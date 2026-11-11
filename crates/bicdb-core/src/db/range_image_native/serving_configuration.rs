@@ -163,6 +163,41 @@ impl BicDb {
         }
         Ok(Some(record))
     }
+    /// Read-only reissue from ACTUAL native WAL state plus an existing owned
+    /// materialization pin. This is not a fresh quorum or activation authority.
+    pub(crate) fn observe_native_recovered_serving_for_physical(
+        &self,
+        physical: &LocalNativeRecoveryReady,
+        scope: &RecoveryFenceScope,
+        expected_checksum: &str,
+    ) -> Result<NativeRecoveredServingReceipt> {
+        physical.require_owned_materialization_current(self)?;
+        let actual = self.current_native_range_source_lineage(scope.range_id)?;
+        let record = actual
+            .serving
+            .ok_or_else(|| invalid("completed refusal has no actual native serving record"))?;
+        if record.checksum_sha256 != expected_checksum
+            || !record.scope.same_session(scope)
+            || record.activation_index != physical.range_index()
+            || record.activation_history_sha256 != physical.logical_history_sha256()
+            || record.logical_genesis_sha256 != physical.logical_genesis_sha256()
+            || record.native_receipt_at_activation_sha256 != physical.native_receipt_sha256()
+            || record.local_visibility_at_activation != physical.visibility().get()
+        {
+            return Err(invalid(
+                "completed native record differs from actual pinned materialization",
+            ));
+        }
+        let native = self.native_recovery_admission(
+            &record.scope.cluster_id,
+            record.scope.bootstrap_id,
+            &record.local_node_id,
+            record.local_member_incarnation,
+        )?;
+        let receipt = NativeRecoveredServingReceipt { native, record };
+        receipt.require_current(self)?;
+        Ok(receipt)
+    }
     /// Caller retains the actual owned Prepared pin/freeze throughout both
     /// native persistence and subsequent catalogue completion. Membership,
     /// replica-ID/pin/restore changes and handoff activation are excluded.

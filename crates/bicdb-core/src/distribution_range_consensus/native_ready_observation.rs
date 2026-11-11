@@ -103,6 +103,7 @@ impl RangeWriteStore {
         if !matches!(
             record.phase,
             recovery_state::RecoveryFencePhase::NativePrepared(_)
+                | recovery_state::RecoveryFencePhase::NativeCompleted(_)
         ) || log.last_index != prepared.range_index()
             || log.resolved_through != prepared.range_index()
             || log
@@ -140,7 +141,7 @@ impl RangeWriteStore {
         }
         Ok(LocalNativeReadyEvidence {
             reply: NativeReadyReply {
-                stage: FrozenNativeReadyStage::NativePrepared,
+                stage: prepared.frozen_stage()?,
                 evidence_version: 1,
                 physical_domain: NativeReadyPhysicalDomain::SameVoterNativeAnchorV1,
                 scope: request.scope.clone(),

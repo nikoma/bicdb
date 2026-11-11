@@ -678,6 +678,184 @@ mod tests {
     }
 
     #[test]
+    fn actual_native_completion_stays_frozen_and_can_close_a_later_ready_round() {
+        use crate::distribution_range_recovery::FrozenNativeReadyStage;
+        let mut fixture = Fixture::new();
+        fixture.seed(fixture.range().id, 1);
+        fixture.topology.ranges.values_mut().next().unwrap().epoch += 1;
+        let nonce = Uuid::now_v7();
+        let role = fixture.role(nonce);
+        let frozen = fixture.freeze(&role);
+        let mut store = fixture.store();
+        let local = fixture
+            .attest(
+                role,
+                &mut store,
+                Arc::clone(&frozen),
+                &CancellationToken::uncancelable(),
+            )
+            .unwrap();
+        let prepared = store
+            .prepare_native_recovery_ready(&fixture.db.read(), local)
+            .unwrap();
+        let closed = actual_local_closed_ready_quorum(
+            &fixture,
+            &store,
+            &prepared,
+            nonce,
+            &CancellationToken::uncancelable(),
+        );
+        let fresh = fixture.role(nonce);
+        let receipt = store
+            .complete_native_recovery_frozen(&fixture.db.read(), &prepared, closed, &fresh)
+            .unwrap();
+        receipt
+            .require_current(&fixture.db.read(), &store, &prepared, &fresh)
+            .unwrap();
+        assert_eq!(
+            prepared.frozen_stage().unwrap(),
+            FrozenNativeReadyStage::NativeCompletedFrozen
+        );
+        assert_eq!(store.recovery_observation_phase(prepared.scope()).unwrap(),
+            crate::distribution_range_recovery::RecoveryFenceObservationPhase::NativeCompletedFrozen);
+        assert!(store
+            .normal_native_write_allowed(&fixture.conflicting_command())
+            .is_err());
+        assert!(fixture
+            .db
+            .read()
+            .range_mutation_gate()
+            .try_controlled_mutation(&frozen)
+            .is_err());
+        assert!(store
+            .require_recovery_scope(&fresh, &fixture.native(), prepared.scope())
+            .is_err());
+        // Completion retains the ACTUAL same pin; later participants can still
+        // collect its closed readiness without downgrading it to Prepared.
+        let next_closed = actual_local_closed_ready_quorum(
+            &fixture,
+            &store,
+            &prepared,
+            nonce,
+            &CancellationToken::uncancelable(),
+        );
+        let retried = store
+            .complete_native_recovery_frozen(
+                &fixture.db.read(),
+                &prepared,
+                next_closed,
+                &fixture.role(nonce),
+            )
+            .unwrap();
+        assert_eq!(
+            retried.native_serving_sha256(),
+            receipt.native_serving_sha256()
+        );
+        assert_eq!(
+            prepared.frozen_stage().unwrap(),
+            FrozenNativeReadyStage::NativeCompletedFrozen
+        );
+        // Even a dropped in-process owner never clears the durable refusal.
+        drop(prepared);
+        drop(frozen);
+        drop(store);
+        assert!(fixture
+            .store()
+            .normal_native_write_allowed(&fixture.conflicting_command())
+            .is_err());
+    }
+
+    #[test]
+    fn ambiguous_native_completion_requires_exact_refsync_before_refreshing_held_readiness() {
+        use crate::distribution_range_recovery::FrozenNativeReadyStage;
+        for after_actual_write in [false, true] {
+            let fixture = Fixture::new();
+            fixture.seed(fixture.range().id, 1);
+            let nonce = Uuid::now_v7();
+            let role = fixture.role(nonce);
+            let frozen = fixture.freeze(&role);
+            let mut store = fixture.store();
+            let local = fixture
+                .attest(
+                    role,
+                    &mut store,
+                    Arc::clone(&frozen),
+                    &CancellationToken::uncancelable(),
+                )
+                .unwrap();
+            let prepared = store
+                .prepare_native_recovery_ready(&fixture.db.read(), local)
+                .unwrap();
+            let closed = actual_local_closed_ready_quorum(
+                &fixture,
+                &store,
+                &prepared,
+                nonce,
+                &CancellationToken::uncancelable(),
+            );
+            let fresh = fixture.role(nonce);
+            assert!(store
+                .test_complete_native_recovery_frozen_with(
+                    &fixture.db.read(),
+                    &prepared,
+                    closed,
+                    &fresh,
+                    |path, bytes, fsync| {
+                        if after_actual_write {
+                            crate::storage::write_atomic(path, bytes, fsync)?;
+                        }
+                        Err(invalid("injected completion persistence ambiguity"))
+                    }
+                )
+                .is_err());
+            assert!(prepared
+                .require_current_under_role(&fixture.db.read(), &store, &fresh)
+                .is_err());
+            assert!(prepared
+                .refresh_after_durable_native_completion(&fixture.db.read(), &store, &fresh)
+                .is_err());
+            assert!(store
+                .normal_native_write_allowed(&fixture.conflicting_command())
+                .is_err());
+            let renewed = fixture.role(nonce);
+            store
+                .refsync_native_prepared_refusal(
+                    &fixture.db.read(),
+                    &fixture.native(),
+                    &renewed,
+                    &frozen,
+                    &CancellationToken::uncancelable(),
+                )
+                .unwrap();
+            prepared
+                .refresh_after_durable_native_completion(&fixture.db.read(), &store, &renewed)
+                .unwrap();
+            assert_eq!(
+                prepared.frozen_stage().unwrap(),
+                FrozenNativeReadyStage::NativeCompletedFrozen
+            );
+            let closed = actual_local_closed_ready_quorum(
+                &fixture,
+                &store,
+                &prepared,
+                nonce,
+                &CancellationToken::uncancelable(),
+            );
+            store
+                .complete_native_recovery_frozen(
+                    &fixture.db.read(),
+                    &prepared,
+                    closed,
+                    &fixture.role(nonce),
+                )
+                .unwrap();
+            assert!(store
+                .normal_native_write_allowed(&fixture.conflicting_command())
+                .is_err());
+        }
+    }
+
+    #[test]
     fn actual_empty_genesis_ready_owns_the_read_pin_until_proof_drop() {
         let fixture = Fixture::new();
         let role = fixture.role(Uuid::now_v7());

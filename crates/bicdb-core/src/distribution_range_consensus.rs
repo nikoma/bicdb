@@ -42,6 +42,7 @@ use crate::error::{BicDbError, Result};
 mod image_install_obligations;
 pub(crate) use image_install_obligations::TargetImageCatalogHistoryObligations;
 mod image_install_state;
+mod native_ready_catalog;
 mod recovery_state;
 pub(crate) use image_install_state::ImageInstallPurpose;
 use image_install_state::{ImageInstallIntent, IMAGE_INSTALL_RANGE_LOG_FORMAT};
@@ -54,7 +55,7 @@ pub(crate) use recovery_state::{
 
 mod native_prefix;
 #[cfg(test)]
-pub(crate) use native_prefix::tests::seed_actual_origin;
+pub(crate) use native_prefix::tests::{fixture as native_origin_fixture, seed_actual_origin};
 pub(crate) use native_prefix::{NativeRangeCommandIntent, NativeRangeCommitCertificate};
 
 pub const RANGE_WRITE_LOG_FORMAT_VERSION: u32 = 3;

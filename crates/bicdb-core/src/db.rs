@@ -61,7 +61,9 @@ mod range_image_install;
 pub(crate) use range_image_install::{
     NativeInstalledRangeImageBase, TargetNativeImageSnapshotBound,
 };
+mod native_recovery_ready;
 mod range_image_native;
+pub(crate) use native_recovery_ready::{LocalNativeRecoveryReady, NativeLocalVisibilitySequence};
 pub(crate) use range_image_native::{
     FreshRangeGenesisAuthority, NativeHistoryStage, NativeHistoryStageProgress,
     NativeHistoryTargetContext, NativeLogicalHistoryEntryV1, NativeLogicalHistoryOutcomeV1,

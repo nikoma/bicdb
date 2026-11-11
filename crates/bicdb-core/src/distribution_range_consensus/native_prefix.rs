@@ -349,7 +349,7 @@ pub(crate) mod tests {
         drop(service);
     }
 
-    fn fixture() -> (
+    pub(crate) fn fixture() -> (
         tempfile::TempDir,
         Arc<RwLock<BicDb>>,
         ClusterTopology,

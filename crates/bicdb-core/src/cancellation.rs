@@ -21,6 +21,10 @@ pub struct CancellationToken {
 }
 
 impl CancellationToken {
+    pub(crate) fn deadline(&self) -> Option<Instant> {
+        self.deadline
+    }
+
     pub fn new(cancel_requested: Arc<AtomicBool>, deadline: Option<Instant>) -> Self {
         Self {
             cancel_requested,

@@ -1,0 +1,11 @@
+
+running 6 tests
+test distribution_io::tests::healthy_response_is_preserved ... ok
+test distribution_io::tests::cancellation_interrupts_a_silent_peer ... ok
+test distribution_io::tests::parent_deadline_is_not_extended_by_socket_budget ... ok
+test distribution_io::tests::continued_progress_cannot_extend_request_deadline ... ok
+test distribution_io::tests::silent_peer_observes_request_deadline ... ok
+test distribution_io::tests::blocked_writer_observes_request_deadline ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+

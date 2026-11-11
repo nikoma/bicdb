@@ -1,5 +1,6 @@
 //! Actual-core certificate ACK/recovery regressions. Local fsync-on paged
 //! stores and in-process scripted phase faults; not physical HA qualification.
+#![cfg(feature = "tls-replication")]
 use bicdb_core::*;
 use parking_lot::{Mutex, RwLock};
 use serde_json::{json, Value};

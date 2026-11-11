@@ -24,6 +24,8 @@ mod distribution_consensus;
 mod distribution_data;
 mod distribution_events;
 mod distribution_gateway;
+#[cfg(feature = "tls-replication")]
+mod distribution_io;
 mod distribution_query;
 mod distribution_range_consensus;
 mod distribution_restore;
@@ -334,11 +336,12 @@ pub use distribution_certification::{
 };
 pub use distribution_consensus::{
     MetadataAppendRequest, MetadataAppendResponse, MetadataConsensusRole, MetadataConsensusStatus,
-    MetadataConsensusStore, MetadataLogEntry, MetadataRestoreActivation, MetadataSnapshot,
-    MetadataReadAck, MetadataReadAuthority, MetadataReadContext, MetadataReadParticipant,
-    MetadataReadProbeRequest, MetadataReadProbeResponse, METADATA_READ_AUTHORITY_PROTOCOL_VERSION,
-    MetadataVoteRequest, MetadataVoteResponse, CLUSTER_METADATA_CONSENSUS_FORMAT_VERSION,
-    DEFAULT_CLUSTER_METADATA_CONSENSUS_STATE, METADATA_RESTORE_ACTIVATION_FORMAT_VERSION,
+    MetadataConsensusStore, MetadataLogEntry, MetadataReadAck, MetadataReadAuthority,
+    MetadataReadContext, MetadataReadParticipant, MetadataReadProbeRequest,
+    MetadataReadProbeResponse, MetadataRestoreActivation, MetadataSnapshot, MetadataVoteRequest,
+    MetadataVoteResponse, CLUSTER_METADATA_CONSENSUS_FORMAT_VERSION,
+    DEFAULT_CLUSTER_METADATA_CONSENSUS_STATE, METADATA_READ_AUTHORITY_PROTOCOL_VERSION,
+    METADATA_RESTORE_ACTIVATION_FORMAT_VERSION,
 };
 pub use distribution_data::{
     CatchUpSourceBatch, ClusterDataNodeService, ClusterSchemaActivationReceipt,

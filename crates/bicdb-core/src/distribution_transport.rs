@@ -6,7 +6,7 @@ use std::net::{SocketAddr, TcpListener, TcpStream, ToSocketAddrs};
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::thread::{self, JoinHandle};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use parking_lot::{Mutex, RwLock};
 use rustls::{ClientConnection, StreamOwned};
@@ -37,6 +37,7 @@ use crate::distribution_data::{
     CatchUpSourceBatch, ClusterDataNodeService, ClusterSchemaActivationReceipt,
     ClusterSchemaFinalizationReceipt, ClusterSchemaStageReceipt, SnapshotSourceStep,
 };
+use crate::distribution_io::DeadlineTcpStream;
 use crate::distribution_range_consensus::{
     RangeWriteAck, RangeWriteCommand, RangeWriteProbe, RangeWriteProgress, RangeWriteRepairBatch,
     RangeWriteRepairLimits, RangeWriteTransport,
@@ -555,8 +556,8 @@ fn configure_stream(stream: &TcpStream, config: &ClusterNetworkTransportConfig) 
     Ok(())
 }
 
-fn complete_client_tls_handshake(
-    stream: &mut StreamOwned<ClientConnection, TcpStream>,
+fn complete_client_tls_handshake<S: Read + Write>(
+    stream: &mut StreamOwned<ClientConnection, S>,
 ) -> Result<String> {
     while stream.conn.is_handshaking() {
         stream.conn.complete_io(&mut stream.sock)?;
@@ -2836,6 +2837,34 @@ impl TcpClusterRelocationTransport {
         destination_node_id: &ClusterNodeId,
         request: ClusterDataRequest,
     ) -> Result<(ClusterDataResponse, MetadataReadParticipant)> {
+        self.call_with_read_participant_cancellable(
+            &CancellationToken::uncancelable(),
+            destination_node_id,
+            request,
+        )
+    }
+
+    fn call_cancellable(
+        &self,
+        cancellation: &CancellationToken,
+        destination_node_id: &ClusterNodeId,
+        request: ClusterDataRequest,
+    ) -> Result<ClusterDataResponse> {
+        self.call_with_read_participant_cancellable(cancellation, destination_node_id, request)
+            .map(|(response, _)| response)
+    }
+
+    fn call_with_read_participant_cancellable(
+        &self,
+        cancellation: &CancellationToken,
+        destination_node_id: &ClusterNodeId,
+        request: ClusterDataRequest,
+    ) -> Result<(ClusterDataResponse, MetadataReadParticipant)> {
+        cancellation.check()?;
+        let network_deadline = Instant::now() + Duration::from_millis(self.config.io_timeout_ms);
+        let deadline = cancellation
+            .deadline()
+            .map_or(network_deadline, |parent| parent.min(network_deadline));
         let (address, expected_certificate_sha256, pending_certificate_sha256, incarnation) = {
             let topology = self.topology.read();
             let node = topology.nodes.get(destination_node_id).ok_or_else(|| {
@@ -2871,42 +2900,65 @@ impl TcpClusterRelocationTransport {
                 "plaintext cluster data RPC may connect only to loopback",
             ));
         }
+        cancellation.check()?;
+        let remaining = deadline
+            .checked_duration_since(Instant::now())
+            .filter(|remaining| !remaining.is_zero())
+            .ok_or_else(|| transport_error("cluster RPC deadline expired before connect"))?;
         let stream = TcpStream::connect_timeout(
             &address_resolved,
-            Duration::from_millis(self.config.connect_timeout_ms),
+            Duration::from_millis(self.config.connect_timeout_ms).min(remaining),
         )?;
         configure_stream(&stream, &self.config)?;
-        let (response, presented_certificate_sha256) = if let Some(tls) = self.client_tls.as_ref() {
-            let server_name = server_name_from_address(&address)?;
-            let mut stream = client_tls_stream(Arc::clone(&tls.config), &server_name, stream)?;
-            let peer_certificate_sha256 = complete_client_tls_handshake(&mut stream)?;
-            verify_destination_certificate(
-                destination_node_id,
-                expected_certificate_sha256.as_deref(),
-                pending_certificate_sha256.as_deref(),
-                Some(&peer_certificate_sha256),
-            )?;
-            send_json_frame(&mut stream, &envelope, self.config.max_frame_bytes)?;
-            let response = recv_json_frame::<ClusterDataResponseEnvelope>(
-                &mut stream,
-                self.config.max_frame_bytes,
-            )?;
-            (response, Some(peer_certificate_sha256))
-        } else {
-            let mut stream = stream;
-            verify_destination_certificate(
-                destination_node_id,
-                expected_certificate_sha256.as_deref(),
-                pending_certificate_sha256.as_deref(),
-                None,
-            )?;
-            send_json_frame(&mut stream, &envelope, self.config.max_frame_bytes)?;
-            let response = recv_json_frame::<ClusterDataResponseEnvelope>(
-                &mut stream,
-                self.config.max_frame_bytes,
-            )?;
-            (response, None)
-        };
+        let exchange = (|| -> Result<_> {
+            let pair = if let Some(tls) = self.client_tls.as_ref() {
+                let server_name = server_name_from_address(&address)?;
+                let stream = client_tls_stream(Arc::clone(&tls.config), &server_name, stream)?;
+                let mut stream = StreamOwned::new(
+                    stream.conn,
+                    DeadlineTcpStream::new(stream.sock, cancellation.clone(), deadline),
+                );
+                let peer_certificate_sha256 = complete_client_tls_handshake(&mut stream)?;
+                verify_destination_certificate(
+                    destination_node_id,
+                    expected_certificate_sha256.as_deref(),
+                    pending_certificate_sha256.as_deref(),
+                    Some(&peer_certificate_sha256),
+                )?;
+                send_json_frame(&mut stream, &envelope, self.config.max_frame_bytes)?;
+                let response = recv_json_frame::<ClusterDataResponseEnvelope>(
+                    &mut stream,
+                    self.config.max_frame_bytes,
+                )?;
+                (response, Some(peer_certificate_sha256))
+            } else {
+                let mut stream = DeadlineTcpStream::new(stream, cancellation.clone(), deadline);
+                verify_destination_certificate(
+                    destination_node_id,
+                    expected_certificate_sha256.as_deref(),
+                    pending_certificate_sha256.as_deref(),
+                    None,
+                )?;
+                send_json_frame(&mut stream, &envelope, self.config.max_frame_bytes)?;
+                let response = recv_json_frame::<ClusterDataResponseEnvelope>(
+                    &mut stream,
+                    self.config.max_frame_bytes,
+                )?;
+                (response, None)
+            };
+            Ok(pair)
+        })();
+        // Preserve caller cancellation semantics and reject late decoded
+        // responses. Socket progress does not renew the whole RPC budget.
+        cancellation.check()?;
+        if Instant::now() >= deadline {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::TimedOut,
+                "cluster RPC deadline expired",
+            )
+            .into());
+        }
+        let (response, presented_certificate_sha256) = exchange?;
         if response.protocol_version != CLUSTER_DATA_PROTOCOL_VERSION
             || response.cluster_id != self.cluster_id
             || response.source_node_id != *destination_node_id
@@ -3295,7 +3347,8 @@ impl ClusterRelocationTransport for TcpClusterRelocationTransport {
         cancellation: &CancellationToken,
     ) -> Result<()> {
         cancellation.check()?;
-        let bundle = match self.call(
+        let bundle = match self.call_cancellable(
+            cancellation,
             &range.leader,
             ClusterDataRequest::ExportSchemaBundle {
                 range_id: range.id,
@@ -3306,7 +3359,8 @@ impl ClusterRelocationTransport for TcpClusterRelocationTransport {
             response => return Err(unexpected_response("cluster schema bundle", response)),
         };
         cancellation.check()?;
-        match self.call(
+        match self.call_cancellable(
+            cancellation,
             &relocation.target,
             ClusterDataRequest::InstallSchemaBundle {
                 relocation: relocation.clone(),
@@ -3318,7 +3372,8 @@ impl ClusterRelocationTransport for TcpClusterRelocationTransport {
             response => return Err(unexpected_response("schema install ack", response)),
         }
         cancellation.check()?;
-        match self.call(
+        match self.call_cancellable(
+            cancellation,
             &relocation.target,
             ClusterDataRequest::PrepareLearner {
                 relocation: relocation.clone(),
@@ -3338,7 +3393,8 @@ impl ClusterRelocationTransport for TcpClusterRelocationTransport {
     ) -> Result<SnapshotCopyProgress> {
         cancellation.check()?;
         let source = range.leader.clone();
-        let step = match self.call(
+        let step = match self.call_cancellable(
+            cancellation,
             &source,
             ClusterDataRequest::ExportSnapshot {
                 relocation: relocation.clone(),
@@ -3350,7 +3406,8 @@ impl ClusterRelocationTransport for TcpClusterRelocationTransport {
             response => return Err(unexpected_response("snapshot step", response)),
         };
         cancellation.check()?;
-        match self.call(
+        match self.call_cancellable(
+            cancellation,
             &relocation.target,
             ClusterDataRequest::ApplySnapshot {
                 relocation: relocation.clone(),
@@ -3371,7 +3428,8 @@ impl ClusterRelocationTransport for TcpClusterRelocationTransport {
         cancellation: &CancellationToken,
     ) -> Result<CatchUpProgress> {
         cancellation.check()?;
-        let durable = match self.call(
+        let durable = match self.call_cancellable(
+            cancellation,
             &relocation.target,
             ClusterDataRequest::LearnerWatermark {
                 relocation: relocation.clone(),
@@ -3381,7 +3439,8 @@ impl ClusterRelocationTransport for TcpClusterRelocationTransport {
             response => return Err(unexpected_response("learner watermark", response)),
         };
         cancellation.check()?;
-        let batch = match self.call(
+        let batch = match self.call_cancellable(
+            cancellation,
             &range.leader,
             ClusterDataRequest::ExportCatchUp {
                 relocation: Some(relocation.clone()),
@@ -3394,7 +3453,8 @@ impl ClusterRelocationTransport for TcpClusterRelocationTransport {
             response => return Err(unexpected_response("catch-up batch", response)),
         };
         cancellation.check()?;
-        match self.call(
+        match self.call_cancellable(
+            cancellation,
             &relocation.target,
             ClusterDataRequest::ApplyCatchUp {
                 relocation: relocation.clone(),
@@ -3417,7 +3477,8 @@ impl ClusterRelocationTransport for TcpClusterRelocationTransport {
     ) -> Result<CleanupProgress> {
         cancellation.check()?;
         let progress = if let Some(source) = relocation.source.as_ref() {
-            match self.call(
+            match self.call_cancellable(
+                cancellation,
                 source,
                 ClusterDataRequest::CleanupSource {
                     relocation: relocation.clone(),
@@ -3438,7 +3499,8 @@ impl ClusterRelocationTransport for TcpClusterRelocationTransport {
         };
         if progress.completed {
             cancellation.check()?;
-            match self.call(
+            match self.call_cancellable(
+                cancellation,
                 &relocation.target,
                 ClusterDataRequest::CompleteRelocation {
                     relocation: relocation.clone(),

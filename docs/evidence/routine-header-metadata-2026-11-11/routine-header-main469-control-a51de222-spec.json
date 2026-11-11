@@ -1,0 +1,27 @@
+{
+  "repo": "/root/bicdb-routine-defaults",
+  "label": "routine-header-main469-control-a51de222",
+  "source": "a51de2226838a0e393eb34889cccefe90cecc666",
+  "base": "c173fa783fb8323fe02c41fb7eda96f130bc29c3",
+  "source_ref": "refs/bicdb-proof/routine-header-main469-control-a51de222",
+  "wait_units": [
+    "bicdb-private-rename-header-dependencies-final-b2c04472"
+  ],
+  "scope": "Standalone baseline control on frozen PR145 source1129/469 (actualmain468 atsubmission). Tests only, no private Native/rename code. Default cast to table row resolves beforeandafterreopen, procedurecallerpath; exact pg_get_function_result TABLEcolumns and SETOF output bothpg_procrowanddirectOID paths; SECURITY DEFINER defaults must honor caller deniedsecret, explicitargsallowed, GRANTthenallowsdefault forscalar/procedure/setfunction. Recordactual reachedcases; preserveallassertions. NativePG16.13 header andcallercontrols pass. No publicationversionreserved; otherthread470queuedafter469. Noapp/HA/VM proof.",
+  "commands": [
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-sql",
+      "--test",
+      "routine_header_metadata",
+      "--",
+      "--test-threads=1"
+    ]
+  ]
+}

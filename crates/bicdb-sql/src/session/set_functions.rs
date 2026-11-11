@@ -250,6 +250,8 @@ impl<'db> SqlSession<'db> {
         let routine = resolve_routine_cached(self.db_ref(), RoutineKind::Function, name)?
             .ok_or_else(|| SqlError::InvalidSql(format!("function {name} does not exist")))?;
         let (columns, column_types) = self.set_function_columns(name)?;
+        let args = self.complete_routine_default_args(&routine, args)?;
+        let args = args.as_ref();
         self.execute_with_routine_security(&routine.schema, |session| {
             let previous_ir = session
                 .current_routine_ir

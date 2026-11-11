@@ -343,7 +343,16 @@ impl<'db> SqlSession<'db> {
                         None if routine.ir.oracle_autonomous => self.eval_session_expr(
                             param.default_expr.as_ref().expect("validated default"),
                         ),
-                        None => eval_constant_expr(
+                        None if oracle::preview_routine_language_version(
+                            &routine.schema.language,
+                        )
+                        .is_some() =>
+                        {
+                            eval_constant_expr(
+                                param.default_expr.as_ref().expect("validated default"),
+                            )
+                        }
+                        None => self.eval_routine_default_expr(
                             param.default_expr.as_ref().expect("validated default"),
                         ),
                     })
@@ -377,6 +386,7 @@ impl<'db> SqlSession<'db> {
             }
         };
 
+        let args = self.complete_routine_default_args(&routine, &args)?;
         if routine.schema.security_definer {
             return self.execute_with_routine_security(&routine.schema, |session| {
                 session.execute_plpgsql_procedure(&routine.ir, &args)

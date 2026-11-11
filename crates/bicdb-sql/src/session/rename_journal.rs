@@ -629,6 +629,101 @@ mod tests {
     }
 
     #[test]
+    fn scoped_undo_preflights_all_images_before_restoring_any_row() {
+        for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
+            let root = tempfile::tempdir().unwrap();
+            let mut db = BicDb::open_with_config(
+                root.path(),
+                DbConfig::default().with_fsync(true).with_storage_mode(mode),
+            )
+            .unwrap();
+            for name in ["original", "unrelated"] {
+                db.create_collection(name).unwrap();
+                db.insert(name, row("seed", 10)).unwrap();
+            }
+            initialize_rename_journal_identities(&mut db).unwrap();
+            let mut owner = db.begin_transaction().unwrap();
+            let scope = owner
+                .reserve_catalog_collections(&[
+                    "original".into(),
+                    "renamed".into(),
+                    HEADERS.into(),
+                    IMAGES.into(),
+                ])
+                .unwrap();
+            let mut prepared;
+            {
+                let _access = db.enter_catalog_scope(&scope).unwrap();
+                prepared = prepare(&mut db).unwrap();
+                capture_rename(&db, &mut prepared, "original", "renamed").unwrap();
+                // Model a validly encoded but out-of-scope persisted image.
+                // A later valid image would be applied first without complete
+                // inventory preflight, changing an acknowledged row.
+                capture_row(&db, &mut prepared, "unrelated", "seed").unwrap();
+                capture_row(&db, &mut prepared, "original", "seed").unwrap();
+                owner.retain_catalog_scope(&scope, prepared.id()).unwrap();
+                db.rename_collection_preserving_pending_writes(&mut owner, "original", "renamed")
+                    .unwrap();
+                db.insert("renamed", row("seed", 99)).unwrap();
+            }
+            db.insert("unrelated", row("seed", 77)).unwrap();
+            let mut wrong_owner = db.begin_transaction().unwrap();
+            assert!(rollback_owned(&mut db, prepared.id(), &mut wrong_owner).is_err());
+            wrong_owner.rollback().unwrap();
+            let error = rollback_owned(&mut db, prepared.id(), &mut owner).unwrap_err();
+            assert!(
+                error
+                    .to_string()
+                    .contains("outside its reserved catalog scope"),
+                "{error}"
+            );
+            assert!(db.has_collection("renamed") && !db.has_collection("original"));
+            assert_eq!(
+                db.get("renamed", "seed").unwrap().unwrap().metadata["value"],
+                99
+            );
+            assert_eq!(
+                db.get("unrelated", "seed").unwrap().unwrap().metadata["value"],
+                77
+            );
+            assert!(load(&db, prepared.id())
+                .unwrap()
+                .unwrap()
+                .remaining
+                .is_none());
+            // Repair only this fixture's corrupt image and complete real undo.
+            {
+                let _access = db.enter_catalog_scope(&scope).unwrap();
+                let (storage, namespace_id) = storage_for(&db, "renamed").unwrap();
+                let repaired = Effect::Row {
+                    storage,
+                    namespace_id,
+                    id: "seed".into(),
+                    previous: Some(row("seed", 10)),
+                };
+                db.insert(
+                    IMAGES,
+                    Record::new(image_id(&prepared.header, 1))
+                        .with_metadata(serde_json::to_value(repaired).unwrap()),
+                )
+                .unwrap();
+            }
+            rollback_owned(&mut db, prepared.id(), &mut owner).unwrap();
+            owner.rollback().unwrap();
+            assert!(db.has_collection("original") && !db.has_collection("renamed"));
+            assert_eq!(
+                db.get("original", "seed").unwrap().unwrap().metadata["value"],
+                10
+            );
+            assert_eq!(
+                db.get("unrelated", "seed").unwrap().unwrap().metadata["value"],
+                77
+            );
+            db.close().unwrap();
+        }
+    }
+
+    #[test]
     fn reused_rename_backing_cannot_authorize_undo_of_a_replacement_collection() {
         for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
             let root = tempfile::tempdir().unwrap();

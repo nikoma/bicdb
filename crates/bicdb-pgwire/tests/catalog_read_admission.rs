@@ -85,6 +85,166 @@ fn value(messages: &[(u8, Vec<u8>)]) -> Option<String> {
     Some(String::from_utf8(payload[6..6 + size as usize].to_vec()).unwrap())
 }
 
+fn connect(address: std::net::SocketAddr) -> TcpStream {
+    let mut client = TcpStream::connect(address).unwrap();
+    client
+        .set_read_timeout(Some(Duration::from_secs(10)))
+        .unwrap();
+    let mut startup = 196608i32.to_be_bytes().to_vec();
+    startup.extend_from_slice(b"user\0bicdb\0database\0bicdb\0\0");
+    client
+        .write_all(&((startup.len() + 4) as i32).to_be_bytes())
+        .unwrap();
+    client.write_all(&startup).unwrap();
+    assert!(ready(&mut client).iter().all(|(tag, _)| *tag != b'E'));
+    client
+}
+
+fn concurrent_sql_rename(ending: &str) {
+    for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open_with_config(
+            root.path(),
+            DbConfig::default().with_fsync(true).with_storage_mode(mode),
+        )
+        .unwrap();
+        SqlSession::new(&mut db).execute("CREATE TABLE source(id INT PRIMARY KEY,payload INT); INSERT INTO source VALUES(1,10); CREATE TABLE unrelated(id INT PRIMARY KEY,payload INT); INSERT INTO unrelated VALUES(2,2); CREATE VIEW dependent AS SELECT source AS item FROM source").unwrap();
+        bicdb_sql::initialize_rename_journal_identities(&mut db).unwrap();
+        let shared = Arc::new(RwLock::new(db));
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        let server = PgWireServer::open_with_shared(
+            root.path(),
+            PgWireConfig {
+                fsync: true,
+                automatic_paged_checkpoint: false,
+                ..Default::default()
+            },
+            Arc::clone(&shared),
+        )
+        .unwrap();
+        let serving = Arc::clone(&server);
+        let task = thread::spawn(move || bicdb_pgwire::serve_existing_listener(serving, listener));
+        let mut owner = connect(address);
+        let mut writer = connect(address);
+        let mut observer = connect(address);
+        // Always stop our serving thread, including a failed semantic assertion.
+        let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let response = query(
+                &mut writer,
+                "BEGIN; UPDATE unrelated SET payload=99 WHERE id=2",
+            );
+            assert!(codes(&response).is_empty(), "{response:?}");
+            if ending != "autocommit" {
+                let response = query(
+                    &mut owner,
+                    "BEGIN; UPDATE source SET payload=20 WHERE id=1; SAVEPOINT before_rename",
+                );
+                assert!(codes(&response).is_empty(), "{response:?}");
+            }
+            let response = query(&mut owner, "ALTER TABLE source RENAME TO renamed");
+            assert!(codes(&response).is_empty(), "ending={ending}: {response:?}");
+            assert_eq!(
+                value(&query(&mut owner, "SELECT (item).payload FROM dependent")),
+                Some(if ending == "autocommit" { "10" } else { "20" }.into())
+            );
+            assert_eq!(
+                value(&query(
+                    &mut writer,
+                    "SELECT payload FROM unrelated WHERE id=2"
+                )),
+                Some("99".into())
+            );
+            assert_eq!(
+                value(&query(
+                    &mut observer,
+                    "SELECT payload FROM unrelated WHERE id=2"
+                )),
+                Some("2".into())
+            );
+            if ending != "autocommit" {
+                assert_eq!(
+                    codes(&query(&mut observer, "SELECT payload FROM renamed")),
+                    vec!["40001"]
+                );
+            }
+            let response = query(&mut writer, "COMMIT");
+            assert!(codes(&response).is_empty(), "{response:?}");
+            assert_eq!(
+                value(&query(
+                    &mut observer,
+                    "SELECT payload FROM unrelated WHERE id=2"
+                )),
+                Some("99".into())
+            );
+            if ending != "autocommit" {
+                let response = query(
+                    &mut owner,
+                    match ending {
+                        "commit" => "COMMIT",
+                        "rollback" => "ROLLBACK",
+                        "savepoint" => "ROLLBACK TO before_rename; COMMIT",
+                        _ => unreachable!(),
+                    },
+                );
+                assert!(codes(&response).is_empty(), "ending={ending}: {response:?}");
+            }
+            let table = if matches!(ending, "commit" | "autocommit") {
+                "renamed"
+            } else {
+                "source"
+            };
+            let expected = if matches!(ending, "commit" | "savepoint") {
+                "20"
+            } else {
+                "10"
+            };
+            assert_eq!(
+                value(&query(
+                    &mut observer,
+                    &format!("SELECT payload FROM {table}")
+                )),
+                Some(expected.into())
+            );
+            assert_eq!(
+                value(&query(
+                    &mut observer,
+                    "SELECT pg_typeof(item) FROM dependent"
+                )),
+                Some(table.into())
+            );
+        }));
+        for client in [owner, writer, observer] {
+            let _ = client.shutdown(std::net::Shutdown::Both);
+        }
+        server.request_shutdown();
+        task.join().unwrap().unwrap();
+        if let Err(error) = outcome {
+            std::panic::resume_unwind(error);
+        }
+    }
+}
+
+#[test]
+fn concurrent_wire_rename_commits_without_blocking_an_unrelated_sql_writer() {
+    concurrent_sql_rename("commit");
+}
+
+#[test]
+fn concurrent_wire_rename_rollback_keeps_the_unrelated_commit() {
+    concurrent_sql_rename("rollback");
+}
+
+#[test]
+fn concurrent_wire_rename_savepoint_keeps_prior_writes_and_unrelated_commit() {
+    concurrent_sql_rename("savepoint");
+}
+
+#[test]
+fn concurrent_wire_rename_autocommit_keeps_the_unrelated_commit() {
+    concurrent_sql_rename("autocommit");
+}
+
 #[derive(Clone, Copy)]
 enum Case {
     Simple(bool),

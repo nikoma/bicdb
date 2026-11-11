@@ -1,0 +1,46 @@
+{
+  "status": "passed",
+  "started_unix": 1794404117.7699153,
+  "protected_application_schema_mutated": false,
+  "phases": [
+    {
+      "phase": "before_reconnect",
+      "metadata": [
+        [
+          91550,
+          "set_header",
+          "SETOF integer"
+        ],
+        [
+          91549,
+          "table_header",
+          "TABLE(item typed_row)"
+        ]
+      ],
+      "default_value": "kept",
+      "procedure_call_passed": true,
+      "empty_table_function_passed": true
+    },
+    {
+      "phase": "after_reconnect",
+      "metadata": [
+        [
+          91550,
+          "set_header",
+          "SETOF integer"
+        ],
+        [
+          91549,
+          "table_header",
+          "TABLE(item typed_row)"
+        ]
+      ],
+      "default_value": "kept",
+      "procedure_call_passed": true,
+      "empty_table_function_passed": true
+    }
+  ],
+  "server_version": "16.13 (Debian 16.13-1.pgdg13+1)",
+  "temporary_schema_removed": true,
+  "finished_unix": 1794404117.8539796
+}

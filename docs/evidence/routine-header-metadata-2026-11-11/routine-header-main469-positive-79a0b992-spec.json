@@ -1,0 +1,78 @@
+{
+  "repo": "/root/bicdb-routine-defaults",
+  "label": "routine-header-main469-positive-79a0b992",
+  "source": "79a0b992794395128927d7709c53c67e25300ee7",
+  "base": "c173fa783fb8323fe02c41fb7eda96f130bc29c3",
+  "source_ref": "refs/bicdb-proof/routine-header-main469-positive-79a0b992",
+  "wait_units": [
+    "bicdb-routine-header-main469-control-a51de222"
+  ],
+  "scope": "Standalone fixes isolated from privateb2 reviewedselected4filesonly onto1129/469 parent; no Native/rename host changes. PG default expressions resolve database types with cleared caller locals/memo, arguments completed before scalar/procedure/set-function SECURITY DEFINER entry, original Oracle frame and bindings retained. Missingdefaultsallocate, fullysuppliedargsborrow. pg_get_function_result retains TABLEcolumns and SETOF across directOID/catalogrow paths. Baselinea51 queuedbeforethis; actualresults mustbe recorded. Alloriginalassertionsintact, no finalapp/HA/VM acceptance or publicationversionreservation. Broadchecksaftercoherentbatch.",
+  "commands": [
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-sql",
+      "--test",
+      "routine_header_metadata",
+      "--test",
+      "table_row_routines",
+      "--test",
+      "ehr_routine_results",
+      "--test",
+      "version_identity",
+      "--",
+      "--test-threads=1"
+    ],
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-sql",
+      "--test",
+      "user_type_management",
+      "--test",
+      "composite_types",
+      "--test",
+      "domain_types",
+      "--test",
+      "read_only_transactions"
+    ],
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-sql",
+      "--lib",
+      "--",
+      "--test-threads=1"
+    ],
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-sql",
+      "--test",
+      "sql",
+      "--",
+      "--test-threads=1"
+    ]
+  ]
+}

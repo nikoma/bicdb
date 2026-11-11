@@ -529,6 +529,82 @@ mod tests {
     }
 
     #[test]
+    fn reused_rename_backing_cannot_authorize_undo_of_a_replacement_collection() {
+        for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
+            let root = tempfile::tempdir().unwrap();
+            let config = DbConfig::default().with_fsync(true).with_storage_mode(mode);
+            let mut db = BicDb::open_with_config(root.path(), config.clone()).unwrap();
+            db.create_collection("original").unwrap();
+            db.activate_local_namespace_identity_v1().unwrap();
+            let original = db.local_namespace_identity("original").unwrap().unwrap();
+            let mut plan = prepare(&mut db).unwrap();
+            capture_rename(&db, &mut plan, "original", "renamed").unwrap();
+            db.rename_collection("original", "renamed").unwrap();
+            db.drop_collection("renamed").unwrap();
+            // Reproduce the exact storage alias as well as the post-rename
+            // logical name. Only the persistent physical identity differs.
+            db.create_collection("original").unwrap();
+            db.rename_collection("original", "renamed").unwrap();
+            db.insert("renamed", row("replacement", 77)).unwrap();
+            let replacement = db.local_namespace_identity("renamed").unwrap().unwrap();
+            assert_ne!(replacement, original);
+            db.close().unwrap();
+            let mut db = BicDb::open_with_config(root.path(), config).unwrap();
+            assert!(
+                rollback(&mut db, plan.id()).is_err(),
+                "{mode:?}: reused backing must refuse undo"
+            );
+            assert_eq!(
+                db.local_namespace_identity("renamed").unwrap(),
+                Some(replacement)
+            );
+            assert_eq!(
+                db.get("renamed", "replacement").unwrap().unwrap().metadata["value"],
+                77
+            );
+            assert!(!db.collections().iter().any(|meta| meta.name == "original"));
+            assert!(load(&db, plan.id()).unwrap().is_some());
+            db.close().unwrap();
+        }
+    }
+
+    #[test]
+    fn reused_row_backing_cannot_restore_before_images_into_a_replacement_collection() {
+        for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
+            let root = tempfile::tempdir().unwrap();
+            let config = DbConfig::default().with_fsync(true).with_storage_mode(mode);
+            let mut db = BicDb::open_with_config(root.path(), config.clone()).unwrap();
+            db.create_collection("dependent").unwrap();
+            db.insert("dependent", row("same-key", 2)).unwrap();
+            db.activate_local_namespace_identity_v1().unwrap();
+            let original = db.local_namespace_identity("dependent").unwrap().unwrap();
+            let mut plan = prepare(&mut db).unwrap();
+            capture_row(&db, &mut plan, "dependent", "same-key").unwrap();
+            db.drop_collection("dependent").unwrap();
+            db.create_collection("dependent").unwrap();
+            db.insert("dependent", row("same-key", 99)).unwrap();
+            let replacement = db.local_namespace_identity("dependent").unwrap().unwrap();
+            assert_ne!(replacement, original);
+            db.close().unwrap();
+            let mut db = BicDb::open_with_config(root.path(), config).unwrap();
+            assert!(
+                rollback(&mut db, plan.id()).is_err(),
+                "{mode:?}: reused row backing must refuse undo"
+            );
+            assert_eq!(
+                db.local_namespace_identity("dependent").unwrap(),
+                Some(replacement)
+            );
+            assert_eq!(
+                db.get("dependent", "same-key").unwrap().unwrap().metadata["value"],
+                99
+            );
+            assert!(load(&db, plan.id()).unwrap().is_some());
+            db.close().unwrap();
+        }
+    }
+
+    #[test]
     fn uncommitted_journal_restores_backing_and_scoped_rows_after_reopen() {
         for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
             let root = tempfile::tempdir().unwrap();

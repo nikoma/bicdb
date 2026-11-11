@@ -1757,6 +1757,7 @@ pub(crate) fn inherit_view_source_column_types(
     columns: &mut [ColumnSchema],
 ) -> Result<()> {
     let SetExpr::Select(select) = query.body.as_ref() else {
+        for column in columns { hydrate_view_column_type(db, column)?; }
         return Ok(());
     };
     // Infer expressions and every joined relation without executing the view.

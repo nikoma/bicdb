@@ -1,0 +1,11 @@
+
+running 1 test
+test distribution_range_image_install::current_repair_tests::actual_rf3_nonempty_current_voter_repair_uses_same_catalogue_and_keeps_recovery_closed ... FAILED
+
+failures:
+
+failures:
+    distribution_range_image_install::current_repair_tests::actual_rf3_nonempty_current_voter_repair_uses_same_catalogue_and_keeps_recovery_closed
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 657 filtered out; finished in 3.12s
+

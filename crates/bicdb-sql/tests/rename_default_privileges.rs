@@ -5,7 +5,7 @@ fn denied(sql: &mut SqlSession<'_>, role: &str, table: &str) {
     sql.execute(&format!("SET ROLE {role}")).unwrap();
     let result = sql.execute(&format!("SELECT payload FROM {table}"));
     sql.execute("RESET ROLE").unwrap();
-    let error = result.unwrap_err();
+    let error = result.expect_err(&format!("role {role} must not read {table}"));
     assert_eq!(error.sqlstate(), "42501");
 }
 

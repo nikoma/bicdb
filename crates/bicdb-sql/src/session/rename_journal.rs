@@ -1050,6 +1050,7 @@ mod tests {
                     .unwrap();
             db.create_collection("original").unwrap();
             db.insert("original", row("seed", 1)).unwrap();
+            initialize_rename_journal_identities(&mut db).unwrap();
             let mut owner = db.begin_transaction().unwrap();
             owner.insert("original", row("pending", 7)).unwrap();
             let mark = owner.rollback_mark();
@@ -1092,6 +1093,7 @@ mod tests {
         let root = tempfile::tempdir().unwrap();
         let mut db = BicDb::open(root.path()).unwrap();
         db.create_collection("original").unwrap();
+        initialize_rename_journal_identities(&mut db).unwrap();
         let mut owner = db.begin_transaction().unwrap();
         let mut plan = prepare(&mut db).unwrap();
         capture_rename(&db, &mut plan, "original", "renamed").unwrap();
@@ -1130,6 +1132,7 @@ mod tests {
         let root = tempfile::tempdir().unwrap();
         let mut db = BicDb::open(root.path()).unwrap();
         db.create_collection("original").unwrap();
+        initialize_rename_journal_identities(&mut db).unwrap();
         let mut owner = db.begin_transaction().unwrap();
         let mut plan = prepare(&mut db).unwrap();
         capture_rename(&db, &mut plan, "original", "renamed").unwrap();

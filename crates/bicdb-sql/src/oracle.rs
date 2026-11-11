@@ -4337,3 +4337,72 @@ mod postgres_catalog_boundary_tests {
             ]));
     }
 }
+
+#[cfg(test)]
+mod rename_namespace_profile_tests {
+    use super::*;
+    use bicdb_core::{DbConfig, StorageMode};
+
+    #[test]
+    fn profile_initialization_precedes_transactional_rename_and_remains_idempotent() {
+        for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
+            for profile in [POSTGRES_PROFILE, ORACLE_PREVIEW_PROFILE] {
+                let root = tempfile::tempdir().unwrap();
+                let mut db = BicDb::open_with_config(
+                    root.path(),
+                    DbConfig::default()
+                        .with_fsync(true)
+                        .with_storage_mode(mode.clone()),
+                )
+                .unwrap();
+                ensure_database_profile(&mut db, profile).unwrap();
+                assert!(db.local_namespace_identity_feature_active());
+                SqlSession::new(&mut db)
+                    .execute("CREATE TABLE identity_source(id INTEGER PRIMARY KEY)")
+                    .unwrap();
+                let identity = db
+                    .local_namespace_identity("identity_source")
+                    .unwrap()
+                    .unwrap();
+                {
+                    let mut session = SqlSession::new(&mut db);
+                    session.execute("BEGIN").unwrap();
+                    session
+                        .execute("INSERT INTO identity_source VALUES (7)")
+                        .unwrap();
+                    session
+                        .execute("ALTER TABLE identity_source RENAME TO identity_target")
+                        .unwrap();
+                    session.execute("ROLLBACK").unwrap();
+                }
+                assert_eq!(
+                    db.local_namespace_identity("identity_source").unwrap(),
+                    Some(identity)
+                );
+                assert!(!db.has_collection("identity_target"));
+                assert!(SqlSession::new(&mut db)
+                    .execute("SELECT id FROM identity_source")
+                    .unwrap()
+                    .rows
+                    .is_empty());
+                let peer = db.begin_transaction().unwrap();
+                ensure_database_profile(&mut db, profile).unwrap();
+                assert_eq!(
+                    db.local_namespace_identity("identity_source").unwrap(),
+                    Some(identity)
+                );
+                peer.rollback().unwrap();
+                db.close().unwrap();
+            }
+        }
+    }
+
+    #[test]
+    fn invalid_profile_selection_cannot_activate_namespace_identities() {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open(root.path()).unwrap();
+        assert!(ensure_database_profile(&mut db, "unknown-profile").is_err());
+        assert!(!db.local_namespace_identity_feature_active());
+        db.close().unwrap();
+    }
+}

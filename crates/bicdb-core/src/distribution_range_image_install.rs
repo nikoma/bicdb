@@ -2671,3 +2671,7 @@ pub(crate) mod tests {
             .unwrap();
     }
 }
+
+#[cfg(test)]
+#[path = "distribution_range_image_install/current_repair_tests.rs"]
+mod current_repair_tests;

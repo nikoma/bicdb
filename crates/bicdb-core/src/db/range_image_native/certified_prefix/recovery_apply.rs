@@ -618,3 +618,6 @@ impl BicDb {
         }
     }
 }
+
+#[cfg(test)]
+mod tests;

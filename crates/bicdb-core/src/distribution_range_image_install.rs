@@ -276,12 +276,16 @@ impl NativeRangeImageInstaller {
                 Ok(false)
             },
         )?;
+        let controlled = db
+            .range_mutation_gate()
+            .try_controlled_mutation(&self.frozen)?;
         db.delete_range_records_as_local_with_mutation(
             self.fence.range(),
             &meta.name,
             &ids,
-            &RangeMutationAuthority::Frozen(&self.frozen),
+            &RangeMutationAuthority::Controlled(&controlled),
         )?;
+        drop(controlled);
         role.role().require_live_request()?;
         cancellation.check()?;
         if export.completed {
@@ -346,12 +350,16 @@ impl NativeRangeImageInstaller {
                 .database
                 .try_read()
                 .ok_or_else(|| invalid("target DB busy before image batch"))?;
+            let controlled = db
+                .range_mutation_gate()
+                .try_controlled_mutation(&self.frozen)?;
             db.apply_range_snapshot_batch_preinstalled_with_mutation(
                 self.fence.range(),
                 meta,
                 batch,
-                &RangeMutationAuthority::Frozen(&self.frozen),
+                &RangeMutationAuthority::Controlled(&controlled),
             )?;
+            drop(controlled);
         }
         self.validate(store, role)?;
         cancellation.check()?;

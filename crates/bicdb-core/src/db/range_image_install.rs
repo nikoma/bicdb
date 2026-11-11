@@ -531,6 +531,7 @@ impl BicDb {
         };
         // The receipt's own page transaction orders/fsyncs the prior actual
         // image/index page prefix. This is not one all-image atomic SQL txn.
+        let controlled = self.range_mutations.try_controlled_mutation(frozen)?;
         self.in_paged_transaction(|paged, xid| {
             receipt.native_page_xid = xid;
             receipt.checksum_sha256 = receipt.checksum()?;
@@ -546,6 +547,7 @@ impl BicDb {
             Ok(())
         })?
         .ok_or_else(|| invalid("installed receipt has no actual native page transaction"))?;
+        drop(controlled);
         receipt.validate()?;
         let base = NativeInstalledRangeImageBase {
             receipt,
@@ -650,6 +652,7 @@ impl BicDb {
                 &previous.intent_sha256,
             )?;
         }
+        let _controlled = self.range_mutations.try_controlled_mutation(frozen)?;
         self.write_native_range_image_record(
             &active_key(fence.range().id),
             &NativeInstalling {

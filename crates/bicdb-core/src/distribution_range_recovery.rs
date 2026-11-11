@@ -66,7 +66,8 @@ pub(crate) struct RecoveryHistoricalCommandRequest {
 impl RecoveryHistoricalCommandRequest {
     pub(crate) fn probe(&self) -> Result<RecoveryFencedProbeRequest> {
         self.command.validate()?;
-        if self.command.range_id != self.scope.range_id
+        if self.command.cluster_id != self.scope.cluster_id
+            || self.command.range_id != self.scope.range_id
             || self.command.range_epoch > self.scope.range_epoch
         {
             return Err(invalid(

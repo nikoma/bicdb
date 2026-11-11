@@ -1,0 +1,12 @@
+[package]
+name = "qualification/version-upgrade"
+version = "1.0.1"
+
+[module]
+namespace = "qualification.version-upgrade"
+version = "1.0.1"
+
+[runtime]
+source = "git"
+git = "https://github.com/nikoma/carrier.git"
+rev = "ecfc9e030a7526449caa20af6527a642dab109ac"

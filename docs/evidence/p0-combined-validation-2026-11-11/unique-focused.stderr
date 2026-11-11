@@ -1,0 +1,4 @@
+
+thread 'db::index_maintenance_tests::apply_time_unique_probe_rejects_a_bypassed_duplicate' (3069060) panicked at crates/bicdb-core/src/db.rs:33988:14:
+called `Result::unwrap_err()` on an `Ok` value: Some(3)
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace

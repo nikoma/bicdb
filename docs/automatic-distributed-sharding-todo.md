@@ -34,6 +34,13 @@ After every exit gate in this roadmap is complete and certified, work proceeds
 to the public controller/mechanism boundary in
 [`public-controller-apis.md`](public-controller-apis.md).
 
+The [P0 recovery follow-up](p0-range-recovery-progress-2026-11-11.md) records
+current correctness fixes and unresolved gates. Its local tests and protocol
+designs do not close physical qualification. In particular, a copied range image
+without a certified installed history floor can leave a healthy new leader
+unable to recover after log compaction; strong-read and data-handoff proofs
+remain required.
+
 ## Non-negotiable invariants
 
 - A key belongs to exactly one live range at a catalog generation.

@@ -1,0 +1,15 @@
+{
+  "command": [
+    "/tmp/bicdb-azure-artifact-target/release/deps/bicdb_core-dd8577a8933c3970",
+    "db::index_maintenance_tests::apply_time_unique_probe_rejects_a_bypassed_duplicate",
+    "--exact",
+    "--nocapture"
+  ],
+  "environment_override": {
+    "BICDB_PAGED_UNIQUE_APPLY_PROBE": "1"
+  },
+  "exit_code": 0,
+  "seconds": 0.1810988923534751,
+  "source": "035c233ef7f7eec51c22fe17373944e07e9f5f72",
+  "reason": "unit test exercises optional apply-time backstop enabled by default in debug CI, explicit opt-in for release profile"
+}

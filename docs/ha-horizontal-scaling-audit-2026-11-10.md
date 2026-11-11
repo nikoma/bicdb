@@ -1,6 +1,6 @@
 # HA and horizontal scaling maturity audit — 2026-11-10
 
-Audited remote `main`: **1.0.455-beta**, commit
+Initial audit of remote `main`: **1.0.455-beta**, commit
 `2f36fe6900d1dd92aad5cb2b587757b1a670cbd3` (fetched from GitHub).
 This document and its required source-version bump do not change runtime behavior.
 Paths and symbols below refer to that revision unless an older revision is named.
@@ -10,6 +10,19 @@ range replica movement and leader balancing, but BicDB does not currently offer
 transparent distributed SQL and recoverable multi-range SQL transactions to
 ordinary PostgreSQL applications. Independent-machine sustained throughput
 scaling and fault-safe rebalance of the current artifact remain unqualified.
+
+## P0 source follow-up — 2026-11-11
+
+The [P0 correctness and recovery report](p0-range-recovery-progress-2026-11-11.md)
+records newer source fixes and exact local evidence for fair relocation turns,
+certificate quorum before stable-membership write ACK, retry admission, fresh
+metadata authority and client network deadlines. It also records unresolved
+strong-read/image/handoff proofs. A completed snapshot is not evidence that the
+new leader can recover compacted range history: an actual 1.0.463-beta
+characterization retains the copied value but fails healthy-quorum recovery
+after 1,025 commands. These source checks do not qualify a release or alter the
+original failed physical experiment. Historical source and measurement identities
+below remain at the revisions actually tested.
 
 ## Follow-up engineering work — 2026-11-11
 

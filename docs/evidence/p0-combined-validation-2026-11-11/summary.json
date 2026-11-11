@@ -1,0 +1,56 @@
+{
+  "format": 1,
+  "source_commit": "035c233ef7f7eec51c22fe17373944e07e9f5f72",
+  "source_package_version": "1.0.463-beta",
+  "integration": {
+    "status": "passed",
+    "tests_passed": 12,
+    "scope": "5fsync-on certificate ACK/retry +2fair scheduling +1plaintext deadline +4actual mutual TLS deadline/pin regressions"
+  },
+  "full_core_initial_release_profile": {
+    "status": "failed",
+    "passed": 502,
+    "failed": 1,
+    "ignored": 3,
+    "failure": "apply_time_unique_probe_rejects_a_bypassed_duplicate",
+    "reason": "release disables debug_assertions and the optional apply-time backstop defaults off; the test expects it enabled. Original logs retained."
+  },
+  "full_core_documented_probe_config": {
+    "status": "passed",
+    "passed": 503,
+    "failed": 0,
+    "ignored": 3,
+    "environment_override": {
+      "BICDB_PAGED_UNIQUE_APPLY_PROBE": "1"
+    },
+    "scope": "opt-in enabled as required for this debug-default backstop test in release profile; not a default production runtime result"
+  },
+  "no_assertions_disabled_or_changed": true,
+  "build_profile": {
+    "cargo_release": true,
+    "core_opt_level": 0,
+    "core_debug": 0,
+    "dependencies": "retained optimized",
+    "cargo_jobs": 1,
+    "incremental": false,
+    "test_threads": 2
+  },
+  "physical_tests_of_candidate": {
+    "status": "not_tested"
+  },
+  "production_qualification": {
+    "status": "not_tested"
+  },
+  "strong_get_healthy_target": {
+    "status": "failed",
+    "scope": "unmodified463 supports no explicit StrongGet endpoint; no new endpoint added by this batch"
+  },
+  "compacted_relocation_recovery": {
+    "status": "failed",
+    "scope": "separate actual463 characterization, not repaired by this batch"
+  },
+  "azure_causality": {
+    "status": "inconclusive"
+  },
+  "shared_controller_interference": "Local builds/core units/image characterizations overlapped first instrumented cloud baseline; that run is not an isolated performance benchmark."
+}

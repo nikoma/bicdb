@@ -1,0 +1,27 @@
+{
+  "git_head": "035c233ef7f7eec51c22fe17373944e07e9f5f72",
+  "uncommitted_patch_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "source_version": "1.0.463-beta",
+  "scope": "combined P0 component validation; dependency optimization retained, core opt-level=0/debug=0",
+  "physical_qualification": false,
+  "name": "all-core-units",
+  "command": [
+    "cargo",
+    "test",
+    "--release",
+    "--locked",
+    "-p",
+    "bicdb-core",
+    "--config",
+    "profile.release.package.bicdb-core.opt-level=0",
+    "--config",
+    "profile.release.package.bicdb-core.debug=0",
+    "--lib",
+    "--",
+    "--nocapture"
+  ],
+  "exit_code": 101,
+  "interrupted_reason": null,
+  "elapsed_seconds": 101.02522469405085,
+  "minimum_available_bytes": 23884017664
+}

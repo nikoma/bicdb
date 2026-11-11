@@ -55,8 +55,12 @@ pub(super) fn apply(
     updated.row_type_oid = Some(previous.row_type_oid());
     updated.row_array_type_oid = Some(previous.row_array_type_oid());
     updated.name = new.into();
-    if updated.primary_key_name.is_none() && updated.primary_key_column().is_some() {
-        updated.primary_key_name = Some(previous.primary_key_constraint_name());
+    if updated.primary_key_column().is_some() {
+        if updated.primary_key_name.is_none() {
+            updated.primary_key_name = Some(previous.primary_key_constraint_name());
+        }
+    } else if updated.implicit_primary_key_name.is_none() {
+        updated.implicit_primary_key_name = Some(previous.primary_key_constraint_name());
     }
     // Name/type binding must still see the source's original spelling.
     let views = rename_views::plan_queries(session.db_ref(), old, new)?;

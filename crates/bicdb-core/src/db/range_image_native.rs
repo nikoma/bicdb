@@ -9,7 +9,7 @@ use crate::distribution_range_image::{
 };
 use crate::distribution_range_mutation::FrozenRangeMutationPermit;
 
-fn native_key(key: &str) -> Vec<u8> {
+pub(super) fn native_key(key: &str) -> Vec<u8> {
     let mut encoded = crate::paged_collection::RANGE_IMAGE_NATIVE_NS_V1.to_vec();
     encoded.extend_from_slice(key.as_bytes());
     encoded
@@ -18,7 +18,7 @@ const BIRTH_KEY: &str = "birth";
 const READY_KEY: &str = "initialized";
 const INVALIDATION_KEY: &str = "unscoped-invalidation";
 const FACTORY_PREFLIGHT: &str = "range-image-factory.json";
-const MAX_NATIVE_RECEIPT_BYTES: usize = 8 * 1024 * 1024;
+pub(super) const MAX_NATIVE_RECEIPT_BYTES: usize = 8 * 1024 * 1024;
 const MAX_GENESIS_RANGES: usize = 65_536;
 const MAX_WAIT: Duration = Duration::from_secs(300);
 
@@ -241,6 +241,12 @@ impl NativeRecoveryAdmission {
         &self,
     ) -> Option<&crate::distribution_consensus::MetadataRestoreActivation> {
         self.restore_activation.as_ref()
+    }
+    pub(crate) fn birth_id(&self) -> Uuid {
+        self.birth_id
+    }
+    pub(crate) fn birth_sha256(&self) -> &str {
+        &self.birth_sha256
     }
 }
 
@@ -566,7 +572,11 @@ impl BicDb {
         Ok((db, authority))
     }
 
-    fn write_native_range_image_record(&self, key: &str, value: &impl Serialize) -> Result<()> {
+    pub(super) fn write_native_range_image_record(
+        &self,
+        key: &str,
+        value: &impl Serialize,
+    ) -> Result<()> {
         self.check_recovery_state()?;
         if !self.config.fsync || !format::range_image_install_active(&self.path)? {
             return Err(invalid(
@@ -585,7 +595,7 @@ impl BicDb {
         .ok_or_else(|| invalid("native receipt has no page store"))?;
         Ok(())
     }
-    fn read_native_range_image_record<T: serde::de::DeserializeOwned>(
+    pub(super) fn read_native_range_image_record<T: serde::de::DeserializeOwned>(
         &self,
         key: &str,
     ) -> Result<Option<T>> {
@@ -641,6 +651,27 @@ impl BicDb {
             read(INVALIDATION_KEY)?,
             read(&format!("range-invalidation:{}", range_id.get()))?,
         ))
+    }
+    pub(super) fn native_range_image_generation_pair(
+        &self,
+        range_id: RangeId,
+    ) -> Result<(Uuid, Uuid)> {
+        let birth = self
+            .read_native_birth()?
+            .ok_or_else(|| invalid("image generation has no native birth"))?;
+        self.native_range_image_generations(&birth, range_id)
+    }
+
+    /// The installer writes this marker durably BEFORE altering any image
+    /// row. Mere marker presence (even an unfamiliar version) closes lineage
+    /// until the actual completed native base transaction removes it.
+    pub(super) fn native_range_image_installing(&self, range_id: RangeId) -> Result<bool> {
+        Ok(self
+            .read_native_range_image_record::<serde_json::Value>(&format!(
+                "install:active:{}",
+                range_id.get()
+            ))?
+            .is_some())
     }
     /// Must finish durably BEFORE physical mutation. A known-range operation
     /// invalidates only its own base; unscoped imports/DDL invalidate all. No
@@ -757,6 +788,14 @@ impl BicDb {
         range_id: RangeId,
     ) -> Result<NativeRangePrefixObservation> {
         self.check_recovery_state()?;
+        if self.native_range_image_installing(range_id)? {
+            let mut observation = NativeRangePrefixObservation::unknown(
+                range_id,
+                "native image installation is incomplete",
+            );
+            observation.invalidated = true;
+            return Ok(observation);
+        }
         let Some(birth) = self.read_native_birth()? else {
             return Ok(NativeRangePrefixObservation::unknown(
                 range_id,
@@ -815,6 +854,11 @@ impl BicDb {
         range_index: u64,
     ) -> Result<()> {
         self.check_recovery_state()?;
+        if self.native_range_image_installing(range_id)? {
+            return Err(invalid(
+                "native image installation is incomplete; no source lineage",
+            ));
+        }
         let birth = self
             .read_native_birth()?
             .ok_or_else(|| invalid("source has no trusted native database birth"))?;
@@ -1274,6 +1318,38 @@ mod tests {
         let invalidated = db.read().native_range_prefix_observation(range.id).unwrap();
         assert_eq!(invalidated.native_applied_index, None);
         assert!(invalidated.invalidated);
+    }
+
+    #[test]
+    fn native_installing_marker_closes_source_and_observation_after_reopen() {
+        let parent = tempfile::tempdir().unwrap();
+        let root = parent.path().join("node");
+        let expected = spec();
+        let (db, authority) = schema_ready_database(&root, &expected);
+        let range = &expected.initial_ranges[0];
+        let lineage = initialize(&db, &authority, range);
+        for other in expected.initial_ranges.iter().skip(1) {
+            initialize(&db, &authority, other);
+        }
+        db.read()
+            .write_native_range_image_record(
+                &format!("install:active:{}", range.id.get()),
+                &json!({"incomplete":true,"session":Uuid::now_v7()}),
+            )
+            .unwrap();
+        assert!(db
+            .read()
+            .validate_source_range_image_lineage(&lineage, range.id, 0)
+            .is_err());
+        let observation = db.read().native_range_prefix_observation(range.id).unwrap();
+        assert!(observation.invalidated);
+        assert_eq!(observation.native_applied_index, None);
+        drop(db);
+        let (reopened, _) = BicDb::open_range_image_database(&root, config(), &expected).unwrap();
+        assert!(reopened.native_range_image_installing(range.id).unwrap());
+        let observation = reopened.native_range_prefix_observation(range.id).unwrap();
+        assert!(observation.invalidated);
+        assert_eq!(observation.native_applied_index, None);
     }
 
     #[test]

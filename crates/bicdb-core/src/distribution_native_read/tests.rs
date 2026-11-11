@@ -250,7 +250,7 @@ fn native_read_observation_failed_mutation_and_health_invalidate_owned_observati
     fixture
         .db
         .read()
-        .fence_durability("test.native_read", "deliberate durability-negative fixture");
+        .fence_durability("test.native_read", &"deliberate durability-negative fixture");
     assert!(current.require_lifetime().is_err());
     assert!(fixture
         .service()

@@ -51,6 +51,10 @@ struct NativeInstalledRangeImageReceipt {
     intended_activation_members: BTreeMap<ClusterNodeId, RangeImageBirthMember>,
     restore_activation: Option<crate::distribution_consensus::MetadataRestoreActivation>,
     range_index: u64,
+    history_generation: Uuid,
+    logical_genesis_sha256: String,
+    logical_history_sha256: String,
+    history_verified_through: u64,
     attempt_id: Uuid,
     session_id: Uuid,
     nonce: Uuid,
@@ -93,6 +97,10 @@ impl NativeInstalledRangeImageReceipt {
             || self.nonce.is_nil()
             || self.target_member_incarnation == 0
             || self.native_page_xid == 0
+            || self.history_generation.is_nil()
+            || self.history_verified_through != self.range_index
+            || !digest(&self.logical_genesis_sha256)
+            || !digest(&self.logical_history_sha256)
             || self.global_image_generation.is_nil()
             || self.range_image_generation.is_nil()
             || self.capture_range.id != self.intended_activation_range.id
@@ -132,6 +140,154 @@ pub(crate) struct NativeInstalledRangeImageBase {
     receipt: NativeInstalledRangeImageReceipt,
     database_incarnation: String,
     schema_generation: u64,
+}
+
+/// An actual persisted lower-bound receipt. This intentionally does not prove
+/// current row/schema/UID generations, complete data, visibility, or readiness.
+/// It remains available during Installing and after image invalidation so an
+/// irreversible range floor cannot disappear behind a source-read refusal.
+#[derive(Debug)]
+pub(crate) struct NativeInstalledRangeImageIntegrity {
+    receipt: NativeInstalledRangeImageReceipt,
+    database_incarnation: String,
+}
+impl NativeInstalledRangeImageIntegrity {
+    pub(crate) fn history_generation(&self) -> Uuid {
+        self.receipt.history_generation
+    }
+    pub(crate) fn logical_genesis_sha256(&self) -> &str {
+        &self.receipt.logical_genesis_sha256
+    }
+    pub(crate) fn logical_history_sha256(&self) -> &str {
+        &self.receipt.logical_history_sha256
+    }
+    pub(crate) fn history_verified_through(&self) -> u64 {
+        self.receipt.history_verified_through
+    }
+    pub(crate) fn target_snapshot_bound(&self) -> TargetNativeImageSnapshotBound {
+        TargetNativeImageSnapshotBound(self.receipt.reserved_db_upper_bound)
+    }
+    pub(crate) fn target_observed_min_snapshot_sequence(&self) -> u64 {
+        self.receipt.min_snapshot_db_sequence
+    }
+    pub(crate) fn attempt_id(&self) -> Uuid {
+        self.receipt.attempt_id
+    }
+    pub(crate) fn intent_sha256(&self) -> &str {
+        &self.receipt.intent_sha256
+    }
+    pub(crate) fn session_id(&self) -> Uuid {
+        self.receipt.session_id
+    }
+    pub(crate) fn nonce(&self) -> Uuid {
+        self.receipt.nonce
+    }
+    pub(crate) fn source_purpose(
+        &self,
+    ) -> &crate::distribution_range_image::RangeImageSourcePurposeV1 {
+        &self.receipt.source_purpose
+    }
+    pub(crate) fn capture_range(&self) -> &RangeDescriptor {
+        &self.receipt.capture_range
+    }
+    pub(crate) fn intended_activation_range(&self) -> &RangeDescriptor {
+        &self.receipt.intended_activation_range
+    }
+    pub(crate) fn purpose(&self) -> ImageInstallPurpose {
+        self.receipt.purpose
+    }
+    pub(crate) fn range_index(&self) -> u64 {
+        self.receipt.range_index
+    }
+    pub(crate) fn cluster_id(&self) -> &ClusterId {
+        &self.receipt.cluster_id
+    }
+    pub(crate) fn bootstrap_id(&self) -> Uuid {
+        self.receipt.bootstrap_id
+    }
+    pub(crate) fn local_node_id(&self) -> &ClusterNodeId {
+        &self.receipt.target_node_id
+    }
+    pub(crate) fn local_member_incarnation(&self) -> u64 {
+        self.receipt.target_member_incarnation
+    }
+    pub(crate) fn intended_activation_members(
+        &self,
+    ) -> &BTreeMap<ClusterNodeId, RangeImageBirthMember> {
+        &self.receipt.intended_activation_members
+    }
+    pub(crate) fn base_members(&self) -> &BTreeMap<ClusterNodeId, RangeImageBirthMember> {
+        &self.receipt.base_members
+    }
+    pub(crate) fn restore_activation(
+        &self,
+    ) -> Option<&crate::distribution_consensus::MetadataRestoreActivation> {
+        self.receipt.restore_activation.as_ref()
+    }
+    pub(crate) fn native_receipt_sha256(&self) -> &str {
+        &self.receipt.checksum_sha256
+    }
+    pub(crate) fn native_page_xid(&self) -> u64 {
+        self.receipt.native_page_xid
+    }
+    pub(crate) fn schema_sha256(&self) -> &str {
+        &self.receipt.schema_sha256
+    }
+    pub(crate) fn reader_features(&self) -> &[String] {
+        &self.receipt.reader_features
+    }
+    pub(crate) fn portable_catalog_sha256(&self) -> &str {
+        &self.receipt.portable_catalog_sha256
+    }
+    pub(crate) fn image_root_sha256(&self) -> &str {
+        &self.receipt.image_root_sha256
+    }
+    pub(crate) fn local_namespace_ids(&self) -> &[(String, Uuid)] {
+        &self.receipt.local_namespace_ids
+    }
+    pub(crate) fn image_generations(&self) -> (Uuid, Uuid) {
+        (
+            self.receipt.global_image_generation,
+            self.receipt.range_image_generation,
+        )
+    }
+    pub(crate) fn birth_id(&self) -> Uuid {
+        self.receipt.birth_id
+    }
+    pub(crate) fn birth_sha256(&self) -> &str {
+        &self.receipt.birth_sha256
+    }
+
+    pub(crate) fn require_current(
+        &self,
+        database: &BicDb,
+        admission: &NativeRecoveryAdmission,
+    ) -> Result<()> {
+        admission.require_current(database)?;
+        self.receipt.validate()?;
+        let receipt = &self.receipt;
+        if self.database_incarnation != database.incarnation
+            || receipt.birth_id != admission.birth_id()
+            || receipt.birth_sha256 != admission.birth_sha256()
+            || receipt.cluster_id != *admission.cluster_id()
+            || receipt.bootstrap_id != admission.bootstrap_id()
+            || receipt.target_node_id != *admission.local_node_id()
+            || receipt.target_member_incarnation != admission.local_member_incarnation()
+            || receipt.restore_activation.as_ref() != admission.restore_activation()
+        {
+            return Err(invalid(
+                "installed integrity receipt native birth/open mismatch",
+            ));
+        }
+        let actual: NativeInstalledRangeImageReceipt = database
+            .read_native_range_image_record(&base_key(receipt.capture_range.id))?
+            .ok_or_else(|| invalid("installed integrity receipt disappeared"))?;
+        actual.validate()?;
+        if actual != self.receipt {
+            return Err(invalid("installed integrity receipt changed"));
+        }
+        Ok(())
+    }
 }
 
 /// Owned progress from actual native target scans; no serde/numeric constructor.
@@ -223,6 +379,18 @@ impl TargetNativeImageSnapshotBound {
     }
 }
 impl NativeInstalledRangeImageBase {
+    pub(crate) fn history_generation(&self) -> Uuid {
+        self.receipt.history_generation
+    }
+    pub(crate) fn logical_genesis_sha256(&self) -> &str {
+        &self.receipt.logical_genesis_sha256
+    }
+    pub(crate) fn logical_history_sha256(&self) -> &str {
+        &self.receipt.logical_history_sha256
+    }
+    pub(crate) fn history_verified_through(&self) -> u64 {
+        self.receipt.history_verified_through
+    }
     pub(crate) fn target_snapshot_bound(&self) -> TargetNativeImageSnapshotBound {
         TargetNativeImageSnapshotBound(self.receipt.reserved_db_upper_bound)
     }
@@ -396,11 +564,6 @@ impl BicDb {
         cancellation: &CancellationToken,
     ) -> Result<()> {
         let seal = source.seal();
-        if fence.source_range_index() != 0 {
-            return Err(invalid(
-                "nonzero image publication requires actual staged-history proof",
-            ));
-        }
         cancellation.check()?;
         source.require_current()?;
         fence.require_live_role(role)?;
@@ -685,6 +848,7 @@ impl BicDb {
         source: &crate::distribution_range_image::CompletedNativeRangeImageSource,
         recover_completed: bool,
         contents: VerifiedNativeTargetImageContents,
+        history: Option<(&StagedNativeHistoryProof, &NativeHistoryTargetContext<'_>)>,
         cancellation: &CancellationToken,
     ) -> Result<NativeInstalledRangeImageBase> {
         let seal = source.seal();
@@ -699,6 +863,23 @@ impl BicDb {
             cancellation,
         )?;
         contents.require_current(self, fence, admission, bindings, source)?;
+        if recover_completed {
+            let prior = self
+                .native_installed_range_image_base(admission, fence.range().id)?
+                .ok_or_else(|| invalid("completed recovery lost its actual native base"))?;
+            if prior.receipt.intent_sha256 != fence.intent_sha256()
+                || prior.receipt.attempt_id != fence.attempt_id()
+                || prior.receipt.source_native_receipt_sha256 != seal.source_native_receipt_sha256
+                || prior.receipt.logical_genesis_sha256 != seal.logical_genesis_sha256
+                || prior.receipt.logical_history_sha256 != seal.logical_history_sha256
+                || prior.receipt.image_root_sha256 != seal.image_root_sha256
+            {
+                return Err(invalid("completed recovery base/source scope differs"));
+            }
+            return Ok(prior);
+        }
+        let (history, history_context) = history
+            .ok_or_else(|| invalid("native publication requires actual full staged history"))?;
         let reserved = contents.state.reserved;
         let min_snapshot = contents.state.min_snapshot;
         let records = contents.state.records;
@@ -731,62 +912,73 @@ impl BicDb {
                 )
             })
             .collect();
-        let mut receipt = NativeInstalledRangeImageReceipt {
-            format_version: INSTALL_FORMAT,
-            cluster_id: fence.cluster_id().clone(),
-            bootstrap_id: fence.bootstrap_id(),
-            target_node_id: admission.local_node_id().clone(),
-            target_member_incarnation: admission.local_member_incarnation(),
-            birth_id: admission.birth_id(),
-            birth_sha256: admission.birth_sha256().to_string(),
-            purpose: fence.purpose(),
-            capture_range: fence.range().clone(),
-            intended_activation_range: intended,
-            base_members,
-            intended_activation_members,
-            restore_activation: admission.restore_activation().cloned(),
-            range_index: fence.source_range_index(),
-            attempt_id: fence.attempt_id(),
-            session_id: fence.session_id(),
-            nonce: fence.nonce(),
-            source_purpose: fence.source_purpose().clone(),
-            intent_sha256: fence.intent_sha256().to_string(),
-            source_native_receipt_sha256: seal.source_native_receipt_sha256.clone(),
-            old_config_sha256: fence.old_config_sha256().to_string(),
-            intended_config_sha256: fence.intended_config_sha256().to_string(),
-            schema_sha256: bindings.schema_sha256().to_string(),
-            reader_features: bindings.reader_features().to_vec(),
-            portable_catalog_sha256: catalog_sha256,
-            image_root_sha256: seal.image_root_sha256.clone(),
-            local_namespace_ids: bindings.namespace_ids(),
-            global_image_generation,
-            range_image_generation,
-            reserved_db_upper_bound: reserved,
-            min_snapshot_db_sequence: min_snapshot.unwrap_or(reserved),
-            record_count: records,
-            serialized_record_bytes: bytes,
-            native_page_xid: 0,
-            checksum_sha256: String::new(),
-        };
-        // The receipt's own page transaction orders/fsyncs the prior actual
-        // image/index page prefix. This is not one all-image atomic SQL txn.
-        let controlled = self.range_mutations.try_controlled_mutation(frozen)?;
-        self.in_paged_transaction(|paged, xid| {
-            receipt.native_page_xid = xid;
-            receipt.checksum_sha256 = receipt.checksum()?;
-            let encoded = bounded_json(&receipt, MAX_NATIVE_RECEIPT_BYTES)?;
-            paged
-                .store()
-                .put(xid, &native_key(&base_key(fence.range().id)), &encoded)
-                .map_err(|error| BicDbError::PagedStorage(error.to_string()))?;
-            paged
-                .store()
-                .delete(xid, &native_key(&active_key(fence.range().id)))
-                .map_err(|error| BicDbError::PagedStorage(error.to_string()))?;
-            Ok(())
-        })?
-        .ok_or_else(|| invalid("installed receipt has no actual native page transaction"))?;
-        drop(controlled);
+        let mut published_receipt = None;
+        self.with_staged_native_history_publication(
+            history,
+            history_context,
+            source,
+            &contents,
+            bindings,
+            cancellation,
+            |paged, xid, history_binding| {
+                let mut receipt = NativeInstalledRangeImageReceipt {
+                    format_version: INSTALL_FORMAT,
+                    cluster_id: fence.cluster_id().clone(),
+                    bootstrap_id: fence.bootstrap_id(),
+                    target_node_id: admission.local_node_id().clone(),
+                    target_member_incarnation: admission.local_member_incarnation(),
+                    birth_id: admission.birth_id(),
+                    birth_sha256: admission.birth_sha256().to_string(),
+                    purpose: fence.purpose(),
+                    capture_range: fence.range().clone(),
+                    intended_activation_range: intended,
+                    base_members,
+                    intended_activation_members,
+                    restore_activation: admission.restore_activation().cloned(),
+                    range_index: fence.source_range_index(),
+                    history_generation: history_binding.history_generation(),
+                    logical_genesis_sha256: history_binding.logical_genesis_sha256().to_string(),
+                    logical_history_sha256: history_binding.logical_history_sha256().to_string(),
+                    history_verified_through: history_binding.verified_through(),
+                    attempt_id: fence.attempt_id(),
+                    session_id: fence.session_id(),
+                    nonce: fence.nonce(),
+                    source_purpose: fence.source_purpose().clone(),
+                    intent_sha256: fence.intent_sha256().to_string(),
+                    source_native_receipt_sha256: seal.source_native_receipt_sha256.clone(),
+                    old_config_sha256: fence.old_config_sha256().to_string(),
+                    intended_config_sha256: fence.intended_config_sha256().to_string(),
+                    schema_sha256: bindings.schema_sha256().to_string(),
+                    reader_features: bindings.reader_features().to_vec(),
+                    portable_catalog_sha256: catalog_sha256,
+                    image_root_sha256: seal.image_root_sha256.clone(),
+                    local_namespace_ids: bindings.namespace_ids(),
+                    global_image_generation,
+                    range_image_generation,
+                    reserved_db_upper_bound: reserved,
+                    min_snapshot_db_sequence: min_snapshot.unwrap_or(reserved),
+                    record_count: records,
+                    serialized_record_bytes: bytes,
+                    native_page_xid: 0,
+                    checksum_sha256: String::new(),
+                };
+                receipt.native_page_xid = xid;
+                receipt.checksum_sha256 = receipt.checksum()?;
+                let encoded = bounded_json(&receipt, MAX_NATIVE_RECEIPT_BYTES)?;
+                paged
+                    .store()
+                    .put(xid, &native_key(&base_key(fence.range().id)), &encoded)
+                    .map_err(|error| BicDbError::PagedStorage(error.to_string()))?;
+                paged
+                    .store()
+                    .delete(xid, &native_key(&active_key(fence.range().id)))
+                    .map_err(|error| BicDbError::PagedStorage(error.to_string()))?;
+                published_receipt = Some(receipt);
+                Ok(())
+            },
+        )?;
+        let receipt =
+            published_receipt.ok_or_else(|| invalid("native publisher produced no receipt"))?;
         receipt.validate()?;
         let base = NativeInstalledRangeImageBase {
             receipt,
@@ -795,6 +987,31 @@ impl BicDb {
         };
         base.require_current(self, admission)?;
         Ok(base)
+    }
+
+    pub(crate) fn native_installed_range_image_integrity(
+        &self,
+        admission: &NativeRecoveryAdmission,
+        range_id: RangeId,
+    ) -> Result<Option<NativeInstalledRangeImageIntegrity>> {
+        admission.require_current(self)?;
+        let Some(receipt) = self
+            .read_native_range_image_record::<NativeInstalledRangeImageReceipt>(&base_key(
+                range_id,
+            ))?
+        else {
+            return Ok(None);
+        };
+        receipt.validate()?;
+        if receipt.capture_range.id != range_id {
+            return Err(invalid("installed integrity range mismatch"));
+        }
+        let integrity = NativeInstalledRangeImageIntegrity {
+            receipt,
+            database_incarnation: self.incarnation.clone(),
+        };
+        integrity.require_current(self, admission)?;
+        Ok(Some(integrity))
     }
 
     pub(crate) fn native_installed_range_image_base(

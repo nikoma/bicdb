@@ -1,0 +1,70 @@
+{
+  "source": "0d020d5c8c11e8456dd0b23841ae64d97b0c4434",
+  "scope": "Private integrated source0d focused scope/wire/UID controls. Prior final SQLjournal13+profile2 pass on65 (runtime unchanged), CoreSSI15 + catalogunit1 + SQLcatalog27 pass0d. This batch exercises actual four Native catalog integration targets (not just one unit-filter match), namespace foundation tests, then unchanged nine TCP/metadata controls from b1 integrated with public transaction/namespace code. No whole producer gate relaxed, no donor-local mapping, no replicated promotion/app/main474 qualification.",
+  "started_unix": 1794427176.7691164,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--test",
+        "catalog_host_scope",
+        "--test",
+        "catalog_record_scope",
+        "--test",
+        "catalog_read_scope",
+        "--test",
+        "catalog_scope_admission"
+      ],
+      "started_unix": 1794427176.769343,
+      "exit": 0,
+      "finished_unix": 1794427214.3469057
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--lib",
+        "namespace_identity",
+        "--",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794427214.3471265,
+      "exit": 0,
+      "finished_unix": 1794427215.1672513
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-pgwire",
+        "--test",
+        "catalog_read_admission",
+        "--",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794427215.1674833,
+      "exit": 0,
+      "finished_unix": 1794427392.564681
+    }
+  ],
+  "status": "focused_passed",
+  "finished_unix": 1794427392.5649934
+}

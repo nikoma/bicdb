@@ -1,0 +1,102 @@
+{
+  "collected_unix": 1794427518.8281024,
+  "inputs": [
+    {
+      "label": "private-rename-uid-reuse-negative-35e5839d",
+      "source": "35e5839d026f90919ca10a323d7fca98a8aa5419",
+      "status": "failed",
+      "receipt": "private-rename-uid-reuse-negative-35e5839d-receipt.json",
+      "receipt_sha256": "d761a80c4b5c62911dd7ea40aacd1ab097dfd42b83f4b198c993048b6ab6e909",
+      "log": "private-rename-uid-reuse-negative-35e5839d.log.gz",
+      "raw_log_sha256": "2a9990d1760b3813e9cd9be56aae2b711c251a3649b4a58b8336a9626022def1",
+      "gzip_sha256": "b4a7cf5113dc30c2f1684b8b7f5bd7dd7989cf48d6f29cb258002fb3c948f208",
+      "spec": "private-rename-uid-reuse-negative-35e5839d.json",
+      "spec_sha256": "7bb5bfb8b1071f6c96cf5324fd70c48e7f222268c92a667e5625f0cc5d45d5fe"
+    },
+    {
+      "label": "private-rename-uid-reuse-negative-f2c25a66",
+      "source": "f2c25a66db145b7d5cb16b9ae00af78cb6429a67",
+      "status": "failed",
+      "receipt": "private-rename-uid-reuse-negative-f2c25a66-receipt.json",
+      "receipt_sha256": "1003341eeab37493c43b968e216a6a4c802098f091e7675968052148411807c4",
+      "log": "private-rename-uid-reuse-negative-f2c25a66.log.gz",
+      "raw_log_sha256": "975a87e1c48051f34c8fd5051e0768942f8c1f88fdffe5fc0d93bb206a413529",
+      "gzip_sha256": "951aa6baa22746f13e1574f6fa75c707b196abe76bbe1d5ce0114ed5a46c819f",
+      "spec": "private-rename-uid-reuse-negative-f2c25a66.json",
+      "spec_sha256": "d8c5865abf4985d2f0ba59bd0263277f7493afc25c048f8f645b72e334541b53"
+    },
+    {
+      "label": "private-rename-uid-reuse-negative-72da2fe2",
+      "source": "72da2fe2953e39169684547bd76f7fdf9722e697",
+      "status": "failed",
+      "receipt": "private-rename-uid-reuse-negative-72da2fe2-receipt.json",
+      "receipt_sha256": "054a9c4b1a280b5c5f84075555c4f5c221bbb7b01046c7cb08886a4c97c7e0f1",
+      "log": "private-rename-uid-reuse-negative-72da2fe2.log.gz",
+      "raw_log_sha256": "9a070463c490bf281a63d1eb23029869376e0e56e49774b7fea45ea217948661",
+      "gzip_sha256": "df61602d4ec4c327d6248be0dca4414ba2f2a8709ddfcee1fe36f1f5986c54de",
+      "spec": "private-rename-uid-reuse-negative-72da2fe2.json",
+      "spec_sha256": "6b94ff043cb205b6ec034e7e8c4cde2131153758ed2333e200051ecdaacc5e26"
+    },
+    {
+      "label": "private-rename-uid-reuse-positive-aee80da2",
+      "source": "aee80da206bf59e7a7e00b8be6d7f38364ac974c",
+      "status": "focused_passed",
+      "receipt": "private-rename-uid-reuse-positive-aee80da2-receipt.json",
+      "receipt_sha256": "7c4ff9a21a56e153195c760402b600f02bef2af3f15c7054830b3edf838ac481",
+      "log": "private-rename-uid-reuse-positive-aee80da2.log.gz",
+      "raw_log_sha256": "ff7cf829cadda22f3a0492cd19e1ba654fc678647b522df3df0030931d3511eb",
+      "gzip_sha256": "174db20da33481bcae4ec2771163072f9c1262fc805d60e96ffa65545a486c95",
+      "spec": "private-rename-uid-reuse-positive-aee80da2.json",
+      "spec_sha256": "0156ecc9799bb13025fce98782f64b5a633b4efd46d52d3e2aa2de268838e1f3"
+    },
+    {
+      "label": "private-rename-uid-profile-6fa6b58b",
+      "source": "6fa6b58b383fb51b7c36e226ffea64c074ca970e",
+      "status": "failed",
+      "receipt": "private-rename-uid-profile-6fa6b58b-receipt.json",
+      "receipt_sha256": "cd30418afbe787a3f5418cc6f929af44d6a787fe5c26123a14d04ff894f9dd51",
+      "log": "private-rename-uid-profile-6fa6b58b.log.gz",
+      "raw_log_sha256": "9b608864387ba0007e5892d9747576718a5c74eab53a226a06008d1f9afe6ef2",
+      "gzip_sha256": "ca428f757837903aa71bd461cf8f6c0a0ae457e27752942b1a6b738bf4f15f2e",
+      "spec": "private-rename-uid-profile-6fa6b58b.json",
+      "spec_sha256": "7dc054c3e0bcc94b87c1c2749d89e73c48aa8481e5664e9230f39ede476cc73a"
+    },
+    {
+      "label": "private-rename-uid-profile-65e54d42",
+      "source": "65e54d425e8710a158ffdeabd182d7b4e2775f9e",
+      "status": "failed",
+      "receipt": "private-rename-uid-profile-65e54d42-receipt.json",
+      "receipt_sha256": "01d53a6daaa32185abb1fb7345a31d6f2e72194e0b2132aef2d89246cf0fccf6",
+      "log": "private-rename-uid-profile-65e54d42.log.gz",
+      "raw_log_sha256": "008009b957d22df59a07913363dfd54c6f7b1ec9b3324ed983ce4412cb32e70e",
+      "gzip_sha256": "807959756509b77f03cbc976b8015f7de488a32743cd582fbbfa8c1872275fbc",
+      "spec": "private-rename-uid-profile-65e54d42.json",
+      "spec_sha256": "c1a62456239739952f713997da6d769f218742b90d4c99a55a428e9a89177a5f"
+    },
+    {
+      "label": "private-rename-uid-core-integration-0d020d5c",
+      "source": "0d020d5c8c11e8456dd0b23841ae64d97b0c4434",
+      "status": "focused_passed",
+      "receipt": "private-rename-uid-core-integration-0d020d5c-receipt.json",
+      "receipt_sha256": "1e62f95a25ad2785ef47efe89d548f1fff3177dee1b3febc115d3c8229fe7808",
+      "log": "private-rename-uid-core-integration-0d020d5c.log.gz",
+      "raw_log_sha256": "462da381d89549e83724d08e2b2daa0b250402b5adf49567225e5cc79c295804",
+      "gzip_sha256": "02ca678a55bbdc143c898a270a4b3a82fbf32c31ea631833628e926fe724d6a4",
+      "spec": "private-rename-uid-core-integration-0d020d5c.json",
+      "spec_sha256": "ec696f5d01cc71f9f0f8990eef0c37fc0c3c1cea448b4e53bb77cd907661dd27"
+    },
+    {
+      "label": "private-rename-uid-scope-wire-0d020d5c",
+      "source": "0d020d5c8c11e8456dd0b23841ae64d97b0c4434",
+      "status": "focused_passed",
+      "receipt": "private-rename-uid-scope-wire-0d020d5c-receipt.json",
+      "receipt_sha256": "e2b66220c3d3ebd8a47076a1b75f643fecf491af7f1bc4239fd49c866c93230e",
+      "log": "private-rename-uid-scope-wire-0d020d5c.log.gz",
+      "raw_log_sha256": "8cf6c22d1411a34f0caaf2d4abaef29128704709ba09c9944948d0cfde7a4ab7",
+      "gzip_sha256": "4995590a36014926112721b5eb8bffab7b60d870a4b6f8eac17e2bcb4b134e2b",
+      "spec": "private-rename-uid-scope-wire-0d020d5c.json",
+      "spec_sha256": "e065fcec755ed9d1c0ef3610fee6b6302bf9dec5d2e3bd003d7f1c33f235ceea"
+    }
+  ],
+  "scope": "Source-scoped private local rename consumer evidence; not public delivery or replicated promotion qualification"
+}

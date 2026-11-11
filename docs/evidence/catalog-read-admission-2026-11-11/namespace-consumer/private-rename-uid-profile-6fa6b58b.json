@@ -1,0 +1,88 @@
+{
+  "label": "private-rename-uid-profile-6fa6b58b",
+  "source": "6fa6b58b383fb51b7c36e226ffea64c074ca970e",
+  "base": "aee80da206bf59e7a7e00b8be6d7f38364ac974c",
+  "repo": "/root/bicdb-sql-rename-uid-consumer",
+  "wait_units": [
+    "bicdb-private-rename-uid-reuse-positive-aee80da2"
+  ],
+  "scope": "Private final local-consumer/profile integration focus after actual72da negative0pass2fail and aee80da2 fivecommands6testsPASS. All rename journal controls and trusted profile initialization before BEGIN, repeated profile validation with live unrelated Native owner, SSI CatalogBinding incarnation integration and existing catalog reader closure. Existing original assertions retained; direct Native owner fixtures now initialize physical identities at trusted pre-transaction boundary. No global producer/recovery admission relaxed. Streamed localUUID translation remains missing, so no replication/promotion/application qualification claimed.",
+  "commands": [
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-sql",
+      "--lib",
+      "session::rename_journal::tests::",
+      "--",
+      "--test-threads=1"
+    ],
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-sql",
+      "--lib",
+      "rename_namespace_profile_tests",
+      "--",
+      "--test-threads=1"
+    ],
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-core",
+      "--lib",
+      "sql_serializable",
+      "--",
+      "--test-threads=1"
+    ],
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-core",
+      "--lib",
+      "catalog_admission",
+      "--",
+      "--test-threads=1"
+    ],
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-sql",
+      "--test",
+      "catalog_read_admission",
+      "--test",
+      "catalog_read_owner",
+      "--test",
+      "catalog_read_routine_transitions",
+      "--test",
+      "catalog_default_dependencies",
+      "--test",
+      "catalog_default_and_index_columns"
+    ]
+  ]
+}

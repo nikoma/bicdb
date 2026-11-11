@@ -1014,12 +1014,12 @@ impl ClusterDataNodeService {
 
     pub(crate) fn return_adopted_recovery_image_transfer(
         &self,
-        finalization: &crate::distribution_range_image_install::NativeImageCatalogueFinalization,
+        finalization: crate::distribution_range_image_install::NativeImageCatalogueFinalization,
         role: &crate::distribution_range_consensus::NativeImageInstallRole<'_>,
         scope: &crate::distribution_range_consensus::RecoveryFenceScope,
         frozen: &mut crate::distribution_range_mutation::FrozenRangeMutationPermit,
         parent: &crate::CancellationToken,
-    ) -> Result<()> {
+    ) -> Result<crate::distribution_range_image_install::FinalizedNativeRecoveryImage> {
         parent.check()?;
         scope.require_role(role.role())?;
         let db = try_database_read(&self.db)?;
@@ -1041,11 +1041,10 @@ impl ClusterDataNodeService {
                 "adopted image return differs from actual local recovery/native open",
             ));
         }
-        finalization.require_current(&self.range_writes, role, frozen)?;
-        self.range_mutations
-            .validate_quiescent_frozen(scope.range_id, frozen)?;
-        parent.check()?;
-        frozen.try_rotate_owner(scope.freeze_owner()?)
+        drop(db);
+        finalization.return_owned_image_to_recovery(
+            &self.range_writes, role, scope, frozen, parent,
+        )
     }
 
     /// Receiver-only: the runtime already owns the drained range freeze and

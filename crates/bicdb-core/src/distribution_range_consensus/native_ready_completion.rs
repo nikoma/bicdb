@@ -113,6 +113,7 @@ impl RangeWriteStore {
         };
         completed.validate()?;
         quorum.require_local_prepared(prepared, db, self, fresh)?;
+        self.recovery_persistence_uncertain = true;
         self.catalog
             .recovery_fences
             .get_mut(&scope.range_id)

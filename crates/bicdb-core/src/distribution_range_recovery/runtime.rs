@@ -122,7 +122,7 @@ impl RecoveryImageInstallFreeze {
         finalization: crate::distribution_range_image_install::NativeImageCatalogueFinalization,
         role: &crate::distribution_range_consensus::NativeImageInstallRole<'_>,
         parent: &CancellationToken,
-    ) -> Result<()> {
+    ) -> Result<crate::distribution_range_image_install::FinalizedNativeRecoveryImage> {
         self.scope.require_role(role.role())?;
         let token = parent.child_with_deadline(role.role().deadline());
         token.check()?;
@@ -142,15 +142,15 @@ impl RecoveryImageInstallFreeze {
             .service
             .try_lock()
             .ok_or_else(|| invalid("service busy returning adopted image freeze"))?;
-        service.return_adopted_recovery_image_transfer(
-            &finalization,
+        let image = service.return_adopted_recovery_image_transfer(
+            finalization,
             role,
             &self.scope,
             self.frozen.as_mut().unwrap(),
             &token,
         )?;
         self.returned = true;
-        Ok(())
+        Ok(image)
     }
 }
 impl Drop for RecoveryImageInstallFreeze {

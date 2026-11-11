@@ -6,6 +6,7 @@ use crate::distribution_consensus::MetadataRecoveryRolePurpose;
 use crate::distribution_range_consensus::{
     RangeWriteState, RangeWriteStore, RecoveryResolvedCatalogObservation,
 };
+use crate::distribution_range_image_install::FinalizedNativeRecoveryImage;
 use crate::distribution_range_mutation::{FrozenRangeMutationPermit, SourceCaptureReadPin};
 use crate::distribution_range_recovery::RecoveryRoleAdmission;
 
@@ -1076,10 +1077,24 @@ impl NativeLocalVisibilitySequence {
 /// serde/Clone/numeric constructor: callers cannot turn a reported watermark
 /// into a physical proof, or release the pin while retaining this value.
 #[derive(Debug)]
+enum LocalNativeRecoveryCatalogue {
+    Resolved(RecoveryResolvedCatalogObservation),
+    FinalizedImage(Box<FinalizedNativeRecoveryImage>),
+}
+impl LocalNativeRecoveryCatalogue {
+    fn resolved_index(&self) -> u64 {
+        match self {
+            Self::Resolved(observed) => observed.resolved_index(),
+            Self::FinalizedImage(actual) => actual.base().range_index(),
+        }
+    }
+}
+
+#[derive(Debug)]
 pub(crate) struct LocalNativeRecoveryReady {
     role: RecoveryRoleAdmission,
     native: NativeRecoveryAdmission,
-    catalogue: RecoveryResolvedCatalogObservation,
+    catalogue: LocalNativeRecoveryCatalogue,
     lineage: SourceRangeImageLineage,
     visibility: NativeLocalVisibilitySequence,
     cancellation: CancellationToken,
@@ -1097,6 +1112,14 @@ fn voters(range: &RangeDescriptor) -> BTreeMap<crate::ReplicaId, ClusterNodeId> 
 }
 
 impl LocalNativeRecoveryReady {
+    /// An exact physical image/adoption observation only. The catalogue owns
+    /// the atomic intent→Prepared transition; callers cannot clear a refusal.
+    pub(crate) fn finalized_image(&self) -> Option<&FinalizedNativeRecoveryImage> {
+        match &self.catalogue {
+            LocalNativeRecoveryCatalogue::FinalizedImage(image) => Some(image.as_ref()),
+            LocalNativeRecoveryCatalogue::Resolved(_) => None,
+        }
+    }
     pub(crate) fn physical_base_range(&self) -> &RangeDescriptor {
         self.lineage.base_range()
     }
@@ -1173,11 +1196,18 @@ impl LocalNativeRecoveryReady {
     }
     pub(crate) fn require_current(&self, db: &BicDb, store: &RangeWriteStore) -> Result<()> {
         self.require_physical_current(db)?;
-        store.revalidate_recovery_resolved_observation(
-            &self.catalogue,
-            &self.role,
-            &self.native,
-        )?;
+        match &self.catalogue {
+            LocalNativeRecoveryCatalogue::Resolved(observed) => {
+                store.revalidate_recovery_resolved_observation(
+                    observed,
+                    &self.role,
+                    &self.native,
+                )?;
+            }
+            LocalNativeRecoveryCatalogue::FinalizedImage(image) => {
+                image.require_current(db, store, &self.role, &self.frozen)?;
+            }
+        }
         Ok(())
     }
 }
@@ -1192,6 +1222,53 @@ impl BicDb {
         native: NativeRecoveryAdmission,
         role: RecoveryRoleAdmission,
         catalogue: RecoveryResolvedCatalogObservation,
+        store: &RangeWriteStore,
+        frozen: Arc<FrozenRangeMutationPermit>,
+        parent: &CancellationToken,
+    ) -> Result<LocalNativeRecoveryReady> {
+        self.attest_native_recovery_materialization(
+            native,
+            role,
+            LocalNativeRecoveryCatalogue::Resolved(catalogue),
+            store,
+            frozen,
+            parent,
+        )
+    }
+
+    /// Consumes the real Runtime image-return proof. It never opens a temporary
+    /// NoImage window: the exact image intent/adoption MUST still be present.
+    pub(crate) fn attest_finalized_native_recovery_image(
+        &self,
+        image: FinalizedNativeRecoveryImage,
+        role: RecoveryRoleAdmission,
+        store: &RangeWriteStore,
+        frozen: Arc<FrozenRangeMutationPermit>,
+        parent: &CancellationToken,
+    ) -> Result<LocalNativeRecoveryReady> {
+        parent.check()?;
+        image.require_current(self, store, &role, &frozen)?;
+        let native = self.native_recovery_admission(
+            role.cluster_id(),
+            role.bootstrap_id(),
+            role.local_node_id(),
+            role.local_member_incarnation(),
+        )?;
+        self.attest_native_recovery_materialization(
+            native,
+            role,
+            LocalNativeRecoveryCatalogue::FinalizedImage(Box::new(image)),
+            store,
+            frozen,
+            parent,
+        )
+    }
+
+    fn attest_native_recovery_materialization(
+        &self,
+        native: NativeRecoveryAdmission,
+        role: RecoveryRoleAdmission,
+        catalogue: LocalNativeRecoveryCatalogue,
         store: &RangeWriteStore,
         frozen: Arc<FrozenRangeMutationPermit>,
         parent: &CancellationToken,
@@ -1259,44 +1336,48 @@ impl BicDb {
                 "native anchor does not match the current physical recovery scope",
             ));
         }
-        store.verify_native_ready_catalog(
-            &catalogue,
-            &role,
-            &native,
-            self.data_path(),
-            |entry| {
-                cancellation.check()?;
-                let step = self.export_native_logical_history_step_with_source_pin(
-                    &lineage,
-                    &frozen,
-                    &pin,
-                    entry.command.index,
-                    1,
-                    &cancellation,
+        match &catalogue {
+            LocalNativeRecoveryCatalogue::Resolved(observed) => {
+                store.verify_native_ready_catalog(
+                    observed,
+                    &role,
+                    &native,
+                    self.data_path(),
+                    |entry| {
+                        cancellation.check()?;
+                        let step = self.export_native_logical_history_step_with_source_pin(
+                            &lineage,
+                            &frozen,
+                            &pin,
+                            entry.command.index,
+                            1,
+                            &cancellation,
+                        )?;
+                        let actual = step
+                            .entries
+                            .first()
+                            .ok_or_else(|| invalid("missing native decision"))?;
+                        let matching = match (&entry.state, &actual.outcome) {
+                            (
+                                RangeWriteState::Applied,
+                                NativeLogicalHistoryOutcomeV1::Applied {
+                                    command_checksum_sha256,
+                                },
+                            ) => command_checksum_sha256 == &entry.command.checksum_sha256,
+                            (RangeWriteState::Aborted, NativeLogicalHistoryOutcomeV1::Aborted) => {
+                                true
+                            }
+                            _ => false,
+                        };
+                        if !matching {
+                            return Err(invalid(
+                                "retained catalogue decision conflicts with actual native history",
+                            ));
+                        }
+                        Ok(())
+                    },
                 )?;
-                let actual = step
-                    .entries
-                    .first()
-                    .ok_or_else(|| invalid("missing native decision"))?;
-                let matching = match (&entry.state, &actual.outcome) {
-                    (
-                        RangeWriteState::Applied,
-                        NativeLogicalHistoryOutcomeV1::Applied {
-                            command_checksum_sha256,
-                        },
-                    ) => command_checksum_sha256 == &entry.command.checksum_sha256,
-                    (RangeWriteState::Aborted, NativeLogicalHistoryOutcomeV1::Aborted) => true,
-                    _ => false,
-                };
-                if !matching {
-                    return Err(invalid(
-                        "retained catalogue decision conflicts with actual native history",
-                    ));
-                }
-                Ok(())
-            },
-        )?;
-        store.verify_native_ready_historical_markers(&catalogue, &role, &native, |index, checksum| {
+                store.verify_native_ready_historical_markers(observed, &role, &native, |index, checksum| {
             cancellation.check()?;
             let step = self.export_native_logical_history_step_with_source_pin(
                 &lineage, &frozen, &pin, index, 1, &cancellation)?;
@@ -1307,6 +1388,26 @@ impl BicDb {
             }
             Ok(())
         })?;
+            }
+            LocalNativeRecoveryCatalogue::FinalizedImage(image) => {
+                image.require_current(self, store, &role, &frozen)?;
+                store.verify_finalized_native_image_historical_markers(
+                    image, self, &role, &frozen, |index, checksum| {
+                        cancellation.check()?;
+                        let step = self.export_native_logical_history_step_with_source_pin(
+                            &lineage, &frozen, &pin, index, 1, &cancellation,
+                        )?;
+                        if !matches!(step.entries.first().map(|entry| &entry.outcome),
+                            Some(NativeLogicalHistoryOutcomeV1::Applied { command_checksum_sha256 })
+                                if command_checksum_sha256 == checksum)
+                        {
+                            return Err(invalid("finalized image historical certification marker conflicts with actual native history"));
+                        }
+                        Ok(())
+                    },
+                )?;
+            }
+        }
         let proof = LocalNativeRecoveryReady {
             visibility: NativeLocalVisibilitySequence(lineage.actual_local_visibility_sequence()),
             role,

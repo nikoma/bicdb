@@ -432,6 +432,38 @@ impl RangeWriteStore {
         let scope = RecoveryFenceScope::from_role(physical.role())?;
         let point = NativePreparedPoint::from_actual(&physical);
         point.validate()?;
+        let finalized_image_range = if let Some(image) = physical.finalized_image() {
+            // The physical producer has JUST validated this actual finalized
+            // native image under its N-owned read pin while the install intent
+            // is still present. Replacing that exact refusal is one catalogue
+            // transition; there is no NoImage gap for historical/user writes.
+            let fence = image.intent_fence();
+            let saved = &self.catalog.recovery_fences[&scope.range_id];
+            let intent = self
+                .catalog
+                .image_install_intents
+                .get(&scope.range_id)
+                .ok_or_else(|| {
+                    range_write_error("finalized preparation lost its exact image intent")
+                })?;
+            if !image.scope().same_session(&scope)
+                || !matches!(saved.phase, RecoveryFencePhase::Active)
+                || intent.attempt_id != fence.attempt_id()
+                || intent.session_id != fence.session_id()
+                || intent.nonce != fence.nonce()
+                || intent.sha256()? != fence.intent_sha256()
+            {
+                return Err(range_write_error(
+                    "finalized preparation would retire another image/session",
+                ));
+            }
+            Some(scope.range_id)
+        } else {
+            None
+        };
+        // Even a later structural validation failure must never expose a
+        // changed in-memory refusal as if it had already been fsynced.
+        self.recovery_persistence_uncertain = true;
         let native_completed_serving_sha256 = match &self.catalog.recovery_fences[&scope.range_id]
             .phase
         {
@@ -452,6 +484,9 @@ impl RangeWriteStore {
                 None
             }
         };
+        if let Some(range_id) = finalized_image_range {
+            self.catalog.image_install_intents.remove(&range_id);
+        }
         self.catalog.format_version = self.catalog.format_version.max(NATIVE_READY_CATALOG_FORMAT);
         validate_native_prepared_catalog(&self.catalog)?;
         // On any rename/directory-sync ambiguity retain this refusal in memory

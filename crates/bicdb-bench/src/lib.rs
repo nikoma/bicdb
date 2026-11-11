@@ -6197,43 +6197,144 @@ pub fn run_postgres_compat_suite(
     );
     record_pg_case(
         &mut cases,
-        "guardrails.unsupported_repeatable_read_error",
-        "guardrails",
-        "Writable REPEATABLE READ isolation returns a clear PostgreSQL-shaped error",
-        PostgresCompatExpectation::ClearUnsupportedError,
+        "transactions.writable_repeatable_read",
+        "transactions",
+        "Writable REPEATABLE READ retains its snapshot and rejects a stale update",
+        PostgresCompatExpectation::Works,
         || {
-            let error =
-                bench_pg_simple_query_error(&mut client, "BEGIN ISOLATION LEVEL REPEATABLE READ;")?;
-            if error.contains("ERROR")
-                && error.contains("0A000")
-                && error.contains("transaction isolation level REPEATABLE READ requires READ ONLY")
-            {
-                Ok(format!("clear error: {}", compact_error(&error)))
-            } else {
-                anyhow::bail!(
-                    "expected clear writable REPEATABLE READ isolation error, got {error:?}"
-                )
-            }
+            let mut writer = bench_pg_connect(address)?;
+            let result = (|| -> Result<String> {
+                bench_pg_expect_command(&mut client, "CREATE TABLE compat_rr (id INT PRIMARY KEY,v INT); INSERT INTO compat_rr VALUES (1,10)")?;
+                bench_pg_expect_command(
+                    &mut client,
+                    "BEGIN ISOLATION LEVEL REPEATABLE READ READ WRITE",
+                )?;
+                expect_rows(
+                    bench_pg_simple_query(&mut client, "SHOW transaction_isolation")?,
+                    &[&["repeatable read"]],
+                )?;
+                expect_rows(
+                    bench_pg_simple_query(&mut client, "SELECT v FROM compat_rr WHERE id=1")?,
+                    &[&["10"]],
+                )?;
+                bench_pg_expect_command(&mut writer, "UPDATE compat_rr SET v=11 WHERE id=1")?;
+                expect_rows(
+                    bench_pg_simple_query(&mut client, "SELECT v FROM compat_rr WHERE id=1")?,
+                    &[&["10"]],
+                )?;
+                let error = bench_pg_simple_query_error(
+                    &mut client,
+                    "UPDATE compat_rr SET v=20 WHERE id=1",
+                )?;
+                if !error.contains("40001") {
+                    anyhow::bail!("expected stale-write 40001, got {error:?}");
+                }
+                expect_rows(
+                    bench_pg_simple_query(&mut writer, "SELECT v FROM compat_rr WHERE id=1")?,
+                    &[&["11"]],
+                )?;
+                Ok("fixed snapshot retained; stale update returned 40001 and preserved the peer's value".into())
+            })();
+            let _ = bench_pg_simple_query(&mut client, "ROLLBACK");
+            let _ = bench_pg_close(&mut writer);
+            result
         },
     );
     record_pg_case(
         &mut cases,
-        "guardrails.unsupported_serializable_error",
+        "transactions.serializable_dependencies",
+        "transactions",
+        "SERIALIZABLE accepts disjoint commits and rejects a read/write dependency cycle",
+        PostgresCompatExpectation::Works,
+        || {
+            let mut peer = bench_pg_connect(address)?;
+            let result = (|| -> Result<String> {
+                bench_pg_expect_command(
+                    &mut client,
+                    "CREATE TABLE compat_ssi (id INT PRIMARY KEY,v INT)",
+                )?;
+                for cycle in [false, true] {
+                    bench_pg_expect_command(
+                        &mut client,
+                        "DELETE FROM compat_ssi; INSERT INTO compat_ssi VALUES (1,1),(2,1)",
+                    )?;
+                    bench_pg_expect_command(&mut client, "BEGIN ISOLATION LEVEL SERIALIZABLE")?;
+                    bench_pg_expect_command(&mut peer, "BEGIN ISOLATION LEVEL SERIALIZABLE")?;
+                    expect_rows(
+                        bench_pg_simple_query(&mut client, "SHOW transaction_isolation")?,
+                        &[&["serializable"]],
+                    )?;
+                    expect_rows(
+                        bench_pg_simple_query(&mut client, "SELECT v FROM compat_ssi WHERE id=1")?,
+                        &[&["1"]],
+                    )?;
+                    expect_rows(
+                        bench_pg_simple_query(&mut peer, "SELECT v FROM compat_ssi WHERE id=2")?,
+                        &[&["1"]],
+                    )?;
+                    let (first, second) = if cycle {
+                        (
+                            "UPDATE compat_ssi SET v=0 WHERE id=2",
+                            "UPDATE compat_ssi SET v=0 WHERE id=1",
+                        )
+                    } else {
+                        (
+                            "UPDATE compat_ssi SET v=0 WHERE id=1",
+                            "UPDATE compat_ssi SET v=0 WHERE id=2",
+                        )
+                    };
+                    bench_pg_expect_command(&mut client, first)?;
+                    bench_pg_expect_command(&mut peer, second)?;
+                    bench_pg_expect_command(&mut client, "COMMIT")?;
+                    if cycle {
+                        let error = bench_pg_simple_query_error(&mut peer, "COMMIT")?;
+                        if !error.contains("40001") {
+                            anyhow::bail!("expected SSI 40001, got {error:?}");
+                        }
+                        expect_rows(
+                            bench_pg_simple_query(
+                                &mut client,
+                                "SELECT id,v FROM compat_ssi ORDER BY id",
+                            )?,
+                            &[&["1", "1"], &["2", "0"]],
+                        )?;
+                    } else {
+                        bench_pg_expect_command(&mut peer, "COMMIT")?;
+                        expect_rows(
+                            bench_pg_simple_query(
+                                &mut client,
+                                "SELECT id,v FROM compat_ssi ORDER BY id",
+                            )?,
+                            &[&["1", "0"], &["2", "0"]],
+                        )?;
+                    }
+                }
+                Ok("disjoint transactions committed; write skew returned 40001 without publishing the rejected write".into())
+            })();
+            let _ = bench_pg_simple_query(&mut client, "ROLLBACK");
+            let _ = bench_pg_simple_query(&mut peer, "ROLLBACK");
+            let _ = bench_pg_close(&mut peer);
+            result
+        },
+    );
+    record_pg_case(
+        &mut cases,
+        "guardrails.unsupported_snapshot_isolation_error",
         "guardrails",
-        "Unsupported SERIALIZABLE isolation returns a clear PostgreSQL-shaped error",
+        "Unsupported SNAPSHOT isolation returns a clear PostgreSQL-shaped error",
         PostgresCompatExpectation::ClearUnsupportedError,
         || {
             let error = bench_pg_simple_query_error(
                 &mut client,
-                "SET TRANSACTION ISOLATION LEVEL SERIALIZABLE;",
+                "SET TRANSACTION ISOLATION LEVEL SNAPSHOT",
             )?;
             if error.contains("ERROR")
                 && error.contains("0A000")
-                && error.contains("transaction isolation level SERIALIZABLE is not supported")
+                && error.contains("transaction isolation level SNAPSHOT is not supported")
             {
                 Ok(format!("clear error: {}", compact_error(&error)))
             } else {
-                anyhow::bail!("expected clear SERIALIZABLE isolation error, got {error:?}")
+                anyhow::bail!("expected clear SNAPSHOT isolation error, got {error:?}")
             }
         },
     );
@@ -9070,9 +9171,9 @@ fn postgres_compat_known_gaps() -> Vec<PostgresCompatGap> {
         },
         PostgresCompatGap {
             category: "transactions".to_string(),
-            feature: "Serializable and repeatable-read isolation".to_string(),
-            status: "READ COMMITTED-style local transactions with savepoints; READ COMMITTED isolation commands are accepted, stronger isolation levels are rejected with SQLSTATE 0A000".to_string(),
-            recommendation: "Keep rejecting unsupported stronger isolation until real repeatable-read snapshots or serializable validation are implemented".to_string(),
+            feature: "Distributed SSI and complete PostgreSQL transaction behavior".to_string(),
+            status: "Local READ COMMITTED, writable fixed-snapshot REPEATABLE READ and PostgreSQL Serializable dependency tracking are implemented; Serializable refuses standby and distributed commit authority configurations, and blocking/deadlock behavior is not identical to PostgreSQL".to_string(),
+            recommendation: "Handle serialization retries and qualify application transaction behavior; retain explicit refusal of unsupported distributed SSI and imported snapshots".to_string(),
         },
         PostgresCompatGap {
             category: "protocol".to_string(),
@@ -9216,6 +9317,18 @@ fn bench_pg_simple_query_outcome(stream: &mut TcpStream, query: &str) -> Result<
     stream.write_all(&((payload.len() as i32) + 4).to_be_bytes())?;
     stream.write_all(&payload)?;
     bench_pg_read_outcome(stream)
+}
+
+// A command probe must inspect ErrorResponse, even when no rows were returned.
+fn bench_pg_expect_command(stream: &mut TcpStream, query: &str) -> Result<()> {
+    let outcome = bench_pg_simple_query_outcome(stream, query)?;
+    if let Some(error) = outcome.error {
+        anyhow::bail!("command failed: {error}");
+    }
+    if !outcome.rows.is_empty() {
+        anyhow::bail!("command unexpectedly returned rows {:?}", outcome.rows);
+    }
+    Ok(())
 }
 
 fn bench_pg_simple_query_error(stream: &mut TcpStream, query: &str) -> Result<String> {

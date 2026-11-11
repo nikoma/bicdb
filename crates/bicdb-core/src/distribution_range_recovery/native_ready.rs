@@ -43,9 +43,17 @@ impl NativeReadyRequest {
 pub(crate) enum NativeReadyPhysicalDomain {
     SameVoterNativeAnchorV1,
 }
+/// Both stages retain physical exclusion. Activated completion decisions are
+/// deliberately a different protocol and cannot deserialize into this type.
+#[derive(Clone, Copy, Debug, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
+pub(crate) enum FrozenNativeReadyStage {
+    NativePrepared,
+    NativeCompletedFrozen,
+}
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct NativeReadyReply {
+    pub stage: FrozenNativeReadyStage,
     pub evidence_version: u32,
     pub physical_domain: NativeReadyPhysicalDomain,
     pub scope: RecoveryFenceScope,
@@ -172,7 +180,6 @@ pub(crate) struct ClosedNativeReadyQuorumRound {
     scope: RecoveryFenceScope,
     cancellation: CancellationToken,
     observations: BTreeMap<ClusterNodeId, NativeReadyObservation>,
-    point: Option<(u64, String, String)>,
     poisoned: bool,
 }
 impl ClosedNativeReadyQuorumRound {
@@ -201,7 +208,6 @@ impl ClosedNativeReadyQuorumRound {
             scope,
             cancellation,
             observations: BTreeMap::new(),
-            point: None,
             poisoned: false,
         })
     }
@@ -251,33 +257,63 @@ impl ClosedNativeReadyQuorumRound {
                 ))
             }
         }
-        let point = (
-            reply.range_index,
-            reply.logical_genesis_sha256.clone(),
-            reply.logical_history_sha256.clone(),
-        );
-        if self.point.as_ref().is_some_and(|old| old != &point) {
-            return Err(invalid("current native-prepared voters disagree on R/H0/H"));
+        for old in self.observations.values().map(|o| o.reply()) {
+            if old.logical_genesis_sha256 != reply.logical_genesis_sha256
+                || (old.range_index == reply.range_index
+                    && old.logical_history_sha256 != reply.logical_history_sha256)
+                || reply.irreversible_command_sha256.iter().any(|(i, h)| {
+                    old.irreversible_command_sha256
+                        .get(i)
+                        .is_some_and(|old| old != h)
+                })
+            {
+                return Err(invalid(
+                    "current native-prepared voters disclose conflicting immutable history",
+                ));
+            }
         }
-        self.point = Some(point);
         self.observations.insert(reply.node_id.clone(), observation);
         Ok(())
     }
-    pub(crate) fn is_ready(&self) -> bool {
-        !self.poisoned && self.observations.len() >= self.role.member_credentials().len() / 2 + 1
+    fn majority_point(&self) -> Option<(u64, String, String)> {
+        let q = self.role.member_credentials().len() / 2 + 1;
+        let mut counts = BTreeMap::new();
+        for reply in self.observations.values().map(|o| o.reply()) {
+            let point = (
+                reply.range_index,
+                reply.logical_genesis_sha256.clone(),
+                reply.logical_history_sha256.clone(),
+            );
+            let count = counts.entry(point.clone()).or_insert(0usize);
+            *count += 1;
+            if *count >= q {
+                return Some(point);
+            }
+        }
+        None
     }
-    pub(crate) fn finish(self) -> Result<ClosedNativeReadyQuorum> {
+    pub(crate) fn is_ready(&self) -> bool {
+        !self.poisoned && self.majority_point().is_some()
+    }
+    pub(crate) fn finish(mut self) -> Result<ClosedNativeReadyQuorum> {
         self.cancellation.check()?;
         self.role.require_live_request()?;
         if !self.is_ready() {
             return Err(invalid("no closed distinct current native-ready majority"));
         }
+        let point = self.majority_point().unwrap();
+        self.observations.retain(|_, o| {
+            let r = o.reply();
+            r.range_index == point.0
+                && r.logical_genesis_sha256 == point.1
+                && r.logical_history_sha256 == point.2
+        });
         Ok(ClosedNativeReadyQuorum {
             role: self.role,
             scope: self.scope,
             cancellation: self.cancellation,
             observations: self.observations,
-            point: self.point.unwrap(),
+            point,
         })
     }
 }

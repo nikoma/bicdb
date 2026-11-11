@@ -2,7 +2,7 @@
 //! cannot create a physical proof, change a catalogue floor or open admission.
 use super::*;
 use crate::distribution_range_recovery::{
-    NativeReadyPhysicalDomain, NativeReadyReply, NativeReadyRequest,
+    FrozenNativeReadyStage, NativeReadyPhysicalDomain, NativeReadyReply, NativeReadyRequest,
     RecoveryObservationRoleAdmission, RecoveryRoleAdmission,
 };
 
@@ -16,6 +16,41 @@ impl LocalNativeReadyEvidence {
     }
 }
 impl RangeWriteStore {
+    /// Only preflight for retaining a restrictive freeze. This deliberately
+    /// accepts an uncertain exact Prepared refusal so its actual fsync can be
+    /// retried; it grants no observation, floor or mutation authority.
+    pub(crate) fn preflight_native_ready_freeze(
+        &self,
+        role: &RecoveryRoleAdmission,
+        native: &crate::db::NativeRecoveryAdmission,
+        scope: &RecoveryFenceScope,
+    ) -> Result<()> {
+        scope.require_role(role)?;
+        self.require_no_image_install(scope.range_id)?;
+        self.require_native_recovery_identity(role, native)?;
+        let record = self
+            .catalog
+            .recovery_fences
+            .get(&scope.range_id)
+            .ok_or_else(|| {
+                range_write_error("native preparation requires an existing actual recovery fence")
+            })?;
+        if !record.scope.same_session(scope)
+            || record.native_database_incarnation != native.database_incarnation()
+            || record.local_node_id != *role.local_node_id()
+            || record.local_member_incarnation != role.local_member_incarnation()
+            || !matches!(
+                record.phase,
+                recovery_state::RecoveryFencePhase::Active
+                    | recovery_state::RecoveryFencePhase::NativePrepared(_)
+            )
+        {
+            return Err(range_write_error(
+                "native preparation cannot freeze a completed or different session/open",
+            ));
+        }
+        Ok(())
+    }
     pub(crate) fn observe_prepared_native_for_role(
         &self,
         db: &crate::BicDb,
@@ -68,6 +103,7 @@ impl RangeWriteStore {
         if !matches!(
             record.phase,
             recovery_state::RecoveryFencePhase::NativePrepared(_)
+                | recovery_state::RecoveryFencePhase::NativeCompleted(_)
         ) || log.last_index != prepared.range_index()
             || log.resolved_through != prepared.range_index()
             || log
@@ -105,6 +141,7 @@ impl RangeWriteStore {
         }
         Ok(LocalNativeReadyEvidence {
             reply: NativeReadyReply {
+                stage: prepared.frozen_stage()?,
                 evidence_version: 1,
                 physical_domain: NativeReadyPhysicalDomain::SameVoterNativeAnchorV1,
                 scope: request.scope.clone(),

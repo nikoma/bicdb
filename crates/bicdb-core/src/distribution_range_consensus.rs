@@ -51,6 +51,9 @@ mod native_ready_catalog;
 mod native_ready_observation;
 pub(crate) use native_ready_observation::LocalNativeReadyEvidence;
 mod native_ready_prepare;
+mod native_ready_completion;
+use native_ready_completion::NATIVE_COMPLETED_CATALOG_FORMAT;
+pub(crate) use native_ready_completion::NativeRecoveryCompletedFrozenReceipt;
 #[cfg(test)]
 pub(crate) use native_ready_catalog::native_ready_test_command;
 pub(crate) use native_ready_prepare::PreparedNativeRecoveryReady;
@@ -549,15 +552,17 @@ impl RangeWriteEnvelope {
                 | IMAGE_INSTALL_RANGE_LOG_FORMAT
                 | NATIVE_IMAGE_CATALOG_FORMAT
                 | NATIVE_READY_CATALOG_FORMAT
+                | NATIVE_COMPLETED_CATALOG_FORMAT
         ) {
             return Err(range_write_error(format!(
-                "unsupported range-write log format {}; supported formats are 1, 2, {}, {}, {}, {}, and {}",
+                "unsupported range-write log format {}; supported formats are 1, 2, {}, {}, {}, {}, {}, and {}",
                 self.catalog.format_version,
                 RANGE_WRITE_LOG_FORMAT_VERSION,
                 HANDOFF_RANGE_LOG_FORMAT,
                 IMAGE_INSTALL_RANGE_LOG_FORMAT,
                 NATIVE_IMAGE_CATALOG_FORMAT,
-                NATIVE_READY_CATALOG_FORMAT
+                NATIVE_READY_CATALOG_FORMAT,
+                NATIVE_COMPLETED_CATALOG_FORMAT
             )));
         }
         if self.catalog.recovery_fences.len() > recovery_state::MAX_RECOVERY_FENCES {

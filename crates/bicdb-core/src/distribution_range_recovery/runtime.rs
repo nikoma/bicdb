@@ -10,19 +10,27 @@ use parking_lot::Mutex;
 use std::collections::BTreeSet;
 use std::sync::Arc;
 
+mod participants;
+
 const MAX_CONTEXTS: usize = 4;
+// A collector must leave capacity for the readonly peer observations needed
+// by other collectors. This reserves progress capacity without extra workers.
+const MAX_EXCLUSIVE_CONTEXTS: usize = 2;
 const MAX_SESSIONS: usize = 64;
 const LATCH_POLL: Duration = Duration::from_millis(5);
 
 #[derive(Debug)]
 struct Session {
     scope: RecoveryFenceScope,
-    frozen: Arc<FrozenRangeMutationPermit>,
+    frozen: Option<Arc<FrozenRangeMutationPermit>>,
+    image_preflight:
+        Option<crate::distribution_range_consensus::NativeImageInstallTransferPreflight>,
 }
 #[derive(Debug, Default)]
 struct Sessions {
     current: BTreeMap<RangeId, Session>,
     active: BTreeSet<RangeId>,
+    contexts: usize,
 }
 
 #[derive(Debug)]
@@ -31,15 +39,268 @@ pub(crate) struct RangeRecoveryRuntime {
     provider: Arc<MetadataReadProvider>,
     local_node_id: ClusterNodeId,
     gate: RangeMutationGate,
-    sessions: Mutex<Sessions>,
+    sessions: Arc<Mutex<Sessions>>,
+    participant_transport:
+        Option<Arc<dyn crate::distribution_range_consensus::RangeWriteTransport>>,
 }
-struct Operation<'a>(&'a RangeRecoveryRuntime, RangeId);
-impl Drop for Operation<'_> {
+struct Operation {
+    sessions: Arc<Mutex<Sessions>>,
+    range: RangeId,
+    exclusive: bool,
+}
+impl Drop for Operation {
     fn drop(&mut self) {
-        self.0.sessions.lock().active.remove(&self.1);
+        let mut sessions = self.sessions.lock();
+        sessions.contexts -= 1;
+        if self.exclusive {
+            sessions.active.remove(&self.range);
+        }
+    }
+}
+/// Exclusive owned installer lease. Dropping it preserves an A-owned freeze;
+/// only actual catalogue adoption may later authorize returning to recovery N.
+/// There is deliberately no extraction or Clone operation.
+pub(crate) struct RecoveryImageInstallFreeze {
+    runtime: Arc<RangeRecoveryRuntime>,
+    scope: RecoveryFenceScope,
+    frozen: Option<FrozenRangeMutationPermit>,
+    preflight: Option<crate::distribution_range_consensus::NativeImageInstallTransferPreflight>,
+    returned: bool,
+}
+impl std::fmt::Debug for RecoveryImageInstallFreeze {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("RecoveryImageInstallFreeze")
+            .field("range", &self.scope.range_id)
+            .field("frozen", &self.frozen)
+            .finish_non_exhaustive()
+    }
+}
+impl RecoveryImageInstallFreeze {
+    pub(crate) fn as_frozen(&self) -> &FrozenRangeMutationPermit {
+        self.frozen
+            .as_ref()
+            .expect("owned image freeze consumed only during Drop")
+    }
+    pub(crate) fn preflight(
+        &self,
+    ) -> &crate::distribution_range_consensus::NativeImageInstallTransferPreflight {
+        self.preflight
+            .as_ref()
+            .expect("retained image transfer preflight")
+    }
+    /// Actual no-data abort is independently authorized, even if the original
+    /// transfer's request has expired. A modified attempt must resume/adopt.
+    pub(crate) fn return_untouched(
+        mut self,
+        role: &crate::distribution_range_consensus::NativeImageInstallRole<'_>,
+        parent: &CancellationToken,
+    ) -> Result<()> {
+        self.scope.require_role(role.role())?;
+        let token = parent.child_with_deadline(role.role().deadline());
+        token.check()?;
+        let mut service = self
+            .runtime
+            .service
+            .try_lock()
+            .ok_or_else(|| invalid("service busy returning untouched image freeze"))?;
+        service.return_untouched_recovery_image_transfer(
+            self.preflight.as_ref().unwrap(),
+            role,
+            self.frozen.as_mut().unwrap(),
+            &token,
+        )?;
+        self.returned = true;
+        Ok(())
+    }
+    /// The sealed finalization retains the actual native image/base/intent and
+    /// catalogue adoption. Its diagnostic receipt alone cannot return a lease.
+    pub(crate) fn return_after_catalogue_adoption(
+        mut self,
+        finalization: crate::distribution_range_image_install::NativeImageCatalogueFinalization,
+        role: &crate::distribution_range_consensus::NativeImageInstallRole<'_>,
+        parent: &CancellationToken,
+    ) -> Result<()> {
+        self.scope.require_role(role.role())?;
+        let token = parent.child_with_deadline(role.role().deadline());
+        token.check()?;
+        let actual = finalization.catalogue();
+        let preflight = self.preflight.as_ref().unwrap();
+        if actual.range_id() != self.scope.range_id
+            || actual.attempt_id() != preflight.attempt_id()
+            || actual.session_id() != self.scope.freeze_owner()?
+            || actual.nonce() != self.scope.recovery_nonce
+        {
+            return Err(invalid(
+                "catalogue finalization differs from the exact leased image attempt",
+            ));
+        }
+        let service = self
+            .runtime
+            .service
+            .try_lock()
+            .ok_or_else(|| invalid("service busy returning adopted image freeze"))?;
+        service.return_adopted_recovery_image_transfer(
+            &finalization,
+            role,
+            &self.scope,
+            self.frozen.as_mut().unwrap(),
+            &token,
+        )?;
+        self.returned = true;
+        Ok(())
+    }
+}
+impl Drop for RecoveryImageInstallFreeze {
+    fn drop(&mut self) {
+        let Some(frozen) = self.frozen.take() else {
+            return;
+        };
+        let mut sessions = self.runtime.sessions.lock();
+        let session = sessions
+            .current
+            .get_mut(&self.scope.range_id)
+            .expect("leased recovery session remains retained");
+        // No runtime operation can replace a session whose freeze is leased.
+        assert!(session.frozen.is_none() && session.scope.same_session(&self.scope));
+        session.frozen = Some(Arc::new(frozen));
+        session.image_preflight = if self.returned {
+            None
+        } else {
+            self.preflight.take()
+        };
     }
 }
 impl RangeRecoveryRuntime {
+    /// Recover only a provably untouched dropped transfer. The original facts
+    /// remain bounded in the session after Drop; a fresh role cannot replace
+    /// them with caller-selected counters or a new source/attempt.
+    pub(crate) fn return_untouched_image_transfer(
+        self: &Arc<Self>,
+        scope: &RecoveryFenceScope,
+        role: &crate::distribution_range_consensus::NativeImageInstallRole<'_>,
+        parent: &CancellationToken,
+    ) -> Result<()> {
+        let _operation = self.reserve(scope.range_id)?;
+        scope.require_role(role.role())?;
+        let token = parent.child_with_deadline(role.role().deadline());
+        token.check()?;
+        let (frozen, preflight) = {
+            let mut sessions = self.sessions.lock();
+            let session = sessions
+                .current
+                .get_mut(&scope.range_id)
+                .ok_or_else(|| invalid("no dropped image recovery session"))?;
+            if !session.scope.same_session(scope) {
+                return Err(invalid("dropped image belongs to another recovery session"));
+            }
+            let frozen = session
+                .frozen
+                .as_mut()
+                .ok_or_else(|| invalid("image freeze is still leased"))?;
+            if Arc::get_mut(frozen).is_none() {
+                return Err(invalid("dropped image still has a callback/source owner"));
+            }
+            self.gate
+                .validate_quiescent_frozen(scope.range_id, frozen)?;
+            let preflight = session
+                .image_preflight
+                .as_ref()
+                .ok_or_else(|| invalid("no retained untouched-transfer preflight"))?;
+            if frozen.owner() != preflight.attempt_id()
+                || preflight.original_freeze_owner() != scope.freeze_owner()?
+            {
+                return Err(invalid("dropped transfer owner/scope differs"));
+            }
+            let frozen = Arc::try_unwrap(session.frozen.take().unwrap())
+                .expect("unique retained image freeze");
+            (frozen, session.image_preflight.take().unwrap())
+        };
+        RecoveryImageInstallFreeze {
+            runtime: Arc::clone(self),
+            scope: scope.clone(),
+            frozen: Some(frozen),
+            preflight: Some(preflight),
+            returned: false,
+        }
+        .return_untouched(role, &token)
+    }
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn transfer_image_install(
+        self: &Arc<Self>,
+        scope: &RecoveryFenceScope,
+        source: &crate::distribution_range_image::TentativeNativeRangeImageSourceAuthorization<'_>,
+        role: &crate::distribution_range_consensus::NativeImageInstallRole<'_>,
+        purpose: crate::distribution_range_consensus::ImageInstallPurpose,
+        attempt_id: Uuid,
+        parent: &CancellationToken,
+    ) -> Result<RecoveryImageInstallFreeze> {
+        let _operation = self.reserve(scope.range_id)?;
+        if attempt_id == scope.freeze_owner()? {
+            return Err(invalid("image attempt must have a distinct freeze owner"));
+        }
+        scope.require_role(role.role())?;
+        let token = parent.child_with_deadline(role.role().deadline());
+        let original = self.source_capture_freeze(scope)?;
+        let preflight = {
+            let mut service = loop {
+                token.check()?;
+                if let Some(service) = self.service.try_lock_for(LATCH_POLL) {
+                    break service;
+                }
+            };
+            service.preflight_recovery_image_transfer(
+                source, role, &original, purpose, attempt_id, &token,
+            )?
+        };
+        if preflight.range_id() != scope.range_id
+            || preflight.nonce() != scope.recovery_nonce
+            || preflight.session_id() != scope.freeze_owner()?
+            || preflight.original_freeze_owner() != scope.freeze_owner()?
+        {
+            return Err(invalid(
+                "actual image transfer preflight has a different recovery session",
+            ));
+        }
+        // Discard our temporary read reference. No source/read callback may
+        // retain another Arc when the only owner changes N -> attempt A.
+        drop(original);
+        token.check()?;
+        let mut sessions = self.sessions.lock();
+        let session = sessions
+            .current
+            .get_mut(&scope.range_id)
+            .ok_or_else(|| invalid("recovery session disappeared before image transfer"))?;
+        if !session.scope.same_session(scope) {
+            return Err(invalid("recovery session changed before image transfer"));
+        }
+        let arc = session
+            .frozen
+            .as_mut()
+            .ok_or_else(|| invalid("recovery freeze is already leased"))?;
+        let frozen = Arc::get_mut(arc)
+            .ok_or_else(|| invalid("source/callback still owns recovery freeze"))?;
+        if frozen.owner() != preflight.original_freeze_owner() {
+            return Err(invalid(
+                "recovery freeze owner changed before image transfer",
+            ));
+        }
+        let service = self
+            .service
+            .try_lock()
+            .ok_or_else(|| invalid("service is busy before image freeze transfer"))?;
+        service.rotate_recovery_image_transfer(&preflight, source, role, frozen, &token)?;
+        drop(service);
+        let arc = session.frozen.take().unwrap();
+        let frozen =
+            Arc::try_unwrap(arc).expect("unique recovery freeze checked under session lock");
+        Ok(RecoveryImageInstallFreeze {
+            runtime: Arc::clone(self),
+            scope: scope.clone(),
+            frozen: Some(frozen),
+            preflight: Some(preflight),
+            returned: false,
+        })
+    }
     /// Read-only freeze sharing. SourceCapture must atomically acquire its
     /// own exclusive read pin; this Arc cannot grant a frozen write bypass.
     pub(crate) fn source_capture_freeze(
@@ -51,14 +312,25 @@ impl RangeRecoveryRuntime {
             .current
             .get(&scope.range_id)
             .ok_or_else(|| invalid("no retained recovery source freeze"))?;
-        if !session.scope.same_session(scope) || session.frozen.owner() != scope.freeze_owner()? {
+        if !session.scope.same_session(scope)
+            || session
+                .frozen
+                .as_ref()
+                .ok_or_else(|| invalid("recovery freeze is leased to an image installer"))?
+                .owner()
+                != scope.freeze_owner()?
+        {
             return Err(invalid(
                 "source freeze is from another actual recovery session",
             ));
         }
+        let frozen = session
+            .frozen
+            .as_ref()
+            .ok_or_else(|| invalid("recovery freeze is leased to an image installer"))?;
         self.gate
-            .validate_quiescent_frozen(scope.range_id, &session.frozen)?;
-        Ok(Arc::clone(&session.frozen))
+            .validate_quiescent_frozen(scope.range_id, frozen)?;
+        Ok(Arc::clone(frozen))
     }
     pub(crate) fn observe_history(
         &self,
@@ -67,7 +339,15 @@ impl RangeRecoveryRuntime {
         parent: &CancellationToken,
     ) -> Result<RecoveryHistoryObservation> {
         let token = request.cancellation(parent)?;
-        let _operation = self.reserve(request.scope.range_id)?;
+        let _operation = self.reserve_observer(request.scope.range_id)?;
+        self.observe_history_inner(observer, request, &token)
+    }
+    fn observe_history_inner(
+        &self,
+        observer: &MetadataReadParticipant,
+        request: &RecoveryFencedProbeRequest,
+        token: &CancellationToken,
+    ) -> Result<RecoveryHistoryObservation> {
         let business = Uuid::now_v7();
         let challenge = Uuid::now_v7();
         let scope = &request.scope;
@@ -131,15 +411,46 @@ impl RangeRecoveryRuntime {
             provider,
             local_node_id,
             gate,
-            sessions: Mutex::new(Sessions::default()),
+            sessions: Arc::new(Mutex::new(Sessions::default())),
+            participant_transport: None,
         }
     }
-    fn reserve(&self, range: RangeId) -> Result<Operation<'_>> {
+    pub(crate) fn with_participant_transport(
+        mut self,
+        transport: Arc<dyn crate::distribution_range_consensus::RangeWriteTransport>,
+    ) -> Self {
+        self.participant_transport = Some(transport);
+        self
+    }
+    #[cfg(test)]
+    pub(crate) fn test_active_context_count(&self) -> usize {
+        self.sessions.lock().contexts
+    }
+    fn reserve(&self, range: RangeId) -> Result<Arc<Operation>> {
+        self.reserve_context(range, true)
+    }
+    fn reserve_observer(&self, range: RangeId) -> Result<Arc<Operation>> {
+        self.reserve_context(range, false)
+    }
+    fn reserve_context(&self, range: RangeId, exclusive: bool) -> Result<Arc<Operation>> {
         let mut sessions = self.sessions.lock();
-        if sessions.active.len() >= MAX_CONTEXTS || !sessions.active.insert(range) {
+        if sessions
+            .current
+            .get(&range)
+            .is_some_and(|s| s.frozen.is_none())
+            || sessions.contexts >= MAX_CONTEXTS
+            || (exclusive
+                && (sessions.active.len() >= MAX_EXCLUSIVE_CONTEXTS
+                    || !sessions.active.insert(range)))
+        {
             return Err(invalid("receiver recovery context/range is busy"));
         }
-        Ok(Operation(self, range))
+        sessions.contexts += 1;
+        Ok(Arc::new(Operation {
+            sessions: Arc::clone(&self.sessions),
+            range,
+            exclusive,
+        }))
     }
     fn frozen(
         &self,
@@ -151,22 +462,39 @@ impl RangeRecoveryRuntime {
         {
             let mut sessions = self.sessions.lock();
             if let Some(session) = sessions.current.get_mut(&scope.range_id) {
+                let actual = session
+                    .frozen
+                    .as_ref()
+                    .ok_or_else(|| invalid("recovery freeze is leased to an image installer"))?;
+                if actual.owner() != session.scope.freeze_owner()? {
+                    return Err(invalid("retained image freeze requires actual catalogue adoption before any recovery rotation"));
+                }
                 if session.scope.same_session(scope) {
+                    let frozen = session.frozen.as_ref().ok_or_else(|| {
+                        invalid("recovery freeze is leased to an image installer")
+                    })?;
+                    if frozen.owner() != scope.freeze_owner()? {
+                        return Err(invalid("image installation has not returned its freeze through catalogue adoption"));
+                    }
                     self.gate
-                        .validate_quiescent_frozen(scope.range_id, &session.frozen)?;
-                    return Ok(Arc::clone(&session.frozen));
+                        .validate_quiescent_frozen(scope.range_id, frozen)?;
+                    return Ok(Arc::clone(frozen));
                 }
                 if !replace {
                     return Err(invalid(
                         "read-only observation cannot rotate a recovery freeze",
                     ));
                 }
-                let frozen = Arc::get_mut(&mut session.frozen).ok_or_else(|| {
-                    invalid("old recovery freeze still has a source/callback owner")
-                })?;
+                let frozen =
+                    Arc::get_mut(session.frozen.as_mut().ok_or_else(|| {
+                        invalid("recovery freeze is leased to an image installer")
+                    })?)
+                    .ok_or_else(|| {
+                        invalid("old recovery freeze still has a source/callback owner")
+                    })?;
                 frozen.try_rotate_owner(scope.freeze_owner()?)?;
                 session.scope = scope.clone();
-                return Ok(Arc::clone(&session.frozen));
+                return Ok(Arc::clone(session.frozen.as_ref().unwrap()));
             }
             if sessions.current.len() >= MAX_SESSIONS {
                 return Err(invalid("receiver recovery session bound reached"));
@@ -188,7 +516,8 @@ impl RangeRecoveryRuntime {
             scope.range_id,
             Session {
                 scope: scope.clone(),
-                frozen: Arc::clone(&frozen),
+                frozen: Some(Arc::clone(&frozen)),
+                image_preflight: None,
             },
         );
         Ok(frozen)
@@ -370,6 +699,32 @@ mod tests {
             .unwrap(),
         ));
         let runtime = RangeRecoveryRuntime::new(Arc::clone(&service), Arc::clone(&provider));
+        // Readonly peer probes must coexist with the one mutating collector,
+        // but all reservations share a finite cap and detached work retains it.
+        let exclusive = runtime.reserve(range.id).unwrap();
+        let draining_worker = Arc::clone(&exclusive);
+        let observers = (0..3)
+            .map(|_| runtime.reserve_observer(range.id).unwrap())
+            .collect::<Vec<_>>();
+        assert!(runtime.reserve_observer(range.id).is_err());
+        assert!(runtime.reserve(range.id).is_err());
+        drop(observers);
+        drop(exclusive);
+        assert!(
+            runtime.reserve(range.id).is_err(),
+            "worker still owns exclusive reservation"
+        );
+        drop(draining_worker);
+        drop(runtime.reserve(range.id).unwrap());
+        let first_collector = runtime.reserve(range.id).unwrap();
+        let second_collector = runtime
+            .reserve(RangeId::new(range.id.get() + 1).unwrap())
+            .unwrap();
+        assert!(runtime
+            .reserve(RangeId::new(range.id.get() + 2).unwrap())
+            .is_err());
+        let peer_observer = runtime.reserve_observer(range.id).unwrap();
+        drop((first_collector, second_collector, peer_observer));
         let parent = CancellationToken::uncancelable()
             .child_with_deadline(Instant::now() + Duration::from_secs(5));
         let role_for = |purpose: MetadataRecoveryRolePurpose, nonce: Uuid| {
@@ -403,6 +758,18 @@ mod tests {
         };
         let normal = role_for(MetadataRecoveryRolePurpose::NormalRecovery, Uuid::now_v7());
         let normal_scope = RecoveryFenceScope::from_role(&normal).unwrap();
+        {
+            let _blocked_database = db.write();
+            let started = Instant::now();
+            assert!(service
+                .lock()
+                .preflight_native_recovery(&normal, &normal_scope, &parent)
+                .is_err());
+            assert!(
+                started.elapsed() < Duration::from_millis(200),
+                "service cannot wait for an outer DB writer while holding its latch"
+            );
+        }
         let first = runtime
             .fence_epoch(
                 &provider.local_participant(),

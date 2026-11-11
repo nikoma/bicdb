@@ -945,22 +945,9 @@ impl RangeWriteStore {
                 .get(&scope.range_id)
                 .and_then(|log| log.entries.get(&index))
         });
-        // Bound response construction before cloning a possibly large command.
-        struct Bound(usize);
-        impl std::io::Write for Bound {
-            fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
-                self.0 = self
-                    .0
-                    .checked_sub(bytes.len())
-                    .ok_or_else(|| std::io::Error::other("recovery history entry exceeds 2MiB"))?;
-                Ok(bytes.len())
-            }
-            fn flush(&mut self) -> std::io::Result<()> {
-                Ok(())
-            }
-        }
+        // Shared complete-entry bound, before cloning a large command body.
         if let Some(entry) = entry {
-            serde_json::to_writer(Bound(2 * 1024 * 1024), entry)?;
+            super::validate_native_recovery_entry_size(entry)?;
         }
         Ok(entry.cloned())
     }

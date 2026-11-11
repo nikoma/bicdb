@@ -39,6 +39,8 @@ use crate::{
     SchemaCompatibilityAuthority, SchemaCompatibilityFingerprint, SignedClusterSchemaBundle,
 };
 
+mod native_image_install;
+
 pub const RANGE_LEARNER_APPLY_FORMAT_VERSION: u32 = 1;
 pub const DEFAULT_RANGE_LEARNER_APPLY_STATE: &str = "cluster-range-learner-apply.json";
 pub const DEFAULT_RANGE_DIGEST_STATE_DIR: &str = "cluster-range-digests";
@@ -885,12 +887,8 @@ impl ClusterDataNodeService {
         scope: &crate::distribution_range_consensus::RecoveryFenceScope,
         cancellation: &crate::CancellationToken,
     ) -> Result<()> {
-        let db = loop {
-            cancellation.check()?;
-            if let Some(db) = self.db.try_read_for(std::time::Duration::from_millis(5)) {
-                break db;
-            }
-        };
+        cancellation.check()?;
+        let db = try_database_read(&self.db)?;
         let native = db.native_recovery_admission(
             role.cluster_id(),
             role.bootstrap_id(),
@@ -900,6 +898,153 @@ impl ClusterDataNodeService {
         native.require_current(&db)?;
         self.range_writes
             .preflight_recovery_fence(role, &native, scope)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn preflight_recovery_image_transfer(
+        &mut self,
+        source: &crate::distribution_range_image::TentativeNativeRangeImageSourceAuthorization<'_>,
+        role: &crate::distribution_range_consensus::NativeImageInstallRole<'_>,
+        frozen: &crate::distribution_range_mutation::FrozenRangeMutationPermit,
+        purpose: crate::distribution_range_consensus::ImageInstallPurpose,
+        attempt_id: Uuid,
+        cancellation: &crate::CancellationToken,
+    ) -> Result<crate::distribution_range_consensus::NativeImageInstallTransferPreflight> {
+        cancellation.check()?;
+        let actual = role.role();
+        actual.require_live_request()?;
+        self.range_mutations
+            .validate_quiescent_frozen(actual.current_range().id, frozen)?;
+        cancellation.check()?;
+        let db = try_database_read(&self.db)?;
+        let native = db.native_recovery_admission(
+            actual.cluster_id(),
+            actual.bootstrap_id(),
+            actual.local_node_id(),
+            actual.local_member_incarnation(),
+        )?;
+        self.range_writes.preflight_recovery_image_install(
+            &db,
+            &native,
+            source,
+            role,
+            frozen,
+            purpose,
+            attempt_id,
+            cancellation,
+        )
+    }
+
+    /// Final transfer validation and owner rotation are one local critical
+    /// section. The caller already owns the session reservation and service
+    /// latch, so DB acquisition is nonwaiting and performs no RPC or drain.
+    pub(crate) fn rotate_recovery_image_transfer(
+        &self,
+        preflight: &crate::distribution_range_consensus::NativeImageInstallTransferPreflight,
+        source: &crate::distribution_range_image::TentativeNativeRangeImageSourceAuthorization<'_>,
+        role: &crate::distribution_range_consensus::NativeImageInstallRole<'_>,
+        frozen: &mut crate::distribution_range_mutation::FrozenRangeMutationPermit,
+        cancellation: &crate::CancellationToken,
+    ) -> Result<()> {
+        cancellation.check()?;
+        let db = self.db.try_read().ok_or_else(|| {
+            BicDbError::Cluster("native DB is busy before image freeze transfer".into())
+        })?;
+        let actual = role.role();
+        let native = db.native_recovery_admission(
+            actual.cluster_id(),
+            actual.bootstrap_id(),
+            actual.local_node_id(),
+            actual.local_member_incarnation(),
+        )?;
+        preflight.require_transfer_current(
+            &self.range_writes,
+            &db,
+            &native,
+            source,
+            role,
+            frozen,
+        )?;
+        self.range_mutations
+            .validate_quiescent_frozen(preflight.range_id(), frozen)?;
+        cancellation.check()?;
+        frozen.try_rotate_owner(preflight.attempt_id())
+    }
+
+    /// This returns only ownership to an unchanged ACTIVE recovery session.
+    /// Neither the sealed abort proof nor owner rotation grants user writes.
+    pub(crate) fn return_untouched_recovery_image_transfer(
+        &mut self,
+        original: &crate::distribution_range_consensus::NativeImageInstallTransferPreflight,
+        role: &crate::distribution_range_consensus::NativeImageInstallRole<'_>,
+        frozen: &mut crate::distribution_range_mutation::FrozenRangeMutationPermit,
+        parent: &crate::CancellationToken,
+    ) -> Result<()> {
+        parent.check()?;
+        let db = try_database_read(&self.db)?;
+        let actual = role.role();
+        let native = db.native_recovery_admission(
+            actual.cluster_id(),
+            actual.bootstrap_id(),
+            actual.local_node_id(),
+            actual.local_member_incarnation(),
+        )?;
+        self.range_writes
+            .require_image_install_recovery_scope(actual, &native)?;
+        let proof = self
+            .range_writes
+            .prove_untouched_image_transfer_return(original, &db, &native, role, frozen, parent)?;
+        if proof.range_id() != original.range_id()
+            || proof.attempt_id() != original.attempt_id()
+            || proof.nonce() != original.nonce()
+            || proof.session_id() != original.session_id()
+            || proof.original_freeze_owner() != original.original_freeze_owner()
+        {
+            return Err(data_error(
+                "untouched image proof differs from retained preflight",
+            ));
+        }
+        proof.require_current(&self.range_writes, &db, &native, role, frozen)?;
+        self.range_mutations
+            .validate_quiescent_frozen(proof.range_id(), frozen)?;
+        parent.check()?;
+        frozen.try_rotate_owner(proof.original_freeze_owner())
+    }
+
+    pub(crate) fn return_adopted_recovery_image_transfer(
+        &self,
+        finalization: &crate::distribution_range_image_install::NativeImageCatalogueFinalization,
+        role: &crate::distribution_range_consensus::NativeImageInstallRole<'_>,
+        scope: &crate::distribution_range_consensus::RecoveryFenceScope,
+        frozen: &mut crate::distribution_range_mutation::FrozenRangeMutationPermit,
+        parent: &crate::CancellationToken,
+    ) -> Result<()> {
+        parent.check()?;
+        scope.require_role(role.role())?;
+        let db = try_database_read(&self.db)?;
+        let actual = role.role();
+        let native = db.native_recovery_admission(
+            actual.cluster_id(),
+            actual.bootstrap_id(),
+            actual.local_node_id(),
+            actual.local_member_incarnation(),
+        )?;
+        self.range_writes
+            .require_image_install_recovery_scope(actual, &native)?;
+        if finalization.catalogue().native_database_incarnation() != native.database_incarnation()
+            || finalization.catalogue().range_id() != scope.range_id
+            || finalization.catalogue().nonce() != scope.recovery_nonce
+            || finalization.catalogue().session_id() != scope.freeze_owner()?
+        {
+            return Err(data_error(
+                "adopted image return differs from actual local recovery/native open",
+            ));
+        }
+        finalization.require_current(&self.range_writes, role, frozen)?;
+        self.range_mutations
+            .validate_quiescent_frozen(scope.range_id, frozen)?;
+        parent.check()?;
+        frozen.try_rotate_owner(scope.freeze_owner()?)
     }
 
     /// Receiver-only: the runtime already owns the drained range freeze and
@@ -914,12 +1059,8 @@ impl ClusterDataNodeService {
         cancellation.check()?;
         self.range_mutations
             .validate_quiescent_frozen(scope.range_id, frozen)?;
-        let db = loop {
-            cancellation.check()?;
-            if let Some(db) = self.db.try_read_for(std::time::Duration::from_millis(5)) {
-                break db;
-            }
-        };
+        cancellation.check()?;
+        let db = try_database_read(&self.db)?;
         let native = db.native_recovery_admission(
             role.cluster_id(),
             role.bootstrap_id(),
@@ -964,12 +1105,8 @@ impl ClusterDataNodeService {
         cancellation.check()?;
         self.range_mutations
             .validate_quiescent_frozen(scope.range_id, frozen)?;
-        let db = loop {
-            cancellation.check()?;
-            if let Some(db) = self.db.try_read_for(std::time::Duration::from_millis(5)) {
-                break db;
-            }
-        };
+        cancellation.check()?;
+        let db = try_database_read(&self.db)?;
         let native = db.native_recovery_admission(
             role.cluster_id(),
             role.bootstrap_id(),
@@ -1025,12 +1162,8 @@ impl ClusterDataNodeService {
         cancellation.check()?;
         decision.require_recipient_role(role)?;
         let controlled = self.range_mutations.try_controlled_mutation(frozen)?;
-        let db = loop {
-            cancellation.check()?;
-            if let Some(db) = self.db.try_read_for(std::time::Duration::from_millis(5)) {
-                break db;
-            }
-        };
+        cancellation.check()?;
+        let db = try_database_read(&self.db)?;
         let native = db.native_recovery_admission(
             role.cluster_id(),
             role.bootstrap_id(),
@@ -1064,12 +1197,8 @@ impl ClusterDataNodeService {
         cancellation.check()?;
         admission.require_recipient_role(role)?;
         let controlled = self.range_mutations.try_controlled_mutation(frozen)?;
-        let db = loop {
-            cancellation.check()?;
-            if let Some(db) = self.db.try_read_for(std::time::Duration::from_millis(5)) {
-                break db;
-            }
-        };
+        cancellation.check()?;
+        let db = try_database_read(&self.db)?;
         let native = db.native_recovery_admission(
             role.cluster_id(),
             role.bootstrap_id(),

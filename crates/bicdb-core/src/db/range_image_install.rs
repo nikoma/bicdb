@@ -554,6 +554,82 @@ impl NativeInstalledRangeImageBase {
 }
 
 impl BicDb {
+    /// Actual install-phase records, under the native journal and the owned
+    /// quiescent range freeze. This is a read-only commitment, not readiness.
+    pub(crate) fn native_image_install_phase_commitment(
+        &self,
+        range_id: RangeId,
+        frozen: &FrozenRangeMutationPermit,
+    ) -> Result<String> {
+        let _journal = self.try_native_image_journal()?;
+        self.range_mutations
+            .validate_quiescent_frozen(range_id, frozen)?;
+        let marker: Option<NativeInstalling> =
+            self.read_native_range_image_record(&active_key(range_id))?;
+        if let Some(marker) = &marker {
+            if marker.format_version != INSTALL_FORMAT
+                || marker.attempt_id.is_nil()
+                || marker.session_id.is_nil()
+                || marker.birth_id.is_nil()
+            {
+                return Err(invalid(
+                    "unknown native Installing contract during ownership preflight",
+                ));
+            }
+        }
+        let base: Option<NativeInstalledRangeImageReceipt> =
+            self.read_native_range_image_record(&base_key(range_id))?;
+        if let Some(base) = &base {
+            base.validate()?;
+        }
+        let stage = self.native_history_stage_state_commitment(range_id)?;
+        let bytes = bounded_json(
+            &("bicdb.native.image-phase.v1", range_id, marker, base, stage),
+            MAX_NATIVE_RECEIPT_BYTES
+                .saturating_mul(2)
+                .saturating_add(1024),
+        )?;
+        self.range_mutations
+            .validate_quiescent_frozen(range_id, frozen)?;
+        Ok(hex::encode(sha2::Sha256::digest(bytes)))
+    }
+
+    /// A previous other-attempt image may exist unchanged. This attempt must
+    /// have created no Installing, completed native base, or staged history.
+    pub(crate) fn require_no_native_image_install_state_for_attempt(
+        &self,
+        range_id: RangeId,
+        attempt_id: Uuid,
+        frozen: &FrozenRangeMutationPermit,
+    ) -> Result<()> {
+        if attempt_id.is_nil() {
+            return Err(invalid("nil image ownership-return attempt"));
+        }
+        let _journal = self.try_native_image_journal()?;
+        self.range_mutations
+            .validate_quiescent_frozen(range_id, frozen)?;
+        if let Some(marker) =
+            self.read_native_range_image_record::<NativeInstalling>(&active_key(range_id))?
+        {
+            if marker.format_version != INSTALL_FORMAT || marker.attempt_id == attempt_id {
+                return Err(invalid("this image attempt has persisted Installing state"));
+            }
+        }
+        if let Some(base) = self
+            .read_native_range_image_record::<NativeInstalledRangeImageReceipt>(&base_key(
+                range_id,
+            ))?
+        {
+            base.validate()?;
+            if base.attempt_id == attempt_id {
+                return Err(invalid("this image attempt has persisted a native base"));
+            }
+        }
+        self.require_no_native_history_stage_for_attempt(range_id, attempt_id)?;
+        self.range_mutations
+            .validate_quiescent_frozen(range_id, frozen)
+    }
+
     pub(crate) fn require_normal_native_range_mutation_allowed(
         &self,
         range_id: RangeId,

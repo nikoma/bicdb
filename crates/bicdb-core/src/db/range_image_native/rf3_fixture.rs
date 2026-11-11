@@ -187,6 +187,13 @@ pub(crate) struct ActualNativeRf3Fixture {
 }
 impl ActualNativeRf3Fixture {
     pub(crate) fn new() -> Self {
+        Self::new_with_network_precondition(&BTreeMap::new())
+    }
+    /// Test-only INITIAL identities, applied before actual native birth/genesis.
+    /// Never rebind an already-born database to newly invented credentials.
+    pub(crate) fn new_with_network_precondition(
+        network: &BTreeMap<ClusterNodeId, (String, String)>,
+    ) -> Self {
         let root = tempfile::tempdir().unwrap();
         let cluster = ClusterId::new("actual-native-rf3-origin").unwrap();
         let leader = ClusterNodeId::new("n0").unwrap();
@@ -240,6 +247,14 @@ impl ActualNativeRf3Fixture {
                     node_id: ClusterNodeId::new(id).unwrap(),
                     role: RangeReplicaRole::Voter,
                 });
+        }
+        if !network.is_empty() {
+            assert_eq!(network.len(), topology.nodes.len());
+            for (id, member) in &mut topology.nodes {
+                let (address, pin) = &network[id];
+                member.address = address.clone();
+                member.tls_certificate_sha256 = Some(pin.clone());
+            }
         }
         topology.validate().unwrap();
         let range = topology.ranges.values().next().unwrap().clone();
@@ -439,3 +454,54 @@ fn native_rf3_actual_services_ack_origin_while_bare_replica_apply_remains_refuse
     // This is a healthy local ACK/certificate component characterization. It
     // proves neither follower materialization nor RF3 crash-recovery readiness.
 }
+
+#[test]
+fn native_rf3_oversize_refuses_before_any_durable_quorum_or_native_pending() {
+    let fixture = ActualNativeRf3Fixture::new();
+    let leader = fixture.leader();
+    let key = "oversize-before-prepare";
+    let db = fixture.databases[&leader].write();
+    let mut tx = db.begin_transaction().unwrap();
+    tx.insert(
+        "items",
+        Record::new(key).with_metadata(serde_json::json!({
+            "body": "x".repeat(crate::distribution_range_consensus::MAX_NATIVE_RECOVERY_ENTRY_BYTES)
+        })),
+    )
+    .unwrap();
+    let error = tx.commit().unwrap_err();
+    assert!(
+        error.to_string().contains("serialized recovery payload"),
+        "{error}"
+    );
+    drop(db);
+    assert!(
+        fixture.transport.observations().is_empty(),
+        "no Prepare/Commit/Certify/Apply/Abort RPC may precede size refusal"
+    );
+    let topology = fixture.topology.read();
+    let range = topology.range_for_key("items", key).unwrap();
+    for (node, db) in &fixture.databases {
+        let probe = fixture.services[node]
+            .lock()
+            .probe_range_write_for_peer(range, &leader, 1)
+            .unwrap();
+        assert!(probe.entry.is_none());
+        assert_eq!(probe.progress.last_index, 0);
+        assert_eq!(probe.progress.resolved_through, 0);
+        let db = db.read();
+        assert_eq!(
+            db.current_native_range_source_lineage(range.id)
+                .unwrap()
+                .range_index(),
+            0
+        );
+        assert!(db.get("items", key).unwrap().is_none());
+    }
+    // A genuine healthy write must still ACK after this pre-decision refusal.
+    drop(topology);
+    fixture.append("healthy-after-oversize-refusal").unwrap();
+}
+
+#[cfg(feature = "tls-replication")]
+mod native_historical_tls;

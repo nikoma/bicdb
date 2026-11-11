@@ -120,23 +120,11 @@ impl HistoricalCommandDecisionRound {
         authority: Arc<FreshRangeRecoveryAuthority>,
         command: RangeWriteCommand,
     ) -> Result<Self> {
+        // Bound borrowed complete shape before checksum validation allocates
+        // a serialized command buffer, including for rejected peer input.
+        crate::distribution_range_consensus::validate_native_recovery_command_size(&command)?;
         command.validate()?;
         authority.require_historical_scope(&command)?;
-        // Receiver entry export has the same finite bound. Larger commands
-        // require a separately qualified image/history repair path.
-        struct Bound(usize);
-        impl std::io::Write for Bound {
-            fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
-                self.0 = self.0.checked_sub(bytes.len()).ok_or_else(|| {
-                    std::io::Error::other("historical candidate exceeds bounded 2MiB transport")
-                })?;
-                Ok(bytes.len())
-            }
-            fn flush(&mut self) -> std::io::Result<()> {
-                Ok(())
-            }
-        }
-        serde_json::to_writer(Bound(2 * 1024 * 1024), &command)?;
         Ok(Self {
             authority,
             command,
@@ -151,6 +139,25 @@ impl HistoricalCommandDecisionRound {
         }
         self.votes.insert(node, compact_vote(observation));
         Ok(())
+    }
+    pub(super) fn is_ready(&self) -> bool {
+        let q = self.authority.member_credentials().len() / 2 + 1;
+        self.votes.len() >= q
+            && !self
+                .votes
+                .values()
+                .any(|v| v.state == Some(RangeWriteState::Aborted))
+            && (self.votes.values().any(|v| {
+                matches!(
+                    v.state,
+                    Some(RangeWriteState::QuorumCommitted | RangeWriteState::Applied)
+                )
+            }) || self
+                .votes
+                .values()
+                .filter(|v| v.state == Some(RangeWriteState::Committed))
+                .count()
+                >= q)
     }
     pub(crate) fn finish(self) -> Result<HistoricalCommandDecision> {
         self.authority.require_live()?;
@@ -280,6 +287,9 @@ impl CurrentHistoricalCertificationRound {
         }
         self.votes.insert(node, compact_vote(observation));
         Ok(())
+    }
+    pub(super) fn is_ready(&self) -> bool {
+        self.votes.len() >= self.decision.authority().member_credentials().len() / 2 + 1
     }
     pub(crate) fn finish(self) -> Result<RecoveryApplyAdmission> {
         self.decision.require_live()?;

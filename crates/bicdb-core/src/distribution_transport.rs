@@ -101,13 +101,24 @@ fn transport_error(message: impl Into<String>) -> BicDbError {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-struct ClusterDataRequestEnvelope {
+struct ClusterDataRequestEnvelope<Request = ClusterDataRequest> {
     protocol_version: u32,
     cluster_id: ClusterId,
     caller_node_id: ClusterNodeId,
     destination_node_id: ClusterNodeId,
     request_id: u64,
-    request: ClusterDataRequest,
+    request: Request,
+}
+
+// Same private envelope and variant names as the actual sender, borrowing the
+// bounded command for a validation-only pass before any durable admission.
+#[derive(Serialize)]
+enum NativeCommandRequestRef<'a> {
+    PrepareRangeWrite { command: &'a RangeWriteCommand },
+    CommitRangeWrite { command: &'a RangeWriteCommand },
+    CertifyRangeWrite { command: &'a RangeWriteCommand },
+    ApplyRangeWrite { command: &'a RangeWriteCommand },
+    AbortRangeWrite { command: &'a RangeWriteCommand },
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -223,6 +234,12 @@ enum ClusterDataRequest {
     RecoveryFencedProbe {
         request: crate::distribution_range_recovery::RecoveryFencedProbeRequest,
     },
+    RecoveryCertifyHistorical {
+        request: crate::distribution_range_recovery::RecoveryHistoricalCommandRequest,
+    },
+    RecoveryApplyHistorical {
+        request: crate::distribution_range_recovery::RecoveryHistoricalCommandRequest,
+    },
     PrepareRangeWrite {
         command: RangeWriteCommand,
     },
@@ -325,6 +342,8 @@ impl ClusterDataRequest {
             Self::ApplyRangeWriteRepair { batch, .. } => Some(batch.range_id),
             Self::RecoveryEpochFence { request } => Some(request.scope.range_id),
             Self::RecoveryFencedProbe { request } => Some(request.scope.range_id),
+            Self::RecoveryCertifyHistorical { request }
+            | Self::RecoveryApplyHistorical { request } => Some(request.scope.range_id),
             Self::Ping
             | Self::Heartbeat { .. }
             | Self::StageTlsCertificateRotation { .. }
@@ -818,6 +837,34 @@ fn handle_cluster_data_connection(
                 CancellationToken::new(Arc::new(AtomicBool::new(false)), Some(request_deadline));
             return runtime
                 .observe_history(caller, &request, &token)
+                .map(|observation| {
+                    ClusterDataResponse::RecoveryFencedProbe(observation.into_reply())
+                });
+        }
+        if let ClusterDataRequest::RecoveryCertifyHistorical { request } = request.request {
+            let runtime = recovery_runtime
+                .ok_or_else(|| transport_error("native recovery runtime is not active"))?;
+            let caller = authenticated_caller.as_ref().ok_or_else(|| {
+                transport_error("historical certification requires an authenticated member")
+            })?;
+            let token =
+                CancellationToken::new(Arc::new(AtomicBool::new(false)), Some(request_deadline));
+            return runtime
+                .certify_historical(caller, &request, &token)
+                .map(|observation| {
+                    ClusterDataResponse::RecoveryFencedProbe(observation.into_reply())
+                });
+        }
+        if let ClusterDataRequest::RecoveryApplyHistorical { request } = request.request {
+            let runtime = recovery_runtime
+                .ok_or_else(|| transport_error("native recovery runtime is not active"))?;
+            let caller = authenticated_caller.as_ref().ok_or_else(|| {
+                transport_error("historical Apply requires an authenticated member")
+            })?;
+            let token =
+                CancellationToken::new(Arc::new(AtomicBool::new(false)), Some(request_deadline));
+            return runtime
+                .apply_historical(caller, &request, &token)
                 .map(|observation| {
                     ClusterDataResponse::RecoveryFencedProbe(observation.into_reply())
                 });
@@ -2235,6 +2282,10 @@ fn dispatch_cluster_data_request(
             }
             Ok(ClusterDataResponse::MetadataReadProbe(response))
         }
+        ClusterDataRequest::RecoveryCertifyHistorical { .. }
+        | ClusterDataRequest::RecoveryApplyHistorical { .. } => Err(transport_error(
+            "authenticated native historical recovery runtime is not active",
+        )),
         ClusterDataRequest::RecoveryFencedProbe { .. } => Err(transport_error(
             "recovery observations require authenticated receiver runtime",
         )),
@@ -3240,6 +3291,48 @@ impl TcpClusterRelocationTransport {
         }
     }
 
+    pub(crate) fn recovery_historical_command_observation(
+        &self,
+        destination: &ClusterNodeId,
+        request: &crate::distribution_range_recovery::RecoveryHistoricalCommandRequest,
+        apply: bool,
+        parent: &CancellationToken,
+    ) -> Result<crate::distribution_range_recovery::RecoveryHistoryObservation> {
+        let token = request.cancellation(parent)?;
+        let probe = request.probe()?;
+        let payload = if apply {
+            ClusterDataRequest::RecoveryApplyHistorical {
+                request: request.clone(),
+            }
+        } else {
+            ClusterDataRequest::RecoveryCertifyHistorical {
+                request: request.clone(),
+            }
+        };
+        crate::distribution_range_consensus::validate_native_json_size(
+            &ClusterDataRequestEnvelope {
+                protocol_version: CLUSTER_DATA_PROTOCOL_VERSION,
+                cluster_id: self.cluster_id.clone(),
+                caller_node_id: self.caller_node_id.clone(),
+                destination_node_id: destination.clone(),
+                request_id: u64::MAX,
+                request: &payload,
+            },
+            self.config.max_frame_bytes,
+        )?;
+        let (response, peer) =
+            self.call_with_read_participant_cancellable(&token, destination, payload)?;
+        match response {
+            ClusterDataResponse::RecoveryFencedProbe(reply) => {
+                crate::distribution_range_recovery::RecoveryHistoryObservation::from_transport(
+                    AuthenticatedRecoveryProbeReply { reply, peer },
+                    &probe,
+                    token.deadline().unwrap(),
+                )
+            }
+            response => Err(unexpected_response("historical native recovery", response)),
+        }
+    }
     pub(crate) fn recovery_fenced_history_observation(
         &self,
         destination: &ClusterNodeId,
@@ -3344,6 +3437,8 @@ impl TcpClusterRelocationTransport {
                 | ClusterDataRequest::AcquireMetadataRecoveryRole { .. }
                 | ClusterDataRequest::RecoveryEpochFence { .. }
                 | ClusterDataRequest::RecoveryFencedProbe { .. }
+                | ClusterDataRequest::RecoveryCertifyHistorical { .. }
+                | ClusterDataRequest::RecoveryApplyHistorical { .. }
         );
         let network_deadline = Instant::now() + Duration::from_millis(self.config.io_timeout_ms);
         let deadline = cancellation
@@ -3523,6 +3618,54 @@ fn unexpected_response(expected: &str, response: ClusterDataResponse) -> BicDbEr
 }
 
 impl RangeWriteTransport for TcpClusterRelocationTransport {
+    fn recovery_historical_command_observation(
+        &self,
+        destination: &ClusterNodeId,
+        request: &crate::distribution_range_recovery::RecoveryHistoricalCommandRequest,
+        apply: bool,
+        parent: &CancellationToken,
+    ) -> Result<crate::distribution_range_recovery::RecoveryHistoryObservation> {
+        self.recovery_historical_command_observation(destination, request, apply, parent)
+    }
+
+    fn validate_native_command_pre_admission(
+        &self,
+        destinations: &[ClusterNodeId],
+        command: &RangeWriteCommand,
+    ) -> Result<()> {
+        use crate::distribution_range_consensus::{
+            validate_native_json_size, validate_native_recovery_command_size,
+            MIN_NATIVE_RECOVERY_FRAME_BYTES,
+        };
+        validate_native_recovery_command_size(command)?;
+        if self.config.max_frame_bytes < MIN_NATIVE_RECOVERY_FRAME_BYTES {
+            return Err(transport_error(
+                "native recovery requires configured max_frame_bytes >= 4MiB; legacy transport limits are unchanged",
+            ));
+        }
+        for destination in destinations {
+            for request in [
+                NativeCommandRequestRef::PrepareRangeWrite { command },
+                NativeCommandRequestRef::CommitRangeWrite { command },
+                NativeCommandRequestRef::CertifyRangeWrite { command },
+                NativeCommandRequestRef::ApplyRangeWrite { command },
+                NativeCommandRequestRef::AbortRangeWrite { command },
+            ] {
+                let envelope = ClusterDataRequestEnvelope {
+                    protocol_version: CLUSTER_DATA_PROTOCOL_VERSION,
+                    cluster_id: self.cluster_id.clone(),
+                    caller_node_id: self.caller_node_id.clone(),
+                    destination_node_id: destination.clone(),
+                    // Conservative width without consuming a live request ID.
+                    request_id: u64::MAX,
+                    request,
+                };
+                validate_native_json_size(&envelope, self.config.max_frame_bytes)?;
+            }
+        }
+        Ok(())
+    }
+
     fn recovery_fenced_history_observation(
         &self,
         destination: &ClusterNodeId,
@@ -4036,6 +4179,86 @@ impl ClusterRelocationTransport for TcpClusterRelocationTransport {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn native_preflight_binds_actual_envelope_and_refuses_small_frame_without_io() {
+        use crate::distribution_range_consensus::{
+            native_origin_fixture, native_ready_test_command,
+        };
+        let (_root, _db, topology, _spec) = native_origin_fixture();
+        let range = topology.range_for_key("items", "frame").unwrap();
+        let caller = range.leader.clone();
+        let command = native_ready_test_command(
+            topology.cluster_id.clone(),
+            range,
+            1,
+            caller.clone(),
+            &crate::db::CommitAdmissionIntent {
+                transaction_id: 1,
+                mutations: vec![crate::db::CommitAdmissionMutation {
+                    collection: "items".into(),
+                    record_id: "frame".into(),
+                    record: Some(crate::Record::new("frame")),
+                }],
+            },
+        )
+        .unwrap();
+        let base = ClusterNetworkTransportConfig {
+            dev_localhost_plaintext: true,
+            ..Default::default()
+        };
+        let transport = TcpClusterRelocationTransport::new(
+            topology.cluster_id.clone(),
+            caller.clone(),
+            Arc::new(RwLock::new(topology.clone())),
+            base,
+        )
+        .unwrap();
+        transport
+            .validate_native_command_pre_admission(std::slice::from_ref(&caller), &command)
+            .unwrap();
+        assert_eq!(transport.next_request_id.load(Ordering::SeqCst), 1);
+        let borrowed = ClusterDataRequestEnvelope {
+            protocol_version: CLUSTER_DATA_PROTOCOL_VERSION,
+            cluster_id: topology.cluster_id.clone(),
+            caller_node_id: caller.clone(),
+            destination_node_id: caller.clone(),
+            request_id: u64::MAX,
+            request: NativeCommandRequestRef::CertifyRangeWrite { command: &command },
+        };
+        let actual = ClusterDataRequestEnvelope {
+            protocol_version: CLUSTER_DATA_PROTOCOL_VERSION,
+            cluster_id: topology.cluster_id.clone(),
+            caller_node_id: caller.clone(),
+            destination_node_id: caller.clone(),
+            request_id: u64::MAX,
+            request: ClusterDataRequest::CertifyRangeWrite {
+                command: command.clone(),
+            },
+        };
+        assert_eq!(
+            serde_json::to_vec(&borrowed).unwrap(),
+            serde_json::to_vec(&actual).unwrap()
+        );
+        let small = TcpClusterRelocationTransport::new(
+            topology.cluster_id.clone(),
+            caller.clone(),
+            Arc::new(RwLock::new(topology)),
+            ClusterNetworkTransportConfig {
+                dev_localhost_plaintext: true,
+                max_frame_bytes: 64 * 1024,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        assert!(small
+            .validate_native_command_pre_admission(std::slice::from_ref(&caller), &command)
+            .unwrap_err()
+            .to_string()
+            .contains("max_frame_bytes >= 4MiB"));
+        assert_eq!(small.next_request_id.load(Ordering::SeqCst), 1);
+        // No listener exists: both validation paths complete without network I/O.
+    }
 
     #[test]
     fn metadata_read_authority_round_correlates_fresh_wire_and_preserves_legacy_append_shape() {

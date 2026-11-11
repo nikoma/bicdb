@@ -55,13 +55,22 @@ mod recovery_state;
 pub(crate) use image_install_state::ImageInstallPurpose;
 use image_install_state::{ImageInstallIntent, IMAGE_INSTALL_RANGE_LOG_FORMAT};
 mod image_install_fence;
-pub(crate) use image_install_fence::{NativeImageInstallRole, TargetImageInstallFence};
+pub(crate) use image_install_fence::{
+    NativeImageInstallRole, NativeImageInstallTransferPreflight, TargetImageInstallFence,
+    UntouchedNativeImageTransferReturn,
+};
 use recovery_state::RecoveryFenceRecord;
 pub(crate) use recovery_state::{
     HistoricalRangeCertification, RecoveryFenceScope, RecoveryImageInstallSessionObservation,
     RecoveryLocalHistoricalApplyObservation, RecoveryResolvedCatalogObservation,
 };
 
+mod native_limits;
+pub(crate) use native_limits::{
+    validate_native_json_size, validate_native_recovery_command_size,
+    validate_native_recovery_entry_size, MAX_NATIVE_RECOVERY_ENTRY_BYTES,
+    MIN_NATIVE_RECOVERY_FRAME_BYTES,
+};
 mod native_prefix;
 #[cfg(test)]
 pub(crate) use native_prefix::tests::{
@@ -163,6 +172,60 @@ impl RangeWriteCommand {
         };
         command.checksum_sha256 = command.calculate_checksum()?;
         command.validate()?;
+        Ok(command)
+    }
+
+    fn new_native_bounded(
+        cluster_id: ClusterId,
+        range: &RangeDescriptor,
+        index: u64,
+        leader_node_id: ClusterNodeId,
+        intent: &CommitAdmissionIntent,
+    ) -> Result<Self> {
+        // Serialize complete shape by reference BEFORE cloning large records
+        // or allocating a checksum buffer. Native refusals precede Prepare.
+        #[derive(Serialize)]
+        struct Candidate<'a> {
+            protocol_version: u32,
+            cluster_id: &'a ClusterId,
+            range_id: RangeId,
+            range_epoch: u64,
+            index: u64,
+            command_id: &'a str,
+            leader_node_id: &'a ClusterNodeId,
+            transaction_id: u64,
+            mutations: &'a [CommitAdmissionMutation],
+            checksum_sha256: &'a str,
+        }
+        let command_id = Uuid::now_v7().to_string();
+        let checksum_placeholder = "0".repeat(64);
+        native_limits::validate_native_recovery_command_shape(&Candidate {
+            protocol_version: RANGE_WRITE_PROTOCOL_VERSION,
+            cluster_id: &cluster_id,
+            range_id: range.id,
+            range_epoch: range.epoch,
+            index,
+            command_id: &command_id,
+            leader_node_id: &leader_node_id,
+            transaction_id: intent.transaction_id,
+            mutations: &intent.mutations,
+            checksum_sha256: &checksum_placeholder,
+        })?;
+        let mut command = Self {
+            protocol_version: RANGE_WRITE_PROTOCOL_VERSION,
+            cluster_id,
+            range_id: range.id,
+            range_epoch: range.epoch,
+            index,
+            command_id,
+            leader_node_id,
+            transaction_id: intent.transaction_id,
+            mutations: intent.mutations.clone(),
+            checksum_sha256: String::new(),
+        };
+        command.checksum_sha256 = command.calculate_checksum()?;
+        command.validate()?;
+        validate_native_recovery_command_size(&command)?;
         Ok(command)
     }
 
@@ -1450,6 +1513,29 @@ pub struct RangeWriteAck {
 }
 
 pub trait RangeWriteTransport: std::fmt::Debug + Send + Sync + 'static {
+    fn recovery_historical_command_observation(
+        &self,
+        destination: &ClusterNodeId,
+        request: &crate::distribution_range_recovery::RecoveryHistoricalCommandRequest,
+        apply: bool,
+        parent: &CancellationToken,
+    ) -> Result<crate::distribution_range_recovery::RecoveryHistoryObservation> {
+        let _ = (destination, request, apply, parent);
+        Err(range_write_error(
+            "transport does not support authenticated historical recovery",
+        ))
+    }
+
+    /// Validation only, before any durable native Prepare. Embedded transports
+    /// have no TCP frame; production TCP overrides its configured envelope cap.
+    fn validate_native_command_pre_admission(
+        &self,
+        _voters: &[ClusterNodeId],
+        command: &RangeWriteCommand,
+    ) -> Result<()> {
+        validate_native_recovery_command_size(command)
+    }
+
     fn recovery_fenced_history_observation(
         &self,
         destination: &ClusterNodeId,
@@ -2802,13 +2888,26 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
             .collect::<Vec<_>>();
 
         let index = self.local_service.lock().next_range_write_index(range.id);
-        let command = RangeWriteCommand::new(
-            self.cluster_id.clone(),
-            &range,
-            index,
-            self.local_node_id.clone(),
-            intent,
-        )?;
+        let command = if native_database.is_some() {
+            let command = RangeWriteCommand::new_native_bounded(
+                self.cluster_id.clone(),
+                &range,
+                index,
+                self.local_node_id.clone(),
+                intent,
+            )?;
+            self.transport
+                .validate_native_command_pre_admission(&voters, &command)?;
+            command
+        } else {
+            RangeWriteCommand::new(
+                self.cluster_id.clone(),
+                &range,
+                index,
+                self.local_node_id.clone(),
+                intent,
+            )?
+        };
         let native_plan = if let Some(database) = native_database {
             let topology = self.topology.read();
             let bootstrap = topology.range_image_bootstrap_id.ok_or_else(|| {

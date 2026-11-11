@@ -29,7 +29,7 @@ pub(crate) use image_history::{
     RecoveryImageHistoryObligationsV1, RecoveryNativeHistoryPointV1, RecoveryNativePendingHistoryV1,
 };
 mod runtime;
-pub(crate) use runtime::RangeRecoveryRuntime;
+pub(crate) use runtime::{RangeRecoveryRuntime, RecoveryImageInstallFreeze};
 mod quorum;
 pub(crate) use quorum::{FreshRangeRecoveryAuthority, RecoveryFenceQuorumRound};
 mod historical;
@@ -53,6 +53,40 @@ pub(crate) struct RecoveryFencedProbeRequest {
     /// None requests status only. An absent compacted entry remains unknown.
     pub index: Option<u64>,
     pub budget_ms: u64,
+}
+/// Command body only; every recipient independently gathers its own fresh
+/// role, fenced quorum and current certification quorum before side effects.
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct RecoveryHistoricalCommandRequest {
+    pub scope: RecoveryFenceScope,
+    pub command: RangeWriteCommand,
+    pub budget_ms: u64,
+}
+impl RecoveryHistoricalCommandRequest {
+    pub(crate) fn probe(&self) -> Result<RecoveryFencedProbeRequest> {
+        crate::distribution_range_consensus::validate_native_recovery_command_size(&self.command)?;
+        self.command.validate()?;
+        if self.command.cluster_id != self.scope.cluster_id
+            || self.command.range_id != self.scope.range_id
+            || self.command.range_epoch > self.scope.range_epoch
+        {
+            return Err(invalid(
+                "historical request command is outside current recovery scope",
+            ));
+        }
+        Ok(RecoveryFencedProbeRequest {
+            scope: self.scope.clone(),
+            index: Some(self.command.index),
+            budget_ms: self.budget_ms,
+        })
+    }
+    pub(crate) fn cancellation(
+        &self,
+        parent: &crate::CancellationToken,
+    ) -> Result<crate::CancellationToken> {
+        self.probe()?.cancellation(parent)
+    }
 }
 impl RecoveryFencedProbeRequest {
     pub(crate) fn cancellation(

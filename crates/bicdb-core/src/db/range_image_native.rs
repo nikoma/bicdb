@@ -52,7 +52,7 @@ const MAX_WAIT: Duration = Duration::from_secs(300);
 
 /// Native journal serialization bound to the actual current DB open. It is
 /// not a mutation, quorum or source-lineage authority.
-struct NativeImageJournalGuard<'a> {
+pub(super) struct NativeImageJournalGuard<'a> {
     database_incarnation: &'a str,
     _guard: parking_lot::MutexGuard<'a, ()>,
 }
@@ -478,7 +478,7 @@ fn genesis_key(range_id: RangeId) -> String {
 }
 
 impl BicDb {
-    fn try_native_image_journal(&self) -> Result<NativeImageJournalGuard<'_>> {
+    pub(super) fn try_native_image_journal(&self) -> Result<NativeImageJournalGuard<'_>> {
         Ok(NativeImageJournalGuard {
             database_incarnation: &self.incarnation,
             _guard: self

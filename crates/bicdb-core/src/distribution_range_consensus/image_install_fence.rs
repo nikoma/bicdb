@@ -115,7 +115,7 @@ impl NativeImageInstallRole<'_> {
                     role.purpose(),
                     crate::distribution_consensus::MetadataRecoveryRolePurpose::NormalRecovery
                 ) || role.recovery_nonce() != nonce
-                    || role.business_request_id() != session
+                    || role.recovery_nonce() != session
                 {
                     return Err(range_write_error(
                         "current-voter repair is not for this fresh recovery session",

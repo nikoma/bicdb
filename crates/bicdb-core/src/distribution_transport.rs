@@ -45,7 +45,7 @@ use crate::distribution_metadata_read_provider::{
 };
 use crate::distribution_range_consensus::{
     RangeWriteAck, RangeWriteCommand, RangeWriteProbe, RangeWriteProgress, RangeWriteRepairBatch,
-    RangeWriteRepairLimits, RangeWriteTransport,
+    RangeWriteRepairLimits, RangeWriteState, RangeWriteTransport,
 };
 use crate::distribution_schema_rollout::{
     ClusterSchemaActivationTransport, ClusterSchemaFinalizationTransport,

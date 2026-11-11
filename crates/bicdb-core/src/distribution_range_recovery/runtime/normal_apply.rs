@@ -84,7 +84,7 @@ impl RangeRecoveryRuntime {
             &token,
         )?;
         let admission =
-            NativeLeaderInstructionAdmission::from_actual_peer(role, initiator.clone(), request)?;
+            NativeLeaderInstructionAdmission::from_actual_peer(role, initiator, request)?;
         let mut service = loop {
             token.check()?;
             if let Some(service) = self.service.try_lock_for(LATCH_POLL) {

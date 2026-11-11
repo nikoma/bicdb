@@ -126,14 +126,17 @@ fn digest(value: &str) -> bool {
 #[derive(Debug)]
 pub(crate) struct NativeLeaderInstructionAdmission {
     role: RecoveryRoleAdmission,
-    peer: MetadataReadParticipant,
+    peer_node_id: ClusterNodeId,
+    peer_incarnation: u64,
+    peer_pin: Option<String>,
+    peer_plaintext: bool,
     request: NativeOriginApplyRequest,
     intent: NativeRangeCommandIntent,
 }
 impl NativeLeaderInstructionAdmission {
     pub(crate) fn from_actual_peer(
         role: RecoveryRoleAdmission,
-        peer: MetadataReadParticipant,
+        peer: &MetadataReadParticipant,
         request: NativeOriginApplyRequest,
     ) -> Result<Self> {
         role.require_live_request()?;
@@ -175,7 +178,10 @@ impl NativeLeaderInstructionAdmission {
         }
         Ok(Self {
             role,
-            peer,
+            peer_node_id: peer.node_id().clone(),
+            peer_incarnation: peer.member_incarnation(),
+            peer_pin: peer.certificate_sha256().map(str::to_owned),
+            peer_plaintext: peer.plaintext_loopback(),
             request,
             intent,
         })
@@ -186,8 +192,8 @@ impl NativeLeaderInstructionAdmission {
     pub(crate) fn role(&self) -> &RecoveryRoleAdmission {
         &self.role
     }
-    pub(crate) fn peer(&self) -> &MetadataReadParticipant {
-        &self.peer
+    pub(crate) fn peer_node_id(&self) -> &ClusterNodeId {
+        &self.peer_node_id
     }
     pub(crate) fn command(&self) -> &RangeWriteCommand {
         &self.request.command
@@ -202,8 +208,8 @@ impl NativeLeaderInstructionAdmission {
         &self,
     ) -> crate::distribution_range_consensus::NativeRangeCertificateEvidence {
         crate::distribution_range_consensus::NativeRangeCertificateEvidence::AuthenticatedLeaderInstruction {
-            leader_node_id: self.peer.node_id().clone(), leader_incarnation: self.peer.member_incarnation(),
-            peer_certificate_sha256: self.peer.certificate_sha256().map(str::to_owned), plaintext_loopback: self.peer.plaintext_loopback(),
+            leader_node_id: self.peer_node_id.clone(), leader_incarnation: self.peer_incarnation,
+            peer_certificate_sha256: self.peer_pin.clone(), plaintext_loopback: self.peer_plaintext,
             bootstrap_id: self.role.bootstrap_id(), range_epoch: self.role.current_range().epoch,
             metadata_context_id: self.role.context_id(), metadata_term: self.role.metadata_term(), metadata_read_index: self.role.metadata_read_index(),
             restore_activation: self.role.restore_activation().cloned(), scope_sha256: self.intent.scope_sha256().into(),

@@ -45,7 +45,7 @@ impl ClusterDataNodeService {
         let gate = self.range_mutations.clone();
         let permit = gate.try_enter(range.id)?;
         let authority = RangeMutationAuthority::Mutation(&permit);
-        self.validate_range_write(range, admission.peer().node_id(), command)?;
+        self.validate_range_write(range, admission.peer_node_id(), command)?;
         self.range_writes.normal_native_write_allowed(command)?;
         if !matches!(
             self.range_writes.state(command)?,

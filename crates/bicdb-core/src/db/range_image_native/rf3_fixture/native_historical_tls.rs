@@ -1057,6 +1057,19 @@ fn native_completion_actual_tls_sequential_replicas_keep_frozen_pins_and_duplica
         .iter()
         .map(|(id, db)| (id.clone(), db.read().current_commit_seq()))
         .collect::<BTreeMap<_, _>>();
+    let original_records = fixture
+        .native
+        .databases
+        .iter()
+        .map(|(id, db)| {
+            let record = db
+                .read()
+                .get("items", "actual-tls-historical")
+                .unwrap()
+                .unwrap();
+            (id.clone(), record)
+        })
+        .collect::<BTreeMap<_, _>>();
     for name in ["n0", "n1", "n2"] {
         let result = fixture.complete(name, &scope).unwrap();
         fixture.wait_idle();
@@ -1080,8 +1093,13 @@ fn native_completion_actual_tls_sequential_replicas_keep_frozen_pins_and_duplica
         let status = fixture.completion_status(name, &scope).unwrap();
         fixture.wait_idle();
         assert_eq!(status.reply().native_serving_sha256, hashes[&node(name)]);
+        assert_eq!(fixture.native_index(name), 1);
         let db = fixture.native.databases[&node(name)].read();
         assert_eq!(db.current_commit_seq(), before[&node(name)]);
+        assert_eq!(
+            db.get("items", "actual-tls-historical").unwrap().as_ref(),
+            Some(&original_records[&node(name)])
+        );
         assert!(db.range_mutation_gate().try_enter(scope.range_id).is_err());
     }
     // These are actual incoming Complete/readonly TLS RPCs with fresh peer QQ.

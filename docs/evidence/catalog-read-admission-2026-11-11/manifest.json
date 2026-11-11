@@ -1,0 +1,90 @@
+{
+  "format": 1,
+  "scope": "Private source-specific original catalog admission evidence; no full producer/application/HA qualification",
+  "files": {
+    "private-catalog-current471-integration-d1c7e16a-spec.json": {
+      "sha256": "47e77342502c167f4f04c65ad31f94b57954478afe877fb0ff557f5dde9646aa",
+      "bytes": 2581
+    },
+    "private-catalog-record-control-73b120fc-spec.json": {
+      "sha256": "467193d8ebf0872c0eda280b60634eb845a14ee733fb30809574d49fea25911e",
+      "bytes": 1681
+    },
+    "private-catalog-record-positive-c5edfd49-spec.json": {
+      "sha256": "a9f643afb2b8e2f1926e8f385801bb05adc3031590496510beced9ac7e4bbbdd",
+      "bytes": 2122
+    },
+    "private-sql-catalog-owner-control-47f1b038-spec.json": {
+      "sha256": "2874d6665d84a29852b08232b5fc0039a3e7591eed19203e4ddc6d6aef5acfd1",
+      "bytes": 1236
+    },
+    "private-sql-catalog-owner-positive-a339fa54-spec.json": {
+      "sha256": "c0e708e36ed58b59118916d21244fba96d6c6012d47d844156323a423a74305c",
+      "bytes": 2006
+    },
+    "private-sql-catalog-read-control-2970861b-spec.json": {
+      "sha256": "efc1b18da322f8a5c0cbeb3320bbe9b83ff696aa82581f6dd4ecb7fb44715af9",
+      "bytes": 1620
+    },
+    "private-sql-catalog-read-positive-86f12f19-spec.json": {
+      "sha256": "0914da7cfdc4f489693ce3c3738df837a1a4af824e26f819e844018b538079be",
+      "bytes": 2393
+    },
+    "report-private-catalog-current471-integration-d1c7e16a.json": {
+      "sha256": "ea2fca7d148c66f901004cf9d7f1e065bb07372d0a058d0701abe1ff342e8bff",
+      "bytes": 3196
+    },
+    "report-private-catalog-record-control-73b120fc.json": {
+      "sha256": "9d133cead0a20c0462dd7cb04317b7c742ffde22a7199808be3d70aa58e76104",
+      "bytes": 1389
+    },
+    "report-private-catalog-record-positive-c5edfd49.json": {
+      "sha256": "22442787181fe6f6ddd223ba40070557faaeb1ff9108cc6a38aea5dc1e90da16",
+      "bytes": 2420
+    },
+    "report-private-sql-catalog-owner-control-47f1b038.json": {
+      "sha256": "12aaeefec76c975a55b6d795e10835c38714587974761fa1189912915135b7ad",
+      "bytes": 1177
+    },
+    "report-private-sql-catalog-owner-positive-a339fa54.json": {
+      "sha256": "a167a34f4928d41e3fdfc39a86cde0904955c8f188a5ee3788dc50873b6add77",
+      "bytes": 2164
+    },
+    "report-private-sql-catalog-read-control-2970861b.json": {
+      "sha256": "ad9130335d3e86b685f0afb46cb76f7f0bde1626d37221249d839149d41be32c",
+      "bytes": 1314
+    },
+    "report-private-sql-catalog-read-positive-86f12f19.json": {
+      "sha256": "77925671d94f876993a2807a6f44b74bcbbc8e0b169265457137a111dc01ac11",
+      "bytes": 2702
+    },
+    "tc-step-private-catalog-current471-integration-d1c7e16a.log": {
+      "sha256": "89507a4e55c31928edf730a9c26015b8c90f8ea080e846af4894c762e82c8d3b",
+      "bytes": 341233
+    },
+    "tc-step-private-catalog-record-control-73b120fc.log": {
+      "sha256": "5c634f99221836ac207269754cb4b23d3716301b3207405df2410186c50aaa52",
+      "bytes": 65769
+    },
+    "tc-step-private-catalog-record-positive-c5edfd49.log": {
+      "sha256": "f6169c58e3a20e412195b26f4f80c0dd2d676f75f2fc9287e46f7bb93f61dedb",
+      "bytes": 217610
+    },
+    "tc-step-private-sql-catalog-owner-control-47f1b038.log": {
+      "sha256": "1f2bcab0e305f10b084d4ba5f84d8f862a586215fd92fac44962311d89842ce0",
+      "bytes": 86640
+    },
+    "tc-step-private-sql-catalog-owner-positive-a339fa54.log": {
+      "sha256": "857429fffd343cfb834591a24ff2046048326c7258c5521de65234e5fa806bba",
+      "bytes": 160019
+    },
+    "tc-step-private-sql-catalog-read-control-2970861b.log": {
+      "sha256": "1049eaf12944347feec0ace7955694398c640e5f4edf9a986b6f7e49c54c67a2",
+      "bytes": 87334
+    },
+    "tc-step-private-sql-catalog-read-positive-86f12f19.log": {
+      "sha256": "f4046846f184bbddf924ee5bb6a1f61bd804d8ce2e7de147f781f70504091a54",
+      "bytes": 242710
+    }
+  }
+}

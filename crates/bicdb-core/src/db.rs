@@ -3,6 +3,7 @@ mod branching;
 mod collection_rename;
 mod commit_snapshot;
 mod deferred_materialize;
+mod local_namespace_identity;
 pub use deferred_materialize::DeferredMaterializeStats;
 mod ha_bootstrap;
 mod ha_node;
@@ -936,6 +937,11 @@ impl ClusterSchemaStageState {
 
 impl ClusterSchemaBundle {
     fn calculate_checksum(&self) -> Result<String> {
+        let portable_collections = self
+            .collections
+            .iter()
+            .map(CollectionMeta::portable_contract)
+            .collect::<Vec<_>>();
         #[derive(Serialize)]
         struct Payload<'a> {
             format_version: u32,
@@ -948,7 +954,7 @@ impl ClusterSchemaBundle {
             &Payload {
                 format_version: self.format_version,
                 fingerprint: &self.fingerprint,
-                collections: &self.collections,
+                collections: &portable_collections,
                 indexes: &self.indexes,
                 structural_records: &self.structural_records,
             },
@@ -1094,7 +1100,7 @@ fn calculate_schema_compatibility_fingerprint(
     #[derive(Serialize)]
     struct Payload<'a> {
         format_version: u32,
-        user_collections: Vec<&'a CollectionMeta>,
+        user_collections: Vec<CollectionMeta>,
         indexes: Vec<&'a IndexDefinition>,
         structural_records: Vec<StructuralRecord<'a>>,
     }
@@ -1102,6 +1108,7 @@ fn calculate_schema_compatibility_fingerprint(
     let mut user_collections = collections
         .iter()
         .filter(|meta| !meta.name.starts_with("__bicdb_"))
+        .map(CollectionMeta::portable_contract)
         .collect::<Vec<_>>();
     user_collections.sort_by(|left, right| left.name.cmp(&right.name));
     let mut indexes = indexes.iter().collect::<Vec<_>>();
@@ -3885,6 +3892,8 @@ pub struct BicDb {
     /// than only the paged one.
     _directory_lock: Option<Arc<bicdb_page::DirectoryLock>>,
     config: DbConfig,
+    // Opt-in, sticky local format capability; never a portable reader flag.
+    local_namespace_identity_active: bool,
     ha_state: HaState,
     replication_state: ReplicationApplyState,
     consensus_state: ConsensusState,
@@ -8801,7 +8810,7 @@ fn tx_write_to_replication_write(
         operation,
         payload,
         schema_version: 0,
-        collection_meta,
+        collection_meta: collection_meta.map(|meta| meta.portable_contract()),
     })
 }
 
@@ -10020,6 +10029,10 @@ impl BicDb {
             load_replication_state(&path, &config.replication, tx_recovery.last_commit_seq)?;
         open_trace!("tx_recovery");
         let metas = load_catalog(&path.join(DEFAULT_COLLECTION_CATALOG), &encryption)?;
+        let local_namespace_identity_active = format::read_or_legacy_metadata(&path)?
+            .feature_flags
+            .contains(format::LOCAL_NAMESPACE_IDENTITY_FEATURE_FLAG);
+        local_namespace_identity::validate_catalog(&metas, local_namespace_identity_active)?;
         // Physical storage names must be known before any row is read, and an
         // interrupted rename (renamed_from still set) maps index definitions
         // still recorded under the old name.
@@ -10802,6 +10815,7 @@ impl BicDb {
             incarnation: incarnation.clone(),
             _directory_lock: Some(Arc::new(directory_lock)),
             config,
+            local_namespace_identity_active,
             ha_state,
             replication_state,
             consensus_state,
@@ -11932,7 +11946,8 @@ impl BicDb {
         Self::validate_range_snapshot_fields(range, collection_meta, batch)?;
         if !self.collections.contains_key(&batch.collection) {
             validate_collection_name(&batch.collection)?;
-            let mut state = CollectionState::new(collection_meta.clone());
+            let local_meta = self.new_local_collection_metadata(collection_meta);
+            let mut state = CollectionState::new(local_meta);
             state.paged_lazy = self.paged_records.is_some();
             self.collections
                 .insert(batch.collection.clone(), RwLock::new(state));
@@ -11980,7 +11995,12 @@ impl BicDb {
         batch: &RangeSnapshotBatch,
     ) -> Result<usize> {
         Self::validate_range_snapshot_fields(range, collection_meta, batch)?;
-        if self.collection_state(&batch.collection)?.meta != *collection_meta {
+        if self
+            .collection_state(&batch.collection)?
+            .meta
+            .portable_contract()
+            != collection_meta.portable_contract()
+        {
             return Err(BicDbError::Cluster(format!(
                 "snapshot collection metadata for `{}` conflicts with the destination catalog",
                 batch.collection
@@ -12025,7 +12045,7 @@ impl BicDb {
             validate_replication_collection_meta(write)?;
             let state = self.collection_state(&write.collection)?;
             if let Some(meta) = &write.collection_meta {
-                if state.meta != *meta {
+                if state.meta.portable_contract() != meta.portable_contract() {
                     return Err(BicDbError::Cluster(format!(
                         "catch-up collection `{}` differs from its installed schema",
                         write.collection
@@ -12229,6 +12249,7 @@ impl BicDb {
                 .clone()
                 .unwrap_or_else(|| CollectionMeta::standard(write.collection.clone()));
             meta.name = write.collection.clone();
+            let meta = self.new_local_collection_metadata(&meta);
             self.collections.insert(
                 write.collection.clone(),
                 RwLock::new(CollectionState::new(meta)),
@@ -12388,6 +12409,7 @@ impl BicDb {
             flashback: None,
             storage_name: storage_name.clone(),
             renamed_from: None,
+            local_namespace_id: self.fresh_local_namespace_identity(),
         };
         if let Some(storage) = storage_name {
             self.set_storage_alias(name, &storage);

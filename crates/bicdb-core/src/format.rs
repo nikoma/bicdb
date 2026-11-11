@@ -25,16 +25,39 @@ pub const ONLINE_BACKUP_EXTENT_FEATURE_FLAG: &str = "online_backup_extent_tracki
 pub const UNIQUE_NULLS_NOT_DISTINCT_FEATURE_FLAG: &str = "unique_nulls_not_distinct_v1";
 pub const ORACLE_INVALID_ROUTINES_FEATURE_FLAG: &str = "oracle_invalid_routines_v1";
 pub const SQL_CATALOG_INTENTS_FEATURE_FLAG: &str = "sql_catalog_intents_v1";
+/// Node-local namespace lineage. Never replicate this as a portable schema
+/// reader capability: each destination activates and owns its own identities.
+pub const LOCAL_NAMESPACE_IDENTITY_FEATURE_FLAG: &str = "local_namespace_identity_v1";
+/// Local native image receipts require writers that honor image invalidation.
+/// This capability is separate from namespace IDs and is never portable schema.
+pub const RANGE_IMAGE_INSTALL_FEATURE_FLAG: &str = "range_image_install_v1";
 pub const ORACLE_SIMPLE_CASE_V1_FEATURE_FLAG: &str = "oracle_simple_case_v1";
 const KNOWN_FEATURE_FLAGS: &[&str] = &[
     ORACLE_INVALID_ROUTINES_FEATURE_FLAG,
     ORACLE_SIMPLE_CASE_V1_FEATURE_FLAG,
     UNIQUE_NULLS_NOT_DISTINCT_FEATURE_FLAG,
     SQL_CATALOG_INTENTS_FEATURE_FLAG,
+    LOCAL_NAMESPACE_IDENTITY_FEATURE_FLAG,
+    RANGE_IMAGE_INSTALL_FEATURE_FLAG,
     "format_metadata_v2",
     SERVER_PAGED_FEATURE_FLAG,
     ONLINE_BACKUP_EXTENT_FEATURE_FLAG,
 ];
+
+fn feature_flags_lock(root: &Path) -> std::sync::Arc<parking_lot::Mutex<()>> {
+    use std::sync::{Arc, OnceLock, Weak};
+    type Locks = std::collections::HashMap<PathBuf, Weak<parking_lot::Mutex<()>>>;
+    static LOCKS: OnceLock<parking_lot::Mutex<Locks>> = OnceLock::new();
+    let mut locks = LOCKS.get_or_init(Default::default).lock();
+    locks.retain(|_, lock| lock.strong_count() != 0);
+    let path = root.canonicalize().unwrap_or_else(|_| root.to_path_buf());
+    if let Some(lock) = locks.get(&path).and_then(Weak::upgrade) {
+        return lock;
+    }
+    let lock = Arc::new(parking_lot::Mutex::new(()));
+    locks.insert(path, Arc::downgrade(&lock));
+    lock
+}
 
 /// Which storage engine owns a database's durable state. See
 /// `docs/decisions/ADR-004-storage-mode-compatibility.md` and
@@ -227,6 +250,8 @@ pub fn ensure_open_compatible_in_mode(
     fsync: bool,
     mode: StorageMode,
 ) -> Result<FormatMigrationReport> {
+    let lock = feature_flags_lock(root);
+    let _guard = lock.lock();
     let interrupted = load_migration_state(root)?;
     let mut metadata = read_or_legacy_metadata(root)?;
     if load_metadata(root)?.is_none() && !has_legacy_data(root) {
@@ -330,6 +355,8 @@ pub fn check_backup_restore_compatible(metadata: &FormatMetadata) -> Result<()> 
 /// database's metadata as `embedded_memory` — a downgrade of the compatibility
 /// fence performed by a routine operation.
 pub fn persist_current(root: &Path, fsync: bool) -> Result<()> {
+    let lock = feature_flags_lock(root);
+    let _guard = lock.lock();
     let mode = read_or_legacy_metadata(root)?.storage_mode;
     ensure_mode_supported(&mode)?;
     let mut metadata = FormatMetadata::current_with_mode(mode);
@@ -342,6 +369,8 @@ pub fn persist_current(root: &Path, fsync: bool) -> Result<()> {
 
 /// Initialize format metadata for a database being created in `mode`.
 pub fn persist_current_with_mode(root: &Path, mode: StorageMode, fsync: bool) -> Result<()> {
+    let lock = feature_flags_lock(root);
+    let _guard = lock.lock();
     ensure_mode_supported(&mode)?;
     let mut metadata = FormatMetadata::current_with_mode(mode);
     if let Some(previous) = load_metadata(root)? {
@@ -497,7 +526,25 @@ fn validate_supported(metadata: &FormatMetadata) -> Result<()> {
 }
 
 fn persist_metadata(root: &Path, metadata: &FormatMetadata, fsync: bool) -> Result<()> {
-    storage::write_atomic(
+    persist_metadata_with(root, metadata, fsync, storage::write_atomic)
+}
+
+fn persist_metadata_with(
+    root: &Path,
+    metadata: &FormatMetadata,
+    fsync: bool,
+    write: impl FnOnce(&Path, &[u8], bool) -> Result<()>,
+) -> Result<()> {
+    // Once published, the local authority fence must survive every replacement,
+    // including routine flushes for databases whose row fsync is disabled.
+    let fsync = fsync
+        || metadata
+            .feature_flags
+            .contains(LOCAL_NAMESPACE_IDENTITY_FEATURE_FLAG)
+        || metadata
+            .feature_flags
+            .contains(RANGE_IMAGE_INSTALL_FEATURE_FLAG);
+    write(
         &metadata_path(root),
         &serde_json::to_vec_pretty(metadata)?,
         fsync,
@@ -532,6 +579,8 @@ fn cleanup_migration_state(root: &Path) -> Result<()> {
 /// Fence writers predating durable extent tracking before a reusable identity
 /// can be published. Routine metadata rewrites must preserve this capability.
 pub(crate) fn enable_online_backup_extent_tracking(root: &Path) -> Result<()> {
+    let lock = feature_flags_lock(root);
+    let _guard = lock.lock();
     let mut metadata = read_or_legacy_metadata(root)?;
     validate_supported(&metadata)?;
     if metadata.storage_mode == StorageMode::ServerPaged
@@ -546,6 +595,8 @@ pub(crate) fn enable_online_backup_extent_tracking(root: &Path) -> Result<()> {
 
 /// Older binaries must refuse a database whose unique keys compare NULLs as equal.
 pub(crate) fn enable_unique_nulls_not_distinct(root: &Path) -> Result<()> {
+    let lock = feature_flags_lock(root);
+    let _guard = lock.lock();
     let mut metadata = read_or_legacy_metadata(root)?;
     validate_supported(&metadata)?;
     if metadata
@@ -560,6 +611,8 @@ pub(crate) fn enable_unique_nulls_not_distinct(root: &Path) -> Result<()> {
 /// Fence older SQL runtimes before publishing a transactional catalog intent.
 /// Even an empty journal remains sticky: unknown readers must not skip recovery.
 pub(crate) fn enable_sql_catalog_intents(root: &Path) -> Result<()> {
+    let lock = feature_flags_lock(root);
+    let _guard = lock.lock();
     let mut metadata = read_or_legacy_metadata(root)?;
     validate_supported(&metadata)?;
     if metadata
@@ -571,9 +624,46 @@ pub(crate) fn enable_sql_catalog_intents(root: &Path) -> Result<()> {
     Ok(())
 }
 
+/// Always fsync the sticky fence, including an interrupted activation retry,
+/// before any local namespace UUID can become durable in the catalog.
+pub(crate) fn enable_local_namespace_identity(root: &Path) -> Result<()> {
+    let lock = feature_flags_lock(root);
+    let _guard = lock.lock();
+    let mut metadata = read_or_legacy_metadata(root)?;
+    validate_supported(&metadata)?;
+    metadata
+        .feature_flags
+        .insert(LOCAL_NAMESPACE_IDENTITY_FEATURE_FLAG.into());
+    persist_metadata(root, &metadata, true)
+}
+
+/// Fence image-unaware readers/writers before trusting native image receipts.
+pub(crate) fn enable_range_image_install(root: &Path) -> Result<()> {
+    let lock = feature_flags_lock(root);
+    let _guard = lock.lock();
+    let mut metadata = read_or_legacy_metadata(root)?;
+    validate_supported(&metadata)?;
+    metadata
+        .feature_flags
+        .insert(RANGE_IMAGE_INSTALL_FEATURE_FLAG.into());
+    persist_metadata(root, &metadata, true)
+}
+
+/// Presence of a receipt alone is never activation. Validate format and mode
+/// before a native adapter may consider this local receipt capability active.
+pub(crate) fn range_image_install_active(root: &Path) -> Result<bool> {
+    let metadata = read_or_legacy_metadata(root)?;
+    validate_supported(&metadata)?;
+    Ok(metadata
+        .feature_flags
+        .contains(RANGE_IMAGE_INSTALL_FEATURE_FLAG))
+}
+
 /// Persist the reader/writer fence before any Oracle-v1 key definition or build
 /// checkpoint becomes durable. The capability is sticky even after index DROP.
 pub(crate) fn enable_oracle_simple_case_v1(root: &Path) -> Result<()> {
+    let lock = feature_flags_lock(root);
+    let _guard = lock.lock();
     let mut metadata = read_or_legacy_metadata(root)?;
     validate_supported(&metadata)?;
     if metadata
@@ -587,6 +677,8 @@ pub(crate) fn enable_oracle_simple_case_v1(root: &Path) -> Result<()> {
 
 /// Persist a sticky reader fence before publishing an invalid Oracle routine.
 pub(crate) fn enable_oracle_invalid_routines(root: &Path) -> Result<()> {
+    let lock = feature_flags_lock(root);
+    let _guard = lock.lock();
     let mut metadata = read_or_legacy_metadata(root)?;
     validate_supported(&metadata)?;
     if metadata
@@ -596,4 +688,123 @@ pub(crate) fn enable_oracle_invalid_routines(root: &Path) -> Result<()> {
         persist_metadata(root, &metadata, true)?;
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod local_identity_format_tests {
+    use super::*;
+
+    #[test]
+    fn namespace_identity_metadata_replacements_keep_sticky_fences_durable() {
+        let root = tempfile::tempdir().unwrap();
+        let legacy = FormatMetadata::current();
+        persist_metadata_with(root.path(), &legacy, false, |_, _, sync| {
+            assert!(!sync, "legacy/default row-fsync choice remains unchanged");
+            Ok(())
+        })
+        .unwrap();
+        for flag in [
+            LOCAL_NAMESPACE_IDENTITY_FEATURE_FLAG,
+            RANGE_IMAGE_INSTALL_FEATURE_FLAG,
+        ] {
+            let mut metadata = legacy.clone();
+            metadata.feature_flags.insert(flag.into());
+            persist_metadata_with(root.path(), &metadata, false, |path, bytes, sync| {
+                assert!(sync, "sticky local fences cannot be replaced without sync");
+                assert_eq!(path, metadata_path(root.path()));
+                assert!(serde_json::from_slice::<FormatMetadata>(bytes)
+                    .unwrap()
+                    .feature_flags
+                    .contains(flag));
+                Ok(())
+            })
+            .unwrap();
+        }
+    }
+
+    #[test]
+    fn namespace_identity_concurrent_capability_and_flush_writers_preserve_all_flags() {
+        use std::sync::{Arc, Barrier};
+        let root = tempfile::tempdir().unwrap();
+        persist_current(root.path(), false).unwrap();
+        let barrier = Arc::new(Barrier::new(5));
+        std::thread::scope(|scope| {
+            for action in 0..5 {
+                let barrier = barrier.clone();
+                let root = root.path();
+                scope.spawn(move || {
+                    barrier.wait();
+                    for _ in 0..24 {
+                        match action {
+                            0 => enable_local_namespace_identity(root).unwrap(),
+                            1 => enable_range_image_install(root).unwrap(),
+                            2 => enable_unique_nulls_not_distinct(root).unwrap(),
+                            3 => persist_current(root, false).unwrap(),
+                            _ => {
+                                persist_current_with_mode(root, StorageMode::EmbeddedMemory, false)
+                                    .unwrap()
+                            }
+                        }
+                    }
+                });
+            }
+        });
+        let metadata = read_or_legacy_metadata(root.path()).unwrap();
+        for flag in [
+            LOCAL_NAMESPACE_IDENTITY_FEATURE_FLAG,
+            RANGE_IMAGE_INSTALL_FEATURE_FLAG,
+            UNIQUE_NULLS_NOT_DISTINCT_FEATURE_FLAG,
+        ] {
+            assert!(metadata.feature_flags.contains(flag));
+        }
+        validate_supported(&metadata).unwrap();
+    }
+
+    #[test]
+    fn namespace_identity_all_format_writers_share_canonical_root_lock() {
+        use std::sync::{mpsc, Arc};
+        let root = tempfile::tempdir().unwrap();
+        persist_current(root.path(), false).unwrap();
+        let canonical_lock = feature_flags_lock(root.path());
+        let alias = root.path().join(".");
+        assert!(Arc::ptr_eq(&canonical_lock, &feature_flags_lock(&alias)));
+        for action in 0..10 {
+            let guard = canonical_lock.lock();
+            let (entered_tx, entered_rx) = mpsc::channel();
+            let (done_tx, done_rx) = mpsc::channel();
+            std::thread::scope(|scope| {
+                scope.spawn(|| {
+                    entered_tx.send(()).unwrap();
+                    match action {
+                        0 => enable_local_namespace_identity(&alias),
+                        1 => enable_range_image_install(&alias),
+                        2 => enable_unique_nulls_not_distinct(&alias),
+                        3 => enable_sql_catalog_intents(&alias),
+                        4 => enable_oracle_simple_case_v1(&alias),
+                        5 => enable_oracle_invalid_routines(&alias),
+                        6 => enable_online_backup_extent_tracking(&alias),
+                        7 => persist_current(&alias, false),
+                        8 => persist_current_with_mode(&alias, StorageMode::EmbeddedMemory, false),
+                        _ => ensure_open_compatible_in_mode(
+                            &alias,
+                            false,
+                            StorageMode::EmbeddedMemory,
+                        )
+                        .map(|_| ()),
+                    }
+                    .unwrap();
+                    done_tx.send(()).unwrap();
+                });
+                entered_rx.recv().unwrap();
+                assert!(matches!(
+                    done_rx.recv_timeout(std::time::Duration::from_millis(20)),
+                    Err(mpsc::RecvTimeoutError::Timeout)
+                ));
+                drop(guard);
+                done_rx
+                    .recv_timeout(std::time::Duration::from_secs(5))
+                    .unwrap();
+            });
+        }
+    }
 }

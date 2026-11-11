@@ -331,12 +331,13 @@ pub(super) fn continue_actual_compacted_recovery(
     }
     assert_eq!(checked, 1025);
     for mutation in &formerly_unknown.mutations {
+        let actual = target_db
+            .read()
+            .get(&mutation.collection, &mutation.record_id)
+            .unwrap();
         assert_eq!(
-            target_db
-                .read()
-                .get(&mutation.collection, &mutation.record_id)
-                .unwrap(),
-            mutation.record,
+            actual.as_deref(),
+            mutation.record.as_ref(),
             "unknown1026 was resolved by actual decision, never added to ACK ledger"
         );
     }

@@ -1,0 +1,52 @@
+{
+  "scope": "fresh single-process loopback protocol compatibility; synthetic self-addressed Append; no TLS/physical/HA qualification",
+  "run_root": "/tmp/bicdb-protocol19-compat-evidence/run-378c4c908dd9449a8ef315b2257ce71a",
+  "binary": "/tmp/bicdb-azure-artifact-463-evidence/bicdb-1.0.463-beta-d49a391b",
+  "expected_binary_sha256": "840f0124f27a1a7695c4b2b0c72b05a262456802af65e063cff12242559e2f7d",
+  "source_commit": "d49a391b3c6157f90f29e9f2f5214143c60f9f4b",
+  "started_unix_ns": 1794398040166872831,
+  "binary_sha256": "840f0124f27a1a7695c4b2b0c72b05a262456802af65e063cff12242559e2f7d",
+  "version_stdout": "bicdb 1.0.463-beta\n",
+  "rpc_address": [
+    "127.0.0.1",
+    40629
+  ],
+  "sql_address": [
+    "127.0.0.1",
+    49645
+  ],
+  "init_argv": [
+    "/tmp/bicdb-azure-artifact-463-evidence/bicdb-1.0.463-beta-d49a391b",
+    "cluster",
+    "init",
+    "/tmp/bicdb-protocol19-compat-evidence/run-378c4c908dd9449a8ef315b2257ce71a/db",
+    "--cluster-id",
+    "protocol19-compat-ee6f5d6e43b5",
+    "--node-id",
+    "n1",
+    "--address",
+    "127.0.0.1:40629",
+    "--replication-factor",
+    "1",
+    "--initial-ranges",
+    "1",
+    "--capacity-bytes",
+    "268435456",
+    "--application-events",
+    "--json"
+  ],
+  "init_exit_code": 0,
+  "server_argv": [
+    "/tmp/bicdb-azure-artifact-463-evidence/bicdb-1.0.463-beta-d49a391b",
+    "serve",
+    "/tmp/bicdb-protocol19-compat-evidence/run-378c4c908dd9449a8ef315b2257ce71a/db",
+    "--host",
+    "127.0.0.1",
+    "--port",
+    "49645",
+    "--cluster-controller",
+    "balanced"
+  ],
+  "pid": 3568881,
+  "pgid": 3568881
+}

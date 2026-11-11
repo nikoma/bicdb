@@ -5,6 +5,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
+use uuid::Uuid;
 
 use crate::error::{BicDbError, Result};
 use crate::record::Record;
@@ -640,10 +641,20 @@ impl RelocationPhase {
     }
 }
 
+/// Stable identity of one data handoff, persisted by metadata consensus before
+/// any permanent data-voter promise. These UUIDs are correlation, not authority.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct RangeHandoffSession {
+    pub session_id: Uuid,
+    pub nonce: Uuid,
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct RangeRelocation {
     pub id: RelocationId,
     pub plan_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub handoff_session: Option<RangeHandoffSession>,
     pub range_id: RangeId,
     /// Epoch observed by the planner before the learner was allocated.
     pub expected_epoch: u64,
@@ -678,6 +689,13 @@ impl RangeRelocation {
     }
 
     fn validate(&self, topology: &ClusterTopology) -> Result<()> {
+        if self
+            .handoff_session
+            .as_ref()
+            .is_some_and(|session| session.session_id.is_nil() || session.nonce.is_nil())
+        {
+            return Err(cluster_error("relocation has an invalid handoff session"));
+        }
         if self.id.0 == 0 || self.expected_epoch == 0 || self.learner_epoch == 0 {
             return Err(cluster_error(format!(
                 "relocation {} has an invalid zero id or epoch",
@@ -3636,6 +3654,10 @@ impl DistributionStore {
             let relocation = RangeRelocation {
                 id: relocation_id,
                 plan_id: plan.id.clone(),
+                handoff_session: Some(RangeHandoffSession {
+                    session_id: Uuid::new_v4(),
+                    nonce: Uuid::new_v4(),
+                }),
                 range_id: movement.range_id,
                 expected_epoch: movement.expected_epoch,
                 learner_epoch: range.epoch,
@@ -3683,6 +3705,44 @@ impl DistributionStore {
 
     pub fn relocation(&self, relocation_id: RelocationId) -> Option<&RangeRelocation> {
         self.topology.relocations.get(&relocation_id)
+    }
+
+    /// Upgrade an existing active plan before issuing any permanent data
+    /// promise. The controller must quorum-commit this metadata change and a
+    /// fresh read authority must observe it before starting physical handoff.
+    pub(crate) fn initialize_relocation_handoff_session(
+        &mut self,
+        relocation_id: RelocationId,
+        actor: &ClusterNodeId,
+        now_ms: u64,
+    ) -> Result<bool> {
+        self.ensure_actor(actor)?;
+        let relocation = self.relocation_mut(relocation_id)?;
+        if relocation.handoff_session.is_some() {
+            return Ok(false);
+        }
+        if !matches!(
+            relocation.phase,
+            RelocationPhase::LearnerAllocated
+                | RelocationPhase::SnapshotCopying
+                | RelocationPhase::CatchingUp
+                | RelocationPhase::ReadyToPromote
+        ) {
+            return Err(cluster_error(
+                "legacy handoff session cannot start after promotion",
+            ));
+        }
+        relocation.handoff_session = Some(RangeHandoffSession {
+            session_id: Uuid::new_v4(),
+            nonce: Uuid::new_v4(),
+        });
+        relocation.updated_at_ms = now_ms;
+        self.commit_change(
+            actor.clone(),
+            now_ms,
+            format!("{relocation_id} initialized stable data handoff"),
+        )?;
+        Ok(true)
     }
 
     /// Publish the schema installed by a successful authenticated learner
@@ -5957,6 +6017,13 @@ mod tests {
         let relocation_id = ids[0];
         let range_id = range.id;
         let learner_epoch = store.relocation(relocation_id).unwrap().learner_epoch;
+        let handoff_session = store
+            .relocation(relocation_id)
+            .unwrap()
+            .handoff_session
+            .clone()
+            .unwrap();
+        assert!(!handoff_session.session_id.is_nil() && !handoff_session.nonce.is_nil());
         {
             let allocated = store.topology().range_by_id(range_id).unwrap();
             assert_eq!(allocated.epoch, learner_epoch);
@@ -6048,6 +6115,14 @@ mod tests {
             .begin_relocation_cleanup(relocation_id, &actor, 90)
             .unwrap());
         let reopened = DistributionStore::open(dir.path(), config, false).unwrap();
+        assert_eq!(
+            reopened
+                .relocation(relocation_id)
+                .unwrap()
+                .handoff_session
+                .as_ref(),
+            Some(&handoff_session)
+        );
         assert_eq!(
             reopened.relocation(relocation_id).unwrap().phase,
             RelocationPhase::CleaningUp

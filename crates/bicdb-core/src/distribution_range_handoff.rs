@@ -59,9 +59,10 @@ impl RangeHandoffPromise {
     }
 }
 
-/// Non-serializable proof issued only after fresh durable old-data-quorum
-/// promises and source recovery have established the exact range-command cut.
-/// A source DB commit sequence is deliberately not a field of this proof.
+/// Non-serializable observation of a durable old-data-majority's resolved cut.
+/// This alone does not prove source physical image or native prefix lineage.
+/// Capture additionally requires that independent native/genesis/base proof.
+/// A source DB commit sequence is deliberately not a field of this observation.
 #[derive(Debug)]
 pub(crate) struct CertifiedRangeImageCut {
     promise: RangeHandoffPromise,
@@ -125,6 +126,8 @@ impl CertifiedRangeImageCut {
 pub(crate) struct HandoffPromiseAck {
     node_id: ClusterNodeId,
     incarnation: u64,
+    certificate_sha256: Option<String>,
+    plaintext_loopback: bool,
     promise: RangeHandoffPromise,
 }
 
@@ -155,6 +158,8 @@ impl HandoffPromiseAck {
         Ok(Self {
             node_id: destination.id.clone(),
             incarnation: destination.incarnation,
+            certificate_sha256: certificate_sha256.map(str::to_string),
+            plaintext_loopback,
             promise,
         })
     }
@@ -277,8 +282,11 @@ impl HandoffCutRound {
                 voters,
             ))?)))
         };
+        let session = relocation.handoff_session.as_ref().ok_or_else(|| {
+            BicDbError::Cluster("handoff session must be committed before data promises".into())
+        })?;
         let request = RangeHandoffPromise {
-            session_id: Uuid::new_v4(),
+            session_id: session.session_id,
             relocation_id,
             plan_id: relocation.plan_id.clone(),
             range_id: range.id,
@@ -286,7 +294,7 @@ impl HandoffCutRound {
             activation_epoch,
             old_config_sha256: config_digest(&range)?,
             new_config_sha256: config_digest(&new_range)?,
-            nonce: Uuid::new_v4(),
+            nonce: session.nonce,
             resolved_through: 0,
         };
         request.validate()?;
@@ -304,8 +312,27 @@ impl HandoffCutRound {
     }
 
     pub(crate) fn record(&mut self, ack: HandoffPromiseAck) -> Result<()> {
+        let peer = self
+            .authority
+            .topology()
+            .nodes
+            .get(&ack.node_id)
+            .ok_or_else(|| {
+                BicDbError::Cluster("handoff responder absent from current authority".into())
+            })?;
+        let pin_ok = match peer.tls_certificate_sha256.as_deref() {
+            Some(active) => {
+                ack.certificate_sha256.as_deref() == Some(active)
+                    || peer
+                        .pending_tls_certificate_sha256
+                        .as_deref()
+                        .is_some_and(|pending| ack.certificate_sha256.as_deref() == Some(pending))
+            }
+            None => ack.certificate_sha256.is_some() || ack.plaintext_loopback,
+        };
         if self.old_voters.get(&ack.node_id) != Some(&ack.incarnation)
             || !ack.promise.same_request(&self.request)
+            || !pin_ok
         {
             return Err(BicDbError::Cluster(
                 "handoff observation is not from this old data configuration".into(),

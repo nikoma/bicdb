@@ -662,7 +662,7 @@ impl HandoffCutRound {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use crate::distribution::*;
     use crate::distribution_consensus::{
@@ -753,7 +753,7 @@ mod tests {
         (topology, initial_load)
     }
 
-    fn authority(root: &Path, topology: &ClusterTopology) -> MetadataReadAuthority {
+    pub(crate) fn authority(root: &Path, topology: &ClusterTopology) -> MetadataReadAuthority {
         authority_with_restore(root, topology, None, Duration::from_secs(10))
     }
 

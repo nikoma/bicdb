@@ -850,6 +850,21 @@ mod tests {
                     break;
                 }
             }
+            self.export_history();
+        }
+        fn export_history(&mut self) {
+            loop {
+                let capture = self.capture.as_mut().unwrap();
+                let cursor = capture.history_cursor().clone();
+                if capture
+                    .export_history_step(&cursor, 256, &CancellationToken::uncancelable())
+                    .unwrap()
+                    .next_cursor
+                    .complete()
+                {
+                    break;
+                }
+            }
         }
         fn reopen_source(&mut self) {
             assert!(self.capture.is_none());
@@ -1101,6 +1116,7 @@ mod tests {
                 break;
             }
         }
+        fixture.export_history();
         let source = fixture.capture.take().unwrap().complete().unwrap();
         let target = fixture.target();
         let admission = target

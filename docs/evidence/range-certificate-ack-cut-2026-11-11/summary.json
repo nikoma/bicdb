@@ -1,0 +1,22 @@
+{
+  "source_version": "1.0.463-beta",
+  "source_commit": "d49a391b3c6157f90f29e9f2f5214143c60f9f4b",
+  "core_rlib_sha256": "dc714b001a0fe8758473c2c4ef80158474d7426e16630926edb65b6cc35f0356",
+  "command_id": "01a1c9cd-9a17-7970-88d7-effd7a9e5112",
+  "command_checksum_sha256": "f9f6552d97c346553275faadc5170fdf48342fdeceab79906595bcb5d19937a2",
+  "expected_payload_sha256": "ac1e427fe76deba73fcf276c7ec2c87e0ed755923755c6aa9b4f1f9678e86ff9",
+  "findings": {
+    "one_leader_loss_ack_recoverability": "FAILED",
+    "ambiguity_refusal": "PASSED",
+    "data_loss": "INCONCLUSIVE",
+    "metadata_election_correctness": "NOT_TESTED",
+    "physical_ha_qualification": "NOT_TESTED",
+    "azure_failure_causation": "NOT_TESTED"
+  },
+  "limitations": [
+    "fsync=false; actual core methods in-process, not network/power failure",
+    "scripted topology publication rather than a metadata election",
+    "database records remain on unavailable old leader; no loss demonstrated",
+    "no range reconfiguration safety or strong read proof"
+  ]
+}

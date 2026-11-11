@@ -4386,12 +4386,24 @@ mod rename_namespace_profile_tests {
                     .rows
                     .is_empty());
                 let peer = db.begin_transaction().unwrap();
-                ensure_database_profile(&mut db, profile).unwrap();
+                assert_eq!(initialize_rename_journal_identities(&mut db).unwrap(), 0);
+                if profile == POSTGRES_PROFILE {
+                    ensure_database_profile(&mut db, profile).unwrap();
+                } else {
+                    // Oracle's pre-existing case-index migration entrypoint
+                    // is startup-only, even when its ready marker exists.
+                    // Namespace initialization must not relax that boundary.
+                    assert!(matches!(
+                        ensure_database_profile(&mut db, profile),
+                        Err(SqlError::BicDb(BicDbError::Compaction(_)))
+                    ));
+                }
                 assert_eq!(
                     db.local_namespace_identity("identity_source").unwrap(),
                     Some(identity)
                 );
                 peer.rollback().unwrap();
+                ensure_database_profile(&mut db, profile).unwrap();
                 db.close().unwrap();
             }
         }

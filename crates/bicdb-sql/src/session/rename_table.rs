@@ -176,6 +176,168 @@ mod tests {
         })
     }
 
+    fn replica_config(paged: bool, role: bicdb_core::ReplicationMode) -> DbConfig {
+        config(paged)
+            .with_fsync(true)
+            .with_replication(bicdb_core::ReplicationConfig {
+                enabled: true,
+                mode: role,
+                cluster_id: "sql-startup".into(),
+                listen_addr: Some("127.0.0.1:0".into()),
+                tls: Some(bicdb_core::ReplicationTlsConfig {
+                    cert_path: Default::default(),
+                    key_path: Default::default(),
+                    ca_path: Default::default(),
+                    require_client_cert: true,
+                    dev_localhost_plaintext: true,
+                }),
+                ..Default::default()
+            })
+    }
+
+    fn ship(primary: &BicDb, standby: &mut BicDb) {
+        let frames = primary
+            .export_replication_frames_since(standby.last_applied_commit_seq(), 10_000)
+            .unwrap();
+        assert!(!frames.is_empty());
+        standby.apply_replication_batch(&frames).unwrap();
+    }
+
+    fn journal_images(db: &BicDb) -> BTreeMap<String, JsonValue> {
+        db.scan_collection("__bicdb_rename_images")
+            .unwrap()
+            .into_iter()
+            .map(|record| (record.id, record.metadata))
+            .collect()
+    }
+
+    fn bindings(db: &BicDb) -> BTreeMap<String, String> {
+        db.collections()
+            .into_iter()
+            .map(|meta| (meta.name.clone(), meta.storage().to_string()))
+            .collect()
+    }
+
+    #[test]
+    fn standby_initialization_preserves_an_undecided_primary_rename_and_follows_its_decision() {
+        use bicdb_core::ReplicationMode;
+        for paged in [false, true] {
+            for profile in [oracle::POSTGRES_PROFILE, oracle::ORACLE_HR_PROFILE] {
+                for commit in [false, true] {
+                    let root = tempfile::tempdir().unwrap();
+                    let mut primary = BicDb::open_with_config(
+                        root.path().join("primary"),
+                        replica_config(paged, ReplicationMode::Primary),
+                    )
+                    .unwrap();
+                    oracle::ensure_database_profile(&mut primary, profile).unwrap();
+                    let standby_path = root.path().join("standby");
+                    let mut standby = BicDb::open_with_config(
+                        &standby_path,
+                        replica_config(paged, ReplicationMode::Standby),
+                    )
+                    .unwrap();
+                    {
+                        let mut sql = SqlSession::new(&mut primary);
+                        sql.execute("CREATE TABLE source(id INT PRIMARY KEY,payload TEXT); INSERT INTO source VALUES(1,'acknowledged'); BEGIN").unwrap();
+                        // Exercise the host operation's undecided durable
+                        // prefix under each persisted profile, independently
+                        // of Oracle's separately qualified implicit-DDL rules.
+                        let mut schema = load_schema(sql.db_ref(), "source").unwrap().unwrap();
+                        apply(&mut sql, "source", "renamed", &mut schema).unwrap();
+                        ship(sql.db_ref(), &mut standby);
+                        let before = journal_images(&standby);
+                        let before_bindings = bindings(&standby);
+                        assert_eq!(rename_journal::pending(&standby).unwrap().len(), 1);
+                        for reopen in [false, true] {
+                            if reopen {
+                                standby.close().unwrap();
+                                standby = BicDb::open_with_config(
+                                    &standby_path,
+                                    replica_config(paged, ReplicationMode::Standby),
+                                )
+                                .unwrap();
+                            }
+                            oracle::initialize_existing_database_profile(&mut standby).unwrap_or_else(|error|panic!("paged={paged} {profile} commit={commit} reopen={reopen}: standby must follow a live intent without local undo: {error}"));
+                            oracle::ensure_database_profile(&mut standby, profile).unwrap();
+                            assert_eq!(journal_images(&standby), before);
+                            assert_eq!(bindings(&standby), before_bindings);
+                            assert_eq!(rename_journal::pending(&standby).unwrap().len(), 1);
+                            assert!(standby.get("renamed", "1").unwrap().is_some());
+                        }
+                        sql.execute(if commit { "COMMIT" } else { "ROLLBACK" })
+                            .unwrap();
+                        ship(sql.db_ref(), &mut standby);
+                    }
+                    oracle::initialize_existing_database_profile(&mut standby).unwrap();
+                    assert!(rename_journal::pending(&standby).unwrap().is_empty());
+                    assert_eq!(
+                        SqlSession::new_shared(&standby)
+                            .execute(if commit {
+                                "SELECT payload FROM renamed"
+                            } else {
+                                "SELECT payload FROM source"
+                            })
+                            .unwrap()
+                            .rows,
+                        vec![vec![SqlValue::String("acknowledged".into())]]
+                    );
+                    standby.close().unwrap();
+                    primary.close().unwrap();
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn configured_profile_initialization_recovers_an_undecided_primary_rename() {
+        for paged in [false, true] {
+            for profile in [oracle::POSTGRES_PROFILE, oracle::ORACLE_HR_PROFILE] {
+                let root = tempfile::tempdir().unwrap();
+                let mut db = BicDb::open_with_config(root.path(), config(paged)).unwrap();
+                oracle::ensure_database_profile(&mut db, profile).unwrap();
+                {
+                    let mut sql = SqlSession::new(&mut db);
+                    sql.execute("CREATE TABLE source(id INT PRIMARY KEY,payload TEXT); INSERT INTO source VALUES(1,'acknowledged'); BEGIN").unwrap();
+                    let mut schema = load_schema(sql.db_ref(), "source").unwrap().unwrap();
+                    apply(&mut sql, "source", "renamed", &mut schema).unwrap();
+                    // Freeze the undecided durable prefix: discard only the
+                    // native owner, without performing the host's DDL undo.
+                    sql.take_pending_transaction().unwrap().rollback().unwrap();
+                }
+                assert_eq!(rename_journal::pending(&db).unwrap().len(), 1);
+                db.close().unwrap();
+                let mut db = BicDb::open_with_config(root.path(), config(paged)).unwrap();
+                oracle::ensure_database_profile(&mut db, profile).unwrap();
+                assert!(
+                    rename_journal::pending(&db).unwrap().is_empty(),
+                    "paged={paged} {profile}: configured-profile startup skipped recovery"
+                );
+                assert_eq!(
+                    SqlSession::new(&mut db)
+                        .execute("SELECT payload FROM source")
+                        .unwrap()
+                        .rows,
+                    vec![vec![SqlValue::String("acknowledged".into())]]
+                );
+                db.close().unwrap();
+            }
+        }
+    }
+
+    #[test]
+    fn clean_postgres_profile_check_preserves_an_unrelated_live_native_transaction() {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open(root.path()).unwrap();
+        db.create_collection("business").unwrap();
+        let mut native = db.begin_transaction().unwrap();
+        native.insert("business", Record::new("pending")).unwrap();
+        oracle::ensure_database_profile(&mut db, oracle::POSTGRES_PROFILE).unwrap();
+        native.commit().unwrap();
+        assert!(db.get("business", "pending").unwrap().is_some());
+        db.close().unwrap();
+    }
+
     #[test]
     fn sql_rename_cut_child() {
         let Ok(path) = std::env::var("BICDB_TEST_RENAME_PATH") else {

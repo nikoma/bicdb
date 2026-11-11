@@ -15,7 +15,7 @@ these engine changes. These findings do not grant production admission.
 | TCP data RPC | Absolute network exchange deadline below TLS, parent cancellation and final expiry check | Plaintext and actual mTLS tests pass; DNS/locks/CPU/fsync, bootstrap and whole-tick bounds remain outside this proof |
 | Strong reads | Missing end-to-end implementation and readiness proof | Healthy StrongGet target fails on baseline; legacy Get stays eventual |
 | Relocated image and compacted range history | Confirmed healthy-quorum recovery failure after 1,025 commands | Target value is present, but installed range history is zero; no durable image-base fix in this batch |
-| Data-quorum handoff during promotion/cleanup | Further proof and characterization required | Promotion retains a fourth voter until cleanup; do not assume immediate RF3 replacement or metadata consensus alone proves safe removal |
+| Data-quorum handoff during promotion/cleanup | Confirmed late-ACK visibility failure | Actual five-store metadata + fsync-on replica test: cleanup-first permits a healthy new quorum to report recovery complete while an acknowledged value is absent; old copies remain |
 | Physical qualification | Not established | Local component checks and the existing/eventual Azure runtime do not qualify these engine changes |
 
 The exact combined candidate was `035c233ef7f7eec51c22fe17373944e07e9f5f72`
@@ -42,6 +42,15 @@ Reproductions and protocol boundaries:
 - [Network deadlines](cluster-rpc-deadlines-2026-11-11.md), including bootstrap/connect/DNS limits and uncertain remote outcomes.
 - [Strong-read proof design](explicit-strong-range-read-design.md) and [independent integration review](strong-get-integration-review-2026-11-11.md).
 - [Actual relocated-image/history failure](evidence/relocation-image-history-2026-11-11/README.md) and [durable image-base design](range-image-base-protocol-design.md).
+- [Cleanup-first handoff witness](evidence/relocation-handoff-witness-2026-11-11/README.md), including the successful recovery-before-cleanup control.
+- [Concrete image-capture interfaces](range-image-capture-interface-review.md), still a proposal rather than an installed data-plane protocol.
+
+The handoff witness retains the fourth-voter promotion guard: two responders
+cannot recover during the four-voter phase. The failure arises after legitimate
+source cleanup/removal, with one current voter unavailable. The new two-voter
+quorum reports ready without the late ACK; another old replica retains its value
+and the removed source retains the command catalog. This is a correctness failure,
+not a claim of irretrievable data loss or an explanation of either Azure run.
 
 The next engine batch must establish an image-bound certified range floor and a
 safe data-quorum handoff, then integrate fresh authority, range recovery, local

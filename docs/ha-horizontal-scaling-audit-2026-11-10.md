@@ -20,7 +20,9 @@ metadata authority and client network deadlines. It also records unresolved
 strong-read/image/handoff proofs. A completed snapshot is not evidence that the
 new leader can recover compacted range history: an actual 1.0.463-beta
 characterization retains the copied value but fails healthy-quorum recovery
-after 1,025 commands. These source checks do not qualify a release or alter the
+after 1,025 commands. A separate fsync-on five-metadata-store witness also
+shows a late acknowledged value absent on a healthy new quorum after cleanup;
+old copies remain. These source checks do not qualify a release or alter the
 original failed physical experiment. Historical source and measurement identities
 below remain at the revisions actually tested.
 

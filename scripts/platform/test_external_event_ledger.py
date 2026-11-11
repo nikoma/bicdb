@@ -76,6 +76,22 @@ class ExternalLedgerTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             driver.acknowledged_records(self.path)
 
+    def test_poweroff_ack_window_excludes_guest_restart_and_pre_fault_calls(self):
+        control = {'power_off_confirmed_unix_ns': 100, 'start_requested_unix_ns': 200}
+        for before, after, expected in [(100, 199, True), (99, 150, False),
+                                        (100, 200, False), (201, 202, False)]:
+            call = {'started_unix_ns': before, 'completed_unix_ns': after, 'acknowledged': True}
+            self.assertIs(driver.ack_within_confirmed_off_window(call, control), expected)
+        self.assertFalse(driver.ack_within_confirmed_off_window(
+            {'started_unix_ns': 110, 'completed_unix_ns': 120, 'acknowledged': False}, control))
+
+    def test_missing_poweroff_boundary_is_unavailable_not_success(self):
+        call = {'started_unix_ns': 110, 'completed_unix_ns': 120, 'acknowledged': True}
+        self.assertIsNone(driver.ack_within_confirmed_off_window(call, {}))
+        self.assertIsNone(driver.ack_within_confirmed_off_window(call, {'power_off_confirmed_unix_ns': 100}))
+        with self.assertRaises(ValueError):
+            driver.ack_within_confirmed_off_window(call, {'power_off_confirmed_unix_ns': 200, 'start_requested_unix_ns': 100})
+
     def test_remote_command_is_quoted_and_no_topology_is_copied(self):
         remote = driver.RemoteEvents({'format': 1, 'members': [{'ssh': 'bench', 'member_root': '/tmp/db space', 'binary': '/tmp/bicdb'}]})
         with mock.patch.object(driver.subprocess, 'run', return_value=mock.Mock(returncode=0, stdout='{"inserted":false}')) as execute:

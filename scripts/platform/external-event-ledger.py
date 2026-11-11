@@ -152,6 +152,27 @@ def acknowledged_records(path):
     return list(acknowledged.values())
 
 
+
+def ack_within_confirmed_off_window(call, control):
+    """Strict final evidence window; None means a required boundary is unknown.
+
+    A call must begin after confirmed power-off and complete before the first
+    guest-start request. A late response to a pre-fault call cannot prove writes
+    were admitted while the victim was off. Live observations are provisional
+    until the final guest-start boundary has been recorded.
+    """
+    off = control.get('power_off_confirmed_unix_ns')
+    start = control.get('start_requested_unix_ns')
+    if type(off) is not int or type(start) is not int:
+        return None
+    if off <= 0 or start < off:
+        raise ValueError('invalid confirmed-off window')
+    before, after = call['started_unix_ns'], call['completed_unix_ns']
+    if type(before) is not int or type(after) is not int or after < before:
+        raise ValueError('invalid call observation timestamps')
+    return call.get('acknowledged') is True and before >= off and after < start
+
+
 def verify(path, call):
     records = acknowledged_records(path)
     failures = []

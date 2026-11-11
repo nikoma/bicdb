@@ -146,6 +146,13 @@ fn argument_group(nodes: &[Node], previous: Option<&usize>) -> bool {
 }
 
 fn rewrite(sql: &str) -> Option<String> {
+    // Reject excessive raw input before tokenization allocates its vector.
+    // This recovery path gets a byte budget as well as a token/node budget;
+    // hostile over-depth input must not turn the original cheap refusal into
+    // a large extra parser allocation. Ordinary under-depth SQL is unchanged.
+    if sql.len() > max_expression_nodes().saturating_mul(8) {
+        return None;
+    }
     let tokens = Tokenizer::new(&PostgreSqlDialect {}, sql).tokenize().ok()?;
     // The normal expression-node budget still applies after parsing. Bound
     // this extra representation too, before building the token arena.

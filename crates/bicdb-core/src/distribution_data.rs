@@ -1051,6 +1051,52 @@ impl ClusterDataNodeService {
         Ok(marker)
     }
 
+    /// Physical receiver Apply. All independent participant RPC collection is
+    /// complete before taking this service/DB guard. The owned controlled
+    /// lease remains live through actual WAL, native history and catalogue sync.
+    pub(crate) fn apply_native_historical_command(
+        &mut self,
+        role: &crate::distribution_range_recovery::RecoveryRoleAdmission,
+        admission: &crate::distribution_range_recovery::RecoveryApplyAdmission,
+        frozen: &crate::distribution_range_mutation::FrozenRangeMutationPermit,
+        cancellation: &crate::CancellationToken,
+    ) -> Result<crate::db::NativeRecoveryAppliedReceipt> {
+        cancellation.check()?;
+        admission.require_recipient_role(role)?;
+        let controlled = self.range_mutations.try_controlled_mutation(frozen)?;
+        let db = loop {
+            cancellation.check()?;
+            if let Some(db) = self.db.try_read_for(std::time::Duration::from_millis(5)) {
+                break db;
+            }
+        };
+        let native = db.native_recovery_admission(
+            role.cluster_id(),
+            role.bootstrap_id(),
+            role.local_node_id(),
+            role.local_member_incarnation(),
+        )?;
+        native.require_current(&db)?;
+        self.range_mutations
+            .validate_controlled(admission.command().range_id, &controlled)?;
+        let receipt = db.apply_historical_native_command(
+            &self.range_writes,
+            &native,
+            role,
+            admission,
+            frozen,
+            &controlled,
+            cancellation,
+        )?;
+        self.range_writes
+            .mark_historical_applied(&db, &native, role, admission, &receipt)?;
+        receipt.require_current(&db, &native, role, admission)?;
+        cancellation.check()?;
+        drop(db);
+        drop(controlled);
+        Ok(receipt)
+    }
+
     pub fn schema_compatibility_fingerprint(&self) -> Result<SchemaCompatibilityFingerprint> {
         try_database_read(&self.db)?.schema_compatibility_fingerprint()
     }

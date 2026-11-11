@@ -4634,6 +4634,24 @@ impl<'db> SqlSession<'db> {
 
     pub(crate) fn rollback_ddl_to_len(&mut self, len: usize) -> Result<()> {
         while self.ddl_undo.len() > len {
+            // Durable rename undo can be refused by a live foreign owner or
+            // interrupted partway through recovery. Its header/cursor remain
+            // retryable; retain the matching session entry until it succeeds.
+            // Clone only the small journal identity, not legacy row payloads.
+            let retryable = match self.ddl_undo.last() {
+                Some(DdlUndo::RestoreRenameJournal { id, old_table }) => {
+                    Some(DdlUndo::RestoreRenameJournal {
+                        id: id.clone(),
+                        old_table: old_table.clone(),
+                    })
+                }
+                _ => None,
+            };
+            if let Some(undo) = retryable {
+                self.apply_ddl_undo(undo)?;
+                self.ddl_undo.pop();
+                continue;
+            }
             let undo = self
                 .ddl_undo
                 .pop()

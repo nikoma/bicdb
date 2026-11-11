@@ -709,6 +709,7 @@ impl BicDb {
             .collections()
             .into_iter()
             .filter(|meta| !meta.name.starts_with("__bicdb_"))
+            .map(|meta| meta.portable_contract())
             .collect::<Vec<_>>();
         let indexes = self.index_definitions();
         let mut structural_records = Vec::new();
@@ -774,6 +775,7 @@ impl BicDb {
                     || CLUSTER_SCHEMA_CATALOG_COLLECTIONS.contains(&meta.name.as_str())
                     || indexed_collections.contains(meta.name.as_str())
             })
+            .map(|meta| meta.portable_contract())
             .collect::<Vec<_>>();
         let mut structural_records = Vec::new();
         for collection in CLUSTER_SCHEMA_CATALOG_COLLECTIONS {
@@ -1225,7 +1227,9 @@ impl BicDb {
                     let desired = &bundle.collections[state.collection_cursor];
                     inspected_items += 1;
                     match self.collections.get(&desired.name) {
-                        Some(existing) if existing.read().meta == *desired => {}
+                        Some(existing)
+                            if existing.read().meta.portable_contract()
+                                == desired.portable_contract() => {}
                         Some(_) => {
                             return Err(BicDbError::Cluster(format!(
                                 "cluster schema activation found conflicting collection `{}`",
@@ -1234,9 +1238,10 @@ impl BicDb {
                         }
                         None => {
                             self.ensure_no_pending_transactions()?;
+                            let local_meta = self.new_local_collection_metadata(desired);
                             self.collections.insert(
                                 desired.name.clone(),
-                                RwLock::new(CollectionState::new(desired.clone())),
+                                RwLock::new(CollectionState::new(local_meta)),
                             );
                             if let Err(error) = self.persist_catalog() {
                                 self.collections.remove(&desired.name);
@@ -1595,8 +1600,10 @@ impl BicDb {
         let mut catalog_changed = false;
         for meta in desired_collections.values() {
             if let Some(state) = self.collections.get_mut(&meta.name) {
-                if state.get_mut().meta != *meta {
-                    state.get_mut().meta = meta.clone();
+                if state.get_mut().meta.portable_contract() != meta.portable_contract() {
+                    let mut local_meta = meta.portable_contract();
+                    local_meta.local_namespace_id = state.get_mut().meta.local_namespace_id;
+                    state.get_mut().meta = local_meta;
                     catalog_changed = true;
                 }
             } else {
@@ -1604,7 +1611,7 @@ impl BicDb {
                 // that empty page set is already authoritative. Leaving the
                 // new collection resident prevents it from exporting a bounded
                 // snapshot when the next member joins before the first write.
-                let mut state = CollectionState::new(meta.clone());
+                let mut state = CollectionState::new(self.new_local_collection_metadata(meta));
                 state.paged_lazy = self.paged_records.is_some();
                 self.collections
                     .insert(meta.name.clone(), RwLock::new(state));

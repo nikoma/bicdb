@@ -1,0 +1,32 @@
+{
+  "git_head": "24aa180cdce2704fe313852c11177c238b403658",
+  "uncommitted_patch_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "source_version": "1.0.475-beta",
+  "scope": "Public opt-in local physical namespace identity only on pending source475/SSI474 parent; no native image reader capability or RF3 activation. Focused default-release checks, pinned463 old-reader negative, and broad Core CI-backstop-enabled unit scope; no physical/production qualification",
+  "physical_qualification": false,
+  "environment_override": {
+    "BICDB_PAGED_UNIQUE_APPLY_PROBE": "1"
+  },
+  "name": "all-core-units",
+  "command": [
+    "cargo",
+    "test",
+    "--release",
+    "--locked",
+    "-p",
+    "bicdb-core",
+    "--features",
+    "tls-replication",
+    "--config",
+    "profile.release.package.bicdb-core.opt-level=0",
+    "--config",
+    "profile.release.package.bicdb-core.debug=0",
+    "--lib",
+    "--",
+    "--nocapture"
+  ],
+  "exit_code": 0,
+  "interrupted_reason": null,
+  "elapsed_seconds": 40.0106897065416,
+  "minimum_available_bytes": 23927918592
+}

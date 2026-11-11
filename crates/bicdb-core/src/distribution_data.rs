@@ -272,7 +272,7 @@ impl RangeLearnerStore {
                 data_error(format!("invalid stored snapshot chain checksum: {error}"))
             })?,
         );
-        hasher.update(serde_json::to_vec(collection_meta)?);
+        hasher.update(serde_json::to_vec(&collection_meta.portable_contract())?);
         hasher.update(serde_json::to_vec(batch)?);
         let state = self
             .catalog
@@ -1957,7 +1957,7 @@ impl ClusterDataNodeService {
             }
             None => 0,
         };
-        let collection_meta = collections[collection_index].clone();
+        let collection_meta = collections[collection_index].portable_contract();
         let after_id = cursor
             .as_ref()
             .and_then(|cursor| cursor.after_id.as_deref());

@@ -237,6 +237,7 @@ impl BicDb {
                     flashback: None,
                     storage_name: None,
                     renamed_from: None,
+                    local_namespace_id: self.fresh_local_namespace_identity(),
                 };
                 self.collections.insert(
                     write.collection.clone(),
@@ -1650,6 +1651,10 @@ impl BicDb {
         // replay depends on the catalog before it.
         self.deferred_materialize_barrier()?;
         let mut collections = self.collections();
+        local_namespace_identity::validate_catalog(
+            &collections,
+            self.local_namespace_identity_active,
+        )?;
         collections.sort_by(|left, right| left.name.cmp(&right.name));
         let catalog = CollectionCatalog { collections };
         let bytes = serde_json::to_vec_pretty(&catalog)?;
@@ -1660,7 +1665,7 @@ impl BicDb {
             &self.path.join(DEFAULT_COLLECTION_CATALOG),
             FrameKind::Index,
             &bytes,
-            self.config.fsync,
+            self.config.fsync || self.local_namespace_identity_active,
             &self.encryption,
             "catalog",
             storage::FailClosed::Always(&self.durability),

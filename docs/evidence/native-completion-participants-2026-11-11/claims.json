@@ -1,0 +1,237 @@
+{
+  "actual_post_persistence_client_socket_cancellation_tested": true,
+  "audit_date": "2026-11-11",
+  "ci_tested": false,
+  "compile_run": "cad84207-completion",
+  "deployed": false,
+  "distinct_tests": 66,
+  "frozen_retained": true,
+  "green_witness_database_archive_retained": false,
+  "higher_prepared_minority_veto_negative_fixture_tested": false,
+  "incoming_complete_rpc_tested": true,
+  "minimum_available_bytes": 21899538432,
+  "native_activation_tested": false,
+  "new_application_write_after_recovery_tested": false,
+  "patch_sha256": "79a71d8d919f02387e80f619a21bcd4db8e8f341f592b2af6b1fb9cfa2774595",
+  "pause_episodes": 0,
+  "physical_failure_tested": false,
+  "production_qualified": false,
+  "public_patch_base": "b0e2498842be7b01e355bb8da1cc249ff16be056",
+  "readonly_completion_rpc_tested": true,
+  "runs": [
+    {
+      "count": 3,
+      "name": "cad84207-completion",
+      "test_ids": [
+        "db::range_image_native::rf3_fixture::native_historical_tls::native_completion_actual_tls_canceled_socket_after_real_persistence_recovers_by_readonly_status",
+        "db::range_image_native::rf3_fixture::native_historical_tls::native_completion_actual_tls_sequential_replicas_keep_frozen_pins_and_duplicate_sha",
+        "db::range_image_native::rf3_fixture::native_historical_tls::native_completion_actual_tls_wrong_actor_cannot_complete_but_current_voter_can_observe"
+      ]
+    },
+    {
+      "count": 4,
+      "name": "cad84207-current-repair",
+      "test_ids": [
+        "distribution_range_image_install::current_repair_tests::actual_adopted_image_compacted_marker_conflict_refuses_native_preparation",
+        "distribution_range_image_install::current_repair_tests::actual_prepared_serving_record_survives_a_second_current_voter_image_attempt",
+        "distribution_range_image_install::current_repair_tests::actual_rf3_nonempty_current_voter_repair_uses_same_catalogue_and_keeps_recovery_closed",
+        "distribution_range_image_install::current_repair_tests::actual_rf3_nonempty_finalized_image_prepares_without_an_unfenced_window"
+      ]
+    },
+    {
+      "count": 1,
+      "name": "cad84207-floor-negative",
+      "test_ids": [
+        "db::range_image_native::serving_configuration::floor_tests::actual_native_floor_vetoes_lower_and_same_epoch_drift_after_copied_logical_rollback"
+      ]
+    },
+    {
+      "count": 1,
+      "name": "cad84207-floor-witness",
+      "test_ids": [
+        "distribution_range_image_install::current_repair_tests::actual_prepared_serving_record_survives_a_second_current_voter_image_attempt"
+      ]
+    },
+    {
+      "count": 9,
+      "name": "cad84207-gate",
+      "test_ids": [
+        "distribution_range_mutation::tests::bounded_busy_attempt_does_not_park_or_leave_a_pending_freeze",
+        "distribution_range_mutation::tests::cancelled_drain_cleans_its_pending_state_without_revoking_writer",
+        "distribution_range_mutation::tests::controlled_writer_prevents_rotation_and_quiescent_readiness",
+        "distribution_range_mutation::tests::controlled_callback_keeps_tombstone_frozen_after_owner_drop",
+        "distribution_range_mutation::tests::database_mutations_drain_and_cannot_enter_a_range_capture",
+        "distribution_range_mutation::tests::permits_cannot_be_reused_for_another_range_database_or_freeze",
+        "distribution_range_mutation::tests::owned_permits_cross_threads_and_capture_drains_the_last_callback",
+        "distribution_range_mutation::tests::source_read_pin_atomically_excludes_all_frozen_writers",
+        "distribution_range_mutation::tests::transaction_claim_cannot_survive_its_actual_owner_or_reuse_another_lease"
+      ]
+    },
+    {
+      "count": 5,
+      "name": "cad84207-historical-tls",
+      "test_ids": [
+        "db::range_image_native::rf3_fixture::native_historical_tls::actual_mtls_participant_collection_holds_no_recipient_service_or_database_latch",
+        "db::range_image_native::rf3_fixture::native_historical_tls::actual_mtls_participant_current_quorum_recovers_without_old_data_leader_and_rejects_stale_scope",
+        "distribution_metadata_read_provider::tests::tls::actual_mtls_range_leader_acquires_from_different_metadata_leader_without_silent_voter_or_data_latch",
+        "distribution_metadata_read_provider::tests::tls::actual_mtls_role_witness_binds_the_real_recipient_and_initiator",
+        "db::range_image_native::rf3_fixture::native_historical_tls::actual_mtls_unwired_participant_receiver_refuses_without_materializing"
+      ]
+    },
+    {
+      "count": 3,
+      "name": "cad84207-lease",
+      "test_ids": [
+        "distribution_range_image_install::lease_tests::actual_runtime_lease_post_intent_drop_refuses_untouched_return",
+        "distribution_range_image_install::lease_tests::actual_runtime_lease_full_image_adoption_returns_only_control_and_preserves_all_refusals",
+        "distribution_range_image_install::lease_tests::actual_runtime_lease_untouched_cancel_drop_requires_fresh_authority_and_keeps_recovery_fenced"
+      ]
+    },
+    {
+      "count": 19,
+      "name": "cad84207-local-ready",
+      "test_ids": [
+        "db::native_recovery_ready::tests::actual_empty_genesis_ready_owns_the_read_pin_until_proof_drop",
+        "db::native_recovery_ready::tests::actual_closed_rf1_quorum_persists_new_serving_epoch_but_keeps_prepared_refusal",
+        "db::native_recovery_ready::tests::actual_native_prefix_ahead_of_rebuilt_catalogue_requires_adoption_not_numeric_floor",
+        "db::native_recovery_ready::tests::actual_native_completion_stays_frozen_and_can_close_a_later_ready_round",
+        "db::native_recovery_ready::tests::actual_native_preparation_stops_mutation_and_survives_store_reopen",
+        "db::native_recovery_ready::tests::actual_nonempty_native_prefix_uses_local_mvcc_sequence_not_range_index",
+        "db::native_recovery_ready::tests::actual_reopen_invalidates_the_prior_open_local_readiness_proof",
+        "db::native_recovery_ready::tests::ambiguous_native_prepare_persistence_refsyncs_exact_refusal_before_new_physical_proof",
+        "db::native_recovery_ready::tests::ambiguous_native_completion_requires_exact_refsync_before_refreshing_held_readiness",
+        "db::native_recovery_ready::tests::cancelled_local_ready_cannot_persist_a_native_preparation",
+        "db::native_recovery_ready::tests::cancelled_closed_quorum_cannot_persist_a_serving_epoch",
+        "db::native_recovery_ready::tests::catalogue_applied_without_native_materialization_cannot_become_ready",
+        "db::native_recovery_ready::tests::corrupt_compacted_certification_marker_cannot_become_native_ready",
+        "db::native_recovery_ready::tests::durable_preparation_requires_new_authority_after_original_request_cancellation",
+        "db::native_recovery_ready::tests::equal_index_conflicting_actual_catalogue_and_native_history_is_rejected",
+        "db::native_recovery_ready::tests::original_parent_cancellation_invalidates_an_actual_local_ready_proof",
+        "db::native_recovery_ready::tests::prepared_replica_can_be_reattested_by_a_fresh_same_session_role",
+        "db::native_recovery_ready::tests::recovered_native_serving_epoch_survives_strict_cold_open_without_relabelling_capture",
+        "db::native_recovery_ready::tests::same_identity_catalogue_from_another_actual_native_database_is_rejected"
+      ]
+    },
+    {
+      "count": 7,
+      "name": "cad84207-origin",
+      "test_ids": [
+        "distribution_range_consensus::native_prefix::tests::native_install_safety_preserves_floor_when_raw_repair_invalidates_source",
+        "distribution_range_consensus::native_prefix::tests::native_history_actual_coordinator_spine_exports_full_bounded_contiguous_prefix",
+        "distribution_range_consensus::native_prefix::tests::native_origin_actual_coordinator_commits_under_outer_db_write_guard_without_reacquire",
+        "distribution_range_consensus::native_prefix::tests::native_origin_post_admission_pre_wal_unknown_cleans_local_attempt_before_recovery_freeze",
+        "distribution_range_consensus::native_prefix::tests::native_origin_public_ticket_without_actual_pending_scope_cannot_apply_rows",
+        "distribution_range_consensus::native_prefix::tests::native_pending_never_raises_source_floor_and_survives_reopen_without_forged_quorum",
+        "distribution_range_consensus::native_prefix::tests::native_prefix_actual_wal_and_quorum_extend_and_reopen_with_database_seq_distinct_from_range_index"
+      ]
+    },
+    {
+      "count": 7,
+      "name": "cad84207-quorum",
+      "test_ids": [
+        "distribution_range_recovery::quorum::tests::actual_duplicate_and_insufficient_fences_cannot_create_majority",
+        "distribution_range_recovery::quorum::tests::actual_fenced_rf3_genesis_source_verifies_full_history_and_authorizes_current_voter_capture",
+        "distribution_range_recovery::quorum::tests::actual_rf1_fence_is_durable_but_unknown_native_floor_never_becomes_zero_ready",
+        "distribution_range_recovery::quorum::tests::actual_rf3_distinct_fences_succeed_without_waiting_for_data_leader_ack",
+        "distribution_range_recovery::quorum::tests::cancelled_actual_source_history_step_poisoned_round_cannot_resume_with_fresh_timeout",
+        "distribution_range_recovery::quorum::tests::original_parent_cancellation_prevents_consuming_a_real_fence_quorum",
+        "distribution_range_recovery::quorum::tests::independently_real_but_different_session_fence_is_rejected"
+      ]
+    },
+    {
+      "count": 3,
+      "name": "cad84207-ready",
+      "test_ids": [
+        "db::range_image_native::rf3_fixture::native_historical_tls::native_ready_actual_tls_fast_clean_zero_minority_does_not_starve_matching_one_majority",
+        "db::range_image_native::rf3_fixture::native_historical_tls::native_ready_actual_tls_duplicate_voter_cannot_count_twice",
+        "db::range_image_native::rf3_fixture::native_historical_tls::native_ready_actual_tls_preparation_status_and_local_closed_quorum_remain_frozen"
+      ]
+    },
+    {
+      "count": 5,
+      "name": "cad84207-state",
+      "test_ids": [
+        "distribution_range_consensus::recovery_state::tests::actual_native_epoch_fence_preserves_unresolved_tail_and_never_grants_zero_floor",
+        "distribution_range_consensus::recovery_state::tests::actual_other_range_decisions_and_same_session_refresh_preserve_range_observation",
+        "distribution_range_consensus::recovery_state::tests::actual_rename_then_directory_sync_error_cannot_issue_durability_observations",
+        "distribution_range_consensus::recovery_state::tests::actual_same_epoch_nonce_refresh_durably_refuses_delayed_old_fence",
+        "distribution_range_consensus::recovery_state::tests::actual_store_open_and_nonce_bind_resolved_observation"
+      ]
+    }
+  ],
+  "scope": "same-voter NormalRecovery completion remains frozen; declared E2 leader/metadata preconditions, physical native E1 anchors",
+  "source_artifact": "private unmerged component assembly, not a released binary/current-main qualification",
+  "source_revision": "cad84207e8a4329db47449e43f658325d8f8cf55",
+  "source_version": "1.0.471-beta",
+  "strong_get_tested": false,
+  "test_executions": 67,
+  "test_ids": [
+    "db::native_recovery_ready::tests::actual_closed_rf1_quorum_persists_new_serving_epoch_but_keeps_prepared_refusal",
+    "db::native_recovery_ready::tests::actual_empty_genesis_ready_owns_the_read_pin_until_proof_drop",
+    "db::native_recovery_ready::tests::actual_native_completion_stays_frozen_and_can_close_a_later_ready_round",
+    "db::native_recovery_ready::tests::actual_native_prefix_ahead_of_rebuilt_catalogue_requires_adoption_not_numeric_floor",
+    "db::native_recovery_ready::tests::actual_native_preparation_stops_mutation_and_survives_store_reopen",
+    "db::native_recovery_ready::tests::actual_nonempty_native_prefix_uses_local_mvcc_sequence_not_range_index",
+    "db::native_recovery_ready::tests::actual_reopen_invalidates_the_prior_open_local_readiness_proof",
+    "db::native_recovery_ready::tests::ambiguous_native_completion_requires_exact_refsync_before_refreshing_held_readiness",
+    "db::native_recovery_ready::tests::ambiguous_native_prepare_persistence_refsyncs_exact_refusal_before_new_physical_proof",
+    "db::native_recovery_ready::tests::cancelled_closed_quorum_cannot_persist_a_serving_epoch",
+    "db::native_recovery_ready::tests::cancelled_local_ready_cannot_persist_a_native_preparation",
+    "db::native_recovery_ready::tests::catalogue_applied_without_native_materialization_cannot_become_ready",
+    "db::native_recovery_ready::tests::corrupt_compacted_certification_marker_cannot_become_native_ready",
+    "db::native_recovery_ready::tests::durable_preparation_requires_new_authority_after_original_request_cancellation",
+    "db::native_recovery_ready::tests::equal_index_conflicting_actual_catalogue_and_native_history_is_rejected",
+    "db::native_recovery_ready::tests::original_parent_cancellation_invalidates_an_actual_local_ready_proof",
+    "db::native_recovery_ready::tests::prepared_replica_can_be_reattested_by_a_fresh_same_session_role",
+    "db::native_recovery_ready::tests::recovered_native_serving_epoch_survives_strict_cold_open_without_relabelling_capture",
+    "db::native_recovery_ready::tests::same_identity_catalogue_from_another_actual_native_database_is_rejected",
+    "db::range_image_native::rf3_fixture::native_historical_tls::actual_mtls_participant_collection_holds_no_recipient_service_or_database_latch",
+    "db::range_image_native::rf3_fixture::native_historical_tls::actual_mtls_participant_current_quorum_recovers_without_old_data_leader_and_rejects_stale_scope",
+    "db::range_image_native::rf3_fixture::native_historical_tls::actual_mtls_unwired_participant_receiver_refuses_without_materializing",
+    "db::range_image_native::rf3_fixture::native_historical_tls::native_completion_actual_tls_canceled_socket_after_real_persistence_recovers_by_readonly_status",
+    "db::range_image_native::rf3_fixture::native_historical_tls::native_completion_actual_tls_sequential_replicas_keep_frozen_pins_and_duplicate_sha",
+    "db::range_image_native::rf3_fixture::native_historical_tls::native_completion_actual_tls_wrong_actor_cannot_complete_but_current_voter_can_observe",
+    "db::range_image_native::rf3_fixture::native_historical_tls::native_ready_actual_tls_duplicate_voter_cannot_count_twice",
+    "db::range_image_native::rf3_fixture::native_historical_tls::native_ready_actual_tls_fast_clean_zero_minority_does_not_starve_matching_one_majority",
+    "db::range_image_native::rf3_fixture::native_historical_tls::native_ready_actual_tls_preparation_status_and_local_closed_quorum_remain_frozen",
+    "db::range_image_native::serving_configuration::floor_tests::actual_native_floor_vetoes_lower_and_same_epoch_drift_after_copied_logical_rollback",
+    "distribution_metadata_read_provider::tests::tls::actual_mtls_range_leader_acquires_from_different_metadata_leader_without_silent_voter_or_data_latch",
+    "distribution_metadata_read_provider::tests::tls::actual_mtls_role_witness_binds_the_real_recipient_and_initiator",
+    "distribution_range_consensus::native_prefix::tests::native_history_actual_coordinator_spine_exports_full_bounded_contiguous_prefix",
+    "distribution_range_consensus::native_prefix::tests::native_install_safety_preserves_floor_when_raw_repair_invalidates_source",
+    "distribution_range_consensus::native_prefix::tests::native_origin_actual_coordinator_commits_under_outer_db_write_guard_without_reacquire",
+    "distribution_range_consensus::native_prefix::tests::native_origin_post_admission_pre_wal_unknown_cleans_local_attempt_before_recovery_freeze",
+    "distribution_range_consensus::native_prefix::tests::native_origin_public_ticket_without_actual_pending_scope_cannot_apply_rows",
+    "distribution_range_consensus::native_prefix::tests::native_pending_never_raises_source_floor_and_survives_reopen_without_forged_quorum",
+    "distribution_range_consensus::native_prefix::tests::native_prefix_actual_wal_and_quorum_extend_and_reopen_with_database_seq_distinct_from_range_index",
+    "distribution_range_consensus::recovery_state::tests::actual_native_epoch_fence_preserves_unresolved_tail_and_never_grants_zero_floor",
+    "distribution_range_consensus::recovery_state::tests::actual_other_range_decisions_and_same_session_refresh_preserve_range_observation",
+    "distribution_range_consensus::recovery_state::tests::actual_rename_then_directory_sync_error_cannot_issue_durability_observations",
+    "distribution_range_consensus::recovery_state::tests::actual_same_epoch_nonce_refresh_durably_refuses_delayed_old_fence",
+    "distribution_range_consensus::recovery_state::tests::actual_store_open_and_nonce_bind_resolved_observation",
+    "distribution_range_image_install::current_repair_tests::actual_adopted_image_compacted_marker_conflict_refuses_native_preparation",
+    "distribution_range_image_install::current_repair_tests::actual_prepared_serving_record_survives_a_second_current_voter_image_attempt",
+    "distribution_range_image_install::current_repair_tests::actual_rf3_nonempty_current_voter_repair_uses_same_catalogue_and_keeps_recovery_closed",
+    "distribution_range_image_install::current_repair_tests::actual_rf3_nonempty_finalized_image_prepares_without_an_unfenced_window",
+    "distribution_range_image_install::lease_tests::actual_runtime_lease_full_image_adoption_returns_only_control_and_preserves_all_refusals",
+    "distribution_range_image_install::lease_tests::actual_runtime_lease_post_intent_drop_refuses_untouched_return",
+    "distribution_range_image_install::lease_tests::actual_runtime_lease_untouched_cancel_drop_requires_fresh_authority_and_keeps_recovery_fenced",
+    "distribution_range_mutation::tests::bounded_busy_attempt_does_not_park_or_leave_a_pending_freeze",
+    "distribution_range_mutation::tests::cancelled_drain_cleans_its_pending_state_without_revoking_writer",
+    "distribution_range_mutation::tests::controlled_callback_keeps_tombstone_frozen_after_owner_drop",
+    "distribution_range_mutation::tests::controlled_writer_prevents_rotation_and_quiescent_readiness",
+    "distribution_range_mutation::tests::database_mutations_drain_and_cannot_enter_a_range_capture",
+    "distribution_range_mutation::tests::owned_permits_cross_threads_and_capture_drains_the_last_callback",
+    "distribution_range_mutation::tests::permits_cannot_be_reused_for_another_range_database_or_freeze",
+    "distribution_range_mutation::tests::source_read_pin_atomically_excludes_all_frozen_writers",
+    "distribution_range_mutation::tests::transaction_claim_cannot_survive_its_actual_owner_or_reuse_another_lease",
+    "distribution_range_recovery::quorum::tests::actual_duplicate_and_insufficient_fences_cannot_create_majority",
+    "distribution_range_recovery::quorum::tests::actual_fenced_rf3_genesis_source_verifies_full_history_and_authorizes_current_voter_capture",
+    "distribution_range_recovery::quorum::tests::actual_rf1_fence_is_durable_but_unknown_native_floor_never_becomes_zero_ready",
+    "distribution_range_recovery::quorum::tests::actual_rf3_distinct_fences_succeed_without_waiting_for_data_leader_ack",
+    "distribution_range_recovery::quorum::tests::cancelled_actual_source_history_step_poisoned_round_cannot_resume_with_fresh_timeout",
+    "distribution_range_recovery::quorum::tests::independently_real_but_different_session_fence_is_rejected",
+    "distribution_range_recovery::quorum::tests::original_parent_cancellation_prevents_consuming_a_real_fence_quorum"
+  ],
+  "worktree": "/tmp/bicdb-native-completion-participants"
+}

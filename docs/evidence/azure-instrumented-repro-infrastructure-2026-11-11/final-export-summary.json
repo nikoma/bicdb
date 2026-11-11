@@ -1,0 +1,15 @@
+{
+  "all_final_arm_queries_successful": true,
+  "final_arm_queries": 34,
+  "platform_final_window": "2026-11-11T09:44:18.629830+00:00",
+  "final_metrics_requests_successful": 20,
+  "platform_numeric_points": 6918,
+  "activity_log_events_retained_private": 142,
+  "official_sku_models_retained_private": 1,
+  "original_azure_group_still_deleted": true,
+  "new_group_deleted": true,
+  "all_23_resources_accounted": true,
+  "runtime_engine_nodes": 4,
+  "fifth_vm_joined_runtime": false,
+  "actual_billing_verified": false
+}

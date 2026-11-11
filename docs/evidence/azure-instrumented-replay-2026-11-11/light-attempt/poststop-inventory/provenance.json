@@ -1,0 +1,15 @@
+{
+  "helper_sha256": "cb750b882b639f7f052c67adb8d20c543fa842816f70d3b2e3dea4194772ff52",
+  "started_unix_ns": 1794390230731281979,
+  "classification": "read-only_post-owned-stop_files_not_new_engine_availability_observations",
+  "member_private_keys_exported": false,
+  "files": [
+    "server.log",
+    "process.json",
+    "db/bicdb-distribution.json",
+    "db/format.json",
+    "db/cluster-range-write-log.json",
+    "db/cluster-topology.json",
+    "db/cluster-metadata-consensus.json"
+  ]
+}

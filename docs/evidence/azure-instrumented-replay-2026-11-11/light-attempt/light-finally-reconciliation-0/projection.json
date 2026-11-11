@@ -1,0 +1,42 @@
+{
+  "raw_journal_sha256": "90a497babd08468886f0a0e308978520aafe93b808042e271217ea4d8a69b31e",
+  "raw_journal_bytes": 72311897,
+  "raw_hash_chain_validated": true,
+  "projected_records": 21966,
+  "record_counts": {
+    "run_started": 1,
+    "session_start_started": 8,
+    "worker_ready": 8,
+    "session_admitted": 8,
+    "observer_current_leaders_warmed": 1,
+    "reconciliation_inputs_loaded": 1,
+    "traffic_window_started": 1,
+    "operation_started": 2948,
+    "route_attempt_started": 2956,
+    "event_route": 2956,
+    "rpc_started": 3412,
+    "rpc_completed": 3412,
+    "read_observed": 2948,
+    "operation_terminal": 2948,
+    "watermark_observation_trigger": 141,
+    "rpc_failure": 26,
+    "watermark_observation_completed": 141,
+    "retry_backoff": 8,
+    "topology_install": 32,
+    "reconciliation_coverage": 1,
+    "run_completed": 1,
+    "worker_stderr_final_status": 8
+  },
+  "terminal_outcomes": {
+    "exact_match": 2947,
+    "absent": 1
+  },
+  "raw_latency_sample_counts": {
+    "get:exact_match": 2947,
+    "get:absent": 1
+  },
+  "projection_sha256": "d07bd0a69cc7468ddfe8342702f50741ef724888235d411632fa9f56b723eeed",
+  "projection_is_raw_wire_capture": false,
+  "strong_read_proof": false,
+  "qualification_status": "not_qualified"
+}

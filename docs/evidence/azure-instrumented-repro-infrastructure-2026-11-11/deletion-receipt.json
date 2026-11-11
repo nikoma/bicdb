@@ -1,0 +1,34 @@
+{
+  "group_identity_sha256": "8b415fcb6dde4396cb169a20049063492d933974c9b380e7d7fdba8f5fc99018",
+  "requested_at_utc": "2026-11-11T09:46:19.895182+00:00",
+  "identity_guards_passed": true,
+  "resource_types_before": {
+    "Microsoft.Network/virtualNetworks": 1,
+    "Microsoft.Network/networkSecurityGroups": 1,
+    "Microsoft.Network/publicIPAddresses": 1,
+    "Microsoft.Network/networkInterfaces": 5,
+    "Microsoft.Compute/virtualMachines": 5,
+    "Microsoft.Compute/disks": 10
+  },
+  "resource_count_before": 23,
+  "deleted_group_confirmed_absent": true,
+  "workload_evidence_export": "parent authorized deletion after export",
+  "delete_request_exit": 0,
+  "confirmed_absent_at_utc": "2026-11-11T09:49:21.693380+00:00",
+  "independent_subscription_inventory_remaining_owned_resources": 0,
+  "owned_cleanup_units_removed": true,
+  "owned_periodic_collector_stopped": true,
+  "owned_cleanup_private_directory_archived_then_removed": true,
+  "finalized_at_utc": "2026-11-11T09:49:39.520103+00:00",
+  "cleanup_unit_final_state": [
+    {
+      "kind": "timer",
+      "status": "LoadState=not-found\nActiveState=inactive"
+    },
+    {
+      "kind": "service",
+      "status": "LoadState=not-found\nActiveState=inactive"
+    }
+  ],
+  "collector_identity_verified_before_stop": true
+}

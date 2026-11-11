@@ -1,0 +1,48 @@
+[
+  {
+    "node": 0,
+    "original_log_bytes": 364677,
+    "copied_log_bytes": 466044,
+    "original_prefix_identical": true,
+    "post_restart_recovery_error_lines": 32,
+    "post_restart_error_classes": [
+      "other",
+      "schema_fence_verified_stale_or_missing"
+    ],
+    "r18_error_lines": 1
+  },
+  {
+    "node": 1,
+    "original_log_bytes": 7865,
+    "copied_log_bytes": 176659,
+    "original_prefix_identical": true,
+    "post_restart_recovery_error_lines": 59,
+    "post_restart_error_classes": [
+      "other",
+      "schema_fence_verified_stale_or_missing"
+    ],
+    "r18_error_lines": 0
+  },
+  {
+    "node": 2,
+    "original_log_bytes": 7938,
+    "copied_log_bytes": 21816,
+    "original_prefix_identical": true,
+    "post_restart_recovery_error_lines": 3,
+    "post_restart_error_classes": [
+      "schema_fence_verified_stale_or_missing"
+    ],
+    "r18_error_lines": 0
+  },
+  {
+    "node": 3,
+    "original_log_bytes": 8088,
+    "copied_log_bytes": 15774,
+    "original_prefix_identical": true,
+    "post_restart_recovery_error_lines": 1,
+    "post_restart_error_classes": [
+      "schema_fence_verified_stale_or_missing"
+    ],
+    "r18_error_lines": 1
+  }
+]

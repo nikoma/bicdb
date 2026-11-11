@@ -1,0 +1,4 @@
+bicdb 1.0.463-beta
+README search after process restart: passed
+PostgreSQL client reads the same database: passed
+CLI reopen after server shutdown: passed

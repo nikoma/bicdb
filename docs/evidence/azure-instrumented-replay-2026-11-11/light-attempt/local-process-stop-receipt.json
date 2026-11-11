@@ -1,0 +1,797 @@
+{
+  "completed_unix_ns": 1794390825869475725,
+  "signals_sent": [],
+  "all_task_local_controllers_workers_and_sidecar_absent": true,
+  "processes": [
+    {
+      "cohort": "8186dd18b83f4195b1319a85a1ee3498",
+      "phase": "smoke-reconciliation",
+      "role": "controller",
+      "pid": 3017928,
+      "expected_start_ticks": "431178238",
+      "same_identity_alive": false,
+      "gone": true
+    },
+    {
+      "cohort": "8186dd18b83f4195b1319a85a1ee3498",
+      "phase": "smoke-reconciliation",
+      "role": "ssh_worker",
+      "pid": 3017938,
+      "expected_start_ticks": "431178248",
+      "same_identity_alive": false,
+      "gone": true
+    },
+    {
+      "cohort": "8186dd18b83f4195b1319a85a1ee3498",
+      "phase": "smoke-reconciliation",
+      "role": "ssh_worker",
+      "pid": 3018033,
+      "expected_start_ticks": "431178407",
+      "same_identity_alive": false,
+      "gone": true
+    },
+    {
+      "cohort": "8186dd18b83f4195b1319a85a1ee3498",
+      "phase": "smoke-reconciliation",
+      "role": "ssh_worker",
+      "pid": 3018259,
+      "expected_start_ticks": "431178568",
+      "same_identity_alive": false,
+      "gone": true
+    },
+    {
+      "cohort": "8186dd18b83f4195b1319a85a1ee3498",
+      "phase": "smoke-reconciliation",
+      "role": "ssh_worker",
+      "pid": 3018423,
+      "expected_start_ticks": "431178739",
+      "same_identity_alive": false,
+      "gone": true
+    },
+    {
+      "cohort": "8186dd18b83f4195b1319a85a1ee3498",
+      "phase": "smoke-reconciliation",
+      "role": "ssh_worker",
+      "pid": 3018692,
+      "expected_start_ticks": "431178914",
+      "same_identity_alive": false,
+      "gone": true
+    },
+    {
+      "cohort": "8186dd18b83f4195b1319a85a1ee3498",
+      "phase": "smoke-reconciliation",
+      "role": "ssh_worker",
+      "pid": 3018749,
+      "expected_start_ticks": "431179069",
+      "same_identity_alive": false,
+      "gone": true
+    },
+    {
+      "cohort": "8186dd18b83f4195b1319a85a1ee3498",
+      "phase": "smoke-reconciliation",
+      "role": "ssh_worker",
+      "pid": 3018877,
+      "expected_start_ticks": "431179294",
+      "same_identity_alive": false,
+      "gone": true
+    },
+    {
+      "cohort": "8186dd18b83f4195b1319a85a1ee3498",
+      "phase": "smoke-reconciliation",
+      "role": "ssh_worker",
+      "pid": 3018954,
+      "expected_start_ticks": "431179521",
+      "same_identity_alive": false,
+      "gone": true
+    },
+    {
+      "cohort": "8186dd18b83f4195b1319a85a1ee3498",
+      "phase": "cloud-smoke",
+      "role": "controller",
+      "pid": 3013122,
+      "expected_start_ticks": "431169467",
+      "same_identity_alive": false,
+      "gone": true
+    },
+    {
+      "cohort": "8186dd18b83f4195b1319a85a1ee3498",
+      "phase": "cloud-smoke",
+      "role": "ssh_worker",
+      "pid": 3013125,
+      "expected_start_ticks": "431169478",
+      "same_identity_alive": false,
+      "gone": true
+    },
+    {
+      "cohort": "8186dd18b83f4195b1319a85a1ee3498",
+      "phase": "cloud-smoke",
+      "role": "ssh_worker",
+      "pid": 3013186,
+      "expected_start_ticks": "431169636",
+      "same_identity_alive": false,
+      "gone": true
+    },
+    {
+      "cohort": "8186dd18b83f4195b1319a85a1ee3498",
+      "phase": "cloud-smoke",
+      "role": "ssh_worker",
+      "pid": 3013320,
+      "expected_start_ticks": "431169792",
+      "same_identity_alive": false,
+      "gone": true
+    },
+    {
+      "cohort": "8186dd18b83f4195b1319a85a1ee3498",
+      "phase": "cloud-smoke",
+      "role": "ssh_worker",
+      "pid": 3013390,
+      "expected_start_ticks": "431169951",
+      "same_identity_alive": false,
+      "gone": true
+    },
+    {
+      "cohort": "8186dd18b83f4195b1319a85a1ee3498",
+      "phase": "cloud-smoke",
+      "role": "ssh_worker",
+      "pid": 3013501,
+      "expected_start_ticks": "431170108",
+      "same_identity_alive": false,
+      "gone": true
+    },
+    {
+      "cohort": "8186dd18b83f4195b1319a85a1ee3498",
+      "phase": "cloud-smoke",
+      "role": "ssh_worker",
+      "pid": 3013577,
+      "expected_start_ticks": "431170267",
+      "same_identity_alive": false,
+      "gone": true
+    },
+    {
+      "cohort": "8186dd18b83f4195b1319a85a1ee3498",
+      "phase": "cloud-smoke",
+      "role": "ssh_worker",
+      "pid": 3013651,
+      "expected_start_ticks": "431170495",
+      "same_identity_alive": false,
+      "gone": true
+    },
+    {
+      "cohort": "8186dd18b83f4195b1319a85a1ee3498",
+      "phase": "cloud-smoke",
+      "role": "ssh_worker",
+      "pid": 3013841,
+      "expected_start_ticks": "431170719",
+      "same_identity_alive": false,
+      "gone": true
+    },
+    {
+      "cohort": "8186dd18b83f4195b1319a85a1ee3498",
+      "phase": "baseline-4",
+      "role": "controller",
+      "pid": 3020906,
+      "expected_start_ticks": "431183254",
+      "same_identity_alive": false,
+      "gone": true
+    },
+    {
+      "cohort": "8186dd18b83f4195b1319a85a1ee3498",
+      "phase": "baseline-4",
+      "role": "ssh_worker",
+      "pid": 3020909,
+      "expected_start_ticks": "431183270",
+      "same_identity_alive": false,
+      "gone": true
+    },
+    {
+      "cohort": "8186dd18b83f4195b1319a85a1ee3498",
+      "phase": "baseline-4",
+      "role": "ssh_worker",
+      "pid": 3020977,
+      "expected_start_ticks": "431183427",
+      "same_identity_alive": false,
+      "gone": true
+    },
+    {
+      "cohort": "8186dd18b83f4195b1319a85a1ee3498",
+      "phase": "baseline-4",
+      "role": "ssh_worker",
+      "pid": 3021056,
+      "expected_start_ticks": "431183588",
+      "same_identity_alive": false,
+      "gone": true
+    },
+    {
+      "cohort": "8186dd18b83f4195b1319a85a1ee3498",
+      "phase": "baseline-4",
+      "role": "ssh_worker",
+      "pid": 3021124,
+      "expected_start_ticks": "431183751",
+      "same_identity_alive": false,
+      "gone": true
+    },
+    {
+      "cohort": "8186dd18b83f4195b1319a85a1ee3498",
+      "phase": "baseline-4",
+      "role": "ssh_worker",
+      "pid": 3021225,
+      "expected_start_ticks": "431183917",
+      "same_identity_alive": false,
+      "gone": true
+    },
+    {
+      "cohort": "8186dd18b83f4195b1319a85a1ee3498",
+      "phase": "baseline-4",
+      "role": "ssh_worker",
+      "pid": 3021290,
+      "expected_start_ticks": "431184075",
+      "same_identity_alive": false,
+      "gone": true
+    },
+    {
+      "cohort": "8186dd18b83f4195b1319a85a1ee3498",
+      "phase": "baseline-4",
+      "role": "ssh_worker",
+      "pid": 3021438,
+      "expected_start_ticks": "431184237",
+      "same_identity_alive": false,
+      "gone": true
+    },
+    {
+      "cohort": "8186dd18b83f4195b1319a85a1ee3498",
+      "phase": "baseline-4",
+      "role": "ssh_worker",
+      "pid": 3021544,
+      "expected_start_ticks": "431184397",
+      "same_identity_alive": false,
+      "gone": true
+    },
+    {
+      "cohort": "8186dd18b83f4195b1319a85a1ee3498",
+      "phase": "baseline-4",
+      "role": "ssh_worker",
+      "pid": 3021634,
+      "expected_start_ticks": "431184559",
+      "same_identity_alive": false,
+      "gone": true
+    },
+    {
+      "cohort": "8186dd18b83f4195b1319a85a1ee3498",
+      "phase": "baseline-4",
+      "role": "ssh_worker",
+      "pid": 3021777,
+      "expected_start_ticks": "431184729",
+      "same_identity_alive": false,
+      "gone": true
+    },
+    {
+      "cohort": "8186dd18b83f4195b1319a85a1ee3498",
+      "phase": "baseline-4",
+      "role": "ssh_worker",
+      "pid": 3021896,
+      "expected_start_ticks": "431184890",
+      "same_identity_alive": false,
+      "gone": true
+    },
+    {
+      "cohort": "8186dd18b83f4195b1319a85a1ee3498",
+      "phase": "baseline-4",
+      "role": "ssh_worker",
+      "pid": 3022047,
+      "expected_start_ticks": "431185051",
+      "same_identity_alive": false,
+      "gone": true
+    },
+    {
+      "cohort": "8186dd18b83f4195b1319a85a1ee3498",
+      "phase": "baseline-4",
+      "role": "ssh_worker",
+      "pid": 3022222,
+      "expected_start_ticks": "431185214",
+      "same_identity_alive": false,
+      "gone": true
+    },
+    {
+      "cohort": "8186dd18b83f4195b1319a85a1ee3498",
+      "phase": "baseline-4",
+      "role": "ssh_worker",
+      "pid": 3022565,
+      "expected_start_ticks": "431185370",
+      "same_identity_alive": false,
+      "gone": true
+    },
+    {
+      "cohort": "8186dd18b83f4195b1319a85a1ee3498",
+      "phase": "baseline-4",
+      "role": "ssh_worker",
+      "pid": 3022637,
+      "expected_start_ticks": "431185528",
+      "same_identity_alive": false,
+      "gone": true
+    },
+    {
+      "cohort": "8186dd18b83f4195b1319a85a1ee3498",
+      "phase": "baseline-4",
+      "role": "ssh_worker",
+      "pid": 3022775,
+      "expected_start_ticks": "431185691",
+      "same_identity_alive": false,
+      "gone": true
+    },
+    {
+      "cohort": "8186dd18b83f4195b1319a85a1ee3498",
+      "phase": "baseline-4",
+      "role": "ssh_worker",
+      "pid": 3022966,
+      "expected_start_ticks": "431185857",
+      "same_identity_alive": false,
+      "gone": true
+    },
+    {
+      "cohort": "8186dd18b83f4195b1319a85a1ee3498",
+      "phase": "baseline-4",
+      "role": "ssh_worker",
+      "pid": 3023079,
+      "expected_start_ticks": "431186016",
+      "same_identity_alive": false,
+      "gone": true
+    },
+    {
+      "cohort": "8186dd18b83f4195b1319a85a1ee3498",
+      "phase": "baseline-4",
+      "role": "ssh_worker",
+      "pid": 3023159,
+      "expected_start_ticks": "431186239",
+      "same_identity_alive": false,
+      "gone": true
+    },
+    {
+      "cohort": "8186dd18b83f4195b1319a85a1ee3498",
+      "phase": "baseline-4",
+      "role": "ssh_worker",
+      "pid": 3023273,
+      "expected_start_ticks": "431186460",
+      "same_identity_alive": false,
+      "gone": true
+    },
+    {
+      "cohort": "8186dd18b83f4195b1319a85a1ee3498",
+      "phase": "finally-reconciliation-0",
+      "role": "controller",
+      "pid": 3066425,
+      "expected_start_ticks": "431262118",
+      "same_identity_alive": false,
+      "gone": true
+    },
+    {
+      "cohort": "8186dd18b83f4195b1319a85a1ee3498",
+      "phase": "finally-reconciliation-0",
+      "role": "ssh_worker",
+      "pid": 3066429,
+      "expected_start_ticks": "431262128",
+      "same_identity_alive": false,
+      "gone": true
+    },
+    {
+      "cohort": "8186dd18b83f4195b1319a85a1ee3498",
+      "phase": "finally-reconciliation-0",
+      "role": "ssh_worker",
+      "pid": 3066517,
+      "expected_start_ticks": "431262284",
+      "same_identity_alive": false,
+      "gone": true
+    },
+    {
+      "cohort": "8186dd18b83f4195b1319a85a1ee3498",
+      "phase": "finally-reconciliation-0",
+      "role": "ssh_worker",
+      "pid": 3066607,
+      "expected_start_ticks": "431262441",
+      "same_identity_alive": false,
+      "gone": true
+    },
+    {
+      "cohort": "8186dd18b83f4195b1319a85a1ee3498",
+      "phase": "finally-reconciliation-0",
+      "role": "ssh_worker",
+      "pid": 3066692,
+      "expected_start_ticks": "431262603",
+      "same_identity_alive": false,
+      "gone": true
+    },
+    {
+      "cohort": "8186dd18b83f4195b1319a85a1ee3498",
+      "phase": "finally-reconciliation-0",
+      "role": "ssh_worker",
+      "pid": 3066765,
+      "expected_start_ticks": "431262780",
+      "same_identity_alive": false,
+      "gone": true
+    },
+    {
+      "cohort": "8186dd18b83f4195b1319a85a1ee3498",
+      "phase": "finally-reconciliation-0",
+      "role": "ssh_worker",
+      "pid": 3066861,
+      "expected_start_ticks": "431262967",
+      "same_identity_alive": false,
+      "gone": true
+    },
+    {
+      "cohort": "8186dd18b83f4195b1319a85a1ee3498",
+      "phase": "finally-reconciliation-0",
+      "role": "ssh_worker",
+      "pid": 3066963,
+      "expected_start_ticks": "431263202",
+      "same_identity_alive": false,
+      "gone": true
+    },
+    {
+      "cohort": "8186dd18b83f4195b1319a85a1ee3498",
+      "phase": "finally-reconciliation-0",
+      "role": "ssh_worker",
+      "pid": 3067068,
+      "expected_start_ticks": "431263430",
+      "same_identity_alive": false,
+      "gone": true
+    },
+    {
+      "cohort": "light-30cf5a05bde64ced88bd576e8b9950ea",
+      "phase": "two-target-finally-reconciliation",
+      "role": "controller",
+      "pid": 3113701,
+      "expected_start_ticks": "431352627",
+      "same_identity_alive": false,
+      "gone": true
+    },
+    {
+      "cohort": "light-30cf5a05bde64ced88bd576e8b9950ea",
+      "phase": "two-target-finally-reconciliation",
+      "role": "ssh_worker",
+      "pid": 3113704,
+      "expected_start_ticks": "431352637",
+      "same_identity_alive": false,
+      "gone": true
+    },
+    {
+      "cohort": "light-30cf5a05bde64ced88bd576e8b9950ea",
+      "phase": "two-target-finally-reconciliation",
+      "role": "ssh_worker",
+      "pid": 3113737,
+      "expected_start_ticks": "431352799",
+      "same_identity_alive": false,
+      "gone": true
+    },
+    {
+      "cohort": "light-30cf5a05bde64ced88bd576e8b9950ea",
+      "phase": "two-target-finally-reconciliation",
+      "role": "ssh_worker",
+      "pid": 3113858,
+      "expected_start_ticks": "431353028",
+      "same_identity_alive": false,
+      "gone": true
+    },
+    {
+      "cohort": "light-30cf5a05bde64ced88bd576e8b9950ea",
+      "phase": "two-target-finally-reconciliation",
+      "role": "ssh_worker",
+      "pid": 3113949,
+      "expected_start_ticks": "431353280",
+      "same_identity_alive": false,
+      "gone": true
+    },
+    {
+      "cohort": "light-30cf5a05bde64ced88bd576e8b9950ea",
+      "phase": "two-target-finally-reconciliation",
+      "role": "ssh_worker",
+      "pid": 3115042,
+      "expected_start_ticks": "431355365",
+      "same_identity_alive": false,
+      "gone": true
+    },
+    {
+      "cohort": "light-30cf5a05bde64ced88bd576e8b9950ea",
+      "phase": "light-finally-reconciliation-1",
+      "role": "controller",
+      "pid": 3129309,
+      "expected_start_ticks": "431382824",
+      "same_identity_alive": false,
+      "gone": true
+    },
+    {
+      "cohort": "light-30cf5a05bde64ced88bd576e8b9950ea",
+      "phase": "light-finally-reconciliation-1",
+      "role": "ssh_worker",
+      "pid": 3129312,
+      "expected_start_ticks": "431382835",
+      "same_identity_alive": false,
+      "gone": true
+    },
+    {
+      "cohort": "light-30cf5a05bde64ced88bd576e8b9950ea",
+      "phase": "light-finally-reconciliation-1",
+      "role": "ssh_worker",
+      "pid": 3129391,
+      "expected_start_ticks": "431382996",
+      "same_identity_alive": false,
+      "gone": true
+    },
+    {
+      "cohort": "light-30cf5a05bde64ced88bd576e8b9950ea",
+      "phase": "light-finally-reconciliation-1",
+      "role": "ssh_worker",
+      "pid": 3129482,
+      "expected_start_ticks": "431383157",
+      "same_identity_alive": false,
+      "gone": true
+    },
+    {
+      "cohort": "light-30cf5a05bde64ced88bd576e8b9950ea",
+      "phase": "light-finally-reconciliation-1",
+      "role": "ssh_worker",
+      "pid": 3129513,
+      "expected_start_ticks": "431383316",
+      "same_identity_alive": false,
+      "gone": true
+    },
+    {
+      "cohort": "light-30cf5a05bde64ced88bd576e8b9950ea",
+      "phase": "light-finally-reconciliation-1",
+      "role": "ssh_worker",
+      "pid": 3129616,
+      "expected_start_ticks": "431383485",
+      "same_identity_alive": false,
+      "gone": true
+    },
+    {
+      "cohort": "light-30cf5a05bde64ced88bd576e8b9950ea",
+      "phase": "light-finally-reconciliation-1",
+      "role": "ssh_worker",
+      "pid": 3129644,
+      "expected_start_ticks": "431383649",
+      "same_identity_alive": false,
+      "gone": true
+    },
+    {
+      "cohort": "light-30cf5a05bde64ced88bd576e8b9950ea",
+      "phase": "light-finally-reconciliation-1",
+      "role": "ssh_worker",
+      "pid": 3129850,
+      "expected_start_ticks": "431383883",
+      "same_identity_alive": false,
+      "gone": true
+    },
+    {
+      "cohort": "light-30cf5a05bde64ced88bd576e8b9950ea",
+      "phase": "light-finally-reconciliation-1",
+      "role": "ssh_worker",
+      "pid": 3129997,
+      "expected_start_ticks": "431384210",
+      "same_identity_alive": false,
+      "gone": true
+    },
+    {
+      "cohort": "light-30cf5a05bde64ced88bd576e8b9950ea",
+      "phase": "light-finally-reconciliation-0",
+      "role": "controller",
+      "pid": 3116220,
+      "expected_start_ticks": "431357777",
+      "same_identity_alive": false,
+      "gone": true
+    },
+    {
+      "cohort": "light-30cf5a05bde64ced88bd576e8b9950ea",
+      "phase": "light-finally-reconciliation-0",
+      "role": "ssh_worker",
+      "pid": 3116223,
+      "expected_start_ticks": "431357788",
+      "same_identity_alive": false,
+      "gone": true
+    },
+    {
+      "cohort": "light-30cf5a05bde64ced88bd576e8b9950ea",
+      "phase": "light-finally-reconciliation-0",
+      "role": "ssh_worker",
+      "pid": 3116242,
+      "expected_start_ticks": "431357943",
+      "same_identity_alive": false,
+      "gone": true
+    },
+    {
+      "cohort": "light-30cf5a05bde64ced88bd576e8b9950ea",
+      "phase": "light-finally-reconciliation-0",
+      "role": "ssh_worker",
+      "pid": 3116443,
+      "expected_start_ticks": "431358107",
+      "same_identity_alive": false,
+      "gone": true
+    },
+    {
+      "cohort": "light-30cf5a05bde64ced88bd576e8b9950ea",
+      "phase": "light-finally-reconciliation-0",
+      "role": "ssh_worker",
+      "pid": 3116519,
+      "expected_start_ticks": "431358281",
+      "same_identity_alive": false,
+      "gone": true
+    },
+    {
+      "cohort": "light-30cf5a05bde64ced88bd576e8b9950ea",
+      "phase": "light-finally-reconciliation-0",
+      "role": "ssh_worker",
+      "pid": 3116629,
+      "expected_start_ticks": "431358458",
+      "same_identity_alive": false,
+      "gone": true
+    },
+    {
+      "cohort": "light-30cf5a05bde64ced88bd576e8b9950ea",
+      "phase": "light-finally-reconciliation-0",
+      "role": "ssh_worker",
+      "pid": 3116780,
+      "expected_start_ticks": "431358790",
+      "same_identity_alive": false,
+      "gone": true
+    },
+    {
+      "cohort": "light-30cf5a05bde64ced88bd576e8b9950ea",
+      "phase": "light-finally-reconciliation-0",
+      "role": "ssh_worker",
+      "pid": 3116876,
+      "expected_start_ticks": "431359038",
+      "same_identity_alive": false,
+      "gone": true
+    },
+    {
+      "cohort": "light-30cf5a05bde64ced88bd576e8b9950ea",
+      "phase": "light-finally-reconciliation-0",
+      "role": "ssh_worker",
+      "pid": 3118245,
+      "expected_start_ticks": "431361468",
+      "same_identity_alive": false,
+      "gone": true
+    },
+    {
+      "cohort": "light-30cf5a05bde64ced88bd576e8b9950ea",
+      "phase": "two-target-fixture",
+      "role": "controller",
+      "pid": 3105535,
+      "expected_start_ticks": "431336636",
+      "same_identity_alive": false,
+      "gone": true
+    },
+    {
+      "cohort": "light-30cf5a05bde64ced88bd576e8b9950ea",
+      "phase": "two-target-fixture",
+      "role": "ssh_worker",
+      "pid": 3105538,
+      "expected_start_ticks": "431336647",
+      "same_identity_alive": false,
+      "gone": true
+    },
+    {
+      "cohort": "light-30cf5a05bde64ced88bd576e8b9950ea",
+      "phase": "two-target-fixture",
+      "role": "ssh_worker",
+      "pid": 3105621,
+      "expected_start_ticks": "431336817",
+      "same_identity_alive": false,
+      "gone": true
+    },
+    {
+      "cohort": "light-30cf5a05bde64ced88bd576e8b9950ea",
+      "phase": "two-target-fixture",
+      "role": "ssh_worker",
+      "pid": 3105704,
+      "expected_start_ticks": "431336981",
+      "same_identity_alive": false,
+      "gone": true
+    },
+    {
+      "cohort": "light-30cf5a05bde64ced88bd576e8b9950ea",
+      "phase": "two-target-fixture",
+      "role": "ssh_worker",
+      "pid": 3105877,
+      "expected_start_ticks": "431337211",
+      "same_identity_alive": false,
+      "gone": true
+    },
+    {
+      "cohort": "light-30cf5a05bde64ced88bd576e8b9950ea",
+      "phase": "two-target-fixture",
+      "role": "ssh_worker",
+      "pid": 3105980,
+      "expected_start_ticks": "431337440",
+      "same_identity_alive": false,
+      "gone": true
+    },
+    {
+      "cohort": "light-30cf5a05bde64ced88bd576e8b9950ea",
+      "phase": "light-steady-4",
+      "role": "controller",
+      "pid": 3107781,
+      "expected_start_ticks": "431341086",
+      "same_identity_alive": false,
+      "gone": true
+    },
+    {
+      "cohort": "light-30cf5a05bde64ced88bd576e8b9950ea",
+      "phase": "light-steady-4",
+      "role": "ssh_worker",
+      "pid": 3107784,
+      "expected_start_ticks": "431341097",
+      "same_identity_alive": false,
+      "gone": true
+    },
+    {
+      "cohort": "light-30cf5a05bde64ced88bd576e8b9950ea",
+      "phase": "light-steady-4",
+      "role": "ssh_worker",
+      "pid": 3107859,
+      "expected_start_ticks": "431341253",
+      "same_identity_alive": false,
+      "gone": true
+    },
+    {
+      "cohort": "light-30cf5a05bde64ced88bd576e8b9950ea",
+      "phase": "light-steady-4",
+      "role": "ssh_worker",
+      "pid": 3107927,
+      "expected_start_ticks": "431341409",
+      "same_identity_alive": false,
+      "gone": true
+    },
+    {
+      "cohort": "light-30cf5a05bde64ced88bd576e8b9950ea",
+      "phase": "light-steady-4",
+      "role": "ssh_worker",
+      "pid": 3108001,
+      "expected_start_ticks": "431341569",
+      "same_identity_alive": false,
+      "gone": true
+    },
+    {
+      "cohort": "light-30cf5a05bde64ced88bd576e8b9950ea",
+      "phase": "light-steady-4",
+      "role": "ssh_worker",
+      "pid": 3108030,
+      "expected_start_ticks": "431341732",
+      "same_identity_alive": false,
+      "gone": true
+    },
+    {
+      "cohort": "light-30cf5a05bde64ced88bd576e8b9950ea",
+      "phase": "light-steady-4",
+      "role": "ssh_worker",
+      "pid": 3108199,
+      "expected_start_ticks": "431341897",
+      "same_identity_alive": false,
+      "gone": true
+    },
+    {
+      "cohort": "light-30cf5a05bde64ced88bd576e8b9950ea",
+      "phase": "light-steady-4",
+      "role": "ssh_worker",
+      "pid": 3108342,
+      "expected_start_ticks": "431342137",
+      "same_identity_alive": false,
+      "gone": true
+    },
+    {
+      "cohort": "light-30cf5a05bde64ced88bd576e8b9950ea",
+      "phase": "light-steady-4",
+      "role": "ssh_worker",
+      "pid": 3108438,
+      "expected_start_ticks": "431342383",
+      "same_identity_alive": false,
+      "gone": true
+    },
+    {
+      "role": "resource_sidecar",
+      "pid": 3097794,
+      "initial_start_ticks": "not_recorded",
+      "same_task_identity_alive": false,
+      "gone": true
+    }
+  ]
+}

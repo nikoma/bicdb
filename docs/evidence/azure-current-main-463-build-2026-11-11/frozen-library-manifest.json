@@ -1,0 +1,50 @@
+{
+  "source_commit": "d49a391b3c6157f90f29e9f2f5214143c60f9f4b",
+  "version": "1.0.463-beta",
+  "frozen_at_utc": "2026-11-11T08:02:48.547752+00:00",
+  "lua_selection": "Core fingerprint dependency checksum367899405506943672 equals little-endian fingerprint b89a51628f0a1b05 for bicdb-lua-ca489b4ad2cb30f9.",
+  "files": [
+    {
+      "crate": "bicdb_core",
+      "source": "/tmp/bicdb-azure-artifact-target/release/deps/libbicdb_core-263009a48412a831.rlib",
+      "frozen_path": "/tmp/bicdb-azure-artifact-463-evidence/frozen-libs/libbicdb_core-263009a48412a831.rlib",
+      "bytes": 188999874,
+      "sha256": "dc714b001a0fe8758473c2c4ef80158474d7426e16630926edb65b6cc35f0356"
+    },
+    {
+      "crate": "bicdb_core",
+      "source": "/tmp/bicdb-azure-artifact-target/release/deps/libbicdb_core-263009a48412a831.rmeta",
+      "frozen_path": "/tmp/bicdb-azure-artifact-463-evidence/frozen-libs/libbicdb_core-263009a48412a831.rmeta",
+      "bytes": 59569529,
+      "sha256": "b44e5e498c8bec00fe55329c175188bdd93ed6ac10f3d0a7857f58cb7e60a535"
+    },
+    {
+      "crate": "bicdb_page",
+      "source": "/tmp/bicdb-azure-artifact-target/release/deps/libbicdb_page-0be61444a9f6430c.rlib",
+      "frozen_path": "/tmp/bicdb-azure-artifact-463-evidence/frozen-libs/libbicdb_page-0be61444a9f6430c.rlib",
+      "bytes": 19988700,
+      "sha256": "bf29a0600a86c8d9248a9cf3eb5a698f7bc0d7d275fb1e1a8b4ca60d90193702"
+    },
+    {
+      "crate": "bicdb_page",
+      "source": "/tmp/bicdb-azure-artifact-target/release/deps/libbicdb_page-0be61444a9f6430c.rmeta",
+      "frozen_path": "/tmp/bicdb-azure-artifact-463-evidence/frozen-libs/libbicdb_page-0be61444a9f6430c.rmeta",
+      "bytes": 8912696,
+      "sha256": "da0a33cdc7d5a6875d996bad53313d5f2920743c0240ea07289f1af90af04f89"
+    },
+    {
+      "crate": "bicdb_lua",
+      "source": "/tmp/bicdb-azure-artifact-target/release/deps/libbicdb_lua-ca489b4ad2cb30f9.rlib",
+      "frozen_path": "/tmp/bicdb-azure-artifact-463-evidence/frozen-libs/libbicdb_lua-ca489b4ad2cb30f9.rlib",
+      "bytes": 764226,
+      "sha256": "02240d80ccb227f4e90dacc15dedfbc6dffb2c9cf8c0fe693e7a2bb9fb5208cf"
+    },
+    {
+      "crate": "bicdb_lua",
+      "source": "/tmp/bicdb-azure-artifact-target/release/deps/libbicdb_lua-ca489b4ad2cb30f9.rmeta",
+      "frozen_path": "/tmp/bicdb-azure-artifact-463-evidence/frozen-libs/libbicdb_lua-ca489b4ad2cb30f9.rmeta",
+      "bytes": 131789,
+      "sha256": "c5e96797db5d4af1104198490c5675e1029ea33d2f1f6a0eabe39948fbf72807"
+    }
+  ]
+}

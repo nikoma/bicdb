@@ -113,11 +113,16 @@ needs durable old/new data-quorum evidence and a persistent epoch/config promise
 which rejects old prepare/commit/certify/apply attempts even when no command has
 yet been written in the new epoch.
 
-The existing `current_epoch` often describes retained command history and may
-legitimately precede the routing epoch. Do not impose equality as a substitute
-for a separate monotonic authority promise. A temporary backup/digest fence's
-wall-clock TTL is not a permanent configuration fence. Old authority must not
-resume merely because a timer expired or learner metadata was cleaned up.
+The existing `current_epoch` often precedes routing authority while old commands
+remain valid. Do not impose equality as a readiness shortcut. Some durable
+promise mechanics already exist: `install_backup_fence` persists the requested
+epoch, refuses unresolved tails, and `prepare` rejects a lower epoch even after
+the fence is released. These may support a separately proved configuration
+promise; a redundant new counter is not inherently required. The current
+relocation characterization does not exercise such a fence quorum. Prove the
+configuration binding, in-flight-tail exclusion and commit/certify/apply behavior
+before reusing those mechanics. A temporary fence's TTL alone is not a permanent
+configuration proof; expiry or learner cleanup must not revive old authority.
 
 For joint activation, require old and new voter majorities to attest the bound
 cut/image/readiness and persist the transition promise before publishing the new

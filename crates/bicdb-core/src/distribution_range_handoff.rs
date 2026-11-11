@@ -73,6 +73,9 @@ pub(crate) struct CertifiedRangeImageCut {
     source_incarnation: u64,
     target_id: ClusterNodeId,
     target_incarnation: u64,
+    intended_activation_range: RangeDescriptor,
+    intended_activation_members:
+        std::collections::BTreeMap<ClusterNodeId, crate::db::RangeImageBirthMember>,
     bootstrap_id: Option<Uuid>,
     relocation: crate::distribution::RangeRelocation,
     old_member_credentials:
@@ -123,6 +126,16 @@ impl CertifiedRangeImageCut {
     }
     pub(crate) fn activation_epoch(&self) -> u64 {
         self.promise.activation_epoch
+    }
+    /// Intended configuration captured from the genuine metadata proof. This
+    /// is not evidence that the configuration has been activated or installed.
+    pub(crate) fn intended_activation_range(&self) -> &RangeDescriptor {
+        &self.intended_activation_range
+    }
+    pub(crate) fn intended_activation_members(
+        &self,
+    ) -> &std::collections::BTreeMap<ClusterNodeId, crate::db::RangeImageBirthMember> {
+        &self.intended_activation_members
     }
 
     /// Validate only the configuration binding of an independently produced
@@ -327,6 +340,7 @@ pub(crate) struct HandoffCutRound {
     authority: HandoffMetadataProof,
     request: RangeHandoffPromise,
     range: RangeDescriptor,
+    intended_activation_range: RangeDescriptor,
     old_voters: std::collections::BTreeMap<ClusterNodeId, u64>,
     acknowledgements: std::collections::BTreeMap<ClusterNodeId, HandoffPromiseAck>,
 }
@@ -488,6 +502,7 @@ impl HandoffCutRound {
             authority,
             request,
             range,
+            intended_activation_range: new_range,
             old_voters,
             acknowledgements: Default::default(),
         })
@@ -567,6 +582,23 @@ impl HandoffCutRound {
             .range
             .required_schema_sha256(&topology.nodes)
             .map(str::to_string);
+        let intended_activation_members = self
+            .intended_activation_range
+            .replicas
+            .iter()
+            .filter(|replica| replica.role == crate::distribution::RangeReplicaRole::Voter)
+            .map(|replica| {
+                let node = &topology.nodes[&replica.node_id];
+                (
+                    node.id.clone(),
+                    crate::db::RangeImageBirthMember {
+                        incarnation: node.incarnation,
+                        tls_certificate_sha256: node.tls_certificate_sha256.clone(),
+                        pending_tls_certificate_sha256: node.pending_tls_certificate_sha256.clone(),
+                    },
+                )
+            })
+            .collect();
         Ok(CertifiedRangeImageCut {
             promise: self.request,
             cluster_id: topology.cluster_id.clone(),
@@ -576,6 +608,8 @@ impl HandoffCutRound {
             source_incarnation: best.incarnation,
             target_id: target.id.clone(),
             target_incarnation: target.incarnation,
+            intended_activation_range: self.intended_activation_range,
+            intended_activation_members,
             bootstrap_id: topology.range_image_bootstrap_id,
             relocation: relocation.clone(),
             old_member_credentials: self

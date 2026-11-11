@@ -8,6 +8,9 @@ This is Track C, independent of distributed SQL design and durability qualificat
 
 ## Azure execution update — 2026-11-11
 
+See the [consolidated actual-results report](azure-scale-out-results-2026-11-11.md)
+for measured latency, failure, reconciliation and qualification boundaries.
+
 The owner authorized the $25/eight-hour disposable experiment. Subscription
 quota and region restrictions reduced allocation to five North Europe
 `Standard_D2s_v3` VMs (2 vCPU/8 GiB each), dedicated uncached Premium data disks,
@@ -41,7 +44,8 @@ the stronger plan below. The corpus remained small and cache-resident.
 - [Placement-input correction](distributed-placement-load-inputs-2026-11-11.md):
   automatic replica/leader count balancing is real, but live byte/QPS inputs
   remained zero. Measured byte/hotspot balancing is not established.
-- A separate longer native trial used 16 workers and 900-second target windows
+- A [separate longer failed trial](evidence/azure-long-growth-failure-2026-11-11/README.md)
+  used 16 workers and 900-second target windows
   without extra append probes. Baseline completed: 7,592 successful operations,
   zero failures, 3,804 verified ACK writes over 907.00 seconds. Growth aborted
   after 927.50 seconds: 2,746 successful operations, 404 failures, 1,223 ACKs,
@@ -49,8 +53,12 @@ the stronger plan below. The corpus remained small and cache-resident.
   transport/recovery errors, missing values and mismatches; that result alone
   does not prove lost commits. No steady-five, later fault or recovered phase
   ran. All five stopped databases/logs/ledgers were exported with hash parity
-  before a bounded recovery/read diagnosis. Preserve the failed trial even if
-  subsequent reads recover all records.
+  before a bounded recovery/read diagnosis. Both originally unverified keys
+  subsequently returned their exact expected values through all five member
+  client contexts (10/10 matching reads). These are routed reads, not five
+  independent physical copies. Policy convergence still failed its 300-second
+  diagnostic bound, with active/failed relocations and degraded liveness.
+  The initial failure remains a failed availability/verification trial.
 
 The original qualification protocol below remains **unpassed**: no large fixed
 working set, repeated matched read/write/mixed capacity windows, operation-aware

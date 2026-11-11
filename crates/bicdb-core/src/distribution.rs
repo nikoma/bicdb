@@ -11,12 +11,18 @@ use crate::error::{BicDbError, Result};
 use crate::record::Record;
 use crate::replication::{CommitFrame, ReplicationTlsConfig};
 
+mod native_store_birth;
+pub(crate) use native_store_birth::{
+    validate_native_store_birth_preservation, validate_native_store_birth_snapshot,
+    validate_native_store_birth_transition,
+};
+pub use native_store_birth::{NativeStoreBirthV1, NATIVE_STORE_BIRTH_TOPOLOGY_FORMAT_VERSION};
+
 pub const DISTRIBUTION_FORMAT_VERSION: u32 = 1;
 pub const DISTRIBUTION_HASH_VERSION: u32 = 1;
-// Version 20 fences metadata voters that would drop the durable handoff session
-// or native image domain while decoding a newer topology. Mixed 19/20 clusters
-// are refused; this is not a rolling-upgrade compatibility promise.
-pub const CLUSTER_DATA_PROTOCOL_VERSION: u32 = 20;
+// Version 21 fences older authors that would silently drop native store birth
+// enrollment. Mixed protocol versions are refused; no rolling upgrade is implied.
+pub const CLUSTER_DATA_PROTOCOL_VERSION: u32 = 21;
 /// Reserved heartbeat label carrying the canonical local schema identity.
 /// Once the range leader advertises this label, placement and data operations
 /// are fenced to nodes advertising the identical schema.
@@ -1813,6 +1819,8 @@ pub struct ClusterNode {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub pending_tls_certificate_sha256: Option<String>,
     pub incarnation: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub native_store_birth_v1: Option<NativeStoreBirthV1>,
     pub lifecycle: ClusterNodeLifecycle,
     #[serde(default, skip_serializing_if = "MetadataMemberRole::is_voter")]
     pub metadata_role: MetadataMemberRole,
@@ -1851,6 +1859,7 @@ impl ClusterNode {
             tls_certificate_sha256: None,
             pending_tls_certificate_sha256: None,
             incarnation,
+            native_store_birth_v1: None,
             lifecycle: ClusterNodeLifecycle::Active,
             metadata_role: MetadataMemberRole::Voter,
             labels: BTreeMap::new(),
@@ -2065,11 +2074,26 @@ impl ClusterTopology {
                 "native range image bootstrap UUID must not be nil",
             ));
         }
-        if self.format_version != DISTRIBUTION_FORMAT_VERSION {
+        if !matches!(
+            self.format_version,
+            DISTRIBUTION_FORMAT_VERSION | NATIVE_STORE_BIRTH_TOPOLOGY_FORMAT_VERSION
+        ) {
             return Err(cluster_error(format!(
-                "unsupported distribution format version {}; expected {}",
-                self.format_version, DISTRIBUTION_FORMAT_VERSION
+                "unsupported distribution format version {}; supported {} or {}",
+                self.format_version,
+                DISTRIBUTION_FORMAT_VERSION,
+                NATIVE_STORE_BIRTH_TOPOLOGY_FORMAT_VERSION
             )));
+        }
+        if self
+            .nodes
+            .values()
+            .any(|node| node.native_store_birth_v1.is_some())
+            && self.format_version != NATIVE_STORE_BIRTH_TOPOLOGY_FORMAT_VERSION
+        {
+            return Err(cluster_error(
+                "native store birth bindings require topology format 2",
+            ));
         }
         if self.hash_version != DISTRIBUTION_HASH_VERSION {
             return Err(cluster_error(format!(
@@ -2137,6 +2161,9 @@ impl ClusterTopology {
                 return Err(cluster_error(format!(
                     "cluster node {id} has an invalid zero incarnation"
                 )));
+            }
+            if let Some(birth) = &node.native_store_birth_v1 {
+                birth.validate_for(self.range_image_bootstrap_id, node.incarnation)?;
             }
             if node.capacity_bytes == 0 || node.used_bytes > node.capacity_bytes {
                 return Err(cluster_error(format!(
@@ -2820,6 +2847,7 @@ pub struct DistributionStore {
     root: PathBuf,
     fsync: bool,
     ephemeral: bool,
+    ephemeral_previous_topology: Option<ClusterTopology>,
     pending_heartbeats: BTreeMap<ClusterNodeId, PendingClusterHeartbeat>,
     pending_metadata_learners: BTreeMap<ClusterNodeId, PendingMetadataLearner>,
     pending_metadata_promotions: BTreeMap<ClusterNodeId, PendingMetadataPromotion>,
@@ -2927,6 +2955,7 @@ impl DistributionStore {
             root,
             fsync,
             ephemeral: false,
+            ephemeral_previous_topology: None,
             pending_heartbeats: BTreeMap::new(),
             pending_metadata_learners: BTreeMap::new(),
             pending_metadata_promotions: BTreeMap::new(),
@@ -2953,6 +2982,7 @@ impl DistributionStore {
             root,
             fsync,
             ephemeral: false,
+            ephemeral_previous_topology: None,
             pending_heartbeats: BTreeMap::new(),
             pending_metadata_learners: BTreeMap::new(),
             pending_metadata_promotions: BTreeMap::new(),
@@ -2973,6 +3003,7 @@ impl DistributionStore {
     pub fn fork_ephemeral(&self) -> Self {
         let mut staged = self.clone();
         staged.ephemeral = true;
+        staged.ephemeral_previous_topology = Some(self.topology.clone());
         staged.pending_heartbeats.clear();
         staged.pending_metadata_learners.clear();
         staged.pending_metadata_promotions.clear();
@@ -3331,6 +3362,7 @@ impl DistributionStore {
                 "member bootstrap snapshot is older than the local topology",
             ));
         }
+        validate_native_store_birth_snapshot(&self.topology, &topology)?;
         let mut source = self.clone();
         source.topology = topology;
         source.provision_member_directory_with_transport(root, node_id, transport, fsync)
@@ -4355,6 +4387,7 @@ impl DistributionStore {
     pub fn refresh(&mut self) -> Result<&ClusterTopology> {
         let topology = load_topology(&self.root.join(DEFAULT_CLUSTER_TOPOLOGY))?;
         ensure_config_matches(&self.config, &topology)?;
+        validate_native_store_birth_snapshot(&self.topology, &topology)?;
         self.topology = topology;
         Ok(&self.topology)
     }
@@ -4377,6 +4410,7 @@ impl DistributionStore {
             }
             return Ok(false);
         }
+        validate_native_store_birth_snapshot(&self.topology, &topology)?;
         persist_topology(
             &self.root.join(DEFAULT_CLUSTER_TOPOLOGY),
             &topology,
@@ -4433,6 +4467,7 @@ impl DistributionStore {
                 && existing.tls_certificate_sha256 == node.tls_certificate_sha256
                 && existing.pending_tls_certificate_sha256 == node.pending_tls_certificate_sha256
                 && existing.incarnation == node.incarnation
+                && existing.native_store_birth_v1 == node.native_store_birth_v1
                 && existing.capacity_bytes == node.capacity_bytes
                 && existing.labels == node.labels
                 && (existing.metadata_role == node.metadata_role
@@ -5044,9 +5079,18 @@ impl DistributionStore {
         summary: impl Into<String>,
     ) -> Result<()> {
         if self.ephemeral {
+            if let Some(previous) = &self.ephemeral_previous_topology {
+                if let Err(error) = validate_native_store_birth_transition(previous, &self.topology)
+                {
+                    self.topology = previous.clone();
+                    return Err(error);
+                }
+            }
             self.topology
                 .record_change(actor, now_ms, summary, self.config.topology_history_limit);
-            return self.topology.validate();
+            self.topology.validate()?;
+            self.ephemeral_previous_topology = Some(self.topology.clone());
+            return Ok(());
         }
         let on_disk = load_topology(&self.root.join(DEFAULT_CLUSTER_TOPOLOGY))?;
         if on_disk.generation != self.topology.generation {
@@ -5061,6 +5105,10 @@ impl DistributionStore {
         self.topology
             .record_change(actor, now_ms, summary, self.config.topology_history_limit);
         self.topology.validate()?;
+        if let Err(error) = validate_native_store_birth_transition(&on_disk, &self.topology) {
+            self.topology = on_disk;
+            return Err(error);
+        }
         persist_topology(
             &self.root.join(DEFAULT_CLUSTER_TOPOLOGY),
             &self.topology,

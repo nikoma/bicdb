@@ -29,9 +29,11 @@ pub(super) fn create_replacement_collection(
     name: &str,
 ) -> Result<bool> {
     if session.tx.is_none()
-        || !session.ddl_undo.iter().any(
-            |undo| matches!(undo, DdlUndo::RestoreFromRecycleBin { target, .. } if target == name),
-        )
+        || !session.ddl_undo.iter().any(|undo| match undo {
+            DdlUndo::RestoreFromRecycleBin { target, .. } => target == name,
+            DdlUndo::RestoreRenameJournal { old_table, .. } => old_table == name,
+            _ => false,
+        })
     {
         return Ok(false);
     }

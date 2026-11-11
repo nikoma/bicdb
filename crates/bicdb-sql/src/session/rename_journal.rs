@@ -678,6 +678,7 @@ mod tests {
                 session.tx = Some(owner);
                 session.ddl_undo.push(DdlUndo::RestoreRenameJournal {
                     id: plan.header.id.clone(),
+                    old_table: "original".into(),
                 });
                 session.rollback_ddl_to_len(0).unwrap();
                 owner = session.tx.take().unwrap();

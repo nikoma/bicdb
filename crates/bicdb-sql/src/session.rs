@@ -2035,6 +2035,7 @@ pub(crate) enum DdlUndo {
     },
     RestoreRenameJournal {
         id: String,
+        old_table: String,
     },
     RestoreRenamedTable {
         old_table: String,
@@ -4678,7 +4679,7 @@ impl<'db> SqlSession<'db> {
             } => {
                 restore_table_state(self.db_mut()?, &table, &schema, records)?;
             }
-            DdlUndo::RestoreRenameJournal { id } => {
+            DdlUndo::RestoreRenameJournal { id, .. } => {
                 rename_journal::undo_session(self, &id)?;
             }
             DdlUndo::RestoreRenamedTable {

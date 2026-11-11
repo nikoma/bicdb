@@ -68,6 +68,7 @@ pub(super) fn apply(
     if explicit {
         session.ddl_undo.push(DdlUndo::RestoreRenameJournal {
             id: prepared.id().into(),
+            old_table: old.into(),
         });
     }
     let result = (|| -> Result<()> {
@@ -185,18 +186,65 @@ mod tests {
         };
         let paged = std::env::var("BICDB_TEST_RENAME_PAGED").unwrap() == "true";
         let explicit = std::env::var("BICDB_TEST_RENAME_EXPLICIT").unwrap() == "true";
+        let cut = std::env::var("BICDB_TEST_RENAME_CUT").unwrap();
         let mut db = BicDb::open_with_config(&path, config(paged)).unwrap();
         let mut session = SqlSession::new(&mut db);
         if explicit {
             session
                 .execute(
-                    "BEGIN; UPDATE original SET payload='pending-business-write' WHERE rowkey=1",
+                    "BEGIN; UPDATE original SET payload='pending-business-write' WHERE rowkey=1; SAVEPOINT before_rename",
                 )
                 .unwrap();
         }
         session
             .execute("ALTER TABLE original RENAME TO renamed")
             .unwrap();
+        if cut.starts_with("reuse_") {
+            assert!(explicit);
+            session.execute("CREATE TABLE original(rowkey INT PRIMARY KEY,payload TEXT); INSERT INTO original VALUES(2,'replacement')").unwrap();
+            if cut == "reuse_rollback" {
+                session
+                    .execute("ROLLBACK TO before_rename; COMMIT")
+                    .unwrap();
+            } else if cut == "reuse_commit" {
+                session.execute("COMMIT").unwrap();
+            }
+            if cut != "reuse_pending" {
+                let mut acknowledged = BTreeMap::new();
+                for name in if cut == "reuse_commit" {
+                    vec!["original", "renamed"]
+                } else {
+                    vec!["original"]
+                } {
+                    let rows = session
+                        .execute(&format!(
+                            "SELECT rowkey,payload FROM {name} ORDER BY rowkey"
+                        ))
+                        .unwrap()
+                        .rows;
+                    acknowledged.insert(
+                        name,
+                        rows.into_iter()
+                            .map(|row| {
+                                row.into_iter()
+                                    .map(|value| value.to_cell())
+                                    .collect::<Vec<_>>()
+                            })
+                            .collect::<Vec<_>>(),
+                    );
+                }
+                let ack = std::path::Path::new(&path).join(if cut == "reuse_commit" {
+                    "client-rename-ack"
+                } else {
+                    "client-business-ack"
+                });
+                std::fs::write(&ack, serde_json::to_vec(&acknowledged).unwrap()).unwrap();
+                std::fs::File::open(&ack).unwrap().sync_all().unwrap();
+                std::fs::File::open(&path).unwrap().sync_all().unwrap();
+            }
+            stage(&cut);
+            panic!("reuse cut was not reached");
+        }
         if explicit {
             session.execute("COMMIT").unwrap();
         }
@@ -242,6 +290,9 @@ mod tests {
                 } else {
                     "decision_committed"
                 });
+                if explicit {
+                    cuts.extend(["reuse_pending", "reuse_commit", "reuse_rollback"]);
+                }
                 for cut in cuts {
                     let root = tempfile::tempdir().unwrap();
                     let mut db = BicDb::open_with_config(root.path(), config(paged)).unwrap();
@@ -295,18 +346,38 @@ mod tests {
                         String::from_utf8_lossy(&output.stdout),
                         String::from_utf8_lossy(&output.stderr)
                     );
-                    let committed = matches!(cut, "decision_committed" | "client_ack");
+                    let committed =
+                        matches!(cut, "decision_committed" | "client_ack" | "reuse_commit");
                     let table = if committed { "renamed" } else { "original" };
                     let absent = if committed { "original" } else { "renamed" };
-                    let payload = if committed && explicit {
+                    let payload = if explicit && (committed || cut == "reuse_rollback") {
                         "pending-business-write"
                     } else {
                         "acknowledged"
                     };
                     assert_eq!(
                         root.path().join("client-rename-ack").exists(),
-                        cut == "client_ack"
+                        matches!(cut, "client_ack" | "reuse_commit")
                     );
+                    assert_eq!(
+                        root.path().join("client-business-ack").exists(),
+                        cut == "reuse_rollback"
+                    );
+                    if cut == "reuse_commit" || cut == "reuse_rollback" {
+                        let ledger = root.path().join(if cut == "reuse_commit" {
+                            "client-rename-ack"
+                        } else {
+                            "client-business-ack"
+                        });
+                        let ledger: JsonValue =
+                            serde_json::from_slice(&std::fs::read(ledger).unwrap()).unwrap();
+                        let expected = if cut == "reuse_commit" {
+                            serde_json::json!({"original":[["2","replacement"]],"renamed":[["1","pending-business-write"]]})
+                        } else {
+                            serde_json::json!({"original":[["1","pending-business-write"]]})
+                        };
+                        assert_eq!(ledger, expected);
+                    }
                     for reopen in 0..2 {
                         let mut db = BicDb::open_with_config(root.path(), config(paged)).unwrap();
                         {
@@ -319,9 +390,22 @@ mod tests {
                                 vec![vec![SqlValue::Int(1), SqlValue::String(payload.into())]],
                                 "paged={paged} explicit={explicit} cut={cut} reopen={reopen}"
                             );
-                            assert!(session
-                                .execute(&format!("SELECT rowkey FROM {absent}"))
-                                .is_err());
+                            if cut == "reuse_commit" {
+                                assert_eq!(
+                                    session
+                                        .execute("SELECT rowkey,payload FROM original")
+                                        .unwrap()
+                                        .rows,
+                                    vec![vec![
+                                        SqlValue::Int(2),
+                                        SqlValue::String("replacement".into())
+                                    ]]
+                                );
+                            } else {
+                                assert!(session
+                                    .execute(&format!("SELECT rowkey FROM {absent}"))
+                                    .is_err());
+                            }
                             let expected = (1..=8)
                                 .map(|id| {
                                     vec![

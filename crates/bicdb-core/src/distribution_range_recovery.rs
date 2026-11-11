@@ -41,6 +41,7 @@ pub(crate) struct RecoveryRoleAdmission {
     restore: Option<MetadataRestoreActivation>,
     schema: Option<String>,
     relocation: Option<RangeRelocation>,
+    handoff_target_identity: Option<RecoveryMemberIdentity>,
 }
 
 impl RecoveryRoleAdmission {
@@ -116,6 +117,16 @@ impl RecoveryRoleAdmission {
                     .clone(),
             ),
         };
+        let handoff_target_identity = relocation
+            .as_ref()
+            .map(|plan| {
+                topology
+                    .nodes
+                    .get(&plan.target)
+                    .map(identity)
+                    .ok_or_else(|| invalid("committed target member absent"))
+            })
+            .transpose()?;
         let restore = witness
             .restore_activation(read_request_id, recipient_challenge)?
             .cloned();
@@ -131,6 +142,7 @@ impl RecoveryRoleAdmission {
             restore,
             schema,
             relocation,
+            handoff_target_identity,
         })
     }
     pub(crate) fn require_live_request(&self) -> Result<()> {
@@ -270,10 +282,204 @@ impl HandoffRoleAdmission {
             )),
         }
     }
+    pub(crate) fn target_member_identity(&self) -> &RecoveryMemberIdentity {
+        self.0
+            .handoff_target_identity
+            .as_ref()
+            .expect("committed handoff constructor captures its target")
+    }
     pub(crate) fn committed_relocation(&self) -> &RangeRelocation {
         self.0
             .relocation
             .as_ref()
             .expect("handoff constructor requires committed plan")
     }
+}
+
+/// Genuine fresh consensus/provider test fixture, with registered test-peer
+/// identities and real durable metadata stores. It simulates member transport;
+/// it is explicitly NOT mTLS, hardware or deployment qualification evidence.
+#[cfg(test)]
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn test_handoff_role_admission(
+    root: &std::path::Path,
+    topology: &crate::ClusterTopology,
+    metadata_leader: &ClusterNodeId,
+    initiator: &ClusterNodeId,
+    recipient: &ClusterNodeId,
+    relocation_id: crate::RelocationId,
+    budget: Duration,
+) -> Result<HandoffRoleAdmission> {
+    use crate::distribution_consensus::{
+        MetadataConsensusStore, MetadataReadAck, MetadataReadProbeRequest,
+    };
+    use crate::distribution_metadata_read_provider::{
+        MetadataReadProbeTransport, MetadataReadProvider,
+    };
+    use crate::CancellationToken;
+    use parking_lot::Mutex;
+    use std::sync::Arc;
+    let parent = CancellationToken::uncancelable().child_with_deadline(Instant::now() + budget);
+    let participant = |id: &ClusterNodeId| {
+        let member = &topology.nodes[id];
+        MetadataReadParticipant::from_transport(
+            id.clone(),
+            member.incarnation,
+            member.tls_certificate_sha256.clone(),
+            true,
+        )
+    };
+    let peers = topology
+        .nodes
+        .keys()
+        .map(|id| {
+            Ok((
+                id.clone(),
+                Arc::new(Mutex::new(MetadataConsensusStore::open(
+                    root.join(id.as_str()),
+                    topology.cluster_id.clone(),
+                    id.clone(),
+                    topology.clone(),
+                    true,
+                )?)),
+            ))
+        })
+        .collect::<Result<BTreeMap<_, _>>>()?;
+    let leader = peers
+        .get(metadata_leader)
+        .ok_or_else(|| invalid("test metadata leader absent"))?
+        .clone();
+    {
+        let mut state = leader.lock();
+        state.start_election()?;
+        state.become_leader(&topology.metadata_voters())?;
+        for id in topology
+            .metadata_voters()
+            .iter()
+            .filter(|id| *id != metadata_leader)
+        {
+            let reply = peers[id]
+                .lock()
+                .handle_append_request(state.append_request_from(1, 64)?)?;
+            state.record_append_response(id, &reply)?;
+        }
+    }
+    #[derive(Debug)]
+    struct TestTransport {
+        topology: crate::ClusterTopology,
+        leader: ClusterNodeId,
+        peers: BTreeMap<ClusterNodeId, Arc<Mutex<MetadataConsensusStore>>>,
+    }
+    impl MetadataReadProbeTransport for TestTransport {
+        fn local_participant(&self) -> MetadataReadParticipant {
+            let member = &self.topology.nodes[&self.leader];
+            MetadataReadParticipant::from_transport(
+                member.id.clone(),
+                member.incarnation,
+                member.tls_certificate_sha256.clone(),
+                true,
+            )
+        }
+        fn probe(
+            &self,
+            destination: &ClusterNodeId,
+            request: MetadataReadProbeRequest,
+            cancellation: &CancellationToken,
+        ) -> Result<MetadataReadAck> {
+            cancellation.check()?;
+            let reply = self.peers[destination]
+                .lock()
+                .handle_read_authority_probe(request.clone())?;
+            let member = &self.topology.nodes[destination];
+            MetadataReadAck::from_transport(
+                &request,
+                destination,
+                MetadataReadParticipant::from_transport(
+                    member.id.clone(),
+                    member.incarnation,
+                    member.tls_certificate_sha256.clone(),
+                    true,
+                ),
+                reply,
+            )
+        }
+    }
+    let transport = Arc::new(TestTransport {
+        topology: topology.clone(),
+        leader: metadata_leader.clone(),
+        peers,
+    });
+    let provider = MetadataReadProvider::new(leader, transport)?;
+    let plan = topology
+        .relocations
+        .get(&relocation_id)
+        .ok_or_else(|| invalid("test committed plan absent"))?;
+    let session = plan
+        .handoff_session
+        .as_ref()
+        .ok_or_else(|| invalid("test committed session absent"))?;
+    let purpose = MetadataRecoveryRolePurpose::CommittedHandoff {
+        relocation_id,
+        plan_id: plan.plan_id.clone(),
+        session_id: session.session_id,
+        nonce: session.nonce,
+    };
+    let request_id = Uuid::now_v7();
+    let challenge = Uuid::now_v7();
+    let remaining = parent
+        .deadline()
+        .unwrap()
+        .checked_duration_since(Instant::now())
+        .ok_or_else(|| invalid("test witness deadline expired"))?;
+    let request = crate::distribution_consensus::MetadataRecoveryRoleRequest {
+        protocol_version: crate::METADATA_READ_ACQUISITION_PROTOCOL_VERSION,
+        acquisition_id: Uuid::now_v7(),
+        read_request_id: request_id,
+        initiator_node_id: initiator.clone(),
+        initiator_incarnation: topology.nodes[initiator].incarnation,
+        initiator_certificate_sha256: topology.nodes[initiator].tls_certificate_sha256.clone(),
+        initiator_plaintext_loopback: true,
+        recipient_node_id: recipient.clone(),
+        recipient_incarnation: topology.nodes[recipient].incarnation,
+        range_id: plan.range_id,
+        range_epoch: plan.learner_epoch,
+        recovery_nonce: session.nonce,
+        recipient_challenge: challenge,
+        purpose: purpose.clone(),
+        budget_ms: remaining
+            .as_millis()
+            .min(5000)
+            .try_into()
+            .map_err(|_| invalid("test witness budget overflow"))?,
+    };
+    let started = Instant::now();
+    let response =
+        provider.acquire_recovery_role(&participant(recipient), request.clone(), &parent)?;
+    // The transport wrapper is test simulated; the authority consumed above
+    // came exclusively from actual begin/probe/record/finish on real stores.
+    let observation = MetadataRecoveryRoleObservation::from_transport(
+        &request,
+        &topology.cluster_id,
+        metadata_leader,
+        participant(metadata_leader),
+        response,
+        parent.deadline().unwrap(),
+        started,
+    )?;
+    while provider.inflight_contexts() != 0 {
+        parent.check()?;
+        std::thread::sleep(Duration::from_millis(1));
+    }
+    RecoveryRoleAdmission::from_witness(
+        observation,
+        &participant(initiator),
+        recipient,
+        request_id,
+        plan.range_id,
+        plan.learner_epoch,
+        session.nonce,
+        challenge,
+        &purpose,
+    )?
+    .into_handoff()
 }

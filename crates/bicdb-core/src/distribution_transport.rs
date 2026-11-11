@@ -3579,6 +3579,27 @@ impl TcpClusterRelocationTransport {
             )),
         }
     }
+    /// Invalid/replayed wire characterization only. Production senders use the
+    /// actual-certificate constructor, never this DTO entry point.
+    #[cfg(test)]
+    pub(crate) fn test_send_native_origin_request(
+        &self,
+        destination: &ClusterNodeId,
+        request: crate::distribution_native_apply::NativeOriginApplyRequest,
+        parent: &CancellationToken,
+    ) -> Result<crate::distribution_native_apply::NativeReplicaApplyObservation> {
+        self.native_replica_observation(
+            destination,
+            ClusterDataRequest::ApplyNativeOrigin {
+                request: request.clone(),
+            },
+            request.bootstrap_id,
+            request.command.range_id,
+            request.command.range_epoch,
+            request.challenge,
+            parent,
+        )
+    }
     fn native_replica_observation(
         &self,
         destination: &ClusterNodeId,

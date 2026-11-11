@@ -526,17 +526,27 @@ fn native_rf3_actual_services_ack_origin_while_bare_replica_apply_remains_refuse
                 && row.state == Some(state)
                 && row.error.is_none()));
         }
-        assert!(rows.iter().any(|row| row.operation == "apply"
-            && row.state.is_none()
-            && row
-                .error
-                .as_deref()
-                .is_some_and(|error| error.contains("authenticated current-leader instruction"))));
+        // This fixture deliberately drops native instructions to preserve the
+        // historical raw-CQ/native0 precondition. Independently exercise the
+        // actual bare receiver; a fixture delivery error is not that proof.
+        assert!(rows
+            .iter()
+            .any(|row| row.operation == "apply" && row.state.is_none()));
         let service = fixture.services[node].lock();
         let probe = service
             .probe_range_write_for_peer(range, leader, 1)
             .unwrap();
         let entry = probe.entry.unwrap();
+        drop(service);
+        let bare = fixture.services[node]
+            .lock()
+            .apply_certified_range_write(range, leader, &entry.command)
+            .unwrap_err();
+        assert!(
+            bare.to_string()
+                .contains("authenticated current-leader instruction"),
+            "{bare}"
+        );
         assert_eq!(entry.state, RangeWriteState::QuorumCommitted);
         assert_eq!(probe.progress.last_index, 1);
         assert_eq!(probe.progress.resolved_through, 0);

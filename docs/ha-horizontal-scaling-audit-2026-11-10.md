@@ -32,6 +32,11 @@ not change engine behavior or qualify a newer source version.
 
 ## P0 source follow-up — 2026-11-11
 
+The [independent event-routing deadline repair](event-routing-deadline-2026-11-11.md)
+reproduces two silent-socket retry failures on 1.0.468-beta and records five
+passing candidate TCP tests. Event reads remain eventual; this result does not
+qualify strong reads, image recovery, rebalance or the failed Azure run.
+
 The [P0 correctness and recovery report](p0-range-recovery-progress-2026-11-11.md)
 records newer source fixes and exact local evidence for fair relocation turns,
 certificate quorum before stable-membership write ACK, retry admission, fresh

@@ -5,13 +5,18 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::ops::Bound;
 
+mod runtime;
+pub(super) use runtime::{Registration, SerializableTransactions};
+
 type ParticipantId = u64;
 
+#[derive(Debug)]
 struct Dependencies<Collection = u64> {
     order: u64,
     participants: BTreeMap<ParticipantId, Participant<Collection>>,
 }
 
+#[derive(Debug)]
 struct Participant<Collection> {
     snapshot: u64,
     read_only: bool,
@@ -23,20 +28,20 @@ struct Participant<Collection> {
     committed_writes: Vec<WriteFootprint<Collection>>,
 }
 
-#[derive(PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 struct ReadScope<Collection> {
     collection: Collection,
     keys: ReadKeys,
 }
 
-#[derive(PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 enum ReadKeys {
     Relation,
     Record(KeyRange),
     Index { identity: String, range: KeyRange },
 }
 
-#[derive(PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 enum KeyRange {
     Exact(Vec<u8>),
     Prefix(Vec<u8>),
@@ -77,6 +82,7 @@ impl KeyRange {
     }
 }
 
+#[derive(Debug)]
 struct WriteFootprint<Collection> {
     collection: Collection,
     record_key: Vec<u8>,
@@ -571,6 +577,7 @@ fn finished_components_are_reclaimed_without_waiting_for_quiescence() {
     assert_eq!(graph.participants.keys().copied().collect::<Vec<_>>(), [4]);
 }
 
+#[cfg(test)]
 fn record_scope(collection: u64, id: &str) -> ReadScope<u64> {
     ReadScope {
         collection,
@@ -578,6 +585,7 @@ fn record_scope(collection: u64, id: &str) -> ReadScope<u64> {
     }
 }
 
+#[cfg(test)]
 fn write_footprint(collection: u64, id: &str) -> WriteFootprint<u64> {
     WriteFootprint {
         collection,

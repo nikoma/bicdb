@@ -57,9 +57,8 @@ mod read_committed_reservation;
 mod record_read_snapshot;
 pub use record_read_snapshot::RecordReadSnapshot;
 mod row_lock_waiters;
-#[cfg(test)]
-mod sql_serializable;
 mod spatial_paged;
+mod sql_serializable;
 mod transaction_receipts;
 mod transaction_suspension;
 mod unique_reservations;
@@ -4019,6 +4018,7 @@ pub struct BicDb {
     // exclusive side. Ordinary commits therefore remain concurrent, while a
     // serializable validator observes a stable database through its apply.
     serializable_commit_admission: RwLock<()>,
+    postgres_serializable: Arc<sql_serializable::SerializableTransactions>,
     /// Set while an automatic checkpoint runs, so concurrent committers that
     /// also see a large log do not start a second one.
     auto_checkpoint_running: AtomicBool,
@@ -9045,6 +9045,7 @@ pub struct Transaction {
     isolation: TransactionIsolation,
     serializable_generation_snapshot: HashMap<String, u64>,
     serializable_reads: BTreeSet<String>,
+    postgres_serializable: Option<sql_serializable::Registration>,
     /// Used only by authenticated range-log replay. It is private to the core
     /// crate and therefore cannot be selected by SQL, pgwire, or extensions.
     bypass_commit_admission: bool,
@@ -10855,6 +10856,7 @@ impl BicDb {
             index_generation: AtomicU64::new(0),
             unique_reservation_indexes: RwLock::new(None),
             serializable_commit_admission: RwLock::new(()),
+            postgres_serializable: Arc::default(),
             auto_checkpoint_running: AtomicBool::new(false),
             commit_lock: Mutex::new(()),
             flashback_clock: Mutex::new(flashback::FlashbackClock::default()),
@@ -14983,6 +14985,7 @@ impl Transaction {
             return Err(BicDbError::TransactionNotPending);
         }
         if self.isolation == TransactionIsolation::Serializable
+            || self.postgres_serializable.is_some()
             || self.write_len() != 0
             || self.lock_len() != 0
         {
@@ -16005,6 +16008,7 @@ impl Transaction {
     fn get_visible_unchecked(&self, collection: &str, id: &str) -> Result<Option<Arc<Record>>> {
         let db = self.db_ref();
         self.bind_collection_incarnation(collection)?;
+        self.observe_postgres_record(collection, id);
         let (record, observed_version, read_stored) =
             record_read_snapshot::read_record_at_snapshot_unchecked(
                 db,
@@ -16440,6 +16444,11 @@ impl Transaction {
     ) -> Result<Vec<Option<Arc<Record>>>> {
         let db = self.db_ref();
         self.bind_collection_incarnation(collection)?;
+        if self.postgres_serializable.is_some() {
+            for pk in pks {
+                self.observe_postgres_record(collection, pk);
+            }
+        }
         let has_pending = self.has_pending_writes(collection);
         let snapshot = self.snapshot_tx;
         let (stored, lazy_misses): (Vec<Option<Arc<StoredRecord>>>, Vec<usize>) = {
@@ -16882,6 +16891,7 @@ impl Transaction {
     fn scan_collection_visible_unchecked(&self, collection: &str) -> Result<Vec<Record>> {
         let db = self.db_ref();
         self.bind_collection_incarnation(collection)?;
+        self.observe_postgres_relation(collection);
         let mut records = BTreeMap::<String, Record>::new();
         let mut retained_bytes = 0usize;
         let state = db.collection_state(collection)?;
@@ -17008,8 +17018,17 @@ impl Transaction {
         collection: &str,
         id_prefix: &str,
     ) -> Result<Vec<String>> {
-        let db = self.db_ref();
         self.bind_collection_incarnation(collection)?;
+        self.observe_postgres_prefix(collection, id_prefix);
+        self.snapshot_record_ids_with_prefix(collection, id_prefix)
+    }
+
+    fn snapshot_record_ids_with_prefix(
+        &self,
+        collection: &str,
+        id_prefix: &str,
+    ) -> Result<Vec<String>> {
+        let db = self.db_ref();
         let state = db.collection_state(collection)?;
         let mut ids = if state.paged_lazy {
             // Base ids from the page store, then per-key chain overrides —
@@ -17092,10 +17111,11 @@ impl Transaction {
     ) -> Result<(Vec<String>, bool)> {
         let db = self.db_ref();
         self.bind_collection_incarnation(collection)?;
+        self.observe_postgres_range(collection, lower, upper);
         let state = db.collection_state(collection)?;
         if !state.paged_lazy {
             drop(state);
-            let ids = self.scan_collection_record_ids_with_prefix_unchecked(collection, "")?;
+            let ids = self.snapshot_record_ids_with_prefix(collection, "")?;
             return Ok((
                 record_ids_in_range_ordered(ids, lower, upper, descending),
                 true,
@@ -17153,9 +17173,10 @@ impl Transaction {
     ) -> Result<Vec<String>> {
         let db = self.db_ref();
         self.bind_collection_incarnation(collection)?;
+        self.observe_postgres_prefix(collection, id_prefix);
         let state = db.collection_state(collection)?;
         if !state.paged_lazy {
-            return self.scan_collection_record_ids_with_prefix_unchecked(collection, id_prefix);
+            return self.snapshot_record_ids_with_prefix(collection, id_prefix);
         }
         let mut ids = BTreeSet::new();
         if let (Some(snapshot), Some(paged)) = (&self.paged_snapshot, &db.paged_records) {

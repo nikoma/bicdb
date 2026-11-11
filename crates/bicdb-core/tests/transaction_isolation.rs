@@ -248,3 +248,46 @@ fn serializable_relation_reads_reject_write_skew() {
         100
     );
 }
+
+#[test]
+fn postgres_serializable_rejects_write_skew_and_allows_disjoint_writes() {
+    use bicdb_core::{CancellationToken, DbConfig, StorageMode};
+
+    for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
+        for skew in [false, true] {
+            let directory = tempfile::tempdir().unwrap();
+            let mut db = BicDb::open_with_config(
+                directory.path(),
+                DbConfig::default().with_storage_mode(mode.clone()),
+            )
+            .unwrap();
+            db.create_collection("accounts").unwrap();
+            db.insert("accounts", account("a", 100)).unwrap();
+            db.insert("accounts", account("b", 100)).unwrap();
+            let mut first = db.begin_transaction().unwrap();
+            let mut second = db.begin_transaction().unwrap();
+            let cancellation = CancellationToken::uncancelable();
+            for tx in [&mut first, &mut second] {
+                tx.acquire_postgres_serializable_snapshot(0, false, false, &cancellation)
+                    .unwrap();
+            }
+            let first_read = if skew { "b" } else { "a" };
+            let second_read = if skew { "a" } else { "b" };
+            assert!(first.get("accounts", first_read).unwrap().is_some());
+            assert!(second.get("accounts", second_read).unwrap().is_some());
+            first.update("accounts", account("a", 0)).unwrap();
+            second.update("accounts", account("b", 0)).unwrap();
+            first.commit().unwrap();
+            let outcome = second.commit();
+            if skew {
+                assert!(matches!(outcome, Err(BicDbError::TransactionConflict(_))));
+            } else {
+                outcome.unwrap();
+            }
+            assert_eq!(
+                db.get("accounts", "b").unwrap().unwrap().metadata["balance"],
+                if skew { 100 } else { 0 }
+            );
+        }
+    }
+}

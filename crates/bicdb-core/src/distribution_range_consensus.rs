@@ -676,6 +676,16 @@ impl RangeWriteStore {
         &mut self,
         request: &RangeHandoffPromise,
     ) -> Result<RangeHandoffPromise> {
+        self.install_handoff_promise_with(request, Self::persist)
+    }
+
+    // The private adapter keeps the production writer unchanged while allowing
+    // tests to exercise a real rename followed by an uncertain directory sync.
+    fn install_handoff_promise_with(
+        &mut self,
+        request: &RangeHandoffPromise,
+        mut persist: impl FnMut(&Self) -> Result<()>,
+    ) -> Result<RangeHandoffPromise> {
         request.validate()?;
         if !self.fsync || !crate::format::range_image_install_active(&self.root)? {
             return Err(range_write_error(
@@ -687,7 +697,7 @@ impl RangeWriteStore {
                 // An earlier failure may have happened after rename but before
                 // directory fsync. Never turn an unconfirmed in-memory fence
                 // into quorum evidence without re-persisting it durably.
-                self.persist()?;
+                persist(self)?;
                 Ok(existing.clone())
             } else {
                 Err(range_write_error(
@@ -731,7 +741,7 @@ impl RangeWriteStore {
         // write_atomic may have renamed before failing a durability operation;
         // reverting memory could otherwise admit an old writer against it.
         // No response/certificate is issued unless persistence succeeds.
-        self.persist()?;
+        persist(self)?;
         Ok(promise)
     }
 
@@ -1231,9 +1241,13 @@ impl RangeWriteStore {
     }
 
     fn persist(&self) -> Result<()> {
+        self.persist_with(crate::storage::write_atomic)
+    }
+
+    fn persist_with(&self, write: impl FnOnce(&Path, &[u8], bool) -> Result<()>) -> Result<()> {
         fs::create_dir_all(&self.root)?;
         let envelope = RangeWriteEnvelope::new(self.catalog.clone())?;
-        crate::storage::write_atomic(
+        write(
             &self.root.join(DEFAULT_RANGE_WRITE_LOG),
             &serde_json::to_vec_pretty(&envelope)?,
             self.fsync,
@@ -3680,6 +3694,112 @@ mod tests {
         )
         .unwrap();
         assert_eq!(reopened.catalog, before);
+    }
+
+    #[test]
+    fn handoff_postrename_directory_sync_failure_survives_reopen_and_cannot_ack() {
+        use std::cell::Cell;
+        use std::io::Write;
+
+        // This reproduces the actual replacement ordering up to the fault:
+        // synced new file -> atomic rename -> failed directory fsync. It is not
+        // a power-loss simulation and does not claim the unsynced rename would
+        // survive one; its outcome is deliberately treated as uncertain.
+        fn replace_then_fail_directory_sync(path: &Path, bytes: &[u8], fsync: bool) -> Result<()> {
+            assert!(fsync, "handoff evidence requires the durable writer");
+            let temporary = path.with_extension(format!("{}.tmp", Uuid::new_v4()));
+            let mut file = OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(&temporary)?;
+            file.write_all(bytes)?;
+            file.sync_all()?;
+            drop(file);
+            fs::rename(&temporary, path)?;
+            assert_eq!(
+                fs::read(path)?,
+                bytes,
+                "new catalog is visible after rename"
+            );
+            Err(std::io::Error::other("injected post-rename directory fsync failure").into())
+        }
+
+        let directory = tempfile::tempdir().unwrap();
+        crate::format::enable_range_image_install(directory.path()).unwrap();
+        let cluster = ClusterId::new("range-log-test").unwrap();
+        let node = ClusterNodeId::new("n1").unwrap();
+        let mut store =
+            RangeWriteStore::open(directory.path(), cluster.clone(), node.clone(), true).unwrap();
+        let first = command(1, 1);
+        store.prepare(first.clone()).unwrap();
+        store.abort(&first).unwrap();
+        let request = handoff_request();
+        let persistence_calls = Cell::new(0);
+        let failed = store.install_handoff_promise_with(&request, |store| {
+            persistence_calls.set(persistence_calls.get() + 1);
+            store.persist_with(replace_then_fail_directory_sync)
+        });
+        assert!(failed.unwrap_err().to_string().contains("post-rename"));
+        assert_eq!(persistence_calls.get(), 1);
+        let expected = store.catalog.handoff_promises[&request.range_id].clone();
+        assert_eq!(expected.resolved_through, 1);
+        assert!(store.prepare(command(2, 1)).is_err());
+        drop(store);
+
+        let mut reopened =
+            RangeWriteStore::open(directory.path(), cluster.clone(), node.clone(), true).unwrap();
+        assert_eq!(reopened.catalog.format_version, HANDOFF_RANGE_LOG_FORMAT);
+        assert_eq!(
+            reopened.catalog.handoff_promises[&request.range_id],
+            expected
+        );
+        for epoch in [1, 2, 3, 999] {
+            assert!(reopened.prepare(command(2, epoch)).is_err());
+        }
+
+        // A matching in-memory/on-disk promise is not by itself permission to
+        // return quorum evidence: every idempotent retry must re-persist it.
+        let retry = reopened.install_handoff_promise_with(&request, |store| {
+            persistence_calls.set(persistence_calls.get() + 1);
+            store.persist_with(replace_then_fail_directory_sync)
+        });
+        assert!(retry.unwrap_err().to_string().contains("post-rename"));
+        assert_eq!(
+            persistence_calls.get(),
+            2,
+            "retry really reached persistence"
+        );
+        assert!(reopened.prepare(command(2, 1)).is_err());
+        drop(reopened);
+        let mut reopened =
+            RangeWriteStore::open(directory.path(), cluster.clone(), node.clone(), true).unwrap();
+        assert_eq!(
+            reopened.catalog.handoff_promises[&request.range_id],
+            expected
+        );
+
+        let synced = Cell::new(false);
+        let evidence = reopened
+            .install_handoff_promise_with(&request, |store| {
+                persistence_calls.set(persistence_calls.get() + 1);
+                store.persist_with(|path, bytes, fsync| {
+                    assert!(fsync);
+                    crate::storage::write_atomic(path, bytes, fsync)?;
+                    synced.set(true);
+                    Ok(())
+                })
+            })
+            .unwrap();
+        assert!(synced.get(), "proof follows successful durable replacement");
+        assert_eq!(persistence_calls.get(), 3);
+        assert_eq!(evidence, expected);
+        drop(reopened);
+        let mut reopened = RangeWriteStore::open(directory.path(), cluster, node, true).unwrap();
+        assert_eq!(
+            reopened.catalog.handoff_promises[&request.range_id],
+            expected
+        );
+        assert!(reopened.prepare(command(2, 3)).is_err());
     }
 
     #[test]

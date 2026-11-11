@@ -2576,7 +2576,7 @@ fn handle_frontend_message(
         match tag {
             b'd' => {
                 if let Err(error) = copy_in_data(state, &payload) {
-                    abort_copy_in(state);
+                    abort_copy_in(server, state)?;
                     state.failed_queries += 1;
                     server.failed_queries.fetch_add(1, Ordering::SeqCst);
                     state.record_query_error(&server.config.sql_profile);
@@ -2620,7 +2620,7 @@ fn handle_frontend_message(
                 }
             },
             b'f' => {
-                abort_copy_in(state);
+                abort_copy_in(server, state)?;
                 let message = cstring_payload(&payload).unwrap_or("COPY failed");
                 state.failed_queries += 1;
                 server.failed_queries.fetch_add(1, Ordering::SeqCst);
@@ -2637,11 +2637,11 @@ fn handle_frontend_message(
             // this mode, and the subsequent Sync supplies ReadyForQuery.
             b'S' | b'H' => {}
             b'X' => {
-                abort_copy_in(state);
+                abort_copy_in(server, state)?;
                 return Ok(false);
             }
             _ => {
-                abort_copy_in(state);
+                abort_copy_in(server, state)?;
                 state.discard_until_sync = true;
                 error_response(
                     stream,
@@ -2753,7 +2753,7 @@ fn handle_frontend_message(
         },
         b'B' => match bind_message(&payload, &state.prepared, server).and_then(
             |(portal_name, portal, has_parameters)| {
-                acquire_postgres_statement_snapshot(server, state, || {
+                acquire_postgres_statement_snapshot(server, state, None, || {
                     has_parameters
                         || bicdb_sql::postgres_parse_requires_snapshot(&portal.source_sql)
                 })?;
@@ -2972,6 +2972,7 @@ struct CopyInState {
     inserted_rows: usize,
     spill: Option<CopySpillState>,
     started_guc_transaction: bool,
+    owns_serializable_transaction: bool,
     extended: bool,
 }
 
@@ -3474,7 +3475,7 @@ fn execute_server_query(
     }
     if let Some(copy) = parse_copy_statement(sql)? {
         delegation::validate_delegation(server, state)?;
-        acquire_postgres_statement_snapshot(server, state, || true)?;
+        acquire_postgres_statement_snapshot(server, state, None, || true)?;
         if let (CopyDirection::ToStdout, Some(query)) = (
             copy.direction,
             copy.query
@@ -3500,6 +3501,21 @@ fn execute_server_query(
                 if state.failed_transaction {
                     return Err(PgWireError::InFailedTransaction);
                 }
+                let owns_serializable_transaction = !state.in_transaction
+                    && !bicdb_sql::oracle::is_oracle_profile(&server.config.sql_profile)
+                    && state
+                        .session_state
+                        .default_transaction_isolation(&server.config.sql_profile)?
+                        == "serializable";
+                if owns_serializable_transaction {
+                    begin_buffered_transaction(server, state)?;
+                    if let Err(error) =
+                        acquire_postgres_statement_snapshot(server, state, None, || true)
+                    {
+                        rollback_open_transaction(server, state)?;
+                        return Err(error);
+                    }
+                }
                 let started_guc_transaction = !state.session_state.transaction_active();
                 if started_guc_transaction {
                     state.session_state.begin_transaction();
@@ -3514,10 +3530,11 @@ fn execute_server_query(
                     inserted_rows: 0,
                     spill: None,
                     started_guc_transaction,
+                    owns_serializable_transaction,
                     extended: false,
                 });
                 if let Err(error) = enforce_persistent_connection_memory(state, &server.config) {
-                    abort_copy_in(state);
+                    abort_copy_in(server, state)?;
                     return Err(error);
                 }
                 let copy = &state
@@ -4130,6 +4147,32 @@ fn execute_server_db_sql_for_state_inner(
         state.catalog_cache = session.into_catalog_cache();
         return result;
     }
+    if !bicdb_sql::oracle::is_oracle_profile(&server.config.sql_profile)
+        && state
+            .session_state
+            .default_transaction_isolation(&server.config.sql_profile)?
+            == "serializable"
+        && split_sql_statements(sql)
+            .iter()
+            .any(|statement| bicdb_sql::postgres_parse_requires_snapshot(statement))
+    {
+        begin_buffered_transaction(server, state)?;
+        let result =
+            acquire_postgres_statement_snapshot(server, state, Some(cancellation), || true)
+                .and_then(|()| {
+                    execute_server_transaction_sql(server, state, sql, normalized, cancellation)
+                });
+        return match result {
+            Ok(result) => {
+                commit_buffered_transaction(server, state, cancellation)?;
+                Ok(result)
+            }
+            Err(error) => {
+                rollback_open_transaction(server, state)?;
+                Err(error)
+            }
+        };
+    }
     let read_only_candidate = is_read_only_sql_for_shared_execution_normalized(normalized);
     if !read_only_candidate {
         ensure_server_writable(server)?;
@@ -4705,6 +4748,7 @@ fn execute_server_sql_with_options(
 fn acquire_postgres_statement_snapshot(
     server: &PgWireServer,
     state: &mut ConnectionState,
+    execution_cancellation: Option<&CancellationToken>,
     requires_snapshot: impl FnOnce() -> bool,
 ) -> Result<()> {
     if state.failed_transaction || bicdb_sql::oracle::is_oracle_profile(&server.config.sql_profile)
@@ -4716,7 +4760,27 @@ fn acquire_postgres_statement_snapshot(
             // Sample before refreshing so a subsequent replica apply cannot
             // make the newly pinned snapshot look fresher than it is.
             let watermark = *server.replica_read_watermark.lock().unwrap();
-            tx.acquire_statement_snapshot(state.last_commit_seq)?;
+            if state.session_state.transaction_is_serializable() {
+                let preparation_cancellation;
+                let cancellation = match execution_cancellation {
+                    Some(cancellation) => cancellation,
+                    None => {
+                        let deadline = (!server.config.query_timeout.is_zero())
+                            .then(|| Instant::now() + server.config.query_timeout);
+                        preparation_cancellation =
+                            CancellationToken::new(state.cancel_token.clone(), deadline);
+                        &preparation_cancellation
+                    }
+                };
+                tx.acquire_postgres_serializable_snapshot(
+                    state.last_commit_seq,
+                    state.session_state.transaction_read_only(),
+                    state.session_state.transaction_deferrable(),
+                    cancellation,
+                )?;
+            } else {
+                tx.acquire_statement_snapshot(state.last_commit_seq)?;
+            }
             state.replica_tx_watermark = watermark;
         }
     }
@@ -4753,10 +4817,15 @@ fn execute_server_sql_with_options_normalized(
     {
         delegation::validate_delegation(server, state)?;
     }
-    acquire_postgres_statement_snapshot(server, state, || {
-        bicdb_sql::postgres_execution_requires_snapshot(sql)
-    })?;
-    if is_server_status_query_normalized(normalized) {
+    let server_status_query = is_server_status_query_normalized(normalized);
+    let pin_under_execution_admission =
+        state.session_state.transaction_is_serializable() && !server_status_query;
+    if !pin_under_execution_admission {
+        acquire_postgres_statement_snapshot(server, state, None, || {
+            bicdb_sql::postgres_execution_requires_snapshot(sql)
+        })?;
+    }
+    if server_status_query {
         let gucs = state.session_state.session_gucs();
         let configuration_user = gucs
             .get("role")
@@ -4878,16 +4947,29 @@ fn execute_server_sql_with_options_normalized(
     }
     set_active_query(server, state, sql);
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        if pin_under_execution_admission {
+            acquire_postgres_statement_snapshot(server, state, Some(&cancellation), || {
+                bicdb_sql::postgres_execution_requires_snapshot(sql)
+            })?;
+        }
         if transaction_control == Some(Some(TransactionControl::Begin)) {
+            let deferrable = if bicdb_sql::oracle::is_oracle_profile(&server.config.sql_profile) {
+                None
+            } else {
+                bicdb_sql::postgres_transaction_deferrability(sql)?
+            };
+            let modes_sql = deferrable
+                .as_ref()
+                .map_or(sql, |(stripped, _)| stripped.as_str());
             let result = begin_buffered_transaction(server, state);
             if result.is_ok() {
-                if let Some(read_only) = bicdb_sql::parse_transaction_read_only(sql)? {
+                if let Some(read_only) = bicdb_sql::parse_transaction_read_only(modes_sql)? {
                     state
                         .session_state
                         .set_transaction_read_only_label(read_only)?;
                 }
                 if let Some(isolation) = bicdb_sql::parse_transaction_isolation_for_profile(
-                    sql,
+                    modes_sql,
                     &server.config.sql_profile,
                 )? {
                     let fixed = isolation == "repeatable read" || isolation == "serializable";
@@ -4901,15 +4983,14 @@ fn execute_server_sql_with_options_normalized(
                         .tx
                         .as_mut()
                         .unwrap()
-                        .set_statement_write_conflict_check(
-                            fixed
-                                && server.config.sql_profile
-                                    == bicdb_sql::oracle::ORACLE_PREVIEW_PROFILE,
-                        )?;
+                        .set_statement_write_conflict_check(fixed)?;
                     state.tx_fixed_snapshot = fixed;
                     state
                         .session_state
                         .set_transaction_isolation_label(isolation)?;
+                }
+                if let Some((_, deferrable)) = deferrable {
+                    state.session_state.set_transaction_deferrable(deferrable);
                 }
             }
             result
@@ -4951,6 +5032,7 @@ fn execute_server_sql_with_options_normalized(
                 .into());
             }
             let chain_read_only = state.session_state.transaction_read_only();
+            let chain_deferrable = state.session_state.transaction_deferrable();
             let chain_isolation = state
                 .session_state
                 .session_gucs()
@@ -4972,6 +5054,9 @@ fn execute_server_sql_with_options_normalized(
                 state
                     .session_state
                     .set_transaction_read_only_label(chain_read_only)?;
+                state
+                    .session_state
+                    .set_transaction_deferrable(chain_deferrable);
                 if let Some(isolation) = chain_isolation {
                     let fixed = isolation == "repeatable read" || isolation == "serializable";
                     let tx = state.tx.as_mut().unwrap();
@@ -4984,11 +5069,7 @@ fn execute_server_sql_with_options_normalized(
                         .tx
                         .as_mut()
                         .unwrap()
-                        .set_statement_write_conflict_check(
-                            fixed
-                                && server.config.sql_profile
-                                    == bicdb_sql::oracle::ORACLE_PREVIEW_PROFILE,
-                        )?;
+                        .set_statement_write_conflict_check(fixed)?;
                     state.tx_fixed_snapshot = fixed;
                     state
                         .session_state

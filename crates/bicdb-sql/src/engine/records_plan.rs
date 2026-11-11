@@ -698,11 +698,109 @@ impl<'db> SqlEngine<'db> {
         })
     }
 
+    fn reconcile_snapshot_index<T: Ord>(
+        &self,
+        candidates: &mut Vec<T>,
+        name: &str,
+        prefix: &[IndexValue],
+        bounds: Option<(Option<&IndexValue>, Option<&IndexValue>)>,
+        filters: &[(usize, IndexValue)],
+        locator: impl Fn(String, RowId) -> T,
+    ) -> Result<()> {
+        let Some(tx) = self.tx else {
+            return Ok(());
+        };
+        let changes =
+            tx.postgres_snapshot_index_changes(name, prefix, bounds, filters, &self.cancellation)?;
+        if !changes.is_empty() {
+            let by_locator: BTreeMap<T, bool> = changes
+                .into_iter()
+                .map(|(id, rowid, matches)| (locator(id, rowid), matches))
+                .collect();
+            candidates.retain(|key| by_locator.get(key).copied().unwrap_or(true));
+            candidates.extend(
+                by_locator
+                    .into_iter()
+                    .filter_map(|(key, matches)| matches.then_some(key)),
+            );
+            candidates.sort_unstable();
+            candidates.dedup();
+        }
+        Ok(())
+    }
+
+    pub(crate) fn range_index_rowids_for_snapshot(
+        &self,
+        name: &str,
+        prefix: &[IndexValue],
+        lower: Option<&IndexValue>,
+        upper: Option<&IndexValue>,
+        filters: &[(usize, IndexValue)],
+    ) -> Result<Vec<RowId>> {
+        if let Some(tx) = self.tx {
+            tx.observe_postgres_index_range(name, prefix, lower, upper)?;
+        }
+        let mut rows = self
+            .db_ref()
+            .range_index_with_prefix_filters_rowids(name, prefix, lower, upper, filters)?;
+        self.reconcile_snapshot_index(
+            &mut rows,
+            name,
+            prefix,
+            Some((lower, upper)),
+            filters,
+            |_, rowid| rowid,
+        )?;
+        Ok(rows)
+    }
+
+    pub(crate) fn range_index_pks_for_snapshot(
+        &self,
+        name: &str,
+        prefix: &[IndexValue],
+        lower: Option<&IndexValue>,
+        upper: Option<&IndexValue>,
+        filters: &[(usize, IndexValue)],
+    ) -> Result<Vec<String>> {
+        if let Some(tx) = self.tx {
+            tx.observe_postgres_index_range(name, prefix, lower, upper)?;
+        }
+        let mut rows = self
+            .db_ref()
+            .range_index_with_prefix_filters(name, prefix, lower, upper, filters)?;
+        self.reconcile_snapshot_index(
+            &mut rows,
+            name,
+            prefix,
+            Some((lower, upper)),
+            filters,
+            |id, _| id,
+        )?;
+        Ok(rows)
+    }
+
+    pub(crate) fn single_field_range_index_for_snapshot(
+        &self,
+        name: &str,
+        lower: Option<&IndexValue>,
+        upper: Option<&IndexValue>,
+    ) -> Result<Vec<String>> {
+        if let Some(tx) = self.tx {
+            tx.observe_postgres_index_range(name, &[], lower, upper)?;
+        }
+        let mut rows = self.db_ref().range_index(name, lower, upper)?;
+        self.reconcile_snapshot_index(&mut rows, name, &[], Some((lower, upper)), &[], |id, _| id)?;
+        Ok(rows)
+    }
+
     pub(crate) fn lookup_index_rowids_cached(
         &self,
         index_name: &str,
         prefix: &[IndexValue],
     ) -> Result<Rc<[RowId]>> {
+        if let Some(tx) = self.tx {
+            tx.observe_postgres_index_prefix(index_name, prefix)?;
+        }
         if let Some(rowids) = self
             .rowid_index_lookup_cache
             .borrow()
@@ -714,7 +812,11 @@ impl<'db> SqlEngine<'db> {
         }
         #[cfg(test)]
         SQL_INDEX_STORAGE_LOOKUP_CALLS.with(|calls| *calls.borrow_mut() += 1);
-        let rowids: Rc<[RowId]> = Rc::from(self.db_ref().lookup_index_rowids(index_name, prefix)?);
+        let mut rowids = self.db_ref().lookup_index_rowids(index_name, prefix)?;
+        self.reconcile_snapshot_index(&mut rowids, index_name, prefix, None, &[], |_, rowid| {
+            rowid
+        })?;
+        let rowids: Rc<[RowId]> = Rc::from(rowids);
         self.rowid_index_lookup_cache
             .borrow_mut()
             .entry(index_name.to_string())
@@ -728,6 +830,9 @@ impl<'db> SqlEngine<'db> {
         index_name: &str,
         prefix: &[IndexValue],
     ) -> Result<Rc<[String]>> {
+        if let Some(tx) = self.tx {
+            tx.observe_postgres_index_prefix(index_name, prefix)?;
+        }
         if let Some(ids) = self
             .index_lookup_cache
             .borrow()
@@ -739,7 +844,9 @@ impl<'db> SqlEngine<'db> {
         }
         #[cfg(test)]
         SQL_INDEX_STORAGE_LOOKUP_CALLS.with(|calls| *calls.borrow_mut() += 1);
-        let ids: Rc<[String]> = Rc::from(self.db_ref().lookup_index(index_name, prefix)?);
+        let mut ids = self.db_ref().lookup_index(index_name, prefix)?;
+        self.reconcile_snapshot_index(&mut ids, index_name, prefix, None, &[], |id, _| id)?;
+        let ids: Rc<[String]> = Rc::from(ids);
         self.index_lookup_cache
             .borrow_mut()
             .entry(index_name.to_string())
@@ -1001,7 +1108,9 @@ impl<'db> SqlEngine<'db> {
             .flatten()
             .cloned()
             .collect::<Vec<_>>();
-        let committed_primary_key_extreme_is_safe = self.tx.is_none_or(|tx| tx.write_len() == 0);
+        let committed_primary_key_extreme_is_safe = self
+            .tx
+            .is_none_or(|tx| tx.write_len() == 0 && !tx.is_postgres_serializable());
         if committed_primary_key_extreme_is_safe && !primary_key_requires_typed_identity(schema) {
             if let Some(index) = readable_primary_key_index_for_schema(self.db_ref(), schema) {
                 let prefix = prefix_values
@@ -2385,12 +2494,19 @@ impl<'db> SqlEngine<'db> {
         let Some(bounded) = self.bounded_ordered_index_plan(from, select, query)? else {
             return Ok(None);
         };
-        let ids = self.db_ref().prefix_ordered_index_records(
-            &bounded.index_name,
-            bounded.prefix.as_slice(),
-            bounded.descending,
-            bounded.limit,
-        )?;
+        let ids = if self.tx.is_some_and(Transaction::is_postgres_serializable) {
+            // Apply the limit after the caller's snapshot-aware row sort.
+            // A limited live cursor can miss both the old winner and rows
+            // displaced by a key that the snapshot cannot see.
+            self.lookup_index_cached(&bounded.index_name, &bounded.prefix)?
+        } else {
+            Rc::from(self.db_ref().prefix_ordered_index_records(
+                &bounded.index_name,
+                bounded.prefix.as_slice(),
+                bounded.descending,
+                bounded.limit,
+            )?)
+        };
         let records =
             self.records_for_ids_with_schema(&bounded.collection, &ids, bounded.schema.as_ref())?;
         if crate::plan_diagnostics::active() {

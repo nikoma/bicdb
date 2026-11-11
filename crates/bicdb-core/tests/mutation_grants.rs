@@ -68,6 +68,106 @@ fn record(id: &str, tenant: &str, workspace: &str, version: u64, name: &str) -> 
 }
 
 #[test]
+fn fixed_snapshot_insert_identity_preserves_signed_authority_after_a_peer_delete() {
+    for mode in [
+        bicdb_core::StorageMode::EmbeddedMemory,
+        bicdb_core::StorageMode::ServerPaged,
+    ] {
+        let directory = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open_with_config(
+            directory.path(),
+            bicdb_core::DbConfig::default().with_storage_mode(mode),
+        )
+        .unwrap();
+        db.create_collection("documents").unwrap();
+        db.insert(
+            "documents",
+            record("doc-1", "tenant-a", "workspace-a", 1, "old"),
+        )
+        .unwrap();
+        db.set_mutation_policy(
+            "documents",
+            MutationPolicy::grants_required()
+                .with_tenant_field("tenant_id")
+                .with_workspace_field("workspace_id")
+                .with_audit(),
+        )
+        .unwrap();
+
+        let mut reader = db
+            .begin_application_transaction(actor("tenant-a", "workspace-a"))
+            .unwrap();
+        reader.set_snapshot_isolation(true, 0).unwrap();
+        reader.set_statement_write_conflict_check(true).unwrap();
+        assert!(reader
+            .get_for_integrity_check("documents", "doc-1")
+            .unwrap()
+            .is_some());
+        let authority = reader
+            .issue_mutation_grant(grant(MutationOperation::Insert, "doc-1", None))
+            .unwrap();
+        let mut peer = db
+            .begin_application_transaction(actor("tenant-a", "workspace-a"))
+            .unwrap();
+        let deletion = peer
+            .issue_mutation_grant(grant(MutationOperation::Delete, "doc-1", None))
+            .unwrap();
+        peer.delete_with_grant(deletion, "documents", "doc-1")
+            .unwrap();
+        peer.commit().unwrap();
+
+        let denied = reader
+            .insert_using_live_identities(
+                "documents",
+                "documents_pkey",
+                vec![record("doc-1", "tenant-b", "workspace-a", 1, "denied")],
+                Some(authority),
+            )
+            .unwrap_err();
+        assert!(matches!(denied, BicDbError::MutationDenied(_)));
+        assert_eq!(reader.write_len(), 0);
+        assert_eq!(reader.lock_len(), 0);
+
+        reader
+            .insert_using_live_identities(
+                "documents",
+                "documents_pkey",
+                vec![record("doc-1", "tenant-a", "workspace-a", 1, "replacement")],
+                Some(authority),
+            )
+            .unwrap();
+        reader.commit().unwrap();
+        let stored = db.get("documents", "doc-1").unwrap().unwrap();
+        assert_eq!(stored.metadata["name"], "replacement");
+    }
+}
+
+#[test]
+fn fixed_snapshot_insert_identity_releases_locks_on_a_failed_batch() {
+    let directory = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(directory.path()).unwrap();
+    db.create_collection("documents").unwrap();
+    db.insert("documents", Record::new("existing")).unwrap();
+    let mut tx = db.begin_transaction().unwrap();
+    tx.set_snapshot_isolation(true, 0).unwrap();
+    let error = tx
+        .insert_using_live_identities(
+            "documents",
+            "documents_pkey",
+            vec![Record::new("vacant"), Record::new("existing")],
+            None,
+        )
+        .unwrap_err();
+    assert!(matches!(error, BicDbError::UniqueIndexConflict { .. }));
+    assert_eq!(tx.lock_len(), 0);
+    assert_eq!(tx.write_len(), 0);
+    let mut peer = db.begin_transaction().unwrap();
+    peer.insert("documents", Record::new("vacant")).unwrap();
+    peer.commit().unwrap();
+    tx.rollback().unwrap();
+}
+
+#[test]
 fn protected_mutations_require_and_consume_exact_native_grants() {
     let directory = tempfile::tempdir().unwrap();
     let mut db = BicDb::open(directory.path()).unwrap();

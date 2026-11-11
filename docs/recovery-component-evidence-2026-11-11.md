@@ -16,8 +16,10 @@ resource samples, warnings, prior failed attempts and source bytes or a complete
 patch against a pinned public source. The 44-test bundle includes its exact
 source archive; the 55-test verifier can independently reconstruct its source
 from public base `b0e2498842be7b01e355bb8da1cc249ff16be056` without modifying the
-supplied repository. Verification checks retained evidence and does not rerun
-Rust or independently attest execution.
+supplied repository. The source archive includes existing public TLS test
+fixtures, byte-for-byte checked against that public base; it contains no live
+member keys or cloud credentials. Verification checks retained evidence and does
+not rerun Rust or independently attest execution.
 
 Most metadata participants use registered in-process transports. The metadata
 provider groups include actual loopback mTLS tests; that does not turn the

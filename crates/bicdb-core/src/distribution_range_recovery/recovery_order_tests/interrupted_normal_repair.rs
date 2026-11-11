@@ -677,8 +677,13 @@ fn exercise_interrupted_normal_image(stop: ImageStop, resume: bool) {
         None
     };
     wait_for_contexts(&runtimes);
-    let report = serde_json::json!({
-        "characterization_test_passed":true,"recovery_scenario":if resume {"RECOVERED_TO_NATIVE_PREPARED_READY_USING_EXPLICIT_FRESH_INSTALLING_PROTOCOL"} else {"ORDINARY_PATH_REFUSES_INTERRUPTED_IMAGE_USE_EXPLICIT_INSTALLING_PROTOCOL"},
+    let recovery_scenario = if resume {
+        "RECOVERED_TO_NATIVE_PREPARED_READY_USING_EXPLICIT_FRESH_INSTALLING_PROTOCOL"
+    } else {
+        "ORDINARY_PATH_REFUSES_INTERRUPTED_IMAGE_USE_EXPLICIT_INSTALLING_PROTOCOL"
+    };
+    let mut report = serde_json::json!({
+        "characterization_test_passed":true,"recovery_scenario":recovery_scenario,
         "stop":format!("{stop:?}"),"purpose_specific_resume":resumed,"ordinary_path_still_refuses":true,
         "evidence_kind":"actual_in_process_protocol_storage_and_strict_copied_reopen",
         "original_root":original_root,"copied_root":cold.root.path(),"source_actual_native":2,
@@ -688,6 +693,8 @@ fn exercise_interrupted_normal_image(stop: ImageStop, resume: bool) {
         "target_uid":target_uid,"target_birth":birth,"target_birth_sha256":birth_sha,
         "original_target_open":old_open,"current_target_open":new_open,"target_local_db_sequence":local_b,
         "image_attempt":attempt,"stage_id":stage_id,"stage_sha256":stage_sha,"published_image_base_present":false,
+    });
+    let continuation = serde_json::json!({
         "fresh_metadata_term":metadata_term,"fresh_metadata_read_index":metadata_index,
         "fresh_data_fence_observations":1,"required_data_quorum":needed,
         "target_fence_error":target_error.to_string(),"data_quorum_error":quorum_error.to_string(),
@@ -697,6 +704,10 @@ fn exercise_interrupted_normal_image(stop: ImageStop, resume: bool) {
         "intent_cleared":false,"new_genesis_created_after_reopen":false,"stale_authority_reused":false,
         "activation_proven":false,"physical_qualification":false,"strong_get_tested":false
     });
+    report
+        .as_object_mut()
+        .unwrap()
+        .extend(continuation.as_object().unwrap().clone());
     save(
         cold.root.path(),
         "interrupted-normal-cold-result.json",

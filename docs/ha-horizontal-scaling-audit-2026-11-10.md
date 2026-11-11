@@ -11,6 +11,44 @@ transparent distributed SQL and recoverable multi-range SQL transactions to
 ordinary PostgreSQL applications. Independent-machine sustained throughput
 scaling and fault-safe rebalance of the current artifact remain unqualified.
 
+## Follow-up engineering work — 2026-11-11
+
+Runtime baseline **1.0.460-beta**, `c173fa783fb8323fe02c41fb7eda96f130bc29c3`,
+includes PR132's native HA voter safety repair. It validates nonzero synchronous
+K against election majority, excludes observer acknowledgments/lease contacts,
+and requires native handshake v4. Thus item 4 in this historical audit's defect
+list is **source-repaired**, with configuration caveats for explicit async and
+timeout degradation still applicable. The original 1.0.455 evidence is preserved.
+This repair does not implement general distributed SQL or qualify physical scale.
+
+The independent engineering tracks now have separate artifacts:
+
+- [Current native HA test evidence](evidence/native-ha-current-2026-11-11/README.md):
+  exact-source regression results, fault mechanisms, fsync settings and test
+  executable hashes; physical host/VM qualification remains separate.
+- [Distributed SQL design](distributed-sql-design-2026-11-11.md): typed gateway,
+  durable decision/participant recovery, global read visibility and logical
+  locality as an optimization. This is design, not an implemented SQL service.
+- [Four-to-five experiment](scale-out-experiment-2026-11-11.md): runnable growth
+  profile and sanitized Azure preflight. External per-ack ledger, operation-aware
+  faults, quota/placement, bounded infrastructure authorization and cleanup
+  remain execution gates. No independent cluster experiment has run.
+- [Release capability declarations](release-capabilities.md): exact-artifact
+  identity, separate implementation/test/qualification/deployment fields and
+  fail-closed placement preflight. No qualification evidence is fabricated;
+  the v1 generator cannot grant production admission.
+
+The integration at source version **1.0.461-beta** adds release packaging/preflight
+and exploratory runner support, not a distributed SQL engine. The independent
+durability batch passed 78 targeted tests at exact runtime baseline `c173fa78`
+(1.0.460-beta); it does not qualify a newly versioned release binary. The integrated
+Python batch passed 34 tests, including 19 release-manifest tests and a real tiny-ELF
+packaging fixture. Version identity (29 packages), syntax, local link targets and
+whitespace checks passed. The fixture is not a BicDB release artifact.
+
+These tracks do not alter the original audit's measured results or turn its
+historical test runs into validation of a newer runtime artifact.
+
 ## Evidence rules and current CI
 
 Implemented means an executable production code path exists; a public trait or
@@ -369,7 +407,7 @@ provides no provisioning, and its default short process-kill run does not cover
 all movement boundaries or ordinary SQL. A later, separately scoped harness
 change or external runner is necessary; none was implemented for this audit.
 
-## Audit validation and delivery scope
+## Original audit validation and delivery scope
 
 At audited `2f36fe69`, this audit ran 12 Python platform harness unit tests (all
 passed), the hard-VM portable ledger reconciliation, large-transaction portable

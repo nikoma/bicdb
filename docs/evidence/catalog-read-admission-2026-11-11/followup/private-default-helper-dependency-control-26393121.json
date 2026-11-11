@@ -1,0 +1,28 @@
+{
+  "repo": "/root/bicdb-sql-rename-journal",
+  "label": "private-default-helper-dependency-control-26393121",
+  "source": "263931216a9a37e261a56276654f4748eabe9ade",
+  "source_ref": "refs/bicdb-proof/private-default-helper-dependency-control-26393121",
+  "base": "c173fa783fb8323fe02c41fb7eda96f130bc29c3",
+  "wait_units": [
+    "bicdb-private-routine-loop-context-positive-05b3d442"
+  ],
+  "scope": "Tests-only next catalog owner bridge requirement. Readonly SQL function used as procedure default reads Source; bufferedSink write remains uncommitted; later exactSource metadata reservation must conflict until bufferedowner rollback. Independent cold/warm autocommit and warmed explicit-owner cases intendedbothstores. Warm function beforeCALL toexclude compilation-time incidental observations. Actualoutcome mustbeinspected, not assumedfailure. No productioncode/globalDDLgate/assertion changes; nativeMVCCdata semantics cannot be replacedby metadataidentity only.",
+  "commands": [
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-sql",
+      "--test",
+      "catalog_default_dependencies",
+      "--",
+      "--test-threads=1"
+    ]
+  ],
+  "required_receipts": []
+}

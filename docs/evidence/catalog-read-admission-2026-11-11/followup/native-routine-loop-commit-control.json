@@ -1,0 +1,34 @@
+{
+  "status": "passed",
+  "started_unix": 1794415918.428271,
+  "protected_application_schema_mutated": false,
+  "cases": [
+    {
+      "condition": "row_type",
+      "rows": [
+        [
+          0
+        ],
+        [
+          1
+        ]
+      ],
+      "call_completed": true
+    },
+    {
+      "condition": "scalar_subquery",
+      "rows": [
+        [
+          0
+        ],
+        [
+          1
+        ]
+      ],
+      "call_completed": true
+    }
+  ],
+  "server_version": "16.13 (Debian 16.13-1.pgdg13+1)",
+  "temporary_schema_removed": true,
+  "finished_unix": 1794415918.5644631
+}

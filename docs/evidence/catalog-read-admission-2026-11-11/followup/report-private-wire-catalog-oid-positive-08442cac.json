@@ -1,0 +1,28 @@
+{
+  "source": "08442cac00bba6771f2ece21ed498b8f87977146",
+  "scope": "Private catalog reader precision only; no Native CollectionMeta/UID/WAL/lifecycle changes and no global producer/recovery gate relaxed. Known built-in OIDs avoid mutable catalogs while checking recovery health. Known declared/table OIDs classify through private generation snapshots, admit exact stored catalog key before exposure, and unknown OIDs conservatively admit whole catalogs. Public list scans retain whole guards. Actual seven-case TCP negative ea7 retained; verify unrelated builtin/enum/composite/row metadata vs affected Source/Describe bothstores, then existing direct catalog/owner/routine/default regressions. Not main474/runtime qualification.",
+  "started_unix": 1794421079.1396852,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-pgwire",
+        "--test",
+        "catalog_read_admission",
+        "--",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794421079.140068,
+      "exit": 101,
+      "finished_unix": 1794421253.9128294
+    }
+  ],
+  "status": "failed",
+  "finished_unix": 1794421253.9130864
+}

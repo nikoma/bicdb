@@ -1,0 +1,79 @@
+{
+  "source": "05b3d442b08deeb811b34736db2da9468e794186",
+  "scope": "Actual3901 tests-only loopcontrol: BOTH tests fail firstEmbeddedMemory cell with catalogreadownernolongeractive afterbodyCOMMIT; NativePostgreSQL16.13 samebothconditions pass, ownschema removed. Current05b3 selectsactualpending/anonymous catalogreadowner at EACH routineexpression evaluation so structuralWHILE guard cannotrestoreendedowner. No newNativecorecode: reuse658e Core25focused+516library3ignored+isolated1; source658all6commands passed:62focus+Corelibrary516+SQLlibrary891(4ignored)+general419. NewSQLfocus first then fullSQLlib/general on05b3; do notreport658broad asnew05runtime. Originalassertionsunchanged, globalDDL/namespace/recovery gates unchanged; fullproducer/metadatafamilies/wire/identity/nesteddefaultdependency stillopen. Public471 separate.",
+  "started_unix": 1794416456.230714,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "catalog_read_routine_transitions",
+        "--test",
+        "catalog_read_owner",
+        "--test",
+        "catalog_read_admission",
+        "--test",
+        "session_statement_snapshots",
+        "--test",
+        "read_only_transactions",
+        "--test",
+        "routine_header_metadata",
+        "--test",
+        "rename_routine_header_dependencies",
+        "--test",
+        "table_row_routines",
+        "--",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794416456.2309299,
+      "exit": 0,
+      "finished_unix": 1794416608.04546
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--lib",
+        "--",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794416608.045687,
+      "exit": 0,
+      "finished_unix": 1794416942.6536107
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "sql",
+        "--",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794416942.6538563,
+      "exit": 0,
+      "finished_unix": 1794416987.713017
+    }
+  ],
+  "status": "focused_passed",
+  "finished_unix": 1794416987.7133012
+}

@@ -1222,7 +1222,8 @@ pub(crate) mod tests {
         // Exercise the production capture entry too: direct validator tests
         // must not leave the actual image path unwired.
         drop(frozen);
-        let capture_frozen = gate.try_freeze(base.id, cut.session_id()).unwrap();
+        let runtime_frozen = Arc::new(gate.try_freeze(base.id, cut.session_id()).unwrap());
+        let capture_frozen = Arc::clone(&runtime_frozen);
         let mut capture = crate::distribution_range_image::RangeImageCapture::begin(
             Arc::clone(&database),
             cut,
@@ -1232,6 +1233,10 @@ pub(crate) mod tests {
             &CancellationToken::uncancelable(),
         )
         .unwrap();
+        assert!(
+            gate.try_controlled_mutation(&runtime_frozen).is_err(),
+            "Runtime's retained Arc cannot write through actual Capture's read pin"
+        );
         {
             let staging = capture.authorize_target_install().unwrap();
             staging.require_current().unwrap();
@@ -1270,7 +1275,18 @@ pub(crate) mod tests {
         completed.require_current().unwrap();
         assert_eq!(completed.seal(), &seal);
         assert!(gate.try_enter(base.id).is_err());
+        assert!(
+            gate.try_controlled_mutation(&runtime_frozen).is_err(),
+            "Completed retains the actual source read pin"
+        );
         drop(completed);
+        assert!(
+            gate.try_enter(base.id).is_err(),
+            "dropping Capture must not release Runtime's outstanding recovery freeze"
+        );
+        let controlled = gate.try_controlled_mutation(&runtime_frozen).unwrap();
+        drop(controlled);
+        drop(runtime_frozen);
         assert!(gate.try_enter(base.id).is_ok());
         // This actual healthy empty-genesis path is R=0, not proof of the
         // pending installed-image or certified-suffix producer for R>0.

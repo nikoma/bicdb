@@ -281,6 +281,13 @@ fn actual_small_sparse_current_quorum_and_strict_cold_reopen_preserve_decision()
     drop(runtimes);
     drop(providers);
     drop(fixture);
+    let close_deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    while weak.iter().any(|db| db.upgrade().is_some()) && std::time::Instant::now() < close_deadline
+    {
+        // A completed metadata request can still be unwinding its last owner.
+        // Wait outside every DB/service latch; never clear or bypass ownership.
+        std::thread::sleep(std::time::Duration::from_millis(1));
+    }
     assert!(
         weak.iter().all(|db| db.upgrade().is_none()),
         "all original DB owners must close before copying"

@@ -13,6 +13,25 @@ fn config() -> DbConfig {
         .with_storage_mode(StorageMode::ServerPaged)
         .with_paged_buffer_pool_bytes(8 * 1024 * 1024)
 }
+fn reattest_empty_genesis(
+    db: &Arc<RwLock<BicDb>>,
+    factory: &FreshRangeGenesisAuthority,
+    spec: &RangeImageBirthSpec,
+) {
+    for range in &spec.initial_ranges {
+        let gate = db.read().range_mutation_gate();
+        let frozen = gate.try_freeze(range.id, Uuid::now_v7()).unwrap();
+        BicDb::initialize_range_image_genesis(
+            db,
+            factory,
+            range,
+            &frozen,
+            Duration::from_secs(3),
+            &CancellationToken::uncancelable(),
+        )
+        .unwrap();
+    }
+}
 fn fresh_same_spec(
     root: &std::path::Path,
     spec: &RangeImageBirthSpec,
@@ -46,8 +65,10 @@ fn native_enrollment_actual_factory_distinguishes_same_spec_recreated_disk() {
     let path = original.read().data_path().to_path_buf();
     drop(original);
     let (db, factory) = BicDb::open_range_image_database(&path, config(), &spec).unwrap();
+    let db = Arc::new(RwLock::new(db));
+    reattest_empty_genesis(&db, &factory, &spec);
     let enrollment =
-        ActualNativeStoreEnrollment::from_actual_factory(&factory, &db, &topology).unwrap();
+        ActualNativeStoreEnrollment::from_actual_factory(&factory, &db.read(), &topology).unwrap();
     enrollment
         .bind_initial_or_unassigned_learner(&mut topology)
         .unwrap();
@@ -100,8 +121,10 @@ fn native_enrollment_actual_factory_distinguishes_same_spec_recreated_disk() {
     drop(db);
     let (reopened, actual_factory) =
         BicDb::open_range_image_database(&path, config(), &spec).unwrap();
+    let reopened = Arc::new(RwLock::new(reopened));
+    reattest_empty_genesis(&reopened, &actual_factory, &spec);
     assert_eq!(actual_factory.birth_id(), enrolled.birth_id());
-    ActualNativeStoreEnrollment::from_actual_factory(&actual_factory, &reopened, &topology)
+    ActualNativeStoreEnrollment::from_actual_factory(&actual_factory, &reopened.read(), &topology)
         .unwrap()
         .bind_initial_or_unassigned_learner(&mut topology)
         .unwrap();
@@ -117,6 +140,7 @@ fn native_enrollment_refuses_genuine_factory_after_actual_committed_write() {
     drop(original);
     let (db, factory) = BicDb::open_range_image_database(&path, config(), &spec).unwrap();
     let db = Arc::new(RwLock::new(db));
+    reattest_empty_genesis(&db, &factory, &spec);
     ActualNativeStoreEnrollment::from_actual_factory(&factory, &db.read(), &topology).unwrap();
     let range = spec.initial_ranges[0].id;
     seed_actual_origin(&db, topology.clone(), &spec, range, 1);

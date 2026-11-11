@@ -9,6 +9,10 @@ use crate::distribution_range_image::{
 };
 use crate::distribution_range_mutation::FrozenRangeMutationPermit;
 
+mod certified_prefix;
+use certified_prefix::NativeCertifiedRangePrefix;
+pub(crate) use certified_prefix::NativeRangePendingApply;
+
 pub(super) fn native_key(key: &str) -> Vec<u8> {
     let mut encoded = crate::paged_collection::RANGE_IMAGE_NATIVE_NS_V1.to_vec();
     encoded.extend_from_slice(key.as_bytes());
@@ -342,6 +346,7 @@ impl NativeRangePrefixObservation {
 pub(crate) struct SourceRangeImageLineage {
     birth: NativeDatabaseBirth,
     receipt: NativeGenesisReceipt,
+    prefix: Option<NativeCertifiedRangePrefix>,
     current_database_incarnation: String,
     current_schema_generation: u64,
 }
@@ -362,7 +367,9 @@ impl SourceRangeImageLineage {
         &self.receipt.range
     }
     pub(crate) fn range_index(&self) -> u64 {
-        self.receipt.range_index
+        self.prefix
+            .as_ref()
+            .map_or(self.receipt.range_index, |prefix| prefix.range_index())
     }
     pub(crate) fn cluster_id(&self) -> &ClusterId {
         &self.birth.spec.cluster_id
@@ -385,7 +392,11 @@ impl SourceRangeImageLineage {
         self.receipt.restore_activation.as_ref()
     }
     pub(crate) fn native_receipt_sha256(&self) -> &str {
-        &self.receipt.checksum_sha256
+        self.prefix
+            .as_ref()
+            .map_or(self.receipt.checksum_sha256.as_str(), |prefix| {
+                prefix.checksum_sha256()
+            })
     }
     pub(crate) fn schema_sha256(&self) -> &str {
         &self.receipt.schema_sha256
@@ -811,15 +822,16 @@ impl BicDb {
             ));
         };
         let lineage = SourceRangeImageLineage {
+            prefix: self.read_native_certified_range_prefix(&birth, &receipt)?,
             birth,
             receipt,
             current_database_incarnation: self.incarnation.clone(),
             current_schema_generation: self.schema_compatibility.generation(),
         };
-        if let Err(error) = self.validate_source_range_image_lineage(
+        if let Err(error) = self.validate_source_range_image_lineage_contract(
             &lineage,
             range_id,
-            lineage.receipt.range_index,
+            lineage.range_index(),
         ) {
             let mut unknown = NativeRangePrefixObservation::unknown(
                 range_id,
@@ -831,23 +843,40 @@ impl BicDb {
             let _ = error;
             return Ok(unknown);
         }
-        Ok(NativeRangePrefixObservation {
+        let mut observation = NativeRangePrefixObservation {
             range_id,
             native_base_index: Some(lineage.receipt.range_index),
-            native_applied_index: Some(lineage.receipt.range_index),
+            native_applied_index: Some(lineage.range_index()),
             pending_command_index: None,
             materialized_pending_index: None,
             pending_command_id: None,
-            native_receipt_sha256: Some(lineage.receipt.checksum_sha256),
+            native_receipt_sha256: Some(lineage.native_receipt_sha256().to_string()),
             factory_initialization_complete: !self
                 .range_image_initializing
                 .load(AtomicOrdering::Acquire),
             invalidated: false,
             diagnostic: None,
-        })
+        };
+        self.observe_native_pending(&mut observation)?;
+        Ok(observation)
     }
 
     pub(crate) fn validate_source_range_image_lineage(
+        &self,
+        lineage: &SourceRangeImageLineage,
+        range_id: RangeId,
+        range_index: u64,
+    ) -> Result<()> {
+        self.validate_source_range_image_lineage_contract(lineage, range_id, range_index)?;
+        if self.native_range_pending_exists(range_id)? {
+            return Err(invalid(
+                "unfinished native command; source range image unavailable",
+            ));
+        }
+        Ok(())
+    }
+
+    fn validate_source_range_image_lineage_contract(
         &self,
         lineage: &SourceRangeImageLineage,
         range_id: RangeId,
@@ -866,6 +895,7 @@ impl BicDb {
             .read_native_range_image_record(&genesis_key(range_id))?
             .ok_or_else(|| invalid("source has no trusted native range base"))?;
         receipt.validate()?;
+        let prefix = self.read_native_certified_range_prefix(&birth, &receipt)?;
         let bindings = self.capture_range_image_bindings()?;
         let catalog = canonical_range_image_catalog(
             &birth.spec.cluster_id,
@@ -884,7 +914,8 @@ impl BicDb {
             || hex::encode(content_hasher(&catalog).finalize()) != receipt.empty_image_root_sha256
             || birth != lineage.birth
             || receipt != lineage.receipt
-            || receipt.range_index != range_index
+            || prefix != lineage.prefix
+            || lineage.range_index() != range_index
             || receipt.range.id != range_id
             || !self.config.fsync
         {
@@ -955,6 +986,7 @@ impl BicDb {
                     let lineage = SourceRangeImageLineage {
                         birth,
                         receipt,
+                        prefix: None,
                         current_database_incarnation: database.incarnation.clone(),
                         current_schema_generation: database.schema_compatibility.generation(),
                     };
@@ -1071,6 +1103,7 @@ impl BicDb {
         let lineage = SourceRangeImageLineage {
             birth: authority.birth.clone(),
             receipt,
+            prefix: None,
             current_database_incarnation: database.incarnation.clone(),
             current_schema_generation: database.schema_compatibility.generation(),
         };

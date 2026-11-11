@@ -3929,6 +3929,7 @@ pub struct BicDb {
     range_mutations: crate::distribution_range_mutation::RangeMutationGate,
     range_image_initializing: AtomicBool,
     range_image_native_birth_active: AtomicBool,
+    native_range_image_journal: Mutex<()>,
     schema_compatibility: SchemaCompatibilityAuthority,
     encryption: EncryptionRuntime,
     // Per-collection interior mutability: each collection's mutable state lives
@@ -10903,6 +10904,7 @@ impl BicDb {
             range_mutations: crate::distribution_range_mutation::RangeMutationGate::default(),
             range_image_initializing: AtomicBool::new(false),
             range_image_native_birth_active: AtomicBool::new(false),
+            native_range_image_journal: Mutex::new(()),
             schema_compatibility: SchemaCompatibilityAuthority::new(),
             encryption,
             collections,

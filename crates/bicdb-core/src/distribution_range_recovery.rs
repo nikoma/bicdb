@@ -15,13 +15,142 @@ use crate::distribution_consensus::{
     MetadataRestoreActivation,
 };
 use crate::distribution_range_consensus::RangeWriteCommand;
+use crate::distribution_range_consensus::{RangeWriteProgress, RecoveryFenceScope};
 use crate::error::{BicDbError, Result};
 
 fn invalid(message: &str) -> BicDbError {
     BicDbError::Cluster(format!("range recovery: {message}"))
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+mod runtime;
+pub(crate) use runtime::RangeRecoveryRuntime;
+
+/// A wire request is a claim to check, never recovery or native authority.
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct RecoveryEpochFenceRequest {
+    pub scope: RecoveryFenceScope,
+    pub budget_ms: u64,
+}
+impl RecoveryEpochFenceRequest {
+    pub(crate) fn cancellation(
+        &self,
+        parent: &crate::CancellationToken,
+    ) -> Result<crate::CancellationToken> {
+        if self.budget_ms == 0 || self.budget_ms > 5_000 {
+            return Err(invalid("invalid recovery fence budget"));
+        }
+        let child =
+            parent.child_with_deadline(Instant::now() + Duration::from_millis(self.budget_ms));
+        child.check()?;
+        Ok(child)
+    }
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct RecoveryEpochFenceReply {
+    pub scope: RecoveryFenceScope,
+    pub node_id: ClusterNodeId,
+    pub member_incarnation: u64,
+    pub store_open_id: Uuid,
+    pub native_database_incarnation: String,
+    pub birth_initialization_complete: bool,
+    pub progress: RangeWriteProgress,
+    pub native: crate::db::NativeRangePrefixObservation,
+}
+
+/// An actual local drain/persist result or a transport-authenticated response.
+/// No Deserialize/Clone and no constructor accepting an unverified wire DTO.
+#[derive(Debug)]
+pub(crate) struct RecoveryFenceObservation {
+    reply: RecoveryEpochFenceReply,
+    authenticated_peer: MetadataReadParticipant,
+    deadline: Instant,
+}
+impl RecoveryFenceObservation {
+    pub(crate) fn from_transport(
+        verified: crate::distribution_transport::AuthenticatedRecoveryFenceReply,
+        expected: &RecoveryFenceScope,
+        deadline: Instant,
+    ) -> Result<Self> {
+        let (reply, peer) = verified.into_parts();
+        if peer.node_id() != &reply.node_id || peer.member_incarnation() != reply.member_incarnation
+        {
+            return Err(invalid(
+                "fence response does not bind actual destination identity",
+            ));
+        }
+        Self::from_local(reply, peer, expected, deadline)
+    }
+    fn from_local(
+        reply: RecoveryEpochFenceReply,
+        authenticated_peer: MetadataReadParticipant,
+        expected: &RecoveryFenceScope,
+        deadline: Instant,
+    ) -> Result<Self> {
+        if Instant::now() >= deadline
+            || reply.scope != *expected
+            || reply.store_open_id.is_nil()
+            || reply.member_incarnation == 0
+            || authenticated_peer.node_id() != &reply.node_id
+            || authenticated_peer.member_incarnation() != reply.member_incarnation
+            || reply.native_database_incarnation.is_empty()
+            || !reply.birth_initialization_complete
+            || reply.progress.node_id != reply.node_id
+            || reply.progress.range_id != expected.range_id
+            || reply.progress.current_epoch < expected.range_epoch
+            || reply.native.range_id != expected.range_id
+        {
+            return Err(invalid(
+                "invalid, stale or late actual recovery fence observation",
+            ));
+        }
+        Ok(Self {
+            reply,
+            authenticated_peer,
+            deadline,
+        })
+    }
+    pub(crate) fn authenticated_peer(&self) -> &MetadataReadParticipant {
+        &self.authenticated_peer
+    }
+    pub(crate) fn scope(&self) -> &RecoveryFenceScope {
+        &self.reply.scope
+    }
+    pub(crate) fn node_id(&self) -> &ClusterNodeId {
+        &self.reply.node_id
+    }
+    pub(crate) fn member_incarnation(&self) -> u64 {
+        self.reply.member_incarnation
+    }
+    pub(crate) fn store_open_id(&self) -> Uuid {
+        self.reply.store_open_id
+    }
+    pub(crate) fn native_database_incarnation(&self) -> &str {
+        &self.reply.native_database_incarnation
+    }
+    pub(crate) fn progress(&self) -> &RangeWriteProgress {
+        &self.reply.progress
+    }
+    pub(crate) fn native(&self) -> &crate::db::NativeRangePrefixObservation {
+        &self.reply.native
+    }
+    pub(crate) fn deadline(&self) -> Instant {
+        self.deadline
+    }
+    pub(crate) fn require_live(&self) -> Result<()> {
+        if Instant::now() >= self.deadline {
+            return Err(invalid("recovery fence observation budget expired"));
+        }
+        Ok(())
+    }
+    pub(super) fn into_reply(self) -> RecoveryEpochFenceReply {
+        self.reply
+    }
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
 pub(crate) struct RecoveryMemberIdentity {
     pub incarnation: u64,
     pub active_certificate_sha256: Option<String>,
@@ -144,6 +273,70 @@ impl RecoveryRoleAdmission {
             relocation,
             handoff_target_identity,
         })
+    }
+    pub(crate) fn configuration_sha256(&self) -> Result<String> {
+        use sha2::{Digest, Sha256};
+        let mut replicas = self
+            .range
+            .replicas
+            .iter()
+            .map(|r| (r.id, &r.node_id, &r.role))
+            .collect::<Vec<_>>();
+        replicas.sort_by_key(|r| r.0);
+        Ok(hex::encode(Sha256::digest(serde_json::to_vec(&(
+            "bicdb-current-recovery-config-v1",
+            &self.cluster_id,
+            self.bootstrap_id,
+            self.range.id,
+            self.range.start_token,
+            self.range.end_token,
+            self.range.epoch,
+            &self.range.leader,
+            &self.range.placement,
+            &replicas,
+            &self.members,
+            &self.schema,
+            &self.restore,
+            &self.relocation.as_ref().map(|r| {
+                (
+                    &r.id,
+                    &r.plan_id,
+                    &r.handoff_session,
+                    r.expected_epoch,
+                    r.learner_epoch,
+                    &r.target,
+                    r.target_replica_id,
+                )
+            }),
+        ))?)))
+    }
+    pub(crate) fn expected_handoff_old_config_sha256(&self) -> Result<String> {
+        use sha2::{Digest, Sha256};
+        let members = self
+            .members
+            .iter()
+            .map(|(id, m)| {
+                (
+                    id.clone(),
+                    (
+                        m.incarnation,
+                        m.active_certificate_sha256.clone(),
+                        m.pending_certificate_sha256.clone(),
+                    ),
+                )
+            })
+            .collect::<BTreeMap<_, _>>();
+        Ok(hex::encode(Sha256::digest(serde_json::to_vec(&(
+            &self.cluster_id,
+            self.range.id,
+            self.range.start_token,
+            self.range.end_token,
+            self.range.epoch,
+            &self.range.leader,
+            members,
+            self.schema.as_deref(),
+            self.restore.as_ref(),
+        ))?)))
     }
     pub(crate) fn require_live_request(&self) -> Result<()> {
         self.witness
@@ -310,6 +503,48 @@ pub(crate) fn test_handoff_role_admission(
     relocation_id: crate::RelocationId,
     budget: Duration,
 ) -> Result<HandoffRoleAdmission> {
+    let plan = topology
+        .relocations
+        .get(&relocation_id)
+        .ok_or_else(|| invalid("test committed plan absent"))?;
+    let session = plan
+        .handoff_session
+        .as_ref()
+        .ok_or_else(|| invalid("test committed session absent"))?;
+    test_role_admission(
+        root,
+        topology,
+        metadata_leader,
+        initiator,
+        recipient,
+        plan.range_id,
+        plan.learner_epoch,
+        session.nonce,
+        MetadataRecoveryRolePurpose::CommittedHandoff {
+            relocation_id,
+            plan_id: plan.plan_id.clone(),
+            session_id: session.session_id,
+            nonce: session.nonce,
+        },
+        budget,
+    )?
+    .into_handoff()
+}
+
+#[cfg(test)]
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn test_role_admission(
+    root: &std::path::Path,
+    topology: &crate::ClusterTopology,
+    metadata_leader: &ClusterNodeId,
+    initiator: &ClusterNodeId,
+    recipient: &ClusterNodeId,
+    range_id: RangeId,
+    range_epoch: u64,
+    recovery_nonce: Uuid,
+    purpose: MetadataRecoveryRolePurpose,
+    budget: Duration,
+) -> Result<RecoveryRoleAdmission> {
     use crate::distribution_consensus::{
         MetadataConsensusStore, MetadataReadAck, MetadataReadProbeRequest,
     };
@@ -410,20 +645,6 @@ pub(crate) fn test_handoff_role_admission(
         peers,
     });
     let provider = MetadataReadProvider::new(leader, transport)?;
-    let plan = topology
-        .relocations
-        .get(&relocation_id)
-        .ok_or_else(|| invalid("test committed plan absent"))?;
-    let session = plan
-        .handoff_session
-        .as_ref()
-        .ok_or_else(|| invalid("test committed session absent"))?;
-    let purpose = MetadataRecoveryRolePurpose::CommittedHandoff {
-        relocation_id,
-        plan_id: plan.plan_id.clone(),
-        session_id: session.session_id,
-        nonce: session.nonce,
-    };
     let request_id = Uuid::now_v7();
     let challenge = Uuid::now_v7();
     let remaining = parent
@@ -441,9 +662,9 @@ pub(crate) fn test_handoff_role_admission(
         initiator_plaintext_loopback: true,
         recipient_node_id: recipient.clone(),
         recipient_incarnation: topology.nodes[recipient].incarnation,
-        range_id: plan.range_id,
-        range_epoch: plan.learner_epoch,
-        recovery_nonce: session.nonce,
+        range_id,
+        range_epoch,
+        recovery_nonce,
         recipient_challenge: challenge,
         purpose: purpose.clone(),
         budget_ms: remaining
@@ -475,11 +696,160 @@ pub(crate) fn test_handoff_role_admission(
         &participant(initiator),
         recipient,
         request_id,
-        plan.range_id,
-        plan.learner_epoch,
-        session.nonce,
+        range_id,
+        range_epoch,
+        recovery_nonce,
         challenge,
         &purpose,
-    )?
-    .into_handoff()
+    )
+}
+
+/// Shared actual metadata stores for receiver/quorum integration tests. Only
+/// member transport is simulated; all metadata leadership, probes and opaque
+/// authority consumption use the production implementation and durable files.
+#[cfg(test)]
+pub(crate) fn test_recovery_metadata_cluster(
+    root: &std::path::Path,
+    topology: &crate::ClusterTopology,
+    metadata_leader: &ClusterNodeId,
+) -> Result<
+    BTreeMap<
+        ClusterNodeId,
+        std::sync::Arc<crate::distribution_metadata_read_provider::MetadataReadProvider>,
+    >,
+> {
+    use crate::distribution_consensus::{
+        MetadataConsensusStore, MetadataReadAck, MetadataReadProbeRequest,
+        MetadataRecoveryRoleRequest,
+    };
+    use crate::distribution_metadata_read_provider::{
+        MetadataReadProbeTransport, MetadataReadProvider,
+    };
+    use crate::CancellationToken;
+    use parking_lot::Mutex;
+    use std::sync::Arc;
+    #[derive(Debug)]
+    struct Peers {
+        topology: crate::ClusterTopology,
+        leader: ClusterNodeId,
+        stores: BTreeMap<ClusterNodeId, Arc<Mutex<MetadataConsensusStore>>>,
+    }
+    impl Peers {
+        fn participant(&self, node: &ClusterNodeId) -> MetadataReadParticipant {
+            let member = &self.topology.nodes[node];
+            MetadataReadParticipant::from_transport(
+                node.clone(),
+                member.incarnation,
+                member.tls_certificate_sha256.clone(),
+                true,
+            )
+        }
+        fn provider(self: &Arc<Self>, node: &ClusterNodeId) -> Result<MetadataReadProvider> {
+            MetadataReadProvider::new(
+                Arc::clone(&self.stores[node]),
+                Arc::new(Member {
+                    local: node.clone(),
+                    peers: Arc::clone(self),
+                }),
+            )
+        }
+    }
+    #[derive(Debug)]
+    struct Member {
+        local: ClusterNodeId,
+        peers: Arc<Peers>,
+    }
+    impl MetadataReadProbeTransport for Member {
+        fn local_participant(&self) -> MetadataReadParticipant {
+            self.peers.participant(&self.local)
+        }
+        fn probe(
+            &self,
+            destination: &ClusterNodeId,
+            request: MetadataReadProbeRequest,
+            parent: &CancellationToken,
+        ) -> Result<MetadataReadAck> {
+            parent.check()?;
+            let reply = self.peers.stores[destination]
+                .lock()
+                .handle_read_authority_probe(request.clone())?;
+            MetadataReadAck::from_transport(
+                &request,
+                destination,
+                self.peers.participant(destination),
+                reply,
+            )
+        }
+        fn acquire_recovery_role(
+            &self,
+            destination: &ClusterNodeId,
+            request: MetadataRecoveryRoleRequest,
+            parent: &CancellationToken,
+        ) -> Result<MetadataRecoveryRoleObservation> {
+            parent.check()?;
+            if destination != &self.peers.leader {
+                return Err(invalid("test metadata route is not actual leader"));
+            }
+            let started = Instant::now();
+            let deadline = parent
+                .deadline()
+                .ok_or_else(|| invalid("test role acquisition needs parent deadline"))?;
+            let provider = self.peers.provider(destination)?;
+            let response = provider.acquire_recovery_role(
+                &self.peers.participant(&self.local),
+                request.clone(),
+                parent,
+            )?;
+            MetadataRecoveryRoleObservation::from_transport(
+                &request,
+                &self.peers.topology.cluster_id,
+                destination,
+                self.peers.participant(destination),
+                response,
+                deadline,
+                started,
+            )
+        }
+    }
+    let stores = topology
+        .nodes
+        .keys()
+        .map(|node| {
+            Ok((
+                node.clone(),
+                Arc::new(Mutex::new(MetadataConsensusStore::open(
+                    root.join(node.as_str()),
+                    topology.cluster_id.clone(),
+                    node.clone(),
+                    topology.clone(),
+                    true,
+                )?)),
+            ))
+        })
+        .collect::<Result<BTreeMap<_, _>>>()?;
+    {
+        let mut leader = stores[metadata_leader].lock();
+        leader.start_election()?;
+        leader.become_leader(&topology.metadata_voters())?;
+        for node in topology
+            .metadata_voters()
+            .iter()
+            .filter(|node| *node != metadata_leader)
+        {
+            let response = stores[node]
+                .lock()
+                .handle_append_request(leader.append_request_from(1, 64)?)?;
+            leader.record_append_response(node, &response)?;
+        }
+    }
+    let peers = Arc::new(Peers {
+        topology: topology.clone(),
+        leader: metadata_leader.clone(),
+        stores,
+    });
+    topology
+        .nodes
+        .keys()
+        .map(|node| Ok((node.clone(), Arc::new(peers.provider(node)?))))
+        .collect()
 }

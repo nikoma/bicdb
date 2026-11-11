@@ -12,6 +12,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use crate::CancellationToken;
 use parking_lot::{Condvar, Mutex, RwLock};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -41,10 +42,13 @@ use crate::error::{BicDbError, Result};
 mod image_install_obligations;
 pub(crate) use image_install_obligations::TargetImageCatalogHistoryObligations;
 mod image_install_state;
+mod recovery_state;
 pub(crate) use image_install_state::ImageInstallPurpose;
 use image_install_state::{ImageInstallIntent, IMAGE_INSTALL_RANGE_LOG_FORMAT};
 mod image_install_fence;
 pub(crate) use image_install_fence::{NativeImageInstallRole, TargetImageInstallFence};
+use recovery_state::RecoveryFenceRecord;
+pub(crate) use recovery_state::{RecoveryFenceScope, RecoveryResolvedCatalogObservation};
 
 mod native_prefix;
 #[cfg(test)]
@@ -427,6 +431,8 @@ struct RangeWriteCatalog {
     handoff_promises: BTreeMap<RangeId, RangeHandoffPromise>,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     image_install_intents: BTreeMap<RangeId, ImageInstallIntent>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    recovery_fences: BTreeMap<RangeId, RecoveryFenceRecord>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -464,6 +470,19 @@ impl RangeWriteEnvelope {
                 HANDOFF_RANGE_LOG_FORMAT,
                 IMAGE_INSTALL_RANGE_LOG_FORMAT
             )));
+        }
+        if self.catalog.recovery_fences.len() > recovery_state::MAX_RECOVERY_FENCES {
+            return Err(range_write_error("recovery refusal catalog exceeds bound"));
+        }
+        for (range_id, fence) in &self.catalog.recovery_fences {
+            fence.validate()?;
+            if fence.scope.range_id != *range_id
+                || self.catalog.format_version < 5
+                || fence.local_node_id != self.catalog.node_id
+                || fence.scope.cluster_id != self.catalog.cluster_id
+            {
+                return Err(range_write_error("damaged recovery refusal scope"));
+            }
         }
         for log in self.catalog.ranges.values() {
             validate_log(log)?;
@@ -622,6 +641,7 @@ impl RangeWriteStore {
                 backup_fences: BTreeMap::new(),
                 handoff_promises: BTreeMap::new(),
                 image_install_intents: BTreeMap::new(),
+                recovery_fences: BTreeMap::new(),
             },
             Err(error) => return Err(error.into()),
         };
@@ -714,6 +734,7 @@ impl RangeWriteStore {
     ) -> Result<RangeHandoffPromise> {
         request.validate()?;
         self.require_no_image_install(request.range_id)?;
+        self.require_no_active_recovery(request.range_id)?;
         if !self.fsync || !crate::format::range_image_install_active(&self.root)? {
             return Err(range_write_error(
                 "durable handoff requires fsync and the sticky image reader fence",
@@ -789,6 +810,7 @@ impl RangeWriteStore {
         expires_at_ms: u64,
     ) -> Result<RangeWriteProgress> {
         self.require_no_image_install(range_id)?;
+        self.require_no_active_recovery(range_id)?;
         let candidate = RangeBackupWriteFence {
             plan_id,
             range_id,
@@ -1035,6 +1057,7 @@ impl RangeWriteStore {
     pub fn prepare(&mut self, command: RangeWriteCommand) -> Result<RangeWriteState> {
         command.validate()?;
         self.require_no_image_install(command.range_id)?;
+        self.require_no_active_recovery(command.range_id)?;
         if command.cluster_id != self.catalog.cluster_id {
             return Err(range_write_error(
                 "range-write command belongs to another cluster",
@@ -1251,6 +1274,7 @@ impl RangeWriteStore {
     fn match_entry_mut(&mut self, command: &RangeWriteCommand) -> Result<&mut RangeWriteLogEntry> {
         command.validate()?;
         self.require_no_image_install(command.range_id)?;
+        self.require_no_active_recovery(command.range_id)?;
         let entry = self
             .catalog
             .ranges
@@ -1372,6 +1396,17 @@ pub struct RangeWriteAck {
 }
 
 pub trait RangeWriteTransport: std::fmt::Debug + Send + Sync + 'static {
+    fn recovery_epoch_fence_observation(
+        &self,
+        destination: &ClusterNodeId,
+        request: &crate::distribution_range_recovery::RecoveryEpochFenceRequest,
+        parent: &CancellationToken,
+    ) -> Result<crate::distribution_range_recovery::RecoveryFenceObservation> {
+        let _ = (destination, request, parent);
+        Err(range_write_error(
+            "transport does not support native recovery epoch fences",
+        ))
+    }
     fn install_range_backup_fence(
         &self,
         destination: &ClusterNodeId,
@@ -4265,6 +4300,7 @@ mod tests {
             backup_fences: BTreeMap::new(),
             handoff_promises: BTreeMap::new(),
             image_install_intents: BTreeMap::new(),
+            recovery_fences: BTreeMap::new(),
         };
         let envelope = RangeWriteEnvelope::new(catalog).unwrap();
         fs::write(
@@ -4300,6 +4336,7 @@ mod tests {
             backup_fences: BTreeMap::new(),
             handoff_promises: BTreeMap::new(),
             image_install_intents: BTreeMap::new(),
+            recovery_fences: BTreeMap::new(),
         })
         .unwrap();
         let legacy_bytes = serde_json::to_vec_pretty(&envelope).unwrap();

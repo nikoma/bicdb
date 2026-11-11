@@ -63,6 +63,24 @@ use crate::{CancellationToken, ClusterSchemaBundle, SignedClusterSchemaBundle};
 
 const FRAME_HEADER_BYTES: usize = 4;
 
+/// Sealed transport result: only the authenticated client exchange below can
+/// construct it. A deserialized response DTO alone is insufficient.
+#[derive(Debug)]
+pub(crate) struct AuthenticatedRecoveryFenceReply {
+    reply: crate::distribution_range_recovery::RecoveryEpochFenceReply,
+    peer: MetadataReadParticipant,
+}
+impl AuthenticatedRecoveryFenceReply {
+    pub(crate) fn into_parts(
+        self,
+    ) -> (
+        crate::distribution_range_recovery::RecoveryEpochFenceReply,
+        MetadataReadParticipant,
+    ) {
+        (self.reply, self.peer)
+    }
+}
+
 fn transport_error(message: impl Into<String>) -> BicDbError {
     BicDbError::Cluster(message.into())
 }
@@ -184,6 +202,9 @@ enum ClusterDataRequest {
     AcquireMetadataRecoveryRole {
         request: MetadataRecoveryRoleRequest,
     },
+    RecoveryEpochFence {
+        request: crate::distribution_range_recovery::RecoveryEpochFenceRequest,
+    },
     PrepareRangeWrite {
         command: RangeWriteCommand,
     },
@@ -284,6 +305,7 @@ impl ClusterDataRequest {
             | Self::ExportRangeDigestBucket { range_id, .. }
             | Self::ApplyRangeDigestRepair { range_id, .. } => Some(*range_id),
             Self::ApplyRangeWriteRepair { batch, .. } => Some(batch.range_id),
+            Self::RecoveryEpochFence { request } => Some(request.scope.range_id),
             Self::Ping
             | Self::Heartbeat { .. }
             | Self::StageTlsCertificateRotation { .. }
@@ -332,6 +354,7 @@ enum ClusterDataResponse {
     MetadataReadProbe(MetadataReadProbeResponse),
     MetadataReadAcquire(MetadataReadAcquireResponse),
     MetadataRecoveryRole(MetadataRecoveryRoleResponse),
+    RecoveryEpochFence(crate::distribution_range_recovery::RecoveryEpochFenceReply),
     RangeWrite(RangeWriteAck),
     RangeWriteProgress(RangeWriteProgress),
     RangeWriteRepair(RangeWriteRepairBatch),
@@ -458,6 +481,41 @@ pub fn start_cluster_data_server_with_metadata_read_provider(
     metadata_distribution_store: Option<Arc<Mutex<DistributionStore>>>,
     metadata_read_provider: Option<Arc<MetadataReadProvider>>,
 ) -> Result<ClusterDataServerHandle> {
+    let recovery = metadata_read_provider.as_ref().map(|provider| {
+        Arc::new(
+            crate::distribution_range_recovery::RangeRecoveryRuntime::new(
+                Arc::clone(&service),
+                Arc::clone(provider),
+            ),
+        )
+    });
+    start_cluster_data_server_with_recovery_runtime(
+        address,
+        config,
+        topology,
+        service,
+        control_store,
+        metadata_consensus,
+        metadata_distribution_store,
+        metadata_read_provider,
+        recovery,
+    )
+}
+
+/// The host shares the same receiver session owner with its local coordinator.
+/// Legacy callers retain the preceding public signatures and refusal behavior.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn start_cluster_data_server_with_recovery_runtime(
+    address: impl ToSocketAddrs,
+    config: ClusterNetworkTransportConfig,
+    topology: Arc<RwLock<ClusterTopology>>,
+    service: Arc<Mutex<ClusterDataNodeService>>,
+    control_store: Option<Arc<Mutex<DistributionStore>>>,
+    metadata_consensus: Option<Arc<Mutex<MetadataConsensusStore>>>,
+    metadata_distribution_store: Option<Arc<Mutex<DistributionStore>>>,
+    metadata_read_provider: Option<Arc<MetadataReadProvider>>,
+    recovery_runtime: Option<Arc<crate::distribution_range_recovery::RangeRecoveryRuntime>>,
+) -> Result<ClusterDataServerHandle> {
     config.validate()?;
     let listener = TcpListener::bind(address)?;
     let local_addr = listener.local_addr()?;
@@ -511,6 +569,7 @@ pub fn start_cluster_data_server_with_metadata_read_provider(
                     let metadata_distribution_store =
                         metadata_distribution_store.as_ref().map(Arc::clone);
                     let metadata_read_provider = metadata_read_provider.as_ref().map(Arc::clone);
+                    let recovery_runtime = recovery_runtime.as_ref().map(Arc::clone);
                     let request_deadline =
                         Instant::now() + Duration::from_millis(config.io_timeout_ms);
                     let tls = server_tls.as_ref().map(|tls| Arc::clone(&tls.config));
@@ -545,6 +604,7 @@ pub fn start_cluster_data_server_with_metadata_read_provider(
                                     metadata_distribution_store.as_ref(),
                                     Some(&peer_certificate_sha256),
                                     metadata_read_provider.as_ref(),
+                                    recovery_runtime.as_ref(),
                                     request_deadline,
                                 )
                             })
@@ -561,6 +621,7 @@ pub fn start_cluster_data_server_with_metadata_read_provider(
                                 metadata_distribution_store.as_ref(),
                                 None,
                                 metadata_read_provider.as_ref(),
+                                recovery_runtime.as_ref(),
                                 request_deadline,
                             )
                         };
@@ -643,6 +704,7 @@ fn handle_cluster_data_connection(
     metadata_distribution_store: Option<&Arc<Mutex<DistributionStore>>>,
     peer_certificate_sha256: Option<&str>,
     metadata_read_provider: Option<&Arc<MetadataReadProvider>>,
+    recovery_runtime: Option<&Arc<crate::distribution_range_recovery::RangeRecoveryRuntime>>,
     request_deadline: Instant,
 ) -> Result<()> {
     let request = recv_json_frame::<ClusterDataRequestEnvelope>(stream, config.max_frame_bytes)?;
@@ -711,6 +773,20 @@ fn handle_cluster_data_connection(
             return provider
                 .acquire_recovery_role(caller, request, &cancellation)
                 .map(ClusterDataResponse::MetadataRecoveryRole);
+        }
+        if let ClusterDataRequest::RecoveryEpochFence { request } = request.request {
+            let runtime = recovery_runtime
+                .ok_or_else(|| transport_error("native recovery runtime is not active"))?;
+            let caller = authenticated_caller
+                .as_ref()
+                .ok_or_else(|| transport_error("recovery requires an authenticated member"))?;
+            let token =
+                CancellationToken::new(Arc::new(AtomicBool::new(false)), Some(request_deadline));
+            return runtime
+                .fence_epoch(caller, &request, &token)
+                .map(|observation| {
+                    ClusterDataResponse::RecoveryEpochFence(observation.into_reply())
+                });
         }
         dispatch_cluster_data_request(
             service,
@@ -2125,6 +2201,9 @@ fn dispatch_cluster_data_request(
             }
             Ok(ClusterDataResponse::MetadataReadProbe(response))
         }
+        ClusterDataRequest::RecoveryEpochFence { .. } => Err(transport_error(
+            "native recovery requires authenticated receiver runtime",
+        )),
         ClusterDataRequest::AcquireMetadataRecoveryRole { .. } => Err(transport_error(
             "metadata recovery-role acquisition requires the authenticated runtime",
         )),
@@ -3124,6 +3203,33 @@ impl TcpClusterRelocationTransport {
         }
     }
 
+    pub(crate) fn recovery_epoch_fence_observation(
+        &self,
+        destination: &ClusterNodeId,
+        request: &crate::distribution_range_recovery::RecoveryEpochFenceRequest,
+        parent: &CancellationToken,
+    ) -> Result<crate::distribution_range_recovery::RecoveryFenceObservation> {
+        let token = request.cancellation(parent)?;
+        let deadline = token.deadline().unwrap();
+        let (response, peer) = self.call_with_read_participant_cancellable(
+            &token,
+            destination,
+            ClusterDataRequest::RecoveryEpochFence {
+                request: request.clone(),
+            },
+        )?;
+        match response {
+            ClusterDataResponse::RecoveryEpochFence(reply) => {
+                crate::distribution_range_recovery::RecoveryFenceObservation::from_transport(
+                    AuthenticatedRecoveryFenceReply { reply, peer },
+                    &request.scope,
+                    deadline,
+                )
+            }
+            response => Err(unexpected_response("native recovery epoch fence", response)),
+        }
+    }
+
     fn call(
         &self,
         destination_node_id: &ClusterNodeId,
@@ -3167,6 +3273,7 @@ impl TcpClusterRelocationTransport {
             ClusterDataRequest::MetadataReadProbe { .. }
                 | ClusterDataRequest::MetadataReadAcquire { .. }
                 | ClusterDataRequest::AcquireMetadataRecoveryRole { .. }
+                | ClusterDataRequest::RecoveryEpochFence { .. }
         );
         let network_deadline = Instant::now() + Duration::from_millis(self.config.io_timeout_ms);
         let deadline = cancellation
@@ -3346,6 +3453,15 @@ fn unexpected_response(expected: &str, response: ClusterDataResponse) -> BicDbEr
 }
 
 impl RangeWriteTransport for TcpClusterRelocationTransport {
+    fn recovery_epoch_fence_observation(
+        &self,
+        destination: &ClusterNodeId,
+        request: &crate::distribution_range_recovery::RecoveryEpochFenceRequest,
+        parent: &CancellationToken,
+    ) -> Result<crate::distribution_range_recovery::RecoveryFenceObservation> {
+        self.recovery_epoch_fence_observation(destination, request, parent)
+    }
+
     fn install_range_backup_fence(
         &self,
         destination: &ClusterNodeId,

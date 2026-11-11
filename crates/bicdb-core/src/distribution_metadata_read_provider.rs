@@ -130,6 +130,11 @@ struct Candidate {
 }
 
 impl MetadataReadProvider {
+    /// Actual locally configured transport identity, never a caller-selected
+    /// participant DTO. Recovery uses it for local fence observations.
+    pub(crate) fn local_participant(&self) -> MetadataReadParticipant {
+        self.transport.local_participant()
+    }
     pub fn new(
         consensus: Arc<Mutex<MetadataConsensusStore>>,
         transport: Arc<dyn MetadataReadProbeTransport>,

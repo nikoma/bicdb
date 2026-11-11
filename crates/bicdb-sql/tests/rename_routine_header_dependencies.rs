@@ -90,3 +90,48 @@ fn table_returning_routine_columns_follow_a_renamed_table_type() {
         }
     }
 }
+
+#[test]
+fn routine_defaults_keep_the_callers_privileges_before_definer_entry() {
+    for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open_with_config(
+            root.path(),
+            DbConfig::default().with_fsync(true).with_storage_mode(mode),
+        )
+        .unwrap();
+        let mut sql = SqlSession::new(&mut db);
+        sql.execute("CREATE ROLE header_guest; CREATE FUNCTION header_secret() RETURNS TEXT LANGUAGE sql AS 'SELECT ''secret'''; REVOKE ALL ON FUNCTION header_secret() FROM PUBLIC; CREATE FUNCTION header_definer(arg TEXT DEFAULT header_secret()) RETURNS TEXT LANGUAGE sql SECURITY DEFINER AS 'SELECT arg'; CREATE PROCEDURE header_definer_proc(arg TEXT DEFAULT header_secret()) LANGUAGE sql SECURITY DEFINER AS 'SELECT 1'; CREATE FUNCTION header_definer_rows(arg TEXT DEFAULT header_secret()) RETURNS TABLE(item TEXT) LANGUAGE plpgsql SECURITY DEFINER AS $$ BEGIN RETURN; END $$; SET ROLE header_guest").unwrap();
+        for statement in [
+            "SELECT header_definer()",
+            "CALL header_definer_proc()",
+            "SELECT * FROM header_definer_rows()",
+        ] {
+            let error = sql.execute(statement).unwrap_err();
+            assert_eq!(error.sqlstate(), "42501", "{statement}: {error}");
+        }
+        assert_eq!(
+            sql.execute("SELECT header_definer('explicit')")
+                .unwrap()
+                .rows,
+            vec![vec![SqlValue::String("explicit".into())]]
+        );
+        sql.execute("CALL header_definer_proc('explicit')").unwrap();
+        assert!(sql
+            .execute("SELECT * FROM header_definer_rows('explicit')")
+            .unwrap()
+            .rows
+            .is_empty());
+        sql.execute("RESET ROLE; GRANT EXECUTE ON FUNCTION header_secret() TO header_guest; SET ROLE header_guest").unwrap();
+        assert_eq!(
+            sql.execute("SELECT header_definer()").unwrap().rows,
+            vec![vec![SqlValue::String("secret".into())]]
+        );
+        sql.execute("CALL header_definer_proc()").unwrap();
+        assert!(sql
+            .execute("SELECT * FROM header_definer_rows()")
+            .unwrap()
+            .rows
+            .is_empty());
+    }
+}

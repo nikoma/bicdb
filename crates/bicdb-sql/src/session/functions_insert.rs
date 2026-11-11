@@ -377,6 +377,7 @@ impl<'db> SqlSession<'db> {
             }
         };
 
+        let args = self.complete_routine_default_args(&routine, &args)?;
         if routine.schema.security_definer {
             return self.execute_with_routine_security(&routine.schema, |session| {
                 session.execute_plpgsql_procedure(&routine.ir, &args)

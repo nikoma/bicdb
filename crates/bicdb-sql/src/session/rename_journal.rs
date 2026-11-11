@@ -6,6 +6,14 @@ use super::*;
 
 const HEADERS: &str = "__bicdb_rename_intents";
 const IMAGES: &str = "__bicdb_rename_images";
+const GC: &str = "__bicdb_rename_gc";
+const GC_BATCH: usize = 128;
+
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct GcCursor {
+    after: Option<String>,
+}
 
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -39,7 +47,7 @@ pub(super) struct PendingRename {
 }
 
 pub(super) fn is_collection(name: &str) -> bool {
-    [HEADERS, IMAGES].contains(&name)
+    [HEADERS, IMAGES, GC].contains(&name)
 }
 
 /// Gather identities only. Recovery of their physical backings must run after
@@ -91,7 +99,7 @@ fn backing_name(db: &BicDb, storage: &str) -> Result<String> {
 }
 
 fn storage_for(db: &BicDb, name: &str) -> Result<String> {
-    if [HEADERS, IMAGES].contains(&name) {
+    if [HEADERS, IMAGES, GC].contains(&name) {
         return Err(invalid("cannot journal the journal itself"));
     }
     db.collections()
@@ -385,33 +393,115 @@ fn rollback_inner(db: &mut BicDb, id: &str, mut owner: Option<&mut Transaction>)
 /// prune an active intent's images, including steps already undone by cursor.
 pub(super) fn collect_orphans(db: &mut BicDb) -> Result<usize> {
     db.check_catalog_recovery_quiescent()?;
-    let images = match db.scan_collection(IMAGES) {
-        Ok(images) => images,
-        Err(BicDbError::CollectionNotFound(_)) => return Ok(0),
+    let mut after = None;
+    let mut deleted = 0;
+    loop {
+        let (count, next) = collect_orphan_batch(db, after.as_deref(), GC_BATCH)?;
+        deleted += count;
+        let Some(next) = next else {
+            return Ok(deleted);
+        };
+        after = Some(next);
+    }
+}
+
+/// Online maintenance never reverses an intent. An absent, durably deleted
+/// header proves its immutable images obsolete; an active header always wins.
+/// Persist a cursor with the deletions so live images at the beginning cannot
+/// starve later garbage. A completed pass wraps to revisit newly decided work.
+pub(super) fn collect_committed_images_batch(db: &mut BicDb, limit: usize) -> Result<usize> {
+    db.check_recovery_state()?;
+    if db.is_replication_standby() {
+        return Ok(0);
+    }
+    let cursor = match db.get(GC, "cursor") {
+        Ok(Some(record)) => serde_json::from_value::<GcCursor>(record.metadata.clone())?.after,
+        Ok(None) | Err(BicDbError::CollectionNotFound(_)) => None,
         Err(error) => return Err(error.into()),
     };
+    if let Some(after) = &cursor {
+        validate_image_id(after)?;
+    }
+    let (count, _) = collect_orphan_batch(db, cursor.as_deref(), limit)?;
+    Ok(count)
+}
+
+fn validate_image_id(image: &str) -> Result<&str> {
+    let (id, index) = image
+        .split_once(':')
+        .ok_or_else(|| invalid("invalid image identity"))?;
+    let uuid = uuid::Uuid::parse_str(id).map_err(|_| invalid("invalid image owner"))?;
+    let index = index
+        .parse::<u64>()
+        .map_err(|_| invalid("invalid image ordinal"))?;
+    if uuid.simple().to_string() != id || image != format!("{id}:{index:020}") {
+        return Err(invalid("noncanonical image identity"));
+    }
+    Ok(id)
+}
+
+fn collect_orphan_batch(
+    db: &mut BicDb,
+    after: Option<&str>,
+    limit: usize,
+) -> Result<(usize, Option<String>)> {
+    if !(1..=GC_BATCH).contains(&limit) {
+        return Err(invalid("invalid garbage-collection batch limit"));
+    }
+    match db.collection_policy(IMAGES) {
+        Ok(_) => {}
+        Err(BicDbError::CollectionNotFound(_)) => return Ok((0, None)),
+        Err(error) => return Err(error.into()),
+    }
+    let reader = db.begin_transaction()?;
+    let lower = after
+        .map(std::ops::Bound::Excluded)
+        .unwrap_or(std::ops::Bound::Unbounded);
+    let (ids, complete) = match reader.scan_collection_record_key_candidates_in_range_unchecked(
+        IMAGES,
+        lower,
+        std::ops::Bound::Unbounded,
+        false,
+        limit,
+    ) {
+        Ok(batch) => batch,
+        Err(BicDbError::CollectionNotFound(_)) => {
+            reader.rollback()?;
+            return Ok((0, None));
+        }
+        Err(error) => return Err(error.into()),
+    };
+    if ids.is_empty() && !complete {
+        return Err(invalid("garbage-collection scan made no progress"));
+    }
+    if ids.is_empty() && after.is_none() {
+        reader.rollback()?;
+        return Ok((0, None));
+    }
     let mut obsolete = Vec::new();
-    for record in images {
-        let (id, index) = record
-            .id
-            .split_once(':')
-            .ok_or_else(|| invalid("invalid image identity"))?;
-        let uuid = uuid::Uuid::parse_str(id).map_err(|_| invalid("invalid image owner"))?;
-        let index = index
-            .parse::<u64>()
-            .map_err(|_| invalid("invalid image ordinal"))?;
-        if uuid.simple().to_string() != id || record.id != format!("{id}:{index:020}") {
-            return Err(invalid("noncanonical image identity"));
-        }
-        let _: Effect = serde_json::from_value(record.metadata)?;
+    for key in &ids {
+        let Some(record) = reader.get(IMAGES, key)? else {
+            continue;
+        };
+        let id = validate_image_id(&record.id)?;
+        let _: Effect = serde_json::from_value(record.metadata.clone())?;
         if load(db, id)?.is_none() {
-            obsolete.push(record.id);
+            obsolete.push(record.id.clone());
         }
     }
-    for id in &obsolete {
-        db.delete(IMAGES, id)?;
-    }
-    Ok(obsolete.len())
+    let next = (!complete).then(|| ids.last().expect("progress checked").clone());
+    reader.rollback()?;
+    db.create_collection(GC)?;
+    let mut tx = db.begin_transaction()?;
+    tx.delete_many(IMAGES, &obsolete)?;
+    tx.insert(
+        GC,
+        Record::new("cursor").with_metadata(serde_json::to_value(GcCursor {
+            after: next.clone(),
+        })?),
+    )?;
+    tx.commit()?;
+    Ok((obsolete.len(), next))
 }
 
 fn persist_header(db: &mut BicDb, header: &Header) -> Result<()> {
@@ -653,6 +743,62 @@ mod tests {
             2
         );
         db.close().unwrap();
+    }
+
+    #[test]
+    fn bounded_online_gc_preserves_live_intents_and_unrelated_native_transactions() {
+        for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
+            let root = tempfile::tempdir().unwrap();
+            let mut db =
+                BicDb::open_with_config(root.path(), DbConfig::default().with_storage_mode(mode))
+                    .unwrap();
+            db.create_collection("business").unwrap();
+            db.create_collection("unrelated").unwrap();
+            db.insert("unrelated", row("value", 1)).unwrap();
+            let mut decided = prepare(&mut db).unwrap();
+            for index in 0..53 {
+                capture_row(&db, &mut decided, "business", &format!("old_{index}")).unwrap();
+            }
+            let mut live = prepare(&mut db).unwrap();
+            for index in 0..19 {
+                capture_row(&db, &mut live, "business", &format!("live_{index}")).unwrap();
+            }
+            let mut decision = db.begin_transaction().unwrap();
+            decide(&decided, &mut decision).unwrap();
+            decision.commit().unwrap();
+            let mut peer = db.begin_transaction().unwrap();
+            peer.update("unrelated", row("value", 9)).unwrap();
+            let mut reclaimed = 0;
+            for _ in 0..30 {
+                let count = collect_committed_images_batch(&mut db, 7).unwrap();
+                assert!(count <= 7);
+                reclaimed += count;
+                assert!(load(&db, &live.header.id).unwrap().is_some());
+                assert_eq!(
+                    peer.get("unrelated", "value").unwrap().unwrap().metadata["value"],
+                    9
+                );
+                assert_eq!(
+                    db.get("unrelated", "value").unwrap().unwrap().metadata["value"],
+                    1
+                );
+            }
+            assert_eq!(reclaimed, 53);
+            for index in 0..19 {
+                assert!(db
+                    .get(IMAGES, &image_id(&live.header, index))
+                    .unwrap()
+                    .is_some());
+            }
+            peer.commit().unwrap();
+            rollback(&mut db, &live.header.id).unwrap();
+            assert_eq!(collect_orphans(&mut db).unwrap(), 19);
+            assert_eq!(
+                db.get("unrelated", "value").unwrap().unwrap().metadata["value"],
+                9
+            );
+            db.close().unwrap();
+        }
     }
     #[test]
     fn live_undo_preserves_rows_buffered_before_the_rename_savepoint() {

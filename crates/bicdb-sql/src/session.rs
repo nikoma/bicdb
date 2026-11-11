@@ -3990,6 +3990,7 @@ impl<'db> SqlSession<'db> {
             crate::statement_context::note_independent_commit(committed_sequence);
             self.snapshot_floor = self.snapshot_floor.max(committed_sequence);
         }
+        let committed_catalog_work = !self.ddl_undo.is_empty();
         self.ddl_undo.clear();
         self.savepoints.clear();
         self.commit_guc_transaction();
@@ -3999,7 +4000,11 @@ impl<'db> SqlSession<'db> {
         // Concurrent/shared COMMIT cannot mutate the collection catalog. Its
         // durable purge markers remain hidden until exclusive cleanup/startup.
         if self.exclusive {
-            recycle_bin_journal::recover_purges(self.db_mut()?)?;
+            if committed_catalog_work {
+                finish_committed_recycle_bin_purges(self.db_mut()?)?;
+            } else {
+                recycle_bin_journal::recover_purges(self.db_mut()?)?;
+            }
         }
         Ok(SqlResult::command("COMMIT"))
     }

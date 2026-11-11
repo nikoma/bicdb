@@ -2,6 +2,7 @@
 //! that a data majority has stopped ordinary old-session mutations; it grants
 //! neither native visibility nor a committed per-command decision or read permit.
 use std::collections::BTreeMap;
+use std::sync::Arc;
 use std::time::Instant;
 
 use super::{invalid, RecoveryFenceObservation, RecoveryMemberIdentity, RecoveryRoleAdmission};
@@ -21,7 +22,7 @@ pub(crate) struct RecoveryFenceQuorumRound {
     role: RecoveryRoleAdmission,
     scope: RecoveryFenceScope,
     cancellation: CancellationToken,
-    observations: BTreeMap<ClusterNodeId, RecoveryFenceObservation>,
+    observations: BTreeMap<ClusterNodeId, Arc<RecoveryFenceObservation>>,
 }
 
 impl RecoveryFenceQuorumRound {
@@ -61,7 +62,11 @@ impl RecoveryFenceQuorumRound {
         self.observations.contains_key(node)
     }
 
-    pub(crate) fn record(&mut self, observation: RecoveryFenceObservation) -> Result<()> {
+    pub(crate) fn record(
+        &mut self,
+        observation: impl Into<Arc<RecoveryFenceObservation>>,
+    ) -> Result<()> {
+        let observation = observation.into();
         self.cancellation.check()?;
         self.role.require_live_request()?;
         observation.require_live()?;
@@ -189,7 +194,7 @@ pub(crate) struct FreshRangeRecoveryAuthority {
     role: RecoveryRoleAdmission,
     scope: RecoveryFenceScope,
     cancellation: CancellationToken,
-    observations: BTreeMap<ClusterNodeId, RecoveryFenceObservation>,
+    observations: BTreeMap<ClusterNodeId, Arc<RecoveryFenceObservation>>,
 }
 impl FreshRangeRecoveryAuthority {
     pub(crate) fn require_live(&self) -> Result<()> {
@@ -208,7 +213,7 @@ impl FreshRangeRecoveryAuthority {
     pub(crate) fn member_credentials(&self) -> &BTreeMap<ClusterNodeId, RecoveryMemberIdentity> {
         self.role.member_credentials()
     }
-    pub(crate) fn observations(&self) -> &BTreeMap<ClusterNodeId, RecoveryFenceObservation> {
+    pub(crate) fn observations(&self) -> &BTreeMap<ClusterNodeId, Arc<RecoveryFenceObservation>> {
         &self.observations
     }
     pub(crate) fn deadline(&self) -> Instant {
@@ -246,6 +251,7 @@ impl FreshRangeRecoveryAuthority {
         let mut candidates: Vec<_> = self
             .observations
             .values()
+            .map(Arc::as_ref)
             .filter(|observation| {
                 let native = observation.native();
                 native.factory_initialization_complete

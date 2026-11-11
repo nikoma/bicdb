@@ -422,6 +422,10 @@ impl RangeRecoveryRuntime {
         self.participant_transport = Some(transport);
         self
     }
+    #[cfg(test)]
+    pub(crate) fn test_active_context_count(&self) -> usize {
+        self.sessions.lock().contexts
+    }
     fn reserve(&self, range: RangeId) -> Result<Arc<Operation>> {
         self.reserve_context(range, true)
     }

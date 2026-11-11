@@ -187,6 +187,13 @@ pub(crate) struct ActualNativeRf3Fixture {
 }
 impl ActualNativeRf3Fixture {
     pub(crate) fn new() -> Self {
+        Self::new_with_network_precondition(&BTreeMap::new())
+    }
+    /// Test-only INITIAL identities, applied before actual native birth/genesis.
+    /// Never rebind an already-born database to newly invented credentials.
+    pub(crate) fn new_with_network_precondition(
+        network: &BTreeMap<ClusterNodeId, (String, String)>,
+    ) -> Self {
         let root = tempfile::tempdir().unwrap();
         let cluster = ClusterId::new("actual-native-rf3-origin").unwrap();
         let leader = ClusterNodeId::new("n0").unwrap();
@@ -240,6 +247,14 @@ impl ActualNativeRf3Fixture {
                     node_id: ClusterNodeId::new(id).unwrap(),
                     role: RangeReplicaRole::Voter,
                 });
+        }
+        if !network.is_empty() {
+            assert_eq!(network.len(), topology.nodes.len());
+            for (id, member) in &mut topology.nodes {
+                let (address, pin) = &network[id];
+                member.address = address.clone();
+                member.tls_certificate_sha256 = Some(pin.clone());
+            }
         }
         topology.validate().unwrap();
         let range = topology.ranges.values().next().unwrap().clone();
@@ -487,3 +502,6 @@ fn native_rf3_oversize_refuses_before_any_durable_quorum_or_native_pending() {
     drop(topology);
     fixture.append("healthy-after-oversize-refusal").unwrap();
 }
+
+#[cfg(feature = "tls-replication")]
+mod native_historical_tls;

@@ -16,6 +16,6 @@ test_unlisted_file_rejected (test_verify_azure_instrumented_replay_evidence.Evid
 test_unsupported_qualification_claim_rejected_after_rehash (test_verify_azure_instrumented_replay_evidence.EvidenceTests.test_unsupported_qualification_claim_rejected_after_rehash) ... ok
 
 ----------------------------------------------------------------------
-Ran 16 tests in 4.679s
+Ran 16 tests in 4.905s
 
 OK

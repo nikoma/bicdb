@@ -83,5 +83,9 @@
     "controller_io_confounds_first_attempt": "parent supplied rounded context; not recomputed by replay verifier",
     "deletion_verified_utc_and_provider_resources_remaining": "separate infrastructure evidence and verifier",
     "runtime_storage_capacity_and_vm_configuration": "recorded Host source, persisted format/environment captures and separate provider model evidence; not inferred from throughput"
-  }
+  },
+  "forensic_original_routing_extractor_error": true,
+  "corrected_copied_range_route_rows": 212,
+  "ack_keys_acknowledged_before_graceful_restart": 3258,
+  "new_ack_keys_created_after_graceful_restart": 3
 }

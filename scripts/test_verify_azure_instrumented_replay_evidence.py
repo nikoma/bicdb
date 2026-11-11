@@ -35,7 +35,7 @@ class EvidenceTests(unittest.TestCase):
 
     def test_complete_projection_and_uncertain_outcome_accounting(self):
         result=VERIFIER.verify(BUNDLE)
-        self.assertEqual(3261,result['known_ack_keys_observed_exact_after_restart'])
+        self.assertEqual(3261,result['known_ack_keys_observed_exact_after_restart']);self.assertEqual(3258,result['ack_keys_acknowledged_before_graceful_restart']);self.assertEqual(3,result['new_ack_keys_created_after_graceful_restart'])
         self.assertEqual({'exact_match':7,'absent':1},result['uncertain_write_observations'])
         self.assertFalse(result['production_qualified']);self.assertFalse(result['strong_read_proof'])
         self.assertFalse(result['four_to_five_cluster_join_executed'])

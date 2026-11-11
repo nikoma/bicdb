@@ -32945,6 +32945,9 @@
     }
   },
   "private_and_public_file_sets_modes_sizes_unchanged": true,
+  "private_catalog_checksums_verified": 4,
+  "private_command_checksums_verified": 10829,
+  "private_corrected_route_descriptors_verified": 212,
   "private_originals_canonical_comparison_passed": true,
   "private_raw_hashchain_body_linkage_canonical_projection_verified": true,
   "private_verbatim_wire_authenticity_independently_verified": false,

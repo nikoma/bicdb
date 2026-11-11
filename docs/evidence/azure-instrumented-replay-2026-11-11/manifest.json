@@ -7,28 +7,32 @@
       "sha256": "cf58bcc0365ef4003423628e1881a9279bafbb1aefa9a201f3d758fdd5fa2036"
     },
     "claims.json": {
-      "bytes": 3811,
-      "sha256": "a3835125fc7aa45155c1d21dd06e76e0cacff7a92e6f383250d8e793ba8c8fa5"
+      "bytes": 4017,
+      "sha256": "423476e10c2ff3aac8fc16890dbd99dd375384d0357555a9b634ab1fe937c77a"
     },
     "projection-tests.txt": {
       "bytes": 801,
       "sha256": "5303c399766ccb6e2942cacb65714214e69724072c5cf35f94827e92dc0960ae"
+    },
+    "correct-routing-tests.txt": {
+      "bytes": 574,
+      "sha256": "f48b2c36c9b529e361aed80699824821b86fd8dcd06694ca72a6da4fb7b0501e"
     },
     "build-artifact.json": {
       "bytes": 2698,
       "sha256": "39a03c0fbf5a52cdbe226c1d58ac117a4b2f0e0c5d6e84f38f170826c9742b54"
     },
     "private-canonical-verification.json": {
-      "bytes": 2622232,
-      "sha256": "ac6f8a464c1f31db1fe102b886febaf372f431d4fa9ba45a6b961693bc7108f4"
+      "bytes": 2622377,
+      "sha256": "39d0232cfe2552d40c4616e695d62c074df865bcd0f4343b6cfc69e7f729b93b"
     },
     "local-readiness-receipt.json": {
       "bytes": 2300,
       "sha256": "92d7923942aadbae222e29da5278c1a10e9624a944e59658c105fafe8d8dc0b4"
     },
     "verification-results.json": {
-      "bytes": 37824,
-      "sha256": "6e06b02dd4c229d778371c233d8f291a79797ccc125c9a67af8c89150f671a40"
+      "bytes": 38138,
+      "sha256": "38675378cfa276d48c7a82442e0cb696a3bfa418d2dfddf3a784cf162b36801a"
     },
     "durable-private-custody.json": {
       "bytes": 615,
@@ -43,8 +47,8 @@
       "sha256": "dd55ffc070934573c94ab88ea652510f56a2c60c1a40f74ecde96322ec23e693"
     },
     "README.md": {
-      "bytes": 15268,
-      "sha256": "0b8e9f0ed92526e358ec03967598e673afff186f5eb0997237aab01afa2be208"
+      "bytes": 16293,
+      "sha256": "27831794f6910510a4d7a9433c327fce6ec827a6626f117f249b3a6d085525fd"
     },
     "build-release-smoke.json": {
       "bytes": 578,
@@ -64,7 +68,7 @@
     },
     "verification-tests.txt": {
       "bytes": 2603,
-      "sha256": "e5b40bb85d9fa52cdd31713ad216155de86c634ab2d37a1bb7cd0908d75deb33"
+      "sha256": "10780e34fc446c32b6d69aa9965507cf7224139fb161c0e2a39e9b70b293e61f"
     },
     "first-attempt/final.json": {
       "bytes": 572,
@@ -111,12 +115,16 @@
       "sha256": "6a33686c4610a02558f1c67327823d475a5b42277f8d5ca38a5ee6d5a7aba592"
     },
     "executed/verify-evidence.py": {
-      "bytes": 23554,
-      "sha256": "9b3669cdd77c7d85b3f450726ed03d46e85d4b74308a98daeddb0cbf6aa720db"
+      "bytes": 28353,
+      "sha256": "d7bf6263b639ee8cd08291ad30ca5a17ea0ccaaedb0280e4a66844d8300b60a2"
     },
     "executed/final-inventory.executed.py": {
       "bytes": 3749,
       "sha256": "cb750b882b639f7f052c67adb8d20c543fa842816f70d3b2e3dea4194772ff52"
+    },
+    "executed/correct_range_routing.py": {
+      "bytes": 3157,
+      "sha256": "1fff70de9c506a938f39d388c028d2ea3c73d82af47bc4f184a9b4b0f916475a"
     },
     "executed/controller-resources.executed.py": {
       "bytes": 1849,
@@ -325,6 +333,10 @@
     "light-attempt/prestop-forensics/range-position-analysis.json": {
       "bytes": 12116,
       "sha256": "02f1bfd5edc66623283fc122141d3c9c883fc3df072cce2453e008a1601bbef8"
+    },
+    "light-attempt/prestop-forensics/corrected-range-routing.json": {
+      "bytes": 248988,
+      "sha256": "8a862f3db774ae707cba0390a5bb7ae62d7c9dee3bf56f434fdf20c7f2b05ae5"
     },
     "light-attempt/prestop-forensics/full-server-logs.jsonl.gz": {
       "bytes": 34289,

@@ -1,6 +1,14 @@
 {
   "projection_verification_passed": true,
+  "routing_correction": {
+    "original_null_routing_rows_preserved": 212,
+    "corrected_later_capture_routing_rows": 212,
+    "routing_is_request_time": false,
+    "engine_cause_established": false
+  },
   "known_ack_keys": 3261,
+  "ack_keys_acknowledged_before_graceful_restart": 3258,
+  "new_ack_keys_created_after_graceful_restart": 3,
   "known_ack_keys_observed_exact_after_restart": 3261,
   "uncertain_write_observations": {
     "exact_match": 7,

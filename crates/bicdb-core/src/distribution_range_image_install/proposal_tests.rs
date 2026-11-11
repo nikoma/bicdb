@@ -7,6 +7,10 @@ use std::time::Duration;
 fn actual_protected_proposal_orphan_preserves_native_point_and_reopens_without_intent() {
     let mut fixture = CurrentRepairFixture::new();
     fixture.origin.root.disable_cleanup(true);
+    eprintln!(
+        "ORPHAN_PROPOSAL_ORIGINAL_ROOT {}",
+        fixture.origin.root.path().display()
+    );
     let target = crate::distribution::ClusterNodeId::new("n1").unwrap();
     let db = Arc::clone(&fixture.origin.databases[&target]);
     let before = db
@@ -63,6 +67,7 @@ fn actual_protected_proposal_orphan_preserves_native_point_and_reopens_without_i
         .unwrap()
         .unwrap();
     let pointer = proposal.pointer();
+    let expected_schema = proposal.historical_source().schema_sha256.clone();
     assert_eq!(
         proposal
             .preimage()
@@ -114,6 +119,7 @@ fn actual_protected_proposal_orphan_preserves_native_point_and_reopens_without_i
     assert!(weak.iter().all(|db| db.upgrade().is_none()));
     let mut copy = crate::db::ActualNativeRf3Fixture::copy_stopped_recovery_tree(&root).unwrap();
     copy.disable_cleanup(true);
+    eprintln!("ORPHAN_PROPOSAL_COPIED_ROOT {}", copy.path().display());
     let path = copy.path().join(target.as_str());
     let (reopened, _) = BicDb::open_range_image_database(
         &path,
@@ -132,6 +138,12 @@ fn actual_protected_proposal_orphan_preserves_native_point_and_reopens_without_i
             spec.member_incarnation,
         )
         .unwrap();
+    // Observe the REAL reopened schema and compare the original actual
+    // producer's protected contract before asking for a verified lineage.
+    assert_eq!(
+        reopened.schema_compatibility_fingerprint().unwrap().sha256,
+        expected_schema
+    );
     let actual = reopened.current_native_range_source_lineage(range).unwrap();
     assert_eq!(actual.range_index(), 0);
     assert_eq!(actual.logical_history_sha256(), before_h);

@@ -277,11 +277,30 @@ pub(super) fn finish_actual_current_image_resume(
     assert_eq!(ready.reply().range_index, 2);
     assert_eq!(ready.reply().local_visibility_sequence, target_b);
     assert!(db.read().range_mutation_gate().try_enter(range.id).is_err());
+    let final_catalogue: serde_json::Value = serde_json::from_slice(
+        &std::fs::read(db.read().data_path().join("cluster-range-write-log.json")).unwrap(),
+    )
+    .unwrap();
+    let range_key = range.id.get().to_string();
+    assert!(final_catalogue["catalog"]["image_install_intents"]
+        .get(&range_key)
+        .is_none());
+    assert_eq!(
+        final_catalogue["catalog"]["native_image_bases"][&range_key]["range_index"],
+        2
+    );
+    assert_eq!(
+        final_catalogue["catalog"]["recovery_fences"][&range_key]["phase"]["NativePrepared"]
+            ["range_index"],
+        2
+    );
     serde_json::json!({"result":"ACTUAL_NATIVE_PREPARED_READY_RECOVERED","target_range_index":2,
         "target_actual_local_visibility":target_b,"logical_history_sha256":expected_h,"target_uid":target_uid,
         "installing_native_observation_honest":observed_native,"protected_parent":proposal,
         "new_attempt":attempt,"distinct_current_voters":2,"duplicate_actual_reply_rejected":true,
         "acknowledged_values_reconciled_on_target":1,"unknown2_resolved_but_not_new_ack":true,
         "fresh_mixed_qq_and_full_history":true,"ordinary_no_image_relaxed":false,
+        "final_snapshot_phase":"NATIVE_PREPARED_READY_STILL_FROZEN",
+        "final_exact_image_intent_removed":true,"final_native_base_published":true,
         "activation_proven":false,"new_application_ack_tested":false,"physical_qualification":false,"strong_get_tested":false})
 }

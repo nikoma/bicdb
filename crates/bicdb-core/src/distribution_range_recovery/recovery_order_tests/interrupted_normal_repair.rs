@@ -684,6 +684,7 @@ fn exercise_interrupted_normal_image(stop: ImageStop, resume: bool) {
     };
     let mut report = serde_json::json!({
         "characterization_test_passed":true,"recovery_scenario":recovery_scenario,
+        "outer_snapshot_phase":"COLD_BEFORE_EXPLICIT_RESUME",
         "stop":format!("{stop:?}"),"purpose_specific_resume":resumed,"ordinary_path_still_refuses":true,
         "evidence_kind":"actual_in_process_protocol_storage_and_strict_copied_reopen",
         "original_root":original_root,"copied_root":cold.root.path(),"source_actual_native":2,

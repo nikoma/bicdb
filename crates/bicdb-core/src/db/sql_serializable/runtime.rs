@@ -2,7 +2,7 @@ use super::{
     Dependencies, KeyRange, PendingCommit, ReadKeys, ReadScope, SnapshotSafety, WriteFootprint,
 };
 use crate::db::{
-    BicDb, BicDbError, IndexDefinition, IndexKind, IndexRecordMutation, IndexValue, Result,
+    BicDb, BicDbError, IndexDefinition, IndexKind, IndexRecordMutation, IndexValue, Result, RowId,
     Transaction,
 };
 use crate::CancellationToken;
@@ -333,6 +333,77 @@ impl Transaction {
         self.observe_postgres_index(name, || {
             KeyRange::Prefix(crate::db::encode_index_key(prefix))
         })
+    }
+
+    /// Reintroduce fixed-snapshot keys removed from a live index. The caller
+    /// probes the live index first, so a later key can only have disappeared
+    /// after its replacement version entered the MVCC chain.
+    pub fn postgres_snapshot_index_prefix_additions(
+        &self,
+        name: &str,
+        prefix: &[IndexValue],
+        cancellation: &CancellationToken,
+    ) -> Result<Vec<(String, RowId)>> {
+        if self.postgres_serializable.is_none() {
+            return Ok(Vec::new());
+        }
+        let db = self.db_ref();
+        if db.commit_seq.load(std::sync::atomic::Ordering::Acquire) <= self.snapshot_tx.0 {
+            return Ok(Vec::new());
+        }
+        let index = db
+            .indexes
+            .get(name)
+            .ok_or_else(|| BicDbError::Index(format!("index {name} not found")))?
+            .read()
+            .definition
+            .clone();
+        let collection = &index.collection;
+        self.bind_collection_incarnation(collection)?;
+        let changed = {
+            let state = db.collection_state(collection)?;
+            let mut changed = Vec::new();
+            for shard in state.read_all() {
+                for (position, (rowid, versions)) in shard.versions.iter().enumerate() {
+                    if position % 1024 == 0 {
+                        cancellation.check()?;
+                    }
+                    if versions.iter().any(|version| {
+                        version.created_tx.0 > self.snapshot_tx.0
+                            || version
+                                .deleted_tx
+                                .is_some_and(|end| end.0 > self.snapshot_tx.0)
+                    }) {
+                        if let Some(version) =
+                            crate::db::visible_version(versions, self.snapshot_tx)
+                        {
+                            changed.push((version.record.id.clone(), *rowid));
+                        }
+                    }
+                }
+            }
+            changed
+        };
+        let mut additions = Vec::new();
+        for (id, rowid) in changed {
+            cancellation.check()?;
+            let (record, _, _) =
+                crate::db::record_read_snapshot::read_record_at_snapshot_unchecked(
+                    db,
+                    collection,
+                    &id,
+                    self.snapshot_tx,
+                    &self.paged_snapshot,
+                )?;
+            if let Some(record) = record {
+                if crate::db::record_matches_index_predicate(&record, &index)?
+                    && index.key_for_record(&record).starts_with(prefix)
+                {
+                    additions.push((id, rowid));
+                }
+            }
+        }
+        Ok(additions)
     }
 
     /// The index scans use inclusive first-field bounds inside the prefix.

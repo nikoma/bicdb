@@ -717,7 +717,20 @@ impl<'db> SqlEngine<'db> {
         }
         #[cfg(test)]
         SQL_INDEX_STORAGE_LOOKUP_CALLS.with(|calls| *calls.borrow_mut() += 1);
-        let rowids: Rc<[RowId]> = Rc::from(self.db_ref().lookup_index_rowids(index_name, prefix)?);
+        let mut rowids = self.db_ref().lookup_index_rowids(index_name, prefix)?;
+        if let Some(tx) = self.tx {
+            let added = tx.postgres_snapshot_index_prefix_additions(
+                index_name,
+                prefix,
+                &self.cancellation,
+            )?;
+            if !added.is_empty() {
+                rowids.extend(added.into_iter().map(|(_, rowid)| rowid));
+                rowids.sort_unstable();
+                rowids.dedup();
+            }
+        }
+        let rowids: Rc<[RowId]> = Rc::from(rowids);
         self.rowid_index_lookup_cache
             .borrow_mut()
             .entry(index_name.to_string())
@@ -745,7 +758,20 @@ impl<'db> SqlEngine<'db> {
         }
         #[cfg(test)]
         SQL_INDEX_STORAGE_LOOKUP_CALLS.with(|calls| *calls.borrow_mut() += 1);
-        let ids: Rc<[String]> = Rc::from(self.db_ref().lookup_index(index_name, prefix)?);
+        let mut ids = self.db_ref().lookup_index(index_name, prefix)?;
+        if let Some(tx) = self.tx {
+            let added = tx.postgres_snapshot_index_prefix_additions(
+                index_name,
+                prefix,
+                &self.cancellation,
+            )?;
+            if !added.is_empty() {
+                ids.extend(added.into_iter().map(|(id, _)| id));
+                ids.sort_unstable();
+                ids.dedup();
+            }
+        }
+        let ids: Rc<[String]> = Rc::from(ids);
         self.index_lookup_cache
             .borrow_mut()
             .entry(index_name.to_string())

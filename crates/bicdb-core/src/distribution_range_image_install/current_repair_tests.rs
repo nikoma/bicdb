@@ -998,3 +998,362 @@ fn actual_adopted_image_compacted_marker_conflict_refuses_native_preparation() {
         .is_err());
     eprintln!("RF3_IMAGE_MARKER_CORRUPTION_REFUSAL {error}");
 }
+
+impl CurrentRepairFixture {
+    fn prepare_actual_current_image(
+        &mut self,
+        attempt: Uuid,
+    ) -> crate::distribution_range_consensus::PreparedNativeRecoveryReady {
+        let install = self.begin(attempt);
+        let verified = self.materialize(install);
+        let role = self.role();
+        let adopted = self
+            .service
+            .lock()
+            .adopt_native_range_image_catalogue(
+                verified,
+                &NativeImageInstallRole::CurrentVoterRepair(&role),
+                &CancellationToken::uncancelable(),
+            )
+            .unwrap();
+        let role = self.role();
+        let (freeze, finalization) = self
+            .service
+            .lock()
+            .finalize_native_range_image_catalogue(
+                adopted,
+                &NativeImageInstallRole::CurrentVoterRepair(&role),
+                &CancellationToken::uncancelable(),
+            )
+            .unwrap();
+        let NativeImageInstallFreeze::Recovery(lease) = freeze else {
+            panic!("actual Runtime lease required");
+        };
+        let role = self.role();
+        let image = lease
+            .return_after_catalogue_adoption(
+                finalization,
+                &NativeImageInstallRole::CurrentVoterRepair(&role),
+                &CancellationToken::uncancelable(),
+            )
+            .unwrap();
+        let frozen = self.runtimes[&node("n1")]
+            .source_capture_freeze(&self.scope)
+            .unwrap();
+        let role = self.role();
+        self.service
+            .lock()
+            .prepare_finalized_native_recovery_image(
+                image,
+                role,
+                frozen,
+                &CancellationToken::uncancelable(),
+            )
+            .unwrap()
+    }
+
+    fn recapture_actual_source_under_new_nonce(&mut self, nonce: Uuid) {
+        let parent = CancellationToken::uncancelable();
+        let role = Self::fresh_role_for(
+            &self.providers,
+            &self.initiator,
+            &node("n0"),
+            &self.range,
+            nonce,
+        );
+        let mut round = RecoveryFenceQuorumRound::begin(role, &parent).unwrap();
+        let scope = round.scope().clone();
+        assert_ne!(scope.recovery_nonce, self.scope.recovery_nonce);
+        assert_eq!(scope.range_epoch, self.scope.range_epoch);
+        for id in [node("n0"), node("n1"), node("n2")] {
+            let observed = self.runtimes[&id]
+                .fence_epoch(
+                    &self.initiator,
+                    &RecoveryEpochFenceRequest {
+                        scope: scope.clone(),
+                        budget_ms: 5000,
+                    },
+                    &parent,
+                )
+                .unwrap();
+            if id != node("n2") {
+                round.record(observed).unwrap();
+            }
+        }
+        let authority = Arc::new(round.finish().unwrap());
+        let frozen = self.runtimes[&node("n0")]
+            .source_capture_freeze(&scope)
+            .unwrap();
+        let source_service = &self.origin.services[&node("n0")];
+        let ready = source_service
+            .lock()
+            .attest_native_recovery_ready(
+                Self::fresh_role_for(
+                    &self.providers,
+                    &self.initiator,
+                    &node("n0"),
+                    &self.range,
+                    nonce,
+                ),
+                Arc::clone(&frozen),
+                &parent,
+            )
+            .unwrap();
+        assert_eq!(ready.range_index(), 1);
+        let mut history = source_service
+            .lock()
+            .begin_native_recovery_source_history(authority, &ready, node("n1"))
+            .unwrap();
+        let mut done = false;
+        for _ in 0..16 {
+            if source_service
+                .lock()
+                .advance_native_recovery_source_history(&mut history, &ready, &parent)
+                .unwrap()
+            {
+                done = true;
+                break;
+            }
+        }
+        assert!(done);
+        let cut = source_service
+            .lock()
+            .finish_native_recovery_source_history(history, &ready)
+            .unwrap();
+        let source = Arc::clone(&self.origin.databases[&node("n0")]);
+        let lineage = source
+            .read()
+            .current_native_range_source_lineage(self.range.id)
+            .unwrap();
+        drop(ready);
+        self.capture = Some(
+            RangeImageCapture::begin(
+                source,
+                cut,
+                frozen,
+                lineage,
+                Duration::from_secs(30),
+                &parent,
+            )
+            .unwrap(),
+        );
+        self.scope = scope;
+    }
+}
+
+#[test]
+fn actual_prepared_serving_record_survives_a_second_current_voter_image_attempt() {
+    use crate::distribution_range_recovery::{
+        ClosedNativeReadyQuorumRound, NativeReadyObservation, NativeReadyRequest,
+    };
+    let mut fixture = CurrentRepairFixture::new();
+    let target = Arc::clone(&fixture.origin.databases[&node("n1")]);
+    let attempt_a = Uuid::now_v7();
+    let target_prepared = fixture.prepare_actual_current_image(attempt_a);
+    let source_frozen = fixture.runtimes[&node("n0")]
+        .source_capture_freeze(&fixture.scope)
+        .unwrap();
+    let source_role = CurrentRepairFixture::fresh_role_for(
+        &fixture.providers,
+        &fixture.initiator,
+        &node("n0"),
+        &fixture.range,
+        fixture.scope.recovery_nonce,
+    );
+    let source_prepared = fixture.origin.services[&node("n0")]
+        .lock()
+        .test_prepare_existing_native_source(
+            source_role,
+            Arc::clone(&source_frozen),
+            &CancellationToken::uncancelable(),
+        )
+        .unwrap();
+    assert_eq!(source_prepared.range_index(), 1);
+    assert_eq!(
+        source_prepared.logical_history_sha256(),
+        target_prepared.logical_history_sha256()
+    );
+    let fresh = CurrentRepairFixture::fresh_role_for(
+        &fixture.providers,
+        &fixture.initiator,
+        &node("n0"),
+        &fixture.range,
+        fixture.scope.recovery_nonce,
+    );
+    let request = NativeReadyRequest {
+        scope: RecoveryFenceScope::from_role(&fresh).unwrap(),
+        challenge: Uuid::now_v7(),
+        budget_ms: 5000,
+    };
+    let mut round =
+        ClosedNativeReadyQuorumRound::begin(fresh, &CancellationToken::uncancelable()).unwrap();
+    for (id, prepared) in [
+        (node("n0"), &source_prepared),
+        (node("n1"), &target_prepared),
+    ] {
+        let role = CurrentRepairFixture::fresh_role_for(
+            &fixture.providers,
+            &fixture.initiator,
+            &id,
+            &fixture.range,
+            fixture.scope.recovery_nonce,
+        );
+        let actual = fixture.origin.services[&id]
+            .lock()
+            .test_project_actual_prepared_native(prepared, &role, &request)
+            .unwrap();
+        let observation = NativeReadyObservation::from_local(
+            actual,
+            fixture.providers[&id].local_participant(),
+            &request,
+            role.deadline(),
+        )
+        .unwrap();
+        round.record(observation).unwrap();
+    }
+    let closed = round.finish().unwrap();
+    assert_eq!(closed.range_index(), 1);
+    let fresh = fixture.role();
+    let serving = fixture
+        .service
+        .lock()
+        .test_persist_actual_prepared_serving(&target_prepared, &closed, &fresh)
+        .unwrap();
+    serving.require_current(&target.read()).unwrap();
+    let serving_a = target
+        .read()
+        .test_native_serving_record_json(fixture.range.id)
+        .unwrap()
+        .unwrap();
+    assert_eq!(serving_a["checksum_sha256"], serving.checksum_sha256());
+    assert_eq!(serving_a["activation_index"], 1);
+    assert_eq!(serving_a["range"]["epoch"], fixture.range.epoch);
+    let native_a = target_prepared.native_receipt_sha256().to_string();
+    let history = target_prepared.logical_history_sha256().to_string();
+    let target_uid = fixture.original_target_uid;
+    // The first record is genuine durable native Serving metadata while the
+    // catalogue is STILL NativePrepared/fenced. No activation or post-recovery
+    // ACK is invented. End every old pin before a new actual recovery nonce.
+    drop(serving);
+    drop(closed);
+    drop(source_prepared);
+    drop(target_prepared);
+    drop(source_frozen);
+    let old_nonce = fixture.scope.recovery_nonce;
+    fixture.recapture_actual_source_under_new_nonce(Uuid::now_v7());
+    assert_ne!(fixture.scope.recovery_nonce, old_nonce);
+    assert_eq!(
+        target
+            .read()
+            .test_native_serving_record_json(fixture.range.id)
+            .unwrap()
+            .unwrap(),
+        serving_a
+    );
+    let attempt_b = Uuid::now_v7();
+    // On a baseline failure retain the actual stopped native/catalogue roots
+    // after unwinding. On success remove them explicitly. This is local test
+    // custody, not a crash/power-loss or physical qualification claim.
+    let retained = std::mem::replace(&mut fixture.origin.root, tempfile::tempdir().unwrap()).keep();
+    let before: serde_json::Value = serde_json::from_slice(
+        &std::fs::read(target.read().data_path().join(DEFAULT_RANGE_WRITE_LOG)).unwrap(),
+    )
+    .unwrap();
+    let stage = serde_json::json!({"scope":"ACTUAL_LOCAL_INTERRUPTED_COMPLETION_THEN_SECOND_REPAIR","attempt_a":attempt_a,"attempt_b":attempt_b,"old_nonce":old_nonce,"new_scope":fixture.scope,"serving_a":serving_a,"native_receipt_a":native_a,"logical_history_sha256":history,"target_uid":target_uid,"catalogue_before_b":before,"physical_qualification":false});
+    {
+        use std::io::Write;
+        let mut file =
+            std::fs::File::create(retained.join("serving-image-witness-before-b.json")).unwrap();
+        file.write_all(&serde_json::to_vec_pretty(&stage).unwrap())
+            .unwrap();
+        file.sync_all().unwrap();
+        std::fs::File::open(&retained).unwrap().sync_all().unwrap();
+    }
+    eprintln!(
+        "ACTUAL_SERVING_IMAGE_WITNESS_RETAINED_ROOT {}",
+        retained.display()
+    );
+    let install = fixture.begin(attempt_b);
+    let verified = fixture.materialize(install);
+    assert_eq!(verified.base().range_index(), 1);
+    assert_eq!(verified.base().logical_history_sha256(), history);
+    assert_ne!(verified.base().native_receipt_sha256(), native_a);
+    assert_eq!(
+        target
+            .read()
+            .test_native_serving_record_json(fixture.range.id)
+            .unwrap()
+            .unwrap(),
+        serving_a
+    );
+    let role = fixture.role();
+    let adopted = fixture
+        .service
+        .lock()
+        .adopt_native_range_image_catalogue(
+            verified,
+            &NativeImageInstallRole::CurrentVoterRepair(&role),
+            &CancellationToken::uncancelable(),
+        )
+        .unwrap();
+    let role = fixture.role();
+    let (freeze, finalization) = fixture
+        .service
+        .lock()
+        .finalize_native_range_image_catalogue(
+            adopted,
+            &NativeImageInstallRole::CurrentVoterRepair(&role),
+            &CancellationToken::uncancelable(),
+        )
+        .unwrap();
+    let NativeImageInstallFreeze::Recovery(lease) = freeze else {
+        panic!("actual Runtime lease required")
+    };
+    let role = fixture.role();
+    let image = lease
+        .return_after_catalogue_adoption(
+            finalization,
+            &NativeImageInstallRole::CurrentVoterRepair(&role),
+            &CancellationToken::uncancelable(),
+        )
+        .unwrap();
+    let frozen = fixture.runtimes[&node("n1")]
+        .source_capture_freeze(&fixture.scope)
+        .unwrap();
+    let role = fixture.role();
+    let second = fixture
+        .service
+        .lock()
+        .prepare_finalized_native_recovery_image(
+            image,
+            role,
+            frozen,
+            &CancellationToken::uncancelable(),
+        );
+    let after: serde_json::Value = serde_json::from_slice(
+        &std::fs::read(target.read().data_path().join(DEFAULT_RANGE_WRITE_LOG)).unwrap(),
+    )
+    .unwrap();
+    std::fs::write(retained.join("serving-image-witness-after-b.json"),serde_json::to_vec_pretty(&serde_json::json!({"catalogue":after,"serving_record":target.read().test_native_serving_record_json(fixture.range.id).unwrap(),"result":second.as_ref().map(|prepared|prepared.range_index()).map_err(|error|error.to_string())})).unwrap()).unwrap();
+    assert!(second.is_ok(),"a new actual compatible image must prepare without deleting the prior durable serving epoch fence: {:?}",second.as_ref().err());
+    let prepared = second.unwrap();
+    assert_eq!(prepared.range_index(), 1);
+    assert_eq!(prepared.logical_history_sha256(), history);
+    assert_eq!(
+        target.read().local_namespace_identity("items").unwrap(),
+        Some(target_uid)
+    );
+    let retained_serving = target
+        .read()
+        .test_native_serving_record_json(fixture.range.id)
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        retained_serving, serving_a,
+        "physical repair may not delete/relabel the historical epoch fence"
+    );
+    drop(prepared);
+    drop(target);
+    drop(fixture);
+    std::fs::remove_dir_all(retained).unwrap();
+}

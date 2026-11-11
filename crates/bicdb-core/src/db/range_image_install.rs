@@ -554,6 +554,16 @@ impl NativeInstalledRangeImageBase {
 }
 
 impl BicDb {
+    #[cfg(test)]
+    pub(crate) fn test_native_serving_record_json(
+        &self,
+        range_id: RangeId,
+    ) -> Result<Option<serde_json::Value>> {
+        // Read-only forensic view. JSON cannot construct serving authority and
+        // this test method never writes/deletes/relabels the reserved record.
+        self.read_native_range_image_record(&format!("serving-configuration/{range_id}"))
+    }
+
     /// Actual install-phase records, under the native journal and the owned
     /// quiescent range freeze. This is a read-only commitment, not readiness.
     pub(crate) fn native_image_install_phase_commitment(

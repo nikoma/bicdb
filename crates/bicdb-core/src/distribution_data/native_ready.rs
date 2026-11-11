@@ -49,6 +49,7 @@ impl ClusterDataNodeService {
             Ok(
                 crate::distribution_range_recovery::RecoveryFenceObservationPhase::NativePrepared,
             )
+            | Ok(crate::distribution_range_recovery::RecoveryFenceObservationPhase::NativeCompletedFrozen)
             | Err(_) => {
                 // This exact re-fsync path validates the existing Prepared
                 // phase, native birth/open and fresh scope. Errors are never
@@ -58,7 +59,7 @@ impl ClusterDataNodeService {
             }
             _ => {
                 return Err(data_error(
-                    "completed recovery cannot be prepared through an old session",
+                    "activated recovery cannot be prepared through an old session",
                 ))
             }
         }
@@ -105,6 +106,10 @@ impl ClusterDataNodeService {
         )?;
         self.range_writes
             .refsync_native_prepared_refusal(&db, &native, role, frozen, parent)?;
+        if self.range_writes.recovery_observation_phase(&request.scope)?
+            == crate::distribution_range_recovery::RecoveryFenceObservationPhase::NativeCompletedFrozen {
+            prepared.refresh_after_durable_native_completion(&db,&self.range_writes,role)?;
+        }
         let evidence = self
             .range_writes
             .observe_prepared_native_for_role(&db, prepared, role, request)?;

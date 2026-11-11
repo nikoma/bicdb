@@ -2,6 +2,7 @@
 //! Entries are immutable in one LOCAL generation; only actual native commit
 //! producers may append them. DTOs/hash equality alone grant no authority.
 use super::*;
+use crate::distribution_range_mutation::SourceCaptureReadPin;
 
 pub(super) const HISTORY_FORMAT: u32 = 1;
 const ZERO_SHA256: &str = "0000000000000000000000000000000000000000000000000000000000000000";
@@ -240,6 +241,27 @@ impl BicDb {
         max_entries: usize,
         cancellation: &CancellationToken,
     ) -> Result<NativeLogicalHistoryStepV1> {
+        let pin = self
+            .range_mutations
+            .try_source_capture_read_pin(lineage.base_range().id, frozen)?;
+        self.export_native_logical_history_step_with_source_pin(
+            lineage,
+            frozen,
+            &pin,
+            first_index,
+            max_entries,
+            cancellation,
+        )
+    }
+    pub(crate) fn export_native_logical_history_step_with_source_pin(
+        &self,
+        lineage: &SourceRangeImageLineage,
+        frozen: &FrozenRangeMutationPermit,
+        pin: &SourceCaptureReadPin,
+        first_index: u64,
+        max_entries: usize,
+        cancellation: &CancellationToken,
+    ) -> Result<NativeLogicalHistoryStepV1> {
         if !(1..=MAX_HISTORY_STEP_ENTRIES).contains(&max_entries)
             || first_index > lineage.range_index()
         {
@@ -248,8 +270,9 @@ impl BicDb {
             ));
         }
         let range_id = lineage.base_range().id;
+        self.range_mutations.validate_frozen(range_id, frozen)?;
         self.range_mutations
-            .validate_quiescent_frozen(range_id, frozen)?;
+            .validate_source_capture_read_pin(range_id, pin)?;
         self.validate_source_range_image_lineage(lineage, range_id, lineage.range_index())?;
         let mut entries = Vec::with_capacity(max_entries);
         let mut index = first_index;
@@ -295,8 +318,9 @@ impl BicDb {
         if entries.is_empty() {
             return Err(invalid("native history export made no bounded progress"));
         }
+        self.range_mutations.validate_frozen(range_id, frozen)?;
         self.range_mutations
-            .validate_quiescent_frozen(range_id, frozen)?;
+            .validate_source_capture_read_pin(range_id, pin)?;
         self.validate_source_range_image_lineage(lineage, range_id, lineage.range_index())?;
         let step = NativeLogicalHistoryStepV1 {
             format_version: HISTORY_FORMAT,

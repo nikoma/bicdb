@@ -47,6 +47,8 @@ mod image_install_fence;
 pub(crate) use image_install_fence::{NativeImageInstallRole, TargetImageInstallFence};
 
 mod native_prefix;
+#[cfg(test)]
+pub(crate) use native_prefix::tests::seed_actual_origin;
 pub(crate) use native_prefix::{NativeRangeCommandIntent, NativeRangeCommitCertificate};
 
 pub const RANGE_WRITE_LOG_FORMAT_VERSION: u32 = 3;

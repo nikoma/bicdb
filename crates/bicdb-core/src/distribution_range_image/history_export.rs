@@ -74,9 +74,10 @@ impl RangeImageCapture {
             .get()
             .checked_add(1)
             .ok_or_else(|| invalid("history entry count overflow"))?;
-        let history = database.export_native_logical_history_step(
+        let history = database.export_native_logical_history_step_with_source_pin(
             &self.lineage,
             &self.frozen,
+            &self.source_read_pin,
             expected.next_index,
             max_entries,
             cancellation,

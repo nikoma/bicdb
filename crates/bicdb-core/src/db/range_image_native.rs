@@ -11,10 +11,15 @@ use crate::distribution_range_mutation::FrozenRangeMutationPermit;
 
 mod certified_prefix;
 mod history;
+mod history_stage;
 use certified_prefix::NativeCertifiedRangePrefix;
 pub(crate) use history::{
     NativeLogicalHistoryEntryV1, NativeLogicalHistoryOutcomeV1, NativeLogicalHistoryPoint,
     NativeLogicalHistoryStepV1,
+};
+pub(crate) use history_stage::{
+    NativeHistoryStage, NativeHistoryStageProgress, NativeHistoryTargetContext,
+    StagedNativeHistoryProof,
 };
 
 #[cfg(test)]
@@ -36,6 +41,21 @@ const FACTORY_PREFLIGHT: &str = "range-image-factory.json";
 pub(super) const MAX_NATIVE_RECEIPT_BYTES: usize = 8 * 1024 * 1024;
 const MAX_GENESIS_RANGES: usize = 65_536;
 const MAX_WAIT: Duration = Duration::from_secs(300);
+
+/// Native journal serialization bound to the actual current DB open. It is
+/// not a mutation, quorum or source-lineage authority.
+struct NativeImageJournalGuard<'a> {
+    database_incarnation: &'a str,
+    _guard: parking_lot::MutexGuard<'a, ()>,
+}
+impl NativeImageJournalGuard<'_> {
+    fn require_database(&self, database: &BicDb) -> Result<()> {
+        if self.database_incarnation != database.incarnation {
+            return Err(invalid("native journal belongs to another DB open"));
+        }
+        Ok(())
+    }
+}
 
 fn invalid(detail: impl Into<String>) -> BicDbError {
     BicDbError::Cluster(format!("native range image: {}", detail.into()))
@@ -446,6 +466,15 @@ fn genesis_key(range_id: RangeId) -> String {
 }
 
 impl BicDb {
+    fn try_native_image_journal(&self) -> Result<NativeImageJournalGuard<'_>> {
+        Ok(NativeImageJournalGuard {
+            database_incarnation: &self.incarnation,
+            _guard: self
+                .native_range_image_journal
+                .try_lock()
+                .ok_or_else(|| invalid("native image journal busy"))?,
+        })
+    }
     #[cfg(test)]
     pub(crate) fn test_reject_next_native_after_admission() {
         TEST_REJECT_NATIVE_AFTER_ADMISSION.with(|reject| reject.set(true));
@@ -762,12 +791,6 @@ impl BicDb {
         let Some(birth) = self.read_native_birth()? else {
             return Ok(());
         };
-        if self
-            .read_native_range_image_record::<NativeInitializationComplete>(READY_KEY)?
-            .is_none()
-        {
-            return Ok(()); // unpublished factory genesis is still closed
-        }
         if reason.len() > 256 {
             return Err(invalid("invalidation reason bound exceeded"));
         }
@@ -1017,7 +1040,7 @@ impl BicDb {
             return Err(invalid("invalid genesis wait budget"));
         }
         let cancellation = cancellation.child_with_deadline(Instant::now() + budget);
-        let (reserved, bindings) = {
+        let (reserved, bindings, source_pin) = {
             let database = db
                 .try_read()
                 .ok_or_else(|| invalid("database busy; retry genesis outside locks"))?;
@@ -1060,6 +1083,9 @@ impl BicDb {
             (
                 database.current_commit_seq(),
                 database.capture_range_image_bindings()?,
+                database
+                    .range_mutations
+                    .try_source_capture_read_pin(range.id, frozen)?,
             )
         };
         loop {
@@ -1069,6 +1095,9 @@ impl BicDb {
                     .try_read()
                     .ok_or_else(|| invalid("database busy; retry genesis outside locks"))?;
                 database.range_mutations.validate_frozen(range.id, frozen)?;
+                database
+                    .range_mutations
+                    .validate_source_capture_read_pin(range.id, &source_pin)?;
                 database.validate_range_image_bindings(&bindings)?;
                 database.replication_shippable_seq() >= reserved
             };
@@ -1086,6 +1115,9 @@ impl BicDb {
                     .try_read()
                     .ok_or_else(|| invalid("database busy during genesis scan"))?;
                 database.range_mutations.validate_frozen(range.id, frozen)?;
+                database
+                    .range_mutations
+                    .validate_source_capture_read_pin(range.id, &source_pin)?;
                 database.validate_range_image_bindings(&bindings)?;
                 let exported = database.for_each_range_snapshot_batch_with_cancellation(
                     &meta.name,
@@ -1116,9 +1148,12 @@ impl BicDb {
             }
         }
         let database = db
-            .try_read()
+            .try_write()
             .ok_or_else(|| invalid("database busy before native genesis receipt"))?;
         database.range_mutations.validate_frozen(range.id, frozen)?;
+        database
+            .range_mutations
+            .validate_source_capture_read_pin(range.id, &source_pin)?;
         database.validate_range_image_bindings(&bindings)?;
         cancellation.check()?;
         let key = genesis_key(range.id);
@@ -1151,6 +1186,17 @@ impl BicDb {
             checksum_sha256: String::new(),
         };
         receipt.logical_genesis_sha256 = history::logical_genesis_hash(&authority.birth, &receipt)?;
+        // Frozen is read-only. This actual unpublished factory producer owns
+        // a counted native writer until BOTH receipt and initialization marker
+        // have finished their real native page-WAL commits.
+        // The exclusive DB guard bridges pin release to writer admission:
+        // no controlled writer can alter the scanned image in that gap.
+        drop(source_pin);
+        let controlled = database.range_mutations.try_controlled_mutation(frozen)?;
+        database.range_mutations.validate(
+            range.id,
+            &crate::distribution_range_mutation::RangeMutationAuthority::Controlled(&controlled),
+        )?;
         // The page commit orders/syncs the earlier prefix; this is not a claim
         // that separate catalog/record transactions became one atomic txn.
         database
@@ -1175,6 +1221,10 @@ impl BicDb {
             })?
             .ok_or_else(|| invalid("genesis receipt has no native WAL transaction"))?;
         database.finish_native_genesis_initialization(&authority.birth)?;
+        drop(controlled);
+        database
+            .range_mutations
+            .validate_quiescent_frozen(range.id, frozen)?;
         let lineage = SourceRangeImageLineage {
             birth: authority.birth.clone(),
             receipt,

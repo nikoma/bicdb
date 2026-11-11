@@ -526,7 +526,7 @@ fn validate_step(
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use crate::db::{RangeImageBirthMember, RangeImageBirthSpec};
     use crate::distribution::*;
@@ -545,17 +545,28 @@ mod tests {
             .with_storage_mode(StorageMode::ServerPaged)
             .with_paged_buffer_pool_bytes(8 * 1024 * 1024)
     }
-    struct Fixture {
-        root: tempfile::TempDir,
-        topology: ClusterTopology,
-        source: Arc<RwLock<BicDb>>,
-        target: Option<Arc<RwLock<BicDb>>>,
-        target_spec: RangeImageBirthSpec,
-        source_spec: RangeImageBirthSpec,
-        capture: Option<RangeImageCapture>,
+    pub(crate) struct Fixture {
+        pub(crate) root: tempfile::TempDir,
+        pub(crate) topology: ClusterTopology,
+        pub(crate) source: Arc<RwLock<BicDb>>,
+        pub(crate) target: Option<Arc<RwLock<BicDb>>>,
+        pub(crate) target_spec: RangeImageBirthSpec,
+        pub(crate) source_spec: RangeImageBirthSpec,
+        pub(crate) capture: Option<RangeImageCapture>,
     }
     impl Fixture {
-        fn new() -> Self {
+        pub(crate) fn new() -> Self {
+            Self::new_with_ranges_and_before_handoff(1, |_, _, _, _| {})
+        }
+        pub(crate) fn new_with_ranges_and_before_handoff(
+            range_count: u32,
+            before_handoff: impl FnOnce(
+                &Arc<RwLock<BicDb>>,
+                &ClusterTopology,
+                &RangeImageBirthSpec,
+                &std::path::Path,
+            ),
+        ) -> Self {
             let root = tempfile::tempdir().unwrap();
             let mut metadata = DistributionStore::initialize_at(
                 root.path().join("topology"),
@@ -564,7 +575,7 @@ mod tests {
                     cluster_id: ClusterId::new("actual-native-r0-install-test").unwrap(),
                     node_id: node("n1"),
                     node_address: "127.0.0.1:10001".into(),
-                    initial_ranges: 1,
+                    initial_ranges: range_count,
                     replication_factor: 1,
                     ..Default::default()
                 },
@@ -582,7 +593,13 @@ mod tests {
                     )
                     .unwrap();
             }
-            let original = metadata.topology().ranges.values().next().unwrap().clone();
+            let original_topology = metadata.topology().clone();
+            let originals = original_topology
+                .ranges
+                .values()
+                .cloned()
+                .collect::<Vec<_>>();
+            let original = originals[0].clone();
             metadata
                 .apply_rebalance_plan(
                     &RebalancePlan {
@@ -632,7 +649,7 @@ mod tests {
                 restore_activation: None,
                 initial_ranges,
             };
-            let source_spec = spec("n1", vec![original.clone()]);
+            let source_spec = spec("n1", originals.clone());
             let (mut source, _) = BicDb::create_new_range_image_database(
                 &root.path().join("source"),
                 config(),
@@ -676,21 +693,28 @@ mod tests {
                     .insert(SCHEMA_COMPATIBILITY_NODE_LABEL.into(), schema.clone());
             }
             let source = Arc::new(RwLock::new(source));
-            let frozen = source
-                .read()
-                .range_mutation_gate()
-                .try_freeze(original.id, Uuid::now_v7())
+            for initial_range in &originals {
+                let frozen = source
+                    .read()
+                    .range_mutation_gate()
+                    .try_freeze(initial_range.id, Uuid::now_v7())
+                    .unwrap();
+                BicDb::initialize_range_image_genesis(
+                    &source,
+                    &genesis,
+                    initial_range,
+                    &frozen,
+                    Duration::from_secs(3),
+                    &CancellationToken::uncancelable(),
+                )
                 .unwrap();
-            BicDb::initialize_range_image_genesis(
-                &source,
-                &genesis,
-                &original,
-                &frozen,
-                Duration::from_secs(3),
-                &CancellationToken::uncancelable(),
-            )
-            .unwrap();
-            drop(frozen);
+            }
+            // Actual native schema/genesis exists, but no permanent handoff
+            // promise has been installed: genuine ordinary admission is legal.
+            let mut origin_topology = topology.clone();
+            origin_topology.ranges = original_topology.ranges.clone();
+            origin_topology.relocations.clear();
+            before_handoff(&source, &origin_topology, &source_spec, root.path());
             let mut fixture = Self {
                 root,
                 topology,
@@ -703,16 +727,16 @@ mod tests {
             fixture.recapture();
             fixture
         }
-        fn range(&self) -> &RangeDescriptor {
+        pub(crate) fn range(&self) -> &RangeDescriptor {
             self.topology.ranges.values().next().unwrap()
         }
         fn relocation(&self) -> crate::RelocationId {
             *self.topology.relocations.keys().next().unwrap()
         }
-        fn target(&self) -> Arc<RwLock<BicDb>> {
+        pub(crate) fn target(&self) -> Arc<RwLock<BicDb>> {
             Arc::clone(self.target.as_ref().unwrap())
         }
-        fn role(&self) -> HandoffRoleAdmission {
+        pub(crate) fn role(&self) -> HandoffRoleAdmission {
             test_handoff_role_admission(
                 &self
                     .root
@@ -761,16 +785,16 @@ mod tests {
                 )
                 .unwrap();
             let cut = round.finish().unwrap();
-            assert_eq!(
-                cut.range_index(),
-                0,
-                "actual empty native genesis fixture only"
-            );
             let lineage = self
                 .source
                 .read()
                 .current_native_range_source_lineage(self.range().id)
                 .unwrap();
+            assert_eq!(
+                cut.range_index(),
+                lineage.range_index(),
+                "actual native and range-store cut must agree"
+            );
             let frozen = self
                 .source
                 .read()
@@ -789,7 +813,7 @@ mod tests {
                 .unwrap(),
             );
         }
-        fn store(&self) -> RangeWriteStore {
+        pub(crate) fn store(&self) -> RangeWriteStore {
             RangeWriteStore::open(
                 self.root.path().join("target"),
                 self.topology.cluster_id.clone(),

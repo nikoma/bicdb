@@ -179,7 +179,22 @@ impl NativeRangeInstallSafety {
         admission: &NativeRecoveryAdmission,
         frozen: &FrozenRangeMutationPermit,
     ) -> Result<()> {
-        let current = database.native_range_install_safety(admission, self.range_id, frozen)?;
+        let journal = database.try_native_image_journal()?;
+        self.require_irreversible_current_under_journal(database, admission, frozen, &journal)
+    }
+    pub(super) fn require_irreversible_current_under_journal(
+        &self,
+        database: &BicDb,
+        admission: &NativeRecoveryAdmission,
+        frozen: &FrozenRangeMutationPermit,
+        journal: &NativeImageJournalGuard<'_>,
+    ) -> Result<()> {
+        let current = database.native_range_install_safety_under_journal(
+            admission,
+            self.range_id,
+            frozen,
+            journal,
+        )?;
         if self.database_incarnation != current.database_incarnation
             || self.birth_id != current.birth_id
             || self.irreversible_records_sha256 != current.irreversible_records_sha256
@@ -324,15 +339,22 @@ impl BicDb {
         range_id: RangeId,
         frozen: &FrozenRangeMutationPermit,
     ) -> Result<NativeRangeInstallSafety> {
+        let journal = self.try_native_image_journal()?;
+        self.native_range_install_safety_under_journal(admission, range_id, frozen, &journal)
+    }
+    fn native_range_install_safety_under_journal(
+        &self,
+        admission: &NativeRecoveryAdmission,
+        range_id: RangeId,
+        frozen: &FrozenRangeMutationPermit,
+        journal: &NativeImageJournalGuard<'_>,
+    ) -> Result<NativeRangeInstallSafety> {
+        journal.require_database(self)?;
         admission.require_current(self)?;
         // This nonwaiting check also excludes same-owner controlled writers.
         // Draining is a caller operation outside DB/service guards.
         self.range_mutations
             .validate_quiescent_frozen(range_id, frozen)?;
-        let _journal = self
-            .native_range_image_journal
-            .try_lock()
-            .ok_or_else(|| invalid("native journal busy before destructive install"))?;
         let birth = self
             .read_native_birth()?
             .ok_or_else(|| invalid("install safety has no native birth"))?;

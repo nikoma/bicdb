@@ -58,13 +58,16 @@ use index_binding::load_btree_bindings;
 mod integrity_reservations;
 mod pitr_maintenance;
 mod range_image_install;
-pub(crate) use range_image_install::{NativeInstalledRangeImageBase, TargetNativeImageSnapshotBound};
+pub(crate) use range_image_install::{
+    NativeInstalledRangeImageBase, TargetNativeImageSnapshotBound,
+};
 mod range_image_native;
 pub(crate) use range_image_native::{
-    FreshRangeGenesisAuthority, NativeLogicalHistoryEntryV1, NativeLogicalHistoryOutcomeV1,
+    FreshRangeGenesisAuthority, NativeHistoryStage, NativeHistoryStageProgress,
+    NativeHistoryTargetContext, NativeLogicalHistoryEntryV1, NativeLogicalHistoryOutcomeV1,
     NativeLogicalHistoryPoint, NativeLogicalHistoryStepV1, NativeRangeInstallSafety,
     NativeRangePendingApply, NativeRangePrefixObservation, NativeRecoveryAdmission,
-    RangeImageBirthMember, RangeImageBirthSpec, SourceRangeImageLineage,
+    RangeImageBirthMember, RangeImageBirthSpec, SourceRangeImageLineage, StagedNativeHistoryProof,
 };
 mod range_image_bindings;
 pub(crate) use range_image_bindings::RangeImageDbBindings;

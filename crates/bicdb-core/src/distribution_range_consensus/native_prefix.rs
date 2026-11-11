@@ -261,7 +261,7 @@ impl NativeRangeCommitCertificate {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use crate::db::{BicDb, DbConfig, RangeImageBirthSpec};
     use crate::distribution_range_mutation::RangeMutationAuthority;
@@ -299,6 +299,54 @@ mod tests {
         coordinator.recover_local_leadership(1024).unwrap();
         db.read().install_commit_admission(coordinator.clone());
         (coordinator, service)
+    }
+
+    /// Seed through actual ordinary RF1 admission/WAL/certificate callbacks.
+    /// Drop service/store ownership before handoff opens its own store.
+    pub(crate) fn seed_actual_origin(
+        db: &Arc<RwLock<BicDb>>,
+        topology: ClusterTopology,
+        spec: &RangeImageBirthSpec,
+        selected_range: RangeId,
+        count: usize,
+    ) {
+        let root = db.read().data_path().to_path_buf();
+        let service = Arc::new(Mutex::new(
+            ClusterDataNodeService::open(
+                topology.cluster_id.clone(),
+                spec.node_id.clone(),
+                root,
+                Arc::clone(db),
+                true,
+            )
+            .unwrap(),
+        ));
+        let coordinator = Arc::new(
+            RangeWriteCoordinator::new_schema_fenced(
+                topology.cluster_id.clone(),
+                spec.node_id.clone(),
+                Arc::new(RwLock::new(topology.clone())),
+                Arc::clone(&service),
+                Arc::new(super::super::tests::TestTransport { available: false }),
+            )
+            .unwrap(),
+        );
+        coordinator.recover_local_leadership(1024).unwrap();
+        db.read().install_commit_admission(coordinator.clone());
+        let keys = (0..)
+            .map(|i| format!("stage-actual-origin-{i}"))
+            .filter(|key| topology.range_for_key("items", key).unwrap().id == selected_range)
+            .take(count)
+            .collect::<Vec<_>>();
+        for key in keys {
+            let database = db.write();
+            let mut tx = database.begin_transaction().unwrap();
+            tx.insert("items", Record::new(key)).unwrap();
+            tx.commit().unwrap();
+        }
+        db.read().clear_commit_admission();
+        drop(coordinator);
+        drop(service);
     }
 
     fn fixture() -> (

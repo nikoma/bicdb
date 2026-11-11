@@ -40,9 +40,9 @@
     "sha256": "1a54a20749ad775215eab291d0c18a27d697ab63ecbb006180443e723dde1299"
   },
   {
-    "path": "runs/actual-historical-native-apply.stdout",
-    "bytes": 445,
-    "sha256": "b8deb1ad4397e6ee8084ade1d8522d62a12cb13f010ed3836e6169cf9778e803"
+    "path": "runs/actual-historical-native-apply.stdout.gz",
+    "bytes": 259,
+    "sha256": "05f4804e7a50bab74d6a88669c28e3532ae47f8b513b0083ec60643d6b3c70e0"
   },
   {
     "path": "runs/actual-image-catalogue-adoption-resources.json.gz",
@@ -60,9 +60,9 @@
     "sha256": "b2e6d0eb21eabf4ee74cbbc595425cbb9040ffde53eaff00e19621a409ae6c41"
   },
   {
-    "path": "runs/actual-image-catalogue-adoption.stdout",
-    "bytes": 819,
-    "sha256": "df8b6f31ec01c60caaf4143143c9f5047be96656d4e5fe63b2e1e71732f32dab"
+    "path": "runs/actual-image-catalogue-adoption.stdout.gz",
+    "bytes": 313,
+    "sha256": "15fcbff5cdd9ee933c7887a26c615cc068e08f56519786ab184ed1f3f3c77422"
   },
   {
     "path": "runs/actual-initial-quorum-controls-resources.json.gz",
@@ -80,9 +80,9 @@
     "sha256": "b2e6d0eb21eabf4ee74cbbc595425cbb9040ffde53eaff00e19621a409ae6c41"
   },
   {
-    "path": "runs/actual-initial-quorum-controls.stdout",
-    "bytes": 1024,
-    "sha256": "d59d21f370c69999513480149e36277f5a53c9990aa9df2e22be07eae4f91e94"
+    "path": "runs/actual-initial-quorum-controls.stdout.gz",
+    "bytes": 427,
+    "sha256": "5202c41002f79ad961dc9f31d9a2cd5c79e0ce283225648e824f7fe16dda5261"
   },
   {
     "path": "runs/actual-owned-image-lease-resources.json.gz",
@@ -100,9 +100,9 @@
     "sha256": "b2e6d0eb21eabf4ee74cbbc595425cbb9040ffde53eaff00e19621a409ae6c41"
   },
   {
-    "path": "runs/actual-owned-image-lease.stdout",
-    "bytes": 538,
-    "sha256": "d6dd545b20fa3a162775fffd069b36875af94963f61daee96a659e7bb8d5c281"
+    "path": "runs/actual-owned-image-lease.stdout.gz",
+    "bytes": 261,
+    "sha256": "a6a9dbdf18e279ab1366393c2f890955454650dc4ca66f85de9e07262672e39b"
   },
   {
     "path": "runs/actual-tls-participant-recovery-resources.json.gz",
@@ -120,9 +120,9 @@
     "sha256": "1a54a20749ad775215eab291d0c18a27d697ab63ecbb006180443e723dde1299"
   },
   {
-    "path": "runs/actual-tls-participant-recovery.stdout",
-    "bytes": 578,
-    "sha256": "b1808276c69b30b5cfc39687ebb28a8db7c6517f656c44cdb9333fa18071e42c"
+    "path": "runs/actual-tls-participant-recovery.stdout.gz",
+    "bytes": 276,
+    "sha256": "aa824c818d40f96c8c159d5682a029fa5d01e1fea7951638ed14ba692b0cac05"
   },
   {
     "path": "runs/durable-recovery-state-controls-resources.json.gz",
@@ -140,9 +140,9 @@
     "sha256": "1a54a20749ad775215eab291d0c18a27d697ab63ecbb006180443e723dde1299"
   },
   {
-    "path": "runs/durable-recovery-state-controls.stdout",
-    "bytes": 798,
-    "sha256": "9a3b19f988a83a278ca0c8d05a6a968f581619de9525005bed6ae030517acc20"
+    "path": "runs/durable-recovery-state-controls.stdout.gz",
+    "bytes": 324,
+    "sha256": "8078fa9504770551baae3bf93df2af22e7443330894f325fa2ed6b7a4525f027"
   },
   {
     "path": "runs/legacy-v1-catalogue-compatibility-resources.json.gz",
@@ -160,9 +160,9 @@
     "sha256": "1a54a20749ad775215eab291d0c18a27d697ab63ecbb006180443e723dde1299"
   },
   {
-    "path": "runs/legacy-v1-catalogue-compatibility.stdout",
-    "bytes": 238,
-    "sha256": "5a77a456897c1c6713df8140f260d27692e9ecfcb60fa35db362e6894fea0c48"
+    "path": "runs/legacy-v1-catalogue-compatibility.stdout.gz",
+    "bytes": 184,
+    "sha256": "cc036f958c667c22343ec27a4043644a2e7c248e4c289ee057e68ef63b150b92"
   },
   {
     "path": "runs/legacy-v2-catalogue-compatibility-resources.json.gz",
@@ -180,9 +180,9 @@
     "sha256": "1a54a20749ad775215eab291d0c18a27d697ab63ecbb006180443e723dde1299"
   },
   {
-    "path": "runs/legacy-v2-catalogue-compatibility.stdout",
-    "bytes": 224,
-    "sha256": "954a01b217098cca0c8b59edd22f692c8b579e5ac8caf5891dcf26350e8bf431"
+    "path": "runs/legacy-v2-catalogue-compatibility.stdout.gz",
+    "bytes": 174,
+    "sha256": "396ff67ef33f2cea59cce3c07bf9b4f417b58843761d4da4fe22d5b7b0ad88e3"
   },
   {
     "path": "runs/native-ready-all-local-controls-resources.json.gz",
@@ -200,9 +200,9 @@
     "sha256": "b9685e31e83fa8ee597357fa877dec72b80763ae001a54ecf651c68eac16cf90"
   },
   {
-    "path": "runs/native-ready-all-local-controls.stdout",
-    "bytes": 1632,
-    "sha256": "5e934cffb967d970f2f0e3950fce93b0c1bbaa08e0affe7f0f5c1e92766f678d"
+    "path": "runs/native-ready-all-local-controls.stdout.gz",
+    "bytes": 569,
+    "sha256": "8602234ab0d1368e8ed5e1a1a0cfc07a3a3e8a9120e14b641c8d6f4fb091f8e2"
   },
   {
     "path": "source-files.json",
@@ -216,7 +216,7 @@
   },
   {
     "path": "verify.py",
-    "bytes": 5361,
-    "sha256": "3d774464cb1fdf4f9aca63e26c67bf0788c91c1bda19d988145712922ba0b677"
+    "bytes": 5391,
+    "sha256": "091a54a9f3674537476d0a88a58bf06be1e1c8e3bdf60d0a86ab5840634768b2"
   }
 ]

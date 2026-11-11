@@ -34,7 +34,7 @@ def verify(root,repo=None):
         assert samples and min(x['available_bytes'] for x in samples)==run['minimum_available_bytes']
         assert all(not x['paused'] and x['available_bytes']>=12*2**30 for x in samples)
         minimum=min(minimum or run['minimum_available_bytes'],run['minimum_available_bytes'])
-        text=(root/'runs'/f'{name}.stdout').read_text();tests=re.findall(r'^test (\S+) \.\.\. ok$',text,re.M)
+        text=gzip.decompress((root/'runs'/f'{name}.stdout.gz').read_bytes()).decode();tests=re.findall(r'^test (\S+) \.\.\. ok$',text,re.M)
         assert tests==claim['test_ids'] and len(tests)==claim['count'] and f'test result: ok. {len(tests)} passed; 0 failed;' in text
         ids.update(tests);executions+=len(tests)
     assert len(ids)==executions==40 and sorted(ids)==c['test_ids'] and minimum==c['minimum_available_bytes']==22258626560

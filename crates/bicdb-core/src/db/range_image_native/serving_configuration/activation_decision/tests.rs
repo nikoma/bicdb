@@ -389,7 +389,9 @@ fn native_activation_decision_strict_cold_open_reissues_only_actual_native_recor
     );
     let range = topology.ranges.values().next().unwrap();
     let fresh = test_role_admission(
-        &root.path().join("decision-cold-role"),
+        // Reopen the SAME durable metadata stores; a fresh empty term-1
+        // metadata cluster would correctly fail the post-decision anchor.
+        &root.path().join(format!("decision-role-{nonce}")),
         &topology,
         &spec.node_id,
         &spec.node_id,

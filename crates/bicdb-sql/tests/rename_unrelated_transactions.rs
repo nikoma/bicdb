@@ -12,6 +12,9 @@ fn postgres_rename_and_undo_preserve_an_unrelated_native_writer() {
             let mut db = BicDb::open_with_config(root.path(), config.clone()).unwrap();
             SqlSession::new(&mut db).execute("CREATE TABLE source(id INT PRIMARY KEY,payload TEXT); INSERT INTO source VALUES(1,'before')").unwrap();
             db.create_collection("unrelated_native").unwrap();
+            // The embedded host upgrades namespace identity at startup,
+            // before admitting either SQL or native application owners.
+            bicdb_sql::initialize_rename_journal_identities(&mut db).unwrap();
             let mut native = db.begin_transaction().unwrap();
             native
                 .insert("unrelated_native", Record::new("acknowledged-native"))

@@ -553,8 +553,15 @@ pub(crate) fn rollback_transaction_ddl_to_len(
         with_connection_guc_state(sql_session_for_server(server, &mut db), server, state)
             .with_catalog_cache(catalog_cache)
             .with_ddl_undo_log(ddl_undo_log);
+    // SAVEPOINT undo keeps the native business transaction alive. Passing its
+    // actual owner lets journal repair validate that owner's retained scope;
+    // full rollback has already consumed it and uses abandoned-owner recovery.
+    if let Some(tx) = state.tx.take() {
+        session = session.with_pending_transaction(tx);
+    }
     let result = session.rollback_ddl_undo_to_len(len);
     capture_connection_guc_state(state, &session);
+    state.tx = session.take_pending_transaction();
     state.tx_ddl_undo = session.take_ddl_undo_log();
     state.catalog_cache = session.into_catalog_cache();
     result.map_err(PgWireError::from)

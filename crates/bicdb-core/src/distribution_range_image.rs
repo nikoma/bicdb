@@ -60,6 +60,18 @@ pub(crate) struct RangeImageCursorV1 {
     step: u64,
 }
 
+impl RangeImageCursorV1 {
+    pub(crate) fn collection_index(&self) -> usize {
+        self.collection_index
+    }
+    pub(crate) fn after_key(&self) -> Option<&str> {
+        self.after_key.as_deref()
+    }
+    pub(crate) fn step(&self) -> u64 {
+        self.step
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub(crate) struct RangeImageStepV1 {
     pub format_version: u32,

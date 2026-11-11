@@ -122,21 +122,7 @@ impl HistoricalCommandDecisionRound {
     ) -> Result<Self> {
         command.validate()?;
         authority.require_historical_scope(&command)?;
-        // Receiver entry export has the same finite bound. Larger commands
-        // require a separately qualified image/history repair path.
-        struct Bound(usize);
-        impl std::io::Write for Bound {
-            fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
-                self.0 = self.0.checked_sub(bytes.len()).ok_or_else(|| {
-                    std::io::Error::other("historical candidate exceeds bounded 2MiB transport")
-                })?;
-                Ok(bytes.len())
-            }
-            fn flush(&mut self) -> std::io::Result<()> {
-                Ok(())
-            }
-        }
-        serde_json::to_writer(Bound(2 * 1024 * 1024), &command)?;
+        crate::distribution_range_consensus::validate_native_recovery_command_size(&command)?;
         Ok(Self {
             authority,
             command,

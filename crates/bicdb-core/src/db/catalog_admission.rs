@@ -860,6 +860,16 @@ impl BicDb {
         records: &[(String, String)],
     ) -> Result<()> {
         self.check_recovery_state()?;
+        // Keep the same lock order as reservation: resolve collection state
+        // before entering admission, never while holding the global scope gate.
+        let incarnations = records
+            .iter()
+            .map(|(collection, _)| {
+                self.collections
+                    .get(collection)
+                    .map(|current| Arc::clone(&current.read().incarnation))
+            })
+            .collect::<Vec<_>>();
         let state = self.catalog_admission.state.read();
         self.catalog_admission.validate_token(&state, token)?;
         state.check_actor(Some(token.serial))?;
@@ -869,11 +879,7 @@ impl BicDb {
                 "undo relation is outside its reserved catalog scope".into(),
             ));
         }
-        for (collection, id) in records {
-            let incarnation = self
-                .collections
-                .get(collection)
-                .map(|current| Arc::clone(&current.read().incarnation));
+        for ((collection, id), incarnation) in records.iter().zip(&incarnations) {
             if !scope.covers_record(collection, incarnation.as_ref(), Some(id))
                 || !scope.allows_record(collection, incarnation.as_ref(), Some(id))
             {

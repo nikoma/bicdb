@@ -226,6 +226,42 @@ pub(crate) struct AdoptedNativeRangeImageInstall {
     verified: VerifiedNativeRangeImageInstall,
     catalogue: NativeImageCatalogueAdoptionReceipt,
 }
+
+/// Sealed ACTUAL catalogue/native finalization, with its concrete native base,
+/// DB-open admission and exact intent fence retained. Only consuming an adopted
+/// image can construct it. It grants no serving configuration or user admission.
+pub(crate) struct NativeImageCatalogueFinalization {
+    database: Arc<RwLock<BicDb>>,
+    admission: NativeRecoveryAdmission,
+    fence: TargetImageInstallFence,
+    base: NativeInstalledRangeImageBase,
+    catalogue: NativeImageCatalogueAdoptionReceipt,
+}
+impl NativeImageCatalogueFinalization {
+    pub(crate) fn catalogue(&self) -> &NativeImageCatalogueAdoptionReceipt {
+        &self.catalogue
+    }
+    pub(crate) fn require_current(
+        &self,
+        store: &RangeWriteStore,
+        role: &NativeImageInstallRole<'_>,
+        frozen: &FrozenRangeMutationPermit,
+    ) -> Result<()> {
+        let db = self
+            .database
+            .try_read()
+            .ok_or_else(|| invalid("target DB busy validating actual catalogue finalization"))?;
+        self.catalogue.require_materialized_current(
+            store,
+            &db,
+            &self.admission,
+            &self.base,
+            &self.fence,
+            role,
+            frozen,
+        )
+    }
+}
 impl AdoptedNativeRangeImageInstall {
     pub(crate) fn catalogue(&self) -> &NativeImageCatalogueAdoptionReceipt {
         &self.catalogue
@@ -239,6 +275,38 @@ impl AdoptedNativeRangeImageInstall {
         role: &NativeImageInstallRole<'_>,
     ) -> Result<()> {
         self.catalogue.require_current(store, &self.verified, role)
+    }
+    /// Preserve the actual native proof when transferring its exclusive freeze
+    /// back to a recovery runtime. The runtime must revalidate the returned
+    /// sealed object BEFORE any owner rekey; the receipt alone is insufficient.
+    pub(crate) fn into_finalization(
+        self,
+        store: &RangeWriteStore,
+        role: &NativeImageInstallRole<'_>,
+        cancellation: &CancellationToken,
+    ) -> Result<(FrozenRangeMutationPermit, NativeImageCatalogueFinalization)> {
+        cancellation.check()?;
+        self.require_current(store, role)?;
+        let VerifiedNativeRangeImageInstall {
+            database,
+            admission,
+            frozen,
+            fence,
+            source,
+            base,
+        } = self.verified;
+        let proof = NativeImageCatalogueFinalization {
+            database,
+            admission,
+            fence,
+            base,
+            catalogue: self.catalogue,
+        };
+        proof.require_current(store, role, &frozen)?;
+        // Physical/catalogue adoption is durable. Permanent source promises
+        // and target refusal still survive; this drop does not activate either.
+        drop(source);
+        Ok((frozen, proof))
     }
 }
 impl VerifiedNativeRangeImageInstall {
@@ -1428,6 +1496,18 @@ pub(crate) mod tests {
             (1, 1, 1)
         );
         assert_eq!(adopted.catalogue().range_index(), 1);
+        assert!(store
+            .require_no_native_image_catalogue_adoption_for_attempt(
+                fixture.range().id,
+                adopted.catalogue().attempt_id()
+            )
+            .is_err());
+        store
+            .require_no_native_image_catalogue_adoption_for_attempt(
+                fixture.range().id,
+                Uuid::now_v7(),
+            )
+            .unwrap();
         assert_eq!(adopted.base().native_receipt_sha256(), physical_receipt);
         assert!(fixture
             .target()
@@ -1469,6 +1549,39 @@ pub(crate) mod tests {
         )
         .unwrap();
         assert_eq!(inspection.format_version, 6);
+    }
+
+    #[test]
+    fn actual_native_image_catalogue_finalization_retains_real_base_and_rejects_foreign_freeze() {
+        let (fixture, mut store, verified) = actual_catalogue_adoption_fixture();
+        let role = fixture.role();
+        let image_role = NativeImageInstallRole::CommittedHandoff(&role);
+        let adopted = verified
+            .adopt_catalogue(&mut store, &image_role, &CancellationToken::uncancelable())
+            .unwrap();
+        let attempt = adopted.catalogue().attempt_id();
+        let (frozen, proof) = adopted
+            .into_finalization(&store, &image_role, &CancellationToken::uncancelable())
+            .unwrap();
+        proof.require_current(&store, &image_role, &frozen).unwrap();
+        assert_eq!(proof.catalogue().attempt_id(), attempt);
+        let foreign = fixture
+            .source
+            .read()
+            .range_mutation_gate()
+            .try_freeze(fixture.range().id, attempt)
+            .unwrap();
+        assert!(proof
+            .require_current(&store, &image_role, &foreign)
+            .is_err());
+        proof.require_current(&store, &image_role, &frozen).unwrap();
+        assert!(store.require_no_image_install(fixture.range().id).is_err());
+        assert!(fixture
+            .target()
+            .read()
+            .range_mutation_gate()
+            .try_enter(fixture.range().id)
+            .is_err());
     }
 
     #[test]

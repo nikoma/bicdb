@@ -119,10 +119,32 @@ impl NativeImageCatalogueAdoptionReceipt {
         role: &NativeImageInstallRole<'_>,
     ) -> Result<()> {
         verified.require_current(store, role)?;
+        self.require_binding_current(store, verified.base(), verified.fence())
+    }
+    pub(crate) fn require_materialized_current(
+        &self,
+        store: &RangeWriteStore,
+        database: &crate::BicDb,
+        admission: &crate::db::NativeRecoveryAdmission,
+        physical: &crate::db::NativeInstalledRangeImageBase,
+        fence: &TargetImageInstallFence,
+        role: &NativeImageInstallRole<'_>,
+        frozen: &crate::distribution_range_mutation::FrozenRangeMutationPermit,
+    ) -> Result<()> {
+        store.validate_native_image_install_fence(fence, database, admission, role, frozen)?;
+        physical.require_current(database, admission)?;
+        self.require_binding_current(store, physical, fence)
+    }
+    fn require_binding_current(
+        &self,
+        store: &RangeWriteStore,
+        physical: &crate::db::NativeInstalledRangeImageBase,
+        fence: &TargetImageInstallFence,
+    ) -> Result<()> {
         store.require_durable_recovery_catalog()?;
-        let expected = NativeImageCatalogueBase::from_actual(verified)?;
+        let expected = NativeImageCatalogueBase::from_materialized(physical, fence)?;
         if self.store_open_id != store.open_id
-            || self.native_database_incarnation != verified.fence().database_incarnation()
+            || self.native_database_incarnation != fence.database_incarnation()
             || self.base != expected
             || store.catalog.native_image_bases.get(&self.base.range_id) != Some(&self.base)
         {
@@ -149,8 +171,12 @@ impl NativeImageCatalogueAdoptionReceipt {
 }
 impl NativeImageCatalogueBase {
     fn from_actual(verified: &VerifiedNativeRangeImageInstall) -> Result<Self> {
-        let physical = verified.base();
-        let fence = verified.fence();
+        Self::from_materialized(verified.base(), verified.fence())
+    }
+    fn from_materialized(
+        physical: &crate::db::NativeInstalledRangeImageBase,
+        fence: &TargetImageInstallFence,
+    ) -> Result<Self> {
         let base = Self {
             format_version: 1,
             cluster_id: physical.cluster_id().clone(),
@@ -188,6 +214,27 @@ impl NativeImageCatalogueBase {
 }
 
 impl RangeWriteStore {
+    /// Absence of adoption for THIS attempt only, never a native empty/floor
+    /// claim. An older completed base may legitimately remain unchanged.
+    pub(crate) fn require_no_native_image_catalogue_adoption_for_attempt(
+        &self,
+        range_id: RangeId,
+        attempt_id: Uuid,
+    ) -> Result<()> {
+        self.require_durable_recovery_catalog()?;
+        if attempt_id.is_nil()
+            || self
+                .catalog
+                .native_image_bases
+                .get(&range_id)
+                .is_some_and(|base| base.attempt_id == attempt_id)
+        {
+            return Err(range_write_error(
+                "this native image attempt already adopted catalogue state",
+            ));
+        }
+        Ok(())
+    }
     /// A verified native image, not a number/DTO, is the only input that can
     /// establish this snapshot floor. Preserve every existing refusal record.
     pub(crate) fn adopt_verified_native_image_catalogue(

@@ -561,6 +561,7 @@ mod tests {
                     "dependencies",
                     "views",
                     "routine_types",
+                    "procedure_type_row",
                     "value_row",
                     "values_complete",
                     "client_ack",
@@ -591,6 +592,8 @@ mod tests {
                             "GRANT SELECT ON original TO rename_reader",
                             "CREATE FUNCTION rename_row_fn(arg original) RETURNS original LANGUAGE sql AS 'SELECT arg'",
                             "CREATE FUNCTION rename_array_fn(arg original[]) RETURNS original[] LANGUAGE sql AS 'SELECT arg'",
+                            "CREATE PROCEDURE rename_proc_row(arg original) LANGUAGE sql AS 'SELECT 1'",
+                            "CREATE PROCEDURE rename_proc_array(arg original[]) LANGUAGE sql AS 'SELECT 1'",
                             "CREATE FUNCTION rename_trigger_fn() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NEW; END $$",
                             "CREATE TRIGGER rename_guard BEFORE UPDATE ON original FOR EACH ROW EXECUTE FUNCTION rename_trigger_fn()",
                         ] { session.execute(sql).unwrap_or_else(|error| panic!("{sql}: {error}")); }
@@ -620,6 +623,12 @@ mod tests {
                         .unwrap()
                         .rows;
                     assert_eq!(before_signatures.len(), 2);
+                    const PROCEDURE_SIGNATURES: &str = "SELECT proargtypes,pg_get_function_arguments(oid),pg_get_functiondef(oid) FROM pg_proc WHERE proname IN ('rename_proc_row','rename_proc_array') ORDER BY proname";
+                    let before_procedures = SqlSession::new(&mut db)
+                        .execute(PROCEDURE_SIGNATURES)
+                        .unwrap()
+                        .rows;
+                    assert_eq!(before_procedures.len(), 2);
                     db.close().unwrap();
                     let output = std::process::Command::new(std::env::current_exe().unwrap())
                         .args([
@@ -644,6 +653,7 @@ mod tests {
                         matches!(cut, "decision_committed" | "client_ack" | "reuse_commit");
                     let table = if committed { "renamed" } else { "original" };
                     let mut expected_signatures = before_signatures.clone();
+                    let mut expected_procedures = before_procedures.clone();
                     if committed {
                         for row in &mut expected_signatures {
                             for value in &mut row[2..] {
@@ -651,6 +661,14 @@ mod tests {
                                     panic!("expected routine declaration text");
                                 };
                                 *name = name.replace("original", "renamed");
+                            }
+                        }
+                        for row in &mut expected_procedures {
+                            for value in &mut row[1..] {
+                                let SqlValue::String(text) = value else {
+                                    panic!("expected procedure declaration text");
+                                };
+                                *text = text.replace("original", "renamed");
                             }
                         }
                     }
@@ -692,6 +710,11 @@ mod tests {
                                 session.execute(ROUTINE_SIGNATURES).unwrap().rows,
                                 expected_signatures,
                                 "routine identity paged={paged} explicit={explicit} cut={cut} reopen={reopen}"
+                            );
+                            assert_eq!(
+                                session.execute(PROCEDURE_SIGNATURES).unwrap().rows,
+                                expected_procedures,
+                                "procedure identity paged={paged} explicit={explicit} cut={cut} reopen={reopen}"
                             );
                             assert_eq!(
                                 session

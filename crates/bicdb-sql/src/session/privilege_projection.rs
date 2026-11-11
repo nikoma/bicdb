@@ -1929,6 +1929,9 @@ impl<'db> SqlSession<'db> {
                 // Its exact existing catalog row is already captured by the
                 // rename journal, including its stable OID and overload key.
                 save_routine(self.db_mut()?, &routine)?;
+                if routine.kind == RoutineKind::Procedure {
+                    rename_table::stage("procedure_type_row");
+                }
             }
         }
         rename_table::stage("routine_types");

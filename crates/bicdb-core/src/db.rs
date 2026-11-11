@@ -75,8 +75,8 @@ pub(crate) use range_image_native::{
     NativeHistoryStage, NativeHistoryStageProgress, NativeHistoryTargetContext,
     NativeLogicalHistoryEntryV1, NativeLogicalHistoryOutcomeV1, NativeLogicalHistoryPoint,
     NativeLogicalHistoryStepV1, NativeRangeInstallSafety, NativeRangePendingApply,
-    NativeRangePrefixObservation, NativeRecoveryAdmission, RangeImageBirthMember,
-    RangeImageBirthSpec, SourceRangeImageLineage, StagedNativeHistoryProof,
+    NativeRangePrefixObservation, NativeRecoveryAdmission, NativeRecoveryAppliedReceipt,
+    RangeImageBirthMember, RangeImageBirthSpec, SourceRangeImageLineage, StagedNativeHistoryProof,
 };
 mod range_image_bindings;
 pub(crate) use range_image_bindings::RangeImageDbBindings;

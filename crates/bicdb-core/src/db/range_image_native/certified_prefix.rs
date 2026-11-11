@@ -7,7 +7,7 @@ use crate::distribution_range_consensus::{
 };
 use crate::distribution_range_mutation::RangeMutationAuthority;
 mod recovery_apply;
-pub(crate) use recovery_apply::KnownNativeRecoveryPrefix;
+pub(crate) use recovery_apply::{KnownNativeRecoveryPrefix, NativeRecoveryAppliedReceipt};
 
 fn pending_key(range: RangeId) -> String {
     format!("pending:{}", range.get())
@@ -84,6 +84,8 @@ struct PendingNativeRangeCommand {
     global_image_generation: Uuid,
     range_image_generation: Uuid,
     materialized: Option<MaterializedNativeCommand>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    recovery_attempt: Option<recovery_apply::RecoveryNativeAttemptBinding>,
     checksum_sha256: String,
 }
 impl PendingNativeRangeCommand {
@@ -96,6 +98,9 @@ impl PendingNativeRangeCommand {
         )?)))
     }
     fn validate(&self) -> Result<()> {
+        if let Some(attempt) = &self.recovery_attempt {
+            attempt.validate(self)?;
+        }
         if self.format_version != 1
             || self.birth_id.is_nil()
             || self.previous_index.checked_add(1) != Some(self.range_index)
@@ -250,6 +255,8 @@ pub(super) struct NativeCertifiedRangePrefix {
         skip_serializing_if = "NativeRangeCertificateEvidence::is_origin"
     )]
     certificate_evidence: NativeRangeCertificateEvidence,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    recovery_attempt: Option<recovery_apply::RecoveryNativeAttemptBinding>,
     global_image_generation: Uuid,
     range_image_generation: Uuid,
     history_generation: Uuid,
@@ -284,6 +291,18 @@ impl NativeCertifiedRangePrefix {
         base: &NativeRangeBaseBinding,
     ) -> Result<()> {
         self.certificate_evidence.validate()?;
+        if self.certificate_evidence.is_origin() != self.recovery_attempt.is_none() {
+            return Err(invalid(
+                "native prefix certificate kind and actual recovery attempt differ",
+            ));
+        }
+        if let Some(attempt) = &self.recovery_attempt {
+            attempt.validate_prefix(
+                &self.command_checksum_sha256,
+                &self.materialized,
+                &self.certificate_evidence,
+            )?;
+        }
         if self.format_version != 2
             || self.birth_id != birth.birth_id
             || self.base_receipt_sha256 != base.checksum_sha256
@@ -463,6 +482,11 @@ impl BicDb {
         mutations: &[CommitAdmissionMutation],
         authority: &RangeMutationAuthority<'_>,
     ) -> Result<()> {
+        if !certificate.evidence().is_origin() {
+            return Err(invalid(
+                "historical materialization requires exact current-session native recovery adapter",
+            ));
+        }
         let intent = certificate.intent();
         if admission_mutations_sha256(mutations)? != intent.mutations_sha256() {
             return Err(invalid(
@@ -645,9 +669,27 @@ impl BicDb {
             global_image_generation,
             range_image_generation,
             materialized: None,
+            recovery_attempt: None,
             checksum_sha256: String::new(),
         };
         pending.checksum_sha256 = pending.checksum()?;
+        let scope =
+            self.reserve_native_command_scope(local_transaction_id, intent.mutations_sha256())?;
+        self.write_native_range_image_record(&pending_key(pending.range_id), &pending)?;
+        // Publish ordinary-row admission only AFTER actual pending durability.
+        scope.arm()?;
+        Ok(NativeRangePendingApply {
+            database_incarnation: self.incarnation.clone(),
+            intent: intent.clone(),
+            pending,
+            _scope: scope,
+        })
+    }
+    fn reserve_native_command_scope(
+        &self,
+        local_transaction_id: u64,
+        mutations_sha256: &str,
+    ) -> Result<NativeCommandScopeLease> {
         let lease = Uuid::now_v7();
         {
             let mut registry = self
@@ -666,26 +708,18 @@ impl BicDb {
                 NativeCommandScope {
                     lease,
                     database_incarnation: self.incarnation.clone(),
-                    mutations_sha256: intent.mutations_sha256().to_string(),
+                    mutations_sha256: mutations_sha256.to_string(),
                     armed: false,
                 },
             );
         }
-        let scope = NativeCommandScopeLease {
+        Ok(NativeCommandScopeLease {
             registry: Arc::clone(&self.native_range_command_scopes),
             transaction_id: local_transaction_id,
             lease,
-        };
-        self.write_native_range_image_record(&pending_key(pending.range_id), &pending)?;
-        // Publish ordinary-row admission only AFTER actual pending durability.
-        scope.arm()?;
-        Ok(NativeRangePendingApply {
-            database_incarnation: self.incarnation.clone(),
-            intent: intent.clone(),
-            pending,
-            _scope: scope,
         })
     }
+
     fn require_native_pending(
         &self,
         pending: &NativeRangePendingApply,
@@ -741,6 +775,10 @@ impl BicDb {
             .try_lock()
             .ok_or_else(|| invalid("native journal busy after apply"))?;
         let mut record = self.require_native_pending(pending, receipt, authority)?;
+        #[cfg(test)]
+        if self.test_native_after_local_wal_rejected() {
+            return Err(invalid("injected actual post-WAL/pre-native-prefix cut"));
+        }
         let materialized = MaterializedNativeCommand {
             local_transaction_id: receipt.transaction_id(),
             local_wal_sequence: receipt.sequence(),
@@ -842,6 +880,7 @@ impl BicDb {
             certified_voters: certificate.certified_voters().clone(),
             required_quorum: certificate.required_quorum(),
             certificate_evidence: certificate.evidence().clone(),
+            recovery_attempt: record.recovery_attempt,
             global_image_generation: record.global_image_generation,
             range_image_generation: record.range_image_generation,
             history_generation: base.history_generation,

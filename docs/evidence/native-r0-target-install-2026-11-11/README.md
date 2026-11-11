@@ -84,3 +84,8 @@ and pinned dependencies are still needed to build. Temporary fixture databases
 were removed by the Rust test harness. The test executable SHA is an identity
 observation, not a published artifact or a guarantee that the mutable shared
 Cargo cache retains that executable. `manifest.json` covers all exported files.
+
+Run `python3 scripts/verify-native-r0-target-evidence.py` for read-only source,
+manifest, retained-failure and qualification-scope replay. Four Python regression
+cases also reject rehashed scope upgrades, erased failures and cached-executable
+output presented without the actual candidate compilation line.

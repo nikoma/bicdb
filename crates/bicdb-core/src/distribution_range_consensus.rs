@@ -61,7 +61,9 @@ mod native_prefix;
 pub(crate) use native_prefix::tests::{
     fixture as native_origin_fixture, seed_actual_origin, test_catalog_command,
 };
-pub(crate) use native_prefix::{NativeRangeCommandIntent, NativeRangeCommitCertificate};
+pub(crate) use native_prefix::{
+    NativeRangeCertificateEvidence, NativeRangeCommandIntent, NativeRangeCommitCertificate,
+};
 
 pub const RANGE_WRITE_LOG_FORMAT_VERSION: u32 = 3;
 pub const RANGE_WRITE_PROTOCOL_VERSION: u32 = 2;

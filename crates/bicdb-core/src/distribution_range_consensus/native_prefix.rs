@@ -1,7 +1,8 @@
 //! Private native-prefix admission ingredients. These are not metadata/read
 //! authorities, portable signatures, or source visibility by themselves.
 use super::*;
-use crate::db::{RangeImageBirthMember, SourceRangeImageLineage};
+use crate::db::{KnownNativeRecoveryPrefix, RangeImageBirthMember, SourceRangeImageLineage};
+use crate::distribution_range_recovery::RecoveryApplyAdmission;
 
 const MAX_NATIVE_DATA_VOTERS: usize = 64;
 const MAX_NATIVE_SCOPE_BYTES: usize = 64 * 1024;
@@ -24,6 +25,48 @@ pub(crate) struct NativeRangeCommandIntent {
     scope_sha256: String,
 }
 
+/// Persisted provenance of an ACTUAL collected quorum. This is not a wire
+/// certificate, voter signature or read authority. A historical quorum need
+/// not contain the current data leader; ordinary origin admission still does.
+#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub(crate) enum NativeRangeCertificateEvidence {
+    #[default]
+    OriginCertificateQuorum,
+    HistoricalCurrentCertificateQuorum {
+        recovery_nonce: Uuid,
+        configuration_sha256: String,
+        current_range_epoch: u64,
+        metadata_context_id: Uuid,
+    },
+}
+impl NativeRangeCertificateEvidence {
+    pub(crate) fn is_origin(&self) -> bool {
+        matches!(self, Self::OriginCertificateQuorum)
+    }
+    pub(crate) fn validate(&self) -> Result<()> {
+        if let Self::HistoricalCurrentCertificateQuorum {
+            recovery_nonce,
+            configuration_sha256,
+            current_range_epoch,
+            metadata_context_id,
+        } = self
+        {
+            if recovery_nonce.is_nil()
+                || metadata_context_id.is_nil()
+                || *current_range_epoch == 0
+                || configuration_sha256.len() != 64
+                || !configuration_sha256.bytes().all(|b| b.is_ascii_hexdigit())
+            {
+                return Err(range_write_error(
+                    "damaged native historical certificate provenance",
+                ));
+            }
+        }
+        Ok(())
+    }
+}
+
 /// Actual distinct certificate ACKs collected by the coordinator. This opaque
 /// value is not serializable and cannot be recreated from an ACK count.
 #[derive(Debug)]
@@ -31,6 +74,7 @@ pub(crate) struct NativeRangeCommitCertificate {
     intent: NativeRangeCommandIntent,
     certified_voters: BTreeSet<ClusterNodeId>,
     required_quorum: usize,
+    evidence: NativeRangeCertificateEvidence,
 }
 
 fn replicas(
@@ -54,6 +98,117 @@ fn same_range_configuration(left: &RangeDescriptor, right: &RangeDescriptor) -> 
 }
 
 impl NativeRangeCommandIntent {
+    /// Derive exact original command identity only from an actual distinct
+    /// current-session certificate quorum. This does not rebind the physical
+    /// base configuration or grant current serving/new-write readiness.
+    pub(crate) fn for_historical_apply(
+        admission: &RecoveryApplyAdmission,
+        known: &KnownNativeRecoveryPrefix,
+    ) -> Result<NativeRangeCommitCertificate> {
+        admission.require_live_request()?;
+        let command = admission.command();
+        command.validate()?;
+        let current = admission.current_range();
+        let base = known.base_range();
+        let voter_ids = |range: &RangeDescriptor| {
+            range
+                .replicas
+                .iter()
+                .filter(|replica| replica.role == RangeReplicaRole::Voter)
+                .map(|replica| (replica.id, replica.node_id.clone()))
+                .collect::<BTreeMap<_, _>>()
+        };
+        if known.cluster_id() != admission.cluster_id()
+            || known.bootstrap_id() != admission.bootstrap_id()
+            || known.schema_sha256() != admission.expected_schema_sha256().unwrap_or("")
+            || known.restore_activation() != admission.restore_activation()
+            || known.local_node_id() != admission.local_node_id()
+            || known.local_member_incarnation() != admission.local_member_incarnation()
+            || known.range_index().checked_add(1) != Some(command.index)
+            || command.range_id != current.id
+            || command.cluster_id != *admission.cluster_id()
+            || base.id != current.id
+            || base.start_token != current.start_token
+            || base.end_token != current.end_token
+            || base.placement != current.placement
+            || base.epoch > current.epoch
+            || command.range_epoch > current.epoch
+            || voter_ids(base) != voter_ids(current)
+        {
+            return Err(range_write_error("historical native physical configuration/history requires an actual transition/image proof"));
+        }
+        let mut members = BTreeMap::new();
+        for id in voter_ids(current).values() {
+            let member = admission.member_credentials().get(id).ok_or_else(|| {
+                range_write_error("historical native current voter credentials absent")
+            })?;
+            let actual = RangeImageBirthMember {
+                incarnation: member.incarnation,
+                tls_certificate_sha256: member.active_certificate_sha256.clone(),
+                pending_tls_certificate_sha256: member.pending_certificate_sha256.clone(),
+            };
+            if known.base_members().get(id) != Some(&actual) {
+                return Err(range_write_error(
+                    "historical native current voter incarnation/pins changed",
+                ));
+            }
+            members.insert(id.clone(), actual);
+        }
+        let certified_voters = admission
+            .certified_members()
+            .cloned()
+            .collect::<BTreeSet<_>>();
+        let required_quorum = members.len() / 2 + 1;
+        if members.is_empty()
+            || members.len() > MAX_NATIVE_DATA_VOTERS
+            || certified_voters.len() < required_quorum
+            || !certified_voters.iter().all(|id| members.contains_key(id))
+        {
+            return Err(range_write_error(
+                "historical native has no actual distinct current certification majority",
+            ));
+        }
+        let scope = crate::distribution_range_image::bounded_json(
+            &(
+                "bicdb.native.historical-apply.scope.v1",
+                admission.cluster_id(),
+                admission.bootstrap_id(),
+                &admission.scope().configuration_sha256,
+                admission.recovery_nonce(),
+                admission.context_id(),
+                &command.command_id,
+                &command.checksum_sha256,
+                command.index,
+            ),
+            MAX_NATIVE_SCOPE_BYTES,
+        )?;
+        let intent = Self {
+            command_id: command.command_id.clone(),
+            command_checksum_sha256: command.checksum_sha256.clone(),
+            origin_transaction_id: command.transaction_id,
+            mutations_sha256: crate::db::admission_mutations_sha256(&command.mutations)?,
+            range_index: command.index,
+            cluster_id: admission.cluster_id().clone(),
+            bootstrap_id: admission.bootstrap_id(),
+            range: current.clone(),
+            expected_base: base.clone(),
+            members,
+            schema_sha256: known.schema_sha256().to_string(),
+            scope_sha256: hex::encode(Sha256::digest(scope)),
+        };
+        Ok(NativeRangeCommitCertificate {
+            intent,
+            certified_voters,
+            required_quorum,
+            evidence: NativeRangeCertificateEvidence::HistoricalCurrentCertificateQuorum {
+                recovery_nonce: admission.recovery_nonce(),
+                configuration_sha256: admission.scope().configuration_sha256.clone(),
+                current_range_epoch: current.epoch,
+                metadata_context_id: admission.context_id(),
+            },
+        })
+    }
+
     pub(super) fn plan(
         command: &RangeWriteCommand,
         range: &RangeDescriptor,
@@ -215,6 +370,7 @@ impl NativeRangeCommandIntent {
             intent: self.clone(),
             certified_voters: certified_voters.clone(),
             required_quorum,
+            evidence: NativeRangeCertificateEvidence::OriginCertificateQuorum,
         })
     }
     pub(crate) fn command_id(&self) -> &str {
@@ -249,6 +405,9 @@ impl NativeRangeCommandIntent {
     }
 }
 impl NativeRangeCommitCertificate {
+    pub(crate) fn evidence(&self) -> &NativeRangeCertificateEvidence {
+        &self.evidence
+    }
     pub(crate) fn intent(&self) -> &NativeRangeCommandIntent {
         &self.intent
     }

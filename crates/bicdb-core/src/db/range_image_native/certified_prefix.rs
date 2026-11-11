@@ -2,8 +2,12 @@
 //! never raises the source floor. Only the actual WAL callback AND the opaque
 //! coordinator certificate quorum can produce the completed prefix below.
 use super::*;
-use crate::distribution_range_consensus::{NativeRangeCommandIntent, NativeRangeCommitCertificate};
+use crate::distribution_range_consensus::{
+    NativeRangeCertificateEvidence, NativeRangeCommandIntent, NativeRangeCommitCertificate,
+};
 use crate::distribution_range_mutation::RangeMutationAuthority;
+mod recovery_apply;
+pub(crate) use recovery_apply::KnownNativeRecoveryPrefix;
 
 fn pending_key(range: RangeId) -> String {
     format!("pending:{}", range.get())
@@ -241,6 +245,11 @@ pub(super) struct NativeCertifiedRangePrefix {
     materialized: MaterializedNativeCommand,
     certified_voters: BTreeSet<ClusterNodeId>,
     required_quorum: usize,
+    #[serde(
+        default,
+        skip_serializing_if = "NativeRangeCertificateEvidence::is_origin"
+    )]
+    certificate_evidence: NativeRangeCertificateEvidence,
     global_image_generation: Uuid,
     range_image_generation: Uuid,
     history_generation: Uuid,
@@ -274,6 +283,7 @@ impl NativeCertifiedRangePrefix {
         birth: &NativeDatabaseBirth,
         base: &NativeRangeBaseBinding,
     ) -> Result<()> {
+        self.certificate_evidence.validate()?;
         if self.format_version != 2
             || self.birth_id != birth.birth_id
             || self.base_receipt_sha256 != base.checksum_sha256
@@ -831,6 +841,7 @@ impl BicDb {
             materialized,
             certified_voters: certificate.certified_voters().clone(),
             required_quorum: certificate.required_quorum(),
+            certificate_evidence: certificate.evidence().clone(),
             global_image_generation: record.global_image_generation,
             range_image_generation: record.range_image_generation,
             history_generation: base.history_generation,

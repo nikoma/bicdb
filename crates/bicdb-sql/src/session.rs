@@ -844,7 +844,7 @@ fn rewrite_routine_schema_type_identity(
     routine: &mut RoutineSchema,
     previous: &UserTypeSchema,
     updated: &UserTypeSchema,
-) -> bool {
+) -> Result<bool> {
     let mut changed = rewrite_routine_type_identity(&mut routine.return_type, previous, updated);
     if let Some(declaration) = &mut routine.return_type_declaration {
         changed |= rewrite_routine_type_identity(declaration, previous, updated);
@@ -857,15 +857,15 @@ fn rewrite_routine_schema_type_identity(
             changed = true;
         }
     }
-    changed |= rewrite_routine_definition_type_identity(routine, previous, updated);
-    changed
+    changed |= rewrite_routine_definition_type_identity(routine, previous, updated)?;
+    Ok(changed)
 }
 
 fn rewrite_routine_definition_type_identity(
     routine: &mut RoutineSchema,
     previous: &UserTypeSchema,
     updated: &UserTypeSchema,
-) -> bool {
+) -> Result<bool> {
     fn relocate(
         data_type: &mut DataType,
         previous: &UserTypeSchema,
@@ -927,45 +927,83 @@ fn rewrite_routine_definition_type_identity(
         true
     }
 
-    let Ok(mut statements) = Parser::parse_sql(&PostgreSqlDialect {}, &routine.definition) else {
-        return false;
-    };
-    let [Statement::CreateFunction(function)] = statements.as_mut_slice() else {
-        return false;
+    let (mut statements, procedure_proxy) =
+        match Parser::parse_sql(&PostgreSqlDialect {}, &routine.definition) {
+            Ok(statements) => (statements, false),
+            Err(_) if routine.kind == RoutineKind::Procedure => {
+                let Some(header) = oracle::procedures::header(&routine.definition)? else {
+                    return Ok(false);
+                };
+                (vec![Statement::CreateFunction(header)], true)
+            }
+            Err(_) => return Ok(false),
+        };
+    let [statement] = statements.as_mut_slice() else {
+        return Ok(false);
     };
     let mut changed = false;
-    for (index, argument) in function.args.iter_mut().flatten().enumerate() {
-        if relocate(&mut argument.data_type, previous, updated) {
-            if let Some(declaration) = routine.args.get_mut(index) {
-                *declaration = crate::sql_text::sql_text(argument);
+    match statement {
+        Statement::CreateFunction(function) => {
+            for (index, argument) in function.args.iter_mut().flatten().enumerate() {
+                if relocate(&mut argument.data_type, previous, updated) {
+                    if let Some(declaration) = routine.args.get_mut(index) {
+                        *declaration = crate::sql_text::sql_text(argument);
+                    }
+                    if let (Some(saved), Ok(rewritten)) = (
+                        routine.arg_types.get_mut(index),
+                        routine_type_schema(&argument.data_type),
+                    ) {
+                        *saved = rewritten;
+                    }
+                    changed = true;
+                }
             }
-            if let (Some(saved), Ok(rewritten)) = (
-                routine.arg_types.get_mut(index),
-                routine_type_schema(&argument.data_type),
-            ) {
-                *saved = rewritten;
+            if let Some(
+                FunctionReturnType::DataType(data_type) | FunctionReturnType::SetOf(data_type),
+            ) = &mut function.return_type
+            {
+                if relocate(data_type, previous, updated) {
+                    routine.return_type_declaration = Some(data_type.to_string());
+                    if let Ok(rewritten) = routine_type_schema(data_type) {
+                        routine.return_type = rewritten.pg_type;
+                        routine.return_type_modifier = rewritten.type_modifier;
+                    }
+                    changed = true;
+                }
             }
-            changed = true;
         }
-    }
-    if let Some(FunctionReturnType::DataType(data_type) | FunctionReturnType::SetOf(data_type)) =
-        &mut function.return_type
-    {
-        if relocate(data_type, previous, updated) {
-            routine.return_type_declaration = Some(data_type.to_string());
-            if let Ok(rewritten) = routine_type_schema(data_type) {
-                routine.return_type = rewritten.pg_type;
-                routine.return_type_modifier = rewritten.type_modifier;
+        Statement::CreateProcedure { params, .. } => {
+            for (index, argument) in params.iter_mut().flatten().enumerate() {
+                if relocate(&mut argument.data_type, previous, updated) {
+                    if let Some(declaration) = routine.args.get_mut(index) {
+                        *declaration = crate::sql_text::sql_text(argument);
+                    }
+                    if let (Some(saved), Ok(rewritten)) = (
+                        routine.arg_types.get_mut(index),
+                        routine_type_schema(&argument.data_type),
+                    ) {
+                        *saved = rewritten;
+                    }
+                    changed = true;
+                }
             }
-            changed = true;
         }
+        _ => return Ok(false),
     }
     if changed {
         // Loading routine metadata reparses this declaration. Keep its typed
         // header current while preserving the body as its original SQL value.
-        routine.definition = crate::sql_text::sql_text(&statements[0]);
+        let statement = statements.remove(0);
+        routine.definition = if procedure_proxy {
+            let Statement::CreateFunction(function) = statement else {
+                unreachable!("procedure parsing proxy is a function header");
+            };
+            oracle::procedures::render(function)?
+        } else {
+            crate::sql_text::sql_text(&statement)
+        };
     }
-    changed
+    Ok(changed)
 }
 
 fn base_type_uses_routine(user_type: &UserTypeSchema, routine_name: &str) -> bool {

@@ -92,7 +92,7 @@ pub(crate) fn header(sql: &str) -> Result<Option<sqlparser::ast::CreateFunction>
     Ok(Some(function))
 }
 
-pub(super) fn render(mut function: sqlparser::ast::CreateFunction) -> Result<String> {
+pub(crate) fn render(mut function: sqlparser::ast::CreateFunction) -> Result<String> {
     function.return_type = None;
     let mut source = tokens(&render_sql(&Statement::CreateFunction(function)))?;
     let index = source

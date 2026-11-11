@@ -1925,7 +1925,7 @@ impl<'db> SqlSession<'db> {
             self.save_session_user_type(user_type)?;
         }
         for mut routine in list_routines(self.db_ref())? {
-            if rewrite_routine_schema_type_identity(&mut routine, &previous, &updated) {
+            if rewrite_routine_schema_type_identity(&mut routine, &previous, &updated)? {
                 // Its exact existing catalog row is already captured by the
                 // rename journal, including its stable OID and overload key.
                 save_routine(self.db_mut()?, &routine)?;
@@ -2185,7 +2185,7 @@ impl<'db> SqlSession<'db> {
 
         self.sync_user_type_columns(updated, None)?;
         for mut routine in list_routines(self.db_ref())? {
-            if rewrite_routine_schema_type_identity(&mut routine, previous, updated) {
+            if rewrite_routine_schema_type_identity(&mut routine, previous, updated)? {
                 self.save_session_routine(&routine)?;
             }
         }

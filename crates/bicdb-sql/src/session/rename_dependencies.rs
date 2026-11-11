@@ -55,7 +55,7 @@ impl RenameDependencies {
         let replacements = privilege_projection::composite_type_replacements(db, &root)?;
         let previous_type = table_row_type_schema(previous);
         for mut routine in list_routines(db)? {
-            if rewrite_routine_schema_type_identity(&mut routine, &previous_type, &root) {
+            if rewrite_routine_schema_type_identity(&mut routine, &previous_type, &root)? {
                 plan.metadata
                     .insert((ROUTINE_COLLECTION.into(), routine_storage_key(&routine)));
             }

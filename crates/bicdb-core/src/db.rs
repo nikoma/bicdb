@@ -17692,10 +17692,7 @@ impl Transaction {
         if self.state != TxState::Pending {
             return Err(BicDbError::TransactionNotPending);
         }
-        if self.catalog_actor_scope.is_some() {
-            self.db_ref()
-                .ensure_writable("buffer internal catalog deletion")?;
-        }
+        self.ensure_catalog_mutation_scope(collection)?;
         let ids = ids
             .into_iter()
             .map(|(id, statement_snapshot)| (id.as_ref().to_string(), statement_snapshot))
@@ -18150,10 +18147,7 @@ impl Transaction {
         if self.state != TxState::Pending {
             return Err(BicDbError::TransactionNotPending);
         }
-        if self.catalog_actor_scope.is_some() {
-            self.db_ref()
-                .ensure_writable("buffer internal catalog mutation")?;
-        }
+        self.ensure_catalog_mutation_scope(collection)?;
         let records = records.into_iter().collect::<Vec<_>>();
         if records.is_empty() {
             return Ok(());

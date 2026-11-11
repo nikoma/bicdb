@@ -24,8 +24,11 @@ thread_local! {
 }
 
 /// Temporary authority for trusted internal catalog operations on this thread.
-/// It does not grant row-policy or mutation-grant authority. Drop before the
-/// outer business decision; transactions created inside must finish first.
+/// Internal row mutations stay within the token's declared collections and
+/// backing identities. Reads retain ordinary native access checks. This does
+/// not grant row-policy or mutation-grant authority or authorize raw catalog
+/// changes. Drop before the outer business decision; transactions created
+/// inside must finish first.
 #[derive(Debug)]
 pub struct CatalogScopeAccess {
     identity: Arc<()>,
@@ -351,6 +354,28 @@ impl CatalogAdmission {
 }
 
 impl Transaction {
+    pub(super) fn ensure_catalog_mutation_scope(&self, collection: &str) -> Result<()> {
+        let Some(actor) = self.catalog_actor_scope else {
+            return Ok(());
+        };
+        let db = self.db_ref();
+        db.ensure_writable("buffer internal catalog mutation")?;
+        // Resolve under the host's database execution guard before taking
+        // admission, retaining only the immutable identity across the gate.
+        let incarnation = db
+            .collections
+            .get(collection)
+            .map(|current| Arc::clone(&current.read().incarnation));
+        let state = self.catalog_admission.state.read();
+        state.check_actor(Some(actor))?;
+        if !state.scopes[&actor].covers(collection, incarnation.as_ref()) {
+            return Err(BicDbError::TransactionConflict(format!(
+                "internal catalog mutation of `{collection}` exceeds its reserved resources"
+            )));
+        }
+        Ok(())
+    }
+
     pub(super) fn ensure_unprotected_collection_access(
         &self,
         collection: &str,

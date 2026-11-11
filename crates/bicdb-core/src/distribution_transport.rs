@@ -66,6 +66,22 @@ const FRAME_HEADER_BYTES: usize = 4;
 /// Sealed transport result: only the authenticated client exchange below can
 /// construct it. A deserialized response DTO alone is insufficient.
 #[derive(Debug)]
+pub(crate) struct AuthenticatedNativeReadyReply {
+    reply: crate::distribution_range_recovery::NativeReadyReply,
+    peer: crate::distribution_consensus::MetadataReadParticipant,
+}
+impl AuthenticatedNativeReadyReply {
+    pub(crate) fn into_parts(
+        self,
+    ) -> (
+        crate::distribution_range_recovery::NativeReadyReply,
+        crate::distribution_consensus::MetadataReadParticipant,
+    ) {
+        (self.reply, self.peer)
+    }
+}
+
+#[derive(Debug)]
 pub(crate) struct AuthenticatedRecoveryFenceReply {
     reply: crate::distribution_range_recovery::RecoveryEpochFenceReply,
     peer: MetadataReadParticipant,

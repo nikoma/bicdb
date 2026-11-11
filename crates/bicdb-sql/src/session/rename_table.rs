@@ -222,6 +222,127 @@ mod tests {
             .collect()
     }
 
+    fn concurrent_rename_with_native_writer(ending: &str) {
+        for paged in [false, true] {
+            let root = tempfile::tempdir().unwrap();
+            let mut db = BicDb::open_with_config(root.path(), config(paged)).unwrap();
+            SqlSession::new(&mut db)
+                .execute("CREATE TABLE source(id INT PRIMARY KEY,payload INT); INSERT INTO source VALUES(1,10); CREATE VIEW dependent AS SELECT source AS item FROM source")
+                .unwrap();
+            db.create_collection("native_unrelated").unwrap();
+            db.insert(
+                "native_unrelated",
+                Record::new("ack").with_metadata(serde_json::json!({"value": 10})),
+            )
+            .unwrap();
+            rename_journal::initialize_rename_journal_identities(&mut db).unwrap();
+            let mut unrelated = db.begin_transaction().unwrap();
+            unrelated
+                .update(
+                    "native_unrelated",
+                    Record::new("ack").with_metadata(serde_json::json!({"value": 99})),
+                )
+                .unwrap();
+            {
+                let mut sql = SqlSession::new(&mut db);
+                if ending != "autocommit" {
+                    sql.execute(
+                        "BEGIN; UPDATE source SET payload=20 WHERE id=1; SAVEPOINT before_rename",
+                    )
+                    .unwrap();
+                }
+                sql.execute("ALTER TABLE source RENAME TO renamed")
+                    .unwrap_or_else(|error| {
+                        panic!("paged={paged} ending={ending}: unrelated writer must not prevent rename: {error}")
+                    });
+                assert_eq!(
+                    sql.execute("SELECT (item).payload FROM dependent")
+                        .unwrap()
+                        .rows,
+                    vec![vec![SqlValue::Int(if ending == "autocommit" {
+                        10
+                    } else {
+                        20
+                    })]]
+                );
+                // This actual native write/row lock predates the rename and
+                // commits while the SQL owner still holds its catalog scope.
+                unrelated.commit().unwrap();
+                let later = sql.db_ref().begin_transaction().unwrap();
+                assert_eq!(
+                    later
+                        .get("native_unrelated", "ack")
+                        .unwrap()
+                        .unwrap()
+                        .metadata,
+                    serde_json::json!({"value": 99})
+                );
+                if ending != "autocommit" {
+                    assert!(later.scan_collection("renamed").is_err());
+                    assert!(later.scan_collection("source").is_err());
+                }
+                later.rollback().unwrap();
+                match ending {
+                    "commit" => sql.execute("COMMIT").unwrap(),
+                    "rollback" => sql.execute("ROLLBACK").unwrap(),
+                    "savepoint" => sql.execute("ROLLBACK TO before_rename; COMMIT").unwrap(),
+                    "autocommit" => SqlResult::command("SELECT"),
+                    _ => unreachable!(),
+                };
+                let table = if matches!(ending, "commit" | "autocommit") {
+                    "renamed"
+                } else {
+                    "source"
+                };
+                let expected = if matches!(ending, "commit" | "savepoint") {
+                    20
+                } else {
+                    10
+                };
+                assert_eq!(
+                    sql.execute(&format!("SELECT payload FROM {table}"))
+                        .unwrap()
+                        .rows,
+                    vec![vec![SqlValue::Int(expected)]]
+                );
+                assert_eq!(
+                    sql.execute("SELECT pg_typeof(item) FROM dependent")
+                        .unwrap()
+                        .rows,
+                    vec![vec![SqlValue::String(table.into())]]
+                );
+            }
+            // Finalization must release both names and dependent metadata.
+            let observer = db.begin_transaction().unwrap();
+            assert_eq!(
+                observer.scan_collection("native_unrelated").unwrap().len(),
+                1
+            );
+            observer.rollback().unwrap();
+            db.close().unwrap();
+        }
+    }
+
+    #[test]
+    fn concurrent_rename_commits_with_unrelated_pending_native_writer() {
+        concurrent_rename_with_native_writer("commit");
+    }
+
+    #[test]
+    fn concurrent_rename_rolls_back_with_unrelated_pending_native_writer() {
+        concurrent_rename_with_native_writer("rollback");
+    }
+
+    #[test]
+    fn concurrent_rename_savepoint_preserves_prior_writes_and_unrelated_writer() {
+        concurrent_rename_with_native_writer("savepoint");
+    }
+
+    #[test]
+    fn concurrent_rename_autocommit_preserves_unrelated_pending_native_writer() {
+        concurrent_rename_with_native_writer("autocommit");
+    }
+
     #[test]
     fn standby_initialization_preserves_an_undecided_primary_rename_and_follows_its_decision() {
         use bicdb_core::ReplicationMode;

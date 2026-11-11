@@ -1108,7 +1108,9 @@ impl<'db> SqlEngine<'db> {
             .flatten()
             .cloned()
             .collect::<Vec<_>>();
-        let committed_primary_key_extreme_is_safe = self.tx.is_none_or(|tx| tx.write_len() == 0);
+        let committed_primary_key_extreme_is_safe = self
+            .tx
+            .is_none_or(|tx| tx.write_len() == 0 && !tx.is_postgres_serializable());
         if committed_primary_key_extreme_is_safe && !primary_key_requires_typed_identity(schema) {
             if let Some(index) = readable_primary_key_index_for_schema(self.db_ref(), schema) {
                 let prefix = prefix_values
@@ -2492,12 +2494,19 @@ impl<'db> SqlEngine<'db> {
         let Some(bounded) = self.bounded_ordered_index_plan(from, select, query)? else {
             return Ok(None);
         };
-        let ids = self.db_ref().prefix_ordered_index_records(
-            &bounded.index_name,
-            bounded.prefix.as_slice(),
-            bounded.descending,
-            bounded.limit,
-        )?;
+        let ids = if self.tx.is_some_and(Transaction::is_postgres_serializable) {
+            // Apply the limit after the caller's snapshot-aware row sort.
+            // A limited live cursor can miss both the old winner and rows
+            // displaced by a key that the snapshot cannot see.
+            self.lookup_index_cached(&bounded.index_name, &bounded.prefix)?
+        } else {
+            Rc::from(self.db_ref().prefix_ordered_index_records(
+                &bounded.index_name,
+                bounded.prefix.as_slice(),
+                bounded.descending,
+                bounded.limit,
+            )?)
+        };
         let records =
             self.records_for_ids_with_schema(&bounded.collection, &ids, bounded.schema.as_ref())?;
         if crate::plan_diagnostics::active() {

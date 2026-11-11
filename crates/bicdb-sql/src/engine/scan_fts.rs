@@ -3534,12 +3534,12 @@ impl<'db> SqlEngine<'db> {
                 limit,
             } => {
                 sql_profile_index_lookup();
-                if self.tx.is_some_and(|tx| tx.write_len() > 0) {
+                if self
+                    .tx
+                    .is_some_and(|tx| tx.write_len() > 0 || tx.is_postgres_serializable())
+                {
                     sql_profile_full_scan();
                     return self.scan_records(collection);
-                }
-                if let Some(tx) = self.tx {
-                    tx.observe_postgres_index_prefix(index_name, &[])?;
                 }
                 let ids = self
                     .db_ref()
@@ -3557,8 +3557,9 @@ impl<'db> SqlEngine<'db> {
                     sql_profile_full_scan();
                     return self.scan_records(collection);
                 }
-                if let Some(tx) = self.tx {
-                    tx.observe_postgres_index_prefix(index_name, prefix)?;
+                if self.tx.is_some_and(Transaction::is_postgres_serializable) {
+                    let ids = self.lookup_index_cached(index_name, prefix)?;
+                    return self.records_for_ids(collection, &ids);
                 }
                 let ids = self.db_ref().prefix_ordered_index_records(
                     index_name,

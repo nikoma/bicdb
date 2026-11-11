@@ -1470,6 +1470,11 @@ impl<'db> SqlEngine<'db> {
         schema: Option<&TableSchema>,
         selection: Option<&Expr>,
     ) -> Result<Option<Vec<Arc<Record>>>> {
+        if self.tx.is_some_and(Transaction::is_postgres_serializable) {
+            // These postings describe current records only. The heap path
+            // can see older versions and records the relation predicate.
+            return Ok(None);
+        }
         let Some(selection) = selection else {
             return Ok(None);
         };
@@ -2597,7 +2602,9 @@ impl<'db> SqlEngine<'db> {
         if self.selection_contradiction_proven(table, alias, schema, selection) {
             return Ok(Some(RecordLocators::Rowids(Vec::new())));
         }
-        if let Some(schema) = schema {
+        if let Some(schema) =
+            schema.filter(|_| !self.tx.is_some_and(Transaction::is_postgres_serializable))
+        {
             if let Some((index_name, candidate)) =
                 self.trigram_index_candidate(table, alias, schema, selection)?
             {

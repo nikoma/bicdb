@@ -256,6 +256,60 @@ async fn serializable_tracks_row_and_predicate_dependencies() {
         }
         a.batch_execute("COMMIT").await.unwrap();
 
+        peer.batch_execute(
+            "CREATE TABLE ssi_ranked(id INT PRIMARY KEY, grp INT, v INT);
+             CREATE INDEX ssi_ranked_order ON ssi_ranked(grp,v);
+             INSERT INTO ssi_ranked VALUES (1,1,10),(2,1,20),(3,2,0)",
+        )
+        .await
+        .unwrap();
+        a.batch_execute("BEGIN ISOLATION LEVEL SERIALIZABLE READ ONLY; SELECT 1")
+            .await
+            .unwrap();
+        peer.batch_execute("UPDATE ssi_ranked SET v=30 WHERE id=1")
+            .await
+            .unwrap();
+        let row = a
+            .query_one(
+                "SELECT id FROM ssi_ranked WHERE grp=1 ORDER BY v ASC LIMIT 1",
+                &[],
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            row.get::<_, i32>(0),
+            1,
+            "{mode:?}: bounded order lost its historical winner"
+        );
+        a.batch_execute("COMMIT").await.unwrap();
+
+        peer.batch_execute(
+            r#"CREATE TABLE ssi_documents(id INT PRIMARY KEY, body JSONB);
+               CREATE INDEX ssi_documents_body ON ssi_documents USING gin(body);
+               INSERT INTO ssi_documents VALUES (1,'{"tag":"old"}')"#,
+        )
+        .await
+        .unwrap();
+        a.batch_execute("BEGIN ISOLATION LEVEL SERIALIZABLE READ ONLY; SELECT 1")
+            .await
+            .unwrap();
+        peer.batch_execute(r#"UPDATE ssi_documents SET body='{"tag":"new"}' WHERE id=1"#)
+            .await
+            .unwrap();
+        let row = a
+            .query_one(
+                r#"SELECT id FROM ssi_documents WHERE body @> '{"tag":"old"}'::jsonb"#,
+                &[],
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            row.get::<_, i32>(0),
+            1,
+            "{mode:?}: current-only GIN postings hid a historical row"
+        );
+        a.batch_execute("COMMIT").await.unwrap();
+
         b.batch_execute(
             "BEGIN ISOLATION LEVEL SERIALIZABLE; UPDATE ssi_scope SET v=201 WHERE id=2",
         )

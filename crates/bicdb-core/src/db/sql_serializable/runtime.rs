@@ -195,6 +195,10 @@ impl BicDb {
 }
 
 impl Transaction {
+    pub fn is_postgres_serializable(&self) -> bool {
+        self.postgres_serializable.is_some()
+    }
+
     /// Pin and register a PostgreSQL Serializable snapshot at the first
     /// snapshot-requiring statement. A deferrable reader waits outside commit
     /// admission and retries before it can expose an unsafe snapshot.

@@ -879,6 +879,28 @@ impl ClusterDataNodeService {
     ) -> Result<()> {
         self.range_writes.preflight_recovery_nonce(scope)
     }
+    pub(crate) fn preflight_native_recovery(
+        &self,
+        role: &crate::distribution_range_recovery::RecoveryRoleAdmission,
+        scope: &crate::distribution_range_consensus::RecoveryFenceScope,
+        cancellation: &crate::CancellationToken,
+    ) -> Result<()> {
+        let db = loop {
+            cancellation.check()?;
+            if let Some(db) = self.db.try_read_for(std::time::Duration::from_millis(5)) {
+                break db;
+            }
+        };
+        let native = db.native_recovery_admission(
+            role.cluster_id(),
+            role.bootstrap_id(),
+            role.local_node_id(),
+            role.local_member_incarnation(),
+        )?;
+        native.require_current(&db)?;
+        self.range_writes
+            .preflight_recovery_fence(role, &native, scope)
+    }
 
     /// Receiver-only: the runtime already owns the drained range freeze and
     /// acquired an independently fresh role before taking this service latch.
@@ -984,6 +1006,43 @@ impl ClusterDataNodeService {
         cancellation.check()?;
         role.require_scope(scope)?;
         Ok(reply)
+    }
+    /// Receiver-local certify-only step. The runtime collects the decision's
+    /// actual current-voter observations before entering this service latch.
+    pub(crate) fn certify_native_historical_command(
+        &mut self,
+        role: &crate::distribution_range_recovery::RecoveryRoleAdmission,
+        decision: &crate::distribution_range_recovery::HistoricalCommandDecision,
+        frozen: &crate::distribution_range_mutation::FrozenRangeMutationPermit,
+        cancellation: &crate::CancellationToken,
+    ) -> Result<crate::distribution_range_consensus::HistoricalRangeCertification> {
+        cancellation.check()?;
+        decision.require_recipient_role(role)?;
+        let controlled = self.range_mutations.try_controlled_mutation(frozen)?;
+        let db = loop {
+            cancellation.check()?;
+            if let Some(db) = self.db.try_read_for(std::time::Duration::from_millis(5)) {
+                break db;
+            }
+        };
+        let native = db.native_recovery_admission(
+            role.cluster_id(),
+            role.bootstrap_id(),
+            role.local_node_id(),
+            role.local_member_incarnation(),
+        )?;
+        native.require_current(&db)?;
+        self.range_mutations
+            .validate_controlled(role.current_range().id, &controlled)?;
+        let marker = self
+            .range_writes
+            .certify_historical_command(role, &native, decision)?;
+        native.require_current(&db)?;
+        role.require_live_request()?;
+        cancellation.check()?;
+        drop(db);
+        drop(controlled);
+        Ok(marker)
     }
 
     pub fn schema_compatibility_fingerprint(&self) -> Result<SchemaCompatibilityFingerprint> {

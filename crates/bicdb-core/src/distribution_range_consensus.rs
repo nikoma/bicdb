@@ -479,6 +479,26 @@ impl RangeWriteEnvelope {
             {
                 return Err(range_write_error("damaged recovery refusal scope"));
             }
+            let log = self
+                .catalog
+                .ranges
+                .get(range_id)
+                .ok_or_else(|| range_write_error("recovery refusal has no actual range log"))?;
+            for marker in fence.historical_certifications.values() {
+                if marker.index > log.last_index
+                    || log.entries.get(&marker.index).is_some_and(|entry| {
+                        entry.command.checksum_sha256 != marker.command_sha256
+                            || !matches!(
+                                entry.state,
+                                RangeWriteState::QuorumCommitted | RangeWriteState::Applied
+                            )
+                    })
+                {
+                    return Err(range_write_error(
+                        "historical certification conflicts with retained command state",
+                    ));
+                }
+            }
         }
         for log in self.catalog.ranges.values() {
             validate_log(log)?;
@@ -555,6 +575,7 @@ pub struct RangeWriteStore {
     fsync: bool,
     catalog: RangeWriteCatalog,
     open_id: Uuid,
+    recovery_persistence_uncertain: bool,
 }
 
 impl RangeWriteStore {
@@ -673,8 +694,13 @@ impl RangeWriteStore {
             fsync,
             catalog,
             open_id: Uuid::now_v7(),
+            recovery_persistence_uncertain: false,
         };
-        if migrated {
+        // A previous service instance may have observed rename success but
+        // failed directory sync while the same live DB remained open. Reading
+        // that visible JSON is not durability evidence: re-fsync unchanged
+        // validated refusals before this new store-open can expose proofs.
+        if migrated || !store.catalog.recovery_fences.is_empty() {
             store.persist()?;
         }
         Ok(store)

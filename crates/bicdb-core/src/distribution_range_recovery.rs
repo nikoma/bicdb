@@ -24,6 +24,13 @@ fn invalid(message: &str) -> BicDbError {
 
 mod runtime;
 pub(crate) use runtime::RangeRecoveryRuntime;
+mod quorum;
+pub(crate) use quorum::{FreshRangeRecoveryAuthority, RecoveryFenceQuorumRound};
+mod historical;
+pub(crate) use historical::{
+    CurrentHistoricalCertificationRound, HistoricalCommandDecision, HistoricalCommandDecisionRound,
+    RecoveryApplyAdmission,
+};
 
 /// A wire request is a claim to check, never recovery or native authority.
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
@@ -71,7 +78,7 @@ pub(crate) struct RecoveryFencedProbeReply {
 /// It authorizes neither native Apply nor any metadata/data mutation.
 #[derive(Debug)]
 pub(crate) struct RecoveryHistoryObservation {
-    fence: RecoveryFenceObservation,
+    fence: std::sync::Arc<RecoveryFenceObservation>,
     index: Option<u64>,
     entry: Option<crate::distribution_range_consensus::RangeWriteLogEntry>,
     current_certification:
@@ -125,7 +132,7 @@ impl RecoveryHistoryObservation {
             }
         }
         Ok(Self {
-            fence,
+            fence: std::sync::Arc::new(fence),
             index: reply.index,
             entry: reply.entry,
             current_certification: reply.current_certification,
@@ -133,6 +140,9 @@ impl RecoveryHistoryObservation {
     }
     pub(crate) fn fence(&self) -> &RecoveryFenceObservation {
         &self.fence
+    }
+    pub(crate) fn fence_observation(&self) -> std::sync::Arc<RecoveryFenceObservation> {
+        std::sync::Arc::clone(&self.fence)
     }
     pub(crate) fn index(&self) -> Option<u64> {
         self.index
@@ -147,7 +157,7 @@ impl RecoveryHistoryObservation {
     }
     pub(super) fn into_reply(self) -> RecoveryFencedProbeReply {
         RecoveryFencedProbeReply {
-            fence: self.fence.into_reply(),
+            fence: self.fence.reply.clone(),
             index: self.index,
             entry: self.entry,
             current_certification: self.current_certification,
@@ -472,6 +482,7 @@ impl RecoveryRoleAdmission {
             &self.members,
             &self.schema,
             &self.restore,
+            &self.handoff_target_identity,
             &self.relocation.as_ref().map(|r| {
                 (
                     &r.id,
@@ -483,6 +494,33 @@ impl RecoveryRoleAdmission {
                     r.target_replica_id,
                 )
             }),
+        ))?)))
+    }
+    /// The data-range identity shared by Normal and exact committed-Handoff
+    /// purposes. Plan/session/target credentials remain bound by full SHA.
+    pub(crate) fn range_configuration_sha256(&self) -> Result<String> {
+        use sha2::{Digest, Sha256};
+        let mut replicas = self
+            .range
+            .replicas
+            .iter()
+            .map(|r| (r.id, &r.node_id, &r.role))
+            .collect::<Vec<_>>();
+        replicas.sort_by_key(|r| r.0);
+        Ok(hex::encode(Sha256::digest(serde_json::to_vec(&(
+            "bicdb-recovery-semantic-range-v1",
+            &self.cluster_id,
+            self.bootstrap_id,
+            self.range.id,
+            self.range.start_token,
+            self.range.end_token,
+            self.range.epoch,
+            &self.range.leader,
+            &self.range.placement,
+            replicas,
+            &self.members,
+            &self.schema,
+            &self.restore,
         ))?)))
     }
     pub(crate) fn expected_handoff_old_config_sha256(&self) -> Result<String> {
@@ -689,6 +727,7 @@ impl RecoveryObservationRoleAdmission {
             || scope.range_id != self.fresh.current_range().id
             || scope.range_epoch != self.fresh.current_range().epoch
             || scope.configuration_sha256 != self.fresh.configuration_sha256()?
+            || scope.range_configuration_sha256 != self.fresh.range_configuration_sha256()?
             || scope.metadata_term > self.fresh.metadata_term()
             || scope.metadata_read_index > self.fresh.metadata_read_index()
         {

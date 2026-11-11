@@ -23,9 +23,24 @@ pub(crate) struct RecoveryFenceScope {
     pub metadata_term: u64,
     pub metadata_read_index: u64,
     pub configuration_sha256: String,
+    pub range_configuration_sha256: String,
     pub purpose: MetadataRecoveryRolePurpose,
 }
 impl RecoveryFenceScope {
+    pub(crate) fn freeze_owner(&self) -> Result<Uuid> {
+        self.validate()?;
+        match self.purpose {
+            MetadataRecoveryRolePurpose::NormalRecovery => Ok(self.recovery_nonce),
+            MetadataRecoveryRolePurpose::CommittedHandoff { session_id, .. }
+                if !session_id.is_nil() =>
+            {
+                Ok(session_id)
+            }
+            _ => Err(range_write_error(
+                "invalid read-only or missing handoff freeze owner",
+            )),
+        }
+    }
     pub(crate) fn from_role(role: &RecoveryRoleAdmission) -> Result<Self> {
         role.require_live_request()?;
         Ok(Self {
@@ -42,6 +57,7 @@ impl RecoveryFenceScope {
             metadata_term: role.metadata_term(),
             metadata_read_index: role.metadata_read_index(),
             configuration_sha256: role.configuration_sha256()?,
+            range_configuration_sha256: role.range_configuration_sha256()?,
             purpose: role.purpose().clone(),
         })
     }
@@ -60,6 +76,11 @@ impl RecoveryFenceScope {
                 MetadataRecoveryRolePurpose::ObserveFencedRecovery { .. }
             )
             || self.configuration_sha256.len() != 64
+            || self.range_configuration_sha256.len() != 64
+            || !self
+                .range_configuration_sha256
+                .bytes()
+                .all(|b| b.is_ascii_hexdigit())
             || !self
                 .configuration_sha256
                 .bytes()
@@ -81,6 +102,7 @@ impl RecoveryFenceScope {
             || self.recovery_nonce != role.recovery_nonce()
             || &self.purpose != role.purpose()
             || self.configuration_sha256 != role.configuration_sha256()?
+            || self.range_configuration_sha256 != role.range_configuration_sha256()?
             || self.metadata_term > role.metadata_term()
             || self.metadata_read_index > role.metadata_read_index()
         {
@@ -101,6 +123,7 @@ impl RecoveryFenceScope {
             && self.initiator_incarnation == other.initiator_incarnation
             && self.recovery_nonce == other.recovery_nonce
             && self.configuration_sha256 == other.configuration_sha256
+            && self.range_configuration_sha256 == other.range_configuration_sha256
             && self.purpose == other.purpose
     }
 }
@@ -225,10 +248,108 @@ impl RecoveryResolvedCatalogObservation {
 }
 
 impl RangeWriteStore {
+    /// No row/WAL Apply occurs here. Only an independently observed committed
+    /// historical decision can install the current-session certify marker.
+    pub(crate) fn certify_historical_command(
+        &mut self,
+        role: &RecoveryRoleAdmission,
+        native: &NativeRecoveryAdmission,
+        decision: &crate::distribution_range_recovery::HistoricalCommandDecision,
+    ) -> Result<HistoricalRangeCertification> {
+        decision.require_recipient_role(role)?;
+        let scope = decision.scope();
+        self.require_recovery_scope(role, native, scope)?;
+        let command = decision.command();
+        role.require_historical_command_scope(command)?;
+        if self
+            .catalog
+            .handoff_promises
+            .get(&scope.range_id)
+            .is_some_and(|promise| command.index > promise.resolved_through)
+        {
+            return Err(range_write_error(
+                "historical certification exceeds permanent promised prefix",
+            ));
+        }
+        // Every subsequent error retains a conservative no-proof refusal;
+        // partially changed in-memory labels are never durable observations.
+        self.recovery_persistence_uncertain = true;
+        let log = self
+            .catalog
+            .ranges
+            .get_mut(&scope.range_id)
+            .ok_or_else(|| range_write_error("fenced range is absent"))?;
+        if let Some(existing) = log.entries.get(&command.index) {
+            if existing.command != *command || existing.state == RangeWriteState::Aborted {
+                return Err(range_write_error(
+                    "historical certification conflicts with actual retained history",
+                ));
+            }
+        } else {
+            if command.index <= log.compacted_through
+                || command.index != log.last_index.saturating_add(1)
+            {
+                return Err(range_write_error("historical certification has a compacted/unavailable gap; native image/history repair is required"));
+            }
+            log.entries.insert(
+                command.index,
+                RangeWriteLogEntry {
+                    command: command.clone(),
+                    state: RangeWriteState::Committed,
+                },
+            );
+            log.last_index = command.index;
+        }
+        let entry = log
+            .entries
+            .get_mut(&command.index)
+            .expect("validated/inserted historical entry");
+        if entry.state != RangeWriteState::Applied {
+            entry.state = RangeWriteState::QuorumCommitted;
+        }
+        let marker = HistoricalRangeCertification {
+            recovery_nonce: scope.recovery_nonce,
+            configuration_sha256: scope.configuration_sha256.clone(),
+            range_epoch: scope.range_epoch,
+            index: command.index,
+            command_sha256: command.checksum_sha256.clone(),
+        };
+        let record = self
+            .catalog
+            .recovery_fences
+            .get_mut(&scope.range_id)
+            .expect("scope checked active");
+        if !record
+            .historical_certifications
+            .contains_key(&command.index)
+            && record.historical_certifications.len() >= 1024
+        {
+            return Err(range_write_error(
+                "current-session historical certification bound reached",
+            ));
+        }
+        if record
+            .historical_certifications
+            .get(&command.index)
+            .is_some_and(|old| old != &marker)
+        {
+            return Err(range_write_error(
+                "conflicting current-session historical certification",
+            ));
+        }
+        record
+            .historical_certifications
+            .insert(command.index, marker.clone());
+        // Retain ambiguous decisions/refusals but never expose them as synced
+        // observations until a subsequent successful whole-catalog fsync.
+        self.persist_recovery_catalog()?;
+        Ok(marker)
+    }
     pub(crate) fn recovery_observation_phase(
         &self,
         scope: &RecoveryFenceScope,
     ) -> Result<crate::distribution_range_recovery::RecoveryFenceObservationPhase> {
+        self.require_durable_recovery_catalog()?;
         let saved = self
             .catalog
             .recovery_fences
@@ -268,6 +389,7 @@ impl RangeWriteStore {
         role: &RecoveryRoleAdmission,
         native: &NativeRecoveryAdmission,
     ) -> Result<RecoveryFenceScope> {
+        self.require_durable_recovery_catalog()?;
         self.require_native_recovery_identity(role, native)?;
         let saved = self
             .catalog
@@ -303,6 +425,7 @@ impl RangeWriteStore {
         &self,
         scope: &RecoveryFenceScope,
     ) -> Result<()> {
+        self.require_durable_recovery_catalog()?;
         self.require_no_image_install(scope.range_id)?;
         let saved = self
             .catalog
@@ -316,6 +439,24 @@ impl RangeWriteStore {
         }
         Ok(())
     }
+    fn require_durable_recovery_catalog(&self) -> Result<()> {
+        if self.recovery_persistence_uncertain {
+            return Err(range_write_error("recovery catalog persistence is uncertain; re-fsync the exact fenced session before claiming durability"));
+        }
+        Ok(())
+    }
+    fn persist_recovery_catalog(&mut self) -> Result<()> {
+        self.persist_recovery_catalog_with(crate::storage::write_atomic)
+    }
+    fn persist_recovery_catalog_with(
+        &mut self,
+        write: impl FnOnce(&Path, &[u8], bool) -> Result<()>,
+    ) -> Result<()> {
+        self.recovery_persistence_uncertain = true;
+        self.persist_with(write)?;
+        self.recovery_persistence_uncertain = false;
+        Ok(())
+    }
     pub(crate) fn observe_fenced_recovery_history(
         &self,
         role: &crate::distribution_range_recovery::RecoveryObservationRoleAdmission,
@@ -323,6 +464,7 @@ impl RangeWriteStore {
         scope: &RecoveryFenceScope,
         index: Option<u64>,
     ) -> Result<Option<RangeWriteLogEntry>> {
+        self.require_durable_recovery_catalog()?;
         self.require_no_image_install(scope.range_id)?;
         role.require_scope(scope)?;
         role.require_native_identity(native)?;
@@ -453,11 +595,10 @@ impl RangeWriteStore {
         }
         Ok(())
     }
-    /// Caller owns and has quiescently drained the actual DB range freeze,
-    /// then rechecked NativeRecoveryAdmission::require_current under DB guard.
-    /// No old prepared/committed entry is changed, and no native floor is set.
-    pub(crate) fn fence_recovery_epoch(
-        &mut self,
+    /// Read-only full candidate validation before changing the actual freeze
+    /// owner; the mutating persist path repeats it after drain under latches.
+    pub(crate) fn preflight_recovery_fence(
+        &self,
         role: &RecoveryRoleAdmission,
         native: &NativeRecoveryAdmission,
         scope: &RecoveryFenceScope,
@@ -500,6 +641,15 @@ impl RangeWriteStore {
             }
         }
         if let Some(old) = self.catalog.recovery_fences.get(&scope.range_id) {
+            let exact_normal_to_committed_handoff = matches!(
+                old.scope.purpose,
+                MetadataRecoveryRolePurpose::NormalRecovery
+            ) && matches!(
+                scope.purpose,
+                MetadataRecoveryRolePurpose::CommittedHandoff { .. }
+            ) && old.scope.range_epoch == scope.range_epoch
+                && old.scope.range_configuration_sha256 == scope.range_configuration_sha256
+                && role.committed_relocation().is_some();
             if matches!(
                 old.scope.purpose,
                 MetadataRecoveryRolePurpose::CommittedHandoff { .. }
@@ -512,7 +662,8 @@ impl RangeWriteStore {
             }
             if old.scope.range_epoch > scope.range_epoch
                 || (old.scope.range_epoch == scope.range_epoch
-                    && old.scope.configuration_sha256 != scope.configuration_sha256)
+                    && old.scope.configuration_sha256 != scope.configuration_sha256
+                    && !exact_normal_to_committed_handoff)
             {
                 return Err(range_write_error(
                     "recovery scope regressed or changed configuration without epoch",
@@ -537,6 +688,27 @@ impl RangeWriteStore {
                 ));
             }
         }
+        Ok(())
+    }
+    /// Caller owns and has quiescently drained the actual DB range freeze,
+    /// then rechecked NativeRecoveryAdmission::require_current under DB guard.
+    /// No old prepared/committed entry is changed, and no native floor is set.
+    pub(crate) fn fence_recovery_epoch(
+        &mut self,
+        role: &RecoveryRoleAdmission,
+        native: &NativeRecoveryAdmission,
+        scope: &RecoveryFenceScope,
+    ) -> Result<()> {
+        self.fence_recovery_epoch_with(role, native, scope, crate::storage::write_atomic)
+    }
+    fn fence_recovery_epoch_with(
+        &mut self,
+        role: &RecoveryRoleAdmission,
+        native: &NativeRecoveryAdmission,
+        scope: &RecoveryFenceScope,
+        write: impl FnOnce(&Path, &[u8], bool) -> Result<()>,
+    ) -> Result<()> {
+        self.preflight_recovery_fence(role, native, scope)?;
         let log = self
             .catalog
             .ranges
@@ -589,7 +761,7 @@ impl RangeWriteStore {
         );
         // Retain this refusal on any rename/directory-sync ambiguity. Retrying
         // always re-fsyncs before any fresh quorum acknowledgment is issued.
-        self.persist()
+        self.persist_recovery_catalog_with(write)
     }
     pub(crate) fn require_recovery_scope(
         &self,
@@ -597,6 +769,7 @@ impl RangeWriteStore {
         native: &NativeRecoveryAdmission,
         scope: &RecoveryFenceScope,
     ) -> Result<()> {
+        self.require_durable_recovery_catalog()?;
         self.require_no_image_install(scope.range_id)?;
         self.require_native_recovery_identity(role, native)?;
         scope.require_role(role)?;
@@ -871,6 +1044,83 @@ mod tests {
         assert!(reopened.normal_native_write_allowed(&three).is_err());
         assert!(fixture.root.path().exists());
     }
+    #[test]
+    fn actual_rename_then_directory_sync_error_cannot_issue_durability_observations() {
+        let mut fixture = Fixture::new(1);
+        let gate = fixture.db.range_mutation_gate();
+        let _frozen = gate
+            .try_freeze(fixture.range.id, fixture.scope.freeze_owner().unwrap())
+            .unwrap();
+        let error = fixture
+            .store
+            .fence_recovery_epoch_with(
+                &fixture.role,
+                &fixture.native,
+                &fixture.scope,
+                |path, bytes, fsync| {
+                    assert!(fsync);
+                    let stage = path.with_extension("recovery-injected-stage");
+                    fs::write(&stage, bytes)?;
+                    File::open(&stage)?.sync_all()?;
+                    fs::rename(&stage, path)?;
+                    Err(std::io::Error::other(
+                        "injected failure after rename before directory sync",
+                    )
+                    .into())
+                },
+            )
+            .unwrap_err();
+        assert!(error.to_string().contains("after rename"));
+        assert!(
+            fixture
+                .store
+                .catalog
+                .recovery_fences
+                .contains_key(&fixture.range.id),
+            "stricter refusal is retained"
+        );
+        assert!(fixture
+            .store
+            .require_persisted_recovery_scope(&fixture.scope)
+            .is_err());
+        assert!(fixture
+            .store
+            .recovery_observation_phase(&fixture.scope)
+            .is_err());
+        assert!(fixture
+            .store
+            .historical_certification_observation(&fixture.scope, 1)
+            .is_err());
+        assert!(fixture
+            .store
+            .observe_recovery_resolved_prefix(&fixture.role, &fixture.native, &fixture.scope)
+            .is_err());
+        // The same exact session re-fsyncs before reporting any durability.
+        fixture
+            .store
+            .fence_recovery_epoch(&fixture.role, &fixture.native, &fixture.scope)
+            .unwrap();
+        fixture
+            .store
+            .require_persisted_recovery_scope(&fixture.scope)
+            .unwrap();
+        assert_eq!(
+            fixture
+                .store
+                .recovery_observation_phase(&fixture.scope)
+                .unwrap(),
+            crate::distribution_range_recovery::RecoveryFenceObservationPhase::ActiveRecovery
+        );
+        assert_eq!(
+            fixture
+                .db
+                .native_range_prefix_observation(fixture.range.id)
+                .unwrap()
+                .native_applied_index,
+            None
+        );
+    }
+
     #[test]
     fn actual_same_epoch_nonce_refresh_durably_refuses_delayed_old_fence() {
         let mut fixture = Fixture::new(1);

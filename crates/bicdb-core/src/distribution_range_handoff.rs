@@ -385,3 +385,222 @@ impl HandoffCutRound {
         })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::distribution::*;
+    use crate::distribution_consensus::{
+        MetadataConsensusStore, MetadataReadAck, MetadataReadAuthority, MetadataReadParticipant,
+    };
+    use crate::distribution_range_consensus::RangeWriteStore;
+    use std::collections::BTreeSet;
+    use std::path::Path;
+    use std::time::Duration;
+
+    fn topology() -> ClusterTopology {
+        let root = tempfile::tempdir().unwrap();
+        let cfg = DistributionConfig {
+            enabled: true,
+            initial_ranges: 1,
+            replication_factor: 1,
+            cluster_id: ClusterId::new("handoff-round-test").unwrap(),
+            node_id: ClusterNodeId::new("n1").unwrap(),
+            node_address: "127.0.0.1:10001".into(),
+            ..Default::default()
+        };
+        let mut store = DistributionStore::initialize_at(root.path(), cfg, true, 1).unwrap();
+        let actor = ClusterNodeId::new("n1").unwrap();
+        for n in 2..=4 {
+            let mut node = ClusterNode::new(
+                ClusterNodeId::new(format!("n{n}")).unwrap(),
+                format!("127.0.0.1:{}", 10000 + n),
+                7,
+                1_000_000,
+                2,
+            )
+            .unwrap();
+            if n == 2 {
+                node.tls_certificate_sha256 = Some("b".repeat(64));
+                node.pending_tls_certificate_sha256 = Some("c".repeat(64));
+            }
+            store.join_node(node, &actor, 2).unwrap();
+        }
+        let range = store.topology().ranges.values().next().unwrap().clone();
+        let plan = RebalancePlan {
+            id: "stable-handoff-test-plan".into(),
+            topology_generation: store.topology().generation,
+            created_at_ms: 3,
+            replica_moves: vec![PlannedReplicaMove {
+                range_id: range.id,
+                expected_epoch: range.epoch,
+                source: Some(actor.clone()),
+                target: ClusterNodeId::new("n4").unwrap(),
+                estimated_bytes: 0,
+                reason: ReplicaMoveReason::LoadBalance,
+            }],
+            leader_transfers: vec![],
+            unplaced_ranges: vec![],
+            estimated_bytes_in_flight: 0,
+        };
+        store.apply_rebalance_plan(&plan, &actor, 3).unwrap();
+        let mut topology = store.topology().clone();
+        // Explicit protocol fixture: three old data voters and a fourth learner;
+        // metadata membership is independently four voters.
+        let range = topology.ranges.values_mut().next().unwrap();
+        for n in 2..=3 {
+            range.replicas.push(RangeReplica {
+                id: ReplicaId::new(topology.next_replica_id).unwrap(),
+                node_id: ClusterNodeId::new(format!("n{n}")).unwrap(),
+                role: RangeReplicaRole::Voter,
+            });
+            topology.next_replica_id += 1;
+        }
+        topology.replication_factor = 3;
+        topology.validate().unwrap();
+        topology
+    }
+
+    fn authority(root: &Path, topology: &ClusterTopology) -> MetadataReadAuthority {
+        let mut stores: Vec<_> = (1..=3)
+            .map(|n| {
+                MetadataConsensusStore::open(
+                    root.join(format!("n{n}")),
+                    topology.cluster_id.clone(),
+                    ClusterNodeId::new(format!("n{n}")).unwrap(),
+                    topology.clone(),
+                    true,
+                )
+                .unwrap()
+            })
+            .collect();
+        let mut leader = stores.remove(0);
+        leader.start_election().unwrap();
+        leader
+            .become_leader(
+                &(1..=3)
+                    .map(|n| ClusterNodeId::new(format!("n{n}")).unwrap())
+                    .collect::<BTreeSet<_>>(),
+            )
+            .unwrap();
+        for (n, follower) in (2..=3).zip(&mut stores) {
+            let reply = follower
+                .handle_append_request(leader.append_request_from(1, 64).unwrap())
+                .unwrap();
+            leader
+                .record_append_response(&ClusterNodeId::new(format!("n{n}")).unwrap(), &reply)
+                .unwrap();
+        }
+        let participant = |name: &str| {
+            let id = ClusterNodeId::new(name).unwrap();
+            let node = &topology.nodes[&id];
+            MetadataReadParticipant::from_transport(
+                id,
+                node.incarnation,
+                node.tls_certificate_sha256.clone(),
+                true,
+            )
+        };
+        let mut context = leader
+            .begin_read_authority(Uuid::new_v4(), Duration::from_secs(10), &participant("n1"))
+            .unwrap();
+        for (n, follower) in (2..=3).zip(&mut stores) {
+            let id = ClusterNodeId::new(format!("n{n}")).unwrap();
+            let probe = leader.read_authority_probe(&context, &id, 1, 64).unwrap();
+            let response = follower.handle_read_authority_probe(probe.clone()).unwrap();
+            let ack =
+                MetadataReadAck::from_transport(&probe, &id, participant(id.as_str()), response)
+                    .unwrap();
+            leader
+                .record_read_authority_ack(&mut context, &ack)
+                .unwrap();
+        }
+        leader.finish_read_authority(context).unwrap()
+    }
+
+    #[test]
+    fn handoff_round_resumes_same_committed_session_after_coordinator_restart() {
+        let topology = topology();
+        let meta = tempfile::tempdir().unwrap();
+        let data = tempfile::tempdir().unwrap();
+        let id = *topology.relocations.keys().next().unwrap();
+        let round = HandoffCutRound::begin(authority(meta.path(), &topology), id).unwrap();
+        let request = round.request().clone();
+        let mut voters = Vec::new();
+        for n in 1..=2 {
+            let root = data.path().join(format!("n{n}"));
+            std::fs::create_dir_all(&root).unwrap();
+            crate::format::enable_range_image_install(&root).unwrap();
+            let mut voter = RangeWriteStore::open(
+                &root,
+                topology.cluster_id.clone(),
+                ClusterNodeId::new(format!("n{n}")).unwrap(),
+                true,
+            )
+            .unwrap();
+            voter.install_handoff_promise(&request).unwrap();
+            voters.push(voter);
+        }
+        drop(round); // No finish/certificate: resume through reopened metadata stores.
+        let mut resumed = HandoffCutRound::begin(authority(meta.path(), &topology), id).unwrap();
+        assert_eq!(resumed.request(), &request);
+        for (n, voter) in (1..=2).zip(&mut voters) {
+            let node = &topology.nodes[&ClusterNodeId::new(format!("n{n}")).unwrap()];
+            let promised = voter.install_handoff_promise(resumed.request()).unwrap();
+            resumed
+                .record(
+                    HandoffPromiseAck::from_transport(
+                        resumed.request(),
+                        node,
+                        node.tls_certificate_sha256.as_deref(),
+                        true,
+                        promised,
+                    )
+                    .unwrap(),
+                )
+                .unwrap();
+        }
+        let cut = resumed.finish().unwrap();
+        assert_eq!(cut.session_id(), request.session_id);
+        assert_eq!(cut.range_index(), 0);
+    }
+
+    #[test]
+    fn handoff_round_rechecks_authority_pins_and_does_not_count_duplicates_as_quorum() {
+        let topology = topology();
+        let meta = tempfile::tempdir().unwrap();
+        let id = *topology.relocations.keys().next().unwrap();
+        let mut round = HandoffCutRound::begin(authority(meta.path(), &topology), id).unwrap();
+        let node = &topology.nodes[&ClusterNodeId::new("n2").unwrap()];
+        let mut obsolete = node.clone();
+        obsolete.tls_certificate_sha256 = Some("a".repeat(64));
+        obsolete.pending_tls_certificate_sha256 = None;
+        let ack = HandoffPromiseAck::from_transport(
+            round.request(),
+            &obsolete,
+            Some(&"a".repeat(64)),
+            false,
+            round.request().clone(),
+        )
+        .unwrap();
+        assert!(
+            round.record(ack).is_err(),
+            "cached removed pin cannot override current authority"
+        );
+        for pin in ["b".repeat(64), "c".repeat(64)] {
+            let ack = HandoffPromiseAck::from_transport(
+                round.request(),
+                node,
+                Some(&pin),
+                false,
+                round.request().clone(),
+            )
+            .unwrap();
+            round.record(ack).unwrap();
+        }
+        assert!(
+            round.finish().is_err(),
+            "two valid pins for one member are still only one data voter"
+        );
+    }
+}

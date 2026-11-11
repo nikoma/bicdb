@@ -16,6 +16,7 @@ mod recycle_bin_journal;
 mod rename_journal;
 mod rename_dependencies;
 mod view_dependencies;
+mod rename_views;
 pub use recycle_bin::finish_committed_recycle_bin_purges;
 pub(crate) use recycle_bin::is_recycle_bin_name;
 pub use recycle_bin::recover_interrupted_recycle_bin_renames;

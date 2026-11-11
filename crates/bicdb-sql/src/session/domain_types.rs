@@ -1417,6 +1417,7 @@ impl<'db> SqlSession<'db> {
                             Some(new_name.clone()),
                         ));
                     }
+                    let view_updates = rename_views::plan_queries(self.db_ref(), &table, &new_table)?;
                     let in_tx = self.tx.is_some();
                     if let Some(undo) = alter_table_rename_table(
                         self.db_mut()?,
@@ -1466,6 +1467,9 @@ impl<'db> SqlSession<'db> {
                             trigger.table_name = new_table.clone();
                             self.save_session_trigger(&trigger)?;
                         }
+                    }
+                    for view in view_updates {
+                        self.save_session_view(&view)?;
                     }
                     let renamed_type = table_row_type_schema(&schema)
                         .column_type(false)

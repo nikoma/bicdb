@@ -337,7 +337,7 @@ impl NativeRangeCommandIntent {
                 if self.historical_recovery {
                     lineage.base_range()
                 } else {
-                    lineage.native_write_range()
+                    lineage.native_write_range()?
                 },
                 &self.expected_base,
             )

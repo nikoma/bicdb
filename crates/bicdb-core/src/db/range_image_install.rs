@@ -1189,6 +1189,12 @@ impl BicDb {
                     "previous native Installing belongs to another lineage",
                 ));
             }
+            if previous.attempt_id == fence.attempt_id()
+                && (previous.local_namespace_ids != bindings.namespace_ids()
+                    || previous.intent_sha256 != fence.intent_sha256())
+            {
+                return Err(invalid("same native install attempt cannot retarget a recreated namespace or changed intent"));
+            }
             self.require_native_image_install_restartable(
                 fence.range().id,
                 previous.attempt_id,

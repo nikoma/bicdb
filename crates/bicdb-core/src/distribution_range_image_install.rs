@@ -1101,6 +1101,13 @@ pub(crate) mod tests {
             .unwrap()
         }
         fn begin(&self, store: &mut RangeWriteStore, attempt: Uuid) -> NativeRangeImageInstaller {
+            self.try_begin(store, attempt).unwrap()
+        }
+        fn try_begin(
+            &self,
+            store: &mut RangeWriteStore,
+            attempt: Uuid,
+        ) -> Result<NativeRangeImageInstaller> {
             let target = self.target();
             let admission = target
                 .read()
@@ -1133,7 +1140,6 @@ pub(crate) mod tests {
                 ImageInstallPurpose::RelocationLearner,
                 attempt,
             )
-            .unwrap()
         }
         fn clear(&mut self, store: &RangeWriteStore, install: &mut NativeRangeImageInstaller) {
             // Complete and audit the ACTUAL inactive target history before
@@ -1723,6 +1729,80 @@ pub(crate) mod tests {
         assert!(
             fixture.store().require_no_image_install(range_id).is_err(),
             "physical copy and complete history do not activate membership or catalog floor"
+        );
+    }
+
+    #[test]
+    fn native_partial_attempt_refuses_recreated_namespace_until_fresh_authorized_attempt() {
+        let mut fixture = Fixture::new();
+        let original_uid = fixture
+            .target()
+            .read()
+            .local_namespace_identity("items")
+            .unwrap();
+        let attempt = Uuid::now_v7();
+        let mut store = fixture.store();
+        let partial = fixture.begin(&mut store, attempt);
+        drop(partial);
+        drop(store);
+        {
+            let target = fixture.target();
+            let mut db = target.write();
+            assert!(db.drop_collection("items").unwrap());
+            db.create_collection("items").unwrap();
+            assert_ne!(
+                db.local_namespace_identity("items").unwrap(),
+                original_uid,
+                "actual hard drop/recreate has a fresh local namespace lineage"
+            );
+        }
+        fixture.reopen_target();
+        let recreated_uid = fixture
+            .target()
+            .read()
+            .local_namespace_identity("items")
+            .unwrap();
+        let mut store = fixture.store();
+        let error = match fixture.try_begin(&mut store, attempt) {
+            Err(error) => error,
+            Ok(_) => panic!("old attempt must not silently bind the recreated physical backing"),
+        };
+        assert!(error.to_string().contains("recreated namespace"), "{error}");
+        assert!(store.require_no_image_install(fixture.range().id).is_err());
+        assert!(
+            fixture
+                .target()
+                .read()
+                .native_range_prefix_observation(fixture.range().id)
+                .unwrap()
+                .invalidated
+        );
+        // Explicitly restart from a fresh actual role/attempt. No prior receipt,
+        // numeric floor or target UUID is transplanted onto the new backing.
+        let mut restarted = fixture.begin(&mut store, Uuid::now_v7());
+        fixture.clear(&store, &mut restarted);
+        fixture.copy(&store, &mut restarted);
+        let source = fixture.capture.take().unwrap().complete().unwrap();
+        let verified = verify_install(&fixture, &store, restarted, source);
+        assert_eq!(
+            fixture
+                .target()
+                .read()
+                .local_namespace_identity("items")
+                .unwrap(),
+            recreated_uid
+        );
+        assert_ne!(recreated_uid, original_uid);
+        assert!(store.require_no_image_install(fixture.range().id).is_err());
+        drop(verified);
+        fixture.reopen_target();
+        assert_eq!(
+            fixture
+                .target()
+                .read()
+                .local_namespace_identity("items")
+                .unwrap(),
+            recreated_uid
         );
     }
 

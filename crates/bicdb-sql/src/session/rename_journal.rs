@@ -133,6 +133,19 @@ pub fn initialize_rename_journal_identities(db: &mut BicDb) -> Result<usize> {
             "cannot initialize physical identities with unresolved SQL intents",
         ));
     }
+    if db.local_namespace_identity_feature_active()
+        && db
+            .collections()
+            .iter()
+            .all(|meta| meta.local_namespace_id.is_some())
+    {
+        // Profile validation also runs on live connection paths. An already
+        // complete migration needs no catalog mutation or global quiescence.
+        for meta in db.collections() {
+            db.local_namespace_identity(&meta.name)?;
+        }
+        return Ok(0);
+    }
     Ok(db.activate_local_namespace_identity_v1()?)
 }
 
@@ -698,6 +711,9 @@ mod tests {
             db.delete(HEADERS, &id).unwrap();
             assert!(initialize_rename_journal_identities(&mut db).unwrap() >= 2);
             assert!(db.local_namespace_identity("original").unwrap().is_some());
+            let owner = db.begin_transaction().unwrap();
+            assert_eq!(initialize_rename_journal_identities(&mut db).unwrap(), 0);
+            owner.rollback().unwrap();
             db.close().unwrap();
         }
     }

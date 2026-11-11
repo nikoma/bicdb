@@ -130,6 +130,16 @@ impl NativeActivationDecisionRecord {
         current_serving: bool,
     ) -> Result<()> {
         self.validate()?;
+        self.require_native_binding(db, native, current_serving)
+    }
+    /// Private pre-publication check. This does not mint a receipt: the actual
+    /// page callback still supplies XID/checksum before native publication.
+    fn require_native_binding(
+        &self,
+        db: &BicDb,
+        native: &NativeRecoveryAdmission,
+        current_serving: bool,
+    ) -> Result<()> {
         native.require_current(db)?;
         let actual = db.current_native_range_source_lineage(self.scope.range_id)?;
         if self.birth_id != native.birth_id()
@@ -350,10 +360,16 @@ impl BicDb {
                 "activation decision requires actual fsync image/serving reader fences",
             ));
         }
+        // Keep collection/native-domain inspection outside the page writer
+        // guard. Prepared owns the actual physical pin and this journal owns
+        // hidden-record publication throughout. The callback performs only
+        // bounded metadata validation and page operations, then readback
+        // revalidates the full actual binding before returning any receipt.
+        record.require_native_binding(self, &native, true)?;
         self.in_paged_transaction(|paged, xid| {
             record.native_page_xid = xid;
             record.checksum_sha256 = record.checksum()?;
-            record.require_native_domain(self, &native, true)?;
+            record.validate()?;
             for item in old.iter().chain(std::iter::once(&record)) {
                 let archive = decision_history_key(item.scope.range_id, &item.checksum_sha256);
                 if let Some(existing) =

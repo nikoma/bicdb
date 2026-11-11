@@ -2617,12 +2617,12 @@ impl<'db> SqlSession<'db> {
             .snapshot_floor
             .max(crate::statement_context::latest_independent_commit());
         let mut tx = self.db_ref().begin_transaction_after(floor)?;
-        tx.defer_statement_snapshot()?;
         tx.set_blocking_row_waits(self.blocking_row_wait_token());
         if isolation == "serializable" {
             tx.set_snapshot_isolation(true, floor)?;
             tx.set_statement_write_conflict_check(true)?;
         }
+        tx.defer_statement_snapshot()?;
         Ok(tx)
     }
 
@@ -3977,7 +3977,11 @@ impl<'db> SqlSession<'db> {
         let floor = self
             .snapshot_floor
             .max(crate::statement_context::latest_independent_commit());
-        next.set_snapshot_isolation(fixed, floor)?;
+        if oracle {
+            next.set_snapshot_isolation(fixed, floor)?;
+        } else {
+            next.set_deferred_snapshot_isolation(fixed, floor)?;
+        }
         next.set_statement_write_conflict_check(oracle && fixed)?;
         self.set_transaction_read_only_label(read_only)?;
         self.set_transaction_isolation_label(&isolation)?;
@@ -4973,7 +4977,11 @@ impl<'db> SqlSession<'db> {
                     "SET TRANSACTION must be first statement of transaction",
                 ));
             }
-            tx.set_snapshot_isolation(fixed, floor)?;
+            if oracle_preview {
+                tx.set_snapshot_isolation(fixed, floor)?;
+            } else {
+                tx.set_deferred_snapshot_isolation(fixed, floor)?;
+            }
             tx.set_statement_write_conflict_check(oracle_preview && fixed)?;
             self.set_transaction_isolation_label(transaction_defaults::isolation_label(level))?;
         }

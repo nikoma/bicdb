@@ -14955,6 +14955,12 @@ impl Transaction {
     /// statement. Native transactions keep their already selected watermark
     /// unless their creator explicitly opts into this host-managed boundary.
     pub fn defer_statement_snapshot(&mut self) -> Result<()> {
+        self.ensure_statement_snapshot_can_be_deferred()?;
+        self.statement_snapshot_deferred = true;
+        Ok(())
+    }
+
+    fn ensure_statement_snapshot_can_be_deferred(&self) -> Result<()> {
         if self.state != TxState::Pending {
             return Err(BicDbError::TransactionNotPending);
         }
@@ -14968,6 +14974,15 @@ impl Transaction {
                 "statement snapshot can only be deferred before transaction access".into(),
             ));
         }
+        Ok(())
+    }
+
+    /// Select a host-managed SQL mode whose initial snapshot remains deferred.
+    /// A later native set_snapshot_isolation call deliberately pins its own
+    /// watermark and cancels this opt-in.
+    pub fn set_deferred_snapshot_isolation(&mut self, fixed: bool, floor: u64) -> Result<()> {
+        self.ensure_statement_snapshot_can_be_deferred()?;
+        self.set_snapshot_isolation(fixed, floor)?;
         self.statement_snapshot_deferred = true;
         Ok(())
     }
@@ -15018,6 +15033,7 @@ impl Transaction {
         if fixed {
             self.isolation = TransactionIsolation::RepeatableRead;
         }
+        self.statement_snapshot_deferred = false;
         Ok(())
     }
 

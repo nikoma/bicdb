@@ -4891,11 +4891,12 @@ fn execute_server_sql_with_options_normalized(
                     &server.config.sql_profile,
                 )? {
                     let fixed = isolation == "repeatable read" || isolation == "serializable";
-                    state
-                        .tx
-                        .as_mut()
-                        .unwrap()
-                        .set_snapshot_isolation(fixed, state.last_commit_seq)?;
+                    let tx = state.tx.as_mut().unwrap();
+                    if bicdb_sql::oracle::is_oracle_profile(&server.config.sql_profile) {
+                        tx.set_snapshot_isolation(fixed, state.last_commit_seq)?;
+                    } else {
+                        tx.set_deferred_snapshot_isolation(fixed, state.last_commit_seq)?;
+                    }
                     state
                         .tx
                         .as_mut()
@@ -4973,11 +4974,12 @@ fn execute_server_sql_with_options_normalized(
                     .set_transaction_read_only_label(chain_read_only)?;
                 if let Some(isolation) = chain_isolation {
                     let fixed = isolation == "repeatable read" || isolation == "serializable";
-                    state
-                        .tx
-                        .as_mut()
-                        .unwrap()
-                        .set_snapshot_isolation(fixed, state.last_commit_seq)?;
+                    let tx = state.tx.as_mut().unwrap();
+                    if bicdb_sql::oracle::is_oracle_profile(&server.config.sql_profile) {
+                        tx.set_snapshot_isolation(fixed, state.last_commit_seq)?;
+                    } else {
+                        tx.set_deferred_snapshot_isolation(fixed, state.last_commit_seq)?;
+                    }
                     state
                         .tx
                         .as_mut()

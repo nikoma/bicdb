@@ -17,7 +17,7 @@ pub(crate) const MAX_FENCED_IRREVERSIBLE_COMMANDS: usize =
     MAX_NATIVE_READY_IRREVERSIBLE_COMMANDS + 1;
 
 pub(crate) fn fenced_obligation_limit_error() -> crate::BicDbError {
-    invalid(format!(
+    invalid(&format!(
         "fenced history exceeds the complete {MAX_FENCED_IRREVERSIBLE_COMMANDS}-command obligation reply bound; paginated history is required and no partial evidence is admitted"
     ))
 }

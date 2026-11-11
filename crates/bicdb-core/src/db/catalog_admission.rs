@@ -70,6 +70,8 @@ impl CatalogAdmission {
             self.state.read().check_access(owner, name, None)?;
         }
         Ok(())
+    }
+
     pub(super) fn register(&self, owner: TransactionId, bindings: &Arc<Bindings>) {
         self.state
             .write()
@@ -147,7 +149,8 @@ impl Transaction {
             // Existing relations keep the original policy/grant error order.
             // A moved-away reserved name must not leak an intermediate
             // NotFound result before the transaction reaches its bind gate.
-            self.catalog_admission.check_name_access(self.id, collection)?;
+            self.catalog_admission
+                .check_name_access(self.id, collection)?;
         }
         result
     }

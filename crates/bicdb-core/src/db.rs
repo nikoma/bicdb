@@ -18576,7 +18576,9 @@ impl Transaction {
             Some(grant) => {
                 self.validate_mutation_grant_operation(grant, collection, id, operation)?
             }
-            None => self.ensure_unprotected_collection_access(collection, SecureOperation::Write)?,
+            None => {
+                self.ensure_unprotected_collection_access(collection, SecureOperation::Write)?
+            }
         }
         self.bind_collection_incarnation(collection)?;
         if wait {
@@ -18723,7 +18725,9 @@ impl Transaction {
                 id,
                 MutationOperation::Delete,
             )?,
-            None => self.ensure_unprotected_collection_access(collection, SecureOperation::Delete)?,
+            None => {
+                self.ensure_unprotected_collection_access(collection, SecureOperation::Delete)?
+            }
         }
         self.bind_collection_incarnation(collection)?;
         self.lock_row_for_write(tx_id, collection, id, true)?;

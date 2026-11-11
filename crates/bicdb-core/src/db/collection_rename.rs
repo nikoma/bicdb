@@ -696,7 +696,10 @@ impl BicDb {
         // both names/backing. Without one, keep the conservative global gate:
         // other owners' overlays cannot be rebound by this operation. Locks
         // are checked separately while a completed transaction releases them.
-        if !self.catalog_admission.owner_covers(tx.id, old, new) {
+        if !self
+            .catalog_admission
+            .owner_covers(tx.id, tx.catalog_actor_scope, old, new)
+        {
             let other_pending = self.tx_states.shards.iter().any(|shard| {
                 shard
                     .lock()

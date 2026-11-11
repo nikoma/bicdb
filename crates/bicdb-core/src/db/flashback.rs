@@ -310,12 +310,22 @@ impl BicDb {
     /// collection take the flashback clock for their whole commit and carry
     /// their history rows; all others go straight to the commit body.
     pub(crate) fn commit_transaction(&self, tx: &mut Transaction) -> Result<u64> {
+        if !std::ptr::eq(tx.db.as_ptr(), self)
+            || !Arc::ptr_eq(&tx.catalog_admission, &self.catalog_admission)
+            || !Arc::ptr_eq(&tx.tx_states, &self.tx_states)
+        {
+            return Err(BicDbError::Unsupported(
+                "transaction belongs to a different database instance".into(),
+            ));
+        }
         if tx.has_deferred_hooks() {
             return Err(BicDbError::TransactionConflict(
                 "pending SQL constraint effects must be validated before commit".into(),
             ));
         }
         self.check_recovery_state()?;
+        self.catalog_admission
+            .prepare_commit(tx.id, tx.catalog_actor_scope)?;
         if tx.state == TxState::Pending && self.ensure_writable("commit").is_err() {
             return self.commit_read_only_on_standby(tx);
         }
@@ -336,6 +346,9 @@ impl BicDb {
             if !tx.writes.is_empty() || !tx.imported_record_audit_events.is_empty() {
                 replication_live::note_thread_commit(seq);
             }
+        }
+        if committed.is_err() && tx.state != TxState::Committed {
+            self.catalog_admission.reopen_after_failed_commit(tx.id);
         }
         committed
     }

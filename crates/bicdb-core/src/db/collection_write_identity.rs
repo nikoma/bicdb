@@ -9,11 +9,16 @@ impl Transaction {
         let db = self.db_ref();
         db.check_recovery_state()?;
         let result = (|| {
-            self.catalog_admission
-                .bind(self.id, &self.collection_incarnations, collection, || {
+            self.catalog_admission.bind(
+                self.id,
+                self.catalog_actor_scope,
+                &self.collection_incarnations,
+                collection,
+                || {
                     db.ensure_collection(collection)?;
                     Ok(Arc::clone(&db.collection_state(collection)?.incarnation))
-                })
+                },
+            )
         })();
         db.check_recovery_state()?;
         result

@@ -2,7 +2,7 @@ mod access_mutation;
 mod branching;
 mod catalog_admission;
 mod collection_rename;
-pub use catalog_admission::CatalogScopeToken;
+pub use catalog_admission::{CatalogScopeAccess, CatalogScopeToken};
 mod commit_snapshot;
 mod deferred_materialize;
 #[cfg(test)]
@@ -8979,6 +8979,7 @@ pub struct Transaction {
     // writes authored against a dropped or renamed-away collection.
     collection_incarnations: Arc<Mutex<FxHashMap<String, Arc<()>>>>,
     catalog_admission: Arc<catalog_admission::CatalogAdmission>,
+    catalog_actor_scope: Option<u64>,
     /// Opt-in SQL profiles may report write conflicts at the statement
     /// boundary. Commit validation remains mandatory in either mode.
     statement_write_conflicts: bool,
@@ -18973,7 +18974,7 @@ impl Drop for Transaction {
         // Goes through the shared handle (not `db`) to stay sound under
         // concurrent access, mirroring the record-lock release above.
         self.active_snapshots.decr_remove(self.snapshot_tx.0);
-        self.catalog_admission.finish(self.id);
+        self.catalog_admission.finish(self.id, self.state);
     }
 }
 

@@ -175,7 +175,7 @@ pub use db::{
     decode_fts_posting_payload, decode_fts_posting_payload_into, fts_impact_bucket,
     fts_impact_bucket_upper_edge, fts_rank_conjunctive, fts_rank_single_term,
     full_text_oversized_terms_skipped, full_text_term_is_indexable, paged_tid_hint_stats,
-    parse_repair_decimal, BicDb, BlockGate, BypassPolicy, CatalogScopeToken,
+    parse_repair_decimal, BicDb, BlockGate, BypassPolicy, CatalogScopeAccess, CatalogScopeToken,
     ClusterSchemaActivationAdvance, ClusterSchemaActivationLimits, ClusterSchemaActivationPhase,
     ClusterSchemaActivationState, ClusterSchemaBundle, ClusterSchemaCatalogRecord,
     ClusterSchemaCompatibilityWindow, ClusterSchemaFinalizationState, ClusterSchemaOnlinePlan,

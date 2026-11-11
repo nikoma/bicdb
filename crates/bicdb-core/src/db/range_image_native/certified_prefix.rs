@@ -612,11 +612,13 @@ impl BicDb {
         let base = anchor.binding();
         self.validate_native_range_base_history(&birth, &base)?;
         let prefix = self.read_native_certified_range_prefix(&birth, &base)?;
+        let serving = self.read_native_recovered_serving_configuration(&birth, &base, prefix.as_ref())?;
         let lineage = SourceRangeImageLineage {
             birth,
             _anchor: anchor,
             base,
             prefix,
+            serving,
             current_database_incarnation: self.incarnation.clone(),
             current_schema_generation: self.schema_compatibility.generation(),
         };

@@ -71,7 +71,7 @@ pub(crate) use range_image_native::rf3_fixture::{
     ActualNativeRf3Fixture, ActualNativeRf3RpcObservation,
 };
 pub(crate) use range_image_native::{
-    FreshRangeGenesisAuthority, KnownNativeRecoveryPrefix, NativeHistoryPublicationBinding,
+    FreshRangeGenesisAuthority, KnownNativeRecoveryPrefix, NativeRecoveredServingReceipt, NativeHistoryPublicationBinding,
     NativeHistoryStage, NativeHistoryStageProgress, NativeHistoryTargetContext,
     NativeLogicalHistoryEntryV1, NativeLogicalHistoryOutcomeV1, NativeLogicalHistoryPoint,
     NativeLogicalHistoryStepV1, NativeRangeInstallSafety, NativeRangePendingApply,

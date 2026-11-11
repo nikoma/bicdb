@@ -440,6 +440,237 @@ mod tests {
         );
     }
 
+    fn actual_local_closed_ready_quorum(
+        fixture: &Fixture,
+        store: &RangeWriteStore,
+        prepared: &crate::distribution_range_consensus::PreparedNativeRecoveryReady,
+        nonce: Uuid,
+        parent: &CancellationToken,
+    ) -> crate::distribution_range_recovery::ClosedNativeReadyQuorum {
+        use crate::distribution_range_recovery::{
+            ClosedNativeReadyQuorumRound, NativeReadyObservation, NativeReadyRequest,
+        };
+        let fresh = fixture.role(nonce);
+        let request = NativeReadyRequest {
+            scope: RecoveryFenceScope::from_role(&fresh).unwrap(),
+            challenge: Uuid::now_v7(),
+            budget_ms: 5000,
+        };
+        let actual = store
+            .observe_prepared_native_for_role(&fixture.db.read(), prepared, &fresh, &request)
+            .unwrap();
+        let participant = crate::distribution_consensus::MetadataReadParticipant::from_transport(
+            fixture.spec.node_id.clone(),
+            fixture.spec.member_incarnation,
+            None,
+            true,
+        );
+        let reply =
+            NativeReadyObservation::from_local(actual, participant, &request, fresh.deadline())
+                .unwrap();
+        let mut round = ClosedNativeReadyQuorumRound::begin(fresh, parent).unwrap();
+        round.record(reply).unwrap();
+        round.finish().unwrap()
+    }
+
+    #[test]
+    fn actual_closed_rf1_quorum_persists_new_serving_epoch_but_keeps_prepared_refusal() {
+        let mut fixture = Fixture::new();
+        fixture.seed(fixture.range().id, 1);
+        let physical_epoch = fixture.range().epoch;
+        // A declared metadata epoch change, NOT an automatic election/HA test.
+        fixture.topology.ranges.values_mut().next().unwrap().epoch += 1;
+        let nonce = Uuid::now_v7();
+        let role = fixture.role(nonce);
+        let frozen = fixture.freeze(&role);
+        let mut store = fixture.store();
+        let local = fixture
+            .attest(
+                role,
+                &mut store,
+                Arc::clone(&frozen),
+                &CancellationToken::uncancelable(),
+            )
+            .unwrap();
+        let prepared = store
+            .prepare_native_recovery_ready(&fixture.db.read(), local)
+            .unwrap();
+        let closed = actual_local_closed_ready_quorum(
+            &fixture,
+            &store,
+            &prepared,
+            nonce,
+            &CancellationToken::uncancelable(),
+        );
+        let fresh = fixture.role(nonce);
+        let receipt = fixture
+            .db
+            .read()
+            .persist_native_recovered_serving_configuration(&prepared, &store, &closed, &fresh)
+            .unwrap();
+        receipt.require_current(&fixture.db.read()).unwrap();
+        assert_eq!(receipt.range_index(), 1);
+        let actual = fixture
+            .db
+            .read()
+            .current_native_range_source_lineage(fixture.range().id)
+            .unwrap();
+        assert_eq!(actual.base_range().epoch, physical_epoch);
+        assert_eq!(actual.native_write_range().epoch, physical_epoch + 1);
+        assert_eq!(actual.range_index(), 1);
+        assert_eq!(
+            actual.logical_history_sha256(),
+            prepared.logical_history_sha256()
+        );
+        // Native persistence alone does not finish recovery or admit writes.
+        assert!(store
+            .normal_native_write_allowed(&fixture.conflicting_command())
+            .is_err());
+        assert!(fixture
+            .db
+            .read()
+            .range_mutation_gate()
+            .try_controlled_mutation(&frozen)
+            .is_err());
+        prepared
+            .require_current_under_role(&fixture.db.read(), &store, &fresh)
+            .unwrap();
+        // Same opaque quorum + actual state is an idempotent native-write retry.
+        let retried = fixture
+            .db
+            .read()
+            .persist_native_recovered_serving_configuration(&prepared, &store, &closed, &fresh)
+            .unwrap();
+        assert_eq!(receipt.checksum_sha256(), retried.checksum_sha256());
+    }
+
+    #[test]
+    fn recovered_native_serving_epoch_survives_strict_cold_open_without_relabelling_capture() {
+        let mut fixture = Fixture::new();
+        fixture.seed(fixture.range().id, 1);
+        fixture.topology.ranges.values_mut().next().unwrap().epoch += 1;
+        let range_id = fixture.range().id;
+        let epoch = fixture.range().epoch;
+        let nonce = Uuid::now_v7();
+        let role = fixture.role(nonce);
+        let frozen = fixture.freeze(&role);
+        let mut store = fixture.store();
+        let local = fixture
+            .attest(
+                role,
+                &mut store,
+                Arc::clone(&frozen),
+                &CancellationToken::uncancelable(),
+            )
+            .unwrap();
+        let prepared = store
+            .prepare_native_recovery_ready(&fixture.db.read(), local)
+            .unwrap();
+        let closed = actual_local_closed_ready_quorum(
+            &fixture,
+            &store,
+            &prepared,
+            nonce,
+            &CancellationToken::uncancelable(),
+        );
+        let receipt = fixture
+            .db
+            .read()
+            .persist_native_recovered_serving_configuration(
+                &prepared,
+                &store,
+                &closed,
+                &fixture.role(nonce),
+            )
+            .unwrap();
+        let history = prepared.logical_history_sha256().to_owned();
+        let path = fixture.db.read().data_path().to_path_buf();
+        let blocked_command = fixture.conflicting_command();
+        drop(closed);
+        drop(receipt);
+        drop(prepared);
+        drop(frozen);
+        drop(store);
+        let Fixture {
+            root: _root,
+            db,
+            topology,
+            spec,
+        } = fixture;
+        assert_eq!(
+            Arc::strong_count(&db),
+            1,
+            "no DB service owner may survive the cold-open cut"
+        );
+        drop(db);
+        let (reopened, _) = BicDb::open_range_image_database(
+            &path,
+            DbConfig::default()
+                .with_fsync(true)
+                .with_storage_mode(StorageMode::ServerPaged)
+                .with_paged_buffer_pool_bytes(8 * 1024 * 1024),
+            &spec,
+        )
+        .unwrap();
+        let lineage = reopened
+            .current_native_range_source_lineage(range_id)
+            .unwrap();
+        assert_eq!(lineage.base_range().epoch + 1, epoch);
+        assert_eq!(lineage.native_write_range().epoch, epoch);
+        assert_eq!(lineage.range_index(), 1);
+        assert_eq!(lineage.logical_history_sha256(), history);
+        let reopened_store = RangeWriteStore::open(
+            &path,
+            topology.cluster_id.clone(),
+            spec.node_id.clone(),
+            true,
+        )
+        .unwrap();
+        assert!(reopened_store
+            .normal_native_write_allowed(&blocked_command)
+            .is_err());
+    }
+
+    #[test]
+    fn cancelled_closed_quorum_cannot_persist_a_serving_epoch() {
+        let fixture = Fixture::new();
+        let nonce = Uuid::now_v7();
+        let role = fixture.role(nonce);
+        let frozen = fixture.freeze(&role);
+        let mut store = fixture.store();
+        let local = fixture
+            .attest(role, &mut store, frozen, &CancellationToken::uncancelable())
+            .unwrap();
+        let prepared = store
+            .prepare_native_recovery_ready(&fixture.db.read(), local)
+            .unwrap();
+        let parent =
+            CancellationToken::new(Arc::new(std::sync::atomic::AtomicBool::new(false)), None);
+        let closed = actual_local_closed_ready_quorum(&fixture, &store, &prepared, nonce, &parent);
+        parent.cancel();
+        assert!(fixture
+            .db
+            .read()
+            .persist_native_recovered_serving_configuration(
+                &prepared,
+                &store,
+                &closed,
+                &fixture.role(nonce)
+            )
+            .is_err());
+        assert!(!format::native_recovery_serving_active(fixture.db.read().data_path()).unwrap());
+        assert_eq!(
+            fixture
+                .db
+                .read()
+                .current_native_range_source_lineage(fixture.range().id)
+                .unwrap()
+                .native_write_range()
+                .epoch,
+            fixture.range().epoch
+        );
+    }
+
     #[test]
     fn actual_empty_genesis_ready_owns_the_read_pin_until_proof_drop() {
         let fixture = Fixture::new();

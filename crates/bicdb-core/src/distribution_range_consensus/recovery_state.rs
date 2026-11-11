@@ -61,7 +61,8 @@ impl RecoveryFenceScope {
             purpose: role.purpose().clone(),
         })
     }
-    pub(super) fn validate(&self) -> Result<()> {
+    /// Structural DTO validation only; never role, quorum or serving authority.
+    pub(crate) fn validate(&self) -> Result<()> {
         if self.protocol_version != 1
             || self.bootstrap_id.is_nil()
             || self.range_epoch == 0

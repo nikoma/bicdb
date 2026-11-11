@@ -1427,6 +1427,183 @@ pub(crate) mod tests {
             .is_err());
     }
     #[test]
+    fn actual_native_r1_install_uses_target_local_visibility_and_preserves_other_range_rows() {
+        let mut fixture =
+            Fixture::new_with_ranges_and_before_handoff(2, |db, topology, spec, _| {
+                let ranges = topology.ranges.keys().copied().collect::<Vec<_>>();
+                // Genuine independent range commits distinguish global DB sequence
+                // from the selected range's one command. No sequence is assigned.
+                crate::distribution_range_consensus::seed_actual_origin(
+                    db,
+                    topology.clone(),
+                    spec,
+                    ranges[1],
+                    4,
+                );
+                crate::distribution_range_consensus::seed_actual_origin(
+                    db,
+                    topology.clone(),
+                    spec,
+                    ranges[0],
+                    1,
+                );
+            });
+        let target = fixture.target();
+        let source_r = fixture
+            .capture
+            .as_ref()
+            .unwrap()
+            .authorize_target_install()
+            .unwrap()
+            .cut()
+            .range_index();
+        assert_eq!(source_r, 1);
+        let source_b = fixture.source.read().current_commit_seq();
+        assert_ne!(source_b, source_r);
+        let selected = fixture.range().clone();
+        let other = fixture
+            .topology
+            .ranges
+            .values()
+            .find(|r| r.id != selected.id)
+            .unwrap()
+            .clone();
+        let source_key = (0..)
+            .map(|i| format!("stage-actual-origin-{i}"))
+            .find(|key| selected.contains_token(distribution_key_token("items", key)))
+            .unwrap();
+        let expected = fixture
+            .source
+            .read()
+            .get("items", &source_key)
+            .unwrap()
+            .unwrap();
+        let target_uid = target.read().local_namespace_identity("items").unwrap();
+        let mut retained = Vec::new();
+        // These are explicitly unacknowledged learner physical writes. Each
+        // real local transaction advances the target's own MVCC sequence.
+        for key in (0..)
+            .map(|i| format!("other-target-{i}"))
+            .filter(|key| other.contains_token(distribution_key_token("items", key)))
+            .take(17)
+        {
+            let row =
+                crate::Record::new(key.clone()).with_metadata(serde_json::json!({"retained":true}));
+            target
+                .read()
+                .apply_range_snapshot_batch_preinstalled(
+                    &other,
+                    &CollectionMeta::standard("items"),
+                    &RangeSnapshotBatch {
+                        collection: "items".into(),
+                        range_id: other.id,
+                        range_epoch: other.epoch,
+                        snapshot_commit_sequence: 0,
+                        resume_after_key: key.clone(),
+                        serialized_record_bytes: serde_json::to_vec(&row).unwrap().len(),
+                        records: vec![row],
+                    },
+                )
+                .unwrap();
+            retained.push(key);
+        }
+        let stale =
+            crate::Record::new(source_key.clone()).with_metadata(serde_json::json!({"stale":true}));
+        target
+            .read()
+            .apply_range_snapshot_batch_preinstalled(
+                &selected,
+                &CollectionMeta::standard("items"),
+                &RangeSnapshotBatch {
+                    collection: "items".into(),
+                    range_id: selected.id,
+                    range_epoch: selected.epoch,
+                    snapshot_commit_sequence: 0,
+                    resume_after_key: source_key.clone(),
+                    serialized_record_bytes: serde_json::to_vec(&stale).unwrap().len(),
+                    records: vec![stale],
+                },
+            )
+            .unwrap();
+        let target_before = target.read().current_commit_seq();
+        assert!(target_before > source_b && target_before > source_r);
+        drop(target);
+        let mut store = fixture.store();
+        let mut install = fixture.begin(&mut store, Uuid::now_v7());
+        {
+            let role = fixture.role();
+            let auth = fixture
+                .capture
+                .as_ref()
+                .unwrap()
+                .authorize_target_install()
+                .unwrap();
+            assert!(
+                install
+                    .clear_step(
+                        &store,
+                        &NativeImageInstallRole::CommittedHandoff(&role),
+                        &auth,
+                        &CancellationToken::uncancelable()
+                    )
+                    .is_err(),
+                "no destructive clear before actual full history audit"
+            );
+        }
+        fixture.clear(&store, &mut install);
+        fixture.copy(&store, &mut install);
+        let source = fixture.capture.take().unwrap().complete().unwrap();
+        let verified = verify_install(&fixture, &store, install, source);
+        assert_eq!(verified.base().range_index(), source_r);
+        assert!(verified.base().target_snapshot_bound().get() > target_before);
+        assert_ne!(verified.base().target_snapshot_bound().get(), source_b);
+        assert_eq!(verified.base().history_verified_through(), source_r);
+        {
+            let db = fixture.target();
+            let db = db.read();
+            assert_eq!(
+                db.get("items", &source_key).unwrap().unwrap().as_ref(),
+                expected.as_ref(),
+                "ordinary target MVCC get must see the exact copied value"
+            );
+            for key in &retained {
+                assert_eq!(
+                    db.get("items", key).unwrap().unwrap().metadata,
+                    serde_json::json!({"retained":true})
+                );
+            }
+            assert_eq!(db.local_namespace_identity("items").unwrap(), target_uid);
+        }
+        drop(verified);
+        fixture.reopen_target();
+        assert_eq!(
+            fixture
+                .target()
+                .read()
+                .get("items", &source_key)
+                .unwrap()
+                .unwrap()
+                .as_ref(),
+            expected.as_ref()
+        );
+        for key in retained {
+            assert!(fixture
+                .target()
+                .read()
+                .get("items", &key)
+                .unwrap()
+                .is_some());
+        }
+        assert!(
+            fixture
+                .store()
+                .require_no_image_install(selected.id)
+                .is_err(),
+            "native image is not membership/catalog activation"
+        );
+    }
+
+    #[test]
     fn partial_native_attempt_reopen_stays_unready_and_new_attempt_rejects_late_chunks() {
         let mut fixture = Fixture::new();
         let mut store = fixture.store();

@@ -80,6 +80,21 @@ impl AuthenticatedRecoveryFenceReply {
         (self.reply, self.peer)
     }
 }
+#[derive(Debug)]
+pub(crate) struct AuthenticatedRecoveryProbeReply {
+    reply: crate::distribution_range_recovery::RecoveryFencedProbeReply,
+    peer: MetadataReadParticipant,
+}
+impl AuthenticatedRecoveryProbeReply {
+    pub(crate) fn into_parts(
+        self,
+    ) -> (
+        crate::distribution_range_recovery::RecoveryFencedProbeReply,
+        MetadataReadParticipant,
+    ) {
+        (self.reply, self.peer)
+    }
+}
 
 fn transport_error(message: impl Into<String>) -> BicDbError {
     BicDbError::Cluster(message.into())
@@ -205,6 +220,9 @@ enum ClusterDataRequest {
     RecoveryEpochFence {
         request: crate::distribution_range_recovery::RecoveryEpochFenceRequest,
     },
+    RecoveryFencedProbe {
+        request: crate::distribution_range_recovery::RecoveryFencedProbeRequest,
+    },
     PrepareRangeWrite {
         command: RangeWriteCommand,
     },
@@ -306,6 +324,7 @@ impl ClusterDataRequest {
             | Self::ApplyRangeDigestRepair { range_id, .. } => Some(*range_id),
             Self::ApplyRangeWriteRepair { batch, .. } => Some(batch.range_id),
             Self::RecoveryEpochFence { request } => Some(request.scope.range_id),
+            Self::RecoveryFencedProbe { request } => Some(request.scope.range_id),
             Self::Ping
             | Self::Heartbeat { .. }
             | Self::StageTlsCertificateRotation { .. }
@@ -355,6 +374,7 @@ enum ClusterDataResponse {
     MetadataReadAcquire(MetadataReadAcquireResponse),
     MetadataRecoveryRole(MetadataRecoveryRoleResponse),
     RecoveryEpochFence(crate::distribution_range_recovery::RecoveryEpochFenceReply),
+    RecoveryFencedProbe(crate::distribution_range_recovery::RecoveryFencedProbeReply),
     RangeWrite(RangeWriteAck),
     RangeWriteProgress(RangeWriteProgress),
     RangeWriteRepair(RangeWriteRepairBatch),
@@ -786,6 +806,20 @@ fn handle_cluster_data_connection(
                 .fence_epoch(caller, &request, &token)
                 .map(|observation| {
                     ClusterDataResponse::RecoveryEpochFence(observation.into_reply())
+                });
+        }
+        if let ClusterDataRequest::RecoveryFencedProbe { request } = request.request {
+            let runtime = recovery_runtime
+                .ok_or_else(|| transport_error("native recovery runtime is not active"))?;
+            let caller = authenticated_caller.as_ref().ok_or_else(|| {
+                transport_error("recovery observation requires authenticated voter")
+            })?;
+            let token =
+                CancellationToken::new(Arc::new(AtomicBool::new(false)), Some(request_deadline));
+            return runtime
+                .observe_history(caller, &request, &token)
+                .map(|observation| {
+                    ClusterDataResponse::RecoveryFencedProbe(observation.into_reply())
                 });
         }
         dispatch_cluster_data_request(
@@ -2201,6 +2235,9 @@ fn dispatch_cluster_data_request(
             }
             Ok(ClusterDataResponse::MetadataReadProbe(response))
         }
+        ClusterDataRequest::RecoveryFencedProbe { .. } => Err(transport_error(
+            "recovery observations require authenticated receiver runtime",
+        )),
         ClusterDataRequest::RecoveryEpochFence { .. } => Err(transport_error(
             "native recovery requires authenticated receiver runtime",
         )),
@@ -3203,6 +3240,35 @@ impl TcpClusterRelocationTransport {
         }
     }
 
+    pub(crate) fn recovery_fenced_history_observation(
+        &self,
+        destination: &ClusterNodeId,
+        request: &crate::distribution_range_recovery::RecoveryFencedProbeRequest,
+        parent: &CancellationToken,
+    ) -> Result<crate::distribution_range_recovery::RecoveryHistoryObservation> {
+        let token = request.cancellation(parent)?;
+        let deadline = token.deadline().unwrap();
+        let (response, peer) = self.call_with_read_participant_cancellable(
+            &token,
+            destination,
+            ClusterDataRequest::RecoveryFencedProbe {
+                request: request.clone(),
+            },
+        )?;
+        match response {
+            ClusterDataResponse::RecoveryFencedProbe(reply) => {
+                crate::distribution_range_recovery::RecoveryHistoryObservation::from_transport(
+                    AuthenticatedRecoveryProbeReply { reply, peer },
+                    request,
+                    deadline,
+                )
+            }
+            response => Err(unexpected_response(
+                "fenced recovery history observation",
+                response,
+            )),
+        }
+    }
     pub(crate) fn recovery_epoch_fence_observation(
         &self,
         destination: &ClusterNodeId,
@@ -3220,6 +3286,9 @@ impl TcpClusterRelocationTransport {
         )?;
         match response {
             ClusterDataResponse::RecoveryEpochFence(reply) => {
+                if reply.phase != crate::distribution_range_recovery::RecoveryFenceObservationPhase::ActiveRecovery {
+                    return Err(transport_error("epoch fence endpoint returned a non-active authority phase"));
+                }
                 crate::distribution_range_recovery::RecoveryFenceObservation::from_transport(
                     AuthenticatedRecoveryFenceReply { reply, peer },
                     &request.scope,
@@ -3274,6 +3343,7 @@ impl TcpClusterRelocationTransport {
                 | ClusterDataRequest::MetadataReadAcquire { .. }
                 | ClusterDataRequest::AcquireMetadataRecoveryRole { .. }
                 | ClusterDataRequest::RecoveryEpochFence { .. }
+                | ClusterDataRequest::RecoveryFencedProbe { .. }
         );
         let network_deadline = Instant::now() + Duration::from_millis(self.config.io_timeout_ms);
         let deadline = cancellation
@@ -3453,6 +3523,14 @@ fn unexpected_response(expected: &str, response: ClusterDataResponse) -> BicDbEr
 }
 
 impl RangeWriteTransport for TcpClusterRelocationTransport {
+    fn recovery_fenced_history_observation(
+        &self,
+        destination: &ClusterNodeId,
+        request: &crate::distribution_range_recovery::RecoveryFencedProbeRequest,
+        parent: &CancellationToken,
+    ) -> Result<crate::distribution_range_recovery::RecoveryHistoryObservation> {
+        self.recovery_fenced_history_observation(destination, request, parent)
+    }
     fn recovery_epoch_fence_observation(
         &self,
         destination: &ClusterNodeId,

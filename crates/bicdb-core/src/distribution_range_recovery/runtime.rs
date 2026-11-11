@@ -40,6 +40,64 @@ impl Drop for Operation<'_> {
     }
 }
 impl RangeRecoveryRuntime {
+    pub(crate) fn observe_history(
+        &self,
+        observer: &MetadataReadParticipant,
+        request: &RecoveryFencedProbeRequest,
+        parent: &CancellationToken,
+    ) -> Result<RecoveryHistoryObservation> {
+        let token = request.cancellation(parent)?;
+        let _operation = self.reserve(request.scope.range_id)?;
+        let business = Uuid::now_v7();
+        let challenge = Uuid::now_v7();
+        let scope = &request.scope;
+        let purpose = RecoveryObservationRoleAdmission::purpose(scope)?;
+        let witness = self.provider.witness_recovery_role(
+            observer,
+            business,
+            scope.range_id,
+            scope.range_epoch,
+            scope.recovery_nonce,
+            challenge,
+            purpose,
+            &token,
+        )?;
+        let role = RecoveryObservationRoleAdmission::from_witness(
+            witness,
+            observer,
+            &self.local_node_id,
+            business,
+            challenge,
+            scope,
+        )?;
+        let token = token.child_with_deadline(role.deadline());
+        // This cannot create/refresh a durable fence; the service below must
+        // find the exact already-persisted session and native DB incarnation.
+        {
+            let service = loop {
+                token.check()?;
+                if let Some(service) = self.service.try_lock_for(LATCH_POLL) {
+                    break service;
+                }
+            };
+            service.require_persisted_recovery_scope(scope)?;
+        }
+        let frozen = self.frozen(scope, &token, false)?;
+        let service = loop {
+            token.check()?;
+            if let Some(service) = self.service.try_lock_for(LATCH_POLL) {
+                break service;
+            }
+        };
+        let reply = service.observe_native_recovery_history(&role, request, &frozen, &token)?;
+        token.check()?;
+        RecoveryHistoryObservation::from_local(
+            reply,
+            self.provider.local_participant(),
+            request,
+            token.deadline().unwrap(),
+        )
+    }
     pub(crate) fn new(
         service: Arc<Mutex<ClusterDataNodeService>>,
         provider: Arc<MetadataReadProvider>,
@@ -67,6 +125,7 @@ impl RangeRecoveryRuntime {
         &self,
         scope: &RecoveryFenceScope,
         token: &CancellationToken,
+        replace: bool,
     ) -> Result<Arc<FrozenRangeMutationPermit>> {
         token.check()?;
         {
@@ -76,6 +135,11 @@ impl RangeRecoveryRuntime {
                     self.gate
                         .validate_quiescent_frozen(scope.range_id, &session.frozen)?;
                     return Ok(Arc::clone(&session.frozen));
+                }
+                if !replace {
+                    return Err(invalid(
+                        "read-only observation cannot rotate a recovery freeze",
+                    ));
                 }
                 if matches!(
                     session.scope.purpose,
@@ -153,7 +217,16 @@ impl RangeRecoveryRuntime {
         )?;
         scope.require_role(&role)?;
         let token = token.child_with_deadline(role.deadline());
-        let frozen = self.frozen(scope, &token)?;
+        {
+            let service = loop {
+                token.check()?;
+                if let Some(service) = self.service.try_lock_for(LATCH_POLL) {
+                    break service;
+                }
+            };
+            service.preflight_recovery_nonce(scope)?;
+        }
+        let frozen = self.frozen(scope, &token, true)?;
         token.check()?;
         let mut service = loop {
             token.check()?;

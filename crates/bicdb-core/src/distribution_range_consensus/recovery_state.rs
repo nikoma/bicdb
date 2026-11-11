@@ -55,6 +55,10 @@ impl RecoveryFenceScope {
             || self.metadata_context_id.is_nil()
             || self.metadata_term == 0
             || self.metadata_read_index == 0
+            || matches!(
+                self.purpose,
+                MetadataRecoveryRolePurpose::ObserveFencedRecovery { .. }
+            )
             || self.configuration_sha256.len() != 64
             || !self
                 .configuration_sha256
@@ -113,12 +117,50 @@ pub(super) struct RecoveryFenceRecord {
     pub(super) local_node_id: ClusterNodeId,
     pub(super) local_member_incarnation: u64,
     pub(super) native_database_incarnation: String,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub(super) historical_certifications: BTreeMap<u64, HistoricalRangeCertification>,
+    #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
+    pub(super) retired_nonces: BTreeSet<Uuid>,
+}
+/// Persisted observation, not a transferable certificate/Apply admission.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct HistoricalRangeCertification {
+    pub recovery_nonce: Uuid,
+    pub configuration_sha256: String,
+    pub range_epoch: u64,
+    pub index: u64,
+    pub command_sha256: String,
 }
 impl RecoveryFenceRecord {
     pub(super) fn validate(&self) -> Result<()> {
         self.scope.validate()?;
+        if self.retired_nonces.len() > 256
+            || self.retired_nonces.contains(&self.scope.recovery_nonce)
+            || self.retired_nonces.iter().any(Uuid::is_nil)
+        {
+            return Err(range_write_error("damaged/bounded retired recovery nonces"));
+        }
         if self.local_member_incarnation == 0 || self.native_database_incarnation.is_empty() {
             return Err(range_write_error("damaged recovery refusal record"));
+        }
+        if self.historical_certifications.len() > 1024
+            || self
+                .historical_certifications
+                .iter()
+                .any(|(index, marker)| {
+                    *index == 0
+                        || marker.index != *index
+                        || marker.recovery_nonce != self.scope.recovery_nonce
+                        || marker.configuration_sha256 != self.scope.configuration_sha256
+                        || marker.range_epoch != self.scope.range_epoch
+                        || marker.command_sha256.len() != 64
+                        || !marker.command_sha256.bytes().all(|b| b.is_ascii_hexdigit())
+                })
+        {
+            return Err(range_write_error(
+                "damaged/bounded historical certification markers",
+            ));
         }
         Ok(())
     }
@@ -183,6 +225,156 @@ impl RecoveryResolvedCatalogObservation {
 }
 
 impl RangeWriteStore {
+    pub(crate) fn recovery_observation_phase(
+        &self,
+        scope: &RecoveryFenceScope,
+    ) -> Result<crate::distribution_range_recovery::RecoveryFenceObservationPhase> {
+        let saved = self
+            .catalog
+            .recovery_fences
+            .get(&scope.range_id)
+            .ok_or_else(|| range_write_error("no actual recovery phase record"))?;
+        if !saved.scope.same_session(scope) {
+            return Err(range_write_error(
+                "actual recovery phase belongs to another session",
+            ));
+        }
+        Ok(match saved.phase {
+            RecoveryFencePhase::Active=>crate::distribution_range_recovery::RecoveryFenceObservationPhase::ActiveRecovery,
+            RecoveryFencePhase::Completed {..}=>crate::distribution_range_recovery::RecoveryFenceObservationPhase::CompletedEpochAuthority,
+        })
+    }
+    pub(crate) fn preflight_recovery_nonce(&self, scope: &RecoveryFenceScope) -> Result<()> {
+        self.require_no_image_install(scope.range_id)?;
+        scope.validate()?;
+        if let Some(old) = self.catalog.recovery_fences.get(&scope.range_id) {
+            if scope.range_epoch < old.scope.range_epoch
+                || (scope.range_epoch == old.scope.range_epoch
+                    && (old.retired_nonces.contains(&scope.recovery_nonce)
+                        || (old.scope.recovery_nonce != scope.recovery_nonce
+                            && old.retired_nonces.len() >= 256)))
+            {
+                return Err(range_write_error(
+                    "replayed/retired recovery nonce or same-epoch refresh bound reached",
+                ));
+            }
+        }
+        Ok(())
+    }
+    /// Refinement guard for a current-voter image installer. It never installs
+    /// or supersedes a session: that requires a prior actual epoch-fence round.
+    pub(crate) fn require_image_install_recovery_scope(
+        &self,
+        role: &RecoveryRoleAdmission,
+        native: &NativeRecoveryAdmission,
+    ) -> Result<RecoveryFenceScope> {
+        self.require_native_recovery_identity(role, native)?;
+        let saved = self
+            .catalog
+            .recovery_fences
+            .get(&role.current_range().id)
+            .ok_or_else(|| {
+                range_write_error("current-voter repair target has no active recovery fence")
+            })?;
+        saved.scope.require_role(role)?;
+        if !matches!(saved.phase, RecoveryFencePhase::Active)
+            || saved.native_database_incarnation != native.database_incarnation()
+            || saved.local_member_incarnation != role.local_member_incarnation()
+            || &saved.local_node_id != role.local_node_id()
+        {
+            return Err(range_write_error(
+                "image installer recovery scope/native open changed",
+            ));
+        }
+        Ok(saved.scope.clone())
+    }
+    pub(crate) fn historical_certification_observation(
+        &self,
+        scope: &RecoveryFenceScope,
+        index: u64,
+    ) -> Result<Option<HistoricalRangeCertification>> {
+        self.require_persisted_recovery_scope(scope)?;
+        Ok(self.catalog.recovery_fences[&scope.range_id]
+            .historical_certifications
+            .get(&index)
+            .cloned())
+    }
+    pub(crate) fn require_persisted_recovery_scope(
+        &self,
+        scope: &RecoveryFenceScope,
+    ) -> Result<()> {
+        self.require_no_image_install(scope.range_id)?;
+        let saved = self
+            .catalog
+            .recovery_fences
+            .get(&scope.range_id)
+            .ok_or_else(|| range_write_error("no actual persisted recovery fence"))?;
+        if !saved.scope.same_session(scope) || !matches!(saved.phase, RecoveryFencePhase::Active) {
+            return Err(range_write_error(
+                "actual persisted recovery fence scope changed",
+            ));
+        }
+        Ok(())
+    }
+    pub(crate) fn observe_fenced_recovery_history(
+        &self,
+        role: &crate::distribution_range_recovery::RecoveryObservationRoleAdmission,
+        native: &NativeRecoveryAdmission,
+        scope: &RecoveryFenceScope,
+        index: Option<u64>,
+    ) -> Result<Option<RangeWriteLogEntry>> {
+        self.require_no_image_install(scope.range_id)?;
+        role.require_scope(scope)?;
+        role.require_native_identity(native)?;
+        if !self.fsync
+            || !crate::format::range_image_install_active(&self.root)?
+            || self.catalog.cluster_id != *role.cluster_id()
+            || self.catalog.node_id != *role.local_node_id()
+        {
+            return Err(range_write_error(
+                "read-only recovery requires actual local admitted native birth",
+            ));
+        }
+        let saved = self
+            .catalog
+            .recovery_fences
+            .get(&scope.range_id)
+            .ok_or_else(|| {
+                range_write_error("read-only recovery observation has no persisted fence")
+            })?;
+        if !saved.scope.same_session(scope)
+            || !matches!(saved.phase, RecoveryFencePhase::Active)
+            || saved.native_database_incarnation != native.database_incarnation()
+        {
+            return Err(range_write_error(
+                "read-only recovery observation fence/open/session changed",
+            ));
+        }
+        let entry = index.and_then(|index| {
+            self.catalog
+                .ranges
+                .get(&scope.range_id)
+                .and_then(|log| log.entries.get(&index))
+        });
+        // Bound response construction before cloning a possibly large command.
+        struct Bound(usize);
+        impl std::io::Write for Bound {
+            fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+                self.0 = self
+                    .0
+                    .checked_sub(bytes.len())
+                    .ok_or_else(|| std::io::Error::other("recovery history entry exceeds 2MiB"))?;
+                Ok(bytes.len())
+            }
+            fn flush(&mut self) -> std::io::Result<()> {
+                Ok(())
+            }
+        }
+        if let Some(entry) = entry {
+            serde_json::to_writer(Bound(2 * 1024 * 1024), entry)?;
+        }
+        Ok(entry.cloned())
+    }
     pub(crate) fn recovery_store_open_id(&self) -> Uuid {
         self.open_id
     }
@@ -271,6 +463,7 @@ impl RangeWriteStore {
         scope: &RecoveryFenceScope,
     ) -> Result<()> {
         self.require_no_image_install(scope.range_id)?;
+        self.preflight_recovery_nonce(scope)?;
         self.require_native_recovery_identity(role, native)?;
         scope.require_role(role)?;
         if self.catalog.backup_fences.contains_key(&scope.range_id) {
@@ -325,7 +518,9 @@ impl RangeWriteStore {
                     "recovery scope regressed or changed configuration without epoch",
                 ));
             }
-            if old.scope == *scope && matches!(old.phase, RecoveryFencePhase::Completed { .. }) {
+            if old.scope.same_session(scope)
+                && matches!(old.phase, RecoveryFencePhase::Completed { .. })
+            {
                 return Err(range_write_error(
                     "completed recovery context requires a fresh fence round",
                 ));
@@ -355,6 +550,31 @@ impl RangeWriteStore {
             });
         log.current_epoch = log.current_epoch.max(scope.range_epoch);
         self.catalog.format_version = self.catalog.format_version.max(5);
+        let historical_certifications = self
+            .catalog
+            .recovery_fences
+            .get(&scope.range_id)
+            .filter(|old| old.scope.same_session(scope))
+            .map(|old| old.historical_certifications.clone())
+            .unwrap_or_default();
+        let mut retired_nonces = self
+            .catalog
+            .recovery_fences
+            .get(&scope.range_id)
+            .filter(|old| old.scope.range_epoch == scope.range_epoch)
+            .map(|old| old.retired_nonces.clone())
+            .unwrap_or_default();
+        if let Some(old) = self
+            .catalog
+            .recovery_fences
+            .get(&scope.range_id)
+            .filter(|old| {
+                old.scope.range_epoch == scope.range_epoch
+                    && old.scope.recovery_nonce != scope.recovery_nonce
+            })
+        {
+            retired_nonces.insert(old.scope.recovery_nonce);
+        }
         self.catalog.recovery_fences.insert(
             scope.range_id,
             RecoveryFenceRecord {
@@ -363,6 +583,8 @@ impl RangeWriteStore {
                 local_node_id: role.local_node_id().clone(),
                 local_member_incarnation: role.local_member_incarnation(),
                 native_database_incarnation: native.database_incarnation().to_string(),
+                historical_certifications,
+                retired_nonces,
             },
         );
         // Retain this refusal on any rename/directory-sync ambiguity. Retrying
@@ -383,7 +605,7 @@ impl RangeWriteStore {
             .recovery_fences
             .get(&scope.range_id)
             .ok_or_else(|| range_write_error("no durable recovery epoch fence"))?;
-        if saved.scope != *scope
+        if !saved.scope.same_session(scope)
             || !matches!(saved.phase, RecoveryFencePhase::Active)
             || saved.native_database_incarnation != native.database_incarnation()
         {
@@ -649,6 +871,63 @@ mod tests {
         assert!(reopened.normal_native_write_allowed(&three).is_err());
         assert!(fixture.root.path().exists());
     }
+    #[test]
+    fn actual_same_epoch_nonce_refresh_durably_refuses_delayed_old_fence() {
+        let mut fixture = Fixture::new(1);
+        let gate = fixture.db.range_mutation_gate();
+        let mut frozen = gate
+            .try_freeze(fixture.range.id, fixture.scope.recovery_nonce)
+            .unwrap();
+        fixture
+            .store
+            .fence_recovery_epoch(&fixture.role, &fixture.native, &fixture.scope)
+            .unwrap();
+        let role_b = test_role_admission(
+            &fixture.root.path().join("metadata"),
+            &fixture.topology,
+            &fixture.range.leader,
+            &fixture.range.leader,
+            &fixture.range.leader,
+            fixture.range.id,
+            fixture.scope.range_epoch,
+            Uuid::now_v7(),
+            MetadataRecoveryRolePurpose::NormalRecovery,
+            Duration::from_secs(3),
+        )
+        .unwrap();
+        let scope_b = RecoveryFenceScope::from_role(&role_b).unwrap();
+        fixture.store.preflight_recovery_nonce(&scope_b).unwrap();
+        frozen.try_rotate_owner(scope_b.recovery_nonce).unwrap();
+        fixture
+            .store
+            .fence_recovery_epoch(&role_b, &fixture.native, &scope_b)
+            .unwrap();
+        let before = fixture.store.catalog.clone();
+        assert!(fixture
+            .store
+            .preflight_recovery_nonce(&fixture.scope)
+            .is_err());
+        assert!(fixture
+            .store
+            .fence_recovery_epoch(&fixture.role, &fixture.native, &fixture.scope)
+            .is_err());
+        assert_eq!(frozen.owner(), scope_b.recovery_nonce);
+        assert_eq!(fixture.store.catalog, before);
+        let reopened = RangeWriteStore::open(
+            fixture.root.path().join("db"),
+            fixture.topology.cluster_id.clone(),
+            fixture.range.leader.clone(),
+            true,
+        )
+        .unwrap();
+        assert!(reopened.preflight_recovery_nonce(&fixture.scope).is_err());
+        assert!(reopened.preflight_recovery_nonce(&scope_b).is_ok());
+        assert_eq!(
+            reopened.catalog.recovery_fences[&fixture.range.id].retired_nonces,
+            BTreeSet::from([fixture.scope.recovery_nonce])
+        );
+    }
+
     #[test]
     fn actual_store_open_and_nonce_bind_resolved_observation() {
         let mut fixture = Fixture::new(1);

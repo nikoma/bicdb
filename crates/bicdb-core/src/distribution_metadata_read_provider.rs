@@ -577,7 +577,7 @@ mod tests {
             topology.cluster_id.clone(),
             node(name),
             topology.clone(),
-            false,
+            topology.range_image_bootstrap_id.is_some(),
         )
         .unwrap()
     }
@@ -739,6 +739,169 @@ mod tests {
             budget_ms: 1000,
         }
     }
+    #[test]
+    fn fenced_observer_is_data_voter_scoped_and_never_mutation_admission() {
+        use crate::distribution_range_consensus::RecoveryFenceScope;
+        use crate::distribution_range_recovery::{
+            RecoveryObservationRoleAdmission, RecoveryRoleAdmission,
+        };
+        let mut topology = topology_with_count(3);
+        topology.range_image_bootstrap_id = Some(Uuid::now_v7());
+        topology.replication_factor = 2;
+        topology.ranges.values_mut().next().unwrap().replicas.push(
+            crate::distribution::RangeReplica {
+                id: crate::distribution::ReplicaId::new(topology.next_replica_id).unwrap(),
+                node_id: node("n1"),
+                role: crate::distribution::RangeReplicaRole::Voter,
+            },
+        );
+        topology.next_replica_id += 1;
+        topology.validate().unwrap();
+        let fixture = Fixture::with_topology(topology);
+        let mut normal = role_request(
+            &fixture,
+            "n2",
+            "n2",
+            MetadataRecoveryRolePurpose::NormalRecovery,
+        );
+        let started = Instant::now();
+        let response = fixture
+            .provider
+            .acquire_recovery_role(
+                &participant(&fixture.topology, "n2"),
+                normal.clone(),
+                &CancellationToken::uncancelable(),
+            )
+            .unwrap();
+        let witness = MetadataRecoveryRoleObservation::from_transport(
+            &normal,
+            &fixture.topology.cluster_id,
+            &node("n1"),
+            participant(&fixture.topology, "n1"),
+            response,
+            started + Duration::from_secs(1),
+            started,
+        )
+        .unwrap();
+        let role = RecoveryRoleAdmission::from_witness(
+            witness,
+            &participant(&fixture.topology, "n2"),
+            &node("n2"),
+            normal.read_request_id,
+            normal.range_id,
+            normal.range_epoch,
+            normal.recovery_nonce,
+            normal.recipient_challenge,
+            &normal.purpose,
+        )
+        .unwrap();
+        let scope = RecoveryFenceScope::from_role(&role).unwrap();
+        let purpose = RecoveryObservationRoleAdmission::purpose(&scope).unwrap();
+        let mut request = role_request(&fixture, "n2", "n1", purpose.clone());
+        request.recovery_nonce = normal.recovery_nonce;
+        let started = Instant::now();
+        let response = fixture
+            .provider
+            .acquire_recovery_role(
+                &participant(&fixture.topology, "n2"),
+                request.clone(),
+                &CancellationToken::uncancelable(),
+            )
+            .unwrap();
+        let witness = MetadataRecoveryRoleObservation::from_transport(
+            &request,
+            &fixture.topology.cluster_id,
+            &node("n1"),
+            participant(&fixture.topology, "n1"),
+            response,
+            started + Duration::from_secs(1),
+            started,
+        )
+        .unwrap();
+        let readonly = RecoveryObservationRoleAdmission::from_witness(
+            witness,
+            &participant(&fixture.topology, "n1"),
+            &node("n2"),
+            request.read_request_id,
+            request.recipient_challenge,
+            &scope,
+        )
+        .unwrap();
+        readonly.require_scope(&scope).unwrap();
+        let mut wrong = scope.clone();
+        wrong.recovery_nonce = Uuid::now_v7();
+        assert!(readonly.require_scope(&wrong).is_err());
+        let started = Instant::now();
+        let response = fixture
+            .provider
+            .acquire_recovery_role(
+                &participant(&fixture.topology, "n2"),
+                request.clone(),
+                &CancellationToken::uncancelable(),
+            )
+            .unwrap();
+        let witness = MetadataRecoveryRoleObservation::from_transport(
+            &request,
+            &fixture.topology.cluster_id,
+            &node("n1"),
+            participant(&fixture.topology, "n1"),
+            response,
+            started + Duration::from_secs(1),
+            started,
+        )
+        .unwrap();
+        assert!(RecoveryRoleAdmission::from_witness(
+            witness,
+            &participant(&fixture.topology, "n1"),
+            &node("n2"),
+            request.read_request_id,
+            request.range_id,
+            request.range_epoch,
+            request.recovery_nonce,
+            request.recipient_challenge,
+            &purpose
+        )
+        .is_err());
+        for (observer, coordinator, incarnation) in [
+            ("n3", "n2", fixture.topology.nodes[&node("n2")].incarnation),
+            ("n1", "n1", fixture.topology.nodes[&node("n1")].incarnation),
+            ("n1", "n2", u64::MAX),
+        ] {
+            let mut invalid = role_request(
+                &fixture,
+                "n2",
+                observer,
+                MetadataRecoveryRolePurpose::ObserveFencedRecovery {
+                    coordinator_node_id: node(coordinator),
+                    coordinator_incarnation: incarnation,
+                    committed_handoff: None,
+                },
+            );
+            invalid.recovery_nonce = normal.recovery_nonce;
+            assert!(fixture
+                .provider
+                .acquire_recovery_role(
+                    &participant(&fixture.topology, "n2"),
+                    invalid,
+                    &CancellationToken::uncancelable()
+                )
+                .is_err());
+        }
+        normal.initiator_node_id = node("n1");
+        normal.initiator_incarnation = fixture.topology.nodes[&node("n1")].incarnation;
+        assert!(
+            fixture
+                .provider
+                .acquire_recovery_role(
+                    &participant(&fixture.topology, "n2"),
+                    normal,
+                    &CancellationToken::uncancelable()
+                )
+                .is_err(),
+            "normal mutation role remains leader-only"
+        );
+    }
+
     #[test]
     fn fresh_role_is_data_voter_scoped_and_drain_is_not_removal() {
         let mut topology = topology_with_count(3);

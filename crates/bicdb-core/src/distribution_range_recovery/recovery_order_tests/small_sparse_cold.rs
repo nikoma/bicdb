@@ -392,6 +392,17 @@ fn actual_small_sparse_current_quorum_and_strict_cold_reopen_preserve_decision()
     wrong_db.create_collection("items").unwrap();
     drop(wrong_db);
     let (wrong_db, genesis) = BicDb::open_range_image_database(&wrong_path, config, &spec).unwrap();
+    // The new backing must pass the ordinary actual reopened schema gate
+    // before this negative isolates its distinct birth identity.
+    let observed_schema = wrong_db.schema_compatibility_fingerprint().unwrap().sha256;
+    assert_eq!(
+        topology.nodes[&node("n1")].labels[crate::distribution::SCHEMA_COMPATIBILITY_NODE_LABEL],
+        observed_schema
+    );
+    eprintln!(
+        "SMALL_SPARSE_WRONG_BIRTH_ROOT {}",
+        wrong_root.path().display()
+    );
     let wrong_db = Arc::new(parking_lot::RwLock::new(wrong_db));
     let gate = wrong_db.read().range_mutation_gate();
     let freeze = gate.try_freeze(range.id, Uuid::now_v7()).unwrap();

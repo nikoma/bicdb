@@ -123,6 +123,12 @@ impl CurrentRepairFixture {
             crate::distribution_range_consensus::RangeWriteState::QuorumCommitted
         );
         assert_eq!(probe.progress.resolved_through, 0);
+        let original_target_lineage = target
+            .read()
+            .current_native_range_source_lineage(range.id)
+            .unwrap();
+        let original_target_receipt = original_target_lineage.native_receipt_sha256().to_string();
+        let original_target_history = original_target_lineage.logical_history_sha256().to_string();
         assert_eq!(
             target
                 .read()
@@ -175,6 +181,13 @@ impl CurrentRepairFixture {
         }
         let target_b_before = target.read().current_commit_seq();
         assert!(target_b_before > source_b);
+        let unchanged = target
+            .read()
+            .current_native_range_source_lineage(range.id)
+            .unwrap();
+        assert_eq!(unchanged.range_index(), 0);
+        assert_eq!(unchanged.native_receipt_sha256(), original_target_receipt);
+        assert_eq!(unchanged.logical_history_sha256(), original_target_history);
         let providers = test_recovery_metadata_cluster(
             &origin.root.path().join("repair-metadata"),
             &topology,
@@ -502,6 +515,7 @@ fn actual_rf3_nonempty_current_voter_repair_uses_same_catalogue_and_keeps_recove
     let attempt = Uuid::now_v7();
     let install = fixture.begin(attempt);
     let verified = fixture.materialize(install);
+    let installed_b = verified.base().target_snapshot_bound().get();
     assert_eq!(verified.base().range_index(), 1);
     assert_eq!(verified.base().logical_history_sha256(), source_history);
     assert!(verified.base().target_snapshot_bound().get() > fixture.target_b_before);
@@ -583,7 +597,12 @@ fn actual_rf3_nonempty_current_voter_repair_uses_same_catalogue_and_keeps_recove
     .unwrap();
     let key = fixture.range.id.get().to_string();
     assert_eq!(persisted["catalog"]["ranges"][&key]["resolved_through"], 1);
+    assert_eq!(persisted["catalog"]["ranges"][&key]["last_index"], 1);
     assert_eq!(persisted["catalog"]["ranges"][&key]["compacted_through"], 1);
+    assert!(persisted["catalog"]["ranges"][&key]["entries"]
+        .as_object()
+        .unwrap()
+        .is_empty());
     assert_eq!(
         persisted["catalog"]["native_image_bases"][&key]["attempt_id"],
         attempt.to_string()
@@ -607,6 +626,8 @@ fn actual_rf3_nonempty_current_voter_repair_uses_same_catalogue_and_keeps_recove
     let other_keys = fixture.other_keys.clone();
     let range_id = fixture.range.id;
     let target_uid = fixture.original_target_uid;
+    let source_b = fixture.source_b;
+    let target_b_before = fixture.target_b_before;
     let old_target = Arc::downgrade(&target);
     drop(target);
     drop(fixture); // ALL real Runtime/service/coordinator/DB owners end first.
@@ -644,6 +665,27 @@ fn actual_rf3_nonempty_current_voter_repair_uses_same_catalogue_and_keeps_recove
         RangeWriteStore::open(&path, spec.cluster_id.clone(), spec.node_id.clone(), true).unwrap();
     assert!(store.require_no_image_install(range_id).is_err());
     assert!(store.require_no_active_recovery(range_id).is_err());
+    eprintln!(
+        "RF3_CURRENT_REPAIR_EVIDENCE {}",
+        serde_json::json!({
+            "source_range_index": 1,
+            "source_db_sequence": source_b,
+            "target_before_db_sequence": target_b_before,
+            "installed_target_local_db_sequence": installed_b,
+            "cold_target_db_sequence": reopened.current_commit_seq(),
+            "logical_history_sha256": source_history,
+            "target_local_namespace_preserved": true,
+            "selected_native_r0_unchanged_by_diagnostic_other_range_imports": true,
+            "other_range_diagnostic_imports": 17,
+            "other_range_imports_are_rf3_user_acks": false,
+            "current_data_quorum_members": ["n0", "n1"],
+            "source_data_leader": "n0",
+            "metadata_leader": "n2",
+            "native_ready_after_adoption": "REFUSED_RETAINED_IMAGE_INTENT",
+            "cold_recovery_and_image_refusals_retained": true,
+            "physical_qualification": false,
+        })
+    );
     drop(store);
     drop(floor);
     drop(native);

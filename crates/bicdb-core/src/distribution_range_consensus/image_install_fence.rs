@@ -146,7 +146,7 @@ impl NativeImageInstallRole<'_> {
     }
 }
 
-fn require_intent_live_role(
+pub(super) fn require_intent_live_role(
     intent: &ImageInstallIntent,
     role: &NativeImageInstallRole<'_>,
 ) -> Result<()> {
@@ -866,6 +866,28 @@ impl RangeWriteStore {
         Ok(())
     }
 
+    /// Catalogue format is global. A new protected range must not publish
+    /// format11 while another legacy CurrentRepair intent lacks its proposal.
+    /// Such a legacy range needs independent qualified recovery first.
+    fn require_protected_proposal_upgrade_possible(&self, replacing: RangeId) -> Result<()> {
+        if self
+            .catalog
+            .image_install_intents
+            .iter()
+            .any(|(range, intent)| {
+                *range != replacing
+                    && matches!(
+                        intent.source_purpose,
+                        RangeImageSourcePurposeV1::CurrentVoterRepair
+                    )
+                    && intent.protected_proposal.is_none()
+            })
+        {
+            return Err(range_write_error("protected proposal upgrade would strand another legacy current-image intent; recover it before format11"));
+        }
+        Ok(())
+    }
+
     /// Persist the catalog refusal before the native Installing marker or rows.
     /// The independently minted native safety observation is checked by the
     /// target installer under this same freeze immediately before this call.
@@ -884,6 +906,12 @@ impl RangeWriteStore {
         let mut intent = self.candidate_native_image_install_intent(
             database, admission, source, role, frozen, purpose, attempt_id, attempt_id,
         )?;
+        if matches!(
+            intent.source_purpose,
+            RangeImageSourcePurposeV1::CurrentVoterRepair
+        ) {
+            self.require_protected_proposal_upgrade_possible(intent.range.id)?;
+        }
         self.require_native_install_recovery_preflight(database, admission, role, &intent)?;
         let cut = source.cut();
         native_safety.require_current(database, admission, frozen)?;
@@ -1271,6 +1299,60 @@ mod tests {
         crate::format::enable_range_image_install(root).unwrap();
         RangeWriteStore::open(root, command(1).cluster_id, node("n2"), true).unwrap()
     }
+    #[test]
+    fn protected_proposal_global_upgrade_refuses_other_legacy_range_without_writing() {
+        // Lower storage compatibility fixture only: this is a valid historical
+        // refusal DTO, not a source-cut/role/replication authority constructor.
+        let root = tempfile::tempdir().unwrap();
+        let mut local = store(root.path());
+        let legacy_id = RangeId::new(2).unwrap();
+        let mut legacy = intent(0);
+        legacy.range.id = legacy_id;
+        legacy.range.replicas[1].role = RangeReplicaRole::Voter;
+        legacy.purpose = ImageInstallPurpose::CurrentVoterRepair;
+        legacy.source_purpose = RangeImageSourcePurposeV1::CurrentVoterRepair;
+        legacy.intended_range = legacy.range.clone();
+        legacy.activation_epoch = legacy.range.epoch;
+        legacy.intended_config_sha256 = legacy.old_config_sha256.clone();
+        legacy.protected_proposal = None;
+        legacy.validate().unwrap();
+        local
+            .catalog
+            .image_install_intents
+            .insert(legacy_id, legacy);
+        local.catalog.format_version = super::super::SPARSE_HISTORY_CATALOG_FORMAT;
+        local.catalog.sparse_committed_decisions = Some(BTreeMap::new());
+        local.persist().unwrap();
+        let before = std::fs::read(root.path().join(DEFAULT_RANGE_WRITE_LOG)).unwrap();
+        let error = local
+            .require_protected_proposal_upgrade_possible(RangeId::new(1).unwrap())
+            .unwrap_err();
+        assert!(error.to_string().contains("strand another legacy"));
+        assert_eq!(
+            std::fs::read(root.path().join(DEFAULT_RANGE_WRITE_LOG)).unwrap(),
+            before
+        );
+        assert!(!crate::format::current_image_proposal_active(root.path()).unwrap());
+        assert_eq!(
+            local.catalog.format_version,
+            super::super::SPARSE_HISTORY_CATALOG_FORMAT
+        );
+        drop(local);
+        let reopened = store(root.path());
+        assert!(reopened.catalog.image_install_intents[&legacy_id]
+            .protected_proposal
+            .is_none());
+        // Same-range replacement still requires the real actual source/native
+        // producer; passing THIS read-only preflight publishes nothing.
+        reopened
+            .require_protected_proposal_upgrade_possible(legacy_id)
+            .unwrap();
+        assert_eq!(
+            std::fs::read(root.path().join(DEFAULT_RANGE_WRITE_LOG)).unwrap(),
+            before
+        );
+    }
+
     #[test]
     fn install_intent_reopen_blocks_all_ordinary_decisions_without_changing_watermarks() {
         let root = tempfile::tempdir().unwrap();

@@ -26,6 +26,7 @@ fn qualified_outer_reference_does_not_bind_a_shadowing_inner_alias() {
         let mut db =
             BicDb::open_with_config(root.path(), DbConfig::default().with_storage_mode(mode))
                 .unwrap();
+        bicdb_sql::initialize_rename_journal_identities(&mut db).unwrap();
         let mut session = SqlSession::new(&mut db);
         session.execute("CREATE TABLE source(id INT PRIMARY KEY,payload TEXT); INSERT INTO source VALUES(1,'kept'),(2,'second'); CREATE TABLE other(id INT,payload TEXT); INSERT INTO other VALUES(1,'wrong'),(2,'also wrong')").unwrap();
         for query in [
@@ -44,6 +45,7 @@ fn view_query_scopes_keep_their_rows_after_rename_and_reopen() {
             let root = tempfile::tempdir().unwrap();
             let config = DbConfig::default().with_storage_mode(mode.clone());
             let mut db = BicDb::open_with_config(root.path(), config.clone()).unwrap();
+            bicdb_sql::initialize_rename_journal_identities(&mut db).unwrap();
             let expected = {
                 let mut session = SqlSession::new(&mut db);
                 for statement in [
@@ -103,6 +105,7 @@ fn schema_and_quoted_names_are_distinct_source_identities() {
         let mut db =
             BicDb::open_with_config(root.path(), DbConfig::default().with_storage_mode(mode))
                 .unwrap();
+        bicdb_sql::initialize_rename_journal_identities(&mut db).unwrap();
         let mut session = SqlSession::new(&mut db);
         for statement in ["CREATE SCHEMA isolated","CREATE TABLE public.source(id INT)","INSERT INTO public.source VALUES(99)","CREATE TABLE isolated.source(id INT)","INSERT INTO isolated.source VALUES(1)","CREATE VIEW isolated.observed AS SELECT a.id AS local_id,b.id AS public_id FROM isolated.source a CROSS JOIN public.source b"] {session.execute(statement).unwrap();}
         let expected = session
@@ -144,6 +147,7 @@ fn view_rebinding_rolls_back_with_the_rename_savepoint() {
         let mut db =
             BicDb::open_with_config(root.path(), DbConfig::default().with_storage_mode(mode))
                 .unwrap();
+        bicdb_sql::initialize_rename_journal_identities(&mut db).unwrap();
         let mut session = SqlSession::new(&mut db);
         session.execute("CREATE TABLE source(id INT PRIMARY KEY); INSERT INTO source VALUES(1); CREATE VIEW observed AS SELECT source.id FROM source").unwrap();
         let expected = session.execute("SELECT * FROM observed").unwrap().rows;
@@ -179,6 +183,7 @@ fn direct_and_indirect_views_keep_row_type_identity_after_rename_and_reopen() {
         let root = tempfile::tempdir().unwrap();
         let config = DbConfig::default().with_storage_mode(mode);
         let mut db = BicDb::open_with_config(root.path(), config.clone()).unwrap();
+        bicdb_sql::initialize_rename_journal_identities(&mut db).unwrap();
         {
             let mut session = SqlSession::new(&mut db);
             session.execute("CREATE TABLE source(id INT PRIMARY KEY,payload TEXT); INSERT INTO source VALUES(1,'acknowledged'); CREATE VIEW direct_row AS SELECT source AS item FROM source; CREATE VIEW indirect_row AS SELECT item FROM direct_row; CREATE MATERIALIZED VIEW stored_row AS SELECT item FROM direct_row").unwrap();

@@ -19,6 +19,7 @@ fn routine_default_casts_follow_a_renamed_table_type() {
                 .with_fsync(true)
                 .with_storage_mode(mode.clone());
             let mut db = BicDb::open_with_config(root.path(), cfg.clone()).unwrap();
+            bicdb_sql::initialize_rename_journal_identities(&mut db).unwrap();
             {
                 let mut sql = SqlSession::new(&mut db);
                 sql.execute("CREATE TABLE source(id INT PRIMARY KEY,payload TEXT); CREATE FUNCTION default_header_fn(arg TEXT DEFAULT (ROW(1,'kept')::source).payload) RETURNS TEXT LANGUAGE sql AS 'SELECT arg'; CREATE PROCEDURE default_header_proc(arg TEXT DEFAULT (ROW(1,'kept')::source).payload) LANGUAGE sql AS 'SELECT 1'").unwrap();
@@ -66,6 +67,7 @@ fn table_returning_routine_columns_follow_a_renamed_table_type() {
                 .with_fsync(true)
                 .with_storage_mode(mode.clone());
             let mut db = BicDb::open_with_config(root.path(), cfg.clone()).unwrap();
+            bicdb_sql::initialize_rename_journal_identities(&mut db).unwrap();
             {
                 let mut sql = SqlSession::new(&mut db);
                 sql.execute("CREATE TABLE source(id INT PRIMARY KEY,payload TEXT); CREATE FUNCTION header_rows() RETURNS TABLE(item source) LANGUAGE plpgsql AS $$ BEGIN RETURN; END $$").unwrap();
@@ -100,6 +102,7 @@ fn routine_defaults_keep_the_callers_privileges_before_definer_entry() {
             DbConfig::default().with_fsync(true).with_storage_mode(mode),
         )
         .unwrap();
+        bicdb_sql::initialize_rename_journal_identities(&mut db).unwrap();
         let mut sql = SqlSession::new(&mut db);
         sql.execute("CREATE ROLE header_guest; CREATE FUNCTION header_secret() RETURNS TEXT LANGUAGE sql AS 'SELECT ''secret'''; REVOKE ALL ON FUNCTION header_secret() FROM PUBLIC; CREATE FUNCTION header_definer(arg TEXT DEFAULT header_secret()) RETURNS TEXT LANGUAGE sql SECURITY DEFINER AS 'SELECT arg'; CREATE PROCEDURE header_definer_proc(arg TEXT DEFAULT header_secret()) LANGUAGE sql SECURITY DEFINER AS 'SELECT 1'; CREATE FUNCTION header_definer_rows(arg TEXT DEFAULT header_secret()) RETURNS TABLE(item TEXT) LANGUAGE plpgsql SECURITY DEFINER AS $$ BEGIN RETURN; END $$; GRANT EXECUTE ON FUNCTION header_definer(TEXT) TO header_guest; GRANT EXECUTE ON FUNCTION header_definer_proc(TEXT) TO header_guest; GRANT EXECUTE ON FUNCTION header_definer_rows(TEXT) TO header_guest; SET ROLE header_guest").unwrap();
         for statement in [

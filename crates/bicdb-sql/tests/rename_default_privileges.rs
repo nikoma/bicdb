@@ -28,6 +28,7 @@ fn rename_preserves_existing_acl_without_reapplying_changed_creation_defaults() 
                 .with_fsync(true)
                 .with_storage_mode(mode.clone());
             let mut db = BicDb::open_with_config(root.path(), cfg.clone()).unwrap();
+            bicdb_sql::initialize_rename_journal_identities(&mut db).unwrap();
             {
                 let mut sql = SqlSession::new(&mut db);
                 sql.execute("CREATE ROLE prior_reader; CREATE ROLE later_reader; ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO prior_reader; CREATE TABLE source(id INT PRIMARY KEY,payload TEXT); INSERT INTO source VALUES(1,'kept'); ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE SELECT ON TABLES FROM prior_reader; ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO later_reader; CREATE TABLE after_defaults(id INT PRIMARY KEY,payload TEXT); INSERT INTO after_defaults VALUES(1,'new-table')").unwrap();

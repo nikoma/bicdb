@@ -19,6 +19,7 @@ fn rename_retypes_pending_inserts_updates_and_arrays_without_reviving_deletes() 
             let root = tempfile::tempdir().unwrap();
             let config = DbConfig::default().with_storage_mode(mode.clone());
             let mut db = BicDb::open_with_config(root.path(), config.clone()).unwrap();
+            bicdb_sql::initialize_rename_journal_identities(&mut db).unwrap();
             {
                 let mut session = SqlSession::new(&mut db);
                 session.execute("CREATE TABLE source(id INT PRIMARY KEY,payload TEXT); INSERT INTO source VALUES(1,'source'); CREATE TABLE holder(id INT PRIMARY KEY,item source,items source[]); INSERT INTO holder VALUES(1,ROW(1,'seed')::source,ARRAY[ROW(1,'seed-array')::source]),(3,ROW(1,'deleted')::source,ARRAY[ROW(1,'deleted-array')::source])").unwrap();
@@ -89,6 +90,7 @@ fn rename_retypes_a_read_locked_holder_without_losing_its_savepoint_lock() {
             let root = tempfile::tempdir().unwrap();
             let config = DbConfig::default().with_storage_mode(mode.clone());
             let mut db = BicDb::open_with_config(root.path(), config.clone()).unwrap();
+            bicdb_sql::initialize_rename_journal_identities(&mut db).unwrap();
             let name = if rollback { "source" } else { "renamed" };
             let expected = vec![vec![
                 SqlValue::String(name.into()),

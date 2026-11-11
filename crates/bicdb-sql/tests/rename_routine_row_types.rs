@@ -29,6 +29,7 @@ fn table_rename_preserves_routine_row_and_array_type_identity() {
                 .with_fsync(true)
                 .with_storage_mode(mode.clone());
             let mut db = BicDb::open_with_config(root.path(), cfg.clone()).unwrap();
+            bicdb_sql::initialize_rename_journal_identities(&mut db).unwrap();
             let expected;
             {
                 let mut sql = SqlSession::new(&mut db);
@@ -94,6 +95,7 @@ fn table_rename_preserves_procedure_row_types_and_dump_declarations() {
                 .with_fsync(true)
                 .with_storage_mode(mode.clone());
             let mut db = BicDb::open_with_config(root.path(), cfg.clone()).unwrap();
+            bicdb_sql::initialize_rename_journal_identities(&mut db).unwrap();
             let expected;
             {
                 let mut sql = SqlSession::new(&mut db);

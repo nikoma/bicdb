@@ -82,7 +82,9 @@ impl RangeImageBirthSpec {
         if let Some(restore) = &self.restore_activation {
             restore.validate()?;
             if restore.cluster_id != self.cluster_id || !self.initial_ranges.is_empty() {
-                return Err(invalid("restored cluster can add a fresh learner, but cannot initialize old data as empty genesis"));
+                return Err(invalid(
+                    "restored cluster can add a fresh learner, but cannot initialize old data as empty genesis",
+                ));
             }
         }
         let mut ids = BTreeSet::new();
@@ -188,6 +190,60 @@ pub(crate) struct FreshRangeGenesisAuthority {
     root: PathBuf,
 }
 
+/// Local database admission only. A fresh authenticated recovery-role witness
+/// is additionally required by the recovery RPC. This value proves neither a
+/// data quorum nor a readable range floor, and cannot be decoded from a DTO.
+#[derive(Debug)]
+pub(crate) struct NativeRecoveryAdmission {
+    database_incarnation: String,
+    birth_id: Uuid,
+    birth_sha256: String,
+    cluster_id: ClusterId,
+    bootstrap_id: Uuid,
+    local_node_id: ClusterNodeId,
+    local_member_incarnation: u64,
+    restore_activation: Option<crate::distribution_consensus::MetadataRestoreActivation>,
+}
+impl NativeRecoveryAdmission {
+    pub(crate) fn require_current(&self, database: &BicDb) -> Result<()> {
+        let current = database.native_recovery_admission(
+            &self.cluster_id,
+            self.bootstrap_id,
+            &self.local_node_id,
+            self.local_member_incarnation,
+        )?;
+        if self.database_incarnation != current.database_incarnation
+            || self.birth_id != current.birth_id
+            || self.birth_sha256 != current.birth_sha256
+        {
+            return Err(invalid(
+                "recovery admission belongs to another DB/open or native birth",
+            ));
+        }
+        Ok(())
+    }
+    pub(crate) fn cluster_id(&self) -> &ClusterId {
+        &self.cluster_id
+    }
+    pub(crate) fn bootstrap_id(&self) -> Uuid {
+        self.bootstrap_id
+    }
+    pub(crate) fn local_node_id(&self) -> &ClusterNodeId {
+        &self.local_node_id
+    }
+    pub(crate) fn local_member_incarnation(&self) -> u64 {
+        self.local_member_incarnation
+    }
+    pub(crate) fn database_incarnation(&self) -> &str {
+        &self.database_incarnation
+    }
+    pub(crate) fn restore_activation(
+        &self,
+    ) -> Option<&crate::distribution_consensus::MetadataRestoreActivation> {
+        self.restore_activation.as_ref()
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 struct NativeGenesisReceipt {
     format_version: u32,
@@ -237,6 +293,38 @@ impl NativeGenesisReceipt {
             return Err(invalid("damaged native genesis receipt"));
         }
         Ok(())
+    }
+}
+
+/// Read-only observation, never an authority/barrier. Unknown or invalid
+/// native lineage has None indices; verified empty genesis is Some(0).
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub(crate) struct NativeRangePrefixObservation {
+    pub range_id: RangeId,
+    pub native_base_index: Option<u64>,
+    pub native_applied_index: Option<u64>,
+    pub pending_command_index: Option<u64>,
+    pub materialized_pending_index: Option<u64>,
+    pub pending_command_id: Option<String>,
+    pub native_receipt_sha256: Option<String>,
+    pub factory_initialization_complete: bool,
+    pub invalidated: bool,
+    pub diagnostic: Option<String>,
+}
+impl NativeRangePrefixObservation {
+    fn unknown(range_id: RangeId, diagnostic: &str) -> Self {
+        Self {
+            range_id,
+            native_base_index: None,
+            native_applied_index: None,
+            pending_command_index: None,
+            materialized_pending_index: None,
+            pending_command_id: None,
+            native_receipt_sha256: None,
+            factory_initialization_complete: false,
+            invalidated: false,
+            diagnostic: Some(diagnostic.to_string()),
+        }
     }
 }
 
@@ -303,6 +391,63 @@ fn genesis_key(range_id: RangeId) -> String {
 }
 
 impl BicDb {
+    /// Inputs are claimed identity bindings, not authority. The native birth,
+    /// current-open identity and sticky fsync fence must independently match.
+    pub(crate) fn native_recovery_admission(
+        &self,
+        cluster_id: &ClusterId,
+        bootstrap_id: Uuid,
+        local_node_id: &ClusterNodeId,
+        local_member_incarnation: u64,
+    ) -> Result<NativeRecoveryAdmission> {
+        self.check_recovery_state()?;
+        if !self.config.fsync
+            || self.config.storage_mode != StorageMode::ServerPaged
+            || !format::range_image_install_active(&self.path)?
+            || self.range_image_initializing.load(AtomicOrdering::Acquire)
+        {
+            return Err(invalid(
+                "native recovery requires completed fsync image-aware factory",
+            ));
+        }
+        let birth = self
+            .read_native_birth()?
+            .ok_or_else(|| invalid("native recovery has no actual database birth"))?;
+        if bootstrap_id.is_nil()
+            || &birth.spec.cluster_id != cluster_id
+            || birth.spec.bootstrap_id != bootstrap_id
+            || &birth.spec.node_id != local_node_id
+            || birth.spec.member_incarnation != local_member_incarnation
+        {
+            return Err(invalid(
+                "native recovery birth/bootstrap/local member binding mismatch",
+            ));
+        }
+        // An in-memory boolean is insufficient. Revalidate the actual ordered
+        // completion marker and its immutable genesis inventory on every mint.
+        let ready: NativeInitializationComplete =
+            self.read_native_range_image_record(READY_KEY)?
+                .ok_or_else(|| invalid("native recovery factory completion is missing"))?;
+        if ready.birth_id != birth.birth_id
+            || ready.birth_sha256 != birth.checksum_sha256
+            || ready.genesis_sha256 != self.native_genesis_receipts(&birth)?
+        {
+            return Err(invalid(
+                "native recovery factory completion does not match birth",
+            ));
+        }
+        Ok(NativeRecoveryAdmission {
+            database_incarnation: self.incarnation.clone(),
+            birth_id: birth.birth_id,
+            birth_sha256: birth.checksum_sha256,
+            cluster_id: cluster_id.clone(),
+            bootstrap_id,
+            local_node_id: local_node_id.clone(),
+            local_member_incarnation,
+            restore_activation: birth.spec.restore_activation,
+        })
+    }
+
     pub(crate) fn create_new_range_image_database(
         root: &Path,
         config: DbConfig,
@@ -605,6 +750,62 @@ impl BicDb {
             )?;
         }
         self.load_native_range_image_admission()
+    }
+
+    pub(crate) fn native_range_prefix_observation(
+        &self,
+        range_id: RangeId,
+    ) -> Result<NativeRangePrefixObservation> {
+        self.check_recovery_state()?;
+        let Some(birth) = self.read_native_birth()? else {
+            return Ok(NativeRangePrefixObservation::unknown(
+                range_id,
+                "no trusted native birth",
+            ));
+        };
+        let Some(receipt) =
+            self.read_native_range_image_record::<NativeGenesisReceipt>(&genesis_key(range_id))?
+        else {
+            return Ok(NativeRangePrefixObservation::unknown(
+                range_id,
+                "native base has not been installed",
+            ));
+        };
+        let lineage = SourceRangeImageLineage {
+            birth,
+            receipt,
+            current_database_incarnation: self.incarnation.clone(),
+            current_schema_generation: self.schema_compatibility.generation(),
+        };
+        if let Err(error) = self.validate_source_range_image_lineage(
+            &lineage,
+            range_id,
+            lineage.receipt.range_index,
+        ) {
+            let mut unknown = NativeRangePrefixObservation::unknown(
+                range_id,
+                "native base contract is invalid; repair/re-attestation required",
+            );
+            unknown.invalidated = true;
+            // Detailed errors remain local; metadata observers do not receive
+            // namespace values/payloads or mint readiness from an error code.
+            let _ = error;
+            return Ok(unknown);
+        }
+        Ok(NativeRangePrefixObservation {
+            range_id,
+            native_base_index: Some(lineage.receipt.range_index),
+            native_applied_index: Some(lineage.receipt.range_index),
+            pending_command_index: None,
+            materialized_pending_index: None,
+            pending_command_id: None,
+            native_receipt_sha256: Some(lineage.receipt.checksum_sha256),
+            factory_initialization_complete: !self
+                .range_image_initializing
+                .load(AtomicOrdering::Acquire),
+            invalidated: false,
+            diagnostic: None,
+        })
     }
 
     pub(crate) fn validate_source_range_image_lineage(
@@ -934,6 +1135,145 @@ mod tests {
             &CancellationToken::uncancelable(),
         )
         .unwrap()
+    }
+
+    #[test]
+    fn native_recovery_admission_requires_actual_completed_birth_not_flags_or_empty_counters() {
+        let parent = tempfile::tempdir().unwrap();
+        let expected = spec();
+        let legacy = parent.path().join("legacy");
+        let mut db = BicDb::open_with_config(&legacy, config()).unwrap();
+        db.activate_local_namespace_identity_v1().unwrap();
+        format::enable_range_image_install(&legacy).unwrap();
+        assert!(db
+            .native_recovery_admission(
+                &expected.cluster_id,
+                expected.bootstrap_id,
+                &expected.node_id,
+                expected.member_incarnation
+            )
+            .is_err());
+        drop(db);
+
+        let fresh = parent.path().join("fresh");
+        let (db, authority) = schema_ready_database(&fresh, &expected);
+        assert!(db
+            .read()
+            .native_recovery_admission(
+                &expected.cluster_id,
+                expected.bootstrap_id,
+                &expected.node_id,
+                expected.member_incarnation
+            )
+            .is_err());
+        for range in &expected.initial_ranges {
+            initialize(&db, &authority, range);
+        }
+        let admission = db
+            .read()
+            .native_recovery_admission(
+                &expected.cluster_id,
+                expected.bootstrap_id,
+                &expected.node_id,
+                expected.member_incarnation,
+            )
+            .unwrap();
+        admission.require_current(&db.read()).unwrap();
+        assert_eq!(admission.cluster_id(), &expected.cluster_id);
+        assert_eq!(admission.bootstrap_id(), expected.bootstrap_id);
+        assert_eq!(admission.local_node_id(), &expected.node_id);
+        assert_eq!(
+            admission.local_member_incarnation(),
+            expected.member_incarnation
+        );
+        assert_eq!(
+            admission.restore_activation(),
+            expected.restore_activation.as_ref()
+        );
+        assert!(db
+            .read()
+            .native_recovery_admission(
+                &expected.cluster_id,
+                Uuid::now_v7(),
+                &expected.node_id,
+                expected.member_incarnation
+            )
+            .is_err());
+        assert!(db
+            .read()
+            .native_recovery_admission(
+                &expected.cluster_id,
+                expected.bootstrap_id,
+                &expected.node_id,
+                expected.member_incarnation + 1
+            )
+            .is_err());
+        drop(db);
+        let (reopened, _) = BicDb::open_range_image_database(&fresh, config(), &expected).unwrap();
+        assert!(admission.require_current(&reopened).is_err());
+        reopened
+            .native_recovery_admission(
+                &expected.cluster_id,
+                expected.bootstrap_id,
+                &expected.node_id,
+                expected.member_incarnation,
+            )
+            .unwrap()
+            .require_current(&reopened)
+            .unwrap();
+    }
+
+    #[test]
+    fn native_recovery_admission_empty_fresh_learner_has_no_range_floor() {
+        let parent = tempfile::tempdir().unwrap();
+        let root = parent.path().join("learner");
+        let mut expected = spec();
+        expected.initial_ranges.clear();
+        let (db, _) =
+            BicDb::create_new_range_image_database(&root, config(), expected.clone()).unwrap();
+        db.native_recovery_admission(
+            &expected.cluster_id,
+            expected.bootstrap_id,
+            &expected.node_id,
+            expected.member_incarnation,
+        )
+        .unwrap();
+        let observation = db
+            .native_range_prefix_observation(RangeId::new(1).unwrap())
+            .unwrap();
+        assert_eq!(observation.native_base_index, None);
+        assert_eq!(observation.native_applied_index, None);
+        assert_eq!(observation.materialized_pending_index, None);
+    }
+
+    #[test]
+    fn native_range_prefix_observation_distinguishes_verified_zero_and_invalidation() {
+        let parent = tempfile::tempdir().unwrap();
+        let root = parent.path().join("node");
+        let expected = spec();
+        let (db, authority) = schema_ready_database(&root, &expected);
+        let range = &expected.initial_ranges[0];
+        assert_eq!(
+            db.read()
+                .native_range_prefix_observation(range.id)
+                .unwrap()
+                .native_applied_index,
+            None
+        );
+        for range in &expected.initial_ranges {
+            initialize(&db, &authority, range);
+        }
+        let observation = db.read().native_range_prefix_observation(range.id).unwrap();
+        assert_eq!(observation.native_base_index, Some(0));
+        assert_eq!(observation.native_applied_index, Some(0));
+        assert!(observation.factory_initialization_complete);
+        assert!(!observation.invalidated);
+        db.read()
+            .invalidate_native_range_images_before_mutation(Some(range.id), "raw mutation begins")
+            .unwrap();
+        let invalidated = db.read().native_range_prefix_observation(range.id).unwrap();
+        assert_eq!(invalidated.native_applied_index, None);
+        assert!(invalidated.invalidated);
     }
 
     #[test]

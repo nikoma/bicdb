@@ -823,6 +823,35 @@ pub(crate) fn routine_return_type_schema(
     ))
 }
 
+fn custom_routine_pg_type(data_type: &DataType) -> Result<Option<String>> {
+    use sqlparser::ast::ArrayElemTypeDef;
+    let mut element = data_type;
+    let mut array = false;
+    while let DataType::Array(kind) = element {
+        element = match kind {
+            ArrayElemTypeDef::AngleBracket(element)
+            | ArrayElemTypeDef::SquareBracket(element, _)
+            | ArrayElemTypeDef::Parenthesis(element) => element,
+            ArrayElemTypeDef::None => return Ok(None),
+        };
+        array = true;
+    }
+    let DataType::Custom(name, modifiers) = element else {
+        return Ok(None);
+    };
+    if !modifiers.is_empty() {
+        return Err(SqlError::Unsupported(
+            "modifiers on user-defined routine types are not supported".into(),
+        ));
+    }
+    let name = object_name(name)?;
+    if array && pg_type_oid_by_name(&name).is_some() {
+        // Built-in arrays retain their registered element/array validation.
+        return Ok(None);
+    }
+    Ok(Some(if array { format!("{name}[]") } else { name }))
+}
+
 pub(crate) fn routine_type_schema(data_type: &DataType) -> Result<RoutineTypeSchema> {
     if let Some(schema) = oracle::lobs::routine_type(data_type)? {
         return Ok(schema);
@@ -835,17 +864,10 @@ pub(crate) fn routine_type_schema(data_type: &DataType) -> Result<RoutineTypeSch
     }
     let pg_type = match routine_data_type(data_type) {
         Ok(pg_type) => pg_type,
-        Err(SqlError::Unsupported(_)) if matches!(data_type, DataType::Custom(_, _)) => {
-            let DataType::Custom(name, modifiers) = data_type else {
-                unreachable!()
-            };
-            if !modifiers.is_empty() {
-                return Err(SqlError::Unsupported(
-                    "modifiers on user-defined routine types are not supported".into(),
-                ));
-            }
-            object_name(name)?
-        }
+        Err(error @ SqlError::Unsupported(_)) => match custom_routine_pg_type(data_type)? {
+            Some(name) => name,
+            None => return Err(error),
+        },
         Err(error) => return Err(error),
     };
     let type_modifier = if matches!(pg_type.as_str(), "record" | "void" | "trigger") {

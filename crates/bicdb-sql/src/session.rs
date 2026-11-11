@@ -840,6 +840,27 @@ fn rewrite_routine_argument_type_identity(
     true
 }
 
+fn rewrite_routine_schema_type_identity(
+    routine: &mut RoutineSchema,
+    previous: &UserTypeSchema,
+    updated: &UserTypeSchema,
+) -> bool {
+    let mut changed = rewrite_routine_type_identity(&mut routine.return_type, previous, updated);
+    if let Some(declaration) = &mut routine.return_type_declaration {
+        changed |= rewrite_routine_type_identity(declaration, previous, updated);
+    }
+    for index in 0..routine.arg_types.len() {
+        if rewrite_routine_type_identity(&mut routine.arg_types[index].pg_type, previous, updated) {
+            if let Some(argument) = routine.args.get_mut(index) {
+                rewrite_routine_argument_type_identity(argument, previous, updated);
+            }
+            changed = true;
+        }
+    }
+    changed |= rewrite_routine_definition_type_identity(routine, previous, updated);
+    changed
+}
+
 fn rewrite_routine_definition_type_identity(
     routine: &mut RoutineSchema,
     previous: &UserTypeSchema,

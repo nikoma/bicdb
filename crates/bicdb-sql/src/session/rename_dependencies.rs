@@ -53,6 +53,13 @@ impl RenameDependencies {
         }
         let root = table_row_type_schema(updated);
         let replacements = privilege_projection::composite_type_replacements(db, &root)?;
+        let previous_type = table_row_type_schema(previous);
+        for mut routine in list_routines(db)? {
+            if rewrite_routine_schema_type_identity(&mut routine, &previous_type, &root) {
+                plan.metadata
+                    .insert((ROUTINE_COLLECTION.into(), routine_storage_key(&routine)));
+            }
+        }
         if let Some(partition) = &previous.partition_of {
             plan.relations.insert(partition.parent_table.clone());
         }

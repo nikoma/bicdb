@@ -1924,6 +1924,14 @@ impl<'db> SqlSession<'db> {
         for user_type in replacements.values().filter(|kind| kind.oid != updated.oid) {
             self.save_session_user_type(user_type)?;
         }
+        for mut routine in list_routines(self.db_ref())? {
+            if rewrite_routine_schema_type_identity(&mut routine, &previous, &updated) {
+                // Its exact existing catalog row is already captured by the
+                // rename journal, including its stable OID and overload key.
+                save_routine(self.db_mut()?, &routine)?;
+            }
+        }
+        rename_table::stage("routine_types");
         for schema in list_schemas(self.db_ref())? {
             let mut next = schema.clone();
             let changed = next
@@ -2177,26 +2185,7 @@ impl<'db> SqlSession<'db> {
 
         self.sync_user_type_columns(updated, None)?;
         for mut routine in list_routines(self.db_ref())? {
-            let mut changed =
-                rewrite_routine_type_identity(&mut routine.return_type, previous, updated);
-            if let Some(declaration) = &mut routine.return_type_declaration {
-                changed |= rewrite_routine_type_identity(declaration, previous, updated);
-            }
-            for index in 0..routine.arg_types.len() {
-                let argument_changed = rewrite_routine_type_identity(
-                    &mut routine.arg_types[index].pg_type,
-                    previous,
-                    updated,
-                );
-                if argument_changed {
-                    if let Some(argument) = routine.args.get_mut(index) {
-                        rewrite_routine_argument_type_identity(argument, previous, updated);
-                    }
-                    changed = true;
-                }
-            }
-            changed |= rewrite_routine_definition_type_identity(&mut routine, previous, updated);
-            if changed {
+            if rewrite_routine_schema_type_identity(&mut routine, previous, updated) {
                 self.save_session_routine(&routine)?;
             }
         }

@@ -45,14 +45,29 @@ impl RenameDependencies {
                     .insert((TRIGGER_COLLECTION.into(), trigger_key(new, &trigger.name)));
             }
         }
-        for view in list_views(db)? {
-            if view_dependencies::relations(&view.query_sql)?.contains(old) {
-                plan.relations.insert(view.name.clone());
-                plan.metadata.insert((VIEW_COLLECTION.into(), view.name));
-            }
-        }
         let root = table_row_type_schema(updated);
         let replacements = privilege_projection::composite_type_replacements(db, &root)?;
+        if let Some(partition) = &previous.partition_of {
+            plan.relations.insert(partition.parent_table.clone());
+        }
+        for view in list_views(db)? {
+            let direct = view_dependencies::relations(&view.query_sql)?.contains(old);
+            let mut columns = view.columns.clone();
+            let values = columns.iter_mut().fold(false, |changed, column| {
+                replace_column_user_type_references(column, &replacements) || changed
+            });
+            if direct || values {
+                plan.relations.insert(view.name.clone());
+                plan.metadata
+                    .insert((VIEW_COLLECTION.into(), view.name.clone()));
+            }
+            // Virtual views have no rows of their own. A materialized view
+            // does: its stored composite values require the same before-image
+            // coverage as an ordinary table using this row type.
+            if values && view.materialized {
+                plan.value_tables.insert(view.name);
+            }
+        }
         for user_type in replacements.values().filter(|t| t.oid != root.oid) {
             plan.metadata.insert((
                 USER_TYPE_COLLECTION.into(),
@@ -168,6 +183,10 @@ mod tests {
                     "INSERT INTO nested_holder VALUES(1,ROW(ROW(1,'nested')::original)::wrapper)",
                     "CREATE TABLE unrelated(id INT PRIMARY KEY,payload INT)",
                     "INSERT INTO unrelated VALUES(1,10)",
+                    "CREATE VIEW direct_row AS SELECT original AS item FROM original",
+                    "CREATE VIEW indirect_row AS SELECT item FROM direct_row",
+                    "CREATE MATERIALIZED VIEW stored_row AS SELECT item FROM direct_row",
+                    "CREATE VIEW unrelated_view AS SELECT payload FROM unrelated",
                     "GRANT SELECT ON original TO rename_reader",
                     "CREATE FUNCTION rename_guard() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NEW; END $$",
                     "CREATE TRIGGER rename_trigger BEFORE UPDATE ON original FOR EACH ROW EXECUTE FUNCTION rename_guard()",
@@ -182,11 +201,17 @@ mod tests {
             let privileges = catalog(list_privileges(&db).unwrap());
             let triggers = catalog(list_triggers(&db).unwrap());
             let sequences = catalog(list_sequences(&db).unwrap());
+            let views = catalog(list_views(&db).unwrap());
             let plan = RenameDependencies::plan(&db, &previous, &updated).unwrap();
             assert!(plan.relations.contains("child"));
             assert!(plan.relations.contains("holder"));
             assert!(plan.relations.contains("nested_holder"));
             assert!(!plan.relations.contains("unrelated"));
+            assert!(plan.relations.contains("direct_row"));
+            assert!(plan.relations.contains("indirect_row"));
+            assert!(plan.relations.contains("stored_row"));
+            assert!(plan.value_tables.contains("stored_row"));
+            assert!(!plan.relations.contains("unrelated_view"));
             let prepared = plan.capture(&mut db, "original", "renamed").unwrap();
             {
                 let mut session = SqlSession::new(&mut db);
@@ -212,6 +237,7 @@ mod tests {
             assert_eq!(catalog(list_privileges(&db).unwrap()), privileges);
             assert_eq!(catalog(list_triggers(&db).unwrap()), triggers);
             assert_eq!(catalog(list_sequences(&db).unwrap()), sequences);
+            assert_eq!(catalog(list_views(&db).unwrap()), views);
             {
                 let mut session = SqlSession::new(&mut db);
                 assert_eq!(
@@ -240,6 +266,20 @@ mod tests {
                         .unwrap()
                         .rows,
                     vec![vec![SqlValue::Int(99)]]
+                );
+                assert_eq!(
+                    session
+                        .execute("SELECT (item).payload FROM indirect_row")
+                        .unwrap()
+                        .rows,
+                    vec![vec![SqlValue::String("acknowledged".into())]]
+                );
+                assert_eq!(
+                    session
+                        .execute("SELECT (item).payload FROM stored_row")
+                        .unwrap()
+                        .rows,
+                    vec![vec![SqlValue::String("acknowledged".into())]]
                 );
                 session.execute("INSERT INTO child VALUES(2,1)").unwrap();
                 assert_eq!(

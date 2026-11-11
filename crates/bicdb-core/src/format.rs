@@ -39,6 +39,84 @@ const KNOWN_FEATURE_FLAGS: &[&str] = &[
     ONLINE_BACKUP_EXTENT_FEATURE_FLAG,
 ];
 
+// These affect SQL/data interpretation on every replica. Storage mode and
+// online-backup extent tracking belong to the destination's local layout.
+const REPLICATED_READER_FEATURES: &[&str] = &[
+    ORACLE_INVALID_ROUTINES_FEATURE_FLAG,
+    ORACLE_SIMPLE_CASE_V1_FEATURE_FLAG,
+    UNIQUE_NULLS_NOT_DISTINCT_FEATURE_FLAG,
+    SQL_CATALOG_INTENTS_FEATURE_FLAG,
+    SQL_RENAME_INTENTS_FEATURE_FLAG,
+];
+fn feature_flags_lock(root: &Path) -> std::sync::Arc<parking_lot::Mutex<()>> {
+    use std::sync::{Arc, OnceLock, Weak};
+    type Locks = std::collections::HashMap<PathBuf, Weak<parking_lot::Mutex<()>>>;
+    static LOCKS: OnceLock<parking_lot::Mutex<Locks>> = OnceLock::new();
+    let mut locks = LOCKS.get_or_init(Default::default).lock();
+    locks.retain(|_, lock| lock.strong_count() != 0);
+    let path = root.canonicalize().unwrap_or_else(|_| root.to_path_buf());
+    if let Some(lock) = locks.get(&path).and_then(Weak::upgrade) {
+        return lock;
+    }
+    let lock = Arc::new(parking_lot::Mutex::new(()));
+    locks.insert(path, Arc::downgrade(&lock));
+    lock
+}
+
+pub(crate) fn required_reader_features(root: &Path) -> Result<Vec<String>> {
+    let metadata = read_or_legacy_metadata(root)?;
+    validate_supported(&metadata)?;
+    Ok(metadata
+        .feature_flags
+        .into_iter()
+        .filter(|flag| REPLICATED_READER_FEATURES.contains(&flag.as_str()))
+        .collect())
+}
+
+pub(crate) fn validate_replicated_reader_features(features: &[String]) -> Result<()> {
+    if features.windows(2).any(|pair| pair[0] >= pair[1]) {
+        return Err(BicDbError::FormatCompatibility(
+            "replicated reader capabilities must be sorted and unique".into(),
+        ));
+    }
+    for feature in features {
+        if !REPLICATED_READER_FEATURES.contains(&feature.as_str()) {
+            return Err(BicDbError::FormatCompatibility(format!(
+                "unsupported replicated reader capability `{feature}`"
+            )));
+        }
+    }
+    Ok(())
+}
+
+pub(crate) fn install_replicated_reader_features(root: &Path, features: &[String]) -> Result<()> {
+    validate_replicated_reader_features(features)?;
+    if features.is_empty() {
+        return Ok(());
+    }
+    enable_feature_flags(
+        root,
+        &features.iter().map(String::as_str).collect::<Vec<_>>(),
+    )
+}
+
+fn enable_feature_flags(root: &Path, features: &[&str]) -> Result<()> {
+    // Shared range-apply workers can install different capabilities at once.
+    // Serialize the read/merge/fsync with local feature enables so neither
+    // writer can replace a flag that the other has just made durable.
+    let lock = feature_flags_lock(root);
+    let _guard = lock.lock();
+    let mut metadata = read_or_legacy_metadata(root)?;
+    validate_supported(&metadata)?;
+    let changed = features.iter().fold(false, |changed, feature| {
+        metadata.feature_flags.insert((*feature).into()) || changed
+    });
+    if changed {
+        persist_metadata(root, &metadata, true)?;
+    }
+    Ok(())
+}
+
 /// Which storage engine owns a database's durable state. See
 /// `docs/decisions/ADR-004-storage-mode-compatibility.md` and
 /// `docs/server-paged-storage-todo.md`.
@@ -333,6 +411,8 @@ pub fn check_backup_restore_compatible(metadata: &FormatMetadata) -> Result<()> 
 /// database's metadata as `embedded_memory` — a downgrade of the compatibility
 /// fence performed by a routine operation.
 pub fn persist_current(root: &Path, fsync: bool) -> Result<()> {
+    let lock = feature_flags_lock(root);
+    let _guard = lock.lock();
     let mode = read_or_legacy_metadata(root)?.storage_mode;
     ensure_mode_supported(&mode)?;
     let mut metadata = FormatMetadata::current_with_mode(mode);
@@ -345,6 +425,8 @@ pub fn persist_current(root: &Path, fsync: bool) -> Result<()> {
 
 /// Initialize format metadata for a database being created in `mode`.
 pub fn persist_current_with_mode(root: &Path, mode: StorageMode, fsync: bool) -> Result<()> {
+    let lock = feature_flags_lock(root);
+    let _guard = lock.lock();
     ensure_mode_supported(&mode)?;
     let mut metadata = FormatMetadata::current_with_mode(mode);
     if let Some(previous) = load_metadata(root)? {
@@ -535,6 +617,8 @@ fn cleanup_migration_state(root: &Path) -> Result<()> {
 /// Fence writers predating durable extent tracking before a reusable identity
 /// can be published. Routine metadata rewrites must preserve this capability.
 pub(crate) fn enable_online_backup_extent_tracking(root: &Path) -> Result<()> {
+    let lock = feature_flags_lock(root);
+    let _guard = lock.lock();
     let mut metadata = read_or_legacy_metadata(root)?;
     validate_supported(&metadata)?;
     if metadata.storage_mode == StorageMode::ServerPaged
@@ -549,69 +633,120 @@ pub(crate) fn enable_online_backup_extent_tracking(root: &Path) -> Result<()> {
 
 /// Older binaries must refuse a database whose unique keys compare NULLs as equal.
 pub(crate) fn enable_unique_nulls_not_distinct(root: &Path) -> Result<()> {
-    let mut metadata = read_or_legacy_metadata(root)?;
-    validate_supported(&metadata)?;
-    if metadata
-        .feature_flags
-        .insert(UNIQUE_NULLS_NOT_DISTINCT_FEATURE_FLAG.into())
-    {
-        persist_metadata(root, &metadata, true)?;
-    }
-    Ok(())
+    enable_feature_flags(root, &[UNIQUE_NULLS_NOT_DISTINCT_FEATURE_FLAG])
 }
 
 /// Fence older SQL runtimes before publishing a transactional catalog intent.
 /// Even an empty journal remains sticky: unknown readers must not skip recovery.
 pub(crate) fn enable_sql_catalog_intents(root: &Path) -> Result<()> {
-    let mut metadata = read_or_legacy_metadata(root)?;
-    validate_supported(&metadata)?;
-    if metadata
-        .feature_flags
-        .insert(SQL_CATALOG_INTENTS_FEATURE_FLAG.into())
-    {
-        persist_metadata(root, &metadata, true)?;
-    }
-    Ok(())
+    enable_feature_flags(root, &[SQL_CATALOG_INTENTS_FEATURE_FLAG])
 }
 
 /// Install before publishing any generic rename undo images. Readers that
 /// only understand recycle moves must refuse this store, even after the last
 /// rename intent has been resolved. Never remove this sticky capability.
 pub(crate) fn enable_sql_rename_intents(root: &Path) -> Result<()> {
-    let mut metadata = read_or_legacy_metadata(root)?;
-    validate_supported(&metadata)?;
-    if metadata
-        .feature_flags
-        .insert(SQL_RENAME_INTENTS_FEATURE_FLAG.into())
-    {
-        persist_metadata(root, &metadata, true)?;
-    }
-    Ok(())
+    enable_feature_flags(root, &[SQL_RENAME_INTENTS_FEATURE_FLAG])
 }
 
 /// Persist the reader/writer fence before any Oracle-v1 key definition or build
 /// checkpoint becomes durable. The capability is sticky even after index DROP.
 pub(crate) fn enable_oracle_simple_case_v1(root: &Path) -> Result<()> {
-    let mut metadata = read_or_legacy_metadata(root)?;
-    validate_supported(&metadata)?;
-    if metadata
-        .feature_flags
-        .insert(ORACLE_SIMPLE_CASE_V1_FEATURE_FLAG.into())
-    {
-        persist_metadata(root, &metadata, true)?;
-    }
-    Ok(())
+    enable_feature_flags(root, &[ORACLE_SIMPLE_CASE_V1_FEATURE_FLAG])
 }
 
 /// Persist a sticky reader fence before publishing an invalid Oracle routine.
 pub(crate) fn enable_oracle_invalid_routines(root: &Path) -> Result<()> {
-    let mut metadata = read_or_legacy_metadata(root)?;
-    validate_supported(&metadata)?;
-    if metadata
-        .feature_flags
-        .insert(ORACLE_INVALID_ROUTINES_FEATURE_FLAG.into())
-    {
-        persist_metadata(root, &metadata, true)?;
+    enable_feature_flags(root, &[ORACLE_INVALID_ROUTINES_FEATURE_FLAG])
+}
+
+#[cfg(test)]
+mod replicated_reader_tests {
+    use super::*;
+
+    #[test]
+    fn portable_capabilities_preserve_local_layout_and_backup_fences() {
+        let root = tempfile::tempdir().unwrap();
+        persist_current_with_mode(root.path(), StorageMode::ServerPaged, true).unwrap();
+        enable_online_backup_extent_tracking(root.path()).unwrap();
+        install_replicated_reader_features(root.path(), &[SQL_RENAME_INTENTS_FEATURE_FLAG.into()])
+            .unwrap();
+        install_replicated_reader_features(
+            root.path(),
+            &[ORACLE_SIMPLE_CASE_V1_FEATURE_FLAG.into()],
+        )
+        .unwrap();
+        persist_current(root.path(), true).unwrap();
+        let metadata = read_or_legacy_metadata(root.path()).unwrap();
+        assert_eq!(metadata.storage_mode, StorageMode::ServerPaged);
+        assert!(metadata
+            .feature_flags
+            .contains(ONLINE_BACKUP_EXTENT_FEATURE_FLAG));
+        assert_eq!(
+            required_reader_features(root.path()).unwrap(),
+            vec![
+                ORACLE_SIMPLE_CASE_V1_FEATURE_FLAG.to_string(),
+                SQL_RENAME_INTENTS_FEATURE_FLAG.to_string()
+            ]
+        );
     }
-    Ok(())
+
+    #[test]
+    fn unknown_nonportable_and_noncanonical_requirements_leave_metadata_untouched() {
+        let root = tempfile::tempdir().unwrap();
+        persist_current(root.path(), true).unwrap();
+        let before = std::fs::read(metadata_path(root.path())).unwrap();
+        for features in [
+            vec!["unknown_reader_v999".into()],
+            vec![SERVER_PAGED_FEATURE_FLAG.into()],
+            vec![
+                SQL_RENAME_INTENTS_FEATURE_FLAG.into(),
+                SQL_CATALOG_INTENTS_FEATURE_FLAG.into(),
+            ],
+            vec![
+                SQL_RENAME_INTENTS_FEATURE_FLAG.into(),
+                SQL_RENAME_INTENTS_FEATURE_FLAG.into(),
+            ],
+        ] {
+            assert!(install_replicated_reader_features(root.path(), &features).is_err());
+            assert_eq!(std::fs::read(metadata_path(root.path())).unwrap(), before);
+        }
+    }
+
+    #[test]
+    fn simultaneous_feature_installs_and_metadata_refresh_keep_the_union() {
+        let root = tempfile::tempdir().unwrap();
+        persist_current(root.path(), true).unwrap();
+        let barrier = std::sync::Barrier::new(3);
+        std::thread::scope(|scope| {
+            for feature in [
+                SQL_CATALOG_INTENTS_FEATURE_FLAG,
+                SQL_RENAME_INTENTS_FEATURE_FLAG,
+            ] {
+                let root = root.path();
+                let barrier = &barrier;
+                scope.spawn(move || {
+                    barrier.wait();
+                    for _ in 0..16 {
+                        install_replicated_reader_features(root, &[feature.into()]).unwrap();
+                    }
+                });
+            }
+            let root = root.path();
+            let barrier = &barrier;
+            scope.spawn(move || {
+                barrier.wait();
+                for _ in 0..16 {
+                    persist_current(root, true).unwrap();
+                }
+            });
+        });
+        assert_eq!(
+            required_reader_features(root.path()).unwrap(),
+            vec![
+                SQL_CATALOG_INTENTS_FEATURE_FLAG.to_string(),
+                SQL_RENAME_INTENTS_FEATURE_FLAG.to_string()
+            ]
+        );
+    }
 }

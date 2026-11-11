@@ -47,6 +47,59 @@ pub(crate) enum CatalogOp {
 }
 
 impl BicDb {
+    pub(crate) fn validate_replication_reader_requirements(frame: &CommitFrame) -> Result<()> {
+        let require = |name: &str| -> Result<()> {
+            let feature = match name {
+                "__bicdb_rename_intents" | "__bicdb_rename_images" | "__bicdb_rename_gc" => {
+                    Some(format::SQL_RENAME_INTENTS_FEATURE_FLAG)
+                }
+                "__bicdb_recycle_intents"
+                | "__bicdb_recycle_purges"
+                | "__bicdb_recycle_creations" => Some(format::SQL_CATALOG_INTENTS_FEATURE_FLAG),
+                _ => None,
+            };
+            if let Some(feature) = feature {
+                if !frame
+                    .required_reader_features
+                    .iter()
+                    .any(|present| present == feature)
+                {
+                    return Err(BicDbError::Replication(format!(
+                        "replicated collection `{name}` requires reader capability `{feature}`"
+                    )));
+                }
+            }
+            Ok(())
+        };
+        for write in &frame.writes {
+            require(&write.collection)?;
+            if let Some(meta) = &write.collection_meta {
+                require(&meta.name)?;
+            }
+            if write.collection == CATALOG_LOG_COLLECTION
+                && write.operation != ReplicationOperationType::Delete
+            {
+                let record: Record = serde_json::from_slice(&write.payload)?;
+                let op: CatalogOp = serde_json::from_value(record.metadata)?;
+                match op {
+                    CatalogOp::Create { name, .. }
+                    | CatalogOp::Drop { name }
+                    | CatalogOp::MeshAuthorization { name, .. } => require(&name)?,
+                    CatalogOp::Rename { from, to } => {
+                        require(&from)?;
+                        require(&to)?;
+                    }
+                    CatalogOp::IndexCatalog { definitions } => {
+                        for definition in definitions {
+                            require(&definition.collection)?;
+                        }
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
     /// The physical storage name of a logical collection.
     pub(crate) fn storage_name_of(&self, collection: &str) -> String {
         self.storage_aliases
@@ -466,6 +519,8 @@ impl BicDb {
                 "pending catalog redo belongs to another cluster",
             ));
         }
+        Self::validate_replication_reader_requirements(&frame)?;
+        format::install_replicated_reader_features(&self.path, &frame.required_reader_features)?;
         if frame.commit_seq <= self.current_commit_seq() {
             self.apply_replicated_catalog_ops(&frame)?;
         }

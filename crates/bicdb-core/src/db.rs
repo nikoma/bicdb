@@ -11618,6 +11618,7 @@ impl BicDb {
         // primary's failed batch), and such a commit can still be lost.
         let shippable = self.replication_shippable_seq();
         let commits = self.replication_commits_from_retained_wal(shippable)?;
+        let reader_features = format::required_reader_features(&self.path)?;
         if let Some(oldest) = commits.first().map(|commit| commit.commit_seq) {
             if commit_seq < oldest.saturating_sub(1) {
                 return Err(replication_error(format!(
@@ -11639,7 +11640,7 @@ impl BicDb {
                     commit.timestamp,
                     commit.writes,
                 );
-                Ok(if self.config.replication.record_journal {
+                let frame = if self.config.replication.record_journal {
                     frame.with_journal(
                         self.replication_journal_events(&commit.audit_events)?
                             .ok_or_else(|| {
@@ -11648,7 +11649,8 @@ impl BicDb {
                     )
                 } else {
                     frame
-                })
+                };
+                frame.with_required_reader_features(reader_features.clone())
             })
             .collect::<Result<Vec<_>>>()?)
     }
@@ -12019,6 +12021,8 @@ impl BicDb {
         frame: &CommitFrame,
     ) -> Result<usize> {
         let filtered = filter_commit_frame_for_range(frame, range)?;
+        Self::validate_replication_reader_requirements(&filtered)?;
+        format::install_replicated_reader_features(&self.path, &filtered.required_reader_features)?;
         self.ensure_replication_frame_collections(&filtered)?;
         self.apply_range_commit_frame_as_local_preinstalled(range, frame)
     }
@@ -12029,6 +12033,8 @@ impl BicDb {
         frame: &CommitFrame,
     ) -> Result<usize> {
         let filtered = filter_commit_frame_for_range(frame, range)?;
+        Self::validate_replication_reader_requirements(&filtered)?;
+        format::install_replicated_reader_features(&self.path, &filtered.required_reader_features)?;
         for write in &filtered.writes {
             validate_replication_collection_meta(write)?;
             let state = self.collection_state(&write.collection)?;
@@ -12138,6 +12144,8 @@ impl BicDb {
         }
         if frame.protocol_version != crate::replication::REPLICATION_PROTOCOL_VERSION
             && frame.protocol_version != crate::replication::REPLICATION_JOURNAL_PROTOCOL_VERSION
+            && frame.protocol_version
+                != crate::replication::REPLICATION_READER_FEATURES_PROTOCOL_VERSION
         {
             return Err(replication_error(format!(
                 "unsupported replication protocol version {}",
@@ -12145,8 +12153,13 @@ impl BicDb {
             )));
         }
         self.validate_replication_journal(&frame.journal)?;
+        Self::validate_replication_reader_requirements(frame)?;
         let current = self.last_applied_commit_seq();
         if frame.commit_seq <= current {
+            format::install_replicated_reader_features(
+                &self.path,
+                &frame.required_reader_features,
+            )?;
             return Ok(ReplicationApplyReport {
                 applied: 0,
                 duplicates: 1,
@@ -12162,6 +12175,7 @@ impl BicDb {
         }
 
         self.verify_replication_attachments(frame)?;
+        format::install_replicated_reader_features(&self.path, &frame.required_reader_features)?;
         self.ensure_replication_frame_collections(frame)?;
         let writes = replication_writes_to_tx_writes(frame)?;
         self.stage_pending_replication_catalog(frame)?;

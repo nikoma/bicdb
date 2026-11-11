@@ -2937,9 +2937,7 @@ impl BicDb {
         }
         tx.state = TxState::Committed;
         tx.committed_seq = Some(commit_seq);
-        if let Some(attempt) = postgres_commit {
-            attempt.committed(tx);
-        }
+        postgres_commit.map(|attempt| attempt.committed(tx));
         drop(postgres_registry);
         // The decision is already durable. Complete the outboxes while this
         // commit still holds admission: a checkpoint must not cut their redo

@@ -30,6 +30,9 @@ fn same_install_lineage_for_new_attempt(
     let mut normalized = existing.clone();
     normalized.range = candidate.range.clone();
     normalized.attempt_id = candidate.attempt_id;
+    // The protected producer validates the old pointer and immutable preimage;
+    // pointer identity itself changes on a fresh explicitly authorized attempt.
+    normalized.protected_proposal = candidate.protected_proposal.clone();
     if existing.attempt_id != candidate.attempt_id {
         normalized.target_namespace_ids = candidate.target_namespace_ids.clone();
     }
@@ -900,6 +903,28 @@ impl RangeWriteStore {
         // full staged logical-history compatibility is a separate mandatory
         // prerequisite of the target row/final-publication state machine.
         self.validate_install_local_log(cut.range(), cut.range_index())?;
+        if matches!(cut.purpose(), RangeImageSourcePurposeV1::CurrentVoterRepair) {
+            let binding = super::NativeImageProposalIntentBinding::from_actual_candidate(
+                self, admission, &intent,
+            )?;
+            let catalogue = self.image_install_catalog_history_obligations(intent.range.id)?;
+            let proposal = database.persist_native_current_image_proposal(
+                self,
+                &binding,
+                admission,
+                native_safety,
+                &catalogue,
+                source,
+                role,
+                frozen,
+            )?;
+            if proposal.intent_core_sha256() != intent.core_sha256()? {
+                return Err(range_write_error(
+                    "protected proposal differs from exact BEGIN core",
+                ));
+            }
+            intent.protected_proposal = Some(proposal.pointer());
+        }
         self.invalidate_native_activation_open(intent.range.id);
         if let Some(existing) = self.catalog.image_install_intents.get(&intent.range.id) {
             if existing.attempt_id == intent.attempt_id
@@ -953,7 +978,7 @@ impl RangeWriteStore {
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn candidate_native_image_install_intent(
+    pub(super) fn candidate_native_image_install_intent(
         &self,
         database: &crate::BicDb,
         admission: &NativeRecoveryAdmission,
@@ -1064,6 +1089,7 @@ impl RangeWriteStore {
             target_credentials: credentials(current.local_member_identity()),
             restore_activation: current.restore_activation().cloned(),
             schema_sha256: source.bindings().schema_sha256().to_string(),
+            protected_proposal: None,
         };
         intent.validate()?;
         Ok(intent)
@@ -1075,13 +1101,21 @@ impl RangeWriteStore {
         persist: impl FnOnce(&Self) -> Result<()>,
     ) -> Result<()> {
         intent.validate()?;
+        let protected = intent.protected_proposal.is_some();
         self.catalog
             .image_install_intents
             .insert(intent.range.id, intent);
-        self.catalog.format_version = self
-            .catalog
-            .format_version
-            .max(IMAGE_INSTALL_RANGE_LOG_FORMAT);
+        self.catalog.format_version = self.catalog.format_version.max(if protected {
+            super::IMAGE_PROPOSAL_CATALOG_FORMAT
+        } else {
+            IMAGE_INSTALL_RANGE_LOG_FORMAT
+        });
+        if protected {
+            // Format10+ requires the explicit sparse field even when empty.
+            self.catalog
+                .sparse_committed_decisions
+                .get_or_insert_with(BTreeMap::new);
+        }
         // write_atomic may rename before returning a directory-sync error.
         // Never restore the previous permissive in-memory catalog on failure.
         persist(self)
@@ -1097,6 +1131,14 @@ impl RangeWriteStore {
     ) -> Result<()> {
         fence.require_live_role(role)?;
         admission.require_current(database)?;
+        if let Some(pointer) = &fence.intent.protected_proposal {
+            let protected = database.read_native_current_image_proposal(admission, pointer)?;
+            if protected.intent_core_sha256() != fence.intent.core_sha256()? {
+                return Err(range_write_error(
+                    "image fence protected proposal/core mismatch",
+                ));
+            }
+        }
         database
             .range_mutation_gate()
             .validate_frozen(fence.range().id, frozen)?;
@@ -1222,6 +1264,7 @@ mod tests {
             target_credentials: member,
             restore_activation: None,
             schema_sha256: "f".repeat(64),
+            protected_proposal: None,
         }
     }
     fn store(root: &Path) -> RangeWriteStore {

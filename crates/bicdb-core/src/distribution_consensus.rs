@@ -1201,6 +1201,12 @@ impl MetadataConsensusStore {
 
     fn commit_entry(&mut self, entry: MetadataLogEntry) -> Result<()> {
         validate_log_entry_shape(&entry, &self.state.cluster_id)?;
+        if let Some(activation) = &entry.restore_activation {
+            validate_committed_activation_progress(
+                self.state.committed_restore_activation.as_ref(),
+                Some(activation),
+            )?;
+        }
         self.state.commit_index = entry.index;
         self.state.base_index = entry.index;
         self.state.base_term = entry.term;
@@ -1219,7 +1225,7 @@ impl MetadataConsensusStore {
         snapshot.topology.validate()?;
         self.ensure_cluster(&snapshot.topology.cluster_id)?;
         if let Some(activation) = &snapshot.restore_activation {
-            validate_activation_against_topology(
+            validate_historical_activation_against_topology(
                 activation,
                 &snapshot.topology,
                 &self.state.cluster_id,
@@ -1237,6 +1243,10 @@ impl MetadataConsensusStore {
                 "snapshot conflicts with the committed metadata index",
             ));
         }
+        validate_committed_activation_progress(
+            self.state.committed_restore_activation.as_ref(),
+            snapshot.restore_activation.as_ref(),
+        )?;
         self.state.base_index = snapshot.last_included_index;
         self.state.base_term = snapshot.last_included_term;
         self.state.commit_index = snapshot.last_included_index;
@@ -1438,7 +1448,7 @@ fn validate_state(state: &MetadataConsensusState) -> Result<()> {
         ));
     }
     if let Some(activation) = &state.committed_restore_activation {
-        validate_activation_against_topology(
+        validate_historical_activation_against_topology(
             activation,
             &state.committed_topology,
             &state.cluster_id,
@@ -1447,9 +1457,8 @@ fn validate_state(state: &MetadataConsensusState) -> Result<()> {
     let mut expected = state.base_index.saturating_add(1);
     let mut latest_generation = state.committed_topology.generation;
     let mut latest_topology = state.committed_topology.clone();
-    let mut latest_activation_ms = state
-        .committed_restore_activation
-        .as_ref()
+    let mut latest_activation = state.committed_restore_activation.as_ref();
+    let mut latest_activation_ms = latest_activation
         .map(|activation| activation.activated_at_ms)
         .unwrap_or(0);
     for entry in &state.log {
@@ -1472,6 +1481,8 @@ fn validate_state(state: &MetadataConsensusState) -> Result<()> {
                     "restore activation changes topology or does not advance its decision time",
                 ));
             }
+            validate_committed_activation_progress(latest_activation, Some(activation))?;
+            latest_activation = Some(activation);
             latest_activation_ms = activation.activated_at_ms;
         } else {
             if entry.topology.generation <= latest_generation {
@@ -1499,6 +1510,66 @@ fn validate_log_entry_shape(entry: &MetadataLogEntry, cluster_id: &ClusterId) ->
     }
     if let Some(activation) = &entry.restore_activation {
         validate_activation_against_topology(activation, &entry.topology, cluster_id)?;
+    }
+    Ok(())
+}
+
+/// A retained committed decision describes the topology at activation, not a
+/// permanent ban on later membership/load changes. Local envelopes are checked
+/// before state validation; snapshot callers must authenticate the actual
+/// consensus source before reaching this store. Older topology hashes cannot
+/// be recomputed from a later compacted topology, and are historical lineage,
+/// never independent proof of fresh restore admission. NEW decisions still use
+/// `validate_activation_against_topology` at proposal/log admission.
+fn validate_historical_activation_against_topology(
+    activation: &MetadataRestoreActivation,
+    topology: &ClusterTopology,
+    cluster_id: &ClusterId,
+) -> Result<()> {
+    activation.validate()?;
+    if activation.cluster_id != *cluster_id
+        || activation.cluster_id != topology.cluster_id
+        || activation.topology_generation > topology.generation
+    {
+        return Err(metadata_error(
+            "historical restore activation belongs to another cluster or future topology",
+        ));
+    }
+    if activation.topology_generation == topology.generation {
+        validate_activation_against_topology(activation, topology, cluster_id)?;
+    }
+    Ok(())
+}
+
+/// Ordinary Raft replication cannot erase or rewrite an already committed
+/// restore decision. A fresh authorized restore into a new root has no previous
+/// lineage; that separate admission still validates its complete certificate.
+fn validate_committed_activation_progress(
+    previous: Option<&MetadataRestoreActivation>,
+    next: Option<&MetadataRestoreActivation>,
+) -> Result<()> {
+    if let Some(next) = next {
+        next.validate()?;
+    }
+    let Some(previous) = previous else {
+        return Ok(());
+    };
+    let Some(next) = next else {
+        return Err(metadata_error(
+            "snapshot erases committed restore activation",
+        ));
+    };
+    if previous == next {
+        return Ok(());
+    }
+    if previous.cluster_id != next.cluster_id
+        || previous.activation_id == next.activation_id
+        || next.activated_at_ms <= previous.activated_at_ms
+        || next.topology_generation < previous.topology_generation
+    {
+        return Err(metadata_error(
+            "restore activation regresses or rewrites a committed decision",
+        ));
     }
     Ok(())
 }
@@ -2211,7 +2282,7 @@ mod tests {
             .unwrap();
         assert_eq!(follower.committed_restore_activation(), Some(&activation));
         drop(follower);
-        let follower = open(roots[1].path(), "n2", &topology);
+        let mut follower = open(roots[1].path(), "n2", &topology);
         assert_eq!(follower.committed_restore_activation(), Some(&activation));
         assert_eq!(
             MetadataConsensusStore::inspect_restore_activation(roots[1].path()).unwrap(),
@@ -2234,6 +2305,272 @@ mod tests {
         wrong_topology.topology_sha256 = "d".repeat(64);
         assert!(leader.propose_restore_activation(wrong_topology).is_err());
         assert_eq!(leader.status().current_term, election.term);
+
+        let old_snapshot = leader.append_request_from(1, 8).unwrap();
+        let newer = restore_activation(&topology, 10_002);
+        let entry = leader.propose_restore_activation(newer.clone()).unwrap();
+        let response = follower
+            .handle_append_request(leader.append_request_from(entry.index, 8).unwrap())
+            .unwrap();
+        assert!(leader
+            .record_append_response(&response.node_id, &response)
+            .unwrap());
+        follower
+            .handle_append_request(leader.append_request_from(entry.index + 1, 8).unwrap())
+            .unwrap();
+        let newest_snapshot = leader.append_request_from(1, 8).unwrap();
+        assert!(
+            snapshot_target
+                .handle_append_request(newest_snapshot.clone())
+                .unwrap()
+                .success
+        );
+        assert_eq!(snapshot_target.committed_restore_activation(), Some(&newer));
+        // A genuine old snapshot is ignored and cannot undo the newer decision.
+        snapshot_target.handle_append_request(old_snapshot).unwrap();
+        assert_eq!(snapshot_target.committed_restore_activation(), Some(&newer));
+        // The same complete decision remains an idempotent snapshot positive.
+        assert!(
+            snapshot_target
+                .handle_append_request(newest_snapshot.clone())
+                .unwrap()
+                .success
+        );
+
+        // These are deliberately adversarial DTOs, not fabricated qualification
+        // evidence. A forged higher index must not bypass lineage monotonicity.
+        let template = newest_snapshot.snapshot.unwrap();
+        let mut same_id_rewrite = newer.clone();
+        same_id_rewrite.activated_at_ms += 1;
+        same_id_rewrite.node_ack_set_sha256 = "d".repeat(64);
+        let mut same_time_new_id = newer.clone();
+        same_time_new_id.activation_id = Uuid::new_v4();
+        let mut same_generation_wrong_hash = newer.clone();
+        same_generation_wrong_hash.topology_sha256 = "e".repeat(64);
+        let mut future = newer.clone();
+        future.topology_generation += 1;
+        let mut wrong_cluster = newer.clone();
+        wrong_cluster.cluster_id = ClusterId::new("another-cluster").unwrap();
+        for invalid in [
+            None,
+            Some(activation.clone()),
+            Some(same_id_rewrite),
+            Some(same_time_new_id),
+            Some(same_generation_wrong_hash),
+            Some(future),
+            Some(wrong_cluster),
+        ] {
+            let before = snapshot_target.state.clone();
+            let mut forged = template.clone();
+            forged.last_included_index += 1;
+            forged.restore_activation = invalid;
+            assert!(snapshot_target.install_snapshot(forged).is_err());
+            assert_eq!(
+                snapshot_target.state, before,
+                "rejected snapshot cannot mutate committed state"
+            );
+        }
+        assert_eq!(leader.committed_restore_activation(), Some(&newer));
+        assert_eq!(follower.committed_restore_activation(), Some(&newer));
+    }
+
+    #[test]
+    fn restore_activation_historical_validation_does_not_weaken_new_decision_admission() {
+        let topology = topology_with_nodes(3);
+        let activation = restore_activation(&topology, 10_000);
+        let mut successor = topology.clone();
+        successor.generation += 1;
+        validate_historical_activation_against_topology(
+            &activation,
+            &successor,
+            &topology.cluster_id,
+        )
+        .unwrap();
+        assert!(validate_activation_against_topology(
+            &activation,
+            &successor,
+            &topology.cluster_id
+        )
+        .is_err());
+        let new_decision = MetadataLogEntry {
+            index: 2,
+            term: 1,
+            leadership_barrier: false,
+            topology: successor.clone(),
+            restore_activation: Some(activation.clone()),
+        };
+        assert!(
+            validate_log_entry_shape(&new_decision, &topology.cluster_id).is_err(),
+            "NEW decisions still need the exact topology at admission"
+        );
+        let mut corrupt = activation.clone();
+        corrupt.topology_sha256 = "d".repeat(64);
+        assert!(validate_historical_activation_against_topology(
+            &corrupt,
+            &topology,
+            &topology.cluster_id
+        )
+        .is_err());
+        let mut future = activation.clone();
+        future.topology_generation = successor.generation + 1;
+        assert!(validate_historical_activation_against_topology(
+            &future,
+            &successor,
+            &topology.cluster_id
+        )
+        .is_err());
+        let mut wrong_cluster = activation.clone();
+        wrong_cluster.cluster_id = ClusterId::new("wrong-cluster").unwrap();
+        assert!(validate_historical_activation_against_topology(
+            &wrong_cluster,
+            &successor,
+            &topology.cluster_id
+        )
+        .is_err());
+        let mut malformed = activation.clone();
+        malformed.admission_checksum_sha256 = "bad".into();
+        assert!(validate_historical_activation_against_topology(
+            &malformed,
+            &successor,
+            &topology.cluster_id
+        )
+        .is_err());
+        assert!(validate_committed_activation_progress(None, Some(&malformed)).is_err());
+        // New-root bootstrap has no prior committed lineage to erase.
+        validate_committed_activation_progress(None, Some(&activation)).unwrap();
+    }
+
+    #[test]
+    fn restore_activation_historical_lineage_survives_load_commit_reopen_and_snapshot() {
+        let topology = topology_with_nodes(3);
+        let roots = (0..3)
+            .map(|_| tempfile::tempdir().unwrap())
+            .collect::<Vec<_>>();
+        let open_durable = |index: usize, name: &str| {
+            MetadataConsensusStore::open(
+                roots[index].path(),
+                topology.cluster_id.clone(),
+                ClusterNodeId::new(name).unwrap(),
+                topology.clone(),
+                true,
+            )
+        };
+        let mut leader = open_durable(0, "n1").unwrap();
+        let mut follower = open_durable(1, "n2").unwrap();
+        let mut snapshot_target = open_durable(2, "n3").unwrap();
+        let election = leader.start_election().unwrap();
+        let mut votes = BTreeSet::from([election.candidate_id.clone()]);
+        for peer in [&mut follower, &mut snapshot_target] {
+            let vote = peer.handle_vote_request(election.clone()).unwrap();
+            assert!(vote.vote_granted);
+            assert_eq!(vote.term, election.term);
+            votes.insert(vote.voter_id);
+        }
+        leader.become_leader(&votes).unwrap();
+        let reply = follower
+            .handle_append_request(leader.append_request_from(1, 8).unwrap())
+            .unwrap();
+        assert!(leader
+            .record_append_response(&reply.node_id, &reply)
+            .unwrap());
+        follower
+            .handle_append_request(
+                leader
+                    .append_request_from(leader.status().commit_index + 1, 8)
+                    .unwrap(),
+            )
+            .unwrap();
+
+        let activation = restore_activation(&topology, 10_000);
+        let decision = leader
+            .propose_restore_activation(activation.clone())
+            .unwrap();
+        let reply = follower
+            .handle_append_request(leader.append_request_from(decision.index, 8).unwrap())
+            .unwrap();
+        assert!(leader
+            .record_append_response(&reply.node_id, &reply)
+            .unwrap());
+        follower
+            .handle_append_request(leader.append_request_from(decision.index + 1, 8).unwrap())
+            .unwrap();
+        assert_eq!(leader.committed_restore_activation(), Some(&activation));
+        assert_eq!(follower.committed_restore_activation(), Some(&activation));
+
+        // Obtain the ordinary load-only successor through real distribution
+        // operations, rather than forging a generation or catalog watermark.
+        let plan_root = tempfile::tempdir().unwrap();
+        let config = DistributionConfig {
+            enabled: true,
+            cluster_id: topology.cluster_id.clone(),
+            node_id: election.candidate_id.clone(),
+            node_address: "127.0.0.1:10001".into(),
+            replication_factor: 1,
+            initial_ranges: 2,
+            ..DistributionConfig::default()
+        };
+        let mut plan =
+            DistributionStore::initialize_at(plan_root.path(), config, true, 10).unwrap();
+        plan.install_authoritative_topology(topology.clone())
+            .unwrap();
+        let range_id = topology.ranges.values().next().unwrap().id;
+        assert!(plan
+            .update_range_load(range_id, 4321, 17, &election.candidate_id, 10_001)
+            .unwrap());
+        let changed = plan.topology().clone();
+        assert!(changed.generation > activation.topology_generation);
+        let load_entry = leader.propose_topology(changed.clone()).unwrap();
+        let reply = follower
+            .handle_append_request(leader.append_request_from(load_entry.index, 8).unwrap())
+            .unwrap();
+        assert!(leader
+            .record_append_response(&reply.node_id, &reply)
+            .unwrap());
+        follower
+            .handle_append_request(leader.append_request_from(load_entry.index + 1, 8).unwrap())
+            .unwrap();
+        assert_eq!(leader.committed_topology(), &changed);
+        assert_eq!(follower.committed_topology(), &changed);
+        assert_eq!(leader.committed_restore_activation(), Some(&activation));
+        assert_eq!(follower.committed_restore_activation(), Some(&activation));
+
+        // This is a trusted-caller store/protocol test, not an mTLS test. The
+        // actual leader creates the compacted snapshot; no state is forged.
+        let snapshot = leader.append_request_from(1, 8).unwrap();
+        assert!(snapshot.snapshot.is_some());
+        let snapshot_result = snapshot_target.handle_append_request(snapshot);
+        let snapshot_error = snapshot_result.as_ref().err().map(ToString::to_string);
+        if let Ok(reply) = &snapshot_result {
+            assert!(reply.success);
+            assert_eq!(snapshot_target.committed_topology(), &changed);
+            assert_eq!(
+                snapshot_target.committed_restore_activation(),
+                Some(&activation)
+            );
+        }
+        drop(leader);
+        drop(follower);
+        let leader_reopen = open_durable(0, "n1");
+        let follower_reopen = open_durable(1, "n2");
+        let report = serde_json::json!({
+            "scope": "three fsync-on stores; trusted-caller vote/Append/snapshot protocol; no TLS or power loss",
+            "activation_generation": activation.topology_generation,
+            "current_generation": changed.generation,
+            "activation_index": decision.index,
+            "load_commit_index": load_entry.index,
+            "snapshot_error": snapshot_error,
+            "leader_reopen_error": leader_reopen.as_ref().err().map(ToString::to_string),
+            "follower_reopen_error": follower_reopen.as_ref().err().map(ToString::to_string)
+        });
+        eprintln!("RESTORE_LINEAGE_REPORT {report}");
+        assert!(
+            snapshot_result.is_ok() && leader_reopen.is_ok() && follower_reopen.is_ok(),
+            "{report}"
+        );
+        for store in [leader_reopen.unwrap(), follower_reopen.unwrap()] {
+            assert_eq!(store.committed_topology(), &changed);
+            assert_eq!(store.committed_restore_activation(), Some(&activation));
+        }
     }
 
     #[test]

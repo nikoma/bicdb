@@ -132,7 +132,7 @@ fn catalog_identity_reads_do_not_acquire_a_data_snapshot_or_erase_observations()
     for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
         for scan in [false, true] {
             let root = tempfile::tempdir().unwrap();
-            let mut db = BicDb::open_with_config(root.path(), config(mode)).unwrap();
+            let mut db = BicDb::open_with_config(root.path(), config(mode.clone())).unwrap();
             db.create_collection("catalog").unwrap();
             db.insert("catalog", Record::new("metadata")).unwrap();
             let mut reader = db.begin_transaction().unwrap();

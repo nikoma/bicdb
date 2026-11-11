@@ -144,6 +144,19 @@ impl BicDb {
         self.config.replication.enabled && self.ha_node.role() == NodeRole::Primary
     }
 
+    /// Additional Native backings touched by catalog operations. A trusted
+    /// host must declare these resources before delegating scoped DDL effects;
+    /// the names are owned here, alongside the actual catalog-log writer.
+    /// This exposes the resource inventory and changes no replication format,
+    /// lifecycle operation, mutation grant or durability requirement.
+    pub fn catalog_operation_scope_collections(&self) -> &'static [&'static str] {
+        if self.replicates_catalog() {
+            &[CATALOG_LOG_COLLECTION]
+        } else {
+            &[]
+        }
+    }
+
     /// On a replication primary, ships `op` to standbys (see
     /// [`CATALOG_LOG_COLLECTION`]).
     pub(super) fn log_catalog_op(&mut self, op: CatalogOp) -> Result<()> {

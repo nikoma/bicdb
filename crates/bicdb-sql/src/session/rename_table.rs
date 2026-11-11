@@ -74,7 +74,7 @@ pub(super) fn apply(
         Some(session.begin_session_transaction()?)
     };
     let owner = session.tx.as_ref().or(implicit_owner.as_ref()).unwrap();
-    let scope = dependencies.reserve(owner)?;
+    let scope = dependencies.reserve(session.db_ref(), owner)?;
     let access = match session.db_ref().enter_catalog_scope(&scope) {
         Ok(access) => access,
         Err(error) => {

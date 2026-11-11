@@ -10,8 +10,17 @@ pub(super) struct RenameDependencies {
 }
 
 impl RenameDependencies {
-    pub(super) fn reserve(&self, owner: &Transaction) -> Result<bicdb_core::CatalogScopeToken> {
+    pub(super) fn reserve(
+        &self,
+        db: &BicDb,
+        owner: &Transaction,
+    ) -> Result<bicdb_core::CatalogScopeToken> {
         let mut names = self.relations.clone();
+        names.extend(
+            db.catalog_operation_scope_collections()
+                .iter()
+                .map(|name| (*name).into()),
+        );
         names.extend(
             rename_journal::scope_collections()
                 .iter()

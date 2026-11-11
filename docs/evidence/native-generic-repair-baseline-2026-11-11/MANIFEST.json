@@ -1,0 +1,70 @@
+{
+  "format_version": 1,
+  "files": [
+    {
+      "path": "README.md",
+      "bytes": 4269,
+      "sha256": "c15286ce0b600df2525ab92b834f229d77f0a1f40951546027682fc99b155938"
+    },
+    {
+      "path": "actual-report.json",
+      "bytes": 1895,
+      "sha256": "c551a50f12b73c28d3b5924d9981e847536c1823f42a493f5dceb576aa533e33"
+    },
+    {
+      "path": "custody-receipt.json",
+      "bytes": 445,
+      "sha256": "8c4f2ded8c24008b2d245d7387b24a439f876ac2523767cc15363719bde5cd0c"
+    },
+    {
+      "path": "findings.json",
+      "bytes": 758,
+      "sha256": "856b6235ded6e663d5a853f3bd8acebf2c8199f4ffdbff921de741f8b9e9d7e6"
+    },
+    {
+      "path": "runs/attempt-1-native-generic-repair-inputs.json",
+      "bytes": 808,
+      "sha256": "0d3b65439ce6414dad184d67bcf1904a0dac2489b99fda46e1a8efd05bb5c47b"
+    },
+    {
+      "path": "runs/attempt-1-native-generic-repair-resources.jsonl",
+      "bytes": 23980,
+      "sha256": "ef6909bba08c6be81ba93c0eea25f12962f79a396104c25f6085c7795a719ead"
+    },
+    {
+      "path": "runs/attempt-1-native-generic-repair-result.json",
+      "bytes": 992,
+      "sha256": "0035dea54c45ffa81eb721870989808700eded2f82c9e6065cedbdc11144a568"
+    },
+    {
+      "path": "runs/attempt-1-native-generic-repair.stderr",
+      "bytes": 117046,
+      "sha256": "e65155f748ac79dd42b1dcb2e87a4228e06ee8452cf25d751a03516d47709c5b"
+    },
+    {
+      "path": "runs/attempt-1-native-generic-repair.stdout",
+      "bytes": 472,
+      "sha256": "fe60872f12d087a1601d59e73b549081a8aed3fe23dee7a5207ea353e77f721a"
+    },
+    {
+      "path": "runs/run_cargo_guarded.py",
+      "bytes": 2926,
+      "sha256": "25cd8156ab71b5f14594f780b1eccce2044ec5d6e40a7b0bd522d2392cbb4e5a"
+    },
+    {
+      "path": "source/distribution_data.rs",
+      "bytes": 136333,
+      "sha256": "0ff34238954f095b446d378d80b822ae63128b7b8764508f5ff9bfa2c3a681c8"
+    },
+    {
+      "path": "source/distribution_range_consensus.rs",
+      "bytes": 224438,
+      "sha256": "2b778dd43c3da89401d350029fe78f87e345e08ff2f11f0cab6e0b09655b635a"
+    },
+    {
+      "path": "source/native_repair_regression.rs",
+      "bytes": 9074,
+      "sha256": "c53474a0f66e8c182c94f6c730c614432e51635e556020644d8aef765bcdc4cc"
+    }
+  ]
+}

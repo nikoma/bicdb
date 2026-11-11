@@ -1249,6 +1249,19 @@ pub(crate) mod tests {
                 break;
             }
         }
+        assert!(
+            capture.completed_seal().is_err(),
+            "row completion alone cannot certify an omitted logical spine"
+        );
+        loop {
+            let cursor = capture.history_cursor().clone();
+            let step = capture
+                .export_history_step(&cursor, 256, &CancellationToken::uncancelable())
+                .unwrap();
+            if step.next_cursor.complete() {
+                break;
+            }
+        }
         let seal = capture.completed_seal().unwrap();
         assert_eq!(seal.record_count, 0);
         assert_eq!(seal.range_index, 0);

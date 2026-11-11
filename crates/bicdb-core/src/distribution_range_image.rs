@@ -20,6 +20,8 @@ use crate::distribution_range_handoff::CertifiedRangeImageCut;
 use crate::distribution_range_mutation::{FrozenRangeMutationPermit, RangeMutationGate};
 use crate::{BicDb, BicDbError, CancellationToken, CollectionMeta, Result};
 
+mod history_export;
+pub(crate) use history_export::{RangeImageHistoryCursorV1, RangeImageHistoryStepV1};
 mod source_cut;
 pub(crate) use source_cut::{
     CertifiedRecoveryImageCut, NativeRangeImageSourceCut, RangeImageSourcePurposeV1,
@@ -122,6 +124,11 @@ pub(crate) struct LocalRangeImageSealV1 {
     pub serialized_record_bytes: u64,
     pub steps: u64,
     pub wire_chain_sha256: String,
+    pub logical_genesis_sha256: String,
+    pub logical_history_sha256: String,
+    pub history_entries: u64,
+    pub history_steps: u64,
+    pub history_wire_chain_sha256: String,
     pub local_namespace_ids: Vec<(String, Uuid)>,
 }
 
@@ -141,6 +148,11 @@ pub(crate) struct RangeImageCapture {
     content: Sha256,
     cursor: RangeImageCursorV1,
     previous_step: Option<RangeImageStepV1>,
+    history_cursor: RangeImageHistoryCursorV1,
+    previous_history_step: Option<RangeImageHistoryStepV1>,
+    history_verified_entries: u64,
+    history_last_sha256: Option<String>,
+    history_wire_chain_sha256: String,
     wire_chain_sha256: String,
     record_count: u64,
     serialized_record_bytes: u64,
@@ -360,6 +372,11 @@ impl RangeImageCapture {
             content,
             cursor: RangeImageCursorV1::default(),
             previous_step: None,
+            history_cursor: RangeImageHistoryCursorV1::default(),
+            previous_history_step: None,
+            history_verified_entries: 0,
+            history_last_sha256: None,
+            history_wire_chain_sha256: history_export::initial_history_chain(),
             wire_chain_sha256,
             record_count: 0,
             serialized_record_bytes: 0,
@@ -543,8 +560,19 @@ impl RangeImageCapture {
     }
 
     pub(crate) fn completed_seal(&self) -> Result<LocalRangeImageSealV1> {
-        if !self.complete {
-            return Err(invalid("cannot seal an incomplete image"));
+        if !self.complete
+            || !self.history_cursor.complete()
+            || self.history_verified_entries
+                != self
+                    .range_index
+                    .get()
+                    .checked_add(1)
+                    .ok_or_else(|| invalid("history entry count overflow"))?
+            || self.history_last_sha256.as_deref() != Some(self.lineage.logical_history_sha256())
+        {
+            return Err(invalid(
+                "cannot seal incomplete rows or missing zero-through-R native history",
+            ));
         }
         let database = read_database(&self.db)?;
         self.validate(&database)?;
@@ -578,6 +606,11 @@ impl RangeImageCapture {
             serialized_record_bytes: self.serialized_record_bytes,
             steps: self.cursor.step,
             wire_chain_sha256: self.wire_chain_sha256.clone(),
+            logical_genesis_sha256: self.lineage.logical_genesis_sha256().to_string(),
+            logical_history_sha256: self.lineage.logical_history_sha256().to_string(),
+            history_entries: self.history_verified_entries,
+            history_steps: self.history_cursor.step(),
+            history_wire_chain_sha256: self.history_wire_chain_sha256.clone(),
             local_namespace_ids: self.bindings.namespace_ids(),
         })
     }

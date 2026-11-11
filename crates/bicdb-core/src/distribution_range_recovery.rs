@@ -23,6 +23,8 @@ fn invalid(message: &str) -> BicDbError {
 }
 
 mod image_compatibility;
+#[cfg(test)]
+mod recovery_order_tests;
 mod image_history;
 pub(crate) use image_compatibility::{RecoverySourceHistoryRound, VerifiedRecoverySourceHistory};
 pub(crate) use image_history::{

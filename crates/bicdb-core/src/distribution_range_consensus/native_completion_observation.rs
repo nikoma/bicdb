@@ -112,6 +112,9 @@ impl RangeWriteStore {
                 native_receipt_sha256: point.native_receipt_sha256().to_owned(),
                 local_visibility_sequence_at_completion: point.local_visibility_sequence(),
                 native_serving_sha256: completed.native_serving_sha256.clone(),
+                // Deliberately unbound until the protected native-WAL decision
+                // consumer is composed; shape validation refuses this anchor.
+                activation_decision_sha256: None,
             },
         })
     }

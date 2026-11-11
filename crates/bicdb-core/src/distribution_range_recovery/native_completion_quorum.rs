@@ -269,27 +269,52 @@ impl NativeCompletionQuorum {
         }
         Ok(())
     }
-    pub(crate) fn decision_sha256(&self) -> Result<String> {
+    pub(crate) fn decision_provenance(&self) -> Result<NativeCompletionDecisionProvenance> {
         self.require_live()?;
         let voters = self
             .observations
             .iter()
             .map(|(n, o)| {
+                let r = o.reply();
                 (
-                    n,
-                    o.reply().member_incarnation,
-                    &o.reply().native_serving_sha256,
+                    n.clone(),
+                    NativeCompletionVoterProvenance {
+                        member_incarnation: r.member_incarnation,
+                        peer_certificate_sha256: o
+                            .authenticated_peer()
+                            .certificate_sha256()
+                            .map(str::to_owned),
+                        peer_plaintext_loopback: o.authenticated_peer().plaintext_loopback(),
+                        stage: r.stage,
+                        challenge: r.challenge,
+                        store_open_id: r.store_open_id,
+                        native_database_incarnation: r.native_database_incarnation.clone(),
+                        native_serving_sha256: r.native_serving_sha256.clone(),
+                        native_receipt_sha256: r.native_receipt_sha256.clone(),
+                        activation_decision_sha256: r.activation_decision_sha256.clone(),
+                        observed_metadata_context_id: r.observed_metadata_context_id,
+                        observed_metadata_term: r.observed_metadata_term,
+                        observed_metadata_read_index: r.observed_metadata_read_index,
+                    },
                 )
             })
-            .collect::<Vec<_>>();
-        let bytes = serde_json::to_vec(&(
-            &self.scope,
-            self.range_index(),
-            self.logical_genesis_sha256(),
-            self.logical_history_sha256(),
+            .collect();
+        let projection = NativeCompletionDecisionProvenance {
+            scope: self.scope.clone(),
+            range_index: self.range_index(),
+            logical_genesis_sha256: self.logical_genesis_sha256().to_owned(),
+            logical_history_sha256: self.logical_history_sha256().to_owned(),
+            local_recipient: self.role.local_node_id().clone(),
+            local_member_incarnation: self.role.local_member_incarnation(),
+            metadata_context_id: self.role.context_id(),
+            metadata_term: self.role.metadata_term(),
+            metadata_read_index: self.role.metadata_read_index(),
             voters,
-        ))?;
-        use sha2::Digest;
-        Ok(hex::encode(sha2::Sha256::digest(bytes)))
+        };
+        projection.validate(&self.scope, self.role.member_credentials())?;
+        Ok(projection)
+    }
+    pub(crate) fn decision_sha256(&self) -> Result<String> {
+        self.decision_provenance()?.checksum_sha256()
     }
 }

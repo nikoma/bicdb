@@ -23,12 +23,16 @@ fn invalid(message: &str) -> BicDbError {
 }
 
 mod image_compatibility;
+mod image_history;
 #[cfg(test)]
 mod recovery_order_tests;
-mod image_history;
 pub(crate) use image_compatibility::{RecoverySourceHistoryRound, VerifiedRecoverySourceHistory};
 pub(crate) use image_history::{
     RecoveryImageHistoryObligationsV1, RecoveryNativeHistoryPointV1, RecoveryNativePendingHistoryV1,
+};
+mod native_completion_provenance;
+pub(crate) use native_completion_provenance::{
+    NativeCompletionDecisionProvenance, NativeCompletionVoterProvenance,
 };
 mod native_completion_quorum;
 pub(crate) use native_completion_quorum::{

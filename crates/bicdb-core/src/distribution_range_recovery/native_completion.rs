@@ -49,6 +49,7 @@ pub(crate) struct NativeCompletionReply {
     pub native_receipt_sha256: String,
     pub local_visibility_sequence_at_completion: u64,
     pub native_serving_sha256: String,
+    pub activation_decision_sha256: Option<String>,
 }
 impl NativeCompletionReply {
     pub(crate) fn from_frozen_projection(
@@ -78,6 +79,7 @@ impl NativeCompletionReply {
             native_receipt_sha256: ready.native_receipt_sha256,
             local_visibility_sequence_at_completion: ready.local_visibility_sequence,
             native_serving_sha256,
+            activation_decision_sha256: None,
         })
     }
     fn require_shape(
@@ -108,6 +110,13 @@ impl NativeCompletionReply {
             || !sha(&self.logical_history_sha256)
             || !sha(&self.native_receipt_sha256)
             || !sha(&self.native_serving_sha256)
+            || match self.stage {
+                NativeCompletionStage::CompletedFrozen => self.activation_decision_sha256.is_some(),
+                NativeCompletionStage::ActivatedAnchor => self
+                    .activation_decision_sha256
+                    .as_deref()
+                    .is_none_or(|s| !sha(s)),
+            }
             || (self.range_index == 0 && self.logical_genesis_sha256 != self.logical_history_sha256)
         {
             return Err(invalid(

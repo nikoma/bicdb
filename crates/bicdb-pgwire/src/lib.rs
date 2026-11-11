@@ -4135,7 +4135,9 @@ fn execute_server_db_sql_for_state_inner(
             .session_state
             .default_transaction_isolation(&server.config.sql_profile)?
             == "serializable"
-        && bicdb_sql::postgres_parse_requires_snapshot(sql)
+        && split_sql_statements(sql)
+            .iter()
+            .any(|statement| bicdb_sql::postgres_parse_requires_snapshot(statement))
     {
         begin_buffered_transaction(server, state)?;
         let result =

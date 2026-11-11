@@ -8977,7 +8977,7 @@ pub struct Transaction {
     observed_record_versions: Mutex<FxHashMap<String, FxHashMap<String, u64>>>,
     // Owned capabilities prevent a reused logical/storage name from receiving
     // writes authored against a dropped or renamed-away collection.
-    collection_incarnations: Arc<Mutex<FxHashMap<String, Arc<()>>>>,
+    collection_incarnations: Arc<catalog_admission::Bindings>,
     catalog_admission: Arc<catalog_admission::CatalogAdmission>,
     catalog_actor_scope: Option<u64>,
     /// Opt-in SQL profiles may report write conflicts at the statement
@@ -16075,7 +16075,7 @@ impl Transaction {
 
     fn get_visible_unchecked(&self, collection: &str, id: &str) -> Result<Option<Arc<Record>>> {
         let db = self.db_ref();
-        self.bind_collection_incarnation(collection)?;
+        self.bind_collection_incarnation_for_record(collection, id)?;
         let (record, observed_version, read_stored) =
             record_read_snapshot::read_record_at_snapshot_unchecked(
                 db,
@@ -17575,7 +17575,10 @@ impl Transaction {
     fn push_writes(&mut self, writes: Vec<TxWrite>) -> Result<()> {
         let mut previous_collection = None;
         for write in &writes {
-            if previous_collection != Some(write.collection.as_str()) {
+            if self.catalog_actor_scope.is_some() {
+                self.ensure_catalog_record_mutation_scope(&write.collection, &write.record_id)?;
+                self.bind_collection_incarnation_for_record(&write.collection, &write.record_id)?;
+            } else if previous_collection != Some(write.collection.as_str()) {
                 self.ensure_catalog_mutation_scope(&write.collection)?;
                 self.bind_collection_incarnation(&write.collection)?;
                 previous_collection = Some(write.collection.as_str());
@@ -17787,6 +17790,7 @@ impl Transaction {
         if ids.is_empty() {
             return Ok(());
         }
+        self.prepare_catalog_record_mutations(collection, ids.iter().map(|(id, _)| id.as_str()))?;
         let tx_id = self.id;
         let timestamp = unix_timestamp();
         let mut writes = Vec::with_capacity(ids.len());
@@ -17794,7 +17798,9 @@ impl Transaction {
         if enforce_legacy_access {
             self.ensure_unprotected_collection_access(collection, SecureOperation::Delete)?;
         }
-        self.bind_collection_incarnation(collection)?;
+        if self.catalog_actor_scope.is_none() {
+            self.bind_collection_incarnation(collection)?;
+        }
         for (id, statement_snapshot) in ids {
             if id.is_empty() {
                 return Err(BicDbError::EmptyRecordId);
@@ -18239,6 +18245,10 @@ impl Transaction {
         if records.is_empty() {
             return Ok(());
         }
+        self.prepare_catalog_record_mutations(
+            collection,
+            records.iter().map(|(record, _, _)| record.id.as_str()),
+        )?;
         let tx_id = self.id;
         let timestamp = unix_timestamp();
         let mut writes = Vec::with_capacity(records.len());
@@ -18250,7 +18260,9 @@ impl Transaction {
             if enforce_legacy_access {
                 self.ensure_unprotected_collection_access(collection, SecureOperation::Write)?;
             }
-            self.bind_collection_incarnation(collection)?;
+            if self.catalog_actor_scope.is_none() {
+                self.bind_collection_incarnation(collection)?;
+            }
             let (mut next_dim, policy) = {
                 let state = db.collection_state(collection)?;
                 (state.meta.vector_dim, state.meta.policy.clone())
@@ -18435,13 +18447,19 @@ impl Transaction {
         if rows.is_empty() {
             return Ok(());
         }
+        self.prepare_catalog_record_mutations(
+            collection,
+            rows.iter().map(|(_, stored, _, _, _)| stored.id.as_str()),
+        )?;
         let tx_id = self.id;
         let timestamp = unix_timestamp();
         let mut writes = Vec::with_capacity(rows.len());
         {
             let db = self.db_ref();
             self.ensure_unprotected_collection_access(collection, SecureOperation::Write)?;
-            self.bind_collection_incarnation(collection)?;
+            if self.catalog_actor_scope.is_none() {
+                self.bind_collection_incarnation(collection)?;
+            }
             let (mut next_dim, policy) = {
                 let state = db.collection_state(collection)?;
                 (state.meta.vector_dim, state.meta.policy.clone())
@@ -18524,13 +18542,19 @@ impl Transaction {
         if records.is_empty() {
             return Ok(());
         }
+        self.prepare_catalog_record_mutations(
+            collection,
+            records.iter().map(|(record, _, _)| record.id.as_str()),
+        )?;
         let tx_id = self.id;
         let timestamp = unix_timestamp();
         let mut writes = Vec::with_capacity(records.len());
         {
             let db = self.db_ref();
             self.ensure_unprotected_collection_access(collection, SecureOperation::Write)?;
-            self.bind_collection_incarnation(collection)?;
+            if self.catalog_actor_scope.is_none() {
+                self.bind_collection_incarnation(collection)?;
+            }
             let mut next_dim = db.collection_state(collection)?.meta.vector_dim;
             for (record, statement_snapshot, repair) in records {
                 let record_id = record.id.clone();

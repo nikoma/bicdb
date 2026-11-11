@@ -5,7 +5,40 @@ use super::*;
 use std::cell::RefCell;
 use std::sync::Weak;
 
-type Bindings = Mutex<FxHashMap<String, Arc<()>>>;
+pub(super) type Bindings = Mutex<FxHashMap<String, CatalogBinding>>;
+
+const RECORD_OBSERVATIONS_PER_COLLECTION: usize = 128;
+
+#[derive(Debug)]
+pub(super) struct CatalogBinding {
+    pub(super) incarnation: Arc<()>,
+    // None is a whole-collection observation. Point catalog observations
+    // escalate to that conservative representation at a fixed memory bound.
+    records: Option<BTreeSet<String>>,
+}
+
+#[derive(Debug)]
+struct RecordReservation {
+    incarnation: Option<Arc<()>>,
+    ids: BTreeSet<String>,
+}
+
+impl RecordReservation {
+    fn matches(&self, name: &str, incarnation: Option<&Arc<()>>, collection: &str) -> bool {
+        name == collection
+            || self.incarnation.as_ref().is_some_and(|expected| {
+                incarnation.is_some_and(|actual| Arc::ptr_eq(expected, actual))
+            })
+    }
+
+    fn same_backing(&self, incarnation: Option<&Arc<()>>) -> bool {
+        match (self.incarnation.as_ref(), incarnation) {
+            (Some(expected), Some(actual)) => Arc::ptr_eq(expected, actual),
+            (None, None) => true,
+            _ => false,
+        }
+    }
+}
 
 #[derive(Clone, Debug)]
 pub struct CatalogScopeToken {
@@ -79,6 +112,7 @@ struct Scope {
     owner: TransactionId,
     names: BTreeSet<String>,
     incarnations: Vec<Arc<()>>,
+    records: BTreeMap<String, RecordReservation>,
     context: Option<String>,
     owner_live: bool,
     owner_outcome: Option<TxState>,
@@ -100,6 +134,17 @@ impl Scope {
                     .iter()
                     .any(|right| Arc::ptr_eq(left, right))
             })
+            || self.records.iter().any(|(name, rows)| {
+                other.covers(name, rows.incarnation.as_ref())
+                    || other.records.iter().any(|(other_name, other_rows)| {
+                        rows.matches(name, other_rows.incarnation.as_ref(), other_name)
+                            && !rows.ids.is_disjoint(&other_rows.ids)
+                    })
+            })
+            || other
+                .records
+                .iter()
+                .any(|(name, rows)| self.covers(name, rows.incarnation.as_ref()))
     }
 
     fn covers(&self, name: &str, incarnation: Option<&Arc<()>>) -> bool {
@@ -108,6 +153,34 @@ impl Scope {
                 self.incarnations
                     .iter()
                     .any(|expected| Arc::ptr_eq(current, expected))
+            })
+    }
+
+    fn covers_record(&self, name: &str, incarnation: Option<&Arc<()>>, id: Option<&str>) -> bool {
+        self.covers(name, incarnation)
+            || self.records.iter().any(|(collection, rows)| {
+                rows.matches(collection, incarnation, name)
+                    && id.is_none_or(|id| rows.ids.contains(id))
+            })
+    }
+
+    fn intersects_observation(&self, name: &str, binding: &CatalogBinding) -> bool {
+        self.covers(name, Some(&binding.incarnation))
+            || self.records.iter().any(|(collection, rows)| {
+                rows.matches(collection, Some(&binding.incarnation), name)
+                    && binding
+                        .records
+                        .as_ref()
+                        .is_none_or(|observed| !rows.ids.is_disjoint(observed))
+            })
+    }
+
+    fn allows_record(&self, name: &str, incarnation: Option<&Arc<()>>, id: Option<&str>) -> bool {
+        self.covers(name, incarnation)
+            || self.records.iter().any(|(collection, rows)| {
+                rows.matches(collection, incarnation, name)
+                    && rows.same_backing(incarnation)
+                    && id.is_none_or(|id| rows.ids.contains(id))
             })
     }
 }
@@ -126,15 +199,26 @@ impl State {
         collection: &str,
         incarnation: Option<&Arc<()>>,
     ) -> Result<()> {
+        self.check_record_access(owner, actor, collection, incarnation, None)
+    }
+
+    fn check_record_access(
+        &self,
+        owner: TransactionId,
+        actor: Option<u64>,
+        collection: &str,
+        incarnation: Option<&Arc<()>>,
+        id: Option<&str>,
+    ) -> Result<()> {
         self.check_actor(actor)?;
         for scope in self.scopes.values() {
-            if scope.owner == owner || !scope.covers(collection, incarnation) {
+            if scope.owner == owner || !scope.covers_record(collection, incarnation, id) {
                 continue;
             }
             let delegated = actor
                 .and_then(|serial| self.scopes.get(&serial))
                 .is_some_and(|access| {
-                    access.owner == scope.owner && access.covers(collection, incarnation)
+                    access.owner == scope.owner && access.covers_record(collection, incarnation, id)
                 });
             if !delegated {
                 return Err(BicDbError::TransactionConflict(format!(
@@ -264,6 +348,7 @@ impl CatalogAdmission {
         actor: Option<u64>,
         bindings: &Bindings,
         collection: &str,
+        record: Option<&str>,
         current: impl FnOnce() -> Result<Arc<()>>,
     ) -> Result<()> {
         // Already-published bindings make a conflicting reservation refuse.
@@ -278,23 +363,50 @@ impl CatalogAdmission {
         let state = self.state.read();
         // Check absent names too: a reserved rename destination/source must
         // not return NotFound while its owner has an unfinished catalog move.
-        state.check_access(owner, actor, collection, None)?;
+        state.check_record_access(owner, actor, collection, None, record)?;
         let current = current()?;
-        state.check_access(owner, actor, collection, Some(&current))?;
+        state.check_record_access(owner, actor, collection, Some(&current), record)?;
         Self::remember(bindings, collection, current)
     }
 
     fn remember(bindings: &Bindings, collection: &str, incarnation: Arc<()>) -> Result<()> {
+        Self::remember_record(bindings, collection, incarnation, None)
+    }
+
+    fn remember_record(
+        bindings: &Bindings,
+        collection: &str,
+        incarnation: Arc<()>,
+        record: Option<&str>,
+    ) -> Result<()> {
         let mut bindings = bindings.lock();
-        match bindings.get(collection) {
-            Some(expected) if !Arc::ptr_eq(expected, &incarnation) => {
+        match bindings.get_mut(collection) {
+            Some(expected) if !Arc::ptr_eq(&expected.incarnation, &incarnation) => {
                 Err(BicDbError::TransactionConflict(format!(
                     "collection `{collection}` was replaced after this transaction observed it"
                 )))
             }
-            Some(_) => Ok(()),
+            Some(binding) => {
+                match (binding.records.as_mut(), record) {
+                    (Some(records), Some(id))
+                        if records.len() < RECORD_OBSERVATIONS_PER_COLLECTION
+                            || records.contains(id) =>
+                    {
+                        records.insert(id.to_string());
+                    }
+                    (_, None) | (Some(_), Some(_)) => binding.records = None,
+                    (None, Some(_)) => {}
+                }
+                Ok(())
+            }
             None => {
-                bindings.insert(collection.to_string(), incarnation);
+                bindings.insert(
+                    collection.to_string(),
+                    CatalogBinding {
+                        incarnation,
+                        records: record.map(|id| BTreeSet::from([id.to_string()])),
+                    },
+                );
                 Ok(())
             }
         }
@@ -420,10 +532,54 @@ impl Transaction {
             .map(|current| Arc::clone(&current.read().incarnation));
         let state = self.catalog_admission.state.read();
         state.check_actor(Some(actor))?;
-        if !state.scopes[&actor].covers(collection, incarnation.as_ref()) {
+        if !state.scopes[&actor].allows_record(collection, incarnation.as_ref(), None) {
             return Err(BicDbError::TransactionConflict(format!(
                 "internal catalog mutation of `{collection}` exceeds its reserved resources"
             )));
+        }
+        Ok(())
+    }
+
+    pub(super) fn ensure_catalog_record_mutation_scope(
+        &self,
+        collection: &str,
+        id: &str,
+    ) -> Result<()> {
+        let Some(actor) = self.catalog_actor_scope else {
+            return Ok(());
+        };
+        let db = self.db_ref();
+        db.ensure_writable("buffer internal catalog record mutation")?;
+        let incarnation = db
+            .collections
+            .get(collection)
+            .map(|current| Arc::clone(&current.read().incarnation));
+        let state = self.catalog_admission.state.read();
+        state.check_actor(Some(actor))?;
+        if !state.scopes[&actor].allows_record(collection, incarnation.as_ref(), Some(id)) {
+            return Err(BicDbError::TransactionConflict(format!("internal catalog mutation of `{collection}` record `{id}` exceeds its reserved resources")));
+        }
+        state.check_record_access(
+            self.id,
+            Some(actor),
+            collection,
+            incarnation.as_ref(),
+            Some(id),
+        )
+    }
+
+    pub(super) fn prepare_catalog_record_mutations<'a>(
+        &self,
+        collection: &str,
+        ids: impl Iterator<Item = &'a str> + Clone,
+    ) -> Result<()> {
+        if self.catalog_actor_scope.is_some() {
+            for id in ids.clone() {
+                self.ensure_catalog_record_mutation_scope(collection, id)?;
+            }
+            for id in ids {
+                self.bind_collection_incarnation_for_record(collection, id)?;
+            }
         }
         Ok(())
     }
@@ -457,6 +613,18 @@ impl Transaction {
     /// As with other Transaction operations, the host must hold its ordinary
     /// database execution guard; this is not a replacement for that guard.
     pub fn reserve_catalog_collections(&self, names: &[String]) -> Result<CatalogScopeToken> {
+        self.reserve_catalog_resources(names, &[])
+    }
+
+    /// Reserve relation names/backings and exact catalog record identities in
+    /// one admission step. A scan observes all records; bounded point-read sets
+    /// may conservatively escalate to that representation. This is runtime
+    /// admission only: durable host undo and SQL visibility remain separate.
+    pub fn reserve_catalog_resources(
+        &self,
+        names: &[String],
+        records: &[(String, String)],
+    ) -> Result<CatalogScopeToken> {
         let db = self.db_ref();
         db.check_recovery_state()?;
         if self.state != TxState::Pending {
@@ -468,11 +636,30 @@ impl Transaction {
             ));
         }
         let names = names.iter().cloned().collect::<BTreeSet<_>>();
-        if names.is_empty() {
+        if names.is_empty() && records.is_empty() {
             return Err(BicDbError::Unsupported("empty catalog scope".into()));
         }
         for name in &names {
             validate_collection_name(name)?;
+        }
+        let mut rows: BTreeMap<String, RecordReservation> = BTreeMap::new();
+        for (collection, id) in records {
+            validate_collection_name(collection)?;
+            if id.is_empty() {
+                return Err(BicDbError::Unsupported(
+                    "empty catalog record identity".into(),
+                ));
+            }
+            rows.entry(collection.clone())
+                .or_insert_with(|| RecordReservation {
+                    incarnation: db
+                        .collections
+                        .get(collection)
+                        .map(|current| Arc::clone(&current.read().incarnation)),
+                    ids: BTreeSet::new(),
+                })
+                .ids
+                .insert(id.clone());
         }
         // Resolve the immutable identities under the caller's database guard
         // before entering admission. Never wait for a collection lock while
@@ -486,6 +673,7 @@ impl Transaction {
             owner: self.id,
             names,
             incarnations,
+            records: rows,
             context: None,
             owner_live: true,
             owner_outcome: None,
@@ -495,15 +683,19 @@ impl Transaction {
         for name in &scope.names {
             state.check_access(self.id, None, name, None)?;
         }
+        for (collection, rows) in &scope.records {
+            for id in &rows.ids {
+                state.check_record_access(
+                    self.id,
+                    None,
+                    collection,
+                    rows.incarnation.as_ref(),
+                    Some(id),
+                )?;
+            }
+        }
         for existing in state.scopes.values() {
-            if existing.owner != self.id
-                && existing.incarnations.iter().any(|incarnation| {
-                    scope
-                        .incarnations
-                        .iter()
-                        .any(|other| Arc::ptr_eq(incarnation, other))
-                })
-            {
+            if existing.owner != self.id && scope.overlaps(existing) {
                 return Err(BicDbError::TransactionConflict(
                     "catalog scope overlaps another owner's backing".into(),
                 ));
@@ -517,7 +709,7 @@ impl Transaction {
                 if bindings
                     .lock()
                     .iter()
-                    .any(|(name, incarnation)| scope.covers(name, Some(incarnation)))
+                    .any(|(name, binding)| scope.intersects_observation(name, binding))
                 {
                     return Err(BicDbError::TransactionConflict(
                         "catalog scope has an existing transaction observation".into(),
@@ -626,12 +818,12 @@ impl Transaction {
 
 impl BicDb {
     /// Check a SQL catalog read before consulting any cache. `None` describes
-    /// a collection scan; point identities are retained for row-level resource
-    /// admission. Current collection reservations protect every record.
+    /// a collection scan. Whole collection reservations protect every record;
+    /// record reservations protect their declared keys and backing identity.
     ///
     /// The host must use this for each metadata dependency; it is not a query
     /// parser, a durable journal, or authority to bypass ordinary data policy.
-    pub fn check_catalog_read_access(&self, collection: &str, _id: Option<&str>) -> Result<()> {
+    pub fn check_catalog_read_access(&self, collection: &str, id: Option<&str>) -> Result<()> {
         if self.catalog_admission.active.load(AtomicOrdering::Acquire) == 0
             && HOST_ACCESS.with(|frames| frames.borrow().is_empty())
             && READ_ACCESS.with(|frames| frames.borrow().is_empty())
@@ -639,12 +831,25 @@ impl BicDb {
             return Ok(());
         }
         self.check_recovery_state()?;
+        let incarnation = self
+            .collections
+            .get(collection)
+            .map(|current| Arc::clone(&current.read().incarnation));
         if let Some(actor) = self.catalog_admission.ambient_actor()? {
-            self.catalog_admission.state.read().check_access(
+            let state = self.catalog_admission.state.read();
+            if state.scopes[&actor].covers_record(collection, incarnation.as_ref(), id)
+                && !state.scopes[&actor].allows_record(collection, incarnation.as_ref(), id)
+            {
+                return Err(BicDbError::TransactionConflict(
+                    "catalog record backing was replaced after reservation".into(),
+                ));
+            }
+            state.check_record_access(
                 TransactionId(0),
                 Some(actor),
                 collection,
-                None,
+                incarnation.as_ref(),
+                id,
             )?;
             return self.check_recovery_state();
         }
@@ -657,10 +862,6 @@ impl BicDb {
                 .find(|frame| Weak::ptr_eq(&frame.admission, &admission))
                 .cloned()
         });
-        let incarnation = self
-            .collections
-            .get(collection)
-            .map(|current| Arc::clone(&current.read().incarnation));
         let state = self.catalog_admission.state.read();
         if let Some(frame) = frame {
             let registrations = self.catalog_admission.registrations.lock();
@@ -676,21 +877,59 @@ impl BicDb {
             let bindings = registration.bindings.upgrade().ok_or_else(|| {
                 BicDbError::TransactionConflict("catalog read owner has expired".into())
             })?;
-            state.check_access(frame.owner, frame.actor, collection, incarnation.as_ref())?;
+            if frame.actor.is_some_and(|actor| {
+                state.scopes.get(&actor).is_some_and(|scope| {
+                    scope.covers_record(collection, incarnation.as_ref(), id)
+                        && !scope.allows_record(collection, incarnation.as_ref(), id)
+                })
+            }) {
+                return Err(BicDbError::TransactionConflict(
+                    "catalog record backing was replaced after reservation".into(),
+                ));
+            }
+            state.check_record_access(
+                frame.owner,
+                frame.actor,
+                collection,
+                incarnation.as_ref(),
+                id,
+            )?;
             if state.scopes.values().any(|scope| {
                 scope.owner == frame.owner
                     && scope.closing
-                    && scope.covers(collection, incarnation.as_ref())
+                    && scope.covers_record(collection, incarnation.as_ref(), id)
             }) {
                 return Err(BicDbError::TransactionConflict(
                     "catalog read owner is finalizing its decision".into(),
                 ));
             }
+            if state
+                .scopes
+                .values()
+                .filter(|scope| scope.owner == frame.owner)
+                .any(|scope| {
+                    scope.records.iter().any(|(name, rows)| {
+                        rows.matches(name, incarnation.as_ref(), collection)
+                            && id.is_none_or(|id| rows.ids.contains(id))
+                            && !rows.same_backing(incarnation.as_ref())
+                    })
+                })
+            {
+                return Err(BicDbError::TransactionConflict(
+                    "catalog record backing was replaced after reservation".into(),
+                ));
+            }
             if let Some(incarnation) = incarnation {
-                CatalogAdmission::remember(&bindings, collection, incarnation)?;
+                CatalogAdmission::remember_record(&bindings, collection, incarnation, id)?;
             }
         } else {
-            state.check_access(TransactionId(0), None, collection, incarnation.as_ref())?;
+            state.check_record_access(
+                TransactionId(0),
+                None,
+                collection,
+                incarnation.as_ref(),
+                id,
+            )?;
         }
         self.check_recovery_state()
     }

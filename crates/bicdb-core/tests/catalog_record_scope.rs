@@ -4,10 +4,12 @@ use bicdb_core::{
 };
 use serde_json::json;
 
-// Characterize the existing collection-only mechanism first. The next step
-// replaces this adapter with exact resource admission, preserving assertions.
-fn reserve(owner: &Transaction, _ids: &[&str]) -> bicdb_core::Result<CatalogScopeToken> {
-    owner.reserve_catalog_collections(&["catalog".into()])
+fn reserve(owner: &Transaction, ids: &[&str]) -> bicdb_core::Result<CatalogScopeToken> {
+    let records = ids
+        .iter()
+        .map(|id| ("catalog".to_string(), (*id).to_string()))
+        .collect::<Vec<_>>();
+    owner.reserve_catalog_resources(&[], &records)
 }
 
 fn value(id: &str, number: i64) -> Record {

@@ -249,6 +249,30 @@ async fn serializable_tracks_row_and_predicate_dependencies() {
         );
         a.batch_execute("COMMIT").await.unwrap();
 
+        b.batch_execute(
+            "BEGIN ISOLATION LEVEL SERIALIZABLE; UPDATE ssi_scope SET v=201 WHERE id=2",
+        )
+        .await
+        .unwrap();
+        a.batch_execute("BEGIN ISOLATION LEVEL SERIALIZABLE READ ONLY DEFERRABLE")
+            .await
+            .unwrap();
+        {
+            let read = a.simple_query("SELECT v FROM ssi_scope WHERE id=1");
+            tokio::pin!(read);
+            assert!(tokio::time::timeout(Duration::from_millis(200), &mut read)
+                .await
+                .is_err());
+            a.cancel_token().cancel_query(NoTls).await.unwrap();
+            let error = tokio::time::timeout(Duration::from_secs(5), &mut read)
+                .await
+                .expect("deferrable simple query did not respond to cancellation")
+                .unwrap_err();
+            assert_eq!(error.code().unwrap().code(), "57014");
+        }
+        a.batch_execute("ROLLBACK").await.unwrap();
+        b.batch_execute("COMMIT").await.unwrap();
+
         drop((a, b, peer));
         a_task.abort();
         b_task.abort();

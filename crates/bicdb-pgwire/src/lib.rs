@@ -2753,7 +2753,7 @@ fn handle_frontend_message(
         },
         b'B' => match bind_message(&payload, &state.prepared, server).and_then(
             |(portal_name, portal, has_parameters)| {
-                acquire_postgres_statement_snapshot(server, state, || {
+                acquire_postgres_statement_snapshot(server, state, None, || {
                     has_parameters
                         || bicdb_sql::postgres_parse_requires_snapshot(&portal.source_sql)
                 })?;
@@ -3474,7 +3474,7 @@ fn execute_server_query(
     }
     if let Some(copy) = parse_copy_statement(sql)? {
         delegation::validate_delegation(server, state)?;
-        acquire_postgres_statement_snapshot(server, state, || true)?;
+        acquire_postgres_statement_snapshot(server, state, None, || true)?;
         if let (CopyDirection::ToStdout, Some(query)) = (
             copy.direction,
             copy.query
@@ -4705,6 +4705,7 @@ fn execute_server_sql_with_options(
 fn acquire_postgres_statement_snapshot(
     server: &PgWireServer,
     state: &mut ConnectionState,
+    execution_cancellation: Option<&CancellationToken>,
     requires_snapshot: impl FnOnce() -> bool,
 ) -> Result<()> {
     if state.failed_transaction || bicdb_sql::oracle::is_oracle_profile(&server.config.sql_profile)
@@ -4717,14 +4718,22 @@ fn acquire_postgres_statement_snapshot(
             // make the newly pinned snapshot look fresher than it is.
             let watermark = *server.replica_read_watermark.lock().unwrap();
             if state.session_state.transaction_is_serializable() {
-                let deadline = (!server.config.query_timeout.is_zero())
-                    .then(|| Instant::now() + server.config.query_timeout);
-                let cancellation = CancellationToken::new(state.cancel_token.clone(), deadline);
+                let preparation_cancellation;
+                let cancellation = match execution_cancellation {
+                    Some(cancellation) => cancellation,
+                    None => {
+                        let deadline = (!server.config.query_timeout.is_zero())
+                            .then(|| Instant::now() + server.config.query_timeout);
+                        preparation_cancellation =
+                            CancellationToken::new(state.cancel_token.clone(), deadline);
+                        &preparation_cancellation
+                    }
+                };
                 tx.acquire_postgres_serializable_snapshot(
                     state.last_commit_seq,
                     state.session_state.transaction_read_only(),
                     state.session_state.transaction_deferrable(),
-                    &cancellation,
+                    cancellation,
                 )?;
             } else {
                 tx.acquire_statement_snapshot(state.last_commit_seq)?;
@@ -4765,10 +4774,15 @@ fn execute_server_sql_with_options_normalized(
     {
         delegation::validate_delegation(server, state)?;
     }
-    acquire_postgres_statement_snapshot(server, state, || {
-        bicdb_sql::postgres_execution_requires_snapshot(sql)
-    })?;
-    if is_server_status_query_normalized(normalized) {
+    let server_status_query = is_server_status_query_normalized(normalized);
+    let pin_under_execution_admission =
+        state.session_state.transaction_is_serializable() && !server_status_query;
+    if !pin_under_execution_admission {
+        acquire_postgres_statement_snapshot(server, state, None, || {
+            bicdb_sql::postgres_execution_requires_snapshot(sql)
+        })?;
+    }
+    if server_status_query {
         let gucs = state.session_state.session_gucs();
         let configuration_user = gucs
             .get("role")
@@ -4886,6 +4900,11 @@ fn execute_server_sql_with_options_normalized(
     }
     set_active_query(server, state, sql);
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        if pin_under_execution_admission {
+            acquire_postgres_statement_snapshot(server, state, Some(&cancellation), || {
+                bicdb_sql::postgres_execution_requires_snapshot(sql)
+            })?;
+        }
         if transaction_control == Some(Some(TransactionControl::Begin)) {
             let deferrable = if bicdb_sql::oracle::is_oracle_profile(&server.config.sql_profile) {
                 None

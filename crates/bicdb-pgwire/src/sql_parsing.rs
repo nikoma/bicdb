@@ -2437,7 +2437,7 @@ pub(crate) fn parse_message(
     server: &Arc<PgWireServer>,
     state: &mut ConnectionState,
 ) -> Result<ParsedStatementMessage> {
-    acquire_postgres_statement_snapshot(server, state, || {
+    acquire_postgres_statement_snapshot(server, state, None, || {
         parse_payload_sql(payload).is_some_and(bicdb_sql::postgres_parse_requires_snapshot)
     })?;
     let db = server.read_db_for_transaction_progress()?;

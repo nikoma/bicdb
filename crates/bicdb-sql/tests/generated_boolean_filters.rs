@@ -33,6 +33,16 @@ fn growing_grid_filter_remains_executable_and_describable() {
                 .execute(&sql)
                 .unwrap_or_else(|e| panic!("{mode:?} {count}: {e}"));
             assert_eq!(result.rows, vec![vec![SqlValue::Int(2)]]);
+            // TABLE lowering and Boolean balancing share the parser entry.
+            // Neither rewrite may bypass the other's grammar or safety gate.
+            let sql = format!("WITH observed AS (TABLE orders) SELECT count(*) FROM observed AS orders WHERE {filter} AND processed='N'");
+            assert_eq!(
+                session
+                    .execute(&sql)
+                    .unwrap_or_else(|e| panic!("{mode:?} TABLE body {count}: {e}"))
+                    .rows,
+                vec![vec![SqlValue::Int(2)]]
+            );
         }
         let sql = format!(
             "SELECT id FROM orders WHERE {} AND processed=$1",

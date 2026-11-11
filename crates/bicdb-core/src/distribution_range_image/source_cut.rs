@@ -7,14 +7,7 @@ use crate::db::RangeImageBirthMember;
 use crate::distribution::RangeDescriptor;
 use crate::distribution_consensus::MetadataRestoreActivation;
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
-pub(crate) enum RangeImageSourcePurposeV1 {
-    CommittedHandoff {
-        relocation_id: crate::RelocationId,
-        plan_id: String,
-    },
-    CurrentVoterRepair,
-}
+pub(crate) use crate::distribution_range_image_scope::RangeImageSourcePurposeV1;
 
 /// No Serialize/Deserialize, public fields, number constructor or fake plan.
 /// Its only future production factory must consume the actual fresh fenced

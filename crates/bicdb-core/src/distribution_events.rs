@@ -176,8 +176,9 @@ mod client {
             })
         }
 
-        /// Bound route discovery and retry work. One in-flight transport call
-        /// may outlive this budget by its configured connect/I/O timeout.
+        /// Bound route discovery, retries and their TCP/TLS calls with one
+        /// absolute deadline. Hostname resolution remains outside the network
+        /// deadline; numeric member addresses avoid that resolver limitation.
         pub fn with_request_timeout(mut self, timeout: std::time::Duration) -> Result<Self> {
             if timeout.is_zero() || timeout > std::time::Duration::from_secs(300) {
                 return Err(invalid(
@@ -203,6 +204,8 @@ mod client {
         }
 
         fn refresh_members_until(&self, deadline: std::time::Instant) -> Result<bool> {
+            let cancellation =
+                crate::CancellationToken::uncancelable().child_with_deadline(deadline);
             let members: Vec<ClusterNodeId> = self.topology.read().nodes.keys().cloned().collect();
             let mut observed = false;
             for member in members {
@@ -212,15 +215,25 @@ mod client {
                 // Committed snapshots are available from followers too. A
                 // stale client may know only the former leader, so requiring
                 // leader authority here can prevent learning its replacement.
-                let topology = match self.transport.fetch_metadata_snapshot(&member) {
+                // One silent member must leave time to ask the others. Both
+                // discovery forms share this member's slice of the original
+                // request deadline, including the legacy fallback.
+                let member_cancellation = cancellation.child_with_deadline(
+                    deadline.min(std::time::Instant::now() + std::time::Duration::from_secs(1)),
+                );
+                let topology = match self
+                    .transport
+                    .fetch_metadata_snapshot_cancellable(&member_cancellation, &member)
+                {
                     Ok(snapshot) => {
                         snapshot.validate()?;
                         Some(snapshot.topology)
                     }
                     // Legacy non-consensus controllers expose only this read.
-                    Err(_) if std::time::Instant::now() < deadline => {
-                        self.transport.fetch_topology(&member).ok()
-                    }
+                    Err(_) if std::time::Instant::now() < deadline => self
+                        .transport
+                        .fetch_topology_cancellable(&member_cancellation, &member)
+                        .ok(),
                     Err(_) => None,
                 };
                 if let Some(topology) = topology {
@@ -238,6 +251,8 @@ mod client {
         ) -> Result<ClusterEventResponse> {
             operation.validate()?;
             let deadline = std::time::Instant::now() + self.request_timeout;
+            let cancellation =
+                crate::CancellationToken::uncancelable().child_with_deadline(deadline);
             let mut last_error = invalid("event cluster request failed");
             for attempt in 0..5 {
                 if std::time::Instant::now() >= deadline {
@@ -280,7 +295,17 @@ mod client {
                         },
                     )
                 };
-                match self.transport.application_event(&destination, request) {
+                // Reserve part of the remaining budget for route discovery
+                // after a silent old leader. Otherwise every new request can
+                // exhaust its whole budget on the same stale route forever.
+                let now = std::time::Instant::now();
+                let attempt_cancellation = cancellation
+                    .child_with_deadline(now + deadline.saturating_duration_since(now) / 2);
+                match self.transport.application_event_cancellable(
+                    &attempt_cancellation,
+                    &destination,
+                    request,
+                ) {
                     Ok(response) => return Ok(response),
                     Err(error) => last_error = error,
                 }

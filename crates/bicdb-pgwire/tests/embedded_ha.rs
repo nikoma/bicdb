@@ -388,10 +388,22 @@ fn journal_replicas_share_author_identity_and_preserve_it_after_promotion() {
             .unwrap()
             .replication
             .record_journal = true;
-        EmbeddedHaDatabase::open(
+        EmbeddedHaDatabase::open_with_initializer(
             root.path().join(format!("journal-n{index}")),
             configuration,
             DbConfig::default().with_audit_events(true),
+            |db| {
+                // Schema bootstrap is local initialization, before lease and
+                // quorum services start. with_write callbacks may perform
+                // several independent engine commits; they do not make a
+                // multi-step SQL DDL operation atomic across lease expiry.
+                if index == 0 {
+                    SqlSession::new(db).execute(
+                        "CREATE TABLE IF NOT EXISTS entries (id TEXT PRIMARY KEY, value INT)",
+                    )?;
+                }
+                Ok(())
+            },
         )
         .unwrap()
     };
@@ -431,20 +443,6 @@ fn journal_replicas_share_author_identity_and_preserve_it_after_promotion() {
     // one: holding it across schema and journal setup can starve the peer
     // confirmations past this test's short write lease on a busy runner.
     let writer = hosts[0].as_ref().unwrap();
-    // Cold schema initialization can outlast the short fixture lease while
-    // holding the engine guard on a busy runner. A lease refusal is correct;
-    // retry only that transient result with an idempotent setup statement.
-    wait(|| {
-        match writer.with_write(|db| {
-            SqlSession::new(db)
-                .execute("CREATE TABLE IF NOT EXISTS entries (id TEXT PRIMARY KEY, value INT)")?;
-            Ok(())
-        }) {
-            Ok(()) => true,
-            Err(error) if error.to_string().contains("write lease") => false,
-            Err(error) => panic!("journal fixture schema setup failed: {error}"),
-        }
-    });
     writer
         .with_write(|db| {
             db.set_collection_mesh_sync_enabled("entries", true)?;

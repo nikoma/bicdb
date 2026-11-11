@@ -1469,6 +1469,7 @@ pub struct RangeWriteCoordinator<Transport: RangeWriteTransport> {
     recovery_cursor: Mutex<Option<RangeId>>,
     require_schema_compatibility: bool,
     local_incarnation: String,
+    native_image_mode: bool,
     pending_acknowledgements: Mutex<BTreeMap<String, RangeAcknowledgementEvidence>>,
 }
 
@@ -1481,6 +1482,14 @@ struct RangeAcknowledgementEvidence {
     certified: usize,
     required_quorum: usize,
     mutation: RangeMutationPermit,
+    native: Option<NativeRangeAcknowledgementEvidence>,
+}
+
+#[derive(Debug)]
+struct NativeRangeAcknowledgementEvidence {
+    pending: crate::db::NativeRangePendingApply,
+    mutations_sha256: String,
+    certificate: Option<NativeRangeCommitCertificate>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -1615,13 +1624,12 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
             let service = local_service.lock();
             (service.database(), service.range_mutation_gate())
         };
-        let local_incarnation = database
-            .try_read()
-            .ok_or_else(|| {
-                range_write_error("database is busy while constructing range authority")
-            })?
-            .incarnation_id()
-            .to_string();
+        let database_guard = database.try_read().ok_or_else(|| {
+            range_write_error("database is busy while constructing range authority")
+        })?;
+        let local_incarnation = database_guard.incarnation_id().to_string();
+        let native_image_mode = database_guard.native_range_image_birth_present();
+        drop(database_guard);
         Ok(Self {
             cluster_id,
             local_node_id,
@@ -1636,6 +1644,7 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
             recovery_cursor: Mutex::new(None),
             require_schema_compatibility: false,
             local_incarnation,
+            native_image_mode,
             pending_acknowledgements: Mutex::new(BTreeMap::new()),
         })
     }
@@ -2653,8 +2662,27 @@ impl<Transport: RangeWriteTransport> RangeAntiEntropyFenceAuthority
     }
 }
 
-impl<Transport: RangeWriteTransport> CommitAdmission for RangeWriteCoordinator<Transport> {
-    fn admit(&self, intent: &CommitAdmissionIntent) -> Result<CommitAdmissionTicket> {
+impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
+    fn admit_with_database(
+        &self,
+        intent: &CommitAdmissionIntent,
+        database: Option<&crate::BicDb>,
+    ) -> Result<CommitAdmissionTicket> {
+        let native_database = match (self.native_image_mode, database) {
+            (false, None) => None,
+            (false, Some(database)) if !database.native_range_image_birth_present() => None,
+            (true, Some(database))
+                if database.native_range_image_birth_present()
+                    && database.incarnation_id() == self.local_incarnation =>
+            {
+                Some(database)
+            }
+            _ => {
+                return Err(range_write_error(
+                    "native admission requires its actual originating database context",
+                ))
+            }
+        };
         let range = self.resolve_range(intent)?;
         self.require_recovered_epoch(&range)?;
         let mutation = self.range_mutations.try_enter(range.id)?;
@@ -2675,6 +2703,29 @@ impl<Transport: RangeWriteTransport> CommitAdmission for RangeWriteCoordinator<T
             self.local_node_id.clone(),
             intent,
         )?;
+        let native_plan = if let Some(database) = native_database {
+            let topology = self.topology.read();
+            let bootstrap = topology.range_image_bootstrap_id.ok_or_else(|| {
+                range_write_error("native admission has no committed bootstrap domain")
+            })?;
+            let incarnation = topology
+                .nodes
+                .get(&self.local_node_id)
+                .ok_or_else(|| range_write_error("native local member missing"))?
+                .incarnation;
+            database.native_recovery_admission(
+                &self.cluster_id,
+                bootstrap,
+                &self.local_node_id,
+                incarnation,
+            )?;
+            let plan = NativeRangeCommandIntent::plan(&command, &range, &topology)?;
+            let lineage = database.current_native_range_source_lineage(range.id)?;
+            plan.validate_native_base(&lineage)?;
+            Some(plan)
+        } else {
+            None
+        };
         self.local_service
             .lock()
             .prepare_range_write_with_mutation(
@@ -2765,11 +2816,25 @@ impl<Transport: RangeWriteTransport> CommitAdmission for RangeWriteCoordinator<T
         // The leader persists the quorum certificate before any replica is
         // allowed to apply. From this point onward the command must be
         // recovered/applied and may not be overtaken by a later command.
-        self.local_service
-            .lock()
-            .certify_range_write_with_mutation(&range, &self.local_node_id, &command, authority)?;
+        let local_certificate = self.local_service.lock().certify_range_write_with_mutation(
+            &range,
+            &self.local_node_id,
+            &command,
+            authority,
+        );
+        if let Err(error) = local_certificate {
+            if native_database.is_some() {
+                self.recovered_epochs.lock().remove(&range.id);
+                return Err(BicDbError::CommitOutcomeUnknown {
+                    sequence: None, transaction_id: Some(command.transaction_id), incarnation:self.local_incarnation.clone(),
+                    detail:format!("range {} command {} reached a decision quorum, but local certificate persistence is uncertain: {error}; local row apply has not started", range.id,command.command_id),
+                });
+            }
+            return Err(error);
+        }
         reservation.preserve_for_recovery(&command.command_id);
         let mut certified_voters = 1usize;
+        let mut certified_nodes = BTreeSet::from([self.local_node_id.clone()]);
         for voter in &committed_nodes {
             let certified = self
                 .transport
@@ -2784,9 +2849,51 @@ impl<Transport: RangeWriteTransport> CommitAdmission for RangeWriteCoordinator<T
                 });
             if certified.is_some() {
                 certified_voters += 1;
-                let _ = self.transport.apply_range_write(voter, &command);
+                certified_nodes.insert(voter.clone());
+                if native_database.is_none() {
+                    let _ = self.transport.apply_range_write(voter, &command);
+                }
             }
         }
+        let native = if let (Some(database), Some(plan)) = (native_database, native_plan) {
+            let certificate = plan.certify(&certified_nodes).ok();
+            let pending = match database.prepare_native_range_command(
+                &plan,
+                command.transaction_id,
+                authority,
+            ) {
+                Ok(pending) => pending,
+                Err(error) => {
+                    self.recovered_epochs.lock().remove(&range.id);
+                    let mut active = self.active_ranges.lock();
+                    if active.get(&range.id) == Some(&command.command_id) {
+                        active.remove(&range.id);
+                        self.active_range_changed.notify_all();
+                    }
+                    return Err(BicDbError::CommitOutcomeUnknown {
+                        sequence:None,transaction_id:Some(command.transaction_id),incarnation:self.local_incarnation.clone(),
+                        detail:format!("range {} command {} is irrevocably certified but native pending persistence failed before local row apply: {error}; recovery is required",range.id,command.command_id),
+                    });
+                }
+            };
+            // A native Apply instruction is never emitted by an early ACK.
+            // Actual distinct certificate quorum must already be established.
+            if certificate.is_some() {
+                for voter in certified_nodes
+                    .iter()
+                    .filter(|node| **node != self.local_node_id)
+                {
+                    let _ = self.transport.apply_range_write(voter, &command);
+                }
+            }
+            Some(NativeRangeAcknowledgementEvidence {
+                pending,
+                mutations_sha256: plan.mutations_sha256().to_string(),
+                certificate,
+            })
+        } else {
+            None
+        };
         // An irrevocable certificate already exists. Continue through the
         // ordinary local WAL/receipt boundary even if certificate replies were
         // lost; the callback must report uncertainty rather than a rollback.
@@ -2798,6 +2905,7 @@ impl<Transport: RangeWriteTransport> CommitAdmission for RangeWriteCoordinator<T
                 certified: certified_voters,
                 required_quorum: quorum,
                 mutation,
+                native,
             },
         );
         Ok(CommitAdmissionTicket {
@@ -2806,7 +2914,12 @@ impl<Transport: RangeWriteTransport> CommitAdmission for RangeWriteCoordinator<T
         })
     }
 
-    fn local_applied(&self, ticket: &CommitAdmissionTicket, commit_seq: u64) -> Result<()> {
+    fn finish_local_application(
+        &self,
+        ticket: &CommitAdmissionTicket,
+        commit_seq: u64,
+        native_context: Option<(&crate::db::NativeWalApplyReceipt, &crate::BicDb)>,
+    ) -> Result<()> {
         if !ticket
             .authority
             .starts_with(&format!("range-quorum-v{RANGE_WRITE_PROTOCOL_VERSION}:"))
@@ -2828,21 +2941,58 @@ impl<Transport: RangeWriteTransport> CommitAdmission for RangeWriteCoordinator<T
         {
             return Err(range_write_error("commit ticket range authority mismatch"));
         }
-        let applied = self
-            .local_service
-            .lock()
-            .mark_range_write_applied_with_mutation(
-                &ticket.command_id,
-                &RangeMutationAuthority::Mutation(&evidence.mutation),
-            );
-        let uncertainty = match applied {
-            Err(error) => Some(format!("local range applied checkpoint failed: {error}")),
-            Ok(()) if evidence.certified < evidence.required_quorum => Some(format!(
+        let authority = &RangeMutationAuthority::Mutation(&evidence.mutation);
+        let mut problems = Vec::new();
+        let mut actual_native_apply_verified = !self.native_image_mode;
+        if let Some(native) = &evidence.native {
+            if let Some((receipt, database)) = native_context {
+                let validation = database.validate_native_wal_apply_receipt(receipt).and_then(|()| {
+                    if database.incarnation_id() != self.local_incarnation
+                        || receipt.transaction_id() != evidence.transaction_id
+                        || receipt.mutations_sha256() != native.mutations_sha256
+                    {
+                        return Err(range_write_error("native callback actual database/transaction/mutations differ from admission"));
+                    }
+                    Ok(())
+                });
+                match validation {
+                    Err(error) => {
+                        problems.push(format!("native actual-WAL binding failed: {error}"))
+                    }
+                    Ok(()) => {
+                        actual_native_apply_verified = true;
+                        let completion = database.record_native_range_materialized(&native.pending, receipt, authority)
+                            .and_then(|()| {
+                                let certificate = native.certificate.as_ref().ok_or_else(|| range_write_error("native prefix has no actual certificate quorum; materialized pending remains unresolved"))?;
+                                database.complete_native_range_command(&native.pending, certificate, receipt, authority)
+                            });
+                        if let Err(error) = completion {
+                            problems.push(format!("native prefix completion failed: {error}"));
+                        }
+                    }
+                }
+            } else {
+                problems.push("native callback requires the actual borrowed DB and private WAL apply receipt; a sequence is insufficient".to_string());
+            }
+        } else if self.native_image_mode {
+            problems.push("native callback has no admitted native command journal".to_string());
+        }
+        if actual_native_apply_verified {
+            if let Err(error) = self
+                .local_service
+                .lock()
+                .mark_range_write_applied_with_mutation(&ticket.command_id, authority)
+            {
+                problems.push(format!("local range applied checkpoint failed: {error}"));
+            }
+        }
+        if evidence.certified < evidence.required_quorum {
+            problems.push(format!(
                 "durable range certificate acknowledgments reached only {}/{} voters",
                 evidence.certified, evidence.required_quorum
-            )),
-            Ok(()) => None,
-        };
+            ));
+        }
+        let uncertainty = (!problems.is_empty()).then(|| problems.join("; "));
         if uncertainty.is_some() {
             // Local WAL is durable and the range decision is irrevocable. Do
             // not claim rollback or let another command overtake recovery.
@@ -2861,13 +3011,81 @@ impl<Transport: RangeWriteTransport> CommitAdmission for RangeWriteCoordinator<T
         self.active_range_changed.notify_all();
         drop(active);
         if let Some(detail) = uncertainty {
+            let local_detail = if actual_native_apply_verified {
+                "local application is durable"
+            } else {
+                "local application requires independent verification"
+            };
             return Err(BicDbError::CommitOutcomeUnknown {
                 sequence: Some(commit_seq),
                 transaction_id: Some(evidence.transaction_id),
                 incarnation: self.local_incarnation.clone(),
-                detail: format!("range {} command {}: {detail}; local application is durable, cluster recovery/verification is still required before treating this as acknowledged", evidence.range_id, ticket.command_id),
+                detail: format!("range {} command {}: {detail}; {local_detail}, cluster recovery/verification is still required before treating this as acknowledged", evidence.range_id, ticket.command_id),
             });
         }
+        Ok(())
+    }
+}
+
+impl<Transport: RangeWriteTransport> CommitAdmission for RangeWriteCoordinator<Transport> {
+    fn admit(&self, intent: &CommitAdmissionIntent) -> Result<CommitAdmissionTicket> {
+        self.admit_with_database(intent, None)
+    }
+    fn admit_with_native_context(
+        &self,
+        intent: &CommitAdmissionIntent,
+        database: &crate::BicDb,
+    ) -> Result<CommitAdmissionTicket> {
+        self.admit_with_database(intent, Some(database))
+    }
+    fn local_applied(&self, ticket: &CommitAdmissionTicket, commit_seq: u64) -> Result<()> {
+        self.finish_local_application(ticket, commit_seq, None)
+    }
+    fn local_applied_with_native_context(
+        &self,
+        ticket: &CommitAdmissionTicket,
+        receipt: &crate::db::NativeWalApplyReceipt,
+        database: &crate::BicDb,
+    ) -> Result<()> {
+        self.finish_local_application(ticket, receipt.sequence(), Some((receipt, database)))
+    }
+    fn release_native_application_for_recovery(
+        &self,
+        ticket: &CommitAdmissionTicket,
+    ) -> Result<()> {
+        if !self.native_image_mode {
+            return Ok(());
+        }
+        let evidence = {
+            let mut pending = self.pending_acknowledgements.lock();
+            let Some(evidence) = pending.get(&ticket.command_id) else {
+                return Ok(());
+            };
+            if ticket.authority
+                != format!(
+                    "range-quorum-v{RANGE_WRITE_PROTOCOL_VERSION}:{}",
+                    evidence.range_id
+                )
+            {
+                return Err(range_write_error(
+                    "native recovery release ticket range mismatch",
+                ));
+            }
+            pending
+                .remove(&ticket.command_id)
+                .expect("checked pending native ticket")
+        };
+        self.recovered_epochs.lock().remove(&evidence.range_id);
+        {
+            let mut active = self.active_ranges.lock();
+            if active.get(&evidence.range_id) == Some(&ticket.command_id) {
+                active.remove(&evidence.range_id);
+                self.active_range_changed.notify_all();
+            }
+        }
+        // Drop owned local mutation/scope leases only after the caller has
+        // completed actual local cleanup. Durable CQ/pending remain untouched.
+        drop(evidence);
         Ok(())
     }
 }
@@ -2884,8 +3102,8 @@ mod tests {
     use std::sync::atomic::{AtomicBool, Ordering};
 
     #[derive(Debug)]
-    struct TestTransport {
-        available: bool,
+    pub(super) struct TestTransport {
+        pub(super) available: bool,
     }
 
     impl RangeWriteTransport for TestTransport {

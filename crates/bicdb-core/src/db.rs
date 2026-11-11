@@ -3931,6 +3931,7 @@ pub struct BicDb {
     range_image_initializing: AtomicBool,
     range_image_native_birth_active: AtomicBool,
     native_range_image_journal: Mutex<()>,
+    native_range_command_scopes: Arc<Mutex<range_image_native::NativeRangeScopeRegistry>>,
     schema_compatibility: SchemaCompatibilityAuthority,
     encryption: EncryptionRuntime,
     // Per-collection interior mutability: each collection's mutable state lives
@@ -8930,12 +8931,44 @@ pub struct CommitAdmissionTicket {
     pub command_id: String,
 }
 
+/// Owns only volatile admission cleanup. Drop occurs after Transaction's
+/// row-lock cleanup; the callback may not mutate/abort a durable command.
+#[derive(Debug)]
+struct NativeAdmissionRecoveryRelease {
+    admission: Arc<dyn CommitAdmission>,
+    ticket: Option<CommitAdmissionTicket>,
+}
+impl Drop for NativeAdmissionRecoveryRelease {
+    fn drop(&mut self) {
+        if let Some(ticket) = self.ticket.take() {
+            if let Err(error) = self
+                .admission
+                .release_native_application_for_recovery(&ticket)
+            {
+                bicdb_page::health::log_event(
+                    &json!({"event":"range_image.native_admission_release_failed","severity":"warn","command_id":ticket.command_id,"error":error.to_string()}),
+                );
+            }
+        }
+    }
+}
+
 /// Capability installed by the trusted cluster host. `admit` must not return
 /// success until the intent has a durable quorum decision. Implementations
 /// must be idempotent because transport ambiguity and process recovery can
 /// repeat both calls.
 pub trait CommitAdmission: std::fmt::Debug + Send + Sync {
     fn admit(&self, intent: &CommitAdmissionIntent) -> Result<CommitAdmissionTicket>;
+    /// Actual borrowed native DB context avoids reacquiring its outer guard
+    /// during admission. This is additive; legacy authorities keep their
+    /// existing callback behavior.
+    fn admit_with_native_context(
+        &self,
+        intent: &CommitAdmissionIntent,
+        _database: &BicDb,
+    ) -> Result<CommitAdmissionTicket> {
+        self.admit(intent)
+    }
     /// Record the exact durable local sequence for an admitted decision.
     /// This callback runs only after the transaction WAL is durable. Keeping
     /// the sequence in this trusted callback lets Cell writer fencing advance
@@ -8952,6 +8985,28 @@ pub trait CommitAdmission: std::fmt::Debug + Send + Sync {
         receipt: &NativeWalApplyReceipt,
     ) -> Result<()> {
         self.local_applied(ticket, receipt.sequence())
+    }
+
+    /// Invoked with the actual transaction's borrowed database after WAL
+    /// durability. Implementations must validate the private receipt binding;
+    /// they must not recursively acquire the originating database guard.
+    fn local_applied_with_native_context(
+        &self,
+        ticket: &CommitAdmissionTicket,
+        receipt: &NativeWalApplyReceipt,
+        _database: &BicDb,
+    ) -> Result<()> {
+        self.local_applied_with_receipt(ticket, receipt)
+    }
+
+    /// Release volatile ownership after a failed native local attempt has
+    /// fully stopped mutating. Durable decisions/pending records stay intact;
+    /// this must never be implemented as an abort or physical row operation.
+    fn release_native_application_for_recovery(
+        &self,
+        _ticket: &CommitAdmissionTicket,
+    ) -> Result<()> {
+        Ok(())
     }
 
     /// Irreversibly reject future admissions for this installed authority.
@@ -9104,6 +9159,7 @@ pub struct Transaction {
     database_mutation_permit: Option<crate::distribution_range_mutation::DatabaseMutationPermit>,
     native_wal_retention: Option<native_wal_apply::NativeWalRetentionPin>,
     commit_admission_ticket: Option<(Arc<dyn CommitAdmission>, CommitAdmissionTicket)>,
+    native_admission_recovery_release: Option<NativeAdmissionRecoveryRelease>,
     committed_seq: Option<u64>,
     // Paged mode: the page-store snapshot captured when this transaction began,
     // used to read rows a lazy collection has never touched this session (they
@@ -10906,6 +10962,7 @@ impl BicDb {
             range_image_initializing: AtomicBool::new(false),
             range_image_native_birth_active: AtomicBool::new(false),
             native_range_image_journal: Mutex::new(()),
+            native_range_command_scopes: Arc::new(Mutex::new(Default::default())),
             schema_compatibility: SchemaCompatibilityAuthority::new(),
             encryption,
             collections,
@@ -17935,11 +17992,15 @@ impl Transaction {
                     sequence: Some(commit_seq), transaction_id: Some(self.id.0), incarnation: db.incarnation.clone(),
                     detail: format!("native WAL apply receipt was not established after local commit: {error}"),
                 })?;
-                admission.local_applied_with_receipt(ticket, &receipt)?;
+                admission.local_applied_with_native_context(ticket, &receipt, db)?;
             } else {
                 admission.local_applied(ticket, commit_seq)?;
             }
             self.commit_admission_ticket = None;
+            if let Some(release) = self.native_admission_recovery_release.as_mut() {
+                release.ticket = None;
+            }
+            self.native_admission_recovery_release = None;
         }
         // Successful callback completed the native prefix boundary; a replay
         // helper may retain a shared private receipt beyond this transaction.
@@ -19129,7 +19190,11 @@ fn release_owned_write_locks(
 impl Drop for Transaction {
     fn drop(&mut self) {
         if self.state == TxState::Pending {
-            self.receipt_aborted();
+            // An admitted native command is irrevocable even if local WAL
+            // never started. Do not publish a false aborted receipt on drop.
+            if self.native_admission_recovery_release.is_none() {
+                self.receipt_aborted();
+            }
             // Release this transaction's record locks for abandoned (never
             // committed/rolled-back) transactions. We go through our own handle
             // to the shared lock map rather than dereferencing `db`, so drop is

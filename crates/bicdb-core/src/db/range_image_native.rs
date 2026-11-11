@@ -11,6 +11,12 @@ use crate::distribution_range_mutation::FrozenRangeMutationPermit;
 
 mod certified_prefix;
 use certified_prefix::NativeCertifiedRangePrefix;
+
+#[cfg(test)]
+thread_local! {
+    static TEST_REJECT_NATIVE_AFTER_ADMISSION: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+pub(super) use certified_prefix::NativeRangeScopeRegistry;
 pub(crate) use certified_prefix::{NativeRangeInstallSafety, NativeRangePendingApply};
 
 pub(super) fn native_key(key: &str) -> Vec<u8> {
@@ -408,6 +414,29 @@ fn genesis_key(range_id: RangeId) -> String {
 }
 
 impl BicDb {
+    #[cfg(test)]
+    pub(crate) fn test_reject_next_native_after_admission() {
+        TEST_REJECT_NATIVE_AFTER_ADMISSION.with(|reject| reject.set(true));
+    }
+    #[cfg(test)]
+    pub(super) fn test_native_admission_rejected(&self) -> bool {
+        TEST_REJECT_NATIVE_AFTER_ADMISSION.with(|reject| reject.replace(false))
+    }
+    pub(super) fn finish_failed_native_local_attempt(&self, transaction: &mut Transaction) {
+        if transaction.state == TxState::Pending {
+            self.tx_states.remove(&transaction.id.0);
+            let locked_keys = transaction.locked_keys.get_mut().take_all();
+            release_owned_write_locks(&self.write_locks, transaction.id, &locked_keys);
+            transaction.state = TxState::Aborted;
+        }
+    }
+
+    /// Mode selection only, never a birth, range or recovery authority.
+    pub(crate) fn native_range_image_birth_present(&self) -> bool {
+        self.range_image_native_birth_active
+            .load(AtomicOrdering::Acquire)
+    }
+
     /// Inputs are claimed identity bindings, not authority. The native birth,
     /// current-open identity and sticky fsync fence must independently match.
     pub(crate) fn native_recovery_admission(

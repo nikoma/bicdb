@@ -268,6 +268,39 @@ mod tests {
     use crate::{CancellationToken, DistributionConfig, DistributionStore, Record, StorageMode};
     use serde_json::json;
 
+    type NativeCoordinator = RangeWriteCoordinator<super::super::tests::TestTransport>;
+
+    fn actual_coordinator(
+        db: &Arc<RwLock<BicDb>>,
+        parent: &Path,
+        topology: ClusterTopology,
+        spec: &RangeImageBirthSpec,
+    ) -> (Arc<NativeCoordinator>, Arc<Mutex<ClusterDataNodeService>>) {
+        let service = Arc::new(Mutex::new(
+            ClusterDataNodeService::open(
+                topology.cluster_id.clone(),
+                spec.node_id.clone(),
+                parent.join("database"),
+                Arc::clone(db),
+                true,
+            )
+            .unwrap(),
+        ));
+        let coordinator = Arc::new(
+            RangeWriteCoordinator::new_schema_fenced(
+                topology.cluster_id.clone(),
+                spec.node_id.clone(),
+                Arc::new(RwLock::new(topology)),
+                Arc::clone(&service),
+                Arc::new(super::super::tests::TestTransport { available: false }),
+            )
+            .unwrap(),
+        );
+        coordinator.recover_local_leadership(1024).unwrap();
+        db.read().install_commit_admission(coordinator.clone());
+        (coordinator, service)
+    }
+
     fn fixture() -> (
         tempfile::TempDir,
         Arc<RwLock<BicDb>>,
@@ -485,5 +518,232 @@ mod tests {
         assert!(reopened
             .current_native_range_source_lineage(range.id)
             .is_err());
+    }
+
+    #[test]
+    fn native_origin_actual_coordinator_commits_under_outer_db_write_guard_without_reacquire() {
+        let (parent, db, topology, spec) = fixture();
+        let range = topology.range_for_key("items", "origin").unwrap().clone();
+        let (coordinator, service) = actual_coordinator(&db, parent.path(), topology, &spec);
+        let plain = CommitAdmissionIntent {
+            transaction_id: 77,
+            mutations: vec![CommitAdmissionMutation {
+                collection: "items".into(),
+                record_id: "origin".into(),
+                record: Some(Record::new("origin")),
+            }],
+        };
+        assert!(coordinator.admit(&plain).is_err());
+        let (sender, receiver) = std::sync::mpsc::channel();
+        let owned = Arc::clone(&db);
+        let worker = std::thread::spawn(move || {
+            let database = owned.write();
+            let result = (|| {
+                let mut tx = database.begin_transaction()?;
+                tx.insert(
+                    "items",
+                    Record::new("origin").with_metadata(json!({"value":1})),
+                )?;
+                tx.commit()
+            })();
+            sender
+                .send(result.map_err(|error: BicDbError| error.to_string()))
+                .unwrap();
+        });
+        receiver
+            .recv_timeout(Duration::from_secs(5))
+            .expect("native callback must not reacquire its caller-owned DB write guard")
+            .unwrap();
+        worker.join().unwrap();
+        assert_eq!(
+            service
+                .lock()
+                .range_write_progress(range.id)
+                .resolved_through,
+            1
+        );
+        assert_eq!(
+            db.read()
+                .native_range_prefix_observation(range.id)
+                .unwrap()
+                .native_applied_index,
+            Some(1)
+        );
+        assert_eq!(
+            db.read().get("items", "origin").unwrap().unwrap().metadata,
+            json!({"value":1})
+        );
+        assert!(coordinator.pending_acknowledgements.lock().is_empty());
+        let gate = db.read().range_mutation_gate();
+        let frozen = gate.try_freeze(range.id, Uuid::now_v7()).unwrap();
+        drop(frozen);
+        db.read().clear_commit_admission();
+    }
+
+    #[test]
+    fn native_origin_public_ticket_without_actual_pending_scope_cannot_apply_rows() {
+        #[derive(Debug)]
+        struct BareTicket;
+        impl CommitAdmission for BareTicket {
+            fn admit(&self, _: &CommitAdmissionIntent) -> Result<CommitAdmissionTicket> {
+                Ok(CommitAdmissionTicket {
+                    authority: "plain-public-ticket".into(),
+                    command_id: Uuid::now_v7().to_string(),
+                })
+            }
+            fn local_applied(&self, _: &CommitAdmissionTicket, _: u64) -> Result<()> {
+                panic!("public ticket without native scope must not reach application callback")
+            }
+        }
+        let (_parent, db, topology, _spec) = fixture();
+        let range = topology.range_for_key("items", "unscoped").unwrap();
+        let database = db.write();
+        database.install_commit_admission(Arc::new(BareTicket));
+        let mut tx = database.begin_transaction().unwrap();
+        tx.insert("items", Record::new("unscoped")).unwrap();
+        assert!(matches!(
+            tx.commit(),
+            Err(BicDbError::CommitOutcomeUnknown { .. })
+        ));
+        assert!(database.get("items", "unscoped").unwrap().is_none());
+        let observation = database.native_range_prefix_observation(range.id).unwrap();
+        assert_eq!(observation.native_applied_index, Some(0));
+        assert_eq!(observation.pending_command_index, None);
+        database.clear_commit_admission();
+    }
+
+    #[test]
+    fn native_origin_post_admission_pre_wal_unknown_cleans_local_attempt_before_recovery_freeze() {
+        let (parent, db, topology, spec) = fixture();
+        let range = topology.range_for_key("items", "cut").unwrap().clone();
+        let (coordinator, service) = actual_coordinator(&db, parent.path(), topology, &spec);
+        let (sender, receiver) = std::sync::mpsc::channel();
+        let owned = Arc::clone(&db);
+        let worker = std::thread::spawn(move || {
+            let database = owned.write();
+            let mut tx = database.begin_transaction().unwrap();
+            tx.insert("items", Record::new("cut")).unwrap();
+            BicDb::test_reject_next_native_after_admission();
+            let error = tx.commit().unwrap_err();
+            sender
+                .send(matches!(error, BicDbError::CommitOutcomeUnknown { .. }))
+                .unwrap();
+        });
+        assert!(receiver.recv_timeout(Duration::from_secs(5)).unwrap());
+        worker.join().unwrap();
+        assert!(db.read().get("items", "cut").unwrap().is_none());
+        assert!(coordinator.pending_acknowledgements.lock().is_empty());
+        assert!(!coordinator.recovered_epochs.lock().contains_key(&range.id));
+        let observation = db.read().native_range_prefix_observation(range.id).unwrap();
+        assert_eq!(observation.native_applied_index, Some(0));
+        assert_eq!(observation.pending_command_index, Some(1));
+        let gate = db.read().range_mutation_gate();
+        let frozen = gate
+            .freeze(
+                range.id,
+                Uuid::now_v7(),
+                Duration::from_millis(200),
+                &CancellationToken::uncancelable(),
+            )
+            .unwrap();
+        drop(frozen);
+        assert_eq!(service.lock().range_write_progress(range.id).last_index, 1);
+        assert_eq!(
+            service
+                .lock()
+                .range_write_progress(range.id)
+                .resolved_through,
+            0
+        );
+        db.read().clear_commit_admission();
+        drop(coordinator);
+        drop(service);
+        drop(db);
+        let (reopened, _) = BicDb::open_range_image_database(
+            &parent.path().join("database"),
+            DbConfig::default()
+                .with_fsync(true)
+                .with_storage_mode(StorageMode::ServerPaged)
+                .with_paged_buffer_pool_bytes(8 * 1024 * 1024),
+            &spec,
+        )
+        .unwrap();
+        reopened.schema_compatibility_fingerprint().unwrap();
+        let reopened = Arc::new(RwLock::new(reopened));
+        let service = ClusterDataNodeService::open(
+            spec.cluster_id.clone(),
+            spec.node_id.clone(),
+            parent.path().join("database"),
+            Arc::clone(&reopened),
+            true,
+        )
+        .unwrap();
+        assert_eq!(service.range_write_progress(range.id).resolved_through, 0);
+        assert_eq!(
+            reopened
+                .read()
+                .native_range_prefix_observation(range.id)
+                .unwrap()
+                .pending_command_index,
+            Some(1)
+        );
+        assert!(reopened.read().get("items", "cut").unwrap().is_none());
+        assert!(reopened
+            .read()
+            .current_native_range_source_lineage(range.id)
+            .is_err());
+    }
+
+    #[test]
+    fn native_install_safety_preserves_floor_when_raw_repair_invalidates_source() {
+        let (_parent, db, topology, spec) = fixture();
+        let command = command(&topology, "guard", 1);
+        let range = topology.range_by_id(command.range_id).unwrap();
+        let intent = NativeRangeCommandIntent::plan(&command, range, &topology).unwrap();
+        let certificate = intent
+            .certify(&BTreeSet::from([range.leader.clone()]))
+            .unwrap();
+        let gate = db.read().range_mutation_gate();
+        {
+            let permit = gate.try_enter(range.id).unwrap();
+            let authority = RangeMutationAuthority::Mutation(&permit);
+            db.read()
+                .apply_native_locally_certified_command(
+                    &certificate,
+                    &command.mutations,
+                    &authority,
+                )
+                .unwrap();
+            db.read()
+                .apply_admitted_mutations_with_mutation(range.id, &command.mutations, &authority)
+                .unwrap();
+        }
+        assert_eq!(
+            db.read()
+                .native_range_prefix_observation(range.id)
+                .unwrap()
+                .native_applied_index,
+            None
+        );
+        let frozen = gate.try_freeze(range.id, Uuid::now_v7()).unwrap();
+        let admission = db
+            .read()
+            .native_recovery_admission(
+                &spec.cluster_id,
+                spec.bootstrap_id,
+                &spec.node_id,
+                spec.member_incarnation,
+            )
+            .unwrap();
+        let safety = db
+            .read()
+            .native_range_install_safety(&admission, range.id, &frozen)
+            .unwrap();
+        assert_eq!(safety.applied_index(), Some(1));
+        assert_eq!(safety.maximum_irreversible_index(), Some(1));
+        assert!(safety.source_invalidated());
+        safety
+            .require_current(&db.read(), &admission, &frozen)
+            .unwrap();
     }
 }

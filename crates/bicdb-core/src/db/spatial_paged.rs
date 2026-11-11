@@ -2672,13 +2672,36 @@ impl BicDb {
                     })
                 })
                 .collect::<Result<Vec<_>>>()?;
-            Some(admission.admit(&CommitAdmissionIntent {
+            let intent = CommitAdmissionIntent {
                 transaction_id: tx.id.0,
                 mutations,
-            })?)
+            };
+            Some(
+                if self
+                    .range_image_native_birth_active
+                    .load(AtomicOrdering::Acquire)
+                {
+                    let ticket = admission.admit_with_native_context(&intent, self)?;
+                    tx.commit_admission_ticket = Some((Arc::clone(admission), ticket.clone()));
+                    tx.native_admission_recovery_release = Some(NativeAdmissionRecoveryRelease {
+                        admission: Arc::clone(admission),
+                        ticket: Some(ticket.clone()),
+                    });
+                    ticket
+                } else {
+                    admission.admit(&intent)?
+                },
+            )
         } else {
             None
         };
+        self.require_native_transaction_mutation_scope(tx)?;
+        #[cfg(test)]
+        if tx.native_admission_recovery_release.is_some() && self.test_native_admission_rejected() {
+            return Err(BicDbError::Cluster(
+                "injected native post-admission/pre-WAL rejection".into(),
+            ));
+        }
         let sync_ops = if tx.imported_projection {
             Vec::new()
         } else {

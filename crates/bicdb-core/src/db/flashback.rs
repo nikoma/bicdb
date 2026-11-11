@@ -354,6 +354,25 @@ impl BicDb {
             }
             other => other,
         };
+        let committed = match committed {
+            Err(error) if tx.native_admission_recovery_release.is_some() => {
+                // The synchronous apply stack and page guards have unwound.
+                // Terminate this local attempt BEFORE releasing volatile
+                // owned leases. This is no distributed abort/aborted receipt.
+                self.finish_failed_native_local_attempt(tx);
+                let sequence = match &error {
+                    BicDbError::CommitOutcomeUnknown { sequence, .. } => *sequence,
+                    _ => tx.committed_seq,
+                };
+                tx.commit_admission_ticket = None;
+                drop(tx.native_admission_recovery_release.take());
+                Err(BicDbError::CommitOutcomeUnknown {
+                    sequence, transaction_id: Some(tx.id.0), incarnation: self.incarnation.clone(),
+                    detail: format!("native distributed command was admitted before the local attempt failed: {error}; durable certificate/pending state is preserved for recovery"),
+                })
+            }
+            other => other,
+        };
         if let Ok(seq) = committed {
             if !tx.writes.is_empty() || !tx.imported_record_audit_events.is_empty() {
                 replication_live::note_thread_commit(seq);

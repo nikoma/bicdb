@@ -12,6 +12,51 @@ fn prefix_key(range: RangeId) -> String {
     format!("prefix:{}", range.get())
 }
 
+const MAX_NATIVE_COMMAND_SCOPES: usize = 65_536;
+#[derive(Debug)]
+struct NativeCommandScope {
+    lease: Uuid,
+    database_incarnation: String,
+    mutations_sha256: String,
+    armed: bool,
+}
+#[derive(Debug, Default)]
+pub(in crate::db) struct NativeRangeScopeRegistry {
+    entries: BTreeMap<u64, NativeCommandScope>,
+}
+#[derive(Debug)]
+struct NativeCommandScopeLease {
+    registry: Arc<Mutex<NativeRangeScopeRegistry>>,
+    transaction_id: u64,
+    lease: Uuid,
+}
+impl NativeCommandScopeLease {
+    fn arm(&self) -> Result<()> {
+        let mut registry = self.registry.lock();
+        let entry = registry
+            .entries
+            .get_mut(&self.transaction_id)
+            .ok_or_else(|| invalid("native tx scope reservation disappeared"))?;
+        if entry.lease != self.lease {
+            return Err(invalid("native tx scope lease changed"));
+        }
+        entry.armed = true;
+        Ok(())
+    }
+}
+impl Drop for NativeCommandScopeLease {
+    fn drop(&mut self) {
+        let mut registry = self.registry.lock();
+        if registry
+            .entries
+            .get(&self.transaction_id)
+            .is_some_and(|entry| entry.lease == self.lease)
+        {
+            registry.entries.remove(&self.transaction_id);
+        }
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 struct MaterializedNativeCommand {
     local_transaction_id: u64,
@@ -65,6 +110,7 @@ pub(crate) struct NativeRangePendingApply {
     database_incarnation: String,
     intent: NativeRangeCommandIntent,
     pending: PendingNativeRangeCommand,
+    _scope: NativeCommandScopeLease,
 }
 
 /// Destructive-install guard observation. Invalidating source visibility does
@@ -194,6 +240,41 @@ impl NativeCertifiedRangePrefix {
 }
 
 impl BicDb {
+    /// Scope ownership is not durability/quorum evidence. Its sole purpose is
+    /// preventing ordinary native row apply without the actual pending journal.
+    pub(in crate::db) fn require_native_transaction_mutation_scope(
+        &self,
+        transaction: &Transaction,
+    ) -> Result<()> {
+        if !self.native_range_image_birth_present()
+            || transaction.bypass_commit_admission
+            || transaction.writes.is_empty()
+        {
+            return Ok(());
+        }
+        // The private WAL-only fixtures have no actual birth or source image;
+        // a flag alone must not manufacture a native lineage obligation.
+        if self.read_native_birth()?.is_none() {
+            return Ok(());
+        }
+        let actual_hash =
+            super::super::native_wal_apply::actual_transaction_mutations_sha256(transaction)?;
+        let registry = self.native_range_command_scopes.lock();
+        let matched = registry
+            .entries
+            .get(&transaction.id().0)
+            .is_some_and(|entry| {
+                entry.armed
+                    && entry.database_incarnation == self.incarnation
+                    && entry.mutations_sha256 == actual_hash
+            });
+        if !matched {
+            return Err(invalid(
+                "ordinary native mutation has no owned, durable pending-command scope",
+            ));
+        }
+        Ok(())
+    }
     pub(crate) fn native_range_install_safety(
         &self,
         admission: &NativeRecoveryAdmission,
@@ -366,6 +447,7 @@ impl BicDb {
             self.complete_native_range_command(&pending, certificate, &receipt, authority)
         })();
         if let Err(error) = result {
+            self.finish_failed_native_local_attempt(&mut transaction);
             return Err(BicDbError::CommitOutcomeUnknown {
                 sequence: transaction.committed_seq,
                 transaction_id: Some(transaction.id().0),
@@ -470,11 +552,42 @@ impl BicDb {
             checksum_sha256: String::new(),
         };
         pending.checksum_sha256 = pending.checksum()?;
+        let lease = Uuid::now_v7();
+        {
+            let mut registry = self
+                .native_range_command_scopes
+                .try_lock()
+                .ok_or_else(|| invalid("native tx scope registry busy"))?;
+            if registry.entries.len() >= MAX_NATIVE_COMMAND_SCOPES
+                || registry.entries.contains_key(&local_transaction_id)
+            {
+                return Err(invalid(
+                    "native tx scope bound or duplicate transaction reached",
+                ));
+            }
+            registry.entries.insert(
+                local_transaction_id,
+                NativeCommandScope {
+                    lease,
+                    database_incarnation: self.incarnation.clone(),
+                    mutations_sha256: intent.mutations_sha256().to_string(),
+                    armed: false,
+                },
+            );
+        }
+        let scope = NativeCommandScopeLease {
+            registry: Arc::clone(&self.native_range_command_scopes),
+            transaction_id: local_transaction_id,
+            lease,
+        };
         self.write_native_range_image_record(&pending_key(pending.range_id), &pending)?;
+        // Publish ordinary-row admission only AFTER actual pending durability.
+        scope.arm()?;
         Ok(NativeRangePendingApply {
             database_incarnation: self.incarnation.clone(),
             intent: intent.clone(),
             pending,
+            _scope: scope,
         })
     }
     fn require_native_pending(

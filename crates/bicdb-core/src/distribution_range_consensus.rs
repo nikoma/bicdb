@@ -53,7 +53,7 @@ pub(crate) use image_install_fence::{NativeImageInstallRole, TargetImageInstallF
 use recovery_state::RecoveryFenceRecord;
 pub(crate) use recovery_state::{
     HistoricalRangeCertification, RecoveryFenceScope, RecoveryImageInstallSessionObservation,
-    RecoveryResolvedCatalogObservation,
+    RecoveryLocalHistoricalApplyObservation, RecoveryResolvedCatalogObservation,
 };
 
 mod native_prefix;

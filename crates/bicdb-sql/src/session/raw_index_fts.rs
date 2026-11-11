@@ -1889,7 +1889,24 @@ impl<'db> SqlSession<'db> {
         table: &str,
         records: Vec<Record>,
     ) -> Result<()> {
-        self.insert_session_records_with_blob_mode(table, records, None)
+        self.insert_session_records_with_blob_mode(table, records, None, None)
+    }
+
+    pub(crate) fn insert_session_new_records(
+        &mut self,
+        table: &str,
+        schema: Option<&TableSchema>,
+        records: Vec<Record>,
+    ) -> Result<()> {
+        let live_constraint =
+            if records::postgres_fixed_snapshot(self.db_ref(), self.tx.as_ref())?.is_some() {
+                schema
+                    .filter(|schema| !primary_key_columns_for_schema(schema).is_empty())
+                    .map(TableSchema::primary_key_constraint_name)
+            } else {
+                None
+            };
+        self.insert_session_records_with_blob_mode(table, records, None, live_constraint.as_deref())
     }
 
     pub(crate) fn insert_session_records_for_key_move<'record>(
@@ -1907,7 +1924,7 @@ impl<'db> SqlSession<'db> {
             )?);
             prepared.push(after);
         }
-        self.insert_session_records_with_blob_mode(table, prepared, Some(events))
+        self.insert_session_records_with_blob_mode(table, prepared, Some(events), None)
     }
 
     fn insert_session_records_with_blob_mode(
@@ -1915,6 +1932,7 @@ impl<'db> SqlSession<'db> {
         table: &str,
         mut records: Vec<Record>,
         prepared: Option<Vec<oracle::lobs::WriteEvent>>,
+        live_constraint: Option<&str>,
     ) -> Result<()> {
         let events = match prepared {
             Some(events) => events,
@@ -1933,13 +1951,21 @@ impl<'db> SqlSession<'db> {
             .then(|| self.signed_mutation_grant(table))
             .flatten();
         if let Some(tx) = self.tx.as_mut() {
-            if protected {
-                let grant = signed_grant.ok_or_else(|| {
-                    SqlError::BicDb(BicDbError::Authorization(
-                        "protected SQL writes inside transactions require a signed mutation grant"
-                            .to_string(),
-                    ))
-                })?;
+            if protected && signed_grant.is_none() {
+                return Err(SqlError::BicDb(BicDbError::Authorization(
+                    "protected SQL writes inside transactions require a signed mutation grant"
+                        .to_string(),
+                )));
+            }
+            if let Some(constraint) = live_constraint {
+                let started = Instant::now();
+                tx.insert_using_live_identities(table, constraint, records, signed_grant)?;
+                sql_profile_write_elapsed(started);
+                sql_profile_write_batch(record_count);
+                self.record_blob_writes(events)?;
+                return Ok(());
+            }
+            if let Some(grant) = signed_grant {
                 let started = Instant::now();
                 for record in records {
                     tx.upsert_with_grant(grant, table, record)?;

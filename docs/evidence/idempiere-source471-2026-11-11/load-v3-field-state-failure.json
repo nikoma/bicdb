@@ -1,0 +1,201 @@
+{
+  "profile": "existing_login_and_listbox_preferences_after_retained_native_reproduced_first_use_failures",
+  "prior_failed_runs": [
+    "main471-ui-load-v1",
+    "main471-ui-load-v2"
+  ],
+  "native_comparison": "main471-ui-load-v1/native-preference-race-comparison.json",
+  "fixture_state": "same private fixture after original UI created login and listbox preferences in retained failed first-use runs; no SQL preference seeding",
+  "source": "b0e2498842be7b01e355bb8da1cc249ff16be056",
+  "source_version": "1.0.471-beta",
+  "status": "sessions_finished",
+  "binary_sha256": "e23d7c1a078b7ce6722237f35cfa67a822727d9762c928c808f3ce2767c543c2",
+  "coordinator_receipt": "main471-ui-coordinator.json",
+  "prefix": "BicdbLoad47193223dfb6d3c",
+  "sessions": {
+    "0": {
+      "username": "GardenAdmin",
+      "user_id": 101,
+      "status": "finished",
+      "acks": 100,
+      "desktop": "GardenAdmin@GardenWorld.*/GardenWorld Admin\nFeedback\n\u00a0\nPreference\n\u00a0\nChange Role\n\u00a0\nLog Out\nFavorites\n Sales Order\n\n\n Business Partner\n\n\n Product\nRecent Items\nSales Order: 50300\nSales Order: 50299\nSales Order: 50297\nSales Order: 50296\nSales Order: 5029",
+      "stage": "save",
+      "last_document": "50600"
+    },
+    "1": {
+      "username": "GardenUser",
+      "user_id": 102,
+      "status": "finished",
+      "acks": 100,
+      "desktop": "GardenUser@GardenWorld.Fertilizer/GardenWorld User\nFeedback\n\u00a0\nPreference\n\u00a0\nChange Role\n\u00a0\nLog Out\nFavorites\n Sales Order\nRecent Items\nSales Order: 50298\nSales Order: 50295\nSales Order: 50292\nSales Order: 50290\nSales Order: 50287\nSales Order: 50284\nSal",
+      "stage": "save",
+      "last_document": "50598"
+    },
+    "2": {
+      "username": "GardenAdmin",
+      "user_id": 101,
+      "status": "finished",
+      "acks": 100,
+      "desktop": "GardenAdmin@GardenWorld.*/GardenWorld Admin\nFeedback\n\u00a0\nPreference\n\u00a0\nChange Role\n\u00a0\nLog Out\nFavorites\n Sales Order\n\n\n Business Partner\n\n\n Product\nRecent Items\nSales Order: 50300\nSales Order: 50299\nSales Order: 50297\nSales Order: 50296\nSales Order: 5029",
+      "stage": "save",
+      "last_document": "50599"
+    },
+    "3": {
+      "username": "GardenUser",
+      "user_id": 102,
+      "status": "error",
+      "acks": 0,
+      "desktop": "GardenUser@GardenWorld.Fertilizer/GardenWorld User\nFeedback\n\u00a0\nPreference\n\u00a0\nChange Role\n\u00a0\nLog Out\nFavorites\n Sales Order\nRecent Items\nSales Order: 50298\nSales Order: 50295\nSales Order: 50292\nSales Order: 50290\nSales Order: 50287\nSales Order: 50284\nSal",
+      "stage": "organization",
+      "error": "AssertionError('Locator expected to have Value \\'HQ Warehouse\\'\\nActual value: Fertilizer \\nCall log:\\n  - Expect \"to_have_value\" with timeout 30000ms\\n  - waiting for locator(\"[instancename=\\\\\"C_Order0M_Warehouse_ID\\\\\"] input\").filter(visible=True)\\n    33 \u00d7 locator resolved to <input type=\"text\" id=\"eJpXwx0-real\" autocomplete=\"off\" value=\"HQ Warehouse\" class=\"z-combobox-input\" aria-autocomplete=\"none\" aria-controls=\"eJpXwx0-pp\"/>\\n       - unexpected value \"Fertilizer\"\\n')",
+      "fields": [
+        {
+          "instance": null,
+          "value": ""
+        },
+        {
+          "instance": null,
+          "value": ""
+        },
+        {
+          "instance": "C_Order0AD_Client_ID",
+          "value": "GardenWorld"
+        },
+        {
+          "instance": "C_Order0AD_Org_ID",
+          "value": "Fertilizer"
+        },
+        {
+          "instance": "C_Order0DocumentNo",
+          "value": "<80003>"
+        },
+        {
+          "instance": "C_Order0POReference",
+          "value": ""
+        },
+        {
+          "instance": "C_Order0Description",
+          "value": ""
+        },
+        {
+          "instance": "C_Order0C_DocTypeTarget_ID",
+          "value": "POS Order"
+        },
+        {
+          "instance": "C_Order0IsSelfService",
+          "value": "on"
+        },
+        {
+          "instance": "C_Order0DateOrdered",
+          "value": "11/11/2026"
+        },
+        {
+          "instance": "C_Order0C_BPartner_ID",
+          "value": ""
+        },
+        {
+          "instance": "C_Order0Bill_BPartner_ID",
+          "value": ""
+        },
+        {
+          "instance": "C_Order0C_BPartner_Location_ID",
+          "value": ""
+        },
+        {
+          "instance": "C_Order0Bill_Location_ID",
+          "value": ""
+        },
+        {
+          "instance": "C_Order0AD_User_ID",
+          "value": ""
+        },
+        {
+          "instance": "C_Order0Bill_User_ID",
+          "value": ""
+        },
+        {
+          "instance": "C_Order0M_Warehouse_ID",
+          "value": "Fertilizer"
+        },
+        {
+          "instance": "C_Order0IsDropShip",
+          "value": "on"
+        },
+        {
+          "instance": "C_Order0DeliveryViaRule",
+          "value": "Pickup"
+        },
+        {
+          "instance": "C_Order0M_PriceList_ID",
+          "value": "Standard"
+        },
+        {
+          "instance": "C_Order0C_Currency_ID",
+          "value": "USD"
+        },
+        {
+          "instance": "C_Order0SalesRep_ID",
+          "value": "GardenUser"
+        },
+        {
+          "instance": "C_Order0IsDiscountPrinted",
+          "value": "on"
+        },
+        {
+          "instance": "C_Order0PaymentRule",
+          "value": "Cash"
+        },
+        {
+          "instance": "C_Order0PromotionCode",
+          "value": ""
+        },
+        {
+          "instance": "C_Order0C_Project_ID",
+          "value": ""
+        },
+        {
+          "instance": "C_Order0C_Campaign_ID",
+          "value": ""
+        },
+        {
+          "instance": "C_Order0TotalLines",
+          "value": "0.00"
+        },
+        {
+          "instance": "C_Order0GrandTotal",
+          "value": "0.00"
+        },
+        {
+          "instance": "C_Order0DocStatus",
+          "value": "Drafted"
+        },
+        {
+          "instance": "C_Order0C_DocType_ID",
+          "value": "** New **"
+        },
+        {
+          "instance": "C_Order0IsPayScheduleValid",
+          "value": "on"
+        },
+        {
+          "instance": "C_Order0C_OrderSource_ID",
+          "value": ""
+        },
+        {
+          "instance": "C_Order0C_CashPlanLine_ID",
+          "value": ""
+        },
+        {
+          "instance": null,
+          "value": "on"
+        }
+      ],
+      "body": "GardenUser@GardenWorld.Fertilizer/GardenWorld User\nFeedback\n\u00a0\nPreference\n\u00a0\nChange Role\n\u00a0\nLog Out\nFavorites\n Sales Order\nRecent Items\nSales Order: 50321\nSales Order: 50317\nSales Order: 50314\nSales Order: 50311\nSales Order: 50307\nSales Order: 50304\nSales Order: 50301\nSales Order: 50298\nSales Order: 50295\nSales Order: 50292\nTool Tip\n\nDocument No\n\nDocument sequence number of the document\n\nThe document number is usually automatically generated by the system and determined by the document type of the document. If the document is not saved, the preliminary number is displayed in \"<>\".\n\nIf the document type of your document has no automatic document sequence defined, the field is empty if you create a new document. This is for documents which usually have an external number (like vendor invoice). If you leave the field empty, the system will generate a document number for you. The document sequence used for this fallback number is defined in the \"Maintain Sequence\" window with the name \"DocumentNo_\", where TableName is the actual name of the table (e.g. C_Order).\n\nHow To\n\nOrder\n\nOrder Header\n\nThe Order Header Tab defines the parameters of an Order. Changing the Organization, Business Partner, Warehouse, Date Promised, etc. changes these values on all the lines.\n\nHome (100)\n *Sales Order: <80003>\n\u00a01\n\u00a0\nOrder\n+*2/302\nInserted\u00a0\nTenant*\n\t\t\nOrganization*\n\t\n\t\u00a0\n\nDocument No\n\t\t\nOrder Reference\n\t\t\u00a0\n\nDescription\n\t\t\u00a0\n\nTarget Document Type*\n\t\n\t\u00a0\tSelf-Service\t\u00a0\n\nDate Ordered*\n\t\n\t\n\t\t\u00a0\n\nBusiness Partner*\n\t\n\t\nInvoice Partner\n\t\n\t\u00a0\n\nPartner Location*\n\t\n\t\nInvoice Location\n\t\n\t\u00a0\n\nUser/Contact\n\t\n\t\nInvoice Contact\n\t\n\t\u00a0\n\nDelivery\n\n\nWarehouse*\n\t\n\t\u00a0\tDrop Shipment\t\u00a0\n\nDelivery Via*\n\t\n\t\n\t\t\u00a0\n\nInvoicing\n\n\nPrice List*\n\t\n\t\nCurrency*\n\t\t\u00a0\n\nSales Representative*\n\t\n\t\u00a0\tDiscount Printed\t\u00a0\n\nPayment Rule*\n\t\n\t\n\t\t\u00a0\n\nPromotion Code\n\t\t\u00a0\n\nReference\n\n\nProject\n\t\n\t\n\t\t\u00a0\n\nCampaign\n\t\n\t\n\t\t\u00a0\n\nStatus\n\n\nTotal Lines*\n\t\n\t\nGrand Total*\n\t\n\t\u00a0\n\nDocument Status*\n\t\t\nDocument Type*\n\t\t\u00a0\n\u00a0\tPay Schedule valid\t\u00a0\t\nDocument Action\t\u00a0\n\nOrder Source\n\t\n\t\u00a0\t\t\u00a0\n\nCash Plan Line\n\t\n\t\u00a0\n\nOrder Line\nOrder Tax\nPayment Schedule\n\u00a0\n0 Records\n\u00a0\n\t\n\u00a0\n\t\nOrganization\n\t\nOrder\n\t\nBusiness Partner\n\t\nPartner Location\n\t\nDate Promised\n\t\nDate Ordered\n\t\nLine No\n\t\nWarehouse\n\t\nProduct\n\t\nCharge\n\t\nAttribute Set Instance\n\t\nResource Assignment\n\t\nDescription\n\t\nQuantity\n\t\nUOM\n\t\nOrdered Quantity\n\t\nDelivered Quantity\n\t\nReserved Quantity\n\t\nQuantity Invoiced\n\t\nShipper\n\t\nPrice\n\t\nUnit Price\n\t\nList Price\n\t\nFreight Amount\n\t\nTax\n\t\nDiscount %\n\t\nProject\n\t\nActivity\n\t\nCampaign\n\t\nTrx Organization\n\t\nUser Element List 1\n\t\nUser Element List 2\n\t\nLine Amount\n\t\nLost Sales Qty\n\t\nProcessed\n\t\nDepartment\n\t\nCost Center\n\t\nNo Records found"
+    }
+  },
+  "started_unix": 1794428563.75618,
+  "process_crash_qualified": false,
+  "physical_power_loss": false,
+  "tunnel_pid": 1131363,
+  "finished_unix": 1794428975.676894
+}

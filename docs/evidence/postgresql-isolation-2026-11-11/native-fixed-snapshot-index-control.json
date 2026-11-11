@@ -1,0 +1,495 @@
+{
+  "status": "passed",
+  "started_unix": 1794418866.6428308,
+  "protected_application_schema_mutated": false,
+  "cases": [
+    {
+      "isolation": "REPEATABLE READ",
+      "query": "SELECT id FROM history WHERE k=10",
+      "expected": [
+        1
+      ],
+      "observed": [
+        1
+      ],
+      "plan": [
+        "Bitmap Heap Scan on history",
+        "  Recheck Cond: (k = 10)",
+        "  ->  Bitmap Index Scan on history_k",
+        "        Index Cond: (k = 10)"
+      ]
+    },
+    {
+      "isolation": "REPEATABLE READ",
+      "query": "SELECT id FROM history WHERE k>=10 AND k<=20 ORDER BY id",
+      "expected": [
+        1,
+        2
+      ],
+      "observed": [
+        1,
+        2
+      ],
+      "plan": [
+        "Sort",
+        "  Sort Key: id",
+        "  ->  Bitmap Heap Scan on history",
+        "        Recheck Cond: ((k >= 10) AND (k <= 20))",
+        "        ->  Bitmap Index Scan on history_k",
+        "              Index Cond: ((k >= 10) AND (k <= 20))"
+      ]
+    },
+    {
+      "isolation": "REPEATABLE READ",
+      "query": "SELECT id FROM history WHERE k>=0 ORDER BY k LIMIT 1",
+      "expected": [
+        1
+      ],
+      "observed": [
+        1
+      ],
+      "plan": [
+        "Limit",
+        "  ->  Index Scan using history_k on history",
+        "        Index Cond: (k >= 0)"
+      ]
+    },
+    {
+      "isolation": "REPEATABLE READ",
+      "query": "SELECT min(k) FROM history",
+      "expected": [
+        10
+      ],
+      "observed": [
+        10
+      ],
+      "plan": [
+        "Result",
+        "  InitPlan 1 (returns $0)",
+        "    ->  Limit",
+        "          ->  Index Only Scan using history_k on history",
+        "                Index Cond: (k IS NOT NULL)"
+      ]
+    },
+    {
+      "isolation": "REPEATABLE READ",
+      "query": "SELECT max(k) FROM history",
+      "expected": [
+        20
+      ],
+      "observed": [
+        20
+      ],
+      "plan": [
+        "Result",
+        "  InitPlan 1 (returns $0)",
+        "    ->  Limit",
+        "          ->  Index Only Scan Backward using history_k on history",
+        "                Index Cond: (k IS NOT NULL)"
+      ]
+    },
+    {
+      "isolation": "REPEATABLE READ",
+      "query": "SELECT id FROM history WHERE body @> '{\"status\":\"open\"}'::jsonb",
+      "expected": [
+        1
+      ],
+      "observed": [
+        1
+      ],
+      "plan": [
+        "Bitmap Heap Scan on history",
+        "  Recheck Cond: (body @> '{\"status\": \"open\"}'::jsonb)",
+        "  ->  Bitmap Index Scan on history_body",
+        "        Index Cond: (body @> '{\"status\": \"open\"}'::jsonb)"
+      ]
+    },
+    {
+      "isolation": "REPEATABLE READ",
+      "query": "SELECT id FROM history WHERE id>=0 ORDER BY id",
+      "expected": [
+        1,
+        2
+      ],
+      "observed": [
+        1,
+        2
+      ],
+      "plan": [
+        "Sort",
+        "  Sort Key: id",
+        "  ->  Bitmap Heap Scan on history",
+        "        Recheck Cond: (id >= 0)",
+        "        ->  Bitmap Index Scan on history_pkey",
+        "              Index Cond: (id >= 0)"
+      ]
+    },
+    {
+      "isolation": "REPEATABLE READ READ ONLY",
+      "query": "SELECT id FROM history WHERE k=10",
+      "expected": [
+        1
+      ],
+      "observed": [
+        1
+      ],
+      "plan": [
+        "Bitmap Heap Scan on history",
+        "  Recheck Cond: (k = 10)",
+        "  ->  Bitmap Index Scan on history_k",
+        "        Index Cond: (k = 10)"
+      ]
+    },
+    {
+      "isolation": "REPEATABLE READ READ ONLY",
+      "query": "SELECT id FROM history WHERE k>=10 AND k<=20 ORDER BY id",
+      "expected": [
+        1,
+        2
+      ],
+      "observed": [
+        1,
+        2
+      ],
+      "plan": [
+        "Sort",
+        "  Sort Key: id",
+        "  ->  Bitmap Heap Scan on history",
+        "        Recheck Cond: ((k >= 10) AND (k <= 20))",
+        "        ->  Bitmap Index Scan on history_k",
+        "              Index Cond: ((k >= 10) AND (k <= 20))"
+      ]
+    },
+    {
+      "isolation": "REPEATABLE READ READ ONLY",
+      "query": "SELECT id FROM history WHERE k>=0 ORDER BY k LIMIT 1",
+      "expected": [
+        1
+      ],
+      "observed": [
+        1
+      ],
+      "plan": [
+        "Limit",
+        "  ->  Index Scan using history_k on history",
+        "        Index Cond: (k >= 0)"
+      ]
+    },
+    {
+      "isolation": "REPEATABLE READ READ ONLY",
+      "query": "SELECT min(k) FROM history",
+      "expected": [
+        10
+      ],
+      "observed": [
+        10
+      ],
+      "plan": [
+        "Result",
+        "  InitPlan 1 (returns $0)",
+        "    ->  Limit",
+        "          ->  Index Only Scan using history_k on history",
+        "                Index Cond: (k IS NOT NULL)"
+      ]
+    },
+    {
+      "isolation": "REPEATABLE READ READ ONLY",
+      "query": "SELECT max(k) FROM history",
+      "expected": [
+        20
+      ],
+      "observed": [
+        20
+      ],
+      "plan": [
+        "Result",
+        "  InitPlan 1 (returns $0)",
+        "    ->  Limit",
+        "          ->  Index Only Scan Backward using history_k on history",
+        "                Index Cond: (k IS NOT NULL)"
+      ]
+    },
+    {
+      "isolation": "REPEATABLE READ READ ONLY",
+      "query": "SELECT id FROM history WHERE body @> '{\"status\":\"open\"}'::jsonb",
+      "expected": [
+        1
+      ],
+      "observed": [
+        1
+      ],
+      "plan": [
+        "Bitmap Heap Scan on history",
+        "  Recheck Cond: (body @> '{\"status\": \"open\"}'::jsonb)",
+        "  ->  Bitmap Index Scan on history_body",
+        "        Index Cond: (body @> '{\"status\": \"open\"}'::jsonb)"
+      ]
+    },
+    {
+      "isolation": "REPEATABLE READ READ ONLY",
+      "query": "SELECT id FROM history WHERE id>=0 ORDER BY id",
+      "expected": [
+        1,
+        2
+      ],
+      "observed": [
+        1,
+        2
+      ],
+      "plan": [
+        "Sort",
+        "  Sort Key: id",
+        "  ->  Bitmap Heap Scan on history",
+        "        Recheck Cond: (id >= 0)",
+        "        ->  Bitmap Index Scan on history_pkey",
+        "              Index Cond: (id >= 0)"
+      ]
+    },
+    {
+      "isolation": "SERIALIZABLE",
+      "query": "SELECT id FROM history WHERE k=10",
+      "expected": [
+        1
+      ],
+      "observed": [
+        1
+      ],
+      "plan": [
+        "Bitmap Heap Scan on history",
+        "  Recheck Cond: (k = 10)",
+        "  ->  Bitmap Index Scan on history_k",
+        "        Index Cond: (k = 10)"
+      ]
+    },
+    {
+      "isolation": "SERIALIZABLE",
+      "query": "SELECT id FROM history WHERE k>=10 AND k<=20 ORDER BY id",
+      "expected": [
+        1,
+        2
+      ],
+      "observed": [
+        1,
+        2
+      ],
+      "plan": [
+        "Sort",
+        "  Sort Key: id",
+        "  ->  Bitmap Heap Scan on history",
+        "        Recheck Cond: ((k >= 10) AND (k <= 20))",
+        "        ->  Bitmap Index Scan on history_k",
+        "              Index Cond: ((k >= 10) AND (k <= 20))"
+      ]
+    },
+    {
+      "isolation": "SERIALIZABLE",
+      "query": "SELECT id FROM history WHERE k>=0 ORDER BY k LIMIT 1",
+      "expected": [
+        1
+      ],
+      "observed": [
+        1
+      ],
+      "plan": [
+        "Limit",
+        "  ->  Index Scan using history_k on history",
+        "        Index Cond: (k >= 0)"
+      ]
+    },
+    {
+      "isolation": "SERIALIZABLE",
+      "query": "SELECT min(k) FROM history",
+      "expected": [
+        10
+      ],
+      "observed": [
+        10
+      ],
+      "plan": [
+        "Result",
+        "  InitPlan 1 (returns $0)",
+        "    ->  Limit",
+        "          ->  Index Only Scan using history_k on history",
+        "                Index Cond: (k IS NOT NULL)"
+      ]
+    },
+    {
+      "isolation": "SERIALIZABLE",
+      "query": "SELECT max(k) FROM history",
+      "expected": [
+        20
+      ],
+      "observed": [
+        20
+      ],
+      "plan": [
+        "Result",
+        "  InitPlan 1 (returns $0)",
+        "    ->  Limit",
+        "          ->  Index Only Scan Backward using history_k on history",
+        "                Index Cond: (k IS NOT NULL)"
+      ]
+    },
+    {
+      "isolation": "SERIALIZABLE",
+      "query": "SELECT id FROM history WHERE body @> '{\"status\":\"open\"}'::jsonb",
+      "expected": [
+        1
+      ],
+      "observed": [
+        1
+      ],
+      "plan": [
+        "Bitmap Heap Scan on history",
+        "  Recheck Cond: (body @> '{\"status\": \"open\"}'::jsonb)",
+        "  ->  Bitmap Index Scan on history_body",
+        "        Index Cond: (body @> '{\"status\": \"open\"}'::jsonb)"
+      ]
+    },
+    {
+      "isolation": "SERIALIZABLE",
+      "query": "SELECT id FROM history WHERE id>=0 ORDER BY id",
+      "expected": [
+        1,
+        2
+      ],
+      "observed": [
+        1,
+        2
+      ],
+      "plan": [
+        "Sort",
+        "  Sort Key: id",
+        "  ->  Bitmap Heap Scan on history",
+        "        Recheck Cond: (id >= 0)",
+        "        ->  Bitmap Index Scan on history_pkey",
+        "              Index Cond: (id >= 0)"
+      ]
+    },
+    {
+      "isolation": "SERIALIZABLE READ ONLY",
+      "query": "SELECT id FROM history WHERE k=10",
+      "expected": [
+        1
+      ],
+      "observed": [
+        1
+      ],
+      "plan": [
+        "Bitmap Heap Scan on history",
+        "  Recheck Cond: (k = 10)",
+        "  ->  Bitmap Index Scan on history_k",
+        "        Index Cond: (k = 10)"
+      ]
+    },
+    {
+      "isolation": "SERIALIZABLE READ ONLY",
+      "query": "SELECT id FROM history WHERE k>=10 AND k<=20 ORDER BY id",
+      "expected": [
+        1,
+        2
+      ],
+      "observed": [
+        1,
+        2
+      ],
+      "plan": [
+        "Sort",
+        "  Sort Key: id",
+        "  ->  Bitmap Heap Scan on history",
+        "        Recheck Cond: ((k >= 10) AND (k <= 20))",
+        "        ->  Bitmap Index Scan on history_k",
+        "              Index Cond: ((k >= 10) AND (k <= 20))"
+      ]
+    },
+    {
+      "isolation": "SERIALIZABLE READ ONLY",
+      "query": "SELECT id FROM history WHERE k>=0 ORDER BY k LIMIT 1",
+      "expected": [
+        1
+      ],
+      "observed": [
+        1
+      ],
+      "plan": [
+        "Limit",
+        "  ->  Index Scan using history_k on history",
+        "        Index Cond: (k >= 0)"
+      ]
+    },
+    {
+      "isolation": "SERIALIZABLE READ ONLY",
+      "query": "SELECT min(k) FROM history",
+      "expected": [
+        10
+      ],
+      "observed": [
+        10
+      ],
+      "plan": [
+        "Result",
+        "  InitPlan 1 (returns $0)",
+        "    ->  Limit",
+        "          ->  Index Only Scan using history_k on history",
+        "                Index Cond: (k IS NOT NULL)"
+      ]
+    },
+    {
+      "isolation": "SERIALIZABLE READ ONLY",
+      "query": "SELECT max(k) FROM history",
+      "expected": [
+        20
+      ],
+      "observed": [
+        20
+      ],
+      "plan": [
+        "Result",
+        "  InitPlan 1 (returns $0)",
+        "    ->  Limit",
+        "          ->  Index Only Scan Backward using history_k on history",
+        "                Index Cond: (k IS NOT NULL)"
+      ]
+    },
+    {
+      "isolation": "SERIALIZABLE READ ONLY",
+      "query": "SELECT id FROM history WHERE body @> '{\"status\":\"open\"}'::jsonb",
+      "expected": [
+        1
+      ],
+      "observed": [
+        1
+      ],
+      "plan": [
+        "Bitmap Heap Scan on history",
+        "  Recheck Cond: (body @> '{\"status\": \"open\"}'::jsonb)",
+        "  ->  Bitmap Index Scan on history_body",
+        "        Index Cond: (body @> '{\"status\": \"open\"}'::jsonb)"
+      ]
+    },
+    {
+      "isolation": "SERIALIZABLE READ ONLY",
+      "query": "SELECT id FROM history WHERE id>=0 ORDER BY id",
+      "expected": [
+        1,
+        2
+      ],
+      "observed": [
+        1,
+        2
+      ],
+      "plan": [
+        "Sort",
+        "  Sort Key: id",
+        "  ->  Bitmap Heap Scan on history",
+        "        Recheck Cond: (id >= 0)",
+        "        ->  Bitmap Index Scan on history_pkey",
+        "              Index Cond: (id >= 0)"
+      ]
+    }
+  ],
+  "server_version": "16.13 (Debian 16.13-1.pgdg13+1)",
+  "fsync": "on",
+  "temporary_schema_removed": true,
+  "finished_unix": 1794418866.9090178
+}

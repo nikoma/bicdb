@@ -1,0 +1,35 @@
+{
+  "server_version": "16.13 (Debian 16.13-1.pgdg13+1)",
+  "results": [
+    {
+      "case": "updated primary conflict / ignore",
+      "sqlstate": "40001"
+    },
+    {
+      "case": "updated primary conflict / false update predicate",
+      "sqlstate": "40001"
+    },
+    {
+      "case": "deleted primary conflict / ignore",
+      "sqlstate": "00000",
+      "rows_affected": 1
+    },
+    {
+      "case": "deleted primary conflict / insert",
+      "sqlstate": "00000",
+      "rows_affected": 1
+    },
+    {
+      "case": "new secondary conflict / untargeted ignore",
+      "sqlstate": "40001"
+    },
+    {
+      "case": "new secondary conflict / targeted primary ignore",
+      "sqlstate": "23505"
+    },
+    {
+      "case": "new secondary conflict / targeted secondary update",
+      "sqlstate": "40001"
+    }
+  ]
+}

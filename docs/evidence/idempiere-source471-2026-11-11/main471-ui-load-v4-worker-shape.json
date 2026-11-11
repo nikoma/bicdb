@@ -1,0 +1,9 @@
+{
+  "original_business_worker_ast_equal_after_removing_only_added_frontend_idle_waits": true,
+  "original_worker_sha256": "5c4fdf9eb21985e6949c1e66bf6ea9781746068f4b31c2c626e1b4aa12c06abe",
+  "source": "source = 'b0e2498842be7b01e355bb8da1cc249ff16be056'",
+  "installed_frontend_implementation": "zk_10.3.0.1.jar web/js/zk/index.js: zAu.processing returns zk.mounting || queued commands || ajaxReq || pendingReqInf; zk.processing tracked by framework",
+  "original_30s_field_assertions_and_upstream_10s_waits_unchanged": true,
+  "old_script_sha256": "cc461a7149027ff553a75b8435029bc728c0ef8a7e631dc6ef39c6408803b07e",
+  "new_script_sha256": "5c2baa1aff056cc6499e0422301e7949d86de1673bfabb2226472ca8d1efb6ee"
+}

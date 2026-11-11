@@ -580,7 +580,12 @@ impl<'db> SqlSession<'db> {
         target_alias: &str,
         schema: Option<&TableSchema>,
     ) -> Result<Option<Vec<RepairableAssignment>>> {
-        if !self.update_repair_enabled() || self.tx.is_none() {
+        if !self.update_repair_enabled()
+            || !self
+                .tx
+                .as_ref()
+                .is_some_and(|tx| tx.isolation() == bicdb_core::TransactionIsolation::ReadCommitted)
+        {
             return Ok(None);
         }
         let Some(schema) = schema else {

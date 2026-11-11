@@ -57,6 +57,9 @@ pub fn is_postgres_rule_command(sql: &str) -> Result<bool> {
 }
 
 fn parse_inference_statements(db: &BicDb, sql: &str) -> Result<Vec<Statement>> {
+    if let Some((stripped, _)) = postgres_transaction_deferrability(sql)? {
+        return parse_statements(&stripped);
+    }
     if is_constraint_timing_command(sql)? || is_postgres_rule_command(sql)? {
         return Ok(Vec::new());
     }

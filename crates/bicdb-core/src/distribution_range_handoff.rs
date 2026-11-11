@@ -165,11 +165,73 @@ impl HandoffPromiseAck {
     }
 }
 
+/// Neither variant is deserializable or convertible into the other. Remote
+/// metadata remains a transport-verified observation, never local authority.
+/// Its finite budget is not a leadership lease. Promotion/activation still
+/// requires independent fresh revalidation and native source lineage.
+#[derive(Debug)]
+enum HandoffMetadataProof {
+    Local(crate::distribution_consensus::MetadataReadAuthority),
+    Transport {
+        observation: crate::distribution_consensus::MetadataReadObservation,
+        business_request_id: Uuid,
+    },
+}
+
+impl HandoffMetadataProof {
+    fn require_live(&self) -> Result<()> {
+        match self {
+            Self::Local(authority) if authority.is_current_budget() => Ok(()),
+            Self::Local(_) => Err(BicDbError::Cluster(
+                "handoff metadata authority budget expired".into(),
+            )),
+            Self::Transport {
+                observation,
+                business_request_id,
+            } => observation.require_live_request(*business_request_id),
+        }
+    }
+    fn topology(&self) -> Result<&crate::distribution::ClusterTopology> {
+        self.require_live()?;
+        match self {
+            Self::Local(authority) => Ok(authority.topology()),
+            Self::Transport {
+                observation,
+                business_request_id,
+            } => observation.committed_topology(*business_request_id),
+        }
+    }
+    fn restore_activation(
+        &self,
+    ) -> Result<Option<&crate::distribution_consensus::MetadataRestoreActivation>> {
+        self.require_live()?;
+        match self {
+            Self::Local(authority) => Ok(authority.restore_activation()),
+            Self::Transport {
+                observation,
+                business_request_id,
+            } => observation.restore_activation(*business_request_id),
+        }
+    }
+    fn require_range_scope(&self, range: &RangeDescriptor) -> Result<()> {
+        self.require_live()?;
+        if let Self::Transport { observation, .. } = self {
+            let request = observation.request();
+            if request.range_id != range.id || request.range_epoch != range.epoch {
+                return Err(BicDbError::Cluster(
+                    "handoff observation belongs to another range or epoch".into(),
+                ));
+            }
+        }
+        Ok(())
+    }
+}
+
 /// Bounded one-shot collection of actual old-data-voter promises. A metadata
 /// quorum cannot substitute for this separate data quorum.
 #[derive(Debug)]
 pub(crate) struct HandoffCutRound {
-    authority: crate::distribution_consensus::MetadataReadAuthority,
+    authority: HandoffMetadataProof,
     request: RangeHandoffPromise,
     range: RangeDescriptor,
     old_voters: std::collections::BTreeMap<ClusterNodeId, u64>,
@@ -181,14 +243,33 @@ impl HandoffCutRound {
         authority: crate::distribution_consensus::MetadataReadAuthority,
         relocation_id: RelocationId,
     ) -> Result<Self> {
+        Self::begin_with_proof(HandoffMetadataProof::Local(authority), relocation_id)
+    }
+
+    /// Consume the actual transport observation for this business request.
+    /// A decoded DTO cannot enter this path or mint a local authority.
+    pub(crate) fn begin_from_observation(
+        observation: crate::distribution_consensus::MetadataReadObservation,
+        business_request_id: Uuid,
+        relocation_id: RelocationId,
+    ) -> Result<Self> {
+        Self::begin_with_proof(
+            HandoffMetadataProof::Transport {
+                observation,
+                business_request_id,
+            },
+            relocation_id,
+        )
+    }
+
+    fn begin_with_proof(
+        authority: HandoffMetadataProof,
+        relocation_id: RelocationId,
+    ) -> Result<Self> {
         use crate::distribution::{RangeReplicaRole, RelocationPhase};
         use sha2::{Digest, Sha256};
-        if !authority.is_current_budget() {
-            return Err(BicDbError::Cluster(
-                "handoff metadata authority budget expired".into(),
-            ));
-        }
-        let topology = authority.topology();
+        let topology = authority.topology()?;
+        let restore_activation = authority.restore_activation()?;
         let relocation = topology
             .relocations
             .get(&relocation_id)
@@ -209,6 +290,7 @@ impl HandoffCutRound {
                 "handoff requires the exact committed pre-promotion plan".into(),
             ));
         }
+        authority.require_range_scope(&range)?;
         let activation_epoch = range
             .epoch
             .checked_add(2)
@@ -285,6 +367,9 @@ impl HandoffCutRound {
                 descriptor.epoch,
                 &descriptor.leader,
                 voters,
+                // A reused session cannot silently cross restore activation
+                // lineage. This remains metadata binding, not source-image proof.
+                restore_activation,
             ))?)))
         };
         let session = relocation.handoff_session.as_ref().ok_or_else(|| {
@@ -303,6 +388,7 @@ impl HandoffCutRound {
             resolved_through: 0,
         };
         request.validate()?;
+        authority.require_live()?;
         Ok(Self {
             authority,
             request,
@@ -317,14 +403,10 @@ impl HandoffCutRound {
     }
 
     pub(crate) fn record(&mut self, ack: HandoffPromiseAck) -> Result<()> {
-        if !self.authority.is_current_budget() {
-            return Err(BicDbError::Cluster(
-                "handoff metadata authority budget expired".into(),
-            ));
-        }
+        self.authority.require_live()?;
         let peer = self
             .authority
-            .topology()
+            .topology()?
             .nodes
             .get(&ack.node_id)
             .ok_or_else(|| {
@@ -355,16 +437,13 @@ impl HandoffCutRound {
                 ));
             }
         }
+        self.authority.require_live()?;
         self.acknowledgements.insert(ack.node_id.clone(), ack);
         Ok(())
     }
 
     pub(crate) fn finish(self) -> Result<CertifiedRangeImageCut> {
-        if !self.authority.is_current_budget() {
-            return Err(BicDbError::Cluster(
-                "handoff metadata authority budget expired".into(),
-            ));
-        }
+        self.authority.require_live()?;
         if self.acknowledgements.len() < self.old_voters.len() / 2 + 1 {
             return Err(BicDbError::Cluster(
                 "handoff has no durable old data majority".into(),
@@ -385,9 +464,10 @@ impl HandoffCutRound {
                 )
             })
             .expect("nonempty promised majority");
-        let topology = self.authority.topology();
+        let topology = self.authority.topology()?;
         let relocation = &topology.relocations[&self.request.relocation_id];
         let target = &topology.nodes[&relocation.target];
+        self.authority.require_live()?;
         Ok(CertifiedRangeImageCut {
             promise: self.request,
             cluster_id: topology.cluster_id.clone(),
@@ -414,10 +494,14 @@ mod tests {
     use std::time::Duration;
 
     fn topology() -> ClusterTopology {
+        topology_with_ranges(1)
+    }
+
+    fn topology_with_ranges(initial_ranges: u32) -> ClusterTopology {
         let root = tempfile::tempdir().unwrap();
         let cfg = DistributionConfig {
             enabled: true,
-            initial_ranges: 1,
+            initial_ranges,
             replication_factor: 1,
             cluster_id: ClusterId::new("handoff-round-test").unwrap(),
             node_id: ClusterNodeId::new("n1").unwrap(),
@@ -477,6 +561,15 @@ mod tests {
     }
 
     fn authority(root: &Path, topology: &ClusterTopology) -> MetadataReadAuthority {
+        authority_with_restore(root, topology, None, Duration::from_secs(10))
+    }
+
+    fn authority_with_restore(
+        root: &Path,
+        topology: &ClusterTopology,
+        activation: Option<crate::MetadataRestoreActivation>,
+        budget: Duration,
+    ) -> MetadataReadAuthority {
         let mut stores: Vec<_> = (1..=3)
             .map(|n| {
                 MetadataConsensusStore::open(
@@ -506,6 +599,17 @@ mod tests {
                 .record_append_response(&ClusterNodeId::new(format!("n{n}")).unwrap(), &reply)
                 .unwrap();
         }
+        if let Some(activation) = activation {
+            leader.propose_restore_activation(activation).unwrap();
+            for (n, follower) in (2..=3).zip(&mut stores) {
+                let reply = follower
+                    .handle_append_request(leader.append_request_from(1, 64).unwrap())
+                    .unwrap();
+                leader
+                    .record_append_response(&ClusterNodeId::new(format!("n{n}")).unwrap(), &reply)
+                    .unwrap();
+            }
+        }
         let participant = |name: &str| {
             let id = ClusterNodeId::new(name).unwrap();
             let node = &topology.nodes[&id];
@@ -517,7 +621,7 @@ mod tests {
             )
         };
         let mut context = leader
-            .begin_read_authority(Uuid::new_v4(), Duration::from_secs(10), &participant("n1"))
+            .begin_read_authority(Uuid::new_v4(), budget, &participant("n1"))
             .unwrap();
         for (n, follower) in (2..=3).zip(&mut stores) {
             let id = ClusterNodeId::new(format!("n{n}")).unwrap();
@@ -531,6 +635,126 @@ mod tests {
                 .unwrap();
         }
         leader.finish_read_authority(context).unwrap()
+    }
+
+    fn activation(topology: &ClusterTopology) -> crate::MetadataRestoreActivation {
+        crate::MetadataRestoreActivation {
+            format_version: crate::METADATA_RESTORE_ACTIVATION_FORMAT_VERSION,
+            activation_id: Uuid::now_v7(),
+            cluster_id: topology.cluster_id.clone(),
+            certificate_id: Uuid::now_v7(),
+            certificate_checksum_sha256: "a".repeat(64),
+            admission_id: Uuid::now_v7(),
+            admission_checksum_sha256: "b".repeat(64),
+            plan_id: Uuid::now_v7(),
+            topology_generation: topology.generation,
+            topology_sha256: crate::distribution_supervisor::ClusterBackupMetadata::capture(
+                topology,
+            )
+            .unwrap()
+            .topology_sha256,
+            acknowledged_nodes: 3,
+            node_ack_set_sha256: "c".repeat(64),
+            activated_at_ms: 10_000,
+        }
+    }
+
+    #[test]
+    fn handoff_configuration_identity_binds_restore_activation_lineage() {
+        let topology = topology();
+        let root = tempfile::tempdir().unwrap();
+        let id = *topology.relocations.keys().next().unwrap();
+        let first = activation(&topology);
+        let mut second = first.clone();
+        second.activation_id = Uuid::now_v7();
+        let one = HandoffCutRound::begin(
+            authority_with_restore(
+                &root.path().join("one"),
+                &topology,
+                Some(first),
+                Duration::from_secs(1),
+            ),
+            id,
+        )
+        .unwrap();
+        let two = HandoffCutRound::begin(
+            authority_with_restore(
+                &root.path().join("two"),
+                &topology,
+                Some(second),
+                Duration::from_secs(1),
+            ),
+            id,
+        )
+        .unwrap();
+        assert_eq!(one.request().session_id, two.request().session_id);
+        assert_ne!(
+            one.request().old_config_sha256,
+            two.request().old_config_sha256
+        );
+        assert_ne!(
+            one.request().new_config_sha256,
+            two.request().new_config_sha256
+        );
+        assert!(!one.request().same_request(two.request()));
+    }
+
+    #[test]
+    fn handoff_local_metadata_deadline_cannot_be_renewed_at_begin_record_or_finish() {
+        let topology = topology();
+        let root = tempfile::tempdir().unwrap();
+        let id = *topology.relocations.keys().next().unwrap();
+        for stage in 0..3 {
+            let authority = authority_with_restore(
+                &root.path().join(format!("stage-{stage}")),
+                &topology,
+                None,
+                Duration::from_millis(500),
+            );
+            let deadline = authority.deadline();
+            if stage == 0 {
+                std::thread::sleep(
+                    deadline.saturating_duration_since(std::time::Instant::now())
+                        + Duration::from_millis(1),
+                );
+                assert!(HandoffCutRound::begin(authority, id).is_err());
+                continue;
+            }
+            let mut round = HandoffCutRound::begin(authority, id).unwrap();
+            let make_ack = |request: &RangeHandoffPromise| {
+                HandoffPromiseAck::from_transport(
+                    request,
+                    &topology.nodes[&ClusterNodeId::new("n1").unwrap()],
+                    None,
+                    true,
+                    request.clone(),
+                )
+                .unwrap()
+            };
+            let ack = make_ack(round.request());
+            if stage == 2 {
+                round.record(ack).unwrap();
+                let peer = &topology.nodes[&ClusterNodeId::new("n2").unwrap()];
+                let second = HandoffPromiseAck::from_transport(
+                    round.request(),
+                    peer,
+                    peer.tls_certificate_sha256.as_deref(),
+                    false,
+                    round.request().clone(),
+                )
+                .unwrap();
+                round.record(second).unwrap();
+            }
+            std::thread::sleep(
+                deadline.saturating_duration_since(std::time::Instant::now())
+                    + Duration::from_millis(1),
+            );
+            if stage == 1 {
+                assert!(round.record(make_ack(round.request())).is_err());
+            } else {
+                assert!(round.finish().is_err());
+            }
+        }
     }
 
     #[test]
@@ -617,5 +841,349 @@ mod tests {
             round.finish().is_err(),
             "two valid pins for one member are still only one data voter"
         );
+    }
+    #[cfg(feature = "tls-replication")]
+    mod remote {
+        use super::*;
+        use crate::{
+            start_cluster_data_server_with_metadata_read_provider, BicDb, CancellationToken,
+            ClusterDataNodeService, ClusterDataServerHandle, ClusterNetworkTransportConfig,
+            DbConfig, MetadataReadObservation, MetadataReadProvider, ReplicationTlsConfig,
+            TcpClusterRelocationTransport,
+        };
+        use parking_lot::{Mutex, RwLock};
+        use rcgen::{
+            BasicConstraints, CertificateParams, ExtendedKeyUsagePurpose, IsCa, KeyPair,
+            KeyUsagePurpose,
+        };
+        use std::collections::BTreeMap;
+        use std::net::TcpListener;
+        use std::path::PathBuf;
+        use std::sync::Arc;
+        use std::time::Instant;
+
+        fn node(name: &str) -> ClusterNodeId {
+            ClusterNodeId::new(name).unwrap()
+        }
+        struct Identity {
+            cert: PathBuf,
+            key: PathBuf,
+            ca: PathBuf,
+        }
+        impl Identity {
+            fn tls(&self) -> ReplicationTlsConfig {
+                ReplicationTlsConfig {
+                    cert_path: self.cert.clone(),
+                    key_path: self.key.clone(),
+                    ca_path: self.ca.clone(),
+                    require_client_cert: true,
+                    dev_localhost_plaintext: false,
+                }
+            }
+            fn pin(&self) -> String {
+                crate::replication_transport::replication_certificate_sha256(&self.cert).unwrap()
+            }
+        }
+        fn identities(root: &Path) -> BTreeMap<ClusterNodeId, Identity> {
+            let key = KeyPair::generate().unwrap();
+            let mut params = CertificateParams::default();
+            params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
+            params.key_usages = vec![
+                KeyUsagePurpose::KeyCertSign,
+                KeyUsagePurpose::DigitalSignature,
+            ];
+            let ca = params.self_signed(&key).unwrap();
+            let ca_path = root.join("ca.pem");
+            std::fs::write(&ca_path, ca.pem()).unwrap();
+            ["n1", "n2", "n3", "n4"]
+                .into_iter()
+                .map(|name| {
+                    let leaf_key = KeyPair::generate().unwrap();
+                    let mut params =
+                        CertificateParams::new(vec!["localhost".into(), "127.0.0.1".into()])
+                            .unwrap();
+                    params.is_ca = IsCa::ExplicitNoCa;
+                    params.key_usages = vec![KeyUsagePurpose::DigitalSignature];
+                    params.extended_key_usages = vec![
+                        ExtendedKeyUsagePurpose::ServerAuth,
+                        ExtendedKeyUsagePurpose::ClientAuth,
+                    ];
+                    let cert = params.signed_by(&leaf_key, &ca, &key).unwrap();
+                    let identity = Identity {
+                        cert: root.join(format!("{name}.pem")),
+                        key: root.join(format!("{name}.key")),
+                        ca: ca_path.clone(),
+                    };
+                    std::fs::write(&identity.cert, cert.pem()).unwrap();
+                    std::fs::write(&identity.key, leaf_key.serialize_pem()).unwrap();
+                    (node(name), identity)
+                })
+                .collect()
+        }
+        struct Fixture {
+            root: tempfile::TempDir,
+            _silent: TcpListener,
+            servers: Vec<ClusterDataServerHandle>,
+            client: TcpClusterRelocationTransport,
+            topology: ClusterTopology,
+        }
+        impl Fixture {
+            fn new() -> Self {
+                let root = tempfile::tempdir().unwrap();
+                let identities = identities(root.path());
+                let mut topology = topology_with_ranges(2);
+                let listeners = (0..4)
+                    .map(|_| TcpListener::bind("127.0.0.1:0").unwrap())
+                    .collect::<Vec<_>>();
+                for (i, listener) in listeners.iter().enumerate() {
+                    let member = topology
+                        .nodes
+                        .get_mut(&node(&format!("n{}", i + 1)))
+                        .unwrap();
+                    member.address = listener.local_addr().unwrap().to_string();
+                    member.tls_certificate_sha256 = Some(identities[&member.id].pin());
+                }
+                for range in topology.ranges.values_mut() {
+                    range.leader = node("n2");
+                    if !range.replicas.iter().any(|r| r.node_id == node("n2")) {
+                        range.replicas[0].node_id = node("n2");
+                    }
+                }
+                topology.validate().unwrap();
+                let mut stores = (1..=3)
+                    .map(|i| {
+                        MetadataConsensusStore::open(
+                            root.path().join(format!("meta-{i}")),
+                            topology.cluster_id.clone(),
+                            node(&format!("n{i}")),
+                            topology.clone(),
+                            true,
+                        )
+                        .unwrap()
+                    })
+                    .collect::<Vec<_>>();
+                let mut leader = stores.remove(0);
+                leader.start_election().unwrap();
+                leader
+                    .become_leader(&(1..=3).map(|i| node(&format!("n{i}"))).collect())
+                    .unwrap();
+                for (i, follower) in (2..=3).zip(&mut stores) {
+                    let reply = follower
+                        .handle_append_request(leader.append_request_from(1, 64).unwrap())
+                        .unwrap();
+                    leader
+                        .record_append_response(&node(&format!("n{i}")), &reply)
+                        .unwrap();
+                }
+                stores.insert(0, leader);
+                let stores = stores
+                    .into_iter()
+                    .map(|s| Arc::new(Mutex::new(s)))
+                    .collect::<Vec<_>>();
+                let shared = Arc::new(RwLock::new(topology.clone()));
+                let network = |name: &str| ClusterNetworkTransportConfig {
+                    connect_timeout_ms: 100,
+                    io_timeout_ms: 2000,
+                    max_frame_bytes: 4 * 1024 * 1024,
+                    max_inbound_connections: 8,
+                    dev_localhost_plaintext: false,
+                    tls: Some(identities[&node(name)].tls()),
+                };
+                let leader_transport = Arc::new(
+                    TcpClusterRelocationTransport::new(
+                        topology.cluster_id.clone(),
+                        node("n1"),
+                        shared.clone(),
+                        network("n1"),
+                    )
+                    .unwrap(),
+                );
+                let provider = Arc::new(
+                    MetadataReadProvider::new(stores[0].clone(), leader_transport).unwrap(),
+                );
+                let client = TcpClusterRelocationTransport::new(
+                    topology.cluster_id.clone(),
+                    node("n2"),
+                    shared.clone(),
+                    network("n2"),
+                )
+                .unwrap();
+                let mut listeners = listeners;
+                let silent = listeners.pop().unwrap();
+                drop(listeners);
+                let mut servers = Vec::new();
+                for i in 0..3 {
+                    let name = format!("n{}", i + 1);
+                    let db = Arc::new(RwLock::new(
+                        BicDb::open_with_config(
+                            root.path().join(format!("db-{name}")),
+                            DbConfig::default().with_fsync(false),
+                        )
+                        .unwrap(),
+                    ));
+                    let service = Arc::new(Mutex::new(
+                        ClusterDataNodeService::open(
+                            topology.cluster_id.clone(),
+                            node(&name),
+                            root.path().join(format!("service-{name}")),
+                            db,
+                            false,
+                        )
+                        .unwrap(),
+                    ));
+                    servers.push(
+                        start_cluster_data_server_with_metadata_read_provider(
+                            &topology.nodes[&node(&name)].address,
+                            network(&name),
+                            shared.clone(),
+                            service,
+                            None,
+                            Some(stores[i].clone()),
+                            None,
+                            if i == 0 { Some(provider.clone()) } else { None },
+                        )
+                        .unwrap(),
+                    );
+                }
+                Self {
+                    root,
+                    _silent: silent,
+                    servers,
+                    client,
+                    topology,
+                }
+            }
+            fn observation(
+                &self,
+                range_id: RangeId,
+                budget: Duration,
+            ) -> (Uuid, MetadataReadObservation) {
+                let request = Uuid::now_v7();
+                let range = self.topology.range_by_id(range_id).unwrap();
+                let observation = self
+                    .client
+                    .acquire_metadata_read_observation(
+                        &node("n1"),
+                        request,
+                        range_id,
+                        range.epoch,
+                        budget,
+                        &CancellationToken::uncancelable(),
+                    )
+                    .unwrap();
+                assert_eq!(observation.metadata_leader_id(), &node("n1"));
+                assert_eq!(observation.request().requester_node_id, node("n2"));
+                (request, observation)
+            }
+            fn ack(&self, request: &RangeHandoffPromise, name: &str) -> HandoffPromiseAck {
+                let path = self.root.path().join(format!("promises-{name}"));
+                std::fs::create_dir_all(&path).unwrap();
+                crate::format::enable_range_image_install(&path).unwrap();
+                let mut store = RangeWriteStore::open(
+                    &path,
+                    self.topology.cluster_id.clone(),
+                    node(name),
+                    true,
+                )
+                .unwrap();
+                let promised = store.install_handoff_promise(request).unwrap();
+                let peer = &self.topology.nodes[&node(name)];
+                HandoffPromiseAck::from_transport(
+                    request,
+                    peer,
+                    peer.tls_certificate_sha256.as_deref(),
+                    false,
+                    promised,
+                )
+                .unwrap()
+            }
+        }
+        impl Drop for Fixture {
+            fn drop(&mut self) {
+                for server in self.servers.drain(..) {
+                    server.join().unwrap();
+                }
+            }
+        }
+
+        #[test]
+        fn actual_transport_observation_from_different_metadata_leader_bridges_to_old_data_cut() {
+            let fixture = Fixture::new();
+            let relocation = *fixture.topology.relocations.keys().next().unwrap();
+            let range_id = fixture.topology.relocations[&relocation].range_id;
+            let (request, observation) = fixture.observation(range_id, Duration::from_secs(1));
+            let mut round =
+                HandoffCutRound::begin_from_observation(observation, request, relocation).unwrap();
+            let first = fixture.ack(round.request(), "n1");
+            round.record(first).unwrap();
+            assert!(round.acknowledgements.len() < round.old_voters.len() / 2 + 1);
+            let second = fixture.ack(round.request(), "n2");
+            round.record(second).unwrap();
+            let cut = round.finish().unwrap();
+            assert_eq!(cut.range().id, range_id);
+            assert_eq!(cut.range_index(), 0);
+            assert_eq!(cut.source_id(), &node("n2"));
+            // This is only a resolved old-data-quorum observation. It has no
+            // native source lineage and does not prove an image or strong Get.
+        }
+        #[test]
+        fn transport_observation_rejects_wrong_uuid_other_range_and_expiration() {
+            let fixture = Fixture::new();
+            let relocation = *fixture.topology.relocations.keys().next().unwrap();
+            let range_id = fixture.topology.relocations[&relocation].range_id;
+            let (_, observation) = fixture.observation(range_id, Duration::from_secs(1));
+            assert!(HandoffCutRound::begin_from_observation(
+                observation,
+                Uuid::now_v7(),
+                relocation
+            )
+            .is_err());
+            let other = fixture
+                .topology
+                .ranges
+                .values()
+                .find(|r| r.id != range_id)
+                .unwrap()
+                .id;
+            let (request, observation) = fixture.observation(other, Duration::from_secs(1));
+            assert!(
+                HandoffCutRound::begin_from_observation(observation, request, relocation).is_err()
+            );
+            for stage in 0..3 {
+                let (request, observation) =
+                    fixture.observation(range_id, Duration::from_millis(500));
+                let deadline = observation.deadline();
+                if stage == 0 {
+                    std::thread::sleep(
+                        deadline.saturating_duration_since(Instant::now())
+                            + Duration::from_millis(1),
+                    );
+                    assert!(HandoffCutRound::begin_from_observation(
+                        observation,
+                        request,
+                        relocation
+                    )
+                    .is_err());
+                    continue;
+                }
+                let mut round =
+                    HandoffCutRound::begin_from_observation(observation, request, relocation)
+                        .unwrap();
+                if stage == 2 {
+                    for name in ["n1", "n2"] {
+                        let ack = fixture.ack(round.request(), name);
+                        round.record(ack).unwrap();
+                    }
+                }
+                std::thread::sleep(
+                    deadline.saturating_duration_since(Instant::now()) + Duration::from_millis(1),
+                );
+                if stage == 1 {
+                    assert!(round.record(fixture.ack(round.request(), "n1")).is_err());
+                } else {
+                    assert!(round.finish().is_err());
+                }
+            }
+        }
     }
 }

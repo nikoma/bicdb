@@ -216,7 +216,7 @@ fn check_other_range_domain(completed_b: bool) {
     // The per-range hash excludes this global field, but minimum/known format
     // validation is independently mandatory on the actual retained proof.
     let known = store.catalog.format_version;
-    for corrupt in [1, 10] {
+    for corrupt in [1, u32::MAX] {
         store.catalog.format_version = corrupt;
         assert!(b
             .require_current_under_role(

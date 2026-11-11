@@ -85,7 +85,7 @@ fn native_read_observation_recovered_serving_requires_actual_activated_open() {
 fn native_read_observation_uses_current_r2_not_activation_anchor_and_refuses_cq_only_peer() {
     use super::activation_tests::{completion, data_zero_scope};
     use crate::distribution_range_recovery::RecoveryMemberIdentity;
-    let fixture = NetworkFixture::new_ready_network_with_roles(true, true, false, "n0", "n1");
+    let mut fixture = NetworkFixture::new_ready_network_with_roles(true, true, false, "n0", "n1");
     fixture.native.root.disable_cleanup(true);
     eprintln!(
         "CURRENT_NATIVE_READ_RPLUSONE_ROOT {}",

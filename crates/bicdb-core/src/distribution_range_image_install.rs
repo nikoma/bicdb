@@ -14,8 +14,8 @@ use crate::db::{
 };
 use crate::distribution::{distribution_key_token, RangeSnapshotOptions};
 use crate::distribution_range_consensus::{
-    ImageInstallPurpose, NativeImageInstallRole, RangeWriteStore,
-    TargetImageCatalogHistoryObligations, TargetImageInstallFence,
+    ImageInstallPurpose, NativeImageCatalogueAdoptionReceipt, NativeImageInstallRole,
+    RangeWriteStore, TargetImageCatalogHistoryObligations, TargetImageInstallFence,
 };
 use crate::distribution_range_image::{
     bounded_json, canonical_range_image_catalog, content_hasher, CompletedNativeRangeImageSource,
@@ -219,7 +219,45 @@ pub(crate) struct VerifiedNativeRangeImageInstall {
     source: CompletedNativeRangeImageSource,
     base: NativeInstalledRangeImageBase,
 }
+
+/// The actual physical image and its fsynced catalogue snapshot, with all
+/// refusals/freezes still owned. This is not an activated/serving image.
+pub(crate) struct AdoptedNativeRangeImageInstall {
+    verified: VerifiedNativeRangeImageInstall,
+    catalogue: NativeImageCatalogueAdoptionReceipt,
+}
+impl AdoptedNativeRangeImageInstall {
+    pub(crate) fn catalogue(&self) -> &NativeImageCatalogueAdoptionReceipt {
+        &self.catalogue
+    }
+    pub(crate) fn base(&self) -> &NativeInstalledRangeImageBase {
+        self.verified.base()
+    }
+    pub(crate) fn require_current(
+        &self,
+        store: &RangeWriteStore,
+        role: &NativeImageInstallRole<'_>,
+    ) -> Result<()> {
+        self.catalogue.require_current(store, &self.verified, role)
+    }
+}
 impl VerifiedNativeRangeImageInstall {
+    pub(crate) fn adopt_catalogue(
+        self,
+        store: &mut RangeWriteStore,
+        role: &NativeImageInstallRole<'_>,
+        cancellation: &CancellationToken,
+    ) -> Result<AdoptedNativeRangeImageInstall> {
+        cancellation.check()?;
+        let catalogue = store.adopt_verified_native_image_catalogue(&self, role)?;
+        cancellation.check()?;
+        let adopted = AdoptedNativeRangeImageInstall {
+            verified: self,
+            catalogue,
+        };
+        adopted.require_current(store, role)?;
+        Ok(adopted)
+    }
     pub(crate) fn base(&self) -> &NativeInstalledRangeImageBase {
         &self.base
     }
@@ -1344,6 +1382,237 @@ pub(crate) mod tests {
             )
             .unwrap();
         finish_verification(fixture, store, verification)
+    }
+
+    fn actual_catalogue_adoption_fixture(
+    ) -> (Fixture, RangeWriteStore, VerifiedNativeRangeImageInstall) {
+        let mut fixture =
+            Fixture::new_with_ranges_and_before_handoff(1, |db, topology, spec, _| {
+                let range = topology.ranges.values().next().unwrap().id;
+                crate::distribution_range_consensus::seed_actual_origin(
+                    db,
+                    topology.clone(),
+                    spec,
+                    range,
+                    1,
+                );
+            });
+        let mut store = fixture.store();
+        let mut install = fixture.begin(&mut store, Uuid::now_v7());
+        fixture.clear(&store, &mut install);
+        fixture.copy(&store, &mut install);
+        let source = fixture.capture.take().unwrap().complete().unwrap();
+        let verified = verify_install(&fixture, &store, install, source);
+        assert_eq!(verified.base().range_index(), 1);
+        assert_eq!(store.progress(fixture.range().id).resolved_through, 0);
+        (fixture, store, verified)
+    }
+
+    #[test]
+    fn actual_native_image_catalogue_adoption_folds_real_rows_but_keeps_every_admission_refused() {
+        let (fixture, mut store, verified) = actual_catalogue_adoption_fixture();
+        let physical_receipt = verified.base().native_receipt_sha256().to_string();
+        let role = fixture.role();
+        let image_role = NativeImageInstallRole::CommittedHandoff(&role);
+        let adopted = verified
+            .adopt_catalogue(&mut store, &image_role, &CancellationToken::uncancelable())
+            .unwrap();
+        adopted.require_current(&store, &image_role).unwrap();
+        let progress = store.progress(fixture.range().id);
+        assert_eq!(
+            (
+                progress.last_index,
+                progress.resolved_through,
+                progress.compacted_through
+            ),
+            (1, 1, 1)
+        );
+        assert_eq!(adopted.catalogue().range_index(), 1);
+        assert_eq!(adopted.base().native_receipt_sha256(), physical_receipt);
+        assert!(fixture
+            .target()
+            .read()
+            .get("items", "stage-actual-origin-0")
+            .unwrap()
+            .is_some());
+        assert!(store.require_no_image_install(fixture.range().id).is_err());
+        assert!(fixture
+            .target()
+            .read()
+            .range_mutation_gate()
+            .try_enter(fixture.range().id)
+            .is_err());
+        let command = crate::distribution_range_consensus::native_ready_test_command(
+            fixture.topology.cluster_id.clone(),
+            fixture.range(),
+            2,
+            fixture.range().leader.clone(),
+            &crate::CommitAdmissionIntent {
+                transaction_id: 1234567,
+                mutations: vec![crate::CommitAdmissionMutation {
+                    collection: "items".into(),
+                    record_id: "still-refused".into(),
+                    record: Some(crate::Record::new("still-refused")),
+                }],
+            },
+        )
+        .unwrap();
+        assert!(
+            store.prepare(command).is_err(),
+            "adopting a real image must not enable ordinary writes"
+        );
+        let inspection = RangeWriteStore::inspect(
+            fixture.root.path().join("target"),
+            fixture.topology.cluster_id.clone(),
+            node("n2"),
+            64 * 1024 * 1024,
+        )
+        .unwrap();
+        assert_eq!(inspection.format_version, 6);
+    }
+
+    #[test]
+    fn actual_native_image_catalogue_adoption_retry_is_idempotent_without_reapplying_rows() {
+        let (fixture, mut store, verified) = actual_catalogue_adoption_fixture();
+        let role = fixture.role();
+        let image_role = NativeImageInstallRole::CommittedHandoff(&role);
+        let before_sequence = fixture.target().read().current_commit_seq();
+        let first = store
+            .adopt_verified_native_image_catalogue(&verified, &image_role)
+            .unwrap();
+        let second = store
+            .adopt_verified_native_image_catalogue(&verified, &image_role)
+            .unwrap();
+        first
+            .require_current(&store, &verified, &image_role)
+            .unwrap();
+        second
+            .require_current(&store, &verified, &image_role)
+            .unwrap();
+        assert_eq!(
+            first.native_receipt_sha256(),
+            second.native_receipt_sha256()
+        );
+        assert_eq!(
+            fixture.target().read().current_commit_seq(),
+            before_sequence
+        );
+        drop(store);
+        let reopened = fixture.store();
+        assert!(
+            first
+                .require_current(&reopened, &verified, &image_role)
+                .is_err(),
+            "a new store-open must reissue actual proof"
+        );
+        assert_eq!(reopened.progress(fixture.range().id).resolved_through, 1);
+        assert!(reopened
+            .require_no_image_install(fixture.range().id)
+            .is_err());
+    }
+
+    #[test]
+    fn actual_native_image_catalogue_adoption_ambiguous_persist_needs_real_refsync_before_receipt()
+    {
+        let (fixture, mut store, verified) = actual_catalogue_adoption_fixture();
+        let role = fixture.role();
+        let image_role = NativeImageInstallRole::CommittedHandoff(&role);
+        let physical_receipt = verified.base().native_receipt_sha256().to_string();
+        let error = store
+            .test_adopt_native_image_catalogue_after_durable_rename_failure(&verified, &image_role)
+            .unwrap_err();
+        assert!(
+            error
+                .to_string()
+                .contains("injected catalogue acknowledgment error"),
+            "{error}"
+        );
+        assert_eq!(store.progress(fixture.range().id).resolved_through, 1);
+        assert!(store.require_no_image_install(fixture.range().id).is_err());
+        let receipt = store
+            .adopt_verified_native_image_catalogue(&verified, &image_role)
+            .unwrap();
+        receipt
+            .require_current(&store, &verified, &image_role)
+            .unwrap();
+        assert_eq!(receipt.native_receipt_sha256(), physical_receipt);
+        assert!(store.require_no_image_install(fixture.range().id).is_err());
+    }
+
+    #[test]
+    fn actual_native_image_catalogue_adoption_reopens_and_reissues_same_materialized_snapshot() {
+        let (mut fixture, mut store, verified) = actual_catalogue_adoption_fixture();
+        let attempt = verified.fence().attempt_id();
+        let role = fixture.role();
+        let image_role = NativeImageInstallRole::CommittedHandoff(&role);
+        let adopted = verified
+            .adopt_catalogue(&mut store, &image_role, &CancellationToken::uncancelable())
+            .unwrap();
+        let original = adopted.base().native_receipt_sha256().to_string();
+        drop(adopted);
+        drop(store);
+        fixture.reopen_target();
+        fixture.reopen_source();
+        fixture.recapture();
+        loop {
+            let capture = fixture.capture.as_mut().unwrap();
+            let cursor = capture.cursor().clone();
+            if capture
+                .export_step(&cursor, &options(), &CancellationToken::uncancelable())
+                .unwrap()
+                .complete
+            {
+                break;
+            }
+        }
+        fixture.export_history();
+        let source = fixture.capture.take().unwrap().complete().unwrap();
+        let target = fixture.target();
+        let admission = target
+            .read()
+            .native_recovery_admission(
+                &fixture.topology.cluster_id,
+                fixture.topology.range_image_bootstrap_id.unwrap(),
+                &node("n2"),
+                fixture.target_spec.member_incarnation,
+            )
+            .unwrap();
+        let frozen = target
+            .read()
+            .range_mutation_gate()
+            .try_freeze(fixture.range().id, attempt)
+            .unwrap();
+        let role = fixture.role();
+        let image_role = NativeImageInstallRole::CommittedHandoff(&role);
+        let mut store = fixture.store();
+        let verification = NativeRangeImageInstaller::recover_completed(
+            target,
+            &mut store,
+            admission,
+            source,
+            &image_role,
+            frozen,
+            ImageInstallPurpose::RelocationLearner,
+            attempt,
+            &CancellationToken::uncancelable(),
+        )
+        .unwrap();
+        let verified = finish_verification(&fixture, &store, verification);
+        let role = fixture.role();
+        let image_role = NativeImageInstallRole::CommittedHandoff(&role);
+        let reissued = verified
+            .adopt_catalogue(&mut store, &image_role, &CancellationToken::uncancelable())
+            .unwrap();
+        reissued.require_current(&store, &image_role).unwrap();
+        assert_eq!(reissued.base().native_receipt_sha256(), original);
+        assert_eq!(store.progress(fixture.range().id).resolved_through, 1);
+        assert!(fixture
+            .target()
+            .read()
+            .get("items", "stage-actual-origin-0")
+            .unwrap()
+            .is_some());
+        assert!(store.require_no_image_install(fixture.range().id).is_err());
     }
 
     #[test]

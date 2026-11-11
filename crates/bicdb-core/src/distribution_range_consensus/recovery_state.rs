@@ -633,6 +633,7 @@ impl RangeWriteStore {
                 refusal,
                 self.catalog.handoff_promises.get(&range_id),
                 self.catalog.image_install_intents.get(&range_id),
+                self.catalog.native_image_bases.get(&range_id),
                 self.catalog.backup_fences.get(&range_id),
             ),
         )?;
@@ -829,16 +830,16 @@ impl RangeWriteStore {
         }
         Ok(())
     }
-    fn require_durable_recovery_catalog(&self) -> Result<()> {
+    pub(super) fn require_durable_recovery_catalog(&self) -> Result<()> {
         if self.recovery_persistence_uncertain {
             return Err(range_write_error("recovery catalog persistence is uncertain; re-fsync the exact fenced session before claiming durability"));
         }
         Ok(())
     }
-    fn persist_recovery_catalog(&mut self) -> Result<()> {
+    pub(super) fn persist_recovery_catalog(&mut self) -> Result<()> {
         self.persist_recovery_catalog_with(crate::storage::write_atomic)
     }
-    fn persist_recovery_catalog_with(
+    pub(super) fn persist_recovery_catalog_with(
         &mut self,
         write: impl FnOnce(&Path, &[u8], bool) -> Result<()>,
     ) -> Result<()> {

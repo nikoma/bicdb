@@ -379,7 +379,11 @@ impl RangeWriteStore {
         Ok(())
     }
 
-    fn validate_install_local_log(&self, range: &RangeDescriptor, source_r: u64) -> Result<()> {
+    pub(super) fn validate_install_local_log(
+        &self,
+        range: &RangeDescriptor,
+        source_r: u64,
+    ) -> Result<()> {
         if self.catalog.backup_fences.contains_key(&range.id) {
             return Err(range_write_error(
                 "image install conflicts with a backup fence",

@@ -288,7 +288,7 @@ pub(super) fn rollback(db: &mut BicDb, id: &str) -> Result<()> {
     Ok(())
 }
 
-fn persist_header(db: &BicDb, header: &Header) -> Result<()> {
+fn persist_header(db: &mut BicDb, header: &Header) -> Result<()> {
     db.insert(
         HEADERS,
         Record::new(&header.id).with_metadata(serde_json::to_value(header)?),

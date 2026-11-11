@@ -3,6 +3,17 @@ use super::*;
 use crate::db::NativeRecoveryAdmission;
 use crate::distribution_range_recovery::RecoveryRoleAdmission;
 
+#[cfg(test)]
+pub(crate) fn native_ready_test_command(
+    cluster: ClusterId,
+    range: &RangeDescriptor,
+    index: u64,
+    leader: ClusterNodeId,
+    intent: &CommitAdmissionIntent,
+) -> Result<RangeWriteCommand> {
+    RangeWriteCommand::new(cluster, range, index, leader, intent)
+}
+
 impl RangeWriteStore {
     /// The callback observes only actual retained resolved entries, while this
     /// store is immutably borrowed. A numeric resolved watermark is insufficient:

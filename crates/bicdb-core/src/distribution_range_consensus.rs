@@ -43,6 +43,8 @@ mod image_install_obligations;
 pub(crate) use image_install_obligations::TargetImageCatalogHistoryObligations;
 mod image_install_state;
 mod native_ready_catalog;
+#[cfg(test)]
+pub(crate) use native_ready_catalog::native_ready_test_command;
 mod recovery_state;
 pub(crate) use image_install_state::ImageInstallPurpose;
 use image_install_state::{ImageInstallIntent, IMAGE_INSTALL_RANGE_LOG_FORMAT};

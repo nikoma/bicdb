@@ -17,8 +17,8 @@ fn invalid(message: &str) -> BicDbError {
 mod tests {
     use super::*;
     use crate::distribution_range_consensus::{
-        native_origin_fixture, seed_actual_origin, RangeWriteCommand, RecoveryFenceScope,
-        DEFAULT_RANGE_WRITE_LOG,
+        native_origin_fixture, native_ready_test_command, seed_actual_origin, RangeWriteCommand,
+        RecoveryFenceScope, DEFAULT_RANGE_WRITE_LOG,
     };
     use crate::distribution_range_recovery::test_role_admission;
     use crate::ClusterTopology;
@@ -111,7 +111,7 @@ mod tests {
                     self.topology.range_for_key("items", key).unwrap().id == self.range().id
                 })
                 .unwrap();
-            RangeWriteCommand::new(
+            native_ready_test_command(
                 self.topology.cluster_id.clone(),
                 self.range(),
                 1,
@@ -274,6 +274,73 @@ mod tests {
         let proof = fixture.attest(role, &mut store, frozen, &parent).unwrap();
         cancelled.store(true, AtomicOrdering::SeqCst);
         assert!(proof.require_current(&fixture.db.read(), &store).is_err());
+    }
+
+    #[test]
+    fn same_identity_catalogue_from_another_actual_native_database_is_rejected() {
+        let fixture = Fixture::new();
+        let other_path = fixture.root.path().join("different-physical-database");
+        let mut other_spec = fixture.spec.clone();
+        other_spec.initial_ranges.clear();
+        let (_other_database, _) = BicDb::create_new_range_image_database(
+            &other_path,
+            DbConfig::default()
+                .with_fsync(true)
+                .with_storage_mode(StorageMode::ServerPaged)
+                .with_paged_buffer_pool_bytes(8 * 1024 * 1024),
+            other_spec,
+        )
+        .unwrap();
+        let mut other_store = RangeWriteStore::open(
+            &other_path,
+            fixture.topology.cluster_id.clone(),
+            fixture.spec.node_id.clone(),
+            true,
+        )
+        .unwrap();
+        let role = fixture.role(Uuid::now_v7());
+        let frozen = fixture.freeze(&role);
+        let error = fixture
+            .attest(
+                role,
+                &mut other_store,
+                frozen,
+                &CancellationToken::uncancelable(),
+            )
+            .unwrap_err();
+        assert!(
+            error.to_string().contains("another physical database"),
+            "{error}"
+        );
+    }
+
+    #[test]
+    fn actual_reopen_invalidates_the_prior_open_local_readiness_proof() {
+        let fixture = Fixture::new();
+        let role = fixture.role(Uuid::now_v7());
+        let frozen = fixture.freeze(&role);
+        let mut store = fixture.store();
+        let proof = fixture
+            .attest(role, &mut store, frozen, &CancellationToken::uncancelable())
+            .unwrap();
+        let path = fixture.db.read().data_path().to_path_buf();
+        let Fixture {
+            root: _root,
+            db,
+            topology: _topology,
+            spec,
+        } = fixture;
+        drop(db);
+        let (reopened, _) = BicDb::open_range_image_database(
+            &path,
+            DbConfig::default()
+                .with_fsync(true)
+                .with_storage_mode(StorageMode::ServerPaged)
+                .with_paged_buffer_pool_bytes(8 * 1024 * 1024),
+            &spec,
+        )
+        .unwrap();
+        assert!(proof.require_current(&reopened, &store).is_err());
     }
 }
 

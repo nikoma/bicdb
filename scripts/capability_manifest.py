@@ -74,7 +74,9 @@ def build_manifest(root, binary, revision, target='x86_64-unknown-linux-gnu'):
     require(binary.is_file() and not Path(binary).is_symlink(), 'regular binary required')
     actual = subprocess.check_output([str(binary), '--version'], text=True, timeout=30).strip()
     require(actual == 'bicdb ' + version, 'binary/source version mismatch')
-    catalog = json.loads(catalog_path.read_text())
+    catalog_identity = committed_evidence(root, revision, 'capabilities/catalog.json')
+    catalog = json.loads(subprocess.check_output(
+        ['git', '-C', str(root), 'cat-file', 'blob', revision + ':capabilities/catalog.json']))
     validate_catalog(catalog, root)
     for capabilities in catalog['modes'].values():
         for claim in capabilities.values():
@@ -102,7 +104,7 @@ def build_manifest(root, binary, revision, target='x86_64-unknown-linux-gnu'):
                      'binary_sha256': sha256(binary), 'target': target,
                      'source_build_binding': 'operator_asserted_not_attested',
                      'target_binding': 'operator_asserted_not_inspected'},
-        'catalog_sha256': sha256(catalog_path),
+        'catalog_sha256': catalog_identity['sha256'],
         'scope': 'release_declarations_only_not_live_configuration_or_deployment_authority',
         'modes': modes,
     }

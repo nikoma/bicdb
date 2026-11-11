@@ -113,6 +113,19 @@ class CapabilityManifestTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             cap.committed_evidence(self.root, self.revision, 'untracked.rs')
 
+    def test_committed_catalog_symlink_cannot_import_external_claims(self):
+        with tempfile.TemporaryDirectory() as outside:
+            catalog = Path(outside) / 'catalog.json'
+            catalog.write_text(json.dumps(self.catalog))
+            path = self.root / 'capabilities/catalog.json'
+            path.unlink()
+            path.symlink_to(catalog)
+            self.git('add', 'capabilities/catalog.json')
+            self.git('-c', 'user.name=Test', '-c', 'user.email=test@example.org', 'commit', '-qm', 'symlink catalog')
+            self.revision = self.git('rev-parse', 'HEAD').strip()
+            with self.assertRaises(ValueError):
+                self.manifest()
+
     def test_parent_symlink_cannot_supply_source_evidence(self):
         with tempfile.TemporaryDirectory() as outside:
             (Path(outside) / 'source.rs').write_text('// external')

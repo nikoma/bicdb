@@ -476,24 +476,68 @@ pub(crate) fn validate_routine_language(db: &BicDb, language: &str) -> Result<()
 /// Initialize the profile already recorded by this store before exposing SQL.
 /// This never chooses a new profile for an unprovisioned database.
 pub fn initialize_existing_database_profile(db: &mut BicDb) -> Result<()> {
-    recover_interrupted_recycle_bin_renames(db)?;
+    db.check_recovery_state()?;
     let profile = match db.get(PROFILE_COLLECTION, "profile") {
-        Err(BicDbError::CollectionNotFound(_)) => return Ok(()),
+        Err(BicDbError::CollectionNotFound(_)) => None,
         Err(error) => return Err(error.into()),
         Ok(None) => return Err(unsupported("SQL profile marker is missing")),
-        Ok(Some(record)) => record
-            .metadata
-            .get("profile")
-            .and_then(JsonValue::as_str)
-            .map(str::to_string)
-            .ok_or_else(|| unsupported("SQL profile marker has no profile identity"))?,
+        Ok(Some(record)) => Some(
+            record
+                .metadata
+                .get("profile")
+                .and_then(JsonValue::as_str)
+                .map(str::to_string)
+                .ok_or_else(|| unsupported("SQL profile marker has no profile identity"))?,
+        ),
     };
-    ensure_database_profile(db, &profile)?;
+    if let Some(profile) = &profile {
+        validate_database_profile_selection(db, profile)?;
+    }
+    recover_interrupted_recycle_bin_renames(db)?;
+    if let Some(profile) = profile {
+        ensure_database_profile_inner(db, &profile)?;
+    }
     db.check_recovery_state()?;
     Ok(())
 }
 
 pub fn ensure_database_profile(db: &mut BicDb, profile: &str) -> Result<()> {
+    db.check_recovery_state()?;
+    // A wrong serve flag must not repair or convert a differently profiled
+    // store before reporting the mismatch.
+    validate_database_profile_selection(db, profile)?;
+    recover_interrupted_recycle_bin_renames(db)?;
+    let result = ensure_database_profile_inner(db, profile);
+    db.check_recovery_state()?;
+    result
+}
+
+fn validate_database_profile_selection(db: &BicDb, profile: &str) -> Result<()> {
+    if !is_known_profile(profile) {
+        return Err(unsupported(format!("unknown SQL profile {profile}")));
+    }
+    match db.get(PROFILE_COLLECTION, "profile") {
+        Ok(Some(marker)) if matches_profile(&marker.metadata, profile) => Ok(()),
+        Ok(Some(_)) => Err(unsupported(
+            "database SQL profile does not match server configuration",
+        )),
+        Ok(None) => Err(unsupported("SQL profile marker is missing")),
+        Err(BicDbError::CollectionNotFound(_)) => {
+            if profile != POSTGRES_PROFILE
+                && (!list_schemas(db)?.is_empty()
+                    || db.collections().iter().any(|c| !c.name.starts_with("__")))
+            {
+                return Err(unsupported(
+                    "Oracle profile must be provisioned on an empty database",
+                ));
+            }
+            Ok(())
+        }
+        Err(error) => Err(error.into()),
+    }
+}
+
+fn ensure_database_profile_inner(db: &mut BicDb, profile: &str) -> Result<()> {
     if !is_known_profile(profile) {
         return Err(unsupported(format!("unknown SQL profile {profile}")));
     }
@@ -510,11 +554,8 @@ pub fn ensure_database_profile(db: &mut BicDb, profile: &str) -> Result<()> {
                 "database SQL profile does not match server configuration",
             ));
         }
-        // Recovered before-images may contain legacy case-index definitions.
-        // Resolve catalog moves before deciding that the profile is case-ready.
-        if is_oracle_profile(profile) {
-            recover_interrupted_recycle_bin_renames(db)?;
-        }
+        // The public entrypoints resolved primary catalog moves before
+        // reaching profile migrations; hot standbys retain the source prefix.
         // Upgrade legacy preview foreign keys before serving any sessions.
         // No row values or validation state are changed by this marker upgrade.
         if profile == ORACLE_PREVIEW_PROFILE

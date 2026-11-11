@@ -70,6 +70,10 @@ pub(super) fn pending(db: &BicDb) -> Result<Vec<PendingRename>> {
         .collect()
 }
 
+pub(super) fn has_pending_recovery(db: &BicDb) -> Result<bool> {
+    super::recycle_bin_journal::collection_has_visible_records(db, HEADERS)
+}
+
 pub(super) struct PreparedRename {
     header: Header,
     sequence: u64,
@@ -392,7 +396,10 @@ fn rollback_inner(db: &mut BicDb, id: &str, mut owner: Option<&mut Transaction>)
 /// Only a deleted manifest proves that all its images are obsolete. Never
 /// prune an active intent's images, including steps already undone by cursor.
 pub(super) fn collect_orphans(db: &mut BicDb) -> Result<usize> {
-    db.check_catalog_recovery_quiescent()?;
+    db.check_recovery_state()?;
+    if db.is_standby_role() {
+        return Ok(0);
+    }
     let mut after = None;
     let mut deleted = 0;
     loop {
@@ -411,7 +418,7 @@ pub(super) fn collect_orphans(db: &mut BicDb) -> Result<usize> {
 /// starve later garbage. A completed pass wraps to revisit newly decided work.
 pub(super) fn collect_committed_images_batch(db: &mut BicDb, limit: usize) -> Result<usize> {
     db.check_recovery_state()?;
-    if db.is_replication_standby() {
+    if db.is_standby_role() {
         return Ok(0);
     }
     let cursor = match db.get(GC, "cursor") {
@@ -790,6 +797,11 @@ mod tests {
                     .unwrap()
                     .is_some());
             }
+            assert_eq!(
+                collect_orphans(&mut db).unwrap(),
+                0,
+                "complete immutable-image pass also preserves the unrelated pending owner"
+            );
             peer.commit().unwrap();
             rollback(&mut db, &live.header.id).unwrap();
             assert_eq!(collect_orphans(&mut db).unwrap(), 19);

@@ -1027,6 +1027,7 @@ impl<'db> SqlSession<'db> {
 
     pub(crate) fn execute_statement(&mut self, statement: &Statement) -> Result<SqlResult> {
         self.ensure_read_only_statement(statement)?;
+        recycle_bin::ensure_replica_catalog_statement_ready(self.db_ref(), statement)?;
         // User-defined operators bind to their functions before execution.
         let bound = match crate::pg_operators::operators_to_bind(self.db_ref(), statement)? {
             Some(operators) => crate::pg_operators::bind_statement_operators(

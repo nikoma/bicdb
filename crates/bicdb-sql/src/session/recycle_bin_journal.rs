@@ -13,6 +13,56 @@ pub(crate) fn is_catalog_journal_collection(name: &str) -> bool {
     [INTENTS, PURGES, CREATIONS].contains(&name) || super::rename_journal::is_collection(name)
 }
 
+/// Check for live recovery work without materializing journal payloads or
+/// registering a repair while an unrelated native transaction is active.
+pub(super) fn collection_has_visible_records(db: &BicDb, collection: &str) -> Result<bool> {
+    match db.collection_policy(collection) {
+        Ok(_) => {}
+        Err(BicDbError::CollectionNotFound(_)) => return Ok(false),
+        Err(error) => return Err(error.into()),
+    }
+    let reader = db.begin_transaction()?;
+    let mut after: Option<String> = None;
+    loop {
+        let lower = after
+            .as_deref()
+            .map(std::ops::Bound::Excluded)
+            .unwrap_or(std::ops::Bound::Unbounded);
+        let (ids, complete) = reader.scan_collection_record_key_batch_in_range_unchecked(
+            collection,
+            lower,
+            std::ops::Bound::Unbounded,
+            false,
+            128,
+        )?;
+        if ids.is_empty() && !complete {
+            return Err(SqlError::InvalidSql(
+                "catalog-intent probe made no progress".into(),
+            ));
+        }
+        for id in &ids {
+            if reader.get(collection, id)?.is_some() {
+                reader.rollback()?;
+                return Ok(true);
+            }
+        }
+        if complete {
+            reader.rollback()?;
+            return Ok(false);
+        }
+        after = ids.last().cloned();
+    }
+}
+
+pub(super) fn has_pending_recovery(db: &BicDb) -> Result<bool> {
+    for collection in [INTENTS, PURGES, CREATIONS] {
+        if collection_has_visible_records(db, collection)? {
+            return Ok(true);
+        }
+    }
+    super::rename_journal::has_pending_recovery(db)
+}
+
 const CREATED_PREFIX: &str = "__bicdb_created_";
 #[derive(Clone, Serialize, Deserialize)]
 struct CreationIntent {

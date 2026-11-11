@@ -1,6 +1,6 @@
 //! SQL rename producer for the durable before-image journal. This prototype
-//! retains conservative native quiescence checks. Scoped admission, concurrent
-//! transaction visibility and bounded value mutation remain qualification gates.
+//! retains conservative native quiescence checks. Scoped admission, replica
+//! consistency and final crash/performance qualification remain gates.
 use super::*;
 
 #[inline]
@@ -269,6 +269,14 @@ mod tests {
                             assert_eq!(bindings(&standby), before_bindings);
                             assert_eq!(rename_journal::pending(&standby).unwrap().len(), 1);
                             assert!(standby.get("renamed", "1").unwrap().is_some());
+                            let mut client = SqlSession::new_shared(&standby);
+                            let error = client.execute("SELECT payload FROM renamed").unwrap_err();
+                            assert_eq!(
+                                error.sqlstate(),
+                                "55000",
+                                "do not expose intermediate source catalog state"
+                            );
+                            client.execute("BEGIN; ROLLBACK").unwrap();
                         }
                         sql.execute(if commit { "COMMIT" } else { "ROLLBACK" })
                             .unwrap();
@@ -313,6 +321,19 @@ mod tests {
                 assert_eq!(rename_journal::pending(&db).unwrap().len(), 1);
                 db.close().unwrap();
                 let mut db = BicDb::open_with_config(root.path(), config(paged)).unwrap();
+                let before = bindings(&db);
+                let wrong = if profile == oracle::POSTGRES_PROFILE {
+                    oracle::ORACLE_HR_PROFILE
+                } else {
+                    oracle::POSTGRES_PROFILE
+                };
+                assert!(oracle::ensure_database_profile(&mut db, wrong).is_err());
+                assert_eq!(
+                    bindings(&db),
+                    before,
+                    "wrong serve profile must not repair the store"
+                );
+                assert_eq!(rename_journal::pending(&db).unwrap().len(), 1);
                 oracle::ensure_database_profile(&mut db, profile).unwrap();
                 assert!(
                     rename_journal::pending(&db).unwrap().is_empty(),
@@ -335,9 +356,11 @@ mod tests {
         let root = tempfile::tempdir().unwrap();
         let mut db = BicDb::open(root.path()).unwrap();
         db.create_collection("business").unwrap();
+        SqlSession::new(&mut db).execute("CREATE TABLE history(id INT PRIMARY KEY); INSERT INTO history VALUES(1); ALTER TABLE history RENAME TO renamed_history").unwrap();
         let mut native = db.begin_transaction().unwrap();
         native.insert("business", Record::new("pending")).unwrap();
         oracle::ensure_database_profile(&mut db, oracle::POSTGRES_PROFILE).unwrap();
+        assert!(db.get("renamed_history", "1").unwrap().is_some());
         native.commit().unwrap();
         assert!(db.get("business", "pending").unwrap().is_some());
         db.close().unwrap();

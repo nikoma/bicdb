@@ -12,79 +12,13 @@ pub(crate) fn materialize_actual_current_repair_image(
     before_clear: impl FnOnce(),
     mut install: NativeRangeImageInstaller,
 ) -> VerifiedNativeRangeImageInstall {
-    loop {
-        let step = {
-            let capture = capture.as_mut().unwrap();
-            let cursor = capture.history_cursor().clone();
-            capture
-                .export_history_step(&cursor, 256, &CancellationToken::uncancelable())
-                .unwrap()
-        };
-        let role = fresh_role();
-        let source = capture
-            .as_ref()
-            .unwrap()
-            .authorize_target_install()
-            .unwrap();
-        let stage_id = install.history_stage_id();
-        let progress = service
-            .lock()
-            .stage_native_range_image_history(
-                &mut install,
-                &NativeImageInstallRole::CurrentVoterRepair(&role),
-                &source,
-                stage_id,
-                &step,
-                &CancellationToken::uncancelable(),
-            )
-            .unwrap();
-        if progress.cursor.complete() {
-            break;
-        }
-    }
-    loop {
-        let role = fresh_role();
-        let source = capture
-            .as_ref()
-            .unwrap()
-            .authorize_target_install()
-            .unwrap();
-        if service
-            .lock()
-            .audit_native_range_image_history(
-                &mut install,
-                &NativeImageInstallRole::CurrentVoterRepair(&role),
-                &source,
-                256,
-                &CancellationToken::uncancelable(),
-            )
-            .unwrap()
-            .audit_complete
-        {
-            break;
-        }
-    }
-    before_clear();
-    loop {
-        let role = fresh_role();
-        let source = capture
-            .as_ref()
-            .unwrap()
-            .authorize_target_install()
-            .unwrap();
-        if service
-            .lock()
-            .clear_native_range_image_step(
-                &mut install,
-                &NativeImageInstallRole::CurrentVoterRepair(&role),
-                &source,
-                &CancellationToken::uncancelable(),
-            )
-            .unwrap()
-        {
-            break;
-        }
-    }
+    stage_and_clear_actual_current_repair_image(
+        capture,
+        service,
+        &fresh_role,
+        before_clear,
+        &mut install,
+    );
     loop {
         let step = {
             let capture = capture.as_mut().unwrap();
@@ -156,4 +90,88 @@ pub(crate) fn materialize_actual_current_repair_image(
             &CancellationToken::uncancelable(),
         )
         .unwrap()
+}
+
+/// Stops after actual complete history staging/audit and target clear. It
+/// deliberately publishes no native image receipt and performs no row copy.
+pub(crate) fn stage_and_clear_actual_current_repair_image(
+    capture: &mut Option<crate::distribution_range_image::RangeImageCapture>,
+    service: &Arc<Mutex<crate::distribution_data::ClusterDataNodeService>>,
+    fresh_role: &impl Fn() -> RecoveryRoleAdmission,
+    before_clear: impl FnOnce(),
+    install: &mut NativeRangeImageInstaller,
+) {
+    loop {
+        let step = {
+            let capture = capture.as_mut().unwrap();
+            let cursor = capture.history_cursor().clone();
+            capture
+                .export_history_step(&cursor, 256, &CancellationToken::uncancelable())
+                .unwrap()
+        };
+        let role = fresh_role();
+        let source = capture
+            .as_ref()
+            .unwrap()
+            .authorize_target_install()
+            .unwrap();
+        let stage_id = install.history_stage_id();
+        let progress = service
+            .lock()
+            .stage_native_range_image_history(
+                install,
+                &NativeImageInstallRole::CurrentVoterRepair(&role),
+                &source,
+                stage_id,
+                &step,
+                &CancellationToken::uncancelable(),
+            )
+            .unwrap();
+        if progress.cursor.complete() {
+            break;
+        }
+    }
+    loop {
+        let role = fresh_role();
+        let source = capture
+            .as_ref()
+            .unwrap()
+            .authorize_target_install()
+            .unwrap();
+        if service
+            .lock()
+            .audit_native_range_image_history(
+                install,
+                &NativeImageInstallRole::CurrentVoterRepair(&role),
+                &source,
+                256,
+                &CancellationToken::uncancelable(),
+            )
+            .unwrap()
+            .audit_complete
+        {
+            break;
+        }
+    }
+    before_clear();
+    loop {
+        let role = fresh_role();
+        let source = capture
+            .as_ref()
+            .unwrap()
+            .authorize_target_install()
+            .unwrap();
+        if service
+            .lock()
+            .clear_native_range_image_step(
+                install,
+                &NativeImageInstallRole::CurrentVoterRepair(&role),
+                &source,
+                &CancellationToken::uncancelable(),
+            )
+            .unwrap()
+        {
+            break;
+        }
+    }
 }

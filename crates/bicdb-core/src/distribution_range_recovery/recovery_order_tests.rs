@@ -466,3 +466,5 @@ mod sparse_current_case;
 mod small_sparse_cold;
 
 mod copied_full_image_case;
+
+mod interrupted_normal_repair;

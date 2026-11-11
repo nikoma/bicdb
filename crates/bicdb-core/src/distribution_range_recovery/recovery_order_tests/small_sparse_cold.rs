@@ -1,7 +1,7 @@
 //! Default runnable actual RF3 sparse decision and strict copied cold-open case.
 //! In-process data/metadata member delivery is explicit, not TLS qualification.
 use super::*;
-fn make_runtimes(
+pub(super) fn make_runtimes(
     fixture: &ActualNativeRf3Fixture,
     providers: &BTreeMap<ClusterNodeId, Arc<MetadataReadProvider>>,
 ) -> BTreeMap<ClusterNodeId, Arc<RangeRecoveryRuntime>> {
@@ -27,7 +27,7 @@ fn make_runtimes(
         })
         .collect()
 }
-fn fence_pair(
+pub(super) fn fence_pair(
     runtimes: &BTreeMap<ClusterNodeId, Arc<RangeRecoveryRuntime>>,
     actor: &MetadataReadParticipant,
     scope: &RecoveryFenceScope,

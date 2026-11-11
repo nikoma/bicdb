@@ -14,7 +14,7 @@ fn copied_actual_1025_sparse_source_then_full_image_repairs_behind_voter() {
     super::sparse_current_case::run_sparse_current_case(true);
 }
 
-fn recipient_role(
+pub(super) fn recipient_role(
     providers: &BTreeMap<ClusterNodeId, Arc<MetadataReadProvider>>,
     initiator: &MetadataReadParticipant,
     range: &RangeDescriptor,

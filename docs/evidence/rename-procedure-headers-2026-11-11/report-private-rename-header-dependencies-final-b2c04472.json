@@ -1,0 +1,149 @@
+{
+  "source": "b2c044722519291a8c15c76d0d4849366776782b",
+  "scope": "Actual fb8 tests-only control failed both before rename: context-free default evaluator cannot cast source row type; pg_get_function_result loses TABLE output columns. Preserve original assertions. Database-aware defaults evaluate in session security context with caller local slots/vars/memos cleared; ordinary constant-only frame constructor retained for tests. Function/procedure header default casts and TABLE output column types share pure dependency relocation and full raw row journal. Metadata uses original TABLE declaration and consistent SETOF elsewhere. Run both new full two-store/two-decision/reuse/reopen tests plus existing procedure/function/dump/OID tests, process crash matrix58cuts116reopens, Oracle procedure parser and selected type/rename/read-only suites. Private source version465, not final PR145 source469, not full Native SQL ownership, app or VM acceptance. First105 candidate did not compile: accidentally used engine helper available only under cfg(test); no test executions. Use shared production helper. Database-aware defaults must not gain SECURITY DEFINER authority: complete missing PostgreSQL argument values before scalar/procedure/set-returning security entry, retain Oracle-specific bindings, avoid allocation when no missing arguments. Added denied secret function defaults for all three entry paths, explicit values allowed, GRANT allows default afterwards. No assertion relaxation. Actuald135both originaldefaults/TABLE tests pass bothstores/fullrenamecommitrollback/reuse/reopen. Newsecuritytest reaches explicitcallandfails42501on header_definer itself: fixture omitted GRANTonentryroutine, so earlierdenialsneverreachedsecret. Correctfixturegrantsentryroutineexecuteandstrengthensdenialtoheader_secretnames, preserving allotherassertions. Productionruntimeunchangedd135. Earliergroupsnotrunafterfailedtest. At24d2 all3newtests and5earlierroutinestestsPASS, laterfocusedprocessgroupstillrunning. Finalreview removesnewcallbackfromsharedframeconstructorandretainsoriginalOracleconstant/defaultbranches exactly. PGpubliccallerboundarycompletesdefaults beforesecurityentry; keep same originaltestsand finish live24d2 collection. Broad SQLlibrary/generalSQL+targetedroutine/type/securitychecks run after this coherentbatchstabilizes.",
+  "started_unix": 1794403606.8494413,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "rename_routine_header_dependencies",
+        "--test",
+        "rename_routine_row_types",
+        "--test",
+        "table_row_routines",
+        "--",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794403606.8495378,
+      "exit": 0,
+      "finished_unix": 1794403703.7047658
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--lib",
+        "session::rename_",
+        "--",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794403703.7050383,
+      "exit": 0,
+      "finished_unix": 1794403861.611149
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--lib",
+        "oracle::procedures::tests"
+      ],
+      "started_unix": 1794403861.6113708,
+      "exit": 0,
+      "finished_unix": 1794403861.8835402
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "user_type_management",
+        "--test",
+        "composite_types",
+        "--test",
+        "domain_types",
+        "--test",
+        "schema_table_rename",
+        "--test",
+        "read_only_transactions",
+        "--test",
+        "session_statement_snapshots"
+      ],
+      "started_unix": 1794403861.8837073,
+      "exit": 0,
+      "finished_unix": 1794403888.0256703
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "ehr_routine_results"
+      ],
+      "started_unix": 1794403888.0259612,
+      "exit": 0,
+      "finished_unix": 1794403892.2355013
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--lib",
+        "--",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794403892.2358015,
+      "exit": 0,
+      "finished_unix": 1794404115.4211197
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "sql",
+        "--",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794404115.4214408,
+      "exit": 0,
+      "finished_unix": 1794404153.324562
+    }
+  ],
+  "status": "focused_passed",
+  "finished_unix": 1794404153.324867
+}

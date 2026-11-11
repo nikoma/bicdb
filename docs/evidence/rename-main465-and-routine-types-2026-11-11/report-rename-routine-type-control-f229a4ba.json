@@ -1,0 +1,26 @@
+{
+  "source": "f229a4baf867ba2f3a0c81d710367b19ccfa470d",
+  "scope": "Tests-only next dependency identity control. Scalar and array routine signatures bind table row type OIDs. PostgreSQL16.13 two reference cases pass: signatures show renamed names with unchanged argument/return OIDs during owner transaction, commit/rollback, and old spelling reuse. BicDB intended both stores and commit/rollback plus reopen, first failure stops. Runtime identical to 7138 merged-main465 integration; do not assume success or failure, inspect actual result. Not completed SQL scoped admission, application or VM qualification.",
+  "started_unix": 1794395945.694315,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "rename_routine_row_types"
+      ],
+      "started_unix": 1794395945.694405,
+      "exit": 101,
+      "finished_unix": 1794395948.7964232
+    }
+  ],
+  "status": "failed",
+  "finished_unix": 1794395948.7966409
+}

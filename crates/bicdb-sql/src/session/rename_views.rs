@@ -464,10 +464,30 @@ impl VisitorMut for Rebinder<'_> {
 /// Compute before moving the source collection: all metadata-only name binding
 /// must still see the old source. Apply through session view undo afterward.
 pub(super) fn plan_queries(db: &BicDb, old: &str, new: &str) -> Result<Vec<ViewSchema>> {
+    let mut updated =
+        load_schema(db, old)?.ok_or_else(|| SqlError::InvalidCollection(old.into()))?;
+    updated.name = new.into();
+    let replacements =
+        privilege_projection::composite_type_replacements(db, &table_row_type_schema(&updated))?;
     let mut updates = Vec::new();
     for mut view in list_views(db)? {
+        let mut changed = false;
+        let mut columns = view.columns.clone();
+        for column in &mut columns {
+            // Resolve old descriptors before the source spelling disappears.
+            // An indirect view may expose this type without mentioning the
+            // renamed relation anywhere in its own query body.
+            hydrate_view_column_type(db, column)?;
+            changed |= replace_column_user_type_references(column, &replacements);
+        }
+        if changed {
+            view.columns = columns;
+        }
         if view_dependencies::relations(&view.query_sql)?.contains(old) {
             view.query_sql = query(db, &view.query_sql, old, new)?;
+            changed = true;
+        }
+        if changed {
             updates.push(view);
         }
     }

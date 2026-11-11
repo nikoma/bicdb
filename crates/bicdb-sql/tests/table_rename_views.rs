@@ -1,7 +1,7 @@
 //! Stored views retain source identity across rename, rollback and reopen.
 //! Native PG16 controls for these query scopes are retained independently.
 use bicdb_core::{BicDb, DbConfig, StorageMode};
-use bicdb_sql::SqlSession;
+use bicdb_sql::{SqlSession, SqlValue};
 
 const CASES: &[(&str,&str)] = &[
     ("implicit", "SELECT source.id,source.payload FROM source"),
@@ -142,5 +142,58 @@ fn view_rebinding_rolls_back_with_the_rename_savepoint() {
                 .len(),
             2
         );
+    }
+}
+
+#[test]
+fn direct_and_indirect_views_keep_row_type_identity_after_rename_and_reopen() {
+    for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
+        let root = tempfile::tempdir().unwrap();
+        let config = DbConfig::default().with_storage_mode(mode);
+        let mut db = BicDb::open_with_config(root.path(), config.clone()).unwrap();
+        {
+            let mut session = SqlSession::new(&mut db);
+            session.execute("CREATE TABLE source(id INT PRIMARY KEY,payload TEXT); INSERT INTO source VALUES(1,'acknowledged'); CREATE VIEW direct_row AS SELECT source AS item FROM source; CREATE VIEW indirect_row AS SELECT item FROM direct_row; CREATE MATERIALIZED VIEW stored_row AS SELECT item FROM direct_row").unwrap();
+            for view in ["direct_row", "indirect_row", "stored_row"] {
+                assert_eq!(
+                    session
+                        .execute(&format!(
+                            "SELECT (item).payload,pg_typeof(item) FROM {view}"
+                        ))
+                        .unwrap()
+                        .rows,
+                    vec![vec![
+                        SqlValue::String("acknowledged".into()),
+                        SqlValue::String("source".into())
+                    ]]
+                );
+            }
+            session
+                .execute("ALTER TABLE source RENAME TO renamed")
+                .unwrap();
+        }
+        for reopen in [false, true] {
+            if reopen {
+                db.close().unwrap();
+                db = BicDb::open_with_config(root.path(), config.clone()).unwrap();
+            }
+            let mut session = SqlSession::new(&mut db);
+            for view in ["direct_row", "indirect_row", "stored_row"] {
+                assert_eq!(
+                    session
+                        .execute(&format!(
+                            "SELECT (item).payload,pg_typeof(item) FROM {view}"
+                        ))
+                        .unwrap()
+                        .rows,
+                    vec![vec![
+                        SqlValue::String("acknowledged".into()),
+                        SqlValue::String("renamed".into())
+                    ]],
+                    "{view} reopen={reopen}"
+                );
+            }
+        }
+        db.close().unwrap();
     }
 }

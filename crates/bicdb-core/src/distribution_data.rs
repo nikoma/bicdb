@@ -806,7 +806,10 @@ impl ClusterDataNodeService {
         let root = root.as_ref();
         // Refuse unsafe native configuration BEFORE opening or creating any
         // learner/range/digest catalog. Actual DB context, never request DTO.
-        let storage_policy = ServiceStoragePolicy::capture(&try_database_read(&db)?)?;
+        let storage_policy = {
+            let database = try_database_read(&db)?;
+            ServiceStoragePolicy::capture(&database)?
+        };
         storage_policy.validate_configuration(root, fsync)?;
         let learner = RangeLearnerStore::open(root, cluster_id.clone(), fsync)?;
         let range_writes = RangeWriteStore::open(root, cluster_id.clone(), node_id.clone(), fsync)?;

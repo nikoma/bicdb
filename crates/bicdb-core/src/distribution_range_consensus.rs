@@ -29,6 +29,9 @@ use crate::distribution_anti_entropy_auto::{
 use crate::distribution_anti_entropy_repair_certificate::RangeDigestRepairCertificate;
 use crate::distribution_backup::{ClusterBackupPlan, CLUSTER_BACKUP_CERTIFICATE_FORMAT_VERSION};
 use crate::distribution_data::ClusterDataNodeService;
+use crate::distribution_range_handoff::{
+    RangeHandoffPromise, HANDOFF_RANGE_LOG_FORMAT, MAX_HANDOFF_PROMISES,
+};
 use crate::distribution_supervisor::ClusterBackupMetadata;
 use crate::error::{BicDbError, Result};
 
@@ -404,6 +407,8 @@ struct RangeWriteCatalog {
     ranges: BTreeMap<RangeId, RangeWriteLog>,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     backup_fences: BTreeMap<RangeId, RangeBackupWriteFence>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    handoff_promises: BTreeMap<RangeId, RangeHandoffPromise>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -429,11 +434,13 @@ impl RangeWriteEnvelope {
         }
         if !matches!(
             self.catalog.format_version,
-            1 | 2 | RANGE_WRITE_LOG_FORMAT_VERSION
+            1 | 2 | RANGE_WRITE_LOG_FORMAT_VERSION | HANDOFF_RANGE_LOG_FORMAT
         ) {
             return Err(range_write_error(format!(
-                "unsupported range-write log format {}; supported formats are 1, 2, and {}",
-                self.catalog.format_version, RANGE_WRITE_LOG_FORMAT_VERSION
+                "unsupported range-write log format {}; supported formats are 1, 2, {}, and {}",
+                self.catalog.format_version,
+                RANGE_WRITE_LOG_FORMAT_VERSION,
+                HANDOFF_RANGE_LOG_FORMAT
             )));
         }
         for log in self.catalog.ranges.values() {
@@ -457,6 +464,28 @@ impl RangeWriteEnvelope {
                 return Err(range_write_error(format!(
                     "backup fence for {range_id} disagrees with its resolved range log"
                 )));
+            }
+        }
+        if self.catalog.handoff_promises.len() > MAX_HANDOFF_PROMISES {
+            return Err(range_write_error(
+                "range handoff promise catalog exceeds its bound",
+            ));
+        }
+        for (id, promise) in &self.catalog.handoff_promises {
+            promise.validate()?;
+            let log = self
+                .catalog
+                .ranges
+                .get(id)
+                .ok_or_else(|| range_write_error("handoff promise has no range log"))?;
+            if self.catalog.format_version < HANDOFF_RANGE_LOG_FORMAT
+                || promise.range_id != *id
+                || log.current_epoch < promise.activation_epoch
+                || log.resolved_through < promise.resolved_through
+            {
+                return Err(range_write_error(
+                    "handoff promise disagrees with durable range log",
+                ));
             }
         }
         Ok(self.catalog)
@@ -567,6 +596,7 @@ impl RangeWriteStore {
                 node_id: node_id.clone(),
                 ranges: BTreeMap::new(),
                 backup_fences: BTreeMap::new(),
+                handoff_promises: BTreeMap::new(),
             },
             Err(error) => return Err(error.into()),
         };
@@ -575,8 +605,15 @@ impl RangeWriteStore {
                 "range-write catalog cluster or node identity mismatch",
             ));
         }
+        if catalog.format_version >= HANDOFF_RANGE_LOG_FORMAT
+            && (!fsync || !crate::format::range_image_install_active(&root)?)
+        {
+            return Err(range_write_error(
+                "handoff range catalog requires its durable image reader fence and fsync",
+            ));
+        }
         let migrated_v1_decisions = catalog.format_version == 1;
-        let migrated = catalog.format_version != RANGE_WRITE_LOG_FORMAT_VERSION;
+        let migrated = catalog.format_version < RANGE_WRITE_LOG_FORMAT_VERSION;
         if migrated_v1_decisions {
             // Format v1 used `Committed` as its crash-replayable terminal
             // decision. Preserve that published meaning while moving new
@@ -589,7 +626,7 @@ impl RangeWriteStore {
                 }
             }
         }
-        catalog.format_version = RANGE_WRITE_LOG_FORMAT_VERSION;
+        catalog.format_version = catalog.format_version.max(RANGE_WRITE_LOG_FORMAT_VERSION);
         let store = Self {
             root,
             fsync,
@@ -633,6 +670,63 @@ impl RangeWriteStore {
         }
     }
 
+    /// Current metadata and the exclusive range gate are validated by the
+    /// caller. This persistence boundary records its own local resolved cut.
+    pub(crate) fn install_handoff_promise(
+        &mut self,
+        request: &RangeHandoffPromise,
+    ) -> Result<RangeHandoffPromise> {
+        request.validate()?;
+        if !self.fsync || !crate::format::range_image_install_active(&self.root)? {
+            return Err(range_write_error(
+                "durable handoff requires fsync and the sticky image reader fence",
+            ));
+        }
+        if let Some(existing) = self.catalog.handoff_promises.get(&request.range_id) {
+            return if existing.same_request(request) {
+                Ok(existing.clone())
+            } else {
+                Err(range_write_error(
+                    "range is already promised to another handoff",
+                ))
+            };
+        }
+        if self.catalog.handoff_promises.len() >= MAX_HANDOFF_PROMISES {
+            return Err(range_write_error(
+                "handoff promise catalog reached its bound",
+            ));
+        }
+        let progress = self.progress(request.range_id);
+        if progress.current_epoch > request.old_epoch
+            || progress.last_index != progress.resolved_through
+            || self.catalog.backup_fences.contains_key(&request.range_id)
+        {
+            return Err(range_write_error(
+                "handoff requires the current epoch, no backup fence and a resolved local tail",
+            ));
+        }
+        let previous = self.catalog.clone();
+        let mut promise = request.clone();
+        promise.resolved_through = progress.resolved_through;
+        let log = self
+            .catalog
+            .ranges
+            .entry(request.range_id)
+            .or_insert_with(|| RangeWriteLog {
+                current_epoch: request.old_epoch,
+                last_index: 0,
+                resolved_through: 0,
+                compacted_through: 0,
+                entries: BTreeMap::new(),
+            });
+        log.current_epoch = promise.activation_epoch;
+        self.catalog.format_version = HANDOFF_RANGE_LOG_FORMAT;
+        self.catalog
+            .handoff_promises
+            .insert(request.range_id, promise.clone());
+        self.persist_or_restore(previous, promise)
+    }
+
     pub fn active_backup_fence(&self, range_id: RangeId) -> Option<&RangeBackupWriteFence> {
         self.catalog.backup_fences.get(&range_id)
     }
@@ -658,6 +752,11 @@ impl RangeWriteStore {
             expires_at_ms,
         };
         candidate.validate()?;
+        if self.catalog.handoff_promises.contains_key(&range_id) {
+            return Err(range_write_error(
+                "range handoff must finish before a backup fence can be installed",
+            ));
+        }
         if installed_at_ms >= expires_at_ms {
             return Err(range_write_error("range backup fence is already expired"));
         }
@@ -893,6 +992,16 @@ impl RangeWriteStore {
             return Err(range_write_error(
                 "range-write command belongs to another cluster",
             ));
+        }
+        if self
+            .catalog
+            .handoff_promises
+            .contains_key(&command.range_id)
+        {
+            return Err(range_write_error(format!(
+                "range {} is unavailable while its durable handoff is incomplete",
+                command.range_id
+            )));
         }
         if let Some(fence) = self.catalog.backup_fences.get(&command.range_id) {
             if command.index > fence.resolved_through {
@@ -3445,6 +3554,121 @@ mod tests {
         command
     }
 
+    fn handoff_request() -> RangeHandoffPromise {
+        RangeHandoffPromise {
+            session_id: Uuid::new_v4(),
+            relocation_id: crate::RelocationId::new(1).unwrap(),
+            plan_id: "actual-relocation-plan".into(),
+            range_id: RangeId::new(1).unwrap(),
+            old_epoch: 1,
+            activation_epoch: 3,
+            old_config_sha256: "a".repeat(64),
+            new_config_sha256: "b".repeat(64),
+            nonce: Uuid::new_v4(),
+            resolved_through: u64::MAX,
+        }
+    }
+
+    #[test]
+    fn handoff_promise_survives_restart_and_blocks_old_intermediate_and_future_prepares() {
+        let directory = tempfile::tempdir().unwrap();
+        crate::format::enable_range_image_install(directory.path()).unwrap();
+        let cluster = ClusterId::new("range-log-test").unwrap();
+        let node = ClusterNodeId::new("n1").unwrap();
+        let mut store =
+            RangeWriteStore::open(directory.path(), cluster.clone(), node.clone(), true).unwrap();
+        let first = command(1, 1);
+        store.prepare(first.clone()).unwrap();
+        store.commit(&first).unwrap();
+        store.certify(&first).unwrap();
+        store.mark_applied(&first).unwrap();
+        let request = handoff_request();
+        let promise = store.install_handoff_promise(&request).unwrap();
+        assert_eq!(
+            promise.resolved_through, 1,
+            "request cannot invent a local watermark"
+        );
+        assert_eq!(store.install_handoff_promise(&request).unwrap(), promise);
+        drop(store);
+        let mut store =
+            RangeWriteStore::open(directory.path(), cluster.clone(), node.clone(), true).unwrap();
+        assert_eq!(store.catalog.format_version, HANDOFF_RANGE_LOG_FORMAT);
+        for epoch in [1, 2, 3, 999] {
+            assert!(store
+                .prepare(command(2, epoch))
+                .unwrap_err()
+                .to_string()
+                .contains("handoff"));
+        }
+        assert_eq!(store.install_handoff_promise(&request).unwrap(), promise);
+        let mut conflicting = request.clone();
+        conflicting.nonce = Uuid::new_v4();
+        assert!(store.install_handoff_promise(&conflicting).is_err());
+        assert!(RangeWriteStore::open(directory.path(), cluster, node, false).is_err());
+        let mut other = command(1, 1);
+        other.range_id = RangeId::new(2).unwrap();
+        other.checksum_sha256 = other.calculate_checksum().unwrap();
+        store.prepare(other).unwrap();
+    }
+
+    #[test]
+    fn handoff_refuses_provisional_or_certified_unapplied_tail_and_unfenced_format() {
+        let directory = tempfile::tempdir().unwrap();
+        let mut store = RangeWriteStore::open(
+            directory.path(),
+            ClusterId::new("range-log-test").unwrap(),
+            ClusterNodeId::new("n1").unwrap(),
+            true,
+        )
+        .unwrap();
+        let request = handoff_request();
+        assert!(store.install_handoff_promise(&request).is_err());
+        crate::format::enable_range_image_install(directory.path()).unwrap();
+        let first = command(1, 1);
+        store.prepare(first.clone()).unwrap();
+        assert!(store.install_handoff_promise(&request).is_err());
+        store.commit(&first).unwrap();
+        store.certify(&first).unwrap();
+        assert!(store.install_handoff_promise(&request).is_err());
+        assert!(store.catalog.handoff_promises.is_empty());
+        store.mark_applied(&first).unwrap();
+        store.install_handoff_promise(&request).unwrap();
+    }
+
+    #[test]
+    fn handoff_failed_persistence_keeps_previous_authority_and_no_trusted_promise() {
+        let directory = tempfile::tempdir().unwrap();
+        crate::format::enable_range_image_install(directory.path()).unwrap();
+        let mut store = RangeWriteStore::open(
+            directory.path(),
+            ClusterId::new("range-log-test").unwrap(),
+            ClusterNodeId::new("n1").unwrap(),
+            true,
+        )
+        .unwrap();
+        let first = command(1, 1);
+        store.prepare(first.clone()).unwrap();
+        store.abort(&first).unwrap();
+        let before = store.catalog.clone();
+        let log_path = directory.path().join(DEFAULT_RANGE_WRITE_LOG);
+        let saved = directory.path().join("retained-before-interruption.json");
+        std::fs::rename(&log_path, &saved).unwrap();
+        std::fs::create_dir(&log_path).unwrap();
+        assert!(store.install_handoff_promise(&handoff_request()).is_err());
+        assert_eq!(store.catalog, before);
+        std::fs::remove_dir(&log_path).unwrap();
+        std::fs::rename(saved, &log_path).unwrap();
+        drop(store);
+        let reopened = RangeWriteStore::open(
+            directory.path(),
+            ClusterId::new("range-log-test").unwrap(),
+            ClusterNodeId::new("n1").unwrap(),
+            true,
+        )
+        .unwrap();
+        assert_eq!(reopened.catalog, before);
+    }
+
     #[test]
     fn durable_log_recovers_committed_command_and_idempotent_retries() {
         let directory = tempfile::tempdir().unwrap();
@@ -3606,6 +3830,7 @@ mod tests {
                 },
             )]),
             backup_fences: BTreeMap::new(),
+            handoff_promises: BTreeMap::new(),
         };
         let envelope = RangeWriteEnvelope::new(catalog).unwrap();
         fs::write(
@@ -3639,6 +3864,7 @@ mod tests {
             node_id: node.clone(),
             ranges: BTreeMap::new(),
             backup_fences: BTreeMap::new(),
+            handoff_promises: BTreeMap::new(),
         })
         .unwrap();
         let legacy_bytes = serde_json::to_vec_pretty(&envelope).unwrap();

@@ -41,6 +41,8 @@ phonenumber.workspace = true
 reqwest.workspace = true
 regex.workspace = true
 ring.workspace = true
+rustls.workspace = true
+rustls-pemfile.workspace = true
 rust_decimal = { version = "1.43", features = ["serde"] }
 serde.workspace = true
 serde_json.workspace = true

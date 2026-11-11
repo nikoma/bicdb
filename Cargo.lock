@@ -949,6 +949,8 @@ dependencies = [
  "reqwest",
  "ring",
  "rust_decimal",
+ "rustls",
+ "rustls-pemfile",
  "semver",
  "serde",
  "serde_json",

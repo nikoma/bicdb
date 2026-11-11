@@ -80,6 +80,46 @@ fn read_committed_direct_session_observes_commits_between_client_statements() {
 }
 
 #[test]
+fn locking_read_after_an_earlier_read_uses_the_locked_statement_version() {
+    for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
+        for lock in ["FOR UPDATE", "FOR UPDATE NOWAIT", "FOR UPDATE SKIP LOCKED"] {
+            let root = tempfile::tempdir().unwrap();
+            let db = seeded(mode.clone(), root.path());
+            let mut sql = SqlSession::new_shared(&db);
+            let mut peer = SqlSession::new_shared(&db);
+            sql.execute("BEGIN").unwrap();
+            assert_eq!(
+                sql.execute("SELECT payload FROM statement_rows WHERE rowkey=1")
+                    .unwrap()
+                    .rows,
+                vec![vec![SqlValue::Int(10)]]
+            );
+            peer.execute("UPDATE statement_rows SET payload=20 WHERE rowkey=1")
+                .unwrap();
+            assert_eq!(
+                sql.execute(&format!(
+                    "SELECT payload FROM statement_rows WHERE rowkey=1 {lock}"
+                ))
+                .unwrap()
+                .rows,
+                vec![vec![SqlValue::Int(20)]],
+                "{mode} {lock}"
+            );
+            sql.execute("UPDATE statement_rows SET payload=payload+1 WHERE rowkey=1")
+                .unwrap();
+            sql.execute("COMMIT").unwrap();
+            assert_eq!(
+                peer.execute("SELECT payload FROM statement_rows WHERE rowkey=1")
+                    .unwrap()
+                    .rows,
+                vec![vec![SqlValue::Int(21)]],
+                "{mode} {lock}"
+            );
+        }
+    }
+}
+
+#[test]
 fn fixed_read_only_snapshot_is_not_advanced_by_client_statement_refresh() {
     for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
         let root = tempfile::tempdir().unwrap();

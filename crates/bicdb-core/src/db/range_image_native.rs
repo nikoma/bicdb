@@ -18,8 +18,8 @@ pub(crate) use history::{
     NativeLogicalHistoryStepV1,
 };
 pub(crate) use history_stage::{
-    NativeHistoryStage, NativeHistoryStageProgress, NativeHistoryTargetContext,
-    StagedNativeHistoryProof,
+    NativeHistoryPublicationBinding, NativeHistoryStage, NativeHistoryStageProgress,
+    NativeHistoryTargetContext, StagedNativeHistoryProof,
 };
 
 #[cfg(test)]

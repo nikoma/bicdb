@@ -64,11 +64,12 @@ pub(crate) use range_image_install::{
 };
 mod range_image_native;
 pub(crate) use range_image_native::{
-    FreshRangeGenesisAuthority, NativeHistoryStage, NativeHistoryStageProgress,
-    NativeHistoryTargetContext, NativeLogicalHistoryEntryV1, NativeLogicalHistoryOutcomeV1,
-    NativeLogicalHistoryPoint, NativeLogicalHistoryStepV1, NativeRangeInstallSafety,
-    NativeRangePendingApply, NativeRangePrefixObservation, NativeRecoveryAdmission,
-    RangeImageBirthMember, RangeImageBirthSpec, SourceRangeImageLineage, StagedNativeHistoryProof,
+    FreshRangeGenesisAuthority, NativeHistoryPublicationBinding, NativeHistoryStage,
+    NativeHistoryStageProgress, NativeHistoryTargetContext, NativeLogicalHistoryEntryV1,
+    NativeLogicalHistoryOutcomeV1, NativeLogicalHistoryPoint, NativeLogicalHistoryStepV1,
+    NativeRangeInstallSafety, NativeRangePendingApply, NativeRangePrefixObservation,
+    NativeRecoveryAdmission, RangeImageBirthMember, RangeImageBirthSpec, SourceRangeImageLineage,
+    StagedNativeHistoryProof,
 };
 mod range_image_bindings;
 pub(crate) use range_image_bindings::RangeImageDbBindings;

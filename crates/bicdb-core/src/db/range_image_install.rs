@@ -191,7 +191,7 @@ impl NativeTargetImageVerifier {
     }
 }
 impl VerifiedNativeTargetImageContents {
-    fn require_current(
+    pub(in crate::db) fn require_current(
         &self,
         database: &BicDb,
         fence: &TargetImageInstallFence,

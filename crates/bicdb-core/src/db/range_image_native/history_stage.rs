@@ -180,6 +180,8 @@ struct StageHeader {
     audit_next_index: u64,
     audit_head: Option<String>,
     audit_complete: bool,
+    #[serde(default)]
+    published_native_page_xid: Option<u64>,
     checksum_sha256: String,
 }
 impl StageHeader {
@@ -208,6 +210,9 @@ impl StageHeader {
             || self.cursor.complete() != (self.verified_entries == total)
             || self.audit_next_index > total
             || self.audit_complete != (self.audit_next_index == total)
+            || self
+                .published_native_page_xid
+                .is_some_and(|xid| xid == 0 || !self.audit_complete)
         {
             return Err(invalid("damaged/inconsistent native history stage header"));
         }
@@ -302,7 +307,218 @@ impl StagedNativeHistoryProof {
     }
 }
 
+/// Values derived from an actual fully audited staged spine. Only the private
+/// atomic native publisher creates this binding inside its page transaction.
+/// A consumer writes these values into the completed native base receipt;
+/// they grant no committed range configuration or read readiness.
+pub(crate) struct NativeHistoryPublicationBinding<'a> {
+    proof: &'a StagedNativeHistoryProof,
+}
+impl NativeHistoryPublicationBinding<'_> {
+    pub(crate) fn history_generation(&self) -> Uuid {
+        self.proof.history_generation()
+    }
+    pub(crate) fn verified_through(&self) -> u64 {
+        self.proof.verified_through()
+    }
+    pub(crate) fn logical_genesis_sha256(&self) -> &str {
+        self.proof.logical_genesis_sha256()
+    }
+    pub(crate) fn logical_history_sha256(&self) -> &str {
+        self.proof.logical_history_sha256()
+    }
+    pub(crate) fn source_native_receipt_sha256(&self) -> &str {
+        self.proof.source_native_receipt_sha256()
+    }
+    pub(crate) fn target_birth_id(&self) -> Uuid {
+        self.proof.target_birth_id()
+    }
+    pub(crate) fn target_birth_sha256(&self) -> &str {
+        self.proof.target_birth_sha256()
+    }
+    pub(crate) fn attempt_id(&self) -> Uuid {
+        self.proof.attempt_id()
+    }
+    pub(crate) fn source_session_id(&self) -> Uuid {
+        self.proof.source_session_id()
+    }
+    pub(crate) fn source_nonce(&self) -> Uuid {
+        self.proof.source_nonce()
+    }
+    pub(crate) fn range_id(&self) -> RangeId {
+        self.proof.range_id()
+    }
+}
+
 impl BicDb {
+    /// Couple the actual completed native base pointer to old-prefix retirement
+    /// in ONE ordered native page-WAL transaction. Source completion, full
+    /// stored history audit, actual target data/root/UID/visibility proof and
+    /// current immutable catalog/native obligations are independently required.
+    /// No physical data copy or O(R) history copy occurs in this transaction.
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn with_staged_native_history_publication<F>(
+        &self,
+        proof: &StagedNativeHistoryProof,
+        context: &NativeHistoryTargetContext<'_>,
+        source: &crate::distribution_range_image::CompletedNativeRangeImageSource,
+        contents: &super::super::range_image_install::VerifiedNativeTargetImageContents,
+        bindings: &RangeImageDbBindings,
+        cancellation: &CancellationToken,
+        publish_base: F,
+    ) -> Result<bicdb_page::Xid>
+    where
+        F: FnOnce(
+            &crate::paged_collection::PagedRecords,
+            bicdb_page::Xid,
+            &NativeHistoryPublicationBinding<'_>,
+        ) -> Result<()>,
+    {
+        cancellation.check()?;
+        source.require_current()?;
+        let authorization = source.authorize_target_install()?;
+        let journal = self.try_native_image_journal()?;
+        context.require_current_under_journal(self, &journal)?;
+        let mut header = self.read_history_stage(proof.range_id())?;
+        if self.incarnation != proof.database_incarnation
+            || header.stage_id != proof.stage_id
+            || header != proof.header
+            || header.checksum_sha256 != proof.header_sha256
+            || header.source != HistorySourceScope::actual(&authorization)?
+            || !header.audit_complete
+            || !header.cursor.complete()
+            || !header.target_point_matched
+            || !header.remaining_commands.is_empty()
+            || header.published_native_page_xid.is_some()
+            || source.seal().logical_genesis_sha256 != proof.logical_genesis_sha256()
+            || source.seal().logical_history_sha256 != proof.logical_history_sha256()
+            || source.seal().history_entries
+                != proof
+                    .verified_through()
+                    .checked_add(1)
+                    .ok_or_else(|| invalid("native publication history length overflow"))?
+            || !self.native_range_image_installing(proof.range_id())?
+        {
+            return Err(invalid(
+                "native history publication proof/source/dirty scope changed",
+            ));
+        }
+        // Re-read immutable stored endpoints after actual persisted full audit;
+        // no active history keys can be overwritten by the stager.
+        for (index, expected) in [
+            (0, proof.logical_genesis_sha256()),
+            (proof.verified_through(), proof.logical_history_sha256()),
+        ] {
+            if self
+                .read_native_history_entry(proof.range_id(), proof.history_generation(), index)?
+                .commitment_sha256
+                != expected
+            {
+                return Err(invalid("native publication staged endpoint changed"));
+            }
+        }
+        contents.require_current(self, context.fence, context.admission, bindings, source)?;
+        cancellation.check()?;
+        let controlled = self
+            .range_mutations
+            .try_controlled_mutation(context.frozen)?;
+        let binding = NativeHistoryPublicationBinding { proof };
+        let xid = self
+            .in_paged_transaction(|paged, xid| {
+                cancellation.check()?;
+                publish_base(paged, xid, &binding)?;
+                // Read our OWN actual page transaction. A no-op callback or
+                // an old receipt must never retire native lower bounds.
+                let mut own_snapshot = paged.latest_snapshot();
+                own_snapshot.xid = xid;
+                let encoded = paged
+                    .store()
+                    .get_as_of(
+                        &own_snapshot,
+                        &native_key(&format!("install:base:{}", proof.range_id().get())),
+                    )
+                    .map_err(|e| BicDbError::PagedStorage(e.to_string()))?
+                    .ok_or_else(|| invalid("native publisher wrote no completed base"))?;
+                if encoded.len() > MAX_NATIVE_RECEIPT_BYTES {
+                    return Err(invalid("native published base exceeds byte bound"));
+                }
+                let base: serde_json::Value = serde_json::from_slice(&encoded)?;
+                let matches =
+                    |name: &str, expected: serde_json::Value| base.get(name) == Some(&expected);
+                if !matches("native_page_xid", serde_json::json!(xid))
+                    || !matches("birth_id", serde_json::json!(binding.target_birth_id()))
+                    || !matches(
+                        "birth_sha256",
+                        serde_json::json!(binding.target_birth_sha256()),
+                    )
+                    || !matches("attempt_id", serde_json::json!(binding.attempt_id()))
+                    || !matches("session_id", serde_json::json!(binding.source_session_id()))
+                    || !matches("nonce", serde_json::json!(binding.source_nonce()))
+                    || !matches("range_index", serde_json::json!(binding.verified_through()))
+                    || !matches(
+                        "history_verified_through",
+                        serde_json::json!(binding.verified_through()),
+                    )
+                    || !matches(
+                        "history_generation",
+                        serde_json::json!(binding.history_generation()),
+                    )
+                    || !matches(
+                        "logical_genesis_sha256",
+                        serde_json::json!(binding.logical_genesis_sha256()),
+                    )
+                    || !matches(
+                        "logical_history_sha256",
+                        serde_json::json!(binding.logical_history_sha256()),
+                    )
+                    || !matches(
+                        "source_native_receipt_sha256",
+                        serde_json::json!(binding.source_native_receipt_sha256()),
+                    )
+                    || paged
+                        .store()
+                        .get_as_of(
+                            &own_snapshot,
+                            &native_key(&format!("install:active:{}", proof.range_id().get())),
+                        )
+                        .map_err(|e| BicDbError::PagedStorage(e.to_string()))?
+                        .is_some()
+                {
+                    return Err(invalid(
+                        "native publisher base/active/history transaction binding differs",
+                    ));
+                }
+                // The completed receipt's new local history generation is written
+                // by the trusted publisher closure in this same transaction.
+                // Retire only exact old range journals already covered by the
+                // actual immutable target compatibility observation.
+                for key in [
+                    format!("pending:{}", proof.range_id().get()),
+                    format!("prefix:{}", proof.range_id().get()),
+                ] {
+                    paged
+                        .store()
+                        .delete(xid, &native_key(&key))
+                        .map_err(|e| BicDbError::PagedStorage(e.to_string()))?;
+                }
+                header.published_native_page_xid = Some(xid);
+                header.checksum_sha256 = header.checksum()?;
+                header.validate()?;
+                paged
+                    .store()
+                    .put(
+                        xid,
+                        &native_key(&stage_key(proof.range_id())),
+                        &bounded_json(&header, MAX_NATIVE_RECEIPT_BYTES)?,
+                    )
+                    .map_err(|e| BicDbError::PagedStorage(e.to_string()))?;
+                Ok(())
+            })?
+            .ok_or_else(|| invalid("native history publication has no page store"))?;
+        drop(controlled);
+        Ok(xid)
+    }
+
     fn read_history_stage(&self, range: RangeId) -> Result<StageHeader> {
         let header: StageHeader = self
             .read_native_range_image_record(&stage_key(range))?
@@ -330,6 +546,7 @@ impl BicDb {
             || header.native_irreversible_sha256 != context.safety.irreversible_records_sha256()
             || header.catalog_sha256 != context.catalog.range_log_sha256()
             || header.source != HistorySourceScope::actual(source)?
+            || header.published_native_page_xid.is_some()
         {
             return Err(invalid(
                 "native history stage/attempt/source/target binding changed",
@@ -457,6 +674,7 @@ impl BicDb {
             audit_next_index: 0,
             audit_head: None,
             audit_complete: false,
+            published_native_page_xid: None,
             checksum_sha256: String::new(),
         };
         header.checksum_sha256 = header.checksum()?;

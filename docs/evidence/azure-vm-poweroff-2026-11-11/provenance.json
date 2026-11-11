@@ -1,0 +1,189 @@
+{
+  "format": 1,
+  "raw_sources_retained_privately": true,
+  "cold_database_archive_excluded": true,
+  "exports": [
+    {
+      "source_artifact": "vm-fault/report.json",
+      "source_raw_sha256": "097fd5d48108864b2d966ff0779d1086f997683779f230cf8411d0e39c38423d",
+      "export_artifact": "probe-report.json",
+      "export_sha256": "34762a96e809b95872b56f235819f2de2a001dbdb88b26210a2a7b71834cf853",
+      "transformation": "Allowlisted report/measurements/outcomes; omit full topology, redact endpoints, hash guest boot IDs"
+    },
+    {
+      "source_artifact": "vm-fault/report.json",
+      "source_raw_sha256": "097fd5d48108864b2d966ff0779d1086f997683779f230cf8411d0e39c38423d",
+      "export_artifact": "strict-off-window.json",
+      "export_sha256": "d343bbdd50705274a2d1498923b3ca0e3bd12d7601da4ba921cf49a3876b071e",
+      "transformation": "Derived strict classification from preserved call start/completion and actual first start boundary; no provisional window used"
+    },
+    {
+      "source_artifact": "vm-fault/ledger.jsonl",
+      "source_raw_sha256": "9ff5aab791c1e550aa66337425a72df387f111eaf83ecf8f082d35e15afb25d6",
+      "export_artifact": "targeted-ledger.json.gz",
+      "export_sha256": "0784be9e271011486d92058a03166fef4e2336f3ff126b0377bcfa3e4a748eed",
+      "transformation": "Original JSON-lines records converted to JSON array/gzip; redact endpoint text only"
+    },
+    {
+      "source_artifact": "vm-fault/uncertain-outcome-observations.json",
+      "source_raw_sha256": "0d5247b6c8b66fe5bdef02c1686191a955501f16858c521be03c2f8053eff314",
+      "export_artifact": "uncertain-outcomes.json",
+      "export_sha256": "b50fc5f0de1a78f8dfc026d58b87f2a98ba0771f57931a2ee7b1446140d23d3c",
+      "transformation": "JSON normalization; preserve post-convergence point-read scope"
+    },
+    {
+      "source_artifact": "vm-fault/diagnostic-databases.private/receipt.json",
+      "source_raw_sha256": "7b57e51edecf476f1ea7bf1d2d60205624d1c39e480a678035f6f5b3e3c7d7c8",
+      "export_artifact": "diagnostic-export-receipt.json",
+      "export_sha256": "01e1f10b94e506ca50f626a9227410db214b9860a439438b2c534a3af4e47922",
+      "transformation": "Archive metadata only; private database archives not exported"
+    },
+    {
+      "source_artifact": "vm-fault/n0-status-while-off.private.json",
+      "source_raw_sha256": "6461df7d67583933bc639b81157475e1eff86a6e7837f3e04cbe4ea0679a1488",
+      "export_artifact": "n0-status-window.json",
+      "export_sha256": "dce8f24d5a8a6d5ec63698259869b8b85f8fb6a8b8955ab54332d7c7cfca9041",
+      "transformation": "Allowlisted metrics/consensus and membership heartbeat timestamps; no endpoint/certificate identities"
+    },
+    {
+      "source_artifact": "vm-fault/n1-status-while-off.private.json",
+      "source_raw_sha256": "8ac9195dda38a1407b09eb9a5327482858c6ea9acc7b03ada190f62e8aec75e0",
+      "export_artifact": "n1-status-window.json",
+      "export_sha256": "2a749a913807561ec56ef1072d889fbec9c7bf8e07e3868796262e9b4e387423",
+      "transformation": "Allowlisted metrics/consensus and membership heartbeat timestamps; no endpoint/certificate identities"
+    },
+    {
+      "source_artifact": "vm-fault/n2-status-while-off.private.json",
+      "source_raw_sha256": "92116eb628bc7aa194c26b7a7bfe745cdccb369b6437c9caa3264eae30ee53ab",
+      "export_artifact": "n2-status-window.json",
+      "export_sha256": "1a450340b5ad2de57f411ff5faa70f9f4a37fc7ff2db2ed3a4423075414061d6",
+      "transformation": "Allowlisted metrics/consensus and membership heartbeat timestamps; no endpoint/certificate identities"
+    },
+    {
+      "source_artifact": "vm-fault/n3-status-while-off.private.json",
+      "source_raw_sha256": "24141a0357272aee957b3bac6a97b4ac49f434e4b77f67ea14051b11e20631dc",
+      "export_artifact": "n3-status-window.json",
+      "export_sha256": "58acf29941754037629a20ca3732289738d21cb4b75ca9a15fab9f0cfee5197b",
+      "transformation": "Allowlisted metrics/consensus and membership heartbeat timestamps; no endpoint/certificate identities"
+    },
+    {
+      "source_artifact": "vm-fault/n0-runtime-while-off.private.json",
+      "source_raw_sha256": "08a7bec80e587e89b6ec66af679bb8e9d02d6be4c02c9f4f8b8b881e0f86f255",
+      "export_artifact": "n0-continuity-earlier.json",
+      "export_sha256": "5b9a1982bc39dbc1f7657db2f08d52cf15cce8f56c2978d7562ac4a3952b8a80",
+      "transformation": "Derived allowlisted process continuity/CPU and listener/OOM witnesses; no raw endpoints, logs, argv or process-address details"
+    },
+    {
+      "source_artifact": "vm-fault/n0-runtime-after-vm-start.private.json",
+      "source_raw_sha256": "71138df66b5095cf1c3d14c0a8ff0e826c15991850e09af1f6166b370553ea40",
+      "export_artifact": "n0-continuity-later.json",
+      "export_sha256": "005e3cee3e90bc3a144a495cb04640a340a1428e91f270e02f6cc077cb1ba68b",
+      "transformation": "Derived allowlisted process continuity/CPU and listener/OOM witnesses; no raw endpoints, logs, argv or process-address details"
+    },
+    {
+      "source_artifact": "vm-fault/n1-runtime-while-off.private.json",
+      "source_raw_sha256": "c903173731ce023a3766de3cd8fc8821540956e73ba23e9d7b4bd695243c05a5",
+      "export_artifact": "n1-continuity-earlier.json",
+      "export_sha256": "349ddcc261da9173fb647f7a3d8a410182980a8fb6797becc3dbc00741984f1c",
+      "transformation": "Derived allowlisted process continuity/CPU and listener/OOM witnesses; no raw endpoints, logs, argv or process-address details"
+    },
+    {
+      "source_artifact": "vm-fault/n1-runtime-after-vm-start.private.json",
+      "source_raw_sha256": "cf76d0b4defc77fa71b85b4a4e73589d6a66bbbe2cc30bc57ad97ec23f20296f",
+      "export_artifact": "n1-continuity-later.json",
+      "export_sha256": "94238d7b16b5b939546a23bca93948c78393c5ee7cbbf7aa1c18bd5d6e887c26",
+      "transformation": "Derived allowlisted process continuity/CPU and listener/OOM witnesses; no raw endpoints, logs, argv or process-address details"
+    },
+    {
+      "source_artifact": "vm-fault/n2-runtime-while-off.private.json",
+      "source_raw_sha256": "3193ff4f454e4dc03d113f61c580067f19e704a0b15c4f372f46ab99e466409b",
+      "export_artifact": "n2-continuity-earlier.json",
+      "export_sha256": "fc4b4d53ea2d1a001344442ac746d1bd4bb144eb46edd9cc9f37237ddbd79834",
+      "transformation": "Derived allowlisted process continuity/CPU and listener/OOM witnesses; no raw endpoints, logs, argv or process-address details"
+    },
+    {
+      "source_artifact": "vm-fault/n2-runtime-after-vm-start.private.json",
+      "source_raw_sha256": "80940f9d1d66a76c5ec33c1b0669da4ef1c152cb6461998d49aee95c2ad920e4",
+      "export_artifact": "n2-continuity-later.json",
+      "export_sha256": "a975d2c5c627ab626e5e48bbdc426ca6c9d08a49bc05aef6281ebf484c44281f",
+      "transformation": "Derived allowlisted process continuity/CPU and listener/OOM witnesses; no raw endpoints, logs, argv or process-address details"
+    },
+    {
+      "source_artifact": "vm-fault/n3-runtime-while-off.private.json",
+      "source_raw_sha256": "c956322e40a68aad05477bec3b1c825dc33203893ed5e0bf6625586b04ef2916",
+      "export_artifact": "n3-continuity-earlier.json",
+      "export_sha256": "3f316d1cb8162557f5784711917fdfbce412c64636d6ac320581a7d7fffdcb90",
+      "transformation": "Derived allowlisted process continuity/CPU and listener/OOM witnesses; no raw endpoints, logs, argv or process-address details"
+    },
+    {
+      "source_artifact": "vm-fault/n3-runtime-after-vm-start.private.json",
+      "source_raw_sha256": "08881d418f68c8a99027c6e0d2bebdf45939248cc406af4eb966ee125818e54d",
+      "export_artifact": "n3-continuity-later.json",
+      "export_sha256": "c6bdcdc62a1dce1fd08a7d52fea6e33ea5581f18ea5ea2ef71fc629c8b3b7097",
+      "transformation": "Derived allowlisted process continuity/CPU and listener/OOM witnesses; no raw endpoints, logs, argv or process-address details"
+    },
+    {
+      "source_artifact": "vm-fault-attempt-1-aborted/report.json",
+      "source_raw_sha256": "1da6a6bb0adf6663d2f787a41358507aacf2bdb85194edaed1cd72dbb9203d71",
+      "export_artifact": "aborted-v1-report.json",
+      "export_sha256": "657c05ee90869dec6b12c50e444ff43366151cdf66a0efad71e625a2c430419c",
+      "transformation": "Allowlisted launch/hash/abort facts; remove machine-local source paths from launch argv/files"
+    },
+    {
+      "source_artifact": "vm-fault-preflight-abort.json",
+      "source_raw_sha256": "26b9e37c1840361b0f62afd0607131a661ef89a8229108b2afb159d6e7f440f6",
+      "export_artifact": "aborted-v1-reason.json",
+      "export_sha256": "ed70ee0216ef88c29b36c35d9d68c995c997353106cc7f6e29aea983e0c6dd18",
+      "transformation": "Allowlisted launch/hash/abort facts; remove machine-local source paths from launch argv/files"
+    },
+    {
+      "source_artifact": "vm-fault-attempt-1-aborted/launch-provenance.json",
+      "source_raw_sha256": "083ff369780f58699a6ba8f3e94bf7f3aa839e51e80f85bf8d1e72c3bfd50004",
+      "export_artifact": "aborted-v1-launch.json",
+      "export_sha256": "bf487e57de1396486e8cfbbc5bb6c770bf70dfbc60ab1e9997533e8aa440c06a",
+      "transformation": "Allowlisted launch/hash/abort facts; remove machine-local source paths from launch argv/files"
+    },
+    {
+      "source_artifact": "vm-fault-attempt-2-launch-provenance.json",
+      "source_raw_sha256": "cfa0ee0c7f009bccb4ae7bfbe7940ff5675792600d0fff4f94e5c3eef3050066",
+      "export_artifact": "v2-launch.json",
+      "export_sha256": "067fff77a49d7acdb6e5e455c6ce528c2a3b244d2f7ef7c5ea005903d233cff5",
+      "transformation": "Allowlisted launch/hash/abort facts; remove machine-local source paths from launch argv/files"
+    },
+    {
+      "source_artifact": "vm-fault/infra-helper-provenance.json",
+      "source_raw_sha256": "8b5b41476ba54ce2cfc9101c69a56b595817ec67c001039ee999600628e8dea0",
+      "export_artifact": "infra-helper-provenance.json",
+      "export_sha256": "0a11e33281d75d076498a395465293fb737b8bb980f4def1462be59d10d121a4",
+      "transformation": "Allowlisted launch/hash/abort facts; remove machine-local source paths from launch argv/files"
+    },
+    {
+      "source_artifact": "vm-fault-probe.attempt-2.frozen.py",
+      "source_raw_sha256": "7a891dc59bc56a28aa5d292ebec98f4b2090b1b49069b9b6b7a48f293c77544d",
+      "export_artifact": "executed-probe-v2.py",
+      "export_sha256": "7a891dc59bc56a28aa5d292ebec98f4b2090b1b49069b9b6b7a48f293c77544d",
+      "transformation": "Exact helper bytes, inspected for literal endpoint/account/key material; task-local paths retained"
+    },
+    {
+      "source_artifact": "guest-power-fault.executed.py",
+      "source_raw_sha256": "7c3aab8c69ec20315847c2b7d5c22b4e07370bcbecdad4ce0a5bc8d451c94651",
+      "export_artifact": "executed-infra-helper.py",
+      "export_sha256": "7c3aab8c69ec20315847c2b7d5c22b4e07370bcbecdad4ce0a5bc8d451c94651",
+      "transformation": "Exact helper bytes, inspected for literal endpoint/account/key material; task-local paths retained"
+    },
+    {
+      "source_artifact": "vm-fault-attempt-1-aborted/executed-helper.py",
+      "source_raw_sha256": "41423e4d31deffc6079f13bf591a46b57ccd44db4796a8e2b56f2529bb3d2dac",
+      "export_artifact": "aborted-probe-v1.py",
+      "export_sha256": "41423e4d31deffc6079f13bf591a46b57ccd44db4796a8e2b56f2529bb3d2dac",
+      "transformation": "Exact helper bytes, inspected for literal endpoint/account/key material; task-local paths retained"
+    },
+    {
+      "source_artifact": "vm-fault/ledger.jsonl",
+      "source_raw_sha256": "9ff5aab791c1e550aa66337425a72df387f111eaf83ecf8f082d35e15afb25d6",
+      "export_artifact": "fresh-off-window-writes.json",
+      "export_sha256": "1ef7127229ca476d3a531b081c95e8ea536acbfe2161351e8be38d68483e217f",
+      "transformation": "Derived unique-attempt/inserted=true witnesses for strict five calls; source records retained in targeted-ledger export"
+    }
+  ]
+}

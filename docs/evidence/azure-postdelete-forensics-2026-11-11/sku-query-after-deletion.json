@@ -1,0 +1,173 @@
+[
+  {
+    "capabilities": [
+      {
+        "name": "MaxResourceVolumeMB",
+        "value": "16384"
+      },
+      {
+        "name": "OSVhdSizeMB",
+        "value": "1047552"
+      },
+      {
+        "name": "vCPUs",
+        "value": "2"
+      },
+      {
+        "name": "MemoryPreservingMaintenanceSupported",
+        "value": "True"
+      },
+      {
+        "name": "HyperVGenerations",
+        "value": "V1,V2"
+      },
+      {
+        "name": "SupportedCapacityReservationTypes",
+        "value": "Open,Targeted"
+      },
+      {
+        "name": "SupportedEphemeralOSDiskPlacements",
+        "value": "ResourceDisk,CacheDisk"
+      },
+      {
+        "name": "MemoryGB",
+        "value": "8"
+      },
+      {
+        "name": "MaxDataDiskCount",
+        "value": "4"
+      },
+      {
+        "name": "CpuArchitectureType",
+        "value": "x64"
+      },
+      {
+        "name": "LowPriorityCapable",
+        "value": "True"
+      },
+      {
+        "name": "PremiumIO",
+        "value": "True"
+      },
+      {
+        "name": "VMDeploymentTypes",
+        "value": "IaaS"
+      },
+      {
+        "name": "vCPUsConstraintsAllowed",
+        "value": "1, 2"
+      },
+      {
+        "name": "vCPUsAvailable",
+        "value": "2"
+      },
+      {
+        "name": "ACUs",
+        "value": "160"
+      },
+      {
+        "name": "vCPUsPerCore",
+        "value": "2"
+      },
+      {
+        "name": "CombinedTempDiskAndCachedIOPS",
+        "value": "4000"
+      },
+      {
+        "name": "CombinedTempDiskAndCachedReadBytesPerSecond",
+        "value": "32768000"
+      },
+      {
+        "name": "CombinedTempDiskAndCachedWriteBytesPerSecond",
+        "value": "32768000"
+      },
+      {
+        "name": "CachedDiskBytes",
+        "value": "53687091200"
+      },
+      {
+        "name": "UncachedDiskIOPS",
+        "value": "3200"
+      },
+      {
+        "name": "UncachedDiskBytesPerSecond",
+        "value": "48000000"
+      },
+      {
+        "name": "EphemeralOSDiskSupported",
+        "value": "True"
+      },
+      {
+        "name": "EncryptionAtHostSupported",
+        "value": "True"
+      },
+      {
+        "name": "CapacityReservationSupported",
+        "value": "True"
+      },
+      {
+        "name": "AcceleratedNetworkingEnabled",
+        "value": "True"
+      },
+      {
+        "name": "RdmaEnabled",
+        "value": "False"
+      },
+      {
+        "name": "MaxNetworkInterfaces",
+        "value": "2"
+      }
+    ],
+    "family": "standardDSv3Family",
+    "locationInfo": [
+      {
+        "location": "northeurope",
+        "zoneDetails": [
+          {
+            "capabilities": [
+              {
+                "name": "UltraSSDAvailable",
+                "value": "True"
+              }
+            ],
+            "name": [
+              "2",
+              "3",
+              "1"
+            ]
+          }
+        ],
+        "zones": [
+          "2",
+          "3",
+          "1"
+        ]
+      }
+    ],
+    "locations": [
+      "northeurope"
+    ],
+    "name": "Standard_D2s_v3",
+    "resourceType": "virtualMachines",
+    "restrictions": [
+      {
+        "reasonCode": "NotAvailableForSubscription",
+        "restrictionInfo": {
+          "locations": [
+            "northeurope"
+          ],
+          "zones": [
+            "2",
+            "3"
+          ]
+        },
+        "type": "Zone",
+        "values": [
+          "northeurope"
+        ]
+      }
+    ],
+    "size": "D2s_v3",
+    "tier": "Standard"
+  }
+]

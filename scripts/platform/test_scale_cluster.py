@@ -7,6 +7,7 @@ import sys
 import tempfile
 import unittest
 import uuid
+from unittest import mock
 
 spec = importlib.util.spec_from_file_location('scale_cluster', Path(__file__).with_name('scale-cluster.py'))
 scale = importlib.util.module_from_spec(spec)
@@ -57,6 +58,42 @@ class HarnessContracts(unittest.TestCase):
             Path(host.root, 'process.json').write_text(json.dumps(dict(pid=os.getpid(), start='invalid')))
             with self.assertRaisesRegex(RuntimeError, 'outside this run'):
                 host.action('signal', signal='SIGKILL')
+
+    def test_storage_environment_prefix_reaches_commands_and_launch_without_shell_interpolation(self):
+        host = scale.Host(dict(address='127.0.0.1:9444'), 0, 'fixture', '/tmp/bicdb', True,
+                          storage_mode='server_paged', buffer_pool_bytes=268435456)
+        prefix = ['env', 'BICDB_STORAGE_MODE=server_paged', 'BICDB_PAGED_BUFFER_POOL_BYTES=268435456', '/tmp/bicdb']
+        with mock.patch.object(host, 'action', return_value={'code': 0, 'stdout': 'ok'}) as action:
+            host.command('cluster', 'init', host.db)
+            self.assertEqual(action.call_args.kwargs['argv'][:4], prefix)
+            host.start()
+            self.assertEqual(action.call_args.kwargs['argv'][:4], prefix)
+        self.assertEqual(scale.storage_environment(None, None), [])
+
+    def test_storage_and_capacity_bounds_refuse_before_binary_or_host_access(self):
+        scale.validate_storage_options('server_paged', 268435456, 100000000000)
+        for mode, pool, capacity in [('server_paged', 0, 1), (None, 268435456, 1),
+                                     ('embedded_memory', 8192, 1), (None, None, 0),
+                                     (None, None, 2**64), ('unknown', None, 1)]:
+            with self.subTest(mode=mode,pool=pool,capacity=capacity), self.assertRaises(ValueError):
+                scale.validate_storage_options(mode, pool, capacity)
+        result = subprocess.run([sys.executable, str(Path(scale.__file__)), '--local',
+                                 '--binary', '/does/not/exist', '--output', '/does/not/exist',
+                                 '--node-capacity-bytes', '0'], capture_output=True, text=True)
+        self.assertEqual(result.returncode, 2)
+        self.assertIn('node capacity', result.stderr)
+        self.assertNotIn('Traceback', result.stderr)
+
+    def test_persisted_storage_mismatch_is_not_accepted_as_requested_mode(self):
+        host = mock.Mock(index=3)
+        host.action.return_value = {'contents': json.dumps({'storage_mode': 'embedded_memory'})}
+        records = scale.persisted_storage([host])
+        self.assertEqual(host.action.call_args.kwargs['file'], 'db/format.json')
+        with self.assertRaisesRegex(RuntimeError, 'embedded_memory.*server_paged'):
+            scale.validate_persisted_storage(records, 'server_paged')
+        scale.validate_persisted_storage(records, None)
+        records[0]['format']['storage_mode'] = 'server_paged'
+        scale.validate_persisted_storage(records, 'server_paged')
 
     def test_capacity_requires_serving_leaders_and_no_remaining_relocation(self):
         status = dict(topology=dict(nodes={'n0':dict(metadata_role='voter')}, ranges={'0':dict(leader='n0')}),

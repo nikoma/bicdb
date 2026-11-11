@@ -1,0 +1,242 @@
+[
+  {
+    "label": "vm-0",
+    "queried_at_utc": "2026-11-11T07:00:41.809536+00:00",
+    "metric_names": [
+      "Percentage CPU"
+    ],
+    "aggregation": "Average",
+    "interval": "PT1M",
+    "requested_timespan_utc": "2026-11-11T03:52:00Z/2026-11-11T06:52:00Z",
+    "exit_code": 1,
+    "error": "ERROR: Not Found({\"error\":{\"code\":\"ResourceGroupNotFound\",\"message\":\"Resource group '<original-experiment-group>' could not be found.\"}})\n",
+    "returned_json_bytes": 0,
+    "status": "unavailable_not_zero"
+  },
+  {
+    "label": "vm-1",
+    "queried_at_utc": "2026-11-11T07:00:42.615617+00:00",
+    "metric_names": [
+      "Percentage CPU"
+    ],
+    "aggregation": "Average",
+    "interval": "PT1M",
+    "requested_timespan_utc": "2026-11-11T03:52:00Z/2026-11-11T06:52:00Z",
+    "exit_code": 1,
+    "error": "ERROR: Not Found({\"error\":{\"code\":\"ResourceGroupNotFound\",\"message\":\"Resource group '<original-experiment-group>' could not be found.\"}})\n",
+    "returned_json_bytes": 0,
+    "status": "unavailable_not_zero"
+  },
+  {
+    "label": "vm-2",
+    "queried_at_utc": "2026-11-11T07:00:43.089530+00:00",
+    "metric_names": [
+      "Percentage CPU"
+    ],
+    "aggregation": "Average",
+    "interval": "PT1M",
+    "requested_timespan_utc": "2026-11-11T03:52:00Z/2026-11-11T06:52:00Z",
+    "exit_code": 1,
+    "error": "ERROR: Not Found({\"error\":{\"code\":\"ResourceNotFound\",\"message\":\"The Resource 'Microsoft.Compute/virtualMachines/n2' under resource group '<original-experiment-group>' was not found. For more details please go to https://aka.ms/ARMResourceNotFoundFix\"}})\n",
+    "returned_json_bytes": 0,
+    "status": "unavailable_not_zero"
+  },
+  {
+    "label": "vm-3",
+    "queried_at_utc": "2026-11-11T07:00:43.566478+00:00",
+    "metric_names": [
+      "Percentage CPU"
+    ],
+    "aggregation": "Average",
+    "interval": "PT1M",
+    "requested_timespan_utc": "2026-11-11T03:52:00Z/2026-11-11T06:52:00Z",
+    "exit_code": 1,
+    "error": "ERROR: Not Found({\"error\":{\"code\":\"ResourceNotFound\",\"message\":\"The Resource 'Microsoft.Compute/virtualMachines/n3' under resource group '<original-experiment-group>' was not found. For more details please go to https://aka.ms/ARMResourceNotFoundFix\"}})\n",
+    "returned_json_bytes": 0,
+    "status": "unavailable_not_zero"
+  },
+  {
+    "label": "vm-4",
+    "queried_at_utc": "2026-11-11T07:00:44.427790+00:00",
+    "metric_names": [
+      "Percentage CPU"
+    ],
+    "aggregation": "Average",
+    "interval": "PT1M",
+    "requested_timespan_utc": "2026-11-11T03:52:00Z/2026-11-11T06:52:00Z",
+    "exit_code": 1,
+    "error": "ERROR: Not Found({\"error\":{\"code\":\"ResourceGroupNotFound\",\"message\":\"Resource group '<original-experiment-group>' could not be found.\"}})\n",
+    "returned_json_bytes": 0,
+    "status": "unavailable_not_zero"
+  },
+  {
+    "label": "disk-0",
+    "queried_at_utc": "2026-11-11T07:00:45.446416+00:00",
+    "metric_names": [
+      "Composite Disk Read Bytes/sec",
+      "Composite Disk Write Bytes/sec",
+      "Composite Disk Read Operations/sec",
+      "Composite Disk Write Operations/sec"
+    ],
+    "aggregation": "Average",
+    "interval": "PT1M",
+    "requested_timespan_utc": "2026-11-11T03:52:00Z/2026-11-11T06:52:00Z",
+    "exit_code": 1,
+    "error": "ERROR: Not Found({\"error\":{\"code\":\"ResourceGroupNotFound\",\"message\":\"Resource group 'BICDB-SCALE-20261111-035251' could not be found.\"}})\n",
+    "returned_json_bytes": 0,
+    "status": "unavailable_not_zero"
+  },
+  {
+    "label": "disk-1",
+    "queried_at_utc": "2026-11-11T07:00:46.277518+00:00",
+    "metric_names": [
+      "Composite Disk Read Bytes/sec",
+      "Composite Disk Write Bytes/sec",
+      "Composite Disk Read Operations/sec",
+      "Composite Disk Write Operations/sec"
+    ],
+    "aggregation": "Average",
+    "interval": "PT1M",
+    "requested_timespan_utc": "2026-11-11T03:52:00Z/2026-11-11T06:52:00Z",
+    "exit_code": 1,
+    "error": "ERROR: Not Found({\"error\":{\"code\":\"ResourceGroupNotFound\",\"message\":\"Resource group 'BICDB-SCALE-20261111-035251' could not be found.\"}})\n",
+    "returned_json_bytes": 0,
+    "status": "unavailable_not_zero"
+  },
+  {
+    "label": "disk-2",
+    "queried_at_utc": "2026-11-11T07:00:46.955438+00:00",
+    "metric_names": [
+      "Composite Disk Read Bytes/sec",
+      "Composite Disk Write Bytes/sec",
+      "Composite Disk Read Operations/sec",
+      "Composite Disk Write Operations/sec"
+    ],
+    "aggregation": "Average",
+    "interval": "PT1M",
+    "requested_timespan_utc": "2026-11-11T03:52:00Z/2026-11-11T06:52:00Z",
+    "exit_code": 1,
+    "error": "ERROR: Not Found({\"error\":{\"code\":\"ResourceGroupNotFound\",\"message\":\"Resource group 'BICDB-SCALE-20261111-035251' could not be found.\"}})\n",
+    "returned_json_bytes": 0,
+    "status": "unavailable_not_zero"
+  },
+  {
+    "label": "disk-3",
+    "queried_at_utc": "2026-11-11T07:00:47.816669+00:00",
+    "metric_names": [
+      "Composite Disk Read Bytes/sec",
+      "Composite Disk Write Bytes/sec",
+      "Composite Disk Read Operations/sec",
+      "Composite Disk Write Operations/sec"
+    ],
+    "aggregation": "Average",
+    "interval": "PT1M",
+    "requested_timespan_utc": "2026-11-11T03:52:00Z/2026-11-11T06:52:00Z",
+    "exit_code": 1,
+    "error": "ERROR: Not Found({\"error\":{\"code\":\"ResourceGroupNotFound\",\"message\":\"Resource group 'BICDB-SCALE-20261111-035251' could not be found.\"}})\n",
+    "returned_json_bytes": 0,
+    "status": "unavailable_not_zero"
+  },
+  {
+    "label": "disk-4",
+    "queried_at_utc": "2026-11-11T07:00:48.404166+00:00",
+    "metric_names": [
+      "Composite Disk Read Bytes/sec",
+      "Composite Disk Write Bytes/sec",
+      "Composite Disk Read Operations/sec",
+      "Composite Disk Write Operations/sec"
+    ],
+    "aggregation": "Average",
+    "interval": "PT1M",
+    "requested_timespan_utc": "2026-11-11T03:52:00Z/2026-11-11T06:52:00Z",
+    "exit_code": 1,
+    "error": "ERROR: Not Found({\"error\":{\"code\":\"ResourceNotFound\",\"message\":\"The Resource 'Microsoft.Compute/disks/n2_OsDisk_1_2b8331db08b7474e8c59af399d8fb060' under resource group 'BICDB-SCALE-20261111-035251' was not found. For more details please go to https://aka.ms/ARMResourceNotFoundFix\"}})\n",
+    "returned_json_bytes": 0,
+    "status": "unavailable_not_zero"
+  },
+  {
+    "label": "disk-5",
+    "queried_at_utc": "2026-11-11T07:00:49.221679+00:00",
+    "metric_names": [
+      "Composite Disk Read Bytes/sec",
+      "Composite Disk Write Bytes/sec",
+      "Composite Disk Read Operations/sec",
+      "Composite Disk Write Operations/sec"
+    ],
+    "aggregation": "Average",
+    "interval": "PT1M",
+    "requested_timespan_utc": "2026-11-11T03:52:00Z/2026-11-11T06:52:00Z",
+    "exit_code": 1,
+    "error": "ERROR: Not Found({\"error\":{\"code\":\"ResourceGroupNotFound\",\"message\":\"Resource group 'BICDB-SCALE-20261111-035251' could not be found.\"}})\n",
+    "returned_json_bytes": 0,
+    "status": "unavailable_not_zero"
+  },
+  {
+    "label": "disk-6",
+    "queried_at_utc": "2026-11-11T07:00:49.995905+00:00",
+    "metric_names": [
+      "Composite Disk Read Bytes/sec",
+      "Composite Disk Write Bytes/sec",
+      "Composite Disk Read Operations/sec",
+      "Composite Disk Write Operations/sec"
+    ],
+    "aggregation": "Average",
+    "interval": "PT1M",
+    "requested_timespan_utc": "2026-11-11T03:52:00Z/2026-11-11T06:52:00Z",
+    "exit_code": 1,
+    "error": "ERROR: Not Found({\"error\":{\"code\":\"ResourceGroupNotFound\",\"message\":\"Resource group 'BICDB-SCALE-20261111-035251' could not be found.\"}})\n",
+    "returned_json_bytes": 0,
+    "status": "unavailable_not_zero"
+  },
+  {
+    "label": "disk-7",
+    "queried_at_utc": "2026-11-11T07:00:50.750889+00:00",
+    "metric_names": [
+      "Composite Disk Read Bytes/sec",
+      "Composite Disk Write Bytes/sec",
+      "Composite Disk Read Operations/sec",
+      "Composite Disk Write Operations/sec"
+    ],
+    "aggregation": "Average",
+    "interval": "PT1M",
+    "requested_timespan_utc": "2026-11-11T03:52:00Z/2026-11-11T06:52:00Z",
+    "exit_code": 1,
+    "error": "ERROR: Not Found({\"error\":{\"code\":\"ResourceGroupNotFound\",\"message\":\"Resource group 'BICDB-SCALE-20261111-035251' could not be found.\"}})\n",
+    "returned_json_bytes": 0,
+    "status": "unavailable_not_zero"
+  },
+  {
+    "label": "disk-8",
+    "queried_at_utc": "2026-11-11T07:00:51.123064+00:00",
+    "metric_names": [
+      "Composite Disk Read Bytes/sec",
+      "Composite Disk Write Bytes/sec",
+      "Composite Disk Read Operations/sec",
+      "Composite Disk Write Operations/sec"
+    ],
+    "aggregation": "Average",
+    "interval": "PT1M",
+    "requested_timespan_utc": "2026-11-11T03:52:00Z/2026-11-11T06:52:00Z",
+    "exit_code": 1,
+    "error": "ERROR: Not Found({\"error\":{\"code\":\"ResourceNotFound\",\"message\":\"The Resource 'Microsoft.Compute/disks/n4_OsDisk_1_5fbe77e9402a4675bd4a1d07120a5495' under resource group 'BICDB-SCALE-20261111-035251' was not found. For more details please go to https://aka.ms/ARMResourceNotFoundFix\"}})\n",
+    "returned_json_bytes": 0,
+    "status": "unavailable_not_zero"
+  },
+  {
+    "label": "disk-9",
+    "queried_at_utc": "2026-11-11T07:00:52.152342+00:00",
+    "metric_names": [
+      "Composite Disk Read Bytes/sec",
+      "Composite Disk Write Bytes/sec",
+      "Composite Disk Read Operations/sec",
+      "Composite Disk Write Operations/sec"
+    ],
+    "aggregation": "Average",
+    "interval": "PT1M",
+    "requested_timespan_utc": "2026-11-11T03:52:00Z/2026-11-11T06:52:00Z",
+    "exit_code": 1,
+    "error": "ERROR: Not Found({\"error\":{\"code\":\"ResourceGroupNotFound\",\"message\":\"Resource group 'BICDB-SCALE-20261111-035251' could not be found.\"}})\n",
+    "returned_json_bytes": 0,
+    "status": "unavailable_not_zero"
+  }
+]

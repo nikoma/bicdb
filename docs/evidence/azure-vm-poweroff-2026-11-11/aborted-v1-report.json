@@ -1,0 +1,8 @@
+{
+  "binary_sha256": "15ad8ad644c92fd9248020c19b1fad9d4f62e6dceef8d4bc43f1415a8ff4e028",
+  "events": [],
+  "fault_mechanism": "azure_guest_abrupt_power_off",
+  "physical_host_power_loss": false,
+  "qualification_status": "not_qualified",
+  "source_commit": "b05385d4b033edf0db03f3eccf4bdd86f7c8eddb"
+}

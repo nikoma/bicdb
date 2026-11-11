@@ -1,0 +1,32 @@
+{
+  "source_revision": "b05385d4b033edf0db03f3eccf4bdd86f7c8eddb",
+  "source_tree": "61bf3210c7278f13806ab425643470a03688c2ae",
+  "source_clean_at_build_start": true,
+  "environment": {
+    "CARGO_TARGET_DIR": "/tmp/bicdb-azure-artifact-target",
+    "CARGO_BUILD_JOBS": "1",
+    "CARGO_INCREMENTAL": "0",
+    "RUSTFLAGS": null,
+    "CARGO_ENCODED_RUSTFLAGS": null,
+    "CARGO_PROFILE_RELEASE_OPT_LEVEL": null,
+    "CARGO_PROFILE_RELEASE_DEBUG": null,
+    "CARGO_PROFILE_RELEASE_LTO": null,
+    "CARGO_PROFILE_RELEASE_CODEGEN_UNITS": null,
+    "CARGO_PROFILE_RELEASE_PANIC": null,
+    "RUSTUP_TOOLCHAIN": "1.96.0-x86_64-unknown-linux-gnu",
+    "CC": null,
+    "CFLAGS": null,
+    "CXX": null,
+    "CXXFLAGS": null
+  },
+  "features": "bicdb-cli defaults, no --features/no --no-default-features",
+  "profile": "standard repository release",
+  "source_hashes": {
+    "Cargo.toml": "7c756098550cdd9c86d781044c6427a369dc9983ce9296df07ed4d720ae7a3ad",
+    "Cargo.lock": "296372b3d1df9e72cc329425b40ef1a083c9d64b1a7c0e1137435ae20a8514f5",
+    "rust-toolchain.toml": "66894b16254576f70fc56e3e3abf4d489c678e08feaec17e101ec405207b9d84",
+    "crates/bicdb-cli/Cargo.toml": "9deacd6451dc75c040ab3f4c89084abb23cbf6bfc8701112e0b25c09353b78d2"
+  },
+  "compiler": "rustc 1.96.0 (ac68faa20 2026-05-25)\nbinary: rustc\ncommit-hash: ac68faa20c58cbccd01ee7208bf3b6e93a7d7f96\ncommit-date: 2026-05-25\nhost: x86_64-unknown-linux-gnu\nrelease: 1.96.0\nLLVM version: 22.1.2\n",
+  "cargo": "cargo 1.96.0 (30a34c682 2026-05-25)"
+}

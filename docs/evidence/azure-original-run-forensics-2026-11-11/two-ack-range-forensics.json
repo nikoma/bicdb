@@ -1,0 +1,870 @@
+{
+  "runtime_source": "b05385d4b033edf0db03f3eccf4bdd86f7c8eddb",
+  "focus": [
+    {
+      "label": "A",
+      "record_id_sha256": "04fbba34f4a4eac064060eefd057b8e4a964a79cc9874330811898e6f09711e7",
+      "range_id": 41,
+      "snapshots": [
+        {
+          "snapshot": "baseline_four_checkpoint",
+          "topology_generation": 2124,
+          "metrics_generated_at_ms": 1794375806261,
+          "range_id": 41,
+          "range_epoch": 10,
+          "leader": "n0",
+          "replicas": [
+            {
+              "id": 41,
+              "node_id": "n0",
+              "role": "voter"
+            },
+            {
+              "id": 169,
+              "node_id": "n2",
+              "role": "voter"
+            },
+            {
+              "id": 219,
+              "node_id": "n3",
+              "role": "voter"
+            }
+          ]
+        },
+        {
+          "snapshot": "mid_growth_local_observation",
+          "topology_generation": 8314,
+          "metrics_generated_at_ms": 1794377338163,
+          "range_id": 41,
+          "range_epoch": 13,
+          "leader": "n3",
+          "replicas": [
+            {
+              "id": 41,
+              "node_id": "n0",
+              "role": "voter"
+            },
+            {
+              "id": 169,
+              "node_id": "n2",
+              "role": "voter"
+            },
+            {
+              "id": 219,
+              "node_id": "n3",
+              "role": "voter"
+            },
+            {
+              "id": 276,
+              "node_id": "n4",
+              "role": "learner"
+            }
+          ]
+        },
+        {
+          "snapshot": "diagnostic_300s_last_local_observation",
+          "topology_generation": 9616,
+          "metrics_generated_at_ms": 1794378397472,
+          "range_id": 41,
+          "range_epoch": 18,
+          "leader": "n0",
+          "replicas": [
+            {
+              "id": 41,
+              "node_id": "n0",
+              "role": "voter"
+            },
+            {
+              "id": 219,
+              "node_id": "n3",
+              "role": "voter"
+            },
+            {
+              "id": 276,
+              "node_id": "n4",
+              "role": "voter"
+            },
+            {
+              "id": 347,
+              "node_id": "n2",
+              "role": "learner"
+            }
+          ]
+        }
+      ],
+      "original_archived_nodes": [
+        {
+          "node": 0,
+          "topology_generation": 8969,
+          "persisted_range_epoch": 16,
+          "persisted_range_leader": "n4",
+          "persisted_replicas": [
+            {
+              "id": 41,
+              "node_id": "n0",
+              "role": "voter"
+            },
+            {
+              "id": 219,
+              "node_id": "n3",
+              "role": "voter"
+            },
+            {
+              "id": 276,
+              "node_id": "n4",
+              "role": "voter"
+            }
+          ],
+          "catalog_range": {
+            "current_epoch": 13,
+            "last_index": 107,
+            "resolved_through": 107,
+            "compacted_through": 0
+          },
+          "matching_retained_commands": [
+            {
+              "command_id_sha256": "bce0ebc94e39c8806ad9a36081490e70518814ef85e2e8f6ed2d1813ea5d9c7a",
+              "command_checksum_sha256": "1eb4d2d0dc763b8d004f985b6ed06fdba46f6e91c58ca21e82ae2afcb4910ab4",
+              "range_epoch": 11,
+              "index": 74,
+              "declared_leader": "n2",
+              "state": "applied",
+              "exact_expected_payload": true,
+              "resolved_watermark_covers_command": true
+            }
+          ],
+          "scope": "persisted local state after owned sequential shutdown; not original read-time topology"
+        },
+        {
+          "node": 1,
+          "topology_generation": 9034,
+          "persisted_range_epoch": 16,
+          "persisted_range_leader": "n4",
+          "persisted_replicas": [
+            {
+              "id": 41,
+              "node_id": "n0",
+              "role": "voter"
+            },
+            {
+              "id": 219,
+              "node_id": "n3",
+              "role": "voter"
+            },
+            {
+              "id": 276,
+              "node_id": "n4",
+              "role": "voter"
+            }
+          ],
+          "catalog_range": null,
+          "matching_retained_commands": [],
+          "scope": "persisted local state after owned sequential shutdown; not original read-time topology"
+        },
+        {
+          "node": 2,
+          "topology_generation": 9066,
+          "persisted_range_epoch": 16,
+          "persisted_range_leader": "n4",
+          "persisted_replicas": [
+            {
+              "id": 41,
+              "node_id": "n0",
+              "role": "voter"
+            },
+            {
+              "id": 219,
+              "node_id": "n3",
+              "role": "voter"
+            },
+            {
+              "id": 276,
+              "node_id": "n4",
+              "role": "voter"
+            }
+          ],
+          "catalog_range": {
+            "current_epoch": 13,
+            "last_index": 107,
+            "resolved_through": 107,
+            "compacted_through": 0
+          },
+          "matching_retained_commands": [
+            {
+              "command_id_sha256": "bce0ebc94e39c8806ad9a36081490e70518814ef85e2e8f6ed2d1813ea5d9c7a",
+              "command_checksum_sha256": "1eb4d2d0dc763b8d004f985b6ed06fdba46f6e91c58ca21e82ae2afcb4910ab4",
+              "range_epoch": 11,
+              "index": 74,
+              "declared_leader": "n2",
+              "state": "applied",
+              "exact_expected_payload": true,
+              "resolved_watermark_covers_command": true
+            }
+          ],
+          "scope": "persisted local state after owned sequential shutdown; not original read-time topology"
+        },
+        {
+          "node": 3,
+          "topology_generation": 9073,
+          "persisted_range_epoch": 16,
+          "persisted_range_leader": "n4",
+          "persisted_replicas": [
+            {
+              "id": 41,
+              "node_id": "n0",
+              "role": "voter"
+            },
+            {
+              "id": 219,
+              "node_id": "n3",
+              "role": "voter"
+            },
+            {
+              "id": 276,
+              "node_id": "n4",
+              "role": "voter"
+            }
+          ],
+          "catalog_range": {
+            "current_epoch": 13,
+            "last_index": 107,
+            "resolved_through": 107,
+            "compacted_through": 0
+          },
+          "matching_retained_commands": [
+            {
+              "command_id_sha256": "bce0ebc94e39c8806ad9a36081490e70518814ef85e2e8f6ed2d1813ea5d9c7a",
+              "command_checksum_sha256": "1eb4d2d0dc763b8d004f985b6ed06fdba46f6e91c58ca21e82ae2afcb4910ab4",
+              "range_epoch": 11,
+              "index": 74,
+              "declared_leader": "n2",
+              "state": "applied",
+              "exact_expected_payload": true,
+              "resolved_watermark_covers_command": true
+            }
+          ],
+          "scope": "persisted local state after owned sequential shutdown; not original read-time topology"
+        },
+        {
+          "node": 4,
+          "topology_generation": 9073,
+          "persisted_range_epoch": 16,
+          "persisted_range_leader": "n4",
+          "persisted_replicas": [
+            {
+              "id": 41,
+              "node_id": "n0",
+              "role": "voter"
+            },
+            {
+              "id": 219,
+              "node_id": "n3",
+              "role": "voter"
+            },
+            {
+              "id": 276,
+              "node_id": "n4",
+              "role": "voter"
+            }
+          ],
+          "catalog_range": {
+            "current_epoch": 13,
+            "last_index": 107,
+            "resolved_through": 107,
+            "compacted_through": 0
+          },
+          "matching_retained_commands": [
+            {
+              "command_id_sha256": "bce0ebc94e39c8806ad9a36081490e70518814ef85e2e8f6ed2d1813ea5d9c7a",
+              "command_checksum_sha256": "1eb4d2d0dc763b8d004f985b6ed06fdba46f6e91c58ca21e82ae2afcb4910ab4",
+              "range_epoch": 11,
+              "index": 74,
+              "declared_leader": "n2",
+              "state": "applied",
+              "exact_expected_payload": true,
+              "resolved_watermark_covers_command": true
+            }
+          ],
+          "scope": "persisted local state after owned sequential shutdown; not original read-time topology"
+        }
+      ],
+      "original_per_key_read_result": "NOT RETAINED: error, absent value and mismatch were collapsed",
+      "original_request_destinations_topology_generations_retries_timestamps": "NOT RETAINED",
+      "later_routed_reads": [
+        {
+          "client_node": 0,
+          "started_unix_ns": 1794378400821492727,
+          "completed_unix_ns": 1794378421900121650,
+          "exact_expected_value": true
+        },
+        {
+          "client_node": 1,
+          "started_unix_ns": 1794378400821654149,
+          "completed_unix_ns": 1794378421916587490,
+          "exact_expected_value": true
+        },
+        {
+          "client_node": 2,
+          "started_unix_ns": 1794378421900147418,
+          "completed_unix_ns": 1794378424356164508,
+          "exact_expected_value": true
+        },
+        {
+          "client_node": 3,
+          "started_unix_ns": 1794378421916606506,
+          "completed_unix_ns": 1794378424466926305,
+          "exact_expected_value": true
+        },
+        {
+          "client_node": 4,
+          "started_unix_ns": 1794378424356195196,
+          "completed_unix_ns": 1794378426831947849,
+          "exact_expected_value": true
+        }
+      ],
+      "first_retained_success_completed_unix_ns": 1794378421900121650,
+      "visibility_restoration_cause": "UNKNOWN: first retained success was after restart and 300-second observation; intermediate events not correlated"
+    },
+    {
+      "label": "B",
+      "record_id_sha256": "de0055b2ef2e46c099356896ad745859a636b0594c4846d8bc8659af41ec75f0",
+      "range_id": 11,
+      "snapshots": [
+        {
+          "snapshot": "baseline_four_checkpoint",
+          "topology_generation": 2124,
+          "metrics_generated_at_ms": 1794375806261,
+          "range_id": 11,
+          "range_epoch": 9,
+          "leader": "n3",
+          "replicas": [
+            {
+              "id": 11,
+              "node_id": "n0",
+              "role": "voter"
+            },
+            {
+              "id": 75,
+              "node_id": "n1",
+              "role": "voter"
+            },
+            {
+              "id": 139,
+              "node_id": "n3",
+              "role": "voter"
+            }
+          ]
+        },
+        {
+          "snapshot": "mid_growth_local_observation",
+          "topology_generation": 8314,
+          "metrics_generated_at_ms": 1794377338163,
+          "range_id": 11,
+          "range_epoch": 27,
+          "leader": "n4",
+          "replicas": [
+            {
+              "id": 11,
+              "node_id": "n0",
+              "role": "voter"
+            },
+            {
+              "id": 75,
+              "node_id": "n1",
+              "role": "voter"
+            },
+            {
+              "id": 236,
+              "node_id": "n4",
+              "role": "voter"
+            },
+            {
+              "id": 274,
+              "node_id": "n3",
+              "role": "learner"
+            }
+          ]
+        },
+        {
+          "snapshot": "diagnostic_300s_last_local_observation",
+          "topology_generation": 9616,
+          "metrics_generated_at_ms": 1794378397472,
+          "range_id": 11,
+          "range_epoch": 31,
+          "leader": "n1",
+          "replicas": [
+            {
+              "id": 75,
+              "node_id": "n1",
+              "role": "voter"
+            },
+            {
+              "id": 236,
+              "node_id": "n4",
+              "role": "voter"
+            },
+            {
+              "id": 274,
+              "node_id": "n3",
+              "role": "voter"
+            },
+            {
+              "id": 336,
+              "node_id": "n2",
+              "role": "learner"
+            }
+          ]
+        }
+      ],
+      "original_archived_nodes": [
+        {
+          "node": 0,
+          "topology_generation": 8969,
+          "persisted_range_epoch": 29,
+          "persisted_range_leader": "n4",
+          "persisted_replicas": [
+            {
+              "id": 75,
+              "node_id": "n1",
+              "role": "voter"
+            },
+            {
+              "id": 236,
+              "node_id": "n4",
+              "role": "voter"
+            },
+            {
+              "id": 274,
+              "node_id": "n3",
+              "role": "voter"
+            }
+          ],
+          "catalog_range": {
+            "current_epoch": 27,
+            "last_index": 69,
+            "resolved_through": 69,
+            "compacted_through": 0
+          },
+          "matching_retained_commands": [
+            {
+              "command_id_sha256": "fbbbc8dd18705aec2e1102474ffe083e6f6b95c6c5915a9f721580309ce9fb6a",
+              "command_checksum_sha256": "efaf12ee531b3af05854e83fffd0cc934776a3f92b18036edd0a77fcfd1a4ad1",
+              "range_epoch": 11,
+              "index": 55,
+              "declared_leader": "n0",
+              "state": "applied",
+              "exact_expected_payload": true,
+              "resolved_watermark_covers_command": true
+            }
+          ],
+          "scope": "persisted local state after owned sequential shutdown; not original read-time topology"
+        },
+        {
+          "node": 1,
+          "topology_generation": 9034,
+          "persisted_range_epoch": 29,
+          "persisted_range_leader": "n4",
+          "persisted_replicas": [
+            {
+              "id": 75,
+              "node_id": "n1",
+              "role": "voter"
+            },
+            {
+              "id": 236,
+              "node_id": "n4",
+              "role": "voter"
+            },
+            {
+              "id": 274,
+              "node_id": "n3",
+              "role": "voter"
+            }
+          ],
+          "catalog_range": {
+            "current_epoch": 27,
+            "last_index": 69,
+            "resolved_through": 69,
+            "compacted_through": 0
+          },
+          "matching_retained_commands": [
+            {
+              "command_id_sha256": "fbbbc8dd18705aec2e1102474ffe083e6f6b95c6c5915a9f721580309ce9fb6a",
+              "command_checksum_sha256": "efaf12ee531b3af05854e83fffd0cc934776a3f92b18036edd0a77fcfd1a4ad1",
+              "range_epoch": 11,
+              "index": 55,
+              "declared_leader": "n0",
+              "state": "applied",
+              "exact_expected_payload": true,
+              "resolved_watermark_covers_command": true
+            }
+          ],
+          "scope": "persisted local state after owned sequential shutdown; not original read-time topology"
+        },
+        {
+          "node": 2,
+          "topology_generation": 9066,
+          "persisted_range_epoch": 29,
+          "persisted_range_leader": "n4",
+          "persisted_replicas": [
+            {
+              "id": 75,
+              "node_id": "n1",
+              "role": "voter"
+            },
+            {
+              "id": 236,
+              "node_id": "n4",
+              "role": "voter"
+            },
+            {
+              "id": 274,
+              "node_id": "n3",
+              "role": "voter"
+            }
+          ],
+          "catalog_range": null,
+          "matching_retained_commands": [],
+          "scope": "persisted local state after owned sequential shutdown; not original read-time topology"
+        },
+        {
+          "node": 3,
+          "topology_generation": 9073,
+          "persisted_range_epoch": 29,
+          "persisted_range_leader": "n4",
+          "persisted_replicas": [
+            {
+              "id": 75,
+              "node_id": "n1",
+              "role": "voter"
+            },
+            {
+              "id": 236,
+              "node_id": "n4",
+              "role": "voter"
+            },
+            {
+              "id": 274,
+              "node_id": "n3",
+              "role": "voter"
+            }
+          ],
+          "catalog_range": {
+            "current_epoch": 11,
+            "last_index": 57,
+            "resolved_through": 57,
+            "compacted_through": 0
+          },
+          "matching_retained_commands": [
+            {
+              "command_id_sha256": "fbbbc8dd18705aec2e1102474ffe083e6f6b95c6c5915a9f721580309ce9fb6a",
+              "command_checksum_sha256": "efaf12ee531b3af05854e83fffd0cc934776a3f92b18036edd0a77fcfd1a4ad1",
+              "range_epoch": 11,
+              "index": 55,
+              "declared_leader": "n0",
+              "state": "applied",
+              "exact_expected_payload": true,
+              "resolved_watermark_covers_command": true
+            }
+          ],
+          "scope": "persisted local state after owned sequential shutdown; not original read-time topology"
+        },
+        {
+          "node": 4,
+          "topology_generation": 9073,
+          "persisted_range_epoch": 29,
+          "persisted_range_leader": "n4",
+          "persisted_replicas": [
+            {
+              "id": 75,
+              "node_id": "n1",
+              "role": "voter"
+            },
+            {
+              "id": 236,
+              "node_id": "n4",
+              "role": "voter"
+            },
+            {
+              "id": 274,
+              "node_id": "n3",
+              "role": "voter"
+            }
+          ],
+          "catalog_range": {
+            "current_epoch": 27,
+            "last_index": 69,
+            "resolved_through": 69,
+            "compacted_through": 0
+          },
+          "matching_retained_commands": [
+            {
+              "command_id_sha256": "fbbbc8dd18705aec2e1102474ffe083e6f6b95c6c5915a9f721580309ce9fb6a",
+              "command_checksum_sha256": "efaf12ee531b3af05854e83fffd0cc934776a3f92b18036edd0a77fcfd1a4ad1",
+              "range_epoch": 11,
+              "index": 55,
+              "declared_leader": "n0",
+              "state": "applied",
+              "exact_expected_payload": true,
+              "resolved_watermark_covers_command": true
+            }
+          ],
+          "scope": "persisted local state after owned sequential shutdown; not original read-time topology"
+        }
+      ],
+      "original_per_key_read_result": "NOT RETAINED: error, absent value and mismatch were collapsed",
+      "original_request_destinations_topology_generations_retries_timestamps": "NOT RETAINED",
+      "later_routed_reads": [
+        {
+          "client_node": 0,
+          "started_unix_ns": 1794378424466947625,
+          "completed_unix_ns": 1794378425848813208,
+          "exact_expected_value": true
+        },
+        {
+          "client_node": 1,
+          "started_unix_ns": 1794378425848831503,
+          "completed_unix_ns": 1794378428276985573,
+          "exact_expected_value": true
+        },
+        {
+          "client_node": 2,
+          "started_unix_ns": 1794378426831970492,
+          "completed_unix_ns": 1794378428838945190,
+          "exact_expected_value": true
+        },
+        {
+          "client_node": 3,
+          "started_unix_ns": 1794378428277005860,
+          "completed_unix_ns": 1794378430213995669,
+          "exact_expected_value": true
+        },
+        {
+          "client_node": 4,
+          "started_unix_ns": 1794378428838966910,
+          "completed_unix_ns": 1794378430896949088,
+          "exact_expected_value": true
+        }
+      ],
+      "first_retained_success_completed_unix_ns": 1794378425848813208,
+      "visibility_restoration_cause": "UNKNOWN: first retained success was after restart and 300-second observation; intermediate events not correlated"
+    }
+  ],
+  "original_cold_log_inputs": [
+    {
+      "node": 0,
+      "original_archive_sha256": "715102a2cbbdc3af2c38a76e9fb9235a512aeae390daa6300cfcadb0cc7a3e23",
+      "catalog_sha256": "caf838845f409399a3ecbf1b1c1e262a9d2bd8c223f4194796ef1301f9721b0c",
+      "persisted_topology_sha256": "f89f24e4c6cd20700fe259d19a4eba3aa32a6427166f08a0ec6529c3e21d24ce",
+      "server_log_sha256": "3a7449354fc389321b6afbaa3cc051a677f87271e3fd5a643c78ed08dda207a9",
+      "server_log_bytes": 381842,
+      "original_key_string_occurrences": 0
+    },
+    {
+      "node": 1,
+      "original_archive_sha256": "0e41786e146a89f3f45e60647e30addc737e5849dbf43cedd8040bd45a6e24e2",
+      "catalog_sha256": "ca0763fe441ee7f9cdb9b635a090bb002ddb2016dea85dd387f57867f4f41b88",
+      "persisted_topology_sha256": "f45e647f3ac496fd13c3ecf62cc56ec39e76fc7080004ee9783680fbb6e0a222",
+      "server_log_sha256": "7b0e916f548a972a10d764b30c7214290a6e27d60ed7d825d79de8f450fc9595",
+      "server_log_bytes": 39739,
+      "original_key_string_occurrences": 0
+    },
+    {
+      "node": 2,
+      "original_archive_sha256": "74bb92c062e8828894bc904f303cc7761d2bf0b6e7e29ec89a96feb19db75113",
+      "catalog_sha256": "d81bb0ba2b2e232a575209aeabf45239009444851fc80fd0fe1d4112bd6382bf",
+      "persisted_topology_sha256": "0ce4354322dfe2d550d9dadcedae5a5d3f2dbaa53c9030b4d0f31b912f85c2c3",
+      "server_log_sha256": "b3e6a63421290ac6b85ad99468c1526d38b34f2b32ea9acef5b8026b59d601c6",
+      "server_log_bytes": 56433,
+      "original_key_string_occurrences": 0
+    },
+    {
+      "node": 3,
+      "original_archive_sha256": "d7215e9e7ee8a9df3c5853ecd9a2eb18bb2267010b05003999e6055676ee0f82",
+      "catalog_sha256": "ef1503a538fa89745711751d116ec972ad818cc7bceccbd4803d6e347ce1e554",
+      "persisted_topology_sha256": "026b92ef1e3f85710dd72b2eb05b02b607fe97975366668004bf9db7f3d71be2",
+      "server_log_sha256": "c2bdbde64a5035ed05b29ce64096f0ff4ac84a34508c9cee5158e1518a5d3336",
+      "server_log_bytes": 35935,
+      "original_key_string_occurrences": 0
+    },
+    {
+      "node": 4,
+      "original_archive_sha256": "db3a4c4726d0aec3e697d40578493bcb4daf6909a74041fc763854d4d5687172",
+      "catalog_sha256": "ac805a9bece03062c755d09aeb45dd07fd204f1c1b9e6be5aa61449f55e9951e",
+      "persisted_topology_sha256": "026b92ef1e3f85710dd72b2eb05b02b607fe97975366668004bf9db7f3d71be2",
+      "server_log_sha256": "afcd36890ecf1c0f646d4a9d21113d6efd93cb37a484439839080710821cacc5",
+      "server_log_bytes": 43438,
+      "original_key_string_occurrences": 0
+    }
+  ],
+  "untimestamped_range_log_fragments": [
+    {
+      "node": 0,
+      "line_number": 6,
+      "range_id": 11,
+      "message": "cluster error: range r11 epoch 1 has no leader schema fingerprint; writes remain unavailable",
+      "wall_clock_timestamp": "NOT RETAINED on this fragment",
+      "causal_link_to_original_failed_Get": "NOT ESTABLISHED"
+    },
+    {
+      "node": 0,
+      "line_number": 8,
+      "range_id": 41,
+      "message": "cluster error: range r41 epoch 1 has no leader schema fingerprint; writes remain unavailable",
+      "wall_clock_timestamp": "NOT RETAINED on this fragment",
+      "causal_link_to_original_failed_Get": "NOT ESTABLISHED"
+    },
+    {
+      "node": 0,
+      "line_number": 10,
+      "range_id": 11,
+      "message": "cluster error: range r11 epoch 1 has no leader schema fingerprint; writes remain unavailable",
+      "wall_clock_timestamp": "NOT RETAINED on this fragment",
+      "causal_link_to_original_failed_Get": "NOT ESTABLISHED"
+    },
+    {
+      "node": 0,
+      "line_number": 12,
+      "range_id": 41,
+      "message": "cluster error: range r41 epoch 1 has no leader schema fingerprint; writes remain unavailable",
+      "wall_clock_timestamp": "NOT RETAINED on this fragment",
+      "causal_link_to_original_failed_Get": "NOT ESTABLISHED"
+    },
+    {
+      "node": 0,
+      "line_number": 14,
+      "range_id": 11,
+      "message": "cluster error: range r11 epoch 1 has no leader schema fingerprint; writes remain unavailable",
+      "wall_clock_timestamp": "NOT RETAINED on this fragment",
+      "causal_link_to_original_failed_Get": "NOT ESTABLISHED"
+    },
+    {
+      "node": 0,
+      "line_number": 137,
+      "range_id": 11,
+      "message": "cluster error: range-write leader recovery for r11 reached only 1/2 voters",
+      "wall_clock_timestamp": "NOT RETAINED on this fragment",
+      "causal_link_to_original_failed_Get": "NOT ESTABLISHED"
+    },
+    {
+      "node": 0,
+      "line_number": 141,
+      "range_id": 11,
+      "message": "cluster error: range-write leader recovery for r11 reached only 1/2 voters",
+      "wall_clock_timestamp": "NOT RETAINED on this fragment",
+      "causal_link_to_original_failed_Get": "NOT ESTABLISHED"
+    },
+    {
+      "node": 0,
+      "line_number": 214,
+      "range_id": 41,
+      "message": "cluster error: range-write leader recovery for r41 reached only 1/2 voters",
+      "wall_clock_timestamp": "NOT RETAINED on this fragment",
+      "causal_link_to_original_failed_Get": "NOT ESTABLISHED"
+    },
+    {
+      "node": 0,
+      "line_number": 218,
+      "range_id": 41,
+      "message": "cluster error: range-write leader recovery for r41 reached only 1/2 voters",
+      "wall_clock_timestamp": "NOT RETAINED on this fragment",
+      "causal_link_to_original_failed_Get": "NOT ESTABLISHED"
+    },
+    {
+      "node": 0,
+      "line_number": 340,
+      "range_id": 41,
+      "message": "cluster error: range-write leader recovery for r41 reached only 1/2 voters",
+      "wall_clock_timestamp": "NOT RETAINED on this fragment",
+      "causal_link_to_original_failed_Get": "NOT ESTABLISHED"
+    },
+    {
+      "node": 0,
+      "line_number": 343,
+      "range_id": 41,
+      "message": "cluster error: range-write leader recovery for r41 reached only 1/2 voters",
+      "wall_clock_timestamp": "NOT RETAINED on this fragment",
+      "causal_link_to_original_failed_Get": "NOT ESTABLISHED"
+    },
+    {
+      "node": 0,
+      "line_number": 345,
+      "range_id": 41,
+      "message": "cluster error: range-write leader recovery for r41 reached only 1/2 voters",
+      "wall_clock_timestamp": "NOT RETAINED on this fragment",
+      "causal_link_to_original_failed_Get": "NOT ESTABLISHED"
+    },
+    {
+      "node": 0,
+      "line_number": 435,
+      "range_id": 41,
+      "message": "cluster error: range-write leader recovery for r41 reached only 1/3 voters",
+      "wall_clock_timestamp": "NOT RETAINED on this fragment",
+      "causal_link_to_original_failed_Get": "NOT ESTABLISHED"
+    },
+    {
+      "node": 0,
+      "line_number": 438,
+      "range_id": 41,
+      "message": "cluster error: range-write leader recovery for r41 reached only 1/2 voters",
+      "wall_clock_timestamp": "NOT RETAINED on this fragment",
+      "causal_link_to_original_failed_Get": "NOT ESTABLISHED"
+    },
+    {
+      "node": 1,
+      "line_number": 58,
+      "range_id": 11,
+      "message": "cluster error: range-write tail recovery for r11 index 65 reached only 1/2 voters",
+      "wall_clock_timestamp": "NOT RETAINED on this fragment",
+      "causal_link_to_original_failed_Get": "NOT ESTABLISHED"
+    },
+    {
+      "node": 3,
+      "line_number": 129,
+      "range_id": 41,
+      "message": "cluster error: range r41 is still applying command command-sha256:f71706518c80096af119f578adae36a91b15b535f00da522a5c0a4ddb01952bc; leadership recovery deferred",
+      "wall_clock_timestamp": "NOT RETAINED on this fragment",
+      "causal_link_to_original_failed_Get": "NOT ESTABLISHED"
+    },
+    {
+      "node": 4,
+      "line_number": 22,
+      "range_id": 11,
+      "message": "cluster error: range-write tail recovery for r11 index 60 reached only 1/2 voters",
+      "wall_clock_timestamp": "NOT RETAINED on this fragment",
+      "causal_link_to_original_failed_Get": "NOT ESTABLISHED"
+    },
+    {
+      "node": 4,
+      "line_number": 25,
+      "range_id": 11,
+      "message": "cluster error: range r11 epoch 16 changed before schema validation",
+      "wall_clock_timestamp": "NOT RETAINED on this fragment",
+      "causal_link_to_original_failed_Get": "NOT ESTABLISHED"
+    },
+    {
+      "node": 4,
+      "line_number": 26,
+      "range_id": 11,
+      "message": "cluster error: range-write tail recovery for r11 index 62 reached only 1/2 voters",
+      "wall_clock_timestamp": "NOT RETAINED on this fragment",
+      "causal_link_to_original_failed_Get": "NOT ESTABLISHED"
+    },
+    {
+      "node": 4,
+      "line_number": 27,
+      "range_id": 11,
+      "message": "cluster error: range r11 epoch 20 changed before schema validation",
+      "wall_clock_timestamp": "NOT RETAINED on this fragment",
+      "causal_link_to_original_failed_Get": "NOT ESTABLISHED"
+    },
+    {
+      "node": 4,
+      "line_number": 89,
+      "range_id": 11,
+      "message": "cluster error: range r11 epoch 22 changed before schema validation",
+      "wall_clock_timestamp": "NOT RETAINED on this fragment",
+      "causal_link_to_original_failed_Get": "NOT ESTABLISHED"
+    }
+  ]
+}

@@ -1,0 +1,74 @@
+[
+  {
+    "node": 0,
+    "unix_ns": 1794376758747951541,
+    "files": {
+      "code": 0,
+      "stdout": "{\"cluster-range-write-log.json\": {\"bytes\": 6536293, \"mtime_ns\": 1794376724711403467}, \"cluster-topology.json\": {\"bytes\": 212919, \"mtime_ns\": 1794376761348744548}, \"cluster-metadata-consensus.json\": {\"bytes\": 226467, \"mtime_ns\": 1794376761334744417}, \"transactions.log\": {\"bytes\": 5900259, \"mtime_ns\": 1794376724608402501}, \"paged/store.wal\": {\"bytes\": 24736, \"mtime_ns\": 1794376724603402454}, \"paged/store.pages\": {\"bytes\": 4702208, \"mtime_ns\": 1794376724372400288}}\n",
+      "stderr": ""
+    },
+    "sample": {
+      "running": true,
+      "pid": 105007,
+      "stat": "105007 (bicdb) S 1 105007 105007 0 -1 4194304 3162127 0 0 0 80139 15312 0 0 20 0 18 0 627717 2491281408 112294 18446744073709551615 107209753589248 107209995146688 140723184693872 0 0 0 0 4096 17475 0 0 0 17 0 0 0 0 0 0 107210003775160 107210003847688 107210544369664 140723184700645 140723184700844 140723184700844 140723184701362 0\n",
+      "status": "Name:\tbicdb\nUmask:\t0002\nState:\tS (sleeping)\nTgid:\t105007\nNgid:\t0\nPid:\t105007\nPPid:\t1\nTracerPid:\t0\nUid:\t1000\t1000\t1000\t1000\nGid:\t1000\t1000\t1000\t1000\nFDSize:\t64\nGroups:\t4 24 27 30 105 1000 \nNStgid:\t105007\nNSpid:\t105007\nNSpgid:\t105007\nNSsid:\t105007\nKthread:\t0\nVmPeak:\t 2445492 kB\nVmSize:\t 2432892 kB\nVmLck:\t       0 kB\nVmPin:\t       0 kB\nVmHWM:\t  638372 kB\nVmRSS:\t  449160 kB\nRssAnon:\t  391716 kB\nRssFile:\t   57444 kB\nRssShmem:\t       0 kB\nVmData:\t 1131404 kB\nVmStk:\t     132 kB\nVmExe:\t  235900 kB\nVmLib:\t    6076 kB\nVmPTE:\t    1384 kB\nVmSwap:\t       0 kB\nHugetlbPages:\t       0 kB\nCoreDumping:\t0\nTHP_enabled:\t1\nuntag_mask:\t0xffffffffffffffff\nThreads:\t18\nSigQ:\t0/28076\nSigPnd:\t0000000000000000\nShdPnd:\t0000000000000000\nSigBlk:\t0000000000000000\nSigIgn:\t0000000000001000\nSigCgt:\t0000000100004443\nCapInh:\t0000000000000000\nCapPrm:\t0000000000000000\nCapEff:\t0000000000000000\nCapBnd:\t000001ffffffffff\nCapAmb:\t0000000000000000\nNoNewPrivs:\t0\nSeccomp:\t0\nSeccomp_filters:\t0\nSpeculation_Store_Bypass:\tvulnerable\nSpeculationIndirectBranch:\talways enabled\nCpus_allowed:\t3\nCpus_allowed_list:\t0-1\nMems_allowed:\t00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000001\nMems_allowed_list:\t0\nvoluntary_ctxt_switches:\t40611\nnonvoluntary_ctxt_switches:\t16267\nx86_Thread_features:\t\nx86_Thread_features_locked:\t\n",
+      "io": "rchar: 28164210\nwchar: 49729548237\nsyscr: 44491\nsyscw: 416682\nread_bytes: 0\nwrite_bytes: 44692533248\ncancelled_write_bytes: 0\n",
+      "clock_ticks": 100,
+      "page_size": 4096
+    }
+  },
+  {
+    "node": 1,
+    "unix_ns": 1794376758748138989,
+    "files": {
+      "code": 0,
+      "stdout": "{\"cluster-range-write-log.json\": {\"bytes\": 6410642, \"mtime_ns\": 1794376724339037941}, \"cluster-topology.json\": {\"bytes\": 212919, \"mtime_ns\": 1794376761778452371}, \"cluster-metadata-consensus.json\": {\"bytes\": 226469, \"mtime_ns\": 1794376761857453123}, \"transactions.log\": {\"bytes\": 5786214, \"mtime_ns\": 1794376724226036298}, \"paged/store.wal\": {\"bytes\": 24736, \"mtime_ns\": 1794376724221036225}, \"paged/store.pages\": {\"bytes\": 4595712, \"mtime_ns\": 1794376724202035948}}\n",
+      "stderr": ""
+    },
+    "sample": {
+      "running": true,
+      "pid": 35227,
+      "stat": "35227 (bicdb) S 1 35227 35227 0 -1 4194304 1731302 0 0 0 59671 8842 0 0 20 0 17 0 621449 2489102336 107143 18446744073709551615 101419833247232 101420074804672 140728482259312 0 0 0 0 4096 17475 0 0 0 17 0 0 0 0 0 0 101420083433144 101420083505672 101420130377728 140728482262248 140728482262447 140728482262447 140728482262962 0\n",
+      "status": "Name:\tbicdb\nUmask:\t0002\nState:\tS (sleeping)\nTgid:\t35227\nNgid:\t0\nPid:\t35227\nPPid:\t1\nTracerPid:\t0\nUid:\t1000\t1000\t1000\t1000\nGid:\t1000\t1000\t1000\t1000\nFDSize:\t64\nGroups:\t4 24 27 30 105 1000 \nNStgid:\t35227\nNSpid:\t35227\nNSpgid:\t35227\nNSsid:\t35227\nKthread:\t0\nVmPeak:\t 2430980 kB\nVmSize:\t 2430764 kB\nVmLck:\t       0 kB\nVmPin:\t       0 kB\nVmHWM:\t  536352 kB\nVmRSS:\t  428664 kB\nRssAnon:\t  373184 kB\nRssFile:\t   55480 kB\nRssShmem:\t       0 kB\nVmData:\t 1129276 kB\nVmStk:\t     132 kB\nVmExe:\t  235900 kB\nVmLib:\t    6076 kB\nVmPTE:\t    1288 kB\nVmSwap:\t       0 kB\nHugetlbPages:\t       0 kB\nCoreDumping:\t0\nTHP_enabled:\t1\nuntag_mask:\t0xffffffffffffffff\nThreads:\t17\nSigQ:\t0/28075\nSigPnd:\t0000000000000000\nShdPnd:\t0000000000000000\nSigBlk:\t0000000000000000\nSigIgn:\t0000000000001000\nSigCgt:\t0000000100004443\nCapInh:\t0000000000000000\nCapPrm:\t0000000000000000\nCapEff:\t0000000000000000\nCapBnd:\t000001ffffffffff\nCapAmb:\t0000000000000000\nNoNewPrivs:\t0\nSeccomp:\t0\nSeccomp_filters:\t0\nSpeculation_Store_Bypass:\tvulnerable\nSpeculationIndirectBranch:\talways enabled\nCpus_allowed:\t3\nCpus_allowed_list:\t0-1\nMems_allowed:\t00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000001\nMems_allowed_list:\t0\nvoluntary_ctxt_switches:\t40718\nnonvoluntary_ctxt_switches:\t21642\nx86_Thread_features:\t\nx86_Thread_features_locked:\t\n",
+      "io": "rchar: 28159442\nwchar: 39349016935\nsyscr: 44636\nsyscw: 220183\nread_bytes: 0\nwrite_bytes: 39168491520\ncancelled_write_bytes: 0\n",
+      "clock_ticks": 100,
+      "page_size": 4096
+    }
+  },
+  {
+    "node": 2,
+    "unix_ns": 1794376762506918020,
+    "files": {
+      "code": 0,
+      "stdout": "{\"cluster-range-write-log.json\": {\"bytes\": 6361958, \"mtime_ns\": 1794376724571681130}, \"cluster-topology.json\": {\"bytes\": 212919, \"mtime_ns\": 1794376764184274001}, \"cluster-metadata-consensus.json\": {\"bytes\": 226469, \"mtime_ns\": 1794376764196274179}, \"transactions.log\": {\"bytes\": 5741313, \"mtime_ns\": 1794376724495680000}, \"paged/store.wal\": {\"bytes\": 49472, \"mtime_ns\": 1794376724489679910}, \"paged/store.pages\": {\"bytes\": 4538368, \"mtime_ns\": 1794376723671667741}}\n",
+      "stderr": ""
+    },
+    "sample": {
+      "running": true,
+      "pid": 66135,
+      "stat": "66135 (bicdb) S 1 66135 66135 0 -1 4194304 1865548 0 0 0 52262 6710 0 0 20 0 17 0 615194 2487001088 110130 18446744073709551615 98473925113344 98474166670784 140730237053648 0 0 0 0 4096 17475 0 0 0 17 0 0 0 0 0 0 98474175299256 98474175371784 98475078201344 140730237062376 140730237062575 140730237062575 140730237063090 0\n",
+      "status": "Name:\tbicdb\nUmask:\t0002\nState:\tS (sleeping)\nTgid:\t66135\nNgid:\t0\nPid:\t66135\nPPid:\t1\nTracerPid:\t0\nUid:\t1000\t1000\t1000\t1000\nGid:\t1000\t1000\t1000\t1000\nFDSize:\t64\nGroups:\t4 24 27 30 105 1000 \nNStgid:\t66135\nNSpid:\t66135\nNSpgid:\t66135\nNSsid:\t66135\nKthread:\t0\nVmPeak:\t 2428916 kB\nVmSize:\t 2428712 kB\nVmLck:\t       0 kB\nVmPin:\t       0 kB\nVmHWM:\t  552100 kB\nVmRSS:\t  440680 kB\nRssAnon:\t  384884 kB\nRssFile:\t   55796 kB\nRssShmem:\t       0 kB\nVmData:\t 1127228 kB\nVmStk:\t     132 kB\nVmExe:\t  235900 kB\nVmLib:\t    6076 kB\nVmPTE:\t    1312 kB\nVmSwap:\t       0 kB\nHugetlbPages:\t       0 kB\nCoreDumping:\t0\nTHP_enabled:\t1\nuntag_mask:\t0xffffffffffffffff\nThreads:\t17\nSigQ:\t0/28075\nSigPnd:\t0000000000000000\nShdPnd:\t0000000000000000\nSigBlk:\t0000000000000000\nSigIgn:\t0000000000001000\nSigCgt:\t0000000100004443\nCapInh:\t0000000000000000\nCapPrm:\t0000000000000000\nCapEff:\t0000000000000000\nCapBnd:\t000001ffffffffff\nCapAmb:\t0000000000000000\nNoNewPrivs:\t0\nSeccomp:\t0\nSeccomp_filters:\t0\nSpeculation_Store_Bypass:\tvulnerable\nSpeculationIndirectBranch:\talways enabled\nCpus_allowed:\t3\nCpus_allowed_list:\t0-1\nMems_allowed:\t00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000001\nMems_allowed_list:\t0\nvoluntary_ctxt_switches:\t40772\nnonvoluntary_ctxt_switches:\t22046\nx86_Thread_features:\t\nx86_Thread_features_locked:\t\n",
+      "io": "rchar: 28208217\nwchar: 38792064732\nsyscr: 44752\nsyscw: 219566\nread_bytes: 0\nwrite_bytes: 38609530880\ncancelled_write_bytes: 0\n",
+      "clock_ticks": 100,
+      "page_size": 4096
+    }
+  },
+  {
+    "node": 3,
+    "unix_ns": 1794376763903140853,
+    "files": {
+      "code": 0,
+      "stdout": "{\"cluster-range-write-log.json\": {\"bytes\": 6335024, \"mtime_ns\": 1794376723819670137}, \"cluster-topology.json\": {\"bytes\": 212919, \"mtime_ns\": 1794376765136892507}, \"cluster-metadata-consensus.json\": {\"bytes\": 479044, \"mtime_ns\": 1794376765459894242}, \"transactions.log\": {\"bytes\": 5716826, \"mtime_ns\": 1794376723733669673}, \"paged/store.wal\": {\"bytes\": 0, \"mtime_ns\": 1794376725111677112}, \"paged/store.pages\": {\"bytes\": 4546560, \"mtime_ns\": 1794376725109677101}}\n",
+      "stderr": ""
+    },
+    "sample": {
+      "running": true,
+      "pid": 31367,
+      "stat": "31367 (bicdb) S 1 31367 31367 0 -1 4194304 1875249 0 0 0 62752 9910 0 0 20 0 18 0 608838 2491281408 109106 18446744073709551615 107761073223168 107761314780608 140733085262032 0 0 0 0 4096 17475 0 0 0 17 0 0 0 0 0 0 107761323409080 107761323481608 107762009985024 140733085269224 140733085269423 140733085269423 140733085269938 0\n",
+      "status": "Name:\tbicdb\nUmask:\t0002\nState:\tS (sleeping)\nTgid:\t31367\nNgid:\t0\nPid:\t31367\nPPid:\t1\nTracerPid:\t0\nUid:\t1000\t1000\t1000\t1000\nGid:\t1000\t1000\t1000\t1000\nFDSize:\t64\nGroups:\t4 24 27 30 105 1000 \nNStgid:\t31367\nNSpid:\t31367\nNSpgid:\t31367\nNSsid:\t31367\nKthread:\t0\nVmPeak:\t 2433084 kB\nVmSize:\t 2432892 kB\nVmLck:\t       0 kB\nVmPin:\t       0 kB\nVmHWM:\t  557580 kB\nVmRSS:\t  436700 kB\nRssAnon:\t  380412 kB\nRssFile:\t   56288 kB\nRssShmem:\t       0 kB\nVmData:\t 1131400 kB\nVmStk:\t     132 kB\nVmExe:\t  235900 kB\nVmLib:\t    6076 kB\nVmPTE:\t    1332 kB\nVmSwap:\t       0 kB\nHugetlbPages:\t       0 kB\nCoreDumping:\t0\nTHP_enabled:\t1\nuntag_mask:\t0xffffffffffffffff\nThreads:\t18\nSigQ:\t0/28076\nSigPnd:\t0000000000000000\nShdPnd:\t0000000000000000\nSigBlk:\t0000000000000000\nSigIgn:\t0000000000001000\nSigCgt:\t0000000100004443\nCapInh:\t0000000000000000\nCapPrm:\t0000000000000000\nCapEff:\t0000000000000000\nCapBnd:\t000001ffffffffff\nCapAmb:\t0000000000000000\nNoNewPrivs:\t0\nSeccomp:\t0\nSeccomp_filters:\t0\nSpeculation_Store_Bypass:\tvulnerable\nSpeculationIndirectBranch:\talways enabled\nCpus_allowed:\t3\nCpus_allowed_list:\t0-1\nMems_allowed:\t00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000001\nMems_allowed_list:\t0\nvoluntary_ctxt_switches:\t40502\nnonvoluntary_ctxt_switches:\t20945\nx86_Thread_features:\t\nx86_Thread_features_locked:\t\n",
+      "io": "rchar: 28294831\nwchar: 38490250269\nsyscr: 44741\nsyscw: 218022\nread_bytes: 0\nwrite_bytes: 38308327424\ncancelled_write_bytes: 0\n",
+      "clock_ticks": 100,
+      "page_size": 4096
+    }
+  }
+]

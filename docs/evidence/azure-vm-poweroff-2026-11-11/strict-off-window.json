@@ -1,0 +1,44 @@
+{
+  "calls": [
+    {
+      "acknowledged": true,
+      "completed_unix_ns": 1794374806814338432,
+      "latency_us": 11607709,
+      "sequence": 20,
+      "started_unix_ns": 1794374795145797285
+    },
+    {
+      "acknowledged": true,
+      "completed_unix_ns": 1794374819455041093,
+      "latency_us": 11577661,
+      "sequence": 21,
+      "started_unix_ns": 1794374807829943000
+    },
+    {
+      "acknowledged": true,
+      "completed_unix_ns": 1794374832083773254,
+      "latency_us": 11570119,
+      "sequence": 22,
+      "started_unix_ns": 1794374820476711925
+    },
+    {
+      "acknowledged": true,
+      "completed_unix_ns": 1794374845267282084,
+      "latency_us": 12109640,
+      "sequence": 23,
+      "started_unix_ns": 1794374833105813017
+    },
+    {
+      "acknowledged": true,
+      "completed_unix_ns": 1794374857876521090,
+      "latency_us": 11552790,
+      "sequence": 24,
+      "started_unix_ns": 1794374846293539591
+    }
+  ],
+  "fifth_ack_seconds_after_confirmed_off": 148.556992324,
+  "first_ack_seconds_after_confirmed_off": 97.494809666,
+  "first_ack_seconds_after_off_request": 105.608195866,
+  "first_start_requested_unix_ns": 1794374859373869881,
+  "power_off_confirmed_unix_ns": 1794374709319528766
+}

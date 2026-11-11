@@ -1,0 +1,53 @@
+{
+  "disks": {
+    "queried_at_utc": "2026-11-11T04:48:56.274468+00:00",
+    "url": "https://prices.azure.com/api/retail/prices?%24filter=armRegionName+eq+%27northeurope%27+and+productName+eq+%27Premium+SSD+Managed+Disks%27+and+%28skuName+eq+%27P6+LRS%27+or+skuName+eq+%27P10+LRS%27%29&currencyCode=USD",
+    "items": [
+      {
+        "productName": "Premium SSD Managed Disks",
+        "skuName": "P10 LRS",
+        "armSkuName": "Premium_SSD_Managed_Disk_P10",
+        "meterName": "P10 LRS Disk Mount",
+        "retailPrice": 1.092,
+        "unitOfMeasure": "1/Month",
+        "currencyCode": "USD"
+      },
+      {
+        "productName": "Premium SSD Managed Disks",
+        "skuName": "P6 LRS",
+        "armSkuName": "Premium_SSD_Managed_Disk_P6",
+        "meterName": "P6 LRS Disk Mount",
+        "retailPrice": 0.564,
+        "unitOfMeasure": "1/Month",
+        "currencyCode": "USD"
+      },
+      {
+        "productName": "Premium SSD Managed Disks",
+        "skuName": "P6 LRS",
+        "armSkuName": "Premium_SSD_Managed_Disk_P6",
+        "meterName": "P6 LRS Disk",
+        "retailPrice": 10.207,
+        "unitOfMeasure": "1/Month",
+        "currencyCode": "USD"
+      },
+      {
+        "productName": "Premium SSD Managed Disks",
+        "skuName": "P10 LRS",
+        "armSkuName": "Premium_SSD_Managed_Disk_P10",
+        "meterName": "P10 LRS Disk",
+        "retailPrice": 19.71,
+        "unitOfMeasure": "1/Month",
+        "currencyCode": "USD"
+      }
+    ],
+    "next_page_present": false,
+    "status": "success"
+  },
+  "public_ip": {
+    "queried_at_utc": "2026-11-11T04:49:01.055037+00:00",
+    "url": "https://prices.azure.com/api/retail/prices?%24filter=armRegionName+eq+%27northeurope%27+and+serviceName+eq+%27Virtual+Network%27+and+contains%28meterName%2C+%27IP%27%29&currencyCode=USD",
+    "status": "error",
+    "error_type": "HTTPError",
+    "error": "HTTP Error 429: Too Many Requests"
+  }
+}

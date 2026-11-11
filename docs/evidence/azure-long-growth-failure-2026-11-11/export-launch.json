@@ -1,0 +1,6 @@
+{
+  "unix_ns": 1794377938640309825,
+  "helper_sha256": "0f3df0cd8b765f37fae7f3f8cdc5e88131559909671b701f514249a8fb64b97e",
+  "source_report": "growth/report.json",
+  "phase": "failed-growth-before-any-restart"
+}

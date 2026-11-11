@@ -1,0 +1,92 @@
+[
+  {
+    "class": "original-failed-growth-cold",
+    "node": 0,
+    "bytes": 1908319,
+    "sha256": "715102a2cbbdc3af2c38a76e9fb9235a512aeae390daa6300cfcadb0cc7a3e23",
+    "remote_sha256": "715102a2cbbdc3af2c38a76e9fb9235a512aeae390daa6300cfcadb0cc7a3e23",
+    "public_contents": false,
+    "classification": "contains task-generated database identity material; private archive retained"
+  },
+  {
+    "class": "original-failed-growth-cold",
+    "node": 1,
+    "bytes": 1936175,
+    "sha256": "0e41786e146a89f3f45e60647e30addc737e5849dbf43cedd8040bd45a6e24e2",
+    "remote_sha256": "0e41786e146a89f3f45e60647e30addc737e5849dbf43cedd8040bd45a6e24e2",
+    "public_contents": false,
+    "classification": "contains task-generated database identity material; private archive retained"
+  },
+  {
+    "class": "original-failed-growth-cold",
+    "node": 2,
+    "bytes": 1898798,
+    "sha256": "74bb92c062e8828894bc904f303cc7761d2bf0b6e7e29ec89a96feb19db75113",
+    "remote_sha256": "74bb92c062e8828894bc904f303cc7761d2bf0b6e7e29ec89a96feb19db75113",
+    "public_contents": false,
+    "classification": "contains task-generated database identity material; private archive retained"
+  },
+  {
+    "class": "original-failed-growth-cold",
+    "node": 3,
+    "bytes": 1846853,
+    "sha256": "d7215e9e7ee8a9df3c5853ecd9a2eb18bb2267010b05003999e6055676ee0f82",
+    "remote_sha256": "d7215e9e7ee8a9df3c5853ecd9a2eb18bb2267010b05003999e6055676ee0f82",
+    "public_contents": false,
+    "classification": "contains task-generated database identity material; private archive retained"
+  },
+  {
+    "class": "original-failed-growth-cold",
+    "node": 4,
+    "bytes": 1911204,
+    "sha256": "db3a4c4726d0aec3e697d40578493bcb4daf6909a74041fc763854d4d5687172",
+    "remote_sha256": "db3a4c4726d0aec3e697d40578493bcb4daf6909a74041fc763854d4d5687172",
+    "public_contents": false,
+    "classification": "contains task-generated database identity material; private archive retained"
+  },
+  {
+    "class": "post-diagnostic-cold",
+    "node": 0,
+    "bytes": 2889885,
+    "sha256": "b455c7fb0c50e58ea74317abac28b2c086f6fe2796df30f2f3aa54ddf9f76911",
+    "remote_sha256": "b455c7fb0c50e58ea74317abac28b2c086f6fe2796df30f2f3aa54ddf9f76911",
+    "public_contents": false,
+    "classification": "contains task-generated database identity material; private archive retained"
+  },
+  {
+    "class": "post-diagnostic-cold",
+    "node": 1,
+    "bytes": 3015494,
+    "sha256": "4c92f8829424b26250e39fb0627145066ef0baad36c6823011da998c23c3c5be",
+    "remote_sha256": "4c92f8829424b26250e39fb0627145066ef0baad36c6823011da998c23c3c5be",
+    "public_contents": false,
+    "classification": "contains task-generated database identity material; private archive retained"
+  },
+  {
+    "class": "post-diagnostic-cold",
+    "node": 2,
+    "bytes": 2801144,
+    "sha256": "b361991f584240acd3395279da336c9365337d4fc39632ffde6771f2b21e4b2d",
+    "remote_sha256": "b361991f584240acd3395279da336c9365337d4fc39632ffde6771f2b21e4b2d",
+    "public_contents": false,
+    "classification": "contains task-generated database identity material; private archive retained"
+  },
+  {
+    "class": "post-diagnostic-cold",
+    "node": 3,
+    "bytes": 2702386,
+    "sha256": "c207ae5b3fa655d3cc4580e06abe4a7056d6366231186c571803b7131aa29f69",
+    "remote_sha256": "c207ae5b3fa655d3cc4580e06abe4a7056d6366231186c571803b7131aa29f69",
+    "public_contents": false,
+    "classification": "contains task-generated database identity material; private archive retained"
+  },
+  {
+    "class": "post-diagnostic-cold",
+    "node": 4,
+    "bytes": 3502942,
+    "sha256": "cb386ddfc7daedba1906b5798dc9e29f947cabaa305414774648edb54d1dedbd",
+    "remote_sha256": "cb386ddfc7daedba1906b5798dc9e29f947cabaa305414774648edb54d1dedbd",
+    "public_contents": false,
+    "classification": "contains task-generated database identity material; private archive retained"
+  }
+]

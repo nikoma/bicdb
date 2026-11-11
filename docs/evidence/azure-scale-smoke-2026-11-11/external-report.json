@@ -1,0 +1,22 @@
+{
+  "acknowledged_operations": 107,
+  "acknowledged_operations_per_second": 0.8830344665672232,
+  "attempted_operations": 107,
+  "classification": "ssh_mediated_external_ack_ledger",
+  "driver_sha256": "89da4c05e6c1e823f6f09964a1f239bbc9be0ce2eaaaafdc9e2f906efc159a17",
+  "format": 1,
+  "fsync_per_attempt_and_ack": true,
+  "orchestrator_and_ledger_placement": "operator_asserted_independent_driver",
+  "qualification_status": "not_qualified",
+  "rpc_client_placement": "data_members",
+  "run_id": "673843e045344fabad9e1fd32aae6c34",
+  "seconds": 121.17307313717902,
+  "ssh_append_latency_us": {
+    "max": 4846894,
+    "p50": 2119684,
+    "p95": 3028933,
+    "p99": 3667733
+  },
+  "throughput_certification": false,
+  "uncertain_operations": 0
+}

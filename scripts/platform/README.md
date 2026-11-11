@@ -154,3 +154,73 @@ Harness validation:
 python3 -m unittest discover -s scripts/platform -p 'test_*.py'
 node --test examples/platform/notebook/*.test.mjs
 ```
+
+## Independent acknowledgment ledger for exploratory Azure trials
+
+`external-event-ledger.py` runs on a controller outside the five data VMs. It
+uses existing `cluster events append/get` commands over pinned SSH; it never
+copies member topology or certificates. The actual RPC client still runs on
+members, and every operation pays SSH/process overhead plus external-ledger
+fsync. Its numbers **cannot certify engine throughput scaling**. It is a separate
+write/verification phase from the existing lower-overhead mixed workload.
+
+Provision the cluster first with the ordinary runner. Build an owner-only
+inventory naming its existing member contexts (not fresh database directories):
+
+```json
+{"format":1,"members":[
+  {"ssh":"bench-n1","binary":"/tmp/bicdb-scale-RUN-n0/bicdb",
+   "member_root":"/tmp/bicdb-scale-RUN-n0/db"}
+]}
+```
+
+Include other live members if desired; member selection is a gateway choice,
+not application-managed physical shard routing. Host keys must already be pinned.
+Run controller traffic while the separate growth/fault orchestrator operates:
+
+```sh
+python3 scripts/platform/external-event-ledger.py --inventory /private/members.json \
+  traffic --namespace isolated-RUN --output /evidence/new-phase \
+  --seconds 60 --concurrency 4 --max-operations 10000
+
+python3 scripts/platform/external-event-ledger.py --inventory /private/members.json \
+  verify --ledger /evidence/new-phase/ledger.jsonl
+```
+
+Each unique attempt is fsynced before its RPC dispatch. After a server response,
+its ACK identity and payload digest are fsynced before the driver reports success.
+Timeouts, malformed responses and transport failures are recorded as uncertain,
+never silently treated as rollback. Retries must retain the same operation ID,
+key, namespace and value; changed identities are refused before dispatch. The
+verifier rechecks every unique acknowledged payload, rejects torn/malformed ledger
+records and keeps read unavailability separate from a successful reconciliation.
+A failed ledger write fences later dispatch; a failed run may leave only its raw
+ledger and exception, which must be preserved rather than relabeled complete.
+
+The driver does not automatically replay uncertain appends, inject relocation
+faults, implement stock SQL, certify physical failure domains or prove a durable
+cluster snapshot. The independently durable controller itself must survive the
+chosen data-node fault, and evidence must be exported before its teardown. It
+emits `qualification_status=not_qualified`, `throughput_certification=false` and
+explicit client/ledger placement. Eight regression tests exercise acknowledgment
+ordering, ambiguous responses, persistence failures, stable retry identities,
+reconciliation and SSH quoting.
+
+For an explicit paged-store trial, pass the storage and placement declarations:
+
+```sh
+python3 scripts/platform/scale-cluster.py --inventory /private/hosts.json \
+  --binary /immutable/bicdb --output /evidence/new-run --sizes 4,5 \
+  --storage-mode server_paged --buffer-pool-bytes 268435456 \
+  --node-capacity-bytes 100000000000
+```
+
+The runner passes these as `env` argv entries to init, join, serve, workload and
+other engine commands. It reads every active node's persisted `db/format.json`
+after each convergence checkpoint and refuses an explicit mode mismatch before
+starting the next traffic phase. Reports retain requested mode/pool, environment,
+capacity and persisted-format checkpoints. The pool value is an explicit runtime
+request; `format.json` proves storage mode, not effective pool telemetry. Declared
+capacity must fit the actual test volume; it is not a measured data-set size.
+Omitting storage flags preserves historical inherited defaults, which may be
+`embedded_memory`; never relabel an old unspecified run as paged evidence.

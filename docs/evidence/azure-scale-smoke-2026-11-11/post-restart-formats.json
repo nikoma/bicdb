@@ -1,0 +1,67 @@
+[
+  {
+    "format": {
+      "feature_flags": [
+        "format_metadata_v2",
+        "server_paged_storage"
+      ],
+      "format_version": 2,
+      "min_reader_version": 1,
+      "min_writer_version": 2,
+      "storage_mode": "server_paged"
+    },
+    "node": 0
+  },
+  {
+    "format": {
+      "feature_flags": [
+        "format_metadata_v2",
+        "server_paged_storage"
+      ],
+      "format_version": 2,
+      "min_reader_version": 1,
+      "min_writer_version": 2,
+      "storage_mode": "server_paged"
+    },
+    "node": 1
+  },
+  {
+    "format": {
+      "feature_flags": [
+        "format_metadata_v2",
+        "server_paged_storage"
+      ],
+      "format_version": 2,
+      "min_reader_version": 1,
+      "min_writer_version": 2,
+      "storage_mode": "server_paged"
+    },
+    "node": 2
+  },
+  {
+    "format": {
+      "feature_flags": [
+        "format_metadata_v2",
+        "server_paged_storage"
+      ],
+      "format_version": 2,
+      "min_reader_version": 1,
+      "min_writer_version": 2,
+      "storage_mode": "server_paged"
+    },
+    "node": 3
+  },
+  {
+    "format": {
+      "feature_flags": [
+        "format_metadata_v2",
+        "server_paged_storage"
+      ],
+      "format_version": 2,
+      "min_reader_version": 1,
+      "min_writer_version": 2,
+      "storage_mode": "server_paged"
+    },
+    "node": 4
+  }
+]

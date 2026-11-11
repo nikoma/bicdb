@@ -1,0 +1,156 @@
+{
+  "format": 1,
+  "source_results_sha256": "02e741c8aff163d61e5320319db101430162a8917fd8be3f2e7e6a7b3d7f384f",
+  "scope_valid_for_engine_availability": false,
+  "scope_valid_for_original_failure_classification": false,
+  "missed_final_prelaunch_completion_check": true,
+  "second_ledger_completed_unix_ns": 1794379496609335417,
+  "classification_started_unix_ns": 1794379509559578465,
+  "classification_start_after_second_ledger_seconds": 12.950243048,
+  "cleanup_window_upper_bound_unix_ns": 1794379543537464963,
+  "exact_first_SIGINT_timestamp_recorded": false,
+  "cleanup_boundary_scope": "conservative window starts at second ledger completion; immutable helper immediately enters owned cleanup afterward; per-node signal timestamps were not recorded",
+  "all_calls_cleanup_confounded": true,
+  "calls": [
+    {
+      "key": "41c00a2d23a44d258fe42a1554db1e5d-0-94",
+      "started_unix_ns": 1794379509560886575,
+      "completed_unix_ns": 1794379513016508212,
+      "classification": "cli_error",
+      "scope": "cleanup-confounded; no new engine availability defect/commit count inference"
+    },
+    {
+      "key": "41c00a2d23a44d258fe42a1554db1e5d-0-362",
+      "started_unix_ns": 1794379509561210269,
+      "completed_unix_ns": 1794379512919285300,
+      "classification": "cli_error",
+      "scope": "cleanup-confounded; no new engine availability defect/commit count inference"
+    },
+    {
+      "key": "41c00a2d23a44d258fe42a1554db1e5d-0-588",
+      "started_unix_ns": 1794379509561364647,
+      "completed_unix_ns": 1794379511023379663,
+      "classification": "exact_match",
+      "scope": "cleanup-confounded; no new engine availability defect/commit count inference"
+    },
+    {
+      "key": "41c00a2d23a44d258fe42a1554db1e5d-0-1136",
+      "started_unix_ns": 1794379509561637766,
+      "completed_unix_ns": 1794379513039916504,
+      "classification": "cli_error",
+      "scope": "cleanup-confounded; no new engine availability defect/commit count inference"
+    },
+    {
+      "key": "41c00a2d23a44d258fe42a1554db1e5d-0-1712",
+      "started_unix_ns": 1794379511023394541,
+      "completed_unix_ns": 1794379512447743437,
+      "classification": "exact_match",
+      "scope": "cleanup-confounded; no new engine availability defect/commit count inference"
+    },
+    {
+      "key": "41c00a2d23a44d258fe42a1554db1e5d-0-3904",
+      "started_unix_ns": 1794379512447757844,
+      "completed_unix_ns": 1794379515593157831,
+      "classification": "cli_error",
+      "scope": "cleanup-confounded; no new engine availability defect/commit count inference"
+    },
+    {
+      "key": "41c00a2d23a44d258fe42a1554db1e5d-0-4014",
+      "started_unix_ns": 1794379512919296731,
+      "completed_unix_ns": 1794379514349004528,
+      "classification": "exact_match",
+      "scope": "cleanup-confounded; no new engine availability defect/commit count inference"
+    },
+    {
+      "key": "41c00a2d23a44d258fe42a1554db1e5d-0-4578",
+      "started_unix_ns": 1794379513016521086,
+      "completed_unix_ns": 1794379514621576606,
+      "classification": "exact_match",
+      "scope": "cleanup-confounded; no new engine availability defect/commit count inference"
+    },
+    {
+      "key": "41c00a2d23a44d258fe42a1554db1e5d-0-6294",
+      "started_unix_ns": 1794379513039931031,
+      "completed_unix_ns": 1794379516157508440,
+      "classification": "cli_error",
+      "scope": "cleanup-confounded; no new engine availability defect/commit count inference"
+    },
+    {
+      "key": "41c00a2d23a44d258fe42a1554db1e5d-0-6580",
+      "started_unix_ns": 1794379514349015308,
+      "completed_unix_ns": 1794379517373952325,
+      "classification": "cli_error",
+      "scope": "cleanup-confounded; no new engine availability defect/commit count inference"
+    },
+    {
+      "key": "41c00a2d23a44d258fe42a1554db1e5d-0-6616",
+      "started_unix_ns": 1794379514621589360,
+      "completed_unix_ns": 1794379515872827237,
+      "classification": "exact_match",
+      "scope": "cleanup-confounded; no new engine availability defect/commit count inference"
+    },
+    {
+      "key": "41c00a2d23a44d258fe42a1554db1e5d-0-6986",
+      "started_unix_ns": 1794379515593175224,
+      "completed_unix_ns": 1794379518482737782,
+      "classification": "cli_error",
+      "scope": "cleanup-confounded; no new engine availability defect/commit count inference"
+    },
+    {
+      "key": "41c00a2d23a44d258fe42a1554db1e5d-1-260",
+      "started_unix_ns": 1794379515872839870,
+      "completed_unix_ns": 1794379517279258300,
+      "classification": "exact_match",
+      "scope": "cleanup-confounded; no new engine availability defect/commit count inference"
+    },
+    {
+      "key": "41c00a2d23a44d258fe42a1554db1e5d-1-374",
+      "started_unix_ns": 1794379516157522306,
+      "completed_unix_ns": 1794379517531157347,
+      "classification": "exact_match",
+      "scope": "cleanup-confounded; no new engine availability defect/commit count inference"
+    },
+    {
+      "key": "41c00a2d23a44d258fe42a1554db1e5d-1-1236",
+      "started_unix_ns": 1794379517279270252,
+      "completed_unix_ns": 1794379520203873581,
+      "classification": "cli_error",
+      "scope": "cleanup-confounded; no new engine availability defect/commit count inference"
+    },
+    {
+      "key": "41c00a2d23a44d258fe42a1554db1e5d-1-6922",
+      "started_unix_ns": 1794379517373967043,
+      "completed_unix_ns": 1794379520336423595,
+      "classification": "cli_error",
+      "scope": "cleanup-confounded; no new engine availability defect/commit count inference"
+    },
+    {
+      "key": "41c00a2d23a44d258fe42a1554db1e5d-1-7284",
+      "started_unix_ns": 1794379517531178426,
+      "completed_unix_ns": 1794379518966384929,
+      "classification": "exact_match",
+      "scope": "cleanup-confounded; no new engine availability defect/commit count inference"
+    },
+    {
+      "key": "41c00a2d23a44d258fe42a1554db1e5d-1-7478",
+      "started_unix_ns": 1794379518482752579,
+      "completed_unix_ns": 1794379519794231711,
+      "classification": "exact_match",
+      "scope": "cleanup-confounded; no new engine availability defect/commit count inference"
+    },
+    {
+      "key": "41c00a2d23a44d258fe42a1554db1e5d-1-7510",
+      "started_unix_ns": 1794379518966397141,
+      "completed_unix_ns": 1794379521824863322,
+      "classification": "cli_error",
+      "scope": "cleanup-confounded; no new engine availability defect/commit count inference"
+    },
+    {
+      "key": "41c00a2d23a44d258fe42a1554db1e5d-2-212",
+      "started_unix_ns": 1794379519794242481,
+      "completed_unix_ns": 1794379520958009075,
+      "classification": "exact_match",
+      "scope": "cleanup-confounded; no new engine availability defect/commit count inference"
+    }
+  ]
+}

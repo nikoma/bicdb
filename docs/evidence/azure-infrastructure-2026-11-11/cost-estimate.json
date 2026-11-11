@@ -1,0 +1,8 @@
+{
+  "classification": "retail_planning_estimate_not_actual_invoice",
+  "elapsed_hours_from_initial_allocation_plan_to_confirmed_deletion": 2.9950751199999996,
+  "compute_disk_optional_mount_rate_usd_per_hour": 0.7512534246575343,
+  "conservative_all_nodes_all_disks_full_interval_estimate_usd": 2.250060441006575,
+  "public_ip_network_taxes_discounts_excluded": true,
+  "actual_bill_verified": false
+}

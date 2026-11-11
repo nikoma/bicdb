@@ -1,0 +1,35 @@
+{
+  "original_failure_preserved": true,
+  "recovery_converged": false,
+  "new_writes": false,
+  "restart_complete_unix_ns": 1794378099043561880,
+  "recovery_observation_completed_unix_ns": 1794378400820653225,
+  "original_unverified_point_reads_matching": 10,
+  "original_unverified_point_reads_total": 10,
+  "ledger_checks_completed": 2,
+  "cleanup": [
+    {
+      "node": 0,
+      "stopped": true
+    },
+    {
+      "node": 1,
+      "stopped": true
+    },
+    {
+      "node": 2,
+      "stopped": true
+    },
+    {
+      "node": 3,
+      "stopped": true
+    },
+    {
+      "node": 4,
+      "stopped": true
+    }
+  ],
+  "completed_unix_ns": 1794379543537464963,
+  "new_writes_field_scope": "no new application/event writes; metadata/recovery/relocation activity continues",
+  "ledger_checks_completed_field_scope": "number of command attempts finished, not number of successful ledger verifications"
+}

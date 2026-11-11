@@ -1,0 +1,14 @@
+{
+  "azure-vms-before-delete.json": "10fbeb6212276bcc775d3884fe5416c0384a731d82c7953d970c41d041e94320",
+  "provisioning.json": "b89e6464e004851814f0e4068654c2bc6c3bbe3dd50e40d12e9d66b41e967248",
+  "vm-retail-prices.json": "86857096ddf156a6b1562609c6312957e3fc33ad8b7fc4cb62868901759c4836",
+  "deletion-receipt.json": "1d99e920e97cef0d651f1c27c4ae23ca84e60e2c09657c10eb5c9b64f046bd04",
+  "cleanup.executed.py": "bc471a9bae7dfa08fa9bab99eaa1d5703d2b01f18dfdc910ee41b1e623859d16",
+  "cost-estimate.json": "d11dec8e8d70ce92265c6d14f6d4f1d48b9c0bedc5f8b04bb0812d3a7e9159b8",
+  "README.md": "6f41cd0287d6537fc6f857a93da936b1c7f9666ad63770a2fabf4b3cd0f3bb36",
+  "azure-vm-configuration.json": "7fcf4dd11e51171bd1415c3b74f0ceea6588cd6162bcfa159a1aa047948eb53b",
+  "guest-bootstrap-attempt1.json": "626a9865260da911b651af2ab96ebd212780008c4773bcf18b9ab4b84dc4e892",
+  "teardown.executed.py": "d6274985f7950d318ddfdc63953217be335ec55190f877c05afe9cf73d376b93",
+  "refreshed-retail-prices.json": "7fff47ebc05961c4377dbbd4bf52652c33fc57da1a971715055aaf82e6538f73",
+  "guest-verification.json": "e9107c3ee74e69e3e5769ea280ca2ac42c59c271d6b4c79576f3abee3e923811"
+}

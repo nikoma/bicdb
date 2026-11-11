@@ -1,0 +1,630 @@
+{
+  "aborted_prefault_attempt_ack_verification": {
+    "checked_acknowledged_operations": 0,
+    "status": "no_ledger_no_acknowledgments"
+  },
+  "acknowledged_calls": 38,
+  "after_status": {
+    "membership_last_heartbeat_ms": {
+      "n0": 1794375012205,
+      "n1": 1794375012364,
+      "n2": 1794375012491,
+      "n3": 1794375012379,
+      "n4": 1794375012208
+    },
+    "metadata_consensus": {
+      "cluster_id": "scale-a7103e2d52164d69baa04bb4b855bef9",
+      "commit_index": 2253,
+      "current_term": 28,
+      "last_log_index": 2253,
+      "last_log_term": 28,
+      "leader_id": "n2",
+      "learners": [],
+      "node_id": "n0",
+      "role": "follower",
+      "topology_generation": 14505,
+      "voted_for": "n2",
+      "voters": [
+        "n0",
+        "n1",
+        "n2",
+        "n3",
+        "n4"
+      ]
+    },
+    "metrics": {
+      "active_relocations": 0,
+      "failed_relocations": 0,
+      "generated_at_ms": 1794375012885,
+      "leader_skew": 1,
+      "leaders_total": 64,
+      "nodes_dead": 0,
+      "nodes_decommissioned": 0,
+      "nodes_draining": 0,
+      "nodes_live": 5,
+      "nodes_suspect": 0,
+      "nodes_total": 5,
+      "ranges_total": 64,
+      "replica_byte_skew": 0,
+      "replica_skew": 1,
+      "replicas_total": 192,
+      "topology_generation": 14505,
+      "unavailable_ranges": 0,
+      "under_replicated_ranges": 0
+    }
+  },
+  "attempt_id": "vm-fault-755a2a0ffc8c49a9983584fa5b6af5d8",
+  "availability_observation": "five_affected_range_acks_while_confirmed_off",
+  "binary_sha256": "15ad8ad644c92fd9248020c19b1fad9d4f62e6dceef8d4bc43f1415a8ff4e028",
+  "calls": [
+    {
+      "acknowledged": true,
+      "completed_unix_ns": 1794374652687732043,
+      "latency_us": 1894458,
+      "sequence": 0,
+      "started_unix_ns": 1794374650760229566
+    },
+    {
+      "acknowledged": true,
+      "completed_unix_ns": 1794374655638129353,
+      "latency_us": 1866827,
+      "sequence": 1,
+      "started_unix_ns": 1794374653710397197
+    },
+    {
+      "acknowledged": true,
+      "completed_unix_ns": 1794374658573803536,
+      "latency_us": 1871216,
+      "sequence": 2,
+      "started_unix_ns": 1794374656653828888
+    },
+    {
+      "acknowledged": true,
+      "completed_unix_ns": 1794374661519791175,
+      "latency_us": 1890328,
+      "sequence": 3,
+      "started_unix_ns": 1794374659589550050
+    },
+    {
+      "acknowledged": true,
+      "completed_unix_ns": 1794374664503226094,
+      "latency_us": 1932205,
+      "sequence": 4,
+      "started_unix_ns": 1794374662535484441
+    },
+    {
+      "acknowledged": true,
+      "completed_unix_ns": 1794374667508472279,
+      "latency_us": 1897753,
+      "sequence": 5,
+      "started_unix_ns": 1794374665546337685
+    },
+    {
+      "acknowledged": true,
+      "completed_unix_ns": 1794374670431805806,
+      "latency_us": 1880851,
+      "sequence": 6,
+      "started_unix_ns": 1794374668524008909
+    },
+    {
+      "acknowledged": true,
+      "completed_unix_ns": 1794374673417509507,
+      "latency_us": 1924728,
+      "sequence": 7,
+      "started_unix_ns": 1794374671453332549
+    },
+    {
+      "acknowledged": true,
+      "completed_unix_ns": 1794374676410739635,
+      "latency_us": 1917331,
+      "sequence": 8,
+      "started_unix_ns": 1794374674432968166
+    },
+    {
+      "acknowledged": true,
+      "completed_unix_ns": 1794374679325632693,
+      "latency_us": 1881127,
+      "sequence": 9,
+      "started_unix_ns": 1794374677426144345
+    },
+    {
+      "acknowledged": true,
+      "completed_unix_ns": 1794374682313949534,
+      "latency_us": 1931110,
+      "sequence": 10,
+      "started_unix_ns": 1794374680341246132
+    },
+    {
+      "acknowledged": true,
+      "completed_unix_ns": 1794374685240536823,
+      "latency_us": 1867464,
+      "sequence": 11,
+      "started_unix_ns": 1794374683329836832
+    },
+    {
+      "acknowledged": true,
+      "completed_unix_ns": 1794374688834571734,
+      "latency_us": 2512045,
+      "sequence": 12,
+      "started_unix_ns": 1794374686256199435
+    },
+    {
+      "acknowledged": true,
+      "completed_unix_ns": 1794374691794678027,
+      "latency_us": 1902074,
+      "sequence": 13,
+      "started_unix_ns": 1794374689849727560
+    },
+    {
+      "acknowledged": true,
+      "completed_unix_ns": 1794374694772548407,
+      "latency_us": 1915011,
+      "sequence": 14,
+      "started_unix_ns": 1794374692810003819
+    },
+    {
+      "acknowledged": true,
+      "completed_unix_ns": 1794374697807449821,
+      "latency_us": 1971869,
+      "sequence": 15,
+      "started_unix_ns": 1794374695788092245
+    },
+    {
+      "acknowledged": true,
+      "completed_unix_ns": 1794374700827517000,
+      "latency_us": 1984325,
+      "sequence": 16,
+      "started_unix_ns": 1794374698823449797
+    },
+    {
+      "acknowledged": false,
+      "completed_unix_ns": 1794374731915698182,
+      "latency_us": 30048608,
+      "sequence": 17,
+      "started_unix_ns": 1794374701849193428
+    },
+    {
+      "acknowledged": false,
+      "completed_unix_ns": 1794374763013939805,
+      "latency_us": 30066992,
+      "sequence": 18,
+      "started_unix_ns": 1794374732937741503
+    },
+    {
+      "acknowledged": false,
+      "completed_unix_ns": 1794374794129337549,
+      "latency_us": 30059095,
+      "sequence": 19,
+      "started_unix_ns": 1794374764029732083
+    },
+    {
+      "acknowledged": true,
+      "completed_unix_ns": 1794374806814338432,
+      "latency_us": 11607709,
+      "sequence": 20,
+      "started_unix_ns": 1794374795145797285
+    },
+    {
+      "acknowledged": true,
+      "completed_unix_ns": 1794374819455041093,
+      "latency_us": 11577661,
+      "sequence": 21,
+      "started_unix_ns": 1794374807829943000
+    },
+    {
+      "acknowledged": true,
+      "completed_unix_ns": 1794374832083773254,
+      "latency_us": 11570119,
+      "sequence": 22,
+      "started_unix_ns": 1794374820476711925
+    },
+    {
+      "acknowledged": true,
+      "completed_unix_ns": 1794374845267282084,
+      "latency_us": 12109640,
+      "sequence": 23,
+      "started_unix_ns": 1794374833105813017
+    },
+    {
+      "acknowledged": true,
+      "completed_unix_ns": 1794374857876521090,
+      "latency_us": 11552790,
+      "sequence": 24,
+      "started_unix_ns": 1794374846293539591
+    },
+    {
+      "acknowledged": true,
+      "completed_unix_ns": 1794374870599912815,
+      "latency_us": 11601359,
+      "sequence": 25,
+      "started_unix_ns": 1794374858935242714
+    },
+    {
+      "acknowledged": true,
+      "completed_unix_ns": 1794374883209759065,
+      "latency_us": 11567713,
+      "sequence": 26,
+      "started_unix_ns": 1794374871622419422
+    },
+    {
+      "acknowledged": true,
+      "completed_unix_ns": 1794374893010403996,
+      "latency_us": 8739455,
+      "sequence": 27,
+      "started_unix_ns": 1794374884226430836
+    },
+    {
+      "acknowledged": true,
+      "completed_unix_ns": 1794374896599614674,
+      "latency_us": 2493345,
+      "sequence": 28,
+      "started_unix_ns": 1794374894026162508
+    },
+    {
+      "acknowledged": true,
+      "completed_unix_ns": 1794374899334639689,
+      "latency_us": 1688944,
+      "sequence": 29,
+      "started_unix_ns": 1794374897615084570
+    },
+    {
+      "acknowledged": true,
+      "completed_unix_ns": 1794374901955024204,
+      "latency_us": 1586523,
+      "sequence": 30,
+      "started_unix_ns": 1794374900350162540
+    },
+    {
+      "acknowledged": true,
+      "completed_unix_ns": 1794374904605932944,
+      "latency_us": 1593746,
+      "sequence": 31,
+      "started_unix_ns": 1794374902970697771
+    },
+    {
+      "acknowledged": true,
+      "completed_unix_ns": 1794374907264317354,
+      "latency_us": 1591176,
+      "sequence": 32,
+      "started_unix_ns": 1794374905621908328
+    },
+    {
+      "acknowledged": true,
+      "completed_unix_ns": 1794374909947225432,
+      "latency_us": 1607777,
+      "sequence": 33,
+      "started_unix_ns": 1794374908280480542
+    },
+    {
+      "acknowledged": true,
+      "completed_unix_ns": 1794374912578986679,
+      "latency_us": 1587725,
+      "sequence": 34,
+      "started_unix_ns": 1794374910963588829
+    },
+    {
+      "acknowledged": true,
+      "completed_unix_ns": 1794374919429255677,
+      "latency_us": 5759979,
+      "sequence": 35,
+      "started_unix_ns": 1794374913600569197
+    },
+    {
+      "acknowledged": true,
+      "completed_unix_ns": 1794375029691620989,
+      "latency_us": 13389101,
+      "phase": "after_victim_engine_restart",
+      "sequence": 36,
+      "started_unix_ns": 1794375016250378960
+    },
+    {
+      "acknowledged": true,
+      "completed_unix_ns": 1794375033343215550,
+      "latency_us": 2575570,
+      "phase": "after_victim_engine_restart",
+      "sequence": 37,
+      "started_unix_ns": 1794375030707338469
+    },
+    {
+      "acknowledged": true,
+      "completed_unix_ns": 1794375036339863681,
+      "latency_us": 1929581,
+      "phase": "after_victim_engine_restart",
+      "sequence": 38,
+      "started_unix_ns": 1794375034358437598
+    },
+    {
+      "acknowledged": true,
+      "completed_unix_ns": 1794375039353390736,
+      "latency_us": 1952268,
+      "phase": "after_victim_engine_restart",
+      "sequence": 39,
+      "started_unix_ns": 1794375037355736593
+    },
+    {
+      "acknowledged": true,
+      "completed_unix_ns": 1794375042438078599,
+      "latency_us": 2014186,
+      "phase": "after_victim_engine_restart",
+      "sequence": 40,
+      "started_unix_ns": 1794375040369474325
+    }
+  ],
+  "complete": true,
+  "confirmed_off_max_success_streak": 5,
+  "confirmed_off_successful_calls": 5,
+  "confirmed_off_window_available": true,
+  "earlier_external_ack_verification": {
+    "checked_acknowledged_operations": 107,
+    "failures": [],
+    "verification_passed": true
+  },
+  "earlier_native_verification": [
+    {
+      "checked": 438,
+      "phase": "steady-4",
+      "unverified": 0,
+      "unverified_key_samples": [],
+      "verification_passed": true
+    },
+    {
+      "checked": 265,
+      "phase": "growth-4-to-5",
+      "unverified": 0,
+      "unverified_key_samples": [],
+      "verification_passed": true
+    },
+    {
+      "checked": 227,
+      "phase": "steady-5",
+      "unverified": 0,
+      "unverified_key_samples": [],
+      "verification_passed": true
+    },
+    {
+      "checked": 287,
+      "phase": "failure-5",
+      "unverified": 0,
+      "unverified_key_samples": [],
+      "verification_passed": true
+    },
+    {
+      "checked": 64,
+      "phase": "recovered-5",
+      "unverified": 0,
+      "unverified_key_samples": [],
+      "verification_passed": true
+    }
+  ],
+  "events": [
+    {
+      "kind": "baseline_five_acks",
+      "range_id": 21,
+      "unix_ns": 1794374664503285424
+    },
+    {
+      "kind": "five_provisional_off_window_acks",
+      "unix_ns": 1794374857876602411
+    },
+    {
+      "kind": "victim_bicdb_restart_requested",
+      "unix_ns": 1794374921316998425
+    },
+    {
+      "kind": "all_ack_rechecks_finished",
+      "unix_ns": 1794375323361622558
+    }
+  ],
+  "fault_control": {
+    "attempt_id": "vm-fault-755a2a0ffc8c49a9983584fa5b6af5d8",
+    "bicdb_restart_ready": true,
+    "bicdb_restart_ready_unix_ns": 1794374915866111113,
+    "binary_sha256": "15ad8ad644c92fd9248020c19b1fad9d4f62e6dceef8d4bc43f1415a8ff4e028",
+    "cold_database_archive": {
+      "bytes": 1363864,
+      "classification": "database-files-after-filesystem-journal-replay-before-BicDB-open-not-raw-disk",
+      "controller_sha256": "45fd44506366d1302bec01d236221f306c7c6ca6e3cf099109bb7905a5d1f233",
+      "exported": true,
+      "sha256": "45fd44506366d1302bec01d236221f306c7c6ca6e3cf099109bb7905a5d1f233"
+    },
+    "events": [
+      {
+        "exit_code": 0,
+        "kind": "azure_stop_request_returned",
+        "unix_ns": 1794374702319640801
+      },
+      {
+        "kind": "instance_view",
+        "statuses": [
+          "ProvisioningState/updating",
+          "PowerState/stopping"
+        ],
+        "unix_ns": 1794374703315668071
+      },
+      {
+        "kind": "instance_view",
+        "statuses": [
+          "ProvisioningState/succeeded",
+          "PowerState/stopped"
+        ],
+        "unix_ns": 1794374709291806396
+      },
+      {
+        "kind": "five_affected_range_acks_while_off_observed",
+        "unix_ns": 1794374859347340892
+      },
+      {
+        "exit_code": 0,
+        "kind": "azure_start_request_returned",
+        "unix_ns": 1794374861214165988
+      },
+      {
+        "kind": "instance_view",
+        "statuses": [
+          "ProvisioningState/updating",
+          "PowerState/starting"
+        ],
+        "unix_ns": 1794374862215863453
+      },
+      {
+        "kind": "instance_view",
+        "statuses": [
+          "ProvisioningState/succeeded",
+          "PowerState/running"
+        ],
+        "unix_ns": 1794374868350601787
+      },
+      {
+        "kind": "guest_reboot_and_data_mount_verified",
+        "unix_ns": 1794374910752704389
+      },
+      {
+        "kind": "cold_database_archive_exported_verified",
+        "unix_ns": 1794374915847794591
+      }
+    ],
+    "fault_mechanism": "azure_vm_stop_skip_shutdown",
+    "guest_boot_id_after_sha256": "b35d4a1825b9029653f04a5e511ad4dd69dad417a68cf91d7b69da2fb15047e9",
+    "guest_boot_id_before_sha256": "0157866fb7e7bdbfa4bd03bbd8320966534168e6227410ec1a35e2c2052b8dfe",
+    "guest_running_confirmed_unix_ns": 1794374868384015162,
+    "physical_host_power_loss": false,
+    "power_off_confirmed_unix_ns": 1794374709319528766,
+    "request_started_unix_ns": 1794374701206142566,
+    "selected_range_id": 21,
+    "stable_acks_while_off_observed": true,
+    "start_requested_unix_ns": 1794374859373869881
+  },
+  "fault_mechanism": "azure_guest_abrupt_power_off",
+  "first_confirmed_off_ack_unix_ns": 1794374806814338432,
+  "namespace": "vm-reset-8f421431ccbb41cf86466825de4c2656",
+  "physical_host_power_loss": false,
+  "qualification_status": "not_qualified",
+  "route_after": {
+    "cluster_id": "scale-a7103e2d52164d69baa04bb4b855bef9",
+    "hash_version": 1,
+    "protocol_version": 1,
+    "scope": {
+      "key": "vm-reset-8f421431ccbb41cf86466825de4c2656/probe-31",
+      "namespace": "__bic_cluster_events",
+      "scope": "point",
+      "token": 5995164526196954103
+    },
+    "targets": [
+      {
+        "end_token": 6052837899185946624,
+        "leader_node": "n0",
+        "range_epoch": 37,
+        "range_id": 21,
+        "start_token": 5764607523034234880
+      }
+    ],
+    "topology_generation": 14835
+  },
+  "route_before": {
+    "cluster_id": "scale-a7103e2d52164d69baa04bb4b855bef9",
+    "hash_version": 1,
+    "protocol_version": 1,
+    "scope": {
+      "key": "vm-reset-8f421431ccbb41cf86466825de4c2656/probe-31",
+      "namespace": "__bic_cluster_events",
+      "scope": "point",
+      "token": 5995164526196954103
+    },
+    "targets": [
+      {
+        "end_token": 6052837899185946624,
+        "leader_node": "n4",
+        "range_epoch": 28,
+        "range_id": 21,
+        "start_token": 5764607523034234880
+      }
+    ],
+    "topology_generation": 12483
+  },
+  "selected_range": {
+    "approximate_bytes": 0,
+    "approximate_qps": 0,
+    "end_token": 6052837899185946624,
+    "epoch": 28,
+    "id": 21,
+    "leader": "n4",
+    "placement": {
+      "distinct_failure_domains": [],
+      "required_node_labels": {}
+    },
+    "replicas": [
+      {
+        "id": 85,
+        "node_id": "n1",
+        "role": "voter"
+      },
+      {
+        "id": 283,
+        "node_id": "n0",
+        "role": "voter"
+      },
+      {
+        "id": 429,
+        "node_id": "n4",
+        "role": "voter"
+      }
+    ],
+    "start_token": 5764607523034234880
+  },
+  "source_commit": "b05385d4b033edf0db03f3eccf4bdd86f7c8eddb",
+  "source_status": {
+    "membership_last_heartbeat_ms": {
+      "n0": 1794374634783,
+      "n1": 1794374634832,
+      "n2": 1794374634930,
+      "n3": 1794374634761,
+      "n4": 1794374634813
+    },
+    "metadata_consensus": {
+      "cluster_id": "scale-a7103e2d52164d69baa04bb4b855bef9",
+      "commit_index": 1942,
+      "current_term": 28,
+      "last_log_index": 1943,
+      "last_log_term": 28,
+      "leader_id": "n2",
+      "learners": [],
+      "node_id": "n0",
+      "role": "follower",
+      "topology_generation": 12313,
+      "voted_for": "n2",
+      "voters": [
+        "n0",
+        "n1",
+        "n2",
+        "n3",
+        "n4"
+      ]
+    },
+    "metrics": {
+      "active_relocations": 0,
+      "failed_relocations": 0,
+      "generated_at_ms": 1794374635539,
+      "leader_skew": 1,
+      "leaders_total": 64,
+      "nodes_dead": 0,
+      "nodes_decommissioned": 0,
+      "nodes_draining": 0,
+      "nodes_live": 5,
+      "nodes_suspect": 0,
+      "nodes_total": 5,
+      "ranges_total": 64,
+      "replica_byte_skew": 0,
+      "replica_skew": 1,
+      "replicas_total": 192,
+      "topology_generation": 12313,
+      "unavailable_ranges": 0,
+      "under_replicated_ranges": 0
+    }
+  },
+  "targeted_ack_verification": {
+    "checked_acknowledged_operations": 38,
+    "failures": [],
+    "verification_passed": true
+  },
+  "verification_passed": true
+}

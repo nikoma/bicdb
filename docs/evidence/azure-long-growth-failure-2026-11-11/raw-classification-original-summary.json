@@ -1,0 +1,11 @@
+{
+  "started_unix_ns": 1794379509559578465,
+  "completed_unix_ns": 1794379521825286551,
+  "sample_count": 20,
+  "classifications": {
+    "cli_error": 10,
+    "exact_match": 10
+  },
+  "new_application_event_writes": false,
+  "scope": "fresh Get observations during ongoing recovery and diagnostic growth ledger verification, not original111failure classification"
+}

@@ -58,6 +58,11 @@ pub(crate) struct NativeReadyReply {
     pub physical_domain: NativeReadyPhysicalDomain,
     pub scope: RecoveryFenceScope,
     pub challenge: Uuid,
+    // Actual recipient's independently challenged MQ observation. The scope
+    // above is the caller's requested minimum and must not be mislabeled fresh.
+    pub observed_metadata_context_id: Uuid,
+    pub observed_metadata_term: u64,
+    pub observed_metadata_read_index: u64,
     pub node_id: ClusterNodeId,
     pub member_incarnation: u64,
     pub store_open_id: Uuid,
@@ -82,6 +87,10 @@ impl NativeReadyReply {
             || self.physical_domain != NativeReadyPhysicalDomain::SameVoterNativeAnchorV1
             || self.challenge != request.challenge
             || self.challenge.is_nil()
+            || self.observed_metadata_context_id.is_nil()
+            || self.observed_metadata_term == 0
+            || self.observed_metadata_term < request.scope.metadata_term
+            || self.observed_metadata_read_index < request.scope.metadata_read_index
             || !self.scope.same_session(&request.scope)
             || !matches!(
                 self.scope.purpose,
@@ -227,6 +236,13 @@ impl ClosedNativeReadyQuorumRound {
         self.role.require_live_request()?;
         let reply = observation.reply();
         reply.scope.require_role(&self.role)?;
+        if reply.observed_metadata_term < self.scope.metadata_term
+            || reply.observed_metadata_read_index < self.scope.metadata_read_index
+        {
+            return Err(invalid(
+                "native-ready recipient observation predates this actual caller MQ anchor",
+            ));
+        }
         if !reply.scope.same_session(&self.scope) || self.observations.contains_key(&reply.node_id)
         {
             return Err(invalid("duplicate or wrong-session native-prepared voter"));

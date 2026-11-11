@@ -61,7 +61,13 @@ impl RangeWriteStore {
     ) -> Result<LocalNativeReadyEvidence> {
         prepared.require_current_under_role(db, self, role)?;
         request.scope.require_role(role)?;
-        self.project_prepared_native(prepared, request)
+        self.project_prepared_native(
+            prepared,
+            request,
+            role.context_id(),
+            role.metadata_term(),
+            role.metadata_read_index(),
+        )
     }
     pub(crate) fn observe_prepared_native_for_observer(
         &self,
@@ -71,14 +77,26 @@ impl RangeWriteStore {
         request: &NativeReadyRequest,
     ) -> Result<LocalNativeReadyEvidence> {
         prepared.require_current_for_observer(db, self, observer, &request.scope)?;
-        self.project_prepared_native(prepared, request)
+        self.project_prepared_native(
+            prepared,
+            request,
+            observer.metadata_context_id(),
+            observer.metadata_term(),
+            observer.metadata_read_index(),
+        )
     }
     fn project_prepared_native(
         &self,
         prepared: &PreparedNativeRecoveryReady,
         request: &NativeReadyRequest,
+        observed_metadata_context_id: Uuid,
+        observed_metadata_term: u64,
+        observed_metadata_read_index: u64,
     ) -> Result<LocalNativeReadyEvidence> {
-        if request.challenge.is_nil()
+        if observed_metadata_context_id.is_nil()
+            || observed_metadata_term < request.scope.metadata_term
+            || observed_metadata_read_index < request.scope.metadata_read_index
+            || request.challenge.is_nil()
             || !request.scope.same_session(prepared.scope())
             || !matches!(
                 request.scope.purpose,
@@ -147,6 +165,9 @@ impl RangeWriteStore {
                 physical_domain: NativeReadyPhysicalDomain::SameVoterNativeAnchorV1,
                 scope: request.scope.clone(),
                 challenge: request.challenge,
+                observed_metadata_context_id,
+                observed_metadata_term,
+                observed_metadata_read_index,
                 node_id: self.catalog.node_id.clone(),
                 member_incarnation: prepared.role().local_member_incarnation(),
                 store_open_id: self.open_id,

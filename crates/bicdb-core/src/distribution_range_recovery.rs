@@ -820,6 +820,17 @@ impl RecoveryObservationRoleAdmission {
     pub(crate) fn bootstrap_id(&self) -> Uuid {
         self.fresh.bootstrap_id()
     }
+    /// Readonly provenance only; this does not expose the underlying mutation
+    /// role or convert an observation purpose into recovery permission.
+    pub(crate) fn metadata_context_id(&self) -> Uuid {
+        self.fresh.context_id()
+    }
+    pub(crate) fn metadata_term(&self) -> u64 {
+        self.fresh.metadata_term()
+    }
+    pub(crate) fn metadata_read_index(&self) -> u64 {
+        self.fresh.metadata_read_index()
+    }
     pub(crate) fn deadline(&self) -> Instant {
         self.fresh.deadline()
     }

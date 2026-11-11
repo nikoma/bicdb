@@ -183,6 +183,11 @@ impl HandoffCutRound {
     ) -> Result<Self> {
         use crate::distribution::{RangeReplicaRole, RelocationPhase};
         use sha2::{Digest, Sha256};
+        if !authority.is_current_budget() {
+            return Err(BicDbError::Cluster(
+                "handoff metadata authority budget expired".into(),
+            ));
+        }
         let topology = authority.topology();
         let relocation = topology
             .relocations
@@ -312,6 +317,11 @@ impl HandoffCutRound {
     }
 
     pub(crate) fn record(&mut self, ack: HandoffPromiseAck) -> Result<()> {
+        if !self.authority.is_current_budget() {
+            return Err(BicDbError::Cluster(
+                "handoff metadata authority budget expired".into(),
+            ));
+        }
         let peer = self
             .authority
             .topology()
@@ -350,6 +360,11 @@ impl HandoffCutRound {
     }
 
     pub(crate) fn finish(self) -> Result<CertifiedRangeImageCut> {
+        if !self.authority.is_current_budget() {
+            return Err(BicDbError::Cluster(
+                "handoff metadata authority budget expired".into(),
+            ));
+        }
         if self.acknowledgements.len() < self.old_voters.len() / 2 + 1 {
             return Err(BicDbError::Cluster(
                 "handoff has no durable old data majority".into(),

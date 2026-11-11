@@ -30,6 +30,15 @@ impl RecoveryFenceQuorumRound {
         let cancellation = parent.child_with_deadline(role.deadline());
         cancellation.check()?;
         role.require_live_request()?;
+        if !matches!(
+            role.purpose(),
+            MetadataRecoveryRolePurpose::NormalRecovery
+                | MetadataRecoveryRolePurpose::CommittedHandoff { .. }
+        ) {
+            return Err(invalid(
+                "read-only observation role cannot grant recovery mutation authority",
+            ));
+        }
         let members = role.member_credentials();
         if members.is_empty()
             || members.len() > MAX_VOTERS
@@ -70,6 +79,11 @@ impl RecoveryFenceQuorumRound {
         self.cancellation.check()?;
         self.role.require_live_request()?;
         observation.require_live()?;
+        if !observation.is_active_recovery() {
+            return Err(invalid(
+                "completed epoch authority is not an active recovery fence",
+            ));
+        }
         // Recipients obtain independent fresh metadata contexts. Their durable
         // recovery session must match; their context UUID need not equal ours.
         observation.scope().require_role(&self.role)?;
@@ -118,6 +132,11 @@ impl RecoveryFenceQuorumRound {
             MetadataRecoveryRolePurpose::NormalRecovery => None,
             MetadataRecoveryRolePurpose::CommittedHandoff { .. } => {
                 self.role.current_range().epoch.checked_add(2)
+            }
+            MetadataRecoveryRolePurpose::ObserveFencedRecovery { .. } => {
+                return Err(invalid(
+                    "read-only observation role cannot collect mutation fences",
+                ));
             }
         };
         if progress.node_id != *observation.node_id()

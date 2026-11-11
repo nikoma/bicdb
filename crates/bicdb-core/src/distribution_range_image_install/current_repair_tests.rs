@@ -1147,6 +1147,24 @@ fn actual_prepared_serving_record_survives_a_second_current_voter_image_attempt(
         ClosedNativeReadyQuorumRound, NativeReadyObservation, NativeReadyRequest,
     };
     let mut fixture = CurrentRepairFixture::new();
+    // Keep all actual native/catalogue roots even if a healthy precondition
+    // fails before the second-attempt boundary. The source methods own their
+    // existing concrete paths; replacing this cleanup owner changes no DB.
+    let retained = std::mem::replace(&mut fixture.origin.root, tempfile::tempdir().unwrap()).keep();
+    eprintln!(
+        "ACTUAL_SERVING_IMAGE_WITNESS_RETAINED_ROOT {}",
+        retained.display()
+    );
+    std::fs::write(
+        retained.join("serving-image-witness-start.json"),
+        serde_json::to_vec_pretty(&serde_json::json!({
+            "scope":fixture.scope,"target_birth_spec":fixture.origin.specs[&node("n1")],
+            "target_uid":fixture.original_target_uid,"source_b":fixture.source_b,
+            "target_b_before":fixture.target_b_before,"physical_qualification":false,
+        }))
+        .unwrap(),
+    )
+    .unwrap();
     let target = Arc::clone(&fixture.origin.databases[&node("n1")]);
     let attempt_a = Uuid::now_v7();
     let target_prepared = fixture.prepare_actual_current_image(attempt_a);
@@ -1254,7 +1272,6 @@ fn actual_prepared_serving_record_survives_a_second_current_voter_image_attempt(
     // On a baseline failure retain the actual stopped native/catalogue roots
     // after unwinding. On success remove them explicitly. This is local test
     // custody, not a crash/power-loss or physical qualification claim.
-    let retained = std::mem::replace(&mut fixture.origin.root, tempfile::tempdir().unwrap()).keep();
     let before: serde_json::Value = serde_json::from_slice(
         &std::fs::read(target.read().data_path().join(DEFAULT_RANGE_WRITE_LOG)).unwrap(),
     )

@@ -4716,7 +4716,19 @@ fn acquire_postgres_statement_snapshot(
             // Sample before refreshing so a subsequent replica apply cannot
             // make the newly pinned snapshot look fresher than it is.
             let watermark = *server.replica_read_watermark.lock().unwrap();
-            tx.acquire_statement_snapshot(state.last_commit_seq)?;
+            if state.session_state.transaction_is_serializable() {
+                let deadline = (!server.config.query_timeout.is_zero())
+                    .then(|| Instant::now() + server.config.query_timeout);
+                let cancellation = CancellationToken::new(state.cancel_token.clone(), deadline);
+                tx.acquire_postgres_serializable_snapshot(
+                    state.last_commit_seq,
+                    state.session_state.transaction_read_only(),
+                    state.session_state.transaction_deferrable(),
+                    &cancellation,
+                )?;
+            } else {
+                tx.acquire_statement_snapshot(state.last_commit_seq)?;
+            }
             state.replica_tx_watermark = watermark;
         }
     }
@@ -4875,15 +4887,23 @@ fn execute_server_sql_with_options_normalized(
     set_active_query(server, state, sql);
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         if transaction_control == Some(Some(TransactionControl::Begin)) {
+            let deferrable = if bicdb_sql::oracle::is_oracle_profile(&server.config.sql_profile) {
+                None
+            } else {
+                bicdb_sql::postgres_transaction_deferrability(sql)?
+            };
+            let modes_sql = deferrable
+                .as_ref()
+                .map_or(sql, |(stripped, _)| stripped.as_str());
             let result = begin_buffered_transaction(server, state);
             if result.is_ok() {
-                if let Some(read_only) = bicdb_sql::parse_transaction_read_only(sql)? {
+                if let Some(read_only) = bicdb_sql::parse_transaction_read_only(modes_sql)? {
                     state
                         .session_state
                         .set_transaction_read_only_label(read_only)?;
                 }
                 if let Some(isolation) = bicdb_sql::parse_transaction_isolation_for_profile(
-                    sql,
+                    modes_sql,
                     &server.config.sql_profile,
                 )? {
                     let fixed = isolation == "repeatable read" || isolation == "serializable";
@@ -4901,6 +4921,9 @@ fn execute_server_sql_with_options_normalized(
                     state
                         .session_state
                         .set_transaction_isolation_label(isolation)?;
+                }
+                if let Some((_, deferrable)) = deferrable {
+                    state.session_state.set_transaction_deferrable(deferrable);
                 }
             }
             result
@@ -4942,6 +4965,7 @@ fn execute_server_sql_with_options_normalized(
                 .into());
             }
             let chain_read_only = state.session_state.transaction_read_only();
+            let chain_deferrable = state.session_state.transaction_deferrable();
             let chain_isolation = state
                 .session_state
                 .session_gucs()
@@ -4963,6 +4987,9 @@ fn execute_server_sql_with_options_normalized(
                 state
                     .session_state
                     .set_transaction_read_only_label(chain_read_only)?;
+                state
+                    .session_state
+                    .set_transaction_deferrable(chain_deferrable);
                 if let Some(isolation) = chain_isolation {
                     let fixed = isolation == "repeatable read" || isolation == "serializable";
                     state

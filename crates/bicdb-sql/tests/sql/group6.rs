@@ -467,12 +467,12 @@ fn transaction_isolation_commands_accept_repeatable_read() {
     }
 
     let error = session
-        .execute("SET TRANSACTION ISOLATION LEVEL SERIALIZABLE")
+        .execute("SET TRANSACTION ISOLATION LEVEL SNAPSHOT")
         .unwrap_err();
     assert_eq!(error.sqlstate(), "0A000");
     assert_eq!(
         error.to_string(),
-        "unsupported SQL: transaction isolation level SERIALIZABLE is not supported"
+        "unsupported SQL: transaction isolation level SNAPSHOT is not supported"
     );
 }
 

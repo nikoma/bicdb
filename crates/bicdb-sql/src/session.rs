@@ -3540,6 +3540,33 @@ impl<'db> SqlSession<'db> {
     /// Parse and run the statements of `sql`; the raw-text handlers above
     /// have either declined or been bypassed.
     fn execute_parsed_sql(&mut self, sql: &str) -> Result<SqlResult> {
+        if let Some((stripped, deferrable)) = postgres_transaction_deferrability(sql)? {
+            if oracle::preview_routine_language_enabled(self.db_ref())? {
+                return Err(SqlError::Unsupported(
+                    "DEFERRABLE transaction mode requires the PostgreSQL profile".into(),
+                ));
+            }
+            let statements = parse_statements(&stripped)?;
+            if matches!(statements.as_slice(), [Statement::Set(_)]) {
+                if self.tx.is_none()
+                    || self
+                        .tx
+                        .as_ref()
+                        .is_some_and(Transaction::statement_snapshot_acquired)
+                {
+                    return Err(SqlError::data_exception(
+                        "25001",
+                        "SET TRANSACTION DEFERRABLE must precede the first query",
+                        None,
+                    ));
+                }
+            }
+            let result = self.execute_statement_list(&statements)?;
+            let mut state = self.take_session_guc_state();
+            state.set_transaction_deferrable(deferrable);
+            self.install_session_guc_state(state);
+            return Ok(result);
+        }
         if crate::statement_cache::statement_is_cacheable(sql) {
             if let Some(result) = self.execute_cached_statements(sql)? {
                 return Ok(result);
@@ -3610,7 +3637,24 @@ impl<'db> SqlSession<'db> {
         let floor = self
             .snapshot_floor
             .max(crate::statement_context::latest_independent_commit());
-        if let Some(tx) = self.tx.as_mut() {
+        let serializable = self
+            .session_gucs
+            .get("transaction_isolation")
+            .is_some_and(|level| level == "serializable");
+        let deferrable = self
+            .session_gucs
+            .get("transaction_deferrable")
+            .is_some_and(|value| value == "on");
+        let read_only = self.transaction_read_only();
+        let tx = self.tx.as_mut().unwrap();
+        if serializable {
+            tx.acquire_postgres_serializable_snapshot(
+                floor,
+                read_only,
+                deferrable,
+                &self.cancellation,
+            )?;
+        } else {
             tx.acquire_statement_snapshot(floor)?;
         }
         Ok(())
@@ -3960,6 +4004,10 @@ impl<'db> SqlSession<'db> {
             })?;
         let fixed = tx.isolation() != bicdb_core::TransactionIsolation::ReadCommitted;
         let read_only = self.transaction_read_only();
+        let deferrable = self
+            .session_gucs
+            .get("transaction_deferrable")
+            .is_some_and(|value| value == "on");
         let isolation = self
             .session_gucs
             .get("transaction_isolation")
@@ -3979,6 +4027,9 @@ impl<'db> SqlSession<'db> {
         next.set_statement_write_conflict_check(fixed)?;
         self.set_transaction_read_only_label(read_only)?;
         self.set_transaction_isolation_label(&isolation)?;
+        let mut state = self.take_session_guc_state();
+        state.set_transaction_deferrable(deferrable);
+        self.install_session_guc_state(state);
         self.tx = Some(next);
         Ok(result)
     }
@@ -5509,6 +5560,7 @@ impl<'db> SqlSession<'db> {
                 "bicdb.sql_profile",
                 "transaction_isolation",
                 "transaction_read_only",
+                "transaction_deferrable",
             ];
             Arc::make_mut(&mut self.session_gucs).retain(|key, _| {
                 preserved.contains(&key.as_str())

@@ -10640,11 +10640,11 @@ fn pgwire_transaction_isolation_commands_accept_repeatable_read() {
     send_query(&mut client, "ROLLBACK;");
     assert_eq!(read_query_rows_with_status(&mut client).1, b'I');
 
-    send_query(&mut client, "SET TRANSACTION ISOLATION LEVEL SERIALIZABLE;");
+    send_query(&mut client, "SET TRANSACTION ISOLATION LEVEL SNAPSHOT;");
     let (error, status) = read_error_response_with_status(&mut client);
     assert_eq!(status, b'I');
     assert!(error.contains("0A000"));
-    assert!(error.contains("transaction isolation level SERIALIZABLE is not supported"));
+    assert!(error.contains("transaction isolation level SNAPSHOT is not supported"));
 
     client.write_all(b"X\0\0\0\x04").unwrap();
     server.request_shutdown();

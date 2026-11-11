@@ -23,13 +23,35 @@ pub(super) fn validate_default_isolation(value: &str, oracle: bool) -> Result<&'
             )))
         }
     };
-    // The Oracle profile's SERIALIZABLE contract is snapshot isolation. Do not
-    // enable PostgreSQL SERIALIZABLE through a setting without its SSI contract.
     validate_profile_transaction_modes(&[TransactionMode::IsolationLevel(level.clone())], oracle)?;
     Ok(isolation_label(&level))
 }
 
 impl SqlSessionGucState {
+    pub fn transaction_is_serializable(&self) -> bool {
+        self.session_gucs
+            .get("transaction_isolation")
+            .is_some_and(|level| level == "serializable")
+    }
+
+    pub fn transaction_deferrable(&self) -> bool {
+        self.session_gucs
+            .get("transaction_deferrable")
+            .is_some_and(|value| value == "on")
+    }
+
+    pub fn set_transaction_deferrable(&mut self, enabled: bool) {
+        let key = "transaction_deferrable";
+        if !enabled && !self.session_gucs.contains_key(key) {
+            return;
+        }
+        self.begin_transaction();
+        let previous = self.session_gucs.get(key).cloned();
+        self.local_restore.entry(key.into()).or_insert(previous);
+        Arc::make_mut(&mut self.session_gucs)
+            .insert(key.into(), if enabled { "on" } else { "off" }.into());
+    }
+
     /// Validate and return the connection's default under its fixed SQL profile.
     pub fn default_transaction_isolation(&self, profile: &str) -> Result<&'static str> {
         validate_default_isolation(
@@ -308,7 +330,7 @@ mod tests {
             if !oracle {
                 assert!(run(
                     &mut session,
-                    "SET SESSION CHARACTERISTICS AS TRANSACTION ISOLATION LEVEL SERIALIZABLE",
+                    "SET SESSION CHARACTERISTICS AS TRANSACTION ISOLATION LEVEL SNAPSHOT",
                     false
                 )
                 .is_err());

@@ -1,0 +1,9 @@
+{
+  "after_first_guest_start_request": true,
+  "capture_scope": "post-start-request-continuity-not-continuous-off-window-health",
+  "cpu_ticks": 8645,
+  "pid": 35742,
+  "process_start_ticks": 503028,
+  "running": true,
+  "snapshot_unix_ns": 1794374898452177932
+}

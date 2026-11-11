@@ -1,0 +1,67 @@
+[
+  {
+    "archive_bytes": 1012740,
+    "database_bytes": 13780789,
+    "included_run_artifacts": [
+      "db",
+      "recovered-5-ledger.json",
+      "server.log",
+      "steady-4-ledger.json",
+      "process.json",
+      "failure-5-ledger.json",
+      "growth-4-to-5-ledger.json",
+      "steady-5-ledger.json"
+    ],
+    "node": 0,
+    "sha256": "71c93caddbf8012791f85742287e3d285a57ec7f9e09d3efb71ced32ba9dbcf8",
+    "status": "exported"
+  },
+  {
+    "archive_bytes": 959892,
+    "database_bytes": 13237059,
+    "included_run_artifacts": [
+      "db",
+      "server.log",
+      "process.json"
+    ],
+    "node": 1,
+    "sha256": "267e2e25d1572a142d9ccf9f610b5c2702bc944e57d66dcb7c63e41a1e0e4778",
+    "status": "exported"
+  },
+  {
+    "archive_bytes": 941771,
+    "database_bytes": 13005302,
+    "included_run_artifacts": [
+      "db",
+      "process.json",
+      "server.log"
+    ],
+    "node": 2,
+    "sha256": "c476f1e30aea4c5dc27a87e2757a8307b0de0b32b570f88eb4312ec7a4cd97cf",
+    "status": "exported"
+  },
+  {
+    "archive_bytes": 901785,
+    "database_bytes": 12731537,
+    "included_run_artifacts": [
+      "db",
+      "process.json",
+      "server.log"
+    ],
+    "node": 3,
+    "sha256": "7a84ed6bf3489f5f8319fb46f853d2dee03f7be2cec88948499db051759c0212",
+    "status": "exported"
+  },
+  {
+    "archive_bytes": 1693025,
+    "database_bytes": 22422411,
+    "included_run_artifacts": [
+      "db",
+      "server.log",
+      "process.json"
+    ],
+    "node": 4,
+    "sha256": "8114195f155b557060dcc05df8e12e787f10102c8cc5834d1b208e712c42a40e",
+    "status": "exported"
+  }
+]

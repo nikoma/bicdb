@@ -17,24 +17,30 @@ observed 148.56 seconds after confirmed off. The selected range had been led by
 the powered-off n4 and retained two surviving RF3 voters. Three calls had uncertain
 client outcomes: subsequent point reads found one whole record present and two
 absent. These are observed immutable-event outcomes, not a multi-record SQL
-atomicity proof. Final all-acknowledgment reconciliation belongs to the separately
-published completed probe evidence; it is not claimed complete by this note.
+atomicity proof. The completed [probe evidence](evidence/azure-vm-poweroff-2026-11-11/README.md)
+separately records the final targeted and earlier-ledger reconciliation; these
+results do not establish a universal durability guarantee.
 
 Successful probe writes during that bounded interval took approximately
 11.55–12.11 seconds including SSH/client invocation, versus approximately 1.9
 seconds at baseline. Earlier targeted calls reached the controller's 30-second
 timeout. A timeout is not evidence that a transaction rolled back or was lost.
 
-All four surviving guests retained the exact BicDB process PID/start-time/database
-arguments, port 9444 listeners and increasing CPU ticks; kernel inspection found
-no OOM event. This excludes several obvious stale-PID, dead-listener and host-OOM
-explanations at the observation points. SSH reachability alone would not do so.
+Two sets of survivor continuity snapshots were captured **after the first guest
+start request**, despite earlier filenames containing `while-off`. They showed
+the same owned BicDB PID/start-time between samples, increasing CPU ticks, later
+port 9444 listeners and no recorded kernel OOM event. They exclude a restart
+between those samples, not a transient listener/process stall inside the strict
+off window. SSH reachability alone would not establish database health.
 Untimestamped older log lines include earlier cluster process restarts; those
 lines cannot be assigned to the guest-off interval as causal evidence.
 
 Temporarily, all four surviving committed-status snapshots exposed the same
 metadata generation 13094, commit index 2096, term 28 and metadata leader n2,
 while derived liveness classified all five members dead and 64 ranges unavailable.
+Unlike the later runtime snapshots, these metadata-status records have both
+guest metric times and controller file receipt mtimes inside the strict off
+interval. Cross-guest clock skew was not independently calibrated.
 Later strictly off-window writes succeeded. Thus a stale/expired published
 membership view and successful operations can coexist; this is not evidence that
 all survivor operating systems or all metadata voters were actually dead.

@@ -1,0 +1,52 @@
+{
+  "controller_source_file_mtime_ns": 1794374852948726543,
+  "membership_last_heartbeat_ms": {
+    "n0": 1794374733718,
+    "n1": 1794374733866,
+    "n2": 1794374783398,
+    "n3": 1794374733861,
+    "n4": 1794374702888
+  },
+  "metadata_consensus": {
+    "cluster_id": "scale-a7103e2d52164d69baa04bb4b855bef9",
+    "commit_index": 2096,
+    "current_term": 28,
+    "last_log_index": 2096,
+    "last_log_term": 28,
+    "leader_id": "n2",
+    "learners": [],
+    "node_id": "n1",
+    "role": "follower",
+    "topology_generation": 13094,
+    "voted_for": "n2",
+    "voters": [
+      "n0",
+      "n1",
+      "n2",
+      "n3",
+      "n4"
+    ]
+  },
+  "metrics": {
+    "active_relocations": 6,
+    "failed_relocations": 0,
+    "generated_at_ms": 1794374852575,
+    "leader_skew": 38,
+    "leaders_total": 64,
+    "nodes_dead": 5,
+    "nodes_decommissioned": 0,
+    "nodes_draining": 0,
+    "nodes_live": 0,
+    "nodes_suspect": 0,
+    "nodes_total": 5,
+    "ranges_total": 64,
+    "replica_byte_skew": 0,
+    "replica_skew": 4,
+    "replicas_total": 198,
+    "topology_generation": 13094,
+    "unavailable_ranges": 64,
+    "under_replicated_ranges": 64
+  },
+  "recorded_times_inside_strict_off_window": true,
+  "source_metrics_clock_unix_ms": 1794374852575
+}

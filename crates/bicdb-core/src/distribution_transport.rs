@@ -3858,6 +3858,14 @@ fn unexpected_response(expected: &str, response: ClusterDataResponse) -> BicDbEr
 }
 
 impl RangeWriteTransport for TcpClusterRelocationTransport {
+    fn observe_native_completion_observation(
+        &self,
+        destination: &ClusterNodeId,
+        request: &crate::distribution_range_recovery::NativeCompletionRequest,
+        parent: &CancellationToken,
+    ) -> Result<crate::distribution_range_recovery::NativeCompletionObservation> {
+        self.observe_native_completion_observation(destination, request, parent)
+    }
     fn prepare_native_ready_observation(
         &self,
         destination: &ClusterNodeId,

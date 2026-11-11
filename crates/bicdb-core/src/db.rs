@@ -63,6 +63,8 @@ pub(crate) use range_image_install::{
     NativeTargetImageVerificationProgress, NativeTargetImageVerifier,
     TargetNativeImageSnapshotBound,
 };
+mod native_activation;
+pub(crate) use native_activation::NativeActivatedOpenGuard;
 mod native_recovery_ready;
 mod range_image_native;
 pub(crate) use native_recovery_ready::{LocalNativeRecoveryReady, NativeLocalVisibilitySequence};
@@ -70,6 +72,7 @@ pub(crate) use native_recovery_ready::{LocalNativeRecoveryReady, NativeLocalVisi
 pub(crate) use range_image_native::rf3_fixture::{
     ActualNativeRf3Fixture, ActualNativeRf3RpcObservation,
 };
+pub(crate) use range_image_native::NativeActivationDecisionReceipt;
 pub(crate) use range_image_native::{
     FreshRangeGenesisAuthority, KnownNativeRecoveryPrefix, NativeRecoveredServingReceipt, NativeHistoryPublicationBinding,
     NativeHistoryStage, NativeHistoryStageProgress, NativeHistoryTargetContext,

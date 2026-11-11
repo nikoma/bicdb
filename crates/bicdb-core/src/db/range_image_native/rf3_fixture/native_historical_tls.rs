@@ -105,6 +105,15 @@ struct ObservedTlsTransport {
     lag_status_seen: Arc<AtomicBool>,
 }
 impl RangeWriteTransport for ObservedTlsTransport {
+    fn observe_native_completion_observation(
+        &self,
+        destination: &ClusterNodeId,
+        request: &crate::distribution_range_recovery::NativeCompletionRequest,
+        parent: &CancellationToken,
+    ) -> Result<crate::distribution_range_recovery::NativeCompletionObservation> {
+        self.inner
+            .observe_native_completion_observation(destination, request, parent)
+    }
     fn observe_native_ready_observation(
         &self,
         destination: &ClusterNodeId,
@@ -236,6 +245,16 @@ impl NetworkFixture {
         Self::new_ready_network(wired, false, false)
     }
     fn new_ready_network(wired: bool, all_nodes: bool, lagging_two: bool) -> Self {
+        Self::new_ready_network_with_roles(wired, all_nodes, lagging_two, "n1", "n2")
+    }
+    fn new_ready_network_with_roles(
+        wired: bool,
+        all_nodes: bool,
+        lagging_two: bool,
+        data_leader: &str,
+        metadata_leader: &str,
+    ) -> Self {
+        assert!((data_leader == "n1" && metadata_leader == "n2") || all_nodes);
         assert!(!lagging_two || all_nodes);
         let live_names = if all_nodes {
             vec!["n0", "n1", "n2"]
@@ -286,7 +305,7 @@ impl NetworkFixture {
         topology.generation += 1;
         let range = topology.ranges.values_mut().next().unwrap();
         range.epoch += 1;
-        range.leader = node("n1");
+        range.leader = node(data_leader);
         topology.validate().unwrap();
         let config = |id: &ClusterNodeId| ClusterNetworkTransportConfig {
             connect_timeout_ms: 50,
@@ -314,7 +333,8 @@ impl NetworkFixture {
                 (id, client)
             })
             .collect::<BTreeMap<_, _>>();
-        // Actual persisted current-term metadata anchor, with n2 the leader.
+        // Actual persisted current-term metadata anchor. Defaults remain n2;
+        // adversarial all-node fixtures may choose a distinct metadata leader.
         // Election membership is an explicit unit fixture precondition.
         let open = |id: &ClusterNodeId| {
             MetadataConsensusStore::open(
@@ -326,36 +346,48 @@ impl NetworkFixture {
             )
             .unwrap()
         };
-        let mut leader = open(&node("n2"));
-        let mut follower = open(&node("n1"));
+        let metadata_leader = node(metadata_leader);
+        let follower_id = if metadata_leader == node("n2") {
+            node("n1")
+        } else {
+            node("n0")
+        };
+        assert_ne!(metadata_leader, follower_id);
+        let extra_id = [node("n0"), node("n1"), node("n2")]
+            .into_iter()
+            .find(|id| id != &metadata_leader && id != &follower_id)
+            .unwrap();
+        let mut leader = open(&metadata_leader);
+        let mut follower = open(&follower_id);
         leader.start_election().unwrap();
         leader
-            .become_leader(&BTreeSet::from([node("n1"), node("n2")]))
+            .become_leader(&BTreeSet::from([
+                follower_id.clone(),
+                metadata_leader.clone(),
+            ]))
             .unwrap();
         let response = follower
             .handle_append_request(leader.append_request_from(1, 16).unwrap())
             .unwrap();
         leader
-            .record_append_response(&node("n1"), &response)
+            .record_append_response(&follower_id, &response)
             .unwrap();
         let extra = if all_nodes {
-            let mut zero = open(&node("n0"));
-            let response = zero
+            let mut extra = open(&extra_id);
+            let response = extra
                 .handle_append_request(leader.append_request_from(1, 16).unwrap())
                 .unwrap();
-            leader
-                .record_append_response(&node("n0"), &response)
-                .unwrap();
-            Some(Arc::new(Mutex::new(zero)))
+            leader.record_append_response(&extra_id, &response).unwrap();
+            Some(Arc::new(Mutex::new(extra)))
         } else {
             None
         };
         let mut consensus = BTreeMap::from([
-            (node("n1"), Arc::new(Mutex::new(follower))),
-            (node("n2"), Arc::new(Mutex::new(leader))),
+            (follower_id, Arc::new(Mutex::new(follower))),
+            (metadata_leader, Arc::new(Mutex::new(leader))),
         ]);
-        if let Some(zero) = extra {
-            consensus.insert(node("n0"), zero);
+        if let Some(extra) = extra {
+            consensus.insert(extra_id, extra);
         }
         let providers = consensus
             .iter()
@@ -1046,7 +1078,7 @@ fn native_ready_actual_tls_fast_clean_zero_minority_does_not_starve_matching_one
 
 #[test]
 fn native_completion_actual_tls_sequential_replicas_keep_frozen_pins_and_duplicate_sha() {
-    use crate::distribution_range_recovery::FrozenNativeReadyStage;
+    use crate::distribution_range_recovery::{FrozenNativeReadyStage, NativeCompletionStage};
     let (fixture, scope) = NetworkFixture::all_r1_prepared();
     assert!(fixture.completion_status("n0", &scope).is_err());
     fixture.wait_idle();
@@ -1073,11 +1105,8 @@ fn native_completion_actual_tls_sequential_replicas_keep_frozen_pins_and_duplica
     for name in ["n0", "n1", "n2"] {
         let result = fixture.complete(name, &scope).unwrap();
         fixture.wait_idle();
-        assert_eq!(
-            result.reply().ready.stage,
-            FrozenNativeReadyStage::NativeCompletedFrozen
-        );
-        assert_eq!(result.reply().ready.range_index, 1);
+        assert_eq!(result.reply().stage, NativeCompletionStage::CompletedFrozen);
+        assert_eq!(result.reply().range_index, 1);
         hashes.insert(node(name), result.reply().native_serving_sha256.clone());
         let status = fixture.status_ready(name, &scope).unwrap();
         fixture.wait_idle();
@@ -1108,7 +1137,7 @@ fn native_completion_actual_tls_sequential_replicas_keep_frozen_pins_and_duplica
 
 #[test]
 fn native_completion_actual_tls_wrong_actor_cannot_complete_but_current_voter_can_observe() {
-    use crate::distribution_range_recovery::FrozenNativeReadyStage;
+    use crate::distribution_range_recovery::{FrozenNativeReadyStage, NativeCompletionStage};
     let (fixture, scope) = NetworkFixture::all_r1_prepared();
     let wrong = fixture.clients[&node("n2")].complete_native_recovery_observation(
         &node("n0"),
@@ -1160,7 +1189,7 @@ fn native_completion_actual_tls_wrong_actor_cannot_complete_but_current_voter_ca
 #[test]
 fn native_completion_actual_tls_canceled_socket_after_real_persistence_recovers_by_readonly_status()
 {
-    use crate::distribution_range_recovery::FrozenNativeReadyStage;
+    use crate::distribution_range_recovery::{FrozenNativeReadyStage, NativeCompletionStage};
     let (fixture, scope) = NetworkFixture::all_r1_prepared();
     for name in ["n0", "n1"] {
         fixture.complete(name, &scope).unwrap();
@@ -1205,10 +1234,10 @@ fn native_completion_actual_tls_canceled_socket_after_real_persistence_recovers_
     let observed = fixture.completion_status("n2", &scope).unwrap();
     fixture.wait_idle();
     assert_eq!(
-        observed.reply().ready.stage,
-        FrozenNativeReadyStage::NativeCompletedFrozen
+        observed.reply().stage,
+        NativeCompletionStage::CompletedFrozen
     );
-    assert_eq!(observed.reply().ready.range_index, 1);
+    assert_eq!(observed.reply().range_index, 1);
     let retry = fixture.complete("n2", &scope).unwrap();
     fixture.wait_idle();
     assert_eq!(
@@ -1224,3 +1253,9 @@ fn native_completion_actual_tls_canceled_socket_after_real_persistence_recovers_
     // This preserves an UNKNOWN client outcome until fresh readonly resolution;
     // no activation, new-write, StrongGet or physical-fault qualification.
 }
+
+#[cfg(test)]
+mod activation_smoke;
+
+#[cfg(test)]
+mod activation_tests;

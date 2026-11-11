@@ -881,6 +881,7 @@ impl RangeWriteStore {
         // full staged logical-history compatibility is a separate mandatory
         // prerequisite of the target row/final-publication state machine.
         self.validate_install_local_log(cut.range(), cut.range_index())?;
+        self.invalidate_native_activation_open(intent.range.id);
         if let Some(existing) = self.catalog.image_install_intents.get(&intent.range.id) {
             if existing.attempt_id == intent.attempt_id
                 && existing.target_namespace_ids != intent.target_namespace_ids

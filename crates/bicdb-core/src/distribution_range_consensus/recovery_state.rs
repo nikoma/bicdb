@@ -138,6 +138,7 @@ pub(super) enum RecoveryFencePhase {
     /// Native configuration and completion are durable, but all ordinary
     /// writes remain refused until a separate completion quorum activates it.
     NativeCompleted(super::native_ready_completion::NativeCompletedPoint),
+    NativeActivated(super::native_activation::NativeActivatedPoint),
     Completed {
         resolved_index: u64,
     },
@@ -171,6 +172,9 @@ impl RecoveryFenceRecord {
             point.validate()?;
         }
         if let RecoveryFencePhase::NativeCompleted(point) = &self.phase {
+            point.validate()?;
+        }
+        if let RecoveryFencePhase::NativeActivated(point) = &self.phase {
             point.validate()?;
         }
         if self.retired_nonces.len() > 256
@@ -643,6 +647,13 @@ impl RangeWriteStore {
         Ok(scope)
     }
     pub(super) fn recovery_range_catalog_sha256(&self, range_id: RangeId) -> Result<String> {
+        self.recovery_range_catalog_sha256_with_phase(range_id, None)
+    }
+    pub(super) fn recovery_range_catalog_sha256_with_phase(
+        &self,
+        range_id: RangeId,
+        phase: Option<&RecoveryFencePhase>,
+    ) -> Result<String> {
         let saved = self
             .catalog
             .recovery_fences
@@ -665,7 +676,7 @@ impl RangeWriteStore {
             &scope.purpose,
         );
         let refusal = (
-            &saved.phase,
+            phase.unwrap_or(&saved.phase),
             &saved.local_node_id,
             saved.local_member_incarnation,
             &saved.native_database_incarnation,
@@ -686,10 +697,9 @@ impl RangeWriteStore {
         serde_json::to_writer(
             &mut hash,
             &(
-                "bicdb-recovery-range-catalog-v1",
+                "bicdb-recovery-range-catalog-v2",
                 &self.catalog.cluster_id,
                 &self.catalog.node_id,
-                self.catalog.format_version,
                 self.catalog.ranges.get(&range_id),
                 stable_scope,
                 refusal,
@@ -829,6 +839,7 @@ impl RangeWriteStore {
             RecoveryFencePhase::Active=>crate::distribution_range_recovery::RecoveryFenceObservationPhase::ActiveRecovery,
             RecoveryFencePhase::NativePrepared(_) => crate::distribution_range_recovery::RecoveryFenceObservationPhase::NativePrepared,
             RecoveryFencePhase::NativeCompleted(_) => crate::distribution_range_recovery::RecoveryFenceObservationPhase::NativeCompletedFrozen,
+            RecoveryFencePhase::NativeActivated(_) => crate::distribution_range_recovery::RecoveryFenceObservationPhase::NativeActivatedAnchor,
             RecoveryFencePhase::Completed {..}=>crate::distribution_range_recovery::RecoveryFenceObservationPhase::CompletedEpochAuthority,
         })
     }
@@ -906,7 +917,36 @@ impl RangeWriteStore {
         }
         Ok(())
     }
+    pub(super) fn require_native_phase_format(&self, range: RangeId) -> Result<()> {
+        let minimum = match self.catalog.recovery_fences.get(&range).map(|r| &r.phase) {
+            Some(RecoveryFencePhase::NativeActivated(_)) => {
+                super::native_activation::NATIVE_ACTIVATED_FORMAT
+            }
+            Some(RecoveryFencePhase::NativeCompleted(_)) => {
+                super::native_ready_completion::NATIVE_COMPLETED_CATALOG_FORMAT
+            }
+            Some(RecoveryFencePhase::NativePrepared(_)) => {
+                super::native_ready_prepare::NATIVE_READY_CATALOG_FORMAT
+            }
+            Some(_) => 5,
+            None => return Err(range_write_error("missing native recovery phase")),
+        };
+        if self.catalog.format_version < minimum
+            || self.catalog.format_version > super::native_activation::NATIVE_ACTIVATED_FORMAT
+        {
+            return Err(range_write_error(
+                "actual native recovery phase has an unsupported format",
+            ));
+        }
+        Ok(())
+    }
     pub(super) fn require_durable_recovery_catalog(&self) -> Result<()> {
+        if !matches!(
+            self.catalog.format_version,
+            1..=super::native_activation::NATIVE_ACTIVATED_FORMAT
+        ) {
+            return Err(range_write_error("unknown range recovery catalogue format"));
+        }
         if self.recovery_persistence_uncertain {
             return Err(range_write_error("recovery catalog persistence is uncertain; re-fsync the exact fenced session before claiming durability"));
         }
@@ -981,7 +1021,8 @@ impl RangeWriteStore {
             .recovery_fences
             .get(&range_id)
             .is_some_and(|f| {
-                !matches!(f.phase, RecoveryFencePhase::Completed { .. })
+                !(matches!(f.phase, RecoveryFencePhase::Completed { .. })
+                    || self.native_activated_open_allowed(range_id).is_ok())
                     || matches!(
                         f.scope.purpose,
                         MetadataRecoveryRolePurpose::CommittedHandoff { .. }
@@ -1162,6 +1203,7 @@ impl RangeWriteStore {
         write: impl FnOnce(&Path, &[u8], bool) -> Result<()>,
     ) -> Result<()> {
         self.preflight_recovery_fence(role, native, scope)?;
+        self.native_activated_opens.remove(&scope.range_id);
         let log = self
             .catalog
             .ranges

@@ -54,6 +54,9 @@ mod native_ready_catalog;
 pub(crate) use native_completion_observation::LocalNativeCompletionEvidence;
 mod native_ready_observation;
 pub(crate) use native_ready_observation::LocalNativeReadyEvidence;
+mod native_activation;
+pub(crate) use native_activation::NativeActivationReceipt;
+use native_activation::NATIVE_ACTIVATED_FORMAT;
 mod native_ready_completion;
 mod native_ready_prepare;
 #[cfg(test)]
@@ -557,16 +560,18 @@ impl RangeWriteEnvelope {
                 | NATIVE_IMAGE_CATALOG_FORMAT
                 | NATIVE_READY_CATALOG_FORMAT
                 | NATIVE_COMPLETED_CATALOG_FORMAT
+                | NATIVE_ACTIVATED_FORMAT
         ) {
             return Err(range_write_error(format!(
-                "unsupported range-write log format {}; supported formats are 1, 2, {}, {}, {}, {}, {}, and {}",
+                "unsupported range-write log format {}; supported formats are 1, 2, {}, {}, {}, {}, {}, {}, and {}",
                 self.catalog.format_version,
                 RANGE_WRITE_LOG_FORMAT_VERSION,
                 HANDOFF_RANGE_LOG_FORMAT,
                 IMAGE_INSTALL_RANGE_LOG_FORMAT,
                 NATIVE_IMAGE_CATALOG_FORMAT,
                 NATIVE_READY_CATALOG_FORMAT,
-                NATIVE_COMPLETED_CATALOG_FORMAT
+                NATIVE_COMPLETED_CATALOG_FORMAT,
+                NATIVE_ACTIVATED_FORMAT
             )));
         }
         if self.catalog.recovery_fences.len() > recovery_state::MAX_RECOVERY_FENCES {
@@ -680,6 +685,7 @@ pub struct RangeWriteStore {
     catalog: RangeWriteCatalog,
     open_id: Uuid,
     recovery_persistence_uncertain: bool,
+    native_activated_opens: BTreeMap<RangeId, crate::db::NativeActivatedOpenGuard>,
 }
 
 impl RangeWriteStore {
@@ -799,6 +805,7 @@ impl RangeWriteStore {
             fsync,
             catalog,
             open_id: Uuid::now_v7(),
+            native_activated_opens: BTreeMap::new(),
             recovery_persistence_uncertain: false,
         };
         // A previous service instance may have observed rename success but
@@ -1526,6 +1533,16 @@ pub struct RangeWriteAck {
 }
 
 pub trait RangeWriteTransport: std::fmt::Debug + Send + Sync + 'static {
+    fn observe_native_completion_observation(
+        &self,
+        _destination: &ClusterNodeId,
+        _request: &crate::distribution_range_recovery::NativeCompletionRequest,
+        _parent: &crate::CancellationToken,
+    ) -> Result<crate::distribution_range_recovery::NativeCompletionObservation> {
+        Err(range_write_error(
+            "authenticated native completion transport is not wired",
+        ))
+    }
     fn prepare_native_ready_observation(
         &self,
         destination: &ClusterNodeId,

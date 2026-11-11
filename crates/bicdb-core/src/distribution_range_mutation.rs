@@ -4,8 +4,8 @@
 //! Durable range fencing and every mutator's integration are separate required
 //! boundaries. A freeze must never be awaited under a database/service latch.
 use std::collections::{BTreeMap, BTreeSet};
-use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::{Arc, Weak};
 use std::time::{Duration, Instant};
 
 use parking_lot::{Condvar, Mutex};
@@ -35,6 +35,7 @@ struct RangeState {
 #[derive(Debug, Default)]
 struct Inner {
     ranges: Mutex<BTreeMap<RangeId, RangeState>>,
+    serving_generations: Mutex<BTreeMap<RangeId, (Uuid, Weak<AtomicBool>)>>,
     changed: Condvar,
     database_active: AtomicUsize,
     range_active: AtomicUsize,
@@ -44,6 +45,34 @@ struct Inner {
 #[derive(Clone, Debug, Default)]
 pub(crate) struct RangeMutationGate {
     inner: Arc<Inner>,
+}
+
+/// Local invalidation only, never quorum or serving authority. A new freeze
+/// invalidates this range's old generation before any frozen mutation can run.
+#[derive(Debug)]
+pub(crate) struct RangeServingGeneration {
+    inner: Weak<Inner>,
+    range_id: RangeId,
+    generation: Uuid,
+    live: Arc<AtomicBool>,
+}
+impl RangeServingGeneration {
+    pub(crate) fn require_current(&self) -> Result<()> {
+        let inner = self
+            .inner
+            .upgrade()
+            .ok_or_else(|| invalid("native serving gate was dropped"))?;
+        if !self.live.load(Ordering::Acquire)
+            || inner
+                .serving_generations
+                .lock()
+                .get(&self.range_id)
+                .is_none_or(|(id, _)| *id != self.generation)
+        {
+            return Err(invalid("native serving generation was invalidated"));
+        }
+        Ok(())
+    }
 }
 
 /// Owned rather than a borrowed/non-Send lock guard: a leader keeps this token
@@ -229,6 +258,7 @@ impl RangeMutationGate {
             if state.active.is_empty() && self.inner.database_active.load(Ordering::Relaxed) == 0 {
                 state.pending = None;
                 state.frozen = Some((owner, lease));
+                self.invalidate_serving_generation(range_id);
                 return Ok(FrozenRangeMutationPermit {
                     inner: Arc::clone(&self.inner),
                     range_id,
@@ -277,6 +307,7 @@ impl RangeMutationGate {
         }
         let lease = Uuid::now_v7();
         state.frozen = Some((owner, lease));
+        self.invalidate_serving_generation(range_id);
         Ok(FrozenRangeMutationPermit {
             inner: Arc::clone(&self.inner),
             range_id,
@@ -424,6 +455,48 @@ impl RangeMutationGate {
             return Err(invalid("controlled lease is no longer active"));
         }
         Ok(())
+    }
+    pub(crate) fn invalidate_serving_generation(&self, range_id: RangeId) {
+        if let Some((_, old)) = self.inner.serving_generations.lock().remove(&range_id) {
+            if let Some(old) = old.upgrade() {
+                old.store(false, Ordering::Release);
+            }
+        }
+    }
+    pub(crate) fn invalidate_all_serving_generations(&self) {
+        let mut slots = self.inner.serving_generations.lock();
+        for (_, weak) in slots.values() {
+            if let Some(live) = weak.upgrade() {
+                live.store(false, Ordering::Release);
+            }
+        }
+        slots.clear();
+    }
+    pub(crate) fn bind_serving_generation(
+        &self,
+        range_id: RangeId,
+        frozen: &FrozenRangeMutationPermit,
+    ) -> Result<RangeServingGeneration> {
+        self.validate_quiescent_frozen(range_id, frozen)?;
+        let mut slots = self.inner.serving_generations.lock();
+        slots.retain(|_, (_, weak)| weak.strong_count() > 0);
+        if !slots.contains_key(&range_id) && slots.len() >= MAX_GATE_RANGES {
+            return Err(invalid("native serving generation bound reached"));
+        }
+        if let Some((_, old)) = slots.remove(&range_id) {
+            if let Some(old) = old.upgrade() {
+                old.store(false, Ordering::Release);
+            }
+        }
+        let generation = Uuid::now_v7();
+        let live = Arc::new(AtomicBool::new(true));
+        slots.insert(range_id, (generation, Arc::downgrade(&live)));
+        Ok(RangeServingGeneration {
+            inner: Arc::downgrade(&self.inner),
+            range_id,
+            generation,
+            live,
+        })
     }
     pub(crate) fn validate_quiescent_frozen(
         &self,

@@ -30,14 +30,18 @@ use crate::distribution_anti_entropy_repair::{
 };
 use crate::distribution_consensus::{
     MetadataAppendRequest, MetadataAppendResponse, MetadataConsensusStore, MetadataReadAck,
+    MetadataReadAcquireRequest, MetadataReadAcquireResponse, MetadataReadObservation,
     MetadataReadParticipant, MetadataReadProbeRequest, MetadataReadProbeResponse,
-    MetadataVoteRequest, MetadataVoteResponse,
+    MetadataVoteRequest, MetadataVoteResponse, METADATA_READ_ACQUISITION_PROTOCOL_VERSION,
 };
 use crate::distribution_data::{
     CatchUpSourceBatch, ClusterDataNodeService, ClusterSchemaActivationReceipt,
     ClusterSchemaFinalizationReceipt, ClusterSchemaStageReceipt, SnapshotSourceStep,
 };
 use crate::distribution_io::DeadlineTcpStream;
+use crate::distribution_metadata_read_provider::{
+    MetadataReadProbeTransport, MetadataReadProvider,
+};
 use crate::distribution_range_consensus::{
     RangeWriteAck, RangeWriteCommand, RangeWriteProbe, RangeWriteProgress, RangeWriteRepairBatch,
     RangeWriteRepairLimits, RangeWriteTransport,
@@ -173,6 +177,9 @@ enum ClusterDataRequest {
     MetadataReadProbe {
         request: MetadataReadProbeRequest,
     },
+    MetadataReadAcquire {
+        request: MetadataReadAcquireRequest,
+    },
     PrepareRangeWrite {
         command: RangeWriteCommand,
     },
@@ -283,7 +290,8 @@ impl ClusterDataRequest {
             | Self::FetchTopology
             | Self::MetadataVote { .. }
             | Self::MetadataAppend { .. }
-            | Self::MetadataReadProbe { .. } => None,
+            | Self::MetadataReadProbe { .. }
+            | Self::MetadataReadAcquire { .. } => None,
         }
     }
 }
@@ -317,6 +325,7 @@ enum ClusterDataResponse {
     MetadataVote(MetadataVoteResponse),
     MetadataAppend(MetadataAppendResponse),
     MetadataReadProbe(MetadataReadProbeResponse),
+    MetadataReadAcquire(MetadataReadAcquireResponse),
     RangeWrite(RangeWriteAck),
     RangeWriteProgress(RangeWriteProgress),
     RangeWriteRepair(RangeWriteRepairBatch),
@@ -419,6 +428,30 @@ pub fn start_cluster_data_server(
     metadata_consensus: Option<Arc<Mutex<MetadataConsensusStore>>>,
     metadata_distribution_store: Option<Arc<Mutex<DistributionStore>>>,
 ) -> Result<ClusterDataServerHandle> {
+    start_cluster_data_server_with_metadata_read_provider(
+        address,
+        config,
+        topology,
+        service,
+        control_store,
+        metadata_consensus,
+        metadata_distribution_store,
+        None,
+    )
+}
+
+/// Opt-in runtime wiring for fresh metadata acquisition. The legacy listener
+/// signature and its refusal of unwired acquisition requests remain intact.
+pub fn start_cluster_data_server_with_metadata_read_provider(
+    address: impl ToSocketAddrs,
+    config: ClusterNetworkTransportConfig,
+    topology: Arc<RwLock<ClusterTopology>>,
+    service: Arc<Mutex<ClusterDataNodeService>>,
+    control_store: Option<Arc<Mutex<DistributionStore>>>,
+    metadata_consensus: Option<Arc<Mutex<MetadataConsensusStore>>>,
+    metadata_distribution_store: Option<Arc<Mutex<DistributionStore>>>,
+    metadata_read_provider: Option<Arc<MetadataReadProvider>>,
+) -> Result<ClusterDataServerHandle> {
     config.validate()?;
     let listener = TcpListener::bind(address)?;
     let local_addr = listener.local_addr()?;
@@ -471,6 +504,9 @@ pub fn start_cluster_data_server(
                     let metadata_consensus = metadata_consensus.as_ref().map(Arc::clone);
                     let metadata_distribution_store =
                         metadata_distribution_store.as_ref().map(Arc::clone);
+                    let metadata_read_provider = metadata_read_provider.as_ref().map(Arc::clone);
+                    let request_deadline =
+                        Instant::now() + Duration::from_millis(config.io_timeout_ms);
                     let tls = server_tls.as_ref().map(|tls| Arc::clone(&tls.config));
                     let config = config.clone();
                     let local_identity = local_identity.clone();
@@ -502,6 +538,8 @@ pub fn start_cluster_data_server(
                                     metadata_consensus.as_ref(),
                                     metadata_distribution_store.as_ref(),
                                     Some(&peer_certificate_sha256),
+                                    metadata_read_provider.as_ref(),
+                                    request_deadline,
                                 )
                             })
                         } else {
@@ -516,6 +554,8 @@ pub fn start_cluster_data_server(
                                 metadata_consensus.as_ref(),
                                 metadata_distribution_store.as_ref(),
                                 None,
+                                metadata_read_provider.as_ref(),
+                                request_deadline,
                             )
                         };
                         if let Err(error) = result {
@@ -596,6 +636,8 @@ fn handle_cluster_data_connection(
     metadata_consensus: Option<&Arc<Mutex<MetadataConsensusStore>>>,
     metadata_distribution_store: Option<&Arc<Mutex<DistributionStore>>>,
     peer_certificate_sha256: Option<&str>,
+    metadata_read_provider: Option<&Arc<MetadataReadProvider>>,
+    request_deadline: Instant,
 ) -> Result<()> {
     let request = recv_json_frame::<ClusterDataRequestEnvelope>(stream, config.max_frame_bytes)?;
     let request_id = request.request_id;
@@ -629,7 +671,28 @@ fn handle_cluster_data_connection(
             peer_certificate_sha256,
             config.dev_localhost_plaintext,
         )?;
+        let authenticated_caller = caller.map(|node| {
+            MetadataReadParticipant::from_transport(
+                caller_node_id.clone(),
+                node.incarnation,
+                peer_certificate_sha256.map(str::to_string),
+                config.dev_localhost_plaintext,
+            )
+        });
         drop(topology_guard);
+        if let ClusterDataRequest::MetadataReadAcquire { request } = request.request {
+            let provider = metadata_read_provider.ok_or_else(|| {
+                transport_error("fresh metadata read acquisition provider is not active")
+            })?;
+            let caller = authenticated_caller.as_ref().ok_or_else(|| {
+                transport_error("metadata acquisition requires an authenticated member")
+            })?;
+            let cancellation =
+                CancellationToken::new(Arc::new(AtomicBool::new(false)), Some(request_deadline));
+            return provider
+                .acquire(caller, request, &cancellation)
+                .map(ClusterDataResponse::MetadataReadAcquire);
+        }
         dispatch_cluster_data_request(
             service,
             control_store,
@@ -2043,6 +2106,9 @@ fn dispatch_cluster_data_request(
             }
             Ok(ClusterDataResponse::MetadataReadProbe(response))
         }
+        ClusterDataRequest::MetadataReadAcquire { .. } => Err(transport_error(
+            "metadata acquisition requires its authenticated runtime provider",
+        )),
     }
 }
 
@@ -2318,6 +2384,20 @@ impl std::fmt::Debug for TcpClusterRelocationTransport {
             .field("config", &self.config)
             .field("tls_configured", &self.client_tls.is_some())
             .finish_non_exhaustive()
+    }
+}
+
+impl MetadataReadProbeTransport for TcpClusterRelocationTransport {
+    fn local_participant(&self) -> MetadataReadParticipant {
+        self.local_metadata_read_participant()
+    }
+    fn probe(
+        &self,
+        destination: &ClusterNodeId,
+        request: MetadataReadProbeRequest,
+        cancellation: &CancellationToken,
+    ) -> Result<MetadataReadAck> {
+        self.probe_metadata_read_authority_cancellable(destination, request, cancellation)
     }
 }
 
@@ -2806,7 +2886,50 @@ impl TcpClusterRelocationTransport {
         destination: &ClusterNodeId,
         request: MetadataReadProbeRequest,
     ) -> Result<MetadataReadAck> {
-        let (response, participant) = self.call_with_read_participant(
+        self.probe_metadata_read_authority_cancellable(
+            destination,
+            request,
+            &CancellationToken::uncancelable(),
+        )
+    }
+
+    /// Deadline-bound metadata APIs deliberately require numeric socket
+    /// endpoints. They never start an unbounded synchronous DNS lookup.
+    fn require_numeric_metadata_destination(
+        &self,
+        destination: &ClusterNodeId,
+        cancellation: &CancellationToken,
+    ) -> Result<()> {
+        let topology = loop {
+            cancellation.check()?;
+            if let Some(topology) = self.topology.try_read_for(Duration::from_millis(10)) {
+                break topology;
+            }
+        };
+        let node = topology
+            .nodes
+            .get(destination)
+            .ok_or_else(|| transport_error("metadata RPC destination is absent"))?;
+        node.address.parse::<SocketAddr>().map_err(|_| {
+            transport_error("deadline-bound metadata RPC requires a numeric SocketAddr")
+        })?;
+        Ok(())
+    }
+
+    pub fn probe_metadata_read_authority_cancellable(
+        &self,
+        destination: &ClusterNodeId,
+        request: MetadataReadProbeRequest,
+        cancellation: &CancellationToken,
+    ) -> Result<MetadataReadAck> {
+        cancellation.check()?;
+        // Even a caller without its own deadline receives this fixed network
+        // deadline across admission and the actual exchange.
+        let cancellation = cancellation
+            .child_with_deadline(Instant::now() + Duration::from_millis(self.config.io_timeout_ms));
+        self.require_numeric_metadata_destination(destination, &cancellation)?;
+        let (response, participant) = self.call_with_read_participant_cancellable(
+            &cancellation,
             destination,
             ClusterDataRequest::MetadataReadProbe {
                 request: request.clone(),
@@ -2820,6 +2943,70 @@ impl TcpClusterRelocationTransport {
                 "metadata read authority probe",
                 response,
             )),
+        }
+    }
+
+    /// Obtain fresh metadata from its actual leader, including when the range
+    /// leader is another member. Unsupported/unwired servers fail closed;
+    /// there is no cached-topology, ordinary Append or eventual-read fallback.
+    pub fn acquire_metadata_read_observation(
+        &self,
+        metadata_leader: &ClusterNodeId,
+        read_request_id: Uuid,
+        range_id: RangeId,
+        range_epoch: u64,
+        budget: Duration,
+        parent: &CancellationToken,
+    ) -> Result<MetadataReadObservation> {
+        let request_started = Instant::now();
+        parent.check()?;
+        if budget.is_zero() || budget > Duration::from_secs(5) {
+            return Err(transport_error(
+                "metadata acquisition budget must be at most five seconds",
+            ));
+        }
+        let cancellation = parent.child_with_deadline(request_started + budget);
+        self.require_numeric_metadata_destination(metadata_leader, &cancellation)?;
+        let deadline = cancellation
+            .deadline()
+            .expect("bounded acquisition deadline");
+        let remaining = deadline
+            .checked_duration_since(Instant::now())
+            .ok_or_else(|| transport_error("metadata acquisition deadline expired"))?;
+        let request = MetadataReadAcquireRequest {
+            protocol_version: METADATA_READ_ACQUISITION_PROTOCOL_VERSION,
+            acquisition_id: Uuid::now_v7(),
+            read_request_id,
+            requester_node_id: self.caller_node_id.clone(),
+            requester_incarnation: self.caller_incarnation,
+            range_id,
+            range_epoch,
+            budget_ms: remaining
+                .as_millis()
+                .try_into()
+                .map_err(|_| transport_error("metadata acquisition duration overflow"))?,
+        };
+        request.validate()?;
+        let (response, participant) = self.call_with_read_participant_cancellable(
+            &cancellation,
+            metadata_leader,
+            ClusterDataRequest::MetadataReadAcquire {
+                request: request.clone(),
+            },
+        )?;
+        match response {
+            ClusterDataResponse::MetadataReadAcquire(response) => {
+                MetadataReadObservation::from_transport(
+                    &request,
+                    &self.cluster_id,
+                    metadata_leader,
+                    participant,
+                    response,
+                    deadline,
+                    request_started,
+                )
+            }
+            response => Err(unexpected_response("fresh metadata acquisition", response)),
         }
     }
 
@@ -2861,12 +3048,27 @@ impl TcpClusterRelocationTransport {
         request: ClusterDataRequest,
     ) -> Result<(ClusterDataResponse, MetadataReadParticipant)> {
         cancellation.check()?;
+        let numeric_metadata_read = matches!(
+            &request,
+            ClusterDataRequest::MetadataReadProbe { .. }
+                | ClusterDataRequest::MetadataReadAcquire { .. }
+        );
         let network_deadline = Instant::now() + Duration::from_millis(self.config.io_timeout_ms);
         let deadline = cancellation
             .deadline()
             .map_or(network_deadline, |parent| parent.min(network_deadline));
         let (address, expected_certificate_sha256, pending_certificate_sha256, incarnation) = {
-            let topology = self.topology.read();
+            let topology = loop {
+                cancellation.check()?;
+                if Instant::now() >= deadline {
+                    return Err(transport_error(
+                        "cluster RPC deadline expired waiting for topology",
+                    ));
+                }
+                if let Some(topology) = self.topology.try_read_for(Duration::from_millis(10)) {
+                    break topology;
+                }
+            };
             let node = topology.nodes.get(destination_node_id).ok_or_else(|| {
                 transport_error(format!("unknown cluster node {destination_node_id}"))
             })?;
@@ -2891,10 +3093,19 @@ impl TcpClusterRelocationTransport {
             request_id,
             request,
         };
-        let mut addrs = address.to_socket_addrs()?;
-        let address_resolved = addrs.next().ok_or_else(|| {
-            transport_error(format!("cluster address `{address}` resolved empty"))
-        })?;
+        // Check the address from the same locked snapshot used for this
+        // dispatch; a concurrent topology change cannot introduce DNS after
+        // metadata-read preflight has admitted a numeric endpoint.
+        let address_resolved = if numeric_metadata_read {
+            address.parse::<SocketAddr>().map_err(|_| {
+                transport_error("deadline-bound metadata RPC requires a numeric SocketAddr")
+            })?
+        } else {
+            let mut addrs = address.to_socket_addrs()?;
+            addrs.next().ok_or_else(|| {
+                transport_error(format!("cluster address `{address}` resolved empty"))
+            })?
+        };
         if self.config.dev_localhost_plaintext && !address_resolved.ip().is_loopback() {
             return Err(transport_error(
                 "plaintext cluster data RPC may connect only to loopback",

@@ -13,7 +13,9 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
-use crate::distribution::{ClusterId, ClusterNodeId, ClusterNodeLifecycle, ClusterTopology};
+use crate::distribution::{
+    ClusterId, ClusterNodeId, ClusterNodeLifecycle, ClusterTopology, MetadataMemberRole, RangeId,
+};
 use crate::error::{BicDbError, Result};
 
 pub const CLUSTER_METADATA_CONSENSUS_FORMAT_VERSION: u32 = 1;
@@ -21,9 +23,343 @@ pub const METADATA_RESTORE_ACTIVATION_FORMAT_VERSION: u32 = 1;
 pub const DEFAULT_CLUSTER_METADATA_CONSENSUS_STATE: &str = "cluster-metadata-consensus.json";
 const MAX_RESTORE_ACTIVATION_ACKNOWLEDGEMENTS: u64 = 100_000;
 pub const METADATA_READ_AUTHORITY_PROTOCOL_VERSION: u32 = 1;
+pub const METADATA_READ_ACQUISITION_PROTOCOL_VERSION: u32 = 1;
+
+/// Wire request only. This is not a read authority or a row-read permit.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct MetadataReadAcquireRequest {
+    pub protocol_version: u32,
+    pub acquisition_id: Uuid,
+    pub read_request_id: Uuid,
+    pub requester_node_id: ClusterNodeId,
+    pub requester_incarnation: u64,
+    pub range_id: RangeId,
+    pub range_epoch: u64,
+    pub budget_ms: u64,
+}
+
+impl MetadataReadAcquireRequest {
+    pub(crate) fn validate(&self) -> Result<()> {
+        if self.protocol_version != METADATA_READ_ACQUISITION_PROTOCOL_VERSION
+            || self.acquisition_id.is_nil()
+            || self.read_request_id.is_nil()
+            || self.requester_incarnation == 0
+            || self.range_epoch == 0
+            || self.budget_ms == 0
+            || self.budget_ms > 5_000
+        {
+            return Err(metadata_error("invalid metadata read acquisition request"));
+        }
+        Ok(())
+    }
+}
+
+/// A current-term committed anchor observed at begin, before any fresh probes.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct MetadataReadAnchor {
+    pub index: u64,
+    pub term: u64,
+    pub topology_generation: u64,
+    pub topology_sha256: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct MetadataReadVoterProof {
+    pub node_id: ClusterNodeId,
+    pub incarnation: u64,
+    pub active_certificate_sha256: Option<String>,
+    pub pending_certificate_sha256: Option<String>,
+}
+
+/// Transfer DTO, deliberately separate from the non-deserializable authority.
+/// The source leader attests its fresh transport-correlated joint quorum;
+/// these fields are not transferable voter signatures.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct MetadataReadAcquireResponse {
+    pub protocol_version: u32,
+    pub request: MetadataReadAcquireRequest,
+    pub context_id: Uuid,
+    pub metadata_leader_id: ClusterNodeId,
+    pub metadata_leader_incarnation: u64,
+    pub term: u64,
+    pub anchor: MetadataReadAnchor,
+    pub read_index: u64,
+    pub applied_index: u64,
+    pub context_budget_ms: u64,
+    pub committed_topology: ClusterTopology,
+    pub joint_configuration_candidate: Option<ClusterTopology>,
+    pub old_voters: Vec<MetadataReadVoterProof>,
+    pub new_voters: Vec<MetadataReadVoterProof>,
+    pub fresh_old_voters: BTreeSet<ClusterNodeId>,
+    pub fresh_new_voters: BTreeSet<ClusterNodeId>,
+    pub restore_activation: Option<MetadataRestoreActivation>,
+}
+
+/// A request-bound metadata observation minted only after transport checks.
+/// It cannot be deserialized or converted into MetadataReadAuthority. It is
+/// neither a range-image permit nor an implementation of strong row reads.
+#[derive(Debug)]
+pub struct MetadataReadObservation {
+    response: MetadataReadAcquireResponse,
+    deadline: Instant,
+}
+
+impl MetadataReadObservation {
+    pub fn deadline(&self) -> Instant {
+        self.deadline
+    }
+    pub fn remaining_budget(&self) -> Option<Duration> {
+        self.deadline
+            .checked_duration_since(Instant::now())
+            .filter(|d| !d.is_zero())
+    }
+    pub fn context_id(&self) -> Uuid {
+        self.response.context_id
+    }
+    pub fn anchor(&self) -> &MetadataReadAnchor {
+        &self.response.anchor
+    }
+    pub fn metadata_leader_incarnation(&self) -> u64 {
+        self.response.metadata_leader_incarnation
+    }
+    pub fn request(&self) -> &MetadataReadAcquireRequest {
+        &self.response.request
+    }
+    pub fn metadata_leader_id(&self) -> &ClusterNodeId {
+        &self.response.metadata_leader_id
+    }
+    pub fn term(&self) -> u64 {
+        self.response.term
+    }
+    pub fn read_index(&self) -> u64 {
+        self.response.read_index
+    }
+    pub fn applied_index(&self) -> u64 {
+        self.response.applied_index
+    }
+    pub fn require_live_request(&self, request_id: Uuid) -> Result<()> {
+        if request_id != self.response.request.read_request_id || Instant::now() >= self.deadline {
+            return Err(metadata_error(
+                "metadata observation request changed or expired",
+            ));
+        }
+        Ok(())
+    }
+    pub fn committed_topology(&self, request_id: Uuid) -> Result<&ClusterTopology> {
+        self.require_live_request(request_id)?;
+        Ok(&self.response.committed_topology)
+    }
+    pub fn restore_activation(
+        &self,
+        request_id: Uuid,
+    ) -> Result<Option<&MetadataRestoreActivation>> {
+        self.require_live_request(request_id)?;
+        Ok(self.response.restore_activation.as_ref())
+    }
+    pub(crate) fn from_transport(
+        request: &MetadataReadAcquireRequest,
+        cluster_id: &ClusterId,
+        destination: &ClusterNodeId,
+        participant: MetadataReadParticipant,
+        response: MetadataReadAcquireResponse,
+        deadline: Instant,
+        request_started: Instant,
+    ) -> Result<Self> {
+        request.validate()?;
+        response.validate(request)?;
+        // Anchor the remote round's ORIGINAL duration before our request,
+        // never at response receipt. Transit cannot renew the server budget.
+        let deadline =
+            deadline.min(request_started + Duration::from_millis(response.context_budget_ms));
+        if Instant::now() >= deadline
+            || response.committed_topology.cluster_id != *cluster_id
+            || response.metadata_leader_id != *destination
+            || participant.node_id != *destination
+            || participant.member_incarnation != response.metadata_leader_incarnation
+        {
+            return Err(metadata_error(
+                "metadata acquisition source/incarnation/deadline mismatch",
+            ));
+        }
+        let node = response
+            .committed_topology
+            .nodes
+            .get(destination)
+            .ok_or_else(|| metadata_error("metadata observation leader is absent"))?;
+        let identity = MetadataReadVoterIdentity {
+            incarnation: node.incarnation,
+            active_certificate: node.tls_certificate_sha256.clone(),
+            pending_certificate: node.pending_tls_certificate_sha256.clone(),
+        };
+        if !identity.accepts(&participant) {
+            return Err(metadata_error(
+                "metadata observation transport pin is not its leader",
+            ));
+        }
+        Ok(Self { response, deadline })
+    }
+}
+
+impl MetadataReadAcquireResponse {
+    fn validate(&self, request: &MetadataReadAcquireRequest) -> Result<()> {
+        self.committed_topology.validate()?;
+        if self.protocol_version != METADATA_READ_ACQUISITION_PROTOCOL_VERSION
+            || &self.request != request
+            || self.context_id.is_nil()
+            || self.term == 0
+            || self.read_index == 0
+            || self.anchor.index != self.read_index
+            || self.anchor.term != self.term
+            || self.anchor.topology_generation == 0
+            || self.anchor.topology_generation > self.committed_topology.generation
+            || self.anchor.topology_sha256.len() != 64
+            || !self
+                .anchor
+                .topology_sha256
+                .bytes()
+                .all(|byte| byte.is_ascii_hexdigit())
+            || self.applied_index < self.read_index
+            || self.context_budget_ms == 0
+            || self.context_budget_ms > request.budget_ms
+        {
+            return Err(metadata_error(
+                "metadata acquisition proof/correlation is invalid",
+            ));
+        }
+        if self.anchor.topology_generation == self.committed_topology.generation
+            && self.anchor.topology_sha256 != topology_checksum(&self.committed_topology)?
+        {
+            return Err(metadata_error(
+                "metadata acquisition current anchor digest differs",
+            ));
+        }
+        validate_acquire_requester(request, &self.committed_topology)?;
+        let leader = self
+            .committed_topology
+            .nodes
+            .get(&self.metadata_leader_id)
+            .ok_or_else(|| metadata_error("metadata acquisition leader missing"))?;
+        if leader.incarnation != self.metadata_leader_incarnation
+            || leader.lifecycle != ClusterNodeLifecycle::Active
+            || leader.metadata_role != MetadataMemberRole::Voter
+        {
+            return Err(metadata_error(
+                "metadata acquisition leader identity is not active",
+            ));
+        }
+        fn validate_side(
+            topology: &ClusterTopology,
+            voters: &[MetadataReadVoterProof],
+            fresh: &BTreeSet<ClusterNodeId>,
+        ) -> Result<()> {
+            let expected = topology_voters(topology);
+            let identities = voters
+                .iter()
+                .map(|v| v.node_id.clone())
+                .collect::<BTreeSet<_>>();
+            if expected.is_empty()
+                || expected.len() > 64
+                || identities != expected
+                || identities.len() != voters.len()
+                || !fresh.is_subset(&identities)
+                || fresh.len() < identities.len() / 2 + 1
+            {
+                return Err(metadata_error(
+                    "metadata acquisition lacks a fresh joint quorum",
+                ));
+            }
+            for proof in voters {
+                let node = &topology.nodes[&proof.node_id];
+                if node.incarnation != proof.incarnation
+                    || node.tls_certificate_sha256 != proof.active_certificate_sha256
+                    || node.pending_tls_certificate_sha256 != proof.pending_certificate_sha256
+                {
+                    return Err(metadata_error(
+                        "metadata acquisition voter identity changed",
+                    ));
+                }
+            }
+            Ok(())
+        }
+        validate_side(
+            &self.committed_topology,
+            &self.old_voters,
+            &self.fresh_old_voters,
+        )?;
+        let new = self
+            .joint_configuration_candidate
+            .as_ref()
+            .unwrap_or(&self.committed_topology);
+        new.validate()?;
+        if new.cluster_id != self.committed_topology.cluster_id {
+            return Err(metadata_error("metadata acquisition joint cluster changed"));
+        }
+        validate_side(new, &self.new_voters, &self.fresh_new_voters)?;
+        if let Some(activation) = &self.restore_activation {
+            activation.validate()?;
+            if activation.cluster_id != self.committed_topology.cluster_id {
+                return Err(metadata_error(
+                    "metadata acquisition restore cluster differs",
+                ));
+            }
+        }
+        Ok(())
+    }
+}
+
+pub(crate) fn validate_acquire_requester(
+    request: &MetadataReadAcquireRequest,
+    topology: &ClusterTopology,
+) -> Result<()> {
+    request.validate()?;
+    let node = topology
+        .nodes
+        .get(&request.requester_node_id)
+        .ok_or_else(|| metadata_error("metadata acquisition requester is absent"))?;
+    let range = topology
+        .range_by_id(request.range_id)
+        .ok_or_else(|| metadata_error("metadata acquisition range is absent"))?;
+    if node.incarnation != request.requester_incarnation
+        || node.lifecycle != ClusterNodeLifecycle::Active
+        || node.metadata_role != MetadataMemberRole::Voter
+        || range.epoch != request.range_epoch
+        || range.leader != request.requester_node_id
+    {
+        return Err(metadata_error(
+            "metadata acquisition requester/range authority changed",
+        ));
+    }
+    Ok(())
+}
 
 fn metadata_error(message: impl Into<String>) -> BicDbError {
     BicDbError::Cluster(format!("metadata consensus: {}", message.into()))
+}
+
+struct MetadataReadSizeLimit(usize);
+
+impl std::io::Write for MetadataReadSizeLimit {
+    fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+        if bytes.len() > self.0 {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "metadata read byte bound",
+            ));
+        }
+        self.0 -= bytes.len();
+        Ok(bytes.len())
+    }
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+
+fn topology_checksum(topology: &ClusterTopology) -> Result<String> {
+    Ok(hex::encode(Sha256::digest(serde_json::to_vec(topology)?)))
 }
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -277,6 +613,8 @@ pub struct MetadataReadContext {
     term: u64,
     read_index: u64,
     deadline: Instant,
+    started: Instant,
+    anchor: MetadataReadAnchor,
     quorums: MetadataReadQuorums,
     fresh_old: BTreeSet<ClusterNodeId>,
     fresh_new: BTreeSet<ClusterNodeId>,
@@ -284,6 +622,12 @@ pub struct MetadataReadContext {
 }
 
 impl MetadataReadContext {
+    pub(crate) fn restrict_deadline(&mut self, deadline: Instant) {
+        self.deadline = self.deadline.min(deadline);
+    }
+    pub(crate) fn deadline(&self) -> Instant {
+        self.deadline
+    }
     pub fn context_id(&self) -> Uuid {
         self.context_id
     }
@@ -319,9 +663,67 @@ pub struct MetadataReadAuthority {
     applied_index: u64,
     topology: ClusterTopology,
     restore_activation: Option<MetadataRestoreActivation>,
+    leader_id: ClusterNodeId,
+    leader_incarnation: u64,
+    anchor: MetadataReadAnchor,
+    joint_configuration_candidate: Option<ClusterTopology>,
+    old_voters: Vec<MetadataReadVoterProof>,
+    new_voters: Vec<MetadataReadVoterProof>,
+    fresh_old_voters: BTreeSet<ClusterNodeId>,
+    fresh_new_voters: BTreeSet<ClusterNodeId>,
+    deadline: Instant,
+    started: Instant,
 }
 
 impl MetadataReadAuthority {
+    /// Original begin-round deadline, never a renewed completion-time lease.
+    pub fn deadline(&self) -> Instant {
+        self.deadline
+    }
+    pub fn remaining_budget(&self) -> Option<Duration> {
+        self.deadline
+            .checked_duration_since(Instant::now())
+            .filter(|d| !d.is_zero())
+    }
+    pub fn is_current_budget(&self) -> bool {
+        self.remaining_budget().is_some()
+    }
+    pub(crate) fn into_acquisition_response(
+        self,
+        request: MetadataReadAcquireRequest,
+    ) -> Result<MetadataReadAcquireResponse> {
+        if !self.is_current_budget() {
+            return Err(metadata_error(
+                "completed metadata authority budget expired",
+            ));
+        }
+        let response = MetadataReadAcquireResponse {
+            protocol_version: METADATA_READ_ACQUISITION_PROTOCOL_VERSION,
+            request,
+            context_id: self.context_id,
+            metadata_leader_id: self.leader_id,
+            metadata_leader_incarnation: self.leader_incarnation,
+            term: self.term,
+            anchor: self.anchor,
+            read_index: self.read_index,
+            applied_index: self.applied_index,
+            context_budget_ms: self
+                .deadline
+                .saturating_duration_since(self.started)
+                .as_millis()
+                .try_into()
+                .map_err(|_| metadata_error("metadata context duration overflow"))?,
+            committed_topology: self.topology,
+            joint_configuration_candidate: self.joint_configuration_candidate,
+            old_voters: self.old_voters,
+            new_voters: self.new_voters,
+            fresh_old_voters: self.fresh_old_voters,
+            fresh_new_voters: self.fresh_new_voters,
+            restore_activation: self.restore_activation,
+        };
+        response.validate(&response.request)?;
+        Ok(response)
+    }
     pub fn context_id(&self) -> Uuid {
         self.context_id
     }
@@ -396,6 +798,76 @@ pub struct MetadataConsensusStore {
 }
 
 impl MetadataConsensusStore {
+    pub(crate) fn validate_read_acquisition_caller(
+        &self,
+        request: &MetadataReadAcquireRequest,
+        participant: &MetadataReadParticipant,
+    ) -> Result<crate::RangeDescriptor> {
+        validate_acquire_requester(request, &self.state.committed_topology)?;
+        let node = &self.state.committed_topology.nodes[&request.requester_node_id];
+        let identity = MetadataReadVoterIdentity {
+            incarnation: node.incarnation,
+            active_certificate: node.tls_certificate_sha256.clone(),
+            pending_certificate: node.pending_tls_certificate_sha256.clone(),
+        };
+        if participant.node_id != request.requester_node_id || !identity.accepts(participant) {
+            return Err(metadata_error(
+                "metadata acquisition caller is not transport-authenticated",
+            ));
+        }
+        Ok(self
+            .state
+            .committed_topology
+            .range_by_id(request.range_id)
+            .unwrap()
+            .clone())
+    }
+
+    pub(crate) fn read_authority_ready(&self, context: &MetadataReadContext) -> Result<bool> {
+        self.validate_read_context(context)?;
+        Ok(context.fresh_old.len() > context.quorums.old.len() / 2
+            && context.fresh_new.len() > context.quorums.new.len() / 2)
+    }
+
+    /// Bound serialization before cloning topology-bearing metadata messages.
+    pub(crate) fn read_authority_payload_fits(&self, max_bytes: usize) -> Result<()> {
+        let mut writer = MetadataReadSizeLimit(max_bytes);
+        serde_json::to_writer(&mut writer, &self.state.committed_topology).map_err(|_| {
+            metadata_error("metadata read committed topology exceeds payload bound")
+        })?;
+        if let Some(pending) = self.state.log.last() {
+            serde_json::to_writer(&mut writer, &pending.topology).map_err(|_| {
+                metadata_error("metadata read joint topology exceeds payload bound")
+            })?;
+        }
+        Ok(())
+    }
+
+    pub(crate) fn bounded_read_authority_probe(
+        &self,
+        context: &MetadataReadContext,
+        destination: &ClusterNodeId,
+        next_index: u64,
+        max_bytes: usize,
+    ) -> Result<MetadataReadProbeRequest> {
+        let mut writer = MetadataReadSizeLimit(max_bytes);
+        if next_index <= self.state.base_index {
+            serde_json::to_writer(&mut writer, &self.state.committed_topology).map_err(|_| {
+                metadata_error("metadata read catch-up snapshot exceeds payload bound")
+            })?;
+        }
+        if let Some(entry) = self
+            .state
+            .log
+            .iter()
+            .find(|entry| entry.index >= next_index)
+        {
+            serde_json::to_writer(&mut writer, entry).map_err(|_| {
+                metadata_error("metadata read catch-up entry exceeds payload bound")
+            })?;
+        }
+        self.read_authority_probe(context, destination, next_index, 1)
+    }
     /// Read and verify the durable metadata state without changing role or
     /// rewriting the file. This is safe for status tooling and health probes
     /// while a server owns the live consensus instance.
@@ -567,6 +1039,7 @@ impl MetadataConsensusStore {
         budget: Duration,
         local: &MetadataReadParticipant,
     ) -> Result<MetadataReadContext> {
+        let started = Instant::now();
         if read_request_id.is_nil() || budget.is_zero() || budget > Duration::from_secs(300) {
             return Err(metadata_error("read authority request/budget is invalid"));
         }
@@ -612,7 +1085,14 @@ impl MetadataConsensusStore {
             leader_id: self.state.node_id.clone(),
             term: self.state.current_term,
             read_index: self.state.commit_index,
-            deadline: Instant::now() + budget,
+            deadline: started + budget,
+            started,
+            anchor: MetadataReadAnchor {
+                index: self.state.commit_index,
+                term: self.state.current_term,
+                topology_generation: self.state.committed_topology.generation,
+                topology_sha256: topology_checksum(&self.state.committed_topology)?,
+            },
             quorums,
             fresh_old,
             fresh_new,
@@ -768,6 +1248,28 @@ impl MetadataConsensusStore {
                 "read authority has no fresh old-and-new voter quorum",
             ));
         }
+        fn proofs(
+            voters: &BTreeMap<ClusterNodeId, MetadataReadVoterIdentity>,
+        ) -> Vec<MetadataReadVoterProof> {
+            voters
+                .iter()
+                .map(|(node_id, identity)| MetadataReadVoterProof {
+                    node_id: node_id.clone(),
+                    incarnation: identity.incarnation,
+                    active_certificate_sha256: identity.active_certificate.clone(),
+                    pending_certificate_sha256: identity.pending_certificate.clone(),
+                })
+                .collect()
+        }
+        let leader_incarnation = context
+            .quorums
+            .old
+            .get(&context.leader_id)
+            .or_else(|| context.quorums.new.get(&context.leader_id))
+            .ok_or_else(|| metadata_error("metadata read leader missing from its quorum"))?
+            .incarnation;
+        let old_voters = proofs(&context.quorums.old);
+        let new_voters = proofs(&context.quorums.new);
         Ok(MetadataReadAuthority {
             context_id: context.context_id,
             read_request_id: context.read_request_id,
@@ -776,6 +1278,21 @@ impl MetadataConsensusStore {
             applied_index: self.state.commit_index,
             topology: self.state.committed_topology.clone(),
             restore_activation: self.state.committed_restore_activation.clone(),
+            leader_id: context.leader_id,
+            leader_incarnation,
+            anchor: context.anchor,
+            joint_configuration_candidate: self
+                .state
+                .log
+                .last()
+                .filter(|entry| entry.topology != self.state.committed_topology)
+                .map(|entry| entry.topology.clone()),
+            old_voters,
+            new_voters,
+            fresh_old_voters: context.fresh_old,
+            fresh_new_voters: context.fresh_new,
+            deadline: context.deadline,
+            started: context.started,
         })
     }
 

@@ -26,6 +26,7 @@ mod distribution_events;
 mod distribution_gateway;
 #[cfg(feature = "tls-replication")]
 mod distribution_io;
+mod distribution_metadata_read_provider;
 mod distribution_query;
 mod distribution_range_consensus;
 mod distribution_range_handoff;
@@ -337,12 +338,13 @@ pub use distribution_certification::{
 };
 pub use distribution_consensus::{
     MetadataAppendRequest, MetadataAppendResponse, MetadataConsensusRole, MetadataConsensusStatus,
-    MetadataConsensusStore, MetadataLogEntry, MetadataReadAck, MetadataReadAuthority,
-    MetadataReadContext, MetadataReadParticipant, MetadataReadProbeRequest,
-    MetadataReadProbeResponse, MetadataRestoreActivation, MetadataSnapshot, MetadataVoteRequest,
-    MetadataVoteResponse, CLUSTER_METADATA_CONSENSUS_FORMAT_VERSION,
-    DEFAULT_CLUSTER_METADATA_CONSENSUS_STATE, METADATA_READ_AUTHORITY_PROTOCOL_VERSION,
-    METADATA_RESTORE_ACTIVATION_FORMAT_VERSION,
+    MetadataConsensusStore, MetadataLogEntry, MetadataReadAck, MetadataReadAcquireRequest,
+    MetadataReadAcquireResponse, MetadataReadAnchor, MetadataReadAuthority, MetadataReadContext,
+    MetadataReadObservation, MetadataReadParticipant, MetadataReadProbeRequest,
+    MetadataReadProbeResponse, MetadataReadVoterProof, MetadataRestoreActivation, MetadataSnapshot,
+    MetadataVoteRequest, MetadataVoteResponse, CLUSTER_METADATA_CONSENSUS_FORMAT_VERSION,
+    DEFAULT_CLUSTER_METADATA_CONSENSUS_STATE, METADATA_READ_ACQUISITION_PROTOCOL_VERSION,
+    METADATA_READ_AUTHORITY_PROTOCOL_VERSION, METADATA_RESTORE_ACTIVATION_FORMAT_VERSION,
 };
 pub use distribution_data::{
     CatchUpSourceBatch, ClusterDataNodeService, ClusterSchemaActivationReceipt,
@@ -355,6 +357,9 @@ pub use distribution_data::{
 pub use distribution_gateway::{
     BoundedClusterConnectionPool, ClusterConnectionPoolStats, ClusterGatewayConfig,
     ClusterPointConnection, ClusterPointConnector, ClusterPointGateway, PointTransportReply,
+};
+pub use distribution_metadata_read_provider::{
+    MetadataReadProbeTransport, MetadataReadProvider, MetadataReadProviderLimits,
 };
 pub use distribution_query::{
     execute_distributed_transaction, execute_scatter_gather, execute_scatter_gather_governed,
@@ -417,8 +422,8 @@ pub use distribution_supervisor::{
 };
 #[cfg(feature = "tls-replication")]
 pub use distribution_transport::{
-    start_cluster_data_server, ClusterDataServerHandle, TcpClusterBootstrapClient,
-    TcpClusterRelocationTransport,
+    start_cluster_data_server, start_cluster_data_server_with_metadata_read_provider,
+    ClusterDataServerHandle, TcpClusterBootstrapClient, TcpClusterRelocationTransport,
 };
 pub use encryption::{
     DatabaseObjectCipher, EncryptionBinding, EncryptionConfig, EncryptionKdfMetadata,

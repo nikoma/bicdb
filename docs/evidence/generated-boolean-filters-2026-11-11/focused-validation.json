@@ -1,0 +1,51 @@
+{
+  "source": "da76993d79cecefd1792e3563f5e68fd46692662",
+  "scope": "Iterative token-arena balancing of generated associative Boolean filters only after original depth check refuses input. Same guard must accept normalized input. SQL execute and parameter inference, both stores, truth/NULL mixed operators, scalar grammar and non-Boolean CAST rejection. Consolidated corrected test ownership; latest source and prior compile-only failures preserved separately.",
+  "started_unix": 1794371600.2969718,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--lib",
+        "boolean_parse::tests",
+        "--",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794371600.2975082,
+      "exit": 0,
+      "finished_unix": 1794371717.77751
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "generated_boolean_filters",
+        "--test",
+        "parser_tree_depth",
+        "--test",
+        "rls_boolean_depth",
+        "--",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794371717.777677,
+      "exit": 0,
+      "finished_unix": 1794371855.6905477
+    }
+  ],
+  "status": "focused_passed",
+  "finished_unix": 1794371855.6908662
+}

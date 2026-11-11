@@ -868,6 +868,8 @@ impl BicDb {
             observed_record_versions: Mutex::new(FxHashMap::default()),
             collection_incarnations: Mutex::new(FxHashMap::default()),
             statement_write_conflicts: false,
+            statement_snapshot_acquired: false,
+            statement_snapshot_deferred: false,
             state: TxState::Pending,
             outcome_observer: OnceLock::new(),
             write_receipts: None,

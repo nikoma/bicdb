@@ -2751,7 +2751,15 @@ fn handle_frontend_message(
                 }
             }
         },
-        b'B' => match bind_message(&payload, &state.prepared, server) {
+        b'B' => match bind_message(&payload, &state.prepared, server).and_then(
+            |(portal_name, portal, has_parameters)| {
+                acquire_postgres_statement_snapshot(server, state, || {
+                    has_parameters
+                        || bicdb_sql::postgres_parse_requires_snapshot(&portal.source_sql)
+                })?;
+                Ok((portal_name, portal))
+            },
+        ) {
             Ok((portal_name, portal)) => {
                 state.portals.insert(portal_name, portal);
                 bind_complete(stream)?;
@@ -3466,6 +3474,7 @@ fn execute_server_query(
     }
     if let Some(copy) = parse_copy_statement(sql)? {
         delegation::validate_delegation(server, state)?;
+        acquire_postgres_statement_snapshot(server, state, || true)?;
         if let (CopyDirection::ToStdout, Some(query)) = (
             copy.direction,
             copy.query
@@ -4693,6 +4702,27 @@ fn execute_server_sql_with_options(
     )
 }
 
+fn acquire_postgres_statement_snapshot(
+    server: &PgWireServer,
+    state: &mut ConnectionState,
+    requires_snapshot: impl FnOnce() -> bool,
+) -> Result<()> {
+    if state.failed_transaction || bicdb_sql::oracle::is_oracle_profile(&server.config.sql_profile)
+    {
+        return Ok(());
+    }
+    if let Some(tx) = state.tx.as_mut() {
+        if !tx.statement_snapshot_acquired() && requires_snapshot() {
+            // Sample before refreshing so a subsequent replica apply cannot
+            // make the newly pinned snapshot look fresher than it is.
+            let watermark = *server.replica_read_watermark.lock().unwrap();
+            tx.acquire_statement_snapshot(state.last_commit_seq)?;
+            state.replica_tx_watermark = watermark;
+        }
+    }
+    Ok(())
+}
+
 /// `execute_server_sql_with_options` for a caller that already normalized
 /// the text (the simple-query path normalizes once per query).
 fn execute_server_sql_with_options_normalized(
@@ -4723,6 +4753,9 @@ fn execute_server_sql_with_options_normalized(
     {
         delegation::validate_delegation(server, state)?;
     }
+    acquire_postgres_statement_snapshot(server, state, || {
+        bicdb_sql::postgres_execution_requires_snapshot(sql)
+    })?;
     if is_server_status_query_normalized(normalized) {
         let gucs = state.session_state.session_gucs();
         let configuration_user = gucs
@@ -4830,8 +4863,12 @@ fn execute_server_sql_with_options_normalized(
         .with_wait_admission(_permit.observer());
     let transaction_control = if is_transaction_control_candidate(normalized) {
         Some(
-            parse_transaction_control_for_profile(sql, &server.config.sql_profile)
-                .map_err(PgWireError::from)?,
+            bicdb_sql::parse_transaction_control_for_session(
+                sql,
+                &server.config.sql_profile,
+                state.session_state.transaction_read_only(),
+            )
+            .map_err(PgWireError::from)?,
         )
     } else {
         None
@@ -4854,11 +4891,12 @@ fn execute_server_sql_with_options_normalized(
                     &server.config.sql_profile,
                 )? {
                     let fixed = isolation == "repeatable read" || isolation == "serializable";
-                    state
-                        .tx
-                        .as_mut()
-                        .unwrap()
-                        .set_snapshot_isolation(fixed, state.last_commit_seq)?;
+                    let tx = state.tx.as_mut().unwrap();
+                    if bicdb_sql::oracle::is_oracle_profile(&server.config.sql_profile) {
+                        tx.set_snapshot_isolation(fixed, state.last_commit_seq)?;
+                    } else {
+                        tx.set_deferred_snapshot_isolation(fixed, state.last_commit_seq)?;
+                    }
                     state
                         .tx
                         .as_mut()
@@ -4901,6 +4939,18 @@ fn execute_server_sql_with_options_normalized(
                 }
             }
         } else if let Some(ending) = transaction_end {
+            if matches!(
+                ending,
+                delegation::TransactionEnd::Commit { chain: true }
+                    | delegation::TransactionEnd::Rollback { chain: true }
+            ) && !state.in_transaction
+            {
+                return Err(SqlError::InvalidTransactionState {
+                    message: "AND CHAIN requires an active transaction".into(),
+                }
+                .into());
+            }
+            let chain_read_only = state.session_state.transaction_read_only();
             let chain_isolation = state
                 .session_state
                 .session_gucs()
@@ -4919,13 +4969,17 @@ fn execute_server_sql_with_options_normalized(
             };
             if chain {
                 begin_buffered_transaction(server, state)?;
+                state
+                    .session_state
+                    .set_transaction_read_only_label(chain_read_only)?;
                 if let Some(isolation) = chain_isolation {
                     let fixed = isolation == "repeatable read" || isolation == "serializable";
-                    state
-                        .tx
-                        .as_mut()
-                        .unwrap()
-                        .set_snapshot_isolation(fixed, state.last_commit_seq)?;
+                    let tx = state.tx.as_mut().unwrap();
+                    if bicdb_sql::oracle::is_oracle_profile(&server.config.sql_profile) {
+                        tx.set_snapshot_isolation(fixed, state.last_commit_seq)?;
+                    } else {
+                        tx.set_deferred_snapshot_isolation(fixed, state.last_commit_seq)?;
+                    }
                     state
                         .tx
                         .as_mut()

@@ -8948,6 +8948,8 @@ pub struct Transaction {
     /// Opt-in SQL profiles may report write conflicts at the statement
     /// boundary. Commit validation remains mandatory in either mode.
     statement_write_conflicts: bool,
+    statement_snapshot_acquired: bool,
+    statement_snapshot_deferred: bool,
     state: TxState,
     outcome_observer: OnceLock<Arc<transaction_receipts::OutcomeState>>,
     write_receipts: Option<Box<transaction_receipts::ReceiptJournal>>,
@@ -14944,6 +14946,63 @@ impl Transaction {
         self.isolation
     }
 
+    /// Whether the host has reached a statement that requires a snapshot.
+    pub fn statement_snapshot_acquired(&self) -> bool {
+        self.statement_snapshot_acquired
+    }
+
+    /// Let a host acquire the initial fixed snapshot at its first SQL
+    /// statement. Native transactions keep their already selected watermark
+    /// unless their creator explicitly opts into this host-managed boundary.
+    pub fn defer_statement_snapshot(&mut self) -> Result<()> {
+        self.ensure_statement_snapshot_can_be_deferred()?;
+        self.statement_snapshot_deferred = true;
+        Ok(())
+    }
+
+    fn ensure_statement_snapshot_can_be_deferred(&self) -> Result<()> {
+        if self.state != TxState::Pending {
+            return Err(BicDbError::TransactionNotPending);
+        }
+        if self.statement_snapshot_acquired
+            || self.write_len() != 0
+            || self.lock_len() != 0
+            || !self.observed_record_versions.lock().is_empty()
+            || !self.collection_incarnations.lock().is_empty()
+        {
+            return Err(BicDbError::TransactionConflict(
+                "statement snapshot can only be deferred before transaction access".into(),
+            ));
+        }
+        Ok(())
+    }
+
+    /// Select a host-managed SQL mode whose initial snapshot remains deferred.
+    /// A later native set_snapshot_isolation call deliberately pins its own
+    /// watermark and cancels this opt-in.
+    pub fn set_deferred_snapshot_isolation(&mut self, fixed: bool, floor: u64) -> Result<()> {
+        self.ensure_statement_snapshot_can_be_deferred()?;
+        self.set_snapshot_isolation(fixed, floor)?;
+        self.statement_snapshot_deferred = true;
+        Ok(())
+    }
+
+    /// Pin the first SQL statement's snapshot for a host-managed fixed
+    /// transaction. Native callers keep their begin-time snapshot semantics.
+    pub fn acquire_statement_snapshot(&mut self, floor: u64) -> Result<()> {
+        if self.statement_snapshot_acquired {
+            return Ok(());
+        }
+        if self.statement_snapshot_deferred
+            && self.isolation == TransactionIsolation::RepeatableRead
+        {
+            self.set_snapshot_isolation(true, floor)?;
+        }
+        self.statement_snapshot_deferred = false;
+        self.statement_snapshot_acquired = true;
+        Ok(())
+    }
+
     /// Validate newly buffered writes against their observed snapshots before
     /// accepting a statement. The default retains deferred commit checks.
     pub fn set_statement_write_conflict_check(&mut self, enabled: bool) -> Result<()> {
@@ -14974,6 +15033,7 @@ impl Transaction {
         if fixed {
             self.isolation = TransactionIsolation::RepeatableRead;
         }
+        self.statement_snapshot_deferred = false;
         Ok(())
     }
 

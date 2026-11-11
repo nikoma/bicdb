@@ -2798,7 +2798,7 @@ mod tests {
             .unwrap();
         assert_eq!(follower.committed_restore_activation(), Some(&activation));
         drop(follower);
-        let follower = open(roots[1].path(), "n2", &topology);
+        let mut follower = open(roots[1].path(), "n2", &topology);
         assert_eq!(follower.committed_restore_activation(), Some(&activation));
         assert_eq!(
             MetadataConsensusStore::inspect_restore_activation(roots[1].path()).unwrap(),

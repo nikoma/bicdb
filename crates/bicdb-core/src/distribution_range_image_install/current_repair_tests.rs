@@ -1191,10 +1191,13 @@ fn actual_prepared_serving_record_survives_a_second_current_voter_image_attempt(
         source_prepared.logical_history_sha256(),
         target_prepared.logical_history_sha256()
     );
+    // This closed quorum is for the ACTUAL target recipient. The initiating
+    // data leader remains n0; acquiring target-local metadata evidence does
+    // not substitute a caller-selected subject or manufacture voter replies.
     let fresh = CurrentRepairFixture::fresh_role_for(
         &fixture.providers,
         &fixture.initiator,
-        &node("n0"),
+        &node("n1"),
         &fixture.range,
         fixture.scope.recovery_nonce,
     );

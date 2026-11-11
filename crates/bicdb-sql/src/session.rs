@@ -872,6 +872,11 @@ fn rewrite_routine_definition_type_identity(
         updated: &UserTypeSchema,
     ) -> bool {
         use sqlparser::ast::ArrayElemTypeDef;
+        if let DataType::Table(Some(columns)) | DataType::NamedTable { columns, .. } = data_type {
+            return columns.iter_mut().fold(false, |changed, column| {
+                relocate(&mut column.data_type, previous, updated) || changed
+            });
+        }
         if let DataType::Array(
             ArrayElemTypeDef::AngleBracket(element)
             | ArrayElemTypeDef::SquareBracket(element, _)
@@ -927,6 +932,25 @@ fn rewrite_routine_definition_type_identity(
         true
     }
 
+    fn relocate_default(
+        default: &mut Option<Expr>,
+        previous: &UserTypeSchema,
+        updated: &UserTypeSchema,
+    ) -> bool {
+        let mut changed = false;
+        let _ = sqlparser::ast::visit_expressions_mut(default, |expr| {
+            match expr {
+                Expr::Cast { data_type, .. } => changed |= relocate(data_type, previous, updated),
+                Expr::TypedString(value) => {
+                    changed |= relocate(&mut value.data_type, previous, updated)
+                }
+                _ => {}
+            }
+            ControlFlow::<()>::Continue(())
+        });
+        changed
+    }
+
     let (mut statements, procedure_proxy) =
         match Parser::parse_sql(&PostgreSqlDialect {}, &routine.definition) {
             Ok(statements) => (statements, false),
@@ -945,7 +969,10 @@ fn rewrite_routine_definition_type_identity(
     match statement {
         Statement::CreateFunction(function) => {
             for (index, argument) in function.args.iter_mut().flatten().enumerate() {
-                if relocate(&mut argument.data_type, previous, updated) {
+                let type_changed = relocate(&mut argument.data_type, previous, updated);
+                let default_changed =
+                    relocate_default(&mut argument.default_expr, previous, updated);
+                if type_changed || default_changed {
                     if let Some(declaration) = routine.args.get_mut(index) {
                         *declaration = crate::sql_text::sql_text(argument);
                     }
@@ -974,7 +1001,9 @@ fn rewrite_routine_definition_type_identity(
         }
         Statement::CreateProcedure { params, .. } => {
             for (index, argument) in params.iter_mut().flatten().enumerate() {
-                if relocate(&mut argument.data_type, previous, updated) {
+                let type_changed = relocate(&mut argument.data_type, previous, updated);
+                let default_changed = relocate_default(&mut argument.default, previous, updated);
+                if type_changed || default_changed {
                     if let Some(declaration) = routine.args.get_mut(index) {
                         *declaration = crate::sql_text::sql_text(argument);
                     }

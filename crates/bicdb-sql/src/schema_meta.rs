@@ -5004,6 +5004,14 @@ impl RoutineFrame {
         template: &RoutineFrameTemplate,
         args: &[SqlValue],
     ) -> Result<Self> {
+        Self::from_template_with_defaults(template, args, eval_constant_expr)
+    }
+
+    pub(crate) fn from_template_with_defaults(
+        template: &RoutineFrameTemplate,
+        args: &[SqlValue],
+        mut evaluate_default: impl FnMut(&Expr) -> Result<SqlValue>,
+    ) -> Result<Self> {
         let slot_count = template.slot_names.len();
         let mut frame = Self {
             last_sql_row_count: 0,
@@ -5035,7 +5043,7 @@ impl RoutineFrame {
                         .get(input_idx)
                         .cloned()
                         .map(Ok)
-                        .or_else(|| param.default_expr.as_ref().map(eval_constant_expr))
+                        .or_else(|| param.default_expr.as_ref().map(&mut evaluate_default))
                         .unwrap_or_else(|| {
                             Err(SqlError::InvalidSql(format!(
                                 "stored routine argument {} is missing",

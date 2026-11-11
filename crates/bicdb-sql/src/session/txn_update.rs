@@ -4109,11 +4109,24 @@ impl<'db> SqlSession<'db> {
             memo.insert(key, std::rc::Rc::clone(&built));
             built
         });
-        let mut frame = RoutineFrame::from_template(&template, args)?;
+        let mut frame = RoutineFrame::from_template_with_defaults(&template, args, |expr| {
+            self.eval_routine_default_expr(expr)
+        })?;
         frame.oracle_statement_rollback = ir.oracle_statement_rollback;
         frame.oracle_procedural_evaluation = ir.oracle_procedural_evaluation;
         frame.oracle_error_diagnostics = ir.oracle_error_diagnostics.clone();
         Ok(frame)
+    }
+
+    pub(crate) fn eval_routine_default_expr(&self, expr: &Expr) -> Result<SqlValue> {
+        // Defaults need the database's type catalog, but cannot capture an
+        // unrelated caller frame's local variables or expression-node memos.
+        self.sql_engine()
+            .with_routine_vars(BTreeMap::new())
+            .with_routine_slots(None)
+            .with_routine_ir(None)
+            .with_ir_owned_statement(false)
+            .eval_select_constant_expr(expr)
     }
 
     /// One generation read per routine call covers both catalogs whose

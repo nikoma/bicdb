@@ -74,6 +74,17 @@ consensus, default controller, checkpoint driver, event routing or event CLI
 files. That source comparison does not turn the 1.0.461 binary's measurements
 into tests of 1.0.462 or the later documentation delivery version.
 
+Before evidence delivery, main advanced again to **1.0.463-beta**,
+`d49a391b3c6157f90f29e9f2f5214143c60f9f4b` (PR138, SQL protocol/frontend
+guards and generated boolean parsing). Those engine fixes are a separate PR.
+The inspected distribution, metadata consensus, range-write, controller and
+event-client/handler source paths remain unchanged from the frozen 1.0.461
+experiment. The evidence/test-tool delivery bumps source to 1.0.464-beta; it
+neither builds nor physically qualifies that newer runtime. The
+[failed-attempt dispositions](azure-original-run-forensics-2026-11-11.md) and
+[recovered Azure metadata](evidence/azure-postdelete-forensics-2026-11-11/README.md)
+provide the subsequent original-run forensic findings and remaining unknowns.
+
 ## Evidence rules and source-scoped CI
 
 Implemented means an executable production code path exists; a public trait or

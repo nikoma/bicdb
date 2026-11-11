@@ -159,7 +159,8 @@ the failed trial or authorize weakening durability.
 
 ## Release and qualification boundary
 
-Main advanced to 1.0.462-beta during this experiment. Documentation/evidence and
+Main advanced to 1.0.462-beta during this experiment and to 1.0.463-beta
+(PR138) before evidence delivery. Documentation/evidence and
 test-runner delivery versions are separate from the frozen 1.0.461 runtime.
 Neither a source version bump, this optimized build, portable evidence checks,
 nor the observed guest deployment qualifies the newer integrated binary.

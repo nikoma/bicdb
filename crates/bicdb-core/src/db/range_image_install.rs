@@ -555,6 +555,16 @@ impl NativeInstalledRangeImageBase {
 
 impl BicDb {
     #[cfg(test)]
+    pub(crate) fn test_native_serving_history_json(
+        &self,
+        range_id: RangeId,
+        checksum: &str,
+    ) -> Result<Option<serde_json::Value>> {
+        self.read_native_range_image_record(&format!(
+            "serving-configuration-history/{range_id}/{checksum}"
+        ))
+    }
+    #[cfg(test)]
     pub(crate) fn test_native_serving_record_json(
         &self,
         range_id: RangeId,

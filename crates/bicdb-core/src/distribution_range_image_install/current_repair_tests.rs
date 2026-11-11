@@ -1386,6 +1386,161 @@ fn actual_prepared_serving_record_survives_a_second_current_voter_image_attempt(
         retained_serving, serving_a,
         "physical repair may not delete/relabel the historical epoch fence"
     );
+    let proposed = crate::distribution_range_consensus::native_ready_test_command(
+        fixture.scope.cluster_id.clone(),
+        &fixture.range,
+        2,
+        node("n0"),
+        &crate::CommitAdmissionIntent {
+            transaction_id: 999_003,
+            mutations: vec![crate::CommitAdmissionMutation {
+                collection: "items".into(),
+                record_id: fixture.selected_key.clone(),
+                record: Some(crate::Record::new(&fixture.selected_key)),
+            }],
+        },
+    )
+    .unwrap();
+    let topology = fixture.origin.topology.read().clone();
+    let physical_only = target
+        .read()
+        .current_native_range_source_lineage(fixture.range.id)
+        .unwrap();
+    assert!(
+        physical_only.native_write_range().is_err(),
+        "historical A cannot become B's current grant"
+    );
+    let refused = crate::distribution_range_consensus::test_validate_ordinary_native_intent(
+        &proposed,
+        &fixture.range,
+        &topology,
+        &physical_only,
+    )
+    .unwrap_err();
+    assert!(refused
+        .to_string()
+        .contains("no current physical-base grant"));
+    drop(physical_only);
+
+    // Obtain a NEW genuine closed native-ready quorum for nonce B. Only that
+    // proof can rebind a serving grant to actual base B; readiness alone cannot.
+    let frozen_source_b = fixture.runtimes[&node("n0")]
+        .source_capture_freeze(&fixture.scope)
+        .unwrap();
+    let role_source_b = CurrentRepairFixture::fresh_role_for(
+        &fixture.providers,
+        &fixture.initiator,
+        &node("n0"),
+        &fixture.range,
+        fixture.scope.recovery_nonce,
+    );
+    let source_prepared_b = fixture.origin.services[&node("n0")]
+        .lock()
+        .test_prepare_existing_native_source(
+            role_source_b,
+            Arc::clone(&frozen_source_b),
+            &CancellationToken::uncancelable(),
+        )
+        .unwrap();
+    let collector = fixture.role();
+    let request_b = NativeReadyRequest {
+        scope: RecoveryFenceScope::from_role(&collector).unwrap(),
+        challenge: Uuid::now_v7(),
+        budget_ms: 5000,
+    };
+    let mut round_b =
+        ClosedNativeReadyQuorumRound::begin(collector, &CancellationToken::uncancelable()).unwrap();
+    for (id, local) in [(node("n0"), &source_prepared_b), (node("n1"), &prepared)] {
+        let fresh = CurrentRepairFixture::fresh_role_for(
+            &fixture.providers,
+            &fixture.initiator,
+            &id,
+            &fixture.range,
+            fixture.scope.recovery_nonce,
+        );
+        let evidence = fixture.origin.services[&id]
+            .lock()
+            .test_project_actual_prepared_native(local, &fresh, &request_b)
+            .unwrap();
+        round_b
+            .record(
+                NativeReadyObservation::from_local(
+                    evidence,
+                    fixture.providers[&id].local_participant(),
+                    &request_b,
+                    fresh.deadline(),
+                )
+                .unwrap(),
+            )
+            .unwrap();
+    }
+    let closed_b = round_b.finish().unwrap();
+    let fresh = fixture.role();
+    let grant_b = fixture
+        .service
+        .lock()
+        .test_persist_actual_prepared_serving(&prepared, &closed_b, &fresh)
+        .unwrap();
+    grant_b.require_current(&target.read()).unwrap();
+    let fresh = fixture.role();
+    let repeated = fixture
+        .service
+        .lock()
+        .test_persist_actual_prepared_serving(&prepared, &closed_b, &fresh)
+        .unwrap();
+    assert_eq!(
+        grant_b.checksum_sha256(),
+        repeated.checksum_sha256(),
+        "same actual grant is idempotent"
+    );
+    assert_eq!(
+        target
+            .read()
+            .test_native_serving_history_json(
+                fixture.range.id,
+                serving_a["checksum_sha256"].as_str().unwrap()
+            )
+            .unwrap(),
+        Some(serving_a.clone())
+    );
+    let current = target
+        .read()
+        .test_native_serving_record_json(fixture.range.id)
+        .unwrap()
+        .unwrap();
+    assert_ne!(
+        current["physical_base_sha256"],
+        serving_a["physical_base_sha256"]
+    );
+    assert_eq!(current["range"]["epoch"], serving_a["range"]["epoch"]);
+    assert_eq!(current["activation_index"], 1);
+    let granted = target
+        .read()
+        .current_native_range_source_lineage(fixture.range.id)
+        .unwrap();
+    crate::distribution_range_consensus::test_validate_ordinary_native_intent(
+        &proposed,
+        &fixture.range,
+        &topology,
+        &granted,
+    )
+    .unwrap();
+    // Passing ONE intent prerequisite is not an activated user-write grant.
+    assert!(fixture
+        .service
+        .lock()
+        .prepare_range_write(&fixture.range, &node("n0"), proposed)
+        .is_err());
+    eprintln!(
+        "SERVING_FLOOR_REPAIR_GREEN {}",
+        serde_json::json!({"range_index":1,"epoch_floor":fixture.range.epoch,"history":history,"old_record_preserved":true,"ordinary_intent_refused_before_new_grant":true,"grant_b_idempotent":true,"actual_user_write_still_refused":true,"activation_proven":false})
+    );
+    drop(granted);
+    drop(repeated);
+    drop(grant_b);
+    drop(closed_b);
+    drop(source_prepared_b);
+    drop(frozen_source_b);
     drop(prepared);
     drop(target);
     drop(fixture);

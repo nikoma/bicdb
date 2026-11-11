@@ -692,3 +692,206 @@ fn actual_rf3_nonempty_current_voter_repair_uses_same_catalogue_and_keeps_recove
     drop(reopened);
     std::fs::remove_dir_all(root).unwrap();
 }
+
+#[test]
+fn actual_rf3_nonempty_finalized_image_prepares_without_an_unfenced_window() {
+    let mut fixture = CurrentRepairFixture::new();
+    let target = Arc::clone(&fixture.origin.databases[&node("n1")]);
+    let expected = fixture.origin.databases[&node("n0")]
+        .read()
+        .get("items", &fixture.selected_key)
+        .unwrap()
+        .unwrap();
+    let original_command = fixture.origin.services[&node("n0")]
+        .lock()
+        .probe_range_write_for_peer(&fixture.range, &node("n0"), 1)
+        .unwrap()
+        .entry
+        .unwrap()
+        .command;
+    let attempt = Uuid::now_v7();
+    let install = fixture.begin(attempt);
+    let verified = fixture.materialize(install);
+    let history = verified.base().logical_history_sha256().to_string();
+    let native_receipt = verified.base().native_receipt_sha256().to_string();
+    let target_b = verified.base().target_snapshot_bound().get();
+    assert!(target_b > fixture.target_b_before && target_b > fixture.source_b);
+    let role = fixture.role();
+    let adopted = fixture
+        .service
+        .lock()
+        .adopt_native_range_image_catalogue(
+            verified,
+            &NativeImageInstallRole::CurrentVoterRepair(&role),
+            &CancellationToken::uncancelable(),
+        )
+        .unwrap();
+    let role = fixture.role();
+    let (freeze, finalization) = fixture
+        .service
+        .lock()
+        .finalize_native_range_image_catalogue(
+            adopted,
+            &NativeImageInstallRole::CurrentVoterRepair(&role),
+            &CancellationToken::uncancelable(),
+        )
+        .unwrap();
+    let NativeImageInstallFreeze::Recovery(lease) = freeze else {
+        panic!("actual Normal repair must retain its owned Runtime lease")
+    };
+    let role = fixture.role();
+    let image = lease
+        .return_after_catalogue_adoption(
+            finalization,
+            &NativeImageInstallRole::CurrentVoterRepair(&role),
+            &CancellationToken::uncancelable(),
+        )
+        .unwrap();
+    let frozen = fixture.runtimes[&node("n1")]
+        .source_capture_freeze(&fixture.scope)
+        .unwrap();
+    assert_eq!(frozen.owner(), fixture.scope.recovery_nonce);
+    assert_eq!(image.intent_fence().attempt_id(), attempt);
+    assert_eq!(image.base().range_index(), 1);
+    assert_eq!(image.base().target_snapshot_bound().get(), target_b);
+    // The ordinary producer STILL refuses the actual image intent. No clear
+    // or permissive intermediate catalogue state is used to obtain physical
+    // attestation. Only the typed real owner-return receipt enters that path.
+    let ordinary_role = fixture.role();
+    assert!(fixture
+        .service
+        .lock()
+        .attest_native_recovery_ready(
+            ordinary_role,
+            Arc::clone(&frozen),
+            &CancellationToken::uncancelable(),
+        )
+        .is_err());
+    assert!(fixture
+        .service
+        .lock()
+        .require_persisted_recovery_scope(&fixture.scope)
+        .is_err());
+    let role = fixture.role();
+    let prepared = fixture
+        .service
+        .lock()
+        .prepare_finalized_native_recovery_image(
+            image,
+            role,
+            Arc::clone(&frozen),
+            &CancellationToken::uncancelable(),
+        )
+        .unwrap();
+    assert_eq!(prepared.range_index(), 1);
+    assert_eq!(prepared.logical_history_sha256(), history);
+    assert_eq!(prepared.native_receipt_sha256(), native_receipt);
+    assert_eq!(prepared.local_visibility_sequence(), target_b);
+    assert!(prepared.scope().same_session(&fixture.scope));
+    assert_eq!(
+        target.read().get("items", &fixture.selected_key).unwrap(),
+        Some(expected.clone())
+    );
+    assert_eq!(
+        target.read().local_namespace_identity("items").unwrap(),
+        Some(fixture.original_target_uid)
+    );
+    for key in &fixture.other_keys {
+        assert!(target.read().get("items", key).unwrap().is_some());
+    }
+    assert!(target
+        .read()
+        .range_mutation_gate()
+        .try_controlled_mutation(&frozen)
+        .is_err());
+    assert!(fixture
+        .service
+        .lock()
+        .require_persisted_recovery_scope(&fixture.scope)
+        .is_err());
+    assert!(fixture
+        .service
+        .lock()
+        .prepare_range_write(&fixture.range, &node("n0"), original_command.clone(),)
+        .is_err());
+    let persisted: serde_json::Value = serde_json::from_slice(
+        &std::fs::read(target.read().data_path().join(DEFAULT_RANGE_WRITE_LOG)).unwrap(),
+    )
+    .unwrap();
+    let key = fixture.range.id.get().to_string();
+    assert!(persisted["catalog"]["image_install_intents"]
+        .get(&key)
+        .is_none());
+    assert_eq!(
+        persisted["catalog"]["native_image_bases"][&key]["attempt_id"],
+        attempt.to_string()
+    );
+    let point = &persisted["catalog"]["recovery_fences"][&key]["phase"]["NativePrepared"];
+    assert_eq!(point["range_index"], 1);
+    assert_eq!(point["logical_history_sha256"], history);
+    assert_eq!(point["native_receipt_sha256"], native_receipt);
+    assert_eq!(point["local_visibility_sequence"], target_b);
+    assert_eq!(
+        persisted["catalog"]["recovery_fences"][&key]["scope"]["recovery_nonce"],
+        fixture.scope.recovery_nonce.to_string()
+    );
+    let root = std::mem::replace(&mut fixture.origin.root, tempfile::tempdir().unwrap()).keep();
+    let path = target.read().data_path().to_path_buf();
+    let spec = fixture.origin.specs[&node("n1")].clone();
+    let selected = fixture.selected_key.clone();
+    let other_keys = fixture.other_keys.clone();
+    let target_uid = fixture.original_target_uid;
+    let scope = fixture.scope.clone();
+    let old_target = Arc::downgrade(&target);
+    drop(prepared);
+    drop(frozen);
+    drop(target);
+    drop(fixture);
+    assert_eq!(
+        old_target.strong_count(),
+        0,
+        "all physical owners end before reopen"
+    );
+    let (reopened, _) = BicDb::open_range_image_database(
+        &path,
+        crate::DbConfig::default()
+            .with_fsync(true)
+            .with_storage_mode(crate::StorageMode::ServerPaged)
+            .with_paged_buffer_pool_bytes(8 * 1024 * 1024),
+        &spec,
+    )
+    .unwrap();
+    assert_eq!(reopened.get("items", &selected).unwrap(), Some(expected));
+    assert_eq!(
+        reopened.local_namespace_identity("items").unwrap(),
+        Some(target_uid)
+    );
+    for key in other_keys {
+        assert!(reopened.get("items", &key).unwrap().is_some());
+    }
+    let store =
+        RangeWriteStore::open(&path, spec.cluster_id.clone(), spec.node_id.clone(), true).unwrap();
+    store.require_no_image_install(scope.range_id).unwrap();
+    assert_eq!(
+        store.recovery_observation_phase(&scope).unwrap(),
+        crate::distribution_range_recovery::RecoveryFenceObservationPhase::NativePrepared
+    );
+    assert!(store.require_persisted_recovery_scope(&scope).is_err());
+    assert!(store
+        .normal_native_write_allowed(&original_command)
+        .is_err());
+    eprintln!(
+        "RF3_IMAGE_PREPARED_EVIDENCE {}",
+        serde_json::json!({
+            "range_index": 1, "local_visibility_sequence": target_b,
+            "logical_history_sha256": history, "native_receipt_sha256": native_receipt,
+            "target_namespace_preserved": true, "exact_image_intent_replaced": true,
+            "native_image_catalogue_base_retained": true, "cold_refusal_retained": true,
+            "normal_writes_admitted": false, "activation_proven": false,
+            "physical_qualification": false,
+        })
+    );
+    drop(store);
+    drop(reopened);
+    std::fs::remove_dir_all(root).unwrap();
+}

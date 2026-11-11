@@ -245,6 +245,16 @@ impl NetworkFixture {
         Self::new_ready_network(wired, false, false)
     }
     fn new_ready_network(wired: bool, all_nodes: bool, lagging_two: bool) -> Self {
+        Self::new_ready_network_with_roles(wired, all_nodes, lagging_two, "n1", "n2")
+    }
+    fn new_ready_network_with_roles(
+        wired: bool,
+        all_nodes: bool,
+        lagging_two: bool,
+        data_leader: &str,
+        metadata_leader: &str,
+    ) -> Self {
+        assert!((data_leader == "n1" && metadata_leader == "n2") || all_nodes);
         assert!(!lagging_two || all_nodes);
         let live_names = if all_nodes {
             vec!["n0", "n1", "n2"]
@@ -295,7 +305,7 @@ impl NetworkFixture {
         topology.generation += 1;
         let range = topology.ranges.values_mut().next().unwrap();
         range.epoch += 1;
-        range.leader = node("n1");
+        range.leader = node(data_leader);
         topology.validate().unwrap();
         let config = |id: &ClusterNodeId| ClusterNetworkTransportConfig {
             connect_timeout_ms: 50,
@@ -323,7 +333,8 @@ impl NetworkFixture {
                 (id, client)
             })
             .collect::<BTreeMap<_, _>>();
-        // Actual persisted current-term metadata anchor, with n2 the leader.
+        // Actual persisted current-term metadata anchor. Defaults remain n2;
+        // adversarial all-node fixtures may choose a distinct metadata leader.
         // Election membership is an explicit unit fixture precondition.
         let open = |id: &ClusterNodeId| {
             MetadataConsensusStore::open(
@@ -335,36 +346,48 @@ impl NetworkFixture {
             )
             .unwrap()
         };
-        let mut leader = open(&node("n2"));
-        let mut follower = open(&node("n1"));
+        let metadata_leader = node(metadata_leader);
+        let follower_id = if metadata_leader == node("n2") {
+            node("n1")
+        } else {
+            node("n0")
+        };
+        assert_ne!(metadata_leader, follower_id);
+        let extra_id = [node("n0"), node("n1"), node("n2")]
+            .into_iter()
+            .find(|id| id != &metadata_leader && id != &follower_id)
+            .unwrap();
+        let mut leader = open(&metadata_leader);
+        let mut follower = open(&follower_id);
         leader.start_election().unwrap();
         leader
-            .become_leader(&BTreeSet::from([node("n1"), node("n2")]))
+            .become_leader(&BTreeSet::from([
+                follower_id.clone(),
+                metadata_leader.clone(),
+            ]))
             .unwrap();
         let response = follower
             .handle_append_request(leader.append_request_from(1, 16).unwrap())
             .unwrap();
         leader
-            .record_append_response(&node("n1"), &response)
+            .record_append_response(&follower_id, &response)
             .unwrap();
         let extra = if all_nodes {
-            let mut zero = open(&node("n0"));
-            let response = zero
+            let mut extra = open(&extra_id);
+            let response = extra
                 .handle_append_request(leader.append_request_from(1, 16).unwrap())
                 .unwrap();
-            leader
-                .record_append_response(&node("n0"), &response)
-                .unwrap();
-            Some(Arc::new(Mutex::new(zero)))
+            leader.record_append_response(&extra_id, &response).unwrap();
+            Some(Arc::new(Mutex::new(extra)))
         } else {
             None
         };
         let mut consensus = BTreeMap::from([
-            (node("n1"), Arc::new(Mutex::new(follower))),
-            (node("n2"), Arc::new(Mutex::new(leader))),
+            (follower_id, Arc::new(Mutex::new(follower))),
+            (metadata_leader, Arc::new(Mutex::new(leader))),
         ]);
-        if let Some(zero) = extra {
-            consensus.insert(node("n0"), zero);
+        if let Some(extra) = extra {
+            consensus.insert(extra_id, extra);
         }
         let providers = consensus
             .iter()
@@ -1233,3 +1256,6 @@ fn native_completion_actual_tls_canceled_socket_after_real_persistence_recovers_
 
 #[cfg(test)]
 mod activation_smoke;
+
+#[cfg(test)]
+mod activation_tests;

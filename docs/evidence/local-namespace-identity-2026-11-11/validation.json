@@ -1,0 +1,340 @@
+{
+  "kind": "local_source_validation_not_qualification",
+  "source_commit": "b5a13033399ad2470b26a771b1a3035a27bb87ee",
+  "source_version": "1.0.466-beta",
+  "base_commit": "226d9fd80ecd9dbf249fd4fee5984b61311fed47",
+  "source_manifest": [
+    {
+      "path": "crates/bicdb-core/src/db.rs",
+      "sha256": "afbae35b97823751e7ff83467172d7e5a8e4dc9ad1e6f0c68a50d3beef350062"
+    },
+    {
+      "path": "crates/bicdb-core/src/db/collection_rename.rs",
+      "sha256": "da95e5eda0a084565a89998a232287d0b3fcb5d2b4263a99a7a369acf3c55f4d"
+    },
+    {
+      "path": "crates/bicdb-core/src/db/commit_snapshot.rs",
+      "sha256": "6e426d5343902fd9304f62c4886711f89c2605af326cf872b233a5322f774137"
+    },
+    {
+      "path": "crates/bicdb-core/src/db/local_namespace_identity.rs",
+      "sha256": "e5e1c3db56453975376b22fc1d34cc2a923105c1fbdcb0230722e6649951c936"
+    },
+    {
+      "path": "crates/bicdb-core/src/db/pitr_maintenance.rs",
+      "sha256": "40991ac92bf390ebe12860ef5fe4ee0ebab652bf12bbe64b5ac9ad212ff2c567"
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_data.rs",
+      "sha256": "325ce047624efff5aeedc3ab20686b1ce2909f0f62287c1d7fee066862f15b9d"
+    },
+    {
+      "path": "crates/bicdb-core/src/format.rs",
+      "sha256": "78ceeebc2c837e42d89bb8e17ffd3179a20508cb484033fe44d956a87c4690c3"
+    },
+    {
+      "path": "crates/bicdb-core/src/lib.rs",
+      "sha256": "4bf9448fe547bf82962b1751d247bfbc38c7211a44e50700594a477d803ae0bd"
+    },
+    {
+      "path": "crates/bicdb-core/src/record.rs",
+      "sha256": "b86e6740423fed2afc5e33fb59224fc41221ae0b04188574712cb5e477dcc310"
+    }
+  ],
+  "checks": [
+    {
+      "source_revision": "226d9fd80ecd9dbf249fd4fee5984b61311fed47",
+      "dirty_diff_sha256": "6e050c4d030ae0c8dd1f1fc0f3d5a43acc9f350518af6c59919054d154fca0a4",
+      "command": [
+        "cargo",
+        "test",
+        "--release",
+        "--locked",
+        "-p",
+        "bicdb-core",
+        "--config",
+        "profile.release.package.bicdb-core.opt-level=0",
+        "--config",
+        "profile.release.package.bicdb-core.debug=0",
+        "--lib",
+        "namespace_identity_",
+        "--",
+        "--nocapture"
+      ],
+      "environment": {
+        "CARGO_TARGET_DIR": "/tmp/bicdb-azure-artifact-target",
+        "CARGO_BUILD_JOBS": "1",
+        "CARGO_INCREMENTAL": "0",
+        "RUST_TEST_THREADS": "2"
+      },
+      "compiler": "rustc 1.96.0 (ac68faa20 2026-05-25)",
+      "start_unix": 1794394784.8076122,
+      "end_unix": 1794394850.862109,
+      "exit_code": 0,
+      "guard_stop_reason": null,
+      "pause_episodes": 0,
+      "minimum_available_bytes": 20873175040,
+      "test_result": {
+        "status": "ok",
+        "passed": 11,
+        "failed": 0,
+        "ignored": 1
+      },
+      "tested_source_commit": "b5a13033",
+      "source_state_note": "Base revision plus staged implementation; staged diff hashes include the new module and equal the committed implementation."
+    },
+    {
+      "source_revision": "226d9fd80ecd9dbf249fd4fee5984b61311fed47",
+      "dirty_diff_sha256": "6e050c4d030ae0c8dd1f1fc0f3d5a43acc9f350518af6c59919054d154fca0a4",
+      "command": [
+        "cargo",
+        "test",
+        "--release",
+        "--locked",
+        "-p",
+        "bicdb-core",
+        "--config",
+        "profile.release.package.bicdb-core.opt-level=0",
+        "--config",
+        "profile.release.package.bicdb-core.debug=0",
+        "--lib",
+        "namespace_identity_frozen_old_reader",
+        "--",
+        "--ignored",
+        "--nocapture"
+      ],
+      "environment": {
+        "CARGO_TARGET_DIR": "/tmp/bicdb-azure-artifact-target",
+        "CARGO_BUILD_JOBS": "1",
+        "CARGO_INCREMENTAL": "0",
+        "RUST_TEST_THREADS": "2"
+      },
+      "compiler": "rustc 1.96.0 (ac68faa20 2026-05-25)",
+      "start_unix": 1794394863.0875182,
+      "end_unix": 1794394865.1277676,
+      "exit_code": 0,
+      "guard_stop_reason": null,
+      "pause_episodes": 0,
+      "minimum_available_bytes": 22916493312,
+      "test_result": {
+        "status": "ok",
+        "passed": 1,
+        "failed": 0,
+        "ignored": 0
+      },
+      "tested_source_commit": "b5a13033",
+      "source_state_note": "Base revision plus staged implementation; staged diff hashes include the new module and equal the committed implementation."
+    },
+    {
+      "source_revision": "226d9fd80ecd9dbf249fd4fee5984b61311fed47",
+      "dirty_diff_sha256": "6e050c4d030ae0c8dd1f1fc0f3d5a43acc9f350518af6c59919054d154fca0a4",
+      "command": [
+        "cargo",
+        "test",
+        "--release",
+        "--locked",
+        "-p",
+        "bicdb-core",
+        "--config",
+        "profile.release.package.bicdb-core.opt-level=0",
+        "--config",
+        "profile.release.package.bicdb-core.debug=0",
+        "--lib",
+        "collection_rename",
+        "--",
+        "--nocapture"
+      ],
+      "environment": {
+        "CARGO_TARGET_DIR": "/tmp/bicdb-azure-artifact-target",
+        "CARGO_BUILD_JOBS": "1",
+        "CARGO_INCREMENTAL": "0",
+        "RUST_TEST_THREADS": "2"
+      },
+      "compiler": "rustc 1.96.0 (ac68faa20 2026-05-25)",
+      "start_unix": 1794394856.7022655,
+      "end_unix": 1794394857.7365556,
+      "exit_code": 0,
+      "guard_stop_reason": null,
+      "pause_episodes": 0,
+      "minimum_available_bytes": 22691246080,
+      "test_result": {
+        "status": "ok",
+        "passed": 1,
+        "failed": 0,
+        "ignored": 0
+      },
+      "tested_source_commit": "b5a13033",
+      "source_state_note": "Base revision plus staged implementation; staged diff hashes include the new module and equal the committed implementation."
+    },
+    {
+      "source_revision": "226d9fd80ecd9dbf249fd4fee5984b61311fed47",
+      "dirty_diff_sha256": "6e050c4d030ae0c8dd1f1fc0f3d5a43acc9f350518af6c59919054d154fca0a4",
+      "command": [
+        "cargo",
+        "test",
+        "--release",
+        "--locked",
+        "-p",
+        "bicdb-core",
+        "--config",
+        "profile.release.package.bicdb-core.opt-level=0",
+        "--config",
+        "profile.release.package.bicdb-core.debug=0",
+        "--lib",
+        "distribution",
+        "--",
+        "--nocapture"
+      ],
+      "environment": {
+        "CARGO_TARGET_DIR": "/tmp/bicdb-azure-artifact-target",
+        "CARGO_BUILD_JOBS": "1",
+        "CARGO_INCREMENTAL": "0",
+        "RUST_TEST_THREADS": "2"
+      },
+      "compiler": "rustc 1.96.0 (ac68faa20 2026-05-25)",
+      "start_unix": 1794394868.4869885,
+      "end_unix": 1794394874.5231564,
+      "exit_code": 0,
+      "guard_stop_reason": null,
+      "pause_episodes": 0,
+      "minimum_available_bytes": 22218305536,
+      "test_result": {
+        "status": "ok",
+        "passed": 167,
+        "failed": 0,
+        "ignored": 0
+      },
+      "tested_source_commit": "b5a13033",
+      "source_state_note": "Base revision plus staged implementation; staged diff hashes include the new module and equal the committed implementation."
+    }
+  ],
+  "guard": {
+    "available_memory_pause_bytes": 12884901888,
+    "available_memory_resume_bytes": 15032385536,
+    "available_memory_kill_bytes": 8589934592,
+    "memory_full_psi_pause_avg10_percent": 1.0,
+    "owned_process_group_only": true
+  },
+  "scope": {
+    "engine_cargo_profile": "release with bicdb-core opt-level=0 debug=0",
+    "full_suite": false,
+    "physical_faults": false,
+    "azure_resources": false,
+    "strong_reads_enabled": false,
+    "production_qualification": false
+  },
+  "old_reader": {
+    "source_version": "1.0.463-beta",
+    "source_commit": "d49a391b3c6157f90f29e9f2f5214143c60f9f4b",
+    "binary_sha256": "840f0124f27a1a7695c4b2b0c72b05a262456802af65e063cff12242559e2f7d",
+    "default_unit_case_ignored": true,
+    "explicit_ignored_case_executed": true,
+    "default_legacy_open": "passed",
+    "independent_unknown_flags_refused_without_mutation": [
+      "local_namespace_identity_v1",
+      "range_image_install_v1"
+    ]
+  },
+  "retained_evidence": [
+    {
+      "path": "checks/distribution-2-inputs.json",
+      "bytes": 687,
+      "sha256": "c4be7ac7d766adc6c20b3f6e6a67d8d4033fde6c5c0da8bb9bb2061d66bb41a6"
+    },
+    {
+      "path": "checks/distribution-2-resources.jsonl",
+      "bytes": 1637,
+      "sha256": "8c8a32642a1af88d037029c2124646e9b3f885ff3aef04ba53184e654c106343"
+    },
+    {
+      "path": "checks/distribution-2-result.json",
+      "bytes": 869,
+      "sha256": "42fd31812da20d53f07ecb3ee5569d21497ec5eebf82224f1f39cafbc5924fc0"
+    },
+    {
+      "path": "checks/distribution-2.stderr.gz",
+      "bytes": 7979,
+      "sha256": "d0574ce818ec72be6042de1236fcf3c83d104b6c3545bdb0d54792ae0befe7e4"
+    },
+    {
+      "path": "checks/distribution-2.stdout.gz",
+      "bytes": 4443,
+      "sha256": "434be937cc5faeba8e6d923b160bfafbdb5b6e27e12703cf82b0b462c19be7e7"
+    },
+    {
+      "path": "checks/focused-3-inputs.json",
+      "bytes": 694,
+      "sha256": "cff5b20570bb21531808d670d3789163182b95ccd9024ce093c82ac715b88656"
+    },
+    {
+      "path": "checks/focused-3-resources.jsonl",
+      "bytes": 18004,
+      "sha256": "d6594fd005d3966c8a5414c048685a424a559f0c1a894e0e6342e988c8e10e99"
+    },
+    {
+      "path": "checks/focused-3-result.json",
+      "bytes": 875,
+      "sha256": "21fec2f4e8148a4541136776bccb62fc68892897afc5d2102d8b0d166f2091af"
+    },
+    {
+      "path": "checks/focused-3.stderr.gz",
+      "bytes": 8034,
+      "sha256": "0eb914b2ba6c0797c6a2267620e56a8c2b1583ba5494d8ba491578562374a633"
+    },
+    {
+      "path": "checks/focused-3.stdout.gz",
+      "bytes": 580,
+      "sha256": "46c3820ed5ff11cfc059b7d79d87a4f838aee4d31badbc1514b7618c758dca75"
+    },
+    {
+      "path": "checks/old-reader-2-inputs.json",
+      "bytes": 728,
+      "sha256": "baaa835a4d525279f95f07d694d75c1afbaa09c44c4385b046f158b539a13fba"
+    },
+    {
+      "path": "checks/old-reader-2-resources.jsonl",
+      "bytes": 545,
+      "sha256": "888bb25a95dade8fbfb188887e2a11a37c44cd92e1f2b927a70c8653bb07febb"
+    },
+    {
+      "path": "checks/old-reader-2-result.json",
+      "bytes": 910,
+      "sha256": "660273919c3e10244a474e9eb320f19772c62df3b37a6d8e2af03fe821bd29bb"
+    },
+    {
+      "path": "checks/old-reader-2.stderr.gz",
+      "bytes": 7979,
+      "sha256": "54b46e100da359f6f0f3208ef8fd2ad4db9d49fb7fbb213c24e024ce8dc4260a"
+    },
+    {
+      "path": "checks/old-reader-2.stdout.gz",
+      "bytes": 235,
+      "sha256": "ca2fe4b493477fe43ee4afc48ad454974d69f2060f4d90507d94726122a117e9"
+    },
+    {
+      "path": "checks/rename-1-inputs.json",
+      "bytes": 692,
+      "sha256": "72bcd67560946737c1736d8672880d3597627b5e4617a3d8e3618377298714e7"
+    },
+    {
+      "path": "checks/rename-1-resources.jsonl",
+      "bytes": 273,
+      "sha256": "27792d4e1f978cbb32d5ac61d66056214f7796ab28f49e4b0776f6c67255a870"
+    },
+    {
+      "path": "checks/rename-1-result.json",
+      "bytes": 874,
+      "sha256": "00abb05708038e135025fa84dfd4b57b93fe865a5e438b6b254218b01a70b040"
+    },
+    {
+      "path": "checks/rename-1.stderr.gz",
+      "bytes": 7979,
+      "sha256": "abc193373b6dbf41d836129a178dae79658ebddd4f15bb27b6f7e612f14e5dea"
+    },
+    {
+      "path": "checks/rename-1.stdout.gz",
+      "bytes": 173,
+      "sha256": "1fb4d39fa71c95efe050067f2030a1cb67e4b6a46e475503f4e6a1f849dd1a38"
+    }
+  ]
+}

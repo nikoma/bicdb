@@ -1,0 +1,2 @@
+{"unix": 1794394863.1272976, "available_bytes": 22916493312, "swap_free_bytes": 53248, "disk_free_bytes": 33950609408, "memory_pressure": "some avg10=0.00 avg60=0.03 avg300=0.04 total=4749549320\nfull avg10=0.00 avg60=0.03 avg300=0.04 total=4577616889\n", "paused": false}
+{"unix": 1794394864.127638, "available_bytes": 23086845952, "swap_free_bytes": 53248, "disk_free_bytes": 33950474240, "memory_pressure": "some avg10=0.00 avg60=0.02 avg300=0.04 total=4749567307\nfull avg10=0.00 avg60=0.02 avg300=0.04 total=4577634828\n", "paused": false}

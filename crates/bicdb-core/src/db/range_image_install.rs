@@ -133,7 +133,23 @@ pub(crate) struct NativeInstalledRangeImageBase {
     database_incarnation: String,
     schema_generation: u64,
 }
+
+/// Actual target-global snapshot/durability domain, distinct from consensus R
+/// and from the source's reservation B. Only a native installed base issues it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct TargetNativeImageSnapshotBound(u64);
+impl TargetNativeImageSnapshotBound {
+    pub(crate) fn get(self) -> u64 {
+        self.0
+    }
+}
 impl NativeInstalledRangeImageBase {
+    pub(crate) fn target_snapshot_bound(&self) -> TargetNativeImageSnapshotBound {
+        TargetNativeImageSnapshotBound(self.receipt.reserved_db_upper_bound)
+    }
+    pub(crate) fn target_observed_min_snapshot_sequence(&self) -> u64 {
+        self.receipt.min_snapshot_db_sequence
+    }
     pub(crate) fn attempt_id(&self) -> Uuid {
         self.receipt.attempt_id
     }

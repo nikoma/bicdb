@@ -67,6 +67,25 @@ fn host_metadata_actual_tls_follower_observes_without_generic_range_leadership()
 }
 
 #[test]
+fn host_metadata_actual_tls_metadata_leader_observes_over_its_actual_listener() {
+    let fixture = NetworkFixture::new_ready_network(true, true, false);
+    let business = Uuid::now_v7();
+    let observation = fixture.clients[&node("n2")]
+        .acquire_host_metadata_observation(
+            &node("n2"),
+            business,
+            Duration::from_secs(5),
+            &CancellationToken::uncancelable(),
+        )
+        .unwrap();
+    let topology = observation.committed_topology(business).unwrap();
+    assert_eq!(observation.requester_node_id(), &node("n2"));
+    assert_eq!(topology.ranges.values().next().unwrap().leader, node("n1"));
+    assert!(observation.read_index() > 0 && observation.term() > 0);
+    fixture.wait_idle();
+}
+
+#[test]
 fn host_metadata_actual_tls_unassigned_learner_observes_but_cannot_supply_quorum() {
     let mut fixture = learner_fixture();
     let parent = CancellationToken::uncancelable();

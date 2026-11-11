@@ -576,8 +576,9 @@ fn actual_interrupted_normal_image_cold_resume_is_characterized_without_forged_c
             cold.databases[&source_id]
                 .read()
                 .get(&mutation.collection, &mutation.record_id)
-                .unwrap(),
-            mutation.record
+                .unwrap()
+                .as_deref(),
+            mutation.record.as_ref()
         );
     }
     assert_eq!(

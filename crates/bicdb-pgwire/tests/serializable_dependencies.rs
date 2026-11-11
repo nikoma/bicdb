@@ -222,6 +222,33 @@ async fn serializable_tracks_row_and_predicate_dependencies() {
         );
         a.batch_execute("ROLLBACK").await.unwrap();
 
+        peer.batch_execute(
+            "CREATE INDEX ssi_scope_value ON ssi_scope(v); UPDATE ssi_scope SET v=10 WHERE id=1",
+        )
+        .await
+        .unwrap();
+        a.batch_execute("BEGIN ISOLATION LEVEL SERIALIZABLE READ ONLY; SELECT 1")
+            .await
+            .unwrap();
+        b.batch_execute(
+            "BEGIN ISOLATION LEVEL SERIALIZABLE; UPDATE ssi_scope SET v=11 WHERE id=1; COMMIT",
+        )
+        .await
+        .unwrap();
+        let rows = a
+            .query("SELECT id FROM ssi_scope WHERE v=10 ORDER BY id", &[])
+            .await
+            .unwrap()
+            .into_iter()
+            .map(|row| row.get::<_, i32>(0))
+            .collect::<Vec<_>>();
+        assert_eq!(
+            rows,
+            [1],
+            "{mode:?}: a secondary-key lookup lost a row visible to the fixed snapshot"
+        );
+        a.batch_execute("COMMIT").await.unwrap();
+
         drop((a, b, peer));
         a_task.abort();
         b_task.abort();

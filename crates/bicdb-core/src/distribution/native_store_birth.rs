@@ -72,7 +72,10 @@ pub(crate) fn validate_native_store_birth_transition(
         let old = previous.nodes.get(id);
         if let Some(old) = old {
             if old.incarnation != node.incarnation
-                && (old.native_store_birth_v1.is_some() || node.native_store_birth_v1.is_some())
+                && (previous.range_image_bootstrap_id.is_some()
+                    || next.range_image_bootstrap_id.is_some()
+                    || old.native_store_birth_v1.is_some()
+                    || node.native_store_birth_v1.is_some())
                 && (node.incarnation <= old.incarnation
                     || old.lifecycle != ClusterNodeLifecycle::Decommissioned
                     || !is_unassigned_metadata_learner(next, node))
@@ -105,7 +108,10 @@ pub(crate) fn validate_native_store_birth_snapshot(
     for (id, node) in &next.nodes {
         if let Some(old) = previous.nodes.get(id) {
             if old.incarnation != node.incarnation
-                && (old.native_store_birth_v1.is_some() || node.native_store_birth_v1.is_some())
+                && (previous.range_image_bootstrap_id.is_some()
+                    || next.range_image_bootstrap_id.is_some()
+                    || old.native_store_birth_v1.is_some()
+                    || node.native_store_birth_v1.is_some())
                 && node.incarnation <= old.incarnation
             {
                 return Err(cluster_error("native store incarnation cannot regress"));
@@ -144,14 +150,25 @@ pub(crate) fn validate_native_store_birth_preservation(
         ));
     }
     for (id, old) in &previous.nodes {
-        if old.native_store_birth_v1.is_none() {
+        let unbound_native_voter = old.native_store_birth_v1.is_none()
+            && (previous.range_image_bootstrap_id.is_some()
+                || next.range_image_bootstrap_id.is_some())
+            && has_voter_identity(previous, old);
+        if old.native_store_birth_v1.is_none() && !unbound_native_voter {
             continue;
         }
         let node = next.nodes.get(id).ok_or_else(|| {
-            cluster_error("enrolled native store node must retain its identity tombstone")
+            cluster_error("known native store voter must retain its identity tombstone")
         })?;
         if old.incarnation == node.incarnation {
-            if old.native_store_birth_v1 != node.native_store_birth_v1 {
+            if unbound_native_voter && node.metadata_role == MetadataMemberRole::Learner {
+                return Err(cluster_error(
+                    "unbound native voter cannot become a learner within the same incarnation",
+                ));
+            }
+            if old.native_store_birth_v1.is_some()
+                && old.native_store_birth_v1 != node.native_store_birth_v1
+            {
                 return Err(cluster_error(
                     "native store birth is immutable within a node incarnation",
                 ));
@@ -168,6 +185,15 @@ pub(crate) fn validate_native_store_birth_preservation(
 fn is_unassigned_metadata_learner(topology: &ClusterTopology, node: &ClusterNode) -> bool {
     node.metadata_role == MetadataMemberRole::Learner
         && !topology.ranges.values().any(|range| {
+            range.replicas.iter().any(|replica| {
+                replica.node_id == node.id && replica.role == RangeReplicaRole::Voter
+            })
+        })
+}
+
+fn has_voter_identity(topology: &ClusterTopology, node: &ClusterNode) -> bool {
+    node.metadata_role == MetadataMemberRole::Voter
+        || topology.ranges.values().any(|range| {
             range.replicas.iter().any(|replica| {
                 replica.node_id == node.id && replica.role == RangeReplicaRole::Voter
             })

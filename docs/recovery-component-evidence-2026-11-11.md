@@ -10,6 +10,7 @@ historical tested version below.
 | [Fresh recovery receiver foundation](evidence/fresh-recovery-receiver-2026-11-11/README.md) | `bcddd35a` equivalent to pinned `9979638e` plus retained patch; package 1.0.466-beta | 44 distinct focused tests, 45 executions | Fresh roles, fences, quorum observations, native local physical proof and mutation ownership; later historical Apply/RPC collection excluded |
 | [Native catalogue adoption and historical replay](evidence/native-catalogue-historical-recovery-2026-11-11/README.md) | `9e37d812369de61bb9489ce5415d73d47fdcef35`; package 1.0.471-beta | 38 distinct focused tests | Actual image catalogue adoption and fresh local WAL replay after checkpoint/reopen; recovery still blocks ordinary new writes |
 | [Coherent participant source composition](evidence/recovery-participant-compose-471-2026-11-11/README.md) | `5d70669eec9fcea8f9963894ef73d243ef9d208f`; package 1.0.471-beta | 55 distinct focused tests | New recipient RPC collector and recovery-to-installer lease compile; neither new path was exercised in this bundle |
+| [Local preparation and authenticated receiver](evidence/native-prepared-receiver-2026-11-11/README.md) | `d440c58ebc962f1e62374d86faecbfcc051e2bbf`; package 1.0.471-beta | 40 distinct focused tests | Actual mTLS historical receiver and owned lease components; durable local preparation still grants no NativeReadyQQ or RecoveryComplete |
 
 The bundles overlap; their counts must not be added. Each retains commands,
 resource samples, warnings, prior failed attempts and source bytes or a complete
@@ -27,7 +28,9 @@ historical Apply scenarios into authenticated remote receiver tests. Those
 scenarios use actual fsynced native stores, quorum observations and local WAL
 callbacks. A declared new metadata epoch/leader in a fixture is not an observed
 automatic election. Later source or runtime experiments need separate receipts;
-they do not retroactively extend these results.
+they do not retroactively extend these results. The separate 40-test receipt
+executes authenticated historical receiver collection on its own pinned source;
+that does not change the earlier 55-test bundle's compiled-only boundary.
 
 No bundle establishes physical scale-out, sustained throughput gain, hardware
 RPO/RTO or production p50/p95/p99. Actual RecoveryComplete, ordinary new writes
@@ -46,6 +49,8 @@ PYTHONDONTWRITEBYTECODE=1 python3 docs/evidence/fresh-recovery-receiver-2026-11-
 PYTHONDONTWRITEBYTECODE=1 python3 docs/evidence/fresh-recovery-receiver-2026-11-11/test_verify.py
 PYTHONDONTWRITEBYTECODE=1 python3 docs/evidence/recovery-participant-compose-471-2026-11-11/verify.py --repo .
 PYTHONDONTWRITEBYTECODE=1 python3 docs/evidence/recovery-participant-compose-471-2026-11-11/test_verify.py
+PYTHONDONTWRITEBYTECODE=1 python3 docs/evidence/native-prepared-receiver-2026-11-11/verify.py --repo .
+PYTHONDONTWRITEBYTECODE=1 python3 docs/evidence/native-prepared-receiver-2026-11-11/test_verify.py
 ```
 
 The catalogue/replay bundle retains its exact manifest, compressed source

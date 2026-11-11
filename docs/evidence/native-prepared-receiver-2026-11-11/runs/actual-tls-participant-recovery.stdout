@@ -1,0 +1,8 @@
+
+running 3 tests
+test db::range_image_native::rf3_fixture::native_historical_tls::actual_mtls_participant_collection_holds_no_recipient_service_or_database_latch ... ok
+test db::range_image_native::rf3_fixture::native_historical_tls::actual_mtls_participant_current_quorum_recovers_without_old_data_leader_and_rejects_stale_scope ... ok
+test db::range_image_native::rf3_fixture::native_historical_tls::actual_mtls_unwired_participant_receiver_refuses_without_materializing ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 653 filtered out; finished in 8.28s
+

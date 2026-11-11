@@ -27,6 +27,8 @@ historical tested version below.
 
 | [Sparse committed-decision source recovery](evidence/native-sparse-source-tail-2026-11-11/README.md) | `0d58359b07c31b38ed432e0a72ef7996ee2544b7`; package 1.0.471-beta | **3 distinct PASS**; separate codec pass at `1e6e3a0a`; two prior failures retained | Actual lagging voter stores full committed1026 without data/raw advancement; current quorum lets source reach native/Ready1026 and 1025 ACK digests match. Behind image repair/cold sparse reissue not tested by this cohort |
 
+| [Native ordinary Apply and catch-up](evidence/native-normal-apply-2026-11-11/README.md) | `18723cf4f1ddbb01e37f3762067b30000707cadb`; separate prior `87f1da00` cohort; package 1.0.471-beta | **5 distinct PASS**, with **7 earlier origin PASS** kept separate | Actual mTLS retained-command catch-up, new writes, duplicate preservation and wrong-actor/domain refusals. Original exact before-Prepare2 regression not rerun here; successful DB archives/external ACK ledgers not retained |
+
 The bundles overlap; their counts must not be added. Each retains commands,
 resource samples, warnings, prior failed attempts and source bytes or a complete
 patch against a pinned public source. The 44-test bundle includes its exact
@@ -62,9 +64,10 @@ No bundle establishes physical scale-out, sustained throughput gain, hardware
 RPO/RTO or production p50/p95/p99. The activation receipt exercises a trusted
 local Runtime activation API after actual authenticated completion observations;
 it does not establish an incoming Activate endpoint or operator/controller
-integration. Ordinary remote native Apply/catch-up, complete audit/sync/broker
-effects, StrongGet and fault-safe four-to-five-node relocation remain outside
-these claims. The late follower's current R2 catch-up remains **not tested**;
+integration. Ordinary native Apply and retained-command catch-up have the separate local/mTLS
+component evidence above; this does not establish the complete recovery/serving
+lifecycle. Complete audit/sync/broker effects, StrongGet and fault-safe
+four-to-five-node relocation remain outside these claims. The late follower's current R2 catch-up remains **not tested**;
 the original Azure visibility cause and convergence cause remain **inconclusive**.
 All failures above are private-prototype findings unless a receipt explicitly
 identifies a public runtime; no source-level fix alone establishes qualification. General distributed SQL and atomic

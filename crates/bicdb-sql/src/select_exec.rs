@@ -436,6 +436,9 @@ pub(crate) fn row_value_from_parts_opt(row: &SqlRow, parts: &[String]) -> Option
     if let Some(value) = row_value_for_key(row, &full_key) {
         return Some(value.clone());
     }
+    if crate::slot_types::current_schema_qualifier_matches(parts) == Some(false) {
+        return None;
+    }
     let qualified_column = format!("{}.{}", parts[0], parts[1]);
     if let Some(value) = row_value_for_key(row, &qualified_column) {
         return if parts.len() == 2 {

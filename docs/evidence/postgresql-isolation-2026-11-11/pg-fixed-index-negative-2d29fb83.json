@@ -1,0 +1,23 @@
+{
+  "label": "pg-fixed-index-negative-2d29fb83",
+  "source": "2d29fb83b8986786f40d1ccfdd435b1c608c13ba",
+  "base": "c097e1c5e78f1a39ef176ab80ca5a0eda1c3489e",
+  "repo": "/root/bicdb-pg-isolation-delivery",
+  "scope": "Tests-only negative control against integrated RR/SSI runtime. Historical secondary equality/ranges, bounded ordered winner, MIN/MAX, GIN, and primary rows independently across writable/read-only RR/SSI in both stores. Preserve actual failures; no claim of correctness from prior SSI-only index controls.",
+  "commands": [
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-pgwire",
+      "--test",
+      "fixed_snapshot_index_visibility",
+      "--",
+      "--nocapture"
+    ]
+  ]
+}

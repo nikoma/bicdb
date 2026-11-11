@@ -1,0 +1,50 @@
+{
+  "server_version": "16.13 (Debian 16.13-1.pgdg13+1)",
+  "results": [
+    {
+      "key": "numeric equality",
+      "action": "plain INSERT",
+      "sqlstate": "23505"
+    },
+    {
+      "key": "numeric equality",
+      "action": "ON CONFLICT DO NOTHING",
+      "sqlstate": "40001"
+    },
+    {
+      "key": "numeric equality",
+      "action": "ON CONFLICT (id) DO UPDATE SET v=excluded.v",
+      "sqlstate": "40001"
+    },
+    {
+      "key": "json equality",
+      "action": "plain INSERT",
+      "sqlstate": "23505"
+    },
+    {
+      "key": "json equality",
+      "action": "ON CONFLICT DO NOTHING",
+      "sqlstate": "40001"
+    },
+    {
+      "key": "json equality",
+      "action": "ON CONFLICT (k) DO UPDATE SET v=excluded.v",
+      "sqlstate": "40001"
+    },
+    {
+      "key": "partial index",
+      "action": "plain INSERT",
+      "sqlstate": "23505"
+    },
+    {
+      "key": "partial index",
+      "action": "ON CONFLICT DO NOTHING",
+      "sqlstate": "40001"
+    },
+    {
+      "key": "partial index",
+      "action": "ON CONFLICT (k) WHERE live DO UPDATE SET v=excluded.v",
+      "sqlstate": "40001"
+    }
+  ]
+}

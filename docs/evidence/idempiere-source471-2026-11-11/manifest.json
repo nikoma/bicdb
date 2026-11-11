@@ -1,0 +1,342 @@
+{
+  "source": "b0e2498842be7b01e355bb8da1cc249ff16be056",
+  "source_version": "1.0.471-beta",
+  "cli_binary_sha256": "e23d7c1a078b7ce6722237f35cfa67a822727d9762c928c808f3ce2767c543c2",
+  "scope": "Historical source471 original application suites, unchanged native-Oracle UI comparisons, single-user workflow and four-session SIGKILL/reopen ACK proof. Not validation of the PR151 candidate carrying this evidence.",
+  "collected_unix": 1794429906.5902178,
+  "artifacts": [
+    {
+      "file": "oracle-complete-original-audit.json.gz",
+      "source": "/root/.local/state/bicdb/typed-compare/main471-b0e24988/oracle-complete-original-audit.json",
+      "raw_sha256": "30108127e724be29966a2ca9ea9830e1b7c9802f2a71d532313a5c1a87d116b5",
+      "artifact_sha256": "4e84848df6c34234c914daa1ca34be51c14e78a113181ee9529e6b806dfa8698",
+      "raw_bytes": 851618,
+      "artifact_bytes": 52547
+    },
+    {
+      "file": "oracle-native-comparison-final.json",
+      "source": "/root/.local/state/bicdb/typed-compare/main471-b0e24988/oracle-native-comparison-final.json",
+      "raw_sha256": "1f8fff83b3bb1092445a9cd918375029e6af7c7bb10d1cbb6e9e896299771582",
+      "artifact_sha256": "1f8fff83b3bb1092445a9cd918375029e6af7c7bb10d1cbb6e9e896299771582",
+      "raw_bytes": 23642,
+      "artifact_bytes": 23642
+    },
+    {
+      "file": "pg-complete-original-audit.json.gz",
+      "source": "/root/.local/state/bicdb/typed-compare/main471-b0e24988/pg-complete-original-audit.json",
+      "raw_sha256": "c561e29a13898ea94e1edc738fe28c4aaf31aa83c5c260c7a436695747c45af0",
+      "artifact_sha256": "a94cae2a558e5b7150d0f22c9105d26cbc725348b258533d8af40c064ffc0656",
+      "raw_bytes": 901032,
+      "artifact_bytes": 54433
+    },
+    {
+      "file": "pg-native-comparison-final.json",
+      "source": "/root/.local/state/bicdb/typed-compare/main471-b0e24988/pg-native-comparison-final.json",
+      "raw_sha256": "89d710e1cf53d599b8e0e0db1402a06ae39890f7721d0f22472d074487677a72",
+      "artifact_sha256": "89d710e1cf53d599b8e0e0db1402a06ae39890f7721d0f22472d074487677a72",
+      "raw_bytes": 54452,
+      "artifact_bytes": 54452
+    },
+    {
+      "file": "ui-single-user-workflow.json",
+      "source": "/root/.local/state/bicdb/typed-compare/main471-ui-browser/workflow-verification.json",
+      "raw_sha256": "eb75ee4b7f9d60d94909bd9668fad3a5c37b08f6d23f2f477a9efb5b5a9274b7",
+      "artifact_sha256": "eb75ee4b7f9d60d94909bd9668fad3a5c37b08f6d23f2f477a9efb5b5a9274b7",
+      "raw_bytes": 1277,
+      "artifact_bytes": 1277
+    },
+    {
+      "file": "ui-single-user-browser-record.json.gz",
+      "source": "/root/.local/state/bicdb/typed-compare/main471-ui-browser/record.json",
+      "raw_sha256": "2e835a039949ea31132f5a836c464121e817a08212b5e9dfed8e73766633d764",
+      "artifact_sha256": "efed9b57d2df772c1a719d9c5a96b7342e58f462b12e0376e580e25daa7fbf44",
+      "raw_bytes": 377312,
+      "artifact_bytes": 19341
+    },
+    {
+      "file": "fresh-session-order-retrieval.json",
+      "source": "/root/.local/state/bicdb/typed-compare/main471-ui-browser/fresh-session-order-retrieval.json",
+      "raw_sha256": "aacef6d31d564005ab7ee326aac6668bd9d58c9b460d5c6873ac640c5c02a6d8",
+      "artifact_sha256": "aacef6d31d564005ab7ee326aac6668bd9d58c9b460d5c6873ac640c5c02a6d8",
+      "raw_bytes": 1758,
+      "artifact_bytes": 1758
+    },
+    {
+      "file": "order-completed-sql-observation.json",
+      "source": "/root/.local/state/bicdb/typed-compare/main471-ui-browser/order-completed-sql-observation.json",
+      "raw_sha256": "81f3551643abd70174351ed39fb5c97032b9038e98bc1f9dbae9ed96839385f6",
+      "artifact_sha256": "81f3551643abd70174351ed39fb5c97032b9038e98bc1f9dbae9ed96839385f6",
+      "raw_bytes": 1482,
+      "artifact_bytes": 1482
+    },
+    {
+      "file": "invoice-completed-posted-sql-observation.json",
+      "source": "/root/.local/state/bicdb/typed-compare/main471-ui-browser/invoice-completed-posted-sql-observation.json",
+      "raw_sha256": "ae4ffb99e356af5cec5692323336c95e780d747c3f1a4a607d69b9354d1cc5b0",
+      "artifact_sha256": "ae4ffb99e356af5cec5692323336c95e780d747c3f1a4a607d69b9354d1cc5b0",
+      "raw_bytes": 2734,
+      "artifact_bytes": 2734
+    },
+    {
+      "file": "payment-completed-allocated-posted-sql-observation.json",
+      "source": "/root/.local/state/bicdb/typed-compare/main471-ui-browser/payment-completed-allocated-posted-sql-observation.json",
+      "raw_sha256": "8749b9a1f756640e82c3c7841437bea8ce0acea4ed32bf130f0468b1af7d547b",
+      "artifact_sha256": "8749b9a1f756640e82c3c7841437bea8ce0acea4ed32bf130f0468b1af7d547b",
+      "raw_bytes": 5003,
+      "artifact_bytes": 5003
+    },
+    {
+      "file": "ui-rendered-order-report.png",
+      "source": "/root/.local/state/bicdb/typed-compare/main471-ui-browser/capture-042.png",
+      "raw_sha256": "48d31594380ad98acc6b2acb710fa324de34bc13a9bb6d1ae6d8165e2c66db15",
+      "artifact_sha256": "48d31594380ad98acc6b2acb710fa324de34bc13a9bb6d1ae6d8165e2c66db15",
+      "raw_bytes": 161539,
+      "artifact_bytes": 161539
+    },
+    {
+      "file": "native-preference-race-comparison.json",
+      "source": "/root/.local/state/bicdb/typed-compare/main471-ui-load-v1/native-preference-race-comparison.json",
+      "raw_sha256": "7bd7b3daaeb32cb03e82476c872ff94102bfc489e6dd1c0198b7c69463f21b4a",
+      "artifact_sha256": "7bd7b3daaeb32cb03e82476c872ff94102bfc489e6dd1c0198b7c69463f21b4a",
+      "raw_bytes": 2309,
+      "artifact_bytes": 2309
+    },
+    {
+      "file": "native-listbox-race-comparison.json",
+      "source": "/root/.local/state/bicdb/typed-compare/main471-ui-load-v2/native-listbox-race-comparison.json",
+      "raw_sha256": "a76aa19af0f19790f4cc51915def268734ad9cb17ec5320c5c205851a9bb6432",
+      "artifact_sha256": "a76aa19af0f19790f4cc51915def268734ad9cb17ec5320c5c205851a9bb6432",
+      "raw_bytes": 13473,
+      "artifact_bytes": 13473
+    },
+    {
+      "file": "load-v2-final-ack-reconciliation.json",
+      "source": "/root/.local/state/bicdb/typed-compare/main471-ui-load-v2/final-ack-reconciliation.json",
+      "raw_sha256": "8f4e50c67d3297f69dcfe61ac463d545198ab831f01107551f09fe4804027c2a",
+      "artifact_sha256": "8f4e50c67d3297f69dcfe61ac463d545198ab831f01107551f09fe4804027c2a",
+      "raw_bytes": 906,
+      "artifact_bytes": 906
+    },
+    {
+      "file": "load-v2-final-ack-snapshot.json.gz",
+      "source": "/root/.local/state/bicdb/typed-compare/main471-ui-load-v2/final-ack-snapshot.json",
+      "raw_sha256": "b4465ff8d1dd86f42601ee205f4506ee8350b20dc2fe10ccaff633720017e450",
+      "artifact_sha256": "2c177ba95c73a5493b6f6024a2623aad062b9d5d8236829fa66b3180a1e530f2",
+      "raw_bytes": 70671,
+      "artifact_bytes": 7154
+    },
+    {
+      "file": "load-v2-final-row-capture.json.gz",
+      "source": "/root/.local/state/bicdb/typed-compare/main471-ui-load-v2/final-row-capture.json",
+      "raw_sha256": "e5c88665832d642969e492d2677262c56c29b36b65f680f53f499faac2720de5",
+      "artifact_sha256": "4f22ee3a8fe23815c8713a7e16576c08a0ae65e62596b74f4106162415e4cf3f",
+      "raw_bytes": 65047,
+      "artifact_bytes": 3382
+    },
+    {
+      "file": "load-v3-field-state-failure.json",
+      "source": "/root/.local/state/bicdb/typed-compare/main471-ui-load-v3/result.json",
+      "raw_sha256": "a6759381282647ca0d91f090d759ba02202ece35ce8de7c682f9d7d33740c5e1",
+      "artifact_sha256": "a6759381282647ca0d91f090d759ba02202ece35ce8de7c682f9d7d33740c5e1",
+      "raw_bytes": 9805,
+      "artifact_bytes": 9805
+    },
+    {
+      "file": "native-original-oracle-cold-login-result.json",
+      "source": "/root/.local/state/bicdb/native-oracle-app/ui-login-control-v3/result.json",
+      "raw_sha256": "b83aae6513df2da6cee3311e3fc543e57dd31ed3300a060169db24937d9289ec",
+      "artifact_sha256": "b83aae6513df2da6cee3311e3fc543e57dd31ed3300a060169db24937d9289ec",
+      "raw_bytes": 2827,
+      "artifact_bytes": 2827
+    },
+    {
+      "file": "native-original-oracle-listbox-result.json",
+      "source": "/root/.local/state/bicdb/native-oracle-app/native-ui-warm-load-v1/result.json",
+      "raw_sha256": "0af586e14f737f158c8a4bfd6b4bd32184cb9bc48ac3f8c2a08938580f9d4107",
+      "artifact_sha256": "0af586e14f737f158c8a4bfd6b4bd32184cb9bc48ac3f8c2a08938580f9d4107",
+      "raw_bytes": 15827,
+      "artifact_bytes": 15827
+    },
+    {
+      "file": "native-cold-login-ui-lifecycle.json",
+      "source": "/root/.local/state/bicdb/native-oracle-app/ui-control-v3.json",
+      "raw_sha256": "e65b9b4362fa45fec31c402d0abaf2719b5b5f4e7ca40a25eaa8db4fa1ce8354",
+      "artifact_sha256": "e65b9b4362fa45fec31c402d0abaf2719b5b5f4e7ca40a25eaa8db4fa1ce8354",
+      "raw_bytes": 813,
+      "artifact_bytes": 813
+    },
+    {
+      "file": "native-listbox-ui-lifecycle.json",
+      "source": "/root/.local/state/bicdb/native-oracle-app/ui-control-v4.json",
+      "raw_sha256": "0b5252cbcca086162af8c1b556869c4ae255d98e21d8a5a4ea4d5d8414d70bd7",
+      "artifact_sha256": "0b5252cbcca086162af8c1b556869c4ae255d98e21d8a5a4ea4d5d8414d70bd7",
+      "raw_bytes": 814,
+      "artifact_bytes": 814
+    },
+    {
+      "file": "ui-bytecode-comparison.json",
+      "source": "/root/.local/state/bicdb/native-oracle-app/ui-bytecode-comparison.json",
+      "raw_sha256": "d3e1a8528ad2b84938261473bb4bf450f07ba3fa4e9960671ef9ac2b62d7267f",
+      "artifact_sha256": "d3e1a8528ad2b84938261473bb4bf450f07ba3fa4e9960671ef9ac2b62d7267f",
+      "raw_bytes": 981,
+      "artifact_bytes": 981
+    },
+    {
+      "file": "warm-ui-workload-bytecode-shape.json",
+      "source": "/root/.local/state/bicdb/native-oracle-app/warm-ui-workload-bytecode-shape.json",
+      "raw_sha256": "44ed3e00df50f3f5ebe001027de2e8bc960c552b0187c73ebf66b646e08dfa01",
+      "artifact_sha256": "44ed3e00df50f3f5ebe001027de2e8bc960c552b0187c73ebf66b646e08dfa01",
+      "raw_bytes": 399,
+      "artifact_bytes": 399
+    },
+    {
+      "file": "ui-native-engine-and-restored-clone-state.log",
+      "source": "/root/.local/state/bicdb/native-oracle-app/ui-native-engine-and-restored-clone-state.log",
+      "raw_sha256": "8219aee909298d765729e0d6b5760031960a9104e9d2170f182550ef34c6737c",
+      "artifact_sha256": "8219aee909298d765729e0d6b5760031960a9104e9d2170f182550ef34c6737c",
+      "raw_bytes": 127,
+      "artifact_bytes": 127
+    },
+    {
+      "file": "independent-crash-verification.json",
+      "source": "/root/.local/state/bicdb/typed-compare/main471-ui-load-v4/independent-crash-verification.json",
+      "raw_sha256": "845fce68f1e6fcb922467cc930853fd62746ec68449fda9e0ec7f0bd7adc7c80",
+      "artifact_sha256": "845fce68f1e6fcb922467cc930853fd62746ec68449fda9e0ec7f0bd7adc7c80",
+      "raw_bytes": 1838,
+      "artifact_bytes": 1838
+    },
+    {
+      "file": "crash-raw-two-reopens.json",
+      "source": "/root/.local/state/bicdb/typed-compare/main471-ui-load-v4/remote-recovery-capture.json",
+      "raw_sha256": "3d48fd635cec70ea104fa97198c08fa2752ae79dce1a85d3bf43d8f89ef30cab",
+      "artifact_sha256": "3d48fd635cec70ea104fa97198c08fa2752ae79dce1a85d3bf43d8f89ef30cab",
+      "raw_bytes": 37698,
+      "artifact_bytes": 37698
+    },
+    {
+      "file": "crash-coordinator.json",
+      "source": "/root/.local/state/bicdb/typed-compare/main471-ui-load-v4/crash-coordinator.json",
+      "raw_sha256": "9433af88a337485db5f7c4dafe9ba418a1f8d3c75cf0b59b9d1ea637eb35a064",
+      "artifact_sha256": "9433af88a337485db5f7c4dafe9ba418a1f8d3c75cf0b59b9d1ea637eb35a064",
+      "raw_bytes": 1126,
+      "artifact_bytes": 1126
+    },
+    {
+      "file": "crash-original-worker-result.json",
+      "source": "/root/.local/state/bicdb/typed-compare/main471-ui-load-v4/result.json",
+      "raw_sha256": "7310c86fb26923eb47822dc3373d5e7166197421507bf515ee37126ac51f9818",
+      "artifact_sha256": "7310c86fb26923eb47822dc3373d5e7166197421507bf515ee37126ac51f9818",
+      "raw_bytes": 4891,
+      "artifact_bytes": 4891
+    },
+    {
+      "file": "crash-client-acks.sqlite",
+      "source": "/root/.local/state/bicdb/typed-compare/main471-ui-load-v4/client-acks.sqlite",
+      "raw_sha256": "e3ba06536f7dbba337dee3c1c5f01b43660ce276abb54c5cee2d5defc5b970aa",
+      "artifact_sha256": "e3ba06536f7dbba337dee3c1c5f01b43660ce276abb54c5cee2d5defc5b970aa",
+      "raw_bytes": 4096,
+      "artifact_bytes": 4096
+    },
+    {
+      "file": "main471-ui-load-v4-worker-shape.json",
+      "source": "/root/.local/state/bicdb/typed-compare/main471-ui-load-v4-worker-shape.json",
+      "raw_sha256": "732c69da98972712d050ffd4741e5bcadb32414bb1eb3d90883d3205a10fbf42",
+      "artifact_sha256": "732c69da98972712d050ffd4741e5bcadb32414bb1eb3d90883d3205a10fbf42",
+      "raw_bytes": 710,
+      "artifact_bytes": 710
+    },
+    {
+      "file": "remote-cut-and-recovery.log.gz",
+      "source": "/root/.local/state/bicdb/typed-compare/main471-ui-load-v4/remote-cut-and-recovery.log",
+      "raw_sha256": "7a28e2952bf5a437a93aab68306451784c6c21118b61fabead5827dd121186af",
+      "artifact_sha256": "39be317b0c1414af3c92f94f330a48de63e33a082ef5a1a22982e38320297edc",
+      "raw_bytes": 19493,
+      "artifact_bytes": 1991
+    },
+    {
+      "file": "run_main471_ui_load_v4.py",
+      "source": "/root/.local/state/bicdb/typed-compare/run_main471_ui_load_v4.py",
+      "raw_sha256": "5c2baa1aff056cc6499e0422301e7949d86de1673bfabb2226472ca8d1efb6ee",
+      "artifact_sha256": "5c2baa1aff056cc6499e0422301e7949d86de1673bfabb2226472ca8d1efb6ee",
+      "raw_bytes": 12149,
+      "artifact_bytes": 12149
+    },
+    {
+      "file": "coordinate_ui471_load_v4_crash.py",
+      "source": "/root/.local/state/bicdb/typed-compare/coordinate_ui471_load_v4_crash.py",
+      "raw_sha256": "744f3c6963fdcda679c68739b88e588943f9973fefa6c0bf9e0fe7782f8608db",
+      "artifact_sha256": "744f3c6963fdcda679c68739b88e588943f9973fefa6c0bf9e0fe7782f8608db",
+      "raw_bytes": 4206,
+      "artifact_bytes": 4206
+    },
+    {
+      "file": "cut_and_recover_main471_ui_load_v4.py",
+      "source": "/root/.local/state/bicdb/typed-compare/cut_and_recover_main471_ui_load_v4.py",
+      "raw_sha256": "a193c8c59a661b15b9e5db668e8bd97cb6c44e744feb9640bfc75f7a5f1a7150",
+      "artifact_sha256": "a193c8c59a661b15b9e5db668e8bd97cb6c44e744feb9640bfc75f7a5f1a7150",
+      "raw_bytes": 7529,
+      "artifact_bytes": 7529
+    },
+    {
+      "file": "verify_ui471_load_v4_crash.py",
+      "source": "/root/.local/state/bicdb/typed-compare/verify_ui471_load_v4_crash.py",
+      "raw_sha256": "fa7c70ecd08af6f8dae4e1e856918b24967fe7908a67a269fc887154a1211dbc",
+      "artifact_sha256": "fa7c70ecd08af6f8dae4e1e856918b24967fe7908a67a269fc887154a1211dbc",
+      "raw_bytes": 6463,
+      "artifact_bytes": 6463
+    },
+    {
+      "file": "run_native_ui_warm_load_v1.py",
+      "source": "/root/.local/state/bicdb/native-oracle-app/run_native_ui_warm_load_v1.py",
+      "raw_sha256": "6f0406e3fbf5f7f16b8ecb2b4ac1ce95f4328fd98503185d378f783e101db04f",
+      "artifact_sha256": "6f0406e3fbf5f7f16b8ecb2b4ac1ce95f4328fd98503185d378f783e101db04f",
+      "raw_bytes": 10965,
+      "artifact_bytes": 10965
+    },
+    {
+      "file": "control_native_ui_concurrent_login_v3.py",
+      "source": "/root/.local/state/bicdb/native-oracle-app/control_native_ui_concurrent_login_v3.py",
+      "raw_sha256": "507a2e086f82e9c8290f8d638b6be69851b15910e6414919840484d5bed966d8",
+      "artifact_sha256": "507a2e086f82e9c8290f8d638b6be69851b15910e6414919840484d5bed966d8",
+      "raw_bytes": 5321,
+      "artifact_bytes": 5321
+    },
+    {
+      "file": "ui-protected-source-before-v3.json.gz",
+      "source": "/root/.local/state/bicdb/native-oracle-app/ui-protected-source-before-v3.json",
+      "raw_sha256": "0487b453d2c912213e70b8c27430e8cb97a7cd6ab88f48ac621e25171b459575",
+      "artifact_sha256": "2e0bd2945b851fa2279ad442fa5d8bd7221df9785af5c01be907319d93333fd7",
+      "raw_bytes": 3905550,
+      "artifact_bytes": 197859
+    },
+    {
+      "file": "ui-protected-source-after-v3.json.gz",
+      "source": "/root/.local/state/bicdb/native-oracle-app/ui-protected-source-after-v3.json",
+      "raw_sha256": "0487b453d2c912213e70b8c27430e8cb97a7cd6ab88f48ac621e25171b459575",
+      "artifact_sha256": "2e0bd2945b851fa2279ad442fa5d8bd7221df9785af5c01be907319d93333fd7",
+      "raw_bytes": 3905550,
+      "artifact_bytes": 197859
+    },
+    {
+      "file": "ui-protected-source-before-v4.json.gz",
+      "source": "/root/.local/state/bicdb/native-oracle-app/ui-protected-source-before-v4.json",
+      "raw_sha256": "0487b453d2c912213e70b8c27430e8cb97a7cd6ab88f48ac621e25171b459575",
+      "artifact_sha256": "2e0bd2945b851fa2279ad442fa5d8bd7221df9785af5c01be907319d93333fd7",
+      "raw_bytes": 3905550,
+      "artifact_bytes": 197859
+    },
+    {
+      "file": "ui-protected-source-after-v4.json.gz",
+      "source": "/root/.local/state/bicdb/native-oracle-app/ui-protected-source-after-v4.json",
+      "raw_sha256": "0487b453d2c912213e70b8c27430e8cb97a7cd6ab88f48ac621e25171b459575",
+      "artifact_sha256": "2e0bd2945b851fa2279ad442fa5d8bd7221df9785af5c01be907319d93333fd7",
+      "raw_bytes": 3905550,
+      "artifact_bytes": 197859
+    },
+    {
+      "file": "native-class-loader-provenance.json",
+      "artifact_sha256": "149e553232b4c1c15d909ecadac90ab866f17e64e0e5a426fc66acd2fd6f0dc4",
+      "artifact_bytes": 1927
+    }
+  ]
+}

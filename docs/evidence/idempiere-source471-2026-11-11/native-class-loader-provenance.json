@@ -1,0 +1,22 @@
+[
+  {
+    "mode": "v3",
+    "whole_log_sha256": "b36f81b75c7e9106772271b27b702bc08cec0bc34dcd050b7ca93618d738a436",
+    "actual_loader_lines": [
+      "[18.395s][info][class,load] oracle.jdbc.OracleDriver source: file:/tmp/bicdb-idempiere-reference-20261101/org.idempiere.p2/target/products/org.adempiere.server.product/linux/gtk/x86_64/plugins/wrapped.com.oracle.database.jdbc.ojdbc17_23.26.0.0.jar",
+      "[26.298s][info][class,load] org.adempiere.webui.util.UserPreference source: file:/tmp/bicdb-idempiere-reference-20261101/org.idempiere.p2/target/products/org.adempiere.server.product/linux/gtk/x86_64/plugins/org.adempiere.ui.zk_13.0.0.202611011311/",
+      "[31.503s][info][class,load] org.adempiere.webui.panel.RolePanel source: file:/tmp/bicdb-idempiere-reference-20261101/org.idempiere.p2/target/products/org.adempiere.server.product/linux/gtk/x86_64/plugins/org.adempiere.ui.zk_13.0.0.202611011311/"
+    ],
+    "sdk_adapter_driver_loaded": false
+  },
+  {
+    "mode": "v4",
+    "whole_log_sha256": "6c10c2340e2cfe94cc506cd393d6aa149726fa61ff54bd63c3ccc8c03592f1ea",
+    "actual_loader_lines": [
+      "[19.820s][info][class,load] oracle.jdbc.OracleDriver source: file:/tmp/bicdb-idempiere-reference-20261101/org.idempiere.p2/target/products/org.adempiere.server.product/linux/gtk/x86_64/plugins/wrapped.com.oracle.database.jdbc.ojdbc17_23.26.0.0.jar",
+      "[27.530s][info][class,load] org.adempiere.webui.util.UserPreference source: file:/tmp/bicdb-idempiere-reference-20261101/org.idempiere.p2/target/products/org.adempiere.server.product/linux/gtk/x86_64/plugins/org.adempiere.ui.zk_13.0.0.202611011311/",
+      "[32.705s][info][class,load] org.adempiere.webui.panel.RolePanel source: file:/tmp/bicdb-idempiere-reference-20261101/org.idempiere.p2/target/products/org.adempiere.server.product/linux/gtk/x86_64/plugins/org.adempiere.ui.zk_13.0.0.202611011311/"
+    ],
+    "sdk_adapter_driver_loaded": false
+  }
+]

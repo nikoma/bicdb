@@ -1,0 +1,2169 @@
+memory_available_kib=42129432 swap_free_kib=2715476 cgroup_current_bytes=4337664 cgroup_anon_bytes=3858432 cgroup_kernel_bytes=618496 cgroup_max_bytes=17179869184 memory_psi_avg10=0.00 cgroup_memory_psi_avg10=0.00
+memory_available_kib=42132336 swap_free_kib=2718804 cgroup_current_bytes=9314304 cgroup_anon_bytes=8720384 cgroup_kernel_bytes=606208 cgroup_max_bytes=17179869184 memory_psi_avg10=0.00 cgroup_memory_psi_avg10=0.00
+memory_available_kib=41769876 swap_free_kib=2720596 cgroup_current_bytes=9428992 cgroup_anon_bytes=8724480 cgroup_kernel_bytes=602112 cgroup_max_bytes=17179869184 memory_psi_avg10=0.00 cgroup_memory_psi_avg10=0.00
+memory_available_kib=44480344 swap_free_kib=2722644 cgroup_current_bytes=9281536 cgroup_anon_bytes=8728576 cgroup_kernel_bytes=598016 cgroup_max_bytes=17179869184 memory_psi_avg10=0.00 cgroup_memory_psi_avg10=0.00
+memory_available_kib=43279120 swap_free_kib=2722644 cgroup_current_bytes=9281536 cgroup_anon_bytes=8720384 cgroup_kernel_bytes=593920 cgroup_max_bytes=17179869184 memory_psi_avg10=0.00 cgroup_memory_psi_avg10=0.00
+memory_available_kib=43438132 swap_free_kib=2722644 cgroup_current_bytes=9302016 cgroup_anon_bytes=8724480 cgroup_kernel_bytes=598016 cgroup_max_bytes=17179869184 memory_psi_avg10=0.00 cgroup_memory_psi_avg10=0.00
+memory_available_kib=42566668 swap_free_kib=2722644 cgroup_current_bytes=9310208 cgroup_anon_bytes=8724480 cgroup_kernel_bytes=589824 cgroup_max_bytes=17179869184 memory_psi_avg10=0.00 cgroup_memory_psi_avg10=0.00
+memory_available_kib=41853468 swap_free_kib=2723668 cgroup_current_bytes=9285632 cgroup_anon_bytes=8728576 cgroup_kernel_bytes=602112 cgroup_max_bytes=17179869184 memory_psi_avg10=0.00 cgroup_memory_psi_avg10=0.00
+memory_available_kib=40120276 swap_free_kib=2723668 cgroup_current_bytes=9289728 cgroup_anon_bytes=8728576 cgroup_kernel_bytes=606208 cgroup_max_bytes=17179869184 memory_psi_avg10=0.00 cgroup_memory_psi_avg10=0.00
+memory_available_kib=40574528 swap_free_kib=2438604 cgroup_current_bytes=9265152 cgroup_anon_bytes=8724480 cgroup_kernel_bytes=602112 cgroup_max_bytes=17179869184 memory_psi_avg10=0.00 cgroup_memory_psi_avg10=0.00
+memory_available_kib=40067844 swap_free_kib=2439628 cgroup_current_bytes=9150464 cgroup_anon_bytes=8728576 cgroup_kernel_bytes=593920 cgroup_max_bytes=17179869184 memory_psi_avg10=0.00 cgroup_memory_psi_avg10=0.00
+memory_available_kib=39527264 swap_free_kib=2443724 cgroup_current_bytes=9674752 cgroup_anon_bytes=8724480 cgroup_kernel_bytes=598016 cgroup_max_bytes=17179869184 memory_psi_avg10=0.00 cgroup_memory_psi_avg10=0.00
+memory_available_kib=38801320 swap_free_kib=2444236 cgroup_current_bytes=9379840 cgroup_anon_bytes=8728576 cgroup_kernel_bytes=598016 cgroup_max_bytes=17179869184 memory_psi_avg10=0.00 cgroup_memory_psi_avg10=0.00
+memory_available_kib=39874672 swap_free_kib=2444236 cgroup_current_bytes=9412608 cgroup_anon_bytes=8724480 cgroup_kernel_bytes=598016 cgroup_max_bytes=17179869184 memory_psi_avg10=0.00 cgroup_memory_psi_avg10=0.00
+memory_available_kib=39668696 swap_free_kib=2446028 cgroup_current_bytes=9281536 cgroup_anon_bytes=8724480 cgroup_kernel_bytes=598016 cgroup_max_bytes=17179869184 memory_psi_avg10=0.00 cgroup_memory_psi_avg10=0.00
+memory_available_kib=38776648 swap_free_kib=2446028 cgroup_current_bytes=9482240 cgroup_anon_bytes=8728576 cgroup_kernel_bytes=602112 cgroup_max_bytes=17179869184 memory_psi_avg10=0.00 cgroup_memory_psi_avg10=0.00
+memory_available_kib=38924172 swap_free_kib=2448332 cgroup_current_bytes=9273344 cgroup_anon_bytes=8720384 cgroup_kernel_bytes=598016 cgroup_max_bytes=17179869184 memory_psi_avg10=0.00 cgroup_memory_psi_avg10=0.00
+memory_available_kib=39161748 swap_free_kib=2448332 cgroup_current_bytes=9768960 cgroup_anon_bytes=8724480 cgroup_kernel_bytes=602112 cgroup_max_bytes=17179869184 memory_psi_avg10=0.00 cgroup_memory_psi_avg10=0.00
+memory_available_kib=40986328 swap_free_kib=2448588 cgroup_current_bytes=9363456 cgroup_anon_bytes=8720384 cgroup_kernel_bytes=610304 cgroup_max_bytes=17179869184 memory_psi_avg10=0.24 cgroup_memory_psi_avg10=0.00
+memory_available_kib=41189928 swap_free_kib=2448588 cgroup_current_bytes=9416704 cgroup_anon_bytes=8724480 cgroup_kernel_bytes=593920 cgroup_max_bytes=17179869184 memory_psi_avg10=0.16 cgroup_memory_psi_avg10=0.00
+memory_available_kib=40001884 swap_free_kib=2448588 cgroup_current_bytes=9240576 cgroup_anon_bytes=8720384 cgroup_kernel_bytes=602112 cgroup_max_bytes=17179869184 memory_psi_avg10=0.08 cgroup_memory_psi_avg10=0.00
+memory_available_kib=40946728 swap_free_kib=2448588 cgroup_current_bytes=9367552 cgroup_anon_bytes=8724480 cgroup_kernel_bytes=598016 cgroup_max_bytes=17179869184 memory_psi_avg10=0.05 cgroup_memory_psi_avg10=0.00
+memory_available_kib=40262188 swap_free_kib=2448588 cgroup_current_bytes=9523200 cgroup_anon_bytes=8724480 cgroup_kernel_bytes=598016 cgroup_max_bytes=17179869184 memory_psi_avg10=0.03 cgroup_memory_psi_avg10=0.00
+memory_available_kib=43337380 swap_free_kib=2448588 cgroup_current_bytes=9277440 cgroup_anon_bytes=8724480 cgroup_kernel_bytes=598016 cgroup_max_bytes=17179869184 memory_psi_avg10=0.02 cgroup_memory_psi_avg10=0.00
+memory_available_kib=40422972 swap_free_kib=2448588 cgroup_current_bytes=9428992 cgroup_anon_bytes=8724480 cgroup_kernel_bytes=598016 cgroup_max_bytes=17179869184 memory_psi_avg10=0.01 cgroup_memory_psi_avg10=0.00
+memory_available_kib=42831440 swap_free_kib=2448588 cgroup_current_bytes=9285632 cgroup_anon_bytes=8728576 cgroup_kernel_bytes=593920 cgroup_max_bytes=17179869184 memory_psi_avg10=0.00 cgroup_memory_psi_avg10=0.00
+memory_available_kib=43086588 swap_free_kib=2448588 cgroup_current_bytes=9183232 cgroup_anon_bytes=8720384 cgroup_kernel_bytes=602112 cgroup_max_bytes=17179869184 memory_psi_avg10=0.00 cgroup_memory_psi_avg10=0.00
+memory_available_kib=42667636 swap_free_kib=2448588 cgroup_current_bytes=9736192 cgroup_anon_bytes=8724480 cgroup_kernel_bytes=598016 cgroup_max_bytes=17179869184 memory_psi_avg10=0.00 cgroup_memory_psi_avg10=0.00
+memory_available_kib=43681652 swap_free_kib=2449100 cgroup_current_bytes=9531392 cgroup_anon_bytes=8728576 cgroup_kernel_bytes=598016 cgroup_max_bytes=17179869184 memory_psi_avg10=0.00 cgroup_memory_psi_avg10=0.00
+memory_available_kib=43350780 swap_free_kib=2449868 cgroup_current_bytes=9490432 cgroup_anon_bytes=8724480 cgroup_kernel_bytes=602112 cgroup_max_bytes=17179869184 memory_psi_avg10=0.00 cgroup_memory_psi_avg10=0.00
+memory_available_kib=43150456 swap_free_kib=2449868 cgroup_current_bytes=9256960 cgroup_anon_bytes=8724480 cgroup_kernel_bytes=614400 cgroup_max_bytes=17179869184 memory_psi_avg10=0.00 cgroup_memory_psi_avg10=0.00
+memory_available_kib=43540780 swap_free_kib=2449868 cgroup_current_bytes=9347072 cgroup_anon_bytes=8724480 cgroup_kernel_bytes=598016 cgroup_max_bytes=17179869184 memory_psi_avg10=0.00 cgroup_memory_psi_avg10=0.00
+memory_available_kib=43030292 swap_free_kib=2449868 cgroup_current_bytes=9527296 cgroup_anon_bytes=8724480 cgroup_kernel_bytes=614400 cgroup_max_bytes=17179869184 memory_psi_avg10=0.00 cgroup_memory_psi_avg10=0.00
+memory_available_kib=42235968 swap_free_kib=2451404 cgroup_current_bytes=9199616 cgroup_anon_bytes=8720384 cgroup_kernel_bytes=598016 cgroup_max_bytes=17179869184 memory_psi_avg10=0.00 cgroup_memory_psi_avg10=0.00
+memory_available_kib=41870084 swap_free_kib=2451404 cgroup_current_bytes=9273344 cgroup_anon_bytes=8724480 cgroup_kernel_bytes=598016 cgroup_max_bytes=17179869184 memory_psi_avg10=0.00 cgroup_memory_psi_avg10=0.00
+memory_available_kib=41045244 swap_free_kib=2451404 cgroup_current_bytes=9408512 cgroup_anon_bytes=8728576 cgroup_kernel_bytes=593920 cgroup_max_bytes=17179869184 memory_psi_avg10=0.00 cgroup_memory_psi_avg10=0.00
+memory_available_kib=40745756 swap_free_kib=2451404 cgroup_current_bytes=9535488 cgroup_anon_bytes=8728576 cgroup_kernel_bytes=593920 cgroup_max_bytes=17179869184 memory_psi_avg10=0.00 cgroup_memory_psi_avg10=0.00
+memory_available_kib=44081788 swap_free_kib=2455244 cgroup_current_bytes=9793536 cgroup_anon_bytes=8724480 cgroup_kernel_bytes=630784 cgroup_max_bytes=17179869184 memory_psi_avg10=0.00 cgroup_memory_psi_avg10=0.00
+memory_available_kib=44049032 swap_free_kib=2455756 cgroup_current_bytes=9506816 cgroup_anon_bytes=8724480 cgroup_kernel_bytes=593920 cgroup_max_bytes=17179869184 memory_psi_avg10=0.00 cgroup_memory_psi_avg10=0.00
+memory_available_kib=45405396 swap_free_kib=2456268 cgroup_current_bytes=9138176 cgroup_anon_bytes=8720384 cgroup_kernel_bytes=602112 cgroup_max_bytes=17179869184 memory_psi_avg10=0.00 cgroup_memory_psi_avg10=0.00
+memory_available_kib=44230372 swap_free_kib=2456268 cgroup_current_bytes=9183232 cgroup_anon_bytes=8724480 cgroup_kernel_bytes=610304 cgroup_max_bytes=17179869184 memory_psi_avg10=0.00 cgroup_memory_psi_avg10=0.00
+memory_available_kib=45415280 swap_free_kib=2458828 cgroup_current_bytes=9256960 cgroup_anon_bytes=8724480 cgroup_kernel_bytes=593920 cgroup_max_bytes=17179869184 memory_psi_avg10=0.00 cgroup_memory_psi_avg10=0.00
+memory_available_kib=44673708 swap_free_kib=2460108 cgroup_current_bytes=9662464 cgroup_anon_bytes=8724480 cgroup_kernel_bytes=610304 cgroup_max_bytes=17179869184 memory_psi_avg10=0.00 cgroup_memory_psi_avg10=0.00
+memory_available_kib=45100868 swap_free_kib=2460876 cgroup_current_bytes=9420800 cgroup_anon_bytes=8720384 cgroup_kernel_bytes=593920 cgroup_max_bytes=17179869184 memory_psi_avg10=0.00 cgroup_memory_psi_avg10=0.00
+memory_available_kib=43754160 swap_free_kib=2461644 cgroup_current_bytes=9699328 cgroup_anon_bytes=8724480 cgroup_kernel_bytes=622592 cgroup_max_bytes=17179869184 memory_psi_avg10=0.00 cgroup_memory_psi_avg10=0.00
+memory_available_kib=43365056 swap_free_kib=2463436 cgroup_current_bytes=9437184 cgroup_anon_bytes=8728576 cgroup_kernel_bytes=598016 cgroup_max_bytes=17179869184 memory_psi_avg10=0.00 cgroup_memory_psi_avg10=0.00
+memory_available_kib=41244084 swap_free_kib=2463436 cgroup_current_bytes=9691136 cgroup_anon_bytes=8728576 cgroup_kernel_bytes=606208 cgroup_max_bytes=17179869184 memory_psi_avg10=0.00 cgroup_memory_psi_avg10=0.00
+memory_available_kib=39139192 swap_free_kib=2463436 cgroup_current_bytes=9129984 cgroup_anon_bytes=8720384 cgroup_kernel_bytes=598016 cgroup_max_bytes=17179869184 memory_psi_avg10=0.00 cgroup_memory_psi_avg10=0.00
+memory_available_kib=38935432 swap_free_kib=2463436 cgroup_current_bytes=9158656 cgroup_anon_bytes=8720384 cgroup_kernel_bytes=598016 cgroup_max_bytes=17179869184 memory_psi_avg10=0.00 cgroup_memory_psi_avg10=0.00
+memory_available_kib=39101620 swap_free_kib=2463948 cgroup_current_bytes=9359360 cgroup_anon_bytes=8724480 cgroup_kernel_bytes=618496 cgroup_max_bytes=17179869184 memory_psi_avg10=0.00 cgroup_memory_psi_avg10=0.00
+memory_available_kib=38533556 swap_free_kib=2464068 cgroup_current_bytes=9420800 cgroup_anon_bytes=8724480 cgroup_kernel_bytes=606208 cgroup_max_bytes=17179869184 memory_psi_avg10=0.14 cgroup_memory_psi_avg10=0.00
+memory_available_kib=37373860 swap_free_kib=2464836 cgroup_current_bytes=9170944 cgroup_anon_bytes=8728576 cgroup_kernel_bytes=602112 cgroup_max_bytes=17179869184 memory_psi_avg10=0.08 cgroup_memory_psi_avg10=0.00
+memory_available_kib=38845432 swap_free_kib=2464836 cgroup_current_bytes=9486336 cgroup_anon_bytes=8724480 cgroup_kernel_bytes=614400 cgroup_max_bytes=17179869184 memory_psi_avg10=0.05 cgroup_memory_psi_avg10=0.00
+memory_available_kib=39169076 swap_free_kib=2465860 cgroup_current_bytes=9498624 cgroup_anon_bytes=8724480 cgroup_kernel_bytes=593920 cgroup_max_bytes=17179869184 memory_psi_avg10=0.02 cgroup_memory_psi_avg10=0.00
+memory_available_kib=38959368 swap_free_kib=2465860 cgroup_current_bytes=9281536 cgroup_anon_bytes=8724480 cgroup_kernel_bytes=630784 cgroup_max_bytes=17179869184 memory_psi_avg10=0.01 cgroup_memory_psi_avg10=0.00
+memory_available_kib=38917648 swap_free_kib=2469444 cgroup_current_bytes=9375744 cgroup_anon_bytes=8724480 cgroup_kernel_bytes=622592 cgroup_max_bytes=17179869184 memory_psi_avg10=0.00 cgroup_memory_psi_avg10=0.00
+memory_available_kib=38270584 swap_free_kib=2469700 cgroup_current_bytes=9904128 cgroup_anon_bytes=8720384 cgroup_kernel_bytes=610304 cgroup_max_bytes=17179869184 memory_psi_avg10=0.00 cgroup_memory_psi_avg10=0.00
+memory_available_kib=38914648 swap_free_kib=2469956 cgroup_current_bytes=9285632 cgroup_anon_bytes=8724480 cgroup_kernel_bytes=593920 cgroup_max_bytes=17179869184 memory_psi_avg10=0.00 cgroup_memory_psi_avg10=0.00
+memory_available_kib=37993656 swap_free_kib=2470212 cgroup_current_bytes=9375744 cgroup_anon_bytes=8728576 cgroup_kernel_bytes=602112 cgroup_max_bytes=17179869184 memory_psi_avg10=0.00 cgroup_memory_psi_avg10=0.00
+memory_available_kib=38110744 swap_free_kib=2470212 cgroup_current_bytes=9289728 cgroup_anon_bytes=8724480 cgroup_kernel_bytes=593920 cgroup_max_bytes=17179869184 memory_psi_avg10=0.00 cgroup_memory_psi_avg10=0.00
+memory_available_kib=36697184 swap_free_kib=2470212 cgroup_current_bytes=9166848 cgroup_anon_bytes=8720384 cgroup_kernel_bytes=598016 cgroup_max_bytes=17179869184 memory_psi_avg10=0.00 cgroup_memory_psi_avg10=0.00
+memory_available_kib=37615720 swap_free_kib=2470212 cgroup_current_bytes=9449472 cgroup_anon_bytes=8728576 cgroup_kernel_bytes=593920 cgroup_max_bytes=17179869184 memory_psi_avg10=0.00 cgroup_memory_psi_avg10=0.00
+memory_available_kib=38263432 swap_free_kib=2470212 cgroup_current_bytes=9486336 cgroup_anon_bytes=8720384 cgroup_kernel_bytes=610304 cgroup_max_bytes=17179869184 memory_psi_avg10=0.00 cgroup_memory_psi_avg10=0.00
+memory_available_kib=37759152 swap_free_kib=2470724 cgroup_current_bytes=9510912 cgroup_anon_bytes=8724480 cgroup_kernel_bytes=598016 cgroup_max_bytes=17179869184 memory_psi_avg10=0.00 cgroup_memory_psi_avg10=0.00
+memory_available_kib=36851540 swap_free_kib=2470724 cgroup_current_bytes=9244672 cgroup_anon_bytes=8724480 cgroup_kernel_bytes=598016 cgroup_max_bytes=17179869184 memory_psi_avg10=0.00 cgroup_memory_psi_avg10=0.00
+memory_available_kib=38655612 swap_free_kib=2470724 cgroup_current_bytes=9129984 cgroup_anon_bytes=8724480 cgroup_kernel_bytes=593920 cgroup_max_bytes=17179869184 memory_psi_avg10=0.00 cgroup_memory_psi_avg10=0.00
+memory_available_kib=40666100 swap_free_kib=2472260 cgroup_current_bytes=9699328 cgroup_anon_bytes=8724480 cgroup_kernel_bytes=593920 cgroup_max_bytes=17179869184 memory_psi_avg10=0.00 cgroup_memory_psi_avg10=0.00
+memory_available_kib=40678676 swap_free_kib=2472260 cgroup_current_bytes=9420800 cgroup_anon_bytes=8724480 cgroup_kernel_bytes=598016 cgroup_max_bytes=17179869184 memory_psi_avg10=0.00 cgroup_memory_psi_avg10=0.00
+memory_available_kib=40500468 swap_free_kib=2472260 cgroup_current_bytes=9736192 cgroup_anon_bytes=8724480 cgroup_kernel_bytes=602112 cgroup_max_bytes=17179869184 memory_psi_avg10=0.00 cgroup_memory_psi_avg10=0.00
+memory_available_kib=40511744 swap_free_kib=2472260 cgroup_current_bytes=9302016 cgroup_anon_bytes=8724480 cgroup_kernel_bytes=598016 cgroup_max_bytes=17179869184 memory_psi_avg10=0.00 cgroup_memory_psi_avg10=0.00
+memory_available_kib=39731688 swap_free_kib=2472516 cgroup_current_bytes=9195520 cgroup_anon_bytes=8724480 cgroup_kernel_bytes=602112 cgroup_max_bytes=17179869184 memory_psi_avg10=0.00 cgroup_memory_psi_avg10=0.00
+memory_available_kib=39044544 swap_free_kib=2472516 cgroup_current_bytes=9502720 cgroup_anon_bytes=8724480 cgroup_kernel_bytes=610304 cgroup_max_bytes=17179869184 memory_psi_avg10=0.00 cgroup_memory_psi_avg10=0.00
+memory_available_kib=39102848 swap_free_kib=2472516 cgroup_current_bytes=9416704 cgroup_anon_bytes=8728576 cgroup_kernel_bytes=593920 cgroup_max_bytes=17179869184 memory_psi_avg10=0.00 cgroup_memory_psi_avg10=0.00
+memory_available_kib=38608640 swap_free_kib=2472772 cgroup_current_bytes=9490432 cgroup_anon_bytes=8720384 cgroup_kernel_bytes=602112 cgroup_max_bytes=17179869184 memory_psi_avg10=0.00 cgroup_memory_psi_avg10=0.00
+memory_available_kib=38974836 swap_free_kib=2472772 cgroup_current_bytes=9502720 cgroup_anon_bytes=8724480 cgroup_kernel_bytes=610304 cgroup_max_bytes=17179869184 memory_psi_avg10=0.00 cgroup_memory_psi_avg10=0.00
+memory_available_kib=37145536 swap_free_kib=2474052 cgroup_current_bytes=9654272 cgroup_anon_bytes=8728576 cgroup_kernel_bytes=602112 cgroup_max_bytes=17179869184 memory_psi_avg10=0.00 cgroup_memory_psi_avg10=0.00
+memory_available_kib=37220964 swap_free_kib=2474052 cgroup_current_bytes=9641984 cgroup_anon_bytes=8720384 cgroup_kernel_bytes=593920 cgroup_max_bytes=17179869184 memory_psi_avg10=0.00 cgroup_memory_psi_avg10=0.00
+memory_available_kib=35636356 swap_free_kib=2474052 cgroup_current_bytes=9306112 cgroup_anon_bytes=8724480 cgroup_kernel_bytes=610304 cgroup_max_bytes=17179869184 memory_psi_avg10=0.00 cgroup_memory_psi_avg10=0.00
+memory_available_kib=37007600 swap_free_kib=2473284 cgroup_current_bytes=9302016 cgroup_anon_bytes=8728576 cgroup_kernel_bytes=598016 cgroup_max_bytes=17179869184 memory_psi_avg10=0.00 cgroup_memory_psi_avg10=0.00
+memory_available_kib=38121732 swap_free_kib=2473284 cgroup_current_bytes=9523200 cgroup_anon_bytes=8724480 cgroup_kernel_bytes=602112 cgroup_max_bytes=17179869184 memory_psi_avg10=0.00 cgroup_memory_psi_avg10=0.00
+memory_available_kib=38849184 swap_free_kib=2473284 cgroup_current_bytes=9396224 cgroup_anon_bytes=8724480 cgroup_kernel_bytes=593920 cgroup_max_bytes=17179869184 memory_psi_avg10=0.00 cgroup_memory_psi_avg10=0.00
+memory_available_kib=38164340 swap_free_kib=2473284 cgroup_current_bytes=9412608 cgroup_anon_bytes=8724480 cgroup_kernel_bytes=606208 cgroup_max_bytes=17179869184 memory_psi_avg10=0.00 cgroup_memory_psi_avg10=0.00
+memory_available_kib=38586560 swap_free_kib=2474820 cgroup_current_bytes=9736192 cgroup_anon_bytes=8724480 cgroup_kernel_bytes=610304 cgroup_max_bytes=17179869184 memory_psi_avg10=0.00 cgroup_memory_psi_avg10=0.00
+memory_available_kib=40875288 swap_free_kib=2474820 cgroup_current_bytes=10170368 cgroup_anon_bytes=8720384 cgroup_kernel_bytes=622592 cgroup_max_bytes=17179869184 memory_psi_avg10=0.00 cgroup_memory_psi_avg10=0.00
+memory_available_kib=41529788 swap_free_kib=2475076 cgroup_current_bytes=9519104 cgroup_anon_bytes=8716288 cgroup_kernel_bytes=622592 cgroup_max_bytes=17179869184 memory_psi_avg10=0.00 cgroup_memory_psi_avg10=0.00
+memory_available_kib=41717868 swap_free_kib=2475076 cgroup_current_bytes=9297920 cgroup_anon_bytes=8720384 cgroup_kernel_bytes=602112 cgroup_max_bytes=17179869184 memory_psi_avg10=0.00 cgroup_memory_psi_avg10=0.00
+memory_available_kib=39942236 swap_free_kib=2475076 cgroup_current_bytes=9302016 cgroup_anon_bytes=8720384 cgroup_kernel_bytes=593920 cgroup_max_bytes=17179869184 memory_psi_avg10=0.00 cgroup_memory_psi_avg10=0.00
+memory_available_kib=40248084 swap_free_kib=2475332 cgroup_current_bytes=9105408 cgroup_anon_bytes=8724480 cgroup_kernel_bytes=589824 cgroup_max_bytes=17179869184 memory_psi_avg10=0.00 cgroup_memory_psi_avg10=0.00
+memory_available_kib=41188552 swap_free_kib=2475844 cgroup_current_bytes=9297920 cgroup_anon_bytes=8728576 cgroup_kernel_bytes=593920 cgroup_max_bytes=17179869184 memory_psi_avg10=0.00 cgroup_memory_psi_avg10=0.00
+memory_available_kib=41954116 swap_free_kib=2475844 cgroup_current_bytes=9367552 cgroup_anon_bytes=8724480 cgroup_kernel_bytes=593920 cgroup_max_bytes=17179869184 memory_psi_avg10=0.00 cgroup_memory_psi_avg10=0.00
+memory_available_kib=44239324 swap_free_kib=2475844 cgroup_current_bytes=9224192 cgroup_anon_bytes=8720384 cgroup_kernel_bytes=598016 cgroup_max_bytes=17179869184 memory_psi_avg10=0.00 cgroup_memory_psi_avg10=0.00
+memory_available_kib=44324208 swap_free_kib=2475844 cgroup_current_bytes=9334784 cgroup_anon_bytes=8728576 cgroup_kernel_bytes=589824 cgroup_max_bytes=17179869184 memory_psi_avg10=0.00 cgroup_memory_psi_avg10=0.00
+memory_available_kib=42475596 swap_free_kib=2475844 cgroup_current_bytes=9306112 cgroup_anon_bytes=8724480 cgroup_kernel_bytes=598016 cgroup_max_bytes=17179869184 memory_psi_avg10=0.00 cgroup_memory_psi_avg10=0.00
+memory_available_kib=43861976 swap_free_kib=2475844 cgroup_current_bytes=9265152 cgroup_anon_bytes=8724480 cgroup_kernel_bytes=593920 cgroup_max_bytes=17179869184 memory_psi_avg10=0.00 cgroup_memory_psi_avg10=0.00
+memory_available_kib=43282896 swap_free_kib=2478148 cgroup_current_bytes=9555968 cgroup_anon_bytes=8720384 cgroup_kernel_bytes=610304 cgroup_max_bytes=17179869184 memory_psi_avg10=0.00 cgroup_memory_psi_avg10=0.00
+From /root/bicdb-durability-s3/host-control/pg-fixed-index-negative-2d29fb83.bundle
+ * [new ref]           HEAD       -> task-pg-fixed-index-negative-2d29fb83
+Previous HEAD position was c097e1c5 Integrate PostgreSQL writable repeatable read and SSI with current snapshot admission
+HEAD is now at 2d29fb83 Test indexed historical visibility independently for RR and Serializable
+warning: methods `node_kind`, `child_value`, and `child_for` are never used
+   --> crates/bicdb-page/src/btree.rs:376:16
+    |
+337 |         impl $ty {
+    |         -------- methods in this implementation
+...
+376 |             fn node_kind(&self, page_id: PageId) -> Result<bool> {
+    |                ^^^^^^^^^
+...
+389 |             fn child_value(&self, page_id: PageId, index: usize) -> Result<PageId> {
+    |                ^^^^^^^^^^^
+...
+430 |             fn child_for(&self, page_id: PageId, needle: &[u8]) -> Result<PageId> {
+    |                ^^^^^^^^^
+...
+449 | node_reads!(Node<'_>);
+    | --------------------- in this macro invocation
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+    = note: this warning originates in the macro `node_reads` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: methods `free_start`, `free_end`, `page_id`, `is_leaf`, and `free_space` are never used
+   --> crates/bicdb-page/src/btree.rs:349:16
+    |
+337 |         impl $ty {
+    |         -------- methods in this implementation
+...
+349 |             fn free_start(&self) -> usize {
+    |                ^^^^^^^^^^
+...
+354 |             fn free_end(&self) -> usize {
+    |                ^^^^^^^^
+...
+359 |             fn page_id(&self) -> PageId {
+    |                ^^^^^^^
+...
+368 |             fn is_leaf(&self) -> bool {
+    |                ^^^^^^^
+...
+442 |             fn free_space(&self) -> usize {
+    |                ^^^^^^^^^^
+...
+450 | node_reads!(NodeRef<'_>);
+    | ------------------------ in this macro invocation
+    |
+    = note: this warning originates in the macro `node_reads` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: `bicdb-page` (lib) generated 2 warnings
+warning: unused import: `bundle_event_for_stored`
+   --> crates/bicdb-core/src/db.rs:151:11
+    |
+151 |     self, bundle_event_for_stored, envelope_from_metadata, event_with_sync_metadata, EventEnvelope,
+    |           ^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `PathBuf`
+  --> crates/bicdb-core/src/aggregate_projection.rs:23:23
+   |
+23 | use std::path::{Path, PathBuf};
+   |                       ^^^^^^^
+
+warning: unused import: `Verifier`
+  --> crates/bicdb-core/src/db.rs:67:32
+   |
+67 | use ed25519_dalek::{Signature, Verifier, VerifyingKey};
+   |                                ^^^^^^^^
+
+warning: variable does not need to be mutable
+   --> crates/bicdb-core/src/db/collection_rename.rs:299:23
+    |
+299 |             if let Ok(mut state) = self.collection_state_mut(name) {
+    |                       ----^^^^^
+    |                       |
+    |                       help: remove this `mut`
+    |
+    = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `impact_seq`
+    --> crates/bicdb-core/src/db/fts_build.rs:2569:28
+     |
+2569 | ...                   impact_seq: &mut u32,
+     |                       ^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_impact_seq`
+     |
+     = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `sink`
+    --> crates/bicdb-core/src/db/fts_build.rs:2606:25
+     |
+2606 |             if let Some(sink) = &segment_sink {
+     |                         ^^^^ help: if this is intentional, prefix it with an underscore: `_sink`
+
+warning: variable does not need to be mutable
+    --> crates/bicdb-core/src/db/fts_query.rs:1287:13
+     |
+1287 |         let mut emit_tail = |index: usize,
+     |             ----^^^^^^^^^
+     |             |
+     |             help: remove this `mut`
+
+warning: variable does not need to be mutable
+    --> crates/bicdb-core/src/db/fts_query.rs:1875:13
+     |
+1875 |         let mut probe = |label: &str,
+     |             ----^^^^^
+     |             |
+     |             help: remove this `mut`
+
+warning: variable does not need to be mutable
+   --> crates/bicdb-core/src/db/index_build.rs:628:13
+    |
+628 |         let mut flush = |pending: &mut Vec<(u64, Vec<u8>)>,
+    |             ----^^^^^
+    |             |
+    |             help: remove this `mut`
+
+warning: variable does not need to be mutable
+    --> crates/bicdb-core/src/db/index_build.rs:1361:29
+     |
+1361 |                         let mut resolve = |pk: &str| -> Option<RowId> {
+     |                             ----^^^^^^^
+     |                             |
+     |                             help: remove this `mut`
+
+warning: variable does not need to be mutable
+     --> crates/bicdb-core/src/db.rs:22374:17
+      |
+22374 |             let mut apply = || -> Result<()> {
+      |                 ----^^^^^
+      |                 |
+      |                 help: remove this `mut`
+
+warning: variable does not need to be mutable
+     --> crates/bicdb-core/src/db.rs:24321:13
+      |
+24321 |         let mut consume = |triple: ImpactTriple,
+      |             ----^^^^^^^
+      |             |
+      |             help: remove this `mut`
+
+warning: variable does not need to be mutable
+     --> crates/bicdb-core/src/db.rs:27376:13
+      |
+27376 |         let mut file = fs::OpenOptions::new()
+      |             ----^^^^
+      |             |
+      |             help: remove this `mut`
+
+warning: unused variable: `collection`
+    --> crates/bicdb-core/src/paged_collection.rs:4556:13
+     |
+4556 |         let collection: &str = &physical;
+     |             ^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_collection`
+
+warning: variable does not need to be mutable
+   --> crates/bicdb-core/src/spatial_packed.rs:257:9
+    |
+257 |     let mut emit_leaf = |leaf: &mut Vec<PackedSpatialEntry>,
+    |         ----^^^^^^^^^
+    |         |
+    |         help: remove this `mut`
+
+warning: type `db::ClockPairTable` is more private than the item `access_mutation::<impl db::BicDb>::clock_pair_table`
+     --> crates/bicdb-core/src/db/access_mutation.rs:2337:5
+      |
+ 2337 |     pub(crate) fn clock_pair_table(&self) -> Result<ClockPairTable> {
+      |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ method `access_mutation::<impl db::BicDb>::clock_pair_table` is reachable at visibility `pub(crate)`
+      |
+note: but type `db::ClockPairTable` is only usable at visibility `pub(self)`
+     --> crates/bicdb-core/src/db.rs:21423:1
+      |
+21423 | struct ClockPairTable {
+      | ^^^^^^^^^^^^^^^^^^^^^
+      = note: `#[warn(private_interfaces)]` on by default
+
+warning: type `db::PitrAuditBatch` is more private than the item `access_mutation::<impl db::BicDb>::pitr_audit_batch`
+    --> crates/bicdb-core/src/db/access_mutation.rs:2554:5
+     |
+2554 | /     pub(crate) fn pitr_audit_batch(
+2555 | |         &self,
+2556 | |         after_offset: Option<u64>,
+2557 | |         timestamp: i64,
+2558 | |         max_events: usize,
+2559 | |         max_bytes: usize,
+2560 | |     ) -> Result<PitrAuditBatch> {
+     | |_______________________________^ method `access_mutation::<impl db::BicDb>::pitr_audit_batch` is reachable at visibility `pub(crate)`
+     |
+note: but type `db::PitrAuditBatch` is only usable at visibility `pub(self)`
+    --> crates/bicdb-core/src/db.rs:7403:1
+     |
+7403 | struct PitrAuditBatch {
+     | ^^^^^^^^^^^^^^^^^^^^^
+
+warning: type `db::IndexRecordMutation` is more private than the item `commit_snapshot::<impl db::BicDb>::claim_unique_keys`
+    --> crates/bicdb-core/src/db/commit_snapshot.rs:346:5
+     |
+ 346 | /     pub(crate) fn claim_unique_keys<'db>(
+ 347 | |         &'db self,
+ 348 | |         tx: &Transaction,
+ 349 | |         index_mutations_by_collection: &BTreeMap<String, Vec<IndexRecordMutation>>,
+ 350 | |     ) -> Result<UniqueClaimsGuard<'db>> {
+     | |_______________________________________^ method `commit_snapshot::<impl db::BicDb>::claim_unique_keys` is reachable at visibility `pub(crate)`
+     |
+note: but type `db::IndexRecordMutation` is only usable at visibility `pub(self)`
+    --> crates/bicdb-core/src/db.rs:9412:1
+     |
+9412 | struct IndexRecordMutation {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: type `db::UniqueClaimsGuard<'db>` is more private than the item `commit_snapshot::<impl db::BicDb>::claim_unique_keys`
+    --> crates/bicdb-core/src/db/commit_snapshot.rs:346:5
+     |
+ 346 | /     pub(crate) fn claim_unique_keys<'db>(
+ 347 | |         &'db self,
+ 348 | |         tx: &Transaction,
+ 349 | |         index_mutations_by_collection: &BTreeMap<String, Vec<IndexRecordMutation>>,
+ 350 | |     ) -> Result<UniqueClaimsGuard<'db>> {
+     | |_______________________________________^ method `commit_snapshot::<impl db::BicDb>::claim_unique_keys` is reachable at visibility `pub(crate)`
+     |
+note: but type `db::UniqueClaimsGuard<'db>` is only usable at visibility `pub(self)`
+    --> crates/bicdb-core/src/db.rs:3286:1
+     |
+3286 | struct UniqueClaimsGuard<'db> {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: type `db::IndexRecordMutation` is more private than the item `commit_snapshot::<impl db::BicDb>::claim_exclusion_ranges`
+    --> crates/bicdb-core/src/db/commit_snapshot.rs:416:5
+     |
+ 416 | /     pub(crate) fn claim_exclusion_ranges<'db>(
+ 417 | |         &'db self,
+ 418 | |         tx: &Transaction,
+ 419 | |         index_mutations_by_collection: &BTreeMap<String, Vec<IndexRecordMutation>>,
+ 420 | |     ) -> Result<ExclusionClaimsGuard<'db>> {
+     | |__________________________________________^ method `commit_snapshot::<impl db::BicDb>::claim_exclusion_ranges` is reachable at visibility `pub(crate)`
+     |
+note: but type `db::IndexRecordMutation` is only usable at visibility `pub(self)`
+    --> crates/bicdb-core/src/db.rs:9412:1
+     |
+9412 | struct IndexRecordMutation {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: type `db::ExclusionClaimsGuard<'db>` is more private than the item `commit_snapshot::<impl db::BicDb>::claim_exclusion_ranges`
+    --> crates/bicdb-core/src/db/commit_snapshot.rs:416:5
+     |
+ 416 | /     pub(crate) fn claim_exclusion_ranges<'db>(
+ 417 | |         &'db self,
+ 418 | |         tx: &Transaction,
+ 419 | |         index_mutations_by_collection: &BTreeMap<String, Vec<IndexRecordMutation>>,
+ 420 | |     ) -> Result<ExclusionClaimsGuard<'db>> {
+     | |__________________________________________^ method `commit_snapshot::<impl db::BicDb>::claim_exclusion_ranges` is reachable at visibility `pub(crate)`
+     |
+note: but type `db::ExclusionClaimsGuard<'db>` is only usable at visibility `pub(self)`
+    --> crates/bicdb-core/src/db.rs:3304:1
+     |
+3304 | struct ExclusionClaimsGuard<'db> {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: type `db::IndexRecordMutation` is more private than the item `commit_snapshot::<impl db::BicDb>::validate_exclusion_record_mutations`
+    --> crates/bicdb-core/src/db/commit_snapshot.rs:473:5
+     |
+ 473 | /     pub(crate) fn validate_exclusion_record_mutations(
+ 474 | |         &self,
+ 475 | |         definition: &IndexDefinition,
+ 476 | |         mutations: &[IndexRecordMutation],
+ 477 | |     ) -> Result<()> {
+     | |___________________^ method `commit_snapshot::<impl db::BicDb>::validate_exclusion_record_mutations` is reachable at visibility `pub(crate)`
+     |
+note: but type `db::IndexRecordMutation` is only usable at visibility `pub(self)`
+    --> crates/bicdb-core/src/db.rs:9412:1
+     |
+9412 | struct IndexRecordMutation {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: type `db::IndexRecordMutation` is more private than the item `commit_snapshot::<impl db::BicDb>::record_audit_events_for_commit`
+    --> crates/bicdb-core/src/db/commit_snapshot.rs:834:5
+     |
+ 834 | /     pub(crate) fn record_audit_events_for_commit(
+ 835 | |         &self,
+ 836 | |         index_mutations_by_collection: &BTreeMap<String, Vec<IndexRecordMutation>>,
+ 837 | |     ) -> Result<Vec<Event>> {
+     | |___________________________^ method `commit_snapshot::<impl db::BicDb>::record_audit_events_for_commit` is reachable at visibility `pub(crate)`
+     |
+note: but type `db::IndexRecordMutation` is only usable at visibility `pub(self)`
+    --> crates/bicdb-core/src/db.rs:9412:1
+     |
+9412 | struct IndexRecordMutation {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: type `db::IndexRecordMutation` is more private than the item `commit_snapshot::<impl db::BicDb>::sync_ops_for_commit`
+    --> crates/bicdb-core/src/db/commit_snapshot.rs:899:5
+     |
+ 899 | /     pub(crate) fn sync_ops_for_commit(
+ 900 | |         &self,
+ 901 | |         index_mutations_by_collection: &BTreeMap<String, Vec<IndexRecordMutation>>,
+ 902 | |     ) -> Result<Vec<SyncOp>> {
+     | |____________________________^ method `commit_snapshot::<impl db::BicDb>::sync_ops_for_commit` is reachable at visibility `pub(crate)`
+     |
+note: but type `db::IndexRecordMutation` is only usable at visibility `pub(self)`
+    --> crates/bicdb-core/src/db.rs:9412:1
+     |
+9412 | struct IndexRecordMutation {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: type `db::IndexRecordMutation` is more private than the item `commit_snapshot::<impl db::BicDb>::validate_index_mutations`
+    --> crates/bicdb-core/src/db/commit_snapshot.rs:971:5
+     |
+ 971 | /     pub(crate) fn validate_index_mutations(
+ 972 | |         &self,
+ 973 | |         index_mutations_by_collection: &BTreeMap<String, Vec<IndexRecordMutation>>,
+ 974 | |     ) -> Result<()> {
+     | |___________________^ method `commit_snapshot::<impl db::BicDb>::validate_index_mutations` is reachable at visibility `pub(crate)`
+     |
+note: but type `db::IndexRecordMutation` is only usable at visibility `pub(self)`
+    --> crates/bicdb-core/src/db.rs:9412:1
+     |
+9412 | struct IndexRecordMutation {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: type `db::IndexRecordMutation` is more private than the item `commit_snapshot::<impl db::BicDb>::validate_paged_btree_record_mutations`
+    --> crates/bicdb-core/src/db/commit_snapshot.rs:1006:5
+     |
+1006 | /     pub(crate) fn validate_paged_btree_record_mutations(
+1007 | |         &self,
+1008 | |         definition: &IndexDefinition,
+1009 | |         mutations: &[IndexRecordMutation],
+1010 | |     ) -> Result<()> {
+     | |___________________^ method `commit_snapshot::<impl db::BicDb>::validate_paged_btree_record_mutations` is reachable at visibility `pub(crate)`
+     |
+note: but type `db::IndexRecordMutation` is only usable at visibility `pub(self)`
+    --> crates/bicdb-core/src/db.rs:9412:1
+     |
+9412 | struct IndexRecordMutation {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: type `db::IndexRecordMutation` is more private than the item `commit_snapshot::<impl db::BicDb>::apply_index_mutations`
+    --> crates/bicdb-core/src/db/commit_snapshot.rs:1106:5
+     |
+1106 | /     pub(crate) fn apply_index_mutations(
+1107 | |         &self,
+1108 | |         index_mutations_by_collection: &BTreeMap<String, Vec<IndexRecordMutation>>,
+1109 | |     ) -> Result<Vec<Event>> {
+     | |___________________________^ method `commit_snapshot::<impl db::BicDb>::apply_index_mutations` is reachable at visibility `pub(crate)`
+     |
+note: but type `db::IndexRecordMutation` is only usable at visibility `pub(self)`
+    --> crates/bicdb-core/src/db.rs:9412:1
+     |
+9412 | struct IndexRecordMutation {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: type `db::IndexRecordMutation` is more private than the item `commit_snapshot::<impl db::BicDb>::apply_committed_record_writes`
+    --> crates/bicdb-core/src/db/commit_snapshot.rs:1188:5
+     |
+1188 | /     pub(crate) fn apply_committed_record_writes(
+1189 | |         &self,
+1190 | |         commit_seq: u64,
+1191 | |         writes_by_collection: &BTreeMap<&str, Vec<&TxWrite>>,
+...    |
+1195 | |         deferred_page_commit: Option<&mut Option<bicdb_page::Lsn>>,
+1196 | |     ) -> Result<()> {
+     | |___________________^ method `commit_snapshot::<impl db::BicDb>::apply_committed_record_writes` is reachable at visibility `pub(crate)`
+     |
+note: but type `db::IndexRecordMutation` is only usable at visibility `pub(self)`
+    --> crates/bicdb-core/src/db.rs:9412:1
+     |
+9412 | struct IndexRecordMutation {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: type `db::LockedKeys` is more private than the item `commit_snapshot::<impl db::BicDb>::lock_tx_record`
+    --> crates/bicdb-core/src/db/commit_snapshot.rs:1307:5
+     |
+1307 | /     pub(crate) fn lock_tx_record(
+1308 | |         &self,
+1309 | |         tx_id: TransactionId,
+1310 | |         collection: &str,
+1311 | |         record_id: &str,
+1312 | |         locked_keys: &Mutex<LockedKeys>,
+1313 | |     ) -> Result<()> {
+     | |___________________^ method `commit_snapshot::<impl db::BicDb>::lock_tx_record` is reachable at visibility `pub(crate)`
+     |
+note: but type `db::LockedKeys` is only usable at visibility `pub(self)`
+    --> crates/bicdb-core/src/db.rs:2331:1
+     |
+2331 | struct LockedKeys {
+     | ^^^^^^^^^^^^^^^^^
+
+warning: type `db::LockedKeys` is more private than the item `commit_snapshot::<impl db::BicDb>::lock_tx_record_for_read_committed_update`
+    --> crates/bicdb-core/src/db/commit_snapshot.rs:1330:5
+     |
+1330 | /     pub(crate) fn lock_tx_record_for_read_committed_update(
+1331 | |         &self,
+1332 | |         tx_id: TransactionId,
+1333 | |         collection: &str,
+1334 | |         record_id: &str,
+1335 | |         locked_keys: &Mutex<LockedKeys>,
+1336 | |     ) -> Result<()> {
+     | |___________________^ method `commit_snapshot::<impl db::BicDb>::lock_tx_record_for_read_committed_update` is reachable at visibility `pub(crate)`
+     |
+note: but type `db::LockedKeys` is only usable at visibility `pub(self)`
+    --> crates/bicdb-core/src/db.rs:2331:1
+     |
+2331 | struct LockedKeys {
+     | ^^^^^^^^^^^^^^^^^
+
+warning: type `db::LockedKeys` is more private than the item `commit_snapshot::<impl db::BicDb>::lock_tx_record_for_read_committed_update_with_first_wait`
+    --> crates/bicdb-core/src/db/commit_snapshot.rs:1346:5
+     |
+1346 | /     pub(crate) fn lock_tx_record_for_read_committed_update_with_first_wait(
+1347 | |         &self,
+1348 | |         tx_id: TransactionId,
+1349 | |         collection: &str,
+...    |
+1352 | |         first_wait: bool,
+1353 | |     ) -> Result<()> {
+     | |___________________^ method `commit_snapshot::<impl db::BicDb>::lock_tx_record_for_read_committed_update_with_first_wait` is reachable at visibility `pub(crate)`
+     |
+note: but type `db::LockedKeys` is only usable at visibility `pub(self)`
+    --> crates/bicdb-core/src/db.rs:2331:1
+     |
+2331 | struct LockedKeys {
+     | ^^^^^^^^^^^^^^^^^
+
+warning: type `db::LockedKeys` is more private than the item `commit_snapshot::<impl db::BicDb>::lock_tx_first_record_for_reservation`
+    --> crates/bicdb-core/src/db/commit_snapshot.rs:1384:5
+     |
+1384 | /     pub(crate) fn lock_tx_first_record_for_reservation(
+1385 | |         &self,
+1386 | |         tx_id: TransactionId,
+1387 | |         collection: &str,
+1388 | |         record_id: &str,
+1389 | |         locked_keys: &Mutex<LockedKeys>,
+1390 | |     ) -> Result<()> {
+     | |___________________^ method `commit_snapshot::<impl db::BicDb>::lock_tx_first_record_for_reservation` is reachable at visibility `pub(crate)`
+     |
+note: but type `db::LockedKeys` is only usable at visibility `pub(self)`
+    --> crates/bicdb-core/src/db.rs:2331:1
+     |
+2331 | struct LockedKeys {
+     | ^^^^^^^^^^^^^^^^^
+
+warning: type `db::LockedKeys` is more private than the item `commit_snapshot::<impl db::BicDb>::lock_tx_record_with_attempts`
+    --> crates/bicdb-core/src/db/commit_snapshot.rs:1403:5
+     |
+1403 | /     pub(crate) fn lock_tx_record_with_attempts(
+1404 | |         &self,
+1405 | |         tx_id: TransactionId,
+1406 | |         collection: &str,
+...    |
+1411 | |         locked_keys: &Mutex<LockedKeys>,
+1412 | |     ) -> Result<()> {
+     | |___________________^ method `commit_snapshot::<impl db::BicDb>::lock_tx_record_with_attempts` is reachable at visibility `pub(crate)`
+     |
+note: but type `db::LockedKeys` is only usable at visibility `pub(self)`
+    --> crates/bicdb-core/src/db.rs:2331:1
+     |
+2331 | struct LockedKeys {
+     | ^^^^^^^^^^^^^^^^^
+
+warning: type `db::LockedKeys` is more private than the item `commit_snapshot::<impl db::BicDb>::lock_tx_record_cancellable`
+    --> crates/bicdb-core/src/db/commit_snapshot.rs:1427:5
+     |
+1427 | /     pub(crate) fn lock_tx_record_cancellable(
+1428 | |         &self,
+1429 | |         tx_id: TransactionId,
+1430 | |         collection: &str,
+...    |
+1433 | |         cancellation: &crate::CancellationToken,
+1434 | |     ) -> Result<()> {
+     | |___________________^ method `commit_snapshot::<impl db::BicDb>::lock_tx_record_cancellable` is reachable at visibility `pub(crate)`
+     |
+note: but type `db::LockedKeys` is only usable at visibility `pub(self)`
+    --> crates/bicdb-core/src/db.rs:2331:1
+     |
+2331 | struct LockedKeys {
+     | ^^^^^^^^^^^^^^^^^
+
+warning: type `db::PreparedMutation` is more private than the item `commit_snapshot::<impl db::BicDb>::prepare_mutations`
+    --> crates/bicdb-core/src/db/commit_snapshot.rs:1602:5
+     |
+1602 | /     pub(crate) fn prepare_mutations(
+1603 | |         &mut self,
+1604 | |         collection: &str,
+1605 | |         records: Vec<Record>,
+1606 | |     ) -> Result<Vec<PreparedMutation>> {
+     | |______________________________________^ method `commit_snapshot::<impl db::BicDb>::prepare_mutations` is reachable at visibility `pub(crate)`
+     |
+note: but type `db::PreparedMutation` is only usable at visibility `pub(self)`
+    --> crates/bicdb-core/src/db.rs:9116:1
+     |
+9116 | struct PreparedMutation {
+     | ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: type `db::IndexMaintenanceCatalog` is more private than the item `commit_snapshot::<impl db::BicDb>::load_index_maintenance_catalog`
+    --> crates/bicdb-core/src/db/commit_snapshot.rs:1746:5
+     |
+1746 |     pub(crate) fn load_index_maintenance_catalog(&self) -> Result<IndexMaintenanceCatalog> {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ method `commit_snapshot::<impl db::BicDb>::load_index_maintenance_catalog` is reachable at visibility `pub(crate)`
+     |
+note: but type `db::IndexMaintenanceCatalog` is only usable at visibility `pub(self)`
+    --> crates/bicdb-core/src/db.rs:5305:1
+     |
+5305 | struct IndexMaintenanceCatalog {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: type `db::IndexMaintenanceCatalog` is more private than the item `commit_snapshot::<impl db::BicDb>::persist_index_maintenance_catalog`
+    --> crates/bicdb-core/src/db/commit_snapshot.rs:1754:5
+     |
+1754 | /     pub(crate) fn persist_index_maintenance_catalog(
+1755 | |         &self,
+1756 | |         catalog: &IndexMaintenanceCatalog,
+1757 | |     ) -> Result<()> {
+     | |___________________^ method `commit_snapshot::<impl db::BicDb>::persist_index_maintenance_catalog` is reachable at visibility `pub(crate)`
+     |
+note: but type `db::IndexMaintenanceCatalog` is only usable at visibility `pub(self)`
+    --> crates/bicdb-core/src/db.rs:5305:1
+     |
+5305 | struct IndexMaintenanceCatalog {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: type `db::IndexMaintenanceStatus` is more private than the item `commit_snapshot::<impl db::BicDb>::persist_index_maintenance_status`
+    --> crates/bicdb-core/src/db/commit_snapshot.rs:1772:5
+     |
+1772 | /     pub(crate) fn persist_index_maintenance_status(
+1773 | |         &self,
+1774 | |         definition: &IndexDefinition,
+1775 | |         status: IndexMaintenanceStatus,
+1776 | |     ) -> Result<()> {
+     | |___________________^ method `commit_snapshot::<impl db::BicDb>::persist_index_maintenance_status` is reachable at visibility `pub(crate)`
+     |
+note: but type `db::IndexMaintenanceStatus` is only usable at visibility `pub(self)`
+    --> crates/bicdb-core/src/db.rs:5311:1
+     |
+5311 | struct IndexMaintenanceStatus {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: type `db::IndexMaintenanceStatus` is more private than the item `commit_snapshot::<impl db::BicDb>::index_maintenance_status`
+    --> crates/bicdb-core/src/db/commit_snapshot.rs:1782:5
+     |
+1782 | /     pub(crate) fn index_maintenance_status(
+1783 | |         &self,
+1784 | |         name: &str,
+1785 | |     ) -> Result<Option<IndexMaintenanceStatus>> {
+     | |_______________________________________________^ method `commit_snapshot::<impl db::BicDb>::index_maintenance_status` is reachable at visibility `pub(crate)`
+     |
+note: but type `db::IndexMaintenanceStatus` is only usable at visibility `pub(self)`
+    --> crates/bicdb-core/src/db.rs:5311:1
+     |
+5311 | struct IndexMaintenanceStatus {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: type `db::IndexRecordMutation` is more private than the item `commit_snapshot::<impl db::BicDb>::validate_collection_index_mutations`
+    --> crates/bicdb-core/src/db/commit_snapshot.rs:1973:5
+     |
+1973 | /     pub(crate) fn validate_collection_index_mutations(
+1974 | |         &self,
+1975 | |         collection: &str,
+1976 | |         mutations: &[IndexRecordMutation],
+1977 | |     ) -> Result<()> {
+     | |___________________^ method `commit_snapshot::<impl db::BicDb>::validate_collection_index_mutations` is reachable at visibility `pub(crate)`
+     |
+note: but type `db::IndexRecordMutation` is only usable at visibility `pub(self)`
+    --> crates/bicdb-core/src/db.rs:9412:1
+     |
+9412 | struct IndexRecordMutation {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: type `db::IndexRecordMutation` is more private than the item `commit_snapshot::<impl db::BicDb>::apply_collection_index_mutations`
+    --> crates/bicdb-core/src/db/commit_snapshot.rs:2003:5
+     |
+2003 | /     pub(crate) fn apply_collection_index_mutations(
+2004 | |         &self,
+2005 | |         collection: &str,
+2006 | |         mutations: &mut [IndexRecordMutation],
+2007 | |     ) -> Result<()> {
+     | |___________________^ method `commit_snapshot::<impl db::BicDb>::apply_collection_index_mutations` is reachable at visibility `pub(crate)`
+     |
+note: but type `db::IndexRecordMutation` is only usable at visibility `pub(self)`
+    --> crates/bicdb-core/src/db.rs:9412:1
+     |
+9412 | struct IndexRecordMutation {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: type `db::PreparedMutation` is more private than the item `commit_snapshot::<impl db::BicDb>::prepared_index_mutations`
+    --> crates/bicdb-core/src/db/commit_snapshot.rs:2042:5
+     |
+2042 | /     pub(crate) fn prepared_index_mutations(
+2043 | |         &self,
+2044 | |         collection: &str,
+2045 | |         prepared: &[PreparedMutation],
+2046 | |     ) -> Result<Vec<IndexRecordMutation>> {
+     | |_________________________________________^ method `commit_snapshot::<impl db::BicDb>::prepared_index_mutations` is reachable at visibility `pub(crate)`
+     |
+note: but type `db::PreparedMutation` is only usable at visibility `pub(self)`
+    --> crates/bicdb-core/src/db.rs:9116:1
+     |
+9116 | struct PreparedMutation {
+     | ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: type `db::IndexRecordMutation` is more private than the item `commit_snapshot::<impl db::BicDb>::prepared_index_mutations`
+    --> crates/bicdb-core/src/db/commit_snapshot.rs:2042:5
+     |
+2042 | /     pub(crate) fn prepared_index_mutations(
+2043 | |         &self,
+2044 | |         collection: &str,
+2045 | |         prepared: &[PreparedMutation],
+2046 | |     ) -> Result<Vec<IndexRecordMutation>> {
+     | |_________________________________________^ method `commit_snapshot::<impl db::BicDb>::prepared_index_mutations` is reachable at visibility `pub(crate)`
+     |
+note: but type `db::IndexRecordMutation` is only usable at visibility `pub(self)`
+    --> crates/bicdb-core/src/db.rs:9412:1
+     |
+9412 | struct IndexRecordMutation {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: type `db::IndexRecordMutation` is more private than the item `commit_snapshot::<impl db::BicDb>::delete_index_mutation`
+    --> crates/bicdb-core/src/db/commit_snapshot.rs:2093:5
+     |
+2093 | /     pub(crate) fn delete_index_mutation(
+2094 | |         &self,
+2095 | |         collection: &str,
+2096 | |         record_id: &str,
+2097 | |     ) -> Result<Option<IndexRecordMutation>> {
+     | |____________________________________________^ method `commit_snapshot::<impl db::BicDb>::delete_index_mutation` is reachable at visibility `pub(crate)`
+     |
+note: but type `db::IndexRecordMutation` is only usable at visibility `pub(self)`
+    --> crates/bicdb-core/src/db.rs:9412:1
+     |
+9412 | struct IndexRecordMutation {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: type `db::IndexRecordMutation` is more private than the item `commit_snapshot::<impl db::BicDb>::tx_index_mutations`
+    --> crates/bicdb-core/src/db/commit_snapshot.rs:2122:5
+     |
+2122 | /     pub(crate) fn tx_index_mutations(
+2123 | |         &self,
+2124 | |         collection: &str,
+2125 | |         writes: &[&TxWrite],
+2126 | |         writes_are_unique: bool,
+2127 | |     ) -> Result<Vec<IndexRecordMutation>> {
+     | |_________________________________________^ method `commit_snapshot::<impl db::BicDb>::tx_index_mutations` is reachable at visibility `pub(crate)`
+     |
+note: but type `db::IndexRecordMutation` is only usable at visibility `pub(self)`
+    --> crates/bicdb-core/src/db.rs:9412:1
+     |
+9412 | struct IndexRecordMutation {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: type `db::IndexRecordMutation` is more private than the item `commit_snapshot::<impl db::BicDb>::tx_index_mutations_by_collection`
+    --> crates/bicdb-core/src/db/commit_snapshot.rs:2253:5
+     |
+2253 | /     pub(crate) fn tx_index_mutations_by_collection(
+2254 | |         &self,
+2255 | |         writes_by_collection: &BTreeMap<&str, Vec<&TxWrite>>,
+2256 | |         writes_are_unique: bool,
+2257 | |     ) -> Result<BTreeMap<String, Vec<IndexRecordMutation>>> {
+     | |___________________________________________________________^ method `commit_snapshot::<impl db::BicDb>::tx_index_mutations_by_collection` is reachable at visibility `pub(crate)`
+     |
+note: but type `db::IndexRecordMutation` is only usable at visibility `pub(self)`
+    --> crates/bicdb-core/src/db.rs:9412:1
+     |
+9412 | struct IndexRecordMutation {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: type `db::IndexRecordMutation` is more private than the item `commit_snapshot::<impl db::BicDb>::fill_index_mutation_rowids`
+    --> crates/bicdb-core/src/db/commit_snapshot.rs:2274:5
+     |
+2274 | /     pub(crate) fn fill_index_mutation_rowids(
+2275 | |         &self,
+2276 | |         collection: &str,
+2277 | |         mutations: &mut [IndexRecordMutation],
+2278 | |     ) -> Result<()> {
+     | |___________________^ method `commit_snapshot::<impl db::BicDb>::fill_index_mutation_rowids` is reachable at visibility `pub(crate)`
+     |
+note: but type `db::IndexRecordMutation` is only usable at visibility `pub(self)`
+    --> crates/bicdb-core/src/db.rs:9412:1
+     |
+9412 | struct IndexRecordMutation {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: type `db::IndexRecordMutation` is more private than the item `commit_snapshot::<impl db::BicDb>::fill_all_index_mutation_rowids`
+    --> crates/bicdb-core/src/db/commit_snapshot.rs:2295:5
+     |
+2295 | /     pub(crate) fn fill_all_index_mutation_rowids(
+2296 | |         &self,
+2297 | |         index_mutations_by_collection: &mut BTreeMap<String, Vec<IndexRecordMutation>>,
+2298 | |     ) -> Result<()> {
+     | |___________________^ method `commit_snapshot::<impl db::BicDb>::fill_all_index_mutation_rowids` is reachable at visibility `pub(crate)`
+     |
+note: but type `db::IndexRecordMutation` is only usable at visibility `pub(self)`
+    --> crates/bicdb-core/src/db.rs:9412:1
+     |
+9412 | struct IndexRecordMutation {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: type `db::CompactionCheckpointPhase` is more private than the item `commit_snapshot::<impl db::BicDb>::write_compaction_checkpoint`
+    --> crates/bicdb-core/src/db/commit_snapshot.rs:2640:5
+     |
+2640 | /     pub(crate) fn write_compaction_checkpoint(
+2641 | |         &self,
+2642 | |         checkpoint_id: &str,
+2643 | |         phase: CompactionCheckpointPhase,
+...    |
+2647 | |         sync_log_bytes_before: u64,
+2648 | |     ) -> Result<()> {
+     | |___________________^ method `commit_snapshot::<impl db::BicDb>::write_compaction_checkpoint` is reachable at visibility `pub(crate)`
+     |
+note: but type `db::CompactionCheckpointPhase` is only usable at visibility `pub(self)`
+    --> crates/bicdb-core/src/db.rs:7332:1
+     |
+7332 | enum CompactionCheckpointPhase {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: type `db::CollectionState` is more private than the item `commit_snapshot::<impl db::BicDb>::collection_state`
+    --> crates/bicdb-core/src/db/commit_snapshot.rs:3102:5
+     |
+3102 | /     pub(crate) fn collection_state(
+3103 | |         &self,
+3104 | |         collection: &str,
+3105 | |     ) -> Result<RwLockReadGuard<'_, CollectionState>> {
+     | |_____________________________________________________^ method `commit_snapshot::<impl db::BicDb>::collection_state` is reachable at visibility `pub(crate)`
+     |
+note: but type `db::CollectionState` is only usable at visibility `pub(self)`
+    --> crates/bicdb-core/src/db.rs:4428:1
+     |
+4428 | struct CollectionState {
+     | ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: type `db::CollectionState` is more private than the item `commit_snapshot::<impl db::BicDb>::collection_state_mut`
+    --> crates/bicdb-core/src/db/commit_snapshot.rs:3117:5
+     |
+3117 | /     pub(crate) fn collection_state_mut(
+3118 | |         &mut self,
+3119 | |         collection: &str,
+3120 | |     ) -> Result<&mut CollectionState> {
+     | |_____________________________________^ method `commit_snapshot::<impl db::BicDb>::collection_state_mut` is reachable at visibility `pub(crate)`
+     |
+note: but type `db::CollectionState` is only usable at visibility `pub(self)`
+    --> crates/bicdb-core/src/db.rs:4428:1
+     |
+4428 | struct CollectionState {
+     | ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: type `db::CollectionState` is more private than the item `commit_snapshot::<impl db::BicDb>::collection_state_write`
+    --> crates/bicdb-core/src/db/commit_snapshot.rs:3132:5
+     |
+3132 | /     pub(crate) fn collection_state_write(
+3133 | |         &self,
+3134 | |         collection: &str,
+3135 | |     ) -> Result<RwLockWriteGuard<'_, CollectionState>> {
+     | |______________________________________________________^ method `commit_snapshot::<impl db::BicDb>::collection_state_write` is reachable at visibility `pub(crate)`
+     |
+note: but type `db::CollectionState` is only usable at visibility `pub(self)`
+    --> crates/bicdb-core/src/db.rs:4428:1
+     |
+4428 | struct CollectionState {
+     | ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: type `db::AuditMergeReport` is more private than the item `commit_snapshot::<impl db::BicDb>::merge_record_audit_events`
+     --> crates/bicdb-core/src/db/commit_snapshot.rs:3188:5
+      |
+ 3188 | /     pub(crate) fn merge_record_audit_events(
+ 3189 | |         &mut self,
+ 3190 | |         incoming: Vec<Event>,
+ 3191 | |     ) -> Result<AuditMergeReport> {
+      | |_________________________________^ method `commit_snapshot::<impl db::BicDb>::merge_record_audit_events` is reachable at visibility `pub(crate)`
+      |
+note: but type `db::AuditMergeReport` is only usable at visibility `pub(self)`
+     --> crates/bicdb-core/src/db.rs:21471:1
+      |
+21471 | struct AuditMergeReport {
+      | ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: type `db::PagedDurableIndexDef` is more private than the item `db::fts_build::<impl db::BicDb>::backfill_full_text_direct_blocks`
+     --> crates/bicdb-core/src/db/fts_build.rs:1543:5
+      |
+ 1543 | /     pub(crate) fn backfill_full_text_direct_blocks(
+ 1544 | |         &self,
+ 1545 | |         paged: &Arc<crate::paged_collection::PagedRecords>,
+ 1546 | |         definition: &IndexDefinition,
+ 1547 | |         def: &PagedDurableIndexDef,
+ 1548 | |     ) -> Result<bool> {
+      | |_____________________^ method `db::fts_build::<impl db::BicDb>::backfill_full_text_direct_blocks` is reachable at visibility `pub(crate)`
+      |
+note: but type `db::PagedDurableIndexDef` is only usable at visibility `pub(self)`
+     --> crates/bicdb-core/src/db.rs:24760:1
+      |
+24760 | struct PagedDurableIndexDef {
+      | ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: type `db::PagedDurableIndexDef` is more private than the item `db::fts_build::<impl db::BicDb>::prepare_and_complete_external_full_text_build`
+     --> crates/bicdb-core/src/db/fts_build.rs:1848:5
+      |
+ 1848 | /     pub(crate) fn prepare_and_complete_external_full_text_build(
+ 1849 | |         &self,
+ 1850 | |         paged: &Arc<crate::paged_collection::PagedRecords>,
+ 1851 | |         definition: &IndexDefinition,
+ 1852 | |         def: &PagedDurableIndexDef,
+ 1853 | |         step_budget_documents: Option<u64>,
+ 1854 | |     ) -> Result<ExternalFullTextBuildOutcome> {
+      | |_____________________________________________^ method `db::fts_build::<impl db::BicDb>::prepare_and_complete_external_full_text_build` is reachable at visibility `pub(crate)`
+      |
+note: but type `db::PagedDurableIndexDef` is only usable at visibility `pub(self)`
+     --> crates/bicdb-core/src/db.rs:24760:1
+      |
+24760 | struct PagedDurableIndexDef {
+      | ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: type `db::ExternalFullTextBuildOutcome` is more private than the item `db::fts_build::<impl db::BicDb>::prepare_and_complete_external_full_text_build`
+     --> crates/bicdb-core/src/db/fts_build.rs:1848:5
+      |
+ 1848 | /     pub(crate) fn prepare_and_complete_external_full_text_build(
+ 1849 | |         &self,
+ 1850 | |         paged: &Arc<crate::paged_collection::PagedRecords>,
+ 1851 | |         definition: &IndexDefinition,
+ 1852 | |         def: &PagedDurableIndexDef,
+ 1853 | |         step_budget_documents: Option<u64>,
+ 1854 | |     ) -> Result<ExternalFullTextBuildOutcome> {
+      | |_____________________________________________^ method `db::fts_build::<impl db::BicDb>::prepare_and_complete_external_full_text_build` is reachable at visibility `pub(crate)`
+      |
+note: but type `db::ExternalFullTextBuildOutcome` is only usable at visibility `pub(self)`
+     --> crates/bicdb-core/src/db.rs:34370:1
+      |
+34370 | enum ExternalFullTextBuildOutcome {
+      | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: type `db::FullTextBm25Mode` is more private than the item `fts_query::<impl db::BicDb>::full_text_bm25_top_k_impl`
+    --> crates/bicdb-core/src/db/fts_query.rs:906:5
+     |
+ 906 | /     pub(crate) fn full_text_bm25_top_k_impl(
+ 907 | |         &self,
+ 908 | |         name: &str,
+ 909 | |         terms: &[&str],
+...    |
+ 914 | |         cancellation: Option<&CancellationToken>,
+ 915 | |     ) -> Result<Option<Vec<crate::fts_postings::FullTextRankedPosting>>> {
+     | |________________________________________________________________________^ method `fts_query::<impl db::BicDb>::full_text_bm25_top_k_impl` is reachable at visibility `pub(crate)`
+     |
+note: but type `db::FullTextBm25Mode` is only usable at visibility `pub(self)`
+    --> crates/bicdb-core/src/db.rs:1210:1
+     |
+1210 | enum FullTextBm25Mode {
+     | ^^^^^^^^^^^^^^^^^^^^^
+
+warning: type `db::RouteAlgorithm` is more private than the item `fts_query::<impl db::BicDb>::emit_route_path_computed`
+     --> crates/bicdb-core/src/db/fts_query.rs:3247:5
+      |
+ 3247 | /     pub(crate) fn emit_route_path_computed(
+ 3248 | |         &mut self,
+ 3249 | |         operation: &str,
+ 3250 | |         algorithm: RouteAlgorithm,
+ 3251 | |         path: &RoutePath,
+ 3252 | |     ) -> Result<()> {
+      | |___________________^ method `fts_query::<impl db::BicDb>::emit_route_path_computed` is reachable at visibility `pub(crate)`
+      |
+note: but type `db::RouteAlgorithm` is only usable at visibility `pub(self)`
+     --> crates/bicdb-core/src/db.rs:26051:1
+      |
+26051 | enum RouteAlgorithm {
+      | ^^^^^^^^^^^^^^^^^^^
+
+warning: type `db::RouteAlgorithm` is more private than the item `fts_query::<impl db::BicDb>::shortest_path_with_algorithm`
+     --> crates/bicdb-core/src/db/fts_query.rs:3274:5
+      |
+ 3274 | /     pub(crate) fn shortest_path_with_algorithm(
+ 3275 | |         &self,
+ 3276 | |         graph: &str,
+ 3277 | |         start: &Geometry,
+ 3278 | |         end: &Geometry,
+ 3279 | |         algorithm: RouteAlgorithm,
+ 3280 | |     ) -> Result<RoutePath> {
+      | |__________________________^ method `fts_query::<impl db::BicDb>::shortest_path_with_algorithm` is reachable at visibility `pub(crate)`
+      |
+note: but type `db::RouteAlgorithm` is only usable at visibility `pub(self)`
+     --> crates/bicdb-core/src/db.rs:26051:1
+      |
+26051 | enum RouteAlgorithm {
+      | ^^^^^^^^^^^^^^^^^^^
+
+warning: type `db::RouteDistanceMatrix` is more private than the item `fts_query::<impl db::BicDb>::route_distance_matrix`
+     --> crates/bicdb-core/src/db/fts_query.rs:3305:5
+      |
+ 3305 | /     pub(crate) fn route_distance_matrix(
+ 3306 | |         &self,
+ 3307 | |         graph: &str,
+ 3308 | |         stops: &[Geometry],
+ 3309 | |     ) -> Result<RouteDistanceMatrix> {
+      | |____________________________________^ method `fts_query::<impl db::BicDb>::route_distance_matrix` is reachable at visibility `pub(crate)`
+      |
+note: but type `db::RouteDistanceMatrix` is only usable at visibility `pub(self)`
+     --> crates/bicdb-core/src/db.rs:26057:1
+      |
+26057 | struct RouteDistanceMatrix {
+      | ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: type `db::RoadGraph` is more private than the item `fts_query::<impl db::BicDb>::load_road_graph`
+     --> crates/bicdb-core/src/db/fts_query.rs:3364:5
+      |
+ 3364 |     pub(crate) fn load_road_graph(&self, graph: &str) -> Result<RoadGraph> {
+      |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ method `fts_query::<impl db::BicDb>::load_road_graph` is reachable at visibility `pub(crate)`
+      |
+note: but type `db::RoadGraph` is only usable at visibility `pub(self)`
+     --> crates/bicdb-core/src/db.rs:26063:1
+      |
+26063 | struct RoadGraph {
+      | ^^^^^^^^^^^^^^^^
+
+warning: type `db::IndexState` is more private than the item `fts_query::<impl db::BicDb>::packed_spatial_envelope_hits`
+    --> crates/bicdb-core/src/db/fts_query.rs:3584:5
+     |
+3584 | /     pub(crate) fn packed_spatial_envelope_hits(
+3585 | |         &self,
+3586 | |         state: &IndexState,
+3587 | |         envelope: &AABB<[f64; 2]>,
+3588 | |     ) -> Result<Vec<SpatialIndexEntry>> {
+     | |_______________________________________^ method `fts_query::<impl db::BicDb>::packed_spatial_envelope_hits` is reachable at visibility `pub(crate)`
+     |
+note: but type `db::IndexState` is only usable at visibility `pub(self)`
+    --> crates/bicdb-core/src/db.rs:6325:1
+     |
+6325 | struct IndexState {
+     | ^^^^^^^^^^^^^^^^^
+
+warning: type `db::SpatialIndexEntry` is more private than the item `fts_query::<impl db::BicDb>::packed_spatial_envelope_hits`
+    --> crates/bicdb-core/src/db/fts_query.rs:3584:5
+     |
+3584 | /     pub(crate) fn packed_spatial_envelope_hits(
+3585 | |         &self,
+3586 | |         state: &IndexState,
+3587 | |         envelope: &AABB<[f64; 2]>,
+3588 | |     ) -> Result<Vec<SpatialIndexEntry>> {
+     | |_______________________________________^ method `fts_query::<impl db::BicDb>::packed_spatial_envelope_hits` is reachable at visibility `pub(crate)`
+     |
+note: but type `db::SpatialIndexEntry` is only usable at visibility `pub(self)`
+    --> crates/bicdb-core/src/db.rs:6549:1
+     |
+6549 | struct SpatialIndexEntry {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: type `db::IndexState` is more private than the item `fts_query::<impl db::BicDb>::packed_spatial_contains`
+    --> crates/bicdb-core/src/db/fts_query.rs:3625:5
+     |
+3625 | /     pub(crate) fn packed_spatial_contains(
+3626 | |         &self,
+3627 | |         state: &IndexState,
+3628 | |         entry: &SpatialIndexEntry,
+3629 | |     ) -> Result<bool> {
+     | |_____________________^ method `fts_query::<impl db::BicDb>::packed_spatial_contains` is reachable at visibility `pub(crate)`
+     |
+note: but type `db::IndexState` is only usable at visibility `pub(self)`
+    --> crates/bicdb-core/src/db.rs:6325:1
+     |
+6325 | struct IndexState {
+     | ^^^^^^^^^^^^^^^^^
+
+warning: type `db::SpatialIndexEntry` is more private than the item `fts_query::<impl db::BicDb>::packed_spatial_contains`
+    --> crates/bicdb-core/src/db/fts_query.rs:3625:5
+     |
+3625 | /     pub(crate) fn packed_spatial_contains(
+3626 | |         &self,
+3627 | |         state: &IndexState,
+3628 | |         entry: &SpatialIndexEntry,
+3629 | |     ) -> Result<bool> {
+     | |_____________________^ method `fts_query::<impl db::BicDb>::packed_spatial_contains` is reachable at visibility `pub(crate)`
+     |
+note: but type `db::SpatialIndexEntry` is only usable at visibility `pub(self)`
+    --> crates/bicdb-core/src/db.rs:6549:1
+     |
+6549 | struct SpatialIndexEntry {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: type `db::IndexState` is more private than the item `fts_query::<impl db::BicDb>::packed_spatial_live_count`
+    --> crates/bicdb-core/src/db/fts_query.rs:3641:5
+     |
+3641 |     pub(crate) fn packed_spatial_live_count(&self, state: &IndexState) -> Result<usize> {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ method `fts_query::<impl db::BicDb>::packed_spatial_live_count` is reachable at visibility `pub(crate)`
+     |
+note: but type `db::IndexState` is only usable at visibility `pub(self)`
+    --> crates/bicdb-core/src/db.rs:6325:1
+     |
+6325 | struct IndexState {
+     | ^^^^^^^^^^^^^^^^^
+
+warning: type `db::IndexState` is more private than the item `fts_query::<impl db::BicDb>::spatial_candidates_in_envelope`
+    --> crates/bicdb-core/src/db/fts_query.rs:3677:5
+     |
+3677 | /     pub(crate) fn spatial_candidates_in_envelope(
+3678 | |         &self,
+3679 | |         state: &IndexState,
+3680 | |         envelope: &AABB<[f64; 2]>,
+3681 | |     ) -> Result<Vec<SpatialIndexEntry>> {
+     | |_______________________________________^ method `fts_query::<impl db::BicDb>::spatial_candidates_in_envelope` is reachable at visibility `pub(crate)`
+     |
+note: but type `db::IndexState` is only usable at visibility `pub(self)`
+    --> crates/bicdb-core/src/db.rs:6325:1
+     |
+6325 | struct IndexState {
+     | ^^^^^^^^^^^^^^^^^
+
+warning: type `db::SpatialIndexEntry` is more private than the item `fts_query::<impl db::BicDb>::spatial_candidates_in_envelope`
+    --> crates/bicdb-core/src/db/fts_query.rs:3677:5
+     |
+3677 | /     pub(crate) fn spatial_candidates_in_envelope(
+3678 | |         &self,
+3679 | |         state: &IndexState,
+3680 | |         envelope: &AABB<[f64; 2]>,
+3681 | |     ) -> Result<Vec<SpatialIndexEntry>> {
+     | |_______________________________________^ method `fts_query::<impl db::BicDb>::spatial_candidates_in_envelope` is reachable at visibility `pub(crate)`
+     |
+note: but type `db::SpatialIndexEntry` is only usable at visibility `pub(self)`
+    --> crates/bicdb-core/src/db.rs:6549:1
+     |
+6549 | struct SpatialIndexEntry {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: type `db::IndexState` is more private than the item `fts_query::<impl db::BicDb>::spatial_index_state`
+    --> crates/bicdb-core/src/db/fts_query.rs:3697:5
+     |
+3697 | /     pub(crate) fn spatial_index_state(
+3698 | |         &self,
+3699 | |         name: &str,
+3700 | |     ) -> Result<RwLockReadGuard<'_, IndexState>> {
+     | |________________________________________________^ method `fts_query::<impl db::BicDb>::spatial_index_state` is reachable at visibility `pub(crate)`
+     |
+note: but type `db::IndexState` is only usable at visibility `pub(self)`
+    --> crates/bicdb-core/src/db.rs:6325:1
+     |
+6325 | struct IndexState {
+     | ^^^^^^^^^^^^^^^^^
+
+warning: type `db::IndexState` is more private than the item `index_build::<impl db::BicDb>::index_state_for_build`
+    --> crates/bicdb-core/src/db/index_build.rs:1024:5
+     |
+1024 |     pub(crate) fn index_state_for_build(&self, definition: IndexDefinition) -> Result<IndexState> {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ method `index_build::<impl db::BicDb>::index_state_for_build` is reachable at visibility `pub(crate)`
+     |
+note: but type `db::IndexState` is only usable at visibility `pub(self)`
+    --> crates/bicdb-core/src/db.rs:6325:1
+     |
+6325 | struct IndexState {
+     | ^^^^^^^^^^^^^^^^^
+
+warning: type `db::PitrAuditAction` is more private than the item `pitr_maintenance::<impl db::BicDb>::pitr_apply_actions`
+    --> crates/bicdb-core/src/db/pitr_maintenance.rs:41:5
+     |
+  41 |     pub(crate) fn pitr_apply_actions(&self, actions: Vec<PitrAuditAction>) -> Result<usize> {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ method `pitr_maintenance::<impl db::BicDb>::pitr_apply_actions` is reachable at visibility `pub(crate)`
+     |
+note: but type `db::PitrAuditAction` is only usable at visibility `pub(self)`
+    --> crates/bicdb-core/src/db.rs:7397:1
+     |
+7397 | struct PitrAuditAction {
+     | ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: type `db::CompactionCheckpointPhase` is more private than the item `spatial_paged::<impl db::BicDb>::write_incremental_compatibility_checkpoint`
+    --> crates/bicdb-core/src/db/spatial_paged.rs:886:5
+     |
+ 886 | /     pub(crate) fn write_incremental_compatibility_checkpoint(
+ 887 | |         &self,
+ 888 | |         state: &IncrementalCompactionState,
+ 889 | |         phase: CompactionCheckpointPhase,
+ 890 | |     ) -> Result<()> {
+     | |___________________^ method `spatial_paged::<impl db::BicDb>::write_incremental_compatibility_checkpoint` is reachable at visibility `pub(crate)`
+     |
+note: but type `db::CompactionCheckpointPhase` is only usable at visibility `pub(self)`
+    --> crates/bicdb-core/src/db.rs:7332:1
+     |
+7332 | enum CompactionCheckpointPhase {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: type `db::PagedDurableIndexDef` is more private than the item `spatial_paged::<impl db::BicDb>::paged_durable_index_defs`
+     --> crates/bicdb-core/src/db/spatial_paged.rs:1436:5
+      |
+ 1436 | /     pub(crate) fn paged_durable_index_defs(
+ 1437 | |         &self,
+ 1438 | |         collection: &str,
+ 1439 | |     ) -> Result<Vec<PagedDurableIndexDef>> {
+      | |__________________________________________^ method `spatial_paged::<impl db::BicDb>::paged_durable_index_defs` is reachable at visibility `pub(crate)`
+      |
+note: but type `db::PagedDurableIndexDef` is only usable at visibility `pub(self)`
+     --> crates/bicdb-core/src/db.rs:24760:1
+      |
+24760 | struct PagedDurableIndexDef {
+      | ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: type `db::PagedApplyCtx` is more private than the item `spatial_paged::<impl db::BicDb>::paged_apply_ctx`
+    --> crates/bicdb-core/src/db/spatial_paged.rs:1572:5
+     |
+1572 | /     pub(crate) fn paged_apply_ctx(
+1573 | |         &self,
+1574 | |         collection: &str,
+1575 | |         xid: bicdb_page::Xid,
+1576 | |     ) -> Option<PagedApplyCtx> {
+     | |______________________________^ method `spatial_paged::<impl db::BicDb>::paged_apply_ctx` is reachable at visibility `pub(crate)`
+     |
+note: but type `db::PagedApplyCtx` is only usable at visibility `pub(self)`
+    --> crates/bicdb-core/src/db.rs:1274:1
+     |
+1274 | struct PagedApplyCtx {
+     | ^^^^^^^^^^^^^^^^^^^^
+
+warning: methods `contains_record` and `forget_if_empty` are never used
+    --> crates/bicdb-core/src/db.rs:4411:8
+     |
+4290 | impl Shard {
+     | ---------- methods in this implementation
+...
+4411 |     fn contains_record(&self, pk: &str) -> bool {
+     |        ^^^^^^^^^^^^^^^
+...
+4419 |     fn forget_if_empty(&mut self, pk: &str, rid: RowId) {
+     |        ^^^^^^^^^^^^^^^
+     |
+     = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: methods `write_all` and `bump_generation` are never used
+    --> crates/bicdb-core/src/db.rs:4541:8
+     |
+4470 | impl CollectionState {
+     | -------------------- methods in this implementation
+...
+4541 |     fn write_all(&self) -> Vec<RwLockWriteGuard<'_, Shard>> {
+     |        ^^^^^^^^^
+...
+4609 |     fn bump_generation(&self) {
+     |        ^^^^^^^^^^^^^^^
+
+warning: associated function `from_event` is never used
+     --> crates/bicdb-core/src/db.rs:21477:8
+      |
+21476 | impl AuditMutation {
+      | ------------------ associated function in this implementation
+21477 |     fn from_event(owner_node_id: &NodeId, stored: &StoredEvent) -> Result<Option<Self>> {
+      |        ^^^^^^^^^^
+
+warning: function `build_indexes` is never used
+     --> crates/bicdb-core/src/db.rs:22023:4
+      |
+22023 | fn build_indexes(
+      |    ^^^^^^^^^^^^^
+
+warning: function `decode_record_frame` is never used
+     --> crates/bicdb-core/src/db.rs:27135:4
+      |
+27135 | fn decode_record_frame(payload: &[u8]) -> Result<RecordFrame> {
+      |    ^^^^^^^^^^^^^^^^^^^
+
+warning: methods `prepare_mutations`, `validate_collection_index_mutations`, `apply_collection_index_mutations`, `prepared_index_mutations`, and `delete_index_mutation` are never used
+    --> crates/bicdb-core/src/db/commit_snapshot.rs:1602:19
+     |
+   5 | impl BicDb {
+     | ---------- methods in this implementation
+...
+1602 |     pub(crate) fn prepare_mutations(
+     |                   ^^^^^^^^^^^^^^^^^
+...
+1973 |     pub(crate) fn validate_collection_index_mutations(
+     |                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+2003 |     pub(crate) fn apply_collection_index_mutations(
+     |                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+2042 |     pub(crate) fn prepared_index_mutations(
+     |                   ^^^^^^^^^^^^^^^^^^^^^^^^
+...
+2093 |     pub(crate) fn delete_index_mutation(
+     |                   ^^^^^^^^^^^^^^^^^^^^^
+
+warning: method `paged_stub_fetch` is never used
+    --> crates/bicdb-core/src/db/spatial_paged.rs:1561:19
+     |
+   5 | impl BicDb {
+     | ---------- method in this implementation
+...
+1561 |     pub(crate) fn paged_stub_fetch(
+     |                   ^^^^^^^^^^^^^^^^
+
+warning: function `ensure_open_compatible` is never used
+   --> crates/bicdb-core/src/format.rs:219:8
+    |
+219 | pub fn ensure_open_compatible(root: &Path, fsync: bool) -> Result<FormatMigrationReport> {
+    |        ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `read_u64` is never used
+    --> crates/bicdb-core/src/fts_build.rs:1574:4
+     |
+1574 | fn read_u64(reader: &mut impl Read) -> Result<u64> {
+     |    ^^^^^^^^
+
+warning: associated function `uncached` is never used
+  --> crates/bicdb-core/src/fts_cache.rs:29:12
+   |
+28 | impl CachedPostingBlock {
+   | ----------------------- associated function in this implementation
+29 |     pub fn uncached(
+   |            ^^^^^^^^
+
+warning: method `len` is never used
+   --> crates/bicdb-core/src/fts_segment.rs:499:8
+    |
+488 | impl TermsBacking {
+    | ----------------- method in this implementation
+...
+499 |     fn len(&self) -> usize {
+    |        ^^^
+
+warning: method `sole` is never used
+    --> crates/bicdb-core/src/fts_segment.rs:1947:19
+     |
+1902 | impl SegmentSet {
+     | --------------- method in this implementation
+...
+1947 |     pub(crate) fn sole(&self) -> Option<&Arc<FtsSegmentReader>> {
+     |                   ^^^^
+
+warning: associated function `verify` is never used
+    --> crates/bicdb-core/src/fts_segment.rs:2380:19
+     |
+2261 | impl FtsSegmentReader {
+     | --------------------- associated function in this implementation
+...
+2380 |     pub(crate) fn verify(segments_root: &Path, physical: &str) -> Result<()> {
+     |                   ^^^^^^
+
+warning: function `scan_sql_value_end` is never used
+    --> crates/bicdb-core/src/observability.rs:1193:4
+     |
+1193 | fn scan_sql_value_end(input: &str, start: usize) -> usize {
+     |    ^^^^^^^^^^^^^^^^^^
+
+warning: method `scan_all_numeric_posting_blocks_paged` is never used
+    --> crates/bicdb-core/src/paged_collection.rs:2880:8
+     |
+ 251 | impl PagedRecords {
+     | ----------------- method in this implementation
+...
+2880 |     fn scan_all_numeric_posting_blocks_paged<'store>(
+     |        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `INDEX_ENTRY_TERM_V2` is never used
+    --> crates/bicdb-core/src/paged_collection.rs:4157:18
+     |
+4157 | pub(crate) const INDEX_ENTRY_TERM_V2: [u8; 2] = [0, 0];
+     |                  ^^^^^^^^^^^^^^^^^^^
+
+warning: function `posting_block_max_impact` is never used
+    --> crates/bicdb-core/src/paged_collection.rs:4817:15
+     |
+4817 | pub(crate) fn posting_block_max_impact(bytes: &[u8]) -> Result<u16> {
+     |               ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `decode_doc_terms_header` is never used
+    --> crates/bicdb-core/src/paged_collection.rs:5781:15
+     |
+5781 | pub(crate) fn decode_doc_terms_header(bytes: &[u8]) -> Result<(u32, u32)> {
+     |               ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: field `0` is never read
+    --> crates/bicdb-core/src/record.rs:1015:19
+     |
+1015 |     struct RawMap(std::collections::BTreeMap<(), ()>);
+     |            ------ ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |            |
+     |            field in this struct
+     |
+     = help: consider removing this field
+
+warning: constant `BTREE_ENTRY_OVERHEAD` is never used
+    --> crates/bicdb-core/src/aggregate_projection.rs:1070:15
+     |
+1070 |         const BTREE_ENTRY_OVERHEAD: u64 = 24;
+     |               ^^^^^^^^^^^^^^^^^^^^
+
+warning: function `read_bytes_at` is never used
+    --> crates/bicdb-core/src/storage.rs:1565:15
+     |
+1565 | pub(crate) fn read_bytes_at(path: &Path, offset: u64, len: usize) -> Result<Option<Vec<u8>>> {
+     |               ^^^^^^^^^^^^^
+
+warning: function `bundle_event_for_stored` is never used
+   --> crates/bicdb-core/src/sync_mesh.rs:725:15
+    |
+725 | pub(crate) fn bundle_event_for_stored(
+    |               ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `envelope_for_event` is never used
+   --> crates/bicdb-core/src/sync_mesh.rs:744:15
+    |
+744 | pub(crate) fn envelope_for_event(
+    |               ^^^^^^^^^^^^^^^^^^
+
+warning: calls to `std::mem::drop` with a reference instead of an owned value does nothing
+     --> crates/bicdb-core/src/db.rs:18387:17
+      |
+18387 |                 drop(db);
+      |                 ^^^^^--^
+      |                      |
+      |                      argument has type `&db::BicDb`
+      |
+      = note: `#[warn(dropping_references)]` on by default
+help: use `let _ = ...` to ignore the expression or result
+      |
+18387 -                 drop(db);
+18387 +                 let _ = db;
+      |
+
+warning: `bicdb-core` (lib) generated 98 warnings (run `cargo fix --lib -p bicdb-core` to apply 14 suggestions)
+warning: unnecessary parentheses around block return value
+   --> crates/bicdb-sql/src/oracle.rs:147:13
+    |
+147 |             (record.metadata == metadata_v8() || record.metadata == metadata_v9())
+    |             ^                                                                    ^
+    |
+    = note: `#[warn(unused_parens)]` (part of `#[warn(unused)]`) on by default
+help: remove these parentheses
+    |
+147 -             (record.metadata == metadata_v8() || record.metadata == metadata_v9())
+147 +             record.metadata == metadata_v8() || record.metadata == metadata_v9()
+    |
+
+warning: unused import: `fts_index_terms`
+   --> crates/bicdb-sql/src/lib.rs:112:80
+    |
+112 |     eval_fts_db_function_value, eval_fts_function_value, fts_function_pg_type, fts_index_terms,
+    |                                                                                ^^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `crate::*`
+  --> crates/bicdb-sql/src/engine/column_check.rs:15:5
+   |
+15 | use crate::*;
+   |     ^^^^^^^^
+
+warning: unused doc comment
+    --> crates/bicdb-sql/src/eval/aggregates.rs:1196:1
+     |
+1196 | / /// Logical PostgreSQL type name of a single projected expression, resolved
+1197 | | /// against the (single-table) schema. Handles aggregates (per
+1198 | | /// [`aggregate_result_pg_type`]), explicit `::type` casts, and column references
+1199 | | /// (including qualified ones and primary keys). Returns `None` for dynamic/JSON
+1200 | | /// or otherwise unmodeled expressions, so the wire layer falls back to its
+1201 | | /// value-width heuristic.
+     | |_-------------------------^
+     |   |
+     |   rustdoc does not generate documentation for macro invocations
+     |
+     = help: to document an item produced by a macro, the macro must produce the documentation as part of its expansion
+     = note: `#[warn(unused_doc_comments)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `std::cell::RefCell`
+  --> crates/bicdb-sql/src/eval.rs:40:5
+   |
+40 | use std::cell::RefCell;
+   |     ^^^^^^^^^^^^^^^^^^
+
+warning: unreachable pattern
+   --> crates/bicdb-sql/src/oracle/routine_arithmetic.rs:510:27
+    |
+486 |                         "lower"
+    |                         ------- matches all the relevant values
+...
+510 |                         | "lower" | "upper",
+    |                           ^^^^^^^ no value can reach this
+    |
+    = note: `#[warn(unreachable_patterns)]` (part of `#[warn(unused)]`) on by default
+
+warning: unreachable pattern
+   --> crates/bicdb-sql/src/oracle/routine_arithmetic.rs:510:37
+    |
+487 |                         | "upper"
+    |                           ------- matches all the relevant values
+...
+510 |                         | "lower" | "upper",
+    |                                     ^^^^^^^ no value can reach this
+
+warning: variable does not need to be mutable
+    --> crates/bicdb-sql/src/session/txn_update.rs:5537:13
+     |
+5537 |         let mut replace = |expr: &mut Expr, changed: &mut bool| {
+     |             ----^^^^^^^
+     |             |
+     |             help: remove this `mut`
+     |
+     = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `before_child`
+    --> crates/bicdb-sql/src/session/txn_update.rs:6353:21
+     |
+6353 |                 let before_child = child.clone();
+     |                     ^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_before_child`
+     |
+     = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: variable does not need to be mutable
+    --> crates/bicdb-sql/src/session/txn_update.rs:7092:13
+     |
+7092 |         let mut row_engine = row_engine.with_operand_type_memo(memo);
+     |             ----^^^^^^^^^^
+     |             |
+     |             help: remove this `mut`
+
+warning: variable does not need to be mutable
+   --> crates/bicdb-sql/src/mvt.rs:274:9
+    |
+274 |     let mut emit_moves =
+    |         ----^^^^^^^^^^
+    |         |
+    |         help: remove this `mut`
+
+warning: value assigned to `first_bucket` is never read
+    --> crates/bicdb-sql/src/engine/scan_fts.rs:2144:21
+     |
+2144 |                     first_bucket = None;
+     |                     ^^^^^^^^^^^^^^^^^^^
+     |
+     = help: maybe it is overwritten before being read?
+     = note: `#[warn(unused_assignments)]` (part of `#[warn(unused)]`) on by default
+
+warning: variable does not need to be mutable
+    --> crates/bicdb-sql/src/eval/text_rewrite.rs:1587:9
+     |
+1587 |     let mut flush = |words: &mut Vec<(String, usize)>, inserts: &mut Vec<usize>| {
+     |         ----^^^^^
+     |         |
+     |         help: remove this `mut`
+
+warning: type `session::CompositeAttributeMutation` is more private than the item `privilege_projection::<impl session::SqlSession<'db>>::apply_composite_type_change`
+    --> crates/bicdb-sql/src/session/privilege_projection.rs:1772:5
+     |
+1772 | /     pub(crate) fn apply_composite_type_change(
+1773 | |         &mut self,
+1774 | |         previous: &UserTypeSchema,
+1775 | |         updated: &UserTypeSchema,
+1776 | |         mutation: &CompositeAttributeMutation,
+1777 | |         persist_root: bool,
+1778 | |     ) -> Result<()> {
+     | |___________________^ method `privilege_projection::<impl session::SqlSession<'db>>::apply_composite_type_change` is reachable at visibility `pub(crate)`
+     |
+note: but type `session::CompositeAttributeMutation` is only usable at visibility `pub(self)`
+    --> crates/bicdb-sql/src/session.rs:1298:1
+     |
+1298 | enum CompositeAttributeMutation {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     = note: `#[warn(private_interfaces)]` on by default
+
+warning: type `session::CompositeAttributeMutation` is more private than the item `privilege_projection::<impl session::SqlSession<'db>>::apply_table_row_type_change`
+    --> crates/bicdb-sql/src/session/privilege_projection.rs:1898:5
+     |
+1898 | /     pub(crate) fn apply_table_row_type_change(
+1899 | |         &mut self,
+1900 | |         previous_schema: &TableSchema,
+1901 | |         updated_schema: &TableSchema,
+1902 | |         mutation: &CompositeAttributeMutation,
+1903 | |     ) -> Result<()> {
+     | |___________________^ method `privilege_projection::<impl session::SqlSession<'db>>::apply_table_row_type_change` is reachable at visibility `pub(crate)`
+     |
+note: but type `session::CompositeAttributeMutation` is only usable at visibility `pub(self)`
+    --> crates/bicdb-sql/src/session.rs:1298:1
+     |
+1298 | enum CompositeAttributeMutation {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: type `engine::RelationColumnMetadata` is more private than the item `materialize::<impl engine::SqlEngine<'db>>::collect_relation_column_metadata`
+    --> crates/bicdb-sql/src/engine/materialize.rs:1694:5
+     |
+1694 | /     pub(crate) fn collect_relation_column_metadata(
+1695 | |         &self,
+1696 | |         factor: &TableFactor,
+1697 | |         relations: &mut Vec<RelationColumnMetadata>,
+1698 | |     ) -> Option<()> {
+     | |___________________^ method `materialize::<impl engine::SqlEngine<'db>>::collect_relation_column_metadata` is reachable at visibility `pub(crate)`
+     |
+note: but type `engine::RelationColumnMetadata` is only usable at visibility `pub(self)`
+    --> crates/bicdb-sql/src/engine.rs:43:1
+     |
+  43 | struct RelationColumnMetadata {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: associated function `from_keyword` is never used
+    --> crates/bicdb-sql/src/lib.rs:3711:8
+     |
+3710 | impl PolicyCommand {
+     | ------------------ associated function in this implementation
+3711 |     fn from_keyword(keyword: &str) -> Result<Self> {
+     |        ^^^^^^^^^^^^
+     |
+     = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: method `owner_observation` is never used
+   --> crates/bicdb-sql/src/oracle/lobs/history.rs:192:19
+    |
+ 62 | impl History {
+    | ------------ method in this implementation
+...
+192 |     pub(super) fn owner_observation(&self) -> Result<OwnerVersion> {
+    |                   ^^^^^^^^^^^^^^^^^
+
+warning: function `unsupported` is never used
+  --> crates/bicdb-sql/src/adaptive/host.rs:50:4
+   |
+50 | fn unsupported(what: impl Into<String>) -> SqlError {
+   |    ^^^^^^^^^^^
+
+warning: struct `CursorState` is never constructed
+  --> crates/bicdb-sql/src/adaptive/host.rs:58:8
+   |
+58 | struct CursorState {
+   |        ^^^^^^^^^^^
+
+warning: struct `BicDbStorage` is never constructed
+  --> crates/bicdb-sql/src/adaptive/host.rs:70:19
+   |
+70 | pub(crate) struct BicDbStorage<'a> {
+   |                   ^^^^^^^^^^^^
+
+warning: associated items `new`, `schema_for`, and `open_cursor` are never used
+  --> crates/bicdb-sql/src/adaptive/host.rs:80:19
+   |
+77 | impl<'a> BicDbStorage<'a> {
+   | ------------------------- associated items in this implementation
+...
+80 |     pub(crate) fn new(tx: &'a mut Transaction, schemas: HashMap<String, TableSchema>) -> Self {
+   |                   ^^^
+...
+89 |     fn schema_for(&self, table: &str) -> Result<&TableSchema> {
+   |        ^^^^^^^^^^
+...
+95 |     fn open_cursor(&mut self, rows: Vec<ExecRow>) -> CursorId {
+   |        ^^^^^^^^^^^
+
+warning: function `materialize_record` is never used
+   --> crates/bicdb-sql/src/adaptive/host.rs:105:4
+    |
+105 | fn materialize_record(schema: &TableSchema, table: &str, record: &Record) -> ExecRow {
+    |    ^^^^^^^^^^^^^^^^^^
+
+warning: constant `HOST_BATCH_ROWS` is never used
+   --> crates/bicdb-sql/src/adaptive/host.rs:259:7
+    |
+259 | const HOST_BATCH_ROWS: usize = 1024;
+    |       ^^^^^^^^^^^^^^^
+
+warning: struct `HostBackend` is never constructed
+   --> crates/bicdb-sql/src/adaptive/host.rs:263:19
+    |
+263 | pub(crate) struct HostBackend;
+    |                   ^^^^^^^^^^^
+
+warning: function `as_bool_opt` is never used
+   --> crates/bicdb-sql/src/adaptive/host.rs:267:4
+    |
+267 | fn as_bool_opt(v: &SqlValue) -> Result<Option<bool>> {
+    |    ^^^^^^^^^^^
+
+warning: function `bool3` is never used
+   --> crates/bicdb-sql/src/adaptive/host.rs:275:4
+    |
+275 | fn bool3(opt: Option<bool>) -> SqlValue {
+    |    ^^^^^
+
+warning: function `numeric_cmp` is never used
+   --> crates/bicdb-sql/src/adaptive/host.rs:283:4
+    |
+283 | fn numeric_cmp(a: &SqlValue, b: &SqlValue) -> Option<Option<std::cmp::Ordering>> {
+    |    ^^^^^^^^^^^
+
+warning: function `compare_values` is never used
+   --> crates/bicdb-sql/src/adaptive/host.rs:294:4
+    |
+294 | fn compare_values(op: CompareOp, a: &SqlValue, b: &SqlValue) -> Result<SqlValue> {
+    |    ^^^^^^^^^^^^^^
+
+warning: function `arithmetic` is never used
+   --> crates/bicdb-sql/src/adaptive/host.rs:319:4
+    |
+319 | fn arithmetic(op: BinaryOp, a: &SqlValue, b: &SqlValue) -> Result<SqlValue> {
+    |    ^^^^^^^^^^
+
+warning: function `numeric_as_f64` is never used
+   --> crates/bicdb-sql/src/adaptive/host.rs:356:4
+    |
+356 | fn numeric_as_f64(v: &SqlValue) -> Option<f64> {
+    |    ^^^^^^^^^^^^^^
+
+warning: function `eval_scalar` is never used
+   --> crates/bicdb-sql/src/adaptive/host.rs:365:4
+    |
+365 | fn eval_scalar(expr: &ScalarExpr, row: &[SqlValue], params: &[SqlValue]) -> Result<SqlValue> {
+    |    ^^^^^^^^^^^
+
+warning: method `eval_op` is never used
+   --> crates/bicdb-sql/src/adaptive/host.rs:436:8
+    |
+435 | impl HostBackend {
+    | ---------------- method in this implementation
+436 |     fn eval_op(
+    |        ^^^^^^^
+
+warning: function `op_name` is never used
+   --> crates/bicdb-sql/src/adaptive/host.rs:549:4
+    |
+549 | fn op_name(op: &RelOp) -> &'static str {
+    |    ^^^^^^^
+
+warning: function `compare_op` is never used
+   --> crates/bicdb-sql/src/adaptive/host.rs:592:4
+    |
+592 | fn compare_op(op: &BinaryOperator) -> Option<CompareOp> {
+    |    ^^^^^^^^^^
+
+warning: function `arith_op` is never used
+   --> crates/bicdb-sql/src/adaptive/host.rs:604:4
+    |
+604 | fn arith_op(op: &BinaryOperator) -> Option<BinaryOp> {
+    |    ^^^^^^^^
+
+warning: function `col_index` is never used
+   --> crates/bicdb-sql/src/adaptive/host.rs:615:4
+    |
+615 | fn col_index(cols: &[&ColumnSchema], name: &str) -> Option<u32> {
+    |    ^^^^^^^^^
+
+warning: function `lower_scalar` is never used
+   --> crates/bicdb-sql/src/adaptive/host.rs:622:4
+    |
+622 | fn lower_scalar(expr: &Expr, cols: &[&ColumnSchema]) -> Option<ScalarExpr> {
+    |    ^^^^^^^^^^^^
+
+warning: function `is_literal_or_param` is never used
+   --> crates/bicdb-sql/src/adaptive/host.rs:687:4
+    |
+687 | fn is_literal_or_param(expr: &Expr) -> bool {
+    |    ^^^^^^^^^^^^^^^^^^^
+
+warning: enum `Access` is never used
+   --> crates/bicdb-sql/src/adaptive/host.rs:693:6
+    |
+693 | enum Access {
+    |      ^^^^^^
+
+warning: function `lower_where` is never used
+   --> crates/bicdb-sql/src/adaptive/host.rs:700:4
+    |
+700 | fn lower_where(
+    |    ^^^^^^^^^^^
+
+warning: function `lower_select` is never used
+   --> crates/bicdb-sql/src/adaptive/host.rs:744:15
+    |
+744 | pub(crate) fn lower_select<F>(query: &Query, resolve_schema: F) -> Option<RelPlan>
+    |               ^^^^^^^^^^^^
+
+warning: function `has_group_by` is never used
+   --> crates/bicdb-sql/src/adaptive/host.rs:881:4
+    |
+881 | fn has_group_by(select: &sqlparser::ast::Select) -> bool {
+    |    ^^^^^^^^^^^^
+
+warning: function `lower_routine_ir` is never used
+   --> crates/bicdb-sql/src/adaptive/lower.rs:191:15
+    |
+191 | pub(crate) fn lower_routine_ir(ir: &RoutineIR) -> Option<ProcIr> {
+    |               ^^^^^^^^^^^^^^^^
+
+warning: associated function `new` is never used
+   --> crates/bicdb-sql/src/adaptive/lower.rs:392:26
+    |
+388 | impl SessionHost {
+    | ---------------- associated function in this implementation
+...
+392 |     pub(crate) unsafe fn new<'db>(
+    |                          ^^^
+
+warning: methods `mark` and `finish` are never used
+   --> crates/bicdb-sql/src/pg_large_objects/descriptors.rs:210:19
+    |
+165 | impl DescriptorState {
+    | -------------------- methods in this implementation
+...
+210 |     pub(super) fn mark(&self, transaction: DescriptorTransaction) -> Result<DescriptorSavepoint> {
+    |                   ^^^^
+...
+231 |     pub(super) fn finish(&self, transaction: DescriptorTransaction) {
+    |                   ^^^^^^
+
+warning: function `pg_default_opclass` is never used
+   --> crates/bicdb-sql/src/pg_opclasses.rs:271:15
+    |
+271 | pub(crate) fn pg_default_opclass(
+    |               ^^^^^^^^^^^^^^^^^^
+
+warning: method `session_user_can_manage_roles` is never used
+    --> crates/bicdb-sql/src/session.rs:5207:8
+     |
+2327 | impl<'db> SqlSession<'db> {
+     | ------------------------- method in this implementation
+...
+5207 |     fn session_user_can_manage_roles(&self) -> Result<bool> {
+     |        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `run` is never used
+ --> crates/bicdb-sql/src/session/join_lookup_tests.rs:6:4
+  |
+6 | fn run(session: &mut SqlSession<'_>, profile: &str, sql: &str) -> Result<SqlResult> {
+  |    ^^^
+
+warning: function `profiled` is never used
+  --> crates/bicdb-sql/src/session/join_lookup_tests.rs:14:4
+   |
+14 | fn profiled(session: &mut SqlSession<'_>, profile: &str, sql: &str) -> (Vec<Vec<String>>, usize) {
+   |    ^^^^^^^^
+
+warning: method `enforce_rls_check` is never used
+    --> crates/bicdb-sql/src/session/raw_index_fts.rs:1761:19
+     |
+  54 | impl<'db> SqlSession<'db> {
+     | ------------------------- method in this implementation
+...
+1761 |     pub(crate) fn enforce_rls_check(
+     |                   ^^^^^^^^^^^^^^^^^
+
+warning: function `validate_start_transaction_modes` is never used
+   --> crates/bicdb-sql/src/schema_meta.rs:983:15
+    |
+983 | pub(crate) fn validate_start_transaction_modes(modes: &[TransactionMode]) -> Result<()> {
+    |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `validate_set_transaction_modes` is never used
+   --> crates/bicdb-sql/src/schema_meta.rs:987:15
+    |
+987 | pub(crate) fn validate_set_transaction_modes(modes: &[TransactionMode]) -> Result<()> {
+    |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: method `set_slot_by_key` is never used
+    --> crates/bicdb-sql/src/schema_meta.rs:5313:19
+     |
+5027 | impl RoutineFrame {
+     | ----------------- method in this implementation
+...
+5313 |     pub(crate) fn set_slot_by_key(&mut self, key: &str, value: SqlValue) -> bool {
+     |                   ^^^^^^^^^^^^^^^
+
+warning: function `assign_routine_targets` is never used
+    --> crates/bicdb-sql/src/schema_meta.rs:5662:15
+     |
+5662 | pub(crate) fn assign_routine_targets(
+     |               ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `assign_routine_targets_nullable` is never used
+    --> crates/bicdb-sql/src/schema_meta.rs:5726:15
+     |
+5726 | pub(crate) fn assign_routine_targets_nullable(
+     |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `bind_literals` is never used
+   --> crates/bicdb-sql/src/statement_cache.rs:316:15
+    |
+316 | pub(crate) fn bind_literals(
+    |               ^^^^^^^^^^^^^
+
+warning: function `compile_routine_ir` is never used
+  --> crates/bicdb-sql/src/routines.rs:59:15
+   |
+59 | pub(crate) fn compile_routine_ir(routine: &RoutineSchema) -> Result<RoutineIR> {
+   |               ^^^^^^^^^^^^^^^^^^
+
+warning: function `compile_cached_routine_ir` is never used
+   --> crates/bicdb-sql/src/routines.rs:301:15
+    |
+301 | pub(crate) fn compile_cached_routine_ir(routine: &RoutineSchema) -> Result<Arc<RoutineIR>> {
+    |               ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `delete_routine` is never used
+    --> crates/bicdb-sql/src/routines.rs:2863:15
+     |
+2863 | pub(crate) fn delete_routine(db: &mut BicDb, kind: RoutineKind, name: &str) -> Result<bool> {
+     |               ^^^^^^^^^^^^^^
+
+warning: function `validate_not_null` is never used
+   --> crates/bicdb-sql/src/records.rs:543:15
+    |
+543 | pub(crate) fn validate_not_null(table: &str, schema: &TableSchema, record: &Record) -> Result<()> {
+    |               ^^^^^^^^^^^^^^^^^
+
+warning: function `validate_column_types` is never used
+   --> crates/bicdb-sql/src/records.rs:571:15
+    |
+571 | pub(crate) fn validate_column_types(
+    |               ^^^^^^^^^^^^^^^^^^^^^
+
+warning: struct `IndexLookupCacheKey` is never constructed
+    --> crates/bicdb-sql/src/engine.rs:4221:19
+     |
+4221 | pub(crate) struct IndexLookupCacheKey {
+     |                   ^^^^^^^^^^^^^^^^^^^
+
+warning: method `with_bound_context_cache` is never used
+    --> crates/bicdb-sql/src/engine.rs:4532:19
+     |
+4348 | impl<'db> SqlEngine<'db> {
+     | ------------------------ method in this implementation
+...
+4532 |     pub(crate) fn with_bound_context_cache(mut self, cache: SharedBoundContextCache) -> Self {
+     |                   ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: method `execute_virtual_table` is never used
+   --> crates/bicdb-sql/src/engine/materialize.rs:505:19
+    |
+ 12 | impl<'db> SqlEngine<'db> {
+    | ------------------------ method in this implementation
+...
+505 |     pub(crate) fn execute_virtual_table(
+    |                   ^^^^^^^^^^^^^^^^^^^^^
+
+warning: field `slot` is never read
+   --> crates/bicdb-sql/src/engine/scan_fts.rs:852:17
+    |
+851 |             Fold {
+    |             ---- field in this variant
+852 |                 slot: usize,
+    |                 ^^^^
+
+warning: associated items `from_sql_row` and `values_unprobed` are never used
+   --> crates/bicdb-sql/src/planner.rs:460:19
+    |
+447 | impl OuterSlotRow {
+    | ----------------- associated items in this implementation
+...
+460 |     pub(crate) fn from_sql_row(row: &SqlRow) -> Self {
+    |                   ^^^^^^^^^^^^
+...
+486 |     pub(crate) fn values_unprobed(&self) -> &SlotRow {
+    |                   ^^^^^^^^^^^^^^^
+
+warning: function `relation_display_name` is never used
+    --> crates/bicdb-sql/src/eval.rs:1592:4
+     |
+1592 | fn relation_display_name(schema: &TableSchema) -> String {
+     |    ^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `has_trusted_identity` is never used
+    --> crates/bicdb-sql/src/eval/value_ops1.rs:2056:15
+     |
+2056 | pub(crate) fn has_trusted_identity(session_gucs: &HashMap<String, String>) -> bool {
+     |               ^^^^^^^^^^^^^^^^^^^^
+
+warning: function `canonical_jsonb_identity_text` is never used
+    --> crates/bicdb-sql/src/eval/temporal_json_oid.rs:1956:15
+     |
+1956 | pub(crate) fn canonical_jsonb_identity_text(value: &JsonValue) -> String {
+     |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `pg_timestamp_from_unix_seconds` is never used
+    --> crates/bicdb-sql/src/eval/temporal_json_oid.rs:2822:15
+     |
+2822 | pub(crate) fn pg_timestamp_from_unix_seconds(seconds: i64) -> PgTimestamp {
+     |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: field `scale` is never read
+  --> crates/bicdb-sql/src/eval/numeric_power.rs:97:5
+   |
+96 | struct Fixed {
+   |        ----- field in this struct
+97 |     scale: i64,
+   |     ^^^^^
+
+warning: `bicdb-sql` (lib) generated 72 warnings (run `cargo fix --lib -p bicdb-sql` to apply 9 suggestions)
+warning: unused variable: `control_server`
+    --> crates/bicdb-pgwire/src/lib.rs:2152:9
+     |
+2152 |         control_server,
+     |         ^^^^^^^^^^^^^^ help: try ignoring the field: `control_server: _`
+     |
+     = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `process_id`
+    --> crates/bicdb-pgwire/src/lib.rs:2154:9
+     |
+2154 |         process_id,
+     |         ^^^^^^^^^^ help: try ignoring the field: `process_id: _`
+
+warning: unused variable: `secret_key`
+    --> crates/bicdb-pgwire/src/lib.rs:2155:9
+     |
+2155 |         secret_key,
+     |         ^^^^^^^^^^ help: try ignoring the field: `secret_key: _`
+
+warning: value assigned to `last_activity` is never read
+    --> crates/bicdb-pgwire/src/lib.rs:2188:17
+     |
+2188 |                 last_activity = Instant::now();
+     |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this value is reassigned later and never used
+...
+2212 |                     last_activity = Instant::now();
+     |                     ------------------------------ `last_activity` is overwritten here before the previous value is read
+     |
+     = note: `#[warn(unused_assignments)]` (part of `#[warn(unused)]`) on by default
+
+warning: value assigned to `last_activity` is never read
+    --> crates/bicdb-pgwire/src/lib.rs:2212:21
+     |
+2212 |                     last_activity = Instant::now();
+     |                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this value is reassigned later and never used
+...
+2271 |                 last_activity = Instant::now();
+     |                 ------------------------------ `last_activity` is overwritten here before the previous value is read
+
+warning: value assigned to `notifications` is never read
+    --> crates/bicdb-pgwire/src/lib.rs:4518:29
+     |
+4518 |     let mut notifications = Vec::new();
+     |                             ^^^^^^^^^^ this value is reassigned later and never used
+...
+4583 |             notifications = session.take_pending_notifications();
+     |             ------------- `notifications` is overwritten here before the previous value is read
+
+warning: function `handle_plain_client_async` is never used
+    --> crates/bicdb-pgwire/src/lib.rs:2142:10
+     |
+2142 | async fn handle_plain_client_async(
+     |          ^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `flush_notifications_async` is never used
+    --> crates/bicdb-pgwire/src/lib.rs:2342:10
+     |
+2342 | async fn flush_notifications_async(
+     |          ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: enum `AsyncFrontendMessageRead` is never used
+    --> crates/bicdb-pgwire/src/lib.rs:2368:6
+     |
+2368 | enum AsyncFrontendMessageRead {
+     |      ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `parse_frontend_message_buffer` is never used
+    --> crates/bicdb-pgwire/src/lib.rs:2374:4
+     |
+2374 | fn parse_frontend_message_buffer(
+     |    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `read_frontend_message_async` is never used
+    --> crates/bicdb-pgwire/src/lib.rs:2403:10
+     |
+2403 | async fn read_frontend_message_async(
+     |          ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `drain_available_frontend_messages` is never used
+    --> crates/bicdb-pgwire/src/lib.rs:2449:4
+     |
+2449 | fn drain_available_frontend_messages(
+     |    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: variants `Sql` and `CopyRows` are never constructed
+    --> crates/bicdb-pgwire/src/lib.rs:3156:5
+     |
+3155 | enum TxBufferedOperation {
+     |      ------------------- variants in this enum
+3156 |     Sql(String),
+     |     ^^^
+3157 |     CopyRows {
+     |     ^^^^^^^^
+     |
+     = note: `TxBufferedOperation` has derived impls for the traits `Debug` and `Clone`, but these are intentionally ignored during dead code analysis
+
+warning: fields `process_id` and `secret_key` are never read
+    --> crates/bicdb-pgwire/src/server_cluster.rs:2911:16
+     |
+2904 | pub(crate) struct InitializedPlainClient {
+     |                   ---------------------- fields in this struct
+...
+2911 |     pub(crate) process_id: i32,
+     |                ^^^^^^^^^^
+2912 |     pub(crate) secret_key: i32,
+     |                ^^^^^^^^^^
+
+warning: fields `process_id` and `secret_key` are never read
+    --> crates/bicdb-pgwire/src/server_cluster.rs:2923:16
+     |
+2916 | pub(crate) struct InitializedBlockingClient {
+     |                   ------------------------- fields in this struct
+...
+2923 |     pub(crate) process_id: i32,
+     |                ^^^^^^^^^^
+2924 |     pub(crate) secret_key: i32,
+     |                ^^^^^^^^^^
+
+warning: function `parse_advisory_lock_call` is never used
+ --> crates/bicdb-pgwire/src/sql_parsing.rs:7:15
+  |
+7 | pub(crate) fn parse_advisory_lock_call(sql: &str) -> Result<Option<AdvisoryLockCall>> {
+  |               ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `advisory_integer_expr` is never used
+   --> crates/bicdb-pgwire/src/sql_parsing.rs:225:15
+    |
+225 | pub(crate) fn advisory_integer_expr(expr: &Expr) -> Result<Option<i64>> {
+    |               ^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `parse_pg_sleep` is never used
+   --> crates/bicdb-pgwire/src/sql_parsing.rs:273:15
+    |
+273 | pub(crate) fn parse_pg_sleep(sql: &str) -> Option<Duration> {
+    |               ^^^^^^^^^^^^^^
+
+warning: function `should_buffer_in_transaction` is never used
+    --> crates/bicdb-pgwire/src/sql_parsing.rs:1237:15
+     |
+1237 | pub(crate) fn should_buffer_in_transaction(normalized: &str) -> bool {
+     |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `buffer_transaction_sql` is never used
+    --> crates/bicdb-pgwire/src/sql_parsing.rs:1246:15
+     |
+1246 | pub(crate) fn buffer_transaction_sql(
+     |               ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `command_tag_for_buffered_sql` is never used
+    --> crates/bicdb-pgwire/src/sql_parsing.rs:1496:15
+     |
+1496 | pub(crate) fn command_tag_for_buffered_sql(normalized: &str) -> &'static str {
+     |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: `bicdb-pgwire` (lib) generated 21 warnings (run `cargo fix --lib -p bicdb-pgwire` to apply 3 suggestions)
+   Compiling bicdb-pgwire v1.0.471-beta (/root/bicdb-durability-s3/repo-tc/crates/bicdb-pgwire)
+memory_available_kib=41809928 swap_free_kib=2478148 cgroup_current_bytes=1054367744 cgroup_anon_bytes=1041043456 cgroup_kernel_bytes=9334784 cgroup_max_bytes=17179869184 memory_psi_avg10=0.00 cgroup_memory_psi_avg10=0.00
+    Finished `test` profile [unoptimized] target(s) in 4.76s
+     Running tests/fixed_snapshot_index_visibility.rs (/root/bicdb-durability-s3/target-tc/debug/deps/fixed_snapshot_index_visibility-f56fc4a5c989e05a)
+
+running 1 test
+{"timestamp":1794419314,"event":"server.listening","severity":"info","fields":{"address":"127.0.0.1:43025"}}
+bicdb pgwire listening on 127.0.0.1:43025 — effective limits: --max-connections=100 --max-pending-accepts=100 --max-active-queries=2 (reads 2 / writes 2) --max-queued-queries=16 (reads 16 / writes 16). Defaults are host-sized; set these explicitly for production.
+{"timestamp":1794419314,"event":"server.limits","severity":"info","fields":{"address":"127.0.0.1:43025","max_active_queries":2,"max_active_reads":2,"max_active_writes":2,"max_connections":100,"max_pending_accepts":100,"max_queued_queries":16,"max_queued_reads":16,"max_queued_writes":16}}
+{"timestamp":1794419314,"event":"connection.opened","severity":"info","fields":{"connection_id":1,"database":"bicdb","peer_addr":"127.0.0.1:53834","tls":false,"user":"bicdb"}}
+{"timestamp":1794419314,"event":"connection.opened","severity":"info","fields":{"connection_id":2,"database":"bicdb","peer_addr":"127.0.0.1:53844","tls":false,"user":"bicdb"}}
+{"timestamp":1794419315,"event":"connection.closed","severity":"info","fields":{"connection_id":2}}
+{"timestamp":1794419315,"event":"connection.closed","severity":"info","fields":{"connection_id":1}}
+{"timestamp":1794419315,"event":"server.listening","severity":"info","fields":{"address":"127.0.0.1:36049"}}
+bicdb pgwire listening on 127.0.0.1:36049 — effective limits: --max-connections=100 --max-pending-accepts=100 --max-active-queries=2 (reads 2 / writes 2) --max-queued-queries=16 (reads 16 / writes 16). Defaults are host-sized; set these explicitly for production.
+{"timestamp":1794419315,"event":"server.limits","severity":"info","fields":{"address":"127.0.0.1:36049","max_active_queries":2,"max_active_reads":2,"max_active_writes":2,"max_connections":100,"max_pending_accepts":100,"max_queued_queries":16,"max_queued_reads":16,"max_queued_writes":16}}
+{"timestamp":1794419315,"event":"connection.opened","severity":"info","fields":{"connection_id":1,"database":"bicdb","peer_addr":"127.0.0.1:56782","tls":false,"user":"bicdb"}}
+{"timestamp":1794419315,"event":"connection.opened","severity":"info","fields":{"connection_id":2,"database":"bicdb","peer_addr":"127.0.0.1:56792","tls":false,"user":"bicdb"}}
+{"timestamp":1794419317,"event":"connection.closed","severity":"info","fields":{"connection_id":2}}
+{"timestamp":1794419317,"event":"connection.closed","severity":"info","fields":{"connection_id":1}}
+
+thread 'fixed_snapshots_retain_rows_removed_from_live_index_candidates' (3992190) panicked at crates/bicdb-pgwire/tests/fixed_snapshot_index_visibility.rs:101:5:
+EmbeddedMemory REPEATABLE READ: SELECT id FROM history WHERE k=10: expected [1], got []
+EmbeddedMemory REPEATABLE READ: SELECT id FROM history WHERE k>=10 AND k<=20 ORDER BY id: expected [1, 2], got []
+EmbeddedMemory REPEATABLE READ: SELECT id FROM history WHERE body @> '{"status":"open"}'::jsonb: expected [1], got []
+EmbeddedMemory REPEATABLE READ READ ONLY: SELECT id FROM history WHERE k=10: expected [1], got []
+EmbeddedMemory REPEATABLE READ READ ONLY: SELECT id FROM history WHERE k>=10 AND k<=20 ORDER BY id: expected [1, 2], got []
+EmbeddedMemory REPEATABLE READ READ ONLY: SELECT id FROM history WHERE body @> '{"status":"open"}'::jsonb: expected [1], got []
+ServerPaged REPEATABLE READ: SELECT id FROM history WHERE k=10: expected [1], got []
+ServerPaged REPEATABLE READ: SELECT id FROM history WHERE k>=10 AND k<=20 ORDER BY id: expected [1, 2], got []
+ServerPaged REPEATABLE READ: SELECT id FROM history WHERE body @> '{"status":"open"}'::jsonb: expected [1], got []
+ServerPaged REPEATABLE READ READ ONLY: SELECT id FROM history WHERE k=10: expected [1], got []
+ServerPaged REPEATABLE READ READ ONLY: SELECT id FROM history WHERE k>=10 AND k<=20 ORDER BY id: expected [1, 2], got []
+ServerPaged REPEATABLE READ READ ONLY: SELECT id FROM history WHERE body @> '{"status":"open"}'::jsonb: expected [1], got []
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test fixed_snapshots_retain_rows_removed_from_live_index_candidates ... FAILED
+
+failures:
+
+failures:
+    fixed_snapshots_retain_rows_removed_from_live_index_candidates
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.47s
+
+error: test failed, to rerun pass `-p bicdb-pgwire --test fixed_snapshot_index_visibility`
+{"source": "2d29fb83b8986786f40d1ccfdd435b1c608c13ba", "scope": "Tests-only negative control against integrated RR/SSI runtime. Historical secondary equality/ranges, bounded ordered winner, MIN/MAX, GIN, and primary rows independently across writable/read-only RR/SSI in both stores. Preserve actual failures; no claim of correctness from prior SSI-only index controls.", "started_unix": 1794419309.821869, "steps": [{"command": ["cargo", "+1.96.0", "test", "--locked", "-j", "1", "-p", "bicdb-pgwire", "--test", "fixed_snapshot_index_visibility", "--", "--nocapture"], "started_unix": 1794419309.8222134, "exit": 101, "finished_unix": 1794419317.111149}], "status": "failed", "finished_unix": 1794419317.1113997}

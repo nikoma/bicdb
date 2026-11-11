@@ -317,6 +317,9 @@ impl BicDb {
         }
         self.check_recovery_state()?;
         if tx.state == TxState::Pending && self.ensure_writable("commit").is_err() {
+            if tx.postgres_serializable.is_some() {
+                self.ensure_writable("commit serializable transaction")?;
+            }
             return self.commit_read_only_on_standby(tx);
         }
         let committed = self.commit_transaction_tracked(tx);

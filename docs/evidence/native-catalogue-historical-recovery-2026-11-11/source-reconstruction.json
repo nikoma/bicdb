@@ -1,0 +1,10 @@
+{
+  "status": "PASS",
+  "public_base": "b0e2498842be7b01e355bb8da1cc249ff16be056",
+  "source": "9e37d812369de61bb9489ce5415d73d47fdcef35",
+  "source_files": 59,
+  "method": "temporary independent Git index; apply complete engine patch; hash every changed source",
+  "rust_rerun": false,
+  "workspace_index_modified": false,
+  "initial_failure_reverse_patch_sha256": "3f42e41151cb8c75930a7dbfb413d73c5c0fa33b8e6240c15afbeb180aab544f"
+}

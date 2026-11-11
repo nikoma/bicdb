@@ -1,11 +1,13 @@
 # PostgreSQL Transactions
 
 BicDB supports single-node transactions through the SQL engine and PostgreSQL
-wire server. The implemented isolation behavior is `READ COMMITTED` style:
-statements never see uncommitted writes from other transactions, and later
-statements can see rows committed by other transactions. Explicit
-`REPEATABLE READ READ ONLY` transactions use a fixed snapshot. PostgreSQL
-`SERIALIZABLE` and read-write repeatable read are not supported.
+wire server. `READ COMMITTED` statements never see another transaction's
+uncommitted writes; later statements can see newly committed rows.
+`REPEATABLE READ` supports both read-only and writable fixed snapshots.
+`SERIALIZABLE` adds tuple and predicate read/write dependency validation to a
+fixed snapshot. These PostgreSQL modes require local transaction execution;
+Serializable snapshot acquisition refuses a standby or a database configured
+with distributed commit admission.
 
 Accepted PostgreSQL isolation command forms:
 
@@ -14,24 +16,42 @@ SET TRANSACTION ISOLATION LEVEL READ COMMITTED;
 BEGIN ISOLATION LEVEL READ COMMITTED;
 BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED READ WRITE;
 START TRANSACTION ISOLATION LEVEL READ COMMITTED;
+SET SESSION CHARACTERISTICS AS TRANSACTION ISOLATION LEVEL REPEATABLE READ;
+BEGIN ISOLATION LEVEL SERIALIZABLE;
+BEGIN ISOLATION LEVEL SERIALIZABLE READ ONLY DEFERRABLE;
 ```
 
-`BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY` is also accepted.
+PostgreSQL fixed snapshots are acquired at the first snapshot-requiring
+statement, including extended-protocol Parse/Bind when analysis needs one.
+`BEGIN`, ordinary settings and `SHOW` do not pin the initial snapshot. A later
+isolation change must respect that boundary. `COMMIT AND CHAIN` and
+`ROLLBACK AND CHAIN` preserve isolation, access mode and deferrability.
 
-Outside that snapshot selection, `READ ONLY` and `READ WRITE` access modes are parsed for client
-compatibility and currently do not change execution behavior.
+`READ ONLY` prevents writes. A Serializable read-only `DEFERRABLE` transaction
+waits for a safe snapshot, honoring cancellation and query deadlines. It keeps
+that snapshot after the wait. Session defaults also apply to implicit data
+statements, grouped simple-query transactions and COPY transfers.
+
+Fixed snapshots retain historical index candidates when another transaction
+changes a key or deletes a row. Current-only postings and bounded index cursors
+cannot substitute their live contents for the transaction's visible rows.
+Serializable dependency tracking is distinct from this visibility requirement:
+Repeatable Read retains snapshot rows without SSI dependency aborts.
+
+In a fixed snapshot, stale UPDATE/DELETE and locking reads report `40001`.
+Plain duplicate INSERT retains uniqueness errors (`23505`); an `ON CONFLICT`
+action that depends on a conflicting tuple outside the snapshot can require a
+`40001` retry. Optional UPDATE repair does not widen a fixed snapshot.
 
 Unsupported isolation levels are rejected instead of being silently accepted:
 
-- `REPEATABLE READ READ WRITE`
-- `SERIALIZABLE`
-- `READ UNCOMMITTED`
 - `SNAPSHOT`
 - transaction snapshots
 
 These return SQLSTATE `0A000` through PostgreSQL-shaped error responses on the
-wire protocol. Native engine and Oracle-profile isolation capabilities do not
-imply PostgreSQL SERIALIZABLE/SSI support.
+wire protocol. PostgreSQL `READ UNCOMMITTED` uses Read Committed visibility.
+The Oracle profile retains its separate snapshot-isolation contract; its
+`SERIALIZABLE` mode does not select PostgreSQL SSI.
 
 Concurrent writes use per-record locks and optimistic conflict checks. A
 transaction conflict is reported as SQLSTATE `40001`; the application must retry

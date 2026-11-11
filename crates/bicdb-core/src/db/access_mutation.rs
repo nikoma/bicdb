@@ -900,6 +900,7 @@ impl BicDb {
             isolation: TransactionIsolation::ReadCommitted,
             serializable_generation_snapshot: HashMap::new(),
             serializable_reads: BTreeSet::new(),
+            postgres_serializable: None,
             bypass_commit_admission: false,
             commit_admission_ticket: None,
             committed_seq: None,

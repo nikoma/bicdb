@@ -1,0 +1,29 @@
+{
+  "status": "passed",
+  "server_version": "16.13 (Debian 16.13-1.pgdg13+1)",
+  "implicit_batch": {
+    "wait": [
+      "Lock",
+      "transactionid"
+    ],
+    "sqlstate": "40001",
+    "rows_after_failure": [
+      [
+        101,
+        10
+      ]
+    ]
+  },
+  "copy": {
+    "wait": [
+      "IPC",
+      "SafeSnapshot"
+    ],
+    "reader_snapshot_count": 0,
+    "rows_after_abort": [
+      [
+        103
+      ]
+    ]
+  }
+}

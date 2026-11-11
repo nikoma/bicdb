@@ -1,0 +1,175 @@
+{
+  "compiled_source": "5d70669eec9fcea8f9963894ef73d243ef9d208f",
+  "source_version": "1.0.471-beta",
+  "public_patch_base": "b0e2498842be7b01e355bb8da1cc249ff16be056",
+  "patch_sha256": "0fd3c57010a9462bd7ea642bdd40109514f372a6c0f72e1f2c869b52e6c09a3c",
+  "unique_tests": 55,
+  "executions": 55,
+  "runs": [
+    {
+      "name": "receiver-participant-first-v2",
+      "count": 1,
+      "test_ids": [
+        "distribution_range_recovery::runtime::tests::actual_runtime_handoff_uses_committed_session_owner_after_normal_preflight"
+      ]
+    },
+    {
+      "name": "receiver-historical-v2",
+      "count": 2,
+      "test_ids": [
+        "db::range_image_native::certified_prefix::recovery_apply::tests::actual_native_historical_replica_uses_current_marker_quorum_without_data_leader_certifier",
+        "db::range_image_native::certified_prefix::recovery_apply::tests::actual_post_wal_unknown_checkpoint_reopen_uses_new_local_attempt_and_original_command"
+      ]
+    },
+    {
+      "name": "receiver-install-v2",
+      "count": 14,
+      "test_ids": [
+        "distribution_range_image_install::tests::actual_capture_refuses_outstanding_controlled_callback_then_succeeds_after_drain",
+        "distribution_range_image_install::tests::actual_installed_r1_floor_survives_physical_invalidation_and_reopen_without_readiness",
+        "distribution_range_image_install::tests::actual_native_image_catalogue_adoption_ambiguous_persist_needs_real_refsync_before_receipt",
+        "distribution_range_image_install::tests::actual_native_image_catalogue_adoption_folds_real_rows_but_keeps_every_admission_refused",
+        "distribution_range_image_install::tests::actual_native_image_catalogue_adoption_reopens_and_reissues_same_materialized_snapshot",
+        "distribution_range_image_install::tests::actual_native_image_catalogue_adoption_retry_is_idempotent_without_reapplying_rows",
+        "distribution_range_image_install::tests::actual_native_r0_copy_removes_extra_rows_and_preserves_target_namespace_identity",
+        "distribution_range_image_install::tests::actual_native_image_catalogue_finalization_retains_real_base_and_rejects_foreign_freeze",
+        "distribution_range_image_install::tests::actual_native_r1_install_uses_target_local_visibility_and_preserves_other_range_rows",
+        "distribution_range_image_install::tests::native_completed_crash_window_reopens_source_and_target_and_reissues_only_exact_attempt",
+        "distribution_range_image_install::tests::native_completed_nonzero_handoff_window_reaudits_history_and_reissues_exact_anchor",
+        "distribution_range_image_install::tests::native_partial_attempt_refuses_recreated_namespace_until_fresh_authorized_attempt",
+        "distribution_range_image_install::tests::partial_native_attempt_reopen_stays_unready_and_new_attempt_rejects_late_chunks",
+        "distribution_range_image_install::tests::actual_native_r1025_install_preserves_full_history_after_command_payload_compaction"
+      ]
+    },
+    {
+      "name": "receiver-native-limits-v2",
+      "count": 1,
+      "test_ids": [
+        "distribution_range_consensus::native_limits::tests::native_complete_entry_limit_matches_exact_boundary_and_preserves_legacy_constructor"
+      ]
+    },
+    {
+      "name": "receiver-provider-v2",
+      "count": 16,
+      "test_ids": [
+        "distribution_metadata_read_provider::tests::finished_local_authority_keeps_original_context_deadline",
+        "distribution_metadata_read_provider::tests::fenced_observer_is_data_voter_scoped_and_never_mutation_admission",
+        "distribution_metadata_read_provider::tests::fresh_quorum_returns_without_waiting_for_silent_voter",
+        "distribution_metadata_read_provider::tests::fresh_role_is_data_voter_scoped_and_drain_is_not_removal",
+        "distribution_metadata_read_provider::tests::handoff_witness_is_exact_plan_purpose_for_metadata_coordinator_and_target_learner",
+        "distribution_metadata_read_provider::tests::held_probe_allows_committed_load_only_update_but_rejects_epoch_change",
+        "distribution_metadata_read_provider::tests::leadership_or_joint_configuration_change_invalidates_round",
+        "distribution_metadata_read_provider::tests::limits_and_busy_admission_fail_closed",
+        "distribution_metadata_read_provider::tests::response_nonce_quorum_identity_and_deadline_cannot_be_reused",
+        "distribution_metadata_read_provider::tests::role_scope_rejects_wrong_peer_epoch_nonce_and_response_challenge",
+        "distribution_metadata_read_provider::tests::four_silent_sorted_voters_do_not_starve_healthy_nine_node_quorum",
+        "distribution_metadata_read_provider::tests::stale_epoch_wrong_caller_and_expired_parent_refuse",
+        "distribution_metadata_read_provider::tests::tls::actual_mtls_range_leader_acquires_from_different_metadata_leader_without_silent_voter_or_data_latch",
+        "distribution_metadata_read_provider::tests::tls::actual_mtls_role_witness_binds_the_real_recipient_and_initiator",
+        "distribution_metadata_read_provider::tests::tls::unwired_server_and_non_range_leader_refuse_acquisition",
+        "distribution_metadata_read_provider::tests::sliced_probes_never_admit_an_unavailable_quorum"
+      ]
+    },
+    {
+      "name": "receiver-gate-v2",
+      "count": 9,
+      "test_ids": [
+        "distribution_range_mutation::tests::bounded_busy_attempt_does_not_park_or_leave_a_pending_freeze",
+        "distribution_range_mutation::tests::cancelled_drain_cleans_its_pending_state_without_revoking_writer",
+        "distribution_range_mutation::tests::controlled_writer_prevents_rotation_and_quiescent_readiness",
+        "distribution_range_mutation::tests::controlled_callback_keeps_tombstone_frozen_after_owner_drop",
+        "distribution_range_mutation::tests::database_mutations_drain_and_cannot_enter_a_range_capture",
+        "distribution_range_mutation::tests::permits_cannot_be_reused_for_another_range_database_or_freeze",
+        "distribution_range_mutation::tests::source_read_pin_atomically_excludes_all_frozen_writers",
+        "distribution_range_mutation::tests::owned_permits_cross_threads_and_capture_drains_the_last_callback",
+        "distribution_range_mutation::tests::transaction_claim_cannot_survive_its_actual_owner_or_reuse_another_lease"
+      ]
+    },
+    {
+      "name": "receiver-state-v2",
+      "count": 5,
+      "test_ids": [
+        "distribution_range_consensus::recovery_state::tests::actual_native_epoch_fence_preserves_unresolved_tail_and_never_grants_zero_floor",
+        "distribution_range_consensus::recovery_state::tests::actual_other_range_decisions_and_same_session_refresh_preserve_range_observation",
+        "distribution_range_consensus::recovery_state::tests::actual_rename_then_directory_sync_error_cannot_issue_durability_observations",
+        "distribution_range_consensus::recovery_state::tests::actual_same_epoch_nonce_refresh_durably_refuses_delayed_old_fence",
+        "distribution_range_consensus::recovery_state::tests::actual_store_open_and_nonce_bind_resolved_observation"
+      ]
+    },
+    {
+      "name": "receiver-quorum-v2",
+      "count": 7,
+      "test_ids": [
+        "distribution_range_recovery::quorum::tests::actual_duplicate_and_insufficient_fences_cannot_create_majority",
+        "distribution_range_recovery::quorum::tests::actual_fenced_rf3_genesis_source_verifies_full_history_and_authorizes_current_voter_capture",
+        "distribution_range_recovery::quorum::tests::actual_rf1_fence_is_durable_but_unknown_native_floor_never_becomes_zero_ready",
+        "distribution_range_recovery::quorum::tests::actual_rf3_distinct_fences_succeed_without_waiting_for_data_leader_ack",
+        "distribution_range_recovery::quorum::tests::cancelled_actual_source_history_step_poisoned_round_cannot_resume_with_fresh_timeout",
+        "distribution_range_recovery::quorum::tests::original_parent_cancellation_prevents_consuming_a_real_fence_quorum",
+        "distribution_range_recovery::quorum::tests::independently_real_but_different_session_fence_is_rejected"
+      ]
+    }
+  ],
+  "test_ids": [
+    "db::range_image_native::certified_prefix::recovery_apply::tests::actual_native_historical_replica_uses_current_marker_quorum_without_data_leader_certifier",
+    "db::range_image_native::certified_prefix::recovery_apply::tests::actual_post_wal_unknown_checkpoint_reopen_uses_new_local_attempt_and_original_command",
+    "distribution_metadata_read_provider::tests::fenced_observer_is_data_voter_scoped_and_never_mutation_admission",
+    "distribution_metadata_read_provider::tests::finished_local_authority_keeps_original_context_deadline",
+    "distribution_metadata_read_provider::tests::four_silent_sorted_voters_do_not_starve_healthy_nine_node_quorum",
+    "distribution_metadata_read_provider::tests::fresh_quorum_returns_without_waiting_for_silent_voter",
+    "distribution_metadata_read_provider::tests::fresh_role_is_data_voter_scoped_and_drain_is_not_removal",
+    "distribution_metadata_read_provider::tests::handoff_witness_is_exact_plan_purpose_for_metadata_coordinator_and_target_learner",
+    "distribution_metadata_read_provider::tests::held_probe_allows_committed_load_only_update_but_rejects_epoch_change",
+    "distribution_metadata_read_provider::tests::leadership_or_joint_configuration_change_invalidates_round",
+    "distribution_metadata_read_provider::tests::limits_and_busy_admission_fail_closed",
+    "distribution_metadata_read_provider::tests::response_nonce_quorum_identity_and_deadline_cannot_be_reused",
+    "distribution_metadata_read_provider::tests::role_scope_rejects_wrong_peer_epoch_nonce_and_response_challenge",
+    "distribution_metadata_read_provider::tests::sliced_probes_never_admit_an_unavailable_quorum",
+    "distribution_metadata_read_provider::tests::stale_epoch_wrong_caller_and_expired_parent_refuse",
+    "distribution_metadata_read_provider::tests::tls::actual_mtls_range_leader_acquires_from_different_metadata_leader_without_silent_voter_or_data_latch",
+    "distribution_metadata_read_provider::tests::tls::actual_mtls_role_witness_binds_the_real_recipient_and_initiator",
+    "distribution_metadata_read_provider::tests::tls::unwired_server_and_non_range_leader_refuse_acquisition",
+    "distribution_range_consensus::native_limits::tests::native_complete_entry_limit_matches_exact_boundary_and_preserves_legacy_constructor",
+    "distribution_range_consensus::recovery_state::tests::actual_native_epoch_fence_preserves_unresolved_tail_and_never_grants_zero_floor",
+    "distribution_range_consensus::recovery_state::tests::actual_other_range_decisions_and_same_session_refresh_preserve_range_observation",
+    "distribution_range_consensus::recovery_state::tests::actual_rename_then_directory_sync_error_cannot_issue_durability_observations",
+    "distribution_range_consensus::recovery_state::tests::actual_same_epoch_nonce_refresh_durably_refuses_delayed_old_fence",
+    "distribution_range_consensus::recovery_state::tests::actual_store_open_and_nonce_bind_resolved_observation",
+    "distribution_range_image_install::tests::actual_capture_refuses_outstanding_controlled_callback_then_succeeds_after_drain",
+    "distribution_range_image_install::tests::actual_installed_r1_floor_survives_physical_invalidation_and_reopen_without_readiness",
+    "distribution_range_image_install::tests::actual_native_image_catalogue_adoption_ambiguous_persist_needs_real_refsync_before_receipt",
+    "distribution_range_image_install::tests::actual_native_image_catalogue_adoption_folds_real_rows_but_keeps_every_admission_refused",
+    "distribution_range_image_install::tests::actual_native_image_catalogue_adoption_reopens_and_reissues_same_materialized_snapshot",
+    "distribution_range_image_install::tests::actual_native_image_catalogue_adoption_retry_is_idempotent_without_reapplying_rows",
+    "distribution_range_image_install::tests::actual_native_image_catalogue_finalization_retains_real_base_and_rejects_foreign_freeze",
+    "distribution_range_image_install::tests::actual_native_r0_copy_removes_extra_rows_and_preserves_target_namespace_identity",
+    "distribution_range_image_install::tests::actual_native_r1025_install_preserves_full_history_after_command_payload_compaction",
+    "distribution_range_image_install::tests::actual_native_r1_install_uses_target_local_visibility_and_preserves_other_range_rows",
+    "distribution_range_image_install::tests::native_completed_crash_window_reopens_source_and_target_and_reissues_only_exact_attempt",
+    "distribution_range_image_install::tests::native_completed_nonzero_handoff_window_reaudits_history_and_reissues_exact_anchor",
+    "distribution_range_image_install::tests::native_partial_attempt_refuses_recreated_namespace_until_fresh_authorized_attempt",
+    "distribution_range_image_install::tests::partial_native_attempt_reopen_stays_unready_and_new_attempt_rejects_late_chunks",
+    "distribution_range_mutation::tests::bounded_busy_attempt_does_not_park_or_leave_a_pending_freeze",
+    "distribution_range_mutation::tests::cancelled_drain_cleans_its_pending_state_without_revoking_writer",
+    "distribution_range_mutation::tests::controlled_callback_keeps_tombstone_frozen_after_owner_drop",
+    "distribution_range_mutation::tests::controlled_writer_prevents_rotation_and_quiescent_readiness",
+    "distribution_range_mutation::tests::database_mutations_drain_and_cannot_enter_a_range_capture",
+    "distribution_range_mutation::tests::owned_permits_cross_threads_and_capture_drains_the_last_callback",
+    "distribution_range_mutation::tests::permits_cannot_be_reused_for_another_range_database_or_freeze",
+    "distribution_range_mutation::tests::source_read_pin_atomically_excludes_all_frozen_writers",
+    "distribution_range_mutation::tests::transaction_claim_cannot_survive_its_actual_owner_or_reuse_another_lease",
+    "distribution_range_recovery::quorum::tests::actual_duplicate_and_insufficient_fences_cannot_create_majority",
+    "distribution_range_recovery::quorum::tests::actual_fenced_rf3_genesis_source_verifies_full_history_and_authorizes_current_voter_capture",
+    "distribution_range_recovery::quorum::tests::actual_rf1_fence_is_durable_but_unknown_native_floor_never_becomes_zero_ready",
+    "distribution_range_recovery::quorum::tests::actual_rf3_distinct_fences_succeed_without_waiting_for_data_leader_ack",
+    "distribution_range_recovery::quorum::tests::cancelled_actual_source_history_step_poisoned_round_cannot_resume_with_fresh_timeout",
+    "distribution_range_recovery::quorum::tests::independently_real_but_different_session_fence_is_rejected",
+    "distribution_range_recovery::quorum::tests::original_parent_cancellation_prevents_consuming_a_real_fence_quorum",
+    "distribution_range_recovery::runtime::tests::actual_runtime_handoff_uses_committed_session_owner_after_normal_preflight"
+  ],
+  "ci": false,
+  "physical_failure_tested": false,
+  "production_qualified": false,
+  "new_receiver_rpc_exercised": false,
+  "recovery_owned_image_lease_exercised": false
+}

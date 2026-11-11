@@ -248,3 +248,112 @@ fn serializable_relation_reads_reject_write_skew() {
         100
     );
 }
+
+#[test]
+fn postgres_serializable_rejects_write_skew_and_allows_disjoint_writes() {
+    use bicdb_core::{CancellationToken, DbConfig, StorageMode};
+
+    for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
+        for skew in [false, true] {
+            let directory = tempfile::tempdir().unwrap();
+            let mut db = BicDb::open_with_config(
+                directory.path(),
+                DbConfig::default().with_storage_mode(mode.clone()),
+            )
+            .unwrap();
+            db.create_collection("accounts").unwrap();
+            db.insert("accounts", account("a", 100)).unwrap();
+            db.insert("accounts", account("b", 100)).unwrap();
+            let mut first = db.begin_transaction().unwrap();
+            let mut second = db.begin_transaction().unwrap();
+            let cancellation = CancellationToken::uncancelable();
+            for tx in [&mut first, &mut second] {
+                tx.acquire_postgres_serializable_snapshot(0, false, false, &cancellation)
+                    .unwrap();
+            }
+            let first_read = if skew { "b" } else { "a" };
+            let second_read = if skew { "a" } else { "b" };
+            assert!(first.get("accounts", first_read).unwrap().is_some());
+            assert!(second.get("accounts", second_read).unwrap().is_some());
+            first.update("accounts", account("a", 0)).unwrap();
+            second.update("accounts", account("b", 0)).unwrap();
+            first.commit().unwrap();
+            let outcome = second.commit();
+            if skew {
+                assert!(matches!(outcome, Err(BicDbError::TransactionConflict(_))));
+            } else {
+                outcome.unwrap();
+            }
+            assert_eq!(
+                db.get("accounts", "b").unwrap().unwrap().metadata["balance"],
+                if skew { 100 } else { 0 }
+            );
+        }
+    }
+}
+
+#[test]
+fn postgres_deferrable_snapshot_releases_admission_and_keeps_its_visibility() {
+    use bicdb_core::{BlockingWaitAdmission, CancellationToken, Result};
+    use std::sync::{mpsc, Arc};
+    use std::thread;
+    use std::time::Duration;
+
+    #[derive(Debug)]
+    struct WaitObserver(mpsc::SyncSender<()>);
+
+    impl BlockingWaitAdmission for WaitObserver {
+        fn suspend(&self) -> bool {
+            let _ = self.0.try_send(());
+            true
+        }
+
+        fn resume(&self, _cancellation: &CancellationToken) -> Result<()> {
+            Ok(())
+        }
+    }
+
+    let directory = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(directory.path()).unwrap();
+    db.create_collection("accounts").unwrap();
+    db.insert("accounts", account("a", 100)).unwrap();
+    db.insert("accounts", account("b", 100)).unwrap();
+    let mut writer = db.begin_transaction().unwrap();
+    writer
+        .acquire_postgres_serializable_snapshot(0, false, false, &CancellationToken::uncancelable())
+        .unwrap();
+    writer.update("accounts", account("b", 50)).unwrap();
+
+    thread::scope(|scope| {
+        let (waiting, observed_wait) = mpsc::sync_channel(1);
+        let (peer_committed, observed_commit) = mpsc::sync_channel(1);
+        let db = &db;
+        let reader = scope.spawn(move || {
+            let token = CancellationToken::uncancelable()
+                .with_wait_admission(Arc::new(WaitObserver(waiting)))
+                .child_with_deadline(std::time::Instant::now() + Duration::from_secs(5));
+            let mut tx = db.begin_transaction().unwrap();
+            tx.acquire_postgres_serializable_snapshot(0, true, true, &token)
+                .unwrap();
+            observed_commit
+                .recv_timeout(Duration::from_secs(5))
+                .unwrap();
+            assert_eq!(
+                tx.get("accounts", "a").unwrap().unwrap().metadata["balance"],
+                100
+            );
+            assert_eq!(
+                tx.get("accounts", "b").unwrap().unwrap().metadata["balance"],
+                100
+            );
+            tx.commit().unwrap();
+        });
+        observed_wait.recv_timeout(Duration::from_secs(5)).unwrap();
+        writer.commit().unwrap();
+        let mut later = db.begin_transaction().unwrap();
+        later.update("accounts", account("a", 50)).unwrap();
+        later.commit().unwrap();
+        peer_committed.send(()).unwrap();
+        reader.join().unwrap();
+    });
+}

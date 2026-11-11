@@ -1,0 +1,58 @@
+{
+  "source": "61efd7f80045ac8fd8679ef71aaa0bb6be3f4686",
+  "scope": "Actual finalheadCI2f4 restworkspace failedreporting scorecard2casesstillrequirednewlyimplementedRR/SSIrefusal. Updateprobes to actualRRsnapshot+stale40001 andSSIdisjointsuccess+writeSkew40001 withpersistedrowchecks; keepSNAPSHOT0A000negative andstrictzerofailedscorecard. NoCore/SQL/PgWireruntimeorupstreamappassertion/timeoutchanges. Firstfocusedscorecard thenwhole14reportingtests; finalnewhead9CIrequired. Prior2094broad+14versionedruntimeexecutions applyunchangedruntimeat2f4, not newbenchmarkcode.",
+  "started_unix": 1794422491.4161117,
+  "steps": [
+    {
+      "command": [
+        "python3",
+        "scripts/bump-version.py",
+        "--check"
+      ],
+      "started_unix": 1794422491.4163797,
+      "exit": 0,
+      "finished_unix": 1794422491.4766805
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-bench",
+        "--test",
+        "reporting",
+        "postgres_compat_report_exports_scorecard_json_and_csv",
+        "--",
+        "--nocapture"
+      ],
+      "started_unix": 1794422491.4769003,
+      "exit": 0,
+      "finished_unix": 1794422691.663624
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-bench",
+        "--test",
+        "reporting",
+        "--",
+        "--test-threads=4"
+      ],
+      "started_unix": 1794422691.6681807,
+      "exit": 0,
+      "finished_unix": 1794422712.673043
+    }
+  ],
+  "status": "focused_passed",
+  "finished_unix": 1794422712.673252
+}

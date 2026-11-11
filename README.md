@@ -544,8 +544,9 @@ checked-in evidence.
 - PostgreSQL compatibility is broad, not exhaustive. The generated report and
   client matrix are the source of truth; Prisma remains outside the passing
   automated matrix.
-- `READ COMMITTED` and snapshot transaction behavior are implemented;
-  serializable isolation and general distributed transactions are not.
+- Local `READ COMMITTED`, writable `REPEATABLE READ` and PostgreSQL
+  `SERIALIZABLE` are implemented; distributed SSI and general distributed
+  transactions remain outside that contract. See [transaction isolation](docs/postgresql-transactions.md).
 - The embedded-memory mode rebuilds live data and derived structures into RAM
   at startup. The server-paged path is increasingly disk-resident, but
   end-to-end bounded memory and multi-terabyte production qualification remain

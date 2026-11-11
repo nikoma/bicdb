@@ -117,7 +117,7 @@ impl ActualHistoricalContext {
                         &actor,
                         &RecoveryEpochFenceRequest {
                             scope: scope.clone(),
-                            budget_ms: 30000,
+                            budget_ms: 5000,
                         },
                         &self.parent,
                     )
@@ -147,7 +147,7 @@ impl ActualHistoricalContext {
                                 &RecoveryFencedProbeRequest {
                                     scope: authority.scope().clone(),
                                     index: Some(command.index),
-                                    budget_ms: 30000,
+                                    budget_ms: 5000,
                                 },
                                 &self.parent,
                             )
@@ -185,7 +185,7 @@ impl ActualHistoricalContext {
                             &RecoveryFencedProbeRequest {
                                 scope: authority.scope().clone(),
                                 index: Some(command.index),
-                                budget_ms: 30000,
+                                budget_ms: 5000,
                             },
                             &self.parent,
                         )

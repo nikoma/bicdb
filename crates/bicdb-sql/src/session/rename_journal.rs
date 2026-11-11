@@ -1,6 +1,6 @@
-//! Durable undo building blocks for generic rename. Not yet connected to SQL
-//! dispatch or startup: integration must reserve affected relations and merge
-//! these intents into the recycle journal's reverse transaction ordering.
+//! Durable undo for generic rename, connected to ordered startup DDL recovery.
+//! SQL dispatch integration must still reserve affected relations and capture
+//! the complete dependency closure before producing these journal records.
 use super::*;
 
 const HEADERS: &str = "__bicdb_rename_intents";

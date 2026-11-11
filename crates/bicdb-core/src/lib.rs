@@ -32,6 +32,7 @@ mod distribution_range_consensus;
 mod distribution_range_handoff;
 mod distribution_range_image;
 mod distribution_range_mutation;
+mod distribution_range_recovery;
 mod distribution_restore;
 mod distribution_restore_activation;
 mod distribution_routing;

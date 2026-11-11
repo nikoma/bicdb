@@ -26,6 +26,8 @@ struct RangeState {
     active: BTreeSet<Uuid>,
     pending: Option<(Uuid, Uuid)>,
     frozen: Option<(Uuid, Uuid)>,
+    controlled: BTreeSet<Uuid>,
+    frozen_owner_dropped: bool,
     poisoned: bool,
 }
 
@@ -68,6 +70,7 @@ pub(crate) struct RangeMutationClaim {
     range_id: RangeId,
     lease: Uuid,
     frozen_owner: Option<Uuid>,
+    controlled_lease: Option<Uuid>,
 }
 
 /// Local quiescence only. Its private lease nonce prevents a session identifier
@@ -80,12 +83,24 @@ pub(crate) struct FrozenRangeMutationPermit {
     lease: Uuid,
 }
 
+/// An owned controlled writer. It must accompany the actual WAL callback;
+/// dropping its freeze owner cannot reopen normal writes before this drains.
+#[derive(Debug)]
+pub(crate) struct ControlledFrozenMutationPermit {
+    inner: Arc<Inner>,
+    range_id: RangeId,
+    owner: Uuid,
+    owner_lease: Uuid,
+    lease: Uuid,
+}
+
 /// Internal helpers accept the already-owned permit instead of reacquiring a
 /// gate after a freeze has begun waiting. Every public entry acquires its own
 /// normal permit; only a trusted capture/install path receives the frozen arm.
 pub(crate) enum RangeMutationAuthority<'a> {
     Mutation(&'a RangeMutationPermit),
     Frozen(&'a FrozenRangeMutationPermit),
+    Controlled(&'a ControlledFrozenMutationPermit),
 }
 
 impl RangeMutationGate {
@@ -122,6 +137,10 @@ impl RangeMutationGate {
             .ok_or_else(|| invalid("transaction admission owner disappeared"))?;
         let valid = if let Some(owner) = claim.frozen_owner {
             state.frozen == Some((owner, claim.lease))
+                && match claim.controlled_lease {
+                    Some(id) => state.controlled.contains(&id),
+                    None => !state.frozen_owner_dropped,
+                }
         } else {
             state.active.contains(&claim.lease) && state.frozen.is_none()
         };
@@ -277,7 +296,77 @@ impl RangeMutationGate {
                 Ok(())
             }
             RangeMutationAuthority::Frozen(permit) => self.validate_frozen(range_id, permit),
+            RangeMutationAuthority::Controlled(permit) => {
+                self.validate_controlled(range_id, permit)
+            }
         }
+    }
+
+    pub(crate) fn try_controlled_mutation(
+        &self,
+        permit: &FrozenRangeMutationPermit,
+    ) -> Result<ControlledFrozenMutationPermit> {
+        if !Arc::ptr_eq(&self.inner, &permit.inner) {
+            return Err(invalid("controlled freeze belongs to another DB"));
+        }
+        let mut ranges = self.inner.ranges.lock();
+        let state = ranges
+            .get_mut(&permit.range_id)
+            .ok_or_else(|| invalid("controlled freeze absent"))?;
+        if state.poisoned
+            || state.frozen_owner_dropped
+            || state.frozen != Some((permit.owner, permit.lease))
+            || !state.active.is_empty()
+            || state.controlled.len() >= MAX_GATE_RANGES
+            || self.inner.range_active.load(Ordering::Relaxed) >= MAX_GATE_RANGES
+        {
+            return Err(invalid("controlled writer freeze invalid or capacity busy"));
+        }
+        let lease = Uuid::now_v7();
+        state.controlled.insert(lease);
+        self.inner.range_active.fetch_add(1, Ordering::Relaxed);
+        Ok(ControlledFrozenMutationPermit {
+            inner: Arc::clone(&self.inner),
+            range_id: permit.range_id,
+            owner: permit.owner,
+            owner_lease: permit.lease,
+            lease,
+        })
+    }
+    pub(crate) fn validate_controlled(
+        &self,
+        range_id: RangeId,
+        permit: &ControlledFrozenMutationPermit,
+    ) -> Result<()> {
+        if !Arc::ptr_eq(&self.inner, &permit.inner) || permit.range_id != range_id {
+            return Err(invalid("controlled permit belongs to another range/DB"));
+        }
+        let ranges = self.inner.ranges.lock();
+        let state = ranges
+            .get(&range_id)
+            .ok_or_else(|| invalid("controlled state absent"))?;
+        if state.poisoned
+            || state.frozen != Some((permit.owner, permit.owner_lease))
+            || !state.controlled.contains(&permit.lease)
+        {
+            return Err(invalid("controlled lease is no longer active"));
+        }
+        Ok(())
+    }
+    pub(crate) fn validate_quiescent_frozen(
+        &self,
+        range_id: RangeId,
+        permit: &FrozenRangeMutationPermit,
+    ) -> Result<()> {
+        self.validate_frozen(range_id, permit)?;
+        let ranges = self.inner.ranges.lock();
+        let state = ranges
+            .get(&range_id)
+            .ok_or_else(|| invalid("frozen state absent"))?;
+        if !state.controlled.is_empty() {
+            return Err(invalid("controlled WAL/native callback is still active"));
+        }
+        Ok(())
     }
 
     pub(crate) fn validate_frozen(
@@ -295,6 +384,7 @@ impl RangeMutationGate {
         if state.poisoned
             || !state.active.is_empty()
             || state.frozen != Some((permit.owner, permit.lease))
+            || state.frozen_owner_dropped
         {
             return Err(invalid("frozen permit is no longer exclusive"));
         }
@@ -309,6 +399,28 @@ impl FrozenRangeMutationPermit {
     pub(crate) fn owner(&self) -> Uuid {
         self.owner
     }
+    pub(crate) fn try_rotate_owner(&mut self, new_owner: Uuid) -> Result<()> {
+        if new_owner.is_nil() {
+            return Err(invalid("new frozen owner is nil"));
+        }
+        let mut ranges = self.inner.ranges.lock();
+        let state = ranges
+            .get_mut(&self.range_id)
+            .ok_or_else(|| invalid("frozen state absent"))?;
+        if state.poisoned
+            || state.frozen_owner_dropped
+            || state.frozen != Some((self.owner, self.lease))
+            || !state.controlled.is_empty()
+            || !state.active.is_empty()
+        {
+            return Err(invalid(
+                "frozen owner rotation waits for actual controlled callbacks",
+            ));
+        }
+        state.frozen = Some((new_owner, self.lease));
+        self.owner = new_owner;
+        Ok(())
+    }
 }
 
 fn remove_idle(ranges: &mut BTreeMap<RangeId, RangeState>, range_id: RangeId) {
@@ -317,6 +429,8 @@ fn remove_idle(ranges: &mut BTreeMap<RangeId, RangeState>, range_id: RangeId) {
             && state.active.is_empty()
             && state.pending.is_none()
             && state.frozen.is_none()
+            && state.controlled.is_empty()
+            && !state.frozen_owner_dropped
     }) {
         ranges.remove(&range_id);
     }
@@ -327,6 +441,7 @@ impl RangeMutationAuthority<'_> {
         match self {
             Self::Mutation(permit) => permit.range_id,
             Self::Frozen(permit) => permit.range_id,
+            Self::Controlled(permit) => permit.range_id,
         }
     }
     pub(crate) fn claim(&self) -> RangeMutationClaim {
@@ -336,12 +451,21 @@ impl RangeMutationAuthority<'_> {
                 range_id: permit.range_id,
                 lease: permit.lease,
                 frozen_owner: None,
+                controlled_lease: None,
             },
             Self::Frozen(permit) => RangeMutationClaim {
                 inner: Arc::clone(&permit.inner),
                 range_id: permit.range_id,
                 lease: permit.lease,
                 frozen_owner: Some(permit.owner),
+                controlled_lease: None,
+            },
+            Self::Controlled(permit) => RangeMutationClaim {
+                inner: Arc::clone(&permit.inner),
+                range_id: permit.range_id,
+                lease: permit.owner_lease,
+                frozen_owner: Some(permit.owner),
+                controlled_lease: Some(permit.lease),
             },
         }
     }
@@ -373,7 +497,33 @@ impl Drop for FrozenRangeMutationPermit {
         let mut ranges = self.inner.ranges.lock();
         if let Some(state) = ranges.get_mut(&self.range_id) {
             if state.frozen == Some((self.owner, self.lease)) {
-                state.frozen = None;
+                if state.controlled.is_empty() {
+                    state.frozen = None;
+                    state.frozen_owner_dropped = false;
+                } else {
+                    state.frozen_owner_dropped = true;
+                }
+            }
+        }
+        remove_idle(&mut ranges, self.range_id);
+        self.inner.changed.notify_all();
+    }
+}
+
+impl Drop for ControlledFrozenMutationPermit {
+    fn drop(&mut self) {
+        let mut ranges = self.inner.ranges.lock();
+        if let Some(state) = ranges.get_mut(&self.range_id) {
+            if state.frozen == Some((self.owner, self.owner_lease))
+                && state.controlled.remove(&self.lease)
+            {
+                self.inner.range_active.fetch_sub(1, Ordering::Relaxed);
+                if state.frozen_owner_dropped && state.controlled.is_empty() {
+                    state.frozen = None;
+                    state.frozen_owner_dropped = false;
+                }
+            } else {
+                state.poisoned = true;
             }
         }
         remove_idle(&mut ranges, self.range_id);
@@ -409,6 +559,45 @@ mod tests {
             );
             thread::yield_now();
         }
+    }
+
+    #[test]
+    fn controlled_callback_keeps_tombstone_frozen_after_owner_drop() {
+        let gate = RangeMutationGate::default();
+        let id = range(1);
+        let frozen = gate.try_freeze(id, Uuid::now_v7()).unwrap();
+        let controlled = gate.try_controlled_mutation(&frozen).unwrap();
+        let claim = RangeMutationAuthority::Controlled(&controlled).claim();
+        assert!(gate.validate_quiescent_frozen(id, &frozen).is_err());
+        drop(frozen);
+        gate.validate_claim(&claim).unwrap();
+        assert!(gate.try_enter(id).is_err());
+        assert!(gate.try_enter_database().is_err());
+        let (finish, wait) = mpsc::channel();
+        let callback = thread::spawn(move || {
+            wait.recv_timeout(Duration::from_secs(1)).unwrap();
+            drop(controlled);
+        });
+        assert!(gate.try_freeze(id, Uuid::now_v7()).is_err());
+        finish.send(()).unwrap();
+        callback.join().unwrap();
+        assert!(gate.validate_claim(&claim).is_err());
+        gate.try_enter(id).unwrap();
+    }
+    #[test]
+    fn controlled_writer_prevents_rotation_and_quiescent_readiness() {
+        let gate = RangeMutationGate::default();
+        let id = range(1);
+        let mut frozen = gate.try_freeze(id, Uuid::now_v7()).unwrap();
+        let old = RangeMutationAuthority::Frozen(&frozen).claim();
+        let controlled = gate.try_controlled_mutation(&frozen).unwrap();
+        assert!(frozen.try_rotate_owner(Uuid::now_v7()).is_err());
+        assert!(gate.validate_quiescent_frozen(id, &frozen).is_err());
+        drop(controlled);
+        gate.validate_quiescent_frozen(id, &frozen).unwrap();
+        frozen.try_rotate_owner(Uuid::now_v7()).unwrap();
+        assert!(gate.validate_claim(&old).is_err());
+        gate.validate_frozen(id, &frozen).unwrap();
     }
 
     #[test]

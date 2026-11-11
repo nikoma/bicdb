@@ -457,3 +457,5 @@ mod copied_obligation_case;
 
 #[path = "recovery_order_tests/sparse_current_case.rs"]
 mod sparse_current_case;
+
+mod small_sparse_cold;

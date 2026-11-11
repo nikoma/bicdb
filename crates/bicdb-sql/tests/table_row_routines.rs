@@ -32,7 +32,13 @@ fn check(array: bool) {
                 .unwrap();
             sql.execute(&format!("CREATE FUNCTION typed_identity(arg {pg_type}) RETURNS {pg_type} LANGUAGE sql AS 'SELECT arg'"))
                 .unwrap();
+            sql.execute(&format!(
+                "CREATE PROCEDURE typed_procedure(arg {pg_type}) LANGUAGE sql AS 'SELECT 1'"
+            ))
+            .unwrap();
             assert_eq!(sql.execute(&query).unwrap().rows, expected, "{mode}");
+            sql.execute(&format!("CALL typed_procedure({value})"))
+                .unwrap();
             signature = sql
                 .execute(
                     "SELECT proargtypes,prorettype FROM pg_proc WHERE proname='typed_identity'",
@@ -53,6 +59,8 @@ fn check(array: bool) {
         {
             let mut sql = SqlSession::new(&mut db);
             assert_eq!(sql.execute(&query).unwrap().rows, expected, "{mode} reopen");
+            sql.execute(&format!("CALL typed_procedure({value})"))
+                .unwrap();
             assert_eq!(
                 sql.execute(
                     "SELECT proargtypes,prorettype FROM pg_proc WHERE proname='typed_identity'"

@@ -93,6 +93,8 @@ fn live_enrolled_fixture(
     for name in ["n0", "n1", "n2"] {
         fixture.call(name, &scope, true).unwrap();
         fixture.wait_idle();
+    }
+    for name in ["n0", "n1", "n2"] {
         fixture.prepare_ready(name, &scope).unwrap();
         fixture.wait_idle();
     }

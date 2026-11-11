@@ -159,6 +159,15 @@ fn native_read_observation_rejects_actual_raw_prepare_and_cq_ahead_of_native() {
     assert!(service
         .observe_current_native_range(&fixture.request, &CancellationToken::uncancelable())
         .is_err());
+    // Actual legacy raw checkpoint primitive supplies no native WAL receipt.
+    // Even matching last/resolved/Applied counters cannot manufacture R2.
+    service
+        .mark_range_write_applied(&command.command_id)
+        .unwrap();
+    assert_eq!(service.range_write_progress(range.id).resolved_through, 2);
+    assert!(service
+        .observe_current_native_range(&fixture.request, &CancellationToken::uncancelable())
+        .is_err());
     assert_eq!(
         fixture
             .db
@@ -247,10 +256,10 @@ fn native_read_observation_failed_mutation_and_health_invalidate_owned_observati
         "failed/no-data writer does not renew an older observation"
     );
     let current = fixture.observe();
-    fixture
-        .db
-        .read()
-        .fence_durability("test.native_read", &"deliberate durability-negative fixture");
+    fixture.db.read().fence_durability(
+        "test.native_read",
+        &"deliberate durability-negative fixture",
+    );
     assert!(current.require_lifetime().is_err());
     assert!(fixture
         .service()

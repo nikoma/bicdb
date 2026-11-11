@@ -8565,6 +8565,19 @@ fn evaluate_native_invariant_expression(
                 bindings,
                 left,
             )?;
+            // Invariant expressions are pure. Preserve the language's boolean
+            // guards before evaluating an unreachable nested scan or arithmetic
+            // expression. Every predicate that can determine validity still runs.
+            match (operator, left.as_bool()) {
+                (NativeInvariantBinaryOperator::And, Some(false)) => {
+                    return Ok(Value::Bool(false));
+                }
+                (NativeInvariantBinaryOperator::Or, Some(true))
+                | (NativeInvariantBinaryOperator::Implies, Some(false)) => {
+                    return Ok(Value::Bool(true));
+                }
+                _ => {}
+            }
             let right = evaluate_native_invariant_expression(
                 db,
                 tx,

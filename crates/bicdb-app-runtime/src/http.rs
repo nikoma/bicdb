@@ -2843,6 +2843,9 @@ fn lower_resource_request(
         .map(|defaults| defaults.limit)
         .unwrap_or(50);
     let mut offset = 0;
+    let mut page: Option<u64> = None;
+    let mut per_page: Option<u32> = None;
+    let mut pagination_parameters = BTreeSet::new();
     let mut search = None;
     let mut direct_filter_values = BTreeMap::new();
     let mut scope = if operation == ResourceOperation::List {
@@ -2863,7 +2866,36 @@ fn lower_resource_request(
             direct_filter_values.insert(name.clone(), raw.clone());
             continue;
         }
+        if matches!(name.as_str(), "limit" | "offset" | "page" | "per_page")
+            && !pagination_parameters.insert(name.as_str())
+        {
+            return Err(AppRuntimeError::InvalidRequest(format!(
+                "duplicate pagination parameter `{name}`"
+            )));
+        }
         match name.as_str() {
+            "page" => {
+                let value = raw.parse::<u64>().map_err(|_| {
+                    AppRuntimeError::InvalidRequest("invalid page parameter".to_string())
+                })?;
+                if value == 0 {
+                    return Err(AppRuntimeError::InvalidRequest(
+                        "page must be at least one".to_string(),
+                    ));
+                }
+                page = Some(value);
+            }
+            "per_page" => {
+                let value = raw.parse::<u32>().map_err(|_| {
+                    AppRuntimeError::InvalidRequest("invalid per_page parameter".to_string())
+                })?;
+                if value == 0 {
+                    return Err(AppRuntimeError::InvalidRequest(
+                        "per_page must be positive".to_string(),
+                    ));
+                }
+                per_page = Some(value);
+            }
             "limit" => {
                 limit = raw.parse().map_err(|_| {
                     AppRuntimeError::Invocation("invalid limit parameter".to_string())
@@ -2914,6 +2946,28 @@ fn lower_resource_request(
             }
             _ => {}
         }
+    }
+    // Carrier exposes one-based page/per_page; native ABI clients can retain
+    // limit/offset. Reject contradictory aliases rather than silently choosing
+    // one representation. Resource bounds and tenant policy still run below.
+    if let Some(per_page) = per_page {
+        if pagination_parameters.contains("limit") && limit != per_page {
+            return Err(AppRuntimeError::InvalidRequest(
+                "limit and per_page disagree".to_string(),
+            ));
+        }
+        limit = per_page;
+    }
+    if let Some(page) = page {
+        let page_offset = (page - 1).checked_mul(u64::from(limit)).ok_or_else(|| {
+            AppRuntimeError::InvalidRequest("page offset exceeds the supported range".to_string())
+        })?;
+        if pagination_parameters.contains("offset") && offset != page_offset {
+            return Err(AppRuntimeError::InvalidRequest(
+                "page and offset disagree".to_string(),
+            ));
+        }
+        offset = page_offset;
     }
     for filter in &contract.filter_contracts {
         match &filter.filter {

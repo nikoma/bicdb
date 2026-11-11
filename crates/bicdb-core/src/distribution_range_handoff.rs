@@ -34,6 +34,8 @@ impl RangeHandoffPromise {
         let digest = |s: &str| s.len() == 64 && s.bytes().all(|c| c.is_ascii_hexdigit());
         if self.session_id.is_nil()
             || self.nonce.is_nil()
+            || self.range_id.get() == 0
+            || self.relocation_id.get() == 0
             || self.plan_id.is_empty()
             || self.plan_id.len() > 1024
             || self.old_epoch == 0

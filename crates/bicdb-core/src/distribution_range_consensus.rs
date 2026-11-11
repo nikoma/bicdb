@@ -684,6 +684,10 @@ impl RangeWriteStore {
         }
         if let Some(existing) = self.catalog.handoff_promises.get(&request.range_id) {
             return if existing.same_request(request) {
+                // An earlier failure may have happened after rename but before
+                // directory fsync. Never turn an unconfirmed in-memory fence
+                // into quorum evidence without re-persisting it durably.
+                self.persist()?;
                 Ok(existing.clone())
             } else {
                 Err(range_write_error(
@@ -705,7 +709,6 @@ impl RangeWriteStore {
                 "handoff requires the current epoch, no backup fence and a resolved local tail",
             ));
         }
-        let previous = self.catalog.clone();
         let mut promise = request.clone();
         promise.resolved_through = progress.resolved_through;
         let log = self
@@ -724,7 +727,12 @@ impl RangeWriteStore {
         self.catalog
             .handoff_promises
             .insert(request.range_id, promise.clone());
-        self.persist_or_restore(previous, promise)
+        // On any persistence error retain the conservative fence in memory.
+        // write_atomic may have renamed before failing a durability operation;
+        // reverting memory could otherwise admit an old writer against it.
+        // No response/certificate is issued unless persistence succeeds.
+        self.persist()?;
+        Ok(promise)
     }
 
     pub fn active_backup_fence(&self, range_id: RangeId) -> Option<&RangeBackupWriteFence> {
@@ -3636,7 +3644,7 @@ mod tests {
     }
 
     #[test]
-    fn handoff_failed_persistence_keeps_previous_authority_and_no_trusted_promise() {
+    fn handoff_failed_persistence_blocks_locally_without_issuing_quorum_evidence() {
         let directory = tempfile::tempdir().unwrap();
         crate::format::enable_range_image_install(directory.path()).unwrap();
         let mut store = RangeWriteStore::open(
@@ -3654,8 +3662,13 @@ mod tests {
         let saved = directory.path().join("retained-before-interruption.json");
         std::fs::rename(&log_path, &saved).unwrap();
         std::fs::create_dir(&log_path).unwrap();
-        assert!(store.install_handoff_promise(&handoff_request()).is_err());
-        assert_eq!(store.catalog, before);
+        let request = handoff_request();
+        assert!(store.install_handoff_promise(&request).is_err());
+        assert!(store
+            .catalog
+            .handoff_promises
+            .contains_key(&request.range_id));
+        assert!(store.prepare(command(2, 1)).is_err());
         std::fs::remove_dir(&log_path).unwrap();
         std::fs::rename(saved, &log_path).unwrap();
         drop(store);

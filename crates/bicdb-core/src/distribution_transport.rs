@@ -32,6 +32,7 @@ use crate::distribution_anti_entropy_repair::{
     RangeDigestRepairTransport,
 };
 use crate::distribution_consensus::{
+    HostMetadataReadAcquireRequest, HostMetadataReadAcquireResponse, HostMetadataReadObservation,
     MetadataAppendRequest, MetadataAppendResponse, MetadataConsensusStore, MetadataReadAck,
     MetadataReadAcquireRequest, MetadataReadAcquireResponse, MetadataReadObservation,
     MetadataReadParticipant, MetadataReadProbeRequest, MetadataReadProbeResponse,
@@ -46,6 +47,7 @@ use crate::distribution_io::DeadlineTcpStream;
 use crate::distribution_metadata_read_provider::{
     MetadataReadProbeTransport, MetadataReadProvider,
 };
+mod host_metadata;
 use crate::distribution_range_consensus::{
     RangeWriteAck, RangeWriteCommand, RangeWriteProbe, RangeWriteProgress, RangeWriteRepairBatch,
     RangeWriteRepairLimits, RangeWriteState, RangeWriteTransport,
@@ -63,6 +65,7 @@ use crate::replication_transport::{
     replication_certificate_sha256, server_tls_stream, ReplicationClientTls,
 };
 use crate::{CancellationToken, ClusterSchemaBundle, SignedClusterSchemaBundle};
+pub(crate) use host_metadata::AuthenticatedHostMetadataReadReply;
 
 const FRAME_HEADER_BYTES: usize = 4;
 
@@ -313,6 +316,9 @@ enum ClusterDataRequest {
     MetadataReadAcquire {
         request: MetadataReadAcquireRequest,
     },
+    HostMetadataReadAcquire {
+        request: HostMetadataReadAcquireRequest,
+    },
     AcquireMetadataRecoveryRole {
         request: MetadataRecoveryRoleRequest,
     },
@@ -477,6 +483,7 @@ impl ClusterDataRequest {
             | Self::MetadataAppend { .. }
             | Self::MetadataReadProbe { .. }
             | Self::MetadataReadAcquire { .. }
+            | Self::HostMetadataReadAcquire { .. }
             | Self::AcquireMetadataRecoveryRole { .. } => None,
         }
     }
@@ -512,6 +519,7 @@ enum ClusterDataResponse {
     MetadataAppend(MetadataAppendResponse),
     MetadataReadProbe(MetadataReadProbeResponse),
     MetadataReadAcquire(MetadataReadAcquireResponse),
+    HostMetadataReadAcquire(HostMetadataReadAcquireResponse),
     MetadataRecoveryRole(MetadataRecoveryRoleResponse),
     RecoveryEpochFence(crate::distribution_range_recovery::RecoveryEpochFenceReply),
     RecoveryFencedProbe(crate::distribution_range_recovery::RecoveryFencedProbeReply),
@@ -912,6 +920,18 @@ fn handle_cluster_data_connection(
             )
         });
         drop(topology_guard);
+        if let ClusterDataRequest::HostMetadataReadAcquire { request } = request.request {
+            let provider = metadata_read_provider
+                .ok_or_else(|| transport_error("fresh host metadata provider is not active"))?;
+            let caller = authenticated_caller.as_ref().ok_or_else(|| {
+                transport_error("host metadata acquisition requires authenticated membership")
+            })?;
+            let cancellation =
+                CancellationToken::new(Arc::new(AtomicBool::new(false)), Some(request_deadline));
+            return provider
+                .acquire_host_metadata(caller, request, &cancellation)
+                .map(ClusterDataResponse::HostMetadataReadAcquire);
+        }
         if let ClusterDataRequest::MetadataReadAcquire { request } = request.request {
             let provider = metadata_read_provider.ok_or_else(|| {
                 transport_error("fresh metadata read acquisition provider is not active")
@@ -2542,6 +2562,9 @@ fn dispatch_cluster_data_request(
         ClusterDataRequest::MetadataReadAcquire { .. } => Err(transport_error(
             "metadata acquisition requires its authenticated runtime provider",
         )),
+        ClusterDataRequest::HostMetadataReadAcquire { .. } => Err(transport_error(
+            "host metadata acquisition requires its authenticated runtime provider",
+        )),
     }
 }
 
@@ -3942,6 +3965,7 @@ impl TcpClusterRelocationTransport {
             &request,
             ClusterDataRequest::MetadataReadProbe { .. }
                 | ClusterDataRequest::MetadataReadAcquire { .. }
+                | ClusterDataRequest::HostMetadataReadAcquire { .. }
                 | ClusterDataRequest::AcquireMetadataRecoveryRole { .. }
                 | ClusterDataRequest::RecoveryEpochFence { .. }
                 | ClusterDataRequest::RecoveryFencedProbe { .. }

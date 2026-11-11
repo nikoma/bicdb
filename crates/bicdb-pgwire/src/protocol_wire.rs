@@ -514,47 +514,61 @@ fn diagnostic_response(
 ) -> Result<()> {
     let mut payload = Vec::new();
     payload.push(b'S');
-    cstr(&mut payload, severity);
+    diagnostic_cstr(&mut payload, severity);
     payload.push(b'V');
-    cstr(&mut payload, severity);
+    diagnostic_cstr(&mut payload, severity);
     payload.push(b'C');
-    cstr(&mut payload, code);
+    diagnostic_cstr(&mut payload, code);
     payload.push(b'M');
-    cstr(&mut payload, message);
+    diagnostic_cstr(&mut payload, message);
     for field in fields {
         match field {
             SqlErrorField::Detail(value) => {
                 payload.push(b'D');
-                cstr(&mut payload, value);
+                diagnostic_cstr(&mut payload, value);
             }
             SqlErrorField::Schema(value) => {
                 payload.push(b's');
-                cstr(&mut payload, value);
+                diagnostic_cstr(&mut payload, value);
             }
             SqlErrorField::Table(value) => {
                 payload.push(b't');
-                cstr(&mut payload, value);
+                diagnostic_cstr(&mut payload, value);
             }
             SqlErrorField::Column(value) => {
                 payload.push(b'c');
-                cstr(&mut payload, value);
+                diagnostic_cstr(&mut payload, value);
             }
             SqlErrorField::DataType(value) => {
                 payload.push(b'd');
-                cstr(&mut payload, value);
+                diagnostic_cstr(&mut payload, value);
             }
             SqlErrorField::Constraint(value) => {
                 payload.push(b'n');
-                cstr(&mut payload, value);
+                diagnostic_cstr(&mut payload, value);
             }
             SqlErrorField::Hint(value) => {
                 payload.push(b'H');
-                cstr(&mut payload, value);
+                diagnostic_cstr(&mut payload, value);
             }
         }
     }
     payload.push(0);
     write_message(stream, tag, &payload)
+}
+
+// A diagnostic can contain encoded record keys with NUL bytes. Escape them
+// before writing PostgreSQL's NUL-terminated fields so clients receive the
+// complete message and every following diagnostic field.
+fn diagnostic_cstr(payload: &mut Vec<u8>, value: &str) {
+    for byte in value.bytes() {
+        if byte == 0 {
+            payload.extend_from_slice(b"\\0");
+        } else {
+            payload.push(byte);
+        }
+    }
+    payload.push(0);
 }
 
 pub(crate) fn write_message(stream: &mut ClientStream, tag: u8, payload: &[u8]) -> Result<()> {
@@ -2259,5 +2273,93 @@ mod durability_sqlstate_tests {
             crate::query_exec::pgwire_error_sqlstate(&PgWireError::BicDb(unknown)),
             "08007"
         );
+    }
+}
+
+#[cfg(test)]
+mod diagnostic_framing_tests {
+    use super::*;
+
+    #[test]
+    fn diagnostics_preserve_fields_and_following_frames_when_text_contains_nul() {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let sender = TcpStream::connect(listener.local_addr().unwrap()).unwrap();
+        let (mut receiver, _) = listener.accept().unwrap();
+        receiver
+            .set_read_timeout(Some(Duration::from_secs(5)))
+            .unwrap();
+        let mut stream = ClientStream::plain(sender);
+        let fields = vec![
+            SqlErrorField::Detail("before\0after".into()),
+            SqlErrorField::Hint("retry\0later".into()),
+        ];
+        error_response_with_fields(
+            &mut stream,
+            "ERROR",
+            "40001",
+            "sequence:\0Hforged hint",
+            &fields,
+        )
+        .unwrap();
+        notice_response(
+            &mut stream,
+            &bicdb_sql::SqlNotice {
+                sqlstate: "01000".into(),
+                message: "通知\0complete".into(),
+                fields: vec![SqlErrorField::Table("a\0b".into())],
+            },
+        )
+        .unwrap();
+        ready_for_query(&mut stream).unwrap();
+        stream.flush().unwrap();
+
+        for (tag, expected) in [
+            (
+                b'E',
+                vec![
+                    (b'S', "ERROR"),
+                    (b'V', "ERROR"),
+                    (b'C', "40001"),
+                    (b'M', "sequence:\\0Hforged hint"),
+                    (b'D', "before\\0after"),
+                    (b'H', "retry\\0later"),
+                ],
+            ),
+            (
+                b'N',
+                vec![
+                    (b'S', "NOTICE"),
+                    (b'V', "NOTICE"),
+                    (b'C', "01000"),
+                    (b'M', "通知\\0complete"),
+                    (b't', "a\\0b"),
+                ],
+            ),
+        ] {
+            let mut header = [0; 5];
+            receiver.read_exact(&mut header).unwrap();
+            assert_eq!(header[0], tag);
+            let length = u32::from_be_bytes(header[1..].try_into().unwrap()) as usize;
+            let mut payload = vec![0; length - 4];
+            receiver.read_exact(&mut payload).unwrap();
+            let mut actual = Vec::new();
+            let mut position = 0;
+            while payload[position] != 0 {
+                let field = payload[position];
+                position += 1;
+                let end = position
+                    + payload[position..]
+                        .iter()
+                        .position(|byte| *byte == 0)
+                        .unwrap();
+                actual.push((field, std::str::from_utf8(&payload[position..end]).unwrap()));
+                position = end + 1;
+            }
+            assert_eq!(position + 1, payload.len());
+            assert_eq!(actual, expected);
+        }
+        let mut ready = [0; 6];
+        receiver.read_exact(&mut ready).unwrap();
+        assert_eq!(ready, [b'Z', 0, 0, 0, 5, b'I']);
     }
 }

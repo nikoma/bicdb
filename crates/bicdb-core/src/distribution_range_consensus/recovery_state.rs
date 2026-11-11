@@ -248,6 +248,64 @@ impl RecoveryResolvedCatalogObservation {
 }
 
 impl RangeWriteStore {
+    fn recovery_range_catalog_sha256(&self, range_id: RangeId) -> Result<String> {
+        let saved = self
+            .catalog
+            .recovery_fences
+            .get(&range_id)
+            .ok_or_else(|| range_write_error("range commitment has no recovery record"))?;
+        let scope = &saved.scope;
+        // Request/context/term/read-index are one-shot provenance validated by
+        // the live role, not range-state mutations or renewable leases.
+        let stable_scope = (
+            scope.protocol_version,
+            &scope.cluster_id,
+            scope.bootstrap_id,
+            scope.range_id,
+            scope.range_epoch,
+            &scope.initiator_node_id,
+            scope.initiator_incarnation,
+            scope.recovery_nonce,
+            &scope.configuration_sha256,
+            &scope.range_configuration_sha256,
+            &scope.purpose,
+        );
+        let refusal = (
+            &saved.phase,
+            &saved.local_node_id,
+            saved.local_member_incarnation,
+            &saved.native_database_incarnation,
+            &saved.historical_certifications,
+            &saved.retired_nonces,
+        );
+        struct HashWriter(Sha256);
+        impl std::io::Write for HashWriter {
+            fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+                self.0.update(bytes);
+                Ok(bytes.len())
+            }
+            fn flush(&mut self) -> std::io::Result<()> {
+                Ok(())
+            }
+        }
+        let mut hash = HashWriter(Sha256::new());
+        serde_json::to_writer(
+            &mut hash,
+            &(
+                "bicdb-recovery-range-catalog-v1",
+                &self.catalog.cluster_id,
+                &self.catalog.node_id,
+                self.catalog.format_version,
+                self.catalog.ranges.get(&range_id),
+                stable_scope,
+                refusal,
+                self.catalog.handoff_promises.get(&range_id),
+                self.catalog.image_install_intents.get(&range_id),
+                self.catalog.backup_fences.get(&range_id),
+            ),
+        )?;
+        Ok(hex::encode(hash.0.finalize()))
+    }
     /// No row/WAL Apply occurs here. Only an independently observed committed
     /// historical decision can install the current-session certify marker.
     pub(crate) fn certify_historical_command(
@@ -820,7 +878,7 @@ impl RangeWriteStore {
             scope: scope.clone(),
             resolved_index: log.resolved_through,
             compacted_through: log.compacted_through,
-            catalog_sha256: catalog_checksum(&self.catalog)?,
+            catalog_sha256: self.recovery_range_catalog_sha256(scope.range_id)?,
             local_role_context_id: role.context_id(),
         })
     }
@@ -833,7 +891,8 @@ impl RangeWriteStore {
         observation.require_role(role)?;
         self.require_recovery_scope(role, native, &observation.scope)?;
         if observation.store_open_id != self.open_id
-            || observation.catalog_sha256 != catalog_checksum(&self.catalog)?
+            || observation.catalog_sha256
+                != self.recovery_range_catalog_sha256(observation.range_id())?
         {
             return Err(range_write_error(
                 "actual recovery catalogue/open changed after observation",
@@ -866,6 +925,9 @@ mod tests {
     }
     impl Fixture {
         fn new(epoch: u64) -> Self {
+            Self::with_ranges(epoch, 1)
+        }
+        fn with_ranges(epoch: u64, initial_ranges: u32) -> Self {
             let root = tempfile::tempdir().unwrap();
             let node = ClusterNodeId::new("n1").unwrap();
             let bootstrap = Uuid::now_v7();
@@ -874,7 +936,7 @@ mod tests {
                 cluster_id: ClusterId::new("native-recovery-state").unwrap(),
                 node_id: node.clone(),
                 node_address: "127.0.0.1:10001".into(),
-                initial_ranges: 1,
+                initial_ranges,
                 replication_factor: 1,
                 range_image_bootstrap_id: Some(bootstrap),
                 ..DistributionConfig::default()
@@ -1044,6 +1106,94 @@ mod tests {
         assert!(reopened.normal_native_write_allowed(&three).is_err());
         assert!(fixture.root.path().exists());
     }
+    #[test]
+    fn actual_other_range_decisions_and_same_session_refresh_preserve_range_observation() {
+        let mut fixture = Fixture::with_ranges(1, 2);
+        let gate = fixture.db.range_mutation_gate();
+        let _frozen = gate
+            .try_freeze(fixture.range.id, fixture.scope.freeze_owner().unwrap())
+            .unwrap();
+        fixture
+            .store
+            .fence_recovery_epoch(&fixture.role, &fixture.native, &fixture.scope)
+            .unwrap();
+        let observation = fixture
+            .store
+            .observe_recovery_resolved_prefix(&fixture.role, &fixture.native, &fixture.scope)
+            .unwrap();
+        let other = fixture
+            .topology
+            .ranges
+            .values()
+            .find(|r| r.id != fixture.range.id)
+            .unwrap();
+        let key = (0..1000)
+            .map(|n| format!("other-{n}"))
+            .find(|id| fixture.topology.range_for_key("items", id).unwrap().id == other.id)
+            .unwrap();
+        let command = RangeWriteCommand::new(
+            fixture.topology.cluster_id.clone(),
+            other,
+            1,
+            other.leader.clone(),
+            &CommitAdmissionIntent {
+                transaction_id: 123,
+                mutations: vec![CommitAdmissionMutation {
+                    collection: "items".into(),
+                    record_id: key.clone(),
+                    record: Some(crate::Record::new(key)),
+                }],
+            },
+        )
+        .unwrap();
+        fixture.store.prepare(command.clone()).unwrap();
+        fixture.store.commit(&command).unwrap();
+        fixture.store.certify(&command).unwrap();
+        fixture.store.mark_applied(&command).unwrap();
+        fixture
+            .store
+            .revalidate_recovery_resolved_observation(&observation, &fixture.role, &fixture.native)
+            .unwrap();
+        let renewed = test_role_admission(
+            &fixture.root.path().join("metadata"),
+            &fixture.topology,
+            &fixture.range.leader,
+            &fixture.range.leader,
+            &fixture.range.leader,
+            fixture.range.id,
+            fixture.scope.range_epoch,
+            fixture.scope.recovery_nonce,
+            MetadataRecoveryRolePurpose::NormalRecovery,
+            Duration::from_secs(3),
+        )
+        .unwrap();
+        let refreshed_scope = RecoveryFenceScope::from_role(&renewed).unwrap();
+        assert_ne!(
+            refreshed_scope.metadata_context_id,
+            fixture.scope.metadata_context_id
+        );
+        fixture
+            .store
+            .fence_recovery_epoch(&renewed, &fixture.native, &refreshed_scope)
+            .unwrap();
+        fixture
+            .store
+            .revalidate_recovery_resolved_observation(&observation, &fixture.role, &fixture.native)
+            .unwrap();
+        assert!(
+            observation.require_role(&renewed).is_err(),
+            "stable range state does not renew original role provenance"
+        );
+        assert_eq!(
+            fixture
+                .db
+                .native_range_prefix_observation(fixture.range.id)
+                .unwrap()
+                .native_applied_index,
+            None
+        );
+    }
+
     #[test]
     fn actual_rename_then_directory_sync_error_cannot_issue_durability_observations() {
         let mut fixture = Fixture::new(1);

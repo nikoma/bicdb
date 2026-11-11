@@ -1,0 +1,11 @@
+
+running 1 test
+test db::range_image_native::rf3_fixture::native_historical_tls::activation_tests::actual_late_prepared_follower_after_two_activations_and_one_endpoint_loss_completes ... FAILED
+
+failures:
+
+failures:
+    db::range_image_native::rf3_fixture::native_historical_tls::activation_tests::actual_late_prepared_follower_after_two_activations_and_one_endpoint_loss_completes
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 677 filtered out; finished in 7.59s
+

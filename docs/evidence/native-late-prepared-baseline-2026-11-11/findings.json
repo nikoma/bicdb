@@ -1,0 +1,17 @@
+{
+  "source_revision": "e3572fc655fe0dff9e634f56c5c01019ab8de173",
+  "source_version": "1.0.471-beta",
+  "baseline_outcome": "FAIL",
+  "exit_code": 101,
+  "smoke_controls_passed": 2,
+  "completion_controls_passed": 3,
+  "actual_failure": "late Prepared follower cannot collect ClosedReadyQQ after two peer activations and loss of one activated endpoint",
+  "acknowledged_value_retained": true,
+  "main_or_azure_cause_claim": false,
+  "new_application_ack_tested": false,
+  "strong_get_tested": false,
+  "activation_wire_tested": false,
+  "physical_qualification": false,
+  "production_qualified": false,
+  "irretrievable_loss_proven": false
+}

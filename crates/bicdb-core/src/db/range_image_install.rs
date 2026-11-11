@@ -320,6 +320,11 @@ impl BicDb {
     ) -> Result<NativeInstalledRangeImageBase> {
         use crate::distribution_range_image::content_hasher;
         let seal = source.seal();
+        if fence.source_range_index() != 0 {
+            return Err(invalid(
+                "nonzero image publication requires actual staged-history proof",
+            ));
+        }
         cancellation.check()?;
         source.require_current()?;
         fence.require_live_role(role)?;

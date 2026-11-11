@@ -369,16 +369,9 @@ impl RangeWriteStore {
                 "image source would roll back actual native floor or pending mutation",
             ));
         }
-        // R parity is not a history-compatibility proof. Until the opaque
-        // shared logical-history adapter is integrated, refuse nonempty
-        // certified prefixes rather than erasing an equal-index fork.
-        if cut.range_index() != 0
-            || native_safety
-                .maximum_irreversible_index()
-                .is_some_and(|index| index > 0)
-        {
-            return Err(range_write_error("nonzero native image install requires the typed logical-history compatibility adapter"));
-        }
+        // This token is a durable REFUSAL only. It grants no row mutation:
+        // full staged logical-history compatibility is a separate mandatory
+        // prerequisite of the target row/final-publication state machine.
         self.validate_install_local_log(cut.range(), cut.range_index())?;
         if let Some(existing) = self.catalog.image_install_intents.get(&intent.range.id) {
             let mut normalized = existing.clone();

@@ -229,6 +229,14 @@ impl NativeRangeImageInstaller {
     pub(crate) fn fence(&self) -> &TargetImageInstallFence {
         &self.fence
     }
+    fn require_history_before_rows(&self) -> Result<()> {
+        if self.fence.source_range_index() != 0 {
+            return Err(invalid(
+                "nonzero image rows require the opaque full staged-history compatibility proof",
+            ));
+        }
+        Ok(())
+    }
     fn validate(&self, store: &RangeWriteStore, role: &NativeImageInstallRole<'_>) -> Result<()> {
         let db = self
             .database
@@ -255,6 +263,7 @@ impl NativeRangeImageInstaller {
     ) -> Result<bool> {
         cancellation.check()?;
         self.validate(store, role)?;
+        self.require_history_before_rows()?;
         if self.cleared {
             return Ok(true);
         }
@@ -311,6 +320,7 @@ impl NativeRangeImageInstaller {
     ) -> Result<()> {
         cancellation.check()?;
         self.validate(store, role)?;
+        self.require_history_before_rows()?;
         if attempt_id != self.fence.attempt_id() || !self.cleared {
             return Err(invalid(
                 "late attempt or target stale-key clear is incomplete",
@@ -382,6 +392,7 @@ impl NativeRangeImageInstaller {
     ) -> Result<VerifiedNativeRangeImageInstall> {
         source.require_current()?;
         self.validate(store, role)?;
+        self.require_history_before_rows()?;
         let seal = source.seal();
         if !self.cleared
             || !self.complete

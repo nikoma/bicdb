@@ -128,6 +128,10 @@ fn native_read_observation_rejects_actual_raw_prepare_and_cq_ahead_of_native() {
     let mut fixture = Fixture::new(true);
     let observed = fixture.observe();
     let range = fixture.request.scope.range.clone();
+    let key = (0..)
+        .map(|index| format!("unmaterialized-read-negative-{index}"))
+        .find(|key| fixture.topology.range_for_key("items", key).unwrap().id == range.id)
+        .unwrap();
     let command = native_ready_test_command(
         fixture.topology.cluster_id.clone(),
         &range,
@@ -137,8 +141,8 @@ fn native_read_observation_rejects_actual_raw_prepare_and_cq_ahead_of_native() {
             transaction_id: 99991,
             mutations: vec![CommitAdmissionMutation {
                 collection: "items".into(),
-                record_id: "unmaterialized-read-negative".into(),
-                record: Some(Record::new("unmaterialized-read-negative")),
+                record_id: key.clone(),
+                record: Some(Record::new(&key)),
             }],
         },
     )
@@ -178,12 +182,7 @@ fn native_read_observation_rejects_actual_raw_prepare_and_cq_ahead_of_native() {
             .range_index(),
         1
     );
-    assert!(fixture
-        .db
-        .read()
-        .get("items", "unmaterialized-read-negative")
-        .unwrap()
-        .is_none());
+    assert!(fixture.db.read().get("items", &key).unwrap().is_none());
 }
 #[test]
 fn native_read_observation_scope_cancellation_and_store_replacement_are_not_permissions() {

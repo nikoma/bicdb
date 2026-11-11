@@ -7,7 +7,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -20,6 +20,7 @@ pub const CLUSTER_METADATA_CONSENSUS_FORMAT_VERSION: u32 = 1;
 pub const METADATA_RESTORE_ACTIVATION_FORMAT_VERSION: u32 = 1;
 pub const DEFAULT_CLUSTER_METADATA_CONSENSUS_STATE: &str = "cluster-metadata-consensus.json";
 const MAX_RESTORE_ACTIVATION_ACKNOWLEDGEMENTS: u64 = 100_000;
+pub const METADATA_READ_AUTHORITY_PROTOCOL_VERSION: u32 = 1;
 
 fn metadata_error(message: impl Into<String>) -> BicDbError {
     BicDbError::Cluster(format!("metadata consensus: {}", message.into()))
@@ -143,6 +144,205 @@ pub struct MetadataAppendResponse {
     pub success: bool,
     pub match_index: u64,
     pub conflict_index: u64,
+}
+
+/// A new, request-correlated authority round. This is not a cached heartbeat.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct MetadataReadProbeRequest {
+    pub protocol_version: u32,
+    pub context_id: Uuid,
+    pub read_request_id: Uuid,
+    pub read_index: u64,
+    pub append: MetadataAppendRequest,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct MetadataReadProbeResponse {
+    pub protocol_version: u32,
+    pub context_id: Uuid,
+    pub read_request_id: Uuid,
+    pub read_index: u64,
+    pub append: MetadataAppendResponse,
+    pub applied_index: u64,
+}
+
+/// Evidence supplied only by the authenticated cluster transport. Incarnation
+/// is the transport's expected member incarnation, not a new cryptographic
+/// attestation of a remote process. Existing unique-member/fencing assumptions
+/// still apply.
+#[derive(Debug)]
+pub struct MetadataReadParticipant {
+    node_id: ClusterNodeId,
+    member_incarnation: u64,
+    certificate_sha256: Option<String>,
+    plaintext_loopback: bool,
+}
+
+impl MetadataReadParticipant {
+    pub(crate) fn from_transport(
+        node_id: ClusterNodeId,
+        member_incarnation: u64,
+        certificate_sha256: Option<String>,
+        plaintext_loopback: bool,
+    ) -> Self {
+        Self {
+            node_id,
+            member_incarnation,
+            certificate_sha256,
+            plaintext_loopback,
+        }
+    }
+}
+
+/// Not deserializable or publicly constructible: a bare response is not an
+/// authenticated vote. The transport validates TLS/envelope identity first.
+#[derive(Debug)]
+pub struct MetadataReadAck {
+    participant: MetadataReadParticipant,
+    response: MetadataReadProbeResponse,
+}
+
+impl MetadataReadAck {
+    pub fn voter_id(&self) -> &ClusterNodeId {
+        &self.participant.node_id
+    }
+    pub fn conflict_index(&self) -> Option<u64> {
+        (!self.response.append.success).then_some(self.response.append.conflict_index)
+    }
+    pub(crate) fn from_transport(
+        request: &MetadataReadProbeRequest,
+        destination: &ClusterNodeId,
+        participant: MetadataReadParticipant,
+        response: MetadataReadProbeResponse,
+    ) -> Result<Self> {
+        if request.protocol_version != METADATA_READ_AUTHORITY_PROTOCOL_VERSION
+            || response.protocol_version != METADATA_READ_AUTHORITY_PROTOCOL_VERSION
+            || response.context_id != request.context_id
+            || response.read_request_id != request.read_request_id
+            || response.read_index != request.read_index
+            || participant.node_id != *destination
+            || response.append.node_id != *destination
+            || response.append.cluster_id != request.append.cluster_id
+        {
+            return Err(metadata_error(
+                "read probe response correlation/identity mismatch",
+            ));
+        }
+        Ok(Self {
+            participant,
+            response,
+        })
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct MetadataReadVoterIdentity {
+    incarnation: u64,
+    active_certificate: Option<String>,
+    pending_certificate: Option<String>,
+}
+
+impl MetadataReadVoterIdentity {
+    fn accepts(&self, participant: &MetadataReadParticipant) -> bool {
+        if self.incarnation != participant.member_incarnation {
+            return false;
+        }
+        match self.active_certificate.as_deref() {
+            Some(active) => {
+                participant.certificate_sha256.as_deref() == Some(active)
+                    || self.pending_certificate.as_ref().is_some_and(|pending| {
+                        participant.certificate_sha256.as_ref() == Some(pending)
+                    })
+            }
+            None => participant.certificate_sha256.is_some() || participant.plaintext_loopback,
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct MetadataReadQuorums {
+    old: BTreeMap<ClusterNodeId, MetadataReadVoterIdentity>,
+    new: BTreeMap<ClusterNodeId, MetadataReadVoterIdentity>,
+}
+
+/// One-shot, monotonic-deadline context. No historical match indexes are used.
+/// It is deliberately neither Clone nor Serialize and is consumed by finish.
+#[derive(Debug)]
+pub struct MetadataReadContext {
+    context_id: Uuid,
+    read_request_id: Uuid,
+    leader_id: ClusterNodeId,
+    term: u64,
+    read_index: u64,
+    deadline: Instant,
+    quorums: MetadataReadQuorums,
+    fresh_old: BTreeSet<ClusterNodeId>,
+    fresh_new: BTreeSet<ClusterNodeId>,
+    failed: bool,
+}
+
+impl MetadataReadContext {
+    pub fn context_id(&self) -> Uuid {
+        self.context_id
+    }
+    pub fn read_request_id(&self) -> Uuid {
+        self.read_request_id
+    }
+    pub fn read_index(&self) -> u64 {
+        self.read_index
+    }
+    pub fn term(&self) -> u64 {
+        self.term
+    }
+    pub fn remote_voters(&self) -> BTreeSet<ClusterNodeId> {
+        self.quorums
+            .old
+            .keys()
+            .chain(self.quorums.new.keys())
+            .filter(|node| **node != self.leader_id)
+            .cloned()
+            .collect()
+    }
+}
+
+/// A completed metadata-only read-index proof, not a range read permit or
+/// reusable leadership lease. Strong row reads still need certified range
+/// application/image evidence and final authority revalidation.
+#[derive(Debug)]
+pub struct MetadataReadAuthority {
+    context_id: Uuid,
+    read_request_id: Uuid,
+    term: u64,
+    read_index: u64,
+    applied_index: u64,
+    topology: ClusterTopology,
+    restore_activation: Option<MetadataRestoreActivation>,
+}
+
+impl MetadataReadAuthority {
+    pub fn context_id(&self) -> Uuid {
+        self.context_id
+    }
+    pub fn read_request_id(&self) -> Uuid {
+        self.read_request_id
+    }
+    pub fn term(&self) -> u64 {
+        self.term
+    }
+    pub fn read_index(&self) -> u64 {
+        self.read_index
+    }
+    pub fn applied_index(&self) -> u64 {
+        self.applied_index
+    }
+    pub fn topology(&self) -> &ClusterTopology {
+        &self.topology
+    }
+    pub fn restore_activation(&self) -> Option<&MetadataRestoreActivation> {
+        self.restore_activation.as_ref()
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -298,6 +498,285 @@ impl MetadataConsensusStore {
 
     pub fn last_leader_contact_ms(&self) -> u64 {
         self.last_leader_contact_ms
+    }
+
+    fn read_quorums(&self) -> Result<MetadataReadQuorums> {
+        fn identities(
+            topology: &ClusterTopology,
+        ) -> Result<BTreeMap<ClusterNodeId, MetadataReadVoterIdentity>> {
+            topology_voters(topology)
+                .into_iter()
+                .map(|id| {
+                    let node = topology
+                        .nodes
+                        .get(&id)
+                        .ok_or_else(|| metadata_error("read quorum voter missing from topology"))?;
+                    Ok((
+                        id,
+                        MetadataReadVoterIdentity {
+                            incarnation: node.incarnation,
+                            active_certificate: node.tls_certificate_sha256.clone(),
+                            pending_certificate: node.pending_tls_certificate_sha256.clone(),
+                        },
+                    ))
+                })
+                .collect()
+        }
+        let old = identities(&self.state.committed_topology)?;
+        let new = identities(
+            self.state
+                .log
+                .last()
+                .map(|entry| &entry.topology)
+                .unwrap_or(&self.state.committed_topology),
+        )?;
+        if old.is_empty() || new.is_empty() {
+            return Err(metadata_error(
+                "read authority requires nonempty voter configurations",
+            ));
+        }
+        Ok(MetadataReadQuorums { old, new })
+    }
+
+    fn validate_read_context(&self, context: &MetadataReadContext) -> Result<()> {
+        if context.failed || Instant::now() >= context.deadline {
+            return Err(metadata_error("read authority context failed or expired"));
+        }
+        if self.state.role != MetadataConsensusRole::Leader
+            || self.state.node_id != context.leader_id
+            || self.state.current_term != context.term
+            || self.state.commit_index < context.read_index
+        {
+            return Err(metadata_error(
+                "read authority leader/term/applied floor changed",
+            ));
+        }
+        if self.read_quorums()? != context.quorums {
+            return Err(metadata_error(
+                "read authority voter configuration changed; start a fresh context",
+            ));
+        }
+        Ok(())
+    }
+
+    /// Begin one metadata-only linearizable read-index round. A historical
+    /// quorum or an uncommitted current-term leadership barrier cannot qualify.
+    pub fn begin_read_authority(
+        &self,
+        read_request_id: Uuid,
+        budget: Duration,
+        local: &MetadataReadParticipant,
+    ) -> Result<MetadataReadContext> {
+        if read_request_id.is_nil() || budget.is_zero() || budget > Duration::from_secs(300) {
+            return Err(metadata_error("read authority request/budget is invalid"));
+        }
+        if self.state.role != MetadataConsensusRole::Leader
+            || self.state.current_term == 0
+            || self.state.commit_index == 0
+            || self.term_at(self.state.commit_index) != Some(self.state.current_term)
+        {
+            return Err(metadata_error(
+                "read authority requires a committed current-term leadership anchor",
+            ));
+        }
+        if local.node_id != self.state.node_id {
+            return Err(metadata_error(
+                "read authority local transport identity differs from leader",
+            ));
+        }
+        let quorums = self.read_quorums()?;
+        let mut fresh_old = BTreeSet::new();
+        let mut fresh_new = BTreeSet::new();
+        if quorums
+            .old
+            .get(&local.node_id)
+            .is_some_and(|identity| identity.accepts(local))
+        {
+            fresh_old.insert(local.node_id.clone());
+        }
+        if quorums
+            .new
+            .get(&local.node_id)
+            .is_some_and(|identity| identity.accepts(local))
+        {
+            fresh_new.insert(local.node_id.clone());
+        }
+        if fresh_old.is_empty() && fresh_new.is_empty() {
+            return Err(metadata_error(
+                "read authority local incarnation/certificate is not a voter",
+            ));
+        }
+        Ok(MetadataReadContext {
+            context_id: Uuid::now_v7(),
+            read_request_id,
+            leader_id: self.state.node_id.clone(),
+            term: self.state.current_term,
+            read_index: self.state.commit_index,
+            deadline: Instant::now() + budget,
+            quorums,
+            fresh_old,
+            fresh_new,
+            failed: false,
+        })
+    }
+
+    pub fn read_authority_probe(
+        &self,
+        context: &MetadataReadContext,
+        destination: &ClusterNodeId,
+        next_index: u64,
+        max_entries: usize,
+    ) -> Result<MetadataReadProbeRequest> {
+        self.validate_read_context(context)?;
+        if destination == &self.state.node_id
+            || (!context.quorums.old.contains_key(destination)
+                && !context.quorums.new.contains_key(destination))
+        {
+            return Err(metadata_error(
+                "read authority probe destination is not a remote voter",
+            ));
+        }
+        Ok(MetadataReadProbeRequest {
+            protocol_version: METADATA_READ_AUTHORITY_PROTOCOL_VERSION,
+            context_id: context.context_id,
+            read_request_id: context.read_request_id,
+            read_index: context.read_index,
+            append: self.append_request_from(next_index, max_entries)?,
+        })
+    }
+
+    /// Receiver path retains the ordinary durable Append semantics and echoes
+    /// this round's identity. No special no-fsync or weaker bootstrap path.
+    pub fn handle_read_authority_probe(
+        &mut self,
+        request: MetadataReadProbeRequest,
+    ) -> Result<MetadataReadProbeResponse> {
+        if request.protocol_version != METADATA_READ_AUTHORITY_PROTOCOL_VERSION
+            || request.context_id.is_nil()
+            || request.read_request_id.is_nil()
+            || request.append.term == 0
+            || request.read_index == 0
+            || request.read_index > request.append.leader_commit
+        {
+            return Err(metadata_error(
+                "read authority probe identity/index/version is invalid",
+            ));
+        }
+        let append = self.handle_append_request(request.append)?;
+        Ok(MetadataReadProbeResponse {
+            protocol_version: METADATA_READ_AUTHORITY_PROTOCOL_VERSION,
+            context_id: request.context_id,
+            read_request_id: request.read_request_id,
+            read_index: request.read_index,
+            append,
+            applied_index: self.state.commit_index,
+        })
+    }
+
+    /// Only fresh transport-correlated acknowledgments enter this context.
+    /// Deliberately does not consult or update historical match_index: normal
+    /// metadata replication remains responsible for committing proposals.
+    pub fn record_read_authority_ack(
+        &mut self,
+        context: &mut MetadataReadContext,
+        ack: &MetadataReadAck,
+    ) -> Result<bool> {
+        let result = (|| {
+            if ack.response.append.cluster_id != self.state.cluster_id {
+                return Err(metadata_error(
+                    "read authority acknowledgment belongs to another cluster",
+                ));
+            }
+            let current = self.read_quorums()?;
+            let voter = &ack.participant.node_id;
+            if !current
+                .old
+                .get(voter)
+                .is_some_and(|identity| identity.accepts(&ack.participant))
+                && !current
+                    .new
+                    .get(voter)
+                    .is_some_and(|identity| identity.accepts(&ack.participant))
+            {
+                return Err(metadata_error(
+                    "read authority reply is not from a current voter identity",
+                ));
+            }
+            if ack.response.append.term > self.state.current_term {
+                self.observe_remote_term(ack.response.append.term)?;
+                return Err(metadata_error("read authority observed a higher term"));
+            }
+            self.validate_read_context(context)?;
+            if ack.response.context_id != context.context_id
+                || ack.response.read_request_id != context.read_request_id
+                || ack.response.read_index != context.read_index
+                || ack.response.append.term != context.term
+            {
+                return Err(metadata_error(
+                    "read authority acknowledgment is from another round/term",
+                ));
+            }
+            if !ack.response.append.success {
+                return Ok(false);
+            }
+            if ack.response.append.match_index < context.read_index
+                || ack.response.applied_index < context.read_index
+            {
+                return Err(metadata_error(
+                    "read authority peer has not reached the requested metadata floor",
+                ));
+            }
+            let voter = &ack.participant.node_id;
+            let old = context
+                .quorums
+                .old
+                .get(voter)
+                .is_some_and(|identity| identity.accepts(&ack.participant));
+            let new = context
+                .quorums
+                .new
+                .get(voter)
+                .is_some_and(|identity| identity.accepts(&ack.participant));
+            if !old && !new {
+                return Err(metadata_error(
+                    "read authority acknowledgment incarnation/certificate is not a voter",
+                ));
+            }
+            if old {
+                context.fresh_old.insert(voter.clone());
+            }
+            if new {
+                context.fresh_new.insert(voter.clone());
+            }
+            Ok(true)
+        })();
+        if result.is_err() {
+            context.failed = true;
+        }
+        result
+    }
+
+    pub fn finish_read_authority(
+        &self,
+        context: MetadataReadContext,
+    ) -> Result<MetadataReadAuthority> {
+        self.validate_read_context(&context)?;
+        if context.fresh_old.len() < context.quorums.old.len() / 2 + 1
+            || context.fresh_new.len() < context.quorums.new.len() / 2 + 1
+        {
+            return Err(metadata_error(
+                "read authority has no fresh old-and-new voter quorum",
+            ));
+        }
+        Ok(MetadataReadAuthority {
+            context_id: context.context_id,
+            read_request_id: context.read_request_id,
+            term: context.term,
+            read_index: context.read_index,
+            applied_index: self.state.commit_index,
+            topology: self.state.committed_topology.clone(),
+            restore_activation: self.state.committed_restore_activation.clone(),
+        })
     }
 
     /// Begin an election only if the caller's complete observation is still
@@ -722,6 +1201,12 @@ impl MetadataConsensusStore {
 
     fn commit_entry(&mut self, entry: MetadataLogEntry) -> Result<()> {
         validate_log_entry_shape(&entry, &self.state.cluster_id)?;
+        if let Some(activation) = &entry.restore_activation {
+            validate_committed_activation_progress(
+                self.state.committed_restore_activation.as_ref(),
+                Some(activation),
+            )?;
+        }
         self.state.commit_index = entry.index;
         self.state.base_index = entry.index;
         self.state.base_term = entry.term;
@@ -740,7 +1225,7 @@ impl MetadataConsensusStore {
         snapshot.topology.validate()?;
         self.ensure_cluster(&snapshot.topology.cluster_id)?;
         if let Some(activation) = &snapshot.restore_activation {
-            validate_activation_against_topology(
+            validate_historical_activation_against_topology(
                 activation,
                 &snapshot.topology,
                 &self.state.cluster_id,
@@ -758,6 +1243,10 @@ impl MetadataConsensusStore {
                 "snapshot conflicts with the committed metadata index",
             ));
         }
+        validate_committed_activation_progress(
+            self.state.committed_restore_activation.as_ref(),
+            snapshot.restore_activation.as_ref(),
+        )?;
         self.state.base_index = snapshot.last_included_index;
         self.state.base_term = snapshot.last_included_term;
         self.state.commit_index = snapshot.last_included_index;
@@ -959,7 +1448,7 @@ fn validate_state(state: &MetadataConsensusState) -> Result<()> {
         ));
     }
     if let Some(activation) = &state.committed_restore_activation {
-        validate_activation_against_topology(
+        validate_historical_activation_against_topology(
             activation,
             &state.committed_topology,
             &state.cluster_id,
@@ -968,9 +1457,8 @@ fn validate_state(state: &MetadataConsensusState) -> Result<()> {
     let mut expected = state.base_index.saturating_add(1);
     let mut latest_generation = state.committed_topology.generation;
     let mut latest_topology = state.committed_topology.clone();
-    let mut latest_activation_ms = state
-        .committed_restore_activation
-        .as_ref()
+    let mut latest_activation = state.committed_restore_activation.as_ref();
+    let mut latest_activation_ms = latest_activation
         .map(|activation| activation.activated_at_ms)
         .unwrap_or(0);
     for entry in &state.log {
@@ -993,6 +1481,8 @@ fn validate_state(state: &MetadataConsensusState) -> Result<()> {
                     "restore activation changes topology or does not advance its decision time",
                 ));
             }
+            validate_committed_activation_progress(latest_activation, Some(activation))?;
+            latest_activation = Some(activation);
             latest_activation_ms = activation.activated_at_ms;
         } else {
             if entry.topology.generation <= latest_generation {
@@ -1020,6 +1510,66 @@ fn validate_log_entry_shape(entry: &MetadataLogEntry, cluster_id: &ClusterId) ->
     }
     if let Some(activation) = &entry.restore_activation {
         validate_activation_against_topology(activation, &entry.topology, cluster_id)?;
+    }
+    Ok(())
+}
+
+/// A retained committed decision describes the topology at activation, not a
+/// permanent ban on later membership/load changes. Local envelopes are checked
+/// before state validation; snapshot callers must authenticate the actual
+/// consensus source before reaching this store. Older topology hashes cannot
+/// be recomputed from a later compacted topology, and are historical lineage,
+/// never independent proof of fresh restore admission. NEW decisions still use
+/// `validate_activation_against_topology` at proposal/log admission.
+fn validate_historical_activation_against_topology(
+    activation: &MetadataRestoreActivation,
+    topology: &ClusterTopology,
+    cluster_id: &ClusterId,
+) -> Result<()> {
+    activation.validate()?;
+    if activation.cluster_id != *cluster_id
+        || activation.cluster_id != topology.cluster_id
+        || activation.topology_generation > topology.generation
+    {
+        return Err(metadata_error(
+            "historical restore activation belongs to another cluster or future topology",
+        ));
+    }
+    if activation.topology_generation == topology.generation {
+        validate_activation_against_topology(activation, topology, cluster_id)?;
+    }
+    Ok(())
+}
+
+/// Ordinary Raft replication cannot erase or rewrite an already committed
+/// restore decision. A fresh authorized restore into a new root has no previous
+/// lineage; that separate admission still validates its complete certificate.
+fn validate_committed_activation_progress(
+    previous: Option<&MetadataRestoreActivation>,
+    next: Option<&MetadataRestoreActivation>,
+) -> Result<()> {
+    if let Some(next) = next {
+        next.validate()?;
+    }
+    let Some(previous) = previous else {
+        return Ok(());
+    };
+    let Some(next) = next else {
+        return Err(metadata_error(
+            "snapshot erases committed restore activation",
+        ));
+    };
+    if previous == next {
+        return Ok(());
+    }
+    if previous.cluster_id != next.cluster_id
+        || previous.activation_id == next.activation_id
+        || next.activated_at_ms <= previous.activated_at_ms
+        || next.topology_generation < previous.topology_generation
+    {
+        return Err(metadata_error(
+            "restore activation regresses or rewrites a committed decision",
+        ));
     }
     Ok(())
 }
@@ -1115,6 +1665,263 @@ mod tests {
             node_ack_set_sha256: "c".repeat(64),
             activated_at_ms,
         }
+    }
+
+    fn read_participant(topology: &ClusterTopology, name: &str) -> MetadataReadParticipant {
+        let id = ClusterNodeId::new(name).unwrap();
+        MetadataReadParticipant::from_transport(
+            id.clone(),
+            topology.nodes[&id].incarnation,
+            None,
+            true,
+        )
+    }
+
+    fn anchor_leader(leader: &mut MetadataConsensusStore, follower: &mut MetadataConsensusStore) {
+        leader.start_election().unwrap();
+        leader
+            .become_leader(&BTreeSet::from([
+                leader.state.node_id.clone(),
+                follower.state.node_id.clone(),
+            ]))
+            .unwrap();
+        let response = follower
+            .handle_append_request(leader.append_request_from(1, 16).unwrap())
+            .unwrap();
+        leader
+            .record_append_response(&follower.state.node_id, &response)
+            .unwrap();
+        assert_eq!(
+            leader.term_at(leader.state.commit_index),
+            Some(leader.state.current_term)
+        );
+    }
+
+    fn read_ack(
+        leader: &MetadataConsensusStore,
+        context: &MetadataReadContext,
+        follower: &mut MetadataConsensusStore,
+        topology: &ClusterTopology,
+    ) -> MetadataReadAck {
+        let voter = follower.state.node_id.clone();
+        let request = leader.read_authority_probe(context, &voter, 1, 16).unwrap();
+        let response = follower
+            .handle_read_authority_probe(request.clone())
+            .unwrap();
+        MetadataReadAck::from_transport(
+            &request,
+            &voter,
+            read_participant(topology, voter.as_str()),
+            response,
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn read_authority_rejects_uncommitted_current_term_anchor() {
+        let topology = topology_with_nodes(3);
+        let dir = tempfile::tempdir().unwrap();
+        let mut leader = open(dir.path(), "n1", &topology);
+        leader.start_election().unwrap();
+        leader
+            .become_leader(&BTreeSet::from([
+                ClusterNodeId::new("n1").unwrap(),
+                ClusterNodeId::new("n2").unwrap(),
+            ]))
+            .unwrap();
+        assert_eq!(leader.state.commit_index, 0);
+        assert!(leader
+            .begin_read_authority(
+                Uuid::now_v7(),
+                Duration::from_secs(1),
+                &read_participant(&topology, "n1")
+            )
+            .unwrap_err()
+            .to_string()
+            .contains("committed current-term"));
+    }
+
+    #[test]
+    fn read_authority_healthy_quorum_returns_applied_metadata_without_cached_votes() {
+        let topology = topology_with_nodes(3);
+        let dir = tempfile::tempdir().unwrap();
+        let mut leader = open(&dir.path().join("leader"), "n1", &topology);
+        let mut follower = open(&dir.path().join("follower"), "n2", &topology);
+        anchor_leader(&mut leader, &mut follower);
+        let cached_match = leader.match_index.clone();
+        let local = read_participant(&topology, "n1");
+        let no_round = leader
+            .begin_read_authority(Uuid::now_v7(), Duration::from_secs(1), &local)
+            .unwrap();
+        assert!(leader
+            .finish_read_authority(no_round)
+            .unwrap_err()
+            .to_string()
+            .contains("no fresh"));
+        let mut context = leader
+            .begin_read_authority(Uuid::now_v7(), Duration::from_secs(1), &local)
+            .unwrap();
+        let nonce = context.context_id();
+        let ack = read_ack(&leader, &context, &mut follower, &topology);
+        assert!(leader
+            .record_read_authority_ack(&mut context, &ack)
+            .unwrap());
+        let authority = leader.finish_read_authority(context).unwrap();
+        assert_eq!(authority.context_id(), nonce);
+        assert!(authority.applied_index() >= authority.read_index());
+        assert_eq!(authority.topology(), &topology);
+        assert_eq!(
+            leader.match_index, cached_match,
+            "read votes must not become historical commit evidence"
+        );
+    }
+
+    #[test]
+    fn read_authority_rejects_cached_ack_from_another_fresh_nonce() {
+        let topology = topology_with_nodes(3);
+        let dir = tempfile::tempdir().unwrap();
+        let mut leader = open(&dir.path().join("leader"), "n1", &topology);
+        let mut follower = open(&dir.path().join("follower"), "n2", &topology);
+        anchor_leader(&mut leader, &mut follower);
+        let local = read_participant(&topology, "n1");
+        let old_context = leader
+            .begin_read_authority(Uuid::now_v7(), Duration::from_secs(1), &local)
+            .unwrap();
+        let cached = read_ack(&leader, &old_context, &mut follower, &topology);
+        let mut current = leader
+            .begin_read_authority(Uuid::now_v7(), Duration::from_secs(1), &local)
+            .unwrap();
+        assert_ne!(old_context.context_id(), current.context_id());
+        assert!(leader
+            .record_read_authority_ack(&mut current, &cached)
+            .is_err());
+        assert!(leader.finish_read_authority(current).is_err());
+    }
+
+    #[test]
+    fn read_authority_old_leader_cannot_serve_after_higher_term_reply() {
+        let topology = topology_with_nodes(3);
+        let dir = tempfile::tempdir().unwrap();
+        let mut leader = open(&dir.path().join("leader"), "n1", &topology);
+        let mut follower = open(&dir.path().join("follower"), "n2", &topology);
+        anchor_leader(&mut leader, &mut follower);
+        let mut context = leader
+            .begin_read_authority(
+                Uuid::now_v7(),
+                Duration::from_secs(1),
+                &read_participant(&topology, "n1"),
+            )
+            .unwrap();
+        follower.start_election().unwrap();
+        follower
+            .become_leader(&BTreeSet::from([
+                ClusterNodeId::new("n2").unwrap(),
+                ClusterNodeId::new("n3").unwrap(),
+            ]))
+            .unwrap();
+        let ack = read_ack(&leader, &context, &mut follower, &topology);
+        assert!(leader
+            .record_read_authority_ack(&mut context, &ack)
+            .is_err());
+        assert_eq!(leader.state.role, MetadataConsensusRole::Follower);
+        assert_eq!(leader.state.current_term, follower.state.current_term);
+        assert!(leader.finish_read_authority(context).is_err());
+    }
+
+    #[test]
+    fn read_authority_joint_quorums_require_fresh_majorities_on_both_sides() {
+        let mut topology = topology_with_nodes(5);
+        for name in ["n4", "n5"] {
+            topology
+                .nodes
+                .get_mut(&ClusterNodeId::new(name).unwrap())
+                .unwrap()
+                .metadata_role = crate::distribution::MetadataMemberRole::Learner;
+        }
+        let dir = tempfile::tempdir().unwrap();
+        let mut leader = open(&dir.path().join("leader"), "n1", &topology);
+        let mut old_voter = open(&dir.path().join("old"), "n2", &topology);
+        let mut new_voter = open(&dir.path().join("new"), "n4", &topology);
+        anchor_leader(&mut leader, &mut old_voter);
+        let mut proposed = topology.clone();
+        proposed.generation += 1;
+        for name in ["n2", "n3"] {
+            proposed
+                .nodes
+                .get_mut(&ClusterNodeId::new(name).unwrap())
+                .unwrap()
+                .metadata_role = crate::distribution::MetadataMemberRole::Learner;
+        }
+        for name in ["n4", "n5"] {
+            proposed
+                .nodes
+                .get_mut(&ClusterNodeId::new(name).unwrap())
+                .unwrap()
+                .metadata_role = crate::distribution::MetadataMemberRole::Voter;
+        }
+        leader.propose_topology(proposed).unwrap();
+        let local = read_participant(&topology, "n1");
+        for old_side in [true, false] {
+            let mut context = leader
+                .begin_read_authority(Uuid::now_v7(), Duration::from_secs(1), &local)
+                .unwrap();
+            let ack = read_ack(
+                &leader,
+                &context,
+                if old_side {
+                    &mut old_voter
+                } else {
+                    &mut new_voter
+                },
+                &topology,
+            );
+            leader
+                .record_read_authority_ack(&mut context, &ack)
+                .unwrap();
+            assert!(
+                leader.finish_read_authority(context).is_err(),
+                "one side's majority must not certify a joint read"
+            );
+        }
+        let mut context = leader
+            .begin_read_authority(Uuid::now_v7(), Duration::from_secs(1), &local)
+            .unwrap();
+        for follower in [&mut old_voter, &mut new_voter] {
+            let ack = read_ack(&leader, &context, follower, &topology);
+            leader
+                .record_read_authority_ack(&mut context, &ack)
+                .unwrap();
+        }
+        let authority = leader.finish_read_authority(context).unwrap();
+        assert_eq!(
+            authority.topology(),
+            &topology,
+            "uncommitted proposed topology is not served"
+        );
+    }
+
+    #[test]
+    fn read_authority_deadline_and_voter_identity_fail_closed() {
+        let topology = topology_with_nodes(3);
+        let dir = tempfile::tempdir().unwrap();
+        let mut leader = open(&dir.path().join("leader"), "n1", &topology);
+        let mut follower = open(&dir.path().join("follower"), "n2", &topology);
+        anchor_leader(&mut leader, &mut follower);
+        let local = read_participant(&topology, "n1");
+        let mut expired = leader
+            .begin_read_authority(Uuid::now_v7(), Duration::from_secs(1), &local)
+            .unwrap();
+        expired.deadline = Instant::now() - Duration::from_millis(1);
+        assert!(leader.finish_read_authority(expired).is_err());
+        let mut context = leader
+            .begin_read_authority(Uuid::now_v7(), Duration::from_secs(1), &local)
+            .unwrap();
+        let mut ack = read_ack(&leader, &context, &mut follower, &topology);
+        ack.participant.member_incarnation += 1;
+        assert!(leader
+            .record_read_authority_ack(&mut context, &ack)
+            .is_err());
+        assert!(leader.finish_read_authority(context).is_err());
     }
 
     #[test]
@@ -1475,7 +2282,7 @@ mod tests {
             .unwrap();
         assert_eq!(follower.committed_restore_activation(), Some(&activation));
         drop(follower);
-        let follower = open(roots[1].path(), "n2", &topology);
+        let mut follower = open(roots[1].path(), "n2", &topology);
         assert_eq!(follower.committed_restore_activation(), Some(&activation));
         assert_eq!(
             MetadataConsensusStore::inspect_restore_activation(roots[1].path()).unwrap(),
@@ -1498,6 +2305,272 @@ mod tests {
         wrong_topology.topology_sha256 = "d".repeat(64);
         assert!(leader.propose_restore_activation(wrong_topology).is_err());
         assert_eq!(leader.status().current_term, election.term);
+
+        let old_snapshot = leader.append_request_from(1, 8).unwrap();
+        let newer = restore_activation(&topology, 10_002);
+        let entry = leader.propose_restore_activation(newer.clone()).unwrap();
+        let response = follower
+            .handle_append_request(leader.append_request_from(entry.index, 8).unwrap())
+            .unwrap();
+        assert!(leader
+            .record_append_response(&response.node_id, &response)
+            .unwrap());
+        follower
+            .handle_append_request(leader.append_request_from(entry.index + 1, 8).unwrap())
+            .unwrap();
+        let newest_snapshot = leader.append_request_from(1, 8).unwrap();
+        assert!(
+            snapshot_target
+                .handle_append_request(newest_snapshot.clone())
+                .unwrap()
+                .success
+        );
+        assert_eq!(snapshot_target.committed_restore_activation(), Some(&newer));
+        // A genuine old snapshot is ignored and cannot undo the newer decision.
+        snapshot_target.handle_append_request(old_snapshot).unwrap();
+        assert_eq!(snapshot_target.committed_restore_activation(), Some(&newer));
+        // The same complete decision remains an idempotent snapshot positive.
+        assert!(
+            snapshot_target
+                .handle_append_request(newest_snapshot.clone())
+                .unwrap()
+                .success
+        );
+
+        // These are deliberately adversarial DTOs, not fabricated qualification
+        // evidence. A forged higher index must not bypass lineage monotonicity.
+        let template = newest_snapshot.snapshot.unwrap();
+        let mut same_id_rewrite = newer.clone();
+        same_id_rewrite.activated_at_ms += 1;
+        same_id_rewrite.node_ack_set_sha256 = "d".repeat(64);
+        let mut same_time_new_id = newer.clone();
+        same_time_new_id.activation_id = Uuid::new_v4();
+        let mut same_generation_wrong_hash = newer.clone();
+        same_generation_wrong_hash.topology_sha256 = "e".repeat(64);
+        let mut future = newer.clone();
+        future.topology_generation += 1;
+        let mut wrong_cluster = newer.clone();
+        wrong_cluster.cluster_id = ClusterId::new("another-cluster").unwrap();
+        for invalid in [
+            None,
+            Some(activation.clone()),
+            Some(same_id_rewrite),
+            Some(same_time_new_id),
+            Some(same_generation_wrong_hash),
+            Some(future),
+            Some(wrong_cluster),
+        ] {
+            let before = snapshot_target.state.clone();
+            let mut forged = template.clone();
+            forged.last_included_index += 1;
+            forged.restore_activation = invalid;
+            assert!(snapshot_target.install_snapshot(forged).is_err());
+            assert_eq!(
+                snapshot_target.state, before,
+                "rejected snapshot cannot mutate committed state"
+            );
+        }
+        assert_eq!(leader.committed_restore_activation(), Some(&newer));
+        assert_eq!(follower.committed_restore_activation(), Some(&newer));
+    }
+
+    #[test]
+    fn restore_activation_historical_validation_does_not_weaken_new_decision_admission() {
+        let topology = topology_with_nodes(3);
+        let activation = restore_activation(&topology, 10_000);
+        let mut successor = topology.clone();
+        successor.generation += 1;
+        validate_historical_activation_against_topology(
+            &activation,
+            &successor,
+            &topology.cluster_id,
+        )
+        .unwrap();
+        assert!(validate_activation_against_topology(
+            &activation,
+            &successor,
+            &topology.cluster_id
+        )
+        .is_err());
+        let new_decision = MetadataLogEntry {
+            index: 2,
+            term: 1,
+            leadership_barrier: false,
+            topology: successor.clone(),
+            restore_activation: Some(activation.clone()),
+        };
+        assert!(
+            validate_log_entry_shape(&new_decision, &topology.cluster_id).is_err(),
+            "NEW decisions still need the exact topology at admission"
+        );
+        let mut corrupt = activation.clone();
+        corrupt.topology_sha256 = "d".repeat(64);
+        assert!(validate_historical_activation_against_topology(
+            &corrupt,
+            &topology,
+            &topology.cluster_id
+        )
+        .is_err());
+        let mut future = activation.clone();
+        future.topology_generation = successor.generation + 1;
+        assert!(validate_historical_activation_against_topology(
+            &future,
+            &successor,
+            &topology.cluster_id
+        )
+        .is_err());
+        let mut wrong_cluster = activation.clone();
+        wrong_cluster.cluster_id = ClusterId::new("wrong-cluster").unwrap();
+        assert!(validate_historical_activation_against_topology(
+            &wrong_cluster,
+            &successor,
+            &topology.cluster_id
+        )
+        .is_err());
+        let mut malformed = activation.clone();
+        malformed.admission_checksum_sha256 = "bad".into();
+        assert!(validate_historical_activation_against_topology(
+            &malformed,
+            &successor,
+            &topology.cluster_id
+        )
+        .is_err());
+        assert!(validate_committed_activation_progress(None, Some(&malformed)).is_err());
+        // New-root bootstrap has no prior committed lineage to erase.
+        validate_committed_activation_progress(None, Some(&activation)).unwrap();
+    }
+
+    #[test]
+    fn restore_activation_historical_lineage_survives_load_commit_reopen_and_snapshot() {
+        let topology = topology_with_nodes(3);
+        let roots = (0..3)
+            .map(|_| tempfile::tempdir().unwrap())
+            .collect::<Vec<_>>();
+        let open_durable = |index: usize, name: &str| {
+            MetadataConsensusStore::open(
+                roots[index].path(),
+                topology.cluster_id.clone(),
+                ClusterNodeId::new(name).unwrap(),
+                topology.clone(),
+                true,
+            )
+        };
+        let mut leader = open_durable(0, "n1").unwrap();
+        let mut follower = open_durable(1, "n2").unwrap();
+        let mut snapshot_target = open_durable(2, "n3").unwrap();
+        let election = leader.start_election().unwrap();
+        let mut votes = BTreeSet::from([election.candidate_id.clone()]);
+        for peer in [&mut follower, &mut snapshot_target] {
+            let vote = peer.handle_vote_request(election.clone()).unwrap();
+            assert!(vote.vote_granted);
+            assert_eq!(vote.term, election.term);
+            votes.insert(vote.voter_id);
+        }
+        leader.become_leader(&votes).unwrap();
+        let reply = follower
+            .handle_append_request(leader.append_request_from(1, 8).unwrap())
+            .unwrap();
+        assert!(leader
+            .record_append_response(&reply.node_id, &reply)
+            .unwrap());
+        follower
+            .handle_append_request(
+                leader
+                    .append_request_from(leader.status().commit_index + 1, 8)
+                    .unwrap(),
+            )
+            .unwrap();
+
+        let activation = restore_activation(&topology, 10_000);
+        let decision = leader
+            .propose_restore_activation(activation.clone())
+            .unwrap();
+        let reply = follower
+            .handle_append_request(leader.append_request_from(decision.index, 8).unwrap())
+            .unwrap();
+        assert!(leader
+            .record_append_response(&reply.node_id, &reply)
+            .unwrap());
+        follower
+            .handle_append_request(leader.append_request_from(decision.index + 1, 8).unwrap())
+            .unwrap();
+        assert_eq!(leader.committed_restore_activation(), Some(&activation));
+        assert_eq!(follower.committed_restore_activation(), Some(&activation));
+
+        // Obtain the ordinary load-only successor through real distribution
+        // operations, rather than forging a generation or catalog watermark.
+        let plan_root = tempfile::tempdir().unwrap();
+        let config = DistributionConfig {
+            enabled: true,
+            cluster_id: topology.cluster_id.clone(),
+            node_id: election.candidate_id.clone(),
+            node_address: "127.0.0.1:10001".into(),
+            replication_factor: 1,
+            initial_ranges: 2,
+            ..DistributionConfig::default()
+        };
+        let mut plan =
+            DistributionStore::initialize_at(plan_root.path(), config, true, 10).unwrap();
+        plan.install_authoritative_topology(topology.clone())
+            .unwrap();
+        let range_id = topology.ranges.values().next().unwrap().id;
+        assert!(plan
+            .update_range_load(range_id, 4321, 17, &election.candidate_id, 10_001)
+            .unwrap());
+        let changed = plan.topology().clone();
+        assert!(changed.generation > activation.topology_generation);
+        let load_entry = leader.propose_topology(changed.clone()).unwrap();
+        let reply = follower
+            .handle_append_request(leader.append_request_from(load_entry.index, 8).unwrap())
+            .unwrap();
+        assert!(leader
+            .record_append_response(&reply.node_id, &reply)
+            .unwrap());
+        follower
+            .handle_append_request(leader.append_request_from(load_entry.index + 1, 8).unwrap())
+            .unwrap();
+        assert_eq!(leader.committed_topology(), &changed);
+        assert_eq!(follower.committed_topology(), &changed);
+        assert_eq!(leader.committed_restore_activation(), Some(&activation));
+        assert_eq!(follower.committed_restore_activation(), Some(&activation));
+
+        // This is a trusted-caller store/protocol test, not an mTLS test. The
+        // actual leader creates the compacted snapshot; no state is forged.
+        let snapshot = leader.append_request_from(1, 8).unwrap();
+        assert!(snapshot.snapshot.is_some());
+        let snapshot_result = snapshot_target.handle_append_request(snapshot);
+        let snapshot_error = snapshot_result.as_ref().err().map(ToString::to_string);
+        if let Ok(reply) = &snapshot_result {
+            assert!(reply.success);
+            assert_eq!(snapshot_target.committed_topology(), &changed);
+            assert_eq!(
+                snapshot_target.committed_restore_activation(),
+                Some(&activation)
+            );
+        }
+        drop(leader);
+        drop(follower);
+        let leader_reopen = open_durable(0, "n1");
+        let follower_reopen = open_durable(1, "n2");
+        let report = serde_json::json!({
+            "scope": "three fsync-on stores; trusted-caller vote/Append/snapshot protocol; no TLS or power loss",
+            "activation_generation": activation.topology_generation,
+            "current_generation": changed.generation,
+            "activation_index": decision.index,
+            "load_commit_index": load_entry.index,
+            "snapshot_error": snapshot_error,
+            "leader_reopen_error": leader_reopen.as_ref().err().map(ToString::to_string),
+            "follower_reopen_error": follower_reopen.as_ref().err().map(ToString::to_string)
+        });
+        eprintln!("RESTORE_LINEAGE_REPORT {report}");
+        assert!(
+            snapshot_result.is_ok() && leader_reopen.is_ok() && follower_reopen.is_ok(),
+            "{report}"
+        );
+        for store in [leader_reopen.unwrap(), follower_reopen.unwrap()] {
+            assert_eq!(store.committed_topology(), &changed);
+            assert_eq!(store.committed_restore_activation(), Some(&activation));
+        }
     }
 
     #[test]

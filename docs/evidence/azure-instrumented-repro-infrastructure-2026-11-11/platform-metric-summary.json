@@ -1,0 +1,1813 @@
+{
+  "scope": "Azure standard platform one-minute aggregates; not operation latency quantiles or proof of absence of subminute stalls/throttling",
+  "window_start_utc": "2026-11-11T08:48:29.602907+00:00",
+  "window_end_utc": "2026-11-11T09:44:18.629830+00:00",
+  "requested_interval": "PT1M",
+  "successful_final_requests": 20,
+  "numeric_points_exported": 6918,
+  "sample_ingestion_latency_not_bounded": true,
+  "missing_values_are_zero": false,
+  "n4_bicdb_runtime_joined": false,
+  "metrics": [
+    {
+      "node": 0,
+      "metric": "Network In Total",
+      "unit": "Bytes",
+      "numeric_points": 56,
+      "points_without_numeric_aggregation": 0,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 0,
+      "metric": "Network Out Total",
+      "unit": "Bytes",
+      "numeric_points": 56,
+      "points_without_numeric_aggregation": 0,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 0,
+      "metric": "Percentage CPU",
+      "unit": "Percent",
+      "numeric_points": 43,
+      "points_without_numeric_aggregation": 13,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 0,
+      "metric": "VmAvailabilityMetric",
+      "unit": "Count",
+      "numeric_points": 51,
+      "points_without_numeric_aggregation": 5,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 0,
+      "metric": "Available Memory Bytes",
+      "unit": "Bytes",
+      "numeric_points": 40,
+      "points_without_numeric_aggregation": 16,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 0,
+      "metric": "Available Memory Percentage",
+      "unit": "Percent",
+      "numeric_points": 41,
+      "points_without_numeric_aggregation": 15,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 0,
+      "metric": "VM Uncached IOPS Consumed Percentage",
+      "unit": "Percent",
+      "numeric_points": 48,
+      "points_without_numeric_aggregation": 8,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 0,
+      "metric": "VM Uncached Bandwidth Consumed Percentage",
+      "unit": "Percent",
+      "numeric_points": 48,
+      "points_without_numeric_aggregation": 8,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 0,
+      "metric": "VM Cached IOPS Consumed Percentage",
+      "unit": "Percent",
+      "numeric_points": 48,
+      "points_without_numeric_aggregation": 8,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 0,
+      "metric": "VM Cached Bandwidth Consumed Percentage",
+      "unit": "Percent",
+      "numeric_points": 48,
+      "points_without_numeric_aggregation": 8,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 0,
+      "metric": "VM Remote Used Burst IO Credits Percentage",
+      "unit": "Percent",
+      "numeric_points": 9,
+      "points_without_numeric_aggregation": 47,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 0,
+      "metric": "VM Remote Used Burst BPS Credits Percentage",
+      "unit": "Percent",
+      "numeric_points": 0,
+      "points_without_numeric_aggregation": 56,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 0,
+      "metric": "Data Disk Read Bytes/sec",
+      "unit": "BytesPerSecond",
+      "numeric_points": 49,
+      "points_without_numeric_aggregation": 7,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 0,
+      "metric": "Data Disk Write Bytes/sec",
+      "unit": "BytesPerSecond",
+      "numeric_points": 49,
+      "points_without_numeric_aggregation": 7,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 0,
+      "metric": "Data Disk Read Operations/Sec",
+      "unit": "CountPerSecond",
+      "numeric_points": 49,
+      "points_without_numeric_aggregation": 7,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 0,
+      "metric": "Data Disk Write Operations/Sec",
+      "unit": "CountPerSecond",
+      "numeric_points": 49,
+      "points_without_numeric_aggregation": 7,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 0,
+      "metric": "Data Disk Queue Depth",
+      "unit": "Count",
+      "numeric_points": 49,
+      "points_without_numeric_aggregation": 7,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 0,
+      "metric": "Data Disk Latency",
+      "unit": "MilliSeconds",
+      "numeric_points": 49,
+      "points_without_numeric_aggregation": 7,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 0,
+      "metric": "Data Disk Bandwidth Consumed Percentage",
+      "unit": "Percent",
+      "numeric_points": 49,
+      "points_without_numeric_aggregation": 7,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 0,
+      "metric": "Data Disk IOPS Consumed Percentage",
+      "unit": "Percent",
+      "numeric_points": 49,
+      "points_without_numeric_aggregation": 7,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 0,
+      "metric": "Data Disk Target Bandwidth",
+      "unit": "Count",
+      "numeric_points": 10,
+      "points_without_numeric_aggregation": 46,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 0,
+      "metric": "Data Disk Target IOPS",
+      "unit": "Count",
+      "numeric_points": 10,
+      "points_without_numeric_aggregation": 46,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 0,
+      "metric": "Data Disk Max Burst Bandwidth",
+      "unit": "Count",
+      "numeric_points": 10,
+      "points_without_numeric_aggregation": 46,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 0,
+      "metric": "Data Disk Max Burst IOPS",
+      "unit": "Count",
+      "numeric_points": 10,
+      "points_without_numeric_aggregation": 46,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 0,
+      "metric": "Data Disk Used Burst BPS Credits Percentage",
+      "unit": "Percent",
+      "numeric_points": 10,
+      "points_without_numeric_aggregation": 46,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 0,
+      "metric": "Data Disk Used Burst IO Credits Percentage",
+      "unit": "Percent",
+      "numeric_points": 10,
+      "points_without_numeric_aggregation": 46,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 0,
+      "metric": "OS Disk Read Bytes/sec",
+      "unit": "BytesPerSecond",
+      "numeric_points": 49,
+      "points_without_numeric_aggregation": 7,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 0,
+      "metric": "OS Disk Write Bytes/sec",
+      "unit": "BytesPerSecond",
+      "numeric_points": 49,
+      "points_without_numeric_aggregation": 7,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 0,
+      "metric": "OS Disk Read Operations/Sec",
+      "unit": "CountPerSecond",
+      "numeric_points": 49,
+      "points_without_numeric_aggregation": 7,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 0,
+      "metric": "OS Disk Write Operations/Sec",
+      "unit": "CountPerSecond",
+      "numeric_points": 49,
+      "points_without_numeric_aggregation": 7,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 0,
+      "metric": "OS Disk Queue Depth",
+      "unit": "Count",
+      "numeric_points": 49,
+      "points_without_numeric_aggregation": 7,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 0,
+      "metric": "OS Disk Latency",
+      "unit": "MilliSeconds",
+      "numeric_points": 49,
+      "points_without_numeric_aggregation": 7,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 0,
+      "metric": "OS Disk Bandwidth Consumed Percentage",
+      "unit": "Percent",
+      "numeric_points": 49,
+      "points_without_numeric_aggregation": 7,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 0,
+      "metric": "OS Disk IOPS Consumed Percentage",
+      "unit": "Percent",
+      "numeric_points": 49,
+      "points_without_numeric_aggregation": 7,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 0,
+      "metric": "OS Disk Target Bandwidth",
+      "unit": "Count",
+      "numeric_points": 10,
+      "points_without_numeric_aggregation": 46,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 0,
+      "metric": "OS Disk Target IOPS",
+      "unit": "Count",
+      "numeric_points": 10,
+      "points_without_numeric_aggregation": 46,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 0,
+      "metric": "OS Disk Max Burst Bandwidth",
+      "unit": "Count",
+      "numeric_points": 10,
+      "points_without_numeric_aggregation": 46,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 0,
+      "metric": "OS Disk Max Burst IOPS",
+      "unit": "Count",
+      "numeric_points": 10,
+      "points_without_numeric_aggregation": 46,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 0,
+      "metric": "OS Disk Used Burst BPS Credits Percentage",
+      "unit": "Percent",
+      "numeric_points": 10,
+      "points_without_numeric_aggregation": 46,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 0,
+      "metric": "OS Disk Used Burst IO Credits Percentage",
+      "unit": "Percent",
+      "numeric_points": 10,
+      "points_without_numeric_aggregation": 46,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 1,
+      "metric": "Network In Total",
+      "unit": "Bytes",
+      "numeric_points": 56,
+      "points_without_numeric_aggregation": 0,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 1,
+      "metric": "Network Out Total",
+      "unit": "Bytes",
+      "numeric_points": 56,
+      "points_without_numeric_aggregation": 0,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 1,
+      "metric": "Percentage CPU",
+      "unit": "Percent",
+      "numeric_points": 49,
+      "points_without_numeric_aggregation": 7,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 1,
+      "metric": "VmAvailabilityMetric",
+      "unit": "Count",
+      "numeric_points": 50,
+      "points_without_numeric_aggregation": 6,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 1,
+      "metric": "Available Memory Bytes",
+      "unit": "Bytes",
+      "numeric_points": 48,
+      "points_without_numeric_aggregation": 8,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 1,
+      "metric": "Available Memory Percentage",
+      "unit": "Percent",
+      "numeric_points": 49,
+      "points_without_numeric_aggregation": 7,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 1,
+      "metric": "VM Uncached IOPS Consumed Percentage",
+      "unit": "Percent",
+      "numeric_points": 48,
+      "points_without_numeric_aggregation": 8,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 1,
+      "metric": "VM Uncached Bandwidth Consumed Percentage",
+      "unit": "Percent",
+      "numeric_points": 48,
+      "points_without_numeric_aggregation": 8,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 1,
+      "metric": "VM Cached IOPS Consumed Percentage",
+      "unit": "Percent",
+      "numeric_points": 48,
+      "points_without_numeric_aggregation": 8,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 1,
+      "metric": "VM Cached Bandwidth Consumed Percentage",
+      "unit": "Percent",
+      "numeric_points": 48,
+      "points_without_numeric_aggregation": 8,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 1,
+      "metric": "VM Remote Used Burst IO Credits Percentage",
+      "unit": "Percent",
+      "numeric_points": 9,
+      "points_without_numeric_aggregation": 47,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 1,
+      "metric": "VM Remote Used Burst BPS Credits Percentage",
+      "unit": "Percent",
+      "numeric_points": 0,
+      "points_without_numeric_aggregation": 56,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 1,
+      "metric": "Data Disk Read Bytes/sec",
+      "unit": "BytesPerSecond",
+      "numeric_points": 49,
+      "points_without_numeric_aggregation": 7,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 1,
+      "metric": "Data Disk Write Bytes/sec",
+      "unit": "BytesPerSecond",
+      "numeric_points": 49,
+      "points_without_numeric_aggregation": 7,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 1,
+      "metric": "Data Disk Read Operations/Sec",
+      "unit": "CountPerSecond",
+      "numeric_points": 49,
+      "points_without_numeric_aggregation": 7,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 1,
+      "metric": "Data Disk Write Operations/Sec",
+      "unit": "CountPerSecond",
+      "numeric_points": 49,
+      "points_without_numeric_aggregation": 7,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 1,
+      "metric": "Data Disk Queue Depth",
+      "unit": "Count",
+      "numeric_points": 49,
+      "points_without_numeric_aggregation": 7,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 1,
+      "metric": "Data Disk Latency",
+      "unit": "MilliSeconds",
+      "numeric_points": 49,
+      "points_without_numeric_aggregation": 7,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 1,
+      "metric": "Data Disk Bandwidth Consumed Percentage",
+      "unit": "Percent",
+      "numeric_points": 49,
+      "points_without_numeric_aggregation": 7,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 1,
+      "metric": "Data Disk IOPS Consumed Percentage",
+      "unit": "Percent",
+      "numeric_points": 49,
+      "points_without_numeric_aggregation": 7,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 1,
+      "metric": "Data Disk Target Bandwidth",
+      "unit": "Count",
+      "numeric_points": 9,
+      "points_without_numeric_aggregation": 47,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 1,
+      "metric": "Data Disk Target IOPS",
+      "unit": "Count",
+      "numeric_points": 9,
+      "points_without_numeric_aggregation": 47,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 1,
+      "metric": "Data Disk Max Burst Bandwidth",
+      "unit": "Count",
+      "numeric_points": 9,
+      "points_without_numeric_aggregation": 47,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 1,
+      "metric": "Data Disk Max Burst IOPS",
+      "unit": "Count",
+      "numeric_points": 9,
+      "points_without_numeric_aggregation": 47,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 1,
+      "metric": "Data Disk Used Burst BPS Credits Percentage",
+      "unit": "Percent",
+      "numeric_points": 9,
+      "points_without_numeric_aggregation": 47,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 1,
+      "metric": "Data Disk Used Burst IO Credits Percentage",
+      "unit": "Percent",
+      "numeric_points": 9,
+      "points_without_numeric_aggregation": 47,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 1,
+      "metric": "OS Disk Read Bytes/sec",
+      "unit": "BytesPerSecond",
+      "numeric_points": 49,
+      "points_without_numeric_aggregation": 7,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 1,
+      "metric": "OS Disk Write Bytes/sec",
+      "unit": "BytesPerSecond",
+      "numeric_points": 49,
+      "points_without_numeric_aggregation": 7,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 1,
+      "metric": "OS Disk Read Operations/Sec",
+      "unit": "CountPerSecond",
+      "numeric_points": 49,
+      "points_without_numeric_aggregation": 7,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 1,
+      "metric": "OS Disk Write Operations/Sec",
+      "unit": "CountPerSecond",
+      "numeric_points": 49,
+      "points_without_numeric_aggregation": 7,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 1,
+      "metric": "OS Disk Queue Depth",
+      "unit": "Count",
+      "numeric_points": 49,
+      "points_without_numeric_aggregation": 7,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 1,
+      "metric": "OS Disk Latency",
+      "unit": "MilliSeconds",
+      "numeric_points": 49,
+      "points_without_numeric_aggregation": 7,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 1,
+      "metric": "OS Disk Bandwidth Consumed Percentage",
+      "unit": "Percent",
+      "numeric_points": 49,
+      "points_without_numeric_aggregation": 7,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 1,
+      "metric": "OS Disk IOPS Consumed Percentage",
+      "unit": "Percent",
+      "numeric_points": 49,
+      "points_without_numeric_aggregation": 7,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 1,
+      "metric": "OS Disk Target Bandwidth",
+      "unit": "Count",
+      "numeric_points": 9,
+      "points_without_numeric_aggregation": 47,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 1,
+      "metric": "OS Disk Target IOPS",
+      "unit": "Count",
+      "numeric_points": 9,
+      "points_without_numeric_aggregation": 47,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 1,
+      "metric": "OS Disk Max Burst Bandwidth",
+      "unit": "Count",
+      "numeric_points": 9,
+      "points_without_numeric_aggregation": 47,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 1,
+      "metric": "OS Disk Max Burst IOPS",
+      "unit": "Count",
+      "numeric_points": 9,
+      "points_without_numeric_aggregation": 47,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 1,
+      "metric": "OS Disk Used Burst BPS Credits Percentage",
+      "unit": "Percent",
+      "numeric_points": 9,
+      "points_without_numeric_aggregation": 47,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 1,
+      "metric": "OS Disk Used Burst IO Credits Percentage",
+      "unit": "Percent",
+      "numeric_points": 9,
+      "points_without_numeric_aggregation": 47,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 2,
+      "metric": "Network In Total",
+      "unit": "Bytes",
+      "numeric_points": 56,
+      "points_without_numeric_aggregation": 0,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 2,
+      "metric": "Network Out Total",
+      "unit": "Bytes",
+      "numeric_points": 56,
+      "points_without_numeric_aggregation": 0,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 2,
+      "metric": "Percentage CPU",
+      "unit": "Percent",
+      "numeric_points": 44,
+      "points_without_numeric_aggregation": 12,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 2,
+      "metric": "VmAvailabilityMetric",
+      "unit": "Count",
+      "numeric_points": 50,
+      "points_without_numeric_aggregation": 6,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 2,
+      "metric": "Available Memory Bytes",
+      "unit": "Bytes",
+      "numeric_points": 49,
+      "points_without_numeric_aggregation": 7,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 2,
+      "metric": "Available Memory Percentage",
+      "unit": "Percent",
+      "numeric_points": 49,
+      "points_without_numeric_aggregation": 7,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 2,
+      "metric": "VM Uncached IOPS Consumed Percentage",
+      "unit": "Percent",
+      "numeric_points": 48,
+      "points_without_numeric_aggregation": 8,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 2,
+      "metric": "VM Uncached Bandwidth Consumed Percentage",
+      "unit": "Percent",
+      "numeric_points": 48,
+      "points_without_numeric_aggregation": 8,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 2,
+      "metric": "VM Cached IOPS Consumed Percentage",
+      "unit": "Percent",
+      "numeric_points": 49,
+      "points_without_numeric_aggregation": 7,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 2,
+      "metric": "VM Cached Bandwidth Consumed Percentage",
+      "unit": "Percent",
+      "numeric_points": 49,
+      "points_without_numeric_aggregation": 7,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 2,
+      "metric": "VM Remote Used Burst IO Credits Percentage",
+      "unit": "Percent",
+      "numeric_points": 9,
+      "points_without_numeric_aggregation": 47,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 2,
+      "metric": "VM Remote Used Burst BPS Credits Percentage",
+      "unit": "Percent",
+      "numeric_points": 0,
+      "points_without_numeric_aggregation": 56,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 2,
+      "metric": "Data Disk Read Bytes/sec",
+      "unit": "BytesPerSecond",
+      "numeric_points": 49,
+      "points_without_numeric_aggregation": 7,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 2,
+      "metric": "Data Disk Write Bytes/sec",
+      "unit": "BytesPerSecond",
+      "numeric_points": 49,
+      "points_without_numeric_aggregation": 7,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 2,
+      "metric": "Data Disk Read Operations/Sec",
+      "unit": "CountPerSecond",
+      "numeric_points": 48,
+      "points_without_numeric_aggregation": 8,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 2,
+      "metric": "Data Disk Write Operations/Sec",
+      "unit": "CountPerSecond",
+      "numeric_points": 49,
+      "points_without_numeric_aggregation": 7,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 2,
+      "metric": "Data Disk Queue Depth",
+      "unit": "Count",
+      "numeric_points": 49,
+      "points_without_numeric_aggregation": 7,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 2,
+      "metric": "Data Disk Latency",
+      "unit": "MilliSeconds",
+      "numeric_points": 49,
+      "points_without_numeric_aggregation": 7,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 2,
+      "metric": "Data Disk Bandwidth Consumed Percentage",
+      "unit": "Percent",
+      "numeric_points": 41,
+      "points_without_numeric_aggregation": 15,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 2,
+      "metric": "Data Disk IOPS Consumed Percentage",
+      "unit": "Percent",
+      "numeric_points": 44,
+      "points_without_numeric_aggregation": 12,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 2,
+      "metric": "Data Disk Target Bandwidth",
+      "unit": "Count",
+      "numeric_points": 10,
+      "points_without_numeric_aggregation": 46,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 2,
+      "metric": "Data Disk Target IOPS",
+      "unit": "Count",
+      "numeric_points": 10,
+      "points_without_numeric_aggregation": 46,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 2,
+      "metric": "Data Disk Max Burst Bandwidth",
+      "unit": "Count",
+      "numeric_points": 10,
+      "points_without_numeric_aggregation": 46,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 2,
+      "metric": "Data Disk Max Burst IOPS",
+      "unit": "Count",
+      "numeric_points": 10,
+      "points_without_numeric_aggregation": 46,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 2,
+      "metric": "Data Disk Used Burst BPS Credits Percentage",
+      "unit": "Percent",
+      "numeric_points": 10,
+      "points_without_numeric_aggregation": 46,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 2,
+      "metric": "Data Disk Used Burst IO Credits Percentage",
+      "unit": "Percent",
+      "numeric_points": 10,
+      "points_without_numeric_aggregation": 46,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 2,
+      "metric": "OS Disk Read Bytes/sec",
+      "unit": "BytesPerSecond",
+      "numeric_points": 49,
+      "points_without_numeric_aggregation": 7,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 2,
+      "metric": "OS Disk Write Bytes/sec",
+      "unit": "BytesPerSecond",
+      "numeric_points": 48,
+      "points_without_numeric_aggregation": 8,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 2,
+      "metric": "OS Disk Read Operations/Sec",
+      "unit": "CountPerSecond",
+      "numeric_points": 48,
+      "points_without_numeric_aggregation": 8,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 2,
+      "metric": "OS Disk Write Operations/Sec",
+      "unit": "CountPerSecond",
+      "numeric_points": 48,
+      "points_without_numeric_aggregation": 8,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 2,
+      "metric": "OS Disk Queue Depth",
+      "unit": "Count",
+      "numeric_points": 49,
+      "points_without_numeric_aggregation": 7,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 2,
+      "metric": "OS Disk Latency",
+      "unit": "MilliSeconds",
+      "numeric_points": 49,
+      "points_without_numeric_aggregation": 7,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 2,
+      "metric": "OS Disk Bandwidth Consumed Percentage",
+      "unit": "Percent",
+      "numeric_points": 41,
+      "points_without_numeric_aggregation": 15,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 2,
+      "metric": "OS Disk IOPS Consumed Percentage",
+      "unit": "Percent",
+      "numeric_points": 43,
+      "points_without_numeric_aggregation": 13,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 2,
+      "metric": "OS Disk Target Bandwidth",
+      "unit": "Count",
+      "numeric_points": 10,
+      "points_without_numeric_aggregation": 46,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 2,
+      "metric": "OS Disk Target IOPS",
+      "unit": "Count",
+      "numeric_points": 10,
+      "points_without_numeric_aggregation": 46,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 2,
+      "metric": "OS Disk Max Burst Bandwidth",
+      "unit": "Count",
+      "numeric_points": 10,
+      "points_without_numeric_aggregation": 46,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 2,
+      "metric": "OS Disk Max Burst IOPS",
+      "unit": "Count",
+      "numeric_points": 10,
+      "points_without_numeric_aggregation": 46,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 2,
+      "metric": "OS Disk Used Burst BPS Credits Percentage",
+      "unit": "Percent",
+      "numeric_points": 10,
+      "points_without_numeric_aggregation": 46,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 2,
+      "metric": "OS Disk Used Burst IO Credits Percentage",
+      "unit": "Percent",
+      "numeric_points": 10,
+      "points_without_numeric_aggregation": 46,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 3,
+      "metric": "Network In Total",
+      "unit": "Bytes",
+      "numeric_points": 53,
+      "points_without_numeric_aggregation": 3,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 3,
+      "metric": "Network Out Total",
+      "unit": "Bytes",
+      "numeric_points": 53,
+      "points_without_numeric_aggregation": 3,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 3,
+      "metric": "Percentage CPU",
+      "unit": "Percent",
+      "numeric_points": 48,
+      "points_without_numeric_aggregation": 8,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 3,
+      "metric": "VmAvailabilityMetric",
+      "unit": "Count",
+      "numeric_points": 49,
+      "points_without_numeric_aggregation": 7,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 3,
+      "metric": "Available Memory Bytes",
+      "unit": "Bytes",
+      "numeric_points": 49,
+      "points_without_numeric_aggregation": 7,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 3,
+      "metric": "Available Memory Percentage",
+      "unit": "Percent",
+      "numeric_points": 48,
+      "points_without_numeric_aggregation": 8,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 3,
+      "metric": "VM Uncached IOPS Consumed Percentage",
+      "unit": "Percent",
+      "numeric_points": 48,
+      "points_without_numeric_aggregation": 8,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 3,
+      "metric": "VM Uncached Bandwidth Consumed Percentage",
+      "unit": "Percent",
+      "numeric_points": 48,
+      "points_without_numeric_aggregation": 8,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 3,
+      "metric": "VM Cached IOPS Consumed Percentage",
+      "unit": "Percent",
+      "numeric_points": 48,
+      "points_without_numeric_aggregation": 8,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 3,
+      "metric": "VM Cached Bandwidth Consumed Percentage",
+      "unit": "Percent",
+      "numeric_points": 48,
+      "points_without_numeric_aggregation": 8,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 3,
+      "metric": "VM Remote Used Burst IO Credits Percentage",
+      "unit": "Percent",
+      "numeric_points": 9,
+      "points_without_numeric_aggregation": 47,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 3,
+      "metric": "VM Remote Used Burst BPS Credits Percentage",
+      "unit": "Percent",
+      "numeric_points": 0,
+      "points_without_numeric_aggregation": 56,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 3,
+      "metric": "Data Disk Read Bytes/sec",
+      "unit": "BytesPerSecond",
+      "numeric_points": 49,
+      "points_without_numeric_aggregation": 7,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 3,
+      "metric": "Data Disk Write Bytes/sec",
+      "unit": "BytesPerSecond",
+      "numeric_points": 49,
+      "points_without_numeric_aggregation": 7,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 3,
+      "metric": "Data Disk Read Operations/Sec",
+      "unit": "CountPerSecond",
+      "numeric_points": 49,
+      "points_without_numeric_aggregation": 7,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 3,
+      "metric": "Data Disk Write Operations/Sec",
+      "unit": "CountPerSecond",
+      "numeric_points": 49,
+      "points_without_numeric_aggregation": 7,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 3,
+      "metric": "Data Disk Queue Depth",
+      "unit": "Count",
+      "numeric_points": 49,
+      "points_without_numeric_aggregation": 7,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 3,
+      "metric": "Data Disk Latency",
+      "unit": "MilliSeconds",
+      "numeric_points": 49,
+      "points_without_numeric_aggregation": 7,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 3,
+      "metric": "Data Disk Bandwidth Consumed Percentage",
+      "unit": "Percent",
+      "numeric_points": 49,
+      "points_without_numeric_aggregation": 7,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 3,
+      "metric": "Data Disk IOPS Consumed Percentage",
+      "unit": "Percent",
+      "numeric_points": 49,
+      "points_without_numeric_aggregation": 7,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 3,
+      "metric": "Data Disk Target Bandwidth",
+      "unit": "Count",
+      "numeric_points": 9,
+      "points_without_numeric_aggregation": 47,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 3,
+      "metric": "Data Disk Target IOPS",
+      "unit": "Count",
+      "numeric_points": 9,
+      "points_without_numeric_aggregation": 47,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 3,
+      "metric": "Data Disk Max Burst Bandwidth",
+      "unit": "Count",
+      "numeric_points": 9,
+      "points_without_numeric_aggregation": 47,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 3,
+      "metric": "Data Disk Max Burst IOPS",
+      "unit": "Count",
+      "numeric_points": 9,
+      "points_without_numeric_aggregation": 47,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 3,
+      "metric": "Data Disk Used Burst BPS Credits Percentage",
+      "unit": "Percent",
+      "numeric_points": 9,
+      "points_without_numeric_aggregation": 47,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 3,
+      "metric": "Data Disk Used Burst IO Credits Percentage",
+      "unit": "Percent",
+      "numeric_points": 9,
+      "points_without_numeric_aggregation": 47,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 3,
+      "metric": "OS Disk Read Bytes/sec",
+      "unit": "BytesPerSecond",
+      "numeric_points": 49,
+      "points_without_numeric_aggregation": 7,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 3,
+      "metric": "OS Disk Write Bytes/sec",
+      "unit": "BytesPerSecond",
+      "numeric_points": 49,
+      "points_without_numeric_aggregation": 7,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 3,
+      "metric": "OS Disk Read Operations/Sec",
+      "unit": "CountPerSecond",
+      "numeric_points": 49,
+      "points_without_numeric_aggregation": 7,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 3,
+      "metric": "OS Disk Write Operations/Sec",
+      "unit": "CountPerSecond",
+      "numeric_points": 49,
+      "points_without_numeric_aggregation": 7,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 3,
+      "metric": "OS Disk Queue Depth",
+      "unit": "Count",
+      "numeric_points": 49,
+      "points_without_numeric_aggregation": 7,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 3,
+      "metric": "OS Disk Latency",
+      "unit": "MilliSeconds",
+      "numeric_points": 49,
+      "points_without_numeric_aggregation": 7,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 3,
+      "metric": "OS Disk Bandwidth Consumed Percentage",
+      "unit": "Percent",
+      "numeric_points": 49,
+      "points_without_numeric_aggregation": 7,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 3,
+      "metric": "OS Disk IOPS Consumed Percentage",
+      "unit": "Percent",
+      "numeric_points": 49,
+      "points_without_numeric_aggregation": 7,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 3,
+      "metric": "OS Disk Target Bandwidth",
+      "unit": "Count",
+      "numeric_points": 9,
+      "points_without_numeric_aggregation": 47,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 3,
+      "metric": "OS Disk Target IOPS",
+      "unit": "Count",
+      "numeric_points": 9,
+      "points_without_numeric_aggregation": 47,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 3,
+      "metric": "OS Disk Max Burst Bandwidth",
+      "unit": "Count",
+      "numeric_points": 9,
+      "points_without_numeric_aggregation": 47,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 3,
+      "metric": "OS Disk Max Burst IOPS",
+      "unit": "Count",
+      "numeric_points": 9,
+      "points_without_numeric_aggregation": 47,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 3,
+      "metric": "OS Disk Used Burst BPS Credits Percentage",
+      "unit": "Percent",
+      "numeric_points": 9,
+      "points_without_numeric_aggregation": 47,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 3,
+      "metric": "OS Disk Used Burst IO Credits Percentage",
+      "unit": "Percent",
+      "numeric_points": 9,
+      "points_without_numeric_aggregation": 47,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 4,
+      "metric": "Network In Total",
+      "unit": "Bytes",
+      "numeric_points": 52,
+      "points_without_numeric_aggregation": 4,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 4,
+      "metric": "Network Out Total",
+      "unit": "Bytes",
+      "numeric_points": 52,
+      "points_without_numeric_aggregation": 4,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 4,
+      "metric": "Percentage CPU",
+      "unit": "Percent",
+      "numeric_points": 47,
+      "points_without_numeric_aggregation": 9,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 4,
+      "metric": "VmAvailabilityMetric",
+      "unit": "Count",
+      "numeric_points": 48,
+      "points_without_numeric_aggregation": 8,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 4,
+      "metric": "Available Memory Bytes",
+      "unit": "Bytes",
+      "numeric_points": 47,
+      "points_without_numeric_aggregation": 9,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 4,
+      "metric": "Available Memory Percentage",
+      "unit": "Percent",
+      "numeric_points": 47,
+      "points_without_numeric_aggregation": 9,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 4,
+      "metric": "VM Uncached IOPS Consumed Percentage",
+      "unit": "Percent",
+      "numeric_points": 46,
+      "points_without_numeric_aggregation": 10,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 4,
+      "metric": "VM Uncached Bandwidth Consumed Percentage",
+      "unit": "Percent",
+      "numeric_points": 46,
+      "points_without_numeric_aggregation": 10,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 4,
+      "metric": "VM Cached IOPS Consumed Percentage",
+      "unit": "Percent",
+      "numeric_points": 46,
+      "points_without_numeric_aggregation": 10,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 4,
+      "metric": "VM Cached Bandwidth Consumed Percentage",
+      "unit": "Percent",
+      "numeric_points": 46,
+      "points_without_numeric_aggregation": 10,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 4,
+      "metric": "VM Remote Used Burst IO Credits Percentage",
+      "unit": "Percent",
+      "numeric_points": 9,
+      "points_without_numeric_aggregation": 47,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 4,
+      "metric": "VM Remote Used Burst BPS Credits Percentage",
+      "unit": "Percent",
+      "numeric_points": 6,
+      "points_without_numeric_aggregation": 50,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 4,
+      "metric": "Data Disk Read Bytes/sec",
+      "unit": "BytesPerSecond",
+      "numeric_points": 47,
+      "points_without_numeric_aggregation": 9,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 4,
+      "metric": "Data Disk Write Bytes/sec",
+      "unit": "BytesPerSecond",
+      "numeric_points": 47,
+      "points_without_numeric_aggregation": 9,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 4,
+      "metric": "Data Disk Read Operations/Sec",
+      "unit": "CountPerSecond",
+      "numeric_points": 47,
+      "points_without_numeric_aggregation": 9,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 4,
+      "metric": "Data Disk Write Operations/Sec",
+      "unit": "CountPerSecond",
+      "numeric_points": 47,
+      "points_without_numeric_aggregation": 9,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 4,
+      "metric": "Data Disk Queue Depth",
+      "unit": "Count",
+      "numeric_points": 47,
+      "points_without_numeric_aggregation": 9,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 4,
+      "metric": "Data Disk Latency",
+      "unit": "MilliSeconds",
+      "numeric_points": 47,
+      "points_without_numeric_aggregation": 9,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 4,
+      "metric": "Data Disk Bandwidth Consumed Percentage",
+      "unit": "Percent",
+      "numeric_points": 47,
+      "points_without_numeric_aggregation": 9,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 4,
+      "metric": "Data Disk IOPS Consumed Percentage",
+      "unit": "Percent",
+      "numeric_points": 47,
+      "points_without_numeric_aggregation": 9,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 4,
+      "metric": "Data Disk Target Bandwidth",
+      "unit": "Count",
+      "numeric_points": 9,
+      "points_without_numeric_aggregation": 47,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 4,
+      "metric": "Data Disk Target IOPS",
+      "unit": "Count",
+      "numeric_points": 9,
+      "points_without_numeric_aggregation": 47,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 4,
+      "metric": "Data Disk Max Burst Bandwidth",
+      "unit": "Count",
+      "numeric_points": 9,
+      "points_without_numeric_aggregation": 47,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 4,
+      "metric": "Data Disk Max Burst IOPS",
+      "unit": "Count",
+      "numeric_points": 9,
+      "points_without_numeric_aggregation": 47,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 4,
+      "metric": "Data Disk Used Burst BPS Credits Percentage",
+      "unit": "Percent",
+      "numeric_points": 9,
+      "points_without_numeric_aggregation": 47,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 4,
+      "metric": "Data Disk Used Burst IO Credits Percentage",
+      "unit": "Percent",
+      "numeric_points": 9,
+      "points_without_numeric_aggregation": 47,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 4,
+      "metric": "OS Disk Read Bytes/sec",
+      "unit": "BytesPerSecond",
+      "numeric_points": 47,
+      "points_without_numeric_aggregation": 9,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 4,
+      "metric": "OS Disk Write Bytes/sec",
+      "unit": "BytesPerSecond",
+      "numeric_points": 47,
+      "points_without_numeric_aggregation": 9,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 4,
+      "metric": "OS Disk Read Operations/Sec",
+      "unit": "CountPerSecond",
+      "numeric_points": 47,
+      "points_without_numeric_aggregation": 9,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 4,
+      "metric": "OS Disk Write Operations/Sec",
+      "unit": "CountPerSecond",
+      "numeric_points": 47,
+      "points_without_numeric_aggregation": 9,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 4,
+      "metric": "OS Disk Queue Depth",
+      "unit": "Count",
+      "numeric_points": 47,
+      "points_without_numeric_aggregation": 9,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 4,
+      "metric": "OS Disk Latency",
+      "unit": "MilliSeconds",
+      "numeric_points": 47,
+      "points_without_numeric_aggregation": 9,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 4,
+      "metric": "OS Disk Bandwidth Consumed Percentage",
+      "unit": "Percent",
+      "numeric_points": 47,
+      "points_without_numeric_aggregation": 9,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 4,
+      "metric": "OS Disk IOPS Consumed Percentage",
+      "unit": "Percent",
+      "numeric_points": 47,
+      "points_without_numeric_aggregation": 9,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 4,
+      "metric": "OS Disk Target Bandwidth",
+      "unit": "Count",
+      "numeric_points": 9,
+      "points_without_numeric_aggregation": 47,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 4,
+      "metric": "OS Disk Target IOPS",
+      "unit": "Count",
+      "numeric_points": 9,
+      "points_without_numeric_aggregation": 47,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 4,
+      "metric": "OS Disk Max Burst Bandwidth",
+      "unit": "Count",
+      "numeric_points": 9,
+      "points_without_numeric_aggregation": 47,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 4,
+      "metric": "OS Disk Max Burst IOPS",
+      "unit": "Count",
+      "numeric_points": 9,
+      "points_without_numeric_aggregation": 47,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 4,
+      "metric": "OS Disk Used Burst BPS Credits Percentage",
+      "unit": "Percent",
+      "numeric_points": 9,
+      "points_without_numeric_aggregation": 47,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    },
+    {
+      "node": 4,
+      "metric": "OS Disk Used Burst IO Credits Percentage",
+      "unit": "Percent",
+      "numeric_points": 9,
+      "points_without_numeric_aggregation": 47,
+      "timeseries_count": 1,
+      "provider_error_code": "Success"
+    }
+  ]
+}

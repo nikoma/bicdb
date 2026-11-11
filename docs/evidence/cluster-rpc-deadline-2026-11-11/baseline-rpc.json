@@ -1,0 +1,22 @@
+{
+  "command": [
+    "/tmp/bicdb-p0-io-evidence/baseline-rpc-test",
+    "--nocapture"
+  ],
+  "exit_code": 101,
+  "interrupted": null,
+  "seconds": 0.5007897326722741,
+  "resource_samples": [
+    {
+      "seconds": 0.0004755444824695587,
+      "available_bytes": 26548166656
+    },
+    {
+      "seconds": 0.2506834026426077,
+      "available_bytes": 26557296640
+    }
+  ],
+  "source_sha256": "5d2646fe3576ec82a753f9ab21f68f2697d105da1d8459315f2eaf57d23750ba",
+  "scope": "isolated socket helper unit tests; frozen actual463 CancellationToken, no engine rebuild",
+  "physical_qualification": false
+}

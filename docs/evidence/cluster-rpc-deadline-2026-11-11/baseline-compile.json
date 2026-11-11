@@ -1,0 +1,148 @@
+{
+  "command": [
+    "rustc",
+    "--test",
+    "--edition=2021",
+    "/tmp/bicdb-p0-recovery/crates/bicdb-core/tests/distribution_rpc_deadline.rs",
+    "-o",
+    "/tmp/bicdb-p0-io-evidence/baseline-rpc-test",
+    "-C",
+    "opt-level=0",
+    "-C",
+    "debuginfo=0",
+    "-C",
+    "lto=off",
+    "-C",
+    "codegen-units=1",
+    "-L",
+    "dependency=/tmp/bicdb-azure-artifact-target/release/deps",
+    "--extern",
+    "bicdb_core=/tmp/bicdb-azure-artifact-463-evidence/frozen-libs/libbicdb_core-263009a48412a831.rlib",
+    "--extern",
+    "parking_lot=/tmp/bicdb-azure-artifact-target/release/deps/libparking_lot-165ee3f505b0e0d1.rlib",
+    "--extern",
+    "serde_json=/tmp/bicdb-azure-artifact-target/release/deps/libserde_json-6161d00796a1441f.rlib",
+    "--extern",
+    "tempfile=/tmp/bicdb-azure-artifact-target/release/deps/libtempfile-b82d025848a68225.rlib",
+    "-L",
+    "native=/tmp/bicdb-azure-artifact-target/release/build/aws-lc-sys-118f531f8aca1c9b/out",
+    "-L",
+    "native=/tmp/bicdb-azure-artifact-target/release/build/ittapi-sys-e4db93329cd9a579/out",
+    "-L",
+    "native=/tmp/bicdb-azure-artifact-target/release/build/libmimalloc-sys-a89a2f11fc46f2bf/out",
+    "-L",
+    "native=/tmp/bicdb-azure-artifact-target/release/build/mlua-sys-be15ccb52c2d9228/out/lib",
+    "-L",
+    "native=/tmp/bicdb-azure-artifact-target/release/build/psm-431af746e707fd4e/out",
+    "-L",
+    "native=/tmp/bicdb-azure-artifact-target/release/build/ring-ebc8e9ae7dc2cd9b/out",
+    "-L",
+    "native=/tmp/bicdb-azure-artifact-target/release/build/rquickjs-sys-13e9b0ff74c4f5f7/out",
+    "-L",
+    "native=/tmp/bicdb-azure-artifact-target/release/build/wasmtime-66ababe414b746d8/out",
+    "-L",
+    "native=/tmp/bicdb-azure-artifact-target/release/build/wasmtime-internal-jit-debug-9d6af88ebfc10c96/out",
+    "-L",
+    "native=/tmp/bicdb-azure-artifact-target/release/build/zstd-sys-f73f289660bb2177/out"
+  ],
+  "exit_code": 0,
+  "interrupted": null,
+  "seconds": 5.7558778105303645,
+  "resource_samples": [
+    {
+      "seconds": 0.00045094918459653854,
+      "available_bytes": 26618634240
+    },
+    {
+      "seconds": 0.25069393031299114,
+      "available_bytes": 26577969152
+    },
+    {
+      "seconds": 0.5009339572861791,
+      "available_bytes": 26533584896
+    },
+    {
+      "seconds": 0.7512100217863917,
+      "available_bytes": 26404884480
+    },
+    {
+      "seconds": 1.00154794100672,
+      "available_bytes": 25763856384
+    },
+    {
+      "seconds": 1.2518066326156259,
+      "available_bytes": 25657638912
+    },
+    {
+      "seconds": 1.5020875567570329,
+      "available_bytes": 25658646528
+    },
+    {
+      "seconds": 1.7523779077455401,
+      "available_bytes": 25641005056
+    },
+    {
+      "seconds": 2.002645706757903,
+      "available_bytes": 25617358848
+    },
+    {
+      "seconds": 2.252899249084294,
+      "available_bytes": 25614848000
+    },
+    {
+      "seconds": 2.503196442499757,
+      "available_bytes": 25599156224
+    },
+    {
+      "seconds": 2.7534604743123055,
+      "available_bytes": 25594335232
+    },
+    {
+      "seconds": 3.003661540336907,
+      "available_bytes": 25612861440
+    },
+    {
+      "seconds": 3.253877243027091,
+      "available_bytes": 25617698816
+    },
+    {
+      "seconds": 3.5040667466819286,
+      "available_bytes": 25627570176
+    },
+    {
+      "seconds": 3.7542438581585884,
+      "available_bytes": 25628483584
+    },
+    {
+      "seconds": 4.004458398558199,
+      "available_bytes": 25612898304
+    },
+    {
+      "seconds": 4.254653302952647,
+      "available_bytes": 25631596544
+    },
+    {
+      "seconds": 4.504911032505333,
+      "available_bytes": 25648693248
+    },
+    {
+      "seconds": 4.755111647769809,
+      "available_bytes": 25643773952
+    },
+    {
+      "seconds": 5.005333722569048,
+      "available_bytes": 25638047744
+    },
+    {
+      "seconds": 5.25554483756423,
+      "available_bytes": 25653948416
+    },
+    {
+      "seconds": 5.505760480649769,
+      "available_bytes": 25630818304
+    }
+  ],
+  "source_sha256": "5d2646fe3576ec82a753f9ab21f68f2697d105da1d8459315f2eaf57d23750ba",
+  "scope": "isolated socket helper unit tests; frozen actual463 CancellationToken, no engine rebuild",
+  "physical_qualification": false
+}

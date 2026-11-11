@@ -1,0 +1,64 @@
+{
+  "node": 4,
+  "started_unix_ns": 1794389972550814374,
+  "copies": [],
+  "before": {
+    "unix_ns": 1794389975082003993,
+    "db_exists": false,
+    "files": {
+      "server.log": {
+        "absent": true
+      },
+      "process.json": {
+        "absent": true
+      },
+      "db/bicdb-distribution.json": {
+        "absent": true
+      },
+      "db/format.json": {
+        "absent": true
+      },
+      "db/cluster-range-write-log.json": {
+        "absent": true
+      },
+      "db/cluster-topology.json": {
+        "absent": true
+      },
+      "db/cluster-metadata-consensus.json": {
+        "absent": true
+      }
+    },
+    "database_top_level": []
+  },
+  "owned_process_error": "node 4 sample: Traceback (most recent call last):\n  File \"<string>\", line 38, in <module>\n  File \"<string>\", line 5, in owned\n  File \"/usr/lib/python3.12/pathlib.py\", line 1029, in read_text\n    with self.open(mode='r', encoding=encoding, errors=errors) as f:\n         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.12/pathlib.py\", line 1015, in open\n    return io.open(self, mode, buffering, encoding, errors, newline)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nFileNotFoundError: [Errno 2] No such file or directory: '<n4-root>/process.json'\n",
+  "status_classification": "not_joined_database_absent",
+  "after": {
+    "unix_ns": 1794389978883969132,
+    "db_exists": false,
+    "files": {
+      "server.log": {
+        "absent": true
+      },
+      "process.json": {
+        "absent": true
+      },
+      "db/bicdb-distribution.json": {
+        "absent": true
+      },
+      "db/format.json": {
+        "absent": true
+      },
+      "db/cluster-range-write-log.json": {
+        "absent": true
+      },
+      "db/cluster-topology.json": {
+        "absent": true
+      },
+      "db/cluster-metadata-consensus.json": {
+        "absent": true
+      }
+    },
+    "database_top_level": []
+  },
+  "finished_unix_ns": 1794389979032192173
+}

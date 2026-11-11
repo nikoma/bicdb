@@ -1,0 +1,668 @@
+[
+  {
+    "elapsed_seconds": 0.0004017474129796028,
+    "available_bytes": 23584178176,
+    "paused": false,
+    "swap_total_bytes": 2147479552,
+    "swap_free_bytes": 26603520,
+    "memory_pressure": "some avg10=0.00 avg60=0.00 avg300=0.00 total=4750269606\nfull avg10=0.00 avg60=0.00 avg300=0.00 total=4578330759\n",
+    "disk_free_bytes": 34749550592
+  },
+  {
+    "elapsed_seconds": 1.0006668278947473,
+    "available_bytes": 22712246272,
+    "paused": false,
+    "swap_total_bytes": 2147479552,
+    "swap_free_bytes": 0,
+    "memory_pressure": "some avg10=0.00 avg60=0.00 avg300=0.00 total=4750321312\nfull avg10=0.00 avg60=0.00 avg300=0.00 total=4578378301\n",
+    "disk_free_bytes": 34769883136
+  },
+  {
+    "elapsed_seconds": 2.0009516132995486,
+    "available_bytes": 22549659648,
+    "paused": false,
+    "swap_total_bytes": 2147479552,
+    "swap_free_bytes": 0,
+    "memory_pressure": "some avg10=0.72 avg60=0.13 avg300=0.02 total=4750393369\nfull avg10=0.72 avg60=0.13 avg300=0.02 total=4578449607\n",
+    "disk_free_bytes": 34769870848
+  },
+  {
+    "elapsed_seconds": 3.001218314282596,
+    "available_bytes": 22398717952,
+    "paused": false,
+    "swap_total_bytes": 2147479552,
+    "swap_free_bytes": 0,
+    "memory_pressure": "some avg10=0.72 avg60=0.13 avg300=0.02 total=4750464648\nfull avg10=0.72 avg60=0.13 avg300=0.02 total=4578519841\n",
+    "disk_free_bytes": 34769645568
+  },
+  {
+    "elapsed_seconds": 4.001485174521804,
+    "available_bytes": 22820253696,
+    "paused": false,
+    "swap_total_bytes": 2147479552,
+    "swap_free_bytes": 0,
+    "memory_pressure": "some avg10=1.86 avg60=0.35 avg300=0.07 total=4750535462\nfull avg10=1.86 avg60=0.35 avg300=0.07 total=4578588867\n",
+    "disk_free_bytes": 34769842176
+  },
+  {
+    "elapsed_seconds": 5.0017279693856835,
+    "available_bytes": 22671003648,
+    "paused": false,
+    "swap_total_bytes": 2147479552,
+    "swap_free_bytes": 0,
+    "memory_pressure": "some avg10=1.86 avg60=0.35 avg300=0.07 total=4750535482\nfull avg10=1.86 avg60=0.35 avg300=0.07 total=4578588886\n",
+    "disk_free_bytes": 34767990784
+  },
+  {
+    "elapsed_seconds": 6.002011898905039,
+    "available_bytes": 23217897472,
+    "paused": false,
+    "swap_total_bytes": 2147479552,
+    "swap_free_bytes": 0,
+    "memory_pressure": "some avg10=1.70 avg60=0.37 avg300=0.08 total=4750535482\nfull avg10=1.70 avg60=0.37 avg300=0.08 total=4578588886\n",
+    "disk_free_bytes": 34764951552
+  },
+  {
+    "elapsed_seconds": 7.002296527847648,
+    "available_bytes": 24071589888,
+    "paused": false,
+    "swap_total_bytes": 2147479552,
+    "swap_free_bytes": 0,
+    "memory_pressure": "some avg10=1.70 avg60=0.37 avg300=0.08 total=4750535482\nfull avg10=1.70 avg60=0.37 avg300=0.08 total=4578588886\n",
+    "disk_free_bytes": 34762264576
+  },
+  {
+    "elapsed_seconds": 8.002556249499321,
+    "available_bytes": 24052555776,
+    "paused": false,
+    "swap_total_bytes": 2147479552,
+    "swap_free_bytes": 0,
+    "memory_pressure": "some avg10=1.39 avg60=0.36 avg300=0.08 total=4750535482\nfull avg10=1.39 avg60=0.36 avg300=0.08 total=4578588887\n",
+    "disk_free_bytes": 34760327168
+  },
+  {
+    "elapsed_seconds": 9.002764524891973,
+    "available_bytes": 24518209536,
+    "paused": false,
+    "swap_total_bytes": 2147479552,
+    "swap_free_bytes": 0,
+    "memory_pressure": "some avg10=1.39 avg60=0.36 avg300=0.08 total=4750535482\nfull avg10=1.39 avg60=0.36 avg300=0.08 total=4578588887\n",
+    "disk_free_bytes": 34749702144
+  },
+  {
+    "elapsed_seconds": 10.003016690723598,
+    "available_bytes": 24396095488,
+    "paused": false,
+    "swap_total_bytes": 2147479552,
+    "swap_free_bytes": 0,
+    "memory_pressure": "some avg10=1.14 avg60=0.35 avg300=0.07 total=4750535482\nfull avg10=1.14 avg60=0.35 avg300=0.07 total=4578588887\n",
+    "disk_free_bytes": 34749657088
+  },
+  {
+    "elapsed_seconds": 11.003262202255428,
+    "available_bytes": 24213692416,
+    "paused": false,
+    "swap_total_bytes": 2147479552,
+    "swap_free_bytes": 0,
+    "memory_pressure": "some avg10=1.14 avg60=0.35 avg300=0.07 total=4750535482\nfull avg10=1.14 avg60=0.35 avg300=0.07 total=4578588887\n",
+    "disk_free_bytes": 34749644800
+  },
+  {
+    "elapsed_seconds": 12.003507271409035,
+    "available_bytes": 23938224128,
+    "paused": false,
+    "swap_total_bytes": 2147479552,
+    "swap_free_bytes": 0,
+    "memory_pressure": "some avg10=0.93 avg60=0.34 avg300=0.07 total=4750535482\nfull avg10=0.93 avg60=0.34 avg300=0.07 total=4578588887\n",
+    "disk_free_bytes": 34749632512
+  },
+  {
+    "elapsed_seconds": 13.003794388845563,
+    "available_bytes": 23856025600,
+    "paused": false,
+    "swap_total_bytes": 2147479552,
+    "swap_free_bytes": 0,
+    "memory_pressure": "some avg10=0.93 avg60=0.34 avg300=0.07 total=4750535482\nfull avg10=0.93 avg60=0.34 avg300=0.07 total=4578588887\n",
+    "disk_free_bytes": 34749624320
+  },
+  {
+    "elapsed_seconds": 14.004071906208992,
+    "available_bytes": 23774203904,
+    "paused": false,
+    "swap_total_bytes": 2147479552,
+    "swap_free_bytes": 0,
+    "memory_pressure": "some avg10=0.76 avg60=0.32 avg300=0.07 total=4750535493\nfull avg10=0.76 avg60=0.32 avg300=0.07 total=4578588898\n",
+    "disk_free_bytes": 34749620224
+  },
+  {
+    "elapsed_seconds": 15.004318225197494,
+    "available_bytes": 23790665728,
+    "paused": false,
+    "swap_total_bytes": 2147479552,
+    "swap_free_bytes": 0,
+    "memory_pressure": "some avg10=0.76 avg60=0.32 avg300=0.07 total=4750535493\nfull avg10=0.76 avg60=0.32 avg300=0.07 total=4578588898\n",
+    "disk_free_bytes": 34749599744
+  },
+  {
+    "elapsed_seconds": 16.004578668624163,
+    "available_bytes": 23759413248,
+    "paused": false,
+    "swap_total_bytes": 2147479552,
+    "swap_free_bytes": 0,
+    "memory_pressure": "some avg10=0.62 avg60=0.31 avg300=0.07 total=4750535493\nfull avg10=0.62 avg60=0.31 avg300=0.07 total=4578588898\n",
+    "disk_free_bytes": 34749558784
+  },
+  {
+    "elapsed_seconds": 17.005912027321756,
+    "available_bytes": 24036892672,
+    "paused": false,
+    "swap_total_bytes": 2147479552,
+    "swap_free_bytes": 0,
+    "memory_pressure": "some avg10=0.62 avg60=0.31 avg300=0.07 total=4750535493\nfull avg10=0.62 avg60=0.31 avg300=0.07 total=4578588898\n",
+    "disk_free_bytes": 34748829696
+  },
+  {
+    "elapsed_seconds": 18.006206152029335,
+    "available_bytes": 21478256640,
+    "paused": false,
+    "swap_total_bytes": 2147479552,
+    "swap_free_bytes": 0,
+    "memory_pressure": "some avg10=0.51 avg60=0.30 avg300=0.07 total=4750557223\nfull avg10=0.51 avg60=0.30 avg300=0.07 total=4578608037\n",
+    "disk_free_bytes": 34748555264
+  },
+  {
+    "elapsed_seconds": 19.006474214605987,
+    "available_bytes": 25518784512,
+    "paused": false,
+    "swap_total_bytes": 2147479552,
+    "swap_free_bytes": 0,
+    "memory_pressure": "some avg10=0.51 avg60=0.30 avg300=0.07 total=4750562316\nfull avg10=0.51 avg60=0.30 avg300=0.07 total=4578613079\n",
+    "disk_free_bytes": 34462633984
+  },
+  {
+    "elapsed_seconds": 20.006726077757776,
+    "available_bytes": 25303044096,
+    "paused": false,
+    "swap_total_bytes": 2147479552,
+    "swap_free_bytes": 0,
+    "memory_pressure": "some avg10=0.41 avg60=0.29 avg300=0.07 total=4750563189\nfull avg10=0.41 avg60=0.29 avg300=0.07 total=4578613835\n",
+    "disk_free_bytes": 34300616704
+  },
+  {
+    "elapsed_seconds": 21.006974302232265,
+    "available_bytes": 25916354560,
+    "paused": false,
+    "swap_total_bytes": 2147479552,
+    "swap_free_bytes": 0,
+    "memory_pressure": "some avg10=0.41 avg60=0.29 avg300=0.07 total=4750563189\nfull avg10=0.41 avg60=0.29 avg300=0.07 total=4578613835\n",
+    "disk_free_bytes": 34260197376
+  },
+  {
+    "elapsed_seconds": 22.00722722429782,
+    "available_bytes": 25534373888,
+    "paused": false,
+    "swap_total_bytes": 2147479552,
+    "swap_free_bytes": 0,
+    "memory_pressure": "some avg10=0.34 avg60=0.28 avg300=0.07 total=4750563189\nfull avg10=0.34 avg60=0.28 avg300=0.07 total=4578613835\n",
+    "disk_free_bytes": 34259410944
+  },
+  {
+    "elapsed_seconds": 23.007476299069822,
+    "available_bytes": 25086730240,
+    "paused": false,
+    "swap_total_bytes": 2147479552,
+    "swap_free_bytes": 0,
+    "memory_pressure": "some avg10=0.34 avg60=0.28 avg300=0.07 total=4750563189\nfull avg10=0.34 avg60=0.28 avg300=0.07 total=4578613835\n",
+    "disk_free_bytes": 34227245056
+  },
+  {
+    "elapsed_seconds": 24.007787086069584,
+    "available_bytes": 24755736576,
+    "paused": false,
+    "swap_total_bytes": 2147479552,
+    "swap_free_bytes": 0,
+    "memory_pressure": "some avg10=0.28 avg60=0.27 avg300=0.07 total=4750563189\nfull avg10=0.28 avg60=0.27 avg300=0.07 total=4578613835\n",
+    "disk_free_bytes": 34211020800
+  },
+  {
+    "elapsed_seconds": 25.008057737722993,
+    "available_bytes": 24444903424,
+    "paused": false,
+    "swap_total_bytes": 2147479552,
+    "swap_free_bytes": 0,
+    "memory_pressure": "some avg10=0.28 avg60=0.27 avg300=0.07 total=4750563189\nfull avg10=0.28 avg60=0.27 avg300=0.07 total=4578613835\n",
+    "disk_free_bytes": 34194808832
+  },
+  {
+    "elapsed_seconds": 26.00834755320102,
+    "available_bytes": 24268578816,
+    "paused": false,
+    "swap_total_bytes": 2147479552,
+    "swap_free_bytes": 0,
+    "memory_pressure": "some avg10=0.22 avg60=0.26 avg300=0.07 total=4750563219\nfull avg10=0.22 avg60=0.26 avg300=0.07 total=4578613862\n",
+    "disk_free_bytes": 34182889472
+  },
+  {
+    "elapsed_seconds": 27.00863973237574,
+    "available_bytes": 24570044416,
+    "paused": false,
+    "swap_total_bytes": 2147479552,
+    "swap_free_bytes": 0,
+    "memory_pressure": "some avg10=0.22 avg60=0.26 avg300=0.07 total=4750563219\nfull avg10=0.22 avg60=0.26 avg300=0.07 total=4578613862\n",
+    "disk_free_bytes": 34054598656
+  },
+  {
+    "elapsed_seconds": 28.008910581469536,
+    "available_bytes": 24757059584,
+    "paused": false,
+    "swap_total_bytes": 2147479552,
+    "swap_free_bytes": 0,
+    "memory_pressure": "some avg10=0.18 avg60=0.25 avg300=0.07 total=4750563219\nfull avg10=0.18 avg60=0.25 avg300=0.07 total=4578613862\n",
+    "disk_free_bytes": 34042888192
+  },
+  {
+    "elapsed_seconds": 29.009157944470644,
+    "available_bytes": 24762220544,
+    "paused": false,
+    "swap_total_bytes": 2147479552,
+    "swap_free_bytes": 0,
+    "memory_pressure": "some avg10=0.18 avg60=0.25 avg300=0.07 total=4750563219\nfull avg10=0.18 avg60=0.25 avg300=0.07 total=4578613862\n",
+    "disk_free_bytes": 34042851328
+  },
+  {
+    "elapsed_seconds": 30.00943357963115,
+    "available_bytes": 24762150912,
+    "paused": false,
+    "swap_total_bytes": 2147479552,
+    "swap_free_bytes": 0,
+    "memory_pressure": "some avg10=0.15 avg60=0.25 avg300=0.07 total=4750563219\nfull avg10=0.15 avg60=0.25 avg300=0.07 total=4578613862\n",
+    "disk_free_bytes": 34042789888
+  },
+  {
+    "elapsed_seconds": 31.00967683363706,
+    "available_bytes": 24612614144,
+    "paused": false,
+    "swap_total_bytes": 2147479552,
+    "swap_free_bytes": 0,
+    "memory_pressure": "some avg10=0.15 avg60=0.25 avg300=0.07 total=4750563219\nfull avg10=0.15 avg60=0.25 avg300=0.07 total=4578613862\n",
+    "disk_free_bytes": 34042781696
+  },
+  {
+    "elapsed_seconds": 32.00992223992944,
+    "available_bytes": 24539398144,
+    "paused": false,
+    "swap_total_bytes": 2147479552,
+    "swap_free_bytes": 0,
+    "memory_pressure": "some avg10=0.12 avg60=0.24 avg300=0.06 total=4750563219\nfull avg10=0.12 avg60=0.24 avg300=0.06 total=4578613862\n",
+    "disk_free_bytes": 34042761216
+  },
+  {
+    "elapsed_seconds": 33.010166863910854,
+    "available_bytes": 24579280896,
+    "paused": false,
+    "swap_total_bytes": 2147479552,
+    "swap_free_bytes": 0,
+    "memory_pressure": "some avg10=0.12 avg60=0.24 avg300=0.06 total=4750563220\nfull avg10=0.12 avg60=0.24 avg300=0.06 total=4578613863\n",
+    "disk_free_bytes": 34042724352
+  },
+  {
+    "elapsed_seconds": 34.01041437126696,
+    "available_bytes": 24666419200,
+    "paused": false,
+    "swap_total_bytes": 2147479552,
+    "swap_free_bytes": 0,
+    "memory_pressure": "some avg10=0.10 avg60=0.23 avg300=0.06 total=4750563225\nfull avg10=0.10 avg60=0.23 avg300=0.06 total=4578613868\n",
+    "disk_free_bytes": 34042720256
+  },
+  {
+    "elapsed_seconds": 35.01065846160054,
+    "available_bytes": 24553115648,
+    "paused": false,
+    "swap_total_bytes": 2147479552,
+    "swap_free_bytes": 0,
+    "memory_pressure": "some avg10=0.10 avg60=0.23 avg300=0.06 total=4750563225\nfull avg10=0.10 avg60=0.23 avg300=0.06 total=4578613868\n",
+    "disk_free_bytes": 34042716160
+  },
+  {
+    "elapsed_seconds": 36.01090150978416,
+    "available_bytes": 24570679296,
+    "paused": false,
+    "swap_total_bytes": 2147479552,
+    "swap_free_bytes": 0,
+    "memory_pressure": "some avg10=0.08 avg60=0.22 avg300=0.06 total=4750563225\nfull avg10=0.08 avg60=0.22 avg300=0.06 total=4578613868\n",
+    "disk_free_bytes": 34042707968
+  },
+  {
+    "elapsed_seconds": 37.01115548517555,
+    "available_bytes": 24456232960,
+    "paused": false,
+    "swap_total_bytes": 2147479552,
+    "swap_free_bytes": 0,
+    "memory_pressure": "some avg10=0.08 avg60=0.22 avg300=0.06 total=4750563230\nfull avg10=0.08 avg60=0.22 avg300=0.06 total=4578613872\n",
+    "disk_free_bytes": 34042703872
+  },
+  {
+    "elapsed_seconds": 38.0114075075835,
+    "available_bytes": 25242415104,
+    "paused": false,
+    "swap_total_bytes": 2147479552,
+    "swap_free_bytes": 0,
+    "memory_pressure": "some avg10=0.06 avg60=0.21 avg300=0.06 total=4750563230\nfull avg10=0.06 avg60=0.21 avg300=0.06 total=4578613872\n",
+    "disk_free_bytes": 34042691584
+  },
+  {
+    "elapsed_seconds": 39.011654237285256,
+    "available_bytes": 25287692288,
+    "paused": false,
+    "swap_total_bytes": 2147479552,
+    "swap_free_bytes": 0,
+    "memory_pressure": "some avg10=0.06 avg60=0.21 avg300=0.06 total=4750563230\nfull avg10=0.06 avg60=0.21 avg300=0.06 total=4578613872\n",
+    "disk_free_bytes": 34042675200
+  },
+  {
+    "elapsed_seconds": 40.01188449654728,
+    "available_bytes": 25373626368,
+    "paused": false,
+    "swap_total_bytes": 2147479552,
+    "swap_free_bytes": 0,
+    "memory_pressure": "some avg10=0.05 avg60=0.21 avg300=0.06 total=4750563230\nfull avg10=0.05 avg60=0.21 avg300=0.06 total=4578613872\n",
+    "disk_free_bytes": 34029658112
+  },
+  {
+    "elapsed_seconds": 41.012138318270445,
+    "available_bytes": 25404141568,
+    "paused": false,
+    "swap_total_bytes": 2147479552,
+    "swap_free_bytes": 0,
+    "memory_pressure": "some avg10=0.05 avg60=0.21 avg300=0.06 total=4750563230\nfull avg10=0.05 avg60=0.21 avg300=0.06 total=4578613872\n",
+    "disk_free_bytes": 34029645824
+  },
+  {
+    "elapsed_seconds": 42.01239228900522,
+    "available_bytes": 25392627712,
+    "paused": false,
+    "swap_total_bytes": 2147479552,
+    "swap_free_bytes": 0,
+    "memory_pressure": "some avg10=0.04 avg60=0.20 avg300=0.06 total=4750563230\nfull avg10=0.04 avg60=0.20 avg300=0.06 total=4578613872\n",
+    "disk_free_bytes": 34018365440
+  },
+  {
+    "elapsed_seconds": 43.01264906395227,
+    "available_bytes": 25427300352,
+    "paused": false,
+    "swap_total_bytes": 2147479552,
+    "swap_free_bytes": 0,
+    "memory_pressure": "some avg10=0.04 avg60=0.20 avg300=0.06 total=4750563230\nfull avg10=0.04 avg60=0.20 avg300=0.06 total=4578613872\n",
+    "disk_free_bytes": 34018336768
+  },
+  {
+    "elapsed_seconds": 44.01288987789303,
+    "available_bytes": 25458663424,
+    "paused": false,
+    "swap_total_bytes": 2147479552,
+    "swap_free_bytes": 0,
+    "memory_pressure": "some avg10=0.03 avg60=0.19 avg300=0.06 total=4750563271\nfull avg10=0.03 avg60=0.19 avg300=0.06 total=4578613914\n",
+    "disk_free_bytes": 34007506944
+  },
+  {
+    "elapsed_seconds": 45.013128796592355,
+    "available_bytes": 25504284672,
+    "paused": false,
+    "swap_total_bytes": 2147479552,
+    "swap_free_bytes": 0,
+    "memory_pressure": "some avg10=0.03 avg60=0.19 avg300=0.06 total=4750563271\nfull avg10=0.03 avg60=0.19 avg300=0.06 total=4578613914\n",
+    "disk_free_bytes": 33996537856
+  },
+  {
+    "elapsed_seconds": 46.01333854068071,
+    "available_bytes": 25492463616,
+    "paused": false,
+    "swap_total_bytes": 2147479552,
+    "swap_free_bytes": 0,
+    "memory_pressure": "some avg10=0.03 avg60=0.19 avg300=0.06 total=4750563271\nfull avg10=0.03 avg60=0.19 avg300=0.06 total=4578613914\n",
+    "disk_free_bytes": 33996529664
+  },
+  {
+    "elapsed_seconds": 47.01357599440962,
+    "available_bytes": 25481801728,
+    "paused": false,
+    "swap_total_bytes": 2147479552,
+    "swap_free_bytes": 0,
+    "memory_pressure": "some avg10=0.03 avg60=0.19 avg300=0.06 total=4750563271\nfull avg10=0.03 avg60=0.19 avg300=0.06 total=4578613914\n",
+    "disk_free_bytes": 33980706816
+  },
+  {
+    "elapsed_seconds": 48.01383900549263,
+    "available_bytes": 25467715584,
+    "paused": false,
+    "swap_total_bytes": 2147479552,
+    "swap_free_bytes": 0,
+    "memory_pressure": "some avg10=0.02 avg60=0.18 avg300=0.06 total=4750563271\nfull avg10=0.02 avg60=0.18 avg300=0.06 total=4578613914\n",
+    "disk_free_bytes": 33972703232
+  },
+  {
+    "elapsed_seconds": 49.01409223675728,
+    "available_bytes": 25477099520,
+    "paused": false,
+    "swap_total_bytes": 2147479552,
+    "swap_free_bytes": 0,
+    "memory_pressure": "some avg10=0.02 avg60=0.18 avg300=0.06 total=4750563271\nfull avg10=0.02 avg60=0.18 avg300=0.06 total=4578613914\n",
+    "disk_free_bytes": 33972690944
+  },
+  {
+    "elapsed_seconds": 50.014362999238074,
+    "available_bytes": 25499189248,
+    "paused": false,
+    "swap_total_bytes": 2147479552,
+    "swap_free_bytes": 0,
+    "memory_pressure": "some avg10=0.01 avg60=0.17 avg300=0.06 total=4750563271\nfull avg10=0.01 avg60=0.17 avg300=0.06 total=4578613914\n",
+    "disk_free_bytes": 33965522944
+  },
+  {
+    "elapsed_seconds": 51.01463448256254,
+    "available_bytes": 25523826688,
+    "paused": false,
+    "swap_total_bytes": 2147479552,
+    "swap_free_bytes": 0,
+    "memory_pressure": "some avg10=0.01 avg60=0.17 avg300=0.06 total=4750563271\nfull avg10=0.01 avg60=0.17 avg300=0.06 total=4578613914\n",
+    "disk_free_bytes": 33959227392
+  },
+  {
+    "elapsed_seconds": 52.0148806180805,
+    "available_bytes": 25504935936,
+    "paused": false,
+    "swap_total_bytes": 2147479552,
+    "swap_free_bytes": 0,
+    "memory_pressure": "some avg10=0.01 avg60=0.17 avg300=0.06 total=4750563271\nfull avg10=0.01 avg60=0.17 avg300=0.06 total=4578613914\n",
+    "disk_free_bytes": 33952395264
+  },
+  {
+    "elapsed_seconds": 53.015115710906684,
+    "available_bytes": 25542631424,
+    "paused": false,
+    "swap_total_bytes": 2147479552,
+    "swap_free_bytes": 0,
+    "memory_pressure": "some avg10=0.01 avg60=0.17 avg300=0.06 total=4750563271\nfull avg10=0.01 avg60=0.17 avg300=0.06 total=4578613914\n",
+    "disk_free_bytes": 33946046464
+  },
+  {
+    "elapsed_seconds": 54.01533556357026,
+    "available_bytes": 25581273088,
+    "paused": false,
+    "swap_total_bytes": 2147479552,
+    "swap_free_bytes": 0,
+    "memory_pressure": "some avg10=0.01 avg60=0.16 avg300=0.06 total=4750563271\nfull avg10=0.01 avg60=0.16 avg300=0.06 total=4578613914\n",
+    "disk_free_bytes": 33935761408
+  },
+  {
+    "elapsed_seconds": 55.015568440780044,
+    "available_bytes": 25554317312,
+    "paused": false,
+    "swap_total_bytes": 2147479552,
+    "swap_free_bytes": 0,
+    "memory_pressure": "some avg10=0.01 avg60=0.16 avg300=0.06 total=4750563271\nfull avg10=0.01 avg60=0.16 avg300=0.06 total=4578613914\n",
+    "disk_free_bytes": 33931317248
+  },
+  {
+    "elapsed_seconds": 56.01582010090351,
+    "available_bytes": 25583439872,
+    "paused": false,
+    "swap_total_bytes": 2147479552,
+    "swap_free_bytes": 4096,
+    "memory_pressure": "some avg10=0.01 avg60=0.16 avg300=0.06 total=4750563271\nfull avg10=0.01 avg60=0.16 avg300=0.06 total=4578613914\n",
+    "disk_free_bytes": 33926815744
+  },
+  {
+    "elapsed_seconds": 57.01605888642371,
+    "available_bytes": 25600438272,
+    "paused": false,
+    "swap_total_bytes": 2147479552,
+    "swap_free_bytes": 4096,
+    "memory_pressure": "some avg10=0.01 avg60=0.16 avg300=0.06 total=4750563271\nfull avg10=0.01 avg60=0.16 avg300=0.06 total=4578613914\n",
+    "disk_free_bytes": 33918775296
+  },
+  {
+    "elapsed_seconds": 58.016303561627865,
+    "available_bytes": 25550196736,
+    "paused": false,
+    "swap_total_bytes": 2147479552,
+    "swap_free_bytes": 4096,
+    "memory_pressure": "some avg10=0.00 avg60=0.15 avg300=0.06 total=4750563271\nfull avg10=0.00 avg60=0.15 avg300=0.06 total=4578613914\n",
+    "disk_free_bytes": 33914208256
+  },
+  {
+    "elapsed_seconds": 59.01654744334519,
+    "available_bytes": 25565368320,
+    "paused": false,
+    "swap_total_bytes": 2147479552,
+    "swap_free_bytes": 4096,
+    "memory_pressure": "some avg10=0.00 avg60=0.15 avg300=0.06 total=4750563271\nfull avg10=0.00 avg60=0.15 avg300=0.06 total=4578613914\n",
+    "disk_free_bytes": 33908834304
+  },
+  {
+    "elapsed_seconds": 60.016792157664895,
+    "available_bytes": 25586933760,
+    "paused": false,
+    "swap_total_bytes": 2147479552,
+    "swap_free_bytes": 4096,
+    "memory_pressure": "some avg10=0.00 avg60=0.14 avg300=0.06 total=4750563271\nfull avg10=0.00 avg60=0.14 avg300=0.06 total=4578613914\n",
+    "disk_free_bytes": 33901735936
+  },
+  {
+    "elapsed_seconds": 61.01702878344804,
+    "available_bytes": 25508442112,
+    "paused": false,
+    "swap_total_bytes": 2147479552,
+    "swap_free_bytes": 4096,
+    "memory_pressure": "some avg10=0.00 avg60=0.14 avg300=0.06 total=4750563271\nfull avg10=0.00 avg60=0.14 avg300=0.06 total=4578613914\n",
+    "disk_free_bytes": 33895219200
+  },
+  {
+    "elapsed_seconds": 62.017275949940085,
+    "available_bytes": 25500819456,
+    "paused": false,
+    "swap_total_bytes": 2147479552,
+    "swap_free_bytes": 4096,
+    "memory_pressure": "some avg10=0.00 avg60=0.14 avg300=0.06 total=4750563271\nfull avg10=0.00 avg60=0.14 avg300=0.06 total=4578613914\n",
+    "disk_free_bytes": 33888727040
+  },
+  {
+    "elapsed_seconds": 63.01751324534416,
+    "available_bytes": 25541058560,
+    "paused": false,
+    "swap_total_bytes": 2147479552,
+    "swap_free_bytes": 4096,
+    "memory_pressure": "some avg10=0.00 avg60=0.14 avg300=0.06 total=4750563271\nfull avg10=0.00 avg60=0.14 avg300=0.06 total=4578613914\n",
+    "disk_free_bytes": 33882001408
+  },
+  {
+    "elapsed_seconds": 64.01774056069553,
+    "available_bytes": 25551699968,
+    "paused": false,
+    "swap_total_bytes": 2147479552,
+    "swap_free_bytes": 4096,
+    "memory_pressure": "some avg10=0.00 avg60=0.13 avg300=0.06 total=4750563271\nfull avg10=0.00 avg60=0.13 avg300=0.06 total=4578613914\n",
+    "disk_free_bytes": 33876742144
+  },
+  {
+    "elapsed_seconds": 65.01796552166343,
+    "available_bytes": 26788888576,
+    "paused": false,
+    "swap_total_bytes": 2147479552,
+    "swap_free_bytes": 4096,
+    "memory_pressure": "some avg10=0.00 avg60=0.13 avg300=0.06 total=4750563271\nfull avg10=0.00 avg60=0.13 avg300=0.06 total=4578613914\n",
+    "disk_free_bytes": 33872891904
+  },
+  {
+    "elapsed_seconds": 66.01820333581418,
+    "available_bytes": 26746032128,
+    "paused": false,
+    "swap_total_bytes": 2147479552,
+    "swap_free_bytes": 4096,
+    "memory_pressure": "some avg10=0.00 avg60=0.13 avg300=0.06 total=4750563271\nfull avg10=0.00 avg60=0.13 avg300=0.06 total=4578613914\n",
+    "disk_free_bytes": 33868951552
+  },
+  {
+    "elapsed_seconds": 67.01845563482493,
+    "available_bytes": 26725314560,
+    "paused": false,
+    "swap_total_bytes": 2147479552,
+    "swap_free_bytes": 4096,
+    "memory_pressure": "some avg10=0.00 avg60=0.13 avg300=0.06 total=4750563271\nfull avg10=0.00 avg60=0.13 avg300=0.06 total=4578613914\n",
+    "disk_free_bytes": 33865859072
+  },
+  {
+    "elapsed_seconds": 68.01873070467263,
+    "available_bytes": 26616397824,
+    "paused": false,
+    "swap_total_bytes": 2147479552,
+    "swap_free_bytes": 4096,
+    "memory_pressure": "some avg10=0.00 avg60=0.12 avg300=0.06 total=4750563271\nfull avg10=0.00 avg60=0.12 avg300=0.06 total=4578613914\n",
+    "disk_free_bytes": 33824079872
+  },
+  {
+    "elapsed_seconds": 69.01899823080748,
+    "available_bytes": 27036889088,
+    "paused": false,
+    "swap_total_bytes": 2147479552,
+    "swap_free_bytes": 4096,
+    "memory_pressure": "some avg10=0.00 avg60=0.12 avg300=0.06 total=4750563271\nfull avg10=0.00 avg60=0.12 avg300=0.06 total=4578613914\n",
+    "disk_free_bytes": 34042068992
+  },
+  {
+    "elapsed_seconds": 70.01927145570517,
+    "available_bytes": 27072778240,
+    "paused": false,
+    "swap_total_bytes": 2147479552,
+    "swap_free_bytes": 4096,
+    "memory_pressure": "some avg10=0.00 avg60=0.12 avg300=0.06 total=4750563271\nfull avg10=0.00 avg60=0.12 avg300=0.06 total=4578613914\n",
+    "disk_free_bytes": 34042064896
+  },
+  {
+    "elapsed_seconds": 71.01950031798333,
+    "available_bytes": 27164348416,
+    "paused": false,
+    "swap_total_bytes": 2147479552,
+    "swap_free_bytes": 4096,
+    "memory_pressure": "some avg10=0.00 avg60=0.12 avg300=0.06 total=4750563271\nfull avg10=0.00 avg60=0.12 avg300=0.06 total=4578613914\n",
+    "disk_free_bytes": 34042052608
+  },
+  {
+    "elapsed_seconds": 72.01972213480622,
+    "available_bytes": 27179073536,
+    "paused": false,
+    "swap_total_bytes": 2147479552,
+    "swap_free_bytes": 4096,
+    "memory_pressure": "some avg10=0.00 avg60=0.12 avg300=0.06 total=4750563271\nfull avg10=0.00 avg60=0.12 avg300=0.06 total=4578613914\n",
+    "disk_free_bytes": 34042028032
+  },
+  {
+    "elapsed_seconds": 73.01995194517076,
+    "available_bytes": 27196518400,
+    "paused": false,
+    "swap_total_bytes": 2147479552,
+    "swap_free_bytes": 4096,
+    "memory_pressure": "some avg10=0.00 avg60=0.12 avg300=0.06 total=4750563271\nfull avg10=0.00 avg60=0.12 avg300=0.06 total=4578613914\n",
+    "disk_free_bytes": 34042015744
+  }
+]

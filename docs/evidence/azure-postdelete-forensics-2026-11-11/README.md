@@ -83,7 +83,7 @@ public IP, network, tax and account-specific adjustments. Actual bills are not
 verified; `repro-preflight.json` is a planning estimate, not spending proof.
 
 Provisioning helpers refuse unless root explicitly marks instrumentation GO and
-at least 90 minutes remain before the early cleanup trigger. Per-operation worker
+at least 120 minutes remain before the early cleanup trigger (latest allocation GO **09:22:51 UTC**). Per-operation worker
 telemetry must be validated before root authorizes allocation. Full private Azure
 model/resource/disk/NIC/route/NSG/instance-view capture and available provider metric
 definitions/series must then be verified live before starting the workload. Raw

@@ -1,0 +1,7 @@
+Traceback (most recent call last):
+  File "/tmp/bicdb-range-handoff-characterization/scripts/verify-relocation-handoff-characterization.py", line 134, in <module>
+    main()
+  File "/tmp/bicdb-range-handoff-characterization/scripts/verify-relocation-handoff-characterization.py", line 130, in main
+    assert cleanup["new_leader_local_value"] == cleanup["late_payload"], "acknowledged value absent on ready new authority after legitimate cleanup-first handoff"
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: acknowledged value absent on ready new authority after legitimate cleanup-first handoff

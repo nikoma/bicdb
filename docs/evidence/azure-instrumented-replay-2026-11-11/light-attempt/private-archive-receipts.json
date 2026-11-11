@@ -1,0 +1,32 @@
+{
+  "archives": [
+    {
+      "node": 0,
+      "sha256": "f0e0d55693df07947abc5312d0952d1ef84be0e5db4f00dd1e9438bdeb3e3093",
+      "bytes": 1365022,
+      "classification": "stopped_engine_database_and_logs_not_raw_disk_image"
+    },
+    {
+      "node": 1,
+      "sha256": "dd88acf2de2367af2153a43f9c14d30f8745d8bfa344c39d3e72c898fd2a4e49",
+      "bytes": 1234449,
+      "classification": "stopped_engine_database_and_logs_not_raw_disk_image"
+    },
+    {
+      "node": 2,
+      "sha256": "a48631cc9632a60bd96ab88f19385f4d1f458bf184a743b3e9fa8a5f570e3960",
+      "bytes": 1364082,
+      "classification": "stopped_engine_database_and_logs_not_raw_disk_image"
+    },
+    {
+      "node": 3,
+      "sha256": "91dcd0f7ac1cb2e6d934f4d16eb2f31947f3883bd7097ed23e2701bf1c67d5b8",
+      "bytes": 1586234,
+      "classification": "stopped_engine_database_and_logs_not_raw_disk_image"
+    }
+  ],
+  "contents_private": true,
+  "may_contain_task_generated_mesh_identity_material": true,
+  "tls_private_key_folder_excluded": true,
+  "not_raw_disk_images": true
+}

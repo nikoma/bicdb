@@ -1,0 +1,32 @@
+{
+  "argv": [
+    "cargo",
+    "test",
+    "--release",
+    "--locked",
+    "-p",
+    "bicdb-core",
+    "--config",
+    "profile.release.package.bicdb-core.opt-level=0",
+    "--config",
+    "profile.release.package.bicdb-core.debug=0",
+    "--test",
+    "distribution_certificate_ack",
+    "--",
+    "--nocapture",
+    "--test-threads=2"
+  ],
+  "exit_code": 101,
+  "started_unix_ns": 1794387853571897145,
+  "completed_unix_ns": 1794387918103808498,
+  "minimum_available_bytes": 24445059072,
+  "monitor_transitions": [],
+  "source_base": "d49a391b3c6157f90f29e9f2f5214143c60f9f4b",
+  "source_files": {
+    "crates/bicdb-core/src/db.rs": "265e4c522cf66b605e3f431edc6fbd883d96281283c5f16649b740085f91a2a3",
+    "crates/bicdb-core/src/distribution_range_consensus.rs": "127f96e8dd620fb13f5380ffdb692d3c3ac83938642cb8900d0e954dbd15f805",
+    "crates/bicdb-core/src/distribution_events.rs": "b761fd2ba1075fc5f2fe71e23537c20f6a37141101a0c617fc66d3cb005cb206",
+    "crates/bicdb-core/src/db/distribution_event_retry_tests.rs": "9382c3dec3841089885063cf7698f52b71950fe7faf2a164a2ea5910100e59fa",
+    "crates/bicdb-core/tests/distribution_certificate_ack.rs": "0e54b62d6c36bdee78c9b8aa9d2f0846cb662276b4e027cb764261a535d562c3"
+  }
+}

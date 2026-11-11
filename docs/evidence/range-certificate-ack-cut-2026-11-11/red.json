@@ -1,0 +1,5 @@
+{
+  "exit_code": 101,
+  "binary_sha256": "f862e2c5cc4cab562326ccf526dea830164c5810f714443e09ef93ca85d419ec",
+  "scope": "deterministic actual-core RF3 certificate cut; in-process transport; fsync=false; no physical HA qualification"
+}

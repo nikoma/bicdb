@@ -1,0 +1,34 @@
+
+running 5 tests
+test acknowledged_certificate_quorum_survives_only_leader_loss ... ok
+test certificate_gap_returns_unknown_after_local_wal_then_background_recovery_progresses ... ok
+test lost_certificate_reply_stays_unknown_and_surviving_certificate_recovers ... ok
+test matching_event_retry_cannot_bypass_unknown_certificate_outcome ... ok
+test reopened_matching_event_requires_recovered_admission_and_local_outcome_resolves ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 9.41s
+
+
+running 1 test
+{"elapsed_ms":80.53223399999999,"io_budget_ms":80,"peer_chunk_interval_ms":20,"physical_ha_qualification":false,"result":"Err(Io(Custom { kind: TimedOut, error: \"cluster RPC deadline expired\" }))"}
+test slow_progress_does_not_extend_a_cluster_rpc_budget ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.12s
+
+
+running 4 tests
+test mtls_ca_valid_wrong_peer_pin_remains_rejected ... ok
+test mtls_healthy_authenticated_cluster_rpc_succeeds ... ok
+test mtls_stalled_handshake_observes_cluster_rpc_deadline ... ok
+{"elapsed_ms":252.314445,"encrypted_chunks_sent":17,"io_budget_ms":250,"physical_ha_qualification":false}
+test mtls_encrypted_response_progress_does_not_extend_cluster_rpc_deadline ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.28s
+
+
+running 2 tests
+test one_deferred_move_does_not_starve_other_ranges ... ok
+test newly_queued_moves_do_not_postpone_an_existing_moves_next_turn ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+

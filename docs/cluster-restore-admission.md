@@ -92,3 +92,21 @@ Offline certificate validation does not pretend that a persisted pre-crash
 `Leader` role is a new election. It validates the immutable certified topology;
 the startup gate separately verifies each node's durable consensus watermark.
 The restored cluster must then elect authority normally.
+
+## Retained activation after topology changes
+
+A new restore activation must match the exact topology at its admission. Once
+committed, its generation and hash identify that historical restore decision.
+Ordinary committed load, membership or placement updates may subsequently
+advance the topology while restart and metadata snapshot replication retain
+that lineage. A retained decision cannot name a future generation; a decision
+at the current generation must still match its exact hash.
+
+Ordinary replication cannot erase a committed activation or rewrite its
+activation ID. A later decision must have a new ID and a strictly later
+decision timestamp, with no generation regression. Identical snapshot
+decisions are idempotent. These checks do not replace the full certificate
+and admission workflow for a fresh restored root.
+
+The historical-lineage recovery fix and its separately pinned local evidence
+are described in the [source delivery scope](evidence/historical-restore-lineage-2026-11-11/delivery-scope.md).

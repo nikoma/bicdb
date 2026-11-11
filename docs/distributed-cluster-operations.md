@@ -7,6 +7,14 @@ limits and recovery blockers. The subsequent
 movement, no demonstrated capacity gain, and a longer growth trial that failed
 with availability/verification errors. Production qualification remains open.
 
+See also the [relocation scheduling regression](relocation-scheduling-regression-2026-11-11.md)
+for a reproduced starvation defect, focused fix evidence, and remaining bounded-I/O
+and physical convergence gates.
+
+See the [P0 recovery follow-up](p0-range-recovery-progress-2026-11-11.md)
+for narrower ACK guarantees, network-deadline limits and open image/handoff
+blockers. Legacy application-event Get remains eventual.
+
 This guide covers BicDB's automatic range-placement control plane. A cluster
 uses durable membership, virtual ranges, epoch-fenced routes, bounded
 relocation state machines, and an automatic supervisor. Single-node databases

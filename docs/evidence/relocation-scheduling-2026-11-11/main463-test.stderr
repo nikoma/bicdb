@@ -1,0 +1,4 @@
+
+thread 'one_deferred_move_does_not_starve_other_ranges' (2761425) panicked at /tmp/bicdb-p0-recovery/crates/bicdb-core/tests/distribution_supervisor_fairness.rs:129:5:
+a deferred move starved healthy ranges: starved=[RelocationId(2), RelocationId(3), RelocationId(4)], attempted=[RelocationId(1), RelocationId(1), RelocationId(1), RelocationId(1)]
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace

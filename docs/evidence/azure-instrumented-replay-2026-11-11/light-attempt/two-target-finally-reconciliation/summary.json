@@ -1,0 +1,169 @@
+{
+  "format": 1,
+  "policy_source": "b05385d4b033edf0db03f3eccf4bdd86f7c8eddb",
+  "counts": {
+    "run_started": 1,
+    "session_start_started": 5,
+    "worker_ready": 5,
+    "session_admitted": 5,
+    "observer_current_leaders_warmed": 1,
+    "reconciliation_inputs_loaded": 1,
+    "traffic_window_started": 1,
+    "operation_started": 2,
+    "route_attempt_started": 4,
+    "event_route": 4,
+    "rpc_started": 44,
+    "rpc_completed": 44,
+    "read_observed": 2,
+    "watermark_observation_trigger": 10,
+    "operation_terminal": 2,
+    "rpc_failure": 28,
+    "watermark_observation_completed": 10,
+    "retry_backoff": 2,
+    "topology_install": 6,
+    "reconciliation_coverage": 1,
+    "run_completed": 1,
+    "worker_stderr_final_status": 5
+  },
+  "logical_attempts": 2,
+  "externally_durable_ack_records": 0,
+  "ack_observed_rows_present": 0,
+  "bare_ack_logical_ids_without_durable_receipt": [],
+  "ack_observed_rows_with_unproven_fsync": [],
+  "database_success_reply_rows_present": 0,
+  "externally_durable_database_ack_replies": 0,
+  "database_success_reply_ids_with_unproven_fsync": [],
+  "durability_derivation": "Only a subsequent serialized journal append or an explicit validated receipt proves that a prior fsync returned; a visible trailing row alone does not. Client ACK count additionally requires acknowledged terminal linkage.",
+  "database_ack_reply_ids_without_client_completion": [],
+  "uncertain_write_logical_ids": [],
+  "unterminated_logical_ids": [],
+  "unknown_rpc_ids": [],
+  "rpc_unknown_response_ids": [
+    "0fe5c7b816264068bd4a6da910914729",
+    "17ac8896da4948c6a91dce694664ed16",
+    "31cf07cc31014914857eeee2361d1631",
+    "3d80b692ba6c43a3ae2669b8e74c7193",
+    "4365333586534329aed88d9f1cf895bd",
+    "4827b806024d428a8aa22b71283ed63c",
+    "503a319893ca45df937c648e3043efda",
+    "5a5436c1d14e4bf7a2a445a5621112e5",
+    "5bf71f124b724a52ada347c13cdf9e74",
+    "611c95f8d7204f7f8323b20347218e32",
+    "8ea46edf1bb84504b320c8ccec6df1de",
+    "9a415f001fe34eb39c4add300ca04314",
+    "9fbdbbbe42aa4d7d9595a0bb32203bb2",
+    "c35fcfffd83d40b8a2257133b1011ca7",
+    "d5fede32eb1f49afb4c27b32c2b85117",
+    "e64790bc1a2d48199962bc49a24e0e98",
+    "f0f10f27de8240bd90bf8c07d565be20",
+    "f1fe76b0bfb34843b84b8338185b90ac",
+    "f980b49ec381435abeb1ddcdf2cd6ee0"
+  ],
+  "acknowledged_logical_ids_with_unknown_rpc_history": [],
+  "write_attempt_ids_not_dispatched": [],
+  "outcomes": {
+    "exact_match": 2
+  },
+  "raw_latency_distributions": {
+    "get:exact_match": {
+      "samples": 2,
+      "p50_ns": 261604259,
+      "p95_ns": 30083966753,
+      "p99_ns": 30083966753,
+      "max_ns": 30083966753
+    }
+  },
+  "observation_coverage_gaps": 0,
+  "pending_observation_ids": [],
+  "dispatch_fenced": false,
+  "dispatch_fence_records": [],
+  "reconciliation": {
+    "required_target_ids": [
+      "9ed15c1d889aa1d95612f795b86a9b46e1a69655e73e8549448ceb270a8a7ea5",
+      "e2d6b67a6775a97bafea16f6302d2e5015cc0be0d0820a784e64c0ba5ebb23fd"
+    ],
+    "attempted_target_ids": [
+      "9ed15c1d889aa1d95612f795b86a9b46e1a69655e73e8549448ceb270a8a7ea5",
+      "e2d6b67a6775a97bafea16f6302d2e5015cc0be0d0820a784e64c0ba5ebb23fd"
+    ],
+    "terminal_target_ids": [
+      "9ed15c1d889aa1d95612f795b86a9b46e1a69655e73e8549448ceb270a8a7ea5",
+      "e2d6b67a6775a97bafea16f6302d2e5015cc0be0d0820a784e64c0ba5ebb23fd"
+    ],
+    "verified_target_ids": [
+      "9ed15c1d889aa1d95612f795b86a9b46e1a69655e73e8549448ceb270a8a7ea5",
+      "e2d6b67a6775a97bafea16f6302d2e5015cc0be0d0820a784e64c0ba5ebb23fd"
+    ],
+    "unattempted_target_ids": [],
+    "unterminated_target_ids": [],
+    "unverified_target_ids": [],
+    "required_prior_ack_target_ids": [
+      "9ed15c1d889aa1d95612f795b86a9b46e1a69655e73e8549448ceb270a8a7ea5",
+      "e2d6b67a6775a97bafea16f6302d2e5015cc0be0d0820a784e64c0ba5ebb23fd"
+    ],
+    "prior_ack_unverified_target_ids": [],
+    "coverage_complete": true,
+    "all_targets_verified_observation": true,
+    "all_prior_ack_targets_verified_observation": true
+  },
+  "run_completed": true,
+  "termination_reason": "reconciliation_inputs_complete",
+  "qualification_status": "not_qualified",
+  "server_declared_read_contract": "eventual/local-applied-on-named-leader",
+  "oracle_expectation": "read-your-ACK",
+  "strong_read_proof": false,
+  "client_path": "controller frozen-policy replica through member-side SSH TLS wire bridge; not stock CLI or PostgreSQL",
+  "trace_validation": {
+    "trace_valid": true,
+    "reconciliation": {
+      "required_target_ids": [
+        "9ed15c1d889aa1d95612f795b86a9b46e1a69655e73e8549448ceb270a8a7ea5",
+        "e2d6b67a6775a97bafea16f6302d2e5015cc0be0d0820a784e64c0ba5ebb23fd"
+      ],
+      "attempted_target_ids": [
+        "9ed15c1d889aa1d95612f795b86a9b46e1a69655e73e8549448ceb270a8a7ea5",
+        "e2d6b67a6775a97bafea16f6302d2e5015cc0be0d0820a784e64c0ba5ebb23fd"
+      ],
+      "terminal_target_ids": [
+        "9ed15c1d889aa1d95612f795b86a9b46e1a69655e73e8549448ceb270a8a7ea5",
+        "e2d6b67a6775a97bafea16f6302d2e5015cc0be0d0820a784e64c0ba5ebb23fd"
+      ],
+      "verified_target_ids": [
+        "9ed15c1d889aa1d95612f795b86a9b46e1a69655e73e8549448ceb270a8a7ea5",
+        "e2d6b67a6775a97bafea16f6302d2e5015cc0be0d0820a784e64c0ba5ebb23fd"
+      ],
+      "unattempted_target_ids": [],
+      "unterminated_target_ids": [],
+      "unverified_target_ids": [],
+      "required_prior_ack_target_ids": [
+        "9ed15c1d889aa1d95612f795b86a9b46e1a69655e73e8549448ceb270a8a7ea5",
+        "e2d6b67a6775a97bafea16f6302d2e5015cc0be0d0820a784e64c0ba5ebb23fd"
+      ],
+      "prior_ack_unverified_target_ids": [],
+      "coverage_complete": true,
+      "all_targets_verified_observation": true,
+      "all_prior_ack_targets_verified_observation": true
+    },
+    "complete_run_record": true,
+    "planned_termination": true,
+    "dispatch_fenced": false,
+    "logical_attempts": 2,
+    "individual_rpc_calls": 44,
+    "rpc_failures": 28,
+    "full_wire_response_bodies": 25,
+    "durable_client_acks": 0,
+    "database_ack_reply_identities": 0,
+    "unterminated_logical_ids": [],
+    "unfinished_rpc_ids": [],
+    "pending_observation_ids": [],
+    "server_declared_read_contract": "eventual/local-applied-on-named-leader",
+    "oracle_expectation": "read-your-ACK",
+    "strong_read_proof": false,
+    "server_internal_retries_observed": false,
+    "qualification_status": "not_qualified"
+  },
+  "controller_errors": [],
+  "telemetry_complete": true,
+  "planned_experiment_complete": true,
+  "workload_passed": true
+}

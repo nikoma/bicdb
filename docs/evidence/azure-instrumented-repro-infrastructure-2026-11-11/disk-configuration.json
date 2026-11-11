@@ -1,0 +1,102 @@
+[
+  {
+    "role": "os",
+    "size_gib": 64,
+    "sku": "Premium_LRS",
+    "tier": "P6",
+    "configured_iops_read_write": 240,
+    "configured_mbps_read_write": 50,
+    "bursting_enabled_field": null,
+    "provisioning_state": "Succeeded"
+  },
+  {
+    "role": "data",
+    "size_gib": 128,
+    "sku": "Premium_LRS",
+    "tier": "P10",
+    "configured_iops_read_write": 500,
+    "configured_mbps_read_write": 100,
+    "bursting_enabled_field": null,
+    "provisioning_state": "Succeeded"
+  },
+  {
+    "role": "os",
+    "size_gib": 64,
+    "sku": "Premium_LRS",
+    "tier": "P6",
+    "configured_iops_read_write": 240,
+    "configured_mbps_read_write": 50,
+    "bursting_enabled_field": null,
+    "provisioning_state": "Succeeded"
+  },
+  {
+    "role": "data",
+    "size_gib": 128,
+    "sku": "Premium_LRS",
+    "tier": "P10",
+    "configured_iops_read_write": 500,
+    "configured_mbps_read_write": 100,
+    "bursting_enabled_field": null,
+    "provisioning_state": "Succeeded"
+  },
+  {
+    "role": "os",
+    "size_gib": 64,
+    "sku": "Premium_LRS",
+    "tier": "P6",
+    "configured_iops_read_write": 240,
+    "configured_mbps_read_write": 50,
+    "bursting_enabled_field": null,
+    "provisioning_state": "Succeeded"
+  },
+  {
+    "role": "data",
+    "size_gib": 128,
+    "sku": "Premium_LRS",
+    "tier": "P10",
+    "configured_iops_read_write": 500,
+    "configured_mbps_read_write": 100,
+    "bursting_enabled_field": null,
+    "provisioning_state": "Succeeded"
+  },
+  {
+    "role": "os",
+    "size_gib": 64,
+    "sku": "Premium_LRS",
+    "tier": "P6",
+    "configured_iops_read_write": 240,
+    "configured_mbps_read_write": 50,
+    "bursting_enabled_field": null,
+    "provisioning_state": "Succeeded"
+  },
+  {
+    "role": "data",
+    "size_gib": 128,
+    "sku": "Premium_LRS",
+    "tier": "P10",
+    "configured_iops_read_write": 500,
+    "configured_mbps_read_write": 100,
+    "bursting_enabled_field": null,
+    "provisioning_state": "Succeeded"
+  },
+  {
+    "role": "os",
+    "size_gib": 64,
+    "sku": "Premium_LRS",
+    "tier": "P6",
+    "configured_iops_read_write": 240,
+    "configured_mbps_read_write": 50,
+    "bursting_enabled_field": null,
+    "provisioning_state": "Succeeded"
+  },
+  {
+    "role": "data",
+    "size_gib": 128,
+    "sku": "Premium_LRS",
+    "tier": "P10",
+    "configured_iops_read_write": 500,
+    "configured_mbps_read_write": 100,
+    "bursting_enabled_field": null,
+    "provisioning_state": "Succeeded"
+  }
+]

@@ -1,0 +1,16 @@
+{
+  "argv": [
+    "<evidence-workdir>/strong-read-characterization",
+    "target_explicit_strong_get_must_serve_a_healthy_quorum_value",
+    "--exact",
+    "--nocapture",
+    "--test-threads=1"
+  ],
+  "exit_code": 101,
+  "started_unix_ns": 1794384869600841323,
+  "completed_unix_ns": 1794384869695124584,
+  "binary_sha256": "95b833ed1268f3d4cd4c60703dcc4140948f0aec51c8ac48afd209b3e8a53b2f",
+  "expected_current_failure": true,
+  "feature_implemented": false,
+  "scope": "explicit additive strong_get healthy positive; legacy Get control returns exact value; not HA qualification"
+}

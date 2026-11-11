@@ -1,0 +1,15 @@
+{
+  "helper_sha256": "54d71e90844c1d14f6d9bd4ff9a5fcf5a3faff4f7788bb58ee603ecb7329d0d5",
+  "started_unix_ns": 1794389929438782528,
+  "classification": "read-only_live_files_not_atomic_cluster_snapshot",
+  "member_private_keys_exported": false,
+  "files": [
+    "server.log",
+    "process.json",
+    "db/bicdb-distribution.json",
+    "db/format.json",
+    "db/cluster-range-write-log.json",
+    "db/cluster-topology.json",
+    "db/cluster-metadata-consensus.json"
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "source_sha256": "97eb8188487249c37fd1336e56ff44f07175522e2c19aa028c07e959a367f592",
+  "binary_sha256": "f34c50630f4db5f52a723bd84f0083673214eee96586e2c8b565738a99c97a73",
+  "binary_bytes": 91843056,
+  "frozen_at_utc": "2026-11-11T09:56:40.591590+00:00",
+  "compiler": "rustc 1.96.0 (ac68faa20 2026-05-25)",
+  "dynamic_libraries": "\tlinux-vdso.so.1 (0x00007ffe4d396000)\n\tlibgcc_s.so.1 => /lib/x86_64-linux-gnu/libgcc_s.so.1 (0x00007363b052c000)\n\tlibm.so.6 => /lib/x86_64-linux-gnu/libm.so.6 (0x00007363af517000)\n\tlibc.so.6 => /lib/x86_64-linux-gnu/libc.so.6 (0x00007363af200000)\n\t/lib64/ld-linux-x86-64.so.2 (0x00007363b0573000)\n",
+  "engine_recompiled": false,
+  "runtime_source": "d49a391b3c6157f90f29e9f2f5214143c60f9f4b",
+  "core_rlib_sha256": "dc714b001a0fe8758473c2c4ef80158474d7426e16630926edb65b6cc35f0356"
+}

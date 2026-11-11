@@ -1,0 +1,11 @@
+
+running 1 test
+test target_explicit_strong_get_must_serve_a_healthy_quorum_value ... FAILED
+
+failures:
+
+failures:
+    target_explicit_strong_get_must_serve_a_healthy_quorum_value
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.09s
+

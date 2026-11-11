@@ -1,0 +1,72 @@
+[
+  {
+    "elapsed_seconds": 0.0005185147747397423,
+    "available_bytes": 27145441280,
+    "paused": false
+  },
+  {
+    "elapsed_seconds": 1.0007421104237437,
+    "available_bytes": 26695942144,
+    "paused": false
+  },
+  {
+    "elapsed_seconds": 2.000944785773754,
+    "available_bytes": 26673975296,
+    "paused": false
+  },
+  {
+    "elapsed_seconds": 3.0011722780764103,
+    "available_bytes": 26668732416,
+    "paused": false
+  },
+  {
+    "elapsed_seconds": 4.001383049413562,
+    "available_bytes": 26589319168,
+    "paused": false
+  },
+  {
+    "elapsed_seconds": 5.001589882187545,
+    "available_bytes": 26613477376,
+    "paused": false
+  },
+  {
+    "elapsed_seconds": 6.001796605065465,
+    "available_bytes": 26629488640,
+    "paused": false
+  },
+  {
+    "elapsed_seconds": 7.0020038979128,
+    "available_bytes": 26618740736,
+    "paused": false
+  },
+  {
+    "elapsed_seconds": 8.002231289632618,
+    "available_bytes": 26654560256,
+    "paused": false
+  },
+  {
+    "elapsed_seconds": 9.002430045977235,
+    "available_bytes": 26714066944,
+    "paused": false
+  },
+  {
+    "elapsed_seconds": 10.002673286013305,
+    "available_bytes": 26722918400,
+    "paused": false
+  },
+  {
+    "elapsed_seconds": 11.00287071056664,
+    "available_bytes": 26677035008,
+    "paused": false
+  },
+  {
+    "elapsed_seconds": 12.003068074584007,
+    "available_bytes": 26719182848,
+    "paused": false
+  },
+  {
+    "elapsed_seconds": 13.003272731788456,
+    "available_bytes": 26741436416,
+    "paused": false
+  }
+]

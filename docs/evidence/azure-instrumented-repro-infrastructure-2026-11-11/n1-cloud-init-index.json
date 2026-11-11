@@ -1,0 +1,19 @@
+{
+  "exported_at_utc": "2026-11-11T08:54:34.028456+00:00",
+  "files": [
+    {
+      "name": "logs.tgz",
+      "exit": 0,
+      "bytes": 23762,
+      "sha256": "bcc3ed487bb9cb1accd0b2a04602674846f30fa7f6e82d3dc8aedbeb2d37bc12"
+    },
+    {
+      "name": "journal.txt",
+      "exit": 0,
+      "bytes": 14991,
+      "sha256": "0aafa3b4018bbfa52529ded4004037ce428a5b30d5355b6927e1c021046a5da6"
+    }
+  ],
+  "all_raw_private": true,
+  "imds_warning_separate_from_bicdb": true
+}

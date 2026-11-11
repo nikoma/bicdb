@@ -1,0 +1,216 @@
+diff --git a/crates/bicdb-core/src/distribution_supervisor.rs b/crates/bicdb-core/src/distribution_supervisor.rs
+index 96d96c18..e3ec504d 100644
+--- a/crates/bicdb-core/src/distribution_supervisor.rs
++++ b/crates/bicdb-core/src/distribution_supervisor.rs
+@@ -1,10 +1,11 @@
+ //! Automatic cluster controller, bounded relocation driver boundary, metrics,
+ //! and operational compatibility contracts.
+ 
+-use std::collections::BTreeMap;
++use std::collections::{BTreeMap, BTreeSet, VecDeque};
+ use std::sync::atomic::{AtomicBool, Ordering};
+ use std::time::Duration;
+ 
++use parking_lot::Mutex;
+ use serde::{Deserialize, Serialize};
+ use sha2::{Digest, Sha256};
+ 
+@@ -507,6 +508,10 @@ pub struct ClusterSupervisorReport {
+ pub struct ClusterSupervisor {
+     config: ClusterSupervisorConfig,
+     planner: Option<Box<dyn ClusterPlacementPlanner>>,
++    // Scheduling state only: durable relocation phases remain in the store.
++    // Starting at the oldest move on every tick lets a deferred prefix starve
++    // independent ranges indefinitely.
++    relocation_queue: Mutex<VecDeque<RelocationId>>,
+ }
+ 
+ impl ClusterSupervisor {
+@@ -525,6 +530,7 @@ impl ClusterSupervisor {
+         Ok(Self {
+             config,
+             planner: None,
++            relocation_queue: Mutex::new(VecDeque::new()),
+         })
+     }
+ 
+@@ -536,6 +542,7 @@ impl ClusterSupervisor {
+         Ok(Self {
+             config,
+             planner: Some(planner),
++            relocation_queue: Mutex::new(VecDeque::new()),
+         })
+     }
+ 
+@@ -615,7 +622,7 @@ impl ClusterSupervisor {
+             (None, Vec::new())
+         };
+ 
+-        let active = store
++        let mut eligible = store
+             .topology()
+             .relocations
+             .values()
+@@ -623,8 +630,23 @@ impl ClusterSupervisor {
+                 relocation.is_active() && relocation.phase != RelocationPhase::Failed
+             })
+             .map(|relocation| relocation.id)
+-            .take(self.config.max_relocation_steps_per_tick)
+-            .collect::<Vec<_>>();
++            .collect::<BTreeSet<_>>();
++        let active = {
++            let mut queue = self.relocation_queue.lock();
++            // Drop completed/failed work, retain the order of existing work,
++            // and append new moves behind it. A monotonic ID cursor alone can
++            // starve older deferred work when new moves keep arriving.
++            queue.retain(|id| eligible.remove(id));
++            queue.extend(eligible);
++            let steps = self.config.max_relocation_steps_per_tick.min(queue.len());
++            (0..steps)
++                .map(|_| {
++                    let id = queue.pop_front().expect("bounded by queue length");
++                    queue.push_back(id);
++                    id
++                })
++                .collect::<Vec<_>>()
++        };
+         let mut progressed = Vec::new();
+         let mut deferred = Vec::new();
+         let mut failures = BTreeMap::new();
+diff --git a/crates/bicdb-core/tests/distribution_supervisor_fairness.rs b/crates/bicdb-core/tests/distribution_supervisor_fairness.rs
+index 351b48a1..3bd5f2dd 100644
+--- a/crates/bicdb-core/tests/distribution_supervisor_fairness.rs
++++ b/crates/bicdb-core/tests/distribution_supervisor_fairness.rs
+@@ -32,7 +32,7 @@ impl Drop for OwnedDirectory {
+ }
+ 
+ struct OneBlockedMove {
+-    blocked: RelocationId,
++    blocked: Option<RelocationId>,
+     visited: Vec<RelocationId>,
+ }
+ 
+@@ -47,7 +47,7 @@ impl ClusterRelocationDriver for OneBlockedMove {
+     ) -> Result<RelocationDriveOutcome> {
+         cancellation.check()?;
+         self.visited.push(id);
+-        if id == self.blocked {
++        if Some(id) == self.blocked {
+             return Ok(RelocationDriveOutcome::Deferred);
+         }
+         if store.relocation(id).unwrap().phase == RelocationPhase::LearnerAllocated {
+@@ -61,8 +61,12 @@ impl ClusterRelocationDriver for OneBlockedMove {
+     }
+ }
+ 
+-#[test]
+-fn one_deferred_move_does_not_starve_other_ranges() {
++fn relocation_fixture() -> (
++    OwnedDirectory,
++    DistributionStore,
++    ClusterNodeId,
++    Vec<RelocationId>,
++) {
+     let directory = OwnedDirectory::new();
+     let actor = ClusterNodeId::new("n1").unwrap();
+     let config = DistributionConfig {
+@@ -100,15 +104,25 @@ fn one_deferred_move_does_not_starve_other_ranges() {
+     let plan = store.plan_rebalance(&options, 30).unwrap();
+     let ids = store.apply_rebalance_plan(&plan, &actor, 30).unwrap();
+     assert!(ids.len() > 1, "fixture needs independent pending moves");
+-    let supervisor = ClusterSupervisor::new(ClusterSupervisorConfig {
++    (directory, store, actor, ids)
++}
++
++fn bounded_supervisor() -> ClusterSupervisor {
++    ClusterSupervisor::new(ClusterSupervisorConfig {
+         heartbeat_each_tick: false,
+         refresh_topology_each_tick: false,
+         max_relocation_steps_per_tick: 1,
+         ..ClusterSupervisorConfig::default()
+     })
+-    .unwrap();
++    .unwrap()
++}
++
++#[test]
++fn one_deferred_move_does_not_starve_other_ranges() {
++    let (_directory, mut store, actor, ids) = relocation_fixture();
++    let supervisor = bounded_supervisor();
+     let mut driver = OneBlockedMove {
+-        blocked: ids[0],
++        blocked: Some(ids[0]),
+         visited: Vec::new(),
+     };
+     for tick in 0..ids.len() {
+@@ -132,7 +146,69 @@ fn one_deferred_move_does_not_starve_other_ranges() {
+         driver.visited
+     );
+     assert_eq!(
+-        store.relocation(driver.blocked).unwrap().phase,
++        store.relocation(ids[0]).unwrap().phase,
+         RelocationPhase::LearnerAllocated
+     );
+ }
++
++#[test]
++fn newly_queued_moves_do_not_postpone_an_existing_moves_next_turn() {
++    let (_directory, mut store, actor, ids) = relocation_fixture();
++    let supervisor = bounded_supervisor();
++    let mut driver = OneBlockedMove {
++        blocked: Some(ids[0]),
++        visited: Vec::new(),
++    };
++    supervisor
++        .tick(
++            &mut store,
++            &mut driver,
++            31,
++            &CancellationToken::uncancelable(),
++        )
++        .unwrap();
++    assert_eq!(driver.visited, vec![ids[0]]);
++
++    // The transient blocker has cleared. New work must join behind work that
++    // was already waiting; monotonically increasing IDs cannot delay its turn.
++    driver.blocked = None;
++    store
++        .join_node(
++            ClusterNode::new(
++                ClusterNodeId::new("n3").unwrap(),
++                "127.0.0.1:9446",
++                1,
++                1_000_000,
++                32,
++            )
++            .unwrap(),
++            &actor,
++            32,
++        )
++        .unwrap();
++    let options = RebalanceOptions {
++        max_replica_moves: 8,
++        max_moves_per_node: 8,
++        unknown_range_bytes: 1,
++        ..RebalanceOptions::default()
++    };
++    let plan = store.plan_rebalance(&options, 33).unwrap();
++    let later_ids = store.apply_rebalance_plan(&plan, &actor, 33).unwrap();
++    assert!(!later_ids.is_empty(), "fixture requires newly queued work");
++    for tick in 0..ids.len() {
++        supervisor
++            .tick(
++                &mut store,
++                &mut driver,
++                34 + tick as u64,
++                &CancellationToken::uncancelable(),
++            )
++            .unwrap();
++    }
++    assert_eq!(
++        store.relocation(ids[0]).unwrap().phase,
++        RelocationPhase::SnapshotCopying,
++        "new arrivals postponed an existing move: attempted={:?}, new={later_ids:?}",
++        driver.visited
++    );
++}

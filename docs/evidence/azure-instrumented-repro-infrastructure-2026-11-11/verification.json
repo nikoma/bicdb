@@ -1,0 +1,127 @@
+[
+  {
+    "node": 0,
+    "success": true,
+    "data_fsync_readback_and_directory_cleanup_passed": true,
+    "cloud_init_exit": 0,
+    "cloud_init_status": "done",
+    "cloud_init_extended_status": "done",
+    "cloud_init_warnings": [],
+    "cpu": "x86_64",
+    "kernel": "7.0.0-1017-azure",
+    "python": "3.12.3",
+    "root": {
+      "source": "/dev/sda1",
+      "size": 65445814272,
+      "fstype": "ext4"
+    },
+    "data_mount": {
+      "source": "/dev/sdc1",
+      "size": 134681182208,
+      "fstype": "ext4",
+      "options": "rw,noatime"
+    },
+    "machine_id_sha256": "67f7fa7c23c1df73f5516edb1d1bf3830656aa0c27bf80f629b30f7263c81ff9"
+  },
+  {
+    "node": 1,
+    "success": true,
+    "data_fsync_readback_and_directory_cleanup_passed": true,
+    "cloud_init_exit": 2,
+    "cloud_init_status": "done",
+    "cloud_init_extended_status": "degraded done",
+    "cloud_init_warnings": [
+      "Polling IMDS failed attempt 1 with exception: UrlError('404 Client Error: Not Found for url: http://169.254.169.254/metadata/reprovisiondata?api-version=2019-06-01')",
+      "Polling IMDS failed attempt 1 with exception: UrlError('404 Client Error: Not Found for url: http://169.254.169.254/metadata/reprovisiondata?api-version=2019-06-01')",
+      "Polling IMDS failed attempt 1 with exception: UrlError('404 Client Error: Not Found for url: http://169.254.169.254/metadata/reprovisiondata?api-version=2019-06-01')",
+      "Polling IMDS failed attempt 1 with exception: UrlError('404 Client Error: Not Found for url: http://169.254.169.254/metadata/reprovisiondata?api-version=2019-06-01')"
+    ],
+    "cpu": "x86_64",
+    "kernel": "7.0.0-1017-azure",
+    "python": "3.12.3",
+    "root": {
+      "source": "/dev/sda1",
+      "size": 65445814272,
+      "fstype": "ext4"
+    },
+    "data_mount": {
+      "source": "/dev/sdc1",
+      "size": 134681182208,
+      "fstype": "ext4",
+      "options": "rw,noatime"
+    },
+    "machine_id_sha256": "0c044e1c4b09468b90d0b70de1b424bdb14c69b7344df03351c9d09c2bb9bac8"
+  },
+  {
+    "node": 2,
+    "success": true,
+    "data_fsync_readback_and_directory_cleanup_passed": true,
+    "cloud_init_exit": 0,
+    "cloud_init_status": "done",
+    "cloud_init_extended_status": "done",
+    "cloud_init_warnings": [],
+    "cpu": "x86_64",
+    "kernel": "7.0.0-1017-azure",
+    "python": "3.12.3",
+    "root": {
+      "source": "/dev/sda1",
+      "size": 65445814272,
+      "fstype": "ext4"
+    },
+    "data_mount": {
+      "source": "/dev/sdc1",
+      "size": 134681182208,
+      "fstype": "ext4",
+      "options": "rw,noatime"
+    },
+    "machine_id_sha256": "08e89d55d3f185e16866c88b636c8b9729e45c27e04531ebedc6be6e2b598db2"
+  },
+  {
+    "node": 3,
+    "success": true,
+    "data_fsync_readback_and_directory_cleanup_passed": true,
+    "cloud_init_exit": 0,
+    "cloud_init_status": "done",
+    "cloud_init_extended_status": "done",
+    "cloud_init_warnings": [],
+    "cpu": "x86_64",
+    "kernel": "7.0.0-1017-azure",
+    "python": "3.12.3",
+    "root": {
+      "source": "/dev/sda1",
+      "size": 65445814272,
+      "fstype": "ext4"
+    },
+    "data_mount": {
+      "source": "/dev/sdc1",
+      "size": 134681182208,
+      "fstype": "ext4",
+      "options": "rw,noatime"
+    },
+    "machine_id_sha256": "a2d6b66d64ebc6d42e39eaca9d17f5d84e40d37e3c4160bda334db293362510f"
+  },
+  {
+    "node": 4,
+    "success": true,
+    "data_fsync_readback_and_directory_cleanup_passed": true,
+    "cloud_init_exit": 0,
+    "cloud_init_status": "done",
+    "cloud_init_extended_status": "done",
+    "cloud_init_warnings": [],
+    "cpu": "x86_64",
+    "kernel": "7.0.0-1017-azure",
+    "python": "3.12.3",
+    "root": {
+      "source": "/dev/sda1",
+      "size": 65445814272,
+      "fstype": "ext4"
+    },
+    "data_mount": {
+      "source": "/dev/sdc1",
+      "size": 134681182208,
+      "fstype": "ext4",
+      "options": "rw,noatime"
+    },
+    "machine_id_sha256": "02f3c04d0d7a33b3d6a4905d47788bf8080cf97433001b1764790c3d4b0c5861"
+  }
+]

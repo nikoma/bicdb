@@ -1,0 +1,26 @@
+{
+  "snapshot_utc": "2026-11-11T08:57:16.104087+00:00",
+  "root_go_utc": "2026-11-11T08:48:29.602907+00:00",
+  "cloud_model_capture_queries": 34,
+  "cloud_model_capture_successful": 34,
+  "resource_type_counts": {
+    "Microsoft.Network/virtualNetworks": 1,
+    "Microsoft.Network/networkSecurityGroups": 1,
+    "Microsoft.Network/publicIPAddresses": 1,
+    "Microsoft.Network/networkInterfaces": 5,
+    "Microsoft.Compute/virtualMachines": 5,
+    "Microsoft.Compute/disks": 10
+  },
+  "vm_count": 5,
+  "vcpus_total": 10,
+  "vm_size": "Standard_D2s_v3",
+  "location": "northeurope",
+  "watchdog_start_utc": "2026-11-11T11:22:51Z",
+  "hard_application_stop_utc": "2026-11-11T10:55:00Z",
+  "original_budget_total_usd": 25,
+  "new_eight_hour_window": false,
+  "public_endpoint": "one SSH jump public IP, admin IPv4 /32 only; no public BicDB/SQL port",
+  "implicit_outbound_access": false,
+  "published_release": false,
+  "production_qualified": false
+}

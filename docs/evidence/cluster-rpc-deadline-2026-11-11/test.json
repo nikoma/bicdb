@@ -1,0 +1,18 @@
+{
+  "command": [
+    "/tmp/bicdb-p0-io-evidence/deadline-tests",
+    "--nocapture"
+  ],
+  "exit_code": 0,
+  "interrupted": null,
+  "seconds": 0.25057102367281914,
+  "resource_samples": [
+    {
+      "seconds": 0.00041405949741601944,
+      "available_bytes": 26749710336
+    }
+  ],
+  "source_sha256": "d25ad1738112899ee7e265d6e6ff17c9bc8039a8b4dea7ef4a4997c742eabec3",
+  "scope": "isolated socket helper unit tests; frozen actual463 CancellationToken, no engine rebuild",
+  "physical_qualification": false
+}

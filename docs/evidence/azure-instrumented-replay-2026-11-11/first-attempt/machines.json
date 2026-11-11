@@ -1,0 +1,52 @@
+[
+  {
+    "machine_hash": "7a4e510314cb92ca04f143eee207daed296f71edcaed537d1487bb11e2622981",
+    "cpu_count": 2,
+    "kernel": "7.0.0-1017-azure",
+    "meminfo": [
+      "MemTotal:        8122984 kB",
+      "MemFree:         6914800 kB",
+      "MemAvailable:    7572952 kB"
+    ]
+  },
+  {
+    "machine_hash": "ec9b1b05c34fe4aee59f55a3890aba4d09a79880c80f3ca1707b34f9718947c5",
+    "cpu_count": 2,
+    "kernel": "7.0.0-1017-azure",
+    "meminfo": [
+      "MemTotal:        8122984 kB",
+      "MemFree:         6929520 kB",
+      "MemAvailable:    7588740 kB"
+    ]
+  },
+  {
+    "machine_hash": "71899aadd31d8b5da6fbb42d856df362f0dc5218f8deac59cc923725d4a18e75",
+    "cpu_count": 2,
+    "kernel": "7.0.0-1017-azure",
+    "meminfo": [
+      "MemTotal:        8122980 kB",
+      "MemFree:         6975572 kB",
+      "MemAvailable:    7595304 kB"
+    ]
+  },
+  {
+    "machine_hash": "2a1fcaf815c09572ee0ce74d027c71529432f969e72b513815cdaf28dc6b8a83",
+    "cpu_count": 2,
+    "kernel": "7.0.0-1017-azure",
+    "meminfo": [
+      "MemTotal:        8122984 kB",
+      "MemFree:         7375724 kB",
+      "MemAvailable:    7598040 kB"
+    ]
+  },
+  {
+    "machine_hash": "4a2c7f4fa1ba3aa06eec70caadefefc0a272fdebea46f1e56031119d7677f5b9",
+    "cpu_count": 2,
+    "kernel": "7.0.0-1017-azure",
+    "meminfo": [
+      "MemTotal:        8122984 kB",
+      "MemFree:         7399276 kB",
+      "MemAvailable:    7621664 kB"
+    ]
+  }
+]

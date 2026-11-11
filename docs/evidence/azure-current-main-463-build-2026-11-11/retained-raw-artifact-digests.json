@@ -1,0 +1,32 @@
+[
+  {
+    "private_path": "/tmp/bicdb-azure-artifact-463-evidence/build.log",
+    "bytes": 116454,
+    "sha256": "5c8c5678885cddb2ed6e2e9c9007d4f0fe38b87aff182e8cd67cafe0a8900a8d"
+  },
+  {
+    "private_path": "/tmp/bicdb-azure-artifact-463-evidence/resources.jsonl",
+    "bytes": 377686,
+    "sha256": "9d4416b293ca56939a0b9a0a03d7181731663082086d97d7db90d6211f7fd412"
+  },
+  {
+    "private_path": "/tmp/bicdb-azure-artifact-463-evidence/compiler-invocations.jsonl",
+    "bytes": 5963,
+    "sha256": "199b6f652360f2babcdb34139f19ae027fbf1060cba0d9109f5662f2b6bf282e"
+  },
+  {
+    "private_path": "/tmp/bicdb-azure-artifact-463-evidence/core-library.json",
+    "bytes": 741,
+    "sha256": "71b80b0867f5256ba467c8d7c9507ad23f95edc2acdb4f0fb44fe98310b7386a"
+  },
+  {
+    "private_path": "/tmp/bicdb-azure-artifact-463-evidence/preserved-old-core.json",
+    "bytes": 235,
+    "sha256": "bf84eaff251cb7c80c7fcedadf2f6a69b474c1a3f0118e04649e2d854fa6e791"
+  },
+  {
+    "private_path": "/tmp/bicdb-azure-artifact-463-evidence/core-compile-process.json",
+    "bytes": 101,
+    "sha256": "fff92bb185fd0cf6e54e0a1591630c7a562070cf8af265275f7aaa181dff0657"
+  }
+]

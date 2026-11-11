@@ -1,0 +1,4 @@
+
+thread 'slow_progress_does_not_extend_a_cluster_rpc_budget' (3011393) panicked at /tmp/bicdb-p0-recovery/crates/bicdb-core/tests/distribution_rpc_deadline.rs:78:5:
+a valid but slow-progress response exceeded the whole-request budget: Ok(())
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace

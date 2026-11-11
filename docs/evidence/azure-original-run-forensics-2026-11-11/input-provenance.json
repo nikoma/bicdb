@@ -1,0 +1,16 @@
+{
+  "original_run_inputs_sha256": {
+    "failed-growth-workload.json": "043bc9f84373c90e1153c06926f00096481f0a33f4f7ae114ef3b63fb409977e",
+    "post-failure-diagnosis/original-unverified-point-reads.private.json": "f9a2804b625e67a063705fca2e022183935df903c0d7ee86926c45ca7b619e5f",
+    "post-failure-diagnosis/convergence-observations.json": "e08e15807dcaa920031f8b7725d08355019c0c5391b55842339195f2b04bc999",
+    "post-failure-diagnosis/summary.json": "ae3cc47578e26cfcc63992b10dfcf60a480bfea4899b8689e6e2751368768acb",
+    "post-failure-diagnosis/all-ack-ledger-checks.private.json": "5d9be07768bab950583f3eb3d6c05a0572a089aa80693eb05f6b307ef09a5be3",
+    "diagnostic-databases.private/receipt.json": "31164afe461bc46331187590a1a348b5d2561561ed07e6b3affbec60e369dd32",
+    "growth/topology-4-1794375806545507994.json": "8afe678f5689522ba1c73213278718d9b1e820c2057ca8267fbeb09b20770d17",
+    "mid-growth-status.private.json": "babee8eae04d69f9d857be4e3a8d4f4549aea0f1ad90bebfc83387588edb41e2",
+    "post-failure-diagnosis/latest-topology.private.json": "645e6d87e4e7d9f27eee66dae9ccb46ced384e8edc7f40f207759b4690482561"
+  },
+  "projector_sha256": "c117d2ffda9280397956e1d9d9ac75412f5570398336180d0652e00813cdf927",
+  "method": "Read-only original controller files/tar members; no extraction, engine open, replay, VM operations, or new workload.",
+  "raw_originals_preserved": true
+}

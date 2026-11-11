@@ -2,7 +2,10 @@
 
 See the [2026-11-10 maturity audit](ha-horizontal-scaling-audit-2026-11-10.md)
 for source-scoped tests, missing transparent SQL integration, physical evidence
-limits, recovery blockers and the proposed independent 4→5-node experiment.
+limits and recovery blockers. The subsequent
+[Azure 4→5 results](azure-scale-out-results-2026-11-11.md) show real automatic
+movement, no demonstrated capacity gain, and a longer growth trial that failed
+with availability/verification errors. Production qualification remains open.
 
 See also the [relocation scheduling regression](relocation-scheduling-regression-2026-11-11.md)
 for a reproduced starvation defect, focused fix evidence, and remaining bounded-I/O
@@ -292,8 +295,14 @@ bicdb cluster rebalance /srv/bicdb --json
 bicdb cluster rebalance /srv/bicdb --apply
 ```
 
-The planner separately balances replica bytes, replica count, and leaders. It
-does not place new replicas on suspect, dead, draining, or decommissioned
+The default planner redistributes replicas by count and balances leader counts.
+Estimated range bytes rank movement candidates and contribute to capacity and
+in-flight limits; they do not provide an independent bytes-only imbalance trigger.
+At source 1.0.461-beta, the default host does not populate live per-range byte/QPS
+estimates or observed node used bytes. Zero replica-byte skew with zero estimates
+is not verified physical byte balance. See the
+[source and observed-input follow-up](distributed-placement-load-inputs-2026-11-11.md).
+The planner does not place new replicas on suspect, dead, draining, or decommissioned
 nodes. Per-node move counts and total bytes in flight are bounded. Active
 relocations fence a range from receiving a second concurrent move.
 

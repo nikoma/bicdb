@@ -1,0 +1,29 @@
+4-node capacity converged
+traffic phase: steady-4
+traffic phase: growth-4-to-5
+Traceback (most recent call last):
+  File "/tmp/bicdb-azure-run/long-comparison/scale-cluster.frozen.py", line 457, in <module>
+    if __name__ == '__main__': main()
+                               ^^^^^^
+  File "/tmp/bicdb-azure-run/long-comparison/scale-cluster.frozen.py", line 419, in main
+    monitored(pool, f'growth-{previous}-to-{size}', lambda: [add(host) for host in hosts[previous:size]])
+  File "/tmp/bicdb-azure-run/long-comparison/scale-cluster.frozen.py", line 391, in monitored
+    result = task.result()
+             ^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/concurrent/futures/_base.py", line 449, in result
+    return self.__get_result()
+           ^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/concurrent/futures/_base.py", line 401, in __get_result
+    raise self._exception
+  File "/usr/lib/python3.12/concurrent/futures/thread.py", line 58, in run
+    result = self.fn(*self.args, **self.kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/bicdb-azure-run/long-comparison/scale-cluster.frozen.py", line 373, in traffic
+    result = json.loads(hosts[0].command('cluster', 'events', 'workload', hosts[0].db,
+                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/bicdb-azure-run/long-comparison/scale-cluster.frozen.py", line 111, in command
+    raise RuntimeError(f"node {self.index}: {result['stderr'][-4000:]}\n{result['stdout'][-4000:]}")
+RuntimeError: node 0: Error: acknowledged event verification failed
+
+{"format":1,"workload":"immutable_events_append_read","run":"25d1dbd975814f4f9b0c5225b7658d2d","namespace":"scale-83da6383fbae4ba38d8d15f621d03cbb","concurrency":16,"payload_bytes":1024,"encoded_value_bytes":1079,"rpc_timeout_ms":5000,"traffic_seconds":927.503538774,"successful_operations":2746,"failed_operations":404,"successful_operations_per_second":2.9606356042907818,"write_latency":{"samples":1223,"p50_us":4862509,"p95_us":15487779,"p99_us":21462305,"max_us":29723000},"read_latency":{"samples":1523,"p50_us":120009,"p95_us":946799,"p99_us":1939600,"max_us":25536804},"acknowledged_writes":1223,"unverified_writes":["25d1dbd975814f4f9b0c5225b7658d2d-10-636","25d1dbd975814f4f9b0c5225b7658d2d-14-184"],"error_samples":["io error: Resource temporarily unavailable (os error 11)","cluster error: cluster node n4 rejected RPC cluster_data_operation_failed: cluster error: range r8 epoch 16 leader recovery is not complete; writes remain unavailable","cluster error: cluster node n4 rejected RPC cluster_data_operation_failed: cluster error: range r14 epoch 16 leader recovery is not complete; writes remain unavailable","io error: Resource temporarily unavailable (os error 11)","cluster error: no event cluster member is reachable","io error: Resource temporarily unavailable (os error 11)","io error: Resource temporarily unavailable (os error 11)","io error: Connection reset by peer (os error 104)","io error: Resource temporarily unavailable (os error 11)","cluster error: cluster node n4 rejected RPC cluster_data_operation_failed: cluster error: range r25 epoch 23 leader recovery is not complete; writes remain unavailable","cluster error: cluster node n3 rejected RPC cluster_data_operation_failed: cluster error: range r29 epoch 19 leader recovery is not complete; writes remain unavailable","io error: Resource temporarily unavailable (os error 11)","io error: Connection reset by peer (os error 104)","io error: Connection reset by peer (os error 104)","io error: Connection reset by peer (os error 104)","io error: Resource temporarily unavailable (os error 11)","io error: Connection reset by peer (os error 104)","io error: Connection reset by peer (os error 104)","io error: Connection reset by peer (os error 104)","io error: Connection reset by peer (os error 104)"],"verification_passed":false}
+

@@ -1,0 +1,72 @@
+[
+  {
+    "disk_index": 0,
+    "queried_at_utc": "2026-11-11T06:59:45.964938+00:00",
+    "exit_code": 3,
+    "error": "ERROR: (ResourceGroupNotFound) Resource group 'BICDB-SCALE-20261111-035251' could not be found.\nCode: ResourceGroupNotFound\nMessage: Resource group 'BICDB-SCALE-20261111-035251' could not be found.\n",
+    "data_status": "unavailable_not_zero"
+  },
+  {
+    "disk_index": 1,
+    "queried_at_utc": "2026-11-11T06:59:47.040562+00:00",
+    "exit_code": 3,
+    "error": "ERROR: (ResourceGroupNotFound) Resource group 'BICDB-SCALE-20261111-035251' could not be found.\nCode: ResourceGroupNotFound\nMessage: Resource group 'BICDB-SCALE-20261111-035251' could not be found.\n",
+    "data_status": "unavailable_not_zero"
+  },
+  {
+    "disk_index": 2,
+    "queried_at_utc": "2026-11-11T06:59:47.911356+00:00",
+    "exit_code": 3,
+    "error": "ERROR: (ResourceGroupNotFound) Resource group 'BICDB-SCALE-20261111-035251' could not be found.\nCode: ResourceGroupNotFound\nMessage: Resource group 'BICDB-SCALE-20261111-035251' could not be found.\n",
+    "data_status": "unavailable_not_zero"
+  },
+  {
+    "disk_index": 3,
+    "queried_at_utc": "2026-11-11T06:59:48.436339+00:00",
+    "exit_code": 3,
+    "error": "ERROR: (ResourceNotFound) The Resource 'Microsoft.Compute/disks/n1_disk2_90a82798d3404b5fbb690e7f0a8b8cc5' under resource group 'BICDB-SCALE-20261111-035251' was not found. For more details please go to https://aka.ms/ARMResourceNotFoundFix\nCode: ResourceNotFound\nMessage: The Resource 'Microsoft.Compute/disks/n1_disk2_90a82798d3404b5fbb690e7f0a8b8cc5' under resource group 'BICDB-SCALE-20261111-035251' was not found. For more details please go to https://aka.ms/ARMResourceNotFoundFix\n",
+    "data_status": "unavailable_not_zero"
+  },
+  {
+    "disk_index": 4,
+    "queried_at_utc": "2026-11-11T06:59:49.132326+00:00",
+    "exit_code": 3,
+    "error": "ERROR: (ResourceGroupNotFound) Resource group 'BICDB-SCALE-20261111-035251' could not be found.\nCode: ResourceGroupNotFound\nMessage: Resource group 'BICDB-SCALE-20261111-035251' could not be found.\n",
+    "data_status": "unavailable_not_zero"
+  },
+  {
+    "disk_index": 5,
+    "queried_at_utc": "2026-11-11T06:59:49.989913+00:00",
+    "exit_code": 3,
+    "error": "ERROR: (ResourceGroupNotFound) Resource group 'BICDB-SCALE-20261111-035251' could not be found.\nCode: ResourceGroupNotFound\nMessage: Resource group 'BICDB-SCALE-20261111-035251' could not be found.\n",
+    "data_status": "unavailable_not_zero"
+  },
+  {
+    "disk_index": 6,
+    "queried_at_utc": "2026-11-11T06:59:50.677841+00:00",
+    "exit_code": 3,
+    "error": "ERROR: (ResourceNotFound) The Resource 'Microsoft.Compute/disks/n3_OsDisk_1_7874993b71ee4ec2936af6e0ade41491' under resource group 'BICDB-SCALE-20261111-035251' was not found. For more details please go to https://aka.ms/ARMResourceNotFoundFix\nCode: ResourceNotFound\nMessage: The Resource 'Microsoft.Compute/disks/n3_OsDisk_1_7874993b71ee4ec2936af6e0ade41491' under resource group 'BICDB-SCALE-20261111-035251' was not found. For more details please go to https://aka.ms/ARMResourceNotFoundFix\n",
+    "data_status": "unavailable_not_zero"
+  },
+  {
+    "disk_index": 7,
+    "queried_at_utc": "2026-11-11T06:59:51.546518+00:00",
+    "exit_code": 3,
+    "error": "ERROR: (ResourceGroupNotFound) Resource group 'BICDB-SCALE-20261111-035251' could not be found.\nCode: ResourceGroupNotFound\nMessage: Resource group 'BICDB-SCALE-20261111-035251' could not be found.\n",
+    "data_status": "unavailable_not_zero"
+  },
+  {
+    "disk_index": 8,
+    "queried_at_utc": "2026-11-11T06:59:52.363463+00:00",
+    "exit_code": 3,
+    "error": "ERROR: (ResourceGroupNotFound) Resource group 'BICDB-SCALE-20261111-035251' could not be found.\nCode: ResourceGroupNotFound\nMessage: Resource group 'BICDB-SCALE-20261111-035251' could not be found.\n",
+    "data_status": "unavailable_not_zero"
+  },
+  {
+    "disk_index": 9,
+    "queried_at_utc": "2026-11-11T06:59:53.465347+00:00",
+    "exit_code": 3,
+    "error": "ERROR: (ResourceGroupNotFound) Resource group 'BICDB-SCALE-20261111-035251' could not be found.\nCode: ResourceGroupNotFound\nMessage: Resource group 'BICDB-SCALE-20261111-035251' could not be found.\n",
+    "data_status": "unavailable_not_zero"
+  }
+]

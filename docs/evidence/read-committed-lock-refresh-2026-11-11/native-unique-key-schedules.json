@@ -1,0 +1,48 @@
+{
+  "backend": "native_pg16",
+  "status": "passed",
+  "cases": [
+    {
+      "delete": false,
+      "old": [
+        [
+          10
+        ]
+      ],
+      "returned": [
+        [
+          21
+        ]
+      ],
+      "committed": [
+        [
+          20
+        ],
+        [
+          21
+        ]
+      ]
+    },
+    {
+      "delete": true,
+      "old": [
+        [
+          10
+        ]
+      ],
+      "returned": [
+        [
+          20
+        ]
+      ],
+      "committed": [
+        [
+          20
+        ]
+      ]
+    }
+  ],
+  "started_unix": 1794380663.5217423,
+  "private_schema_removed": true,
+  "finished_unix": 1794380663.6628563
+}

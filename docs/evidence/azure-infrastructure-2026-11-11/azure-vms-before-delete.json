@@ -1,0 +1,127 @@
+[
+  {
+    "data_disks": [
+      {
+        "caching": "None",
+        "size_gb": null,
+        "sku": "Premium_LRS"
+      }
+    ],
+    "image": {
+      "exactVersion": "24.04.202610250",
+      "offer": "ubuntu-24_04-lts",
+      "publisher": "Canonical",
+      "sku": "server",
+      "version": "latest"
+    },
+    "node": "n0",
+    "os_disk": {
+      "caching": "ReadWrite",
+      "size_gb": null,
+      "sku": "Premium_LRS"
+    },
+    "power_state": "VM running",
+    "provisioning_state": "Succeeded",
+    "size": "Standard_D2s_v3"
+  },
+  {
+    "data_disks": [
+      {
+        "caching": "None",
+        "size_gb": null,
+        "sku": "Premium_LRS"
+      }
+    ],
+    "image": {
+      "exactVersion": "24.04.202610250",
+      "offer": "ubuntu-24_04-lts",
+      "publisher": "Canonical",
+      "sku": "server",
+      "version": "latest"
+    },
+    "node": "n1",
+    "os_disk": {
+      "caching": "ReadWrite",
+      "size_gb": null,
+      "sku": "Premium_LRS"
+    },
+    "power_state": "VM running",
+    "provisioning_state": "Succeeded",
+    "size": "Standard_D2s_v3"
+  },
+  {
+    "data_disks": [
+      {
+        "caching": "None",
+        "size_gb": null,
+        "sku": "Premium_LRS"
+      }
+    ],
+    "image": {
+      "exactVersion": "24.04.202610250",
+      "offer": "ubuntu-24_04-lts",
+      "publisher": "Canonical",
+      "sku": "server",
+      "version": "latest"
+    },
+    "node": "n2",
+    "os_disk": {
+      "caching": "ReadWrite",
+      "size_gb": null,
+      "sku": "Premium_LRS"
+    },
+    "power_state": "VM running",
+    "provisioning_state": "Succeeded",
+    "size": "Standard_D2s_v3"
+  },
+  {
+    "data_disks": [
+      {
+        "caching": "None",
+        "size_gb": null,
+        "sku": "Premium_LRS"
+      }
+    ],
+    "image": {
+      "exactVersion": "24.04.202610250",
+      "offer": "ubuntu-24_04-lts",
+      "publisher": "Canonical",
+      "sku": "server",
+      "version": "latest"
+    },
+    "node": "n3",
+    "os_disk": {
+      "caching": "ReadWrite",
+      "size_gb": null,
+      "sku": "Premium_LRS"
+    },
+    "power_state": "VM running",
+    "provisioning_state": "Succeeded",
+    "size": "Standard_D2s_v3"
+  },
+  {
+    "data_disks": [
+      {
+        "caching": "None",
+        "size_gb": null,
+        "sku": "Premium_LRS"
+      }
+    ],
+    "image": {
+      "exactVersion": "24.04.202610250",
+      "offer": "ubuntu-24_04-lts",
+      "publisher": "Canonical",
+      "sku": "server",
+      "version": "latest"
+    },
+    "node": "n4",
+    "os_disk": {
+      "caching": "ReadWrite",
+      "size_gb": null,
+      "sku": "Premium_LRS"
+    },
+    "power_state": "VM running",
+    "provisioning_state": "Succeeded",
+    "size": "Standard_D2s_v3"
+  }
+]

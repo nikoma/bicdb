@@ -1,0 +1,182 @@
+{
+  "format": 1,
+  "publication_scope": "initial_completed_smoke_only",
+  "raw_sources_retained_privately": true,
+  "exports": [
+    {
+      "source_artifact": "growth/report.json",
+      "source_raw_sha256": "d45711b6555827ce852294311da0eb67a27cdb7d83d8d69685acf19bf18230e0",
+      "export_artifact": "growth-report.json",
+      "export_sha256": "63ebcfd98e12d7dd615e6e3aa786583c34746005d2354be72fcb65acdaddea16",
+      "transformation": "JSON normalization only; generated fixture/run identifiers and measurements unchanged; no network/account identity fields present"
+    },
+    {
+      "source_artifact": "external/report.json",
+      "source_raw_sha256": "70c20242c4e7e25369d95f78c563053d7bb586b8943f5207cead6ddab625dbd8",
+      "export_artifact": "external-report.json",
+      "export_sha256": "70c20242c4e7e25369d95f78c563053d7bb586b8943f5207cead6ddab625dbd8",
+      "transformation": "JSON normalization; measurements unchanged"
+    },
+    {
+      "source_artifact": "external-verify.stdout",
+      "source_raw_sha256": "37547f0c92b1e9825f9d664ae63baae9107a62a5f2e599b91acefe697913b27f",
+      "export_artifact": "external-verification.json",
+      "export_sha256": "f710a09e4c500823cc95812ac0ec7b63347329ca99cf65d55084f7f388356bb9",
+      "transformation": "JSON normalization; completed post-restart verification output unchanged"
+    },
+    {
+      "source_artifact": "execution-summary.json",
+      "source_raw_sha256": "4c7f7f6c648325388213e21233c19d667686d7998535e412145b5c7b9df95f4e",
+      "export_artifact": "execution-summary.json",
+      "export_sha256": "ee9be569bb5417ed5d3806f404a9f90dea480b55269f84f2a517b1dbdcf15180",
+      "transformation": "JSON normalization"
+    },
+    {
+      "source_artifact": "post-restart-formats.json",
+      "source_raw_sha256": "13829cba3bb4838b50f80740e3855fb893caa6d9b875874559788e2c9b0c3da9",
+      "export_artifact": "post-restart-formats.json",
+      "export_sha256": "573365c82b4487e24b2be0d6ac3b28b3d30ee15e8cc621484b9df6f9246cbd00",
+      "transformation": "JSON normalization"
+    },
+    {
+      "source_artifact": "growth/failure-5-ledger.json",
+      "source_raw_sha256": "ea1b8364f3a7f25983c91fab6f6cbd81b9baf7e69c44dd4a72013fadcd9b431c",
+      "export_artifact": "failure-5-ledger.json.gz",
+      "export_sha256": "bc1c4179cb027123f34a0db15bd30845050a5dd05be3f9e6d4285d12fd4affe3",
+      "transformation": "JSON normalization/gzip; original generated fixture keys unchanged"
+    },
+    {
+      "source_artifact": "growth/growth-4-to-5-ledger.json",
+      "source_raw_sha256": "e23e8de97967a20d3224bc6eea035c88bf1beb25058ce8ebd768922831c638d0",
+      "export_artifact": "growth-4-to-5-ledger.json.gz",
+      "export_sha256": "c7327e1c609374ed01e54141a4780b273660cb3121a9f55f2beab645083ebf2e",
+      "transformation": "JSON normalization/gzip; original generated fixture keys unchanged"
+    },
+    {
+      "source_artifact": "growth/recovered-5-ledger.json",
+      "source_raw_sha256": "b39b2149d2c595df5049c6d58765eb30ab7daed69e04c7c981aa57cccfd763d6",
+      "export_artifact": "recovered-5-ledger.json.gz",
+      "export_sha256": "fbc43dc897aba2d74d89a607c4c64543906caf41872575db4012cf3694376102",
+      "transformation": "JSON normalization/gzip; original generated fixture keys unchanged"
+    },
+    {
+      "source_artifact": "growth/steady-4-ledger.json",
+      "source_raw_sha256": "b6decae2c81ff3a04ef742c1a1af116791f55e404da749e4610a26bc2e4dd654",
+      "export_artifact": "steady-4-ledger.json.gz",
+      "export_sha256": "d7c987804ae5d0cb6b8694645f96c45072c5ef9ba6fbcd3eb414d9bec71bec70",
+      "transformation": "JSON normalization/gzip; original generated fixture keys unchanged"
+    },
+    {
+      "source_artifact": "growth/steady-5-ledger.json",
+      "source_raw_sha256": "efe69c5d63950c87dd3248483061108bf2f7c83f8d6d59b2155d739d473d2463",
+      "export_artifact": "steady-5-ledger.json.gz",
+      "export_sha256": "df920c8ead864714d824f08a31ff21446616413a36e1a5b2249e60894913f65e",
+      "transformation": "JSON normalization/gzip; original generated fixture keys unchanged"
+    },
+    {
+      "source_artifact": "external/ledger.jsonl",
+      "source_raw_sha256": "d016e948dd62e9d9b9051de017cd1e76e299617672d6eb5615fa6284b11b8f7e",
+      "export_artifact": "external-ledger.json.gz",
+      "export_sha256": "8fe843b6af3151f97a0ef10892b664b103d155fc957b2abea9574515822396ec",
+      "transformation": "Original JSON-lines records converted to JSON array/gzip; generated attempts, values, ACKs and timestamps unchanged"
+    },
+    {
+      "source_artifact": "growth/failure-5-resources.json",
+      "source_raw_sha256": "4021ff3610634a15e224fce3f42ba10cbf10437deb589990bb59ccf1893b60ec",
+      "export_artifact": "failure-5-resources.json.gz",
+      "export_sha256": "b8e04edb0329433f7d8dd07c9968c09f5b55cbec5849d2d4b0450657bfa70ce4",
+      "transformation": "Allowlisted time, running/PID and raw process stat/status/io; JSON normalization/gzip"
+    },
+    {
+      "source_artifact": "growth/growth-4-to-5-resources.json",
+      "source_raw_sha256": "fc07373846e3ebedd364dea9f92926b734f1669f94f191fd7932c7e8b539a2f6",
+      "export_artifact": "growth-4-to-5-resources.json.gz",
+      "export_sha256": "c4b03721d832314ce0c6513097957cc5b10a530b499efa5fb03018c43c205e21",
+      "transformation": "Allowlisted time, running/PID and raw process stat/status/io; JSON normalization/gzip"
+    },
+    {
+      "source_artifact": "growth/recovered-5-resources.json",
+      "source_raw_sha256": "2b46b65540cf16aa0580a83d42b2b3be6f8550d8a6e762637461f12ffbd18d52",
+      "export_artifact": "recovered-5-resources.json.gz",
+      "export_sha256": "c43a151312f349bc9f8b801561de68ff0f154be443acc763807f4ccf90471fb2",
+      "transformation": "Allowlisted time, running/PID and raw process stat/status/io; JSON normalization/gzip"
+    },
+    {
+      "source_artifact": "growth/steady-4-resources.json",
+      "source_raw_sha256": "c4b4188a49e6b6b969a032a2e494a3f3c3ba9afc0b7f401ed7cb7fca3452c2ed",
+      "export_artifact": "steady-4-resources.json.gz",
+      "export_sha256": "dab3157aee672a0c12c0c952f1527431d0b0f693a276b31223b3a8364e879b95",
+      "transformation": "Allowlisted time, running/PID and raw process stat/status/io; JSON normalization/gzip"
+    },
+    {
+      "source_artifact": "growth/steady-5-resources.json",
+      "source_raw_sha256": "424ec77e58a6296d87f836259bb2c5ee7dd338f7502a11438929d49f564c77f0",
+      "export_artifact": "steady-5-resources.json.gz",
+      "export_sha256": "eebeeff4b57645c4d4233cf5b3ec0a47f3737ef791fb87b8501d4b9d7c339b04",
+      "transformation": "Allowlisted time, running/PID and raw process stat/status/io; JSON normalization/gzip"
+    },
+    {
+      "source_artifact": "growth/topology-4-1794373222584957078.json",
+      "source_raw_sha256": "9b8cc306b22cf1ffc088ddf072a8f5abe7216663d5ef248e02def68b9cd1c4d6",
+      "export_artifact": "topology-4-1794373222584957078.json",
+      "export_sha256": "5fb653534bc13418cc2e5f95eba4fb6fbe72249c2feae4e8ecd5a27cbcedee50",
+      "transformation": "Allowlisted metrics, metadata consensus, range placement and completed relocation facts; omit node addresses/certificate identities and topology catalog details"
+    },
+    {
+      "source_artifact": "growth/topology-5-1794373382138058536.json",
+      "source_raw_sha256": "049c192ee453ecc6619c719e1a62e4944ad9086f70e5195649c8a2a5cc483e23",
+      "export_artifact": "topology-5-1794373382138058536.json",
+      "export_sha256": "f92fe185bb702316541f13a1ee013dd980cee0d85e7348b02c013373ba6149df",
+      "transformation": "Allowlisted metrics, metadata consensus, range placement and completed relocation facts; omit node addresses/certificate identities and topology catalog details"
+    },
+    {
+      "source_artifact": "growth/topology-5-1794373662849916481.json",
+      "source_raw_sha256": "c5b676b4715418e9f72c26fdbcbd1c018f3450c8481a768df42a005a32608aec",
+      "export_artifact": "topology-5-1794373662849916481.json",
+      "export_sha256": "f2c31d0b940e2f012a392d5969cc5d6cfec942445dba221d51bf489850e01bfd",
+      "transformation": "Allowlisted metrics, metadata consensus, range placement and completed relocation facts; omit node addresses/certificate identities and topology catalog details"
+    },
+    {
+      "source_artifact": "post-restart-topology.private.json",
+      "source_raw_sha256": "48dfc54101d148f0eeb07188dbede8cf5fd1638cdbdc96d3d98d02d96ee1a3b7",
+      "export_artifact": "post-restart-convergence.json",
+      "export_sha256": "59169c2262ece9687dc2c5dd9eb5fc2fe1777bb7c09c11cc3f64bf3970a325ff",
+      "transformation": "Allowlisted converged metrics/consensus only; omit node endpoint/certificate identities"
+    },
+    {
+      "source_artifact": "node-five-user-data-proof.private.json",
+      "source_raw_sha256": "b72f87ab36c940425c6fe20cef920e5ac0d76e918e4fb78eb071e71482fa8020",
+      "export_artifact": "node-five-user-data-proof.json",
+      "export_sha256": "77a1c79f00300e8f2ec0831b9706524e65440eef67ca01eb66c5f59a7ac42ae8",
+      "transformation": "Only prejoin candidate count and five sampled payload/hash/route proofs; remove endpoint addresses and later relocation history"
+    },
+    {
+      "source_artifact": "node-storage-4.private.json",
+      "source_raw_sha256": "c840b08100555e03fa10fd7a9bce99d10e5e676a35ce56c61122efa16503e383",
+      "export_artifact": "node-storage-4.json",
+      "export_sha256": "bc5d0539b1cedc0cad3e9f621549e27fdd2f3e54f0ba5968360026dba2f92f48",
+      "transformation": "Allowlisted observed format, engine env, guest software/CPU/image, mount/disk and numeric database footprint; omit database directory paths"
+    },
+    {
+      "source_artifact": "node-storage-5.private.json",
+      "source_raw_sha256": "ee1499fe175aee7fce0a116813dcee5913d3c22498954784c75d7dd49558f91a",
+      "export_artifact": "node-storage-5.json",
+      "export_sha256": "c96c7c5467767d98d347ab68d97cf62c513b5c84339e0aca147c55b22d780607",
+      "transformation": "Allowlisted observed format, engine env, guest software/CPU/image, mount/disk and numeric database footprint; omit database directory paths"
+    },
+    {
+      "source_artifact": "operational-helper-hashes.json",
+      "source_raw_sha256": "1f476c8c8efc87a0aff8bb285396e9261a957dd9329fd09695b6043a24912aca",
+      "export_artifact": "operational-helper-hashes.json",
+      "export_sha256": "e6db9effe181c710d5be7b266a991a6db7afdd19524051a93270bc659fd72856",
+      "transformation": "JSON normalization; retain post-run hash/mtime scope including absent launch-time digest flags"
+    },
+    {
+      "source_artifact": "post-restart-progress.private.json",
+      "source_raw_sha256": "7a80cdb6f42d07a49f116fffbd8a7facaae05e68a4d8f3a137b250761a96c761",
+      "export_artifact": "post-restart-intermediate.json",
+      "export_sha256": "8c1ea9bd8a841d1749356e7bebb4b91930348642edacfe9ec0d99057884972c5",
+      "transformation": "Allowlisted intermediate metrics/consensus only; omit endpoint/certificate identities"
+    }
+  ]
+}

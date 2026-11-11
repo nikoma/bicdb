@@ -1,0 +1,6 @@
+{
+  "unix_ns": 1794379573999379397,
+  "helper_sha256": "55da441213405206fcbb326cc43457bb2e454c17ab98f6c542619f28bc18bb3f",
+  "phase": "after bounded ACK checks and exact-owned cleanup; classification overlapped cleanup, no new restart",
+  "original_archives_unchanged": true
+}

@@ -1,0 +1,21 @@
+{
+  "queries_performed_after_original_resource_deletion": true,
+  "original_azure_metric_time_series_retrieved": false,
+  "original_metrics_status": "unavailable_through_queried_deleted_resource_APIs_not_zero",
+  "direct_rest_resources_queried": 15,
+  "resource_types": {
+    "virtual_machines": 5,
+    "managed_disks": 10
+  },
+  "activity_log_events_retained_privately": 173,
+  "original_disk_resource_ids_recovered_privately": 10,
+  "original_creation_responses_recovered": {
+    "vm": 5,
+    "disk": 10,
+    "nic": 5
+  },
+  "original_effective_runtime_iops_bandwidth_latency_throttle_burst_credits": "not_retained_or_retrieved",
+  "new_repro_azure_allocated": false,
+  "new_Microsoft_Insights_provider_state": "Registered",
+  "paid_diagnostic_settings_or_agents_created": false
+}

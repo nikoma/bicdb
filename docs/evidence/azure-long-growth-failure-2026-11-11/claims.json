@@ -1,0 +1,30 @@
+{
+  "format": 1,
+  "runtime_version": "1.0.461-beta",
+  "source_commit": "b05385d4b033edf0db03f3eccf4bdd86f7c8eddb",
+  "native_trial_passed": false,
+  "production_qualified": false,
+  "capacity_gain_demonstrated": false,
+  "completed_before_after_comparison": false,
+  "all_known_acks_verified_after_diagnostic_restart": false,
+  "known_acknowledgments": 5027,
+  "original_unverified_keys": 2,
+  "original_unverified_keys_matched_from_member_contexts": 10,
+  "diagnostic_policy_reconverged_within_300_seconds": false,
+  "new_application_event_writes_during_diagnosis": false,
+  "physical_failure_domains_verified": false,
+  "native_failure_records": {
+    "failed_operation_count": 404,
+    "retained_error_samples": 20,
+    "all_failed_attempts_logged": false
+  },
+  "diagnostic_known_acks_matched": 4898,
+  "diagnostic_combined_predicate_unverified": 129,
+  "cleanup_confounded_classification_used_for_availability_claims": false,
+  "unexecuted_native_phases": [
+    "steady-5",
+    "failure-5",
+    "recovered-5",
+    "final post-recovery all-ledger verification"
+  ]
+}

@@ -1,0 +1,240 @@
+{
+  "prejoin_ack_candidates_led_by_n4": 14,
+  "sampled_user_records": [
+    {
+      "operation_id": "673843e045344fabad9e1fd32aae6c34-0",
+      "payload_matches": true,
+      "payload_sha256": "c7e855f4e240436604f9490f0f10c1f075fb0f9b990b5ae6b0a7f8304d6fb06a",
+      "route_after": {
+        "cluster_id": "scale-a7103e2d52164d69baa04bb4b855bef9",
+        "hash_version": 1,
+        "protocol_version": 1,
+        "scope": {
+          "key": "scale-a7103e2d52164d69baa04bb4b855bef9/673843e045344fabad9e1fd32aae6c34-0",
+          "namespace": "__bic_cluster_events",
+          "scope": "point",
+          "token": 2302625312316122917
+        },
+        "targets": [
+          {
+            "end_token": 2305843009213693952,
+            "leader_node": "n4",
+            "range_epoch": 28,
+            "range_id": 8,
+            "start_token": 2017612633061982208
+          }
+        ],
+        "topology_generation": 8906
+      },
+      "route_before": {
+        "cluster_id": "scale-a7103e2d52164d69baa04bb4b855bef9",
+        "hash_version": 1,
+        "protocol_version": 1,
+        "scope": {
+          "key": "scale-a7103e2d52164d69baa04bb4b855bef9/673843e045344fabad9e1fd32aae6c34-0",
+          "namespace": "__bic_cluster_events",
+          "scope": "point",
+          "token": 2302625312316122917
+        },
+        "targets": [
+          {
+            "end_token": 2305843009213693952,
+            "leader_node": "n4",
+            "range_epoch": 28,
+            "range_id": 8,
+            "start_token": 2017612633061982208
+          }
+        ],
+        "topology_generation": 8876
+      }
+    },
+    {
+      "operation_id": "673843e045344fabad9e1fd32aae6c34-1",
+      "payload_matches": true,
+      "payload_sha256": "4922dbfe2f018262d66b9f89a9fdba2224b52bc34135668e8ab99fdccfdfe409",
+      "route_after": {
+        "cluster_id": "scale-a7103e2d52164d69baa04bb4b855bef9",
+        "hash_version": 1,
+        "protocol_version": 1,
+        "scope": {
+          "key": "scale-a7103e2d52164d69baa04bb4b855bef9/673843e045344fabad9e1fd32aae6c34-1",
+          "namespace": "__bic_cluster_events",
+          "scope": "point",
+          "token": 2212978278470573042
+        },
+        "targets": [
+          {
+            "end_token": 2305843009213693952,
+            "leader_node": "n4",
+            "range_epoch": 28,
+            "range_id": 8,
+            "start_token": 2017612633061982208
+          }
+        ],
+        "topology_generation": 8946
+      },
+      "route_before": {
+        "cluster_id": "scale-a7103e2d52164d69baa04bb4b855bef9",
+        "hash_version": 1,
+        "protocol_version": 1,
+        "scope": {
+          "key": "scale-a7103e2d52164d69baa04bb4b855bef9/673843e045344fabad9e1fd32aae6c34-1",
+          "namespace": "__bic_cluster_events",
+          "scope": "point",
+          "token": 2212978278470573042
+        },
+        "targets": [
+          {
+            "end_token": 2305843009213693952,
+            "leader_node": "n4",
+            "range_epoch": 28,
+            "range_id": 8,
+            "start_token": 2017612633061982208
+          }
+        ],
+        "topology_generation": 8921
+      }
+    },
+    {
+      "operation_id": "673843e045344fabad9e1fd32aae6c34-3",
+      "payload_matches": true,
+      "payload_sha256": "d38614ac58d63ae49809360ed19d8a11b440a16f91862aae3d05b1293fc2045f",
+      "route_after": {
+        "cluster_id": "scale-a7103e2d52164d69baa04bb4b855bef9",
+        "hash_version": 1,
+        "protocol_version": 1,
+        "scope": {
+          "key": "scale-a7103e2d52164d69baa04bb4b855bef9/673843e045344fabad9e1fd32aae6c34-3",
+          "namespace": "__bic_cluster_events",
+          "scope": "point",
+          "token": 4946209948281028920
+        },
+        "targets": [
+          {
+            "end_token": 5188146770730811392,
+            "leader_node": "n4",
+            "range_epoch": 23,
+            "range_id": 18,
+            "start_token": 4899916394579099648
+          }
+        ],
+        "topology_generation": 8986
+      },
+      "route_before": {
+        "cluster_id": "scale-a7103e2d52164d69baa04bb4b855bef9",
+        "hash_version": 1,
+        "protocol_version": 1,
+        "scope": {
+          "key": "scale-a7103e2d52164d69baa04bb4b855bef9/673843e045344fabad9e1fd32aae6c34-3",
+          "namespace": "__bic_cluster_events",
+          "scope": "point",
+          "token": 4946209948281028920
+        },
+        "targets": [
+          {
+            "end_token": 5188146770730811392,
+            "leader_node": "n4",
+            "range_epoch": 23,
+            "range_id": 18,
+            "start_token": 4899916394579099648
+          }
+        ],
+        "topology_generation": 8961
+      }
+    },
+    {
+      "operation_id": "673843e045344fabad9e1fd32aae6c34-7",
+      "payload_matches": true,
+      "payload_sha256": "7d0fa57682ceca9be1d60bbd2ae24b391cf48d9b789d60b1f7c90f0fa9427a73",
+      "route_after": {
+        "cluster_id": "scale-a7103e2d52164d69baa04bb4b855bef9",
+        "hash_version": 1,
+        "protocol_version": 1,
+        "scope": {
+          "key": "scale-a7103e2d52164d69baa04bb4b855bef9/673843e045344fabad9e1fd32aae6c34-7",
+          "namespace": "__bic_cluster_events",
+          "scope": "point",
+          "token": 2043166410954811550
+        },
+        "targets": [
+          {
+            "end_token": 2305843009213693952,
+            "leader_node": "n4",
+            "range_epoch": 28,
+            "range_id": 8,
+            "start_token": 2017612633061982208
+          }
+        ],
+        "topology_generation": 9026
+      },
+      "route_before": {
+        "cluster_id": "scale-a7103e2d52164d69baa04bb4b855bef9",
+        "hash_version": 1,
+        "protocol_version": 1,
+        "scope": {
+          "key": "scale-a7103e2d52164d69baa04bb4b855bef9/673843e045344fabad9e1fd32aae6c34-7",
+          "namespace": "__bic_cluster_events",
+          "scope": "point",
+          "token": 2043166410954811550
+        },
+        "targets": [
+          {
+            "end_token": 2305843009213693952,
+            "leader_node": "n4",
+            "range_epoch": 28,
+            "range_id": 8,
+            "start_token": 2017612633061982208
+          }
+        ],
+        "topology_generation": 8996
+      }
+    },
+    {
+      "operation_id": "673843e045344fabad9e1fd32aae6c34-12",
+      "payload_matches": true,
+      "payload_sha256": "d2bfa7565fd853e30a1f8a9d5769eefd856cf0031210263603b73fe3c499793b",
+      "route_after": {
+        "cluster_id": "scale-a7103e2d52164d69baa04bb4b855bef9",
+        "hash_version": 1,
+        "protocol_version": 1,
+        "scope": {
+          "key": "scale-a7103e2d52164d69baa04bb4b855bef9/673843e045344fabad9e1fd32aae6c34-12",
+          "namespace": "__bic_cluster_events",
+          "scope": "point",
+          "token": 74292053784872866
+        },
+        "targets": [
+          {
+            "end_token": 288230376151711744,
+            "leader_node": "n4",
+            "range_epoch": 30,
+            "range_id": 1,
+            "start_token": 0
+          }
+        ],
+        "topology_generation": 9066
+      },
+      "route_before": {
+        "cluster_id": "scale-a7103e2d52164d69baa04bb4b855bef9",
+        "hash_version": 1,
+        "protocol_version": 1,
+        "scope": {
+          "key": "scale-a7103e2d52164d69baa04bb4b855bef9/673843e045344fabad9e1fd32aae6c34-12",
+          "namespace": "__bic_cluster_events",
+          "scope": "point",
+          "token": 74292053784872866
+        },
+        "targets": [
+          {
+            "end_token": 288230376151711744,
+            "leader_node": "n4",
+            "range_epoch": 30,
+            "range_id": 1,
+            "start_token": 0
+          }
+        ],
+        "topology_generation": 9041
+      }
+    }
+  ]
+}

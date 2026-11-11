@@ -5,7 +5,10 @@ unchecked item is not a BicDB capability and must not be described as one.
 Checked planning/router/protocol-boundary items do not establish a general
 distributed SQL executor or production qualification. The
 [2026-11-10 audit](ha-horizontal-scaling-audit-2026-11-10.md) traces those
-distinctions to implementation, tests and retained hardware evidence.
+distinctions to implementation, tests and retained hardware evidence. The
+[subsequent Azure VM experiment](azure-scale-out-results-2026-11-11.md) observed
+automatic data/leader movement but did not pass capacity or fault-safe rebalance
+qualification; no Phase-9 checkbox is closed by that exploratory trial.
 
 The goal is a cluster where an operator joins a server and BicDB automatically
 places, replicates, moves, and balances data without application-level shard
@@ -85,7 +88,16 @@ split/merge, including `0` and `u64::MAX`.
 ## Phase 3 — Replica and leader balancing
 
 - [x] Produce deterministic replica-placement plans from topology and capacity.
-- [x] Balance bytes, replica count, and leaders separately.
+- [x] Balance replica counts and leader counts; rank range-move candidates by
+  estimated bytes and enforce projected capacity/in-flight byte limits.
+- [ ] Populate authoritative live per-range byte/QPS and node-used-byte inputs
+  in the default host, expose unknown/stale statistics, and trigger byte balancing
+  even when replica counts are equal. The earlier checked byte-balance wording
+  overstated the default integration: source 1.0.461-beta has a load-update API
+  but no shipped caller, and the redistribution trigger is count-based. See the
+  [source/input follow-up](distributed-placement-load-inputs-2026-11-11.md).
+- [ ] Implement and qualify traffic-aware leader/hotspot placement. A stored QPS
+  field used by anti-entropy is not a QPS-based placement algorithm.
 - [x] Exclude dead, decommissioned, and draining nodes from new placement.
 - [x] Prefer failure-domain diversity before load equality.
 - [x] Limit concurrent moves per node and total bytes in flight.

@@ -1,0 +1,193 @@
+{
+  "backend": "native_pg16",
+  "status": "passed",
+  "cases": [
+    {
+      "key_type": "INT",
+      "lock": null,
+      "old": [
+        [
+          10
+        ]
+      ],
+      "locked": null,
+      "updated": [
+        [
+          21
+        ]
+      ],
+      "committed": [
+        [
+          21
+        ]
+      ]
+    },
+    {
+      "key_type": "INT",
+      "lock": "FOR UPDATE",
+      "old": [
+        [
+          10
+        ]
+      ],
+      "locked": [
+        [
+          20
+        ]
+      ],
+      "updated": [
+        [
+          21
+        ]
+      ],
+      "committed": [
+        [
+          21
+        ]
+      ]
+    },
+    {
+      "key_type": "INT",
+      "lock": "FOR UPDATE NOWAIT",
+      "old": [
+        [
+          10
+        ]
+      ],
+      "locked": [
+        [
+          20
+        ]
+      ],
+      "updated": [
+        [
+          21
+        ]
+      ],
+      "committed": [
+        [
+          21
+        ]
+      ]
+    },
+    {
+      "key_type": "INT",
+      "lock": "FOR UPDATE SKIP LOCKED",
+      "old": [
+        [
+          10
+        ]
+      ],
+      "locked": [
+        [
+          20
+        ]
+      ],
+      "updated": [
+        [
+          21
+        ]
+      ],
+      "committed": [
+        [
+          21
+        ]
+      ]
+    },
+    {
+      "key_type": "NUMERIC",
+      "lock": null,
+      "old": [
+        [
+          10
+        ]
+      ],
+      "locked": null,
+      "updated": [
+        [
+          21
+        ]
+      ],
+      "committed": [
+        [
+          21
+        ]
+      ]
+    },
+    {
+      "key_type": "NUMERIC",
+      "lock": "FOR UPDATE",
+      "old": [
+        [
+          10
+        ]
+      ],
+      "locked": [
+        [
+          20
+        ]
+      ],
+      "updated": [
+        [
+          21
+        ]
+      ],
+      "committed": [
+        [
+          21
+        ]
+      ]
+    },
+    {
+      "key_type": "NUMERIC",
+      "lock": "FOR UPDATE NOWAIT",
+      "old": [
+        [
+          10
+        ]
+      ],
+      "locked": [
+        [
+          20
+        ]
+      ],
+      "updated": [
+        [
+          21
+        ]
+      ],
+      "committed": [
+        [
+          21
+        ]
+      ]
+    },
+    {
+      "key_type": "NUMERIC",
+      "lock": "FOR UPDATE SKIP LOCKED",
+      "old": [
+        [
+          10
+        ]
+      ],
+      "locked": [
+        [
+          20
+        ]
+      ],
+      "updated": [
+        [
+          21
+        ]
+      ],
+      "committed": [
+        [
+          21
+        ]
+      ]
+    }
+  ],
+  "started_unix": 1794379116.3565521,
+  "private_schema_removed": true,
+  "finished_unix": 1794379116.6551492
+}

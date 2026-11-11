@@ -7,7 +7,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -20,6 +20,7 @@ pub const CLUSTER_METADATA_CONSENSUS_FORMAT_VERSION: u32 = 1;
 pub const METADATA_RESTORE_ACTIVATION_FORMAT_VERSION: u32 = 1;
 pub const DEFAULT_CLUSTER_METADATA_CONSENSUS_STATE: &str = "cluster-metadata-consensus.json";
 const MAX_RESTORE_ACTIVATION_ACKNOWLEDGEMENTS: u64 = 100_000;
+pub const METADATA_READ_AUTHORITY_PROTOCOL_VERSION: u32 = 1;
 
 fn metadata_error(message: impl Into<String>) -> BicDbError {
     BicDbError::Cluster(format!("metadata consensus: {}", message.into()))
@@ -143,6 +144,205 @@ pub struct MetadataAppendResponse {
     pub success: bool,
     pub match_index: u64,
     pub conflict_index: u64,
+}
+
+/// A new, request-correlated authority round. This is not a cached heartbeat.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct MetadataReadProbeRequest {
+    pub protocol_version: u32,
+    pub context_id: Uuid,
+    pub read_request_id: Uuid,
+    pub read_index: u64,
+    pub append: MetadataAppendRequest,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct MetadataReadProbeResponse {
+    pub protocol_version: u32,
+    pub context_id: Uuid,
+    pub read_request_id: Uuid,
+    pub read_index: u64,
+    pub append: MetadataAppendResponse,
+    pub applied_index: u64,
+}
+
+/// Evidence supplied only by the authenticated cluster transport. Incarnation
+/// is the transport's expected member incarnation, not a new cryptographic
+/// attestation of a remote process. Existing unique-member/fencing assumptions
+/// still apply.
+#[derive(Debug)]
+pub struct MetadataReadParticipant {
+    node_id: ClusterNodeId,
+    member_incarnation: u64,
+    certificate_sha256: Option<String>,
+    plaintext_loopback: bool,
+}
+
+impl MetadataReadParticipant {
+    pub(crate) fn from_transport(
+        node_id: ClusterNodeId,
+        member_incarnation: u64,
+        certificate_sha256: Option<String>,
+        plaintext_loopback: bool,
+    ) -> Self {
+        Self {
+            node_id,
+            member_incarnation,
+            certificate_sha256,
+            plaintext_loopback,
+        }
+    }
+}
+
+/// Not deserializable or publicly constructible: a bare response is not an
+/// authenticated vote. The transport validates TLS/envelope identity first.
+#[derive(Debug)]
+pub struct MetadataReadAck {
+    participant: MetadataReadParticipant,
+    response: MetadataReadProbeResponse,
+}
+
+impl MetadataReadAck {
+    pub fn voter_id(&self) -> &ClusterNodeId {
+        &self.participant.node_id
+    }
+    pub fn conflict_index(&self) -> Option<u64> {
+        (!self.response.append.success).then_some(self.response.append.conflict_index)
+    }
+    pub(crate) fn from_transport(
+        request: &MetadataReadProbeRequest,
+        destination: &ClusterNodeId,
+        participant: MetadataReadParticipant,
+        response: MetadataReadProbeResponse,
+    ) -> Result<Self> {
+        if request.protocol_version != METADATA_READ_AUTHORITY_PROTOCOL_VERSION
+            || response.protocol_version != METADATA_READ_AUTHORITY_PROTOCOL_VERSION
+            || response.context_id != request.context_id
+            || response.read_request_id != request.read_request_id
+            || response.read_index != request.read_index
+            || participant.node_id != *destination
+            || response.append.node_id != *destination
+            || response.append.cluster_id != request.append.cluster_id
+        {
+            return Err(metadata_error(
+                "read probe response correlation/identity mismatch",
+            ));
+        }
+        Ok(Self {
+            participant,
+            response,
+        })
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct MetadataReadVoterIdentity {
+    incarnation: u64,
+    active_certificate: Option<String>,
+    pending_certificate: Option<String>,
+}
+
+impl MetadataReadVoterIdentity {
+    fn accepts(&self, participant: &MetadataReadParticipant) -> bool {
+        if self.incarnation != participant.member_incarnation {
+            return false;
+        }
+        match self.active_certificate.as_deref() {
+            Some(active) => {
+                participant.certificate_sha256.as_deref() == Some(active)
+                    || self.pending_certificate.as_ref().is_some_and(|pending| {
+                        participant.certificate_sha256.as_ref() == Some(pending)
+                    })
+            }
+            None => participant.certificate_sha256.is_some() || participant.plaintext_loopback,
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct MetadataReadQuorums {
+    old: BTreeMap<ClusterNodeId, MetadataReadVoterIdentity>,
+    new: BTreeMap<ClusterNodeId, MetadataReadVoterIdentity>,
+}
+
+/// One-shot, monotonic-deadline context. No historical match indexes are used.
+/// It is deliberately neither Clone nor Serialize and is consumed by finish.
+#[derive(Debug)]
+pub struct MetadataReadContext {
+    context_id: Uuid,
+    read_request_id: Uuid,
+    leader_id: ClusterNodeId,
+    term: u64,
+    read_index: u64,
+    deadline: Instant,
+    quorums: MetadataReadQuorums,
+    fresh_old: BTreeSet<ClusterNodeId>,
+    fresh_new: BTreeSet<ClusterNodeId>,
+    failed: bool,
+}
+
+impl MetadataReadContext {
+    pub fn context_id(&self) -> Uuid {
+        self.context_id
+    }
+    pub fn read_request_id(&self) -> Uuid {
+        self.read_request_id
+    }
+    pub fn read_index(&self) -> u64 {
+        self.read_index
+    }
+    pub fn term(&self) -> u64 {
+        self.term
+    }
+    pub fn remote_voters(&self) -> BTreeSet<ClusterNodeId> {
+        self.quorums
+            .old
+            .keys()
+            .chain(self.quorums.new.keys())
+            .filter(|node| **node != self.leader_id)
+            .cloned()
+            .collect()
+    }
+}
+
+/// A completed metadata-only read-index proof, not a range read permit or
+/// reusable leadership lease. Strong row reads still need certified range
+/// application/image evidence and final authority revalidation.
+#[derive(Debug)]
+pub struct MetadataReadAuthority {
+    context_id: Uuid,
+    read_request_id: Uuid,
+    term: u64,
+    read_index: u64,
+    applied_index: u64,
+    topology: ClusterTopology,
+    restore_activation: Option<MetadataRestoreActivation>,
+}
+
+impl MetadataReadAuthority {
+    pub fn context_id(&self) -> Uuid {
+        self.context_id
+    }
+    pub fn read_request_id(&self) -> Uuid {
+        self.read_request_id
+    }
+    pub fn term(&self) -> u64 {
+        self.term
+    }
+    pub fn read_index(&self) -> u64 {
+        self.read_index
+    }
+    pub fn applied_index(&self) -> u64 {
+        self.applied_index
+    }
+    pub fn topology(&self) -> &ClusterTopology {
+        &self.topology
+    }
+    pub fn restore_activation(&self) -> Option<&MetadataRestoreActivation> {
+        self.restore_activation.as_ref()
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -298,6 +498,285 @@ impl MetadataConsensusStore {
 
     pub fn last_leader_contact_ms(&self) -> u64 {
         self.last_leader_contact_ms
+    }
+
+    fn read_quorums(&self) -> Result<MetadataReadQuorums> {
+        fn identities(
+            topology: &ClusterTopology,
+        ) -> Result<BTreeMap<ClusterNodeId, MetadataReadVoterIdentity>> {
+            topology_voters(topology)
+                .into_iter()
+                .map(|id| {
+                    let node = topology
+                        .nodes
+                        .get(&id)
+                        .ok_or_else(|| metadata_error("read quorum voter missing from topology"))?;
+                    Ok((
+                        id,
+                        MetadataReadVoterIdentity {
+                            incarnation: node.incarnation,
+                            active_certificate: node.tls_certificate_sha256.clone(),
+                            pending_certificate: node.pending_tls_certificate_sha256.clone(),
+                        },
+                    ))
+                })
+                .collect()
+        }
+        let old = identities(&self.state.committed_topology)?;
+        let new = identities(
+            self.state
+                .log
+                .last()
+                .map(|entry| &entry.topology)
+                .unwrap_or(&self.state.committed_topology),
+        )?;
+        if old.is_empty() || new.is_empty() {
+            return Err(metadata_error(
+                "read authority requires nonempty voter configurations",
+            ));
+        }
+        Ok(MetadataReadQuorums { old, new })
+    }
+
+    fn validate_read_context(&self, context: &MetadataReadContext) -> Result<()> {
+        if context.failed || Instant::now() >= context.deadline {
+            return Err(metadata_error("read authority context failed or expired"));
+        }
+        if self.state.role != MetadataConsensusRole::Leader
+            || self.state.node_id != context.leader_id
+            || self.state.current_term != context.term
+            || self.state.commit_index < context.read_index
+        {
+            return Err(metadata_error(
+                "read authority leader/term/applied floor changed",
+            ));
+        }
+        if self.read_quorums()? != context.quorums {
+            return Err(metadata_error(
+                "read authority voter configuration changed; start a fresh context",
+            ));
+        }
+        Ok(())
+    }
+
+    /// Begin one metadata-only linearizable read-index round. A historical
+    /// quorum or an uncommitted current-term leadership barrier cannot qualify.
+    pub fn begin_read_authority(
+        &self,
+        read_request_id: Uuid,
+        budget: Duration,
+        local: &MetadataReadParticipant,
+    ) -> Result<MetadataReadContext> {
+        if read_request_id.is_nil() || budget.is_zero() || budget > Duration::from_secs(300) {
+            return Err(metadata_error("read authority request/budget is invalid"));
+        }
+        if self.state.role != MetadataConsensusRole::Leader
+            || self.state.current_term == 0
+            || self.state.commit_index == 0
+            || self.term_at(self.state.commit_index) != Some(self.state.current_term)
+        {
+            return Err(metadata_error(
+                "read authority requires a committed current-term leadership anchor",
+            ));
+        }
+        if local.node_id != self.state.node_id {
+            return Err(metadata_error(
+                "read authority local transport identity differs from leader",
+            ));
+        }
+        let quorums = self.read_quorums()?;
+        let mut fresh_old = BTreeSet::new();
+        let mut fresh_new = BTreeSet::new();
+        if quorums
+            .old
+            .get(&local.node_id)
+            .is_some_and(|identity| identity.accepts(local))
+        {
+            fresh_old.insert(local.node_id.clone());
+        }
+        if quorums
+            .new
+            .get(&local.node_id)
+            .is_some_and(|identity| identity.accepts(local))
+        {
+            fresh_new.insert(local.node_id.clone());
+        }
+        if fresh_old.is_empty() && fresh_new.is_empty() {
+            return Err(metadata_error(
+                "read authority local incarnation/certificate is not a voter",
+            ));
+        }
+        Ok(MetadataReadContext {
+            context_id: Uuid::now_v7(),
+            read_request_id,
+            leader_id: self.state.node_id.clone(),
+            term: self.state.current_term,
+            read_index: self.state.commit_index,
+            deadline: Instant::now() + budget,
+            quorums,
+            fresh_old,
+            fresh_new,
+            failed: false,
+        })
+    }
+
+    pub fn read_authority_probe(
+        &self,
+        context: &MetadataReadContext,
+        destination: &ClusterNodeId,
+        next_index: u64,
+        max_entries: usize,
+    ) -> Result<MetadataReadProbeRequest> {
+        self.validate_read_context(context)?;
+        if destination == &self.state.node_id
+            || (!context.quorums.old.contains_key(destination)
+                && !context.quorums.new.contains_key(destination))
+        {
+            return Err(metadata_error(
+                "read authority probe destination is not a remote voter",
+            ));
+        }
+        Ok(MetadataReadProbeRequest {
+            protocol_version: METADATA_READ_AUTHORITY_PROTOCOL_VERSION,
+            context_id: context.context_id,
+            read_request_id: context.read_request_id,
+            read_index: context.read_index,
+            append: self.append_request_from(next_index, max_entries)?,
+        })
+    }
+
+    /// Receiver path retains the ordinary durable Append semantics and echoes
+    /// this round's identity. No special no-fsync or weaker bootstrap path.
+    pub fn handle_read_authority_probe(
+        &mut self,
+        request: MetadataReadProbeRequest,
+    ) -> Result<MetadataReadProbeResponse> {
+        if request.protocol_version != METADATA_READ_AUTHORITY_PROTOCOL_VERSION
+            || request.context_id.is_nil()
+            || request.read_request_id.is_nil()
+            || request.append.term == 0
+            || request.read_index == 0
+            || request.read_index > request.append.leader_commit
+        {
+            return Err(metadata_error(
+                "read authority probe identity/index/version is invalid",
+            ));
+        }
+        let append = self.handle_append_request(request.append)?;
+        Ok(MetadataReadProbeResponse {
+            protocol_version: METADATA_READ_AUTHORITY_PROTOCOL_VERSION,
+            context_id: request.context_id,
+            read_request_id: request.read_request_id,
+            read_index: request.read_index,
+            append,
+            applied_index: self.state.commit_index,
+        })
+    }
+
+    /// Only fresh transport-correlated acknowledgments enter this context.
+    /// Deliberately does not consult or update historical match_index: normal
+    /// metadata replication remains responsible for committing proposals.
+    pub fn record_read_authority_ack(
+        &mut self,
+        context: &mut MetadataReadContext,
+        ack: &MetadataReadAck,
+    ) -> Result<bool> {
+        let result = (|| {
+            if ack.response.append.cluster_id != self.state.cluster_id {
+                return Err(metadata_error(
+                    "read authority acknowledgment belongs to another cluster",
+                ));
+            }
+            let current = self.read_quorums()?;
+            let voter = &ack.participant.node_id;
+            if !current
+                .old
+                .get(voter)
+                .is_some_and(|identity| identity.accepts(&ack.participant))
+                && !current
+                    .new
+                    .get(voter)
+                    .is_some_and(|identity| identity.accepts(&ack.participant))
+            {
+                return Err(metadata_error(
+                    "read authority reply is not from a current voter identity",
+                ));
+            }
+            if ack.response.append.term > self.state.current_term {
+                self.observe_remote_term(ack.response.append.term)?;
+                return Err(metadata_error("read authority observed a higher term"));
+            }
+            self.validate_read_context(context)?;
+            if ack.response.context_id != context.context_id
+                || ack.response.read_request_id != context.read_request_id
+                || ack.response.read_index != context.read_index
+                || ack.response.append.term != context.term
+            {
+                return Err(metadata_error(
+                    "read authority acknowledgment is from another round/term",
+                ));
+            }
+            if !ack.response.append.success {
+                return Ok(false);
+            }
+            if ack.response.append.match_index < context.read_index
+                || ack.response.applied_index < context.read_index
+            {
+                return Err(metadata_error(
+                    "read authority peer has not reached the requested metadata floor",
+                ));
+            }
+            let voter = &ack.participant.node_id;
+            let old = context
+                .quorums
+                .old
+                .get(voter)
+                .is_some_and(|identity| identity.accepts(&ack.participant));
+            let new = context
+                .quorums
+                .new
+                .get(voter)
+                .is_some_and(|identity| identity.accepts(&ack.participant));
+            if !old && !new {
+                return Err(metadata_error(
+                    "read authority acknowledgment incarnation/certificate is not a voter",
+                ));
+            }
+            if old {
+                context.fresh_old.insert(voter.clone());
+            }
+            if new {
+                context.fresh_new.insert(voter.clone());
+            }
+            Ok(true)
+        })();
+        if result.is_err() {
+            context.failed = true;
+        }
+        result
+    }
+
+    pub fn finish_read_authority(
+        &self,
+        context: MetadataReadContext,
+    ) -> Result<MetadataReadAuthority> {
+        self.validate_read_context(&context)?;
+        if context.fresh_old.len() < context.quorums.old.len() / 2 + 1
+            || context.fresh_new.len() < context.quorums.new.len() / 2 + 1
+        {
+            return Err(metadata_error(
+                "read authority has no fresh old-and-new voter quorum",
+            ));
+        }
+        Ok(MetadataReadAuthority {
+            context_id: context.context_id,
+            read_request_id: context.read_request_id,
+            term: context.term,
+            read_index: context.read_index,
+            applied_index: self.state.commit_index,
+            topology: self.state.committed_topology.clone(),
+            restore_activation: self.state.committed_restore_activation.clone(),
+        })
     }
 
     /// Begin an election only if the caller's complete observation is still
@@ -1115,6 +1594,263 @@ mod tests {
             node_ack_set_sha256: "c".repeat(64),
             activated_at_ms,
         }
+    }
+
+    fn read_participant(topology: &ClusterTopology, name: &str) -> MetadataReadParticipant {
+        let id = ClusterNodeId::new(name).unwrap();
+        MetadataReadParticipant::from_transport(
+            id.clone(),
+            topology.nodes[&id].incarnation,
+            None,
+            true,
+        )
+    }
+
+    fn anchor_leader(leader: &mut MetadataConsensusStore, follower: &mut MetadataConsensusStore) {
+        leader.start_election().unwrap();
+        leader
+            .become_leader(&BTreeSet::from([
+                leader.state.node_id.clone(),
+                follower.state.node_id.clone(),
+            ]))
+            .unwrap();
+        let response = follower
+            .handle_append_request(leader.append_request_from(1, 16).unwrap())
+            .unwrap();
+        leader
+            .record_append_response(&follower.state.node_id, &response)
+            .unwrap();
+        assert_eq!(
+            leader.term_at(leader.state.commit_index),
+            Some(leader.state.current_term)
+        );
+    }
+
+    fn read_ack(
+        leader: &MetadataConsensusStore,
+        context: &MetadataReadContext,
+        follower: &mut MetadataConsensusStore,
+        topology: &ClusterTopology,
+    ) -> MetadataReadAck {
+        let voter = follower.state.node_id.clone();
+        let request = leader.read_authority_probe(context, &voter, 1, 16).unwrap();
+        let response = follower
+            .handle_read_authority_probe(request.clone())
+            .unwrap();
+        MetadataReadAck::from_transport(
+            &request,
+            &voter,
+            read_participant(topology, voter.as_str()),
+            response,
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn read_authority_rejects_uncommitted_current_term_anchor() {
+        let topology = topology_with_nodes(3);
+        let dir = tempfile::tempdir().unwrap();
+        let mut leader = open(dir.path(), "n1", &topology);
+        leader.start_election().unwrap();
+        leader
+            .become_leader(&BTreeSet::from([
+                ClusterNodeId::new("n1").unwrap(),
+                ClusterNodeId::new("n2").unwrap(),
+            ]))
+            .unwrap();
+        assert_eq!(leader.state.commit_index, 0);
+        assert!(leader
+            .begin_read_authority(
+                Uuid::now_v7(),
+                Duration::from_secs(1),
+                &read_participant(&topology, "n1")
+            )
+            .unwrap_err()
+            .to_string()
+            .contains("committed current-term"));
+    }
+
+    #[test]
+    fn read_authority_healthy_quorum_returns_applied_metadata_without_cached_votes() {
+        let topology = topology_with_nodes(3);
+        let dir = tempfile::tempdir().unwrap();
+        let mut leader = open(&dir.path().join("leader"), "n1", &topology);
+        let mut follower = open(&dir.path().join("follower"), "n2", &topology);
+        anchor_leader(&mut leader, &mut follower);
+        let cached_match = leader.match_index.clone();
+        let local = read_participant(&topology, "n1");
+        let no_round = leader
+            .begin_read_authority(Uuid::now_v7(), Duration::from_secs(1), &local)
+            .unwrap();
+        assert!(leader
+            .finish_read_authority(no_round)
+            .unwrap_err()
+            .to_string()
+            .contains("no fresh"));
+        let mut context = leader
+            .begin_read_authority(Uuid::now_v7(), Duration::from_secs(1), &local)
+            .unwrap();
+        let nonce = context.context_id();
+        let ack = read_ack(&leader, &context, &mut follower, &topology);
+        assert!(leader
+            .record_read_authority_ack(&mut context, &ack)
+            .unwrap());
+        let authority = leader.finish_read_authority(context).unwrap();
+        assert_eq!(authority.context_id(), nonce);
+        assert!(authority.applied_index() >= authority.read_index());
+        assert_eq!(authority.topology(), &topology);
+        assert_eq!(
+            leader.match_index, cached_match,
+            "read votes must not become historical commit evidence"
+        );
+    }
+
+    #[test]
+    fn read_authority_rejects_cached_ack_from_another_fresh_nonce() {
+        let topology = topology_with_nodes(3);
+        let dir = tempfile::tempdir().unwrap();
+        let mut leader = open(&dir.path().join("leader"), "n1", &topology);
+        let mut follower = open(&dir.path().join("follower"), "n2", &topology);
+        anchor_leader(&mut leader, &mut follower);
+        let local = read_participant(&topology, "n1");
+        let old_context = leader
+            .begin_read_authority(Uuid::now_v7(), Duration::from_secs(1), &local)
+            .unwrap();
+        let cached = read_ack(&leader, &old_context, &mut follower, &topology);
+        let mut current = leader
+            .begin_read_authority(Uuid::now_v7(), Duration::from_secs(1), &local)
+            .unwrap();
+        assert_ne!(old_context.context_id(), current.context_id());
+        assert!(leader
+            .record_read_authority_ack(&mut current, &cached)
+            .is_err());
+        assert!(leader.finish_read_authority(current).is_err());
+    }
+
+    #[test]
+    fn read_authority_old_leader_cannot_serve_after_higher_term_reply() {
+        let topology = topology_with_nodes(3);
+        let dir = tempfile::tempdir().unwrap();
+        let mut leader = open(&dir.path().join("leader"), "n1", &topology);
+        let mut follower = open(&dir.path().join("follower"), "n2", &topology);
+        anchor_leader(&mut leader, &mut follower);
+        let mut context = leader
+            .begin_read_authority(
+                Uuid::now_v7(),
+                Duration::from_secs(1),
+                &read_participant(&topology, "n1"),
+            )
+            .unwrap();
+        follower.start_election().unwrap();
+        follower
+            .become_leader(&BTreeSet::from([
+                ClusterNodeId::new("n2").unwrap(),
+                ClusterNodeId::new("n3").unwrap(),
+            ]))
+            .unwrap();
+        let ack = read_ack(&leader, &context, &mut follower, &topology);
+        assert!(leader
+            .record_read_authority_ack(&mut context, &ack)
+            .is_err());
+        assert_eq!(leader.state.role, MetadataConsensusRole::Follower);
+        assert_eq!(leader.state.current_term, follower.state.current_term);
+        assert!(leader.finish_read_authority(context).is_err());
+    }
+
+    #[test]
+    fn read_authority_joint_quorums_require_fresh_majorities_on_both_sides() {
+        let mut topology = topology_with_nodes(5);
+        for name in ["n4", "n5"] {
+            topology
+                .nodes
+                .get_mut(&ClusterNodeId::new(name).unwrap())
+                .unwrap()
+                .metadata_role = crate::distribution::MetadataMemberRole::Learner;
+        }
+        let dir = tempfile::tempdir().unwrap();
+        let mut leader = open(&dir.path().join("leader"), "n1", &topology);
+        let mut old_voter = open(&dir.path().join("old"), "n2", &topology);
+        let mut new_voter = open(&dir.path().join("new"), "n4", &topology);
+        anchor_leader(&mut leader, &mut old_voter);
+        let mut proposed = topology.clone();
+        proposed.generation += 1;
+        for name in ["n2", "n3"] {
+            proposed
+                .nodes
+                .get_mut(&ClusterNodeId::new(name).unwrap())
+                .unwrap()
+                .metadata_role = crate::distribution::MetadataMemberRole::Learner;
+        }
+        for name in ["n4", "n5"] {
+            proposed
+                .nodes
+                .get_mut(&ClusterNodeId::new(name).unwrap())
+                .unwrap()
+                .metadata_role = crate::distribution::MetadataMemberRole::Voter;
+        }
+        leader.propose_topology(proposed).unwrap();
+        let local = read_participant(&topology, "n1");
+        for old_side in [true, false] {
+            let mut context = leader
+                .begin_read_authority(Uuid::now_v7(), Duration::from_secs(1), &local)
+                .unwrap();
+            let ack = read_ack(
+                &leader,
+                &context,
+                if old_side {
+                    &mut old_voter
+                } else {
+                    &mut new_voter
+                },
+                &topology,
+            );
+            leader
+                .record_read_authority_ack(&mut context, &ack)
+                .unwrap();
+            assert!(
+                leader.finish_read_authority(context).is_err(),
+                "one side's majority must not certify a joint read"
+            );
+        }
+        let mut context = leader
+            .begin_read_authority(Uuid::now_v7(), Duration::from_secs(1), &local)
+            .unwrap();
+        for follower in [&mut old_voter, &mut new_voter] {
+            let ack = read_ack(&leader, &context, follower, &topology);
+            leader
+                .record_read_authority_ack(&mut context, &ack)
+                .unwrap();
+        }
+        let authority = leader.finish_read_authority(context).unwrap();
+        assert_eq!(
+            authority.topology(),
+            &topology,
+            "uncommitted proposed topology is not served"
+        );
+    }
+
+    #[test]
+    fn read_authority_deadline_and_voter_identity_fail_closed() {
+        let topology = topology_with_nodes(3);
+        let dir = tempfile::tempdir().unwrap();
+        let mut leader = open(&dir.path().join("leader"), "n1", &topology);
+        let mut follower = open(&dir.path().join("follower"), "n2", &topology);
+        anchor_leader(&mut leader, &mut follower);
+        let local = read_participant(&topology, "n1");
+        let mut expired = leader
+            .begin_read_authority(Uuid::now_v7(), Duration::from_secs(1), &local)
+            .unwrap();
+        expired.deadline = Instant::now() - Duration::from_millis(1);
+        assert!(leader.finish_read_authority(expired).is_err());
+        let mut context = leader
+            .begin_read_authority(Uuid::now_v7(), Duration::from_secs(1), &local)
+            .unwrap();
+        let mut ack = read_ack(&leader, &context, &mut follower, &topology);
+        ack.participant.member_incarnation += 1;
+        assert!(leader
+            .record_read_authority_ack(&mut context, &ack)
+            .is_err());
+        assert!(leader.finish_read_authority(context).is_err());
     }
 
     #[test]

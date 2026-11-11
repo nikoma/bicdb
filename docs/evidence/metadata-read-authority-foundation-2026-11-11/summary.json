@@ -1,0 +1,21 @@
+{
+  "tested_base_commit": "d49a391b3c6157f90f29e9f2f5214143c60f9f4b",
+  "source_version": "1.0.463-beta",
+  "candidate_patch_sha256": "6878fbf4f316100139f58689389f6254696de40cc21298ef57844c19b9b522e1",
+  "source_files": {
+    "crates/bicdb-core/src/distribution_consensus.rs": "c505f8856fdbc40da71c9b8ebbde65e769cb009a0a4505cc1799552bb92de0cf",
+    "crates/bicdb-core/src/distribution_transport.rs": "46bce0e59a80d8991574c1dee16c6ca24584490553c5b06975b92f35053b5f35",
+    "crates/bicdb-core/src/lib.rs": "4915942898112086b7fa11fc8dc91306d99e3ad45d63f0b12e238c71d8d7b1f3"
+  },
+  "focused_tests": 7,
+  "distribution_tests": 132,
+  "core_opt_level": 0,
+  "core_debug": 0,
+  "build_jobs": 1,
+  "incremental": false,
+  "memory_guard_bytes": 12884901888,
+  "metadata_only": true,
+  "strong_row_reads_implemented": false,
+  "physical_ha_qualified": false,
+  "production_qualified": false
+}

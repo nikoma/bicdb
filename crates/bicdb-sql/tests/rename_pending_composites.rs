@@ -81,3 +81,74 @@ fn rename_retypes_pending_inserts_updates_and_arrays_without_reviving_deletes() 
         }
     }
 }
+
+#[test]
+fn rename_retypes_a_read_locked_holder_without_losing_its_savepoint_lock() {
+    for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
+        for rollback in [false, true] {
+            let root = tempfile::tempdir().unwrap();
+            let config = DbConfig::default().with_storage_mode(mode.clone());
+            let mut db = BicDb::open_with_config(root.path(), config.clone()).unwrap();
+            let name = if rollback { "source" } else { "renamed" };
+            let expected = vec![vec![
+                SqlValue::String(name.into()),
+                SqlValue::String("locked".into()),
+                SqlValue::String("locked-array".into()),
+            ]];
+            {
+                let mut session = SqlSession::new(&mut db);
+                session.execute("CREATE TABLE source(id INT PRIMARY KEY,payload TEXT); CREATE TABLE holder(id INT PRIMARY KEY,item source,items source[]); INSERT INTO holder VALUES(1,ROW(1,'locked')::source,ARRAY[ROW(1,'locked-array')::source]); BEGIN").unwrap();
+                assert_eq!(
+                    session
+                        .execute("SELECT id FROM holder WHERE id=1 FOR UPDATE")
+                        .unwrap()
+                        .rows,
+                    vec![vec![SqlValue::Int(1)]]
+                );
+                session
+                    .execute("SAVEPOINT before_rename; ALTER TABLE source RENAME TO renamed")
+                    .unwrap();
+                if rollback {
+                    session.execute("ROLLBACK TO before_rename").unwrap();
+                }
+                let owner = session.take_pending_transaction().unwrap();
+                assert!(
+                    owner.holds_record_lock("holder", "1"),
+                    "{mode} rollback={rollback} retained read lock"
+                );
+                session = session.with_pending_transaction(owner);
+                assert_eq!(
+                    session
+                        .execute(
+                            "SELECT pg_typeof(item),(item).payload,(items[1]).payload FROM holder"
+                        )
+                        .unwrap()
+                        .rows,
+                    expected,
+                    "{mode} rollback={rollback} pending"
+                );
+                session.execute("COMMIT").unwrap();
+            }
+            for record in db.scan_collection("holder").unwrap() {
+                assert!(
+                    !old_type_name(
+                        &record.metadata,
+                        if rollback { "renamed" } else { "source" }
+                    ),
+                    "{mode} rollback={rollback}"
+                );
+            }
+            db.close().unwrap();
+            let mut db = BicDb::open_with_config(root.path(), config).unwrap();
+            assert_eq!(
+                SqlSession::new(&mut db)
+                    .execute("SELECT pg_typeof(item),(item).payload,(items[1]).payload FROM holder")
+                    .unwrap()
+                    .rows,
+                expected,
+                "{mode} rollback={rollback} reopened"
+            );
+            db.close().unwrap();
+        }
+    }
+}

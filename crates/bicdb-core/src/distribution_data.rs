@@ -867,6 +867,18 @@ impl ClusterDataNodeService {
     pub fn database(&self) -> Arc<RwLock<BicDb>> {
         Arc::clone(&self.db)
     }
+    pub(crate) fn require_persisted_recovery_scope(
+        &self,
+        scope: &crate::distribution_range_consensus::RecoveryFenceScope,
+    ) -> Result<()> {
+        self.range_writes.require_persisted_recovery_scope(scope)
+    }
+    pub(crate) fn preflight_recovery_nonce(
+        &self,
+        scope: &crate::distribution_range_consensus::RecoveryFenceScope,
+    ) -> Result<()> {
+        self.range_writes.preflight_recovery_nonce(scope)
+    }
 
     /// Receiver-only: the runtime already owns the drained range freeze and
     /// acquired an independently fresh role before taking this service latch.
@@ -903,6 +915,7 @@ impl ClusterDataNodeService {
         role.require_live_request()?;
         Ok(
             crate::distribution_range_recovery::RecoveryEpochFenceReply {
+                phase: self.range_writes.recovery_observation_phase(scope)?,
                 scope: scope.clone(),
                 node_id: self.node_id.clone(),
                 member_incarnation: role.local_member_incarnation(),
@@ -913,6 +926,64 @@ impl ClusterDataNodeService {
                 native: db.native_range_prefix_observation(scope.range_id)?,
             },
         )
+    }
+
+    pub(crate) fn observe_native_recovery_history(
+        &self,
+        role: &crate::distribution_range_recovery::RecoveryObservationRoleAdmission,
+        request: &crate::distribution_range_recovery::RecoveryFencedProbeRequest,
+        frozen: &crate::distribution_range_mutation::FrozenRangeMutationPermit,
+        cancellation: &crate::CancellationToken,
+    ) -> Result<crate::distribution_range_recovery::RecoveryFencedProbeReply> {
+        let scope = &request.scope;
+        cancellation.check()?;
+        self.range_mutations
+            .validate_quiescent_frozen(scope.range_id, frozen)?;
+        let db = loop {
+            cancellation.check()?;
+            if let Some(db) = self.db.try_read_for(std::time::Duration::from_millis(5)) {
+                break db;
+            }
+        };
+        let native = db.native_recovery_admission(
+            role.cluster_id(),
+            role.bootstrap_id(),
+            role.local_node_id(),
+            role.local_member_incarnation(),
+        )?;
+        native.require_current(&db)?;
+        let entry = self.range_writes.observe_fenced_recovery_history(
+            role,
+            &native,
+            scope,
+            request.index,
+        )?;
+        let reply = crate::distribution_range_recovery::RecoveryFencedProbeReply {
+            fence: crate::distribution_range_recovery::RecoveryEpochFenceReply {
+                phase: self.range_writes.recovery_observation_phase(scope)?,
+                scope: scope.clone(),
+                node_id: self.node_id.clone(),
+                member_incarnation: role.local_member_incarnation(),
+                store_open_id: self.range_writes.recovery_store_open_id(),
+                native_database_incarnation: native.database_incarnation().to_string(),
+                birth_initialization_complete: true,
+                progress: self.range_writes.progress(scope.range_id),
+                native: db.native_range_prefix_observation(scope.range_id)?,
+            },
+            index: request.index,
+            entry,
+            current_certification: request
+                .index
+                .map(|index| {
+                    self.range_writes
+                        .historical_certification_observation(scope, index)
+                })
+                .transpose()?
+                .flatten(),
+        };
+        cancellation.check()?;
+        role.require_scope(scope)?;
+        Ok(reply)
     }
 
     pub fn schema_compatibility_fingerprint(&self) -> Result<SchemaCompatibilityFingerprint> {

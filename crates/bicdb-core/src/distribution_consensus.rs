@@ -110,6 +110,23 @@ pub(crate) enum MetadataRecoveryRolePurpose {
         session_id: Uuid,
         nonce: Uuid,
     },
+    /// Read-only observation of an already persisted coordinator fence. The
+    /// actual initiating peer is an old/current data voter, not the claimed
+    /// coordinator, and this purpose cannot construct mutation admission.
+    ObserveFencedRecovery {
+        coordinator_node_id: ClusterNodeId,
+        coordinator_incarnation: u64,
+        committed_handoff: Option<MetadataRecoveryHandoffBinding>,
+    },
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct MetadataRecoveryHandoffBinding {
+    pub relocation_id: crate::distribution::RelocationId,
+    pub plan_id: String,
+    pub session_id: Uuid,
+    pub nonce: Uuid,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -159,6 +176,26 @@ impl MetadataRecoveryRoleRequest {
                 || *nonce != self.recovery_nonce
             {
                 return Err(metadata_error("invalid recovery-role handoff purpose"));
+            }
+        }
+        if let MetadataRecoveryRolePurpose::ObserveFencedRecovery {
+            coordinator_incarnation,
+            committed_handoff,
+            ..
+        } = &self.purpose
+        {
+            if *coordinator_incarnation == 0
+                || committed_handoff.as_ref().is_some_and(|binding| {
+                    binding.plan_id.is_empty()
+                        || binding.plan_id.len() > 1024
+                        || binding.session_id.is_nil()
+                        || binding.nonce.is_nil()
+                        || binding.nonce != self.recovery_nonce
+                })
+            {
+                return Err(metadata_error(
+                    "invalid read-only recovery observation purpose",
+                ));
             }
         }
         Ok(())
@@ -268,6 +305,54 @@ impl MetadataRecoveryRoleRequest {
                     || (!recipient_voter && !exact_target)
                 {
                     return Err(invalid());
+                }
+            }
+            MetadataRecoveryRolePurpose::ObserveFencedRecovery {
+                coordinator_node_id,
+                coordinator_incarnation,
+                committed_handoff,
+            } => {
+                let observer_voter = range
+                    .replicas
+                    .iter()
+                    .any(|r| r.node_id == initiator.id && r.role == RangeReplicaRole::Voter);
+                let coordinator = topology
+                    .nodes
+                    .get(coordinator_node_id)
+                    .ok_or_else(invalid)?;
+                if !observer_voter
+                    || !recipient_voter
+                    || coordinator.incarnation != *coordinator_incarnation
+                    || coordinator.lifecycle == ClusterNodeLifecycle::Decommissioned
+                {
+                    return Err(invalid());
+                }
+                match committed_handoff {
+                    None if range.leader == coordinator.id => {}
+                    Some(binding) => {
+                        let plan = topology
+                            .relocations
+                            .get(&binding.relocation_id)
+                            .ok_or_else(invalid)?;
+                        let session = plan.handoff_session.as_ref().ok_or_else(invalid)?;
+                        if (range.leader != coordinator.id && metadata_leader != &coordinator.id)
+                            || plan.plan_id != binding.plan_id
+                            || plan.range_id != range.id
+                            || plan.learner_epoch != range.epoch
+                            || !matches!(
+                                plan.phase,
+                                RelocationPhase::LearnerAllocated
+                                    | RelocationPhase::SnapshotCopying
+                                    | RelocationPhase::CatchingUp
+                                    | RelocationPhase::ReadyToPromote
+                            )
+                            || session.session_id != binding.session_id
+                            || session.nonce != binding.nonce
+                        {
+                            return Err(invalid());
+                        }
+                    }
+                    None => return Err(invalid()),
                 }
             }
         }

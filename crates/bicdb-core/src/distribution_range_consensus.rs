@@ -44,7 +44,9 @@ mod recovery_state;
 pub(crate) use image_install_state::ImageInstallPurpose;
 use image_install_state::{ImageInstallIntent, IMAGE_INSTALL_RANGE_LOG_FORMAT};
 use recovery_state::RecoveryFenceRecord;
-pub(crate) use recovery_state::{RecoveryFenceScope, RecoveryResolvedCatalogObservation};
+pub(crate) use recovery_state::{
+    HistoricalRangeCertification, RecoveryFenceScope, RecoveryResolvedCatalogObservation,
+};
 
 mod native_prefix;
 pub(crate) use native_prefix::{NativeRangeCommandIntent, NativeRangeCommitCertificate};
@@ -1390,6 +1392,17 @@ pub struct RangeWriteAck {
 }
 
 pub trait RangeWriteTransport: std::fmt::Debug + Send + Sync + 'static {
+    fn recovery_fenced_history_observation(
+        &self,
+        destination: &ClusterNodeId,
+        request: &crate::distribution_range_recovery::RecoveryFencedProbeRequest,
+        parent: &CancellationToken,
+    ) -> Result<crate::distribution_range_recovery::RecoveryHistoryObservation> {
+        let _ = (destination, request, parent);
+        Err(range_write_error(
+            "transport does not support fenced recovery history observations",
+        ))
+    }
     fn recovery_epoch_fence_observation(
         &self,
         destination: &ClusterNodeId,

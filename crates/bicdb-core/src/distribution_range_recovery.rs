@@ -32,6 +32,128 @@ pub(crate) struct RecoveryEpochFenceRequest {
     pub scope: RecoveryFenceScope,
     pub budget_ms: u64,
 }
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct RecoveryFencedProbeRequest {
+    pub scope: RecoveryFenceScope,
+    /// None requests status only. An absent compacted entry remains unknown.
+    pub index: Option<u64>,
+    pub budget_ms: u64,
+}
+impl RecoveryFencedProbeRequest {
+    pub(crate) fn cancellation(
+        &self,
+        parent: &crate::CancellationToken,
+    ) -> Result<crate::CancellationToken> {
+        if self.index == Some(0) {
+            return Err(invalid("recovery probe index must be nonzero"));
+        }
+        RecoveryEpochFenceRequest {
+            scope: self.scope.clone(),
+            budget_ms: self.budget_ms,
+        }
+        .cancellation(parent)
+    }
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct RecoveryFencedProbeReply {
+    pub fence: RecoveryEpochFenceReply,
+    pub index: Option<u64>,
+    pub entry: Option<crate::distribution_range_consensus::RangeWriteLogEntry>,
+    pub current_certification:
+        Option<crate::distribution_range_consensus::HistoricalRangeCertification>,
+}
+
+/// A fresh, authenticated read of an actual persisted fence and catalogue.
+/// It authorizes neither native Apply nor any metadata/data mutation.
+#[derive(Debug)]
+pub(crate) struct RecoveryHistoryObservation {
+    fence: RecoveryFenceObservation,
+    index: Option<u64>,
+    entry: Option<crate::distribution_range_consensus::RangeWriteLogEntry>,
+    current_certification:
+        Option<crate::distribution_range_consensus::HistoricalRangeCertification>,
+}
+impl RecoveryHistoryObservation {
+    pub(crate) fn from_transport(
+        verified: crate::distribution_transport::AuthenticatedRecoveryProbeReply,
+        request: &RecoveryFencedProbeRequest,
+        deadline: Instant,
+    ) -> Result<Self> {
+        let (reply, peer) = verified.into_parts();
+        Self::from_local(reply, peer, request, deadline)
+    }
+    fn from_local(
+        reply: RecoveryFencedProbeReply,
+        peer: MetadataReadParticipant,
+        request: &RecoveryFencedProbeRequest,
+        deadline: Instant,
+    ) -> Result<Self> {
+        if reply.index != request.index || (reply.index.is_none() && reply.entry.is_some()) {
+            return Err(invalid("recovery observation index correlation failed"));
+        }
+        if let Some(entry) = &reply.entry {
+            entry.command.validate()?;
+            if Some(entry.command.index) != request.index
+                || entry.command.range_id != request.scope.range_id
+                || entry.command.cluster_id != request.scope.cluster_id
+                || entry.command.range_epoch > request.scope.range_epoch
+            {
+                return Err(invalid("recovery history command scope mismatch"));
+            }
+        }
+        let fence =
+            RecoveryFenceObservation::from_local(reply.fence, peer, &request.scope, deadline)?;
+        if let Some(marker) = &reply.current_certification {
+            if Some(marker.index) != request.index
+                || marker.recovery_nonce != request.scope.recovery_nonce
+                || marker.configuration_sha256 != request.scope.configuration_sha256
+                || marker.range_epoch != request.scope.range_epoch
+                || marker.command_sha256.len() != 64
+                || !marker.command_sha256.bytes().all(|b| b.is_ascii_hexdigit())
+                || reply
+                    .entry
+                    .as_ref()
+                    .is_some_and(|entry| entry.command.checksum_sha256 != marker.command_sha256)
+            {
+                return Err(invalid(
+                    "current historical certify-only marker scope mismatch",
+                ));
+            }
+        }
+        Ok(Self {
+            fence,
+            index: reply.index,
+            entry: reply.entry,
+            current_certification: reply.current_certification,
+        })
+    }
+    pub(crate) fn fence(&self) -> &RecoveryFenceObservation {
+        &self.fence
+    }
+    pub(crate) fn index(&self) -> Option<u64> {
+        self.index
+    }
+    pub(crate) fn entry(&self) -> Option<&crate::distribution_range_consensus::RangeWriteLogEntry> {
+        self.entry.as_ref()
+    }
+    pub(crate) fn current_certification(
+        &self,
+    ) -> Option<&crate::distribution_range_consensus::HistoricalRangeCertification> {
+        self.current_certification.as_ref()
+    }
+    pub(super) fn into_reply(self) -> RecoveryFencedProbeReply {
+        RecoveryFencedProbeReply {
+            fence: self.fence.into_reply(),
+            index: self.index,
+            entry: self.entry,
+            current_certification: self.current_certification,
+        }
+    }
+}
 impl RecoveryEpochFenceRequest {
     pub(crate) fn cancellation(
         &self,
@@ -50,6 +172,7 @@ impl RecoveryEpochFenceRequest {
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct RecoveryEpochFenceReply {
+    pub phase: RecoveryFenceObservationPhase,
     pub scope: RecoveryFenceScope,
     pub node_id: ClusterNodeId,
     pub member_incarnation: u64,
@@ -58,6 +181,11 @@ pub(crate) struct RecoveryEpochFenceReply {
     pub birth_initialization_complete: bool,
     pub progress: RangeWriteProgress,
     pub native: crate::db::NativeRangePrefixObservation,
+}
+#[derive(Clone, Copy, Debug, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
+pub(crate) enum RecoveryFenceObservationPhase {
+    ActiveRecovery,
+    CompletedEpochAuthority,
 }
 
 /// An actual local drain/persist result or a transport-authenticated response.
@@ -69,6 +197,9 @@ pub(crate) struct RecoveryFenceObservation {
     deadline: Instant,
 }
 impl RecoveryFenceObservation {
+    pub(crate) fn is_active_recovery(&self) -> bool {
+        self.reply.phase == RecoveryFenceObservationPhase::ActiveRecovery
+    }
     pub(crate) fn from_transport(
         verified: crate::distribution_transport::AuthenticatedRecoveryFenceReply,
         expected: &RecoveryFenceScope,
@@ -186,6 +317,38 @@ impl RecoveryRoleAdmission {
         recipient_challenge: Uuid,
         purpose: &MetadataRecoveryRolePurpose,
     ) -> Result<Self> {
+        if matches!(
+            purpose,
+            MetadataRecoveryRolePurpose::ObserveFencedRecovery { .. }
+        ) {
+            return Err(invalid(
+                "read-only observation cannot authorize recovery mutations",
+            ));
+        }
+        Self::from_scoped_witness(
+            witness,
+            actual_initiator,
+            local_node_id,
+            read_request_id,
+            range_id,
+            range_epoch,
+            recovery_nonce,
+            recipient_challenge,
+            purpose,
+        )
+    }
+    #[allow(clippy::too_many_arguments)]
+    fn from_scoped_witness(
+        witness: MetadataRecoveryRoleObservation,
+        actual_initiator: &MetadataReadParticipant,
+        local_node_id: &ClusterNodeId,
+        read_request_id: Uuid,
+        range_id: RangeId,
+        range_epoch: u64,
+        recovery_nonce: Uuid,
+        recipient_challenge: Uuid,
+        purpose: &MetadataRecoveryRolePurpose,
+    ) -> Result<Self> {
         witness.require_live_request(read_request_id, recipient_challenge)?;
         witness.require_initiator(actual_initiator)?;
         let request = witness.request();
@@ -245,6 +408,18 @@ impl RecoveryRoleAdmission {
                     .ok_or_else(|| invalid("committed handoff absent"))?
                     .clone(),
             ),
+            MetadataRecoveryRolePurpose::ObserveFencedRecovery {
+                committed_handoff, ..
+            } => committed_handoff
+                .as_ref()
+                .map(|binding| {
+                    topology
+                        .relocations
+                        .get(&binding.relocation_id)
+                        .cloned()
+                        .ok_or_else(|| invalid("observed committed handoff absent"))
+                })
+                .transpose()?,
         };
         let handoff_target_identity = relocation
             .as_ref()
@@ -442,6 +617,118 @@ impl RecoveryRoleAdmission {
             }
         }
         Ok(())
+    }
+}
+
+/// Only reads an existing durable fence/catalogue. The underlying witness is
+/// never exposed as RecoveryRoleAdmission, even inside transport dispatch.
+#[derive(Debug)]
+pub(crate) struct RecoveryObservationRoleAdmission {
+    fresh: RecoveryRoleAdmission,
+    scope: RecoveryFenceScope,
+}
+impl RecoveryObservationRoleAdmission {
+    pub(crate) fn purpose(scope: &RecoveryFenceScope) -> Result<MetadataRecoveryRolePurpose> {
+        use crate::distribution_consensus::MetadataRecoveryHandoffBinding;
+        let committed_handoff = match &scope.purpose {
+            MetadataRecoveryRolePurpose::NormalRecovery => None,
+            MetadataRecoveryRolePurpose::CommittedHandoff {
+                relocation_id,
+                plan_id,
+                session_id,
+                nonce,
+            } => Some(MetadataRecoveryHandoffBinding {
+                relocation_id: *relocation_id,
+                plan_id: plan_id.clone(),
+                session_id: *session_id,
+                nonce: *nonce,
+            }),
+            MetadataRecoveryRolePurpose::ObserveFencedRecovery { .. } => {
+                return Err(invalid("recursive observation scope refused"))
+            }
+        };
+        Ok(MetadataRecoveryRolePurpose::ObserveFencedRecovery {
+            coordinator_node_id: scope.initiator_node_id.clone(),
+            coordinator_incarnation: scope.initiator_incarnation,
+            committed_handoff,
+        })
+    }
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn from_witness(
+        witness: MetadataRecoveryRoleObservation,
+        actual_observer: &MetadataReadParticipant,
+        local_node: &ClusterNodeId,
+        business: Uuid,
+        challenge: Uuid,
+        scope: &RecoveryFenceScope,
+    ) -> Result<Self> {
+        let purpose = Self::purpose(scope)?;
+        let fresh = RecoveryRoleAdmission::from_scoped_witness(
+            witness,
+            actual_observer,
+            local_node,
+            business,
+            scope.range_id,
+            scope.range_epoch,
+            scope.recovery_nonce,
+            challenge,
+            &purpose,
+        )?;
+        let result = Self {
+            fresh,
+            scope: scope.clone(),
+        };
+        result.require_scope(scope)?;
+        Ok(result)
+    }
+    pub(crate) fn require_scope(&self, scope: &RecoveryFenceScope) -> Result<()> {
+        self.fresh.require_live_request()?;
+        if self.scope != *scope
+            || &scope.cluster_id != self.fresh.cluster_id()
+            || scope.bootstrap_id != self.fresh.bootstrap_id()
+            || scope.range_id != self.fresh.current_range().id
+            || scope.range_epoch != self.fresh.current_range().epoch
+            || scope.configuration_sha256 != self.fresh.configuration_sha256()?
+            || scope.metadata_term > self.fresh.metadata_term()
+            || scope.metadata_read_index > self.fresh.metadata_read_index()
+        {
+            return Err(invalid(
+                "read-only witness does not match durable fenced configuration",
+            ));
+        }
+        Ok(())
+    }
+    pub(crate) fn require_native_identity(
+        &self,
+        native: &crate::db::NativeRecoveryAdmission,
+    ) -> Result<()> {
+        self.require_scope(&self.scope)?;
+        if native.cluster_id() != self.fresh.cluster_id()
+            || native.bootstrap_id() != self.fresh.bootstrap_id()
+            || native.local_node_id() != self.fresh.local_node_id()
+            || native.local_member_incarnation() != self.fresh.local_member_incarnation()
+            || native.restore_activation() != self.fresh.restore_activation()
+        {
+            return Err(invalid(
+                "read-only observation native birth/open identity mismatch",
+            ));
+        }
+        Ok(())
+    }
+    pub(crate) fn local_node_id(&self) -> &ClusterNodeId {
+        self.fresh.local_node_id()
+    }
+    pub(crate) fn local_member_incarnation(&self) -> u64 {
+        self.fresh.local_member_incarnation()
+    }
+    pub(crate) fn cluster_id(&self) -> &ClusterId {
+        self.fresh.cluster_id()
+    }
+    pub(crate) fn bootstrap_id(&self) -> Uuid {
+        self.fresh.bootstrap_id()
+    }
+    pub(crate) fn deadline(&self) -> Instant {
+        self.fresh.deadline()
     }
 }
 

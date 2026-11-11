@@ -10,6 +10,7 @@ use parking_lot::Mutex;
 use std::collections::BTreeSet;
 use std::sync::Arc;
 
+mod native_completion;
 mod native_ready;
 mod native_ready_quorum;
 mod participants;

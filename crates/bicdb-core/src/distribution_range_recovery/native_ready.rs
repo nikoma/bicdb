@@ -86,7 +86,7 @@ impl NativeReadyReply {
     ) -> Result<()> {
         self.require_shape(request, peer)
     }
-    fn require_shape(
+    pub(super) fn require_shape(
         &self,
         request: &NativeReadyRequest,
         peer: &MetadataReadParticipant,

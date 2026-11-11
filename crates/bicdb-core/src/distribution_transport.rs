@@ -81,6 +81,24 @@ impl AuthenticatedNativeReadyReply {
     }
 }
 
+/// Sealed authenticated request-bound completion response. A decoded DTO alone
+/// cannot mint an observation or any activation authority.
+#[derive(Debug)]
+pub(crate) struct AuthenticatedNativeCompletionReply {
+    reply: crate::distribution_range_recovery::NativeCompletionReply,
+    peer: MetadataReadParticipant,
+}
+impl AuthenticatedNativeCompletionReply {
+    pub(crate) fn into_parts(
+        self,
+    ) -> (
+        crate::distribution_range_recovery::NativeCompletionReply,
+        MetadataReadParticipant,
+    ) {
+        (self.reply, self.peer)
+    }
+}
+
 #[derive(Debug)]
 pub(crate) struct AuthenticatedRecoveryFenceReply {
     reply: crate::distribution_range_recovery::RecoveryEpochFenceReply,
@@ -256,6 +274,12 @@ enum ClusterDataRequest {
     ObserveNativeReady {
         request: crate::distribution_range_recovery::NativeReadyRequest,
     },
+    CompleteNativeRecovery {
+        request: crate::distribution_range_recovery::NativeCompletionRequest,
+    },
+    ObserveNativeCompletion {
+        request: crate::distribution_range_recovery::NativeCompletionRequest,
+    },
     RecoveryCertifyHistorical {
         request: crate::distribution_range_recovery::RecoveryHistoricalCommandRequest,
     },
@@ -367,6 +391,8 @@ impl ClusterDataRequest {
             Self::PrepareNativeReady { request } | Self::ObserveNativeReady { request } => {
                 Some(request.scope.range_id)
             }
+            Self::CompleteNativeRecovery { request }
+            | Self::ObserveNativeCompletion { request } => Some(request.scope.range_id),
             Self::RecoveryCertifyHistorical { request }
             | Self::RecoveryApplyHistorical { request } => Some(request.scope.range_id),
             Self::Ping
@@ -420,6 +446,7 @@ enum ClusterDataResponse {
     RecoveryEpochFence(crate::distribution_range_recovery::RecoveryEpochFenceReply),
     RecoveryFencedProbe(crate::distribution_range_recovery::RecoveryFencedProbeReply),
     NativeReady(crate::distribution_range_recovery::NativeReadyReply),
+    NativeCompletion(crate::distribution_range_recovery::NativeCompletionReply),
     RangeWrite(RangeWriteAck),
     RangeWriteProgress(RangeWriteProgress),
     RangeWriteRepair(RangeWriteRepairBatch),
@@ -918,6 +945,30 @@ fn handle_cluster_data_connection(
             return runtime
                 .observe_native_ready(caller, &request, &token)
                 .map(|o| ClusterDataResponse::NativeReady(o.into_reply()));
+        }
+        if let ClusterDataRequest::CompleteNativeRecovery { request } = request.request {
+            let runtime = recovery_runtime
+                .ok_or_else(|| transport_error("native recovery runtime is not active"))?;
+            let caller = authenticated_caller.as_ref().ok_or_else(|| {
+                transport_error("native Complete requires an authenticated current leader")
+            })?;
+            let token =
+                CancellationToken::new(Arc::new(AtomicBool::new(false)), Some(request_deadline));
+            return runtime
+                .complete_native_recovery(caller, &request, &token)
+                .map(|o| ClusterDataResponse::NativeCompletion(o.into_reply()));
+        }
+        if let ClusterDataRequest::ObserveNativeCompletion { request } = request.request {
+            let runtime = recovery_runtime
+                .ok_or_else(|| transport_error("native recovery runtime is not active"))?;
+            let caller = authenticated_caller.as_ref().ok_or_else(|| {
+                transport_error("native completion status requires an authenticated voter")
+            })?;
+            let token =
+                CancellationToken::new(Arc::new(AtomicBool::new(false)), Some(request_deadline));
+            return runtime
+                .observe_native_completion(caller, &request, &token)
+                .map(|o| ClusterDataResponse::NativeCompletion(o.into_reply()));
         }
         dispatch_cluster_data_request(
             service,
@@ -2337,7 +2388,9 @@ fn dispatch_cluster_data_request(
             "authenticated native historical recovery runtime is not active",
         )),
         ClusterDataRequest::PrepareNativeReady { .. }
-        | ClusterDataRequest::ObserveNativeReady { .. } => Err(transport_error(
+        | ClusterDataRequest::ObserveNativeReady { .. }
+        | ClusterDataRequest::CompleteNativeRecovery { .. }
+        | ClusterDataRequest::ObserveNativeCompletion { .. } => Err(transport_error(
             "authenticated native-ready runtime is not active",
         )),
         ClusterDataRequest::RecoveryFencedProbe { .. } => Err(transport_error(
@@ -3405,6 +3458,66 @@ impl TcpClusterRelocationTransport {
     ) -> Result<crate::distribution_range_recovery::NativeReadyObservation> {
         self.native_ready_observation(destination, request, false, parent)
     }
+    fn native_completion_observation(
+        &self,
+        destination: &ClusterNodeId,
+        request: &crate::distribution_range_recovery::NativeCompletionRequest,
+        complete: bool,
+        parent: &CancellationToken,
+    ) -> Result<crate::distribution_range_recovery::NativeCompletionObservation> {
+        let token = request.cancellation(parent)?;
+        let payload = if complete {
+            ClusterDataRequest::CompleteNativeRecovery {
+                request: request.clone(),
+            }
+        } else {
+            ClusterDataRequest::ObserveNativeCompletion {
+                request: request.clone(),
+            }
+        };
+        crate::distribution_range_consensus::validate_native_json_size(
+            &ClusterDataRequestEnvelope {
+                protocol_version: CLUSTER_DATA_PROTOCOL_VERSION,
+                cluster_id: self.cluster_id.clone(),
+                caller_node_id: self.caller_node_id.clone(),
+                destination_node_id: destination.clone(),
+                request_id: u64::MAX,
+                request: &payload,
+            },
+            self.config.max_frame_bytes,
+        )?;
+        let (response, peer) =
+            self.call_with_read_participant_cancellable(&token, destination, payload)?;
+        match response {
+            ClusterDataResponse::NativeCompletion(reply) => {
+                crate::distribution_range_recovery::NativeCompletionObservation::from_transport(
+                    AuthenticatedNativeCompletionReply { reply, peer },
+                    request,
+                    token.deadline().unwrap(),
+                )
+            }
+            response => Err(unexpected_response(
+                "actual frozen native completion",
+                response,
+            )),
+        }
+    }
+    pub(crate) fn complete_native_recovery_observation(
+        &self,
+        destination: &ClusterNodeId,
+        request: &crate::distribution_range_recovery::NativeCompletionRequest,
+        parent: &CancellationToken,
+    ) -> Result<crate::distribution_range_recovery::NativeCompletionObservation> {
+        self.native_completion_observation(destination, request, true, parent)
+    }
+    pub(crate) fn observe_native_completion_observation(
+        &self,
+        destination: &ClusterNodeId,
+        request: &crate::distribution_range_recovery::NativeCompletionRequest,
+        parent: &CancellationToken,
+    ) -> Result<crate::distribution_range_recovery::NativeCompletionObservation> {
+        self.native_completion_observation(destination, request, false, parent)
+    }
     pub(crate) fn recovery_historical_command_observation(
         &self,
         destination: &ClusterNodeId,
@@ -3553,6 +3666,8 @@ impl TcpClusterRelocationTransport {
                 | ClusterDataRequest::RecoveryFencedProbe { .. }
                 | ClusterDataRequest::PrepareNativeReady { .. }
                 | ClusterDataRequest::ObserveNativeReady { .. }
+                | ClusterDataRequest::CompleteNativeRecovery { .. }
+                | ClusterDataRequest::ObserveNativeCompletion { .. }
                 | ClusterDataRequest::RecoveryCertifyHistorical { .. }
                 | ClusterDataRequest::RecoveryApplyHistorical { .. }
         );

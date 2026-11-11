@@ -41,13 +41,15 @@ use crate::error::{BicDbError, Result};
 
 mod native_image_base;
 mod native_image_ready;
-pub(crate) use native_image_ready::FinalizedNativeImageCatalogueObservation;
 pub(crate) use native_image_base::NativeImageCatalogueAdoptionReceipt;
 use native_image_base::{NativeImageCatalogueBase, NATIVE_IMAGE_CATALOG_FORMAT};
+pub(crate) use native_image_ready::FinalizedNativeImageCatalogueObservation;
 mod image_install_obligations;
 pub(crate) use image_install_obligations::TargetImageCatalogHistoryObligations;
 mod image_install_state;
+mod native_completion_observation;
 mod native_ready_catalog;
+pub(crate) use native_completion_observation::LocalNativeCompletionEvidence;
 mod native_ready_observation;
 pub(crate) use native_ready_observation::LocalNativeReadyEvidence;
 mod native_ready_completion;

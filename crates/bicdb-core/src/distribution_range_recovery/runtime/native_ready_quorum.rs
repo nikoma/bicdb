@@ -25,8 +25,20 @@ impl RangeRecoveryRuntime {
         Arc<crate::distribution_range_consensus::PreparedNativeRecoveryReady>,
         ClosedNativeReadyQuorum,
     )> {
-        let token = request.cancellation(parent)?;
         let operation = self.reserve(request.scope.range_id)?;
+        self.acquire_closed_native_ready_with_operation(initiator, request, parent, operation)
+    }
+    pub(super) fn acquire_closed_native_ready_with_operation(
+        &self,
+        initiator: &MetadataReadParticipant,
+        request: &NativeReadyRequest,
+        parent: &CancellationToken,
+        operation: Arc<Operation>,
+    ) -> Result<(
+        Arc<crate::distribution_range_consensus::PreparedNativeRecoveryReady>,
+        ClosedNativeReadyQuorum,
+    )> {
+        let token = request.cancellation(parent)?;
         let scope = &request.scope;
         let business = Uuid::now_v7();
         let challenge = Uuid::now_v7();

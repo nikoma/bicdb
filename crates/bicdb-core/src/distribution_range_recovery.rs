@@ -28,6 +28,10 @@ pub(crate) use image_compatibility::{RecoverySourceHistoryRound, VerifiedRecover
 pub(crate) use image_history::{
     RecoveryImageHistoryObligationsV1, RecoveryNativeHistoryPointV1, RecoveryNativePendingHistoryV1,
 };
+mod native_completion;
+pub(crate) use native_completion::{
+    NativeCompletionObservation, NativeCompletionReply, NativeCompletionRequest,
+};
 mod native_ready;
 pub(crate) use native_ready::{
     ClosedNativeReadyQuorum, ClosedNativeReadyQuorumRound, FrozenNativeReadyStage,

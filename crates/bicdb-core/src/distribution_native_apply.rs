@@ -263,6 +263,7 @@ impl NativeReplicaApplyObservation {
             command_checksum_sha256: physical.command_checksum_sha256().map(str::to_owned),
         })
     }
+    #[cfg(feature = "tls-replication")]
     pub(crate) fn from_transport(
         actual: crate::distribution_transport::AuthenticatedNativeReplicaReply,
     ) -> Result<Self> {

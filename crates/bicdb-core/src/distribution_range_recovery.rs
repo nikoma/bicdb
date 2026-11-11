@@ -164,6 +164,7 @@ pub(crate) struct RecoveryHistoryObservation {
         Option<crate::distribution_range_consensus::HistoricalRangeCertification>,
 }
 impl RecoveryHistoryObservation {
+    #[cfg(feature = "tls-replication")]
     pub(crate) fn from_transport(
         verified: crate::distribution_transport::AuthenticatedRecoveryProbeReply,
         request: &RecoveryFencedProbeRequest,
@@ -318,6 +319,7 @@ impl RecoveryFenceObservation {
     pub(crate) fn is_active_recovery(&self) -> bool {
         self.reply.phase == RecoveryFenceObservationPhase::ActiveRecovery
     }
+    #[cfg(feature = "tls-replication")]
     pub(crate) fn from_transport(
         verified: crate::distribution_transport::AuthenticatedRecoveryFenceReply,
         expected: &RecoveryFenceScope,

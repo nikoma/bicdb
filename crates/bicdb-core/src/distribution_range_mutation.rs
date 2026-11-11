@@ -28,6 +28,7 @@ struct RangeState {
     frozen: Option<(Uuid, Uuid)>,
     controlled: BTreeSet<Uuid>,
     frozen_owner_dropped: bool,
+    capture_pin: Option<Uuid>,
     poisoned: bool,
 }
 
@@ -94,9 +95,20 @@ pub(crate) struct ControlledFrozenMutationPermit {
     lease: Uuid,
 }
 
-/// Internal helpers accept the already-owned permit instead of reacquiring a
-/// gate after a freeze has begun waiting. Every public entry acquires its own
-/// normal permit; only a trusted capture/install path receives the frozen arm.
+/// Owned exclusive source reader: while live every controlled/native writer
+/// is refused. It is not metadata or data-quorum authority.
+#[derive(Debug)]
+pub(crate) struct SourceCaptureReadPin {
+    inner: Arc<Inner>,
+    range_id: RangeId,
+    owner: Uuid,
+    owner_lease: Uuid,
+    lease: Uuid,
+}
+
+/// Internal helpers accept owned admission instead of reacquiring a gate
+/// after a freeze starts waiting. Frozen alone is READ/quiescence authority;
+/// every frozen write uses an owned Controlled token through actual callback.
 pub(crate) enum RangeMutationAuthority<'a> {
     Mutation(&'a RangeMutationPermit),
     Frozen(&'a FrozenRangeMutationPermit),
@@ -138,8 +150,8 @@ impl RangeMutationGate {
         let valid = if let Some(owner) = claim.frozen_owner {
             state.frozen == Some((owner, claim.lease))
                 && match claim.controlled_lease {
-                    Some(id) => state.controlled.contains(&id),
-                    None => !state.frozen_owner_dropped,
+                    Some(id) => state.capture_pin.is_none() && state.controlled.contains(&id),
+                    None => false,
                 }
         } else {
             state.active.contains(&claim.lease) && state.frozen.is_none()
@@ -295,11 +307,69 @@ impl RangeMutationGate {
                 }
                 Ok(())
             }
-            RangeMutationAuthority::Frozen(permit) => self.validate_frozen(range_id, permit),
+            RangeMutationAuthority::Frozen(_) => Err(invalid(
+                "frozen is read-only; writes require owned controlled admission",
+            )),
             RangeMutationAuthority::Controlled(permit) => {
                 self.validate_controlled(range_id, permit)
             }
         }
+    }
+
+    pub(crate) fn try_source_capture_read_pin(
+        &self,
+        range_id: RangeId,
+        permit: &FrozenRangeMutationPermit,
+    ) -> Result<SourceCaptureReadPin> {
+        if !Arc::ptr_eq(&self.inner, &permit.inner) || permit.range_id != range_id {
+            return Err(invalid("source reader belongs to another range/DB"));
+        }
+        let mut ranges = self.inner.ranges.lock();
+        let state = ranges
+            .get_mut(&range_id)
+            .ok_or_else(|| invalid("source reader freeze absent"))?;
+        if state.poisoned
+            || state.frozen_owner_dropped
+            || state.frozen != Some((permit.owner, permit.lease))
+            || !state.active.is_empty()
+            || !state.controlled.is_empty()
+            || state.capture_pin.is_some()
+        {
+            return Err(invalid(
+                "source capture requires exclusive quiescent owned freeze",
+            ));
+        }
+        let lease = Uuid::now_v7();
+        state.capture_pin = Some(lease);
+        Ok(SourceCaptureReadPin {
+            inner: Arc::clone(&self.inner),
+            range_id,
+            owner: permit.owner,
+            owner_lease: permit.lease,
+            lease,
+        })
+    }
+    pub(crate) fn validate_source_capture_read_pin(
+        &self,
+        range_id: RangeId,
+        pin: &SourceCaptureReadPin,
+    ) -> Result<()> {
+        if !Arc::ptr_eq(&self.inner, &pin.inner) || pin.range_id != range_id {
+            return Err(invalid("source reader belongs to another range/DB"));
+        }
+        let ranges = self.inner.ranges.lock();
+        let state = ranges
+            .get(&range_id)
+            .ok_or_else(|| invalid("source reader state absent"))?;
+        if state.poisoned
+            || state.frozen != Some((pin.owner, pin.owner_lease))
+            || state.capture_pin != Some(pin.lease)
+            || !state.active.is_empty()
+            || !state.controlled.is_empty()
+        {
+            return Err(invalid("source reader is no longer exclusive"));
+        }
+        Ok(())
     }
 
     pub(crate) fn try_controlled_mutation(
@@ -317,6 +387,7 @@ impl RangeMutationGate {
             || state.frozen_owner_dropped
             || state.frozen != Some((permit.owner, permit.lease))
             || !state.active.is_empty()
+            || state.capture_pin.is_some()
             || state.controlled.len() >= MAX_GATE_RANGES
             || self.inner.range_active.load(Ordering::Relaxed) >= MAX_GATE_RANGES
         {
@@ -348,6 +419,7 @@ impl RangeMutationGate {
         if state.poisoned
             || state.frozen != Some((permit.owner, permit.owner_lease))
             || !state.controlled.contains(&permit.lease)
+            || state.capture_pin.is_some()
         {
             return Err(invalid("controlled lease is no longer active"));
         }
@@ -411,6 +483,7 @@ impl FrozenRangeMutationPermit {
             || state.frozen_owner_dropped
             || state.frozen != Some((self.owner, self.lease))
             || !state.controlled.is_empty()
+            || state.capture_pin.is_some()
             || !state.active.is_empty()
         {
             return Err(invalid(
@@ -430,6 +503,7 @@ fn remove_idle(ranges: &mut BTreeMap<RangeId, RangeState>, range_id: RangeId) {
             && state.pending.is_none()
             && state.frozen.is_none()
             && state.controlled.is_empty()
+            && state.capture_pin.is_none()
             && !state.frozen_owner_dropped
     }) {
         ranges.remove(&range_id);
@@ -497,12 +571,41 @@ impl Drop for FrozenRangeMutationPermit {
         let mut ranges = self.inner.ranges.lock();
         if let Some(state) = ranges.get_mut(&self.range_id) {
             if state.frozen == Some((self.owner, self.lease)) {
-                if state.controlled.is_empty() {
+                if state.controlled.is_empty() && state.capture_pin.is_none() {
                     state.frozen = None;
                     state.frozen_owner_dropped = false;
                 } else {
                     state.frozen_owner_dropped = true;
                 }
+            }
+        }
+        remove_idle(&mut ranges, self.range_id);
+        self.inner.changed.notify_all();
+    }
+}
+
+impl SourceCaptureReadPin {
+    pub(crate) fn range_id(&self) -> RangeId {
+        self.range_id
+    }
+    pub(crate) fn owner(&self) -> Uuid {
+        self.owner
+    }
+}
+impl Drop for SourceCaptureReadPin {
+    fn drop(&mut self) {
+        let mut ranges = self.inner.ranges.lock();
+        if let Some(state) = ranges.get_mut(&self.range_id) {
+            if state.frozen == Some((self.owner, self.owner_lease))
+                && state.capture_pin == Some(self.lease)
+            {
+                state.capture_pin = None;
+                if state.frozen_owner_dropped && state.controlled.is_empty() {
+                    state.frozen = None;
+                    state.frozen_owner_dropped = false;
+                }
+            } else {
+                state.poisoned = true;
             }
         }
         remove_idle(&mut ranges, self.range_id);
@@ -518,7 +621,10 @@ impl Drop for ControlledFrozenMutationPermit {
                 && state.controlled.remove(&self.lease)
             {
                 self.inner.range_active.fetch_sub(1, Ordering::Relaxed);
-                if state.frozen_owner_dropped && state.controlled.is_empty() {
+                if state.frozen_owner_dropped
+                    && state.controlled.is_empty()
+                    && state.capture_pin.is_none()
+                {
                     state.frozen = None;
                     state.frozen_owner_dropped = false;
                 }
@@ -559,6 +665,34 @@ mod tests {
             );
             thread::yield_now();
         }
+    }
+
+    #[test]
+    fn source_read_pin_atomically_excludes_all_frozen_writers() {
+        let gate = RangeMutationGate::default();
+        let id = range(1);
+        let mut frozen = gate.try_freeze(id, Uuid::now_v7()).unwrap();
+        let direct = RangeMutationAuthority::Frozen(&frozen).claim();
+        assert!(
+            gate.validate_claim(&direct).is_err(),
+            "direct frozen claims are never writers"
+        );
+        let controlled = gate.try_controlled_mutation(&frozen).unwrap();
+        assert!(gate.try_source_capture_read_pin(id, &frozen).is_err());
+        drop(controlled);
+        let pin = gate.try_source_capture_read_pin(id, &frozen).unwrap();
+        gate.validate_frozen(id, &frozen).unwrap();
+        gate.validate_source_capture_read_pin(id, &pin).unwrap();
+        assert!(gate
+            .validate(id, &RangeMutationAuthority::Frozen(&frozen))
+            .is_err());
+        assert!(gate.try_controlled_mutation(&frozen).is_err());
+        assert!(frozen.try_rotate_owner(Uuid::now_v7()).is_err());
+        drop(frozen);
+        assert!(gate.try_enter(id).is_err());
+        gate.validate_source_capture_read_pin(id, &pin).unwrap();
+        drop(pin);
+        gate.try_enter(id).unwrap();
     }
 
     #[test]
@@ -742,7 +876,11 @@ mod tests {
         drop(replacement);
         let frozen = gate.try_freeze(range(1), Uuid::now_v7()).unwrap();
         let frozen_claim = RangeMutationAuthority::Frozen(&frozen).claim();
-        gate.validate_claim(&frozen_claim).unwrap();
+        assert!(gate.validate_claim(&frozen_claim).is_err());
+        let controlled = gate.try_controlled_mutation(&frozen).unwrap();
+        let controlled_claim = RangeMutationAuthority::Controlled(&controlled).claim();
+        gate.validate_claim(&controlled_claim).unwrap();
+        drop(controlled);
         drop(frozen);
         let replacement = gate.try_freeze(range(1), Uuid::now_v7()).unwrap();
         assert!(gate.validate_claim(&frozen_claim).is_err());

@@ -200,6 +200,58 @@ impl RangeWriteStore {
         }
         Ok(())
     }
+    /// Re-fsync ONLY the exact saved prepared refusal after a lost proof or
+    /// ambiguous write. This returns no physical/quorum/serving certificate and
+    /// does not change phase, point, nonce, native open, or membership. A later
+    /// physical producer must independently re-attest the actual materialization.
+    pub(crate) fn refsync_native_prepared_refusal(
+        &mut self,
+        db: &crate::BicDb,
+        native: &NativeRecoveryAdmission,
+        fresh: &RecoveryRoleAdmission,
+        frozen: &crate::distribution_range_mutation::FrozenRangeMutationPermit,
+        parent: &CancellationToken,
+    ) -> Result<()> {
+        let token = parent.child_with_deadline(fresh.deadline());
+        token.check()?;
+        fresh.require_live_request()?;
+        native.require_current(db)?;
+        self.require_native_recovery_identity(fresh, native)?;
+        let scope = RecoveryFenceScope::from_role(fresh)?;
+        self.require_no_image_install(scope.range_id)?;
+        let saved = self
+            .catalog
+            .recovery_fences
+            .get(&scope.range_id)
+            .ok_or_else(|| range_write_error("prepared re-fsync has no saved refusal"))?;
+        saved.scope.require_role(fresh)?;
+        if !saved.scope.same_session(&scope)
+            || !matches!(saved.phase, RecoveryFencePhase::NativePrepared(_))
+            || saved.native_database_incarnation != native.database_incarnation()
+            || saved.local_node_id != *fresh.local_node_id()
+            || saved.local_member_incarnation != fresh.local_member_incarnation()
+            || frozen.owner() != scope.freeze_owner()?
+        {
+            return Err(range_write_error(
+                "prepared re-fsync would change the actual saved session/native identity",
+            ));
+        }
+        db.range_mutation_gate()
+            .validate_frozen(scope.range_id, frozen)?;
+        validate_native_prepared_catalog(&self.catalog)?;
+        self.persist_recovery_catalog()?;
+        token.check()?;
+        fresh.require_live_request()
+    }
+    #[cfg(test)]
+    pub(crate) fn test_prepare_native_recovery_ready_with(
+        &mut self,
+        db: &crate::BicDb,
+        physical: LocalNativeRecoveryReady,
+        write: impl FnOnce(&Path, &[u8], bool) -> Result<()>,
+    ) -> Result<PreparedNativeRecoveryReady> {
+        self.prepare_native_recovery_ready_with(db, physical, write)
+    }
     pub(crate) fn prepare_native_recovery_ready(
         &mut self,
         db: &crate::BicDb,

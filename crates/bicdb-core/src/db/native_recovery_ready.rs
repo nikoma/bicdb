@@ -293,6 +293,92 @@ mod tests {
     }
 
     #[test]
+    fn ambiguous_native_prepare_persistence_refsyncs_exact_refusal_before_new_physical_proof() {
+        for after_actual_write in [false, true] {
+            let fixture = Fixture::new();
+            fixture.seed(fixture.range().id, 1);
+            let nonce = Uuid::now_v7();
+            let role = fixture.role(nonce);
+            let frozen = fixture.freeze(&role);
+            let mut store = fixture.store();
+            let local = fixture
+                .attest(
+                    role,
+                    &mut store,
+                    Arc::clone(&frozen),
+                    &CancellationToken::uncancelable(),
+                )
+                .unwrap();
+            assert!(store
+                .test_prepare_native_recovery_ready_with(
+                    &fixture.db.read(),
+                    local,
+                    |path, bytes, fsync| {
+                        if after_actual_write {
+                            crate::storage::write_atomic(path, bytes, fsync)?;
+                        }
+                        Err(invalid("injected preparation persistence ambiguity"))
+                    }
+                )
+                .is_err());
+            let fresh = fixture.role(nonce);
+            let scope = RecoveryFenceScope::from_role(&fresh).unwrap();
+            let native = fixture.native();
+            assert!(store
+                .observe_native_ready_resolved_prefix(&fresh, &native, &scope)
+                .is_err());
+            let wrong = fixture.role(Uuid::now_v7());
+            assert!(store
+                .refsync_native_prepared_refusal(
+                    &fixture.db.read(),
+                    &native,
+                    &wrong,
+                    &frozen,
+                    &CancellationToken::uncancelable()
+                )
+                .is_err());
+            store
+                .refsync_native_prepared_refusal(
+                    &fixture.db.read(),
+                    &native,
+                    &fresh,
+                    &frozen,
+                    &CancellationToken::uncancelable(),
+                )
+                .unwrap();
+            assert_eq!(
+                store.recovery_observation_phase(&scope).unwrap(),
+                crate::distribution_range_recovery::RecoveryFenceObservationPhase::NativePrepared
+            );
+            assert!(store
+                .require_recovery_scope(&fresh, &native, &scope)
+                .is_err());
+            let observed = store
+                .observe_native_ready_resolved_prefix(&fresh, &native, &scope)
+                .unwrap();
+            let local = fixture
+                .db
+                .read()
+                .attest_local_native_recovery_ready(
+                    native,
+                    fresh,
+                    observed,
+                    &store,
+                    frozen,
+                    &CancellationToken::uncancelable(),
+                )
+                .unwrap();
+            let reissued = store
+                .prepare_native_recovery_ready(&fixture.db.read(), local)
+                .unwrap();
+            assert_eq!(reissued.range_index(), 1);
+            reissued
+                .require_current(&fixture.db.read(), &store)
+                .unwrap();
+        }
+    }
+
+    #[test]
     fn cancelled_local_ready_cannot_persist_a_native_preparation() {
         let fixture = Fixture::new();
         let role = fixture.role(Uuid::now_v7());

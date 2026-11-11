@@ -300,12 +300,11 @@ impl MetadataReadAcquireResponse {
         }
         validate_side(new, &self.new_voters, &self.fresh_new_voters)?;
         if let Some(activation) = &self.restore_activation {
-            activation.validate()?;
-            if activation.cluster_id != self.committed_topology.cluster_id {
-                return Err(metadata_error(
-                    "metadata acquisition restore cluster differs",
-                ));
-            }
+            validate_historical_activation_against_topology(
+                activation,
+                &self.committed_topology,
+                &self.committed_topology.cluster_id,
+            )?;
         }
         Ok(())
     }
@@ -1718,6 +1717,12 @@ impl MetadataConsensusStore {
 
     fn commit_entry(&mut self, entry: MetadataLogEntry) -> Result<()> {
         validate_log_entry_shape(&entry, &self.state.cluster_id)?;
+        if let Some(activation) = &entry.restore_activation {
+            validate_committed_activation_progress(
+                self.state.committed_restore_activation.as_ref(),
+                Some(activation),
+            )?;
+        }
         self.state.commit_index = entry.index;
         self.state.base_index = entry.index;
         self.state.base_term = entry.term;
@@ -1736,7 +1741,7 @@ impl MetadataConsensusStore {
         snapshot.topology.validate()?;
         self.ensure_cluster(&snapshot.topology.cluster_id)?;
         if let Some(activation) = &snapshot.restore_activation {
-            validate_activation_against_topology(
+            validate_historical_activation_against_topology(
                 activation,
                 &snapshot.topology,
                 &self.state.cluster_id,
@@ -1754,6 +1759,10 @@ impl MetadataConsensusStore {
                 "snapshot conflicts with the committed metadata index",
             ));
         }
+        validate_committed_activation_progress(
+            self.state.committed_restore_activation.as_ref(),
+            snapshot.restore_activation.as_ref(),
+        )?;
         self.state.base_index = snapshot.last_included_index;
         self.state.base_term = snapshot.last_included_term;
         self.state.commit_index = snapshot.last_included_index;
@@ -1955,7 +1964,7 @@ fn validate_state(state: &MetadataConsensusState) -> Result<()> {
         ));
     }
     if let Some(activation) = &state.committed_restore_activation {
-        validate_activation_against_topology(
+        validate_historical_activation_against_topology(
             activation,
             &state.committed_topology,
             &state.cluster_id,
@@ -1964,9 +1973,8 @@ fn validate_state(state: &MetadataConsensusState) -> Result<()> {
     let mut expected = state.base_index.saturating_add(1);
     let mut latest_generation = state.committed_topology.generation;
     let mut latest_topology = state.committed_topology.clone();
-    let mut latest_activation_ms = state
-        .committed_restore_activation
-        .as_ref()
+    let mut latest_activation = state.committed_restore_activation.as_ref();
+    let mut latest_activation_ms = latest_activation
         .map(|activation| activation.activated_at_ms)
         .unwrap_or(0);
     for entry in &state.log {
@@ -1989,6 +1997,8 @@ fn validate_state(state: &MetadataConsensusState) -> Result<()> {
                     "restore activation changes topology or does not advance its decision time",
                 ));
             }
+            validate_committed_activation_progress(latest_activation, Some(activation))?;
+            latest_activation = Some(activation);
             latest_activation_ms = activation.activated_at_ms;
         } else {
             if entry.topology.generation <= latest_generation {
@@ -2016,6 +2026,66 @@ fn validate_log_entry_shape(entry: &MetadataLogEntry, cluster_id: &ClusterId) ->
     }
     if let Some(activation) = &entry.restore_activation {
         validate_activation_against_topology(activation, &entry.topology, cluster_id)?;
+    }
+    Ok(())
+}
+
+/// A retained committed decision describes the topology at activation, not a
+/// permanent ban on later membership/load changes. Local envelopes are checked
+/// before state validation; snapshot callers must authenticate the actual
+/// consensus source before reaching this store. Older topology hashes cannot
+/// be recomputed from a later compacted topology, and are historical lineage,
+/// never independent proof of fresh restore admission. NEW decisions still use
+/// `validate_activation_against_topology` at proposal/log admission.
+fn validate_historical_activation_against_topology(
+    activation: &MetadataRestoreActivation,
+    topology: &ClusterTopology,
+    cluster_id: &ClusterId,
+) -> Result<()> {
+    activation.validate()?;
+    if activation.cluster_id != *cluster_id
+        || activation.cluster_id != topology.cluster_id
+        || activation.topology_generation > topology.generation
+    {
+        return Err(metadata_error(
+            "historical restore activation belongs to another cluster or future topology",
+        ));
+    }
+    if activation.topology_generation == topology.generation {
+        validate_activation_against_topology(activation, topology, cluster_id)?;
+    }
+    Ok(())
+}
+
+/// Ordinary Raft replication cannot erase or rewrite an already committed
+/// restore decision. A fresh authorized restore into a new root has no previous
+/// lineage; that separate admission still validates its complete certificate.
+fn validate_committed_activation_progress(
+    previous: Option<&MetadataRestoreActivation>,
+    next: Option<&MetadataRestoreActivation>,
+) -> Result<()> {
+    if let Some(next) = next {
+        next.validate()?;
+    }
+    let Some(previous) = previous else {
+        return Ok(());
+    };
+    let Some(next) = next else {
+        return Err(metadata_error(
+            "snapshot erases committed restore activation",
+        ));
+    };
+    if previous == next {
+        return Ok(());
+    }
+    if previous.cluster_id != next.cluster_id
+        || previous.activation_id == next.activation_id
+        || next.activated_at_ms <= previous.activated_at_ms
+        || next.topology_generation < previous.topology_generation
+    {
+        return Err(metadata_error(
+            "restore activation regresses or rewrites a committed decision",
+        ));
     }
     Ok(())
 }
@@ -2751,6 +2821,139 @@ mod tests {
         wrong_topology.topology_sha256 = "d".repeat(64);
         assert!(leader.propose_restore_activation(wrong_topology).is_err());
         assert_eq!(leader.status().current_term, election.term);
+
+        let old_snapshot = leader.append_request_from(1, 8).unwrap();
+        let newer = restore_activation(&topology, 10_002);
+        let entry = leader.propose_restore_activation(newer.clone()).unwrap();
+        let response = follower
+            .handle_append_request(leader.append_request_from(entry.index, 8).unwrap())
+            .unwrap();
+        assert!(leader
+            .record_append_response(&response.node_id, &response)
+            .unwrap());
+        follower
+            .handle_append_request(leader.append_request_from(entry.index + 1, 8).unwrap())
+            .unwrap();
+        let newest_snapshot = leader.append_request_from(1, 8).unwrap();
+        assert!(
+            snapshot_target
+                .handle_append_request(newest_snapshot.clone())
+                .unwrap()
+                .success
+        );
+        assert_eq!(snapshot_target.committed_restore_activation(), Some(&newer));
+        // A genuine old snapshot is ignored and cannot undo the newer decision.
+        snapshot_target.handle_append_request(old_snapshot).unwrap();
+        assert_eq!(snapshot_target.committed_restore_activation(), Some(&newer));
+        // The same complete decision remains an idempotent snapshot positive.
+        assert!(
+            snapshot_target
+                .handle_append_request(newest_snapshot.clone())
+                .unwrap()
+                .success
+        );
+
+        // These are deliberately adversarial DTOs, not fabricated qualification
+        // evidence. A forged higher index must not bypass lineage monotonicity.
+        let template = newest_snapshot.snapshot.unwrap();
+        let mut same_id_rewrite = newer.clone();
+        same_id_rewrite.activated_at_ms += 1;
+        same_id_rewrite.node_ack_set_sha256 = "d".repeat(64);
+        let mut same_time_new_id = newer.clone();
+        same_time_new_id.activation_id = Uuid::new_v4();
+        let mut same_generation_wrong_hash = newer.clone();
+        same_generation_wrong_hash.topology_sha256 = "e".repeat(64);
+        let mut future = newer.clone();
+        future.topology_generation += 1;
+        let mut wrong_cluster = newer.clone();
+        wrong_cluster.cluster_id = ClusterId::new("another-cluster").unwrap();
+        for invalid in [
+            None,
+            Some(activation.clone()),
+            Some(same_id_rewrite),
+            Some(same_time_new_id),
+            Some(same_generation_wrong_hash),
+            Some(future),
+            Some(wrong_cluster),
+        ] {
+            let before = snapshot_target.state.clone();
+            let mut forged = template.clone();
+            forged.last_included_index += 1;
+            forged.restore_activation = invalid;
+            assert!(snapshot_target.install_snapshot(forged).is_err());
+            assert_eq!(
+                snapshot_target.state, before,
+                "rejected snapshot cannot mutate committed state"
+            );
+        }
+        assert_eq!(leader.committed_restore_activation(), Some(&newer));
+        assert_eq!(follower.committed_restore_activation(), Some(&newer));
+    }
+
+    #[test]
+    fn restore_activation_historical_validation_does_not_weaken_new_decision_admission() {
+        let topology = topology_with_nodes(3);
+        let activation = restore_activation(&topology, 10_000);
+        let mut successor = topology.clone();
+        successor.generation += 1;
+        validate_historical_activation_against_topology(
+            &activation,
+            &successor,
+            &topology.cluster_id,
+        )
+        .unwrap();
+        assert!(validate_activation_against_topology(
+            &activation,
+            &successor,
+            &topology.cluster_id
+        )
+        .is_err());
+        let new_decision = MetadataLogEntry {
+            index: 2,
+            term: 1,
+            leadership_barrier: false,
+            topology: successor.clone(),
+            restore_activation: Some(activation.clone()),
+        };
+        assert!(
+            validate_log_entry_shape(&new_decision, &topology.cluster_id).is_err(),
+            "NEW decisions still need the exact topology at admission"
+        );
+        let mut corrupt = activation.clone();
+        corrupt.topology_sha256 = "d".repeat(64);
+        assert!(validate_historical_activation_against_topology(
+            &corrupt,
+            &topology,
+            &topology.cluster_id
+        )
+        .is_err());
+        let mut future = activation.clone();
+        future.topology_generation = successor.generation + 1;
+        assert!(validate_historical_activation_against_topology(
+            &future,
+            &successor,
+            &topology.cluster_id
+        )
+        .is_err());
+        let mut wrong_cluster = activation.clone();
+        wrong_cluster.cluster_id = ClusterId::new("wrong-cluster").unwrap();
+        assert!(validate_historical_activation_against_topology(
+            &wrong_cluster,
+            &successor,
+            &topology.cluster_id
+        )
+        .is_err());
+        let mut malformed = activation.clone();
+        malformed.admission_checksum_sha256 = "bad".into();
+        assert!(validate_historical_activation_against_topology(
+            &malformed,
+            &successor,
+            &topology.cluster_id
+        )
+        .is_err());
+        assert!(validate_committed_activation_progress(None, Some(&malformed)).is_err());
+        // New-root bootstrap has no prior committed lineage to erase.
+        validate_committed_activation_progress(None, Some(&activation)).unwrap();
     }
 
     #[test]
@@ -2846,6 +3049,59 @@ mod tests {
         assert_eq!(follower.committed_topology(), &changed);
         assert_eq!(leader.committed_restore_activation(), Some(&activation));
         assert_eq!(follower.committed_restore_activation(), Some(&activation));
+
+        // Obtain a real fresh quorum response from the historical state.
+        // The DTO boundary must accept retained lineage, but refuse future or
+        // same-generation mismatched decisions even before row-read wiring.
+        let read_request_id = Uuid::new_v4();
+        let context_local = read_participant(&changed, "n1");
+        let mut context = leader
+            .begin_read_authority(read_request_id, Duration::from_secs(1), &context_local)
+            .unwrap();
+        let probe = leader
+            .read_authority_probe(&context, &ClusterNodeId::new("n2").unwrap(), 1, 8)
+            .unwrap();
+        let response = follower.handle_read_authority_probe(probe.clone()).unwrap();
+        let ack = MetadataReadAck::from_transport(
+            &probe,
+            &ClusterNodeId::new("n2").unwrap(),
+            read_participant(&changed, "n2"),
+            response,
+        )
+        .unwrap();
+        assert!(leader
+            .record_read_authority_ack(&mut context, &ack)
+            .unwrap());
+        let range = changed.range_by_id(range_id).unwrap();
+        let request = MetadataReadAcquireRequest {
+            protocol_version: METADATA_READ_ACQUISITION_PROTOCOL_VERSION,
+            acquisition_id: Uuid::new_v4(),
+            read_request_id,
+            requester_node_id: range.leader.clone(),
+            requester_incarnation: changed.nodes[&range.leader].incarnation,
+            range_id,
+            range_epoch: range.epoch,
+            budget_ms: 1000,
+        };
+        let dto = leader
+            .finish_read_authority(context)
+            .unwrap()
+            .into_acquisition_response(request.clone())
+            .unwrap();
+        assert_eq!(dto.restore_activation, Some(activation.clone()));
+        dto.validate(&request).unwrap();
+        let mut future_dto = dto.clone();
+        future_dto
+            .restore_activation
+            .as_mut()
+            .unwrap()
+            .topology_generation = changed.generation + 1;
+        assert!(future_dto.validate(&request).is_err());
+        let mut mismatched_dto = dto.clone();
+        let mismatched = mismatched_dto.restore_activation.as_mut().unwrap();
+        mismatched.topology_generation = changed.generation;
+        mismatched.topology_sha256 = "d".repeat(64);
+        assert!(mismatched_dto.validate(&request).is_err());
 
         // This is a trusted-caller store/protocol test, not an mTLS test. The
         // actual leader creates the compacted snapshot; no state is forged.

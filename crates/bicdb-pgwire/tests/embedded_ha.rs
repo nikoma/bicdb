@@ -12,11 +12,19 @@ use bicdb_pgwire::{
 use bicdb_sql::SqlSession;
 
 fn port() -> u16 {
-    TcpListener::bind("127.0.0.1:0")
-        .unwrap()
-        .local_addr()
-        .unwrap()
-        .port()
+    // Closing a port-zero probe makes that number immediately eligible for
+    // another probe, including another node in this same HA cluster. Keep
+    // every chosen number unique across concurrent tests and later restarts.
+    static USED: std::sync::OnceLock<std::sync::Mutex<std::collections::HashSet<u16>>> =
+        std::sync::OnceLock::new();
+    let mut used = USED.get_or_init(Default::default).lock().unwrap();
+    loop {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        if used.insert(port) {
+            return port;
+        }
+    }
 }
 fn config(index: usize, ports: &[u16], failover: bool) -> PgWireConfig {
     let address = |index: usize| format!("127.0.0.1:{}", ports[index]);

@@ -1,0 +1,61 @@
+{
+  "source": "66f7a00a934dfb854a1a215628295ca82fb57f49",
+  "scope": "Candidate source1.0.464-beta stacked on exact6f frontend463; includes merged62f native snapshot semantics. RC lock acquisition updates the pinned observation even after client statement refresh, only for native READ COMMITTED with no existing pending write; fixed snapshots and stale already-buffered native writes remain conservative. Core prior negative061a reproduced; stronger SQL tests-only negativea503 on main462 now reproduced a TransactionConflict at COMMIT after fresh UPDATE RETURNING. NativePG16 all8 INT/NUMERIC schedules passed, without and with UPDATE/NOWAIT/SKIP LOCKED. Both storage modes in real SQL regression, source/version identity and snapshot/HA/Oracle-default regressions. Prior nonPK SQL negative passed; retained honestly. No merge until predecessor463 and exact final-head broadCI pass, distinct next unused version verified. No new binary or deployment claimed. Serialized one-job memory-monitored build16GiB and active host10GiB floor.",
+  "started_unix": 1794379549.4715316,
+  "steps": [
+    {
+      "command": [
+        "python3",
+        "scripts/bump-version.py",
+        "--check"
+      ],
+      "started_unix": 1794379549.471732,
+      "exit": 0,
+      "finished_unix": 1794379549.5226243
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--test",
+        "paged_row_reservations",
+        "--test",
+        "transaction_isolation"
+      ],
+      "started_unix": 1794379549.522761,
+      "exit": 0,
+      "finished_unix": 1794379578.2377632
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "read_committed_lock_refresh",
+        "--test",
+        "session_statement_snapshots",
+        "--test",
+        "read_committed_upsert_primary",
+        "--test",
+        "version_identity"
+      ],
+      "started_unix": 1794379578.2380052,
+      "exit": 101,
+      "finished_unix": 1794379686.7027855
+    }
+  ],
+  "status": "failed",
+  "finished_unix": 1794379686.7030513
+}

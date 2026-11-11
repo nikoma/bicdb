@@ -1,0 +1,22 @@
+{
+  "scope": "Read-committed current-row observation after an earlier plain read",
+  "final_source_version": "1.0.465-beta",
+  "focused_source": "0acbe3c3306eb6654562fa288ae23c0f22715332",
+  "tests_only_negative_source": "a5035d2c5e6f4e9ffd8b51262a55e6205359e288",
+  "negative_base_main": "d8e30158d653eef7db7f1b52c56f0d4ab1d4d953",
+  "negative_observed_failure": "First EmbeddedMemory INT primary-key plain-read/UPDATE schedule returns21 then COMMIT reports TransactionConflict: current_rows:1 changed after transaction4 snapshot. The test stops there; other matrix cells were not reached by this negative run.",
+  "incomplete_fix_source": "66f7a00a934dfb854a1a215628295ca82fb57f49",
+  "incomplete_fix_observed_failure": "Core regressions pass but same SQL COMMIT fails. This was an unmerged private1.0.464-beta candidate;464 was subsequently reserved for independent HA evidence. It was not a release or deployment.",
+  "focused_commands_passed": 5,
+  "native_pg16_primary_schedules_passed": 8,
+  "native_pg16_unique_key_schedules_passed": 2,
+  "primary_sql_matrix": "Both stores x INT/NUMERIC primary key x plain UPDATE/FOR UPDATE/NOWAIT/SKIP LOCKED;16 schedules",
+  "unique_key_sql_matrix": "Both stores x UPDATE/DELETE;4 schedules",
+  "ordinary_native_reads_and_already_buffered_writes": "Retain conservative dependencies; original core stale-buffered-write assertions and native fixed-snapshot arbiter retry assertion remain unchanged.",
+  "full_repository_ci": "Recorded separately by GitHub at the delivery head; focused receipts are not substituted for broad suites.",
+  "final_idempiere_acceptance": false,
+  "standard_binary_produced": false,
+  "published_release": false,
+  "deployment_performed": false,
+  "earlier_non_primary_sql_negative": "Passed without the lock-observation fix; not claimed as a reproduction."
+}

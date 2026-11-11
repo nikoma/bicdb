@@ -166,3 +166,97 @@ fn paged_locks_still_reject_a_changed_fixed_snapshot() {
     reader.rollback().unwrap();
     db.close().unwrap();
 }
+
+#[test]
+fn refreshed_lock_replaces_an_earlier_unlocked_observation() {
+    for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
+        for nonblocking in [false, true] {
+            let root = tempfile::tempdir().unwrap();
+            let mut db = BicDb::open_with_config(root.path(), configuration(mode.clone())).unwrap();
+            db.create_collection("counters").unwrap();
+            db.insert("counters", row(1)).unwrap();
+            let mut reader = db.begin_transaction().unwrap();
+            reader.set_snapshot_isolation(false, 0).unwrap();
+            assert_eq!(
+                reader.get("counters", "counter").unwrap().unwrap().metadata["value"],
+                1
+            );
+            let mut writer = db.begin_transaction().unwrap();
+            writer.update("counters", row(2)).unwrap();
+            writer.commit().unwrap();
+            reader.refresh_read_committed_snapshot().unwrap();
+            let locked = if nonblocking {
+                reader.try_lock_visible_record(None, "counters", "counter")
+            } else {
+                reader.lock_visible_record_waiting(None, "counters", "counter")
+            }
+            .unwrap();
+            assert!(locked, "{mode} nonblocking={nonblocking}");
+            let current = reader.get("counters", "counter").unwrap().unwrap();
+            assert_eq!(current.metadata["value"], 2);
+            reader
+                .update(
+                    "counters",
+                    row(current.metadata["value"].as_i64().unwrap() + 1),
+                )
+                .unwrap();
+            reader.commit().unwrap();
+            assert_eq!(
+                db.get("counters", "counter").unwrap().unwrap().metadata["value"],
+                3
+            );
+            db.close().unwrap();
+            let db = BicDb::open_with_config(root.path(), configuration(mode.clone())).unwrap();
+            assert_eq!(
+                db.get("counters", "counter").unwrap().unwrap().metadata["value"],
+                3
+            );
+            db.close().unwrap();
+        }
+    }
+}
+
+#[test]
+fn refresh_and_late_lock_cannot_rebase_an_already_buffered_stale_write() {
+    for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
+        for late_lock in [None, Some(false), Some(true)] {
+            let root = tempfile::tempdir().unwrap();
+            let mut db = BicDb::open_with_config(root.path(), configuration(mode.clone())).unwrap();
+            db.create_collection("counters").unwrap();
+            db.insert("counters", row(1)).unwrap();
+            let mut reader = db.begin_transaction().unwrap();
+            reader.set_snapshot_isolation(false, 0).unwrap();
+            assert_eq!(
+                reader.get("counters", "counter").unwrap().unwrap().metadata["value"],
+                1
+            );
+            let mut writer = db.begin_transaction().unwrap();
+            writer.update("counters", row(2)).unwrap();
+            writer.commit().unwrap();
+            reader.refresh_read_committed_snapshot().unwrap();
+            // A normal re-read keeps native optimistic read dependencies.
+            assert_eq!(
+                reader.get("counters", "counter").unwrap().unwrap().metadata["value"],
+                2
+            );
+            reader.update("counters", row(99)).unwrap();
+            if let Some(nonblocking) = late_lock {
+                assert!(if nonblocking {
+                    reader.try_lock_visible_record(None, "counters", "counter")
+                } else {
+                    reader.lock_visible_record_waiting(None, "counters", "counter")
+                }
+                .unwrap());
+            }
+            assert!(
+                matches!(reader.commit(), Err(BicDbError::TransactionConflict(_))),
+                "{mode} {late_lock:?}"
+            );
+            assert_eq!(
+                db.get("counters", "counter").unwrap().unwrap().metadata["value"],
+                2
+            );
+            db.close().unwrap();
+        }
+    }
+}

@@ -506,6 +506,29 @@ pub(crate) fn has_executable_sql(sql: &str) -> bool {
     false
 }
 
+fn routine_user_type_column(db: &BicDb, name: &str) -> Result<Option<UserTypeColumnSchema>> {
+    let Some(oid) = pg_user_type_oid_by_name(db, name)? else {
+        return Ok(None);
+    };
+    let oid = i64::from(oid);
+    if let Some(user_type) = load_user_type_by_oid(db, oid)? {
+        return Ok(Some(user_type.column_type(user_type.array_oid == oid)));
+    }
+    // A relation's composite type belongs to its table schema, rather than
+    // the standalone user-type catalog. Bind the same cached OID identity
+    // used by row descriptions, including the distinct array identity.
+    let index = row_type_oid_index(db)?;
+    let Some((position, array)) = index
+        .row
+        .get(&oid)
+        .map(|&position| (position, false))
+        .or_else(|| index.array.get(&oid).map(|&position| (position, true)))
+    else {
+        return Ok(None);
+    };
+    Ok(Some(table_row_type_column(&index.schemas[position], array)))
+}
+
 pub(crate) fn cast_routine_return_value(
     db: &BicDb,
     value: SqlValue,
@@ -521,13 +544,8 @@ pub(crate) fn cast_routine_return_value(
     if let Some(pg_type) = pg_type_regtype_name(return_type) {
         return cast_value_to_pg_type(value, &pg_type);
     }
-    if let Some(oid) = pg_user_type_oid_by_name(db, return_type)? {
-        if let Some(user_type) = load_user_type_by_oid(db, i64::from(oid))? {
-            return cast_value_to_user_type(
-                value,
-                &user_type.column_type(user_type.array_oid == i64::from(oid)),
-            );
-        }
+    if let Some(user_type) = routine_user_type_column(db, return_type)? {
+        return cast_value_to_user_type(value, &user_type);
     }
     let pg_type = collapse_sql_whitespace(return_type).to_ascii_lowercase();
     cast_value_to_pg_type(value, &pg_type)
@@ -4987,12 +5005,9 @@ impl RoutineFrame {
             if pg_type_oid_by_name(&schema.pg_type).is_some() {
                 continue;
             }
-            if let Some(oid) = pg_user_type_oid_by_name(db, &schema.pg_type)? {
-                if let Some(user_type) = load_user_type_by_oid(db, i64::from(oid))? {
-                    let array = user_type.array_oid == i64::from(oid);
-                    self.registered_assignment_types
-                        .insert(name.clone(), user_type.column_type(array));
-                }
+            if let Some(user_type) = routine_user_type_column(db, &schema.pg_type)? {
+                self.registered_assignment_types
+                    .insert(name.clone(), user_type);
             }
         }
         Ok(())

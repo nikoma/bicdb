@@ -70,7 +70,18 @@ fn activated_anchor_keeps_r1_after_new_ack_and_late_prepared_follower_activates(
     eprintln!("ACTIVATED_RPLUSONE_RECOVERY {recovery_report}");
     recovered.expect("actual current-epoch coordinator recovery must precede the new origin ACK");
     let next = fixture.native.append("actual-rplusone-after-activation");
-    let origin_report = serde_json::json!({"phase":"NEW_ORIGIN_AFTER_ACTIVATION","acknowledged":next.is_ok(),"error":next.as_ref().err().map(ToString::to_string),"source_native":fixture.native.databases[&node("n0")].read().native_range_prefix_observation(scope.range_id).unwrap(),"late_node_native":fixture.native.databases[&node("n1")].read().native_range_prefix_observation(scope.range_id).unwrap(),"late_node_raw":fixture.native.services[&node("n1")].lock().range_write_progress(scope.range_id),"physical_qualification":false,"strong_get_tested":false});
+    let source_native = fixture.native.databases[&node("n0")]
+        .read()
+        .native_range_prefix_observation(scope.range_id)
+        .unwrap();
+    let late_native = fixture.native.databases[&node("n1")]
+        .read()
+        .native_range_prefix_observation(scope.range_id)
+        .unwrap();
+    let late_raw = fixture.native.services[&node("n1")]
+        .lock()
+        .range_write_progress(scope.range_id);
+    let origin_report = serde_json::json!({"phase":"NEW_ORIGIN_AFTER_ACTIVATION","acknowledged":next.is_ok(),"error":next.as_ref().err().map(ToString::to_string),"source_native":source_native,"late_node_native":late_native,"late_node_raw":late_raw,"physical_qualification":false,"strong_get_tested":false});
     std::fs::write(
         fixture
             .native

@@ -28,9 +28,6 @@ pub const SQL_CATALOG_INTENTS_FEATURE_FLAG: &str = "sql_catalog_intents_v1";
 /// Node-local namespace lineage. Never replicate this as a portable schema
 /// reader capability: each destination activates and owns its own identities.
 pub const LOCAL_NAMESPACE_IDENTITY_FEATURE_FLAG: &str = "local_namespace_identity_v1";
-/// Local native image receipts require writers that honor image invalidation.
-/// This capability is separate from namespace IDs and is never portable schema.
-pub const RANGE_IMAGE_INSTALL_FEATURE_FLAG: &str = "range_image_install_v1";
 pub const ORACLE_SIMPLE_CASE_V1_FEATURE_FLAG: &str = "oracle_simple_case_v1";
 const KNOWN_FEATURE_FLAGS: &[&str] = &[
     ORACLE_INVALID_ROUTINES_FEATURE_FLAG,
@@ -38,7 +35,6 @@ const KNOWN_FEATURE_FLAGS: &[&str] = &[
     UNIQUE_NULLS_NOT_DISTINCT_FEATURE_FLAG,
     SQL_CATALOG_INTENTS_FEATURE_FLAG,
     LOCAL_NAMESPACE_IDENTITY_FEATURE_FLAG,
-    RANGE_IMAGE_INSTALL_FEATURE_FLAG,
     "format_metadata_v2",
     SERVER_PAGED_FEATURE_FLAG,
     ONLINE_BACKUP_EXTENT_FEATURE_FLAG,
@@ -540,10 +536,7 @@ fn persist_metadata_with(
     let fsync = fsync
         || metadata
             .feature_flags
-            .contains(LOCAL_NAMESPACE_IDENTITY_FEATURE_FLAG)
-        || metadata
-            .feature_flags
-            .contains(RANGE_IMAGE_INSTALL_FEATURE_FLAG);
+            .contains(LOCAL_NAMESPACE_IDENTITY_FEATURE_FLAG);
     write(
         &metadata_path(root),
         &serde_json::to_vec_pretty(metadata)?,
@@ -637,28 +630,6 @@ pub(crate) fn enable_local_namespace_identity(root: &Path) -> Result<()> {
     persist_metadata(root, &metadata, true)
 }
 
-/// Fence image-unaware readers/writers before trusting native image receipts.
-pub(crate) fn enable_range_image_install(root: &Path) -> Result<()> {
-    let lock = feature_flags_lock(root);
-    let _guard = lock.lock();
-    let mut metadata = read_or_legacy_metadata(root)?;
-    validate_supported(&metadata)?;
-    metadata
-        .feature_flags
-        .insert(RANGE_IMAGE_INSTALL_FEATURE_FLAG.into());
-    persist_metadata(root, &metadata, true)
-}
-
-/// Presence of a receipt alone is never activation. Validate format and mode
-/// before a native adapter may consider this local receipt capability active.
-pub(crate) fn range_image_install_active(root: &Path) -> Result<bool> {
-    let metadata = read_or_legacy_metadata(root)?;
-    validate_supported(&metadata)?;
-    Ok(metadata
-        .feature_flags
-        .contains(RANGE_IMAGE_INSTALL_FEATURE_FLAG))
-}
-
 /// Persist the reader/writer fence before any Oracle-v1 key definition or build
 /// checkpoint becomes durable. The capability is sticky even after index DROP.
 pub(crate) fn enable_oracle_simple_case_v1(root: &Path) -> Result<()> {
@@ -695,6 +666,20 @@ mod local_identity_format_tests {
     use super::*;
 
     #[test]
+    fn namespace_identity_does_not_advertise_unimplemented_range_image_readers() {
+        let root = tempfile::tempdir().unwrap();
+        let mut metadata = FormatMetadata::current();
+        metadata
+            .feature_flags
+            .insert("range_image_install_v1".into());
+        persist_metadata(root.path(), &metadata, true).unwrap();
+        let error = ensure_open_compatible(root.path(), false).unwrap_err();
+        assert!(error
+            .to_string()
+            .contains("unknown format feature flag `range_image_install_v1`"));
+    }
+
+    #[test]
     fn namespace_identity_metadata_replacements_keep_sticky_fences_durable() {
         let root = tempfile::tempdir().unwrap();
         let legacy = FormatMetadata::current();
@@ -703,10 +688,7 @@ mod local_identity_format_tests {
             Ok(())
         })
         .unwrap();
-        for flag in [
-            LOCAL_NAMESPACE_IDENTITY_FEATURE_FLAG,
-            RANGE_IMAGE_INSTALL_FEATURE_FLAG,
-        ] {
+        for flag in [LOCAL_NAMESPACE_IDENTITY_FEATURE_FLAG] {
             let mut metadata = legacy.clone();
             metadata.feature_flags.insert(flag.into());
             persist_metadata_with(root.path(), &metadata, false, |path, bytes, sync| {
@@ -737,7 +719,7 @@ mod local_identity_format_tests {
                     for _ in 0..24 {
                         match action {
                             0 => enable_local_namespace_identity(root).unwrap(),
-                            1 => enable_range_image_install(root).unwrap(),
+                            1 => enable_sql_catalog_intents(root).unwrap(),
                             2 => enable_unique_nulls_not_distinct(root).unwrap(),
                             3 => persist_current(root, false).unwrap(),
                             _ => {
@@ -752,7 +734,7 @@ mod local_identity_format_tests {
         let metadata = read_or_legacy_metadata(root.path()).unwrap();
         for flag in [
             LOCAL_NAMESPACE_IDENTITY_FEATURE_FLAG,
-            RANGE_IMAGE_INSTALL_FEATURE_FLAG,
+            SQL_CATALOG_INTENTS_FEATURE_FLAG,
             UNIQUE_NULLS_NOT_DISTINCT_FEATURE_FLAG,
         ] {
             assert!(metadata.feature_flags.contains(flag));
@@ -768,7 +750,7 @@ mod local_identity_format_tests {
         let canonical_lock = feature_flags_lock(root.path());
         let alias = root.path().join(".");
         assert!(Arc::ptr_eq(&canonical_lock, &feature_flags_lock(&alias)));
-        for action in 0..10 {
+        for action in 0..9 {
             let guard = canonical_lock.lock();
             let (entered_tx, entered_rx) = mpsc::channel();
             let (done_tx, done_rx) = mpsc::channel();
@@ -777,14 +759,13 @@ mod local_identity_format_tests {
                     entered_tx.send(()).unwrap();
                     match action {
                         0 => enable_local_namespace_identity(&alias),
-                        1 => enable_range_image_install(&alias),
-                        2 => enable_unique_nulls_not_distinct(&alias),
-                        3 => enable_sql_catalog_intents(&alias),
-                        4 => enable_oracle_simple_case_v1(&alias),
-                        5 => enable_oracle_invalid_routines(&alias),
-                        6 => enable_online_backup_extent_tracking(&alias),
-                        7 => persist_current(&alias, false),
-                        8 => persist_current_with_mode(&alias, StorageMode::EmbeddedMemory, false),
+                        1 => enable_unique_nulls_not_distinct(&alias),
+                        2 => enable_sql_catalog_intents(&alias),
+                        3 => enable_oracle_simple_case_v1(&alias),
+                        4 => enable_oracle_invalid_routines(&alias),
+                        5 => enable_online_backup_extent_tracking(&alias),
+                        6 => persist_current(&alias, false),
+                        7 => persist_current_with_mode(&alias, StorageMode::EmbeddedMemory, false),
                         _ => ensure_open_compatible_in_mode(
                             &alias,
                             false,

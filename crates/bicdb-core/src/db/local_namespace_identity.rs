@@ -382,18 +382,6 @@ mod tests {
     }
 
     #[test]
-    fn namespace_identity_image_receipt_capability_is_separate_and_default_off() {
-        let root = tempfile::tempdir().unwrap();
-        let db = BicDb::open_with_config(root.path(), config(StorageMode::EmbeddedMemory)).unwrap();
-        db.close().unwrap();
-        assert!(!format::range_image_install_active(root.path()).unwrap());
-        format::enable_range_image_install(root.path()).unwrap();
-        assert!(format::range_image_install_active(root.path()).unwrap());
-        let db = BicDb::open_with_config(root.path(), config(StorageMode::EmbeddedMemory)).unwrap();
-        assert!(!db.local_namespace_identity_feature_active());
-    }
-
-    #[test]
     #[ignore = "requires the explicitly pinned frozen 1.0.463-beta CLI artifact"]
     fn namespace_identity_frozen_old_reader_refuses_local_flags_without_writes() {
         use sha2::{Digest, Sha256};
@@ -455,20 +443,12 @@ mod tests {
             "default legacy compatibility: {}",
             String::from_utf8_lossy(&positive.stderr)
         );
-        for flag in [
-            format::LOCAL_NAMESPACE_IDENTITY_FEATURE_FLAG,
-            format::RANGE_IMAGE_INSTALL_FEATURE_FLAG,
-        ] {
+        for flag in [format::LOCAL_NAMESPACE_IDENTITY_FEATURE_FLAG] {
             let root = tempfile::tempdir().unwrap();
             let mut db = BicDb::open_with_config(root.path(), cfg.clone()).unwrap();
             db.create_collection("items").unwrap();
-            if flag == format::LOCAL_NAMESPACE_IDENTITY_FEATURE_FLAG {
-                db.activate_local_namespace_identity_v1().unwrap();
-            }
+            db.activate_local_namespace_identity_v1().unwrap();
             db.close().unwrap();
-            if flag == format::RANGE_IMAGE_INSTALL_FEATURE_FLAG {
-                format::enable_range_image_install(root.path()).unwrap();
-            }
             let before = files(root.path());
             let output = Command::new(&binary)
                 .arg("sql")

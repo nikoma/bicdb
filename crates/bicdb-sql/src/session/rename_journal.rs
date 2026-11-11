@@ -859,6 +859,44 @@ mod tests {
     }
 
     #[test]
+    fn refused_ddl_undo_keeps_the_journal_entry_for_a_later_retry() {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open(root.path()).unwrap();
+        db.create_collection("original").unwrap();
+        let mut owner = db.begin_transaction().unwrap();
+        let mut plan = prepare(&mut db).unwrap();
+        capture_rename(&db, &mut plan, "original", "renamed").unwrap();
+        db.rename_collection_preserving_pending_writes(&mut owner, "original", "renamed")
+            .unwrap();
+        let other = db.begin_transaction().unwrap();
+        let mut session = SqlSession::new(&mut db);
+        let owner_id = owner.id();
+        session.tx = Some(owner);
+        session.ddl_undo.push(DdlUndo::RestoreRenameJournal {
+            id: plan.header.id.clone(),
+            old_table: "original".into(),
+        });
+        assert!(session.rollback_ddl_undo_to_len(0).is_err());
+        assert_eq!(
+            session.ddl_undo.len(),
+            1,
+            "a refused restore must retain the durable journal's retry entry"
+        );
+        assert_eq!(session.tx.as_ref().unwrap().id(), owner_id);
+        assert!(session.db_ref().has_collection("renamed"));
+        assert_eq!(pending(session.db_ref()).unwrap().len(), 1);
+        other.rollback().unwrap();
+        session.rollback_ddl_undo_to_len(0).unwrap();
+        assert!(session.ddl_undo.is_empty());
+        assert!(pending(session.db_ref()).unwrap().is_empty());
+        assert!(session.db_ref().has_collection("original"));
+        assert!(!session.db_ref().has_collection("renamed"));
+        session.tx.take().unwrap().rollback().unwrap();
+        drop(session);
+        db.close().unwrap();
+    }
+
+    #[test]
     fn live_undo_refuses_other_owners_before_changing_the_backing() {
         let root = tempfile::tempdir().unwrap();
         let mut db = BicDb::open(root.path()).unwrap();

@@ -250,6 +250,12 @@ enum ClusterDataRequest {
     RecoveryFencedProbe {
         request: crate::distribution_range_recovery::RecoveryFencedProbeRequest,
     },
+    PrepareNativeReady {
+        request: crate::distribution_range_recovery::NativeReadyRequest,
+    },
+    ObserveNativeReady {
+        request: crate::distribution_range_recovery::NativeReadyRequest,
+    },
     RecoveryCertifyHistorical {
         request: crate::distribution_range_recovery::RecoveryHistoricalCommandRequest,
     },
@@ -358,6 +364,9 @@ impl ClusterDataRequest {
             Self::ApplyRangeWriteRepair { batch, .. } => Some(batch.range_id),
             Self::RecoveryEpochFence { request } => Some(request.scope.range_id),
             Self::RecoveryFencedProbe { request } => Some(request.scope.range_id),
+            Self::PrepareNativeReady { request } | Self::ObserveNativeReady { request } => {
+                Some(request.scope.range_id)
+            }
             Self::RecoveryCertifyHistorical { request }
             | Self::RecoveryApplyHistorical { request } => Some(request.scope.range_id),
             Self::Ping
@@ -410,6 +419,7 @@ enum ClusterDataResponse {
     MetadataRecoveryRole(MetadataRecoveryRoleResponse),
     RecoveryEpochFence(crate::distribution_range_recovery::RecoveryEpochFenceReply),
     RecoveryFencedProbe(crate::distribution_range_recovery::RecoveryFencedProbeReply),
+    NativeReady(crate::distribution_range_recovery::NativeReadyReply),
     RangeWrite(RangeWriteAck),
     RangeWriteProgress(RangeWriteProgress),
     RangeWriteRepair(RangeWriteRepairBatch),
@@ -884,6 +894,30 @@ fn handle_cluster_data_connection(
                 .map(|observation| {
                     ClusterDataResponse::RecoveryFencedProbe(observation.into_reply())
                 });
+        }
+        if let ClusterDataRequest::PrepareNativeReady { request } = request.request {
+            let runtime = recovery_runtime
+                .ok_or_else(|| transport_error("native recovery runtime is not active"))?;
+            let caller = authenticated_caller.as_ref().ok_or_else(|| {
+                transport_error("native prepare requires an authenticated leader")
+            })?;
+            let token =
+                CancellationToken::new(Arc::new(AtomicBool::new(false)), Some(request_deadline));
+            return runtime
+                .prepare_native_ready(caller, &request, &token)
+                .map(|o| ClusterDataResponse::NativeReady(o.into_reply()));
+        }
+        if let ClusterDataRequest::ObserveNativeReady { request } = request.request {
+            let runtime = recovery_runtime
+                .ok_or_else(|| transport_error("native recovery runtime is not active"))?;
+            let caller = authenticated_caller.as_ref().ok_or_else(|| {
+                transport_error("native-ready status requires an authenticated voter")
+            })?;
+            let token =
+                CancellationToken::new(Arc::new(AtomicBool::new(false)), Some(request_deadline));
+            return runtime
+                .observe_native_ready(caller, &request, &token)
+                .map(|o| ClusterDataResponse::NativeReady(o.into_reply()));
         }
         dispatch_cluster_data_request(
             service,
@@ -2302,6 +2336,10 @@ fn dispatch_cluster_data_request(
         | ClusterDataRequest::RecoveryApplyHistorical { .. } => Err(transport_error(
             "authenticated native historical recovery runtime is not active",
         )),
+        ClusterDataRequest::PrepareNativeReady { .. }
+        | ClusterDataRequest::ObserveNativeReady { .. } => Err(transport_error(
+            "authenticated native-ready runtime is not active",
+        )),
         ClusterDataRequest::RecoveryFencedProbe { .. } => Err(transport_error(
             "recovery observations require authenticated receiver runtime",
         )),
@@ -3307,6 +3345,66 @@ impl TcpClusterRelocationTransport {
         }
     }
 
+    fn native_ready_observation(
+        &self,
+        destination: &ClusterNodeId,
+        request: &crate::distribution_range_recovery::NativeReadyRequest,
+        prepare: bool,
+        parent: &CancellationToken,
+    ) -> Result<crate::distribution_range_recovery::NativeReadyObservation> {
+        let token = request.cancellation(parent)?;
+        let payload = if prepare {
+            ClusterDataRequest::PrepareNativeReady {
+                request: request.clone(),
+            }
+        } else {
+            ClusterDataRequest::ObserveNativeReady {
+                request: request.clone(),
+            }
+        };
+        crate::distribution_range_consensus::validate_native_json_size(
+            &ClusterDataRequestEnvelope {
+                protocol_version: CLUSTER_DATA_PROTOCOL_VERSION,
+                cluster_id: self.cluster_id.clone(),
+                caller_node_id: self.caller_node_id.clone(),
+                destination_node_id: destination.clone(),
+                request_id: u64::MAX,
+                request: &payload,
+            },
+            self.config.max_frame_bytes,
+        )?;
+        let (response, peer) =
+            self.call_with_read_participant_cancellable(&token, destination, payload)?;
+        match response {
+            ClusterDataResponse::NativeReady(reply) => {
+                crate::distribution_range_recovery::NativeReadyObservation::from_transport(
+                    AuthenticatedNativeReadyReply { reply, peer },
+                    request,
+                    token.deadline().unwrap(),
+                )
+            }
+            response => Err(unexpected_response(
+                "actual frozen native readiness",
+                response,
+            )),
+        }
+    }
+    pub(crate) fn prepare_native_ready_observation(
+        &self,
+        destination: &ClusterNodeId,
+        request: &crate::distribution_range_recovery::NativeReadyRequest,
+        parent: &CancellationToken,
+    ) -> Result<crate::distribution_range_recovery::NativeReadyObservation> {
+        self.native_ready_observation(destination, request, true, parent)
+    }
+    pub(crate) fn observe_native_ready_observation(
+        &self,
+        destination: &ClusterNodeId,
+        request: &crate::distribution_range_recovery::NativeReadyRequest,
+        parent: &CancellationToken,
+    ) -> Result<crate::distribution_range_recovery::NativeReadyObservation> {
+        self.native_ready_observation(destination, request, false, parent)
+    }
     pub(crate) fn recovery_historical_command_observation(
         &self,
         destination: &ClusterNodeId,
@@ -3453,6 +3551,8 @@ impl TcpClusterRelocationTransport {
                 | ClusterDataRequest::AcquireMetadataRecoveryRole { .. }
                 | ClusterDataRequest::RecoveryEpochFence { .. }
                 | ClusterDataRequest::RecoveryFencedProbe { .. }
+                | ClusterDataRequest::PrepareNativeReady { .. }
+                | ClusterDataRequest::ObserveNativeReady { .. }
                 | ClusterDataRequest::RecoveryCertifyHistorical { .. }
                 | ClusterDataRequest::RecoveryApplyHistorical { .. }
         );
@@ -3634,6 +3734,23 @@ fn unexpected_response(expected: &str, response: ClusterDataResponse) -> BicDbEr
 }
 
 impl RangeWriteTransport for TcpClusterRelocationTransport {
+    fn prepare_native_ready_observation(
+        &self,
+        destination: &ClusterNodeId,
+        request: &crate::distribution_range_recovery::NativeReadyRequest,
+        parent: &CancellationToken,
+    ) -> Result<crate::distribution_range_recovery::NativeReadyObservation> {
+        self.prepare_native_ready_observation(destination, request, parent)
+    }
+    fn observe_native_ready_observation(
+        &self,
+        destination: &ClusterNodeId,
+        request: &crate::distribution_range_recovery::NativeReadyRequest,
+        parent: &CancellationToken,
+    ) -> Result<crate::distribution_range_recovery::NativeReadyObservation> {
+        self.observe_native_ready_observation(destination, request, parent)
+    }
+
     fn recovery_historical_command_observation(
         &self,
         destination: &ClusterNodeId,

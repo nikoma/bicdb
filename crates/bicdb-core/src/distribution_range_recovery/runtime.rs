@@ -10,6 +10,8 @@ use parking_lot::Mutex;
 use std::collections::BTreeSet;
 use std::sync::Arc;
 
+mod native_ready;
+mod native_ready_quorum;
 mod participants;
 
 const MAX_CONTEXTS: usize = 4;
@@ -25,6 +27,7 @@ struct Session {
     frozen: Option<Arc<FrozenRangeMutationPermit>>,
     image_preflight:
         Option<crate::distribution_range_consensus::NativeImageInstallTransferPreflight>,
+    native_prepared: Option<Arc<crate::distribution_range_consensus::PreparedNativeRecoveryReady>>,
 }
 #[derive(Debug, Default)]
 struct Sessions {
@@ -485,6 +488,11 @@ impl RangeRecoveryRuntime {
                         "read-only observation cannot rotate a recovery freeze",
                     ));
                 }
+                // Every replace caller already passed actual fresh metadata,
+                // birth and durable-session preflight. Dropping this readonly
+                // pin keeps the old durable refusal and owned freeze intact;
+                // outstanding status holders still force a bounded retry.
+                session.native_prepared.take();
                 let frozen =
                     Arc::get_mut(session.frozen.as_mut().ok_or_else(|| {
                         invalid("recovery freeze is leased to an image installer")
@@ -518,6 +526,7 @@ impl RangeRecoveryRuntime {
                 scope: scope.clone(),
                 frozen: Some(Arc::clone(&frozen)),
                 image_preflight: None,
+                native_prepared: None,
             },
         );
         Ok(frozen)

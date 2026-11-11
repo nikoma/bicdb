@@ -40,6 +40,7 @@ use crate::{
 };
 
 mod native_image_install;
+mod native_ready;
 
 pub const RANGE_LEARNER_APPLY_FORMAT_VERSION: u32 = 1;
 pub const DEFAULT_RANGE_LEARNER_APPLY_STATE: &str = "cluster-range-learner-apply.json";

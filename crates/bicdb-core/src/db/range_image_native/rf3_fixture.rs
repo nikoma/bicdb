@@ -29,6 +29,7 @@ pub(crate) struct ActualNativeRf3ServiceTransport {
     topology: Arc<RwLock<ClusterTopology>>,
     services: BTreeMap<ClusterNodeId, Arc<Mutex<ClusterDataNodeService>>>,
     observations: Mutex<Vec<ActualNativeRf3RpcObservation>>,
+    unavailable: Mutex<BTreeSet<ClusterNodeId>>,
 }
 impl ActualNativeRf3ServiceTransport {
     fn range(&self, id: RangeId, epoch: u64) -> Result<RangeDescriptor> {
@@ -40,6 +41,9 @@ impl ActualNativeRf3ServiceTransport {
             .ok_or_else(|| invalid("actual RF3 fixture range/epoch differs"))
     }
     fn service(&self, id: &ClusterNodeId) -> Result<&Arc<Mutex<ClusterDataNodeService>>> {
+        if self.unavailable.lock().contains(id) {
+            return Err(invalid("actual RF3 fixture destination is unavailable"));
+        }
         self.services
             .get(id)
             .ok_or_else(|| invalid("actual RF3 destination absent"))
@@ -61,6 +65,14 @@ impl ActualNativeRf3ServiceTransport {
                 error: result.as_ref().err().map(ToString::to_string),
             });
         result
+    }
+    pub(crate) fn set_unavailable(&self, node: &ClusterNodeId, unavailable: bool) {
+        let mut nodes = self.unavailable.lock();
+        if unavailable {
+            nodes.insert(node.clone());
+        } else {
+            nodes.remove(node);
+        }
     }
     pub(crate) fn observations(&self) -> Vec<ActualNativeRf3RpcObservation> {
         self.observations.lock().clone()
@@ -353,6 +365,7 @@ impl ActualNativeRf3Fixture {
             topology: Arc::clone(&topology),
             services: services.clone(),
             observations: Mutex::new(Vec::new()),
+            unavailable: Mutex::new(BTreeSet::new()),
         });
         let coordinator = Arc::new(
             RangeWriteCoordinator::new_schema_fenced(

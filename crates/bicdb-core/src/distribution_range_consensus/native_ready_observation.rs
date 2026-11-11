@@ -43,10 +43,11 @@ impl RangeWriteStore {
                 record.phase,
                 recovery_state::RecoveryFencePhase::Active
                     | recovery_state::RecoveryFencePhase::NativePrepared(_)
+                    | recovery_state::RecoveryFencePhase::NativeCompleted(_)
             )
         {
             return Err(range_write_error(
-                "native preparation cannot freeze a completed or different session/open",
+                "native preparation cannot freeze an activated or different session/open",
             ));
         }
         Ok(())

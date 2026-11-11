@@ -101,8 +101,40 @@ impl ProbeHold {
 struct ObservedTlsTransport {
     inner: Arc<TcpClusterRelocationTransport>,
     hold: Arc<ProbeHold>,
+    ready_hold: Arc<ProbeHold>,
+    lag_status_seen: Arc<AtomicBool>,
 }
 impl RangeWriteTransport for ObservedTlsTransport {
+    fn observe_native_ready_observation(
+        &self,
+        destination: &ClusterNodeId,
+        request: &crate::distribution_range_recovery::NativeReadyRequest,
+        parent: &CancellationToken,
+    ) -> Result<crate::distribution_range_recovery::NativeReadyObservation> {
+        if destination == &node("n0") && self.ready_hold.armed.swap(false, Ordering::SeqCst) {
+            self.ready_hold.entered.store(true, Ordering::SeqCst);
+            while !self.ready_hold.released.load(Ordering::SeqCst) {
+                parent.check()?;
+                std::thread::sleep(Duration::from_millis(1));
+            }
+        }
+        let actual = self
+            .inner
+            .observe_native_ready_observation(destination, request, parent)?;
+        if destination == &node("n2") && actual.reply().range_index == 0 {
+            self.lag_status_seen.store(true, Ordering::SeqCst);
+        }
+        Ok(actual)
+    }
+    fn prepare_native_ready_observation(
+        &self,
+        destination: &ClusterNodeId,
+        request: &crate::distribution_range_recovery::NativeReadyRequest,
+        parent: &CancellationToken,
+    ) -> Result<crate::distribution_range_recovery::NativeReadyObservation> {
+        self.inner
+            .prepare_native_ready_observation(destination, request, parent)
+    }
     fn recovery_fenced_history_observation(
         &self,
         destination: &ClusterNodeId,
@@ -195,10 +227,21 @@ struct NetworkFixture {
     runtimes: BTreeMap<ClusterNodeId, Arc<RangeRecoveryRuntime>>,
     servers: Vec<ClusterDataServerHandle>,
     hold: Arc<ProbeHold>,
+    ready_hold: Arc<ProbeHold>,
+    lag_status_seen: Arc<AtomicBool>,
     _keys: tempfile::TempDir,
 }
 impl NetworkFixture {
     fn new(wired: bool) -> Self {
+        Self::new_ready_network(wired, false, false)
+    }
+    fn new_ready_network(wired: bool, all_nodes: bool, lagging_two: bool) -> Self {
+        assert!(!lagging_two || all_nodes);
+        let live_names = if all_nodes {
+            vec!["n0", "n1", "n2"]
+        } else {
+            vec!["n1", "n2"]
+        };
         let keys = tempfile::tempdir().unwrap();
         let identities = identities(keys.path());
         let listeners = ["n0", "n1", "n2"]
@@ -218,7 +261,13 @@ impl NetworkFixture {
             })
             .collect();
         let native = ActualNativeRf3Fixture::new_with_network_precondition(&network);
+        if lagging_two {
+            native.transport.set_unavailable(&node("n2"), true);
+        }
         native.append("actual-tls-historical").unwrap();
+        if lagging_two {
+            native.transport.set_unavailable(&node("n2"), false);
+        }
         let command = {
             let topology = native.topology.read();
             let range = topology.ranges.values().next().unwrap();
@@ -248,8 +297,9 @@ impl NetworkFixture {
             tls: Some(identities[id].tls()),
         };
         let current = Arc::new(RwLock::new(topology.clone()));
-        let clients = ["n1", "n2"]
-            .into_iter()
+        let clients = live_names
+            .iter()
+            .copied()
             .map(|name| {
                 let id = node(name);
                 let client = Arc::new(
@@ -288,10 +338,25 @@ impl NetworkFixture {
         leader
             .record_append_response(&node("n1"), &response)
             .unwrap();
-        let consensus = BTreeMap::from([
+        let extra = if all_nodes {
+            let mut zero = open(&node("n0"));
+            let response = zero
+                .handle_append_request(leader.append_request_from(1, 16).unwrap())
+                .unwrap();
+            leader
+                .record_append_response(&node("n0"), &response)
+                .unwrap();
+            Some(Arc::new(Mutex::new(zero)))
+        } else {
+            None
+        };
+        let mut consensus = BTreeMap::from([
             (node("n1"), Arc::new(Mutex::new(follower))),
             (node("n2"), Arc::new(Mutex::new(leader))),
         ]);
+        if let Some(zero) = extra {
+            consensus.insert(node("n0"), zero);
+        }
         let providers = consensus
             .iter()
             .map(|(id, state)| {
@@ -304,8 +369,11 @@ impl NetworkFixture {
             })
             .collect::<BTreeMap<_, _>>();
         let hold = Arc::new(ProbeHold::default());
-        let runtimes = ["n1", "n2"]
-            .into_iter()
+        let ready_hold = Arc::new(ProbeHold::default());
+        let lag_status_seen = Arc::new(AtomicBool::new(false));
+        let runtimes = live_names
+            .iter()
+            .copied()
             .map(|name| {
                 let id = node(name);
                 let runtime = RangeRecoveryRuntime::new(
@@ -320,6 +388,12 @@ impl NetworkFixture {
                         } else {
                             Arc::new(ProbeHold::default())
                         },
+                        ready_hold: if name == "n1" {
+                            Arc::clone(&ready_hold)
+                        } else {
+                            Arc::new(ProbeHold::default())
+                        },
+                        lag_status_seen: Arc::clone(&lag_status_seen),
                     }))
                 } else {
                     runtime
@@ -327,11 +401,11 @@ impl NetworkFixture {
                 (id, Arc::new(runtime))
             })
             .collect::<BTreeMap<_, _>>();
-        // n0's reserved endpoint is closed and NEVER hosted a recovery server.
-        // A+B remain a live data and metadata majority; no physical-host claim.
+        // Default: n0's endpoint stays closed. The readiness lag variant
+        // opens all three actual mTLS endpoints; neither is a physical-host test.
         drop(listeners);
         let mut servers = Vec::new();
-        for name in ["n1", "n2"] {
+        for name in &live_names {
             let id = node(name);
             servers.push(
                 start_cluster_data_server_with_recovery_runtime(
@@ -357,6 +431,8 @@ impl NetworkFixture {
             runtimes,
             servers,
             hold,
+            ready_hold,
+            lag_status_seen,
             _keys: keys,
         }
     }
@@ -398,10 +474,10 @@ impl NetworkFixture {
         .unwrap();
         let mut round = RecoveryFenceQuorumRound::begin(role, &parent).unwrap();
         let scope = round.scope().clone();
-        for name in ["n1", "n2"] {
+        for destination in self.runtimes.keys() {
             let observation = self.clients[&node("n1")]
                 .recovery_epoch_fence_observation(
-                    &node(name),
+                    destination,
                     &RecoveryEpochFenceRequest {
                         scope: scope.clone(),
                         budget_ms: 4000,
@@ -448,6 +524,71 @@ impl NetworkFixture {
             std::thread::sleep(Duration::from_millis(1));
         }
     }
+    fn ready_request(
+        &self,
+        scope: &RecoveryFenceScope,
+    ) -> crate::distribution_range_recovery::NativeReadyRequest {
+        crate::distribution_range_recovery::NativeReadyRequest {
+            scope: scope.clone(),
+            challenge: Uuid::now_v7(),
+            budget_ms: 3500,
+        }
+    }
+    fn prepare_ready(
+        &self,
+        name: &str,
+        scope: &RecoveryFenceScope,
+    ) -> Result<crate::distribution_range_recovery::NativeReadyObservation> {
+        self.clients[&node("n1")].prepare_native_ready_observation(
+            &node(name),
+            &self.ready_request(scope),
+            &CancellationToken::uncancelable(),
+        )
+    }
+    fn status_ready(
+        &self,
+        name: &str,
+        scope: &RecoveryFenceScope,
+    ) -> Result<crate::distribution_range_recovery::NativeReadyObservation> {
+        self.clients[&node("n1")].observe_native_ready_observation(
+            &node(name),
+            &self.ready_request(scope),
+            &CancellationToken::uncancelable(),
+        )
+    }
+    fn ready_role(&self, scope: &RecoveryFenceScope) -> RecoveryRoleAdmission {
+        let actor = self.actor();
+        let business = Uuid::now_v7();
+        let challenge = Uuid::now_v7();
+        let parent = CancellationToken::uncancelable()
+            .child_with_deadline(Instant::now() + Duration::from_secs(5));
+        let witness = self.providers[&node("n1")]
+            .witness_recovery_role(
+                &actor,
+                business,
+                scope.range_id,
+                scope.range_epoch,
+                scope.recovery_nonce,
+                challenge,
+                scope.purpose.clone(),
+                &parent,
+            )
+            .unwrap();
+        let role = RecoveryRoleAdmission::from_witness(
+            witness,
+            &actor,
+            &node("n1"),
+            business,
+            scope.range_id,
+            scope.range_epoch,
+            scope.recovery_nonce,
+            challenge,
+            &scope.purpose,
+        )
+        .unwrap();
+        scope.require_role(&role).unwrap();
+        role
+    }
     fn native_index(&self, name: &str) -> u64 {
         self.native.databases[&node(name)]
             .read()
@@ -459,6 +600,7 @@ impl NetworkFixture {
 impl Drop for NetworkFixture {
     fn drop(&mut self) {
         self.hold.release();
+        self.ready_hold.release();
         for server in self.servers.drain(..) {
             server.join().unwrap();
         }
@@ -605,4 +747,205 @@ fn actual_mtls_unwired_participant_receiver_refuses_without_materializing() {
         .get("items", "actual-tls-historical")
         .unwrap()
         .is_none());
+}
+
+#[test]
+fn native_ready_actual_tls_preparation_status_and_local_closed_quorum_remain_frozen() {
+    let fixture = NetworkFixture::new(true);
+    let scope = fixture.scope();
+    assert!(
+        fixture.prepare_ready("n1", &scope).is_err(),
+        "raw CQ without physical native apply cannot prepare"
+    );
+    fixture.wait_idle();
+    assert!(
+        fixture.status_ready("n1", &scope).is_err(),
+        "readonly status cannot manufacture a physical preparation"
+    );
+    fixture.wait_idle();
+    for name in ["n1", "n2"] {
+        fixture.call(name, &scope, false).unwrap();
+        fixture.wait_idle();
+    }
+    for name in ["n1", "n2"] {
+        fixture.call(name, &scope, true).unwrap();
+        fixture.wait_idle();
+    }
+    let first = fixture.prepare_ready("n1", &scope).unwrap();
+    fixture.wait_idle();
+    assert_eq!(first.reply().range_index, 1);
+    let request = fixture.ready_request(&scope);
+    assert!(
+        fixture.runtimes[&node("n1")]
+            .acquire_closed_native_ready(
+                &fixture.actor(),
+                &request,
+                &CancellationToken::uncancelable()
+            )
+            .is_err(),
+        "one actual preparation cannot become a current majority"
+    );
+    fixture.wait_idle();
+    let second = fixture.prepare_ready("n2", &scope).unwrap();
+    fixture.wait_idle();
+    assert_eq!(second.reply().range_index, 1);
+    assert_ne!(
+        first.reply().native_receipt_sha256,
+        second.reply().native_receipt_sha256,
+        "local physical receipts are not a common logical history"
+    );
+    let observed = fixture.status_ready("n1", &scope).unwrap();
+    fixture.wait_idle();
+    assert_eq!(
+        observed.reply().native_receipt_sha256,
+        first.reply().native_receipt_sha256
+    );
+    assert_ne!(observed.reply().challenge, first.reply().challenge);
+    let (local, quorum) = fixture.runtimes[&node("n1")]
+        .acquire_closed_native_ready(
+            &fixture.actor(),
+            &fixture.ready_request(&scope),
+            &CancellationToken::uncancelable(),
+        )
+        .unwrap();
+    fixture.wait_idle();
+    assert_eq!(local.range_index(), 1);
+    assert_eq!(quorum.range_index(), 1);
+    assert_eq!(
+        quorum
+            .distinct_member_ids()
+            .cloned()
+            .collect::<BTreeSet<_>>(),
+        BTreeSet::from([node("n1"), node("n2")])
+    );
+    assert!(fixture.native.databases[&node("n1")]
+        .read()
+        .range_mutation_gate()
+        .try_enter(scope.range_id)
+        .is_err());
+    let mut wrong = scope.clone();
+    wrong.recovery_nonce = Uuid::now_v7();
+    assert!(fixture.status_ready("n2", &wrong).is_err());
+    fixture.wait_idle();
+    assert!(fixture.status_ready("n2", &scope).is_ok());
+    fixture.wait_idle();
+    // The collector is invoked locally with a trusted current-member actor.
+    // All peer Prepare/Status evidence came from actual authenticated TLS RPCs.
+    // No completion wire, serving activation, normal new write or StrongGet.
+}
+
+#[test]
+fn native_ready_actual_tls_duplicate_voter_cannot_count_twice() {
+    use crate::distribution_range_recovery::ClosedNativeReadyQuorumRound;
+    let fixture = NetworkFixture::new(true);
+    let scope = fixture.scope();
+    for name in ["n1", "n2"] {
+        fixture.call(name, &scope, false).unwrap();
+        fixture.wait_idle();
+    }
+    for name in ["n1", "n2"] {
+        fixture.call(name, &scope, true).unwrap();
+        fixture.wait_idle();
+    }
+    for name in ["n1", "n2"] {
+        fixture.prepare_ready(name, &scope).unwrap();
+        fixture.wait_idle();
+    }
+    let role = fixture.ready_role(&scope);
+    let mut round =
+        ClosedNativeReadyQuorumRound::begin(role, &CancellationToken::uncancelable()).unwrap();
+    round
+        .record(fixture.status_ready("n1", &scope).unwrap())
+        .unwrap();
+    fixture.wait_idle();
+    assert!(round
+        .record(fixture.status_ready("n1", &scope).unwrap())
+        .is_err());
+    fixture.wait_idle();
+    assert!(!round.is_ready());
+    assert!(round.finish().is_err());
+}
+
+#[test]
+fn native_ready_actual_tls_fast_clean_zero_minority_does_not_starve_matching_one_majority() {
+    let fixture = NetworkFixture::new_ready_network(true, true, true);
+    let scope = fixture.scope();
+    let range = fixture
+        .current
+        .read()
+        .ranges
+        .values()
+        .next()
+        .unwrap()
+        .clone();
+    assert_eq!(
+        fixture.native.services[&node("n2")]
+            .lock()
+            .probe_range_write_for_peer(&range, &node("n1"), 1)
+            .unwrap()
+            .progress
+            .last_index,
+        0
+    );
+    for name in ["n0", "n1"] {
+        fixture.call(name, &scope, false).unwrap();
+        fixture.wait_idle();
+    }
+    fixture.call("n1", &scope, true).unwrap();
+    fixture.wait_idle();
+    for name in ["n0", "n1", "n2"] {
+        fixture.prepare_ready(name, &scope).unwrap();
+        fixture.wait_idle();
+    }
+    assert_eq!(
+        fixture
+            .status_ready("n2", &scope)
+            .unwrap()
+            .reply()
+            .range_index,
+        0
+    );
+    fixture.wait_idle();
+    fixture.ready_hold.arm();
+    fixture.lag_status_seen.store(false, Ordering::SeqCst);
+    let runtime = Arc::clone(&fixture.runtimes[&node("n1")]);
+    let actor = fixture.actor();
+    let request = fixture.ready_request(&scope);
+    let worker = std::thread::spawn(move || -> Result<(u64, u64, BTreeSet<ClusterNodeId>)> {
+        let (local, quorum) = runtime.acquire_closed_native_ready(
+            &actor,
+            &request,
+            &CancellationToken::uncancelable(),
+        )?;
+        // Keep the actual authority/physical proof on its producing thread;
+        // return only diagnostic getters rather than imposing a Send contract.
+        Ok((
+            local.range_index(),
+            quorum.range_index(),
+            quorum.distinct_member_ids().cloned().collect(),
+        ))
+    });
+    let deadline = Instant::now() + Duration::from_secs(2);
+    while !fixture.ready_hold.entered.load(Ordering::SeqCst)
+        || !fixture.lag_status_seen.load(Ordering::SeqCst)
+    {
+        assert!(
+            Instant::now() < deadline,
+            "actual clean R0 response/held R1 peer were not both reached"
+        );
+        std::thread::sleep(Duration::from_millis(1));
+    }
+    assert!(fixture.native.services[&node("n1")].try_lock().is_some());
+    assert!(fixture.native.databases[&node("n1")].try_write().is_some());
+    fixture.ready_hold.release();
+    let (local_index, quorum_index, members) = worker.join().unwrap().unwrap();
+    fixture.wait_idle();
+    assert_eq!(local_index, 1);
+    assert_eq!(quorum_index, 1);
+    assert_eq!(members, BTreeSet::from([node("n0"), node("n1")]));
+    assert_eq!(fixture.native_index("n2"), 0);
+    assert_eq!(fixture.native_index("n0"), 1);
+    assert_eq!(fixture.native_index("n1"), 1);
+    // Genuine native/certified states, no caller-set floor or fake observation.
+    // The lagging minority remains unavailable for serving until actual repair.
 }

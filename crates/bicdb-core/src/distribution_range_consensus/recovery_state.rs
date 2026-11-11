@@ -734,13 +734,13 @@ impl RangeWriteStore {
                 "historical certification exceeds permanent promised prefix",
             ));
         }
-        // Every subsequent error retains a conservative no-proof refusal;
-        // partially changed in-memory labels are never durable observations.
-        self.recovery_persistence_uncertain = true;
+        // Validate the complete operation before changing the catalogue. A
+        // rejected out-of-order request has not attempted persistence and
+        // must not make unrelated durable observations uncertain.
         let log = self
             .catalog
             .ranges
-            .get_mut(&scope.range_id)
+            .get(&scope.range_id)
             .ok_or_else(|| range_write_error("fenced range is absent"))?;
         if let Some(existing) = log.entries.get(&command.index) {
             if existing.command != *command || existing.state == RangeWriteState::Aborted {
@@ -748,27 +748,10 @@ impl RangeWriteStore {
                     "historical certification conflicts with actual retained history",
                 ));
             }
-        } else {
-            if command.index <= log.compacted_through
-                || command.index != log.last_index.saturating_add(1)
-            {
-                return Err(range_write_error("historical certification has a compacted/unavailable gap; native image/history repair is required"));
-            }
-            log.entries.insert(
-                command.index,
-                RangeWriteLogEntry {
-                    command: command.clone(),
-                    state: RangeWriteState::Committed,
-                },
-            );
-            log.last_index = command.index;
-        }
-        let entry = log
-            .entries
-            .get_mut(&command.index)
-            .expect("validated/inserted historical entry");
-        if entry.state != RangeWriteState::Applied {
-            entry.state = RangeWriteState::QuorumCommitted;
+        } else if command.index <= log.compacted_through
+            || command.index != log.last_index.saturating_add(1)
+        {
+            return Err(range_write_error("historical certification has a compacted/unavailable gap; native image/history repair is required"));
         }
         let marker = HistoricalRangeCertification {
             recovery_nonce: scope.recovery_nonce,
@@ -780,7 +763,7 @@ impl RangeWriteStore {
         let record = self
             .catalog
             .recovery_fences
-            .get_mut(&scope.range_id)
+            .get(&scope.range_id)
             .expect("scope checked active");
         if !record
             .historical_certifications
@@ -800,7 +783,36 @@ impl RangeWriteStore {
                 "conflicting current-session historical certification",
             ));
         }
-        record
+        // From the FIRST mutation onward, retain the no-proof refusal on every
+        // error. A failed/ambiguous fsync still requires exact-session re-fsync;
+        // preflight never clears a previous uncertain persistence outcome.
+        self.recovery_persistence_uncertain = true;
+        let log = self
+            .catalog
+            .ranges
+            .get_mut(&scope.range_id)
+            .expect("range checked before mutation");
+        if !log.entries.contains_key(&command.index) {
+            log.entries.insert(
+                command.index,
+                RangeWriteLogEntry {
+                    command: command.clone(),
+                    state: RangeWriteState::Committed,
+                },
+            );
+            log.last_index = command.index;
+        }
+        let entry = log
+            .entries
+            .get_mut(&command.index)
+            .expect("validated/inserted historical entry");
+        if entry.state != RangeWriteState::Applied {
+            entry.state = RangeWriteState::QuorumCommitted;
+        }
+        self.catalog
+            .recovery_fences
+            .get_mut(&scope.range_id)
+            .expect("scope checked before mutation")
             .historical_certifications
             .insert(command.index, marker.clone());
         // Retain ambiguous decisions/refusals but never expose them as synced

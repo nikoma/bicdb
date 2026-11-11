@@ -66,7 +66,7 @@ impl RangeWriteStore {
         native: &crate::db::NativeRecoveryAdmission,
     ) -> Result<NativeRangeReadCatalogue> {
         scope.validate()?;
-        self.require_durable_recovery_catalog()?;
+        self.require_native_catalog_durability(data_path)?;
         let range = scope.range.id;
         self.require_sparse_native_binding(range, native)?;
         self.require_no_image_install(range)?;

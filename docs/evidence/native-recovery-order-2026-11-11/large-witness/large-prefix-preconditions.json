@@ -1,0 +1,61 @@
+{
+  "acknowledged_commits": 1025,
+  "actual_tail": {
+    "command": {
+      "checksum_sha256": "af25af163cba2a11e2eca75f13b165cfd53372c32174a36c5cb2f3c8057d8672",
+      "cluster_id": "actual-native-rf3-origin",
+      "command_id": "01a1cc1f-ca2f-7920-b777-c836cfec4b8a",
+      "index": 1026,
+      "leader_node_id": "n0",
+      "mutations": [
+        {
+          "collection": "items",
+          "record": {
+            "id": "compacted-prefix-unknown-1026",
+            "metadata": {},
+            "payload": null,
+            "timestamp": null,
+            "vector": null
+          },
+          "record_id": "compacted-prefix-unknown-1026"
+        }
+      ],
+      "protocol_version": 2,
+      "range_epoch": 1,
+      "range_id": 1,
+      "transaction_id": 1027
+    },
+    "state": "quorum_committed"
+  },
+  "behind_progress": {
+    "compacted_through": 0,
+    "current_epoch": 0,
+    "last_index": 0,
+    "node_id": "n1",
+    "range_id": 1,
+    "resolved_through": 0
+  },
+  "classification": "ACTUAL_PRECONDITIONS_BEFORE_RECOVERY",
+  "physical_qualification": false,
+  "source_native": {
+    "diagnostic": "unfinished native command; source image unavailable",
+    "factory_initialization_complete": true,
+    "invalidated": false,
+    "materialized_pending_index": null,
+    "native_applied_index": 1025,
+    "native_base_index": 0,
+    "native_receipt_sha256": "109568d326122e50ddf51c84adb42a18e2db4cfa746a9bfcc58996d61701e4a6",
+    "pending_command_id": "01a1cc1f-ca2f-7920-b777-c836cfec4b8a",
+    "pending_command_index": 1026,
+    "range_id": 1
+  },
+  "source_progress": {
+    "compacted_through": 1,
+    "current_epoch": 1,
+    "last_index": 1026,
+    "node_id": "n0",
+    "range_id": 1,
+    "resolved_through": 1025
+  },
+  "unavailable_data_node": "n2"
+}

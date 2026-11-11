@@ -28,6 +28,7 @@ historical tested version below.
 | [Sparse committed-decision source recovery](evidence/native-sparse-source-tail-2026-11-11/README.md) | `0d58359b07c31b38ed432e0a72ef7996ee2544b7`; package 1.0.471-beta | **3 distinct PASS**; separate codec pass at `1e6e3a0a`; two prior failures retained | Actual lagging voter stores full committed1026 without data/raw advancement; current quorum lets source reach native/Ready1026 and 1025 ACK digests match. Behind image repair/cold sparse reissue not tested by this cohort |
 
 | [Native ordinary Apply and catch-up](evidence/native-normal-apply-2026-11-11/README.md) | `18723cf4f1ddbb01e37f3762067b30000707cadb`; separate prior `87f1da00` cohort; package 1.0.471-beta | **5 distinct PASS**, with **7 earlier origin PASS** kept separate | Actual mTLS retained-command catch-up, new writes, duplicate preservation and wrong-actor/domain refusals. Original exact before-Prepare2 regression not rerun here; successful DB archives/external ACK ledgers not retained |
+| [Local native read observations](evidence/native-read-observation-foundation-2026-11-11/README.md) | `6d07ded1ec9e44d688f2263a7804c236b3aa9f14`; package 1.0.471-beta | **9 distinct PASS**; earlier compile and fixture failures retained | Actual local native R/H and target-local B, current-open activation, raw-ahead refusal, cancellation and gate invalidation. No authenticated read RPC, read quorum, admitted host/store identity, MVCC read barrier or StrongGet in this cohort |
 
 The bundles overlap; their counts must not be added. Each retains commands,
 resource samples, warnings, prior failed attempts and source bytes or a complete
@@ -107,3 +108,22 @@ is design only. It requires actual completed transaction cleanup, permanent
 no-commit promises and a real abort quorum before publishing canonical abort
 history with unchanged local data visibility. Raw Aborted alone is insufficient;
 no implementation or executed acceptance follows from that document.
+
+The [interrupted current-image resume review](design/native-interrupted-current-image-resume-review-2026-11-11.md)
+is a separate **source review**, not an executed recovery result. It identifies
+an admission cycle after all owners reopen a partially installed image: the
+ordinary target fence refuses the durable install intent, while obtaining a new
+source cut needs the currently unavailable data quorum. A persisted intent is
+a refusal fence, not evidence of fresh quorum authority. The review preserves
+the requirement for fresh InstallingFence observations and revalidation of all
+target obligations before any destructive continuation. It does not establish
+durable-data loss or explain the original Azure run.
+
+Local native birth is likewise a fact rather than voter-continuation authority.
+A future strong coordinator must compare every counted voter's actual birth
+against immutable, quorum-committed enrollment for that node incarnation. A
+recreated empty database cannot become an old voter merely because its node
+name, epoch, certificate and bootstrap specification match. Missing enrollment
+must refuse admission; replacement requires a new incarnation and learner
+repair. This host admission protocol and its physical replacement tests remain
+**not implemented/qualified by the local observation receipt**.

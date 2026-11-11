@@ -45,6 +45,12 @@ impl RenameDependencies {
                     .insert((TRIGGER_COLLECTION.into(), trigger_key(new, &trigger.name)));
             }
         }
+        for view in list_views(db)? {
+            if view_dependencies::relations(&view.query_sql)?.contains(old) {
+                plan.relations.insert(view.name.clone());
+                plan.metadata.insert((VIEW_COLLECTION.into(), view.name));
+            }
+        }
         let root = table_row_type_schema(updated);
         let replacements = privilege_projection::composite_type_replacements(db, &root)?;
         for user_type in replacements.values().filter(|t| t.oid != root.oid) {

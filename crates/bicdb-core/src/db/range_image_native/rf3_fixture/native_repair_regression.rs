@@ -17,7 +17,7 @@ struct RepairResult {
 struct PrepareTwoBoundary {
     native: NativeRangePrefixObservation,
     raw: RangeWriteProgress,
-    first_record: Option<Record>,
+    first_record: Option<Arc<Record>>,
 }
 #[derive(Debug)]
 struct LoseOneApply {

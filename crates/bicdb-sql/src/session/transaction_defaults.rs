@@ -12,19 +12,23 @@ pub(super) fn isolation_label(level: &TransactionIsolationLevel) -> &'static str
 }
 
 pub(super) fn validate_default_isolation(value: &str, oracle: bool) -> Result<&'static str> {
-    let level = match value.to_ascii_lowercase().as_str() {
+    let level = transaction_isolation_level(value).ok_or_else(|| {
+        SqlError::invalid_parameter_value(format!(
+            "invalid value for parameter default_transaction_isolation: {value}"
+        ))
+    })?;
+    validate_profile_transaction_modes(&[TransactionMode::IsolationLevel(level.clone())], oracle)?;
+    Ok(isolation_label(&level))
+}
+
+pub(super) fn transaction_isolation_level(value: &str) -> Option<TransactionIsolationLevel> {
+    Some(match value.to_ascii_lowercase().as_str() {
         "read committed" => TransactionIsolationLevel::ReadCommitted,
         "read uncommitted" => TransactionIsolationLevel::ReadUncommitted,
         "repeatable read" => TransactionIsolationLevel::RepeatableRead,
         "serializable" => TransactionIsolationLevel::Serializable,
-        _ => {
-            return Err(SqlError::invalid_parameter_value(format!(
-                "invalid value for parameter default_transaction_isolation: {value}"
-            )))
-        }
-    };
-    validate_profile_transaction_modes(&[TransactionMode::IsolationLevel(level.clone())], oracle)?;
-    Ok(isolation_label(&level))
+        _ => return None,
+    })
 }
 
 impl SqlSessionGucState {
@@ -84,6 +88,33 @@ impl SqlSessionGucState {
 }
 
 impl SqlSession<'_> {
+    pub(super) fn validate_transaction_deferrability(&self) -> Result<()> {
+        if self
+            .tx
+            .as_ref()
+            .is_some_and(Transaction::statement_snapshot_acquired)
+            || !self.savepoints.is_empty()
+        {
+            return Err(SqlError::data_exception(
+                "25001",
+                "SET TRANSACTION DEFERRABLE must precede the first query",
+                None,
+            ));
+        }
+        Ok(())
+    }
+
+    pub(super) fn apply_transaction_deferrability(&mut self, deferrable: bool) -> Result<()> {
+        self.validate_transaction_deferrability()?;
+        if self.tx.is_none() {
+            return Ok(());
+        }
+        let mut state = self.take_session_guc_state();
+        state.set_transaction_deferrable(deferrable);
+        self.install_session_guc_state(state);
+        Ok(())
+    }
+
     pub(crate) fn default_transaction_isolation(&self) -> Result<&'static str> {
         let Some(value) = self.session_gucs.get("default_transaction_isolation") else {
             return Ok("read committed");
@@ -158,6 +189,60 @@ mod tests {
                 .unwrap();
         }
         db
+    }
+
+    #[test]
+    fn postgres_transaction_gucs_enforce_snapshot_and_reset_boundaries() {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = open(root.path(), false);
+        let mut session = SqlSession::new(&mut db);
+        session
+            .execute("SET transaction_isolation='serializable'")
+            .unwrap();
+        assert_eq!(
+            shown(&mut session, false, "transaction_isolation"),
+            "read committed"
+        );
+        session.execute("BEGIN READ ONLY").unwrap();
+        session
+            .execute("SET transaction_isolation='serializable'")
+            .unwrap();
+        session.execute("SET TRANSACTION DEFERRABLE").unwrap();
+        session.execute("RESET ALL").unwrap();
+        assert_eq!(
+            shown(&mut session, false, "transaction_isolation"),
+            "serializable"
+        );
+        assert_eq!(shown(&mut session, false, "transaction_deferrable"), "on");
+        session.execute("SELECT 1").unwrap();
+        assert!(session.tx.as_ref().unwrap().is_postgres_serializable());
+        for sql in [
+            "SET transaction_isolation='read committed'",
+            "SET transaction_deferrable=off",
+            "SELECT set_config('transaction_isolation','read committed',false)",
+        ] {
+            assert_eq!(
+                session.execute(sql).unwrap_err().sqlstate(),
+                "25001",
+                "{sql}"
+            );
+        }
+        for sql in [
+            "RESET transaction_isolation",
+            "RESET transaction_deferrable",
+        ] {
+            assert_eq!(
+                session.execute(sql).unwrap_err().sqlstate(),
+                "0A000",
+                "{sql}"
+            );
+        }
+        session.execute("ROLLBACK").unwrap();
+        assert_eq!(
+            shown(&mut session, false, "transaction_isolation"),
+            "read committed"
+        );
+        assert_eq!(shown(&mut session, false, "transaction_deferrable"), "off");
     }
 
     #[test]

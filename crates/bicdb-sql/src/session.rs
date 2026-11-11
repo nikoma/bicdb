@@ -1569,6 +1569,16 @@ struct GucAssignmentTargets {
 }
 
 impl GucAssignmentTargets {
+    fn is_current_transaction_mode(&self) -> bool {
+        self.gucs.len() == 1
+            && self.gucs.iter().any(|key| {
+                matches!(
+                    key.as_str(),
+                    "transaction_isolation" | "transaction_deferrable"
+                )
+            })
+    }
+
     fn setting(setting: &str) -> Self {
         match setting {
             "bicdb.vector_search" => Self {
@@ -1599,6 +1609,8 @@ impl GucAssignmentTargets {
             CURRENT_ROLE_GUC,
             INITIAL_SESSION_AUTHORIZATION_GUC,
             "transaction_isolation",
+            "transaction_deferrable",
+            "transaction_read_only",
         ];
         Self {
             gucs: local_restore
@@ -2857,6 +2869,9 @@ impl<'db> SqlSession<'db> {
     ) -> Result<()> {
         let previous_gucs = self.session_gucs.clone();
         let previous_settings = self.settings;
+        let local = local
+            || (targets.is_current_transaction_mode()
+                && !oracle::preview_routine_language_enabled(self.db_ref())?);
         apply(self)?;
         self.reconcile_guc_assignments(previous_gucs, previous_settings, local);
         if !local {
@@ -3135,7 +3150,11 @@ impl<'db> SqlSession<'db> {
         if !self.transaction_read_only() {
             return self.execute_profiled(sql);
         }
-        let statements = parse_statements(sql).map_err(|_| read_only::violation())?;
+        let options = postgres_transaction_deferrability(sql)?;
+        let parse_sql = options
+            .as_ref()
+            .map_or(sql, |(stripped, _)| stripped.as_str());
+        let statements = parse_statements(parse_sql).map_err(|_| read_only::violation())?;
         if statements.len() > 1 {
             return self.execute_statement_list(&statements);
         }
@@ -3548,23 +3567,10 @@ impl<'db> SqlSession<'db> {
             }
             let statements = parse_statements(&stripped)?;
             if matches!(statements.as_slice(), [Statement::Set(_)]) {
-                if self.tx.is_none()
-                    || self
-                        .tx
-                        .as_ref()
-                        .is_some_and(Transaction::statement_snapshot_acquired)
-                {
-                    return Err(SqlError::data_exception(
-                        "25001",
-                        "SET TRANSACTION DEFERRABLE must precede the first query",
-                        None,
-                    ));
-                }
+                self.validate_transaction_deferrability()?;
             }
             let result = self.execute_statement_list(&statements)?;
-            let mut state = self.take_session_guc_state();
-            state.set_transaction_deferrable(deferrable);
-            self.install_session_guc_state(state);
+            self.apply_transaction_deferrability(deferrable)?;
             return Ok(result);
         }
         if crate::statement_cache::statement_is_cacheable(sql) {
@@ -5602,6 +5608,13 @@ impl<'db> SqlSession<'db> {
             normalize_object_name(raw)
         };
         let targets = GucAssignmentTargets::setting(&setting);
+        if targets.is_current_transaction_mode()
+            && !oracle::preview_routine_language_enabled(self.db_ref())?
+        {
+            return Err(SqlError::Unsupported(format!(
+                "parameter \"{setting}\" cannot be reset"
+            )));
+        }
         if setting == read_only::SETTING {
             return Err(SqlError::Unsupported(
                 "transaction access mode must be changed with SET TRANSACTION".into(),

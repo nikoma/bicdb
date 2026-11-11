@@ -2636,6 +2636,7 @@ pub(crate) fn default_session_guc(name: &str) -> Option<&'static str> {
         "jit" => Some("off"),
         "search_path" => Some("public"),
         "default_transaction_isolation" => Some("read committed"),
+        "transaction_deferrable" => Some("off"),
         _ => None,
     }
 }

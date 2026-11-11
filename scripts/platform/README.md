@@ -205,3 +205,22 @@ emits `qualification_status=not_qualified`, `throughput_certification=false` and
 explicit client/ledger placement. Eight regression tests exercise acknowledgment
 ordering, ambiguous responses, persistence failures, stable retry identities,
 reconciliation and SSH quoting.
+
+For an explicit paged-store trial, pass the storage and placement declarations:
+
+```sh
+python3 scripts/platform/scale-cluster.py --inventory /private/hosts.json \
+  --binary /immutable/bicdb --output /evidence/new-run --sizes 4,5 \
+  --storage-mode server_paged --buffer-pool-bytes 268435456 \
+  --node-capacity-bytes 100000000000
+```
+
+The runner passes these as `env` argv entries to init, join, serve, workload and
+other engine commands. It reads every active node's persisted `db/format.json`
+after each convergence checkpoint and refuses an explicit mode mismatch before
+starting the next traffic phase. Reports retain requested mode/pool, environment,
+capacity and persisted-format checkpoints. The pool value is an explicit runtime
+request; `format.json` proves storage mode, not effective pool telemetry. Declared
+capacity must fit the actual test volume; it is not a measured data-set size.
+Omitting storage flags preserves historical inherited defaults, which may be
+`embedded_memory`; never relabel an old unspecified run as paged evidence.

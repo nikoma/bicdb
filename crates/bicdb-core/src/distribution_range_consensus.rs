@@ -38,6 +38,10 @@ use crate::distribution_range_mutation::{
 use crate::distribution_supervisor::ClusterBackupMetadata;
 use crate::error::{BicDbError, Result};
 
+mod image_install_state;
+pub(crate) use image_install_state::ImageInstallPurpose;
+use image_install_state::{ImageInstallIntent, IMAGE_INSTALL_RANGE_LOG_FORMAT};
+
 mod native_prefix;
 pub(crate) use native_prefix::{NativeRangeCommandIntent, NativeRangeCommitCertificate};
 
@@ -415,6 +419,8 @@ struct RangeWriteCatalog {
     backup_fences: BTreeMap<RangeId, RangeBackupWriteFence>,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     handoff_promises: BTreeMap<RangeId, RangeHandoffPromise>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    image_install_intents: BTreeMap<RangeId, ImageInstallIntent>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -440,13 +446,17 @@ impl RangeWriteEnvelope {
         }
         if !matches!(
             self.catalog.format_version,
-            1 | 2 | RANGE_WRITE_LOG_FORMAT_VERSION | HANDOFF_RANGE_LOG_FORMAT
+            1 | 2
+                | RANGE_WRITE_LOG_FORMAT_VERSION
+                | HANDOFF_RANGE_LOG_FORMAT
+                | IMAGE_INSTALL_RANGE_LOG_FORMAT
         ) {
             return Err(range_write_error(format!(
-                "unsupported range-write log format {}; supported formats are 1, 2, {}, and {}",
+                "unsupported range-write log format {}; supported formats are 1, 2, {}, {}, and {}",
                 self.catalog.format_version,
                 RANGE_WRITE_LOG_FORMAT_VERSION,
-                HANDOFF_RANGE_LOG_FORMAT
+                HANDOFF_RANGE_LOG_FORMAT,
+                IMAGE_INSTALL_RANGE_LOG_FORMAT
             )));
         }
         for log in self.catalog.ranges.values() {
@@ -494,6 +504,7 @@ impl RangeWriteEnvelope {
                 ));
             }
         }
+        image_install_state::validate_catalog_install_intents(&self.catalog)?;
         Ok(self.catalog)
     }
 }
@@ -604,6 +615,7 @@ impl RangeWriteStore {
                 ranges: BTreeMap::new(),
                 backup_fences: BTreeMap::new(),
                 handoff_promises: BTreeMap::new(),
+                image_install_intents: BTreeMap::new(),
             },
             Err(error) => return Err(error.into()),
         };
@@ -695,6 +707,7 @@ impl RangeWriteStore {
         mut persist: impl FnMut(&Self) -> Result<()>,
     ) -> Result<RangeHandoffPromise> {
         request.validate()?;
+        self.require_no_image_install(request.range_id)?;
         if !self.fsync || !crate::format::range_image_install_active(&self.root)? {
             return Err(range_write_error(
                 "durable handoff requires fsync and the sticky image reader fence",
@@ -741,7 +754,7 @@ impl RangeWriteStore {
                 entries: BTreeMap::new(),
             });
         log.current_epoch = promise.activation_epoch;
-        self.catalog.format_version = HANDOFF_RANGE_LOG_FORMAT;
+        self.catalog.format_version = self.catalog.format_version.max(HANDOFF_RANGE_LOG_FORMAT);
         self.catalog
             .handoff_promises
             .insert(request.range_id, promise.clone());
@@ -769,6 +782,7 @@ impl RangeWriteStore {
         installed_at_ms: u64,
         expires_at_ms: u64,
     ) -> Result<RangeWriteProgress> {
+        self.require_no_image_install(range_id)?;
         let candidate = RangeBackupWriteFence {
             plan_id,
             range_id,
@@ -1014,6 +1028,7 @@ impl RangeWriteStore {
 
     pub fn prepare(&mut self, command: RangeWriteCommand) -> Result<RangeWriteState> {
         command.validate()?;
+        self.require_no_image_install(command.range_id)?;
         if command.cluster_id != self.catalog.cluster_id {
             return Err(range_write_error(
                 "range-write command belongs to another cluster",
@@ -1229,6 +1244,7 @@ impl RangeWriteStore {
 
     fn match_entry_mut(&mut self, command: &RangeWriteCommand) -> Result<&mut RangeWriteLogEntry> {
         command.validate()?;
+        self.require_no_image_install(command.range_id)?;
         let entry = self
             .catalog
             .ranges
@@ -4024,6 +4040,7 @@ mod tests {
             )]),
             backup_fences: BTreeMap::new(),
             handoff_promises: BTreeMap::new(),
+            image_install_intents: BTreeMap::new(),
         };
         let envelope = RangeWriteEnvelope::new(catalog).unwrap();
         fs::write(
@@ -4058,6 +4075,7 @@ mod tests {
             ranges: BTreeMap::new(),
             backup_fences: BTreeMap::new(),
             handoff_promises: BTreeMap::new(),
+            image_install_intents: BTreeMap::new(),
         })
         .unwrap();
         let legacy_bytes = serde_json::to_vec_pretty(&envelope).unwrap();

@@ -132,17 +132,46 @@ impl CurrentRepairFixture {
             0
         );
         assert!(target.read().get("items", &selected_key).unwrap().is_none());
-        // These are real target-local, deliberately UNACKNOWLEDGED diagnostic
-        // writes in the other range. They create a higher target-local B and
-        // sentinels that selected-range replacement must leave untouched.
+        // A born current voter correctly refuses an ordinary user transaction
+        // before range commit authority exists. Preserve this negative control.
+        {
+            let db = target.write();
+            let mut tx = db.begin_transaction().unwrap();
+            tx.insert(
+                "items",
+                crate::Record::new(key("refused-target-user", other)),
+            )
+            .unwrap();
+            let error = tx.commit().unwrap_err();
+            assert!(error
+                .to_string()
+                .contains("range-quorum commit authority is not ready"));
+        }
+        // Deliberately UNACKNOWLEDGED diagnostic physical imports use the
+        // existing native range importer, as in the prior MVCC-bound control.
+        // They are NOT authorized user/RF3 commits. Each real local import
+        // transaction advances target B and creates other-range sentinels.
         let other_keys = (0..17)
             .map(|i| key(&format!("target-local-other-{i}"), other))
             .collect::<Vec<_>>();
         for key in &other_keys {
-            let db = target.write();
-            let mut tx = db.begin_transaction().unwrap();
-            tx.insert("items", crate::Record::new(key)).unwrap();
-            tx.commit().unwrap();
+            let row = crate::Record::new(key);
+            target
+                .read()
+                .apply_range_snapshot_batch_preinstalled(
+                    other,
+                    &CollectionMeta::standard("items"),
+                    &crate::RangeSnapshotBatch {
+                        collection: "items".into(),
+                        range_id: other.id,
+                        range_epoch: other.epoch,
+                        snapshot_commit_sequence: 0,
+                        resume_after_key: key.clone(),
+                        serialized_record_bytes: serde_json::to_vec(&row).unwrap().len(),
+                        records: vec![row],
+                    },
+                )
+                .unwrap();
         }
         let target_b_before = target.read().current_commit_seq();
         assert!(target_b_before > source_b);

@@ -90,6 +90,7 @@ enum Case {
     Simple(bool),
     CachedUnrelated,
     CachedSource,
+    Typed(&'static str, &'static str),
 }
 
 fn exercise(case: Case) {
@@ -101,6 +102,21 @@ fn exercise(case: Case) {
         )
         .unwrap();
         SqlSession::new(&mut db).execute("CREATE TABLE source(id INT PRIMARY KEY); CREATE TABLE unrelated(id INT PRIMARY KEY); INSERT INTO source VALUES(1); INSERT INTO unrelated VALUES(2)").unwrap();
+        let mut resources = vec![
+            ("__bicdb_pg_schema".into(), "source".into()),
+            ("__bicdb_pg_schema".into(), "renamed".into()),
+        ];
+        if matches!(case, Case::Typed(..)) {
+            SqlSession::new(&mut db).execute("CREATE TYPE independent_color AS ENUM('red'); CREATE TYPE independent_pair AS (v INT); CREATE TYPE affected_wrapper AS (item source); CREATE TABLE typed_unrelated(id INT PRIMARY KEY,e independent_color,p independent_pair); INSERT INTO typed_unrelated VALUES(1,'red',ROW(2)::independent_pair)").unwrap();
+            let collection = "__bicdb_pg_user_types";
+            let affected = db
+                .scan_collection(collection)
+                .unwrap()
+                .into_iter()
+                .find(|record| record.metadata["name"] == "affected_wrapper")
+                .expect("the dependent standalone type has its own metadata record");
+            resources.push((collection.into(), affected.id.clone()));
+        }
         let shared = Arc::new(RwLock::new(db));
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         let address = listener.local_addr().unwrap();
@@ -134,17 +150,11 @@ fn exercise(case: Case) {
             ),
             Case::CachedUnrelated => prepare(&mut client, "cached", "SELECT id FROM unrelated"),
             Case::CachedSource => prepare(&mut client, "cached", "SELECT id FROM source"),
-            Case::Simple(false) => {}
+            Case::Simple(false) | Case::Typed(..) => {}
         }
         let owner = shared.read().begin_transaction().unwrap();
         let scope = owner
-            .reserve_catalog_resources(
-                &["source".into(), "renamed".into()],
-                &[
-                    ("__bicdb_pg_schema".into(), "source".into()),
-                    ("__bicdb_pg_schema".into(), "renamed".into()),
-                ],
-            )
+            .reserve_catalog_resources(&["source".into(), "renamed".into()], &resources)
             .unwrap();
         let responses = match case {
             Case::Simple(_) => vec![
@@ -153,6 +163,7 @@ fn exercise(case: Case) {
                 query(&mut client, "SELECT id FROM source"),
             ],
             Case::CachedUnrelated | Case::CachedSource => vec![describe(&mut client, "cached")],
+            Case::Typed(sql, _) => vec![query(&mut client, sql)],
         };
         // Cleanup precedes assertions so even a negative control shuts down
         // its own connection/listener and never leaves a serving thread live.
@@ -198,6 +209,14 @@ fn exercise(case: Case) {
                     "cached metadata must not precede its reservation refusal"
                 );
             }
+            Case::Typed(_, expected) => {
+                assert!(
+                    codes(&responses[0]).is_empty(),
+                    "an unrelated declared type must remain available: {:?}",
+                    codes(&responses[0])
+                );
+                assert_eq!(value(&responses[0]), Some(expected.into()));
+            }
         }
     }
 }
@@ -220,4 +239,19 @@ fn cached_unrelated_statement_describe_remains_available() {
 #[test]
 fn cached_affected_statement_describe_obeys_catalog_reservation() {
     exercise(Case::CachedSource);
+}
+
+#[test]
+fn an_unrelated_enum_survives_another_schema_and_type_reservation() {
+    exercise(Case::Typed("SELECT e FROM typed_unrelated", "red"));
+}
+
+#[test]
+fn an_unrelated_composite_survives_another_schema_and_type_reservation() {
+    exercise(Case::Typed("SELECT p FROM typed_unrelated", "(2)"));
+}
+
+#[test]
+fn an_unrelated_table_row_survives_another_schema_and_type_reservation() {
+    exercise(Case::Typed("SELECT ROW(2)::unrelated", "(2)"));
 }

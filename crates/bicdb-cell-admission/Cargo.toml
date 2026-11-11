@@ -1,6 +1,6 @@
 [package]
 name = "bicdb-cell-admission"
-version = "1.0.472-beta"
+version = "1.0.473-beta"
 edition.workspace = true
 license-file.workspace = true
 rust-version.workspace = true

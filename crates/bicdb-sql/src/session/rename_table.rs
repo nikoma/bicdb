@@ -3,6 +3,14 @@
 //! transaction visibility and bounded value mutation remain qualification gates.
 use super::*;
 
+#[inline]
+pub(super) fn stage(_name: &str) {
+    #[cfg(test)]
+    if std::env::var("BICDB_TEST_RENAME_CUT").ok().as_deref() == Some(_name) {
+        std::process::exit(99);
+    }
+}
+
 fn move_source(session: &mut SqlSession<'_>, old: &str, new: &str) -> Result<()> {
     let mut owner = session.tx.take();
     let result = session.db_mut().and_then(|db| match owner.as_mut() {
@@ -55,6 +63,7 @@ pub(super) fn apply(
     let dependencies =
         rename_dependencies::RenameDependencies::plan(session.db_ref(), &previous, &updated)?;
     let prepared = dependencies.capture(session.db_mut()?, old, new)?;
+    stage("captured");
     let explicit = session.tx.is_some();
     if explicit {
         session.ddl_undo.push(DdlUndo::RestoreRenameJournal {
@@ -63,15 +72,19 @@ pub(super) fn apply(
     }
     let result = (|| {
         move_source(session, old, new)?;
+        stage("backing");
         delete_schema(session.db_mut()?, old)?;
+        stage("old_schema_removed");
         *schema = updated;
         session.save_session_schema(schema)?;
+        stage("new_schema_saved");
         for mut sequence in list_sequences(session.db_ref())? {
             if sequence.owned_by_table.as_deref() == Some(old) {
                 sequence.owned_by_table = Some(new.into());
                 session.save_session_sequence(&sequence)?;
             }
         }
+        stage("sequences");
         for mut dependent in list_schemas(session.db_ref())? {
             let mut changed = false;
             for constraint in &mut dependent.constraints {
@@ -95,6 +108,7 @@ pub(super) fn apply(
                 }
             }
         }
+        stage("dependencies");
         for mut grant in list_privileges(session.db_ref())? {
             if grant.object_type == PrivilegeObjectType::Table && grant.object_name == old {
                 session.delete_session_privilege(&grant)?;
@@ -112,6 +126,7 @@ pub(super) fn apply(
         for view in views {
             session.save_session_view(&view)?;
         }
+        stage("views");
         let name = table_row_type_schema(schema)
             .column_type(false)
             .formatted_name();
@@ -120,6 +135,7 @@ pub(super) fn apply(
             schema,
             &CompositeAttributeMutation::RenameType { name },
         )?;
+        stage("values_complete");
         sql_index_definitions_cache_clear();
         Ok(())
     })();
@@ -141,6 +157,11 @@ pub(super) fn apply(
             tx.commit()?;
         }
     }
+    stage(if explicit {
+        "decision_staged"
+    } else {
+        "decision_committed"
+    });
     Ok(())
 }
 
@@ -148,6 +169,239 @@ pub(super) fn apply(
 mod tests {
     use super::*;
     use bicdb_core::{DbConfig, StorageMode};
+
+    fn config(paged: bool) -> DbConfig {
+        DbConfig::default().with_storage_mode(if paged {
+            StorageMode::ServerPaged
+        } else {
+            StorageMode::EmbeddedMemory
+        })
+    }
+
+    #[test]
+    fn sql_rename_cut_child() {
+        let Ok(path) = std::env::var("BICDB_TEST_RENAME_PATH") else {
+            return;
+        };
+        let paged = std::env::var("BICDB_TEST_RENAME_PAGED").unwrap() == "true";
+        let explicit = std::env::var("BICDB_TEST_RENAME_EXPLICIT").unwrap() == "true";
+        let mut db = BicDb::open_with_config(&path, config(paged)).unwrap();
+        let mut session = SqlSession::new(&mut db);
+        if explicit {
+            session
+                .execute(
+                    "BEGIN; UPDATE original SET payload='pending-business-write' WHERE rowkey=1",
+                )
+                .unwrap();
+        }
+        session
+            .execute("ALTER TABLE original RENAME TO renamed")
+            .unwrap();
+        if explicit {
+            session.execute("COMMIT").unwrap();
+        }
+        // A separate fsynced client ledger distinguishes acknowledged rename
+        // from the committed-but-not-yet-acknowledged decision cut.
+        let ack = std::path::Path::new(&path).join("client-rename-ack");
+        std::fs::write(&ack, b"rename-ack\n").unwrap();
+        std::fs::File::open(&ack).unwrap().sync_all().unwrap();
+        std::fs::File::open(&path).unwrap().sync_all().unwrap();
+        stage("client_ack");
+        panic!("requested cut was never reached");
+    }
+
+    fn contains_old_type_name(value: &JsonValue) -> bool {
+        match value {
+            JsonValue::Object(fields) => fields.iter().any(|(key, value)| {
+                (key == "type_name" && value.as_str() == Some("original"))
+                    || contains_old_type_name(value)
+            }),
+            JsonValue::Array(values) => values.iter().any(contains_old_type_name),
+            _ => false,
+        }
+    }
+
+    #[test]
+    fn sql_rename_process_cuts_restore_complete_catalog_and_acknowledged_rows() {
+        for paged in [false, true] {
+            for explicit in [false, true] {
+                let mut cuts = vec![
+                    "captured",
+                    "backing",
+                    "old_schema_removed",
+                    "new_schema_saved",
+                    "sequences",
+                    "dependencies",
+                    "views",
+                    "value_row",
+                    "values_complete",
+                    "client_ack",
+                ];
+                cuts.push(if explicit {
+                    "decision_staged"
+                } else {
+                    "decision_committed"
+                });
+                for cut in cuts {
+                    let root = tempfile::tempdir().unwrap();
+                    let mut db = BicDb::open_with_config(root.path(), config(paged)).unwrap();
+                    {
+                        let mut session = SqlSession::new(&mut db);
+                        for sql in [
+                            "CREATE ROLE rename_reader LOGIN NOSUPERUSER",
+                            "CREATE TABLE original(rowkey INT PRIMARY KEY,payload TEXT,seqid SERIAL)",
+                            "INSERT INTO original(rowkey,payload) VALUES(1,'acknowledged')",
+                            "CREATE TABLE child(id INT PRIMARY KEY,parent INT REFERENCES original(rowkey))",
+                            "INSERT INTO child VALUES(1,1)",
+                            "CREATE TABLE holder(id INT PRIMARY KEY,item original,items original[])",
+                            "CREATE VIEW direct_row AS SELECT original AS item FROM original",
+                            "CREATE VIEW indirect_row AS SELECT item FROM direct_row",
+                            "CREATE MATERIALIZED VIEW stored_row AS SELECT item FROM direct_row",
+                            "GRANT SELECT ON original TO rename_reader",
+                            "CREATE FUNCTION rename_trigger_fn() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NEW; END $$",
+                            "CREATE TRIGGER rename_guard BEFORE UPDATE ON original FOR EACH ROW EXECUTE FUNCTION rename_trigger_fn()",
+                        ] { session.execute(sql).unwrap_or_else(|error| panic!("{sql}: {error}")); }
+                        for id in 1..=8 {
+                            session.execute(&format!("INSERT INTO holder VALUES({id},ROW(1,'item_{id}',1)::original,ARRAY[ROW(1,'array_{id}',1)::original])")).unwrap();
+                        }
+                    }
+                    let identity = load_schema(&db, "original")
+                        .unwrap()
+                        .unwrap()
+                        .row_type_oid();
+                    let before = db
+                        .scan_collection("holder")
+                        .unwrap()
+                        .into_iter()
+                        .map(|row| (row.id, row.metadata))
+                        .collect::<BTreeMap<_, _>>();
+                    db.close().unwrap();
+                    let output = std::process::Command::new(std::env::current_exe().unwrap())
+                        .args([
+                            "--exact",
+                            "session::rename_table::tests::sql_rename_cut_child",
+                            "--nocapture",
+                        ])
+                        .env("BICDB_TEST_RENAME_PATH", root.path())
+                        .env("BICDB_TEST_RENAME_PAGED", paged.to_string())
+                        .env("BICDB_TEST_RENAME_EXPLICIT", explicit.to_string())
+                        .env("BICDB_TEST_RENAME_CUT", cut)
+                        .output()
+                        .unwrap();
+                    assert_eq!(
+                        output.status.code(),
+                        Some(99),
+                        "paged={paged} explicit={explicit} cut={cut}\n{}\n{}",
+                        String::from_utf8_lossy(&output.stdout),
+                        String::from_utf8_lossy(&output.stderr)
+                    );
+                    let committed = matches!(cut, "decision_committed" | "client_ack");
+                    let table = if committed { "renamed" } else { "original" };
+                    let absent = if committed { "original" } else { "renamed" };
+                    let payload = if committed && explicit {
+                        "pending-business-write"
+                    } else {
+                        "acknowledged"
+                    };
+                    assert_eq!(
+                        root.path().join("client-rename-ack").exists(),
+                        cut == "client_ack"
+                    );
+                    for reopen in 0..2 {
+                        let mut db = BicDb::open_with_config(root.path(), config(paged)).unwrap();
+                        {
+                            let mut session = SqlSession::new(&mut db);
+                            assert_eq!(
+                                session
+                                    .execute(&format!("SELECT rowkey,payload FROM {table}"))
+                                    .unwrap()
+                                    .rows,
+                                vec![vec![SqlValue::Int(1), SqlValue::String(payload.into())]],
+                                "paged={paged} explicit={explicit} cut={cut} reopen={reopen}"
+                            );
+                            assert!(session
+                                .execute(&format!("SELECT rowkey FROM {absent}"))
+                                .is_err());
+                            let expected = (1..=8)
+                                .map(|id| {
+                                    vec![
+                                        SqlValue::String(table.into()),
+                                        SqlValue::String(format!("item_{id}")),
+                                        SqlValue::String(format!("array_{id}")),
+                                    ]
+                                })
+                                .collect::<Vec<_>>();
+                            assert_eq!(session.execute("SELECT pg_typeof(item),(item).payload,(items[1]).payload FROM holder ORDER BY id").unwrap().rows,expected);
+                            for view in ["direct_row", "indirect_row", "stored_row"] {
+                                assert_eq!(
+                                    session
+                                        .execute(&format!(
+                                            "SELECT (item).payload,pg_typeof(item) FROM {view}"
+                                        ))
+                                        .unwrap()
+                                        .rows,
+                                    vec![vec![
+                                        SqlValue::String(payload.into()),
+                                        SqlValue::String(table.into())
+                                    ]]
+                                );
+                            }
+                            assert_eq!(
+                                session
+                                    .execute(&format!(
+                                        "INSERT INTO child VALUES({},999)",
+                                        100 + reopen
+                                    ))
+                                    .unwrap_err()
+                                    .sqlstate(),
+                                "23503"
+                            );
+                            session
+                                .execute(&format!("INSERT INTO child VALUES({},1)", 10 + reopen))
+                                .unwrap();
+                        }
+                        assert_eq!(
+                            load_schema(&db, table).unwrap().unwrap().row_type_oid(),
+                            identity
+                        );
+                        let rows = db
+                            .scan_collection("holder")
+                            .unwrap()
+                            .into_iter()
+                            .map(|row| (row.id, row.metadata))
+                            .collect::<BTreeMap<_, _>>();
+                        if committed {
+                            assert!(rows.values().all(|row| !contains_old_type_name(row)));
+                        } else {
+                            assert_eq!(
+                                rows, before,
+                                "complete original typed row images must survive"
+                            );
+                        }
+                        assert!(list_privileges(&db)
+                            .unwrap()
+                            .iter()
+                            .any(|g| g.object_name == table && g.grantee == "rename_reader"));
+                        assert!(list_triggers(&db)
+                            .unwrap()
+                            .iter()
+                            .any(|t| t.table_name == table && t.name == "rename_guard"));
+                        assert!(list_sequences(&db)
+                            .unwrap()
+                            .iter()
+                            .any(|s| s.owned_by_table.as_deref() == Some(table)));
+                        assert!(rename_journal::pending(&db).unwrap().is_empty());
+                        assert!(db
+                            .verify_indexes_consistently()
+                            .unwrap()
+                            .iter()
+                            .all(|index| index.valid));
+                        db.close().unwrap();
+                    }
+                }
+            }
+        }
+    }
 
     #[test]
     fn legacy_name_derived_row_types_keep_their_oid_when_the_old_name_is_reused() {

@@ -1828,6 +1828,9 @@ impl<'db> SqlSession<'db> {
             self.capture_table_state_undo(&previous_schema.name, &previous_schema)?;
             for record in records {
                 self.db_mut()?.insert(&previous_schema.name, record)?;
+                if matches!(mutation, CompositeAttributeMutation::RenameType { .. }) {
+                    rename_table::stage("value_row");
+                }
             }
             self.save_session_schema(&next_schema)?;
         }

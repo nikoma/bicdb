@@ -71,7 +71,7 @@ consensus, default controller, checkpoint driver, event routing or event CLI
 files. That source comparison does not turn the 1.0.461 binary's measurements
 into tests of 1.0.462 or the later documentation delivery version.
 
-## Evidence rules and current CI
+## Evidence rules and source-scoped CI
 
 Implemented means an executable production code path exists; a public trait or
 plan is insufficient. Test evidence names its source and scope. Physical evidence
@@ -86,7 +86,11 @@ runs core, SQL, pgwire and the remaining workspace, and tests the Python cluster
 harness/offline notebook queue. Ordinary tests do not run ignored external-asset
 VM tests. The GitHub connector returned no combined statuses or PR workflow runs
 for the merge SHA; this is unavailable evidence, not a failed test or a green CI
-result. For PR133 head `cd83f3a6161a3abaf70ad3184d694453f75136e8`,
+result. During the Azure follow-up, connector queries for main
+`d8e30158d653eef7db7f1b52c56f0d4ab1d4d953` (1.0.462-beta) again returned
+`statuses: []` and `workflow_runs: []`. The workflow wrapper is scoped to
+PR-triggered runs; empty results do not prove an absence of all workflows or a
+green current artifact. For PR133 head `cd83f3a6161a3abaf70ad3184d694453f75136e8`,
 [tests run 42847577842](https://github.com/nikoma/bicdb/actions/runs/42847577842)
 was in progress and [Rails run 42847577843](https://github.com/nikoma/bicdb/actions/runs/42847577843)
 was successful when queried. PR133 reports 54 focused release tests passed at

@@ -14,7 +14,8 @@ Five North Europe `Standard_D2s_v3` guests, 2 vCPU/8 GiB each, each used a
 `server_paged`, requested/observed 256 MiB pools, fsync, mTLS, RF3 and 64 ranges.
 Quota prevented the proposed larger six-VM deployment. Distinct OS instances
 were verified; five distinct physical hosts/failure domains were not. Native
-traffic ran on data node n0. External per-attempt/per-ACK fsync probes invoked
+traffic ran on data node n0, where its ACK ledger was fsynced at phase
+completion. Only the separate external probes fsynced each ACK off-cluster. External per-attempt/per-ACK fsync probes invoked
 member clients through SSH; they were not a sixth dedicated load generator.
 The small, growing corpus fits caches. These limits preclude independent
 physical-host, saturation or large-data qualification claims.
@@ -34,8 +35,8 @@ addresses and generated keys are not published.
 | Requirement | Actual observation | Status and remaining blocker |
 |---|---|---|
 | Add a node without manual range assignment | n4 joined the existing four-node cluster during native append/read traffic. | Implemented and VM exercised; no ordinary SQL gateway qualification. |
-| Automatically move existing data | At first short-run convergence, 38 relocations to n4 reported 537,266 snapshot bytes. Five prejoin payloads matched through routes naming n4 as leader. | Real data movement, not membership alone. Snapshot counters are not total physical I/O. |
-| Redistribute leadership | First short-run five-node checkpoint: 13/13/13/13/12 leaders; RF3/192 replicas, zero active/failed/unavailable ranges at that checkpoint. | Count balancing observed; continuous availability and request-load balancing not established. |
+| Automatically move existing data | At the first recorded converged checkpoint, 38 relocations to n4 reported 537,266 snapshot bytes. Five prejoin payloads matched through routes naming n4 as leader. | Real data movement, not membership alone. Snapshot counters are not total physical I/O. |
+| Redistribute leadership | First recorded converged five-node checkpoint: 13/13/13/13/12 leaders; RF3/192 replicas, zero active/failed/unavailable ranges at that checkpoint. | Count balancing observed; continuous availability and request-load balancing not established. |
 | Balance measured bytes/hotspots | All sampled range byte/QPS estimates and node used-byte inputs were zero. | Default live load collection and bytes-only redistribution trigger missing; see [source correction](distributed-placement-load-inputs-2026-11-11.md). |
 | Preserve acknowledged writes | Short process-fault and guest-off ledgers reconciled under the scopes below. Longer growth initially failed two ACK reads; both values subsequently matched after restart. | Narrow positive reconciliation, with failed availability preserved. General acknowledged-loss safety remains unqualified. |
 | Fault-safe online rebalance | Short timed process kill occurred after convergence; guest-off probe and longer failed growth are separate trials. | No complete snapshot/catch-up/promotion/cleanup physical fault matrix. Diagnostic convergence failed its 300-second bound. |
@@ -93,8 +94,8 @@ before its first start request. First such ACK was **97.495 seconds after confir
 stop**, 105.608 seconds after the stop request. It is a measured probe interval,
 not first possible server availability or a certified RTO. Selected range RF3
 voters were n4/n0/n1; two survived. Guest boot-ID change and a cold database archive
-support guest RAM loss/reopen, not physical storage-device power loss. Survivor
-status snapshots briefly reported all members dead while fresh writes succeeded;
+support guest RAM loss/reopen, not physical storage-device power loss. Sampled survivor
+status reported all members dead while fresh writes succeeded;
 status/liveness and foreground availability need separate qualification.
 
 Zero observed lost ACKs in bounded reconciliations is not universal RPO=0.

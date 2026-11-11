@@ -31,8 +31,8 @@ exploratory functional/fault evidence, not the independent capacity client in
 the stronger plan below. The corpus remained small and cache-resident.
 
 - [Completed short growth/process-fault smoke](evidence/azure-scale-smoke-2026-11-11/README.md):
-  node five received real records and leadership automatically. At first
-  convergence, 38 relocations to n4 reported 537,266 snapshot bytes. All 1,281
+  node five received real records and leadership automatically. At the first
+  recorded converged checkpoint, 38 relocations to n4 reported 537,266 snapshot bytes. All 1,281
   native ACKs and 107 external ACKs were later reconciled under their documented
   recovery scopes. Throughput was lower after expansion; no capacity gain.
 - [Abrupt guest-poweroff probe](evidence/azure-vm-poweroff-2026-11-11/README.md):
@@ -67,7 +67,7 @@ application, or FTS/queue/audit qualification was delivered. Existing
 `--require-independent-qualification` refusal is retained. No engine feature
 was implemented or production admission enabled by these experiments.
 
-## What is ready
+## Original runner preparation
 
 `scripts/platform/scale-cluster.py --sizes 4,5` now accepts a four-node baseline
 and one-node admission under event traffic. It preserves RF3, fsync, authenticated
@@ -89,7 +89,7 @@ services, had approximately 25 GiB available memory and fully used swap during
 preflight, and has no identified isolated test hosts. Sharing that host would
 not resolve the independent-machine question.
 
-## Read-only infrastructure preflight
+## Original read-only infrastructure preflight
 
 The [sanitized preflight](evidence/scale-out-preflight-2026-11-11/preflight.json)
 retains exact queried SKUs, public price API URLs, returned prices and blockers,
@@ -111,7 +111,7 @@ These are concrete execution blockers. The operator must select an available
 region/SKU, verify quota and authorize bounded disposable infrastructure before
 provisioning. No experiment completion or physical RPO/RTO/throughput is claimed.
 
-## Reviewable Azure resource plan
+## Original reviewable Azure resource plan
 
 Use a new, uniquely named resource group such as
 `bicdb-scale-20261111-RUN`, containing only this experiment. Choose the actual
@@ -151,7 +151,7 @@ Three-zone placement also cannot currently use the West Europe restricted SKUs
 above without resolving their restrictions. Never infer a five-host power-loss
 claim from five machine IDs or destroy physical cloud hardware for this test.
 
-## Cost estimate, not a spending authorization
+## Original cost estimate, before spending authorization
 
 Microsoft's [retail pricing API](https://learn.microsoft.com/en-us/rest/api/cost-management/retail-prices/azure-retail-prices)
 returned these West Europe USD Linux on-demand rates at preflight:
@@ -171,7 +171,8 @@ account discounts and dedicated physical-host isolation are excluded. A planning
 ceiling such as **$25 and eight hours** should include separately reviewed network
 charges and an automatic teardown; it is not a guaranteed bill cap. Re-query
 prices and restrictions immediately before allocation. No paid resource was
-created by this work.
+created during this preflight; the later owner-authorized allocation is recorded
+in the execution update above.
 
 ## Execution contract and remaining runner work
 

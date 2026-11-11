@@ -23,6 +23,19 @@ fn semantic_range(left: &RangeDescriptor, right: &RangeDescriptor) -> bool {
     canonical_range(left) == canonical_range(right)
 }
 
+fn same_install_lineage_for_new_attempt(
+    existing: &ImageInstallIntent,
+    candidate: &ImageInstallIntent,
+) -> bool {
+    let mut normalized = existing.clone();
+    normalized.range = candidate.range.clone();
+    normalized.attempt_id = candidate.attempt_id;
+    if existing.attempt_id != candidate.attempt_id {
+        normalized.target_namespace_ids = candidate.target_namespace_ids.clone();
+    }
+    semantic_range(&existing.range, &candidate.range) && normalized == *candidate
+}
+
 fn credentials(
     identity: &crate::distribution_range_recovery::RecoveryMemberIdentity,
 ) -> crate::db::RangeImageBirthMember {
@@ -188,6 +201,9 @@ impl TargetImageInstallFence {
     pub(crate) fn target_birth_sha256(&self) -> &str {
         &self.intent.target_birth_sha256
     }
+    pub(crate) fn target_namespace_ids(&self) -> &[(String, Uuid)] {
+        &self.intent.target_namespace_ids
+    }
     pub(crate) fn database_incarnation(&self) -> &str {
         &self.database_incarnation
     }
@@ -267,6 +283,7 @@ impl RangeWriteStore {
         let candidate = self.candidate_native_image_install_intent(
             database, admission, &staging, role, frozen, purpose, attempt_id,
         )?;
+        self.require_native_install_recovery_preflight(database, admission, role, &candidate)?;
         let existing = self
             .catalog
             .image_install_intents
@@ -289,21 +306,77 @@ impl RangeWriteStore {
                 "completed image does not match the exact retained source/catalog attempt",
             ));
         }
-        if existing.source_range_index != 0 {
-            return Err(range_write_error(
-                "nonzero completed image recovery requires typed logical-history compatibility",
-            ));
-        }
         self.validate_install_local_log(&existing.range, existing.source_range_index)?;
         let intent = existing.clone();
         self.persist()?;
         role.role().require_live_request()?;
-        Ok(TargetImageInstallFence {
+        let fence = TargetImageInstallFence {
             store_open_id: self.open_id,
             database_incarnation: admission.database_incarnation().to_string(),
             intent_sha256: intent.sha256()?,
             intent,
-        })
+        };
+        if matches!(role, NativeImageInstallRole::CurrentVoterRepair(_)) {
+            self.rebind_recovery_open_after_image_fence(database, admission, role, &fence, frozen)?;
+        }
+        Ok(fence)
+    }
+
+    /// Refusal-only preflight before ANY new intent/marker. A fresh role cannot
+    /// replace a saved nonce. Cold reopen may change only the ephemeral DB open
+    /// and only when an actual pre-existing intent already binds this physical
+    /// birth, unchanged local namespace IDs and exact saved recovery session.
+    fn require_native_install_recovery_preflight(
+        &mut self,
+        database: &crate::BicDb,
+        admission: &NativeRecoveryAdmission,
+        role: &NativeImageInstallRole<'_>,
+        candidate: &ImageInstallIntent,
+    ) -> Result<()> {
+        let NativeImageInstallRole::CurrentVoterRepair(recovery_role) = role else {
+            return Ok(());
+        };
+        let saved =
+            self.observe_image_install_recovery_session(database, admission, recovery_role)?;
+        saved.require_current(self, database, admission, recovery_role)?;
+        if saved.saved_native_database_incarnation() != saved.current_native_database_incarnation()
+        {
+            let existing = self
+                .catalog
+                .image_install_intents
+                .get(&candidate.range.id)
+                .ok_or_else(|| {
+                    range_write_error(
+                        "cold image recovery cannot create an intent over a previous DB open",
+                    )
+                })?;
+            if existing.target_namespace_ids != candidate.target_namespace_ids
+                || existing.target_birth_id != saved.native_birth_id()
+                || existing.target_birth_sha256 != saved.native_birth_sha256()
+                || !same_install_lineage_for_new_attempt(existing, candidate)
+            {
+                return Err(range_write_error("cold image recovery requires the exact existing intent and unchanged native namespace lineage"));
+            }
+        }
+        Ok(())
+    }
+
+    /// All bounded physical install operations use the strict saved session.
+    /// The lower token validator stays separate for the one controlled cold
+    /// rebind, which changes only its saved ephemeral native DB incarnation.
+    pub(crate) fn validate_native_image_install_step(
+        &self,
+        fence: &TargetImageInstallFence,
+        database: &crate::BicDb,
+        admission: &NativeRecoveryAdmission,
+        role: &NativeImageInstallRole<'_>,
+        frozen: &FrozenRangeMutationPermit,
+    ) -> Result<()> {
+        self.validate_native_image_install_fence(fence, database, admission, role, frozen)?;
+        if let NativeImageInstallRole::CurrentVoterRepair(recovery_role) = role {
+            self.require_image_install_recovery_scope(recovery_role, admission)?;
+        }
+        Ok(())
     }
 
     fn validate_install_local_log(&self, range: &RangeDescriptor, source_r: u64) -> Result<()> {
@@ -363,6 +436,7 @@ impl RangeWriteStore {
         let mut intent = self.candidate_native_image_install_intent(
             database, admission, source, role, frozen, purpose, attempt_id,
         )?;
+        self.require_native_install_recovery_preflight(database, admission, role, &intent)?;
         let cut = source.cut();
         native_safety.require_current(database, admission, frozen)?;
         if native_safety.range_id() != cut.range().id
@@ -382,10 +456,14 @@ impl RangeWriteStore {
         // prerequisite of the target row/final-publication state machine.
         self.validate_install_local_log(cut.range(), cut.range_index())?;
         if let Some(existing) = self.catalog.image_install_intents.get(&intent.range.id) {
-            let mut normalized = existing.clone();
-            normalized.range = intent.range.clone();
-            normalized.attempt_id = intent.attempt_id;
-            if !semantic_range(&existing.range, &intent.range) || normalized != intent {
+            if existing.attempt_id == intent.attempt_id
+                && existing.target_namespace_ids != intent.target_namespace_ids
+            {
+                return Err(range_write_error(
+                    "same native install attempt cannot retarget a recreated namespace",
+                ));
+            }
+            if !same_install_lineage_for_new_attempt(existing, &intent) {
                 return Err(range_write_error(
                     "new image attempt cannot replace another handoff lineage",
                 ));
@@ -416,12 +494,16 @@ impl RangeWriteStore {
         }
         self.persist_native_install_intent_with(intent.clone(), Self::persist)?;
         role.role().require_live_request()?;
-        Ok(TargetImageInstallFence {
+        let fence = TargetImageInstallFence {
             store_open_id: self.open_id,
             database_incarnation: admission.database_incarnation().to_string(),
             intent_sha256: intent.sha256()?,
             intent,
-        })
+        };
+        if matches!(role, NativeImageInstallRole::CurrentVoterRepair(_)) {
+            self.rebind_recovery_open_after_image_fence(database, admission, role, &fence, frozen)?;
+        }
+        Ok(fence)
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -516,6 +598,7 @@ impl RangeWriteStore {
             target_member_incarnation: admission.local_member_incarnation(),
             target_birth_id: admission.birth_id(),
             target_birth_sha256: admission.birth_sha256().to_string(),
+            target_namespace_ids: database.capture_range_image_bindings()?.namespace_ids(),
             source_id: cut.source_id().clone(),
             source_incarnation: cut.source_incarnation(),
             source_range_index: cut.range_index(),
@@ -579,6 +662,8 @@ impl RangeWriteStore {
             || admission.local_member_incarnation() != fence.target_member_incarnation()
             || admission.birth_id() != fence.target_birth_id()
             || admission.birth_sha256() != fence.target_birth_sha256()
+            || database.capture_range_image_bindings()?.namespace_ids()
+                != fence.intent.target_namespace_ids
             || frozen.owner() != fence.attempt_id()
             || self.catalog.image_install_intents.get(&fence.range().id) != Some(&fence.intent)
         {
@@ -666,6 +751,7 @@ mod tests {
             target_member_incarnation: 1,
             target_birth_id: Uuid::now_v7(),
             target_birth_sha256: "a".repeat(64),
+            target_namespace_ids: vec![("items".to_string(), Uuid::now_v7())],
             source_id: node("n1"),
             source_incarnation: 1,
             source_range_index: source_r,

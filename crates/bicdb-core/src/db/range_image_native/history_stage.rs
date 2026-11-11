@@ -68,7 +68,7 @@ impl<'a> NativeHistoryTargetContext<'a> {
         journal: &NativeImageJournalGuard<'_>,
     ) -> Result<()> {
         journal.require_database(database)?;
-        self.store.validate_native_image_install_fence(
+        self.store.validate_native_image_install_step(
             self.fence,
             database,
             self.admission,

@@ -101,7 +101,7 @@ impl NativeRangeImageVerification {
             .database
             .try_read()
             .ok_or_else(|| invalid("target DB busy during bounded verification"))?;
-        store.validate_native_image_install_fence(
+        store.validate_native_image_install_step(
             &self.fence,
             &db,
             &self.admission,
@@ -145,7 +145,7 @@ impl NativeRangeImageVerification {
             .database
             .try_read()
             .ok_or_else(|| invalid("target DB busy before verified native publication"))?;
-        store.validate_native_image_install_fence(
+        store.validate_native_image_install_step(
             &self.fence,
             &db,
             &self.admission,
@@ -236,7 +236,7 @@ impl VerifiedNativeRangeImageInstall {
             .database
             .try_read()
             .ok_or_else(|| invalid("target DB busy during verified install validation"))?;
-        store.validate_native_image_install_fence(
+        store.validate_native_image_install_step(
             &self.fence,
             &db,
             &self.admission,
@@ -338,7 +338,7 @@ impl NativeRangeImageInstaller {
         let fence = store.begin_native_image_install(
             &db, &admission, &safety, source, role, &frozen, purpose, attempt_id,
         )?;
-        store.validate_native_image_install_fence(&fence, &db, &admission, role, &frozen)?;
+        store.validate_native_image_install_step(&fence, &db, &admission, role, &frozen)?;
         // The catalog refusal is already durably confirmed. From this point
         // any crash/timeout is dirty/unready until a fresh authorized restart.
         db.begin_native_target_image_install(&fence, &admission, &frozen, &bindings)?;
@@ -510,7 +510,7 @@ impl NativeRangeImageInstaller {
             .database
             .try_read()
             .ok_or_else(|| invalid("target DB busy"))?;
-        store.validate_native_image_install_fence(
+        store.validate_native_image_install_step(
             &self.fence,
             &db,
             &self.admission,

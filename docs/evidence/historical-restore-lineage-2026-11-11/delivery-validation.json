@@ -1,0 +1,8 @@
+{
+  "source_version": "1.0.468-beta",
+  "parent_commit": "ecf6f60a2ae4433c02bc4352331b53c23dcd9c9d",
+  "final_versioned_local_tests": "pending_shared_build_slot",
+  "remote_ci": "not_yet_run",
+  "archived_foundation_results_are_delivery_tests": false,
+  "binary_release_or_deployment_produced": false
+}

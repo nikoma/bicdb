@@ -3,6 +3,7 @@
 //! opaque wrapper. Loading the audit never creates a fresh quorum or source.
 use super::*;
 use crate::db::{LocalNativeRecoveryReady, NativeRangePrefixObservation};
+use crate::BicDb;
 use serde::{Deserialize, Serialize};
 
 const VERSION: u32 = 1;

@@ -3,6 +3,7 @@
 use super::*;
 use crate::db::{NativeRangePrefixObservation, ProtectedCurrentImagePreimageV1};
 use crate::distribution_range_consensus::NativeCurrentImageProposalPointer;
+use crate::CancellationToken;
 use serde::{Deserialize, Serialize};
 const MAX_INSTALLING_EVIDENCE_BYTES: usize = 8 * 1024 * 1024;
 fn digest(s: &str) -> bool {

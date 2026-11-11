@@ -2,6 +2,7 @@
 //! conversion to FreshRangeRecoveryAuthority or any historical-write quorum.
 use super::*;
 use crate::distribution_range_consensus::NativeCurrentImageProposalPointer;
+use crate::CancellationToken;
 use std::sync::Arc;
 #[derive(Debug)]
 pub(crate) enum CurrentImageResumeVote {

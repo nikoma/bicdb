@@ -4,6 +4,7 @@ use super::image_compatibility::ActualSourceIdentity;
 use super::*;
 use crate::db::{LocalNativeRecoveryReady, NativeLogicalHistoryOutcomeV1};
 use crate::distribution_range_consensus::RangeWriteStore;
+use crate::{BicDb, CancellationToken};
 use std::sync::Arc;
 fn add(values: &mut BTreeMap<u64, String>, index: u64, checksum: &str) -> Result<()> {
     if values

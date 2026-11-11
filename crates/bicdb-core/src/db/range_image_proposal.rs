@@ -420,7 +420,7 @@ impl BicDb {
         let controlled = self.range_mutation_gate().try_controlled_mutation(frozen)?;
         self.in_paged_transaction(|paged, xid| {
             if record.native_page_xid == 0 {
-                record.native_page_xid = xid.get();
+                record.native_page_xid = xid;
                 record.checksum_sha256 = record.checksum()?;
             }
             record.validate()?;

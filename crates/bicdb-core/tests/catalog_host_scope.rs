@@ -376,6 +376,14 @@ fn internal_catalog_writes_stay_inside_the_declared_effect_scope() {
                 internal.delete("business", "seed"),
                 Err(BicDbError::TransactionConflict(_))
             ));
+            assert!(matches!(
+                internal.write_upserts_with_repairs("business", [(seed(9), 0, None)]),
+                Err(BicDbError::TransactionConflict(_))
+            ));
+            // Refusal must precede row locks as well as buffered writes.
+            let mut unrelated = db.begin_transaction().unwrap();
+            unrelated.update("business", seed(1)).unwrap();
+            unrelated.rollback().unwrap();
             internal.update("catalog", seed(7)).unwrap();
             internal.commit().unwrap();
         }

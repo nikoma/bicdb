@@ -17506,6 +17506,7 @@ impl Transaction {
         let mut previous_collection = None;
         for write in &writes {
             if previous_collection != Some(write.collection.as_str()) {
+                self.ensure_catalog_mutation_scope(&write.collection)?;
                 self.bind_collection_incarnation(&write.collection)?;
                 previous_collection = Some(write.collection.as_str());
             }
@@ -18343,6 +18344,7 @@ impl Transaction {
         if self.state != TxState::Pending {
             return Err(BicDbError::TransactionNotPending);
         }
+        self.ensure_catalog_mutation_scope(collection)?;
         let rows = rows.into_iter().collect::<Vec<_>>();
         if rows.is_empty() {
             return Ok(());
@@ -18431,6 +18433,7 @@ impl Transaction {
         if self.state != TxState::Pending {
             return Err(BicDbError::TransactionNotPending);
         }
+        self.ensure_catalog_mutation_scope(collection)?;
         let records = records.into_iter().collect::<Vec<_>>();
         if records.is_empty() {
             return Ok(());

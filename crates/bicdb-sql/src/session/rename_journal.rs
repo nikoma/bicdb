@@ -580,7 +580,9 @@ mod tests {
     fn reused_rename_backing_cannot_authorize_undo_of_a_replacement_collection() {
         for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
             let root = tempfile::tempdir().unwrap();
-            let config = DbConfig::default().with_fsync(true).with_storage_mode(mode);
+            let config = DbConfig::default()
+                .with_fsync(true)
+                .with_storage_mode(mode.clone());
             let mut db = BicDb::open_with_config(root.path(), config.clone()).unwrap();
             db.create_collection("original").unwrap();
             db.activate_local_namespace_identity_v1().unwrap();
@@ -620,7 +622,9 @@ mod tests {
     fn reused_row_backing_cannot_restore_before_images_into_a_replacement_collection() {
         for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
             let root = tempfile::tempdir().unwrap();
-            let config = DbConfig::default().with_fsync(true).with_storage_mode(mode);
+            let config = DbConfig::default()
+                .with_fsync(true)
+                .with_storage_mode(mode.clone());
             let mut db = BicDb::open_with_config(root.path(), config.clone()).unwrap();
             db.create_collection("dependent").unwrap();
             db.create_collection("retained").unwrap();
@@ -667,7 +671,9 @@ mod tests {
             let root = tempfile::tempdir().unwrap();
             let mut db = BicDb::open_with_config(
                 root.path(),
-                DbConfig::default().with_fsync(true).with_storage_mode(mode),
+                DbConfig::default()
+                    .with_fsync(true)
+                    .with_storage_mode(mode.clone()),
             )
             .unwrap();
             db.create_collection("original").unwrap();
@@ -701,7 +707,9 @@ mod tests {
         for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
             for missing in [false, true] {
                 let root = tempfile::tempdir().unwrap();
-                let config = DbConfig::default().with_fsync(true).with_storage_mode(mode);
+                let config = DbConfig::default()
+                    .with_fsync(true)
+                    .with_storage_mode(mode.clone());
                 let mut db = BicDb::open_with_config(root.path(), config.clone()).unwrap();
                 db.create_collection("original").unwrap();
                 db.insert("original", row("value", 1)).unwrap();

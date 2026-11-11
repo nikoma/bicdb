@@ -1,0 +1,121 @@
+{
+  "base_source_version": "1.0.463-beta",
+  "base_commit": "d49a391b3c6157f90f29e9f2f5214143c60f9f4b",
+  "findings": {
+    "retained_suffix_healthy_control": "PASSED",
+    "completed_relocation_installs_range_history_base": "FAILED",
+    "compacted_quorum_recovery_availability": "FAILED",
+    "exact_single_key_payload_after_relocation_and_recovery_attempt": "PASSED",
+    "premature_promotion_refusal": "PASSED",
+    "control_plane_checkpoint_close_reopen": "PASSED",
+    "database_process_crash_recovery": "NOT_TESTED",
+    "physical_ha": "NOT_TESTED",
+    "azure_failure_causation": "NOT_TESTED"
+  },
+  "inputs": {
+    "replication_factor": 3,
+    "physical_databases": 4,
+    "virtual_ranges": 1,
+    "start_voters": [
+      "n0",
+      "n1",
+      "n2"
+    ],
+    "final_voters": [
+      "n1",
+      "n2",
+      "n3"
+    ],
+    "initial_leader": "n0",
+    "final_leader": "n3",
+    "fsync": false,
+    "storage": "server_paged; collections created, closed and reopened before service ownership",
+    "buffer_pool_bytes_per_database": 8388608,
+    "test_transport": "same-owned-service Arc<Mutex> forwarding actual replica/relocation handlers",
+    "metadata": "initial topology fixture scripted; subsequent actual metadata relocation methods/driver",
+    "mutation_shape": "one fixed record updated by every actual quorum-admitted transaction",
+    "maximum_workload_seconds": 180,
+    "sampled_process_write_bytes_guard": 17179869184,
+    "minimum_ram_guard_bytes": 12884901888
+  },
+  "tests_passed": 2,
+  "capability_status_is_not_test_exit_status": true,
+  "case_projection": {
+    "below": {
+      "successful_commits": 8,
+      "target_floor_before_recovery": 0,
+      "target_floor_after_recovery": 8,
+      "recovery": "Ok(1)",
+      "source_progress_before_relocation": [
+        {
+          "node_id": "n0",
+          "range_id": 1,
+          "current_epoch": 1,
+          "last_index": 8,
+          "resolved_through": 8,
+          "compacted_through": 0
+        },
+        {
+          "node_id": "n1",
+          "range_id": 1,
+          "current_epoch": 1,
+          "last_index": 8,
+          "resolved_through": 8,
+          "compacted_through": 0
+        },
+        {
+          "node_id": "n2",
+          "range_id": 1,
+          "current_epoch": 1,
+          "last_index": 8,
+          "resolved_through": 8,
+          "compacted_through": 0
+        }
+      ],
+      "snapshot_db_sequence": 8,
+      "copy_and_catchup_control_plane_reopened": [
+        "CatchingUp",
+        "SnapshotCopying"
+      ],
+      "target_local_database_sequence": "NOT_RETAINED; never inferred from range index or source DB sequence"
+    },
+    "compacted": {
+      "successful_commits": 1025,
+      "target_floor_before_recovery": 0,
+      "target_floor_after_recovery": 0,
+      "recovery": "Err(Cluster(\"range leadership recovery deferred for 1 range(s): r1: cluster error: range-write leader recovery for r1 requires a range snapshot at index 0; quorum resolved through 1025\"))",
+      "source_progress_before_relocation": [
+        {
+          "node_id": "n0",
+          "range_id": 1,
+          "current_epoch": 1,
+          "last_index": 1025,
+          "resolved_through": 1025,
+          "compacted_through": 1
+        },
+        {
+          "node_id": "n1",
+          "range_id": 1,
+          "current_epoch": 1,
+          "last_index": 1025,
+          "resolved_through": 1025,
+          "compacted_through": 1
+        },
+        {
+          "node_id": "n2",
+          "range_id": 1,
+          "current_epoch": 1,
+          "last_index": 1025,
+          "resolved_through": 1025,
+          "compacted_through": 1
+        }
+      ],
+      "snapshot_db_sequence": 1025,
+      "copy_and_catchup_control_plane_reopened": [
+        "CatchingUp",
+        "SnapshotCopying"
+      ],
+      "target_local_database_sequence": "NOT_RETAINED; never inferred from range index or source DB sequence"
+    }
+  }
+}

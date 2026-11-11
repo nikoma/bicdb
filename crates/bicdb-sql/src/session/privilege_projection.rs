@@ -1776,29 +1776,7 @@ impl<'db> SqlSession<'db> {
         mutation: &CompositeAttributeMutation,
         persist_root: bool,
     ) -> Result<()> {
-        let mut replacements = BTreeMap::new();
-        replacements.insert(updated.oid, updated.clone());
-        let all_types = list_user_types(self.db_ref())?;
-        loop {
-            let mut changed = false;
-            for candidate in &all_types {
-                let mut candidate = replacements
-                    .get(&candidate.oid)
-                    .cloned()
-                    .unwrap_or_else(|| candidate.clone());
-                let before = candidate.clone();
-                replace_user_type_kind_references(&mut candidate.kind, &replacements);
-                if candidate != before || replacements.contains_key(&candidate.oid) {
-                    if replacements.get(&candidate.oid) != Some(&candidate) {
-                        replacements.insert(candidate.oid, candidate);
-                        changed = true;
-                    }
-                }
-            }
-            if !changed {
-                break;
-            }
-        }
+        let replacements = composite_type_replacements(self.db_ref(), updated)?;
 
         let mut table_updates = Vec::new();
         for schema in list_schemas(self.db_ref())? {
@@ -2153,4 +2131,36 @@ impl<'db> SqlSession<'db> {
         }
         Ok(existed)
     }
+}
+
+/// Shared transitive closure for value rewrites and their durable before-images.
+pub(super) fn composite_type_replacements(
+    db: &BicDb,
+    updated: &UserTypeSchema,
+) -> Result<BTreeMap<i64, UserTypeSchema>> {
+    let mut replacements = BTreeMap::new();
+    replacements.insert(updated.oid, updated.clone());
+    let all_types = list_user_types(db)?;
+    loop {
+        let mut changed = false;
+        for candidate in &all_types {
+            let mut candidate = replacements
+                .get(&candidate.oid)
+                .cloned()
+                .unwrap_or_else(|| candidate.clone());
+            let before = candidate.clone();
+            replace_user_type_kind_references(&mut candidate.kind, &replacements);
+            if candidate != before || replacements.contains_key(&candidate.oid) {
+                if replacements.get(&candidate.oid) != Some(&candidate) {
+                    replacements.insert(candidate.oid, candidate);
+                    changed = true;
+                }
+            }
+        }
+        if !changed {
+            break;
+        }
+    }
+
+    Ok(replacements)
 }

@@ -66,6 +66,12 @@ pub(super) struct PreparedRename {
     sequence: u64,
 }
 
+impl PreparedRename {
+    pub(super) fn id(&self) -> &str {
+        &self.header.id
+    }
+}
+
 fn invalid(message: &str) -> SqlError {
     SqlError::InvalidSql(format!("rename undo journal: {message}"))
 }

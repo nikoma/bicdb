@@ -88,6 +88,9 @@ backlog/recovery qualification.
 
 ## Reproducible issue: distributed range decisions omit original effects
 
+Tracked as [issue #148](https://github.com/nikoma/bicdb/issues/148), with immutable
+main-source links and a deterministic survivor/effect reconciliation experiment.
+
 Scope: distributed virtual-range write admission. This finding does not classify
 legacy/native whole-WAL HA, Cell replication, or application fleet behavior.
 

@@ -10,7 +10,7 @@ const CREATIONS: &str = "__bicdb_recycle_creations";
 /// Compare physical names exactly so identically named user relations in a
 /// private SQL schema remain accessible through their encoded storage name.
 pub(crate) fn is_catalog_journal_collection(name: &str) -> bool {
-    [INTENTS, PURGES, CREATIONS].contains(&name)
+    [INTENTS, PURGES, CREATIONS].contains(&name) || super::rename_journal::is_collection(name)
 }
 
 const CREATED_PREFIX: &str = "__bicdb_created_";
@@ -328,6 +328,7 @@ pub(super) fn recover(db: &mut BicDb) -> Result<usize> {
     enum PendingIntent {
         Move(MoveIntent),
         Creation(CreationIntent),
+        Rename(super::rename_journal::PendingRename),
     }
     let mut pending = intents
         .drain(..)
@@ -338,16 +339,27 @@ pub(super) fn recover(db: &mut BicDb) -> Result<usize> {
         validate_creation(&creation, &record.id)?;
         pending.push(PendingIntent::Creation(creation));
     }
+    pending.extend(
+        super::rename_journal::pending(db)?
+            .into_iter()
+            .map(PendingIntent::Rename),
+    );
     pending.sort_by_key(|intent| {
         std::cmp::Reverse(match intent {
             PendingIntent::Move(intent) => intent.order,
             PendingIntent::Creation(intent) => intent.order,
+            PendingIntent::Rename(intent) => intent.order,
         })
     });
     let mut repaired = purge_repairs;
     for intent in pending {
         let intent = match intent {
             PendingIntent::Move(intent) => intent,
+            PendingIntent::Rename(intent) => {
+                super::rename_journal::rollback(db, &intent.id)?;
+                repaired += 1;
+                continue;
+            }
             PendingIntent::Creation(intent) => {
                 rollback_creation(db, &intent)?;
                 repaired += 1;
@@ -438,6 +450,7 @@ pub(super) fn recover(db: &mut BicDb) -> Result<usize> {
         clear(db, &entry.bin_name)?;
         repaired += 1;
     }
+    super::rename_journal::collect_orphans(db)?;
     Ok(repaired)
 }
 

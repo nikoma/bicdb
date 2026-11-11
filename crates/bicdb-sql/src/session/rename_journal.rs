@@ -32,6 +32,35 @@ enum Effect {
     },
 }
 
+pub(super) struct PendingRename {
+    pub(super) id: String,
+    pub(super) order: u64,
+}
+
+pub(super) fn is_collection(name: &str) -> bool {
+    [HEADERS, IMAGES].contains(&name)
+}
+
+/// Gather identities only. Recovery of their physical backings must run after
+/// later recycle/creation intents have been reversed, in the shared timeline.
+pub(super) fn pending(db: &BicDb) -> Result<Vec<PendingRename>> {
+    let records = match db.scan_collection(HEADERS) {
+        Ok(records) => records,
+        Err(BicDbError::CollectionNotFound(_)) => return Ok(Vec::new()),
+        Err(error) => return Err(error.into()),
+    };
+    records
+        .into_iter()
+        .map(|record| {
+            let header = load(db, &record.id)?.ok_or_else(|| invalid("manifest disappeared"))?;
+            Ok(PendingRename {
+                id: header.id,
+                order: header.order,
+            })
+        })
+        .collect()
+}
+
 pub(super) struct PreparedRename {
     header: Header,
     sequence: u64,
@@ -215,6 +244,14 @@ pub(super) fn rollback(db: &mut BicDb, id: &str) -> Result<()> {
                 }
                 let name = backing_name(db, &storage)?;
                 storage_for(db, &name)?;
+                if name == SCHEMA_COLLECTION {
+                    if let Some(record) = previous {
+                        let schema: TableSchema = serde_json::from_value(record.metadata)?;
+                        if schema.name != id {
+                            return Err(invalid("schema image identity mismatch"));
+                        }
+                    }
+                }
             }
             Effect::Rename { storage, old, new } => {
                 require_user_relation_name(&old)?;
@@ -268,6 +305,16 @@ pub(super) fn rollback(db: &mut BicDb, id: &str) -> Result<()> {
                         }
                     }
                 }
+                if name == SCHEMA_COLLECTION {
+                    sql_schema_list_cache_invalidate(db);
+                    let restored = db.get(&name, &id)?;
+                    let schema = restored
+                        .map(|record| {
+                            serde_json::from_value::<TableSchema>(record.metadata.clone())
+                        })
+                        .transpose()?;
+                    sql_schema_cache_set(db, &id, schema.map(std::sync::Arc::new));
+                }
             }
             Effect::Rename { storage, old, new } => {
                 let name = backing_name(db, &storage)?;
@@ -286,6 +333,39 @@ pub(super) fn rollback(db: &mut BicDb, id: &str) -> Result<()> {
     }
     db.delete(HEADERS, &header.id)?;
     Ok(())
+}
+
+/// Only a deleted manifest proves that all its images are obsolete. Never
+/// prune an active intent's images, including steps already undone by cursor.
+pub(super) fn collect_orphans(db: &mut BicDb) -> Result<usize> {
+    db.check_catalog_recovery_quiescent()?;
+    let images = match db.scan_collection(IMAGES) {
+        Ok(images) => images,
+        Err(BicDbError::CollectionNotFound(_)) => return Ok(0),
+        Err(error) => return Err(error.into()),
+    };
+    let mut obsolete = Vec::new();
+    for record in images {
+        let (id, index) = record
+            .id
+            .split_once(':')
+            .ok_or_else(|| invalid("invalid image identity"))?;
+        let uuid = uuid::Uuid::parse_str(id).map_err(|_| invalid("invalid image owner"))?;
+        let index = index
+            .parse::<u64>()
+            .map_err(|_| invalid("invalid image ordinal"))?;
+        if uuid.simple().to_string() != id || record.id != format!("{id}:{index:020}") {
+            return Err(invalid("noncanonical image identity"));
+        }
+        let _: Effect = serde_json::from_value(record.metadata)?;
+        if load(db, id)?.is_none() {
+            obsolete.push(record.id);
+        }
+    }
+    for id in &obsolete {
+        db.delete(IMAGES, id)?;
+    }
+    Ok(obsolete.len())
 }
 
 fn persist_header(db: &mut BicDb, header: &Header) -> Result<()> {
@@ -406,5 +486,126 @@ mod tests {
                 .is_none());
             db.close().unwrap();
         }
+    }
+    #[test]
+    fn recovery_composes_rename_recycle_and_reused_name_in_reverse_order() {
+        for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
+            let root = tempfile::tempdir().unwrap();
+            let config = DbConfig::default().with_storage_mode(mode);
+            let mut db = BicDb::open_with_config(root.path(), config.clone()).unwrap();
+            SqlSession::new(&mut db).execute("CREATE TABLE original(rowkey INT PRIMARY KEY,payload TEXT); INSERT INTO original VALUES(1,'acknowledged')").unwrap();
+            let schema = load_schema(&db, "original").unwrap().unwrap();
+            let mut renamed_schema = schema.clone();
+            renamed_schema.primary_key_name = Some(schema.primary_key_constraint_name());
+            renamed_schema.name = "renamed".into();
+            let mut plan = prepare(&mut db).unwrap();
+            capture_rename(&db, &mut plan, "original", "renamed").unwrap();
+            capture_row(&db, &mut plan, SCHEMA_COLLECTION, "original").unwrap();
+            capture_row(&db, &mut plan, SCHEMA_COLLECTION, "renamed").unwrap();
+            db.rename_collection("original", "renamed").unwrap();
+            delete_schema(&mut db, "original").unwrap();
+            save_schema(&mut db, &renamed_schema).unwrap();
+            let bin = format!("__bicdb_bin_{}", uuid::Uuid::new_v4().simple());
+            let entry = recycle_bin::RecycleBinEntry {
+                bin_name: bin.clone(),
+                table: "renamed".into(),
+                owner: BOOTSTRAP_ROLE_NAME.into(),
+                dropped_at_micros: unix_micros_now(),
+                schema: renamed_schema,
+                grants: vec![],
+                triggers: vec![],
+                sequences: vec![],
+                indexes: db
+                    .index_definitions()
+                    .into_iter()
+                    .filter(|i| i.collection == "renamed")
+                    .map(|i| (i.name.clone(), i.name))
+                    .collect(),
+            };
+            recycle_bin_journal::prepare(&mut db, &entry).unwrap();
+            db.rename_collection("renamed", &bin).unwrap();
+            delete_schema(&mut db, "renamed").unwrap();
+            // Reuse the logical name with a separately identified backing.
+            // The existing creation journal must undo this BEFORE the later
+            // recycle move, which must itself precede the generic rename.
+            let created = format!("__bicdb_created_{}", uuid::Uuid::new_v4().simple());
+            db.create_collection("__bicdb_recycle_creations").unwrap();
+            let mut tx = db.begin_transaction().unwrap();
+            let order = tx.id().0;
+            tx.insert(
+                "__bicdb_recycle_creations",
+                Record::new(&created).with_metadata(
+                    serde_json::json!({"table":"renamed","storage":created,"order":order}),
+                ),
+            )
+            .unwrap();
+            tx.commit().unwrap();
+            db.create_collection(&created).unwrap();
+            db.rename_collection(&created, "renamed").unwrap();
+            db.insert("renamed", row("replacement", 99)).unwrap();
+            db.close().unwrap();
+            let mut db = BicDb::open_with_config(root.path(), config).unwrap();
+            assert_eq!(
+                recycle_bin::recover_interrupted_recycle_bin_renames(&mut db).unwrap(),
+                3
+            );
+            assert_eq!(
+                recycle_bin::recover_interrupted_recycle_bin_renames(&mut db).unwrap(),
+                0
+            );
+            assert!(load_schema(&db, "renamed").unwrap().is_none());
+            assert!(!db
+                .collections()
+                .iter()
+                .any(|m| m.name == "renamed" || m.name == bin));
+            assert_eq!(
+                SqlSession::new(&mut db)
+                    .execute("SELECT rowkey,payload FROM original")
+                    .unwrap()
+                    .rows,
+                vec![vec![
+                    SqlValue::Int(1),
+                    SqlValue::String("acknowledged".into())
+                ]]
+            );
+            assert!(db
+                .verify_indexes_consistently()
+                .unwrap()
+                .iter()
+                .all(|i| i.valid));
+            db.close().unwrap();
+        }
+    }
+    #[test]
+    fn orphan_collection_keeps_undecided_images_and_business_data() {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open(root.path()).unwrap();
+        db.create_collection("business").unwrap();
+        db.insert("business", row("value", 1)).unwrap();
+        let mut committed = prepare(&mut db).unwrap();
+        capture_row(&db, &mut committed, "business", "value").unwrap();
+        let mut pending = prepare(&mut db).unwrap();
+        capture_row(&db, &mut pending, "business", "other").unwrap();
+        let mut tx = db.begin_transaction().unwrap();
+        tx.update("business", row("value", 2)).unwrap();
+        decide(&committed, &mut tx).unwrap();
+        tx.commit().unwrap();
+        assert_eq!(collect_orphans(&mut db).unwrap(), 1);
+        assert!(db
+            .get(IMAGES, &image_id(&pending.header, 0))
+            .unwrap()
+            .is_some());
+        assert_eq!(
+            db.get("business", "value").unwrap().unwrap().metadata["value"],
+            2
+        );
+        rollback(&mut db, &pending.header.id).unwrap();
+        assert_eq!(collect_orphans(&mut db).unwrap(), 1);
+        assert_eq!(collect_orphans(&mut db).unwrap(), 0);
+        assert_eq!(
+            db.get("business", "value").unwrap().unwrap().metadata["value"],
+            2
+        );
+        db.close().unwrap();
     }
 }

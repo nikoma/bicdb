@@ -507,7 +507,7 @@ pub(crate) fn has_executable_sql(sql: &str) -> bool {
 }
 
 fn routine_user_type_column(db: &BicDb, name: &str) -> Result<Option<UserTypeColumnSchema>> {
-    let Some(oid) = pg_user_type_oid_by_name(db, name)? else {
+    let Some(oid) = resolve_regtype_oid(db, name)? else {
         return Ok(None);
     };
     let oid = i64::from(oid);

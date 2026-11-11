@@ -172,19 +172,10 @@ pub(crate) fn regtype_text_value(db: &BicDb, value: SqlValue) -> Result<SqlValue
         return Ok(SqlValue::Null);
     }
     let value_text = value.to_cell();
-    let oid = sql_value_i64(&value)
-        .or_else(|| {
-            value_text
-                .parse::<i64>()
-                .ok()
-                .or_else(|| pg_type_regtype_name(&value_text).map(|pg_type| pg_type_oid(&pg_type)))
-        })
-        .or_else(|| {
-            pg_user_type_oid_by_name(db, &value_text)
-                .ok()
-                .flatten()
-                .map(i64::from)
-        });
+    let oid = match sql_value_i64(&value).or_else(|| value_text.parse::<i64>().ok()) {
+        Some(oid) => Some(oid),
+        None => resolve_regtype_oid(db, &value_text)?.map(i64::from),
+    };
     let Some(oid) = oid else {
         return Err(SqlError::InvalidSql(format!(
             "cannot cast {} to regtype text",

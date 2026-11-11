@@ -378,6 +378,16 @@ impl FreshRangeGenesisAuthority {
     }
 }
 impl SourceRangeImageLineage {
+    /// Target-local MVCC visibility bound from actual native materialization.
+    /// This is neither range R nor a source-node sequence. Installed anchors
+    /// must use their own actual target bound when that producer is composed.
+    pub(crate) fn actual_local_visibility_sequence(&self) -> u64 {
+        self.prefix
+            .as_ref()
+            .map_or(self.receipt.actual_snapshot_db_sequence, |prefix| {
+                prefix.actual_local_visibility_sequence()
+            })
+    }
     pub(crate) fn base_range(&self) -> &RangeDescriptor {
         &self.receipt.range
     }

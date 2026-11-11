@@ -234,6 +234,9 @@ pub(super) struct NativeCertifiedRangePrefix {
     checksum_sha256: String,
 }
 impl NativeCertifiedRangePrefix {
+    pub(super) fn actual_local_visibility_sequence(&self) -> u64 {
+        self.materialized.local_wal_sequence
+    }
     fn checksum(&self) -> Result<String> {
         let mut unsigned = self.clone();
         unsigned.checksum_sha256.clear();

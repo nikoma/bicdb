@@ -31,7 +31,9 @@ thread_local! {
     static TEST_REJECT_NATIVE_AFTER_ADMISSION: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
 pub(super) use certified_prefix::NativeRangeScopeRegistry;
-pub(crate) use certified_prefix::{NativeRangeInstallSafety, NativeRangePendingApply};
+pub(crate) use certified_prefix::{
+    KnownNativeRecoveryPrefix, NativeRangeInstallSafety, NativeRangePendingApply,
+};
 
 pub(super) fn native_key(key: &str) -> Vec<u8> {
     let mut encoded = crate::paged_collection::RANGE_IMAGE_NATIVE_NS_V1.to_vec();

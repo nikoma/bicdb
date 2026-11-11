@@ -656,8 +656,9 @@ impl BicDb {
 
     /// Rename a collection and retain one transaction's writes/read observations
     /// on that same backing. Catalog mutation requires an exclusive database
-    /// borrow and no other pending transaction or retained row lock; its host
-    /// remains responsible for transactional DDL undo. Native grants retain
+    /// borrow and either a declared catalog scope or no other pending native
+    /// transaction/retained row lock. The host remains responsible for SQL
+    /// catalog visibility and transactional DDL undo. Native grants retain
     /// their immutable relation restrictions.
     pub fn rename_collection_preserving_pending_writes(
         &mut self,
@@ -691,21 +692,23 @@ impl BicDb {
         }
         // A Transaction retains database access independently of this exclusive
         // borrow. Only the supplied transaction's overlays are rebound below;
-        // another live transaction would retain the old logical name and lock
-        // identities. Refuse before publishing any catalog change. Check locks
-        // separately because a completed transaction may still be releasing its
-        // locks, and a SELECT FOR UPDATE need not have buffered any writes.
-        let other_pending = self.tx_states.shards.iter().any(|shard| {
-            shard
-                .lock()
-                .iter()
-                .any(|(id, state)| *id != tx.id.0 && *state == TxState::Pending)
-        });
-        let other_locks = self.write_locks.values_any(|owner| *owner != tx.id);
-        if other_pending || other_locks {
-            return Err(BicDbError::TransactionConflict(
-                "cannot rename while another transaction is pending or holds row locks".into(),
-            ));
+        // A declared scope atomically excludes prior and future observations of
+        // both names/backing. Without one, keep the conservative global gate:
+        // other owners' overlays cannot be rebound by this operation. Locks
+        // are checked separately while a completed transaction releases them.
+        if !self.catalog_admission.owner_covers(tx.id, old, new) {
+            let other_pending = self.tx_states.shards.iter().any(|shard| {
+                shard
+                    .lock()
+                    .iter()
+                    .any(|(id, state)| *id != tx.id.0 && *state == TxState::Pending)
+            });
+            let other_locks = self.write_locks.values_any(|owner| *owner != tx.id);
+            if other_pending || other_locks {
+                return Err(BicDbError::TransactionConflict(
+                    "cannot rename while another transaction is pending or holds row locks".into(),
+                ));
+            }
         }
         // Application grants/commit validators are bound to authored relation
         // names. Rebinding an already-authorized write would change that

@@ -1,6 +1,8 @@
 mod access_mutation;
 mod branching;
+mod catalog_admission;
 mod collection_rename;
+pub use catalog_admission::CatalogScopeToken;
 mod commit_snapshot;
 mod deferred_materialize;
 #[cfg(test)]
@@ -4010,6 +4012,7 @@ pub struct BicDb {
     // `Drop` (for abandoned/conflict-dropped pending txns) without dereferencing
     // `db`, mirroring `write_locks`/`active_snapshots`.
     tx_states: Arc<ShardedMutexMap<u64, TxState>>,
+    catalog_admission: Arc<catalog_admission::CatalogAdmission>,
     /// Distinguishes this open database from any other in the process, so
     /// per-thread commit bookkeeping cannot be attributed to the wrong one.
     /// A counter rather than the address, because a freed `BicDb`'s address can
@@ -8974,7 +8977,8 @@ pub struct Transaction {
     observed_record_versions: Mutex<FxHashMap<String, FxHashMap<String, u64>>>,
     // Owned capabilities prevent a reused logical/storage name from receiving
     // writes authored against a dropped or renamed-away collection.
-    collection_incarnations: Mutex<FxHashMap<String, Arc<()>>>,
+    collection_incarnations: Arc<Mutex<FxHashMap<String, Arc<()>>>>,
+    catalog_admission: Arc<catalog_admission::CatalogAdmission>,
     /// Opt-in SQL profiles may report write conflicts at the statement
     /// boundary. Commit validation remains mandatory in either mode.
     statement_write_conflicts: bool,
@@ -10861,6 +10865,7 @@ impl BicDb {
                 tx_recovery.states,
                 orch_shard_count(),
             )),
+            catalog_admission: Arc::new(catalog_admission::CatalogAdmission::default()),
             next_tx_id: AtomicU64::new(tx_recovery.next_tx_id),
             // MVCC visibility watermark in commit_seq units (snapshots read it).
             instance_id: NEXT_DB_INSTANCE_ID.fetch_add(1, AtomicOrdering::Relaxed),
@@ -18968,6 +18973,7 @@ impl Drop for Transaction {
         // Goes through the shared handle (not `db`) to stay sound under
         // concurrent access, mirroring the record-lock release above.
         self.active_snapshots.decr_remove(self.snapshot_tx.0);
+        self.catalog_admission.finish(self.id);
     }
 }
 

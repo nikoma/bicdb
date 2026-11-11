@@ -856,6 +856,9 @@ impl BicDb {
             applied_watermark = current;
             snapshot_tx = TransactionId(current.max(min_snapshot));
         }
+        let collection_incarnations = Arc::new(Mutex::new(FxHashMap::default()));
+        self.catalog_admission
+            .register(tx_id, &collection_incarnations);
         Ok(Transaction {
             db: NonNull::from(self),
             id: tx_id,
@@ -866,7 +869,8 @@ impl BicDb {
             // provide a more exact mutation boundary.
             applied_snapshot: applied_watermark,
             observed_record_versions: Mutex::new(FxHashMap::default()),
-            collection_incarnations: Mutex::new(FxHashMap::default()),
+            collection_incarnations,
+            catalog_admission: Arc::clone(&self.catalog_admission),
             statement_write_conflicts: false,
             state: TxState::Pending,
             outcome_observer: OnceLock::new(),

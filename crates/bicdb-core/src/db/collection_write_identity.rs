@@ -9,21 +9,11 @@ impl Transaction {
         let db = self.db_ref();
         db.check_recovery_state()?;
         let result = (|| {
-            db.ensure_collection(collection)?;
-            let incarnation = Arc::clone(&db.collection_state(collection)?.incarnation);
-            let mut bindings = self.collection_incarnations.lock();
-            match bindings.get(collection) {
-                Some(expected) if !Arc::ptr_eq(expected, &incarnation) => {
-                    Err(BicDbError::TransactionConflict(format!(
-                        "collection `{collection}` was replaced after this transaction observed it"
-                    )))
-                }
-                Some(_) => Ok(()),
-                None => {
-                    bindings.insert(collection.to_string(), incarnation);
-                    Ok(())
-                }
-            }
+            self.catalog_admission
+                .bind(self.id, &self.collection_incarnations, collection, || {
+                    db.ensure_collection(collection)?;
+                    Ok(Arc::clone(&db.collection_state(collection)?.incarnation))
+                })
         })();
         db.check_recovery_state()?;
         result

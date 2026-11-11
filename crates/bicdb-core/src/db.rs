@@ -10912,6 +10912,16 @@ impl BicDb {
         result
     }
 
+    /// Fence readers that cannot replay generic SQL rename before-images.
+    /// The SQL host must call this before its first rename journal write. This
+    /// only installs the format capability; it does not perform DDL recovery.
+    pub fn enable_sql_rename_intents(&mut self) -> Result<()> {
+        self.ensure_writable("enable SQL rename intents")?;
+        let result = format::enable_sql_rename_intents(&self.path);
+        self.check_recovery_state()?;
+        result
+    }
+
     /// Require a healthy, quiescent database before startup catalog repair.
     /// Includes outstanding row locks as well as pending transaction states.
     pub fn check_catalog_recovery_quiescent(&self) -> Result<()> {

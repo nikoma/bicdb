@@ -25,12 +25,15 @@ pub const ONLINE_BACKUP_EXTENT_FEATURE_FLAG: &str = "online_backup_extent_tracki
 pub const UNIQUE_NULLS_NOT_DISTINCT_FEATURE_FLAG: &str = "unique_nulls_not_distinct_v1";
 pub const ORACLE_INVALID_ROUTINES_FEATURE_FLAG: &str = "oracle_invalid_routines_v1";
 pub const SQL_CATALOG_INTENTS_FEATURE_FLAG: &str = "sql_catalog_intents_v1";
+/// Generic rename before-images require recovery beyond the recycle journal.
+pub const SQL_RENAME_INTENTS_FEATURE_FLAG: &str = "sql_rename_intents_v1";
 pub const ORACLE_SIMPLE_CASE_V1_FEATURE_FLAG: &str = "oracle_simple_case_v1";
 const KNOWN_FEATURE_FLAGS: &[&str] = &[
     ORACLE_INVALID_ROUTINES_FEATURE_FLAG,
     ORACLE_SIMPLE_CASE_V1_FEATURE_FLAG,
     UNIQUE_NULLS_NOT_DISTINCT_FEATURE_FLAG,
     SQL_CATALOG_INTENTS_FEATURE_FLAG,
+    SQL_RENAME_INTENTS_FEATURE_FLAG,
     "format_metadata_v2",
     SERVER_PAGED_FEATURE_FLAG,
     ONLINE_BACKUP_EXTENT_FEATURE_FLAG,
@@ -570,6 +573,17 @@ pub(crate) fn enable_sql_catalog_intents(root: &Path) -> Result<()> {
     }
     Ok(())
 }
+
+/// Install before publishing any generic rename undo images. Readers that
+/// only understand recycle moves must refuse this store, even after the last
+/// rename intent has been resolved. Never remove this sticky capability.
+pub(crate) fn enable_sql_rename_intents(root: &Path) -> Result<()> {
+    let mut metadata = read_or_legacy_metadata(root)?;
+    validate_supported(&metadata)?;
+    if metadata.feature_flags.insert(SQL_RENAME_INTENTS_FEATURE_FLAG.into()) {
+        persist_metadata(root, &metadata, true)?;
+    }
+    Ok(())
 
 /// Persist the reader/writer fence before any Oracle-v1 key definition or build
 /// checkpoint becomes durable. The capability is sticky even after index DROP.

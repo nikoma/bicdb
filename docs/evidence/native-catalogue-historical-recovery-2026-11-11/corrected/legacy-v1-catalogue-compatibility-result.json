@@ -1,0 +1,31 @@
+{
+  "git_head": "9e37d812369de61bb9489ce5415d73d47fdcef35",
+  "uncommitted_patch_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "source_version": "1.0.471-beta",
+  "scope": "main471 actual verified image catalogue-base adoption, historical native Apply/new-local-WAL retry and cold nonzero image reissue; no serving-config/RecoveryComplete/normalReplicaApply/StrongGet/full-effects/physical qualification; core opt-level=0/debug=0",
+  "physical_qualification": false,
+  "environment_override": {},
+  "name": "legacy-v1-catalogue-compatibility",
+  "command": [
+    "cargo",
+    "test",
+    "--release",
+    "--locked",
+    "-p",
+    "bicdb-core",
+    "--features",
+    "tls-replication",
+    "--config",
+    "profile.release.package.bicdb-core.opt-level=0",
+    "--config",
+    "profile.release.package.bicdb-core.debug=0",
+    "--lib",
+    "distribution_range_consensus::tests::v1_committed_log_is_atomically_migrated_to_quorum_certified_current_format",
+    "--",
+    "--nocapture"
+  ],
+  "exit_code": 0,
+  "interrupted_reason": null,
+  "elapsed_seconds": 1.0006275493651628,
+  "minimum_available_bytes": 25940787200
+}

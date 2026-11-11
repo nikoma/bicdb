@@ -384,6 +384,53 @@ impl RecoveryResolvedCatalogObservation {
 }
 
 impl RangeWriteStore {
+    pub(crate) fn mark_historical_applied(
+        &mut self,
+        db: &crate::BicDb,
+        native: &NativeRecoveryAdmission,
+        role: &RecoveryRoleAdmission,
+        admission: &crate::distribution_range_recovery::RecoveryApplyAdmission,
+        receipt: &crate::db::NativeRecoveryAppliedReceipt,
+    ) -> Result<RangeWriteProgress> {
+        receipt.require_current(db, native, role, admission)?;
+        self.require_local_historical_apply_state(role, native, admission)?;
+        let command = admission.command();
+        if receipt.range_id() != command.range_id
+            || receipt.range_index() != command.index
+            || receipt.command_id() != command.command_id
+            || receipt.command_sha256() != command.checksum_sha256
+            || receipt.native_database_incarnation() != native.database_incarnation()
+            || receipt.actual_native_applied_through() < command.index
+            || receipt.recovery_nonce() != admission.recovery_nonce()
+            || receipt.configuration_sha256() != admission.scope().configuration_sha256
+            || receipt.role_context_id() != role.context_id()
+        {
+            return Err(range_write_error(
+                "actual native historical receipt does not match local certified command",
+            ));
+        }
+        self.recovery_persistence_uncertain = true;
+        let log = self
+            .catalog
+            .ranges
+            .get_mut(&command.range_id)
+            .expect("actual local preflight checked range");
+        if let Some(entry) = log.entries.get_mut(&command.index) {
+            // Never infer physical application from this old label: the
+            // opaque actual WAL/history receipt above is mandatory each time.
+            entry.state = RangeWriteState::Applied;
+            advance_resolved(log);
+            compact_resolved(log);
+        } else if command.index > log.compacted_through {
+            return Err(range_write_error(
+                "physical historical receipt has a new catalogue gap",
+            ));
+        }
+        // Even exact already-covered retries re-fsync before acknowledgment.
+        self.persist_recovery_catalog()?;
+        receipt.require_current(db, native, role, admission)?;
+        Ok(self.progress(command.range_id))
+    }
     fn require_local_historical_apply_state(
         &self,
         role: &RecoveryRoleAdmission,

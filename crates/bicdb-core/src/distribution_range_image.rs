@@ -173,6 +173,10 @@ impl TentativeNativeRangeImageSourceAuthorization<'_> {
     pub(crate) fn catalog_sha256(&self) -> &str {
         &self.capture.catalog_sha256
     }
+    /// The actual source reservation bound B, never a consensus range index R.
+    pub(crate) fn reserved_db_upper_bound(&self) -> ReservedDbUpperBound {
+        self.capture.reserved
+    }
     pub(crate) fn native_receipt_sha256(&self) -> &str {
         self.capture.lineage.native_receipt_sha256()
     }

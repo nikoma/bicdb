@@ -49,6 +49,28 @@ whitespace checks passed. The fixture is not a BicDB release artifact.
 These tracks do not alter the original audit's measured results or turn its
 historical test runs into validation of a newer runtime artifact.
 
+### Executed Azure follow-up and newer main
+
+The owner subsequently authorized the isolated Azure experiment, executed with
+the frozen optimized **1.0.461-beta** binary at `b05385d4b033edf0db03f3eccf4bdd86f7c8eddb`.
+The [execution update](scale-out-experiment-2026-11-11.md#azure-execution-update--2026-11-11)
+links the build, actual five-VM infrastructure, completed short growth, abrupt
+guest poweroff, placement-input correction and longer failed growth trial. Real
+data and leadership moved automatically. Sustained capacity did not improve,
+and the longer trial aborted on acknowledged-event read verification. Its
+missing/error distinction and subsequent diagnosis must be reported explicitly.
+These are actual exploratory VM results, not physical-host power-loss or
+production qualification; neither arbitrary PostgreSQL routing nor multi-range
+SQL transactions was added.
+
+During execution, remote main advanced to **1.0.462-beta**,
+`d8e30158d653eef7db7f1b52c56f0d4ab1d4d953` (PR137, fixed local SQL snapshot
+boundaries/native mode selection). Comparison against the tested source found
+no change in the inspected distribution planner, supervisor, range log, metadata
+consensus, default controller, checkpoint driver, event routing or event CLI
+files. That source comparison does not turn the 1.0.461 binary's measurements
+into tests of 1.0.462 or the later documentation delivery version.
+
 ## Evidence rules and current CI
 
 Implemented means an executable production code path exists; a public trait or

@@ -1,0 +1,7 @@
+bicdb cluster data RPC error: json error: unknown variant `strong_get`, expected one of `append`, `get`, `scan` at line 1 column 225
+
+thread 'target_explicit_strong_get_must_serve_a_healthy_quorum_value' (<pid>) panicked at <source-worktree>/scripts/experiments/strong-read-characterization.rs:230:5:
+assertion `left == right` failed: P0 strong contract is not implemented; an unavailable/unsupported healthy read cannot pass: Err("failed to fill whole buffer")
+  left: None
+ right: Some(Object {"healthy": Bool(true)})
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace

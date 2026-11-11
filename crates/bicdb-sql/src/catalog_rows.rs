@@ -7420,6 +7420,7 @@ pub(crate) fn catalog_view_schema(db: &BicDb, view: ViewSchema) -> Result<TableS
         row_array_type_oid: view.row_array_type_oid,
         columns,
         primary_key_name: None,
+        implicit_primary_key_name: None,
         indexes: view.indexes,
         constraints: Vec::new(),
         rls_enabled: false,

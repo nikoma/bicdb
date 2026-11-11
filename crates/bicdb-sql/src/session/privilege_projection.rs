@@ -438,6 +438,7 @@ impl<'db> SqlSession<'db> {
             }
         }
 
+        let mut unnamed_primary_constraint = None;
         for constraint in &create_table.constraints {
             match constraint {
                 TableConstraint::PrimaryKey(primary_key) => {
@@ -446,6 +447,8 @@ impl<'db> SqlSession<'db> {
                     )?;
                     if let Some(name) = primary_key.name.as_ref().map(ident_value) {
                         primary_key_name = Some(name);
+                    } else {
+                        unnamed_primary_constraint = Some(constraints.len());
                     }
                     constraints.extend(table_constraint_schema(
                         &table,
@@ -482,9 +485,6 @@ impl<'db> SqlSession<'db> {
             .map(|column| column.name.clone())
             .collect::<Vec<_>>();
         reject_missing_default_operator_class(self.db_ref(), &columns, &primary_columns, "btree")?;
-        if !primary_columns.is_empty() && primary_key_name.is_none() {
-            primary_key_name = Some(default_primary_key_name(&table));
-        }
         self.require_reference_privilege(&table, &constraints)?;
         for constraint in &constraints {
             if let ConstraintSchema::Unique {
@@ -509,6 +509,24 @@ impl<'db> SqlSession<'db> {
             if let Some(id_column) = columns.iter_mut().find(|column| column.name == "id") {
                 id_column.primary_key = true;
                 id_column.nullable = false;
+            }
+        }
+
+        let mut implicit_primary_key_name = None;
+        if primary_key_name.is_none() && columns.iter().any(|column| column.primary_key) {
+            // The table-level form also stores a uniqueness constraint for the
+            // primary key. Rename that entry along with the generated index.
+            let unnamed_primary =
+                unnamed_primary_constraint.map(|index| (index, constraints.remove(index)));
+            let name = allocate_primary_key_name(self.db_ref(), &schema_name, &table, &constraints);
+            if let Some((index, mut constraint)) = unnamed_primary {
+                set_constraint_name(&mut constraint, name.clone());
+                constraints.insert(index, constraint);
+            }
+            if !primary_columns.is_empty() {
+                primary_key_name = Some(name);
+            } else if name != default_primary_key_name(&table) {
+                implicit_primary_key_name = Some(name);
             }
         }
 
@@ -549,6 +567,7 @@ impl<'db> SqlSession<'db> {
             row_array_type_oid: Some(row_array_type_oid),
             columns,
             primary_key_name,
+            implicit_primary_key_name,
             indexes: Vec::new(),
             constraints,
             rls_enabled: false,

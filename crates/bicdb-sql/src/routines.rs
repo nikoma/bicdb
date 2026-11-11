@@ -3365,6 +3365,7 @@ pub(crate) fn alter_table_rename_table(
                 schema.name = new_table.to_string();
                 if schema.primary_key_name.is_none() {
                     schema.primary_key_name = primary_key_name;
+                    schema.implicit_primary_key_name = None;
                 }
                 for mut sequence in sequences {
                     sequence.owned_by_table = Some(new_table.to_string());
@@ -3417,6 +3418,7 @@ pub(crate) fn alter_table_rename_table(
         schema.name = new_table.to_string();
         if schema.primary_key_name.is_none() {
             schema.primary_key_name = primary_key_name;
+            schema.implicit_primary_key_name = None;
         }
         for sequence in &sequences {
             let mut sequence = sequence.clone();

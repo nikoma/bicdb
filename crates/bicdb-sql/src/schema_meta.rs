@@ -1232,6 +1232,34 @@ pub(crate) fn readable_primary_key_index_for_schema(
     executable_primary_key_index_for_schema(db, schema)
 }
 
+/// A rename keeps the original table's index name. If that name is taken,
+/// generate another without changing the retained index or its owner.
+pub(crate) fn allocate_primary_key_name(
+    db: &BicDb,
+    namespace: &str,
+    table: &str,
+    constraints: &[ConstraintSchema],
+) -> String {
+    let preferred = default_primary_key_name(table);
+    let indexes = index_definitions_shared(db);
+    let available = |name: &str| {
+        let storage = sql_index_storage_name(namespace, name);
+        !indexes
+            .iter()
+            .any(|index| index.name.eq_ignore_ascii_case(&storage))
+            && !constraints.iter().any(|constraint| {
+                constraint_name(constraint).eq_ignore_ascii_case(&catalog_display_name(name))
+            })
+    };
+    if available(&preferred) {
+        return preferred;
+    }
+    (1..)
+        .map(|suffix| format!("{preferred}{suffix}"))
+        .find(|name| available(name))
+        .expect("a finite index catalog cannot exhaust generated names")
+}
+
 pub(crate) fn primary_key_index_definition_for_schema(
     schema: &TableSchema,
 ) -> Option<IndexDefinition> {

@@ -217,6 +217,61 @@ fn failed_unique_commit_keeps_the_host_fence_available_for_recovery() {
 }
 
 #[test]
+fn demotion_during_an_outer_decision_keeps_readonly_host_cleanup_access() {
+    for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
+        let root = tempfile::tempdir().unwrap();
+        let cfg = config(mode).with_replication(bicdb_core::ReplicationConfig {
+            enabled: true,
+            mode: bicdb_core::ReplicationMode::Primary,
+            cluster_id: "catalog-fence".into(),
+            listen_addr: Some("127.0.0.1:0".into()),
+            tls: Some(bicdb_core::ReplicationTlsConfig {
+                cert_path: Default::default(),
+                key_path: Default::default(),
+                ca_path: Default::default(),
+                require_client_cert: true,
+                dev_localhost_plaintext: true,
+            }),
+            ..Default::default()
+        });
+        let mut db = BicDb::open_with_config(root.path(), cfg).unwrap();
+        db.create_collection("catalog").unwrap();
+        db.create_collection("business").unwrap();
+        db.insert("catalog", seed(0)).unwrap();
+        let mut owner = db.begin_transaction().unwrap();
+        owner
+            .insert("business", Record::new("never-acknowledged"))
+            .unwrap();
+        let token = owner
+            .reserve_catalog_collections(&["catalog".into()])
+            .unwrap();
+        owner
+            .retain_catalog_scope(&token, "journal-fenced")
+            .unwrap();
+        db.demote_to_standby().unwrap();
+        assert!(owner.commit().is_err());
+        assert!(db.get("business", "never-acknowledged").unwrap().is_none());
+        fenced(&db);
+        {
+            // Cleanup may inspect its existing catalog prefix, while the
+            // demoted node still refuses every mutation and promotion API.
+            let _access=db.enter_catalog_scope(&token).expect("a refused predecision role-fenced commit must not leave its host scope permanently closing");
+            let mut internal = db.begin_transaction().unwrap();
+            assert_eq!(
+                internal.get("catalog", "seed").unwrap().unwrap().metadata["value"],
+                0
+            );
+            assert!(internal.update("catalog", seed(9)).is_err());
+            internal.rollback().unwrap();
+        }
+        assert!(db.resume_catalog_scope_for_recovery(&token).is_err());
+        db.finish_catalog_scope(&token).unwrap();
+        db.check_catalog_recovery_quiescent().unwrap();
+        db.close().unwrap();
+    }
+}
+
+#[test]
 fn a_runtime_owner_drop_revokes_its_children_and_never_publishes_their_buffer() {
     let root = tempfile::tempdir().unwrap();
     let mut db = BicDb::open(root.path()).unwrap();

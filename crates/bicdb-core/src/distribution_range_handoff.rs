@@ -85,6 +85,34 @@ pub(crate) struct CertifiedRangeImageCut {
 }
 
 impl CertifiedRangeImageCut {
+    pub(crate) fn bootstrap_id(&self) -> Option<Uuid> {
+        self.bootstrap_id
+    }
+    pub(crate) fn schema_sha256(&self) -> Option<&str> {
+        self.expected_schema_sha256.as_deref()
+    }
+    pub(crate) fn restore_activation(
+        &self,
+    ) -> Option<&crate::distribution_consensus::MetadataRestoreActivation> {
+        self.restore_activation.as_ref()
+    }
+    pub(crate) fn capture_members(
+        &self,
+    ) -> std::collections::BTreeMap<ClusterNodeId, crate::db::RangeImageBirthMember> {
+        self.old_member_credentials
+            .iter()
+            .map(|(id, (incarnation, active, pending))| {
+                (
+                    id.clone(),
+                    crate::db::RangeImageBirthMember {
+                        incarnation: *incarnation,
+                        tls_certificate_sha256: active.clone(),
+                        pending_tls_certificate_sha256: pending.clone(),
+                    },
+                )
+            })
+            .collect()
+    }
     pub(crate) fn session_id(&self) -> Uuid {
         self.promise.session_id
     }

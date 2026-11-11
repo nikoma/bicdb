@@ -14,11 +14,16 @@ use uuid::Uuid;
 
 use crate::db::{RangeImageDbBindings, SourceRangeImageLineage};
 use crate::distribution::{
-    ClusterId, ClusterNodeId, RangeId, RangeSnapshotBatch, RangeSnapshotOptions, RelocationId,
+    ClusterId, ClusterNodeId, RangeId, RangeSnapshotBatch, RangeSnapshotOptions,
 };
 use crate::distribution_range_handoff::CertifiedRangeImageCut;
 use crate::distribution_range_mutation::{FrozenRangeMutationPermit, RangeMutationGate};
 use crate::{BicDb, BicDbError, CancellationToken, CollectionMeta, Result};
+
+mod source_cut;
+pub(crate) use source_cut::{
+    CertifiedRecoveryImageCut, NativeRangeImageSourceCut, RangeImageSourcePurposeV1,
+};
 
 const IMAGE_FORMAT: u32 = 1;
 const MAX_BATCH_BYTES: usize = 8 * 1024 * 1024;
@@ -36,7 +41,7 @@ fn invalid(detail: impl Into<String>) -> BicDbError {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct RangeIndexCut(u64);
 impl RangeIndexCut {
-    fn certified(cut: &CertifiedRangeImageCut) -> Self {
+    fn certified(cut: &NativeRangeImageSourceCut) -> Self {
         Self(cut.range_index())
     }
     pub(crate) fn get(self) -> u64 {
@@ -93,8 +98,7 @@ pub(crate) struct LocalRangeImageSealV1 {
     pub format_version: u32,
     pub session_id: Uuid,
     pub nonce: Uuid,
-    pub plan_id: String,
-    pub relocation_id: RelocationId,
+    pub purpose: RangeImageSourcePurposeV1,
     pub cluster_id: ClusterId,
     pub bootstrap_id: Uuid,
     pub source_native_receipt_sha256: String,
@@ -128,7 +132,7 @@ pub(crate) struct RangeImageCapture {
     db: Arc<RwLock<BicDb>>,
     gate: RangeMutationGate,
     frozen: FrozenRangeMutationPermit,
-    cut: CertifiedRangeImageCut,
+    cut: NativeRangeImageSourceCut,
     range_index: RangeIndexCut,
     reserved: ReservedDbUpperBound,
     bindings: RangeImageDbBindings,
@@ -158,7 +162,7 @@ impl TentativeNativeRangeImageSourceAuthorization<'_> {
         let database = read_database(&self.capture.db)?;
         self.capture.validate(&database)
     }
-    pub(crate) fn cut(&self) -> &CertifiedRangeImageCut {
+    pub(crate) fn cut(&self) -> &NativeRangeImageSourceCut {
         &self.capture.cut
     }
     pub(crate) fn bindings(&self) -> &RangeImageDbBindings {
@@ -205,7 +209,7 @@ impl CompletedNativeRangeImageSource {
     pub(crate) fn seal(&self) -> &LocalRangeImageSealV1 {
         &self.seal
     }
-    pub(crate) fn cut(&self) -> &CertifiedRangeImageCut {
+    pub(crate) fn cut(&self) -> &NativeRangeImageSourceCut {
         &self.capture.cut
     }
     pub(crate) fn bindings(&self) -> &RangeImageDbBindings {
@@ -282,12 +286,13 @@ pub(crate) fn content_hasher(catalog: &[u8]) -> Sha256 {
 impl RangeImageCapture {
     pub(crate) fn begin(
         db: Arc<RwLock<BicDb>>,
-        cut: CertifiedRangeImageCut,
+        cut: impl Into<NativeRangeImageSourceCut>,
         frozen: FrozenRangeMutationPermit,
         lineage: SourceRangeImageLineage,
         wait_budget: Duration,
         cancellation: &CancellationToken,
     ) -> Result<Self> {
+        let cut = cut.into();
         if wait_budget.is_zero()
             || wait_budget > MAX_CAPTURE_WAIT
             || frozen.owner() != cut.session_id()
@@ -549,8 +554,7 @@ impl RangeImageCapture {
             format_version: IMAGE_FORMAT,
             session_id: self.cut.session_id(),
             nonce: self.cut.nonce(),
-            plan_id: self.cut.plan_id().to_string(),
-            relocation_id: self.cut.relocation_id(),
+            purpose: self.cut.purpose(),
             cluster_id: self.cut.cluster_id().clone(),
             bootstrap_id: self.lineage.bootstrap_id(),
             source_native_receipt_sha256: self.lineage.native_receipt_sha256().to_string(),

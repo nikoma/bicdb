@@ -134,6 +134,65 @@ pub(crate) struct RangeImageCapture {
     invalid: bool,
 }
 
+/// Permission to stage an image from this live, fenced source. This borrowed
+/// value cannot outlive the capture or be decoded from a remote seal. It does
+/// not certify completed content, target installation, membership or readiness.
+pub(crate) struct TentativeNativeRangeImageSourceAuthorization<'a> {
+    capture: &'a RangeImageCapture,
+}
+
+impl TentativeNativeRangeImageSourceAuthorization<'_> {
+    pub(crate) fn require_current(&self) -> Result<()> {
+        let database = read_database(&self.capture.db)?;
+        self.capture.validate(&database)
+    }
+    pub(crate) fn cut(&self) -> &CertifiedRangeImageCut {
+        &self.capture.cut
+    }
+    pub(crate) fn bindings(&self) -> &RangeImageDbBindings {
+        &self.capture.bindings
+    }
+    pub(crate) fn lineage(&self) -> &SourceRangeImageLineage {
+        &self.capture.lineage
+    }
+    pub(crate) fn bootstrap_id(&self) -> Uuid {
+        self.capture.lineage.bootstrap_id()
+    }
+    pub(crate) fn catalog_sha256(&self) -> &str {
+        &self.capture.catalog_sha256
+    }
+    pub(crate) fn native_receipt_sha256(&self) -> &str {
+        self.capture.lineage.native_receipt_sha256()
+    }
+}
+
+/// A completed source image with its actual database, namespace, lineage and
+/// exclusive mutation pins still owned. The serializable seal alone cannot
+/// construct this value. Target verification and activation remain separate.
+pub(crate) struct CompletedNativeRangeImageSource {
+    capture: RangeImageCapture,
+    seal: LocalRangeImageSealV1,
+}
+
+impl CompletedNativeRangeImageSource {
+    pub(crate) fn require_current(&self) -> Result<()> {
+        let database = read_database(&self.capture.db)?;
+        self.capture.validate(&database)
+    }
+    pub(crate) fn seal(&self) -> &LocalRangeImageSealV1 {
+        &self.seal
+    }
+    pub(crate) fn cut(&self) -> &CertifiedRangeImageCut {
+        &self.capture.cut
+    }
+    pub(crate) fn bindings(&self) -> &RangeImageDbBindings {
+        &self.capture.bindings
+    }
+    pub(crate) fn lineage(&self) -> &SourceRangeImageLineage {
+        &self.capture.lineage
+    }
+}
+
 fn read_database(db: &Arc<RwLock<BicDb>>) -> Result<RwLockReadGuard<'_, BicDb>> {
     db.try_read()
         .ok_or_else(|| invalid("database is busy; retry outside database/service locks"))
@@ -294,6 +353,22 @@ impl RangeImageCapture {
     }
     pub(crate) fn reserved_upper_bound(&self) -> ReservedDbUpperBound {
         self.reserved
+    }
+
+    pub(crate) fn authorize_target_install(
+        &self,
+    ) -> Result<TentativeNativeRangeImageSourceAuthorization<'_>> {
+        let authorization = TentativeNativeRangeImageSourceAuthorization { capture: self };
+        authorization.require_current()?;
+        Ok(authorization)
+    }
+
+    pub(crate) fn complete(self) -> Result<CompletedNativeRangeImageSource> {
+        let seal = self.completed_seal()?;
+        Ok(CompletedNativeRangeImageSource {
+            capture: self,
+            seal,
+        })
     }
 
     fn validate(&self, database: &BicDb) -> Result<()> {

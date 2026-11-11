@@ -1170,6 +1170,13 @@ mod tests {
             &CancellationToken::uncancelable(),
         )
         .unwrap();
+        {
+            let staging = capture.authorize_target_install().unwrap();
+            staging.require_current().unwrap();
+            assert_eq!(staging.bootstrap_id(), bootstrap);
+            assert_eq!(staging.cut().range_index(), 0);
+            assert!(!staging.catalog_sha256().is_empty());
+        }
         let options = crate::RangeSnapshotOptions::default();
         loop {
             let cursor = capture.cursor().clone();
@@ -1184,6 +1191,12 @@ mod tests {
         assert_eq!(seal.record_count, 0);
         assert_eq!(seal.range_index, 0);
         assert_eq!(seal.bootstrap_id, bootstrap);
+        let completed = capture.complete().unwrap();
+        completed.require_current().unwrap();
+        assert_eq!(completed.seal(), &seal);
+        assert!(gate.try_enter(base.id).is_err());
+        drop(completed);
+        assert!(gate.try_enter(base.id).is_ok());
         // This actual healthy empty-genesis path is R=0, not proof of the
         // pending installed-image or certified-suffix producer for R>0.
     }

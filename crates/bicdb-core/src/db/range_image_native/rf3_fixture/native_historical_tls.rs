@@ -1259,3 +1259,6 @@ mod activation_smoke;
 
 #[cfg(test)]
 mod activation_tests;
+
+#[cfg(test)]
+mod activation_rplusone;

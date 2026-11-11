@@ -1,0 +1,132 @@
+{
+  "source": "546ac4a601ef3ec79f5c78453420188137fae4e3",
+  "scope": "Unmerged coherent role/profile initialization batch.795 first standby attempt was invalid fixture WAL bootstrap (older-than-retained13), retained separately; legitimate non-ACK hold02b reproduced actual readonly-standby INSERT refused during inappropriate local undo.795 configured primary PG initializer skipped recovery; clean NativePG control passed. Public configured/existing profile entrypoints now validate identity before mutation, primary recovers all dialect profiles, standby preserves source intents. Bounded pending-work probes avoid undo/quiescence on clean stores, immutable orphan GC preserves unrelated native owners. Conservative standby SQL readiness fence55000 avoids intermediate catalogs and allows transaction/GUC controls; scoped relation/type/Describe admission and fresh Oracle bootstrap remain OPEN gates, not replaced by global fencing. New tests cover PG/OracleHR persisted-profile host prefixes (not Oracle implicit-DDL conformance), both stores, source commit/rollback, target reopen, unchanged image/backing state, read fence, clean history+pendingNative, wrong profile nonmutation. Full original rename/recycle and key SQL regressions. Serial one-job16GiB active memory monitor; no wire/VM acceptance claim.",
+  "started_unix": 1794385367.4438813,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--lib",
+        "session::rename_table::tests::standby_initialization_preserves_an_undecided_primary_rename_and_follows_its_decision",
+        "--",
+        "--exact",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794385367.444145,
+      "exit": 0,
+      "finished_unix": 1794385462.5639508
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--lib",
+        "session::rename_table::tests::configured_profile_initialization_recovers_an_undecided_primary_rename",
+        "--",
+        "--exact",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794385462.5642438,
+      "exit": 0,
+      "finished_unix": 1794385464.4406385
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--lib",
+        "session::rename_table::tests::clean_postgres_profile_check_preserves_an_unrelated_live_native_transaction",
+        "--",
+        "--exact",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794385464.440895,
+      "exit": 0,
+      "finished_unix": 1794385464.8035128
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--lib",
+        "session::rename_",
+        "--",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794385464.8037207,
+      "exit": 0,
+      "finished_unix": 1794385498.0898316
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--lib",
+        "session::recycle_bin_journal::tests",
+        "--",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794385498.090128,
+      "exit": 0,
+      "finished_unix": 1794385527.5012171
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "rename_pending_composites",
+        "--test",
+        "table_rename_views",
+        "--test",
+        "schema_table_rename",
+        "--test",
+        "session_statement_snapshots",
+        "--test",
+        "read_only_transactions"
+      ],
+      "started_unix": 1794385527.5013819,
+      "exit": 0,
+      "finished_unix": 1794385646.1371126
+    }
+  ],
+  "status": "focused_passed",
+  "finished_unix": 1794385646.1374354
+}

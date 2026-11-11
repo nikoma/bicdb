@@ -1,0 +1,29 @@
+{
+  "source": "81fe1ca7e700aa416caa8251a80616c9ddf8d382",
+  "scope": "Local persisted election/restart API control,2storage modes xPG/OracleHR host-operation prefixes. Producer stops with undecided rename and pending business update; promote retained standby prefix, configured startup must restore prior ACK value and permit fresh writes surviving second reopen. Not Oracle client implicitDDL,network quorum,VMfault or independent ACK verifier qualification.",
+  "started_unix": 1794386057.3046787,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--lib",
+        "session::rename_table::tests::promoted_primary_recovers_an_undecided_replicated_rename_before_sql_writes",
+        "--",
+        "--exact",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794386057.304884,
+      "exit": 0,
+      "finished_unix": 1794386142.9514816
+    }
+  ],
+  "status": "focused_passed",
+  "finished_unix": 1794386142.9517155
+}

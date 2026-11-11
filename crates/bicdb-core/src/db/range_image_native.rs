@@ -11,7 +11,7 @@ use crate::distribution_range_mutation::FrozenRangeMutationPermit;
 
 mod certified_prefix;
 use certified_prefix::NativeCertifiedRangePrefix;
-pub(crate) use certified_prefix::NativeRangePendingApply;
+pub(crate) use certified_prefix::{NativeRangeInstallSafety, NativeRangePendingApply};
 
 pub(super) fn native_key(key: &str) -> Vec<u8> {
     let mut encoded = crate::paged_collection::RANGE_IMAGE_NATIVE_NS_V1.to_vec();

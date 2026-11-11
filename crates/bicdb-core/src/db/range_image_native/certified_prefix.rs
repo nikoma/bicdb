@@ -67,6 +67,69 @@ pub(crate) struct NativeRangePendingApply {
     pending: PendingNativeRangeCommand,
 }
 
+/// Destructive-install guard observation. Invalidating source visibility does
+/// not erase these irreversible native lower bounds. It is neither a source
+/// image nor a recovery role; only actual local records can construct it.
+#[derive(Debug)]
+pub(crate) struct NativeRangeInstallSafety {
+    database_incarnation: String,
+    birth_id: Uuid,
+    range_id: RangeId,
+    base_index: Option<u64>,
+    applied_index: Option<u64>,
+    pending_index: Option<u64>,
+    materialized_pending_index: Option<u64>,
+    source_invalidated: bool,
+    records_sha256: String,
+}
+impl NativeRangeInstallSafety {
+    pub(crate) fn base_index(&self) -> Option<u64> {
+        self.base_index
+    }
+    pub(crate) fn applied_index(&self) -> Option<u64> {
+        self.applied_index
+    }
+    pub(crate) fn maximum_irreversible_index(&self) -> Option<u64> {
+        self.applied_index.max(self.materialized_pending_index)
+    }
+    pub(crate) fn maximum_pending_index(&self) -> Option<u64> {
+        self.pending_index
+    }
+    pub(crate) fn pending_index(&self) -> Option<u64> {
+        self.pending_index
+    }
+    pub(crate) fn materialized_pending_index(&self) -> Option<u64> {
+        self.materialized_pending_index
+    }
+    pub(crate) fn source_invalidated(&self) -> bool {
+        self.source_invalidated
+    }
+    pub(crate) fn birth_id(&self) -> Uuid {
+        self.birth_id
+    }
+    pub(crate) fn range_id(&self) -> RangeId {
+        self.range_id
+    }
+    pub(crate) fn records_sha256(&self) -> &str {
+        &self.records_sha256
+    }
+    pub(crate) fn require_current(
+        &self,
+        database: &BicDb,
+        admission: &NativeRecoveryAdmission,
+        frozen: &FrozenRangeMutationPermit,
+    ) -> Result<()> {
+        let current = database.native_range_install_safety(admission, self.range_id, frozen)?;
+        if self.database_incarnation != current.database_incarnation
+            || self.birth_id != current.birth_id
+            || self.records_sha256 != current.records_sha256
+        {
+            return Err(invalid("destructive-install native lower bounds changed"));
+        }
+        Ok(())
+    }
+}
+
 /// Constant-size durable prefix extension; its native transaction follows the
 /// actual data/WAL apply. Previous native receipts form an ordered local
 /// history, not portable voter signatures or metadata authority.
@@ -131,6 +194,116 @@ impl NativeCertifiedRangePrefix {
 }
 
 impl BicDb {
+    pub(crate) fn native_range_install_safety(
+        &self,
+        admission: &NativeRecoveryAdmission,
+        range_id: RangeId,
+        frozen: &FrozenRangeMutationPermit,
+    ) -> Result<NativeRangeInstallSafety> {
+        admission.require_current(self)?;
+        // This nonwaiting check also excludes same-owner controlled writers.
+        // Draining is a caller operation outside DB/service guards.
+        self.range_mutations
+            .validate_quiescent_frozen(range_id, frozen)?;
+        let _journal = self
+            .native_range_image_journal
+            .try_lock()
+            .ok_or_else(|| invalid("native journal busy before destructive install"))?;
+        let birth = self
+            .read_native_birth()?
+            .ok_or_else(|| invalid("install safety has no native birth"))?;
+        // Until the installed-anchor adapter is composed, a known installed
+        // contract is unsupported, not an absent/zero native history.
+        if self
+            .read_native_range_image_record::<serde_json::Value>(&format!(
+                "install:base:{}",
+                range_id.get()
+            ))?
+            .is_some()
+        {
+            return Err(invalid(
+                "installed native base requires its composed safety adapter",
+            ));
+        }
+        let base: Option<NativeGenesisReceipt> =
+            self.read_native_range_image_record(&genesis_key(range_id))?;
+        if base.is_none()
+            && birth
+                .spec
+                .initial_ranges
+                .iter()
+                .any(|range| range.id == range_id)
+        {
+            return Err(invalid(
+                "expected native genesis is missing; lower bound is unknown",
+            ));
+        }
+        let prefix = match &base {
+            Some(base) => {
+                base.validate()?;
+                if base.birth_id != birth.birth_id || base.birth_sha256 != birth.checksum_sha256 {
+                    return Err(invalid(
+                        "native install safety base belongs to another birth",
+                    ));
+                }
+                self.read_native_certified_range_prefix(&birth, base)?
+            }
+            None => {
+                if self
+                    .read_native_range_image_record::<serde_json::Value>(&prefix_key(range_id))?
+                    .is_some()
+                {
+                    return Err(invalid("native prefix has no known physical base"));
+                }
+                None
+            }
+        };
+        let pending: Option<PendingNativeRangeCommand> =
+            self.read_native_range_image_record(&pending_key(range_id))?;
+        let applied_index = prefix
+            .as_ref()
+            .map(|prefix| prefix.range_index)
+            .or_else(|| base.as_ref().map(|base| base.range_index));
+        if let Some(pending) = &pending {
+            pending.validate()?;
+            if pending.birth_id != birth.birth_id
+                || pending.range_id != range_id
+                || applied_index != Some(pending.previous_index)
+            {
+                return Err(invalid(
+                    "native pending lower bound has an unknown/mismatched prefix",
+                ));
+            }
+        }
+        let generations = self.native_range_image_generations(&birth, range_id)?;
+        let source_invalidated = base.as_ref().is_some_and(|base| {
+            generations != (base.global_image_generation, base.range_image_generation)
+        });
+        let records_sha256 = hex::encode(sha2::Sha256::digest(bounded_json(
+            &(
+                &birth.checksum_sha256,
+                range_id,
+                &base,
+                &prefix,
+                &pending,
+                generations,
+            ),
+            MAX_NATIVE_RECEIPT_BYTES,
+        )?));
+        Ok(NativeRangeInstallSafety {
+            database_incarnation: self.incarnation.clone(),
+            birth_id: birth.birth_id,
+            range_id,
+            base_index: base.map(|base| base.range_index),
+            applied_index,
+            pending_index: pending.as_ref().map(|pending| pending.range_index),
+            materialized_pending_index: pending
+                .as_ref()
+                .and_then(|pending| pending.materialized.as_ref().map(|_| pending.range_index)),
+            source_invalidated,
+            records_sha256,
+        })
+    }
     /// Narrow local replica materialization: a concrete coordinator certificate
     /// and exact final mutations are mandatory. Remote/recovery admission is a
     /// separate producer; raw decoded CQ/Applied records cannot call this API.

@@ -107,7 +107,7 @@ fn exercise(case: Case) {
             ("__bicdb_pg_schema".into(), "renamed".into()),
         ];
         if matches!(case, Case::Typed(..)) {
-            SqlSession::new(&mut db).execute("CREATE TYPE independent_color AS ENUM('red'); CREATE TYPE independent_pair AS (v INT); CREATE TYPE affected_wrapper AS (item source); CREATE TABLE typed_unrelated(id INT PRIMARY KEY,e independent_color,p independent_pair); INSERT INTO typed_unrelated VALUES(1,'red',ROW(2)::independent_pair)").unwrap();
+            SqlSession::new(&mut db).execute("CREATE TYPE independent_color AS ENUM('red'); CREATE TYPE independent_pair AS (v INT); CREATE TYPE affected_wrapper AS (item source); CREATE TABLE \"independent.dot\"(id INT); CREATE TABLE typed_unrelated(id INT PRIMARY KEY,e independent_color,p independent_pair); INSERT INTO typed_unrelated VALUES(1,'red',ROW(2)::independent_pair)").unwrap();
             let collection = "__bicdb_pg_user_types";
             let affected = db
                 .scan_collection(collection)
@@ -254,4 +254,68 @@ fn an_unrelated_composite_survives_another_schema_and_type_reservation() {
 #[test]
 fn an_unrelated_table_row_survives_another_schema_and_type_reservation() {
     exercise(Case::Typed("SELECT ROW(2)::unrelated", "(2)"));
+}
+
+#[test]
+fn oid_cache_hits_keep_affected_and_unknown_identities_fenced() {
+    use bicdb_sql::{pg_is_table_row_type_oid, pg_is_user_type_oid, pg_user_type_oid_by_name};
+    for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open_with_config(
+            root.path(),
+            DbConfig::default().with_fsync(true).with_storage_mode(mode),
+        )
+        .unwrap();
+        SqlSession::new(&mut db).execute("CREATE TABLE source(id INT); CREATE TABLE unrelated(id INT); CREATE TYPE independent_color AS ENUM('red'); CREATE TYPE affected_wrapper AS (item source)").unwrap();
+        let source = pg_user_type_oid_by_name(&db, "source").unwrap().unwrap();
+        let unrelated = pg_user_type_oid_by_name(&db, "unrelated").unwrap().unwrap();
+        let color = pg_user_type_oid_by_name(&db, "independent_color")
+            .unwrap()
+            .unwrap();
+        let wrapper = pg_user_type_oid_by_name(&db, "affected_wrapper")
+            .unwrap()
+            .unwrap();
+        let metadata = db
+            .scan_collection("__bicdb_pg_user_types")
+            .unwrap()
+            .into_iter()
+            .find(|record| record.metadata["name"] == "affected_wrapper")
+            .unwrap();
+        assert!(!pg_is_user_type_oid(&db, 1_234_567_890).unwrap());
+        let owner = db.begin_transaction().unwrap();
+        let scope = owner
+            .reserve_catalog_resources(
+                &["source".into(), "renamed".into()],
+                &[
+                    ("__bicdb_pg_schema".into(), "source".into()),
+                    ("__bicdb_pg_schema".into(), "renamed".into()),
+                    ("__bicdb_pg_user_types".into(), metadata.id),
+                ],
+            )
+            .unwrap();
+        assert!(!pg_is_user_type_oid(&db, 23).unwrap());
+        assert!(!pg_is_table_row_type_oid(&db, 23).unwrap());
+        assert!(pg_is_table_row_type_oid(&db, unrelated).unwrap());
+        assert!(pg_is_user_type_oid(&db, color).unwrap());
+        for blocked in [
+            pg_is_table_row_type_oid(&db, source).map(|_| ()),
+            pg_is_user_type_oid(&db, wrapper).map(|_| ()),
+            pg_is_table_row_type_oid(&db, wrapper).map(|_| ()),
+            pg_is_user_type_oid(&db, 1_234_567_890).map(|_| ()),
+            pg_user_type_oid_by_name(&db, "source").map(|_| ()),
+            pg_user_type_oid_by_name(&db, "affected_wrapper").map(|_| ()),
+        ] {
+            assert_eq!(blocked.unwrap_err().sqlstate(), "40001");
+        }
+        owner.release_catalog_scope(&scope).unwrap();
+        owner.rollback().unwrap();
+        assert!(pg_is_table_row_type_oid(&db, source).unwrap());
+        assert!(pg_is_user_type_oid(&db, wrapper).unwrap());
+        assert!(!pg_is_user_type_oid(&db, 1_234_567_890).unwrap());
+    }
+}
+
+#[test]
+fn a_quoted_table_row_type_keeps_its_exact_identity_during_another_reservation() {
+    exercise(Case::Typed("SELECT ROW(2)::\"independent.dot\"", "(2)"));
 }

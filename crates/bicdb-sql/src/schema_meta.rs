@@ -1992,39 +1992,51 @@ pub(crate) fn table_row_type_column(schema: &TableSchema, array: bool) -> UserTy
     table_row_type_schema(schema).column_type(array)
 }
 
+/// Resolve a relation's type through its stored identity. A cached directory
+/// hit admits only that schema row; a miss remains a catalog-wide observation.
+pub(crate) fn table_row_schema_by_type_name(
+    db: &BicDb,
+    schema_name: &str,
+    name: &str,
+) -> Result<Option<TableSchema>> {
+    let schemas = schema_catalog_snapshot_shared(db)?;
+    if let Some(schema) = schemas.iter().find(|schema| {
+        let logical = crate::eval::rewrite_helpers::logical_relation_name(&schema.name);
+        schema.schema_name.eq_ignore_ascii_case(schema_name)
+            && (schema.name.eq_ignore_ascii_case(name)
+                || logical
+                    .as_deref()
+                    .is_some_and(|logical| logical.eq_ignore_ascii_case(name)))
+    }) {
+        check_sql_catalog_read(db, SCHEMA_COLLECTION, Some(&schema.name))?;
+        return Ok(Some(schema.clone()));
+    }
+    check_sql_catalog_read(db, SCHEMA_COLLECTION, None)?;
+    Ok(None)
+}
+
 pub fn pg_user_type_oid_by_name(db: &BicDb, type_name: &str) -> Result<Option<i32>> {
     let type_name = type_name.trim();
     let (type_name, array) = type_name
         .strip_suffix("[]")
         .map(|name| (name.trim(), true))
         .unwrap_or((type_name, false));
-    let parts = type_name
-        .split('.')
-        .map(|part| part.trim().trim_matches('"'))
-        .collect::<Vec<_>>();
-    let (schema_name, name) = match parts.as_slice() {
-        [name] => ("public", *name),
-        [schema_name, name] => (*schema_name, *name),
-        _ => return Ok(None),
-    };
+    let (schema_name, name) = crate::eval::alias_schema_and_name(type_name);
+    let schema_name = schema_name.as_deref().unwrap_or("public");
+    let name = name.as_str();
     let oid = if let Some(user_type) = load_user_type(db, schema_name, name)? {
         if array {
             user_type.array_oid
         } else {
             user_type.oid
         }
-    } else if let Some(schema) = schema_catalog_snapshot_shared(db)?.iter().find(|schema| {
-        schema.schema_name.eq_ignore_ascii_case(schema_name)
-            && schema.name.eq_ignore_ascii_case(name)
-    }) {
-        check_sql_catalog_read(db, SCHEMA_COLLECTION, Some(&schema.name))?;
+    } else if let Some(schema) = table_row_schema_by_type_name(db, schema_name, name)? {
         if array {
             schema.row_array_type_oid()
         } else {
             schema.row_type_oid()
         }
     } else {
-        check_sql_catalog_read(db, SCHEMA_COLLECTION, None)?;
         return Ok(None);
     };
     i32::try_from(oid)

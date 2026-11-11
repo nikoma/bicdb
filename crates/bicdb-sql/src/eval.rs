@@ -1440,7 +1440,7 @@ fn normalize_alias_name(value: &str) -> String {
     }
 }
 
-fn alias_schema_and_name(value: &str) -> (Option<String>, String) {
+pub(crate) fn alias_schema_and_name(value: &str) -> (Option<String>, String) {
     let value = value.trim();
     let mut quoted = false;
     let mut separator = None;

@@ -1685,10 +1685,7 @@ pub(crate) fn user_type_column_from_data_type(
         }
         return Ok(Some(user_type.column_type(array)));
     }
-    if let Some(schema) = list_schemas(db)?.into_iter().find(|schema| {
-        schema.schema_name.eq_ignore_ascii_case(&schema_name)
-            && schema.name.eq_ignore_ascii_case(&name)
-    }) {
+    if let Some(schema) = table_row_schema_by_type_name(db, &schema_name, &name)? {
         return Ok(Some(table_row_type_column(&schema, array)));
     }
     Err(SqlError::undefined_type(if schema_name == "public" {

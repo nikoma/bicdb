@@ -15,6 +15,85 @@ use crate::distribution_range_image_install::{
 };
 
 impl ClusterDataNodeService {
+    /// Inspect this service's actual source catalogue without opening another
+    /// writer. Fresh quorum authority is acquired by the caller beforehand.
+    pub(crate) fn begin_native_recovery_source_history(
+        &self,
+        authority: Arc<crate::distribution_range_recovery::FreshRangeRecoveryAuthority>,
+        source: &crate::db::LocalNativeRecoveryReady,
+        target: ClusterNodeId,
+    ) -> Result<crate::distribution_range_recovery::RecoverySourceHistoryRound> {
+        let db = try_database_read(&self.db)?;
+        crate::distribution_range_recovery::RecoverySourceHistoryRound::begin(
+            authority,
+            source,
+            target,
+            &db,
+            &self.range_writes,
+        )
+    }
+
+    pub(crate) fn advance_native_recovery_source_history(
+        &self,
+        round: &mut crate::distribution_range_recovery::RecoverySourceHistoryRound,
+        source: &crate::db::LocalNativeRecoveryReady,
+        parent: &CancellationToken,
+    ) -> Result<bool> {
+        let db = try_database_read(&self.db)?;
+        round.advance(source, &db, &self.range_writes, parent)
+    }
+
+    pub(crate) fn finish_native_recovery_source_history(
+        &self,
+        round: crate::distribution_range_recovery::RecoverySourceHistoryRound,
+        source: &crate::db::LocalNativeRecoveryReady,
+    ) -> Result<crate::distribution_range_image::CertifiedRecoveryImageCut> {
+        let db = try_database_read(&self.db)?;
+        let history = round.finish(source, &db, &self.range_writes)?;
+        crate::distribution_range_image::CertifiedRecoveryImageCut::from_verified_source_history(
+            history,
+            source,
+            &db,
+            &self.range_writes,
+        )
+    }
+
+    /// Actual source physical proof from this service's already-persisted
+    /// ACTIVE session. It grants no cluster quorum, serving, or caller floor.
+    pub(crate) fn attest_native_recovery_ready(
+        &self,
+        role: crate::distribution_range_recovery::RecoveryRoleAdmission,
+        frozen: Arc<crate::distribution_range_mutation::FrozenRangeMutationPermit>,
+        parent: &CancellationToken,
+    ) -> Result<crate::db::LocalNativeRecoveryReady> {
+        parent.check()?;
+        role.require_live_request()?;
+        if role.cluster_id() != &self.cluster_id || role.local_node_id() != &self.node_id {
+            return Err(data_error(
+                "native source observation belongs to another service",
+            ));
+        }
+        let db = try_database_read(&self.db)?;
+        let native = db.native_recovery_admission(
+            role.cluster_id(),
+            role.bootstrap_id(),
+            role.local_node_id(),
+            role.local_member_incarnation(),
+        )?;
+        let scope = crate::distribution_range_consensus::RecoveryFenceScope::from_role(&role)?;
+        let catalog = self
+            .range_writes
+            .observe_recovery_resolved_prefix(&role, &native, &scope)?;
+        db.attest_local_native_recovery_ready(
+            native,
+            role,
+            catalog,
+            &self.range_writes,
+            frozen,
+            parent,
+        )
+    }
+
     fn require_native_image_local_role(&self, role: &NativeImageInstallRole<'_>) -> Result<()> {
         role.role().require_live_request()?;
         if role.role().cluster_id() != &self.cluster_id

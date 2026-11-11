@@ -61,6 +61,7 @@ impl RecoveryFenceScope {
             purpose: role.purpose().clone(),
         })
     }
+    /// Structural DTO validation only; never role, quorum or serving authority.
     pub(crate) fn validate(&self) -> Result<()> {
         if self.protocol_version != 1
             || self.bootstrap_id.is_nil()
@@ -134,6 +135,9 @@ pub(super) enum RecoveryFencePhase {
     /// Durable promise to stop historical mutation at an ACTUALLY materialized
     /// point. This is neither a serving configuration nor quorum completion.
     NativePrepared(super::native_ready_prepare::NativePreparedPoint),
+    /// Native configuration and completion are durable, but all ordinary
+    /// writes remain refused until a separate completion quorum activates it.
+    NativeCompleted(super::native_ready_completion::NativeCompletedPoint),
     Completed {
         resolved_index: u64,
     },
@@ -164,6 +168,9 @@ impl RecoveryFenceRecord {
     pub(super) fn validate(&self) -> Result<()> {
         self.scope.validate()?;
         if let RecoveryFencePhase::NativePrepared(point) = &self.phase {
+            point.validate()?;
+        }
+        if let RecoveryFencePhase::NativeCompleted(point) = &self.phase {
             point.validate()?;
         }
         if self.retired_nonces.len() > 256
@@ -809,6 +816,7 @@ impl RangeWriteStore {
         Ok(match saved.phase {
             RecoveryFencePhase::Active=>crate::distribution_range_recovery::RecoveryFenceObservationPhase::ActiveRecovery,
             RecoveryFencePhase::NativePrepared(_) => crate::distribution_range_recovery::RecoveryFenceObservationPhase::NativePrepared,
+            RecoveryFencePhase::NativeCompleted(_) => crate::distribution_range_recovery::RecoveryFenceObservationPhase::NativeCompletedFrozen,
             RecoveryFencePhase::Completed {..}=>crate::distribution_range_recovery::RecoveryFenceObservationPhase::CompletedEpochAuthority,
         })
     }
@@ -955,6 +963,7 @@ impl RangeWriteStore {
         self.open_id
     }
     pub(crate) fn require_no_active_recovery(&self, range_id: RangeId) -> Result<()> {
+        self.require_durable_recovery_catalog()?;
         if self
             .catalog
             .recovery_fences

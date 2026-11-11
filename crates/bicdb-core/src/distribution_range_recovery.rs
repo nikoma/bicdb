@@ -242,6 +242,7 @@ pub(crate) struct RecoveryEpochFenceReply {
 pub(crate) enum RecoveryFenceObservationPhase {
     ActiveRecovery,
     NativePrepared,
+    NativeCompletedFrozen,
     CompletedEpochAuthority,
 }
 

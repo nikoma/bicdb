@@ -20,6 +20,7 @@ pub(crate) struct NativeRangeCommandIntent {
     bootstrap_id: Uuid,
     range: RangeDescriptor,
     expected_base: RangeDescriptor,
+    historical_recovery: bool,
     members: BTreeMap<ClusterNodeId, RangeImageBirthMember>,
     schema_sha256: String,
     scope_sha256: String,
@@ -192,6 +193,7 @@ impl NativeRangeCommandIntent {
             bootstrap_id: admission.bootstrap_id(),
             range: current.clone(),
             expected_base: base.clone(),
+            historical_recovery: true,
             members,
             schema_sha256: known.schema_sha256().to_string(),
             scope_sha256: hex::encode(Sha256::digest(scope)),
@@ -320,6 +322,7 @@ impl NativeRangeCommandIntent {
             bootstrap_id,
             range: range.clone(),
             expected_base,
+            historical_recovery: false,
             members,
             schema_sha256,
             scope_sha256: hex::encode(Sha256::digest(scope)),
@@ -330,7 +333,14 @@ impl NativeRangeCommandIntent {
             || lineage.bootstrap_id() != self.bootstrap_id
             || lineage.range_index().checked_add(1) != Some(self.range_index)
             || lineage.schema_sha256() != self.schema_sha256
-            || !same_range_configuration(lineage.base_range(), &self.expected_base)
+            || !same_range_configuration(
+                if self.historical_recovery {
+                    lineage.base_range()
+                } else {
+                    lineage.native_write_range()
+                },
+                &self.expected_base,
+            )
             || !self.members.contains_key(lineage.local_node_id())
             || self
                 .members

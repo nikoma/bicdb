@@ -10,7 +10,7 @@
     "mid-growth-status.private.json": "babee8eae04d69f9d857be4e3a8d4f4549aea0f1ad90bebfc83387588edb41e2",
     "post-failure-diagnosis/latest-topology.private.json": "645e6d87e4e7d9f27eee66dae9ccb46ced384e8edc7f40f207759b4690482561"
   },
-  "projector_sha256": "64719d949df3317dfe1e11b0166b3a8f4bcfdef223a2542e0caa9ef81198f1c9",
+  "projector_sha256": "c117d2ffda9280397956e1d9d9ac75412f5570398336180d0652e00813cdf927",
   "method": "Read-only original controller files/tar members; no extraction, engine open, replay, VM operations, or new workload.",
   "raw_originals_preserved": true
 }

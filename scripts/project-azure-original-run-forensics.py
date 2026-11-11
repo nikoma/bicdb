@@ -168,9 +168,41 @@ save('diagnostic-progress.json', {'samples': len(series), 'series': series, 'met
     'actual_os_node_liveness_continuously_monitored': False})
 
 error_counts = collections.Counter(failed['error_samples'])
+sample_rows = []
+for sample_index, error in enumerate(failed['error_samples']):
+    rejecting_server = re.search(r'cluster node (\S+) rejected RPC (\w+):', error)
+    range_epoch = re.search(r'\brange r(\d+) epoch (\d+)\b', error)
+    os_error = re.search(r'\(os error (\d+)\)', error)
+    if 'leader recovery is not complete' in error:
+        category = 'range_leader_recovery_incomplete'
+    elif 'Connection reset' in error:
+        category = 'connection_reset'
+    elif 'Resource temporarily unavailable' in error:
+        category = 'resource_temporarily_unavailable'
+    elif 'no event cluster member is reachable' in error:
+        category = 'no_event_member_reachable'
+    else:
+        category = 'other_retained_error'
+    sample_rows.append({'sample_index_zero_based': sample_index, 'raw_error': error,
+        'category': category, 'client_process_host': 'n0',
+        'client_process_host_evidence': 'native harness runs workload on its first data node',
+        'operation_id': None, 'operation_type': None, 'operation_timestamp': None,
+        'request_topology_generation': None, 'gateway_process_or_endpoint': None,
+        'actual_network_target': None, 'attempt_or_retry_path': None,
+        'unknown_fields_scope': 'NOT RETAINED; surfaced rejecting-server identity is not a complete network route or gateway trace',
+        'surfaced_rejecting_server_node': rejecting_server[1] if rejecting_server else None,
+        'surfaced_remote_error_code': rejecting_server[2] if rejecting_server else None,
+        'surfaced_range_id': int(range_epoch[1]) if range_epoch else None,
+        'surfaced_range_epoch': int(range_epoch[2]) if range_epoch else None,
+        'surfaced_os_error_number': int(os_error[1]) if os_error else None,
+        'operation_type_source_inference': ('Append is consistent with the write-admission recovery error; '
+            'this is source inference, not a retained per-operation type or proof of the full call path')
+            if category == 'range_leader_recovery_incomplete' else None})
 save('failure-sample-classification.json', {'failed_logical_operation_count': failed['failed_operations'],
     'is_http_status_404': False, 'retained_error_sample_count': len(failed['error_samples']),
     'unretained_failed_operation_bodies': failed['failed_operations'] - len(failed['error_samples']),
+    'indexed_retained_samples': sample_rows,
+    'sample_index_scope': 'Position in the retained error_samples array, not a global operation ID or chronological attempt sequence.',
     'sample_error_counts': dict(error_counts), 'sample_category_counts': {
         'connection_reset': sum(count for error, count in error_counts.items() if 'Connection reset' in error),
         'resource_temporarily_unavailable': sum(count for error, count in error_counts.items() if 'Resource temporarily unavailable' in error),

@@ -3595,7 +3595,7 @@ fn routine_catalog_type_oid(db: &BicDb, pg_type: &str) -> Result<i64> {
     // Built-ins retain their registered identity even when a relation uses
     // the same spelling. Other registered types include table composites.
     if pg_type_oid_by_name(pg_type).is_none() {
-        if let Some(oid) = pg_user_type_oid_by_name(db, pg_type)? {
+        if let Some(oid) = resolve_regtype_oid(db, pg_type)? {
             return Ok(i64::from(oid));
         }
     }

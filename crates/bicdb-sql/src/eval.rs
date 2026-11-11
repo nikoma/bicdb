@@ -1549,7 +1549,8 @@ fn resolve_named_oid_output(oid: i64, objects: &[(u32, &str)]) -> Option<String>
         .find_map(|(candidate, name)| (i64::from(*candidate) == oid).then(|| (*name).to_string()))
 }
 
-fn resolve_regtype_oid(db: &BicDb, value: &str) -> Result<Option<u32>> {
+pub(crate) fn resolve_regtype_oid(db: &BicDb, value: &str) -> Result<Option<u32>> {
+    let array = value.ends_with("[]");
     let (schema, relation) = alias_schema_and_name(value.trim_end_matches("[]"));
     if alias_schema_is(schema.as_deref(), "pg_catalog") {
         if let Some(pg_type) = pg_type_regtype_name(value) {
@@ -1576,7 +1577,14 @@ fn resolve_regtype_oid(db: &BicDb, value: &str) -> Result<Option<u32>> {
                     |requested| candidate.schema_name.eq_ignore_ascii_case(requested),
                 )
         })
-        .and_then(|candidate| u32::try_from(candidate.row_type_oid()).ok()))
+        .and_then(|candidate| {
+            u32::try_from(if array {
+                candidate.row_array_type_oid()
+            } else {
+                candidate.row_type_oid()
+            })
+            .ok()
+        }))
 }
 
 /// How a relation should be spelled in catalog output: the logical name a user

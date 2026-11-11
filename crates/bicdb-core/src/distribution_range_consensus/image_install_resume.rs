@@ -185,6 +185,8 @@ impl RangeWriteStore {
             current_pending,
             current_catalogue_sha256: catalogue.range_log_sha256().to_string(),
             current_irreversible_commands: catalogue.irrevocable_commands().clone(),
+            current_sparse_commands: self
+                .sparse_irreversible_commands(admission.scope().range_id)?,
         };
         result.validate_shape()?;
         safety.require_current(db, native, frozen)?;

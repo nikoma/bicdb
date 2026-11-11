@@ -57,6 +57,7 @@ pub(crate) struct CurrentImageInstallingEvidence {
     pub current_pending: Option<RecoveryNativePendingHistoryV1>,
     pub current_catalogue_sha256: String,
     pub current_irreversible_commands: BTreeMap<u64, String>,
+    pub current_sparse_commands: BTreeMap<u64, String>,
 }
 impl CurrentImageInstallingEvidence {
     pub(crate) fn validate_shape(&self) -> Result<()> {
@@ -120,6 +121,15 @@ impl CurrentImageInstallingEvidence {
             if pending.index == 0 || !digest(&pending.command_checksum_sha256) {
                 return Err(invalid("installing current pending is malformed"));
             }
+        }
+        if self
+            .current_sparse_commands
+            .iter()
+            .any(|(i, hash)| self.current_irreversible_commands.get(i) != Some(hash))
+        {
+            return Err(invalid(
+                "Installing sparse decision omitted from complete obligations",
+            ));
         }
         self.irreversible_union()?;
         crate::distribution_range_image::bounded_json(self, MAX_INSTALLING_EVIDENCE_BYTES)?;

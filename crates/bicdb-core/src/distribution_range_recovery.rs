@@ -26,6 +26,10 @@ mod image_compatibility;
 mod image_history;
 mod image_proposal;
 mod installing_fence;
+mod image_resume_quorum;
+mod image_resume_history;
+pub(crate) use image_resume_history::{CurrentImageResumeHistoryRound, VerifiedCurrentImageResumeHistory};
+pub(crate) use image_resume_quorum::{CurrentImageResumeQuorumRound, FreshCurrentImageResumeAuthority, CurrentImageResumeVote};
 pub(crate) use installing_fence::{CurrentImageInstallingEvidence, CurrentImageInstallingObservation, CurrentImageInstallingRequest};
 pub(crate) use image_proposal::{HistoricalCurrentImageAcceptanceV1, HistoricalCurrentImageSourceAcceptance};
 #[cfg(test)]

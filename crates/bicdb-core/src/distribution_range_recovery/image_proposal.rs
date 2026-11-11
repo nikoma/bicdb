@@ -19,7 +19,19 @@ fn semantic(mut range: RangeDescriptor) -> RangeDescriptor {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
+pub(crate) enum HistoricalCurrentImageVoterKind {
+    Ordinary,
+    Installing {
+        proposal: crate::distribution_range_consensus::NativeCurrentImageProposalPointer,
+        intent_sha256: String,
+    },
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct HistoricalCurrentImageVoterAudit {
+    pub kind: HistoricalCurrentImageVoterKind,
+    pub additional_native_points: Vec<RecoveryNativeHistoryPointV1>,
     pub member_incarnation: u64,
     pub peer_certificate_sha256: Option<String>,
     pub peer_plaintext_loopback: bool,
@@ -118,6 +130,39 @@ impl HistoricalCurrentImageAcceptanceV1 {
                 .members
                 .get(id)
                 .ok_or_else(|| invalid("historical source audit has foreign voter"))?;
+            match &vote.kind {
+                HistoricalCurrentImageVoterKind::Ordinary
+                    if !vote.additional_native_points.is_empty() =>
+                {
+                    return Err(invalid(
+                        "ordinary audit cannot claim Installing preimage points",
+                    ))
+                }
+                HistoricalCurrentImageVoterKind::Installing {
+                    proposal,
+                    intent_sha256,
+                } => {
+                    proposal.validate()?;
+                    if id != &self.target_id || !digest(intent_sha256) {
+                        return Err(invalid("invalid historical Installing audit target"));
+                    }
+                }
+                _ => {}
+            }
+            for point in &vote.additional_native_points {
+                if point.range_index > self.source_range_index
+                    || point.logical_genesis_sha256 != self.logical_genesis_sha256
+                    || !digest(&point.logical_history_sha256)
+                    || !digest(&point.native_receipt_sha256)
+                    || known_points
+                        .insert(point.range_index, point.logical_history_sha256.clone())
+                        .is_some_and(|old| old != point.logical_history_sha256)
+                {
+                    return Err(invalid(
+                        "historical Installing audit has contradictory preimage point",
+                    ));
+                }
+            }
             let pin = match (
                 &member.active_certificate_sha256,
                 &member.pending_certificate_sha256,
@@ -266,6 +311,8 @@ impl VerifiedRecoverySourceHistory {
                     (
                         id.clone(),
                         HistoricalCurrentImageVoterAudit {
+                            kind: HistoricalCurrentImageVoterKind::Ordinary,
+                            additional_native_points: vec![],
                             member_incarnation: observation.member_incarnation(),
                             peer_certificate_sha256: peer.certificate_sha256().map(str::to_string),
                             peer_plaintext_loopback: peer.plaintext_loopback(),
@@ -281,6 +328,140 @@ impl VerifiedRecoverySourceHistory {
                 })
                 .collect(),
         };
+        record.validate()?;
+        self.require_current(source, db, store)?;
+        Ok(HistoricalCurrentImageSourceAcceptance { record })
+    }
+}
+
+impl VerifiedCurrentImageResumeHistory {
+    pub(crate) fn historical_current_image_acceptance(
+        &self,
+        source: &LocalNativeRecoveryReady,
+        db: &BicDb,
+        store: &crate::distribution_range_consensus::RangeWriteStore,
+    ) -> Result<HistoricalCurrentImageSourceAcceptance> {
+        self.require_current(source, db, store)?;
+        let authority = self.authority();
+        let role = authority.role();
+        let native = source.native_admission();
+        native.require_current(db)?;
+        let record = HistoricalCurrentImageAcceptanceV1 {
+            format_version: VERSION,
+            scope: authority.scope().clone(),
+            range: semantic(role.current_range().clone()),
+            members: authority.member_credentials().clone(),
+            source_id: source.role().local_node_id().clone(),
+            source_member_incarnation: source.role().local_member_incarnation(),
+            source_birth_id: native.birth_id(),
+            source_birth_sha256: native.birth_sha256().to_string(),
+            source_database_incarnation: native.database_incarnation().to_string(),
+            target_id: authority.target().clone(),
+            source_range_index: source.range_index(),
+            source_native_receipt_sha256: source.native_receipt_sha256().to_string(),
+            source_native_visibility_db_sequence: source.visibility().get(),
+            logical_genesis_sha256: source.logical_genesis_sha256().to_string(),
+            logical_history_sha256: source.logical_history_sha256().to_string(),
+            schema_sha256: role
+                .expected_schema_sha256()
+                .ok_or_else(|| invalid("historical source acceptance lacks schema"))?
+                .to_string(),
+            restore_activation: role.restore_activation().cloned(),
+            metadata_context_id: role.context_id(),
+            metadata_term: role.metadata_term(),
+            metadata_read_index: role.metadata_read_index(),
+            voters: authority
+                .votes()
+                .iter()
+                .map(|(id, vote)| {
+                    let projected = match vote {
+                        CurrentImageResumeVote::Ordinary(observation) => {
+                            let peer = observation.authenticated_peer();
+                            HistoricalCurrentImageVoterAudit {
+                                kind: HistoricalCurrentImageVoterKind::Ordinary,
+                                additional_native_points: vec![],
+                                member_incarnation: observation.member_incarnation(),
+                                peer_certificate_sha256: peer
+                                    .certificate_sha256()
+                                    .map(str::to_string),
+                                peer_plaintext_loopback: peer.plaintext_loopback(),
+                                store_open_id: observation.store_open_id(),
+                                native_database_incarnation: observation
+                                    .native_database_incarnation()
+                                    .to_string(),
+                                progress: observation.progress().clone(),
+                                native: observation.native().clone(),
+                                image_history: observation.image_history().clone(),
+                            }
+                        }
+                        CurrentImageResumeVote::Installing(observation) => {
+                            let evidence = observation.evidence();
+                            let peer = observation.authenticated_peer();
+                            let mut points = evidence
+                                .preimage
+                                .native_point
+                                .iter()
+                                .chain(evidence.current_native_point.iter())
+                                .cloned()
+                                .collect::<Vec<_>>();
+                            points.sort_by_key(|p| p.range_index);
+                            let native_point = points.pop();
+                            let pending = evidence.current_pending.clone().or_else(|| {
+                                match (
+                                    evidence.preimage.pending_index,
+                                    evidence.preimage.pending_command_sha256.clone(),
+                                ) {
+                                    (Some(index), Some(command_checksum_sha256)) => {
+                                        Some(RecoveryNativePendingHistoryV1 {
+                                            index,
+                                            command_checksum_sha256,
+                                            materialized: evidence
+                                                .preimage
+                                                .materialized_pending_index
+                                                == Some(index),
+                                        })
+                                    }
+                                    _ => None,
+                                }
+                            });
+                            let sparse = (!evidence.current_sparse_commands.is_empty())
+                                .then_some(evidence.current_sparse_commands.clone());
+                            HistoricalCurrentImageVoterAudit {
+                                kind: HistoricalCurrentImageVoterKind::Installing {
+                                    proposal: evidence.proposal.clone(),
+                                    intent_sha256: evidence.intent_sha256.clone(),
+                                },
+                                additional_native_points: points,
+                                member_incarnation: evidence.member_incarnation,
+                                peer_certificate_sha256: peer
+                                    .certificate_sha256()
+                                    .map(str::to_string),
+                                peer_plaintext_loopback: peer.plaintext_loopback(),
+                                store_open_id: evidence.store_open_id,
+                                native_database_incarnation: evidence
+                                    .native_database_incarnation
+                                    .clone(),
+                                progress: evidence.progress.clone(),
+                                native: evidence.current_native.clone(),
+                                image_history: RecoveryImageHistoryObligationsV1 {
+                                    format_version: if sparse.is_some() { 2 } else { 1 },
+                                    node_id: id.clone(),
+                                    range_id: evidence.scope.range_id,
+                                    last_index: evidence.progress.last_index,
+                                    compacted_through: evidence.progress.compacted_through,
+                                    native_point,
+                                    pending_native: pending,
+                                    irreversible_command_sha256: evidence.irreversible_union()?,
+                                    sparse_committed_command_sha256: sparse,
+                                },
+                            }
+                        }
+                    };
+                    Ok((id.clone(), projected))
+                })
+                .collect::<Result<BTreeMap<_, _>>>()?,
+        };
+
         record.validate()?;
         self.require_current(source, db, store)?;
         Ok(HistoricalCurrentImageSourceAcceptance { record })

@@ -11,16 +11,16 @@ use std::sync::Arc;
 use uuid::Uuid;
 
 #[derive(Debug)]
-struct ActualSourceIdentity {
-    node: ClusterNodeId,
-    role_context: Uuid,
-    range_index: u64,
-    native_receipt: String,
-    genesis: String,
-    history: String,
+pub(super) struct ActualSourceIdentity {
+    pub(super) node: ClusterNodeId,
+    pub(super) role_context: Uuid,
+    pub(super) range_index: u64,
+    pub(super) native_receipt: String,
+    pub(super) genesis: String,
+    pub(super) history: String,
 }
 impl ActualSourceIdentity {
-    fn from_actual(source: &LocalNativeRecoveryReady) -> Self {
+    pub(super) fn from_actual(source: &LocalNativeRecoveryReady) -> Self {
         Self {
             node: source.role().local_node_id().clone(),
             role_context: source.role().context_id(),
@@ -30,7 +30,7 @@ impl ActualSourceIdentity {
             history: source.logical_history_sha256().to_string(),
         }
     }
-    fn require_actual(
+    pub(super) fn require_actual(
         &self,
         source: &LocalNativeRecoveryReady,
         db: &BicDb,

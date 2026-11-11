@@ -147,3 +147,136 @@ impl RangeRecoveryRuntime {
         )
     }
 }
+
+impl RangeRecoveryRuntime {
+    /// Only a live capture from the distinct actual mixed-quorum/full-history
+    /// factory may convert this refusal-only cold session into an owned image
+    /// lease. No ordinary recovery authority, caller owner number or DTO works.
+    pub(crate) fn transfer_current_image_resume(
+        self: &Arc<Self>,
+        scope: &RecoveryFenceScope,
+        source: &crate::distribution_range_image::TentativeNativeRangeImageSourceAuthorization<'_>,
+        role: &crate::distribution_range_consensus::NativeImageInstallRole<'_>,
+        attempt_id: Uuid,
+        parent: &CancellationToken,
+    ) -> Result<RecoveryImageInstallFreeze> {
+        let _operation = self.reserve(scope.range_id)?;
+        scope.require_role(role.role())?;
+        let pointer = source
+            .cut()
+            .resume_proposal()
+            .ok_or_else(|| invalid("source is not an actual verified interrupted-image cut"))?;
+        if attempt_id == scope.freeze_owner()? || attempt_id == pointer.proposal_id {
+            return Err(invalid("resumed install requires a fresh distinct attempt"));
+        }
+        let token = parent.child_with_deadline(role.role().deadline());
+        token.check()?;
+        let original = {
+            let sessions = self.sessions.lock();
+            if sessions.current.contains_key(&scope.range_id) {
+                return Err(invalid(
+                    "ordinary recovery session already owns resumed range",
+                ));
+            }
+            let session = sessions
+                .installing
+                .get(&scope.range_id)
+                .ok_or_else(|| invalid("no actual cold Installing session"))?;
+            if !session.scope.same_session(scope) || &session.proposal != pointer {
+                return Err(invalid(
+                    "resumed source differs from exact Installing session",
+                ));
+            }
+            Arc::clone(
+                session
+                    .frozen
+                    .as_ref()
+                    .ok_or_else(|| invalid("Installing freeze is already leased"))?,
+            )
+        };
+        let preflight = {
+            let mut service = loop {
+                token.check()?;
+                if let Some(s) = self.service.try_lock_for(LATCH_POLL) {
+                    break s;
+                }
+            };
+            {
+                let sessions = self.sessions.lock();
+                let session = sessions
+                    .installing
+                    .get(&scope.range_id)
+                    .ok_or_else(|| invalid("Installing session disappeared"))?;
+                service.validate_current_image_installing(
+                    &session.admission,
+                    role.role(),
+                    &token,
+                )?;
+            }
+            service.preflight_recovery_image_transfer(
+                source,
+                role,
+                &original,
+                crate::distribution_range_consensus::ImageInstallPurpose::CurrentVoterRepair,
+                attempt_id,
+                &token,
+            )?
+        };
+        if preflight.original_freeze_owner() != scope.freeze_owner()?
+            || preflight.nonce() != scope.recovery_nonce
+            || preflight.range_id() != scope.range_id
+            || preflight.attempt_id() != attempt_id
+        {
+            return Err(invalid(
+                "actual resumed transfer preflight has another scope",
+            ));
+        }
+        drop(original);
+        token.check()?;
+        let mut sessions = self.sessions.lock();
+        if sessions.current.contains_key(&scope.range_id) {
+            return Err(invalid("another normal session raced resume transfer"));
+        }
+        let session = sessions
+            .installing
+            .get_mut(&scope.range_id)
+            .ok_or_else(|| invalid("Installing ownership disappeared"))?;
+        if &session.proposal != pointer || !session.scope.same_session(scope) {
+            return Err(invalid("Installing proposal changed before transfer"));
+        }
+        let frozen = Arc::get_mut(
+            session
+                .frozen
+                .as_mut()
+                .ok_or_else(|| invalid("Installing ownership is already leased"))?,
+        )
+        .ok_or_else(|| invalid("another actual source/callback holds Installing freeze"))?;
+        let service = self
+            .service
+            .try_lock()
+            .ok_or_else(|| invalid("service busy before resumed owner rotation"))?;
+        service.validate_current_image_installing(&session.admission, role.role(), &token)?;
+        service.rotate_recovery_image_transfer(&preflight, source, role, frozen, &token)?;
+        drop(service);
+        let mut session = sessions.installing.remove(&scope.range_id).unwrap();
+        let arc = session.frozen.take().unwrap();
+        let frozen =
+            Arc::try_unwrap(arc).expect("unique resumed ownership checked under sessions latch");
+        sessions.current.insert(
+            scope.range_id,
+            Session {
+                scope: scope.clone(),
+                frozen: None,
+                image_preflight: None,
+                native_prepared: None,
+            },
+        );
+        Ok(RecoveryImageInstallFreeze {
+            runtime: Arc::clone(self),
+            scope: scope.clone(),
+            frozen: Some(frozen),
+            preflight: Some(preflight),
+            returned: false,
+        })
+    }
+}

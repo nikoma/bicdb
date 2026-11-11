@@ -73,6 +73,12 @@ pub(crate) struct CertifiedRangeImageCut {
     source_incarnation: u64,
     target_id: ClusterNodeId,
     target_incarnation: u64,
+    bootstrap_id: Option<Uuid>,
+    relocation: crate::distribution::RangeRelocation,
+    old_member_credentials:
+        std::collections::BTreeMap<ClusterNodeId, (u64, Option<String>, Option<String>)>,
+    expected_schema_sha256: Option<String>,
+    restore_activation: Option<crate::distribution_consensus::MetadataRestoreActivation>,
 }
 
 impl CertifiedRangeImageCut {
@@ -117,6 +123,91 @@ impl CertifiedRangeImageCut {
     }
     pub(crate) fn activation_epoch(&self) -> u64 {
         self.promise.activation_epoch
+    }
+
+    /// Validate only the configuration binding of an independently produced
+    /// native lineage. This cannot manufacture native visibility or extend R.
+    pub(crate) fn validate_source_lineage_configuration(
+        &self,
+        lineage: &crate::db::SourceRangeImageLineage,
+    ) -> Result<()> {
+        use crate::distribution::RangeReplicaRole;
+        let invalid = || {
+            BicDbError::Cluster(
+                "source native lineage does not match the committed handoff configuration".into(),
+            )
+        };
+        let bootstrap = self
+            .bootstrap_id
+            .filter(|id| !id.is_nil())
+            .ok_or_else(invalid)?;
+        let schema = self.expected_schema_sha256.as_deref().ok_or_else(invalid)?;
+        let relocation = &self.relocation;
+        let target = self
+            .range
+            .replicas
+            .iter()
+            .filter(|replica| replica.id == relocation.target_replica_id)
+            .collect::<Vec<_>>();
+        if lineage.cluster_id() != &self.cluster_id
+            || lineage.bootstrap_id() != bootstrap
+            || lineage.local_node_id() != &self.source_id
+            || lineage.local_member_incarnation() != self.source_incarnation
+            || lineage.range_index() != self.range_index
+            || lineage.schema_sha256() != schema
+            || lineage.restore_activation() != self.restore_activation.as_ref()
+            || lineage.native_receipt_sha256().len() != 64
+            || !lineage
+                .native_receipt_sha256()
+                .bytes()
+                .all(|byte| byte.is_ascii_hexdigit())
+            || relocation.id != self.promise.relocation_id
+            || relocation.range_id != self.range.id
+            || relocation.learner_epoch != self.range.epoch
+            || relocation.expected_epoch.checked_add(1) != Some(relocation.learner_epoch)
+            || relocation.target != self.target_id
+            || target.len() != 1
+            || target[0].node_id != self.target_id
+            || target[0].role != RangeReplicaRole::Learner
+        {
+            return Err(invalid());
+        }
+        let mut expected_base = self.range.clone();
+        expected_base.epoch = relocation.expected_epoch;
+        expected_base
+            .replicas
+            .retain(|replica| replica.id != relocation.target_replica_id);
+        let base = lineage.base_range();
+        let replicas = |range: &RangeDescriptor| {
+            range
+                .replicas
+                .iter()
+                .map(|r| (r.id, (r.node_id.clone(), r.role)))
+                .collect::<std::collections::BTreeMap<_, _>>()
+        };
+        if base.id != expected_base.id
+            || base.start_token != expected_base.start_token
+            || base.end_token != expected_base.end_token
+            || base.epoch != expected_base.epoch
+            || base.leader != expected_base.leader
+            || base.placement != expected_base.placement
+            || base.replicas.len() != expected_base.replicas.len()
+            || replicas(base) != replicas(&expected_base)
+        {
+            return Err(invalid());
+        }
+        // Only the exact expected learner addition is admitted. Old voters
+        // retain their native base identities and active/pending credentials.
+        for (id, (incarnation, active, pending)) in &self.old_member_credentials {
+            let member = lineage.base_members().get(id).ok_or_else(invalid)?;
+            if member.incarnation != *incarnation
+                || &member.tls_certificate_sha256 != active
+                || &member.pending_tls_certificate_sha256 != pending
+            {
+                return Err(invalid());
+            }
+        }
+        Ok(())
     }
 }
 
@@ -342,6 +433,7 @@ impl HandoffCutRound {
             }
         }
         new_range.epoch = activation_epoch;
+        let expected_schema_sha256 = range.required_schema_sha256(&topology.nodes);
         let config_digest = |descriptor: &RangeDescriptor| -> Result<String> {
             // Heartbeats, load estimates and placement metrics do not change
             // the data configuration. Member incarnation and pins do.
@@ -367,6 +459,7 @@ impl HandoffCutRound {
                 descriptor.epoch,
                 &descriptor.leader,
                 voters,
+                expected_schema_sha256,
                 // A reused session cannot silently cross restore activation
                 // lineage. This remains metadata binding, not source-image proof.
                 restore_activation,
@@ -468,6 +561,10 @@ impl HandoffCutRound {
         let relocation = &topology.relocations[&self.request.relocation_id];
         let target = &topology.nodes[&relocation.target];
         self.authority.require_live()?;
+        let expected_schema_sha256 = self
+            .range
+            .required_schema_sha256(&topology.nodes)
+            .map(str::to_string);
         Ok(CertifiedRangeImageCut {
             promise: self.request,
             cluster_id: topology.cluster_id.clone(),
@@ -477,6 +574,25 @@ impl HandoffCutRound {
             source_incarnation: best.incarnation,
             target_id: target.id.clone(),
             target_incarnation: target.incarnation,
+            bootstrap_id: topology.range_image_bootstrap_id,
+            relocation: relocation.clone(),
+            old_member_credentials: self
+                .old_voters
+                .keys()
+                .map(|id| {
+                    let member = &topology.nodes[id];
+                    (
+                        id.clone(),
+                        (
+                            member.incarnation,
+                            member.tls_certificate_sha256.clone(),
+                            member.pending_tls_certificate_sha256.clone(),
+                        ),
+                    )
+                })
+                .collect(),
+            expected_schema_sha256,
+            restore_activation: self.authority.restore_activation()?.cloned(),
         })
     }
 }
@@ -660,7 +776,7 @@ mod tests {
     }
 
     #[test]
-    fn handoff_configuration_identity_binds_restore_activation_lineage() {
+    fn handoff_configuration_identity_binds_schema_and_restore_activation_lineage() {
         let topology = topology();
         let root = tempfile::tempdir().unwrap();
         let id = *topology.relocations.keys().next().unwrap();
@@ -697,6 +813,30 @@ mod tests {
             two.request().new_config_sha256
         );
         assert!(!one.request().same_request(two.request()));
+        let mut schema_one = topology.clone();
+        for node in schema_one.nodes.values_mut() {
+            node.labels
+                .insert(SCHEMA_COMPATIBILITY_NODE_LABEL.into(), "a".repeat(64));
+        }
+        let mut schema_two = schema_one.clone();
+        for node in schema_two.nodes.values_mut() {
+            node.labels
+                .insert(SCHEMA_COMPATIBILITY_NODE_LABEL.into(), "b".repeat(64));
+        }
+        let one =
+            HandoffCutRound::begin(authority(&root.path().join("schema-one"), &schema_one), id)
+                .unwrap();
+        let two =
+            HandoffCutRound::begin(authority(&root.path().join("schema-two"), &schema_two), id)
+                .unwrap();
+        assert_ne!(
+            one.request().old_config_sha256,
+            two.request().old_config_sha256
+        );
+        assert_ne!(
+            one.request().new_config_sha256,
+            two.request().new_config_sha256
+        );
     }
 
     #[test]
@@ -842,6 +982,155 @@ mod tests {
             "two valid pins for one member are still only one data voter"
         );
     }
+    #[test]
+    fn source_lineage_requires_exact_committed_learner_transition_and_native_bindings() {
+        use crate::db::{RangeImageBirthMember, RangeImageBirthSpec};
+        use crate::{BicDb, CancellationToken, DbConfig, StorageMode};
+        use parking_lot::RwLock;
+        use std::sync::Arc;
+        let root = tempfile::tempdir().unwrap();
+        let mut topology = topology();
+        let bootstrap = Uuid::now_v7();
+        topology.range_image_bootstrap_id = Some(bootstrap);
+        let relocation_id = *topology.relocations.keys().next().unwrap();
+        let relocation = &topology.relocations[&relocation_id];
+        let mut base = topology.range_by_id(relocation.range_id).unwrap().clone();
+        base.epoch = relocation.expected_epoch;
+        base.replicas
+            .retain(|replica| replica.id != relocation.target_replica_id);
+        let local = base.leader.clone();
+        let expected = RangeImageBirthSpec {
+            cluster_id: topology.cluster_id.clone(),
+            bootstrap_id: bootstrap,
+            node_id: local.clone(),
+            member_incarnation: topology.nodes[&local].incarnation,
+            initial_members: topology
+                .nodes
+                .iter()
+                .map(|(id, member)| {
+                    (
+                        id.clone(),
+                        RangeImageBirthMember {
+                            incarnation: member.incarnation,
+                            tls_certificate_sha256: member.tls_certificate_sha256.clone(),
+                            pending_tls_certificate_sha256: member
+                                .pending_tls_certificate_sha256
+                                .clone(),
+                        },
+                    )
+                })
+                .collect(),
+            initial_ranges: vec![base.clone()],
+            restore_activation: None,
+        };
+        let config = DbConfig::default()
+            .with_fsync(true)
+            .with_storage_mode(StorageMode::ServerPaged)
+            .with_paged_buffer_pool_bytes(8 * 1024 * 1024);
+        let database_path = root.path().join("native-source");
+        let (mut database, _) = BicDb::create_new_range_image_database(
+            &database_path,
+            config.clone(),
+            expected.clone(),
+        )
+        .unwrap();
+        database.create_collection("items").unwrap();
+        drop(database);
+        let (database, genesis) =
+            BicDb::open_range_image_database(&database_path, config, &expected).unwrap();
+        let schema = database.schema_compatibility_fingerprint().unwrap().sha256;
+        let database = Arc::new(RwLock::new(database));
+        let gate = database.read().range_mutation_gate();
+        let frozen = gate.try_freeze(base.id, Uuid::now_v7()).unwrap();
+        let lineage = BicDb::initialize_range_image_genesis(
+            &database,
+            &genesis,
+            &base,
+            &frozen,
+            Duration::from_secs(3),
+            &CancellationToken::uncancelable(),
+        )
+        .unwrap();
+        for member in topology.nodes.values_mut() {
+            member
+                .labels
+                .insert(SCHEMA_COMPATIBILITY_NODE_LABEL.into(), schema.clone());
+        }
+        let mut round = HandoffCutRound::begin(
+            authority(&root.path().join("metadata"), &topology),
+            relocation_id,
+        )
+        .unwrap();
+        for name in ["n1", "n2"] {
+            let id = ClusterNodeId::new(name).unwrap();
+            let peer = &topology.nodes[&id];
+            let path = root.path().join(format!("resolved-{name}"));
+            std::fs::create_dir_all(&path).unwrap();
+            crate::format::enable_range_image_install(&path).unwrap();
+            let mut store =
+                RangeWriteStore::open(&path, topology.cluster_id.clone(), id, true).unwrap();
+            let promised = store.install_handoff_promise(round.request()).unwrap();
+            let ack = HandoffPromiseAck::from_transport(
+                round.request(),
+                peer,
+                peer.tls_certificate_sha256.as_deref(),
+                true,
+                promised,
+            )
+            .unwrap();
+            round.record(ack).unwrap();
+        }
+        let mut cut = round.finish().unwrap();
+        cut.validate_source_lineage_configuration(&lineage).unwrap();
+        assert_eq!(lineage.base_range().epoch, cut.relocation.expected_epoch);
+        assert_eq!(lineage.base_range().epoch + 1, cut.range.epoch);
+        let original_bootstrap = cut.bootstrap_id;
+        cut.bootstrap_id = None;
+        assert!(cut.validate_source_lineage_configuration(&lineage).is_err());
+        cut.bootstrap_id = Some(Uuid::now_v7());
+        assert!(cut.validate_source_lineage_configuration(&lineage).is_err());
+        cut.bootstrap_id = original_bootstrap;
+        cut.relocation.expected_epoch += 1;
+        assert!(cut.validate_source_lineage_configuration(&lineage).is_err());
+        cut.relocation.expected_epoch -= 1;
+        cut.range.start_token += 1;
+        assert!(cut.validate_source_lineage_configuration(&lineage).is_err());
+        cut.range.start_token -= 1;
+        let target = cut
+            .range
+            .replicas
+            .iter()
+            .position(|r| r.id == cut.relocation.target_replica_id)
+            .unwrap();
+        cut.range.replicas[target].role = RangeReplicaRole::Voter;
+        assert!(cut.validate_source_lineage_configuration(&lineage).is_err());
+        cut.range.replicas[target].role = RangeReplicaRole::Learner;
+        let other = ClusterNodeId::new("n2").unwrap();
+        cut.old_member_credentials.get_mut(&other).unwrap().0 += 1;
+        assert!(cut.validate_source_lineage_configuration(&lineage).is_err());
+        cut.old_member_credentials.get_mut(&other).unwrap().0 -= 1;
+        let pin = cut.old_member_credentials.get_mut(&other).unwrap().2.take();
+        assert!(cut.validate_source_lineage_configuration(&lineage).is_err());
+        cut.old_member_credentials.get_mut(&other).unwrap().2 = pin;
+        let original_schema = cut.expected_schema_sha256.take();
+        assert!(cut.validate_source_lineage_configuration(&lineage).is_err());
+        cut.expected_schema_sha256 = Some("f".repeat(64));
+        assert!(cut.validate_source_lineage_configuration(&lineage).is_err());
+        cut.expected_schema_sha256 = original_schema;
+        cut.restore_activation = Some(activation(&topology));
+        assert!(cut.validate_source_lineage_configuration(&lineage).is_err());
+        cut.restore_activation = None;
+        cut.source_incarnation += 1;
+        assert!(cut.validate_source_lineage_configuration(&lineage).is_err());
+        cut.source_incarnation -= 1;
+        cut.range_index = 1;
+        assert!(cut.validate_source_lineage_configuration(&lineage).is_err());
+        cut.range_index = 0;
+        cut.validate_source_lineage_configuration(&lineage).unwrap();
+        // Actual empty native genesis is R=0. This does not mint the pending
+        // installed-image or certified-suffix producer for R>0.
+    }
+
     #[cfg(feature = "tls-replication")]
     mod remote {
         use super::*;

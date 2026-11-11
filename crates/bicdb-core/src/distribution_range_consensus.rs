@@ -1434,6 +1434,19 @@ pub struct RangeWriteAck {
 }
 
 pub trait RangeWriteTransport: std::fmt::Debug + Send + Sync + 'static {
+    fn recovery_historical_command_observation(
+        &self,
+        destination: &ClusterNodeId,
+        request: &crate::distribution_range_recovery::RecoveryHistoricalCommandRequest,
+        apply: bool,
+        parent: &CancellationToken,
+    ) -> Result<crate::distribution_range_recovery::RecoveryHistoryObservation> {
+        let _ = (destination, request, apply, parent);
+        Err(range_write_error(
+            "transport does not support authenticated historical recovery",
+        ))
+    }
+
     fn recovery_fenced_history_observation(
         &self,
         destination: &ClusterNodeId,

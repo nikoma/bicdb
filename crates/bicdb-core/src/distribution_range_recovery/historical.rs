@@ -152,6 +152,25 @@ impl HistoricalCommandDecisionRound {
         self.votes.insert(node, compact_vote(observation));
         Ok(())
     }
+    pub(super) fn is_ready(&self) -> bool {
+        let q = self.authority.member_credentials().len() / 2 + 1;
+        self.votes.len() >= q
+            && !self
+                .votes
+                .values()
+                .any(|v| v.state == Some(RangeWriteState::Aborted))
+            && (self.votes.values().any(|v| {
+                matches!(
+                    v.state,
+                    Some(RangeWriteState::QuorumCommitted | RangeWriteState::Applied)
+                )
+            }) || self
+                .votes
+                .values()
+                .filter(|v| v.state == Some(RangeWriteState::Committed))
+                .count()
+                >= q)
+    }
     pub(crate) fn finish(self) -> Result<HistoricalCommandDecision> {
         self.authority.require_live()?;
         let quorum = self.authority.member_credentials().len() / 2 + 1;
@@ -280,6 +299,9 @@ impl CurrentHistoricalCertificationRound {
         }
         self.votes.insert(node, compact_vote(observation));
         Ok(())
+    }
+    pub(super) fn is_ready(&self) -> bool {
+        self.votes.len() >= self.decision.authority().member_credentials().len() / 2 + 1
     }
     pub(crate) fn finish(self) -> Result<RecoveryApplyAdmission> {
         self.decision.require_live()?;

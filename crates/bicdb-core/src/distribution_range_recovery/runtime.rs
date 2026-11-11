@@ -10,6 +10,8 @@ use parking_lot::Mutex;
 use std::collections::BTreeSet;
 use std::sync::Arc;
 
+mod participants;
+
 const MAX_CONTEXTS: usize = 4;
 const MAX_SESSIONS: usize = 64;
 const LATCH_POLL: Duration = Duration::from_millis(5);
@@ -23,6 +25,7 @@ struct Session {
 struct Sessions {
     current: BTreeMap<RangeId, Session>,
     active: BTreeSet<RangeId>,
+    contexts: usize,
 }
 
 #[derive(Debug)]
@@ -31,12 +34,22 @@ pub(crate) struct RangeRecoveryRuntime {
     provider: Arc<MetadataReadProvider>,
     local_node_id: ClusterNodeId,
     gate: RangeMutationGate,
-    sessions: Mutex<Sessions>,
+    sessions: Arc<Mutex<Sessions>>,
+    participant_transport:
+        Option<Arc<dyn crate::distribution_range_consensus::RangeWriteTransport>>,
 }
-struct Operation<'a>(&'a RangeRecoveryRuntime, RangeId);
-impl Drop for Operation<'_> {
+struct Operation {
+    sessions: Arc<Mutex<Sessions>>,
+    range: RangeId,
+    exclusive: bool,
+}
+impl Drop for Operation {
     fn drop(&mut self) {
-        self.0.sessions.lock().active.remove(&self.1);
+        let mut sessions = self.sessions.lock();
+        sessions.contexts -= 1;
+        if self.exclusive {
+            sessions.active.remove(&self.range);
+        }
     }
 }
 /// Exclusive owned installer lease. Dropping it preserves an A-owned freeze;
@@ -141,9 +154,12 @@ impl RangeRecoveryRuntime {
                 "recovery freeze owner changed before image transfer",
             ));
         }
-        self.gate
-            .validate_quiescent_frozen(scope.range_id, frozen)?;
-        frozen.try_rotate_owner(attempt_id)?;
+        let service = self
+            .service
+            .try_lock()
+            .ok_or_else(|| invalid("service is busy before image freeze transfer"))?;
+        service.rotate_recovery_image_transfer(&preflight, source, role, frozen, &token)?;
+        drop(service);
         let arc = session.frozen.take().unwrap();
         let frozen =
             Arc::try_unwrap(arc).expect("unique recovery freeze checked under session lock");
@@ -192,7 +208,15 @@ impl RangeRecoveryRuntime {
         parent: &CancellationToken,
     ) -> Result<RecoveryHistoryObservation> {
         let token = request.cancellation(parent)?;
-        let _operation = self.reserve(request.scope.range_id)?;
+        let _operation = self.reserve_observer(request.scope.range_id)?;
+        self.observe_history_inner(observer, request, &token)
+    }
+    fn observe_history_inner(
+        &self,
+        observer: &MetadataReadParticipant,
+        request: &RecoveryFencedProbeRequest,
+        token: &CancellationToken,
+    ) -> Result<RecoveryHistoryObservation> {
         let business = Uuid::now_v7();
         let challenge = Uuid::now_v7();
         let scope = &request.scope;
@@ -256,21 +280,40 @@ impl RangeRecoveryRuntime {
             provider,
             local_node_id,
             gate,
-            sessions: Mutex::new(Sessions::default()),
+            sessions: Arc::new(Mutex::new(Sessions::default())),
+            participant_transport: None,
         }
     }
-    fn reserve(&self, range: RangeId) -> Result<Operation<'_>> {
+    pub(crate) fn with_participant_transport(
+        mut self,
+        transport: Arc<dyn crate::distribution_range_consensus::RangeWriteTransport>,
+    ) -> Self {
+        self.participant_transport = Some(transport);
+        self
+    }
+    fn reserve(&self, range: RangeId) -> Result<Arc<Operation>> {
+        self.reserve_context(range, true)
+    }
+    fn reserve_observer(&self, range: RangeId) -> Result<Arc<Operation>> {
+        self.reserve_context(range, false)
+    }
+    fn reserve_context(&self, range: RangeId, exclusive: bool) -> Result<Arc<Operation>> {
         let mut sessions = self.sessions.lock();
         if sessions
             .current
             .get(&range)
             .is_some_and(|s| s.frozen.is_none())
-            || sessions.active.len() >= MAX_CONTEXTS
-            || !sessions.active.insert(range)
+            || sessions.contexts >= MAX_CONTEXTS
+            || (exclusive && !sessions.active.insert(range))
         {
             return Err(invalid("receiver recovery context/range is busy"));
         }
-        Ok(Operation(self, range))
+        sessions.contexts += 1;
+        Ok(Arc::new(Operation {
+            sessions: Arc::clone(&self.sessions),
+            range,
+            exclusive,
+        }))
     }
     fn frozen(
         &self,

@@ -941,6 +941,42 @@ impl ClusterDataNodeService {
         )
     }
 
+    /// Final transfer validation and owner rotation are one local critical
+    /// section. The caller already owns the session reservation and service
+    /// latch, so DB acquisition is nonwaiting and performs no RPC or drain.
+    pub(crate) fn rotate_recovery_image_transfer(
+        &self,
+        preflight: &crate::distribution_range_consensus::NativeImageInstallTransferPreflight,
+        source: &crate::distribution_range_image::TentativeNativeRangeImageSourceAuthorization<'_>,
+        role: &crate::distribution_range_consensus::NativeImageInstallRole<'_>,
+        frozen: &mut crate::distribution_range_mutation::FrozenRangeMutationPermit,
+        cancellation: &crate::CancellationToken,
+    ) -> Result<()> {
+        cancellation.check()?;
+        let db = self.db.try_read().ok_or_else(|| {
+            BicDbError::Cluster("native DB is busy before image freeze transfer".into())
+        })?;
+        let actual = role.role();
+        let native = db.native_recovery_admission(
+            actual.cluster_id(),
+            actual.bootstrap_id(),
+            actual.local_node_id(),
+            actual.local_member_incarnation(),
+        )?;
+        preflight.require_transfer_current(
+            &self.range_writes,
+            &db,
+            &native,
+            source,
+            role,
+            frozen,
+        )?;
+        self.range_mutations
+            .validate_quiescent_frozen(preflight.range_id(), frozen)?;
+        cancellation.check()?;
+        frozen.try_rotate_owner(preflight.attempt_id())
+    }
+
     /// Receiver-only: the runtime already owns the drained range freeze and
     /// acquired an independently fresh role before taking this service latch.
     pub(crate) fn fence_native_recovery(

@@ -223,6 +223,12 @@ enum ClusterDataRequest {
     RecoveryFencedProbe {
         request: crate::distribution_range_recovery::RecoveryFencedProbeRequest,
     },
+    RecoveryCertifyHistorical {
+        request: crate::distribution_range_recovery::RecoveryHistoricalCommandRequest,
+    },
+    RecoveryApplyHistorical {
+        request: crate::distribution_range_recovery::RecoveryHistoricalCommandRequest,
+    },
     PrepareRangeWrite {
         command: RangeWriteCommand,
     },
@@ -325,6 +331,8 @@ impl ClusterDataRequest {
             Self::ApplyRangeWriteRepair { batch, .. } => Some(batch.range_id),
             Self::RecoveryEpochFence { request } => Some(request.scope.range_id),
             Self::RecoveryFencedProbe { request } => Some(request.scope.range_id),
+            Self::RecoveryCertifyHistorical { request }
+            | Self::RecoveryApplyHistorical { request } => Some(request.scope.range_id),
             Self::Ping
             | Self::Heartbeat { .. }
             | Self::StageTlsCertificateRotation { .. }
@@ -818,6 +826,34 @@ fn handle_cluster_data_connection(
                 CancellationToken::new(Arc::new(AtomicBool::new(false)), Some(request_deadline));
             return runtime
                 .observe_history(caller, &request, &token)
+                .map(|observation| {
+                    ClusterDataResponse::RecoveryFencedProbe(observation.into_reply())
+                });
+        }
+        if let ClusterDataRequest::RecoveryCertifyHistorical { request } = request.request {
+            let runtime = recovery_runtime
+                .ok_or_else(|| transport_error("native recovery runtime is not active"))?;
+            let caller = authenticated_caller.as_ref().ok_or_else(|| {
+                transport_error("historical certification requires an authenticated member")
+            })?;
+            let token =
+                CancellationToken::new(Arc::new(AtomicBool::new(false)), Some(request_deadline));
+            return runtime
+                .certify_historical(caller, &request, &token)
+                .map(|observation| {
+                    ClusterDataResponse::RecoveryFencedProbe(observation.into_reply())
+                });
+        }
+        if let ClusterDataRequest::RecoveryApplyHistorical { request } = request.request {
+            let runtime = recovery_runtime
+                .ok_or_else(|| transport_error("native recovery runtime is not active"))?;
+            let caller = authenticated_caller.as_ref().ok_or_else(|| {
+                transport_error("historical Apply requires an authenticated member")
+            })?;
+            let token =
+                CancellationToken::new(Arc::new(AtomicBool::new(false)), Some(request_deadline));
+            return runtime
+                .apply_historical(caller, &request, &token)
                 .map(|observation| {
                     ClusterDataResponse::RecoveryFencedProbe(observation.into_reply())
                 });
@@ -2235,6 +2271,10 @@ fn dispatch_cluster_data_request(
             }
             Ok(ClusterDataResponse::MetadataReadProbe(response))
         }
+        ClusterDataRequest::RecoveryCertifyHistorical { .. }
+        | ClusterDataRequest::RecoveryApplyHistorical { .. } => Err(transport_error(
+            "authenticated native historical recovery runtime is not active",
+        )),
         ClusterDataRequest::RecoveryFencedProbe { .. } => Err(transport_error(
             "recovery observations require authenticated receiver runtime",
         )),
@@ -3240,6 +3280,37 @@ impl TcpClusterRelocationTransport {
         }
     }
 
+    pub(crate) fn recovery_historical_command_observation(
+        &self,
+        destination: &ClusterNodeId,
+        request: &crate::distribution_range_recovery::RecoveryHistoricalCommandRequest,
+        apply: bool,
+        parent: &CancellationToken,
+    ) -> Result<crate::distribution_range_recovery::RecoveryHistoryObservation> {
+        let token = request.cancellation(parent)?;
+        let probe = request.probe()?;
+        let payload = if apply {
+            ClusterDataRequest::RecoveryApplyHistorical {
+                request: request.clone(),
+            }
+        } else {
+            ClusterDataRequest::RecoveryCertifyHistorical {
+                request: request.clone(),
+            }
+        };
+        let (response, peer) =
+            self.call_with_read_participant_cancellable(&token, destination, payload)?;
+        match response {
+            ClusterDataResponse::RecoveryFencedProbe(reply) => {
+                crate::distribution_range_recovery::RecoveryHistoryObservation::from_transport(
+                    AuthenticatedRecoveryProbeReply { reply, peer },
+                    &probe,
+                    token.deadline().unwrap(),
+                )
+            }
+            response => Err(unexpected_response("historical native recovery", response)),
+        }
+    }
     pub(crate) fn recovery_fenced_history_observation(
         &self,
         destination: &ClusterNodeId,
@@ -3344,6 +3415,8 @@ impl TcpClusterRelocationTransport {
                 | ClusterDataRequest::AcquireMetadataRecoveryRole { .. }
                 | ClusterDataRequest::RecoveryEpochFence { .. }
                 | ClusterDataRequest::RecoveryFencedProbe { .. }
+                | ClusterDataRequest::RecoveryCertifyHistorical { .. }
+                | ClusterDataRequest::RecoveryApplyHistorical { .. }
         );
         let network_deadline = Instant::now() + Duration::from_millis(self.config.io_timeout_ms);
         let deadline = cancellation
@@ -3523,6 +3596,16 @@ fn unexpected_response(expected: &str, response: ClusterDataResponse) -> BicDbEr
 }
 
 impl RangeWriteTransport for TcpClusterRelocationTransport {
+    fn recovery_historical_command_observation(
+        &self,
+        destination: &ClusterNodeId,
+        request: &crate::distribution_range_recovery::RecoveryHistoricalCommandRequest,
+        apply: bool,
+        parent: &CancellationToken,
+    ) -> Result<crate::distribution_range_recovery::RecoveryHistoryObservation> {
+        self.recovery_historical_command_observation(destination, request, apply, parent)
+    }
+
     fn recovery_fenced_history_observation(
         &self,
         destination: &ClusterNodeId,

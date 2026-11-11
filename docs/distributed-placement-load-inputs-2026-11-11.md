@@ -45,7 +45,7 @@ five-node convergence from the initial smoke. At each checkpoint:
 - Reported replica-byte skew was zero; this is **unknown/zero estimate input**,
   not verified equality of physical bytes, disk utilization or traffic.
 
-At first five-node convergence, 38 completed relocations to n4 reported 537,266
+At the first recorded five-node converged checkpoint, 38 completed relocations to n4 reported 537,266
 snapshot bytes. Native writes and prejoin payload reads also demonstrate actual
 user records; populated data does not imply populated planner estimates. The
 later checkpoint contains 76 completed historical relocations and 1,525,862
@@ -72,3 +72,12 @@ Tests of a planner supplied with synthetic estimates establish its behavior for
 those inputs. They do not establish a default runtime sampler, bytes-only movement
 trigger, physical qualification or application throughput gain. The roadmap now
 separates those delivered mechanisms from the missing integration and trigger.
+
+The inspected `distribution.rs`, `distribution_supervisor.rs` and default
+`distribution_controller.rs` files are byte-identical between the original audit
+runtime `2f36fe6900d1dd92aad5cb2b587757b1a670cbd3` and frozen `b05385d4`.
+This corrects the earlier audit's byte-balancing interpretation; it is not a new
+runtime regression introduced after that audit. The smoke's join-to-observed-
+convergence interval is an upper observation bound: the harness waits for its
+traffic/verification window before polling, so it does not establish first actual
+balancing completion or RTO.

@@ -60,7 +60,7 @@ No repeated 15-minute matched read/write/mixed throughput campaign is supplied.
 
 ## What completed and survived
 
-- Node n4 joined during unchanged native traffic. At the first five-node convergence
+- Node n4 joined during unchanged native traffic. At the first recorded five-node converged
   checkpoint, 38 completed relocations to n4 reported **537,266 snapshot bytes**.
   Those are controller snapshot counters, not total disk/network I/O amplification.
   All 64 ranges had RF3/192 replicas; unavailable, under-replicated and active/failed
@@ -92,6 +92,14 @@ A post-restart progress snapshot temporarily showed active relocations. The
 separately retained later convergence checkpoint returned to 192 replicas,
 zero active/failed/unavailable/under-replicated counts and skew one. We do not
 relabel the intermediate work as continuously quiescent.
+
+The timeline's approximately **86.46 s** from join start to the later recorded
+`capacity_converged` event and **154.82 s** (about 155 s) from restart request to
+the later convergence event are **observation upper bounds**, not first actual
+completion times. The harness finishes the growth/failure traffic window and
+payload verification before polling convergence. Round-trip/polling and status
+capture times differ and remain in raw records. Neither interval is an engine
+RTO or a continuous trace of placement completion.
 
 ## Evidence, provenance and remaining gates
 

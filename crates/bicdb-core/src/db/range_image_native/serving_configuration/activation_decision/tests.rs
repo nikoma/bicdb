@@ -14,12 +14,18 @@ struct Fixture {
     db: Arc<RwLock<BicDb>>,
     topology: crate::ClusterTopology,
     spec: RangeImageBirthSpec,
+    acknowledged_key: String,
 }
 impl Fixture {
     fn new() -> Self {
         let (root, db, mut topology, spec) = native_origin_fixture();
         let range = topology.ranges.values().next().unwrap().id;
+        let acknowledged_key = (0..)
+            .map(|index| format!("stage-actual-origin-{index}"))
+            .find(|key| topology.range_for_key("items", key).unwrap().id == range)
+            .unwrap();
         seed_actual_origin(&db, topology.clone(), &spec, range, 1);
+        assert!(db.read().get("items", &acknowledged_key).unwrap().is_some());
         // Declared new metadata epoch, not an election/power-loss experiment.
         topology.ranges.values_mut().next().unwrap().epoch += 1;
         Self {
@@ -27,6 +33,7 @@ impl Fixture {
             db,
             topology,
             spec,
+            acknowledged_key,
         }
     }
     fn role(&self, nonce: Uuid) -> RecoveryRoleAdmission {
@@ -362,6 +369,12 @@ fn native_activation_decision_strict_cold_open_reissues_only_actual_native_recor
         .persist_native_activation_decision(&prepared, &store, &quorum, &fixture.role(nonce))
         .unwrap();
     let path = fixture.db.read().data_path().to_path_buf();
+    let expected = fixture
+        .db
+        .read()
+        .get("items", &fixture.acknowledged_key)
+        .unwrap()
+        .expect("the actual selected-range acknowledged row exists before close");
     drop(quorum);
     drop(prepared);
     drop(frozen);
@@ -371,6 +384,7 @@ fn native_activation_decision_strict_cold_open_reissues_only_actual_native_recor
         db,
         topology,
         spec,
+        acknowledged_key,
     } = fixture;
     assert_eq!(Arc::strong_count(&db), 1);
     drop(db);
@@ -424,8 +438,8 @@ fn native_activation_decision_strict_cold_open_reissues_only_actual_native_recor
         reissued.completion_quorum_sha256(),
         receipt.completion_quorum_sha256()
     );
-    assert!(reopened
-        .get("items", "stage-actual-origin-0")
-        .unwrap()
-        .is_some());
+    assert_eq!(
+        reopened.get("items", &acknowledged_key).unwrap(),
+        Some(expected)
+    );
 }

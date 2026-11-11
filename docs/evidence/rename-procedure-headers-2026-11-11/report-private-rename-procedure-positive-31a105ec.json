@@ -1,0 +1,115 @@
+{
+  "source": "31a105ecb84eee935411524b7151695b1f97732a",
+  "scope": "Private next procedure closure batch. Actual ff control: live procedure argument names and OIDs correctly renamed, but stored/dump definition still old source/source[]; function control passed. Native PG16.13 both decisions/referencecalls pass. Use existing PostgreSQL-style procedure header proxy/renderer (bodies retained as original SQL values), support direct procedure AST as well as function headers, propagate header/render failures before persistence. Capture plan and actual writes share same fallible helper. Original declaration/OID/call/rename/reuse/reopen assertions retained. Process fixture now includes procedures and cut after first procedure publication: expected58process exits/116reopens, uncommitted full raw routine rows and committed declaration identities checked. Includes imported standalone metadata fixes, private version465 only, no source version reserved. Full SQL scope producer/metadata read/effect resources/Describe and app/VM gates remain open; not final source469 PR145, which is separately frozen under CI. At d183 the procedure types were corrected, but exact unchanged dump-header assertion catches token-join formatting drift (arg renamed [ ] with inserted spaces). Preserve all assertions: procedure renderer now uses original AST canonical SQL serialization and changes only its leading FUNCTION kind to PROCEDURE, retaining canonical header/body literal escaping. Same focused suite, still no completed SQL scope claim.",
+  "started_unix": 1794402263.8050618,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "rename_routine_row_types",
+        "--test",
+        "table_row_routines",
+        "--",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794402263.8051481,
+      "exit": 0,
+      "finished_unix": 1794402345.5297754
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--lib",
+        "session::rename_",
+        "--",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794402345.5299804,
+      "exit": 0,
+      "finished_unix": 1794402466.3652537
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--lib",
+        "oracle::procedures::tests",
+        "--",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794402466.3654857,
+      "exit": 0,
+      "finished_unix": 1794402466.672474
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "user_type_management",
+        "--test",
+        "composite_types",
+        "--test",
+        "domain_types",
+        "--test",
+        "schema_table_rename",
+        "--test",
+        "read_only_transactions",
+        "--test",
+        "session_statement_snapshots"
+      ],
+      "started_unix": 1794402466.6726518,
+      "exit": 0,
+      "finished_unix": 1794402486.4767363
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "sql",
+        "routine",
+        "--",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794402486.4770024,
+      "exit": 0,
+      "finished_unix": 1794402491.3454723
+    }
+  ],
+  "status": "focused_passed",
+  "finished_unix": 1794402491.3457682
+}

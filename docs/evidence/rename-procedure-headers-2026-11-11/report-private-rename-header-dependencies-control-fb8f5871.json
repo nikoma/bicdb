@@ -1,0 +1,28 @@
+{
+  "source": "fb8f5871458231e4fa9fdcf0b029091b806b326f",
+  "scope": "Tests-only next two routine header dependencies, runtime unchanged from five-command31a positive. TEXT arguments default through table row cast and field access, so dependency occurs only in default expression; functions/procedures must still work during/after rename/rollback/reuse/reopen. A no-argument RETURNS TABLE(item source) plpgsql empty-return function exposes output-only type dependency and metadata without body-name coupling. Each test intended2stores2decisions; record actual failures and reached cells, no assumedresult. Native PostgreSQL16.13 two decisions/sevenprobes passed all cases. Full Native/SQL scope producer/metadata/Describe and app/VM goal still open, version465 private.",
+  "started_unix": 1794402768.5822554,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "rename_routine_header_dependencies",
+        "--",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794402768.5824268,
+      "exit": 101,
+      "finished_unix": 1794402772.7212038
+    }
+  ],
+  "status": "failed",
+  "finished_unix": 1794402772.7214131
+}

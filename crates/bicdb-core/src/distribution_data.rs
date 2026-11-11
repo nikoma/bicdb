@@ -39,6 +39,8 @@ use crate::{
     SchemaCompatibilityAuthority, SchemaCompatibilityFingerprint, SignedClusterSchemaBundle,
 };
 
+mod native_image_install;
+
 pub const RANGE_LEARNER_APPLY_FORMAT_VERSION: u32 = 1;
 pub const DEFAULT_RANGE_LEARNER_APPLY_STATE: &str = "cluster-range-learner-apply.json";
 pub const DEFAULT_RANGE_DIGEST_STATE_DIR: &str = "cluster-range-digests";

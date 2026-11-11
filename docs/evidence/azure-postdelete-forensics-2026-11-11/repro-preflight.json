@@ -1,0 +1,163 @@
+{
+  "prepared_at_utc": "2026-11-11T06:57:24.543976+00:00",
+  "allocation_authorized_by_root_go": false,
+  "azure_resources_created": false,
+  "budget_total_usd": 25,
+  "original_run_estimate_usd": 2.250060441006575,
+  "original_actual_invoice_verified": false,
+  "new_five_vm_disk_rate_estimate_usd_per_hour": 0.75125,
+  "new_allocation_max_hours_given_original_deadline": 4.5,
+  "new_compute_disk_estimate_upper_planning_usd": 3.381,
+  "combined_compute_disk_planning_usd": 5.632,
+  "network_ip_taxes_actual_invoice_not_included": true,
+  "original_final_cleanup_deadline_utc": "2026-11-11T11:37:51Z",
+  "vms": 5,
+  "size": "Standard_D2s_v3",
+  "location": "northeurope",
+  "quota": {
+    "regional_current": 0,
+    "regional_limit": 10,
+    "family_current": 0,
+    "family_limit": 10
+  },
+  "sku_restrictions": [
+    {
+      "reasonCode": "NotAvailableForSubscription",
+      "restrictionInfo": {
+        "locations": [
+          "northeurope"
+        ],
+        "zones": [
+          "2",
+          "3"
+        ]
+      },
+      "type": "Zone",
+      "values": [
+        "northeurope"
+      ]
+    }
+  ],
+  "sku_capabilities": [
+    {
+      "name": "MaxResourceVolumeMB",
+      "value": "16384"
+    },
+    {
+      "name": "OSVhdSizeMB",
+      "value": "1047552"
+    },
+    {
+      "name": "vCPUs",
+      "value": "2"
+    },
+    {
+      "name": "MemoryPreservingMaintenanceSupported",
+      "value": "True"
+    },
+    {
+      "name": "HyperVGenerations",
+      "value": "V1,V2"
+    },
+    {
+      "name": "SupportedCapacityReservationTypes",
+      "value": "Open,Targeted"
+    },
+    {
+      "name": "SupportedEphemeralOSDiskPlacements",
+      "value": "ResourceDisk,CacheDisk"
+    },
+    {
+      "name": "MemoryGB",
+      "value": "8"
+    },
+    {
+      "name": "MaxDataDiskCount",
+      "value": "4"
+    },
+    {
+      "name": "CpuArchitectureType",
+      "value": "x64"
+    },
+    {
+      "name": "LowPriorityCapable",
+      "value": "True"
+    },
+    {
+      "name": "PremiumIO",
+      "value": "True"
+    },
+    {
+      "name": "VMDeploymentTypes",
+      "value": "IaaS"
+    },
+    {
+      "name": "vCPUsConstraintsAllowed",
+      "value": "1, 2"
+    },
+    {
+      "name": "vCPUsAvailable",
+      "value": "2"
+    },
+    {
+      "name": "ACUs",
+      "value": "160"
+    },
+    {
+      "name": "vCPUsPerCore",
+      "value": "2"
+    },
+    {
+      "name": "CombinedTempDiskAndCachedIOPS",
+      "value": "4000"
+    },
+    {
+      "name": "CombinedTempDiskAndCachedReadBytesPerSecond",
+      "value": "32768000"
+    },
+    {
+      "name": "CombinedTempDiskAndCachedWriteBytesPerSecond",
+      "value": "32768000"
+    },
+    {
+      "name": "CachedDiskBytes",
+      "value": "53687091200"
+    },
+    {
+      "name": "UncachedDiskIOPS",
+      "value": "3200"
+    },
+    {
+      "name": "UncachedDiskBytesPerSecond",
+      "value": "48000000"
+    },
+    {
+      "name": "EphemeralOSDiskSupported",
+      "value": "True"
+    },
+    {
+      "name": "EncryptionAtHostSupported",
+      "value": "True"
+    },
+    {
+      "name": "CapacityReservationSupported",
+      "value": "True"
+    },
+    {
+      "name": "AcceleratedNetworkingEnabled",
+      "value": "True"
+    },
+    {
+      "name": "RdmaEnabled",
+      "value": "False"
+    },
+    {
+      "name": "MaxNetworkInterfaces",
+      "value": "2"
+    }
+  ],
+  "physical_host_independence_verified": false,
+  "metadata_capture": "full model/instance view/resource/disk/NIC/effective NSG+routes+metric definitions API responses private; sanitized allowlisted summary public",
+  "metric_stream_requirement": "Azure metric definitions determine available throttling/burst counters; do not substitute guest counters for missing provider telemetry",
+  "allocation_gate": "root GO only after per-operation instrumentation and evidence export verified; reject if time remaining cannot cover trial+export+deletion margin"
+}

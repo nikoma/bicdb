@@ -155,7 +155,10 @@ pub(crate) fn reject_unlowered(statements: &[Statement]) -> crate::Result<()> {
             ControlFlow::Continue(())
         }
     }
-    if statements.visit(&mut Guard).is_break() {
+    if statements
+        .iter()
+        .any(|statement| statement.visit(&mut Guard).is_break())
+    {
         return Err(crate::SqlError::Unsupported(
             "TABLE query form is not supported in this position".into(),
         ));

@@ -13,6 +13,9 @@ use std::sync::Arc;
 mod participants;
 
 const MAX_CONTEXTS: usize = 4;
+// A collector must leave capacity for the readonly peer observations needed
+// by other collectors. This reserves progress capacity without extra workers.
+const MAX_EXCLUSIVE_CONTEXTS: usize = 2;
 const MAX_SESSIONS: usize = 64;
 const LATCH_POLL: Duration = Duration::from_millis(5);
 
@@ -304,7 +307,9 @@ impl RangeRecoveryRuntime {
             .get(&range)
             .is_some_and(|s| s.frozen.is_none())
             || sessions.contexts >= MAX_CONTEXTS
-            || (exclusive && !sessions.active.insert(range))
+            || (exclusive
+                && (sessions.active.len() >= MAX_EXCLUSIVE_CONTEXTS
+                    || !sessions.active.insert(range)))
         {
             return Err(invalid("receiver recovery context/range is busy"));
         }
@@ -578,6 +583,15 @@ mod tests {
         );
         drop(draining_worker);
         drop(runtime.reserve(range.id).unwrap());
+        let first_collector = runtime.reserve(range.id).unwrap();
+        let second_collector = runtime
+            .reserve(RangeId::new(range.id.get() + 1).unwrap())
+            .unwrap();
+        assert!(runtime
+            .reserve(RangeId::new(range.id.get() + 2).unwrap())
+            .is_err());
+        let peer_observer = runtime.reserve_observer(range.id).unwrap();
+        drop((first_collector, second_collector, peer_observer));
         let parent = CancellationToken::uncancelable()
             .child_with_deadline(Instant::now() + Duration::from_secs(5));
         let role_for = |purpose: MetadataRecoveryRolePurpose, nonce: Uuid| {

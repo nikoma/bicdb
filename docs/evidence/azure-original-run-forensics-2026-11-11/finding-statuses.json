@@ -1,0 +1,87 @@
+[
+  {
+    "finding": "runtime_guest_identity",
+    "status": "passed",
+    "scope": "See linked forensic report for narrow criterion and evidence boundary."
+  },
+  {
+    "finding": "short_automatic_data_and_leader_count_movement",
+    "status": "passed",
+    "scope": "See linked forensic report for narrow criterion and evidence boundary."
+  },
+  {
+    "finding": "native_growth_availability",
+    "status": "failed",
+    "scope": "See linked forensic report for narrow criterion and evidence boundary."
+  },
+  {
+    "finding": "original_growth_ack_read_pass",
+    "status": "failed",
+    "scope": "See linked forensic report for narrow criterion and evidence boundary."
+  },
+  {
+    "finding": "later_baseline_full_ledger_read_pass",
+    "status": "failed",
+    "scope": "See linked forensic report for narrow criterion and evidence boundary."
+  },
+  {
+    "finding": "later_growth_full_ledger_read_pass",
+    "status": "failed",
+    "scope": "See linked forensic report for narrow criterion and evidence boundary."
+  },
+  {
+    "finding": "original_two_later_routed_value_matches",
+    "status": "passed",
+    "scope": "See linked forensic report for narrow criterion and evidence boundary."
+  },
+  {
+    "finding": "all_known_ack_applied_resolved_catalog_records",
+    "status": "passed",
+    "scope": "See linked forensic report for narrow criterion and evidence boundary."
+  },
+  {
+    "finding": "permanent_ack_record_loss",
+    "status": "inconclusive",
+    "scope": "See linked forensic report for narrow criterion and evidence boundary."
+  },
+  {
+    "finding": "original_two_read_failure_cause",
+    "status": "inconclusive",
+    "scope": "See linked forensic report for narrow criterion and evidence boundary."
+  },
+  {
+    "finding": "policy_convergence_within_300s",
+    "status": "failed",
+    "scope": "See linked forensic report for narrow criterion and evidence boundary."
+  },
+  {
+    "finding": "bounded_relocation_progress_vs_churn_or_deadlock",
+    "status": "inconclusive",
+    "scope": "See linked forensic report for narrow criterion and evidence boundary."
+  },
+  {
+    "finding": "sustained_four_to_five_capacity_gain",
+    "status": "inconclusive",
+    "scope": "See linked forensic report for narrow criterion and evidence boundary."
+  },
+  {
+    "finding": "live_byte_hotspot_weighted_placement",
+    "status": "failed",
+    "scope": "See linked forensic report for narrow criterion and evidence boundary."
+  },
+  {
+    "finding": "relocation_phase_fault_and_subsystem_matrix",
+    "status": "not_tested",
+    "scope": "See linked forensic report for narrow criterion and evidence boundary."
+  },
+  {
+    "finding": "unchanged_postgresql_business_sql_multi_range_atomicity",
+    "status": "not_tested",
+    "scope": "See linked forensic report for narrow criterion and evidence boundary."
+  },
+  {
+    "finding": "independent_physical_host_device_rpo_rto_production_qualification",
+    "status": "not_tested",
+    "scope": "See linked forensic report for narrow criterion and evidence boundary."
+  }
+]

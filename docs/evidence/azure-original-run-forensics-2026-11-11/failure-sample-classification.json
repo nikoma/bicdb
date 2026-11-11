@@ -1,0 +1,40 @@
+{
+  "failed_logical_operation_count": 404,
+  "is_http_status_404": false,
+  "retained_error_sample_count": 20,
+  "unretained_failed_operation_bodies": 384,
+  "sample_error_counts": {
+    "io error: Resource temporarily unavailable (os error 11)": 7,
+    "cluster error: cluster node n4 rejected RPC cluster_data_operation_failed: cluster error: range r8 epoch 16 leader recovery is not complete; writes remain unavailable": 1,
+    "cluster error: cluster node n4 rejected RPC cluster_data_operation_failed: cluster error: range r14 epoch 16 leader recovery is not complete; writes remain unavailable": 1,
+    "cluster error: no event cluster member is reachable": 1,
+    "io error: Connection reset by peer (os error 104)": 8,
+    "cluster error: cluster node n4 rejected RPC cluster_data_operation_failed: cluster error: range r25 epoch 23 leader recovery is not complete; writes remain unavailable": 1,
+    "cluster error: cluster node n3 rejected RPC cluster_data_operation_failed: cluster error: range r29 epoch 19 leader recovery is not complete; writes remain unavailable": 1
+  },
+  "sample_category_counts": {
+    "connection_reset": 8,
+    "resource_temporarily_unavailable": 7,
+    "range_leader_recovery_incomplete": 4,
+    "no_event_member_reachable": 1
+  },
+  "sample_operation_ids_types_timestamps_retry_paths_topology_generations": "NOT RETAINED",
+  "all_404_failed_operations_individually_classified": false,
+  "failed_call_latencies_and_individual_successful_call_latencies": "NOT RETAINED",
+  "later_native_ledger_reads": [
+    {
+      "phase": "steady-4",
+      "checked": 3804,
+      "unverified": 111,
+      "command_exit_code": 1,
+      "seconds": 850.864443941
+    },
+    {
+      "phase": "growth-4-to-5",
+      "checked": 1223,
+      "unverified": 18,
+      "command_exit_code": 1,
+      "seconds": 214.84747292
+    }
+  ]
+}

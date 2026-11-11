@@ -1,0 +1,52 @@
+{
+  "focused-result.json": {
+    "raw_sha256": "7a74e044b32684053a672de4e09a1f1fa450d07035521f2d7ae8762e843fa89a",
+    "export_sha256": "7a74e044b32684053a672de4e09a1f1fa450d07035521f2d7ae8762e843fa89a",
+    "transformation": "local task build paths replaced only"
+  },
+  "focused.stdout": {
+    "raw_sha256": "e9b9b86edb8148042a5c55c14d91e60232727ab611ed3f3784647e6fde0574fc",
+    "export_sha256": "e9b9b86edb8148042a5c55c14d91e60232727ab611ed3f3784647e6fde0574fc",
+    "transformation": "local task build paths replaced only"
+  },
+  "broad-result.json": {
+    "raw_sha256": "d18cd098515dd4a1dd6128e7ad908bec84c7632c4af0f123c636af801471a6ac",
+    "export_sha256": "d18cd098515dd4a1dd6128e7ad908bec84c7632c4af0f123c636af801471a6ac",
+    "transformation": "local task build paths replaced only"
+  },
+  "broad.stdout": {
+    "raw_sha256": "6e4f72c8bc7c2d0a6efc040ee7d1cdc3053bb2263424c7ec85ba7068a8e0b0e1",
+    "export_sha256": "6e4f72c8bc7c2d0a6efc040ee7d1cdc3053bb2263424c7ec85ba7068a8e0b0e1",
+    "transformation": "local task build paths replaced only"
+  },
+  "callback-gate-result.json": {
+    "raw_sha256": "e094933e887a0a825df7cdbe4677d09c0d4432ccef95a19dd0ecc4755c5b365f",
+    "export_sha256": "e094933e887a0a825df7cdbe4677d09c0d4432ccef95a19dd0ecc4755c5b365f",
+    "transformation": "local task build paths replaced only"
+  },
+  "callback-gate.stdout": {
+    "raw_sha256": "b4622e4660c5aed006c487b0105ab270ea79ac9f3242a4f1cecb8d56cf8b86f3",
+    "export_sha256": "b4622e4660c5aed006c487b0105ab270ea79ac9f3242a4f1cecb8d56cf8b86f3",
+    "transformation": "local task build paths replaced only"
+  },
+  "callback-gate.stderr": {
+    "raw_sha256": "b4ef436218999c3b1c453fd347f3c5f73b55e040718d28f302279fb4b8142fde",
+    "export_sha256": "a6b835b704b60533b2484847323035261251b17807fe8cf253d38fb5261baf67",
+    "transformation": "local task build paths replaced only"
+  },
+  "fixture-500ms-result.json": {
+    "raw_sha256": "14e7c609923e69125f05bb70ce287806ca1bbc466d0c24d3d1ad457a57d8a5c7",
+    "export_sha256": "14e7c609923e69125f05bb70ce287806ca1bbc466d0c24d3d1ad457a57d8a5c7",
+    "transformation": "local task build paths replaced only"
+  },
+  "fixture-500ms.stdout": {
+    "raw_sha256": "57f8b9f583d273374aa7c566c16c8a3a82455a2174d24c8f5361e8a3e0df83da",
+    "export_sha256": "57f8b9f583d273374aa7c566c16c8a3a82455a2174d24c8f5361e8a3e0df83da",
+    "transformation": "local task build paths replaced only"
+  },
+  "fixture-500ms.stderr": {
+    "raw_sha256": "5dd140e792ddc993d12101e8b2a49a6480fe8d99bf53beada4e981e23f4bdd53",
+    "export_sha256": "365b78c4cfc813d52ab90af32a3bb398b33ea9b327382c697b480379c4e81d65",
+    "transformation": "local task build paths replaced only"
+  }
+}

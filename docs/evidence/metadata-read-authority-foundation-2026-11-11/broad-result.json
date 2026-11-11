@@ -1,0 +1,14 @@
+{
+  "argv": [
+    "<artifact-target>/release/deps/bicdb_core-dd8577a8933c3970",
+    "distribution_",
+    "--nocapture",
+    "--test-threads=2"
+  ],
+  "exit_code": 0,
+  "source_commit": "d49a391b3c6157f90f29e9f2f5214143c60f9f4b",
+  "same_binary_as_focused": true,
+  "started_unix_ns": 1794386966932397593,
+  "completed_unix_ns": 1794386970185089070,
+  "minimum_available_bytes": 26497044480
+}

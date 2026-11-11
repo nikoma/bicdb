@@ -1,0 +1,25 @@
+{
+  "argv": [
+    "cargo",
+    "test",
+    "--release",
+    "--locked",
+    "-p",
+    "bicdb-core",
+    "--config",
+    "profile.release.package.bicdb-core.opt-level=0",
+    "--config",
+    "profile.release.package.bicdb-core.debug=0",
+    "--test",
+    "distribution_certificate_ack",
+    "--",
+    "--nocapture",
+    "--test-threads=2"
+  ],
+  "exit_code": 101,
+  "started_unix_ns": 1794387609396298412,
+  "completed_unix_ns": 1794387679429639041,
+  "minimum_available_bytes": 24359505920,
+  "source_base": "d49a391b3c6157f90f29e9f2f5214143c60f9f4b",
+  "patch_sha256": "7ba77b3520b8b3cfe6a7b787b7f4255d8e320f289863f966c174318cc25446e2"
+}

@@ -1,0 +1,12 @@
+
+running 1 test
+{"result":"Ok(())","elapsed_ms":301.399991,"io_budget_ms":80,"peer_chunk_interval_ms":20,"physical_ha_qualification":false}
+test slow_progress_does_not_extend_a_cluster_rpc_budget ... FAILED
+
+failures:
+
+failures:
+    slow_progress_does_not_extend_a_cluster_rpc_budget
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.32s
+

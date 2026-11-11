@@ -1,0 +1,12 @@
+
+running 7 tests
+test distribution_consensus::tests::read_authority_deadline_and_voter_identity_fail_closed ... ok
+test distribution_consensus::tests::read_authority_healthy_quorum_returns_applied_metadata_without_cached_votes ... ok
+test distribution_consensus::tests::read_authority_joint_quorums_require_fresh_majorities_on_both_sides ... ok
+test distribution_consensus::tests::read_authority_old_leader_cannot_serve_after_higher_term_reply ... ok
+test distribution_consensus::tests::read_authority_rejects_uncommitted_current_term_anchor ... ok
+test distribution_consensus::tests::read_authority_rejects_cached_ack_from_another_fresh_nonce ... ok
+test distribution_transport::tests::metadata_read_authority_round_correlates_fresh_wire_and_preserves_legacy_append_shape ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 491 filtered out; finished in 0.07s
+

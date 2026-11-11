@@ -1,0 +1,31 @@
+{
+  "baseline_revision": "d49a391b3c6157f90f29e9f2f5214143c60f9f4b",
+  "baseline_version": "1.0.463-beta",
+  "baseline_core_sha256": "dc714b001a0fe8758473c2c4ef80158474d7426e16630926edb65b6cc35f0356",
+  "baseline_result": {
+    "status": "failed",
+    "contract": "requested whole-RPC bound, distinct from legacy socket inactivity timeout",
+    "ping_result": "Ok(())",
+    "elapsed_ms": 301.399991,
+    "socket_io_budget_ms": 80
+  },
+  "candidate_result": {
+    "status": "passed",
+    "ping_result": "TimedOut",
+    "elapsed_ms": 80.511497,
+    "socket_io_budget_ms": 80,
+    "source_identity": "candidate-rpc-result.json + candidate-untracked-source-identity.json"
+  },
+  "isolated_socket_helper_tests": 6,
+  "actual_tls_deadline_tests": "pending",
+  "scope_limits": [
+    "client TCP data-transport call family only; bootstrap transport unchanged",
+    "DNS and lock acquisition/CPU/fsync not preempted",
+    "connect uses remaining deadline but flag-only cancellation can wait the connect timeout",
+    "remote operation can apply before timeout; outcome remains uncertain",
+    "per-RPC budget alone does not bound whole relocation completion"
+  ],
+  "physical_qualification": false,
+  "production_qualification": false,
+  "azure_causality": "not established"
+}

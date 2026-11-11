@@ -1,0 +1,11 @@
+{
+  "exit_code": 0,
+  "started_unix_ns": 1794388726915907464,
+  "completed_unix_ns": 1794388727166553783,
+  "stop_reason": null,
+  "minimum_available_bytes": 26857349120,
+  "maximum_sampled_write_bytes": 0,
+  "source_sha256": "463570b028dbc4399df31e01aa8d20e9bb9251e1f6e1ffc71152d6184410da32",
+  "binary_sha256": "df697c05355efd1126086980cc5b0e7b3c09964cf48c4aa8c2d0f1f945f892f2",
+  "core_sha256": "dc714b001a0fe8758473c2c4ef80158474d7426e16630926edb65b6cc35f0356"
+}

@@ -6,7 +6,7 @@ use std::net::{SocketAddr, TcpListener, TcpStream, ToSocketAddrs};
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::thread::{self, JoinHandle};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use parking_lot::{Mutex, RwLock};
 use rustls::{ClientConnection, StreamOwned};
@@ -29,13 +29,15 @@ use crate::distribution_anti_entropy_repair::{
     RangeDigestRepairTransport,
 };
 use crate::distribution_consensus::{
-    MetadataAppendRequest, MetadataAppendResponse, MetadataConsensusStore, MetadataVoteRequest,
-    MetadataVoteResponse,
+    MetadataAppendRequest, MetadataAppendResponse, MetadataConsensusStore, MetadataReadAck,
+    MetadataReadParticipant, MetadataReadProbeRequest, MetadataReadProbeResponse,
+    MetadataVoteRequest, MetadataVoteResponse,
 };
 use crate::distribution_data::{
     CatchUpSourceBatch, ClusterDataNodeService, ClusterSchemaActivationReceipt,
     ClusterSchemaFinalizationReceipt, ClusterSchemaStageReceipt, SnapshotSourceStep,
 };
+use crate::distribution_io::DeadlineTcpStream;
 use crate::distribution_range_consensus::{
     RangeWriteAck, RangeWriteCommand, RangeWriteProbe, RangeWriteProgress, RangeWriteRepairBatch,
     RangeWriteRepairLimits, RangeWriteTransport,
@@ -168,6 +170,9 @@ enum ClusterDataRequest {
     MetadataAppend {
         request: MetadataAppendRequest,
     },
+    MetadataReadProbe {
+        request: MetadataReadProbeRequest,
+    },
     PrepareRangeWrite {
         command: RangeWriteCommand,
     },
@@ -277,7 +282,8 @@ impl ClusterDataRequest {
             Self::FetchBootstrapSnapshot
             | Self::FetchTopology
             | Self::MetadataVote { .. }
-            | Self::MetadataAppend { .. } => None,
+            | Self::MetadataAppend { .. }
+            | Self::MetadataReadProbe { .. } => None,
         }
     }
 }
@@ -310,6 +316,7 @@ enum ClusterDataResponse {
     Topology(ClusterTopology),
     MetadataVote(MetadataVoteResponse),
     MetadataAppend(MetadataAppendResponse),
+    MetadataReadProbe(MetadataReadProbeResponse),
     RangeWrite(RangeWriteAck),
     RangeWriteProgress(RangeWriteProgress),
     RangeWriteRepair(RangeWriteRepairBatch),
@@ -549,8 +556,8 @@ fn configure_stream(stream: &TcpStream, config: &ClusterNetworkTransportConfig) 
     Ok(())
 }
 
-fn complete_client_tls_handshake(
-    stream: &mut StreamOwned<ClientConnection, TcpStream>,
+fn complete_client_tls_handshake<S: Read + Write>(
+    stream: &mut StreamOwned<ClientConnection, S>,
 ) -> Result<String> {
     while stream.conn.is_handshaking() {
         stream.conn.complete_io(&mut stream.sock)?;
@@ -2003,6 +2010,39 @@ fn dispatch_cluster_data_request(
             }
             Ok(ClusterDataResponse::MetadataAppend(response))
         }
+        ClusterDataRequest::MetadataReadProbe { request } => {
+            if &request.append.leader_id != caller_node_id {
+                return Err(transport_error(
+                    "metadata read probe leader does not match authenticated caller",
+                ));
+            }
+            let consensus = metadata_consensus
+                .ok_or_else(|| transport_error("metadata consensus is not active on this node"))?;
+            let (response, committed, commit_advanced) = {
+                let mut consensus = consensus.lock();
+                let commit_before = consensus.status().commit_index;
+                let response = consensus.handle_read_authority_probe(request)?;
+                let committed = consensus.committed_topology().clone();
+                let commit_advanced = consensus.status().commit_index > commit_before;
+                (response, committed, commit_advanced)
+            };
+            if response.append.success && commit_advanced {
+                if let Some(store) = metadata_distribution_store {
+                    store
+                        .lock()
+                        .install_authoritative_topology(committed.clone())?;
+                }
+                let mut published = published_topology.write();
+                if committed.generation > published.generation {
+                    *published = committed;
+                } else if committed.generation == published.generation && committed != *published {
+                    return Err(transport_error(
+                        "metadata commit conflicts with published topology generation",
+                    ));
+                }
+            }
+            Ok(ClusterDataResponse::MetadataReadProbe(response))
+        }
     }
 }
 
@@ -2265,6 +2305,7 @@ pub struct TcpClusterRelocationTransport {
     config: ClusterNetworkTransportConfig,
     client_tls: Option<ReplicationClientTls>,
     client_certificate_sha256: Option<String>,
+    caller_incarnation: u64,
     next_request_id: AtomicU64,
 }
 
@@ -2361,7 +2402,7 @@ impl TcpClusterRelocationTransport {
                     .cert_path,
             )?)
         };
-        {
+        let caller_incarnation = {
             let topology = topology.read();
             topology.validate()?;
             if topology.cluster_id != cluster_id {
@@ -2384,7 +2425,8 @@ impl TcpClusterRelocationTransport {
                     "transport caller {caller_node_id} certificate does not match membership"
                 )));
             }
-        }
+            caller.incarnation
+        };
         let client_tls = if config.dev_localhost_plaintext {
             None
         } else {
@@ -2402,6 +2444,7 @@ impl TcpClusterRelocationTransport {
             config,
             client_tls,
             client_certificate_sha256,
+            caller_incarnation,
             next_request_id: AtomicU64::new(1),
         })
     }
@@ -2747,12 +2790,82 @@ impl TcpClusterRelocationTransport {
         }
     }
 
+    pub fn local_metadata_read_participant(&self) -> MetadataReadParticipant {
+        MetadataReadParticipant::from_transport(
+            self.caller_node_id.clone(),
+            self.caller_incarnation,
+            self.client_certificate_sha256.clone(),
+            self.config.dev_localhost_plaintext,
+        )
+    }
+
+    /// One fresh, authenticated read-authority probe. There is intentionally
+    /// no fallback to ordinary/cached Append acknowledgments or old servers.
+    pub fn probe_metadata_read_authority(
+        &self,
+        destination: &ClusterNodeId,
+        request: MetadataReadProbeRequest,
+    ) -> Result<MetadataReadAck> {
+        let (response, participant) = self.call_with_read_participant(
+            destination,
+            ClusterDataRequest::MetadataReadProbe {
+                request: request.clone(),
+            },
+        )?;
+        match response {
+            ClusterDataResponse::MetadataReadProbe(response) => {
+                MetadataReadAck::from_transport(&request, destination, participant, response)
+            }
+            response => Err(unexpected_response(
+                "metadata read authority probe",
+                response,
+            )),
+        }
+    }
+
     fn call(
         &self,
         destination_node_id: &ClusterNodeId,
         request: ClusterDataRequest,
     ) -> Result<ClusterDataResponse> {
-        let (address, expected_certificate_sha256, pending_certificate_sha256) = {
+        self.call_with_read_participant(destination_node_id, request)
+            .map(|(response, _)| response)
+    }
+
+    fn call_with_read_participant(
+        &self,
+        destination_node_id: &ClusterNodeId,
+        request: ClusterDataRequest,
+    ) -> Result<(ClusterDataResponse, MetadataReadParticipant)> {
+        self.call_with_read_participant_cancellable(
+            &CancellationToken::uncancelable(),
+            destination_node_id,
+            request,
+        )
+    }
+
+    fn call_cancellable(
+        &self,
+        cancellation: &CancellationToken,
+        destination_node_id: &ClusterNodeId,
+        request: ClusterDataRequest,
+    ) -> Result<ClusterDataResponse> {
+        self.call_with_read_participant_cancellable(cancellation, destination_node_id, request)
+            .map(|(response, _)| response)
+    }
+
+    fn call_with_read_participant_cancellable(
+        &self,
+        cancellation: &CancellationToken,
+        destination_node_id: &ClusterNodeId,
+        request: ClusterDataRequest,
+    ) -> Result<(ClusterDataResponse, MetadataReadParticipant)> {
+        cancellation.check()?;
+        let network_deadline = Instant::now() + Duration::from_millis(self.config.io_timeout_ms);
+        let deadline = cancellation
+            .deadline()
+            .map_or(network_deadline, |parent| parent.min(network_deadline));
+        let (address, expected_certificate_sha256, pending_certificate_sha256, incarnation) = {
             let topology = self.topology.read();
             let node = topology.nodes.get(destination_node_id).ok_or_else(|| {
                 transport_error(format!("unknown cluster node {destination_node_id}"))
@@ -2766,6 +2879,7 @@ impl TcpClusterRelocationTransport {
                 node.address.clone(),
                 node.tls_certificate_sha256.clone(),
                 node.pending_tls_certificate_sha256.clone(),
+                node.incarnation,
             )
         };
         let request_id = self.next_request_id.fetch_add(1, Ordering::Relaxed);
@@ -2786,40 +2900,65 @@ impl TcpClusterRelocationTransport {
                 "plaintext cluster data RPC may connect only to loopback",
             ));
         }
+        cancellation.check()?;
+        let remaining = deadline
+            .checked_duration_since(Instant::now())
+            .filter(|remaining| !remaining.is_zero())
+            .ok_or_else(|| transport_error("cluster RPC deadline expired before connect"))?;
         let stream = TcpStream::connect_timeout(
             &address_resolved,
-            Duration::from_millis(self.config.connect_timeout_ms),
+            Duration::from_millis(self.config.connect_timeout_ms).min(remaining),
         )?;
         configure_stream(&stream, &self.config)?;
-        let response = if let Some(tls) = self.client_tls.as_ref() {
-            let server_name = server_name_from_address(&address)?;
-            let mut stream = client_tls_stream(Arc::clone(&tls.config), &server_name, stream)?;
-            let peer_certificate_sha256 = complete_client_tls_handshake(&mut stream)?;
-            verify_destination_certificate(
-                destination_node_id,
-                expected_certificate_sha256.as_deref(),
-                pending_certificate_sha256.as_deref(),
-                Some(&peer_certificate_sha256),
-            )?;
-            send_json_frame(&mut stream, &envelope, self.config.max_frame_bytes)?;
-            recv_json_frame::<ClusterDataResponseEnvelope>(
-                &mut stream,
-                self.config.max_frame_bytes,
-            )?
-        } else {
-            let mut stream = stream;
-            verify_destination_certificate(
-                destination_node_id,
-                expected_certificate_sha256.as_deref(),
-                pending_certificate_sha256.as_deref(),
-                None,
-            )?;
-            send_json_frame(&mut stream, &envelope, self.config.max_frame_bytes)?;
-            recv_json_frame::<ClusterDataResponseEnvelope>(
-                &mut stream,
-                self.config.max_frame_bytes,
-            )?
-        };
+        let exchange = (|| -> Result<_> {
+            let pair = if let Some(tls) = self.client_tls.as_ref() {
+                let server_name = server_name_from_address(&address)?;
+                let stream = client_tls_stream(Arc::clone(&tls.config), &server_name, stream)?;
+                let mut stream = StreamOwned::new(
+                    stream.conn,
+                    DeadlineTcpStream::new(stream.sock, cancellation.clone(), deadline),
+                );
+                let peer_certificate_sha256 = complete_client_tls_handshake(&mut stream)?;
+                verify_destination_certificate(
+                    destination_node_id,
+                    expected_certificate_sha256.as_deref(),
+                    pending_certificate_sha256.as_deref(),
+                    Some(&peer_certificate_sha256),
+                )?;
+                send_json_frame(&mut stream, &envelope, self.config.max_frame_bytes)?;
+                let response = recv_json_frame::<ClusterDataResponseEnvelope>(
+                    &mut stream,
+                    self.config.max_frame_bytes,
+                )?;
+                (response, Some(peer_certificate_sha256))
+            } else {
+                let mut stream = DeadlineTcpStream::new(stream, cancellation.clone(), deadline);
+                verify_destination_certificate(
+                    destination_node_id,
+                    expected_certificate_sha256.as_deref(),
+                    pending_certificate_sha256.as_deref(),
+                    None,
+                )?;
+                send_json_frame(&mut stream, &envelope, self.config.max_frame_bytes)?;
+                let response = recv_json_frame::<ClusterDataResponseEnvelope>(
+                    &mut stream,
+                    self.config.max_frame_bytes,
+                )?;
+                (response, None)
+            };
+            Ok(pair)
+        })();
+        // Preserve caller cancellation semantics and reject late decoded
+        // responses. Socket progress does not renew the whole RPC budget.
+        cancellation.check()?;
+        if Instant::now() >= deadline {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::TimedOut,
+                "cluster RPC deadline expired",
+            )
+            .into());
+        }
+        let (response, presented_certificate_sha256) = exchange?;
         if response.protocol_version != CLUSTER_DATA_PROTOCOL_VERSION
             || response.cluster_id != self.cluster_id
             || response.source_node_id != *destination_node_id
@@ -2829,12 +2968,25 @@ impl TcpClusterRelocationTransport {
                 "cluster data RPC response identity or protocol mismatch",
             ));
         }
-        response.response.map_err(|remote| {
-            transport_error(format!(
-                "cluster node {destination_node_id} rejected RPC {}: {}",
-                remote.code, remote.message
-            ))
-        })
+        response
+            .response
+            .map(|response| {
+                (
+                    response,
+                    MetadataReadParticipant::from_transport(
+                        destination_node_id.clone(),
+                        incarnation,
+                        presented_certificate_sha256,
+                        self.config.dev_localhost_plaintext,
+                    ),
+                )
+            })
+            .map_err(|remote| {
+                transport_error(format!(
+                    "cluster node {destination_node_id} rejected RPC {}: {}",
+                    remote.code, remote.message
+                ))
+            })
     }
 }
 
@@ -3195,7 +3347,8 @@ impl ClusterRelocationTransport for TcpClusterRelocationTransport {
         cancellation: &CancellationToken,
     ) -> Result<()> {
         cancellation.check()?;
-        let bundle = match self.call(
+        let bundle = match self.call_cancellable(
+            cancellation,
             &range.leader,
             ClusterDataRequest::ExportSchemaBundle {
                 range_id: range.id,
@@ -3206,7 +3359,8 @@ impl ClusterRelocationTransport for TcpClusterRelocationTransport {
             response => return Err(unexpected_response("cluster schema bundle", response)),
         };
         cancellation.check()?;
-        match self.call(
+        match self.call_cancellable(
+            cancellation,
             &relocation.target,
             ClusterDataRequest::InstallSchemaBundle {
                 relocation: relocation.clone(),
@@ -3218,7 +3372,8 @@ impl ClusterRelocationTransport for TcpClusterRelocationTransport {
             response => return Err(unexpected_response("schema install ack", response)),
         }
         cancellation.check()?;
-        match self.call(
+        match self.call_cancellable(
+            cancellation,
             &relocation.target,
             ClusterDataRequest::PrepareLearner {
                 relocation: relocation.clone(),
@@ -3238,7 +3393,8 @@ impl ClusterRelocationTransport for TcpClusterRelocationTransport {
     ) -> Result<SnapshotCopyProgress> {
         cancellation.check()?;
         let source = range.leader.clone();
-        let step = match self.call(
+        let step = match self.call_cancellable(
+            cancellation,
             &source,
             ClusterDataRequest::ExportSnapshot {
                 relocation: relocation.clone(),
@@ -3250,7 +3406,8 @@ impl ClusterRelocationTransport for TcpClusterRelocationTransport {
             response => return Err(unexpected_response("snapshot step", response)),
         };
         cancellation.check()?;
-        match self.call(
+        match self.call_cancellable(
+            cancellation,
             &relocation.target,
             ClusterDataRequest::ApplySnapshot {
                 relocation: relocation.clone(),
@@ -3271,7 +3428,8 @@ impl ClusterRelocationTransport for TcpClusterRelocationTransport {
         cancellation: &CancellationToken,
     ) -> Result<CatchUpProgress> {
         cancellation.check()?;
-        let durable = match self.call(
+        let durable = match self.call_cancellable(
+            cancellation,
             &relocation.target,
             ClusterDataRequest::LearnerWatermark {
                 relocation: relocation.clone(),
@@ -3281,7 +3439,8 @@ impl ClusterRelocationTransport for TcpClusterRelocationTransport {
             response => return Err(unexpected_response("learner watermark", response)),
         };
         cancellation.check()?;
-        let batch = match self.call(
+        let batch = match self.call_cancellable(
+            cancellation,
             &range.leader,
             ClusterDataRequest::ExportCatchUp {
                 relocation: Some(relocation.clone()),
@@ -3294,7 +3453,8 @@ impl ClusterRelocationTransport for TcpClusterRelocationTransport {
             response => return Err(unexpected_response("catch-up batch", response)),
         };
         cancellation.check()?;
-        match self.call(
+        match self.call_cancellable(
+            cancellation,
             &relocation.target,
             ClusterDataRequest::ApplyCatchUp {
                 relocation: relocation.clone(),
@@ -3317,7 +3477,8 @@ impl ClusterRelocationTransport for TcpClusterRelocationTransport {
     ) -> Result<CleanupProgress> {
         cancellation.check()?;
         let progress = if let Some(source) = relocation.source.as_ref() {
-            match self.call(
+            match self.call_cancellable(
+                cancellation,
                 source,
                 ClusterDataRequest::CleanupSource {
                     relocation: relocation.clone(),
@@ -3338,7 +3499,8 @@ impl ClusterRelocationTransport for TcpClusterRelocationTransport {
         };
         if progress.completed {
             cancellation.check()?;
-            match self.call(
+            match self.call_cancellable(
+                cancellation,
                 &relocation.target,
                 ClusterDataRequest::CompleteRelocation {
                     relocation: relocation.clone(),
@@ -3354,6 +3516,148 @@ impl ClusterRelocationTransport for TcpClusterRelocationTransport {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn metadata_read_authority_round_correlates_fresh_wire_and_preserves_legacy_append_shape() {
+        let root = tempfile::tempdir().unwrap();
+        let config = crate::DistributionConfig {
+            enabled: true,
+            cluster_id: ClusterId::new("metadata-read-wire").unwrap(),
+            node_id: ClusterNodeId::new("n1").unwrap(),
+            replication_factor: 1,
+            initial_ranges: 1,
+            transport: ClusterNetworkTransportConfig {
+                dev_localhost_plaintext: true,
+                io_timeout_ms: 500,
+                connect_timeout_ms: 100,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let mut distribution = DistributionStore::initialize_at(
+            root.path().join("topology"),
+            config.clone(),
+            false,
+            1,
+        )
+        .unwrap();
+        for name in ["n2", "n3"] {
+            distribution
+                .join_node(
+                    ClusterNode::new(
+                        ClusterNodeId::new(name).unwrap(),
+                        "127.0.0.1:1",
+                        1,
+                        1_000_000,
+                        1,
+                    )
+                    .unwrap(),
+                    &config.node_id,
+                    1,
+                )
+                .unwrap();
+        }
+        let initial = distribution.topology().clone();
+        let n2 = ClusterNodeId::new("n2").unwrap();
+        let mut leader = MetadataConsensusStore::open(
+            root.path().join("leader"),
+            config.cluster_id.clone(),
+            config.node_id.clone(),
+            initial.clone(),
+            false,
+        )
+        .unwrap();
+        let mut follower = MetadataConsensusStore::open(
+            root.path().join("follower"),
+            config.cluster_id.clone(),
+            n2.clone(),
+            initial.clone(),
+            false,
+        )
+        .unwrap();
+        leader.start_election().unwrap();
+        leader
+            .become_leader(&BTreeSet::from([config.node_id.clone(), n2.clone()]))
+            .unwrap();
+        let request = leader.append_request_from(1, 16).unwrap();
+        let legacy = serde_json::to_value(ClusterDataRequest::MetadataAppend {
+            request: request.clone(),
+        })
+        .unwrap();
+        assert_eq!(
+            legacy,
+            serde_json::json!({"MetadataAppend":{"request":request}})
+        );
+        assert!(!legacy.to_string().contains("context_id"));
+        let response = follower
+            .handle_append_request(leader.append_request_from(1, 16).unwrap())
+            .unwrap();
+        leader.record_append_response(&n2, &response).unwrap();
+        // Apply the committed anchor before binding port zero. No metadata
+        // publication is needed for the cache-only test address adjustment.
+        follower
+            .handle_append_request(leader.append_request_from(1, 16).unwrap())
+            .unwrap();
+        let follower = Arc::new(Mutex::new(follower));
+        let topology = Arc::new(RwLock::new(initial));
+        let database = Arc::new(RwLock::new(
+            crate::BicDb::open_with_config(
+                root.path().join("data"),
+                crate::DbConfig::default().with_fsync(false),
+            )
+            .unwrap(),
+        ));
+        let service = Arc::new(Mutex::new(
+            ClusterDataNodeService::open(
+                config.cluster_id.clone(),
+                n2.clone(),
+                root.path().join("service"),
+                database,
+                false,
+            )
+            .unwrap(),
+        ));
+        let listener = start_cluster_data_server(
+            "127.0.0.1:0",
+            config.transport.clone(),
+            Arc::clone(&topology),
+            service,
+            None,
+            Some(Arc::clone(&follower)),
+            None,
+        )
+        .unwrap();
+        topology.write().nodes.get_mut(&n2).unwrap().address = listener.local_addr().to_string();
+        let transport = TcpClusterRelocationTransport::new(
+            config.cluster_id.clone(),
+            config.node_id.clone(),
+            topology,
+            config.transport.clone(),
+        )
+        .unwrap();
+        let local = transport.local_metadata_read_participant();
+        let mut context = leader
+            .begin_read_authority(Uuid::now_v7(), Duration::from_secs(1), &local)
+            .unwrap();
+        let request = leader.read_authority_probe(&context, &n2, 1, 16).unwrap();
+        let ack = transport
+            .probe_metadata_read_authority(&n2, request)
+            .unwrap();
+        leader
+            .record_read_authority_ack(&mut context, &ack)
+            .unwrap();
+        let authority = leader.finish_read_authority(context).unwrap();
+        assert_eq!(authority.read_index(), 1);
+        assert!(authority.applied_index() >= authority.read_index());
+        let next = leader
+            .begin_read_authority(Uuid::now_v7(), Duration::from_secs(1), &local)
+            .unwrap();
+        assert!(
+            leader.finish_read_authority(next).is_err(),
+            "wire reply must not turn into a cached read quorum"
+        );
+        listener.join().unwrap();
+    }
 
     #[test]
     fn member_heartbeat_envelopes_do_not_wait_for_the_data_service_mutex() {

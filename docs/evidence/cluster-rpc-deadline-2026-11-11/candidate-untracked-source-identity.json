@@ -1,0 +1,8 @@
+{
+  "parent": "f1ae70f3b95e1a71dc8fa80dea329af50a852778",
+  "untracked_files_not_in_git_diff_patch": {
+    "crates/bicdb-core/src/distribution_io.rs": "d25ad1738112899ee7e265d6e6ff17c9bc8039a8b4dea7ef4a4997c742eabec3",
+    "crates/bicdb-core/tests/distribution_rpc_deadline.rs": "ca88a101ac6713cc0374ad76bf44a8456320846730d49c8e6a4d2e049df9de7e"
+  },
+  "scope": "supplements candidate.patch; source files remained unchanged during focused build"
+}

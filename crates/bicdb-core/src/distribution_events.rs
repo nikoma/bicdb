@@ -401,15 +401,36 @@ pub(crate) fn execute_cluster_event(
                 return Err(invalid("event write admission is not ready"));
             }
             let id = cluster_event_record_id(&namespace, &key)?;
-            // Immutable event retries read the latest locally applied record.
-            // A transaction's contiguous snapshot can lag a quorum-certified
-            // apply while another range is committing or being recovered.
-            // Retrying that already-applied event must not become a conflicting
-            // blind upsert merely because its earlier RPC lost the reply.
-            if let Some(previous) = db.get(CLUSTER_EVENTS_COLLECTION, &id)? {
+            // A matching local row is not an acknowledged cluster decision:
+            // an earlier call may have applied locally but failed certificate
+            // quorum. Re-admit an identical mutation before acknowledging a
+            // retry, including after process reopen. Reserve the exact current
+            // row/version instead of inventing a global snapshot floor; a
+            // contiguous snapshot may lag this range's already-applied row.
+            if db.get(CLUSTER_EVENTS_COLLECTION, &id)?.is_some() {
+                let mut tx = db.begin_transaction()?;
+                tx.set_snapshot_isolation(false, 0)?;
+                let reserved =
+                    tx.read_committed_update_record_nowait(CLUSTER_EVENTS_COLLECTION, &id)?;
+                let (previous, statement_snapshot) = match reserved {
+                    Some((Some(previous), sequence)) => (previous, sequence),
+                    Some((None, _)) => return Err(invalid("event changed while reserving retry")),
+                    None => (
+                        tx.get(CLUSTER_EVENTS_COLLECTION, &id)?
+                            .ok_or_else(|| invalid("event changed while reserving retry"))?
+                            .as_ref()
+                            .clone(),
+                        0,
+                    ),
+                };
                 if previous.metadata != value {
                     return Err(invalid("event key already exists with a different value"));
                 }
+                tx.write_upserts_with_statement_snapshots(
+                    CLUSTER_EVENTS_COLLECTION,
+                    [(previous, statement_snapshot)],
+                )?;
+                tx.commit()?;
                 return Ok(ClusterEventResponse::Appended { inserted: false });
             }
             let mut tx = db.begin_transaction()?;

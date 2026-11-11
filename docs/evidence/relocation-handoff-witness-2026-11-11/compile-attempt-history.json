@@ -1,0 +1,20 @@
+[
+  {
+    "attempt": 1,
+    "source_sha256": "3958cdda973696619be79acde2295c4561c7bc192670dd4ef3127bd674b13a7e",
+    "exit_code": 1,
+    "engine_recompiled": false,
+    "stderr": "error: invalid character '.' in crate name: `fixture.executed`\n\nerror: aborting due to 1 previous error\n\n",
+    "correction": "explicit rustc crate-name for dotted frozen filename",
+    "raw_private_directory": "/tmp/bicdb-range-handoff-evidence/attempt-1"
+  },
+  {
+    "attempt": 2,
+    "source_sha256": "3958cdda973696619be79acde2295c4561c7bc192670dd4ef3127bd674b13a7e",
+    "exit_code": 1,
+    "engine_recompiled": false,
+    "stderr": "error[E0507]: cannot move out of dereference of `parking_lot::lock_api::RwLockWriteGuard<'_, parking_lot::RawRwLock, bicdb_core::BicDb>`\n    --> /tmp/bicdb-range-handoff-evidence/attempt-2/fixture.executed.rs:713:13\n     |\n 713 |             d.write().close().unwrap();\n     |             ^^^^^^^^^ ------- value moved due to this method call\n     |             |\n     |             move occurs because value has type `bicdb_core::BicDb`, which does not implement the `Copy` trait\n     |\nnote: `bicdb_core::db::spatial_paged::<impl bicdb_core::BicDb>::close` takes ownership of the receiver `self`, which moves value\n    --> crates/bicdb-core/src/db/spatial_paged.rs:2103:18\n     |\n2103 |     pub fn close(self) -> Result<()> {\n     |                  ^^^^\n\nerror: aborting due to 1 previous error\n\nFor more information about this error, try `rustc --explain E0507`.\n",
+    "correction": "fixture shared-handle finish uses checkpoint_for_resume instead of consuming close",
+    "raw_private_directory": "/tmp/bicdb-range-handoff-evidence/attempt-2"
+  }
+]

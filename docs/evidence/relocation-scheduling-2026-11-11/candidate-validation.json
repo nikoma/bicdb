@@ -1,0 +1,58 @@
+[
+  {
+    "git_head": "925d5f3e7030d4211739b75813baa1e0e13d5df9",
+    "uncommitted_patch_sha256": "365eab4e0b43cd71b650e1172801755c70858b9cfd2d690cf1c6f912ebeeea9b",
+    "source_version": "1.0.463-beta",
+    "scope": "focused controller validation; dependency optimization retained, core opt-level=0/debug=0",
+    "physical_qualification": false,
+    "name": "fairness",
+    "command": [
+      "cargo",
+      "test",
+      "--release",
+      "--locked",
+      "-p",
+      "bicdb-core",
+      "--config",
+      "profile.release.package.bicdb-core.opt-level=0",
+      "--config",
+      "profile.release.package.bicdb-core.debug=0",
+      "--test",
+      "distribution_supervisor_fairness",
+      "--",
+      "--nocapture"
+    ],
+    "exit_code": 0,
+    "interrupted_reason": null,
+    "elapsed_seconds": 14.003384145908058,
+    "minimum_available_bytes": 26589319168
+  },
+  {
+    "git_head": "925d5f3e7030d4211739b75813baa1e0e13d5df9",
+    "uncommitted_patch_sha256": "365eab4e0b43cd71b650e1172801755c70858b9cfd2d690cf1c6f912ebeeea9b",
+    "source_version": "1.0.463-beta",
+    "scope": "focused controller validation; dependency optimization retained, core opt-level=0/debug=0",
+    "physical_qualification": false,
+    "name": "distribution-unit",
+    "command": [
+      "cargo",
+      "test",
+      "--release",
+      "--locked",
+      "-p",
+      "bicdb-core",
+      "--config",
+      "profile.release.package.bicdb-core.opt-level=0",
+      "--config",
+      "profile.release.package.bicdb-core.debug=0",
+      "--lib",
+      "distribution_",
+      "--",
+      "--nocapture"
+    ],
+    "exit_code": 0,
+    "interrupted_reason": null,
+    "elapsed_seconds": 61.01274856273085,
+    "minimum_available_bytes": 24216481792
+  }
+]

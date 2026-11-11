@@ -1,0 +1,47 @@
+{
+  "build.json": {
+    "original_sha256": "a4293404d4766a950504859b0258cbe3da9bd8c81860e90a32f72b7ec0390307",
+    "exported_sha256": "ce8cb9eb34a4b4086736b23d5e91cfb2646b5755007895b11689b54ca70e7109",
+    "sanitized": true
+  },
+  "characterization.json": {
+    "original_sha256": "41cc812c2ead091f1ff55b3a5c93f0f4ea3661abfea1e9b5ebe67d56152a807f",
+    "exported_sha256": "bde7695b2b1ee3624c35d777509cde0ea1e7b4370d932b9e17ea1d16c8990716",
+    "sanitized": true
+  },
+  "target-red.json": {
+    "original_sha256": "ea9f69369bb376d21803169be426ee9b7a0880a0606dc9345d3d79c9f8c4a5be",
+    "exported_sha256": "019bc3971d4872bac4b2a5e68002a41da77ed2996fad0ae0c97a0cef5d8e523e",
+    "sanitized": true
+  },
+  "build.stdout": {
+    "original_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "exported_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "sanitized": false
+  },
+  "build.stderr": {
+    "original_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "exported_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "sanitized": false
+  },
+  "characterization.stdout": {
+    "original_sha256": "87c2a69370fc74d8ae4c9c3e2a5a06faefd70668aed4d2f522113af8f294e63a",
+    "exported_sha256": "87c2a69370fc74d8ae4c9c3e2a5a06faefd70668aed4d2f522113af8f294e63a",
+    "sanitized": false
+  },
+  "characterization.stderr": {
+    "original_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "exported_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "sanitized": false
+  },
+  "target-red.stdout": {
+    "original_sha256": "45b9c0d7ede9a61d730546121bd57b8acaabc15519ba2bf2909b617ddcb4698d",
+    "exported_sha256": "45b9c0d7ede9a61d730546121bd57b8acaabc15519ba2bf2909b617ddcb4698d",
+    "sanitized": false
+  },
+  "target-red.stderr": {
+    "original_sha256": "f9be46d6701037aff331386e347e2a861463b2190ff0efb19b2f3d271198300f",
+    "exported_sha256": "d50d0f8fa0fdd209c8046a4e35f5df5d15cea381e52a9d2d0913a39567ce1974",
+    "sanitized": true
+  }
+}

@@ -1312,6 +1312,18 @@ pub struct RangeWriteCoordinator<Transport: RangeWriteTransport> {
     recovered_epochs: Mutex<BTreeMap<RangeId, u64>>,
     recovery_cursor: Mutex<Option<RangeId>>,
     require_schema_compatibility: bool,
+    local_incarnation: String,
+    pending_acknowledgements: Mutex<BTreeMap<String, RangeAcknowledgementEvidence>>,
+}
+
+// Bounded by active range admissions. This is a callback handoff, not durable
+// recovery evidence: durable certificate states remain in each replica log.
+#[derive(Debug)]
+struct RangeAcknowledgementEvidence {
+    range_id: RangeId,
+    transaction_id: u64,
+    certified: usize,
+    required_quorum: usize,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -1439,6 +1451,17 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
             ));
         }
         drop(current);
+        // Construction must not wait behind a caller-owned database write lock.
+        // The incarnation is immutable for this database handle; callbacks run
+        // under database guards and must not attempt to reacquire that lock.
+        let database = local_service.lock().database();
+        let local_incarnation = database
+            .try_read()
+            .ok_or_else(|| {
+                range_write_error("database is busy while constructing range authority")
+            })?
+            .incarnation_id()
+            .to_string();
         Ok(Self {
             cluster_id,
             local_node_id,
@@ -1451,6 +1474,8 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
             recovered_epochs: Mutex::new(BTreeMap::new()),
             recovery_cursor: Mutex::new(None),
             require_schema_compatibility: false,
+            local_incarnation,
+            pending_acknowledgements: Mutex::new(BTreeMap::new()),
         })
     }
 
@@ -1969,6 +1994,17 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
         })
     }
 
+    fn reserve_recovered_range(
+        &self,
+        range: &RangeDescriptor,
+    ) -> Result<RangeAdmissionReservation<'_, Transport>> {
+        let reservation = self.reserve_range(range.id)?;
+        // A writer may have observed readiness before an earlier callback
+        // invalidated it while this writer waited for the reservation.
+        self.require_recovered_epoch(range)?;
+        Ok(reservation)
+    }
+
     fn try_reserve_range(
         &self,
         range_id: RangeId,
@@ -2426,7 +2462,7 @@ impl<Transport: RangeWriteTransport> CommitAdmission for RangeWriteCoordinator<T
     fn admit(&self, intent: &CommitAdmissionIntent) -> Result<CommitAdmissionTicket> {
         let range = self.resolve_range(intent)?;
         self.require_recovered_epoch(&range)?;
-        let mut reservation = self.reserve_range(range.id)?;
+        let mut reservation = self.reserve_recovered_range(&range)?;
         let voters = range
             .replicas
             .iter()
@@ -2530,6 +2566,7 @@ impl<Transport: RangeWriteTransport> CommitAdmission for RangeWriteCoordinator<T
             .lock()
             .certify_range_write(&range, &self.local_node_id, &command)?;
         reservation.preserve_for_recovery(&command.command_id);
+        let mut certified_voters = 1usize;
         for voter in &committed_nodes {
             let certified = self
                 .transport
@@ -2543,39 +2580,87 @@ impl<Transport: RangeWriteTransport> CommitAdmission for RangeWriteCoordinator<T
                         )
                 });
             if certified.is_some() {
+                certified_voters += 1;
                 let _ = self.transport.apply_range_write(voter, &command);
             }
         }
+        // An irrevocable certificate already exists. Continue through the
+        // ordinary local WAL/receipt boundary even if certificate replies were
+        // lost; the callback must report uncertainty rather than a rollback.
+        self.pending_acknowledgements.lock().insert(
+            command.command_id.clone(),
+            RangeAcknowledgementEvidence {
+                range_id: command.range_id,
+                transaction_id: command.transaction_id,
+                certified: certified_voters,
+                required_quorum: quorum,
+            },
+        );
         Ok(CommitAdmissionTicket {
             authority: format!("range-quorum-v{RANGE_WRITE_PROTOCOL_VERSION}:{}", range.id),
             command_id: command.command_id,
         })
     }
 
-    fn local_applied(&self, ticket: &CommitAdmissionTicket, _commit_seq: u64) -> Result<()> {
+    fn local_applied(&self, ticket: &CommitAdmissionTicket, commit_seq: u64) -> Result<()> {
         if !ticket
             .authority
             .starts_with(&format!("range-quorum-v{RANGE_WRITE_PROTOCOL_VERSION}:"))
         {
             return Err(range_write_error("commit ticket authority mismatch"));
         }
-        self.local_service
+        let evidence = self
+            .pending_acknowledgements
             .lock()
-            .mark_range_write_applied(&ticket.command_id)?;
-        let mut active = self.active_ranges.lock();
-        let range_id = active
-            .iter()
-            .find_map(|(range_id, command_id)| {
-                (command_id == &ticket.command_id).then_some(*range_id)
-            })
+            .remove(&ticket.command_id)
             .ok_or_else(|| {
-                range_write_error(format!(
-                    "commit ticket {} is not the active range command",
-                    ticket.command_id
-                ))
+                range_write_error("commit ticket has no pending certificate evidence")
             })?;
-        active.remove(&range_id);
+        if ticket.authority
+            != format!(
+                "range-quorum-v{RANGE_WRITE_PROTOCOL_VERSION}:{}",
+                evidence.range_id
+            )
+        {
+            return Err(range_write_error("commit ticket range authority mismatch"));
+        }
+        let applied = self
+            .local_service
+            .lock()
+            .mark_range_write_applied(&ticket.command_id);
+        let uncertainty = match applied {
+            Err(error) => Some(format!("local range applied checkpoint failed: {error}")),
+            Ok(()) if evidence.certified < evidence.required_quorum => Some(format!(
+                "durable range certificate acknowledgments reached only {}/{} voters",
+                evidence.certified, evidence.required_quorum
+            )),
+            Ok(()) => None,
+        };
+        if uncertainty.is_some() {
+            // Local WAL is durable and the range decision is irrevocable. Do
+            // not claim rollback or let another command overtake recovery.
+            // Releasing this completed local callback's reservation lets the
+            // background supervisor repair the certified tail; the invalidated
+            // epoch refuses all later admissions until that repair succeeds.
+            self.recovered_epochs.lock().remove(&evidence.range_id);
+        }
+        let mut active = self.active_ranges.lock();
+        if active.get(&evidence.range_id) != Some(&ticket.command_id) {
+            return Err(range_write_error(
+                "commit ticket is not the active range command",
+            ));
+        }
+        active.remove(&evidence.range_id);
         self.active_range_changed.notify_all();
+        drop(active);
+        if let Some(detail) = uncertainty {
+            return Err(BicDbError::CommitOutcomeUnknown {
+                sequence: Some(commit_seq),
+                transaction_id: Some(evidence.transaction_id),
+                incarnation: self.local_incarnation.clone(),
+                detail: format!("range {} command {}: {detail}; local application is durable, cluster recovery/verification is still required before treating this as acknowledged", evidence.range_id, ticket.command_id),
+            });
+        }
         Ok(())
     }
 }
@@ -4688,5 +4773,47 @@ mod tests {
             .unwrap_err();
         assert!(error.to_string().contains("repaired only 1/2 voters"));
         assert!(leader_service.lock().range_backup_fences().is_empty());
+    }
+    #[test]
+    fn waiting_writer_rechecks_invalidated_readiness_after_reservation() {
+        let root = tempfile::tempdir().unwrap();
+        let topology = topology(1);
+        let cluster_id = topology.cluster_id.clone();
+        let range = topology.ranges.values().next().unwrap().clone();
+        let (database, service) = open_range_node(root.path(), &cluster_id, &range.leader);
+        let coordinator = Arc::new(
+            RangeWriteCoordinator::new(
+                cluster_id,
+                range.leader.clone(),
+                Arc::new(RwLock::new(topology)),
+                service,
+                Arc::new(TestTransport { available: false }),
+            )
+            .unwrap(),
+        );
+        coordinator.recover_local_leadership(1).unwrap();
+        let reservation = coordinator.reserve_range(range.id).unwrap();
+        let (sender, receiver) = std::sync::mpsc::channel();
+        let worker = Arc::clone(&coordinator);
+        let waiting_range = range.clone();
+        let waiter = std::thread::spawn(move || {
+            worker.require_recovered_epoch(&waiting_range).unwrap();
+            sender.send(()).unwrap();
+            worker
+                .reserve_recovered_range(&waiting_range)
+                .err()
+                .map(|error| error.to_string())
+        });
+        receiver.recv_timeout(Duration::from_secs(2)).unwrap();
+        coordinator.recovered_epochs.lock().remove(&range.id);
+        drop(reservation);
+        assert!(waiter
+            .join()
+            .unwrap()
+            .unwrap()
+            .contains("recovery is not complete"));
+        assert!(coordinator.active_ranges.lock().is_empty());
+        assert_eq!(coordinator.recover_local_leadership(1).unwrap(), 1);
+        drop(database);
     }
 }

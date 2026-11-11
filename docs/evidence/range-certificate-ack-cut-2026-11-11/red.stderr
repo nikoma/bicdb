@@ -1,0 +1,4 @@
+
+thread 'target_acknowledged_rf3_write_recovers_with_only_leader_unavailable' (2965388) panicked at <candidate-worktree>/scripts/experiments/range-certificate-cut.rs:187:5:
+P0 RF3 ACK recoverability invariant: a healthy surviving quorum must recover every prior ACK after only leader loss: Err(Cluster("range leadership recovery deferred for 1 range(s): r1: cluster error: ambiguous provisional decision for r1 index 1: 1 durable decisions, 1 unavailable or compacted voters"))
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace

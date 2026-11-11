@@ -1,0 +1,422 @@
+{
+  "format_version": 1,
+  "reviewed_at_utc": "2026-11-11T09:05:22.828723+00:00",
+  "scope": "independent source assessment and proposed integration tests",
+  "runtime_baseline": {
+    "version": "1.0.463-beta",
+    "revision": "d49a391b3c6157f90f29e9f2f5214143c60f9f4b"
+  },
+  "metadata_candidate_revision": "be82a20f708de36644fa7fdd33b5dbf002a7840b",
+  "design_candidate_revision": "445cb5928c330a20964fed0e1e291718ae33d599",
+  "candidate_merge_state_not_asserted": true,
+  "engine_modified": false,
+  "engine_tests_run_by_review": false,
+  "dynamic_defect_proven": false,
+  "azure_cause_proven": false,
+  "strong_get_implementation_claimed": false,
+  "physical_or_production_qualification_claimed": false,
+  "findings": [
+    {
+      "id": "F1",
+      "finding": "Missing authenticated authority-acquisition boundary when range leader differs from metadata leader.",
+      "existing": [
+        {
+          "revision": "be82a20f708de36644fa7fdd33b5dbf002a7840b",
+          "path": "crates/bicdb-core/src/distribution_consensus.rs",
+          "symbols": [
+            "MetadataConsensusStore::begin_read_authority",
+            "MetadataConsensusStore::read_authority_probe",
+            "MetadataConsensusStore::record_read_authority_ack",
+            "MetadataConsensusStore::finish_read_authority",
+            "MetadataReadAuthority"
+          ]
+        },
+        {
+          "revision": "be82a20f708de36644fa7fdd33b5dbf002a7840b",
+          "path": "crates/bicdb-core/src/distribution_transport.rs",
+          "symbols": [
+            "ClusterDataRequest::MetadataReadProbe",
+            "TcpClusterRelocationTransport::probe_metadata_read_authority"
+          ]
+        }
+      ],
+      "proposal": "Separate MetadataAuthorityProvider and range-leader-to-metadata-leader RPC with fresh request/context identity and authenticated opaque observation; or explicit execution relay. Bare serialized DTO is not a permit."
+    },
+    {
+      "id": "F2",
+      "finding": "Legacy event dispatch holds outer database read guard; listener starts before coordinator construction.",
+      "existing": [
+        {
+          "revision": "d49a391b3c6157f90f29e9f2f5214143c60f9f4b",
+          "path": "crates/bicdb-core/src/distribution_transport.rs",
+          "symbols": [
+            "dispatch_cluster_data_request"
+          ]
+        },
+        {
+          "revision": "d49a391b3c6157f90f29e9f2f5214143c60f9f4b",
+          "path": "crates/bicdb-pgwire/src/checkpoint_driver.rs",
+          "symbols": [
+            "RangeWriteCoordinator::new_schema_fenced",
+            "install_commit_admission"
+          ]
+        },
+        {
+          "revision": "d49a391b3c6157f90f29e9f2f5214143c60f9f4b",
+          "path": "crates/bicdb-core/src/db.rs",
+          "symbols": [
+            "BicDb::commit_admission_ready"
+          ]
+        }
+      ],
+      "proposal": "Separate StrongGet dispatch; release database/service locks before network; reorder construction or use an initially-empty installed coordinator handle. Admission object presence is not freshness."
+    },
+    {
+      "id": "F3",
+      "finding": "Reservation is private/fixed30seconds; recovery entrypoint reserves again and cached leadership recovery skips completed epochs.",
+      "existing": [
+        {
+          "revision": "d49a391b3c6157f90f29e9f2f5214143c60f9f4b",
+          "path": "crates/bicdb-core/src/distribution_range_consensus.rs",
+          "symbols": [
+            "RANGE_ADMISSION_WAIT",
+            "RangeWriteCoordinator::reserve_range",
+            "RangeWriteCoordinator::recover_one_range_leadership",
+            "RangeWriteCoordinator::recover_local_leadership",
+            "recovered_epochs"
+          ]
+        }
+      ],
+      "proposal": "One request-deadline-aware reservation and fresh recovery inner method that consumes/borrows that guard; no nested reserve or cached recovered bit as authority."
+    },
+    {
+      "id": "F4",
+      "finding": "Prefix/tail recovery returns unit and counters rather than a request-scoped certified/applied floor.",
+      "existing": [
+        {
+          "revision": "d49a391b3c6157f90f29e9f2f5214143c60f9f4b",
+          "path": "crates/bicdb-core/src/distribution_range_consensus.rs",
+          "symbols": [
+            "RangeWriteCoordinator::recover_leader_prefix",
+            "RangeWriteCoordinator::recover_leader_tail",
+            "RangeWriteProgress"
+          ]
+        },
+        {
+          "revision": "d49a391b3c6157f90f29e9f2f5214143c60f9f4b",
+          "path": "crates/bicdb-core/src/distribution_data.rs",
+          "symbols": [
+            "ClusterDataNodeService::apply_range_write_leader_recovery",
+            "ClusterDataNodeService::resolve_range_write_leader_tail"
+          ]
+        }
+      ],
+      "proposal": "Typed CertifiedAppliedRangeFloor preserving certificate/abort/configuration evidence. Keep ambiguity/divergence/snapshot refusal; prove ACK/read quorum and range reconfiguration intersection independently of metadata quorum."
+    },
+    {
+      "id": "F5",
+      "finding": "Learner source DB commit sequences are not range indexes; learner state is removed at completion; no installed durable range-image certified base is exposed.",
+      "existing": [
+        {
+          "revision": "d49a391b3c6157f90f29e9f2f5214143c60f9f4b",
+          "path": "crates/bicdb-core/src/distribution_data.rs",
+          "symbols": [
+            "RangeLearnerApplyState",
+            "RangeLearnerStore::finish_snapshot",
+            "RangeLearnerStore::apply_commit_frames_with",
+            "RangeLearnerStore::complete_relocation",
+            "ClusterDataNodeService::apply_snapshot_step",
+            "ClusterDataNodeService::apply_range_write_suffix"
+          ]
+        }
+      ],
+      "proposal": "Persist image/base identity and covered certified/resolved range prefix beyond learner cleanup; capture at verified fenced cut and prove crash-safe installation/extension. Do not equate database seq with range index or add only a discarded learner field."
+    },
+    {
+      "id": "F6",
+      "finding": "Coordinator active-range reservation is not shared by all physical image mutation paths.",
+      "existing": [
+        {
+          "revision": "d49a391b3c6157f90f29e9f2f5214143c60f9f4b",
+          "path": "crates/bicdb-core/src/distribution_range_consensus.rs",
+          "symbols": [
+            "active_ranges"
+          ]
+        },
+        {
+          "revision": "d49a391b3c6157f90f29e9f2f5214143c60f9f4b",
+          "path": "crates/bicdb-core/src/distribution_data.rs",
+          "symbols": [
+            "ClusterDataNodeService::apply_snapshot_step",
+            "ClusterDataNodeService::apply_catch_up",
+            "ClusterDataNodeService::apply_range_digest_repair_batch",
+            "ClusterDataNodeService::cleanup_source_step"
+          ]
+        }
+      ],
+      "proposal": "Shared per-range image gate/generation includes relocation, repair, cleanup and restore; materialize result from snapshot proven to cover floor, keep owned value/stamp, release outer DB locks before final quorum."
+    },
+    {
+      "id": "F7",
+      "finding": "Current legacy local read and schema checks do not establish complete final strong-read semantic permit.",
+      "existing": [
+        {
+          "revision": "d49a391b3c6157f90f29e9f2f5214143c60f9f4b",
+          "path": "crates/bicdb-core/src/distribution_events.rs",
+          "symbols": [
+            "execute_cluster_event"
+          ]
+        },
+        {
+          "revision": "d49a391b3c6157f90f29e9f2f5214143c60f9f4b",
+          "path": "crates/bicdb-core/src/distribution_data.rs",
+          "symbols": [
+            "ClusterDataNodeService::schema_compatibility_allows"
+          ]
+        },
+        {
+          "revision": "d49a391b3c6157f90f29e9f2f5214143c60f9f4b",
+          "path": "crates/bicdb-core/src/db.rs",
+          "symbols": [
+            "BicDb::check_recovery_state"
+          ]
+        },
+        {
+          "revision": "d49a391b3c6157f90f29e9f2f5214143c60f9f4b",
+          "path": "crates/bicdb-core/src/distribution.rs",
+          "symbols": [
+            "RangeDescriptor",
+            "ClusterNode"
+          ]
+        }
+      ],
+      "proposal": "Revalidate range/token interval, epoch, leader/voters/identities/incarnation, restore, namespace, active/pending/live schema, reader capability, image identity and health. Ignore heartbeat-only generation changes; preserve old command epochs."
+    },
+    {
+      "id": "F8",
+      "finding": "Sequential recovery RPC/count bounds and metadata context expiration are not complete end-to-end I/O deadlines.",
+      "existing": [
+        {
+          "revision": "d49a391b3c6157f90f29e9f2f5214143c60f9f4b",
+          "path": "crates/bicdb-core/src/distribution_range_consensus.rs",
+          "symbols": [
+            "RangeWriteCoordinator::recover_leader_prefix",
+            "RangeWriteCoordinator::recover_leader_tail"
+          ]
+        },
+        {
+          "revision": "be82a20f708de36644fa7fdd33b5dbf002a7840b",
+          "path": "crates/bicdb-core/src/distribution_consensus.rs",
+          "symbols": [
+            "MetadataReadContext"
+          ]
+        }
+      ],
+      "proposal": "Propagate remaining budget and bounded parallel quorum work, completing on sufficient safe evidence instead of all-voter completion. Separate TCP deadline candidate is outside this review."
+    }
+  ],
+  "healthy_positive_tests": [
+    {
+      "id": "P1",
+      "required_behavior": "Different metadata/range leaders return exact prior-ACK value and genuine absence within finite budget.",
+      "status": "proposed_not_executed_by_review"
+    },
+    {
+      "id": "P2",
+      "required_behavior": "One voter unavailable but required quorums healthy: successful read without all-node wait.",
+      "status": "proposed_not_executed_by_review"
+    },
+    {
+      "id": "P3",
+      "required_behavior": "Authority epochE2 with retained certified command epochE1: successful exact read after valid recovery.",
+      "status": "proposed_not_executed_by_review"
+    },
+    {
+      "id": "P4",
+      "required_behavior": "Promoted/relocated image beyond retained history: certified base plus suffix works, including restart.",
+      "status": "proposed_not_executed_by_review"
+    },
+    {
+      "id": "P5",
+      "required_behavior": "Aborts advance resolved floor; provisional values remain invisible.",
+      "status": "proposed_not_executed_by_review"
+    },
+    {
+      "id": "P6",
+      "required_behavior": "Heartbeat-only global generations change continuously; stable semantic range still completes reads.",
+      "status": "proposed_not_executed_by_review"
+    },
+    {
+      "id": "P7",
+      "required_behavior": "Concurrent writes yield in-interval state; exact immutable prior-ACK payload remains visible.",
+      "status": "proposed_not_executed_by_review"
+    },
+    {
+      "id": "P8",
+      "required_behavior": "Metadata leadership change with stable range semantics eventually succeeds through bounded retry.",
+      "status": "proposed_not_executed_by_review"
+    }
+  ],
+  "negative_tests": [
+    {
+      "id": "N1",
+      "required_behavior": "Isolated/minority former authority with cached recovered epoch cannot return stale success.",
+      "status": "proposed_not_executed_by_review"
+    },
+    {
+      "id": "N2",
+      "required_behavior": "Uncommitted current-term metadata anchor cannot grant authority.",
+      "status": "proposed_not_executed_by_review"
+    },
+    {
+      "id": "N3",
+      "required_behavior": "Only one side of joint metadata quorum cannot grant authority.",
+      "status": "proposed_not_executed_by_review"
+    },
+    {
+      "id": "N4",
+      "required_behavior": "Wrong/replayed request context, certificate or incarnation rejected.",
+      "status": "proposed_not_executed_by_review"
+    },
+    {
+      "id": "N5",
+      "required_behavior": "Ambiguous or divergent unresolved range tail refuses successful value/absence.",
+      "status": "proposed_not_executed_by_review"
+    },
+    {
+      "id": "N6",
+      "required_behavior": "Partial snapshot or mismatched installed image/base refuses read.",
+      "status": "proposed_not_executed_by_review"
+    },
+    {
+      "id": "N7",
+      "required_behavior": "Range catalog ahead of actual visible rows cannot supply applied-image proof.",
+      "status": "proposed_not_executed_by_review"
+    },
+    {
+      "id": "N8",
+      "required_behavior": "Schema, restore, incarnation or reader capability changes before return invalidate permit.",
+      "status": "proposed_not_executed_by_review"
+    },
+    {
+      "id": "N9",
+      "required_behavior": "Missing old/new range decision quorum intersection blocks guarantee; metadata joint quorum alone insufficient.",
+      "status": "proposed_not_executed_by_review"
+    },
+    {
+      "id": "N10",
+      "required_behavior": "Reservation contention/deadline exhaustion returns bounded unavailable, releases guard and avoids nested-reservation deadlock.",
+      "status": "proposed_not_executed_by_review"
+    },
+    {
+      "id": "N11",
+      "required_behavior": "Unsupported explicit strong operation fails without legacy downgrade.",
+      "status": "proposed_not_executed_by_review"
+    },
+    {
+      "id": "N12",
+      "required_behavior": "Compacted/missing evidence without certified base returns snapshot-required; absence not fabricated.",
+      "status": "proposed_not_executed_by_review"
+    }
+  ],
+  "existing_component_tests": [
+    {
+      "revision": "d49a391b3c6157f90f29e9f2f5214143c60f9f4b",
+      "path": "crates/bicdb-core/src/distribution_range_consensus.rs",
+      "symbol": "new_leader_recovers_a_quorum_resolved_prefix_before_assigning_an_index",
+      "status": "source_present_not_rerun_by_review",
+      "strong_get_or_qualification_proof": false
+    },
+    {
+      "revision": "d49a391b3c6157f90f29e9f2f5214143c60f9f4b",
+      "path": "crates/bicdb-core/src/distribution_range_consensus.rs",
+      "symbol": "new_leader_adopts_and_applies_a_quorum_provisional_tail",
+      "status": "source_present_not_rerun_by_review",
+      "strong_get_or_qualification_proof": false
+    },
+    {
+      "revision": "d49a391b3c6157f90f29e9f2f5214143c60f9f4b",
+      "path": "crates/bicdb-core/src/distribution_range_consensus.rs",
+      "symbol": "new_leader_fails_closed_on_an_ambiguous_provisional_tail",
+      "status": "source_present_not_rerun_by_review",
+      "strong_get_or_qualification_proof": false
+    },
+    {
+      "revision": "d49a391b3c6157f90f29e9f2f5214143c60f9f4b",
+      "path": "crates/bicdb-core/src/distribution_range_consensus.rs",
+      "symbol": "new_leader_rejects_divergent_quorum_resolved_histories",
+      "status": "source_present_not_rerun_by_review",
+      "strong_get_or_qualification_proof": false
+    },
+    {
+      "revision": "d49a391b3c6157f90f29e9f2f5214143c60f9f4b",
+      "path": "crates/bicdb-core/src/distribution_data.rs",
+      "symbol": "range_snapshot_completion_never_labels_a_commit_still_being_written",
+      "status": "source_present_not_rerun_by_review",
+      "strong_get_or_qualification_proof": false
+    }
+  ],
+  "source_file_identities": [
+    {
+      "revision": "445cb5928c330a20964fed0e1e291718ae33d599",
+      "path": "docs/explicit-strong-range-read-design.md",
+      "sha256": "990c05751da74b15882d3852f7ac0010a0d90178b576632322ecd1d65909f7d5"
+    },
+    {
+      "revision": "be82a20f708de36644fa7fdd33b5dbf002a7840b",
+      "path": "crates/bicdb-core/src/distribution_consensus.rs",
+      "sha256": "c505f8856fdbc40da71c9b8ebbde65e769cb009a0a4505cc1799552bb92de0cf"
+    },
+    {
+      "revision": "be82a20f708de36644fa7fdd33b5dbf002a7840b",
+      "path": "crates/bicdb-core/src/distribution_transport.rs",
+      "sha256": "46bce0e59a80d8991574c1dee16c6ca24584490553c5b06975b92f35053b5f35"
+    },
+    {
+      "revision": "d49a391b3c6157f90f29e9f2f5214143c60f9f4b",
+      "path": "crates/bicdb-core/src/db.rs",
+      "sha256": "5b84bc3c271cca26dabcc50a09118a04a55bb92c1b2cb312da9606ed70c160be"
+    },
+    {
+      "revision": "d49a391b3c6157f90f29e9f2f5214143c60f9f4b",
+      "path": "crates/bicdb-core/src/distribution.rs",
+      "sha256": "a3d5c523e4fc3dccc54afab909b885a30af2b743fbf8864b820202908817a33d"
+    },
+    {
+      "revision": "d49a391b3c6157f90f29e9f2f5214143c60f9f4b",
+      "path": "crates/bicdb-core/src/distribution_data.rs",
+      "sha256": "d96bbcfcbae81fc4603cbdf13838593c6619e22b1b9aae562c1929864bcd0762"
+    },
+    {
+      "revision": "d49a391b3c6157f90f29e9f2f5214143c60f9f4b",
+      "path": "crates/bicdb-core/src/distribution_events.rs",
+      "sha256": "4e7322c6cedec5452f328ff0522a49bbb0edd909e2d3acad7cdb5ab55b8adb89"
+    },
+    {
+      "revision": "d49a391b3c6157f90f29e9f2f5214143c60f9f4b",
+      "path": "crates/bicdb-core/src/distribution_range_consensus.rs",
+      "sha256": "9a64bcc12129ef439ce112cc5c77241a6f8ff6d26a462f21d7f7242814c01a5a"
+    },
+    {
+      "revision": "d49a391b3c6157f90f29e9f2f5214143c60f9f4b",
+      "path": "crates/bicdb-core/src/distribution_transport.rs",
+      "sha256": "aa61490cddd464588f0ffbfe7f10d93de578471b9bda1617e86f421274a09092"
+    },
+    {
+      "revision": "d49a391b3c6157f90f29e9f2f5214143c60f9f4b",
+      "path": "crates/bicdb-pgwire/src/checkpoint_driver.rs",
+      "sha256": "4864b801ad002fc3af7f4bb72f6b6fb94a6449c18450b976fc65f628f1bfe0e7"
+    }
+  ],
+  "forbidden_substitutions": [
+    "local database commit sequence == range consensus index",
+    "retained command epoch == current authority epoch",
+    "cached recovered_epochs == fresh quorum proof",
+    "commit_admission_ready == strong reader ready",
+    "heartbeat topology generation == semantic range identity",
+    "serialized response == authenticated authority permit",
+    "learner snapshot bytes/source watermark == certified physical image floor",
+    "unavailable/timeout == absent value",
+    "implemented API or proposed matrix == qualification"
+  ]
+}

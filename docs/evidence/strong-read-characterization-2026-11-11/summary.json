@@ -1,0 +1,30 @@
+{
+  "runtime_source": "d49a391b3c6157f90f29e9f2f5214143c60f9f4b",
+  "runtime_version": "1.0.463-beta",
+  "core_rlib_sha256": "dc714b001a0fe8758473c2c4ef80158474d7426e16630926edb65b6cc35f0356",
+  "source_fixture_sha256": "8d1fd803c69cde93070cc2ca73023602f01910c17701e18041a2df63f2217d77",
+  "binary_sha256": "95b833ed1268f3d4cd4c60703dcc4140948f0aec51c8ac48afd209b3e8a53b2f",
+  "compiler_version_queried_after_run": "rustc 1.96.0 (ac68faa20 2026-05-25)",
+  "characterization_test_count": 2,
+  "characterization_exit_code": 0,
+  "explicit_strong_healthy_positive_test_count": 1,
+  "explicit_strong_healthy_positive_exit_code": 101,
+  "explicit_strong_get_implemented": false,
+  "engine_recompiled": false,
+  "loopback_networking": true,
+  "tls": false,
+  "fsync": false,
+  "paged_buffer_pool_bytes_per_node": 8388608,
+  "in_process_replica_transport": true,
+  "scripted_topology_publication": true,
+  "metadata_election_exercised": false,
+  "physical_ha_qualification": false,
+  "production_qualified": false,
+  "original_Azure_cause_proven": false,
+  "primary_source_read": {
+    "url": "https://raw.githubusercontent.com/ongardie/dissertation/master/online.pdf",
+    "pdf_sha256": "b193279e2872a1b9740d364d42a7ec7b00a95dd6f63db085a9ef86c0e3a95b41",
+    "section": "6.4, printed pages72-73/PDF pages89-90",
+    "redistributed_pdf": false
+  }
+}

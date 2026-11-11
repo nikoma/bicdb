@@ -1,0 +1,28 @@
+{
+  "git_head": "f1ae70f3b95e1a71dc8fa80dea329af50a852778",
+  "uncommitted_patch_sha256": "907530cb707538416b03af1b384e1ea2ea7ae70a0d0dc86f75ce6160aa2f5c7f",
+  "source_version": "1.0.463-beta",
+  "scope": "focused controller validation; dependency optimization retained, core opt-level=0/debug=0",
+  "physical_qualification": false,
+  "name": "candidate-rpc",
+  "command": [
+    "cargo",
+    "test",
+    "--release",
+    "--locked",
+    "-p",
+    "bicdb-core",
+    "--config",
+    "profile.release.package.bicdb-core.opt-level=0",
+    "--config",
+    "profile.release.package.bicdb-core.debug=0",
+    "--test",
+    "distribution_rpc_deadline",
+    "--",
+    "--nocapture"
+  ],
+  "exit_code": 0,
+  "interrupted_reason": null,
+  "elapsed_seconds": 40.008078875020146,
+  "minimum_available_bytes": 24281452544
+}

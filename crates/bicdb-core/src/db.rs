@@ -34298,3 +34298,7 @@ mod analyze_sampling_tests {
         assert_eq!(sorted.len(), 100, "no duplicates");
     }
 }
+
+#[cfg(test)]
+#[path = "db/distribution_event_retry_tests.rs"]
+mod distribution_event_retry_tests;

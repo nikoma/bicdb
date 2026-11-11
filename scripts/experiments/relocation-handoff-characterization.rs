@@ -705,12 +705,12 @@ impl Fixture {
         .unwrap();
         self.meta.commit(&mut self.store, staged, recipients);
     }
-    fn close(&self) {
+    fn checkpoint_and_clear_admission(&self) {
         for d in &self.db {
             d.read().clear_commit_admission();
         }
         for d in &self.db {
-            d.write().close().unwrap();
+            d.read().checkpoint_for_resume().unwrap();
         }
     }
 }
@@ -856,7 +856,7 @@ fn run_case(root: PathBuf, recover_before_cleanup: bool) -> Value {
         serde_json::to_vec_pretty(&report).unwrap(),
     )
     .unwrap();
-    f.close();
+    f.checkpoint_and_clear_admission();
     drop(old);
     drop(next);
     report

@@ -1,0 +1,96 @@
+{
+  "actual_fresh_mq_factual_candidate_tested": true,
+  "admitted_read_quorum_tested": false,
+  "authenticated_read_probe_rpc_tested": true,
+  "candidate_is_unadmitted": true,
+  "ci_tested": false,
+  "deployed": false,
+  "external_ack_ledger_written": false,
+  "final_fresh_metadata_barrier_tested": false,
+  "hard_os_io_deadline_qualified": false,
+  "host_new_birth_continuation_qualification": false,
+  "legacy_get_changed": false,
+  "lower_peer_history_comparison_dynamic_tested": false,
+  "passing_tests": 15,
+  "patch_sha256": "8131894f39bddd0e2d17ebc193746cd373dc3a2e5886618179a0de68adf97612",
+  "pending_test_only_followup": {
+    "compiled": false,
+    "patch_sha256": "6791691048b480c7bf30cfbee3d8bc6de8224ccfd3f1d4139bc64957cfcd3750",
+    "source_revision": "8ce4938c0ba44135f4d62745bdd414aa13e3a6c5",
+    "tested": false
+  },
+  "prior_source": {
+    "patch_sha256": "7feff50e83a6c7206c4c961f86c498110e9d6884cb00bc471fd522f5fb8e6178",
+    "source_revision": "453b86822bdc1a216e57b03d251dd42b573ad746"
+  },
+  "private_custody": {
+    "bytes": 824217,
+    "files": 47,
+    "manifest_sha256": "9fb6d0825bf61bef1ed5835b65df114afdb57f0760799af2e016d952691905f7",
+    "raw_database_keys_private": true,
+    "source_databases_reopened": false
+  },
+  "production_qualified": false,
+  "public_engine_merge_tested": false,
+  "public_patch_base": "b0e2498842be7b01e355bb8da1cc249ff16be056",
+  "row_snapshot_barrier_tested": false,
+  "runs": [
+    {
+      "exit_code": 0,
+      "name": "read-rpc-v1",
+      "passed_test_ids": [
+        "db::range_image_native::rf3_fixture::native_historical_tls::native_read_rpc_tests::native_read_rpc_actual_local_io_context_outlives_canceled_collector",
+        "db::range_image_native::rf3_fixture::native_historical_tls::native_read_rpc_tests::native_read_rpc_actual_tls_fresh_metadata_unadmitted_candidate",
+        "db::range_image_native::rf3_fixture::native_historical_tls::native_read_rpc_tests::native_read_rpc_actual_tls_majority_returns_while_minority_worker_retains_context",
+        "db::range_image_native::rf3_fixture::native_historical_tls::native_read_rpc_tests::native_read_rpc_actual_tls_missing_quorum_never_returns_candidate",
+        "db::range_image_native::rf3_fixture::native_historical_tls::native_read_rpc_tests::native_read_rpc_actual_tls_rejects_old_challenge_actor_incarnation_and_pins"
+      ],
+      "passing_tests": 5,
+      "source_revision": "453b86822bdc1a216e57b03d251dd42b573ad746"
+    },
+    {
+      "exit_code": 0,
+      "name": "read-rpc-v2",
+      "passed_test_ids": [
+        "db::range_image_native::rf3_fixture::native_historical_tls::native_read_observation_tests::native_read_observation_recovered_serving_requires_actual_activated_open",
+        "db::range_image_native::rf3_fixture::native_historical_tls::native_read_observation_tests::native_read_observation_uses_current_r2_not_activation_anchor_and_refuses_cq_only_peer",
+        "db::range_image_native::rf3_fixture::native_historical_tls::native_read_rpc_tests::native_read_rpc_actual_local_io_context_outlives_canceled_collector",
+        "db::range_image_native::rf3_fixture::native_historical_tls::native_read_rpc_tests::native_read_rpc_actual_tls_expired_healthy_attempt_retries_without_renewing_parent",
+        "db::range_image_native::rf3_fixture::native_historical_tls::native_read_rpc_tests::native_read_rpc_actual_tls_fresh_metadata_unadmitted_candidate",
+        "db::range_image_native::rf3_fixture::native_historical_tls::native_read_rpc_tests::native_read_rpc_actual_tls_majority_returns_while_minority_worker_retains_context",
+        "db::range_image_native::rf3_fixture::native_historical_tls::native_read_rpc_tests::native_read_rpc_actual_tls_missing_quorum_never_returns_candidate",
+        "distribution_native_read::tests::native_read_observation_actual_cold_open_invalidates_old_lifetime",
+        "distribution_native_read::tests::native_read_observation_actual_genesis_and_r1_use_target_local_data_b",
+        "distribution_native_read::tests::native_read_observation_failed_mutation_and_health_invalidate_owned_observation",
+        "db::range_image_native::rf3_fixture::native_historical_tls::native_read_rpc_tests::native_read_rpc_actual_tls_rejects_old_challenge_actor_incarnation_and_pins",
+        "distribution_native_read::tests::native_read_observation_rejects_actual_raw_prepare_and_cq_ahead_of_native",
+        "distribution_range_mutation::native_read_stamp_tests::native_read_stamp_invalidates_database_freeze_and_controlled_paths",
+        "distribution_range_mutation::native_read_stamp_tests::native_read_stamp_never_allocates_and_failed_writer_cannot_aba",
+        "distribution_native_read::tests::native_read_observation_scope_cancellation_and_store_replacement_are_not_permissions"
+      ],
+      "passing_tests": 15,
+      "source_revision": "daa77b42cd8f71a212de06596a249bfbce4d36e9"
+    }
+  ],
+  "second_actual_rpc_counter_assertion_tested": false,
+  "source_revision": "daa77b42cd8f71a212de06596a249bfbce4d36e9",
+  "source_version": "1.0.471-beta",
+  "strong_get_tested": false,
+  "test_executables": [
+    {
+      "bytes": 136206384,
+      "mutable_shared_test_executable": true,
+      "path": "/tmp/bicdb-azure-artifact-target/release/deps/bicdb_core-b0702f49611c59ed",
+      "sha256": "7eca5958d8fc191597f3c8f0d04b48ea3e869bde75dbca70901c779d6ac98425",
+      "source_revision": "453b86822bdc1a216e57b03d251dd42b573ad746"
+    },
+    {
+      "bytes": 136252624,
+      "mutable_shared_test_executable": true,
+      "path": "/tmp/bicdb-azure-artifact-target/release/deps/bicdb_core-b0702f49611c59ed",
+      "sha256": "f7cd6056cc638b60b15e526cd584028412e213457146ee83d2d08d1e014e36cf",
+      "source_revision": "daa77b42"
+    }
+  ],
+  "total_executions": 20
+}

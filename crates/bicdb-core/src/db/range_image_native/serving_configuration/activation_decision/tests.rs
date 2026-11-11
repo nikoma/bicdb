@@ -383,6 +383,11 @@ fn native_activation_decision_strict_cold_open_reissues_only_actual_native_recor
         &spec,
     )
     .unwrap();
+    let fingerprint = reopened.schema_compatibility_fingerprint().unwrap();
+    assert_eq!(
+        fingerprint.sha256,
+        topology.nodes[&spec.node_id].labels[crate::distribution::SCHEMA_COMPATIBILITY_NODE_LABEL]
+    );
     assert!(
         receipt.require_current(&reopened).is_err(),
         "old-open token must not survive reopening"

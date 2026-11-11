@@ -1,0 +1,11 @@
+{
+  "database_engine_opened_for_packaging": false,
+  "external_ack_ledgers": "NOT_RETAINED",
+  "individual_rpc_reports": "NOT_RETAINED",
+  "other_task_roots_opened": false,
+  "public_credentials_included": false,
+  "raw_build_and_test_receipts_retained": true,
+  "restricted_database_custody_created": false,
+  "source_assessment": "Both successful fixtures own tempfile::TempDir; no keep()/into_path()/explicit root export or ledger export is called by these tests. Successful destructors remove those test roots. No original successful root pathname was retained in the raw output.",
+  "successful_stopped_database_roots": "NOT_RETAINED"
+}

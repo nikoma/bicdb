@@ -7,16 +7,20 @@ use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
 use crate::db::{
-    NativeInstalledRangeImageBase, NativeRecoveryAdmission, NativeTargetImageVerificationProgress,
-    NativeTargetImageVerifier, RangeImageDbBindings,
+    NativeHistoryStage, NativeHistoryStageProgress, NativeHistoryTargetContext,
+    NativeInstalledRangeImageBase, NativeRangeInstallSafety, NativeRecoveryAdmission,
+    NativeTargetImageVerificationProgress, NativeTargetImageVerifier, RangeImageDbBindings,
+    StagedNativeHistoryProof,
 };
 use crate::distribution::{distribution_key_token, RangeSnapshotOptions};
 use crate::distribution_range_consensus::{
-    ImageInstallPurpose, NativeImageInstallRole, RangeWriteStore, TargetImageInstallFence,
+    ImageInstallPurpose, NativeImageInstallRole, RangeWriteStore,
+    TargetImageCatalogHistoryObligations, TargetImageInstallFence,
 };
 use crate::distribution_range_image::{
     bounded_json, canonical_range_image_catalog, content_hasher, CompletedNativeRangeImageSource,
-    RangeImageCursorV1, RangeImageStepV1, TentativeNativeRangeImageSourceAuthorization,
+    RangeImageCursorV1, RangeImageHistoryStepV1, RangeImageStepV1,
+    TentativeNativeRangeImageSourceAuthorization,
 };
 use crate::distribution_range_mutation::{FrozenRangeMutationPermit, RangeMutationAuthority};
 use crate::{BicDb, BicDbError, CancellationToken, CollectionMeta, Result};
@@ -50,6 +54,11 @@ pub(crate) struct NativeRangeImageInstaller {
     fence: TargetImageInstallFence,
     bindings: RangeImageDbBindings,
     source_reserved_db_upper_bound: u64,
+    safety: NativeRangeInstallSafety,
+    catalog: TargetImageCatalogHistoryObligations,
+    history_stage: NativeHistoryStage,
+    history_proof: Option<StagedNativeHistoryProof>,
+    destructive_started: bool,
     clear_collection: usize,
     clear_after: Option<String>,
     cleared: bool,
@@ -73,6 +82,11 @@ pub(crate) struct NativeRangeImageVerification {
     bindings: RangeImageDbBindings,
     source: CompletedNativeRangeImageSource,
     verifier: NativeTargetImageVerifier,
+    history: Option<(
+        NativeRangeInstallSafety,
+        TargetImageCatalogHistoryObligations,
+        StagedNativeHistoryProof,
+    )>,
     recover_completed: bool,
 }
 impl NativeRangeImageVerification {
@@ -94,6 +108,21 @@ impl NativeRangeImageVerification {
             role,
             &self.frozen,
         )?;
+        if let Some((safety, catalog, proof)) = &self.history {
+            let context = NativeHistoryTargetContext::new(
+                &db,
+                store,
+                &self.fence,
+                &self.admission,
+                safety,
+                catalog,
+                role,
+                &self.frozen,
+            )?;
+            proof.require_current(&db, &context, &self.source.authorize_target_install()?)?;
+        } else if !self.recover_completed {
+            return Err(invalid("bounded verification has no actual staged history"));
+        }
         db.advance_native_target_image_verification(
             &mut self.verifier,
             &self.fence,
@@ -133,6 +162,26 @@ impl NativeRangeImageVerification {
             &self.source,
             cancellation,
         )?;
+        let history_context = self
+            .history
+            .as_ref()
+            .map(|(safety, catalog, _)| {
+                NativeHistoryTargetContext::new(
+                    &db,
+                    store,
+                    &self.fence,
+                    &self.admission,
+                    safety,
+                    catalog,
+                    role,
+                    &self.frozen,
+                )
+            })
+            .transpose()?;
+        let history = match (&self.history, &history_context) {
+            (Some((_, _, proof)), Some(context)) => Some((proof, context)),
+            _ => None,
+        };
         let base = db.finish_native_target_image_install(
             &self.fence,
             &self.admission,
@@ -142,6 +191,7 @@ impl NativeRangeImageVerification {
             &self.source,
             self.recover_completed,
             contents,
+            history,
             cancellation,
         )?;
         drop(db);
@@ -244,6 +294,7 @@ impl NativeRangeImageInstaller {
             bindings,
             source,
             verifier,
+            history: None,
             recover_completed: true,
         })
     }
@@ -291,6 +342,19 @@ impl NativeRangeImageInstaller {
         // The catalog refusal is already durably confirmed. From this point
         // any crash/timeout is dirty/unready until a fresh authorized restart.
         db.begin_native_target_image_install(&fence, &admission, &frozen, &bindings)?;
+        let catalog_obligations =
+            store.image_install_catalog_history_obligations(fence.range().id)?;
+        let context = NativeHistoryTargetContext::new(
+            &db,
+            store,
+            &fence,
+            &admission,
+            &safety,
+            &catalog_obligations,
+            role,
+            &frozen,
+        )?;
+        let history_stage = db.begin_native_history_stage(&context, source)?;
         let catalog = canonical_range_image_catalog(
             source.cut().cluster_id(),
             source.cut().range(),
@@ -312,6 +376,11 @@ impl NativeRangeImageInstaller {
             fence,
             bindings,
             source_reserved_db_upper_bound,
+            safety,
+            catalog: catalog_obligations,
+            history_stage,
+            history_proof: None,
+            destructive_started: false,
             clear_collection: 0,
             clear_after: None,
             cleared: complete,
@@ -328,11 +397,111 @@ impl NativeRangeImageInstaller {
     pub(crate) fn fence(&self) -> &TargetImageInstallFence {
         &self.fence
     }
-    fn require_history_before_rows(&self) -> Result<()> {
-        if self.fence.source_range_index() != 0 {
+    pub(crate) fn history_stage_id(&self) -> Uuid {
+        self.history_stage.stage_id()
+    }
+    pub(crate) fn stage_history_step(
+        &mut self,
+        store: &RangeWriteStore,
+        role: &NativeImageInstallRole<'_>,
+        source: &TentativeNativeRangeImageSourceAuthorization<'_>,
+        stage_id: Uuid,
+        step: &RangeImageHistoryStepV1,
+        cancellation: &CancellationToken,
+    ) -> Result<NativeHistoryStageProgress> {
+        if self.destructive_started || self.history_proof.is_some() {
             return Err(invalid(
-                "nonzero image rows require the opaque full staged-history compatibility proof",
+                "history staging is sealed before target data changes",
             ));
+        }
+        let db = self
+            .database
+            .try_read()
+            .ok_or_else(|| invalid("target DB busy during history stage"))?;
+        let context = NativeHistoryTargetContext::new(
+            &db,
+            store,
+            &self.fence,
+            &self.admission,
+            &self.safety,
+            &self.catalog,
+            role,
+            &self.frozen,
+        )?;
+        db.append_native_history_stage(
+            &self.history_stage,
+            &context,
+            source,
+            stage_id,
+            step,
+            cancellation,
+        )
+    }
+    pub(crate) fn audit_history_step(
+        &mut self,
+        store: &RangeWriteStore,
+        role: &NativeImageInstallRole<'_>,
+        source: &TentativeNativeRangeImageSourceAuthorization<'_>,
+        max_entries: usize,
+        cancellation: &CancellationToken,
+    ) -> Result<NativeHistoryStageProgress> {
+        if self.destructive_started {
+            return Err(invalid("cannot restage after target data changes"));
+        }
+        let db = self
+            .database
+            .try_read()
+            .ok_or_else(|| invalid("target DB busy during history audit"))?;
+        let context = NativeHistoryTargetContext::new(
+            &db,
+            store,
+            &self.fence,
+            &self.admission,
+            &self.safety,
+            &self.catalog,
+            role,
+            &self.frozen,
+        )?;
+        let progress = db.audit_native_history_stage_step(
+            &self.history_stage,
+            &context,
+            source,
+            max_entries,
+            cancellation,
+        )?;
+        if progress.audit_complete {
+            self.history_proof =
+                Some(db.finish_native_history_stage(&self.history_stage, &context, source)?);
+        }
+        Ok(progress)
+    }
+    fn require_history_before_rows(
+        &self,
+        store: &RangeWriteStore,
+        role: &NativeImageInstallRole<'_>,
+        source: &TentativeNativeRangeImageSourceAuthorization<'_>,
+    ) -> Result<()> {
+        let db = self
+            .database
+            .try_read()
+            .ok_or_else(|| invalid("target DB busy checking history"))?;
+        let context = NativeHistoryTargetContext::new(
+            &db,
+            store,
+            &self.fence,
+            &self.admission,
+            &self.safety,
+            &self.catalog,
+            role,
+            &self.frozen,
+        )?;
+        self.history_proof
+            .as_ref()
+            .ok_or_else(|| invalid("target data changes require full actual staged history"))?
+            .require_current(&db, &context, source)?;
+        if !self.destructive_started {
+            self.safety
+                .require_current(&db, &self.admission, &self.frozen)?;
         }
         Ok(())
     }
@@ -358,11 +527,12 @@ impl NativeRangeImageInstaller {
         &mut self,
         store: &RangeWriteStore,
         role: &NativeImageInstallRole<'_>,
+        source: &TentativeNativeRangeImageSourceAuthorization<'_>,
         cancellation: &CancellationToken,
     ) -> Result<bool> {
         cancellation.check()?;
         self.validate(store, role)?;
-        self.require_history_before_rows()?;
+        self.require_history_before_rows(store, role, source)?;
         if self.cleared {
             return Ok(true);
         }
@@ -387,6 +557,7 @@ impl NativeRangeImageInstaller {
         let controlled = db
             .range_mutation_gate()
             .try_controlled_mutation(&self.frozen)?;
+        self.destructive_started = true;
         db.delete_range_records_as_local_with_mutation(
             self.fence.range(),
             &meta.name,
@@ -414,12 +585,13 @@ impl NativeRangeImageInstaller {
         attempt_id: Uuid,
         store: &RangeWriteStore,
         role: &NativeImageInstallRole<'_>,
+        source: &TentativeNativeRangeImageSourceAuthorization<'_>,
         step: &RangeImageStepV1,
         cancellation: &CancellationToken,
     ) -> Result<()> {
         cancellation.check()?;
         self.validate(store, role)?;
-        self.require_history_before_rows()?;
+        self.require_history_before_rows(store, role, source)?;
         if attempt_id != self.fence.attempt_id() || !self.cleared {
             return Err(invalid(
                 "late attempt or target stale-key clear is incomplete",
@@ -462,6 +634,7 @@ impl NativeRangeImageInstaller {
             let controlled = db
                 .range_mutation_gate()
                 .try_controlled_mutation(&self.frozen)?;
+            self.destructive_started = true;
             db.apply_range_snapshot_batch_preinstalled_with_mutation(
                 self.fence.range(),
                 meta,
@@ -491,7 +664,7 @@ impl NativeRangeImageInstaller {
     ) -> Result<NativeRangeImageVerification> {
         source.require_current()?;
         self.validate(store, role)?;
-        self.require_history_before_rows()?;
+        self.require_history_before_rows(store, role, &source.authorize_target_install()?)?;
         let seal = source.seal();
         if !self.cleared
             || !self.complete
@@ -533,6 +706,12 @@ impl NativeRangeImageInstaller {
             bindings: self.bindings,
             source,
             verifier,
+            history: Some((
+                self.safety,
+                self.catalog,
+                self.history_proof
+                    .ok_or_else(|| invalid("complete data has no full history proof"))?,
+            )),
             recover_completed: false,
         })
     }
@@ -956,13 +1135,73 @@ pub(crate) mod tests {
             )
             .unwrap()
         }
-        fn clear(&self, store: &RangeWriteStore, install: &mut NativeRangeImageInstaller) {
+        fn clear(&mut self, store: &RangeWriteStore, install: &mut NativeRangeImageInstaller) {
+            // Complete and audit the ACTUAL inactive target history before
+            // any stale row removal, even for empty R0 sources.
+            loop {
+                let step = {
+                    let capture = self.capture.as_mut().unwrap();
+                    let cursor = capture.history_cursor().clone();
+                    capture
+                        .export_history_step(&cursor, 256, &CancellationToken::uncancelable())
+                        .unwrap()
+                };
+                let role = self.role();
+                let auth = self
+                    .capture
+                    .as_ref()
+                    .unwrap()
+                    .authorize_target_install()
+                    .unwrap();
+                let progress = install
+                    .stage_history_step(
+                        store,
+                        &NativeImageInstallRole::CommittedHandoff(&role),
+                        &auth,
+                        install.history_stage_id(),
+                        &step,
+                        &CancellationToken::uncancelable(),
+                    )
+                    .unwrap();
+                if progress.cursor.complete() {
+                    break;
+                }
+            }
             loop {
                 let role = self.role();
+                let auth = self
+                    .capture
+                    .as_ref()
+                    .unwrap()
+                    .authorize_target_install()
+                    .unwrap();
+                if install
+                    .audit_history_step(
+                        store,
+                        &NativeImageInstallRole::CommittedHandoff(&role),
+                        &auth,
+                        256,
+                        &CancellationToken::uncancelable(),
+                    )
+                    .unwrap()
+                    .audit_complete
+                {
+                    break;
+                }
+            }
+            loop {
+                let role = self.role();
+                let auth = self
+                    .capture
+                    .as_ref()
+                    .unwrap()
+                    .authorize_target_install()
+                    .unwrap();
                 if install
                     .clear_step(
                         store,
                         &NativeImageInstallRole::CommittedHandoff(&role),
+                        &auth,
                         &CancellationToken::uncancelable(),
                     )
                     .unwrap()
@@ -979,11 +1218,18 @@ pub(crate) mod tests {
                     .export_step(&cursor, &options(), &CancellationToken::uncancelable())
                     .unwrap();
                 let role = self.role();
+                let auth = self
+                    .capture
+                    .as_ref()
+                    .unwrap()
+                    .authorize_target_install()
+                    .unwrap();
                 install
                     .install_step(
                         install.fence().attempt_id(),
                         store,
                         &NativeImageInstallRole::CommittedHandoff(&role),
+                        &auth,
                         &step,
                         &CancellationToken::uncancelable(),
                     )
@@ -992,7 +1238,6 @@ pub(crate) mod tests {
                     break;
                 }
             }
-            self.export_history();
         }
         fn export_history(&mut self) {
             loop {
@@ -1231,6 +1476,12 @@ pub(crate) mod tests {
                 old_attempt,
                 &store,
                 &NativeImageInstallRole::CommittedHandoff(&role),
+                &fixture
+                    .capture
+                    .as_ref()
+                    .unwrap()
+                    .authorize_target_install()
+                    .unwrap(),
                 &step,
                 &CancellationToken::uncancelable()
             )
@@ -1316,10 +1567,10 @@ pub(crate) mod tests {
         .unwrap();
         let recovered = finish_verification(&fixture, &store, recovered);
         assert_eq!(recovered.fence().attempt_id(), attempt);
-        assert_ne!(
+        assert_eq!(
             recovered.base().native_receipt_sha256(),
             first_receipt,
-            "recovery confirms a new actual native receipt fsync"
+            "recovery revalidates the exact already-published native anchor without retiring a second prefix"
         );
         assert!(store.require_no_image_install(fixture.range().id).is_err());
     }

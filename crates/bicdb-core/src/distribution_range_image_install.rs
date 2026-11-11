@@ -991,6 +991,10 @@ fn validate_step(
 }
 
 #[cfg(test)]
+#[path = "distribution_range_image_install/lease_tests.rs"]
+mod lease_tests;
+
+#[cfg(test)]
 pub(crate) mod tests {
     use super::*;
     use crate::db::{RangeImageBirthMember, RangeImageBirthSpec};

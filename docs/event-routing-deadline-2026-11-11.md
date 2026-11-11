@@ -65,9 +65,21 @@ stderr records `Compiling bicdb-core` at the correct worktree. When reproducing
 with a shared target, force a fresh compilation from each intended worktree and
 check the path; do not delete another agent's shared build cache.
 
-The smallest next adversarial routing test is a persistent silent former leader
-plus a different healthy member supplying a genuinely changed committed route.
-It must return the expected value within the original client budget. This
-single-endpoint fixture instead becomes responsive to subsequent discovery;
-it does not claim that multi-node route-change case passed. The larger native
-recovery campaign remains mandatory.
+## Final versioned routing control
+
+Exact private **1.0.470-beta** head
+`b09ad4f1bc37ab441ed9a62d9abfa695f9184315` added the next adversarial case:
+a former leader remains permanently silent while a different healthy member
+returns a newer synthetic committed snapshot with a changed range epoch/leader.
+The client discovers that member, sends the event request to the new leader at
+the new epoch, and checks the returned payload within its original three-second
+network budget. No application shard management occurs in this client fixture.
+
+All **six** event routing tests passed after a fresh compile at that exact
+versioned source; the module took 2.89 seconds, including the other silent-socket
+cases. Compile/run time was 68.017 seconds, minimum observed available memory
+24,374,517,760 bytes, with no pauses or interruptions. Raw evidence is under
+`after-final-470`. The runtime patch is still independent of native image code.
+This synthetic two-endpoint case is not actual consensus failover, a linearizable
+read, ordinary PostgreSQL gateway qualification or a physical scale-out result.
+The larger native recovery campaign remains mandatory.

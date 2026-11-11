@@ -188,6 +188,7 @@ mod tests {
         let explicit = std::env::var("BICDB_TEST_RENAME_EXPLICIT").unwrap() == "true";
         let cut = std::env::var("BICDB_TEST_RENAME_CUT").unwrap();
         let mut db = BicDb::open_with_config(&path, config(paged)).unwrap();
+        oracle::initialize_existing_database_profile(&mut db).unwrap();
         let mut session = SqlSession::new(&mut db);
         if explicit {
             session
@@ -380,6 +381,7 @@ mod tests {
                     }
                     for reopen in 0..2 {
                         let mut db = BicDb::open_with_config(root.path(), config(paged)).unwrap();
+                        oracle::initialize_existing_database_profile(&mut db).unwrap();
                         {
                             let mut session = SqlSession::new(&mut db);
                             assert_eq!(
@@ -474,7 +476,10 @@ mod tests {
                             .unwrap()
                             .iter()
                             .any(|s| s.owned_by_table.as_deref() == Some(table)));
-                        assert!(rename_journal::pending(&db).unwrap().is_empty());
+                        assert!(
+                            rename_journal::pending(&db).unwrap().is_empty(),
+                            "paged={paged} explicit={explicit} cut={cut} reopen={reopen}"
+                        );
                         assert!(db
                             .verify_indexes_consistently()
                             .unwrap()

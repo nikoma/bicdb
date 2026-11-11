@@ -355,6 +355,7 @@ mod tests {
                 .unwrap();
             db.close().unwrap();
             let mut db = BicDb::open_with_config(root.path(), config).unwrap();
+            oracle::initialize_existing_database_profile(&mut db).unwrap();
             assert_eq!(
                 SqlSession::new(&mut db)
                     .execute("SELECT payload FROM original")

@@ -332,7 +332,7 @@ impl AdoptedNativeRangeImageInstall {
         store: &RangeWriteStore,
         role: &NativeImageInstallRole<'_>,
         cancellation: &CancellationToken,
-    ) -> Result<(FrozenRangeMutationPermit, NativeImageCatalogueFinalization)> {
+    ) -> Result<(NativeImageInstallFreeze, NativeImageCatalogueFinalization)> {
         cancellation.check()?;
         self.require_current(store, role)?;
         let VerifiedNativeRangeImageInstall {
@@ -350,7 +350,7 @@ impl AdoptedNativeRangeImageInstall {
             base,
             catalogue: self.catalogue,
         };
-        proof.require_current(store, role, &frozen)?;
+        proof.require_current(store, role, frozen.as_frozen())?;
         // Physical/catalogue adoption is durable. Permanent source promises
         // and target refusal still survive; this drop does not activate either.
         drop(source);
@@ -1644,7 +1644,9 @@ pub(crate) mod tests {
         let (frozen, proof) = adopted
             .into_finalization(&store, &image_role, &CancellationToken::uncancelable())
             .unwrap();
-        proof.require_current(&store, &image_role, &frozen).unwrap();
+        proof
+            .require_current(&store, &image_role, frozen.as_frozen())
+            .unwrap();
         assert_eq!(proof.catalogue().attempt_id(), attempt);
         let foreign = fixture
             .source
@@ -1655,7 +1657,9 @@ pub(crate) mod tests {
         assert!(proof
             .require_current(&store, &image_role, &foreign)
             .is_err());
-        proof.require_current(&store, &image_role, &frozen).unwrap();
+        proof
+            .require_current(&store, &image_role, frozen.as_frozen())
+            .unwrap();
         assert!(store.require_no_image_install(fixture.range().id).is_err());
         assert!(fixture
             .target()

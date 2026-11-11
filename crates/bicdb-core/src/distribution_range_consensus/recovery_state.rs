@@ -215,6 +215,75 @@ pub(crate) struct RecoveryImageInstallSessionObservation {
     native_birth_sha256: String,
     range_catalog_sha256: String,
 }
+
+/// Exact actual local catalogue preflight for a physical historical Apply.
+/// It carries no native floor and cannot be constructed from remote cert DTOs.
+#[derive(Debug)]
+pub(crate) struct RecoveryLocalHistoricalApplyObservation {
+    store_open_id: Uuid,
+    native_database_incarnation: String,
+    native_birth_id: Uuid,
+    role_context_id: Uuid,
+    scope: RecoveryFenceScope,
+    command_id: String,
+    command_sha256: String,
+    index: u64,
+    catalog_sha256: String,
+}
+impl RecoveryLocalHistoricalApplyObservation {
+    pub(crate) fn store_open_id(&self) -> Uuid {
+        self.store_open_id
+    }
+    pub(crate) fn native_database_incarnation(&self) -> &str {
+        &self.native_database_incarnation
+    }
+    pub(crate) fn range_id(&self) -> RangeId {
+        self.scope.range_id
+    }
+    pub(crate) fn command_id(&self) -> &str {
+        &self.command_id
+    }
+    pub(crate) fn command_sha256(&self) -> &str {
+        &self.command_sha256
+    }
+    pub(crate) fn command_index(&self) -> u64 {
+        self.index
+    }
+    pub(crate) fn role_context_id(&self) -> Uuid {
+        self.role_context_id
+    }
+    pub(crate) fn scope(&self) -> &RecoveryFenceScope {
+        &self.scope
+    }
+    pub(crate) fn require_current(
+        &self,
+        store: &RangeWriteStore,
+        db: &crate::BicDb,
+        native: &NativeRecoveryAdmission,
+        role: &RecoveryRoleAdmission,
+        admission: &crate::distribution_range_recovery::RecoveryApplyAdmission,
+    ) -> Result<()> {
+        native.require_current(db)?;
+        admission.require_recipient_role(role)?;
+        store.require_local_historical_apply_state(role, native, admission)?;
+        if self.store_open_id != store.open_id
+            || self.native_database_incarnation != native.database_incarnation()
+            || self.native_birth_id != native.birth_id()
+            || self.role_context_id != role.context_id()
+            || !self.scope.same_session(admission.scope())
+            || self.command_id != admission.command().command_id
+            || self.command_sha256 != admission.command().checksum_sha256
+            || self.index != admission.command().index
+            || self.catalog_sha256 != store.recovery_range_catalog_sha256(self.scope.range_id)?
+            || store.root.canonicalize()? != db.data_path().canonicalize()?
+        {
+            return Err(range_write_error(
+                "actual historical Apply catalogue/open/context changed",
+            ));
+        }
+        Ok(())
+    }
+}
 impl RecoveryImageInstallSessionObservation {
     pub(crate) fn saved_scope(&self) -> &RecoveryFenceScope {
         &self.scope
@@ -315,6 +384,98 @@ impl RecoveryResolvedCatalogObservation {
 }
 
 impl RangeWriteStore {
+    fn require_local_historical_apply_state(
+        &self,
+        role: &RecoveryRoleAdmission,
+        native: &NativeRecoveryAdmission,
+        admission: &crate::distribution_range_recovery::RecoveryApplyAdmission,
+    ) -> Result<()> {
+        admission.require_recipient_role(role)?;
+        let scope = admission.scope();
+        self.require_recovery_scope(role, native, scope)?;
+        let command = admission.command();
+        role.require_historical_command_scope(command)?;
+        if self
+            .catalog
+            .handoff_promises
+            .get(&scope.range_id)
+            .is_some_and(|promise| command.index > promise.resolved_through)
+        {
+            return Err(range_write_error(
+                "physical historical Apply exceeds permanent promised prefix",
+            ));
+        }
+        let log = self
+            .catalog
+            .ranges
+            .get(&scope.range_id)
+            .ok_or_else(|| range_write_error("historical Apply actual log is absent"))?;
+        let extra = if matches!(
+            scope.purpose,
+            MetadataRecoveryRolePurpose::CommittedHandoff { .. }
+        ) {
+            scope.range_epoch.checked_add(2)
+        } else {
+            None
+        };
+        if log.current_epoch != scope.range_epoch && Some(log.current_epoch) != extra {
+            return Err(range_write_error(
+                "physical historical Apply actual log epoch changed",
+            ));
+        }
+        match log.entries.get(&command.index) {
+            Some(entry)
+                if entry.command == *command
+                    && matches!(
+                        entry.state,
+                        RangeWriteState::QuorumCommitted | RangeWriteState::Applied
+                    ) => {}
+            None if command.index <= log.compacted_through => {}
+            _ => {
+                return Err(range_write_error(
+                    "physical historical Apply contradicts actual retained command state",
+                ))
+            }
+        }
+        let marker=self.catalog.recovery_fences[&scope.range_id].historical_certifications.get(&command.index)
+            .ok_or_else(||range_write_error("physical historical Apply lacks an actual local current-session certify marker"))?;
+        if marker.recovery_nonce != scope.recovery_nonce
+            || marker.configuration_sha256 != scope.configuration_sha256
+            || marker.range_epoch != scope.range_epoch
+            || marker.index != command.index
+            || marker.command_sha256 != command.checksum_sha256
+        {
+            return Err(range_write_error(
+                "physical historical Apply local certify marker mismatch",
+            ));
+        }
+        Ok(())
+    }
+
+    pub(crate) fn observe_local_historical_apply(
+        &self,
+        db: &crate::BicDb,
+        native: &NativeRecoveryAdmission,
+        role: &RecoveryRoleAdmission,
+        admission: &crate::distribution_range_recovery::RecoveryApplyAdmission,
+    ) -> Result<RecoveryLocalHistoricalApplyObservation> {
+        native.require_current(db)?;
+        self.require_local_historical_apply_state(role, native, admission)?;
+        let command = admission.command();
+        let observed = RecoveryLocalHistoricalApplyObservation {
+            store_open_id: self.open_id,
+            native_database_incarnation: native.database_incarnation().to_string(),
+            native_birth_id: native.birth_id(),
+            role_context_id: role.context_id(),
+            scope: admission.scope().clone(),
+            command_id: command.command_id.clone(),
+            command_sha256: command.checksum_sha256.clone(),
+            index: command.index,
+            catalog_sha256: self.recovery_range_catalog_sha256(command.range_id)?,
+        };
+        observed.require_current(self, db, native, role, admission)?;
+        Ok(observed)
+    }
     pub(crate) fn observe_image_install_recovery_session(
         &mut self,
         db: &crate::BicDb,

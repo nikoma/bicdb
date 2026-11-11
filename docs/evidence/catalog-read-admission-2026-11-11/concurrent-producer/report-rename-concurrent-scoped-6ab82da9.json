@@ -1,0 +1,85 @@
+{
+  "source": "6ab82da97df2b540c56aad72036017bf36963568",
+  "scope": "Private scoped SQL rename producer: reserve full planned relation closure and exact catalog records plus journal backings before capture. Retain durable context until commit/full undo; validate live undo owner/full image coverage; native COMMIT finalizes only after durability and before catalog cleanup. Preserve global startup gates for journals without runtime scopes, UUID consumer, all fsync and upstream assertions. Test new4 actual concurrency scenarios plus existing journal/dependency controls and TCP metadata admission. Not replicated mapping/application acceptance/main delivery qualification.",
+  "started_unix": 1794432024.20495,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--lib",
+        "session::rename_table::tests::concurrent_rename_",
+        "--",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794432024.2052023,
+      "exit": 0,
+      "finished_unix": 1794432190.8235123
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--lib",
+        "session::rename_journal::tests::",
+        "--",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794432190.823777,
+      "exit": 0,
+      "finished_unix": 1794432194.4239287
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--lib",
+        "session::rename_dependencies::tests::",
+        "--",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794432194.4241834,
+      "exit": 0,
+      "finished_unix": 1794432195.974225
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-pgwire",
+        "--test",
+        "catalog_read_admission",
+        "--",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794432195.974506,
+      "exit": 0,
+      "finished_unix": 1794432367.6508586
+    }
+  ],
+  "status": "focused_passed",
+  "finished_unix": 1794432367.65115
+}

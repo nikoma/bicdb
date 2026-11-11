@@ -1,0 +1,29 @@
+{
+  "source": "5a7faea5968490ff93bd6a7523d0057079a1e8e9",
+  "status": "failed",
+  "counts": [
+    {
+      "status": "FAILED",
+      "passed": 0,
+      "failed": 4,
+      "ignored": 0
+    }
+  ],
+  "passed": 0,
+  "failed": 4,
+  "ignored": 0,
+  "files": {
+    "report-rename-concurrent-negative-5a7faea5.json": {
+      "bytes": 1074,
+      "sha256": "a4f53d0378c5af153ae88ae671eb10796ab1e1026f5590b4fd9f00046c4347d1"
+    },
+    "tc-step-rename-concurrent-negative-5a7faea5.log": {
+      "bytes": 91669,
+      "sha256": "efa438bc10e80a56e693c290712f7139f883a9f2fb1033033ec641a5dfb00ea2"
+    }
+  },
+  "scope": "Unchanged private producer runtime5310 plus four positive concurrent-rename regressions. Preserve original global gates and fsync. Each scenario retains an unrelated pending native row writer across SQL rename, then validates commit/rollback/savepoint/autocommit behavior and scope release in both storage modes. Expected to expose actual unsupported concurrent producer before any implementation change. No application, replicated promotion, main delivery or source475 qualification claim.",
+  "main_delivered": false,
+  "application_qualified": false,
+  "observed_unix": 1794432398.8890882
+}

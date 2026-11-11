@@ -1,0 +1,28 @@
+{
+  "source": "5a7faea5968490ff93bd6a7523d0057079a1e8e9",
+  "scope": "Unchanged private producer runtime5310 plus four positive concurrent-rename regressions. Preserve original global gates and fsync. Each scenario retains an unrelated pending native row writer across SQL rename, then validates commit/rollback/savepoint/autocommit behavior and scope release in both storage modes. Expected to expose actual unsupported concurrent producer before any implementation change. No application, replicated promotion, main delivery or source475 qualification claim.",
+  "started_unix": 1794431727.2601323,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--lib",
+        "session::rename_table::tests::concurrent_rename_",
+        "--",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794431727.260385,
+      "exit": 101,
+      "finished_unix": 1794431888.9204047
+    }
+  ],
+  "status": "failed",
+  "finished_unix": 1794431888.920617
+}

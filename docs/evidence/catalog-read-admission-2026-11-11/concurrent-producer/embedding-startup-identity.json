@@ -1,0 +1,61 @@
+{
+  "scope": "Only first database open in each embedding test; trusted SQL namespace initializer before admitting transactions. All original SQL strings, assertions, casts, security denials, waits and reopen checks byte-identical after removing new startup calls. Preserve actual7e 11fail evidence.",
+  "files": [
+    {
+      "file": "crates/bicdb-sql/tests/rename_default_privileges.rs",
+      "before_sha256": "3f98aa76744acf7b27e6335b6c70a0252b4515cd2722814a5d9876aad3087313",
+      "after_sha256": "d13efb0519ac7c46fd8fefe6d77219c0cc54977668177c4a01365289e2553fe1",
+      "startup_calls_added": 1,
+      "removing_only_new_startup_calls_restores_exact_original_bytes": true,
+      "after_fmt_sha256": "d13efb0519ac7c46fd8fefe6d77219c0cc54977668177c4a01365289e2553fe1"
+    },
+    {
+      "file": "crates/bicdb-sql/tests/rename_pending_composites.rs",
+      "before_sha256": "8b2fccca01df5334d460f2ff3c3f450ed8f86dda53642581802b14d065569d1c",
+      "after_sha256": "603176a8948fa0da19b4e70c14ed2597208dd312bfdd84d2d4ca8b127c256f9d",
+      "startup_calls_added": 2,
+      "removing_only_new_startup_calls_restores_exact_original_bytes": true,
+      "after_fmt_sha256": "603176a8948fa0da19b4e70c14ed2597208dd312bfdd84d2d4ca8b127c256f9d"
+    },
+    {
+      "file": "crates/bicdb-sql/tests/rename_routine_header_dependencies.rs",
+      "before_sha256": "38e007e122a3b64b429f0b4fb8efae2a3f452017b353673c13fa6a4ebd996370",
+      "after_sha256": "29c8bcf0e4fbfa9d97a8e309e41779e0beed3b898958b3a0b98177cfb4e578d6",
+      "startup_calls_added": 3,
+      "removing_only_new_startup_calls_restores_exact_original_bytes": true,
+      "after_fmt_sha256": "29c8bcf0e4fbfa9d97a8e309e41779e0beed3b898958b3a0b98177cfb4e578d6"
+    },
+    {
+      "file": "crates/bicdb-sql/tests/rename_routine_row_types.rs",
+      "before_sha256": "03cd07f9993a802d196a25f6f07d4c821113ac5539ff077619cce1e8adda8cbb",
+      "after_sha256": "4b6a14277c0636763f332dc106c51ba5831e0d10b99ace1c5460465872c630f4",
+      "startup_calls_added": 2,
+      "removing_only_new_startup_calls_restores_exact_original_bytes": true,
+      "after_fmt_sha256": "4b6a14277c0636763f332dc106c51ba5831e0d10b99ace1c5460465872c630f4"
+    },
+    {
+      "file": "crates/bicdb-sql/tests/renamed_foreign_keys.rs",
+      "before_sha256": "cff8e71c1ba86b49f1bdd52c43bee0b5a3472a00ddbb94a8f383f0b08d4eae4b",
+      "after_sha256": "5ffefcc87aa09cf57b0659b4d8466e51f6aa8ba8af2ecac8cb78055fdc5df582",
+      "startup_calls_added": 4,
+      "removing_only_new_startup_calls_restores_exact_original_bytes": true,
+      "after_fmt_sha256": "5ffefcc87aa09cf57b0659b4d8466e51f6aa8ba8af2ecac8cb78055fdc5df582"
+    },
+    {
+      "file": "crates/bicdb-sql/tests/renamed_table_triggers.rs",
+      "before_sha256": "99f455b24eae0726557622ed02255d8e5048fe93601d102a7eca0637b4bcdc7e",
+      "after_sha256": "09b5e9cb4c203be2beb71216bcc13ed7f0d868555c87b12da2924634a75a3d8b",
+      "startup_calls_added": 2,
+      "removing_only_new_startup_calls_restores_exact_original_bytes": true,
+      "after_fmt_sha256": "09b5e9cb4c203be2beb71216bcc13ed7f0d868555c87b12da2924634a75a3d8b"
+    },
+    {
+      "file": "crates/bicdb-sql/tests/table_rename_views.rs",
+      "before_sha256": "544d97d6f633619bd64b14bf9aa0b0727597cea4e58b58de5a7affbe0086f161",
+      "after_sha256": "38fb374c7341c139d17f17846fbbd746d1177f76851f502a818b05a4b29ab264",
+      "startup_calls_added": 5,
+      "removing_only_new_startup_calls_restores_exact_original_bytes": true,
+      "after_fmt_sha256": "38fb374c7341c139d17f17846fbbd746d1177f76851f502a818b05a4b29ab264"
+    }
+  ]
+}

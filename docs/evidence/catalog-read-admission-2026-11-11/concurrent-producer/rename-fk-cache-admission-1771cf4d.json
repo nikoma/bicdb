@@ -1,0 +1,28 @@
+{
+  "label": "rename-fk-cache-admission-1771cf4d",
+  "source": "1771cf4d535145ef543f506be98424a3dac85454",
+  "base": "4885ceb8585393f072b8f53422133118cf008bdc",
+  "repo": "/root/bicdb-sql-rename-concurrent-producer",
+  "wait_units": [
+    "bicdb-rename-concurrent-fk-owner-4885ceb8"
+  ],
+  "scope": "Production source byte-identical4885. Four new semantic SQL controls use actual UPDATE/DELETE with cold and warm FK memos, require related child metadata reservations to refuse before changing rows, preserve ordinary23503 FK denial after release, and keep detached-table writes admitted/committed. No broader test/application/main claim.",
+  "commands": [
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-sql",
+      "--test",
+      "catalog_fk_read_admission",
+      "--test",
+      "catalog_read_admission",
+      "--",
+      "--test-threads=1"
+    ]
+  ]
+}

@@ -1,0 +1,16 @@
+
+running 5 tests
+test acknowledged_certificate_quorum_survives_only_leader_loss ... ok
+test certificate_gap_returns_unknown_after_local_wal_then_background_recovery_progresses ... ok
+test lost_certificate_reply_stays_unknown_and_surviving_certificate_recovers ... ok
+test matching_event_retry_cannot_bypass_unknown_certificate_outcome ... FAILED
+test reopened_matching_event_requires_recovered_admission_and_local_outcome_resolves ... FAILED
+
+failures:
+
+failures:
+    matching_event_retry_cannot_bypass_unknown_certificate_outcome
+    reopened_matching_event_requires_recovered_admission_and_local_outcome_resolves
+
+test result: FAILED. 3 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 7.15s
+

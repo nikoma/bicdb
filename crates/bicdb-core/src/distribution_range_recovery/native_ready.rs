@@ -287,6 +287,16 @@ impl ClosedNativeReadyQuorumRound {
             let count = counts.entry(point.clone()).or_insert(0usize);
             *count += 1;
             if *count >= q {
+                // An actual higher physical preparation is irreversible
+                // evidence. It is a veto, never a numeric authority to move a
+                // lower replica forward or silently discard its known tail.
+                if self
+                    .observations
+                    .values()
+                    .any(|o| o.reply().range_index > point.0)
+                {
+                    return None;
+                }
                 return Some(point);
             }
         }

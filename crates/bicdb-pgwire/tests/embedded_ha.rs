@@ -248,18 +248,75 @@ fn native_handshake_refuses_old_versions_and_mismatched_resume_identity() {
     );
 }
 
+// Bootstrap SQL metadata before any lease-bearing callback. A callback can
+// perform independent commits; it is not an atomic multi-statement DDL unit.
+fn open_effects(root: &Path, index: usize, ports: &[u16]) -> EmbeddedHaDatabase {
+    EmbeddedHaDatabase::open_with_initializer(
+        root.join(format!("n{index}")),
+        config(index, ports, true),
+        DbConfig::default(),
+        |db| {
+            if index == 0 {
+                SqlSession::new(db)
+                    .execute("CREATE TABLE effects (id INT PRIMARY KEY, value INT)")?;
+            }
+            Ok(())
+        },
+    )
+    .unwrap()
+}
+
+#[test]
+fn an_embedded_callback_cannot_write_after_its_live_peer_lease_expires() {
+    let root = tempfile::tempdir().unwrap();
+    let ports = [port(), port(), port()];
+    let primary = open_effects(root.path(), 0, &ports);
+    let first = open_effects(root.path(), 1, &ports);
+    let second = open_effects(root.path(), 2, &ports);
+    let lease = primary.writer_lease();
+    wait(|| lease.active());
+    let entered = std::sync::atomic::AtomicBool::new(false);
+    let result = primary.with_write(|db| {
+        entered.store(true, std::sync::atomic::Ordering::SeqCst);
+        first.request_shutdown();
+        second.request_shutdown();
+        // The authoritative probe is nonblocking even while this callback
+        // holds the database guard. Let the actual peer confirmations expire.
+        wait(|| !lease.active());
+        SqlSession::new(db).execute("INSERT INTO effects VALUES (1,7)")?;
+        Ok(())
+    });
+    assert!(entered.load(std::sync::atomic::Ordering::SeqCst));
+    let error = result.expect_err("an admitted callback must still honor lease expiry");
+    assert!(error.to_string().contains("write lease"), "{error}");
+    let data = primary.database();
+    let rows = SqlSession::new(&mut data.write())
+        .execute("SELECT COUNT(*) FROM effects")
+        .unwrap()
+        .rows;
+    assert_eq!(
+        serde_json::to_value(rows).unwrap(),
+        serde_json::json!([[0]])
+    );
+    primary.request_shutdown();
+}
+
 #[test]
 fn embedded_quorum_survives_primary_loss_and_fences_a_returning_writer() {
     let root = tempfile::tempdir().unwrap();
     let ports = [port(), port(), port()];
     let mut hosts: Vec<_> = (0..3)
-        .map(|index| Some(open(root.path(), index, &ports, true)))
+        .map(|index| Some(open_effects(root.path(), index, &ports)))
         .collect();
     wait(|| hosts[0].as_ref().unwrap().writer_lease().active());
-    hosts[0].as_ref().unwrap().with_write(|db| {
-        SqlSession::new(db).execute("CREATE TABLE effects (id INT PRIMARY KEY, value INT); INSERT INTO effects VALUES (1,7)")?;
-        Ok(())
-    }).unwrap();
+    hosts[0]
+        .as_ref()
+        .unwrap()
+        .with_write(|db| {
+            SqlSession::new(db).execute("INSERT INTO effects VALUES (1,7)")?;
+            Ok(())
+        })
+        .unwrap();
     wait(|| {
         (1..3).all(|index| {
             let data = hosts[index].as_ref().unwrap().database();

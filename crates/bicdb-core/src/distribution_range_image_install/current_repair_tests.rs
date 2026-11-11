@@ -338,160 +338,19 @@ impl CurrentRepairFixture {
     }
     fn materialize(
         &mut self,
-        mut install: NativeRangeImageInstaller,
+        install: NativeRangeImageInstaller,
     ) -> VerifiedNativeRangeImageInstall {
-        loop {
-            let step = {
-                let capture = self.capture.as_mut().unwrap();
-                let cursor = capture.history_cursor().clone();
-                capture
-                    .export_history_step(&cursor, 256, &CancellationToken::uncancelable())
-                    .unwrap()
-            };
-            let role = self.role();
-            let source = self
-                .capture
-                .as_ref()
-                .unwrap()
-                .authorize_target_install()
-                .unwrap();
-            let stage_id = install.history_stage_id();
-            let progress = self
-                .service
-                .lock()
-                .stage_native_range_image_history(
-                    &mut install,
-                    &NativeImageInstallRole::CurrentVoterRepair(&role),
-                    &source,
-                    stage_id,
-                    &step,
-                    &CancellationToken::uncancelable(),
-                )
-                .unwrap();
-            if progress.cursor.complete() {
-                break;
-            }
-        }
-        loop {
-            let role = self.role();
-            let source = self
-                .capture
-                .as_ref()
-                .unwrap()
-                .authorize_target_install()
-                .unwrap();
-            if self
-                .service
-                .lock()
-                .audit_native_range_image_history(
-                    &mut install,
-                    &NativeImageInstallRole::CurrentVoterRepair(&role),
-                    &source,
-                    256,
-                    &CancellationToken::uncancelable(),
-                )
-                .unwrap()
-                .audit_complete
-            {
-                break;
-            }
-        }
-        loop {
-            let role = self.role();
-            let source = self
-                .capture
-                .as_ref()
-                .unwrap()
-                .authorize_target_install()
-                .unwrap();
-            if self
-                .service
-                .lock()
-                .clear_native_range_image_step(
-                    &mut install,
-                    &NativeImageInstallRole::CurrentVoterRepair(&role),
-                    &source,
-                    &CancellationToken::uncancelable(),
-                )
-                .unwrap()
-            {
-                break;
-            }
-        }
-        loop {
-            let step = {
-                let capture = self.capture.as_mut().unwrap();
-                let cursor = capture.cursor().clone();
-                capture
-                    .export_step(&cursor, &options(), &CancellationToken::uncancelable())
-                    .unwrap()
-            };
-            let role = self.role();
-            let source = self
-                .capture
-                .as_ref()
-                .unwrap()
-                .authorize_target_install()
-                .unwrap();
-            let attempt = install.fence().attempt_id();
-            self.service
-                .lock()
-                .copy_native_range_image_step(
-                    &mut install,
-                    &NativeImageInstallRole::CurrentVoterRepair(&role),
-                    &source,
-                    attempt,
-                    &step,
-                    &CancellationToken::uncancelable(),
-                )
-                .unwrap();
-            if step.complete {
-                break;
-            }
-        }
-        let source = self.capture.take().unwrap().complete().unwrap();
-        let role = self.role();
-        let mut verification = self
-            .service
-            .lock()
-            .begin_native_range_image_verification(
-                install,
-                &NativeImageInstallRole::CurrentVoterRepair(&role),
-                source,
-                &CancellationToken::uncancelable(),
-            )
-            .unwrap();
-        let mut completed = false;
-        for _ in 0..128 {
-            let role = self.role();
-            if self
-                .service
-                .lock()
-                .advance_native_range_image_verification(
-                    &mut verification,
-                    &NativeImageInstallRole::CurrentVoterRepair(&role),
-                    &CancellationToken::uncancelable(),
-                )
-                .unwrap()
-                == NativeTargetImageVerificationProgress::Complete
-            {
-                completed = true;
-                break;
-            }
-        }
-        assert!(
-            completed,
-            "bounded actual lease target verification must finish"
-        );
-        let role = self.role();
-        self.service
-            .lock()
-            .finish_native_range_image_verification(
-                verification,
-                &NativeImageInstallRole::CurrentVoterRepair(&role),
-                &CancellationToken::uncancelable(),
-            )
-            .unwrap()
+        let providers = &self.providers;
+        let initiator = &self.initiator;
+        let range = &self.range;
+        let nonce = self.scope.recovery_nonce;
+        materialize_actual_current_repair_image(
+            &mut self.capture,
+            &self.service,
+            || Self::fresh_role_for(providers, initiator, &node("n1"), range, nonce),
+            || {},
+            install,
+        )
     }
 }
 

@@ -464,3 +464,5 @@ mod copied_obligation_case;
 mod sparse_current_case;
 
 mod small_sparse_cold;
+
+mod copied_full_image_case;

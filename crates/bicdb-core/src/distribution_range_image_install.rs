@@ -2678,3 +2678,9 @@ pub(crate) mod tests {
 #[cfg(test)]
 #[path = "distribution_range_image_install/current_repair_tests.rs"]
 mod current_repair_tests;
+
+#[cfg(test)]
+#[path = "distribution_range_image_install/current_repair_flow.rs"]
+mod current_repair_flow;
+#[cfg(test)]
+pub(crate) use current_repair_flow::materialize_actual_current_repair_image;

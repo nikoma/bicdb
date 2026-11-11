@@ -5,6 +5,10 @@ use super::*;
 #[test]
 #[ignore = "requires explicit BICDB_RETAINED_NATIVE_RECOVERY_ROOT; copies retained actual 1025-ACK fixture"]
 fn copied_actual_1025_prefix_sparse_current_quorum_finishes_native_tail() {
+    run_sparse_current_case(false);
+}
+
+pub(super) fn run_sparse_current_case(continue_image: bool) {
     let retained = std::env::var_os("BICDB_RETAINED_NATIVE_RECOVERY_ROOT")
         .expect("explicit preserved test-artifact root is required");
     let source = std::path::PathBuf::from(retained);
@@ -253,6 +257,26 @@ fn copied_actual_1025_prefix_sparse_current_quorum_finishes_native_tail() {
             .contains("sparse history is not fully materialized"),
         "{behind_ready_error}"
     );
+    let source_ready_index = source_ready.range_index();
+    let full_image = if continue_image {
+        // End the old short-lived attestation before fresh fence observations;
+        // the continuation obtains its own real quorum/source-history proof.
+        drop(source_ready);
+        Some(
+            super::copied_full_image_case::continue_actual_compacted_recovery(
+                &fixture,
+                &providers,
+                &runtimes,
+                &initiator,
+                &range,
+                &scope,
+                &tail.command,
+                &parent,
+            ),
+        )
+    } else {
+        None
+    };
     let mut checked = 0;
     for line in std::fs::read_to_string(
         fixture
@@ -296,10 +320,10 @@ fn copied_actual_1025_prefix_sparse_current_quorum_finishes_native_tail() {
         "normal_tail_gap_refusal":tail_gap.to_string(),"behind_ready_error":behind_ready_error.to_string(),
         "target_image_obligations":after_image_obligations.irrevocable_commands(),
         "prior_target_image_token_invalidated_without_raw_progress_change":true,
-        "source_ready_index":source_ready.range_index(),"acknowledged_values_reconciled":checked,
+        "source_ready_index":source_ready_index,"full_image_continuation":full_image,"acknowledged_values_reconciled":checked,
         "unknown_tail_is_not_new_application_ack":true,
         "original_catalog_and_refusal_bytes_unchanged":true,"physical_qualification":false,
-        "behind_image_install_tested":false,"activation_proven":false,"new_application_ack_tested":false});
+        "behind_image_install_tested":continue_image,"activation_proven":false,"new_application_ack_tested":false});
     std::fs::write(
         fixture
             .root

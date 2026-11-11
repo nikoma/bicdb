@@ -4,7 +4,10 @@ mod collection_rename;
 mod commit_snapshot;
 mod deferred_materialize;
 mod local_namespace_identity;
+mod native_wal_apply;
 pub use deferred_materialize::DeferredMaterializeStats;
+pub(crate) use native_wal_apply::admission_mutations_sha256;
+pub use native_wal_apply::NativeWalApplyReceipt;
 mod ha_bootstrap;
 mod ha_node;
 mod online_backup;
@@ -2630,6 +2633,10 @@ pub struct TxLogHandle {
     durable_notifier: Arc<replication_live::DurableNotifier>,
     path: PathBuf,
     fsync: bool,
+    native_sync_nonce: Uuid,
+    native_synced_through: Arc<AtomicU64>,
+    native_log_generation: Arc<AtomicU64>,
+    native_retention: Arc<native_wal_apply::NativeWalRetentionState>,
     /// The database's fail-closed durability state. A failed write or sync
     /// of this log fences it: no later batch is written, no waiter retries,
     /// and `written_seq` (what replication ships and what commits wait on)
@@ -2654,6 +2661,10 @@ impl TxLogHandle {
             durable_notifier: Arc::new(replication_live::DurableNotifier::default()),
             path,
             fsync,
+            native_sync_nonce: Uuid::now_v7(),
+            native_synced_through: Arc::new(AtomicU64::new(0)),
+            native_log_generation: Arc::new(AtomicU64::new(1)),
+            native_retention: Arc::new(Default::default()),
             health: bicdb_page::DurabilityHealth::new(),
         }
     }
@@ -2932,6 +2943,13 @@ impl TxLogHandle {
             // Only reopening the database through recovery may clear a
             // failed repair. Dropping the descriptor must not clear it.
             return;
+        }
+        // A cut was deferred while a native receipt owns its pin; in that
+        // case descriptor invalidation alone changes no bytes/generation.
+        if self.native_retention.active.load(AtomicOrdering::Acquire) == 0 {
+            self.native_synced_through.store(0, AtomicOrdering::Release);
+            self.native_log_generation
+                .fetch_add(1, AtomicOrdering::AcqRel);
         }
         state.file = None;
         self.lock_pending().clear();
@@ -3909,6 +3927,7 @@ pub struct BicDb {
     commit_admission: RwLock<Option<Arc<dyn CommitAdmission>>>,
     range_mutations: crate::distribution_range_mutation::RangeMutationGate,
     range_image_initializing: AtomicBool,
+    range_image_native_birth_active: AtomicBool,
     schema_compatibility: SchemaCompatibilityAuthority,
     encryption: EncryptionRuntime,
     // Per-collection interior mutability: each collection's mutable state lives
@@ -8920,6 +8939,18 @@ pub trait CommitAdmission: std::fmt::Debug + Send + Sync {
     /// its external anti-rollback watermark without trusting SQL or a caller.
     fn local_applied(&self, ticket: &CommitAdmissionTicket, commit_seq: u64) -> Result<()>;
 
+    /// Additive native-proof callback. The receipt establishes actual local
+    /// WAL sync/intent only; implementations still require independent range
+    /// certificates and native image/prefix lineage. Legacy authorities retain
+    /// their existing callback semantics through this default.
+    fn local_applied_with_receipt(
+        &self,
+        ticket: &CommitAdmissionTicket,
+        receipt: &NativeWalApplyReceipt,
+    ) -> Result<()> {
+        self.local_applied(ticket, receipt.sequence())
+    }
+
     /// Irreversibly reject future admissions for this installed authority.
     /// Implementations which cannot be fenced locally must refuse explicitly.
     fn fence(&self) -> Result<()> {
@@ -9068,6 +9099,7 @@ pub struct Transaction {
     bypass_commit_admission: bool,
     range_mutation_claim: Option<crate::distribution_range_mutation::RangeMutationClaim>,
     database_mutation_permit: Option<crate::distribution_range_mutation::DatabaseMutationPermit>,
+    native_wal_retention: Option<native_wal_apply::NativeWalRetentionPin>,
     commit_admission_ticket: Option<(Arc<dyn CommitAdmission>, CommitAdmissionTicket)>,
     committed_seq: Option<u64>,
     // Paged mode: the page-store snapshot captured when this transaction began,
@@ -10869,6 +10901,7 @@ impl BicDb {
             commit_admission: RwLock::new(None),
             range_mutations: crate::distribution_range_mutation::RangeMutationGate::default(),
             range_image_initializing: AtomicBool::new(false),
+            range_image_native_birth_active: AtomicBool::new(false),
             schema_compatibility: SchemaCompatibilityAuthority::new(),
             encryption,
             collections,
@@ -17889,9 +17922,24 @@ impl Transaction {
                     "admitted commit has no durable local sequence".to_string(),
                 )
             })?;
-            admission.local_applied(ticket, commit_seq)?;
+            let db = unsafe { self.db.as_ref() };
+            if db
+                .range_image_native_birth_active
+                .load(AtomicOrdering::Acquire)
+            {
+                let receipt = self.mint_native_wal_apply_receipt().map_err(|error| BicDbError::CommitOutcomeUnknown {
+                    sequence: Some(commit_seq), transaction_id: Some(self.id.0), incarnation: db.incarnation.clone(),
+                    detail: format!("native WAL apply receipt was not established after local commit: {error}"),
+                })?;
+                admission.local_applied_with_receipt(ticket, &receipt)?;
+            } else {
+                admission.local_applied(ticket, commit_seq)?;
+            }
             self.commit_admission_ticket = None;
         }
+        // Successful callback completed the native prefix boundary; a replay
+        // helper may retain a shared private receipt beyond this transaction.
+        self.native_wal_retention = None;
         Ok(())
     }
 

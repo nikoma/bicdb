@@ -310,9 +310,17 @@ impl BicDb {
     /// collection take the flashback clock for their whole commit and carry
     /// their history rows; all others go straight to the commit body.
     pub(crate) fn commit_transaction(&self, tx: &mut Transaction) -> Result<u64> {
+        self.check_recovery_state()?;
         if tx.state == TxState::Pending && !tx.writes.is_empty() {
             if self.range_image_initializing.load(AtomicOrdering::Acquire) {
                 return Err(BicDbError::Cluster("fresh image-aware database genesis is incomplete; ordinary writes remain closed".into()));
+            }
+            if self
+                .range_image_native_birth_active
+                .load(AtomicOrdering::Acquire)
+                && tx.native_wal_retention.is_none()
+            {
+                tx.native_wal_retention = Some(self.tx_log.pin_native_wal_proof()?);
             }
             if let Some(claim) = &tx.range_mutation_claim {
                 self.range_mutations.validate_claim(claim)?;

@@ -505,6 +505,12 @@ impl BicDb {
         range_id: Option<RangeId>,
         reason: &str,
     ) -> Result<()> {
+        if !self
+            .range_image_native_birth_active
+            .load(AtomicOrdering::Acquire)
+        {
+            return Ok(());
+        }
         let Some(birth) = self.read_native_birth()? else {
             return Ok(());
         };
@@ -558,8 +564,12 @@ impl BicDb {
     }
     pub(super) fn load_native_range_image_admission(&self) -> Result<()> {
         let Some(birth) = self.read_native_birth()? else {
+            self.range_image_native_birth_active
+                .store(false, AtomicOrdering::Release);
             return Ok(());
         };
+        self.range_image_native_birth_active
+            .store(true, AtomicOrdering::Release);
         let ready: Option<NativeInitializationComplete> =
             self.read_native_range_image_record(READY_KEY)?;
         if let Some(ready) = ready {

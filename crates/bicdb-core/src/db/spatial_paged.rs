@@ -2208,6 +2208,12 @@ impl BicDb {
             // otherwise leave such frames exposed to an OS crash.
             let log = self.tx_log_path();
             if log.exists() {
+                let Some(_native_wal_cut) = self.tx_log.native_wal_cut_guard()? else {
+                    return Err(BicDbError::HighAvailability(
+                        "cannot rewrite recovery WAL while native apply receipts are retained"
+                            .into(),
+                    ));
+                };
                 self.tx_log.flush_pending()?;
                 let _backup_gate = storage::acquire_database_backup_write_guard(&self.path)?;
                 copy_transaction_log_tail(&log, 0, true)?;

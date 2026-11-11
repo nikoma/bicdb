@@ -24,3 +24,9 @@ Still required before this becomes a working range-image protocol:
 - Positive versions of the retained 1,025-command compaction and late-ACK cleanup-first witnesses, plus relevant broad regressions. These are independent of an eventual strong-read API.
 
 [Focused local evidence](evidence/range-image-native-primitives-2026-11-11/README.md) records the precise source manifest and checks. It contains no physical failover, throughput, production qualification, or deployment result.
+
+## Actual local WAL evidence
+
+The next foundation adds `NativeWalApplyReceipt` through an additive commit-authority callback. Its private current-open writer identity, actual transaction/mutation hash, explicit whole-file WAL sync and directory sync are local evidence only. A shared, bounded native retention lease prevents the specific WAL from being cut between commit delivery and the native callback; historical native recovery after a crash remains a separate gate. The legacy callback gains no native floor.
+
+[Receipt and retention checks](evidence/native-wal-apply-receipt-2026-11-11/README.md) passed together with the existing genesis/gate controls. Certified Applied/Aborted prefix extension, target image installation, full handoff and strong reads remain required; this receipt does not substitute for any of them.

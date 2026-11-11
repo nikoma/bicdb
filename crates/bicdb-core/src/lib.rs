@@ -245,6 +245,7 @@ pub use db::{
 pub use db::{timestamp_day_index_inputs_supported, timestamp_day_index_value};
 pub use db::{
     CommitAdmission, CommitAdmissionIntent, CommitAdmissionMutation, CommitAdmissionTicket,
+    NativeWalApplyReceipt,
 };
 pub use db::{CommitResolution, INCARNATION_JOURNAL};
 pub use db::{WalArchiveReport, WalArchiveStatus};

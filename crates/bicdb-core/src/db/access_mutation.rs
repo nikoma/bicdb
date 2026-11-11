@@ -903,6 +903,7 @@ impl BicDb {
             bypass_commit_admission: false,
             range_mutation_claim: None,
             database_mutation_permit: None,
+            native_wal_retention: None,
             commit_admission_ticket: None,
             committed_seq: None,
             paged_snapshot: self

@@ -15041,7 +15041,11 @@ impl Transaction {
             || self.write_len() != 0
             || self.lock_len() != 0
             || !self.observed_record_versions.lock().is_empty()
-            || !self.collection_incarnations.lock().is_empty()
+            || self
+                .collection_incarnations
+                .lock()
+                .values()
+                .any(|binding| binding.snapshot_observed)
         {
             return Err(BicDbError::TransactionConflict(
                 "statement snapshot can only be deferred before transaction access".into(),

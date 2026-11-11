@@ -12,6 +12,10 @@ const RECORD_OBSERVATIONS_PER_COLLECTION: usize = 128;
 #[derive(Debug)]
 pub(super) struct CatalogBinding {
     pub(super) incarnation: Arc<()>,
+    /// Ordinary native row access observes MVCC state. SQL's explicit
+    /// catalog check pins only metadata identity and does not acquire a data
+    /// snapshot, even when it scans the whole metadata collection.
+    pub(super) snapshot_observed: bool,
     // None is a whole-collection observation. Point catalog observations
     // escalate to that conservative representation at a fixed memory bound.
     records: Option<BTreeSet<String>>,
@@ -366,11 +370,11 @@ impl CatalogAdmission {
         state.check_record_access(owner, actor, collection, None, record)?;
         let current = current()?;
         state.check_record_access(owner, actor, collection, Some(&current), record)?;
-        Self::remember(bindings, collection, current)
+        Self::remember_binding(bindings, collection, current, record, true)
     }
 
     fn remember(bindings: &Bindings, collection: &str, incarnation: Arc<()>) -> Result<()> {
-        Self::remember_record(bindings, collection, incarnation, None)
+        Self::remember_binding(bindings, collection, incarnation, None, true)
     }
 
     fn remember_record(
@@ -378,6 +382,16 @@ impl CatalogAdmission {
         collection: &str,
         incarnation: Arc<()>,
         record: Option<&str>,
+    ) -> Result<()> {
+        Self::remember_binding(bindings, collection, incarnation, record, false)
+    }
+
+    fn remember_binding(
+        bindings: &Bindings,
+        collection: &str,
+        incarnation: Arc<()>,
+        record: Option<&str>,
+        snapshot_observed: bool,
     ) -> Result<()> {
         let mut bindings = bindings.lock();
         match bindings.get_mut(collection) {
@@ -387,6 +401,7 @@ impl CatalogAdmission {
                 )))
             }
             Some(binding) => {
+                binding.snapshot_observed |= snapshot_observed;
                 match (binding.records.as_mut(), record) {
                     (Some(records), Some(id)) if records.contains(id) => {}
                     (Some(records), Some(id))
@@ -404,6 +419,7 @@ impl CatalogAdmission {
                     collection.to_string(),
                     CatalogBinding {
                         incarnation,
+                        snapshot_observed,
                         records: record.map(|id| BTreeSet::from([id.to_string()])),
                     },
                 );

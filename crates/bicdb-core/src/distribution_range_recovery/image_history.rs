@@ -60,6 +60,10 @@ pub(crate) struct RecoveryImageHistoryObligationsV1 {
     /// Includes old CQ/Applied entries AND durable current-session certify-only
     /// markers. A later compaction cannot silently remove their obligations.
     pub irreversible_command_sha256: BTreeMap<u64, String>,
+    /// Version 2 explicitly includes permanent sparse committed decisions.
+    /// None is legacy v1 only; a v2 omission/null is invalid, including when empty.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sparse_committed_command_sha256: Option<BTreeMap<u64, String>>,
 }
 impl RecoveryImageHistoryObligationsV1 {
     pub(crate) fn require_shape(
@@ -70,7 +74,7 @@ impl RecoveryImageHistoryObligationsV1 {
         if self.irreversible_command_sha256.len() > MAX_FENCED_IRREVERSIBLE_COMMANDS {
             return Err(fenced_obligation_limit_error());
         }
-        if self.format_version != 1
+        if !matches!(self.format_version, 1 | 2)
             || self.node_id != progress.node_id
             || self.range_id != scope.range_id
             || self.range_id != progress.range_id
@@ -78,12 +82,38 @@ impl RecoveryImageHistoryObligationsV1 {
             || self.compacted_through != progress.compacted_through
             || self.compacted_through > progress.resolved_through
             || progress.resolved_through > self.last_index
-            || self
-                .irreversible_command_sha256
-                .iter()
-                .any(|(index, sha)| *index == 0 || *index > self.last_index || !digest(sha))
+            || self.irreversible_command_sha256.iter().any(|(index, sha)| {
+                *index == 0
+                    || !digest(sha)
+                    || (*index > self.last_index
+                        && self
+                            .sparse_committed_command_sha256
+                            .as_ref()
+                            .and_then(|map| map.get(index))
+                            != Some(sha))
+            })
         {
             return Err(invalid("malformed fenced image-history obligations"));
+        }
+        match (&self.sparse_committed_command_sha256, self.format_version) {
+            (None, 1) => {}
+            (Some(sparse), 2) if sparse.len() <= 1024 => {
+                for (index, sha) in sparse {
+                    if *index == 0
+                        || !digest(sha)
+                        || self.irreversible_command_sha256.get(index) != Some(sha)
+                    {
+                        return Err(invalid(
+                            "sparse history is omitted/conflicting in complete obligations",
+                        ));
+                    }
+                }
+            }
+            _ => {
+                return Err(invalid(
+                    "sparse history field requires its explicit version 2 fence",
+                ))
+            }
         }
         if let Some(point) = &self.native_point {
             if !digest(&point.logical_genesis_sha256)
@@ -173,6 +203,7 @@ pub(crate) fn test_only_structural_fence_dtos(
             command_checksum_sha256: "f".repeat(64),
             materialized: false,
         }),
+        sparse_committed_command_sha256: None,
         irreversible_command_sha256: (first..=u64::MAX)
             .map(|index| (index, "f".repeat(64)))
             .collect(),

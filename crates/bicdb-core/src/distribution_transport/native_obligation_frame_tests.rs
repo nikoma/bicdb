@@ -85,6 +85,7 @@ fn complete_fenced_obligation_envelope_and_maximum_entry_fit_native_frame_floor(
                 fence,
                 index: Some(u64::MAX),
                 entry: Some(entry),
+                sparse_decision: None,
                 current_certification: None,
             },
         )),

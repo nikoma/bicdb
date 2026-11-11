@@ -124,6 +124,12 @@ impl RangeWriteStore {
                 &marker.command_sha256,
             )?;
         }
+        let sparse_commands = self.sparse_irreversible_commands(scope.range_id)?;
+        for (index, checksum) in &sparse_commands {
+            insert_complete_fenced_obligation(&mut irreversible_command_sha256, *index, checksum)?;
+        }
+        let sparse_committed_command_sha256 =
+            (!sparse_commands.is_empty()).then_some(sparse_commands);
         let native_point = safety
             .history_point()
             .map(|point| RecoveryNativeHistoryPointV1 {
@@ -149,7 +155,11 @@ impl RangeWriteStore {
             }
         };
         let observed = RecoveryImageHistoryObligationsV1 {
-            format_version: 1,
+            format_version: if sparse_committed_command_sha256.is_some() {
+                2
+            } else {
+                1
+            },
             node_id: self.catalog.node_id.clone(),
             range_id: scope.range_id,
             last_index: log.last_index,
@@ -157,6 +167,7 @@ impl RangeWriteStore {
             native_point,
             pending_native,
             irreversible_command_sha256,
+            sparse_committed_command_sha256,
         };
         observed.require_shape(scope, &self.progress(scope.range_id))?;
         self.require_persisted_recovery_scope(scope)?;
@@ -190,6 +201,14 @@ impl RangeWriteStore {
                 ));
             }
             verify(*index, &marker.command_sha256)?;
+        }
+        for (index, checksum) in self.sparse_irreversible_commands(observation.range_id())? {
+            if index > observation.resolved_index() {
+                return Err(range_write_error(
+                    "native readiness omits permanent sparse committed history",
+                ));
+            }
+            verify(index, &checksum)?;
         }
         self.revalidate_recovery_resolved_observation(observation, role, native)
     }

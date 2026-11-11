@@ -61,6 +61,14 @@ impl RangeWriteStore {
             }
             verify(*index, &marker.command_sha256)?;
         }
+        for (index, checksum) in self.sparse_irreversible_commands(image.scope().range_id)? {
+            if index > image.base().range_index() {
+                return Err(range_write_error(
+                    "finalized image omits permanent sparse committed history",
+                ));
+            }
+            verify(index, &checksum)?;
+        }
         self.verify_finalized_native_image_catalogue(image, database, role, frozen)
     }
 

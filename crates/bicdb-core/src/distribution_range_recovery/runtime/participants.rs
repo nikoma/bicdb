@@ -315,6 +315,23 @@ impl RangeRecoveryRuntime {
         request: &RecoveryHistoricalCommandRequest,
         parent: &CancellationToken,
     ) -> Result<RecoveryHistoryObservation> {
+        self.certify_historical_inner(initiator, request, parent, false)
+    }
+    pub(crate) fn certify_sparse_historical(
+        &self,
+        initiator: &MetadataReadParticipant,
+        request: &RecoveryHistoricalCommandRequest,
+        parent: &CancellationToken,
+    ) -> Result<RecoveryHistoryObservation> {
+        self.certify_historical_inner(initiator, request, parent, true)
+    }
+    fn certify_historical_inner(
+        &self,
+        initiator: &MetadataReadParticipant,
+        request: &RecoveryHistoricalCommandRequest,
+        parent: &CancellationToken,
+        sparse: bool,
+    ) -> Result<RecoveryHistoryObservation> {
         let cancellation = request.cancellation(parent)?;
         let operation = self.reserve(request.scope.range_id)?;
         let (decision, frozen, _pool) =
@@ -327,7 +344,21 @@ impl RangeRecoveryRuntime {
                     break s;
                 }
             };
-            service.certify_native_historical_command(role, &decision, &frozen, &cancellation)?;
+            if sparse {
+                service.certify_sparse_native_historical_command(
+                    role,
+                    &decision,
+                    &frozen,
+                    &cancellation,
+                )?;
+            } else {
+                service.certify_native_historical_command(
+                    role,
+                    &decision,
+                    &frozen,
+                    &cancellation,
+                )?;
+            }
         }
         self.observe_history_inner(
             &self.provider.local_participant(),

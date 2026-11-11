@@ -454,3 +454,6 @@ fn actual_gap_refusal_preserves_durable_observations_and_retained_prefix_recover
 }
 
 mod copied_obligation_case;
+
+#[path = "recovery_order_tests/sparse_current_case.rs"]
+mod sparse_current_case;

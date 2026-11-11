@@ -289,6 +289,9 @@ enum ClusterDataRequest {
     RecoveryApplyHistorical {
         request: crate::distribution_range_recovery::RecoveryHistoricalCommandRequest,
     },
+    RecoveryCertifySparseHistorical {
+        request: crate::distribution_range_recovery::RecoveryHistoricalCommandRequest,
+    },
     PrepareRangeWrite {
         command: RangeWriteCommand,
     },
@@ -397,6 +400,7 @@ impl ClusterDataRequest {
             Self::CompleteNativeRecovery { request }
             | Self::ObserveNativeCompletion { request } => Some(request.scope.range_id),
             Self::RecoveryCertifyHistorical { request }
+            | Self::RecoveryCertifySparseHistorical { request }
             | Self::RecoveryApplyHistorical { request } => Some(request.scope.range_id),
             Self::Ping
             | Self::Heartbeat { .. }
@@ -907,6 +911,20 @@ fn handle_cluster_data_connection(
                 CancellationToken::new(Arc::new(AtomicBool::new(false)), Some(request_deadline));
             return runtime
                 .certify_historical(caller, &request, &token)
+                .map(|observation| {
+                    ClusterDataResponse::RecoveryFencedProbe(observation.into_reply())
+                });
+        }
+        if let ClusterDataRequest::RecoveryCertifySparseHistorical { request } = request.request {
+            let runtime = recovery_runtime
+                .ok_or_else(|| transport_error("native recovery runtime is not active"))?;
+            let caller = authenticated_caller.as_ref().ok_or_else(|| {
+                transport_error("sparse certification requires an authenticated member")
+            })?;
+            let token =
+                CancellationToken::new(Arc::new(AtomicBool::new(false)), Some(request_deadline));
+            return runtime
+                .certify_sparse_historical(caller, &request, &token)
                 .map(|observation| {
                     ClusterDataResponse::RecoveryFencedProbe(observation.into_reply())
                 });
@@ -2393,6 +2411,7 @@ fn dispatch_cluster_data_request(
             Ok(ClusterDataResponse::MetadataReadProbe(response))
         }
         ClusterDataRequest::RecoveryCertifyHistorical { .. }
+        | ClusterDataRequest::RecoveryCertifySparseHistorical { .. }
         | ClusterDataRequest::RecoveryApplyHistorical { .. } => Err(transport_error(
             "authenticated native historical recovery runtime is not active",
         )),
@@ -3534,9 +3553,43 @@ impl TcpClusterRelocationTransport {
         apply: bool,
         parent: &CancellationToken,
     ) -> Result<crate::distribution_range_recovery::RecoveryHistoryObservation> {
+        self.recovery_historical_command_observation_inner(
+            destination,
+            request,
+            apply,
+            false,
+            parent,
+        )
+    }
+    pub(crate) fn recovery_sparse_historical_command_observation(
+        &self,
+        destination: &ClusterNodeId,
+        request: &crate::distribution_range_recovery::RecoveryHistoricalCommandRequest,
+        parent: &CancellationToken,
+    ) -> Result<crate::distribution_range_recovery::RecoveryHistoryObservation> {
+        self.recovery_historical_command_observation_inner(
+            destination,
+            request,
+            false,
+            true,
+            parent,
+        )
+    }
+    fn recovery_historical_command_observation_inner(
+        &self,
+        destination: &ClusterNodeId,
+        request: &crate::distribution_range_recovery::RecoveryHistoricalCommandRequest,
+        apply: bool,
+        sparse: bool,
+        parent: &CancellationToken,
+    ) -> Result<crate::distribution_range_recovery::RecoveryHistoryObservation> {
         let token = request.cancellation(parent)?;
         let probe = request.probe()?;
-        let payload = if apply {
+        let payload = if sparse {
+            ClusterDataRequest::RecoveryCertifySparseHistorical {
+                request: request.clone(),
+            }
+        } else if apply {
             ClusterDataRequest::RecoveryApplyHistorical {
                 request: request.clone(),
             }
@@ -3678,6 +3731,7 @@ impl TcpClusterRelocationTransport {
                 | ClusterDataRequest::CompleteNativeRecovery { .. }
                 | ClusterDataRequest::ObserveNativeCompletion { .. }
                 | ClusterDataRequest::RecoveryCertifyHistorical { .. }
+                | ClusterDataRequest::RecoveryCertifySparseHistorical { .. }
                 | ClusterDataRequest::RecoveryApplyHistorical { .. }
         );
         let network_deadline = Instant::now() + Duration::from_millis(self.config.io_timeout_ms);
@@ -3891,6 +3945,15 @@ impl RangeWriteTransport for TcpClusterRelocationTransport {
         parent: &CancellationToken,
     ) -> Result<crate::distribution_range_recovery::RecoveryHistoryObservation> {
         self.recovery_historical_command_observation(destination, request, apply, parent)
+    }
+
+    fn recovery_sparse_historical_command_observation(
+        &self,
+        destination: &ClusterNodeId,
+        request: &crate::distribution_range_recovery::RecoveryHistoricalCommandRequest,
+        parent: &CancellationToken,
+    ) -> Result<crate::distribution_range_recovery::RecoveryHistoryObservation> {
+        self.recovery_sparse_historical_command_observation(destination, request, parent)
     }
 
     fn validate_native_command_pre_admission(

@@ -153,6 +153,17 @@ impl RangeWriteStore {
                 ));
             }
         }
+        for (index, checksum) in self.sparse_irreversible_commands(prepared.scope().range_id)? {
+            if index > prepared.range_index()
+                || obligations
+                    .insert(index, checksum.clone())
+                    .is_some_and(|old| old != checksum)
+            {
+                return Err(range_write_error(
+                    "native-prepared sparse committed history conflicts or is uncovered",
+                ));
+            }
+        }
         if obligations.len() > 2048 {
             return Err(range_write_error(
                 "native-ready obligation projection exceeds bounded retention",

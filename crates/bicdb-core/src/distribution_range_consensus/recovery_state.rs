@@ -709,6 +709,18 @@ impl RangeWriteStore {
                 self.catalog.backup_fences.get(&range_id),
             ),
         )?;
+        // Preserve the exact prior v2 commitment for ranges without sparse
+        // history. Unrelated ranges and old durable activation anchors must
+        // not become stale just because another range first uses format 10.
+        if let Some(sparse) = self
+            .catalog
+            .sparse_committed_decisions
+            .as_ref()
+            .and_then(|ranges| ranges.get(&range_id))
+            .filter(|entries| !entries.is_empty())
+        {
+            serde_json::to_writer(&mut hash, &("sparse-committed-history-v1", sparse))?;
+        }
         Ok(hex::encode(hash.0.finalize()))
     }
     /// No row/WAL Apply occurs here. Only an independently observed committed
@@ -1016,6 +1028,7 @@ impl RangeWriteStore {
     }
     pub(crate) fn require_no_active_recovery(&self, range_id: RangeId) -> Result<()> {
         self.require_durable_recovery_catalog()?;
+        self.require_no_uncovered_sparse(range_id, self.progress(range_id).resolved_through)?;
         if self
             .catalog
             .recovery_fences
@@ -1075,6 +1088,7 @@ impl RangeWriteStore {
         native: &NativeRecoveryAdmission,
     ) -> Result<()> {
         role.require_live_request()?;
+        self.require_sparse_native_binding(role.current_range().id, native)?;
         if !self.fsync
             || !crate::format::range_image_install_active(&self.root)?
             || &self.catalog.cluster_id != role.cluster_id()
@@ -1320,6 +1334,7 @@ impl RangeWriteStore {
                 "historical prefix/tail is not fully resolved",
             ));
         }
+        self.require_no_uncovered_sparse(scope.range_id, log.resolved_through)?;
         Ok(RecoveryResolvedCatalogObservation {
             store_open_id: self.open_id,
             node_id: self.catalog.node_id.clone(),

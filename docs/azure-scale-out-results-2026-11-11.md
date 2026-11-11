@@ -1,6 +1,6 @@
 # Azure four-to-five-node experiment: actual results
 
-**Automatic movement observed; capacity and fault-safe rebalance qualification failed.**
+**Automatic movement observed; capacity gain and fault-safe rebalance remain unqualified.**
 The owner authorized an isolated $25/eight-hour Azure experiment. The experiment
 ran on 2026-11-11 UTC with optimized **1.0.461-beta**, source
 `b05385d4b033edf0db03f3eccf4bdd86f7c8eddb`, binary SHA-256
@@ -46,7 +46,10 @@ addresses and generated keys are not published.
 ## Successful-call latency and failures
 
 All values are milliseconds for successful logical calls only. Failed calls are
-counted separately. The short run included extra SSH append/observation traffic;
+counted separately; native failed-call latencies and individual successful-call
+latency samples were not retained. Native percentiles are reported aggregates,
+not independently recomputable from published per-call samples. Successes/s
+counts reads plus writes. The short run included extra SSH append/observation traffic;
 the longer native comparison removed extra append probes but retained observation
 costs and an n0-hosted client. Traffic duration includes draining in-flight calls;
 verification follows it. These are observed VM measurements, not physical-device
@@ -103,6 +106,10 @@ source hypotheses and required regressions; no causal engine repair is claimed.
 The longer baseline's sampled server process write counters grew about 159 GB
 across four members. They include background/control/WAL and verification work.
 They are not isolated range-log write amplification or proof of the bottleneck.
+The [source cost review](distributed-range-log-costs-2026-11-11.md) identifies
+whole-catalog durable replacement at ordinary range-write transitions as a
+performance hypothesis requiring isolated measurement; it does not diagnose
+the failed trial or authorize weakening durability.
 
 ## Release and qualification boundary
 

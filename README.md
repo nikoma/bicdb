@@ -483,10 +483,14 @@ boundary; it does not claim complete PostgreSQL implementation parity.
 The distributed implementation has extensive deterministic tests, but its 1,
 5, and 20 TB production-hardware certification matrix remains open. See the
 [automatic sharding roadmap](docs/automatic-distributed-sharding-todo.md).
-The [3/5/9-node harness](scripts/platform/README.md) and
+The [cluster harness, including 4→5 growth](scripts/platform/README.md), and
 [offline Field Notebook](examples/platform/notebook/README.md) provide
 reproducible functional workloads. Shared-host runs do not establish
-independent-machine throughput scaling or independent-user adoption.
+independent-machine throughput scaling or independent-user adoption. The
+[2026-11-11 Azure VM experiment](docs/azure-scale-out-results-2026-11-11.md)
+observed automatic data and leader movement, but no capacity gain; its longer
+growth trial failed with availability/verification errors. Production
+qualification remains incomplete.
 
 ### Application runtime and extensions
 

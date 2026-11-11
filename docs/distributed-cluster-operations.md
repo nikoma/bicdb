@@ -2,7 +2,10 @@
 
 See the [2026-11-10 maturity audit](ha-horizontal-scaling-audit-2026-11-10.md)
 for source-scoped tests, missing transparent SQL integration, physical evidence
-limits, recovery blockers and the proposed independent 4→5-node experiment.
+limits and recovery blockers. The subsequent
+[Azure 4→5 results](azure-scale-out-results-2026-11-11.md) show real automatic
+movement, no demonstrated capacity gain, and a longer growth trial that failed
+with availability/verification errors. Production qualification remains open.
 
 This guide covers BicDB's automatic range-placement control plane. A cluster
 uses durable membership, virtual ranges, epoch-fenced routes, bounded

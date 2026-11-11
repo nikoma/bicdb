@@ -182,6 +182,11 @@ fn copied_actual_1025_prefix_sparse_current_quorum_finishes_native_tail() {
         .unwrap();
     // A separate protocol operation persists the actual committed decision on
     // the lagging voter. No row, ordered log entry, or applied floor advances.
+    let before_image_obligations = fixture.services[&node("n1")]
+        .lock()
+        .test_image_history_obligations(scope.range_id)
+        .unwrap();
+    assert!(before_image_obligations.irrevocable_commands().is_empty());
     let sparse_observation = runtimes[&node("n1")]
         .certify_sparse_historical(&initiator, &request, &parent)
         .unwrap();
@@ -203,6 +208,18 @@ fn copied_actual_1025_prefix_sparse_current_quorum_finishes_native_tail() {
             .get(&1026),
         Some(&tail.command.checksum_sha256)
     );
+    let after_image_obligations = fixture.services[&node("n1")]
+        .lock()
+        .test_image_history_obligations(scope.range_id)
+        .unwrap();
+    assert_eq!(
+        after_image_obligations.irrevocable_commands(),
+        &BTreeMap::from([(1026, tail.command.checksum_sha256.clone())])
+    );
+    assert_eq!(after_image_obligations.last_index(), 0);
+    assert!(fixture.services[&node("n1")].lock()
+        .test_require_image_history_obligations_current(&before_image_obligations).is_err(),
+        "new sparse history must invalidate an actual old image token even with unchanged raw counters");
     let source_applied = runtimes[&node("n0")]
         .apply_historical(&initiator, &request, &parent)
         .unwrap();
@@ -277,6 +294,8 @@ fn copied_actual_1025_prefix_sparse_current_quorum_finishes_native_tail() {
         "behind_native_after_sparse":sparse_observation.fence().native(),
         "behind_obligations":sparse_observation.fence().image_history(),
         "normal_tail_gap_refusal":tail_gap.to_string(),"behind_ready_error":behind_ready_error.to_string(),
+        "target_image_obligations":after_image_obligations.irrevocable_commands(),
+        "prior_target_image_token_invalidated_without_raw_progress_change":true,
         "source_ready_index":source_ready.range_index(),"acknowledged_values_reconciled":checked,
         "unknown_tail_is_not_new_application_ack":true,
         "original_catalog_and_refusal_bytes_unchanged":true,"physical_qualification":false,

@@ -1482,6 +1482,22 @@ impl ClusterDataNodeService {
         self.range_writes.progress(range_id)
     }
 
+    #[cfg(test)]
+    pub(crate) fn test_image_history_obligations(
+        &self,
+        range_id: RangeId,
+    ) -> Result<crate::distribution_range_consensus::TargetImageCatalogHistoryObligations> {
+        self.range_writes
+            .image_install_catalog_history_obligations(range_id)
+    }
+    #[cfg(test)]
+    pub(crate) fn test_require_image_history_obligations_current(
+        &self,
+        observed: &crate::distribution_range_consensus::TargetImageCatalogHistoryObligations,
+    ) -> Result<()> {
+        observed.require_current(&self.range_writes)
+    }
+
     pub fn range_write_progress_for_peer(
         &self,
         range: &RangeDescriptor,

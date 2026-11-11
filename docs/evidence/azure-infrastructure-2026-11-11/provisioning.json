@@ -1,0 +1,84 @@
+{
+  "recorded_at_utc": "2026-11-11T03:59:32.837431+00:00",
+  "source_commit": "b05385d4b033edf0db03f3eccf4bdd86f7c8eddb",
+  "approved_budget_usd": 25,
+  "approved_max_hours": 8,
+  "initial_plan": {
+    "total_vcpus": 22,
+    "ds_v5_family_quota": 0,
+    "regional_vcpu_quota": 10,
+    "outcome": "not_feasible"
+  },
+  "fallback": {
+    "location": "northeurope",
+    "data_vm_count": 5,
+    "vm_size": "Standard_D2s_v3",
+    "vcpus_each": 2,
+    "memory_gib_each": 8,
+    "regional_vcpu_quota": 10,
+    "ds_v3_family_quota": 10,
+    "total_vcpus": 10,
+    "external_controller": "existing_non_data_host",
+    "dedicated_driver_vm": false,
+    "physical_hosts_verified": false
+  },
+  "provider_registration": {
+    "Microsoft.Compute": "Registered",
+    "Microsoft.Network": "Registered",
+    "Microsoft.Storage": "Registered"
+  },
+  "region_probe": {
+    "westeurope": {
+      "code": "RequestDisallowedByAzure",
+      "message": "The selected region is currently not accepting new customers: https://aka.ms/locationineligible."
+    },
+    "northeurope": {
+      "vnet_create": "succeeded"
+    }
+  },
+  "watchdog": {
+    "independent_of_workload": true,
+    "persistent_systemd_timer": true,
+    "persistent_state_outside_tmp": true,
+    "absolute_deletion_deadline_utc": "2026-11-11T11:37:51Z",
+    "allocation_expiry_utc": "2026-11-11T11:52:51.265723+00:00",
+    "identity_guards": [
+      "pinned_subscription",
+      "full_resource_group_id",
+      "purpose_tag",
+      "experiment_id_tag"
+    ],
+    "az_call_timeout_seconds": 120,
+    "service_timeout_seconds": 360,
+    "retry_seconds": 60,
+    "unlimited_failure_restarts": true,
+    "resource_group_identity_sha256": "22daf499758beb75a00e35fc2d6c5f39ac7635caf987c0d04e2df25b52e4e8fd"
+  },
+  "network": {
+    "separate_vnet": true,
+    "production_peering": false,
+    "default_outbound_access": false,
+    "public_ip_count": 1,
+    "public_ssh": "first_data_node_jump_restricted_to_controller_ipv4_32",
+    "public_sql_or_data": false,
+    "node_hostkeys": "task_owned_keys_injected_at_creation_and_pinned_locally"
+  },
+  "qualifications": {
+    "production": false,
+    "physical_scale": false
+  },
+  "resources_ready": "five_vms_succeeded_and_ssh_mounts_verified",
+  "pricing": {
+    "compute_per_vm_usd_per_hour": 0.107,
+    "compute_total_usd_per_hour": 0.535,
+    "premium_disks": "WestEurope reference5P6+5P10, not a NorthEurope bill",
+    "disk_price_refresh": "NorthEurope retail API HTTP429; no fabricated quote",
+    "public_ip_and_egress": "bounded exploratory setup; actual invoice not measured"
+  },
+  "verified_at_utc": "2026-11-11T04:03:36.704607+00:00",
+  "bootstrap_probe": {
+    "first_attempt": "nodes0-3_ready;node4_ssh_exit255_before_vm_creation_completed",
+    "second_attempt": "all_five_ready",
+    "qualification_interpretation": "infrastructure_readiness_only_no_database_workload"
+  }
+}

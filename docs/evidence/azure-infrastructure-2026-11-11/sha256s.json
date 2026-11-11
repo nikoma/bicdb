@@ -1,0 +1,8 @@
+{
+  "provisioning.json": "79813aca121dff0b50b8994dc973ca1b53d2d47eb2c49e9b58f0e221a672c5c6",
+  "vm-retail-prices.json": "86857096ddf156a6b1562609c6312957e3fc33ad8b7fc4cb62868901759c4836",
+  "README.md": "95703d0374fa23c1b2381c1736e14fa6801a246f895bc5f94a0ce59ac9224fd2",
+  "azure-vm-configuration.json": "7fcf4dd11e51171bd1415c3b74f0ceea6588cd6162bcfa159a1aa047948eb53b",
+  "guest-bootstrap-attempt1.json": "626a9865260da911b651af2ab96ebd212780008c4773bcf18b9ab4b84dc4e892",
+  "guest-verification.json": "e9107c3ee74e69e3e5769ea280ca2ac42c59c271d6b4c79576f3abee3e923811"
+}

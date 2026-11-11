@@ -1,0 +1,47 @@
+[
+  {
+    "bytes": 8684,
+    "ctime_ns": 1794372085641056983,
+    "file": "execute-experiment.py",
+    "hash_captured_unix_ns": 1794373990561181993,
+    "launch_time_digest_recorded": false,
+    "mtime_ns": 1794372085641056983,
+    "sha256": "60c23dce3a75e9510fcf95d79248c56a440d11061f333185a2cc6616c89ac873"
+  },
+  {
+    "bytes": 1263,
+    "ctime_ns": 1794372093500903065,
+    "file": "guest-environment.py",
+    "hash_captured_unix_ns": 1794373990561207941,
+    "launch_time_digest_recorded": false,
+    "mtime_ns": 1794372093500903065,
+    "sha256": "40cfe4ed557a015094e78f7b3cd444f9af43d3b85aa7a3fe699024993046e63a"
+  },
+  {
+    "bytes": 1509,
+    "ctime_ns": 1794373951903647549,
+    "file": "capture-file-sizes.py",
+    "hash_captured_unix_ns": 1794373990561227097,
+    "launch_time_digest_recorded": false,
+    "mtime_ns": 1794373951903647549,
+    "sha256": "7df35468084456a847911fdc62b7c2a6d205a8aa57cb669025bd1d66c5773645"
+  },
+  {
+    "bytes": 2872,
+    "ctime_ns": 1794370960802620978,
+    "file": "export-diagnostics.py",
+    "hash_captured_unix_ns": 1794373990561244529,
+    "launch_time_digest_recorded": "not_yet_launched",
+    "mtime_ns": 1794370960802620978,
+    "sha256": "2c87887f6ac5dc2bc671c52d6a3bb2e76be39c0d0996f06c63d34753ecfec446"
+  },
+  {
+    "bytes": 6696,
+    "ctime_ns": 1794373884384841772,
+    "file": "vm-fault-probe.py",
+    "hash_captured_unix_ns": 1794373990561269616,
+    "launch_time_digest_recorded": "not_yet_launched",
+    "mtime_ns": 1794373884384841772,
+    "sha256": "41423e4d31deffc6079f13bf591a46b57ccd44db4796a8e2b56f2529bb3d2dac"
+  }
+]

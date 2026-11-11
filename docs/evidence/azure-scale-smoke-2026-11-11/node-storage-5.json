@@ -1,0 +1,257 @@
+[
+  {
+    "database_footprint_bytes": 6121894,
+    "disk_free": "Filesystem        1B-blocks      Used    Available Use% Mounted on\n/dev/sda1      134681182208 406740992 127385772032   1% /srv/bicdb-data\n",
+    "format": {
+      "feature_flags": [
+        "format_metadata_v2",
+        "server_paged_storage"
+      ],
+      "format_version": 2,
+      "min_reader_version": 1,
+      "min_writer_version": 2,
+      "storage_mode": "server_paged"
+    },
+    "guest": {
+      "cpu_model": "Intel(R) Xeon(R) CPU E5-2673 v4 @ 2.30GHz",
+      "image": {
+        "offer": "ubuntu-24_04-lts",
+        "osType": "Linux",
+        "publisher": "Canonical",
+        "sku": "server",
+        "version": "24.04.202610250",
+        "vmSize": "Standard_D2s_v3"
+      },
+      "image_reference": {
+        "exactVersion": null,
+        "offer": "ubuntu-24_04-lts",
+        "publisher": "Canonical",
+        "sku": "server",
+        "version": "latest"
+      },
+      "kernel": "7.0.0-1017-azure",
+      "openssl_python_library": "OpenSSL 3.0.13 30 Jan 2024",
+      "python": "3.12.3 (main, Aug 31 2026, 10:18:26) [GCC 13.3.0]",
+      "vcpus": 2
+    },
+    "mount": {
+      "filesystems": [
+        {
+          "fstype": "ext4",
+          "options": "rw,noatime",
+          "source": "/dev/sda1",
+          "target": "/srv/bicdb-data"
+        }
+      ]
+    },
+    "node": 0,
+    "process_environment": {
+      "BICDB_PAGED_BUFFER_POOL_BYTES": "268435456",
+      "BICDB_STORAGE_MODE": "server_paged"
+    }
+  },
+  {
+    "database_footprint_bytes": 5113408,
+    "disk_free": "Filesystem        1B-blocks      Used    Available Use% Mounted on\n/dev/sdc1      134681182208 407846912 127384666112   1% /srv/bicdb-data\n",
+    "format": {
+      "feature_flags": [
+        "format_metadata_v2",
+        "server_paged_storage"
+      ],
+      "format_version": 2,
+      "min_reader_version": 1,
+      "min_writer_version": 2,
+      "storage_mode": "server_paged"
+    },
+    "guest": {
+      "cpu_model": "Intel(R) Xeon(R) CPU E5-2673 v4 @ 2.30GHz",
+      "image": {
+        "offer": "ubuntu-24_04-lts",
+        "osType": "Linux",
+        "publisher": "Canonical",
+        "sku": "server",
+        "version": "24.04.202610250",
+        "vmSize": "Standard_D2s_v3"
+      },
+      "image_reference": {
+        "exactVersion": null,
+        "offer": "ubuntu-24_04-lts",
+        "publisher": "Canonical",
+        "sku": "server",
+        "version": "latest"
+      },
+      "kernel": "7.0.0-1017-azure",
+      "openssl_python_library": "OpenSSL 3.0.13 30 Jan 2024",
+      "python": "3.12.3 (main, Aug 31 2026, 10:18:26) [GCC 13.3.0]",
+      "vcpus": 2
+    },
+    "mount": {
+      "filesystems": [
+        {
+          "fstype": "ext4",
+          "options": "rw,noatime",
+          "source": "/dev/sdc1",
+          "target": "/srv/bicdb-data"
+        }
+      ]
+    },
+    "node": 1,
+    "process_environment": {
+      "BICDB_PAGED_BUFFER_POOL_BYTES": "268435456",
+      "BICDB_STORAGE_MODE": "server_paged"
+    }
+  },
+  {
+    "database_footprint_bytes": 5557843,
+    "disk_free": "Filesystem        1B-blocks      Used    Available Use% Mounted on\n/dev/sdc1      134681182208 406036480 127386476544   1% /srv/bicdb-data\n",
+    "format": {
+      "feature_flags": [
+        "format_metadata_v2",
+        "server_paged_storage"
+      ],
+      "format_version": 2,
+      "min_reader_version": 1,
+      "min_writer_version": 2,
+      "storage_mode": "server_paged"
+    },
+    "guest": {
+      "cpu_model": "Intel(R) Xeon(R) Platinum 8171M CPU @ 2.60GHz",
+      "image": {
+        "offer": "ubuntu-24_04-lts",
+        "osType": "Linux",
+        "publisher": "Canonical",
+        "sku": "server",
+        "version": "24.04.202610250",
+        "vmSize": "Standard_D2s_v3"
+      },
+      "image_reference": {
+        "exactVersion": null,
+        "offer": "ubuntu-24_04-lts",
+        "publisher": "Canonical",
+        "sku": "server",
+        "version": "latest"
+      },
+      "kernel": "7.0.0-1017-azure",
+      "openssl_python_library": "OpenSSL 3.0.13 30 Jan 2024",
+      "python": "3.12.3 (main, Aug 31 2026, 10:18:26) [GCC 13.3.0]",
+      "vcpus": 2
+    },
+    "mount": {
+      "filesystems": [
+        {
+          "fstype": "ext4",
+          "options": "rw,noatime",
+          "source": "/dev/sdc1",
+          "target": "/srv/bicdb-data"
+        }
+      ]
+    },
+    "node": 2,
+    "process_environment": {
+      "BICDB_PAGED_BUFFER_POOL_BYTES": "268435456",
+      "BICDB_STORAGE_MODE": "server_paged"
+    }
+  },
+  {
+    "database_footprint_bytes": 6761706,
+    "disk_free": "Filesystem        1B-blocks      Used    Available Use% Mounted on\n/dev/sda1      134681182208 406831104 127385681920   1% /srv/bicdb-data\n",
+    "format": {
+      "feature_flags": [
+        "format_metadata_v2",
+        "server_paged_storage"
+      ],
+      "format_version": 2,
+      "min_reader_version": 1,
+      "min_writer_version": 2,
+      "storage_mode": "server_paged"
+    },
+    "guest": {
+      "cpu_model": "Intel(R) Xeon(R) CPU E5-2673 v4 @ 2.30GHz",
+      "image": {
+        "offer": "ubuntu-24_04-lts",
+        "osType": "Linux",
+        "publisher": "Canonical",
+        "sku": "server",
+        "version": "24.04.202610250",
+        "vmSize": "Standard_D2s_v3"
+      },
+      "image_reference": {
+        "exactVersion": null,
+        "offer": "ubuntu-24_04-lts",
+        "publisher": "Canonical",
+        "sku": "server",
+        "version": "latest"
+      },
+      "kernel": "7.0.0-1017-azure",
+      "openssl_python_library": "OpenSSL 3.0.13 30 Jan 2024",
+      "python": "3.12.3 (main, Aug 31 2026, 10:18:26) [GCC 13.3.0]",
+      "vcpus": 2
+    },
+    "mount": {
+      "filesystems": [
+        {
+          "fstype": "ext4",
+          "options": "rw,noatime",
+          "source": "/dev/sda1",
+          "target": "/srv/bicdb-data"
+        }
+      ]
+    },
+    "node": 3,
+    "process_environment": {
+      "BICDB_PAGED_BUFFER_POOL_BYTES": "268435456",
+      "BICDB_STORAGE_MODE": "server_paged"
+    }
+  },
+  {
+    "database_footprint_bytes": 9558759,
+    "disk_free": "Filesystem        1B-blocks      Used    Available Use% Mounted on\n/dev/sda1      134681182208 409681920 127382831104   1% /srv/bicdb-data\n",
+    "format": {
+      "feature_flags": [
+        "format_metadata_v2",
+        "server_paged_storage"
+      ],
+      "format_version": 2,
+      "min_reader_version": 1,
+      "min_writer_version": 2,
+      "storage_mode": "server_paged"
+    },
+    "guest": {
+      "cpu_model": "Intel(R) Xeon(R) CPU E5-2673 v4 @ 2.30GHz",
+      "image": {
+        "offer": "ubuntu-24_04-lts",
+        "osType": "Linux",
+        "publisher": "Canonical",
+        "sku": "server",
+        "version": "24.04.202610250",
+        "vmSize": "Standard_D2s_v3"
+      },
+      "image_reference": {
+        "exactVersion": null,
+        "offer": "ubuntu-24_04-lts",
+        "publisher": "Canonical",
+        "sku": "server",
+        "version": "latest"
+      },
+      "kernel": "7.0.0-1017-azure",
+      "openssl_python_library": "OpenSSL 3.0.13 30 Jan 2024",
+      "python": "3.12.3 (main, Aug 31 2026, 10:18:26) [GCC 13.3.0]",
+      "vcpus": 2
+    },
+    "mount": {
+      "filesystems": [
+        {
+          "fstype": "ext4",
+          "options": "rw,noatime",
+          "source": "/dev/sda1",
+          "target": "/srv/bicdb-data"
+        }
+      ]
+    },
+    "node": 4,
+    "process_environment": {
+      "BICDB_PAGED_BUFFER_POOL_BYTES": "268435456",
+      "BICDB_STORAGE_MODE": "server_paged"
+    }
+  }
+]

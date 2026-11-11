@@ -10,6 +10,9 @@ use crate::distribution_range_consensus::{
 };
 use crate::distribution_range_recovery::{ClosedNativeReadyQuorum, RecoveryRoleAdmission};
 
+mod activation_decision;
+pub(crate) use activation_decision::NativeActivationDecisionReceipt;
+
 #[cfg(test)]
 mod floor_tests;
 

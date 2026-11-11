@@ -15,7 +15,7 @@ mod history_stage;
 mod installed_anchor;
 mod serving_configuration;
 use serving_configuration::NativeRecoveredServingConfiguration;
-pub(crate) use serving_configuration::NativeRecoveredServingReceipt;
+pub(crate) use serving_configuration::{NativeActivationDecisionReceipt, NativeRecoveredServingReceipt};
 #[cfg(test)]
 pub(crate) mod rf3_fixture;
 use certified_prefix::NativeCertifiedRangePrefix;

@@ -1,0 +1,7 @@
+
+running 2 tests
+test distribution_range_consensus::native_activation_domain_tests::native_activation_other_range_prepared_domain_survives_global_format_upgrade ... ok
+test distribution_range_consensus::native_activation_domain_tests::native_activation_other_range_completed_domain_survives_global_format_upgrade ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 689 filtered out; finished in 3.49s
+

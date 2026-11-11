@@ -25,6 +25,8 @@ historical tested version below.
 | [Native abort failure baseline](evidence/native-origin-abort-baseline-2026-11-11/README.md) | `eafa6949a78ea4e97f1ea3271ff97f2de27d20c6` | **Failed** positive continuation test | Failed prepare leaves raw Aborted1/native0; restored quorum still cannot ACK the next transaction |
 | [Protected activation decision](evidence/native-activation-decision-2026-11-11/README.md) | `7b36642b444dc57051dde1fbb369f15ddb3cc3e1`, then separate `1cd28523c2f8a3970635dcae4ca43977727b1afe` | **10 distinct PASS**, then **1 separate PASS** | Protected prior decision repairs original late-follower test; later genuine ACK2 and late activation of old R1 tested separately. Late R2 catch-up and strong reads not tested |
 
+| [Sparse committed-decision source recovery](evidence/native-sparse-source-tail-2026-11-11/README.md) | `0d58359b07c31b38ed432e0a72ef7996ee2544b7`; package 1.0.471-beta | **3 distinct PASS**; separate codec pass at `1e6e3a0a`; two prior failures retained | Actual lagging voter stores full committed1026 without data/raw advancement; current quorum lets source reach native/Ready1026 and 1025 ACK digests match. Behind image repair/cold sparse reissue not tested by this cohort |
+
 The bundles overlap; their counts must not be added. Each retains commands,
 resource samples, warnings, prior failed attempts and source bytes or a complete
 patch against a pinned public source. The 44-test bundle includes its exact
@@ -96,3 +98,9 @@ The catalogue/replay bundle retains its exact manifest, compressed source
 snapshots, public-base patch, prior-failure reverse patch and reconstruction
 receipt. Its README describes the source reconstruction and the original fixture
 budget failure; both the failure and correction remain preserved.
+
+The [native no-data abort-history proposal](design/native-abort-history-recovery.md)
+is design only. It requires actual completed transaction cleanup, permanent
+no-commit promises and a real abort quorum before publishing canonical abort
+history with unchanged local data visibility. Raw Aborted alone is insufficient;
+no implementation or executed acceptance follows from that document.

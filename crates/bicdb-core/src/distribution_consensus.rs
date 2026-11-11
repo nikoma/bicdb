@@ -298,6 +298,10 @@ impl MetadataReadAcquireResponse {
         if new.cluster_id != self.committed_topology.cluster_id {
             return Err(metadata_error("metadata acquisition joint cluster changed"));
         }
+        crate::distribution::ensure_range_image_domain(
+            self.committed_topology.range_image_bootstrap_id,
+            new.range_image_bootstrap_id,
+        )?;
         validate_side(new, &self.new_voters, &self.fresh_new_voters)?;
         if let Some(activation) = &self.restore_activation {
             validate_historical_activation_against_topology(
@@ -896,6 +900,10 @@ impl MetadataConsensusStore {
         fsync: bool,
     ) -> Result<Self> {
         bootstrap_topology.validate()?;
+        let expected_image_domain = bootstrap_topology.range_image_bootstrap_id;
+        if expected_image_domain.is_some() && !fsync {
+            return Err(metadata_error("native range image metadata requires fsync"));
+        }
         if bootstrap_topology.cluster_id != cluster_id {
             return Err(metadata_error(
                 "bootstrap topology belongs to another cluster",
@@ -928,6 +936,10 @@ impl MetadataConsensusStore {
             Err(error) => return Err(error.into()),
         };
         validate_state(&state)?;
+        crate::distribution::ensure_range_image_domain(
+            expected_image_domain,
+            state.committed_topology.range_image_bootstrap_id,
+        )?;
         if state.cluster_id != cluster_id {
             return Err(metadata_error(format!(
                 "cluster mismatch: state={} config={cluster_id}",
@@ -1428,6 +1440,10 @@ impl MetadataConsensusStore {
         }
         topology.validate()?;
         self.ensure_cluster(&topology.cluster_id)?;
+        crate::distribution::ensure_range_image_domain(
+            self.state.committed_topology.range_image_bootstrap_id,
+            topology.range_image_bootstrap_id,
+        )?;
         let latest_generation = self
             .state
             .log
@@ -1579,6 +1595,18 @@ impl MetadataConsensusStore {
                 request.leader_id
             )));
         }
+        if let Some(snapshot) = &request.snapshot {
+            crate::distribution::ensure_range_image_domain(
+                self.state.committed_topology.range_image_bootstrap_id,
+                snapshot.topology.range_image_bootstrap_id,
+            )?;
+        }
+        for entry in &request.entries {
+            crate::distribution::ensure_range_image_domain(
+                self.state.committed_topology.range_image_bootstrap_id,
+                entry.topology.range_image_bootstrap_id,
+            )?;
+        }
         self.step_down(request.term, Some(request.leader_id));
         self.mark_election_activity();
         if let Some(snapshot) = request.snapshot {
@@ -1594,6 +1622,10 @@ impl MetadataConsensusStore {
         }
         for incoming in request.entries {
             validate_log_entry_shape(&incoming, &self.state.cluster_id)?;
+            crate::distribution::ensure_range_image_domain(
+                self.state.committed_topology.range_image_bootstrap_id,
+                incoming.topology.range_image_bootstrap_id,
+            )?;
             if incoming.index <= self.state.base_index {
                 continue;
             }
@@ -1717,6 +1749,10 @@ impl MetadataConsensusStore {
 
     fn commit_entry(&mut self, entry: MetadataLogEntry) -> Result<()> {
         validate_log_entry_shape(&entry, &self.state.cluster_id)?;
+        crate::distribution::ensure_range_image_domain(
+            self.state.committed_topology.range_image_bootstrap_id,
+            entry.topology.range_image_bootstrap_id,
+        )?;
         if let Some(activation) = &entry.restore_activation {
             validate_committed_activation_progress(
                 self.state.committed_restore_activation.as_ref(),
@@ -1740,6 +1776,10 @@ impl MetadataConsensusStore {
     fn install_snapshot(&mut self, snapshot: MetadataSnapshot) -> Result<()> {
         snapshot.topology.validate()?;
         self.ensure_cluster(&snapshot.topology.cluster_id)?;
+        crate::distribution::ensure_range_image_domain(
+            self.state.committed_topology.range_image_bootstrap_id,
+            snapshot.topology.range_image_bootstrap_id,
+        )?;
         if let Some(activation) = &snapshot.restore_activation {
             validate_historical_activation_against_topology(
                 activation,
@@ -1979,6 +2019,10 @@ fn validate_state(state: &MetadataConsensusState) -> Result<()> {
         .unwrap_or(0);
     for entry in &state.log {
         validate_log_entry_shape(entry, &state.cluster_id)?;
+        crate::distribution::ensure_range_image_domain(
+            state.committed_topology.range_image_bootstrap_id,
+            entry.topology.range_image_bootstrap_id,
+        )?;
         if entry.index != expected {
             return Err(metadata_error("metadata log indexes are not contiguous"));
         }

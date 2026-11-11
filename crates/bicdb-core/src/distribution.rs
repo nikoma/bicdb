@@ -13,7 +13,10 @@ use crate::replication::{CommitFrame, ReplicationTlsConfig};
 
 pub const DISTRIBUTION_FORMAT_VERSION: u32 = 1;
 pub const DISTRIBUTION_HASH_VERSION: u32 = 1;
-pub const CLUSTER_DATA_PROTOCOL_VERSION: u32 = 19;
+// Version 20 fences metadata voters that would drop the durable handoff session
+// or native image domain while decoding a newer topology. Mixed 19/20 clusters
+// are refused; this is not a rolling-upgrade compatibility promise.
+pub const CLUSTER_DATA_PROTOCOL_VERSION: u32 = 20;
 /// Reserved heartbeat label carrying the canonical local schema identity.
 /// Once the range leader advertises this label, placement and data operations
 /// are fenced to nodes advertising the identical schema.
@@ -1285,6 +1288,10 @@ pub fn build_rebalance_plan(
             topology.cluster_id, config.cluster_id
         )));
     }
+    ensure_range_image_domain(
+        config.range_image_bootstrap_id,
+        topology.range_image_bootstrap_id,
+    )?;
 
     let active_relocation_ranges = topology
         .relocations
@@ -1942,6 +1949,10 @@ pub struct ClusterTopology {
     pub format_version: u32,
     pub hash_version: u32,
     pub cluster_id: ClusterId,
+    /// Immutable native image domain. Legacy stores remain explicitly None;
+    /// names, empty rows and reopened processes never manufacture this proof.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub range_image_bootstrap_id: Option<Uuid>,
     pub generation: u64,
     pub replication_factor: u8,
     pub nodes: BTreeMap<ClusterNodeId, ClusterNode>,
@@ -2032,6 +2043,7 @@ impl ClusterTopology {
             format_version: DISTRIBUTION_FORMAT_VERSION,
             hash_version: DISTRIBUTION_HASH_VERSION,
             cluster_id: config.cluster_id.clone(),
+            range_image_bootstrap_id: config.range_image_bootstrap_id,
             generation: 1,
             replication_factor: config.replication_factor,
             nodes,
@@ -2048,6 +2060,11 @@ impl ClusterTopology {
     }
 
     pub fn validate(&self) -> Result<()> {
+        if self.range_image_bootstrap_id.is_some_and(|id| id.is_nil()) {
+            return Err(cluster_error(
+                "native range image bootstrap UUID must not be nil",
+            ));
+        }
         if self.format_version != DISTRIBUTION_FORMAT_VERSION {
             return Err(cluster_error(format!(
                 "unsupported distribution format version {}; expected {}",
@@ -2523,6 +2540,8 @@ fn topology_checksum(topology: &ClusterTopology) -> Result<String> {
 pub struct DistributionConfig {
     pub enabled: bool,
     pub cluster_id: ClusterId,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub range_image_bootstrap_id: Option<Uuid>,
     pub node_id: ClusterNodeId,
     pub node_address: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -2548,6 +2567,7 @@ impl Default for DistributionConfig {
         Self {
             enabled: false,
             cluster_id: ClusterId("default".to_string()),
+            range_image_bootstrap_id: None,
             node_id: ClusterNodeId("local".to_string()),
             node_address: "127.0.0.1:9444".to_string(),
             node_tls_certificate_sha256: None,
@@ -2568,6 +2588,11 @@ impl Default for DistributionConfig {
 
 impl DistributionConfig {
     pub fn validate(&self) -> Result<()> {
+        if self.range_image_bootstrap_id.is_some_and(|id| id.is_nil()) {
+            return Err(cluster_error(
+                "native range image bootstrap UUID must not be nil",
+            ));
+        }
         validate_identifier("cluster id", self.cluster_id.as_str())?;
         validate_identifier("cluster node id", self.node_id.as_str())?;
         if self.node_address.trim().is_empty() {
@@ -2642,6 +2667,8 @@ impl ClusterBootstrapSnapshot {
         self.config_template.validate()?;
         if !self.config_template.enabled
             || self.config_template.cluster_id != self.topology.cluster_id
+            || self.config_template.range_image_bootstrap_id
+                != self.topology.range_image_bootstrap_id
             || self.config_template.replication_factor != self.topology.replication_factor
         {
             return Err(cluster_error(
@@ -2684,6 +2711,11 @@ pub fn provision_cluster_member_directory(
     fsync: bool,
 ) -> Result<DistributionConfig> {
     snapshot.validate()?;
+    if snapshot.topology.range_image_bootstrap_id.is_some() && !fsync {
+        return Err(cluster_error(
+            "native range image member metadata requires fsync",
+        ));
+    }
     transport.validate()?;
     let node = snapshot
         .topology
@@ -2743,11 +2775,22 @@ pub fn save_distribution_config(
         ));
     }
     let path = root.as_ref().join(DEFAULT_DISTRIBUTION_CONFIG);
+    if path.exists() {
+        let previous: DistributionConfig = serde_json::from_slice(&fs::read(&path)?)?;
+        ensure_range_image_domain(
+            previous.range_image_bootstrap_id,
+            config.range_image_bootstrap_id,
+        )?;
+    }
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)?;
     }
     let bytes = serde_json::to_vec_pretty(config)?;
-    crate::storage::write_atomic(&path, &bytes, fsync)
+    crate::storage::write_atomic(
+        &path,
+        &bytes,
+        fsync || config.range_image_bootstrap_id.is_some(),
+    )
 }
 
 pub fn load_distribution_config(root: impl AsRef<Path>) -> Result<DistributionConfig> {
@@ -2854,6 +2897,9 @@ impl DistributionStore {
         now_ms: u64,
     ) -> Result<Self> {
         config.validate()?;
+        if config.range_image_bootstrap_id.is_some() && !fsync {
+            return Err(cluster_error("native range image metadata requires fsync"));
+        }
         if !config.enabled {
             return Err(cluster_error(
                 "distribution must be enabled before initializing a cluster",
@@ -2892,6 +2938,9 @@ impl DistributionStore {
 
     pub fn open(root: impl AsRef<Path>, config: DistributionConfig, fsync: bool) -> Result<Self> {
         config.validate()?;
+        if config.range_image_bootstrap_id.is_some() && !fsync {
+            return Err(cluster_error("native range image metadata requires fsync"));
+        }
         if !config.enabled {
             return Err(cluster_error(
                 "distribution must be enabled before opening cluster topology",
@@ -3273,6 +3322,10 @@ impl DistributionStore {
                 "member bootstrap snapshot belongs to another cluster",
             ));
         }
+        ensure_range_image_domain(
+            self.topology.range_image_bootstrap_id,
+            topology.range_image_bootstrap_id,
+        )?;
         if topology.generation < self.topology.generation {
             return Err(cluster_error(
                 "member bootstrap snapshot is older than the local topology",
@@ -5017,6 +5070,10 @@ impl DistributionStore {
 }
 
 fn ensure_config_matches(config: &DistributionConfig, topology: &ClusterTopology) -> Result<()> {
+    ensure_range_image_domain(
+        config.range_image_bootstrap_id,
+        topology.range_image_bootstrap_id,
+    )?;
     if topology.cluster_id != config.cluster_id {
         return Err(cluster_error(format!(
             "cluster id mismatch: config={}, topology={}",
@@ -5059,6 +5116,18 @@ fn ensure_config_matches(config: &DistributionConfig, topology: &ClusterTopology
     Ok(())
 }
 
+pub(crate) fn ensure_range_image_domain(
+    expected: Option<Uuid>,
+    actual: Option<Uuid>,
+) -> Result<()> {
+    if expected != actual {
+        return Err(cluster_error(
+            "native range image bootstrap domain mismatch",
+        ));
+    }
+    Ok(())
+}
+
 fn load_topology(path: &Path) -> Result<ClusterTopology> {
     let bytes = fs::read(path).map_err(|error| {
         if error.kind() == std::io::ErrorKind::NotFound {
@@ -5080,7 +5149,11 @@ fn persist_topology(path: &Path, topology: &ClusterTopology, fsync: bool) -> Res
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)?;
     }
-    crate::storage::write_atomic(path, &bytes, fsync)
+    crate::storage::write_atomic(
+        path,
+        &bytes,
+        fsync || topology.range_image_bootstrap_id.is_some(),
+    )
 }
 
 pub(crate) fn unix_time_ms() -> u64 {
@@ -5100,6 +5173,7 @@ mod tests {
         DistributionConfig {
             enabled: true,
             cluster_id: ClusterId::new("cluster-a").unwrap(),
+            range_image_bootstrap_id: None,
             node_id: ClusterNodeId::new(node_id).unwrap(),
             node_address: address.to_string(),
             node_tls_certificate_sha256: None,
@@ -5119,6 +5193,86 @@ mod tests {
 
     fn node(id: &str, address: &str, now_ms: u64) -> ClusterNode {
         ClusterNode::new(ClusterNodeId::new(id).unwrap(), address, 1, 10_000, now_ms).unwrap()
+    }
+
+    #[test]
+    fn range_image_bootstrap_legacy_reopen_never_invents_a_domain() {
+        let root = tempfile::tempdir().unwrap();
+        let cfg = config("n1", "127.0.0.1:9444");
+        let store = DistributionStore::initialize_at(root.path(), cfg.clone(), false, 1).unwrap();
+        assert_eq!(store.topology().range_image_bootstrap_id, None);
+        assert!(serde_json::to_value(store.topology())
+            .unwrap()
+            .get("range_image_bootstrap_id")
+            .is_none());
+        drop(store);
+        let before = fs::read(root.path().join(DEFAULT_CLUSTER_TOPOLOGY)).unwrap();
+        DistributionStore::open(root.path(), cfg.clone(), false).unwrap();
+        let mut incompatible = cfg;
+        incompatible.range_image_bootstrap_id = Some(Uuid::new_v4());
+        assert!(DistributionStore::initialize_at(root.path(), incompatible, true, 2).is_err());
+        assert_eq!(
+            fs::read(root.path().join(DEFAULT_CLUSTER_TOPOLOGY)).unwrap(),
+            before
+        );
+    }
+
+    #[test]
+    fn range_image_bootstrap_domain_survives_reopen_and_rejects_cache_rebinding() {
+        let root = tempfile::tempdir().unwrap();
+        let mut cfg = config("n1", "127.0.0.1:9444");
+        cfg.range_image_bootstrap_id = Some(Uuid::new_v4());
+        let mut store =
+            DistributionStore::initialize_at(root.path(), cfg.clone(), true, 1).unwrap();
+        let initial = store.topology().clone();
+        let router = crate::ClusterRequestRouter::new(cfg.clone(), initial.clone()).unwrap();
+        let transport = crate::TcpClusterRelocationTransport::from_topology(
+            cfg.cluster_id.clone(),
+            cfg.node_id.clone(),
+            initial.clone(),
+            cfg.transport.clone(),
+        )
+        .unwrap();
+        let mut foreign = initial.clone();
+        foreign.generation += 1;
+        foreign.range_image_bootstrap_id = Some(Uuid::new_v4());
+        assert!(store
+            .install_authoritative_topology(foreign.clone())
+            .is_err());
+        assert!(router.install_topology(foreign.clone()).is_err());
+        assert!(transport.install_topology(foreign).is_err());
+        let before = fs::read(root.path().join(DEFAULT_DISTRIBUTION_CONFIG)).unwrap();
+        let mut erased = cfg.clone();
+        erased.range_image_bootstrap_id = None;
+        assert!(save_distribution_config(root.path(), &erased, true).is_err());
+        assert_eq!(
+            fs::read(root.path().join(DEFAULT_DISTRIBUTION_CONFIG)).unwrap(),
+            before
+        );
+        drop(store);
+        let reopened = DistributionStore::open(root.path(), cfg, true).unwrap();
+        assert_eq!(reopened.topology(), &initial);
+    }
+
+    #[test]
+    fn range_image_bootstrap_rejects_nil_and_nondurable_metadata_before_writing() {
+        let root = tempfile::tempdir().unwrap();
+        let mut cfg = config("n1", "127.0.0.1:9444");
+        cfg.range_image_bootstrap_id = Some(Uuid::nil());
+        assert!(cfg.validate().is_err());
+        cfg.range_image_bootstrap_id = Some(Uuid::new_v4());
+        assert!(DistributionStore::initialize_at(root.path(), cfg.clone(), false, 1).is_err());
+        assert_eq!(fs::read_dir(root.path()).unwrap().count(), 0);
+        let initial = ClusterTopology::new(&cfg, node("n1", "127.0.0.1:9444", 1), 1).unwrap();
+        assert!(crate::MetadataConsensusStore::open(
+            root.path(),
+            cfg.cluster_id,
+            cfg.node_id,
+            initial,
+            false
+        )
+        .is_err());
+        assert_eq!(fs::read_dir(root.path()).unwrap().count(), 0);
     }
 
     #[test]

@@ -2535,6 +2535,10 @@ impl TcpClusterRelocationTransport {
             return Err(transport_error("refusing topology from another cluster"));
         }
         let mut installed = self.topology.write();
+        crate::distribution::ensure_range_image_domain(
+            installed.range_image_bootstrap_id,
+            topology.range_image_bootstrap_id,
+        )?;
         if topology.generation < installed.generation {
             return Ok(false);
         }

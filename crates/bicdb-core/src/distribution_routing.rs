@@ -134,6 +134,10 @@ pub struct ClusterRequestRouter {
 
 impl ClusterRequestRouter {
     pub fn new(config: DistributionConfig, topology: ClusterTopology) -> Result<Self> {
+        crate::distribution::ensure_range_image_domain(
+            config.range_image_bootstrap_id,
+            topology.range_image_bootstrap_id,
+        )?;
         config.validate()?;
         topology.validate()?;
         if config.cluster_id != topology.cluster_id {
@@ -170,6 +174,10 @@ impl ClusterRequestRouter {
     }
 
     pub fn install_topology(&self, topology: ClusterTopology) -> Result<TopologyInstall> {
+        crate::distribution::ensure_range_image_domain(
+            self.config.range_image_bootstrap_id,
+            topology.range_image_bootstrap_id,
+        )?;
         topology.validate()?;
         let mut state = self
             .state
@@ -672,6 +680,7 @@ mod tests {
         DistributionConfig {
             enabled: true,
             cluster_id: ClusterId::new("cluster-routing").unwrap(),
+            range_image_bootstrap_id: None,
             node_id: ClusterNodeId::new("n1").unwrap(),
             node_address: "10.0.0.1:9444".to_string(),
             node_tls_certificate_sha256: None,

@@ -816,6 +816,7 @@ mod tests {
         DistributionConfig {
             enabled: true,
             cluster_id: ClusterId::new("cluster-a").unwrap(),
+            range_image_bootstrap_id: None,
             node_id: ClusterNodeId::new("n1").unwrap(),
             node_address: "10.0.0.1:9444".to_string(),
             node_tls_certificate_sha256: None,

@@ -1,0 +1,190 @@
+//! Actual mTLS probes plus LOCAL factual candidate collection. Current data
+//! leader n1 / metadata leader n2 and metadata anchors are fixture preconditions.
+//! No host enrollment, snapshot, final MQ, read gateway or StrongGet is tested.
+use super::*;
+use crate::distribution_consensus::MetadataReadObservation;
+use crate::distribution_native_read::{NativeRangeReadObservation, NativeReadQuorumRound};
+
+fn live_fixture() -> NetworkFixture {
+    let (fixture, scope) = NetworkFixture::all_r1_prepared();
+    for name in ["n0", "n1", "n2"] {
+        fixture.complete(name, &scope).unwrap();
+        fixture.wait_idle();
+    }
+    for name in ["n0", "n1", "n2"] {
+        fixture.runtimes[&node(name)]
+            .activate_native_recovery(
+                &fixture.actor(),
+                &fixture.completion_request(&scope),
+                &CancellationToken::uncancelable(),
+            )
+            .unwrap();
+        fixture.wait_idle();
+    }
+    fixture
+}
+fn fresh_metadata(
+    fixture: &NetworkFixture,
+    business: Uuid,
+    parent: &CancellationToken,
+) -> MetadataReadObservation {
+    let range = fixture
+        .current
+        .read()
+        .ranges
+        .values()
+        .next()
+        .unwrap()
+        .clone();
+    fixture.clients[&node("n1")]
+        .acquire_metadata_read_observation(
+            &node("n2"),
+            business,
+            range.id,
+            range.epoch,
+            Duration::from_secs(5),
+            parent,
+        )
+        .unwrap()
+}
+#[test]
+fn native_read_rpc_actual_tls_fresh_metadata_unadmitted_candidate() {
+    let fixture = live_fixture();
+    let parent = CancellationToken::uncancelable();
+    let business = Uuid::now_v7();
+    let metadata = fresh_metadata(&fixture, business, &parent);
+    let context = metadata.context_id();
+    let challenge = Uuid::now_v7();
+    let candidate = fixture.runtimes[&node("n1")]
+        .acquire_native_read_candidate(metadata, business, challenge, &parent)
+        .unwrap();
+    candidate.require_lifetime().unwrap();
+    assert_eq!(candidate.metadata_context_id(), context);
+    assert_eq!(candidate.business_request_id(), business);
+    assert_eq!(candidate.challenge(), challenge);
+    assert_eq!(candidate.scope().range.leader, node("n1"));
+    assert_eq!(candidate.matching_member_ids().len(), 3);
+    assert_eq!(candidate.point().0, 1);
+    assert_ne!(candidate.point().1, candidate.point().2);
+    fixture.wait_idle();
+    // All three observations originate in actual producers. The local genesis
+    // or Activated facts still do NOT supply host birth-continuation admission.
+    parent.cancel();
+    assert!(candidate.require_lifetime().is_err());
+}
+#[test]
+fn native_read_rpc_actual_tls_rejects_old_challenge_actor_incarnation_and_pins() {
+    let fixture = live_fixture();
+    let parent = CancellationToken::uncancelable();
+    let business = Uuid::now_v7();
+    let round = NativeReadQuorumRound::begin(
+        fresh_metadata(&fixture, business, &parent),
+        business,
+        Uuid::now_v7(),
+        &node("n1"),
+        &parent,
+    )
+    .unwrap();
+    let request = round.request().clone();
+    let old = fixture.clients[&node("n1")]
+        .observe_current_native_range(&node("n2"), &request, &parent)
+        .unwrap();
+    assert_eq!(old.facts().node_id, node("n2"));
+    fixture.wait_idle();
+    let business2 = Uuid::now_v7();
+    let mut next = NativeReadQuorumRound::begin(
+        fresh_metadata(&fixture, business2, &parent),
+        business2,
+        Uuid::now_v7(),
+        &node("n1"),
+        &parent,
+    )
+    .unwrap();
+    assert!(
+        next.record(old).is_err(),
+        "a genuine old response cannot answer a new challenge"
+    );
+    assert!(fixture.clients[&node("n2")]
+        .observe_current_native_range(&node("n0"), &request, &parent)
+        .is_err());
+    fixture.wait_idle();
+    let mut wrong = request.clone();
+    wrong
+        .scope
+        .members
+        .get_mut(&node("n2"))
+        .unwrap()
+        .incarnation += 1;
+    assert!(fixture.clients[&node("n1")]
+        .observe_current_native_range(&node("n2"), &wrong, &parent)
+        .is_err());
+    fixture.wait_idle();
+    wrong = request.clone();
+    wrong
+        .scope
+        .members
+        .get_mut(&node("n2"))
+        .unwrap()
+        .active_certificate_sha256 = Some("00".repeat(32));
+    assert!(fixture.clients[&node("n1")]
+        .observe_current_native_range(&node("n2"), &wrong, &parent)
+        .is_err());
+    fixture.wait_idle();
+    // An authenticated loopback RPC response cannot substitute for the actual
+    // same-service local proof required by the candidate's final revalidation.
+    let actual_remote_local: NativeRangeReadObservation = fixture.clients[&node("n1")]
+        .observe_current_native_range(&node("n1"), &request, &parent)
+        .unwrap();
+    let mut round = round;
+    assert!(round.record(actual_remote_local).is_err());
+    fixture.wait_idle();
+}
+#[test]
+fn native_read_rpc_actual_tls_missing_quorum_never_returns_candidate() {
+    let mut fixture = live_fixture();
+    let parent = CancellationToken::uncancelable()
+        .child_with_deadline(Instant::now() + Duration::from_secs(2));
+    let business = Uuid::now_v7();
+    let metadata = fresh_metadata(&fixture, business, &parent);
+    // Capture genuine MQ first, then stop only this fixture's actual n0/n2
+    // data/metadata listeners. Candidate has one actual local native point.
+    fixture.servers.remove(2).join().unwrap();
+    fixture.servers.remove(0).join().unwrap();
+    assert!(fixture.runtimes[&node("n1")]
+        .acquire_native_read_candidate(metadata, business, Uuid::now_v7(), &parent)
+        .is_err());
+    fixture.wait_idle();
+}
+
+#[test]
+fn native_read_rpc_actual_local_io_context_outlives_canceled_collector() {
+    let fixture = live_fixture();
+    let parent = CancellationToken::uncancelable();
+    let business = Uuid::now_v7();
+    let metadata = fresh_metadata(&fixture, business, &parent);
+    let runtime = Arc::clone(&fixture.runtimes[&node("n1")]);
+    let barrier = runtime.test_hold_native_read_io();
+    let worker = Arc::clone(&runtime);
+    let cancellation = parent.clone();
+    let thread = std::thread::spawn(move || {
+        worker
+            .acquire_native_read_candidate(metadata, business, Uuid::now_v7(), &cancellation)
+            .is_err()
+    });
+    let until = Instant::now() + Duration::from_secs(2);
+    while !barrier.entered() {
+        assert!(Instant::now() < until);
+        std::thread::sleep(Duration::from_millis(1));
+    }
+    assert!(fixture.native.services[&node("n1")].try_lock().is_some());
+    assert!(fixture.native.databases[&node("n1")].try_write().is_some());
+    parent.cancel();
+    assert!(thread.join().unwrap());
+    assert!(
+        runtime.test_active_context_count() > 0,
+        "caller cancellation must not release the context before actual local worker return"
+    );
+    barrier.release();
+    fixture.wait_idle();
+    assert_eq!(runtime.test_active_context_count(), 0);
+}

@@ -105,6 +105,16 @@ struct ObservedTlsTransport {
     lag_status_seen: Arc<AtomicBool>,
 }
 impl RangeWriteTransport for ObservedTlsTransport {
+    fn observe_current_native_range(
+        &self,
+        destination: &ClusterNodeId,
+        request: &crate::distribution_native_read::NativeRangeReadRequest,
+        parent: &CancellationToken,
+    ) -> Result<crate::distribution_native_read::NativeRangeReadObservation> {
+        self.inner
+            .observe_current_native_range(destination, request, parent)
+    }
+
     fn observe_native_completion_observation(
         &self,
         destination: &ClusterNodeId,
@@ -1265,3 +1275,6 @@ mod activation_rplusone;
 
 #[cfg(test)]
 mod native_read_observation_tests;
+
+#[cfg(test)]
+mod native_read_rpc_tests;

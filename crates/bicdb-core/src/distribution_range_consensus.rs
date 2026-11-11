@@ -1563,6 +1563,17 @@ pub struct RangeWriteAck {
 }
 
 pub trait RangeWriteTransport: std::fmt::Debug + Send + Sync + 'static {
+    fn observe_current_native_range(
+        &self,
+        _destination: &ClusterNodeId,
+        _request: &crate::distribution_native_read::NativeRangeReadRequest,
+        _parent: &CancellationToken,
+    ) -> Result<crate::distribution_native_read::NativeRangeReadObservation> {
+        Err(range_write_error(
+            "authenticated current native read observation transport is not wired",
+        ))
+    }
+
     fn apply_native_origin(
         &self,
         _destination: &ClusterNodeId,

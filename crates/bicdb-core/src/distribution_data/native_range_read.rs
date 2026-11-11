@@ -29,6 +29,24 @@ impl ActualServiceNativeReadEvidence {
     }
 }
 impl ClusterDataNodeService {
+    pub(crate) fn require_native_read_ancestor(
+        &self,
+        local: &LocalNativeRangeReadObservation,
+        peer: &crate::distribution_native_read::NativeRangeReadFacts,
+    ) -> Result<()> {
+        local.require_current(self)?;
+        {
+            let database = try_database_read(&self.db)?;
+            self.require_native_catalog_database(&database)?;
+            local.physical().require_ancestor(
+                &database,
+                peer.range_index,
+                &peer.logical_genesis_sha256,
+                &peer.logical_history_sha256,
+            )?;
+        }
+        local.require_current(self)
+    }
     pub(crate) fn observe_current_native_range(
         &self,
         request: &NativeRangeReadRequest,

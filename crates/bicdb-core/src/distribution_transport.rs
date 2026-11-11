@@ -102,6 +102,23 @@ impl AuthenticatedNativeCompletionReply {
     }
 }
 
+/// Only the authenticated transport can construct this request-bound reply.
+#[derive(Debug)]
+pub(crate) struct AuthenticatedNativeRangeReadReply {
+    facts: crate::distribution_native_read::NativeRangeReadFacts,
+    peer: MetadataReadParticipant,
+}
+impl AuthenticatedNativeRangeReadReply {
+    pub(crate) fn into_parts(
+        self,
+    ) -> (
+        crate::distribution_native_read::NativeRangeReadFacts,
+        MetadataReadParticipant,
+    ) {
+        (self.facts, self.peer)
+    }
+}
+
 #[derive(Debug)]
 pub(crate) struct AuthenticatedRecoveryFenceReply {
     reply: crate::distribution_range_recovery::RecoveryEpochFenceReply,
@@ -317,6 +334,9 @@ enum ClusterDataRequest {
     ObserveNativeCompletion {
         request: crate::distribution_range_recovery::NativeCompletionRequest,
     },
+    ObserveCurrentNativeRange {
+        request: crate::distribution_native_read::NativeRangeReadRequest,
+    },
     RecoveryCertifyHistorical {
         request: crate::distribution_range_recovery::RecoveryHistoricalCommandRequest,
     },
@@ -434,6 +454,7 @@ impl ClusterDataRequest {
             Self::ApplyRangeWriteRepair { batch, .. } => Some(batch.range_id),
             Self::ApplyNativeOrigin { request } => Some(request.command.range_id),
             Self::ObserveNativeOrigin { request } => Some(request.range_id),
+            Self::ObserveCurrentNativeRange { request } => Some(request.scope.range.id),
             Self::RecoveryEpochFence { request } => Some(request.scope.range_id),
             Self::RecoveryFencedProbe { request } => Some(request.scope.range_id),
             Self::PrepareNativeReady { request } | Self::ObserveNativeReady { request } => {
@@ -496,6 +517,7 @@ enum ClusterDataResponse {
     RecoveryFencedProbe(crate::distribution_range_recovery::RecoveryFencedProbeReply),
     NativeReady(crate::distribution_range_recovery::NativeReadyReply),
     NativeCompletion(crate::distribution_range_recovery::NativeCompletionReply),
+    NativeRangeRead(crate::distribution_native_read::NativeRangeReadFacts),
     NativeReplica(crate::distribution_native_apply::NativeReplicaProgressReply),
     RangeWrite(RangeWriteAck),
     RangeWriteProgress(RangeWriteProgress),
@@ -1051,6 +1073,19 @@ fn handle_cluster_data_connection(
             return Ok(ClusterDataResponse::NativeCompletion(
                 observation.into_reply(),
             ));
+        }
+        if let ClusterDataRequest::ObserveCurrentNativeRange { request } = request.request {
+            let runtime = recovery_runtime
+                .ok_or_else(|| transport_error("native read observation runtime is not active"))?;
+            let caller = authenticated_caller.as_ref().ok_or_else(|| {
+                transport_error("native read observation requires authenticated peer")
+            })?;
+            let token =
+                CancellationToken::new(Arc::new(AtomicBool::new(false)), Some(request_deadline));
+            return runtime
+                .observe_current_native_range(caller, &request, &token)
+                .and_then(|o| o.into_facts())
+                .map(ClusterDataResponse::NativeRangeRead);
         }
         if let ClusterDataRequest::ObserveNativeCompletion { request } = request.request {
             let runtime = recovery_runtime
@@ -2492,6 +2527,9 @@ fn dispatch_cluster_data_request(
         | ClusterDataRequest::ObserveNativeCompletion { .. } => Err(transport_error(
             "authenticated native-ready runtime is not active",
         )),
+        ClusterDataRequest::ObserveCurrentNativeRange { .. } => Err(transport_error(
+            "authenticated native read observation runtime is not active",
+        )),
         ClusterDataRequest::RecoveryFencedProbe { .. } => Err(transport_error(
             "recovery observations require authenticated receiver runtime",
         )),
@@ -3557,6 +3595,58 @@ impl TcpClusterRelocationTransport {
     ) -> Result<crate::distribution_range_recovery::NativeReadyObservation> {
         self.native_ready_observation(destination, request, false, parent)
     }
+    pub(crate) fn observe_current_native_range(
+        &self,
+        destination: &ClusterNodeId,
+        request: &crate::distribution_native_read::NativeRangeReadRequest,
+        parent: &CancellationToken,
+    ) -> Result<crate::distribution_native_read::NativeRangeReadObservation> {
+        let token = request.cancellation(parent)?;
+        let mut bounded_request = request.clone();
+        bounded_request.budget_ms = u64::try_from(
+            token
+                .deadline()
+                .and_then(|d| d.checked_duration_since(Instant::now()))
+                .ok_or_else(|| transport_error("native read probe deadline expired"))?
+                .as_millis(),
+        )
+        .unwrap_or(5000)
+        .clamp(1, 5000);
+        let payload = ClusterDataRequest::ObserveCurrentNativeRange {
+            request: bounded_request,
+        };
+        crate::distribution_range_consensus::validate_native_json_size(
+            &ClusterDataRequestEnvelope {
+                protocol_version: CLUSTER_DATA_PROTOCOL_VERSION,
+                cluster_id: self.cluster_id.clone(),
+                caller_node_id: self.caller_node_id.clone(),
+                destination_node_id: destination.clone(),
+                request_id: u64::MAX,
+                request: &payload,
+            },
+            self.config.max_frame_bytes,
+        )?;
+        let (response, peer) =
+            self.call_with_read_participant_cancellable(&token, destination, payload)?;
+        match response {
+            ClusterDataResponse::NativeRangeRead(facts) => {
+                if &facts.node_id != destination || peer.node_id() != destination {
+                    return Err(transport_error(
+                        "native read response destination identity differs",
+                    ));
+                }
+                crate::distribution_native_read::NativeRangeReadObservation::from_transport(
+                    AuthenticatedNativeRangeReadReply { facts, peer },
+                    request,
+                    token,
+                )
+            }
+            response => Err(unexpected_response(
+                "authenticated current native read observation",
+                response,
+            )),
+        }
+    }
     fn native_completion_observation(
         &self,
         destination: &ClusterNodeId,
@@ -3838,6 +3928,7 @@ impl TcpClusterRelocationTransport {
                 | ClusterDataRequest::ObserveNativeReady { .. }
                 | ClusterDataRequest::CompleteNativeRecovery { .. }
                 | ClusterDataRequest::ObserveNativeCompletion { .. }
+                | ClusterDataRequest::ObserveCurrentNativeRange { .. }
                 | ClusterDataRequest::RecoveryCertifyHistorical { .. }
                 | ClusterDataRequest::RecoveryCertifySparseHistorical { .. }
                 | ClusterDataRequest::RecoveryApplyHistorical { .. }
@@ -4172,6 +4263,14 @@ impl RangeWriteTransport for TcpClusterRelocationTransport {
                 other,
             )),
         }
+    }
+    fn observe_current_native_range(
+        &self,
+        destination: &ClusterNodeId,
+        request: &crate::distribution_native_read::NativeRangeReadRequest,
+        parent: &CancellationToken,
+    ) -> Result<crate::distribution_native_read::NativeRangeReadObservation> {
+        self.observe_current_native_range(destination, request, parent)
     }
     fn observe_native_completion_observation(
         &self,

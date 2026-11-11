@@ -1994,7 +1994,47 @@ pub(crate) mod tests {
     }
     #[test]
     fn native_completed_crash_window_reopens_source_and_target_and_reissues_only_exact_attempt() {
-        let mut fixture = Fixture::new();
+        exercise_completed_handoff_window(0);
+    }
+    #[test]
+    fn native_completed_nonzero_handoff_window_reaudits_history_and_reissues_exact_anchor() {
+        exercise_completed_handoff_window(1);
+    }
+    fn exercise_completed_handoff_window(source_commands: usize) {
+        let mut fixture = if source_commands == 0 {
+            Fixture::new()
+        } else {
+            Fixture::new_with_ranges_and_before_handoff(2, |db, topology, spec, _| {
+                let ranges = topology
+                    .ranges
+                    .values()
+                    .map(|range| range.id)
+                    .collect::<Vec<_>>();
+                crate::distribution_range_consensus::seed_actual_origin(
+                    db,
+                    topology.clone(),
+                    spec,
+                    ranges[1],
+                    2,
+                );
+                crate::distribution_range_consensus::seed_actual_origin(
+                    db,
+                    topology.clone(),
+                    spec,
+                    ranges[0],
+                    source_commands,
+                );
+            })
+        };
+        let source_b = fixture.source.read().current_commit_seq();
+        let expected_key = (0..)
+            .map(|index| format!("stage-actual-origin-{index}"))
+            .find(|key| {
+                fixture
+                    .range()
+                    .contains_token(distribution_key_token("items", key))
+            })
+            .unwrap();
         let mut store = fixture.store();
         let attempt = Uuid::now_v7();
         let mut install = fixture.begin(&mut store, attempt);
@@ -2003,6 +2043,7 @@ pub(crate) mod tests {
         let source = fixture.capture.take().unwrap().complete().unwrap();
         let verified = verify_install(&fixture, &store, install, source);
         let first_receipt = verified.base().native_receipt_sha256().to_string();
+        assert_eq!(verified.base().range_index(), source_commands as u64);
         let source_open = fixture
             .source
             .read()
@@ -2068,6 +2109,21 @@ pub(crate) mod tests {
         .unwrap();
         let recovered = finish_verification(&fixture, &store, recovered);
         assert_eq!(recovered.fence().attempt_id(), attempt);
+        assert_eq!(recovered.base().range_index(), source_commands as u64);
+        if source_commands > 0 {
+            assert!(source_b > source_commands as u64);
+            assert_ne!(recovered.base().target_snapshot_bound().get(), source_b);
+            assert_eq!(
+                fixture
+                    .target()
+                    .read()
+                    .get("items", &expected_key)
+                    .unwrap()
+                    .unwrap()
+                    .as_ref(),
+                &crate::Record::new(expected_key)
+            );
+        }
         assert_eq!(
             recovered.base().native_receipt_sha256(),
             first_receipt,

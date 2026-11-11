@@ -5329,6 +5329,10 @@ impl<'db> SqlSession<'db> {
         frame: &mut RoutineFrame,
         expr: &RoutineExpr,
     ) -> Result<SqlValue> {
+        // A structural statement can outlive an authored COMMIT in its body.
+        // Repeated loop predicates must not restore its now-ended owner when
+        // consulting a type or planning an embedded scalar subquery.
+        let _catalog_reads = self.enter_current_catalog_reads()?;
         let _diagnostics = frame
             .oracle_error_diagnostics
             .as_ref()

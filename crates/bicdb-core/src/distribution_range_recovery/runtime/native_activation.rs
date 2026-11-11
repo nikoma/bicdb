@@ -57,7 +57,7 @@ impl RangeRecoveryRuntime {
                         break s;
                     }
                 };
-                service.require_current_native_activation(request, &fresh)?;
+                service.require_current_native_activation(request, &fresh, &quorum)?;
             }
             return self.observe_native_completion_inner(initiator, request, &token);
         }

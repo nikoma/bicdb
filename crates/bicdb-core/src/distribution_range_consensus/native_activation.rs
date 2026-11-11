@@ -215,6 +215,28 @@ impl RangeWriteStore {
         })?;
         guard.require_current(self.open_id, &saved.scope, &activated.checksum()?)
     }
+    pub(crate) fn require_current_native_activation_decision(
+        &self,
+        quorum: &NativeCompletionQuorum,
+        fresh: &RecoveryRoleAdmission,
+    ) -> Result<()> {
+        quorum.require_recipient_role(fresh)?;
+        self.native_activated_open_allowed(quorum.scope().range_id)?;
+        let saved = &self.catalog.recovery_fences[&quorum.scope().range_id];
+        let RecoveryFencePhase::NativeActivated(a) = &saved.phase else {
+            unreachable!("checked activation")
+        };
+        if !saved.scope.same_session(quorum.scope())
+            || a.completed.point.range_index() != quorum.range_index()
+            || a.completed.point.logical_genesis_sha256() != quorum.logical_genesis_sha256()
+            || a.completed.point.logical_history_sha256() != quorum.logical_history_sha256()
+        {
+            return Err(range_write_error(
+                "durable local activation contradicts the actual completion quorum",
+            ));
+        }
+        Ok(())
+    }
     pub(crate) fn require_actual_native_activated_open(&self, range: RangeId) -> Result<()> {
         self.native_activated_open_allowed(range)
     }

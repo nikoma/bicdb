@@ -36,12 +36,13 @@ impl ClusterDataNodeService {
         &self,
         request: &NativeCompletionRequest,
         fresh: &RecoveryRoleAdmission,
+        quorum: &NativeCompletionQuorum,
     ) -> Result<()> {
         request.scope.require_role(fresh)?;
         if !self.native_completion_is_activated(request)? {
             return Err(data_error("no actual native activation"));
         }
         self.range_writes
-            .require_actual_native_activated_open(request.scope.range_id)
+            .require_current_native_activation_decision(quorum, fresh)
     }
 }

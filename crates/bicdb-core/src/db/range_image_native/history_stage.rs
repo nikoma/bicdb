@@ -422,6 +422,8 @@ impl BicDb {
         }
         contents.require_current(self, context.fence, context.admission, bindings, source)?;
         cancellation.check()?;
+        let (actual_global_generation, actual_range_generation) =
+            self.native_range_image_generation_pair(proof.range_id())?;
         let controlled = self
             .range_mutations
             .try_controlled_mutation(context.frozen)?;
@@ -448,7 +450,93 @@ impl BicDb {
                 let base: serde_json::Value = serde_json::from_slice(&encoded)?;
                 let matches =
                     |name: &str, expected: serde_json::Value| base.get(name) == Some(&expected);
-                if !matches("native_page_xid", serde_json::json!(xid))
+                if !matches(
+                    "cluster_id",
+                    serde_json::json!(context.admission.cluster_id()),
+                ) || !matches(
+                    "bootstrap_id",
+                    serde_json::json!(context.admission.bootstrap_id()),
+                ) || !matches(
+                    "target_node_id",
+                    serde_json::json!(context.admission.local_node_id()),
+                ) || !matches(
+                    "target_member_incarnation",
+                    serde_json::json!(context.admission.local_member_incarnation()),
+                ) || !matches(
+                    "restore_activation",
+                    serde_json::json!(context.admission.restore_activation()),
+                ) || !matches("purpose", serde_json::json!(context.fence.purpose()))
+                    || !matches("capture_range", serde_json::json!(context.fence.range()))
+                    || !matches(
+                        "intended_activation_range",
+                        serde_json::json!(context.fence.intended_activation_range()),
+                    )
+                    || !matches(
+                        "base_members",
+                        serde_json::json!(source.cut().capture_members()),
+                    )
+                    || !matches(
+                        "intended_activation_members",
+                        serde_json::json!(context.fence.intended_activation_members()),
+                    )
+                    || !matches(
+                        "source_purpose",
+                        serde_json::json!(context.fence.source_purpose()),
+                    )
+                    || !matches(
+                        "intent_sha256",
+                        serde_json::json!(context.fence.intent_sha256()),
+                    )
+                    || !matches(
+                        "old_config_sha256",
+                        serde_json::json!(context.fence.old_config_sha256()),
+                    )
+                    || !matches(
+                        "intended_config_sha256",
+                        serde_json::json!(context.fence.intended_config_sha256()),
+                    )
+                    || !matches("schema_sha256", serde_json::json!(bindings.schema_sha256()))
+                    || !matches(
+                        "reader_features",
+                        serde_json::json!(bindings.reader_features()),
+                    )
+                    || !matches(
+                        "local_namespace_ids",
+                        serde_json::json!(bindings.namespace_ids()),
+                    )
+                    || !matches(
+                        "portable_catalog_sha256",
+                        serde_json::json!(source.seal().portable_catalog_sha256),
+                    )
+                    || !matches(
+                        "image_root_sha256",
+                        serde_json::json!(source.seal().image_root_sha256),
+                    )
+                    || !matches(
+                        "record_count",
+                        serde_json::json!(source.seal().record_count),
+                    )
+                    || !matches(
+                        "serialized_record_bytes",
+                        serde_json::json!(source.seal().serialized_record_bytes),
+                    )
+                    || !matches(
+                        "global_image_generation",
+                        serde_json::json!(actual_global_generation),
+                    )
+                    || !matches(
+                        "range_image_generation",
+                        serde_json::json!(actual_range_generation),
+                    )
+                    || !matches(
+                        "reserved_db_upper_bound",
+                        serde_json::json!(contents.actual_local_visibility_sequence()),
+                    )
+                    || !matches(
+                        "min_snapshot_db_sequence",
+                        serde_json::json!(contents.actual_observed_min_snapshot_sequence()),
+                    )
+                    || !matches("native_page_xid", serde_json::json!(xid))
                     || !matches("birth_id", serde_json::json!(binding.target_birth_id()))
                     || !matches(
                         "birth_sha256",
@@ -1077,7 +1165,12 @@ mod tests {
     /// This fixture uses actual fresh native schema/genesis and, when requested,
     /// ordinary RF1 origin transactions before the permanent handoff promise.
     /// Staging never clears or installs data rows and grants no membership.
-    fn exercise_stage(command_count: usize, tamper: bool, tear_stored_entry: bool) {
+    fn exercise_stage(
+        command_count: usize,
+        tamper: bool,
+        tear_stored_entry: bool,
+        conflict_catalog: bool,
+    ) {
         let mut fixture =
             Fixture::new_with_ranges_and_before_handoff(2, |db, topology, spec, _| {
                 let selected = topology.ranges.values().next().unwrap().id;
@@ -1116,6 +1209,33 @@ mod tests {
             "fresh learner has no native floor"
         );
         let mut store = fixture.store();
+        if conflict_catalog {
+            assert_eq!(command_count, 1);
+            let key = (0..)
+                .map(|i| format!("stage-conflicting-catalog-{i}"))
+                .find(|key| fixture.topology.range_for_key("items", key).unwrap().id == range_id)
+                .unwrap();
+            let command = crate::distribution_range_consensus::test_catalog_command(
+                fixture.topology.cluster_id.clone(),
+                fixture.range(),
+                1,
+                &crate::CommitAdmissionIntent {
+                    transaction_id: 90001,
+                    mutations: vec![crate::CommitAdmissionMutation {
+                        collection: "items".into(),
+                        record_id: key.clone(),
+                        record: Some(crate::Record::new(key)),
+                    }],
+                },
+            )
+            .unwrap();
+            // Actual local catalog transitions, not a hand-edited JSON log or
+            // caller-filtered obligation list. This intentionally incompatible
+            // replica fixture is not a demonstrated distributed fork schedule.
+            store.prepare(command.clone()).unwrap();
+            store.commit(&command).unwrap();
+            store.certify(&command).unwrap();
+        }
         let role = fixture.role();
         let install_role = NativeImageInstallRole::CommittedHandoff(&role);
         let fence = {
@@ -1223,6 +1343,37 @@ mod tests {
                         &CancellationToken::uncancelable()
                     )
                     .is_err());
+            }
+            if conflict_catalog && step.history.first_index == 1 {
+                let error = target
+                    .read()
+                    .append_native_history_stage(
+                        &stage,
+                        &context,
+                        &auth,
+                        stage.stage_id(),
+                        &step,
+                        &CancellationToken::uncancelable(),
+                    )
+                    .unwrap_err();
+                assert!(error
+                    .to_string()
+                    .contains("contradicts actual CQ/Applied/native-pending"));
+                assert!(target
+                    .read()
+                    .finish_native_history_stage(&stage, &context, &auth)
+                    .is_err());
+                assert!(target
+                    .read()
+                    .audit_native_history_stage_step(
+                        &stage,
+                        &context,
+                        &auth,
+                        1,
+                        &CancellationToken::uncancelable()
+                    )
+                    .is_err());
+                return;
             }
             let progress = target
                 .read()
@@ -1333,14 +1484,20 @@ mod tests {
         proof
             .require_current(&target.read(), &context, &auth)
             .unwrap();
-        assert!(
-            target
-                .read()
-                .get("items", "stage-actual-origin-0")
-                .unwrap()
-                .is_none(),
-            "history staging copies no data rows"
-        );
+        for key in (0..)
+            .map(|i| format!("stage-actual-origin-{i}"))
+            .filter(|key| fixture.topology.range_for_key("items", key).unwrap().id == range_id)
+            .take(command_count)
+        {
+            assert!(
+                fixture.source.read().get("items", &key).unwrap().is_some(),
+                "fixture genuinely committed source payload"
+            );
+            assert!(
+                target.read().get("items", &key).unwrap().is_none(),
+                "history staging copies no data rows"
+            );
+        }
         assert!(
             target
                 .read()
@@ -1351,14 +1508,18 @@ mod tests {
     }
     #[test]
     fn native_history_stage_actual_empty_spine_requires_stored_audit_and_is_idempotent() {
-        exercise_stage(0, false, false)
+        exercise_stage(0, false, false, false)
     }
     #[test]
     fn native_history_stage_actual_origin_spine_rejects_corrupt_and_late_frames() {
-        exercise_stage(1, true, false)
+        exercise_stage(1, true, false, false)
+    }
+    #[test]
+    fn native_history_stage_actual_retained_catalog_command_conflict_refuses_before_data() {
+        exercise_stage(1, false, false, true)
     }
     #[test]
     fn native_history_stage_missing_stored_entry_refuses_proof() {
-        exercise_stage(1, false, true)
+        exercise_stage(1, false, true, false)
     }
 }

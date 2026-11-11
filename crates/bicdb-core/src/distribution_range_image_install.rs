@@ -1430,7 +1430,11 @@ pub(crate) mod tests {
     fn actual_native_r1_install_uses_target_local_visibility_and_preserves_other_range_rows() {
         let mut fixture =
             Fixture::new_with_ranges_and_before_handoff(2, |db, topology, spec, _| {
-                let ranges = topology.ranges.keys().copied().collect::<Vec<_>>();
+                let ranges = topology
+                    .ranges
+                    .values()
+                    .map(|range| range.id)
+                    .collect::<Vec<_>>();
                 // Genuine independent range commits distinguish global DB sequence
                 // from the selected range's one command. No sequence is assigned.
                 crate::distribution_range_consensus::seed_actual_origin(
@@ -1604,6 +1608,125 @@ pub(crate) mod tests {
     }
 
     #[test]
+    fn actual_native_r1025_install_preserves_full_history_after_command_payload_compaction() {
+        let mut fixture =
+            Fixture::new_with_ranges_and_before_handoff(2, |db, topology, spec, _| {
+                let ranges = topology.ranges.values().map(|r| r.id).collect::<Vec<_>>();
+                crate::distribution_range_consensus::seed_actual_origin(
+                    db,
+                    topology.clone(),
+                    spec,
+                    ranges[1],
+                    3,
+                );
+                crate::distribution_range_consensus::seed_actual_origin(
+                    db,
+                    topology.clone(),
+                    spec,
+                    ranges[0],
+                    1025,
+                );
+            });
+        let range_id = fixture.range().id;
+        let source_b = fixture.source.read().current_commit_seq();
+        assert!(
+            source_b > 1025,
+            "actual other-range commits make DBseq distinct from R"
+        );
+        let source_store = RangeWriteStore::open(
+            fixture.source.read().data_path(),
+            fixture.topology.cluster_id.clone(),
+            node("n1"),
+            true,
+        )
+        .unwrap();
+        let progress = source_store.progress(range_id);
+        assert_eq!(progress.resolved_through, 1025);
+        assert_eq!(
+            progress.compacted_through, 1,
+            "actual first command payload has passed normal retention"
+        );
+        let obligations = source_store
+            .image_install_catalog_history_obligations(range_id)
+            .unwrap();
+        assert_eq!(obligations.irrevocable_commands().len(), 1024);
+        drop(obligations);
+        drop(source_store);
+        let keys = (0..)
+            .map(|i| format!("stage-actual-origin-{i}"))
+            .filter(|key| {
+                fixture
+                    .range()
+                    .contains_token(distribution_key_token("items", key))
+            })
+            .take(1025)
+            .collect::<Vec<_>>();
+        for key in &keys {
+            assert_eq!(
+                fixture
+                    .source
+                    .read()
+                    .get("items", key)
+                    .unwrap()
+                    .unwrap()
+                    .as_ref(),
+                &crate::Record::new(key)
+            );
+        }
+        let target_uid = fixture
+            .target()
+            .read()
+            .local_namespace_identity("items")
+            .unwrap();
+        let mut store = fixture.store();
+        let mut install = fixture.begin(&mut store, Uuid::now_v7());
+        fixture.clear(&store, &mut install);
+        fixture.copy(&store, &mut install);
+        let source = fixture.capture.take().unwrap().complete().unwrap();
+        assert_eq!(source.seal().range_index, 1025);
+        assert_eq!(source.seal().history_entries, 1026);
+        assert!(
+            source.seal().history_steps >= 5,
+            "bounded history includes genesis and all commands"
+        );
+        let verified = verify_install(&fixture, &store, install, source);
+        assert_eq!(verified.base().range_index(), 1025);
+        assert_eq!(verified.base().history_verified_through(), 1025);
+        assert!(verified.base().target_snapshot_bound().get() < 1025,
+            "target uses its own actual small local MVCC bound, never source range index or source DBseq");
+        {
+            let db = fixture.target();
+            let db = db.read();
+            for key in &keys {
+                assert_eq!(
+                    db.get("items", key).unwrap().unwrap().as_ref(),
+                    &crate::Record::new(key),
+                    "ordinary target MVCC get must see every copied row after payload retention"
+                );
+            }
+            assert_eq!(db.local_namespace_identity("items").unwrap(), target_uid);
+        }
+        drop(verified);
+        fixture.reopen_target();
+        for key in keys {
+            assert_eq!(
+                fixture
+                    .target()
+                    .read()
+                    .get("items", &key)
+                    .unwrap()
+                    .unwrap()
+                    .as_ref(),
+                &crate::Record::new(key)
+            );
+        }
+        assert!(
+            fixture.store().require_no_image_install(range_id).is_err(),
+            "physical copy and complete history do not activate membership or catalog floor"
+        );
+    }
+
+    #[test]
     fn partial_native_attempt_reopen_stays_unready_and_new_attempt_rejects_late_chunks() {
         let mut fixture = Fixture::new();
         let mut store = fixture.store();
@@ -1642,6 +1765,25 @@ pub(crate) mod tests {
             .native_installed_range_image_base(&admission, fixture.range().id)
             .is_err());
         drop(fixture.capture.take());
+        // A real fresh metadata snapshot may carry changed load estimates;
+        // these do not change the handoff configuration/session or data proof.
+        let range_id = fixture.range().id;
+        fixture.topology.generation += 1;
+        fixture
+            .topology
+            .ranges
+            .values_mut()
+            .find(|range| range.id == range_id)
+            .unwrap()
+            .approximate_bytes = 999;
+        fixture
+            .topology
+            .ranges
+            .values_mut()
+            .find(|range| range.id == range_id)
+            .unwrap()
+            .approximate_qps = 777;
+        fixture.topology.validate().unwrap();
         fixture.recapture();
         let mut store = fixture.store();
         let new_attempt = Uuid::now_v7();

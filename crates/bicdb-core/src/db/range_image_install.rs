@@ -227,9 +227,6 @@ impl NativeInstalledRangeImageIntegrity {
     ) -> Option<&crate::distribution_consensus::MetadataRestoreActivation> {
         self.receipt.restore_activation.as_ref()
     }
-    pub(crate) fn source_native_receipt_sha256(&self) -> &str {
-        &self.receipt.source_native_receipt_sha256
-    }
     pub(crate) fn native_receipt_sha256(&self) -> &str {
         &self.receipt.checksum_sha256
     }
@@ -360,6 +357,12 @@ impl NativeTargetImageVerifier {
     }
 }
 impl VerifiedNativeTargetImageContents {
+    pub(in crate::db) fn actual_local_visibility_sequence(&self) -> u64 {
+        self.state.reserved
+    }
+    pub(in crate::db) fn actual_observed_min_snapshot_sequence(&self) -> u64 {
+        self.state.min_snapshot.unwrap_or(self.state.reserved)
+    }
     pub(in crate::db) fn require_current(
         &self,
         database: &BicDb,
@@ -467,9 +470,6 @@ impl NativeInstalledRangeImageBase {
         &self,
     ) -> Option<&crate::distribution_consensus::MetadataRestoreActivation> {
         self.receipt.restore_activation.as_ref()
-    }
-    pub(crate) fn source_native_receipt_sha256(&self) -> &str {
-        &self.receipt.source_native_receipt_sha256
     }
     pub(crate) fn native_receipt_sha256(&self) -> &str {
         &self.receipt.checksum_sha256
@@ -980,8 +980,8 @@ impl BicDb {
         cancellation.check()?;
         let (global_image_generation, range_image_generation) =
             self.native_range_image_generation_pair(fence.range().id)?;
-        let intended = source.cut().intended_activation_range().clone();
-        let intended_activation_members = source.cut().intended_activation_members().clone();
+        let intended = fence.intended_activation_range().clone();
+        let intended_activation_members = fence.intended_activation_members().clone();
         // This is the captured old-data membership only. Intended future
         // credentials/activation still require Root's separate durable proof.
         let base_members = role

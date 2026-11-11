@@ -1565,14 +1565,15 @@ mod tests {
             .read()
             .range_image_initializing
             .load(AtomicOrdering::Acquire));
-        assert_eq!(first.receipt.range_index, 0);
-        assert_eq!(first.receipt.reserved_db_upper_bound, 0);
-        assert!(first.receipt.native_page_xid > 0);
-        let first_hash = first.receipt.checksum_sha256.clone();
+        assert_eq!(first.range_index(), 0);
+        let NativeRangeImageAnchor::Genesis(genesis) = &first._anchor else {
+            panic!("fresh factory must produce actual Genesis, never an installed surrogate")
+        };
+        assert_eq!(genesis.reserved_db_upper_bound, 0);
+        assert!(genesis.native_page_xid > 0);
+        let first_hash = first.native_receipt_sha256().to_string();
         assert_eq!(
-            initialize(&db, &authority, &expected.initial_ranges[0])
-                .receipt
-                .checksum_sha256,
+            initialize(&db, &authority, &expected.initial_ranges[0]).native_receipt_sha256(),
             first_hash
         );
         db.read()
@@ -1587,7 +1588,7 @@ mod tests {
         assert!(!db.range_image_initializing.load(AtomicOrdering::Acquire));
         let db = Arc::new(RwLock::new(db));
         let recovered = initialize(&db, &authority, &expected.initial_ranges[0]);
-        assert_eq!(recovered.receipt.checksum_sha256, first_hash);
+        assert_eq!(recovered.native_receipt_sha256(), first_hash);
         assert!(db
             .read()
             .collections()
@@ -1638,7 +1639,7 @@ mod tests {
             database
                 .validate_source_range_image_lineage(&a, expected.initial_ranges[0].id, 0)
                 .unwrap();
-            assert!(database.current_commit_seq() > a.receipt.range_index); // DBseq != range index
+            assert!(database.current_commit_seq() > a.range_index()); // DBseq != range index
             assert!(database.get("items", &key).unwrap().is_some());
         }
         drop(permit);

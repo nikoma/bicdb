@@ -301,6 +301,17 @@ pub(crate) mod tests {
         (coordinator, service)
     }
 
+    /// Lower Store fixture helper only: use the original private constructor
+    /// and all of its validation. No production constructor/authority is added.
+    pub(crate) fn test_catalog_command(
+        cluster_id: ClusterId,
+        range: &RangeDescriptor,
+        index: u64,
+        intent: &CommitAdmissionIntent,
+    ) -> Result<RangeWriteCommand> {
+        RangeWriteCommand::new(cluster_id, range, index, range.leader.clone(), intent)
+    }
+
     /// Seed through actual ordinary RF1 admission/WAL/certificate callbacks.
     /// Drop service/store ownership before handoff opens its own store.
     pub(crate) fn seed_actual_origin(

@@ -259,6 +259,23 @@ impl NativeRangeImageSourceCut {
                     || lineage.schema_sha256() != cut.schema_sha256
                     || lineage.restore_activation() != cut.restore_activation.as_ref()
                     || !semantic_range(lineage.base_range(), &cut.native_base_range)
+                    || cut.native_base_range.id != cut.range.id
+                    || cut.native_base_range.start_token != cut.range.start_token
+                    || cut.native_base_range.end_token != cut.range.end_token
+                    || cut
+                        .native_base_range
+                        .replicas
+                        .iter()
+                        .filter(|replica| {
+                            replica.role == crate::distribution::RangeReplicaRole::Voter
+                        })
+                        .map(|replica| replica.node_id.clone())
+                        .collect::<std::collections::BTreeSet<_>>()
+                        != cut.members.keys().cloned().collect()
+                    || cut
+                        .members
+                        .iter()
+                        .any(|(id, member)| lineage.base_members().get(id) != Some(member))
                 {
                     return Err(invalid("current-quorum image cut does not bind the selected actual native source lineage"));
                 }

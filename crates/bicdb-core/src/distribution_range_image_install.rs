@@ -1733,6 +1733,108 @@ pub(crate) mod tests {
     }
 
     #[test]
+    fn actual_installed_r1_floor_survives_physical_invalidation_and_reopen_without_readiness() {
+        let mut fixture =
+            Fixture::new_with_ranges_and_before_handoff(2, |db, topology, spec, _| {
+                let selected = topology.ranges.values().next().unwrap().id;
+                crate::distribution_range_consensus::seed_actual_origin(
+                    db,
+                    topology.clone(),
+                    spec,
+                    selected,
+                    1,
+                );
+            });
+        let mut store = fixture.store();
+        let mut install = fixture.begin(&mut store, Uuid::now_v7());
+        fixture.clear(&store, &mut install);
+        fixture.copy(&store, &mut install);
+        let source = fixture.capture.take().unwrap().complete().unwrap();
+        let verified = verify_install(&fixture, &store, install, source);
+        let receipt = verified.base().native_receipt_sha256().to_string();
+        let history = verified.base().logical_history_sha256().to_string();
+        drop(verified);
+        {
+            let target = fixture.target();
+            let db = target.read();
+            let extra = (0..)
+                .map(|i| format!("after-image-unacknowledged-{i}"))
+                .find(|key| {
+                    fixture
+                        .range()
+                        .contains_token(distribution_key_token("items", key))
+                })
+                .unwrap();
+            let row = crate::Record::new(extra.clone());
+            // Trusted physical learner mutation, explicitly NOT an acknowledged
+            // quorum commit or a new native certified prefix. It invalidates
+            // current source contents without erasing the prior durable floor.
+            db.apply_range_snapshot_batch_preinstalled(
+                fixture.range(),
+                &CollectionMeta::standard("items"),
+                &RangeSnapshotBatch {
+                    collection: "items".into(),
+                    range_id: fixture.range().id,
+                    range_epoch: fixture.range().epoch,
+                    snapshot_commit_sequence: 0,
+                    resume_after_key: extra,
+                    serialized_record_bytes: serde_json::to_vec(&row).unwrap().len(),
+                    records: vec![row],
+                },
+            )
+            .unwrap();
+        }
+        for reopen in [false, true] {
+            if reopen {
+                fixture.reopen_target();
+            }
+            let target = fixture.target();
+            let db = target.read();
+            let native = db
+                .native_recovery_admission(
+                    &fixture.topology.cluster_id,
+                    fixture.topology.range_image_bootstrap_id.unwrap(),
+                    &node("n2"),
+                    fixture.target_spec.member_incarnation,
+                )
+                .unwrap();
+            assert!(
+                db.native_installed_range_image_base(&native, fixture.range().id)
+                    .is_err(),
+                "invalidated image must not remain a source/ready anchor"
+            );
+            let integrity = db
+                .native_installed_range_image_integrity(&native, fixture.range().id)
+                .unwrap()
+                .unwrap();
+            assert_eq!(integrity.range_index(), 1);
+            assert_eq!(integrity.native_receipt_sha256(), receipt);
+            assert_eq!(integrity.logical_history_sha256(), history);
+            let frozen = db
+                .range_mutation_gate()
+                .try_freeze(fixture.range().id, Uuid::now_v7())
+                .unwrap();
+            let safety = db
+                .native_range_install_safety(&native, fixture.range().id, &frozen)
+                .unwrap();
+            assert!(safety.source_invalidated());
+            assert_eq!(safety.maximum_irreversible_index(), Some(1));
+            assert_eq!(safety.history_point().unwrap().range_index(), 1);
+            assert_eq!(
+                safety.history_point().unwrap().logical_history_sha256(),
+                history
+            );
+            safety.require_current(&db, &native, &frozen).unwrap();
+            assert!(
+                db.native_range_prefix_observation(fixture.range().id)
+                    .unwrap()
+                    .invalidated
+            );
+            assert!(store.require_no_image_install(fixture.range().id).is_err());
+        }
+    }
+
+    #[test]
     fn native_partial_attempt_refuses_recreated_namespace_until_fresh_authorized_attempt() {
         let mut fixture = Fixture::new();
         let original_uid = fixture

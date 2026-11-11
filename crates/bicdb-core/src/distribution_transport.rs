@@ -1,5 +1,8 @@
 //! Authenticated, bounded RPC transport for physical range relocation.
 
+#[cfg(test)]
+mod native_obligation_frame_tests;
+
 use std::collections::{BTreeMap, BTreeSet};
 use std::io::{Read, Write};
 use std::net::{SocketAddr, TcpListener, TcpStream, ToSocketAddrs};

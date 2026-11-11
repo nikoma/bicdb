@@ -75,6 +75,54 @@ pub(crate) struct NativeReadyReply {
     pub progress: RangeWriteProgress,
     pub irreversible_command_sha256: BTreeMap<u64, String>,
 }
+
+#[cfg(test)]
+mod obligation_bound_tests {
+    use super::*;
+    #[test]
+    fn closed_ready_obligation_bound_stays_2048_without_a_pending_tail() {
+        // Structural DTO validation only: this creates no actual ready proof.
+        let (scope, mut progress, mut image) =
+            super::super::image_history::test_only_structural_fence_dtos(2049);
+        image.irreversible_command_sha256.remove(&u64::MAX);
+        progress.last_index = progress.resolved_through;
+        let point = image.native_point.unwrap();
+        let request = NativeReadyRequest {
+            scope: scope.clone(),
+            challenge: Uuid::new_v4(),
+            budget_ms: 5000,
+        };
+        let peer = MetadataReadParticipant::from_transport(
+            progress.node_id.clone(), 1, None, true,
+        );
+        let mut reply = NativeReadyReply {
+            stage: FrozenNativeReadyStage::NativePrepared,
+            evidence_version: NATIVE_READY_EVIDENCE_VERSION,
+            physical_domain: NativeReadyPhysicalDomain::SameVoterNativeAnchorV1,
+            scope,
+            challenge: request.challenge,
+            observed_metadata_context_id: Uuid::new_v4(),
+            observed_metadata_term: 1,
+            observed_metadata_read_index: 1,
+            node_id: progress.node_id.clone(),
+            member_incarnation: 1,
+            store_open_id: Uuid::new_v4(),
+            native_database_incarnation: "structural-only-not-a-database".into(),
+            range_index: progress.resolved_through,
+            logical_genesis_sha256: point.logical_genesis_sha256,
+            logical_history_sha256: point.logical_history_sha256,
+            native_receipt_sha256: point.native_receipt_sha256,
+            local_visibility_sequence: 1,
+            progress,
+            irreversible_command_sha256: image.irreversible_command_sha256,
+        };
+        assert_eq!(reply.irreversible_command_sha256.len(), 2048);
+        reply.test_validate_shape_only(&request, &peer).unwrap();
+        reply.irreversible_command_sha256.insert(u64::MAX - 2049, "f".repeat(64));
+        assert!(reply.test_validate_shape_only(&request, &peer).is_err());
+        assert_eq!(reply.irreversible_command_sha256.len(), 2049);
+    }
+}
 impl NativeReadyReply {
     /// Structural negative-test seam only. This cannot construct an
     /// authenticated observation or any quorum/serving permission.

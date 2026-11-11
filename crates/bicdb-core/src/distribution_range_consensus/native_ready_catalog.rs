@@ -30,6 +30,31 @@ fn insert_complete_fenced_obligation(
 }
 
 #[cfg(test)]
+mod obligation_bound_tests {
+    use super::*;
+    use crate::distribution_range_recovery::MAX_FENCED_IRREVERSIBLE_COMMANDS;
+
+    #[test]
+    fn complete_fenced_obligation_producer_deduplicates_without_dropping_conflicts_or_overflow() {
+        let mut values = BTreeMap::new();
+        for index in 1..=MAX_FENCED_IRREVERSIBLE_COMMANDS as u64 {
+            insert_complete_fenced_obligation(&mut values, index, &"a".repeat(64)).unwrap();
+        }
+        let before = values.clone();
+        insert_complete_fenced_obligation(&mut values, 1, &"a".repeat(64)).unwrap();
+        assert_eq!(values, before);
+        let conflict = insert_complete_fenced_obligation(&mut values, 1, &"b".repeat(64)).unwrap_err();
+        assert!(conflict.to_string().contains("conflicts"));
+        assert_eq!(values, before);
+        let overflow = insert_complete_fenced_obligation(
+            &mut values, MAX_FENCED_IRREVERSIBLE_COMMANDS as u64 + 1, &"a".repeat(64),
+        ).unwrap_err();
+        assert!(overflow.to_string().contains("complete 2049-command obligation reply bound"));
+        assert_eq!(values, before, "no partial reply or mutated accepted map");
+    }
+}
+
+#[cfg(test)]
 pub(crate) fn native_ready_test_command(
     cluster: ClusterId,
     range: &RangeDescriptor,

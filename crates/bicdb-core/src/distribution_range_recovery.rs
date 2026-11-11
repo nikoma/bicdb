@@ -26,6 +26,8 @@ mod image_compatibility;
 #[cfg(test)]
 mod recovery_order_tests;
 mod image_history;
+#[cfg(test)]
+pub(crate) use image_history::test_only_structural_fence_dtos;
 pub(crate) use image_compatibility::{RecoverySourceHistoryRound, VerifiedRecoverySourceHistory};
 pub(crate) use image_history::{
     fenced_obligation_limit_error, MAX_FENCED_IRREVERSIBLE_COMMANDS,

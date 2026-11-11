@@ -114,3 +114,89 @@ impl RecoveryImageHistoryObligationsV1 {
         Ok(())
     }
 }
+
+/// Synthetic DTOs ONLY for structural/wire-size tests. These do not construct
+/// a native observation, authenticated vote, quorum or recovery permission.
+#[cfg(test)]
+pub(crate) fn test_only_structural_fence_dtos(
+    count: usize,
+) -> (
+    RecoveryFenceScope,
+    RangeWriteProgress,
+    RecoveryImageHistoryObligationsV1,
+) {
+    use crate::distribution_consensus::MetadataRecoveryRolePurpose;
+    use crate::ClusterId;
+    use uuid::Uuid;
+    let node = ClusterNodeId::new("shape-only-node").unwrap();
+    let range_id = RangeId::new(1).unwrap();
+    let scope = RecoveryFenceScope {
+        protocol_version: 1,
+        cluster_id: ClusterId::new("shape-only-cluster").unwrap(),
+        bootstrap_id: Uuid::new_v4(),
+        range_id,
+        range_epoch: 1,
+        initiator_node_id: node.clone(),
+        initiator_incarnation: 1,
+        recovery_nonce: Uuid::new_v4(),
+        business_request_id: Uuid::new_v4(),
+        metadata_context_id: Uuid::new_v4(),
+        metadata_term: 1,
+        metadata_read_index: 1,
+        configuration_sha256: "a".repeat(64),
+        range_configuration_sha256: "b".repeat(64),
+        purpose: MetadataRecoveryRolePurpose::NormalRecovery,
+    };
+    let progress = RangeWriteProgress {
+        node_id: node.clone(),
+        range_id,
+        current_epoch: 1,
+        last_index: u64::MAX,
+        resolved_through: u64::MAX - 1,
+        compacted_through: u64::MAX - 4096,
+    };
+    let first = u64::MAX - count as u64 + 1;
+    let image = RecoveryImageHistoryObligationsV1 {
+        format_version: 1,
+        node_id: node,
+        range_id,
+        last_index: progress.last_index,
+        compacted_through: progress.compacted_through,
+        native_point: Some(RecoveryNativeHistoryPointV1 {
+            range_index: progress.resolved_through,
+            logical_genesis_sha256: "c".repeat(64),
+            logical_history_sha256: "d".repeat(64),
+            native_receipt_sha256: "e".repeat(64),
+        }),
+        pending_native: Some(RecoveryNativePendingHistoryV1 {
+            index: u64::MAX,
+            command_checksum_sha256: "f".repeat(64),
+            materialized: false,
+        }),
+        irreversible_command_sha256: (first..=u64::MAX)
+            .map(|index| (index, "f".repeat(64)))
+            .collect(),
+    };
+    (scope, progress, image)
+}
+
+#[cfg(test)]
+mod obligation_bound_tests {
+    use super::*;
+
+    #[test]
+    fn complete_fenced_obligation_bound_preserves_every_entry_and_refuses_overflow() {
+        let (scope, progress, image) =
+            test_only_structural_fence_dtos(MAX_FENCED_IRREVERSIBLE_COMMANDS);
+        image.require_shape(&scope, &progress).unwrap();
+        assert_eq!(image.irreversible_command_sha256.len(), 2049);
+        let encoded = serde_json::to_vec(&image).unwrap();
+        let decoded: RecoveryImageHistoryObligationsV1 = serde_json::from_slice(&encoded).unwrap();
+        assert_eq!(decoded, image, "the complete map survives serialization");
+        let (scope, progress, oversized) =
+            test_only_structural_fence_dtos(MAX_FENCED_IRREVERSIBLE_COMMANDS + 1);
+        let error = oversized.require_shape(&scope, &progress).unwrap_err();
+        assert!(error.to_string().contains("complete 2049-command obligation reply bound"));
+        assert_eq!(oversized.irreversible_command_sha256.len(), 2050);
+    }
+}

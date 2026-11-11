@@ -28,6 +28,11 @@ pub(crate) use image_compatibility::{RecoverySourceHistoryRound, VerifiedRecover
 pub(crate) use image_history::{
     RecoveryImageHistoryObligationsV1, RecoveryNativeHistoryPointV1, RecoveryNativePendingHistoryV1,
 };
+mod native_ready;
+pub(crate) use native_ready::{
+    ClosedNativeReadyQuorum, ClosedNativeReadyQuorumRound, NativeReadyObservation,
+    NativeReadyPhysicalDomain, NativeReadyReply, NativeReadyRequest,
+};
 mod runtime;
 pub(crate) use runtime::{RangeRecoveryRuntime, RecoveryImageInstallFreeze};
 mod quorum;

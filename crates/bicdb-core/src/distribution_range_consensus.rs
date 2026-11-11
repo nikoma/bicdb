@@ -55,6 +55,8 @@ pub(crate) use native_completion_observation::LocalNativeCompletionEvidence;
 mod native_ready_observation;
 pub(crate) use native_ready_observation::LocalNativeReadyEvidence;
 mod native_activation;
+#[cfg(test)]
+mod native_activation_domain_tests;
 pub(crate) use native_activation::NativeActivationReceipt;
 use native_activation::NATIVE_ACTIVATED_FORMAT;
 mod native_ready_completion;

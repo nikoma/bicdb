@@ -560,6 +560,7 @@ mod tests {
                     "sequences",
                     "dependencies",
                     "views",
+                    "routine_types",
                     "value_row",
                     "values_complete",
                     "client_ack",
@@ -588,6 +589,8 @@ mod tests {
                             "CREATE VIEW indirect_row AS SELECT item FROM direct_row",
                             "CREATE MATERIALIZED VIEW stored_row AS SELECT item FROM direct_row",
                             "GRANT SELECT ON original TO rename_reader",
+                            "CREATE FUNCTION rename_row_fn(arg original) RETURNS original LANGUAGE sql AS 'SELECT arg'",
+                            "CREATE FUNCTION rename_array_fn(arg original[]) RETURNS original[] LANGUAGE sql AS 'SELECT arg'",
                             "CREATE FUNCTION rename_trigger_fn() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NEW; END $$",
                             "CREATE TRIGGER rename_guard BEFORE UPDATE ON original FOR EACH ROW EXECUTE FUNCTION rename_trigger_fn()",
                         ] { session.execute(sql).unwrap_or_else(|error| panic!("{sql}: {error}")); }
@@ -605,6 +608,18 @@ mod tests {
                         .into_iter()
                         .map(|row| (row.id, row.metadata))
                         .collect::<BTreeMap<_, _>>();
+                    let before_routines = db
+                        .scan_collection(ROUTINE_COLLECTION)
+                        .unwrap()
+                        .into_iter()
+                        .map(|row| (row.id, row.metadata))
+                        .collect::<BTreeMap<_, _>>();
+                    const ROUTINE_SIGNATURES: &str = "SELECT proargtypes,prorettype,pg_get_function_arguments(oid),pg_get_function_result(oid) FROM pg_proc WHERE proname IN ('rename_row_fn','rename_array_fn') ORDER BY proname";
+                    let before_signatures = SqlSession::new(&mut db)
+                        .execute(ROUTINE_SIGNATURES)
+                        .unwrap()
+                        .rows;
+                    assert_eq!(before_signatures.len(), 2);
                     db.close().unwrap();
                     let output = std::process::Command::new(std::env::current_exe().unwrap())
                         .args([
@@ -628,6 +643,17 @@ mod tests {
                     let committed =
                         matches!(cut, "decision_committed" | "client_ack" | "reuse_commit");
                     let table = if committed { "renamed" } else { "original" };
+                    let mut expected_signatures = before_signatures.clone();
+                    if committed {
+                        for row in &mut expected_signatures {
+                            for value in &mut row[2..] {
+                                let SqlValue::String(name) = value else {
+                                    panic!("expected routine declaration text");
+                                };
+                                *name = name.replace("original", "renamed");
+                            }
+                        }
+                    }
                     let absent = if committed { "original" } else { "renamed" };
                     let payload = if explicit && (committed || cut == "reuse_rollback") {
                         "pending-business-write"
@@ -662,6 +688,11 @@ mod tests {
                         oracle::initialize_existing_database_profile(&mut db).unwrap();
                         {
                             let mut session = SqlSession::new(&mut db);
+                            assert_eq!(
+                                session.execute(ROUTINE_SIGNATURES).unwrap().rows,
+                                expected_signatures,
+                                "routine identity paged={paged} explicit={explicit} cut={cut} reopen={reopen}"
+                            );
                             assert_eq!(
                                 session
                                     .execute(&format!("SELECT rowkey,payload FROM {table}"))
@@ -740,6 +771,15 @@ mod tests {
                             assert_eq!(
                                 rows, before,
                                 "complete original typed row images must survive"
+                            );
+                            assert_eq!(
+                                db.scan_collection(ROUTINE_COLLECTION)
+                                    .unwrap()
+                                    .into_iter()
+                                    .map(|row| (row.id, row.metadata))
+                                    .collect::<BTreeMap<_, _>>(),
+                                before_routines,
+                                "complete original routine rows must survive"
                             );
                         }
                         assert!(list_privileges(&db)

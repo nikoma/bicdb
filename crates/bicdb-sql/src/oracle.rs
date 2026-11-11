@@ -497,6 +497,9 @@ pub fn initialize_existing_database_profile(db: &mut BicDb) -> Result<()> {
     if let Some(profile) = profile {
         ensure_database_profile_inner(db, &profile)?;
     }
+    if !db.is_standby_role() {
+        initialize_rename_journal_identities(db)?;
+    }
     db.check_recovery_state()?;
     Ok(())
 }
@@ -509,7 +512,11 @@ pub fn ensure_database_profile(db: &mut BicDb, profile: &str) -> Result<()> {
     recover_interrupted_recycle_bin_renames(db)?;
     let result = ensure_database_profile_inner(db, profile);
     db.check_recovery_state()?;
-    result
+    result?;
+    if !db.is_standby_role() {
+        initialize_rename_journal_identities(db)?;
+    }
+    Ok(())
 }
 
 fn validate_database_profile_selection(db: &BicDb, profile: &str) -> Result<()> {

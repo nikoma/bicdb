@@ -219,12 +219,16 @@ fn copied_actual_1025_prefix_sparse_current_quorum_finishes_native_tail() {
         .unwrap();
     assert_eq!(source_ready.range_index(), 1026);
     // Sparse decision storage alone still grants no native readiness.
-    let behind_frozen = runtimes[&node("n1")].source_capture_freeze(&scope).unwrap();
-    let behind_initiator = providers[&node("n1")].local_participant();
-    let role = fresh_role(&providers, &behind_initiator, &range, scope.recovery_nonce);
-    let behind_ready_error = fixture.services[&node("n1")]
-        .lock()
-        .attest_native_recovery_ready(role, behind_frozen, &parent)
+    let behind_ready_error = runtimes[&node("n1")]
+        .prepare_native_ready(
+            &initiator,
+            &NativeReadyRequest {
+                scope: scope.clone(),
+                challenge: Uuid::now_v7(),
+                budget_ms: 5000,
+            },
+            &parent,
+        )
         .unwrap_err();
     assert!(
         behind_ready_error

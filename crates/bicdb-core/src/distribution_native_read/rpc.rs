@@ -155,6 +155,7 @@ impl NativeRangeReadObservation {
             local: Some(local),
         })
     }
+    #[cfg(feature = "tls-replication")]
     pub(crate) fn from_transport(
         authenticated: crate::distribution_transport::AuthenticatedNativeRangeReadReply,
         request: &NativeRangeReadProbeRequest,

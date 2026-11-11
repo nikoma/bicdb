@@ -201,6 +201,7 @@ impl NativeReadyObservation {
     ) -> Result<Self> {
         Self::checked(evidence.into_reply(), peer, request, deadline)
     }
+    #[cfg(feature = "tls-replication")]
     pub(crate) fn from_transport(
         evidence: crate::distribution_transport::AuthenticatedNativeReadyReply,
         request: &NativeReadyRequest,

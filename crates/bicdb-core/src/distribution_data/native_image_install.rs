@@ -15,6 +15,49 @@ use crate::distribution_range_image_install::{
 };
 
 impl ClusterDataNodeService {
+    /// Inspect this service's actual source catalogue without opening another
+    /// writer. Fresh quorum authority is acquired by the caller beforehand.
+    pub(crate) fn begin_native_recovery_source_history(
+        &self,
+        authority: Arc<crate::distribution_range_recovery::FreshRangeRecoveryAuthority>,
+        source: &crate::db::LocalNativeRecoveryReady,
+        target: ClusterNodeId,
+    ) -> Result<crate::distribution_range_recovery::RecoverySourceHistoryRound> {
+        let db = try_database_read(&self.db)?;
+        crate::distribution_range_recovery::RecoverySourceHistoryRound::begin(
+            authority,
+            source,
+            target,
+            &db,
+            &self.range_writes,
+        )
+    }
+
+    pub(crate) fn advance_native_recovery_source_history(
+        &self,
+        round: &mut crate::distribution_range_recovery::RecoverySourceHistoryRound,
+        source: &crate::db::LocalNativeRecoveryReady,
+        parent: &CancellationToken,
+    ) -> Result<bool> {
+        let db = try_database_read(&self.db)?;
+        round.advance(source, &db, &self.range_writes, parent)
+    }
+
+    pub(crate) fn finish_native_recovery_source_history(
+        &self,
+        round: crate::distribution_range_recovery::RecoverySourceHistoryRound,
+        source: &crate::db::LocalNativeRecoveryReady,
+    ) -> Result<crate::distribution_range_image::CertifiedRecoveryImageCut> {
+        let db = try_database_read(&self.db)?;
+        let history = round.finish(source, &db, &self.range_writes)?;
+        crate::distribution_range_image::CertifiedRecoveryImageCut::from_verified_source_history(
+            history,
+            source,
+            &db,
+            &self.range_writes,
+        )
+    }
+
     /// Actual source physical proof from this service's already-persisted
     /// ACTIVE session. It grants no cluster quorum, serving, or caller floor.
     pub(crate) fn attest_native_recovery_ready(

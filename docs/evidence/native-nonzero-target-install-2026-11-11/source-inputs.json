@@ -1,0 +1,131 @@
+{
+  "source_commit": "8a7ddf6ead2bce6e3a41e04fdf68af1a7df3cf57",
+  "scope": "relevant exact source files; complete repository and locked dependencies still required",
+  "files": {
+    "crates/bicdb-core/src/db.rs": {
+      "sha256": "31337385d62db54ac3cd323ea4e4407e27c2459a3b8c1d24992470f7b5e18b41",
+      "bytes": 1381222,
+      "snapshot": "source/crates/bicdb-core/src/db.rs.gz"
+    },
+    "crates/bicdb-core/src/db/range_image_bindings.rs": {
+      "sha256": "28db15d6ddb63146e920e52154e2a27c7e2b531f74bb1ab7512acf0bfd81f227",
+      "bytes": 12927,
+      "snapshot": "source/crates/bicdb-core/src/db/range_image_bindings.rs.gz"
+    },
+    "crates/bicdb-core/src/db/range_image_install.rs": {
+      "sha256": "350f73544c818363d8c9e1753013f3bd78c9f647e863e2e879fb81ed4ea556cb",
+      "bytes": 49732,
+      "snapshot": "source/crates/bicdb-core/src/db/range_image_install.rs.gz"
+    },
+    "crates/bicdb-core/src/db/range_image_native.rs": {
+      "sha256": "146ed23a6fc82f1bcc4f9cce43230618e8a6fb011d5549c560b1930fdf493a5c",
+      "bytes": 69626,
+      "snapshot": "source/crates/bicdb-core/src/db/range_image_native.rs.gz"
+    },
+    "crates/bicdb-core/src/db/range_image_native/certified_prefix.rs": {
+      "sha256": "6234717a6c66d23b42234278cca27293636c090c844244aea117b7b0a7d0d6fe",
+      "bytes": 35455,
+      "snapshot": "source/crates/bicdb-core/src/db/range_image_native/certified_prefix.rs.gz"
+    },
+    "crates/bicdb-core/src/db/range_image_native/history.rs": {
+      "sha256": "4b8fd4be2f5dca307f644db6f1ed10bba98b3bdc14d9150631d89807c6807572",
+      "bytes": 19255,
+      "snapshot": "source/crates/bicdb-core/src/db/range_image_native/history.rs.gz"
+    },
+    "crates/bicdb-core/src/db/range_image_native/history_stage.rs": {
+      "sha256": "127a71adcbc458c8be963d425694c27ed8eb48713975599249c471b9decb268d",
+      "bytes": 62404,
+      "snapshot": "source/crates/bicdb-core/src/db/range_image_native/history_stage.rs.gz"
+    },
+    "crates/bicdb-core/src/db/range_image_native/installed_anchor.rs": {
+      "sha256": "7b2e941e62ec5dba044bd5aba7105974f37f6bf437f907daedbe4c080b94930c",
+      "bytes": 10000,
+      "snapshot": "source/crates/bicdb-core/src/db/range_image_native/installed_anchor.rs.gz"
+    },
+    "crates/bicdb-core/src/distribution_consensus.rs": {
+      "sha256": "238fec20a21a3b92c2bd4524a525b829134e85dfb625aa0c1562f1f5aebf32a0",
+      "bytes": 148174,
+      "snapshot": "source/crates/bicdb-core/src/distribution_consensus.rs.gz"
+    },
+    "crates/bicdb-core/src/distribution_metadata_read_provider.rs": {
+      "sha256": "9e6b30bdcf4d72db0e20dc9638341886d464fe210d641e4520ffa4a490da645e",
+      "bytes": 65602,
+      "snapshot": "source/crates/bicdb-core/src/distribution_metadata_read_provider.rs.gz"
+    },
+    "crates/bicdb-core/src/distribution_range_consensus.rs": {
+      "sha256": "ce449fd58a2db1eb2fe327b6fa12eacde3ec2113e4c0b64136be7ab27e1b0381",
+      "bytes": 214273,
+      "snapshot": "source/crates/bicdb-core/src/distribution_range_consensus.rs.gz"
+    },
+    "crates/bicdb-core/src/distribution_range_consensus/image_install_fence.rs": {
+      "sha256": "fc0782697826547cbef1908a0c9a199ac40247ec262b9f0d213a7201f5bf9380",
+      "bytes": 33771,
+      "snapshot": "source/crates/bicdb-core/src/distribution_range_consensus/image_install_fence.rs.gz"
+    },
+    "crates/bicdb-core/src/distribution_range_consensus/image_install_obligations.rs": {
+      "sha256": "f461141b28b82b1562fc015619279161fd81cfaac03af31f310df9c3c6108288",
+      "bytes": 7769,
+      "snapshot": "source/crates/bicdb-core/src/distribution_range_consensus/image_install_obligations.rs.gz"
+    },
+    "crates/bicdb-core/src/distribution_range_consensus/image_install_state.rs": {
+      "sha256": "20c78f2806c3d0accc98b4acd2dbd988800c316539824f9cab30ac0a20ebdc05",
+      "bytes": 7278,
+      "snapshot": "source/crates/bicdb-core/src/distribution_range_consensus/image_install_state.rs.gz"
+    },
+    "crates/bicdb-core/src/distribution_range_consensus/native_prefix.rs": {
+      "sha256": "97c025bfc462ab772f6f72a4ea7bd2516fc0c1121c306c684c722c816b7ddccc",
+      "bytes": 33575,
+      "snapshot": "source/crates/bicdb-core/src/distribution_range_consensus/native_prefix.rs.gz"
+    },
+    "crates/bicdb-core/src/distribution_range_handoff.rs": {
+      "sha256": "d0bcd9f8da5c6b4ccf4acd1c6dca1ebda1f0bcefab4b11b4e6fbfdaf05cd1068",
+      "bytes": 65926,
+      "snapshot": "source/crates/bicdb-core/src/distribution_range_handoff.rs.gz"
+    },
+    "crates/bicdb-core/src/distribution_range_image.rs": {
+      "sha256": "b0fbe76eacab34a5a07e8cd7fc413118452e5d50256a2e4d76a071ab8da40381",
+      "bytes": 24634,
+      "snapshot": "source/crates/bicdb-core/src/distribution_range_image.rs.gz"
+    },
+    "crates/bicdb-core/src/distribution_range_image/history_export.rs": {
+      "sha256": "5b895ca7c4d52382c6078536bc9cfbd13454c2f195dd2a70adfe44e88eb1cd23",
+      "bytes": 6414,
+      "snapshot": "source/crates/bicdb-core/src/distribution_range_image/history_export.rs.gz"
+    },
+    "crates/bicdb-core/src/distribution_range_image/source_cut.rs": {
+      "sha256": "95aec6dda95b0953846ff86847c272d0b8b431cbfd2017fe7ff712c02c29c18a",
+      "bytes": 8774,
+      "snapshot": "source/crates/bicdb-core/src/distribution_range_image/source_cut.rs.gz"
+    },
+    "crates/bicdb-core/src/distribution_range_image_install.rs": {
+      "sha256": "e0bd22e112d687d6eea3c08adbe6bcbe08a2d159aaabe588ce311dc9c4af591b",
+      "bytes": 72295,
+      "snapshot": "source/crates/bicdb-core/src/distribution_range_image_install.rs.gz"
+    },
+    "crates/bicdb-core/src/distribution_range_image_scope.rs": {
+      "sha256": "1db82bb9a05dd45b3c09ca2347c7f5948fb58547989e93a42b5fb325382488e7",
+      "bytes": 346,
+      "snapshot": "source/crates/bicdb-core/src/distribution_range_image_scope.rs.gz"
+    },
+    "crates/bicdb-core/src/distribution_range_mutation.rs": {
+      "sha256": "324f6dff2aa98826999764aee90c6ba38e1f323a907605d20cef6d606d2c4380",
+      "bytes": 33394,
+      "snapshot": "source/crates/bicdb-core/src/distribution_range_mutation.rs.gz"
+    },
+    "crates/bicdb-core/src/distribution_range_recovery.rs": {
+      "sha256": "4b2e4d5ea44822d23699137c926afee4f27a5fe632b39fc561627b7d21f5ff6b",
+      "bytes": 17632,
+      "snapshot": "source/crates/bicdb-core/src/distribution_range_recovery.rs.gz"
+    },
+    "crates/bicdb-core/src/format.rs": {
+      "sha256": "e3729eb6a7579709a49802a86ae5679942ff7d5e0f8e2fadacc7ca00cbe7fe0d",
+      "bytes": 32707,
+      "snapshot": "source/crates/bicdb-core/src/format.rs.gz"
+    },
+    "crates/bicdb-core/src/lib.rs": {
+      "sha256": "6027fc7429ec7e329cc36e977edeb991672fe62bc6f9cbb9da30026c7391d308",
+      "bytes": 30910,
+      "snapshot": "source/crates/bicdb-core/src/lib.rs.gz"
+    }
+  }
+}

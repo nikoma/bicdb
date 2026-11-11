@@ -15,6 +15,7 @@ pub(crate) mod recycle_bin;
 mod recycle_bin_journal;
 mod rename_dependencies;
 mod rename_journal;
+pub use rename_journal::initialize_rename_journal_identities;
 mod rename_table;
 mod rename_views;
 mod view_dependencies;

@@ -31,11 +31,13 @@ struct Header {
 enum Effect {
     Row {
         storage: String,
+        namespace_id: uuid::Uuid,
         id: String,
         previous: Option<Record>,
     },
     Rename {
         storage: String,
+        namespace_id: uuid::Uuid,
         old: String,
         new: String,
     },
@@ -89,28 +91,49 @@ fn invalid(message: &str) -> SqlError {
     SqlError::InvalidSql(format!("rename undo journal: {message}"))
 }
 
-fn backing_name(db: &BicDb, storage: &str) -> Result<String> {
+fn backing_name(db: &BicDb, storage: &str, namespace_id: uuid::Uuid) -> Result<String> {
+    if namespace_id.is_nil() {
+        return Err(invalid("nil physical namespace identity"));
+    }
     let names = db
         .collections()
         .into_iter()
-        .filter(|meta| meta.storage() == storage)
+        .filter(|meta| meta.local_namespace_id == Some(namespace_id) && meta.storage() == storage)
         .map(|meta| meta.name)
         .collect::<Vec<_>>();
     match names.as_slice() {
         [name] => Ok(name.clone()),
-        _ => Err(invalid("missing or ambiguous physical backing")),
+        _ => Err(invalid("missing, replaced, or ambiguous physical backing")),
     }
 }
 
-fn storage_for(db: &BicDb, name: &str) -> Result<String> {
+fn storage_for(db: &BicDb, name: &str) -> Result<(String, uuid::Uuid)> {
     if [HEADERS, IMAGES, GC].contains(&name) {
         return Err(invalid("cannot journal the journal itself"));
     }
-    db.collections()
+    let namespace_id = db.local_namespace_identity(name)?.ok_or_else(|| {
+        invalid("physical identities must be initialized before accepting SQL transactions")
+    })?;
+    let storage = db
+        .collections()
         .into_iter()
         .find(|meta| meta.name == name)
         .map(|meta| meta.storage().to_string())
-        .ok_or_else(|| invalid("capture collection does not exist"))
+        .ok_or_else(|| invalid("capture collection does not exist"))?;
+    Ok((storage, namespace_id))
+}
+
+/// Trusted host initialization, before any application/native transaction or
+/// SQL DDL intent. Core's quiescence check does not inspect these SQL journals.
+/// Never assign an identity retroactively to an unresolved legacy before-image.
+pub fn initialize_rename_journal_identities(db: &mut BicDb) -> Result<usize> {
+    db.check_recovery_state()?;
+    if super::recycle_bin_journal::has_pending_recovery(db)? {
+        return Err(invalid(
+            "cannot initialize physical identities with unresolved SQL intents",
+        ));
+    }
+    Ok(db.activate_local_namespace_identity_v1()?)
 }
 
 fn image_id(header: &Header, index: u64) -> String {
@@ -118,6 +141,9 @@ fn image_id(header: &Header, index: u64) -> String {
 }
 
 pub(super) fn prepare(db: &mut BicDb) -> Result<PreparedRename> {
+    if !db.local_namespace_identity_feature_active() {
+        initialize_rename_journal_identities(db)?;
+    }
     db.enable_sql_rename_intents()?;
     db.create_collection(HEADERS)?;
     db.create_collection(IMAGES)?;
@@ -170,13 +196,14 @@ pub(super) fn capture_row(
     collection: &str,
     id: &str,
 ) -> Result<()> {
-    let storage = storage_for(db, collection)?;
+    let (storage, namespace_id) = storage_for(db, collection)?;
     let previous = db.get(collection, id)?.map(|row| row.as_ref().clone());
     append(
         db,
         prepared,
         Effect::Row {
             storage,
+            namespace_id,
             id: id.into(),
             previous,
         },
@@ -194,12 +221,13 @@ pub(super) fn capture_rename(
     if old == new || db.collections().iter().any(|meta| meta.name == new) {
         return Err(invalid("rename target is occupied or unchanged"));
     }
-    let storage = storage_for(db, old)?;
+    let (storage, namespace_id) = storage_for(db, old)?;
     append(
         db,
         prepared,
         Effect::Rename {
             storage,
+            namespace_id,
             old: old.into(),
             new: new.into(),
         },
@@ -279,7 +307,12 @@ fn rollback_inner(db: &mut BicDb, id: &str, mut owner: Option<&mut Transaction>)
     let mut names = db
         .collections()
         .into_iter()
-        .map(|meta| (meta.name.clone(), meta.storage().to_string()))
+        .map(|meta| {
+            (
+                meta.name.clone(),
+                (meta.storage().to_string(), meta.local_namespace_id),
+            )
+        })
         .collect::<BTreeMap<_, _>>();
     for index in (0..remaining).rev() {
         let record = db
@@ -289,13 +322,14 @@ fn rollback_inner(db: &mut BicDb, id: &str, mut owner: Option<&mut Transaction>)
         match effect {
             Effect::Row {
                 storage,
+                namespace_id,
                 id,
                 previous,
             } => {
                 if previous.as_ref().is_some_and(|row| row.id != id) {
                     return Err(invalid("before-image row identity mismatch"));
                 }
-                let name = backing_name(db, &storage)?;
+                let name = backing_name(db, &storage, namespace_id)?;
                 storage_for(db, &name)?;
                 if name == SCHEMA_COLLECTION {
                     if let Some(record) = previous {
@@ -306,7 +340,15 @@ fn rollback_inner(db: &mut BicDb, id: &str, mut owner: Option<&mut Transaction>)
                     }
                 }
             }
-            Effect::Rename { storage, old, new } => {
+            Effect::Rename {
+                storage,
+                namespace_id,
+                old,
+                new,
+            } => {
+                if namespace_id.is_nil() {
+                    return Err(invalid("nil planned physical namespace identity"));
+                }
                 require_user_relation_name(&old)?;
                 require_user_relation_name(&new)?;
                 if old == new {
@@ -314,7 +356,7 @@ fn rollback_inner(db: &mut BicDb, id: &str, mut owner: Option<&mut Transaction>)
                 }
                 let matches = names
                     .iter()
-                    .filter(|(_, backing)| **backing == storage)
+                    .filter(|(_, backing)| backing.0 == storage && backing.1 == Some(namespace_id))
                     .map(|(name, _)| name.clone())
                     .collect::<Vec<_>>();
                 let [name] = matches.as_slice() else {
@@ -325,7 +367,7 @@ fn rollback_inner(db: &mut BicDb, id: &str, mut owner: Option<&mut Transaction>)
                         return Err(invalid("rollback target was reused"));
                     }
                     names.remove(&new);
-                    names.insert(old, storage);
+                    names.insert(old, (storage, Some(namespace_id)));
                 } else if name != &old {
                     return Err(invalid("backing has an unexpected planned name"));
                 }
@@ -343,10 +385,11 @@ fn rollback_inner(db: &mut BicDb, id: &str, mut owner: Option<&mut Transaction>)
         match effect {
             Effect::Row {
                 storage,
+                namespace_id,
                 id,
                 previous,
             } => {
-                let name = backing_name(db, &storage)?;
+                let name = backing_name(db, &storage, namespace_id)?;
                 let current = db.get(&name, &id)?;
                 if serde_json::to_value(current.as_deref())? != serde_json::to_value(&previous)? {
                     match previous {
@@ -369,8 +412,13 @@ fn rollback_inner(db: &mut BicDb, id: &str, mut owner: Option<&mut Transaction>)
                     sql_schema_cache_set(db, &id, schema.map(std::sync::Arc::new));
                 }
             }
-            Effect::Rename { storage, old, new } => {
-                let name = backing_name(db, &storage)?;
+            Effect::Rename {
+                storage,
+                namespace_id,
+                old,
+                new,
+            } => {
+                let name = backing_name(db, &storage, namespace_id)?;
                 if name == new {
                     if db.collections().iter().any(|meta| meta.name == old) {
                         return Err(invalid("rollback target was reused"));
@@ -575,11 +623,15 @@ mod tests {
             let config = DbConfig::default().with_fsync(true).with_storage_mode(mode);
             let mut db = BicDb::open_with_config(root.path(), config.clone()).unwrap();
             db.create_collection("dependent").unwrap();
+            db.create_collection("retained").unwrap();
             db.insert("dependent", row("same-key", 2)).unwrap();
+            db.insert("retained", row("other-key", 3)).unwrap();
             db.activate_local_namespace_identity_v1().unwrap();
             let original = db.local_namespace_identity("dependent").unwrap().unwrap();
             let mut plan = prepare(&mut db).unwrap();
             capture_row(&db, &mut plan, "dependent", "same-key").unwrap();
+            capture_row(&db, &mut plan, "retained", "other-key").unwrap();
+            db.insert("retained", row("other-key", 30)).unwrap();
             db.drop_collection("dependent").unwrap();
             db.create_collection("dependent").unwrap();
             db.insert("dependent", row("same-key", 99)).unwrap();
@@ -600,7 +652,84 @@ mod tests {
                 99
             );
             assert!(load(&db, plan.id()).unwrap().is_some());
+            assert_eq!(
+                db.get("retained", "other-key").unwrap().unwrap().metadata["value"],
+                30,
+                "validate every image before repairing even an unrelated valid backing"
+            );
             db.close().unwrap();
+        }
+    }
+
+    #[test]
+    fn namespace_activation_refuses_unresolved_sql_intents_and_live_native_owners() {
+        for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
+            let root = tempfile::tempdir().unwrap();
+            let mut db = BicDb::open_with_config(
+                root.path(),
+                DbConfig::default().with_fsync(true).with_storage_mode(mode),
+            )
+            .unwrap();
+            db.create_collection("original").unwrap();
+            let tx = db.begin_transaction().unwrap();
+            assert!(initialize_rename_journal_identities(&mut db).is_err());
+            assert!(!db.local_namespace_identity_feature_active());
+            tx.rollback().unwrap();
+            db.enable_sql_rename_intents().unwrap();
+            db.create_collection(HEADERS).unwrap();
+            let id = uuid::Uuid::new_v4().simple().to_string();
+            let legacy = Header {
+                id: id.clone(),
+                order: 1,
+                count: 0,
+                remaining: None,
+            };
+            persist_header(&mut db, &legacy).unwrap();
+            assert!(initialize_rename_journal_identities(&mut db).is_err());
+            assert!(!db.local_namespace_identity_feature_active());
+            assert_eq!(db.local_namespace_identity("original").unwrap(), None);
+            assert!(load(&db, &id).unwrap().is_some());
+            db.delete(HEADERS, &id).unwrap();
+            assert!(initialize_rename_journal_identities(&mut db).unwrap() >= 2);
+            assert!(db.local_namespace_identity("original").unwrap().is_some());
+            db.close().unwrap();
+        }
+    }
+
+    #[test]
+    fn legacy_missing_and_nil_namespace_images_refuse_before_any_undo() {
+        for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
+            for missing in [false, true] {
+                let root = tempfile::tempdir().unwrap();
+                let config = DbConfig::default().with_fsync(true).with_storage_mode(mode);
+                let mut db = BicDb::open_with_config(root.path(), config.clone()).unwrap();
+                db.create_collection("original").unwrap();
+                db.insert("original", row("value", 1)).unwrap();
+                let mut plan = prepare(&mut db).unwrap();
+                capture_row(&db, &mut plan, "original", "value").unwrap();
+                db.insert("original", row("value", 2)).unwrap();
+                let key = image_id(&plan.header, 0);
+                let mut image = db.get(IMAGES, &key).unwrap().unwrap().as_ref().clone();
+                if missing {
+                    image
+                        .metadata
+                        .as_object_mut()
+                        .unwrap()
+                        .remove("namespace_id");
+                } else {
+                    image.metadata["namespace_id"] = serde_json::json!(uuid::Uuid::nil());
+                }
+                db.insert(IMAGES, image).unwrap();
+                db.close().unwrap();
+                let mut db = BicDb::open_with_config(root.path(), config).unwrap();
+                assert!(rollback(&mut db, plan.id()).is_err());
+                assert_eq!(
+                    db.get("original", "value").unwrap().unwrap().metadata["value"],
+                    2
+                );
+                assert!(load(&db, plan.id()).unwrap().unwrap().remaining.is_none());
+                db.close().unwrap();
+            }
         }
     }
 

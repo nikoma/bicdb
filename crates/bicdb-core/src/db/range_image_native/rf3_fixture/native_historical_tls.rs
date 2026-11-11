@@ -794,8 +794,53 @@ fn native_ready_actual_tls_preparation_status_and_local_closed_quorum_remain_fro
         second.reply().native_receipt_sha256,
         "local physical receipts are not a common logical history"
     );
-    let observed = fixture.status_ready("n1", &scope).unwrap();
+    let observed_request = fixture.ready_request(&scope);
+    let observed = fixture.clients[&node("n1")]
+        .observe_native_ready_observation(
+            &node("n1"),
+            &observed_request,
+            &CancellationToken::uncancelable(),
+        )
+        .unwrap();
     fixture.wait_idle();
+    assert_ne!(
+        observed.reply().observed_metadata_context_id,
+        scope.metadata_context_id,
+        "wire provenance comes from the recipient's NEW MQ round, not echoed caller scope"
+    );
+    assert_ne!(
+        observed.reply().observed_metadata_context_id,
+        first.reply().observed_metadata_context_id
+    );
+    assert!(observed.reply().observed_metadata_term >= scope.metadata_term);
+    assert!(observed.reply().observed_metadata_read_index >= scope.metadata_read_index);
+    observed
+        .reply()
+        .test_validate_shape_only(&observed_request, observed.authenticated_peer())
+        .unwrap();
+    let mut missing_context = observed.reply().clone();
+    missing_context.observed_metadata_context_id = Uuid::nil();
+    assert!(missing_context
+        .test_validate_shape_only(&observed_request, observed.authenticated_peer())
+        .is_err());
+    let mut missing_term = observed.reply().clone();
+    missing_term.observed_metadata_term = 0;
+    assert!(missing_term
+        .test_validate_shape_only(&observed_request, observed.authenticated_peer())
+        .is_err());
+    let mut future_minimum = observed_request.clone();
+    future_minimum.scope.metadata_read_index = observed
+        .reply()
+        .observed_metadata_read_index
+        .checked_add(1)
+        .unwrap();
+    assert!(
+        observed
+            .reply()
+            .test_validate_shape_only(&future_minimum, observed.authenticated_peer())
+            .is_err(),
+        "a reply cannot meet a committed anchor it has not actually observed"
+    );
     assert_eq!(
         observed.reply().native_receipt_sha256,
         first.reply().native_receipt_sha256

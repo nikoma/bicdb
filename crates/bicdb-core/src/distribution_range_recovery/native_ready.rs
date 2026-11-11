@@ -76,6 +76,16 @@ pub(crate) struct NativeReadyReply {
     pub irreversible_command_sha256: BTreeMap<u64, String>,
 }
 impl NativeReadyReply {
+    /// Structural negative-test seam only. This cannot construct an
+    /// authenticated observation or any quorum/serving permission.
+    #[cfg(test)]
+    pub(crate) fn test_validate_shape_only(
+        &self,
+        request: &NativeReadyRequest,
+        peer: &MetadataReadParticipant,
+    ) -> Result<()> {
+        self.require_shape(request, peer)
+    }
     fn require_shape(
         &self,
         request: &NativeReadyRequest,

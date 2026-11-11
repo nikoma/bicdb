@@ -466,6 +466,8 @@ impl VisitorMut for Rebinder<'_> {
 pub(super) fn plan_queries(db: &BicDb, old: &str, new: &str) -> Result<Vec<ViewSchema>> {
     let mut updated =
         load_schema(db, old)?.ok_or_else(|| SqlError::InvalidCollection(old.into()))?;
+    updated.row_type_oid = Some(updated.row_type_oid());
+    updated.row_array_type_oid = Some(updated.row_array_type_oid());
     updated.name = new.into();
     let replacements =
         privilege_projection::composite_type_replacements(db, &table_row_type_schema(&updated))?;

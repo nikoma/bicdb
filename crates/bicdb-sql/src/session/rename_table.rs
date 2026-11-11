@@ -42,6 +42,10 @@ pub(super) fn apply(
     }
     let previous = schema.clone();
     let mut updated = previous.clone();
+    // Legacy descriptors derive these identities from the original name.
+    // Persist them before changing that spelling, including the array type.
+    updated.row_type_oid = Some(previous.row_type_oid());
+    updated.row_array_type_oid = Some(previous.row_array_type_oid());
     updated.name = new.into();
     if updated.primary_key_name.is_none() && updated.primary_key_column().is_some() {
         updated.primary_key_name = Some(previous.primary_key_constraint_name());
@@ -138,4 +142,59 @@ pub(super) fn apply(
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bicdb_core::{DbConfig, StorageMode};
+
+    #[test]
+    fn legacy_name_derived_row_types_keep_their_oid_when_the_old_name_is_reused() {
+        for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
+            let root = tempfile::tempdir().unwrap();
+            let config = DbConfig::default().with_storage_mode(mode);
+            let mut db = BicDb::open_with_config(root.path(), config.clone()).unwrap();
+            SqlSession::new(&mut db).execute(
+                "CREATE TABLE source(id INT PRIMARY KEY,payload TEXT); INSERT INTO source VALUES(1,'kept')").unwrap();
+            let mut legacy = load_schema(&db, "source").unwrap().unwrap();
+            legacy.row_type_oid = None;
+            legacy.row_array_type_oid = None;
+            let identity = (legacy.row_type_oid(), legacy.row_array_type_oid());
+            save_schema(&mut db, &legacy).unwrap();
+            {
+                let mut session = SqlSession::new(&mut db);
+                session.execute("CREATE VIEW observed AS SELECT source AS item FROM source; ALTER TABLE source RENAME TO renamed; CREATE TABLE source(id INT PRIMARY KEY,payload TEXT)").unwrap();
+                assert_eq!(
+                    session
+                        .execute("SELECT (item).payload,pg_typeof(item) FROM observed")
+                        .unwrap()
+                        .rows,
+                    vec![vec![
+                        SqlValue::String("kept".into()),
+                        SqlValue::String("renamed".into())
+                    ]]
+                );
+            }
+            let renamed = load_schema(&db, "renamed").unwrap().unwrap();
+            assert_eq!(
+                (renamed.row_type_oid(), renamed.row_array_type_oid()),
+                identity
+            );
+            assert_ne!(
+                load_schema(&db, "source").unwrap().unwrap().row_type_oid(),
+                identity.0
+            );
+            db.close().unwrap();
+            let mut db = BicDb::open_with_config(root.path(), config).unwrap();
+            assert_eq!(
+                SqlSession::new(&mut db)
+                    .execute("SELECT (item).payload FROM observed")
+                    .unwrap()
+                    .rows,
+                vec![vec![SqlValue::String("kept".into())]]
+            );
+            db.close().unwrap();
+        }
+    }
 }

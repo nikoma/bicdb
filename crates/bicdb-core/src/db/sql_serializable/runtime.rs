@@ -210,6 +210,16 @@ impl Transaction {
                     ));
                 }
                 self.set_snapshot_isolation(true, floor)?;
+                // A preexisting session floor can equal the new watermark.
+                // Refresh the physical page snapshot even when the registered
+                // numeric visibility boundary does not need to advance.
+                self.applied_snapshot = db
+                    .last_committed_tx
+                    .load(std::sync::atomic::Ordering::SeqCst);
+                self.paged_snapshot = db
+                    .paged_records
+                    .as_ref()
+                    .map(|paged| paged.latest_snapshot());
                 let mut graph = registry.dependencies.lock();
                 if deferrable && read_only {
                     Some(graph.begin_safe_snapshot(self.id.0))

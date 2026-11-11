@@ -1,0 +1,21 @@
+
+running 16 tests
+test distribution_metadata_read_provider::tests::finished_local_authority_keeps_original_context_deadline ... ok
+test distribution_metadata_read_provider::tests::fenced_observer_is_data_voter_scoped_and_never_mutation_admission ... ok
+test distribution_metadata_read_provider::tests::fresh_quorum_returns_without_waiting_for_silent_voter ... ok
+test distribution_metadata_read_provider::tests::fresh_role_is_data_voter_scoped_and_drain_is_not_removal ... ok
+test distribution_metadata_read_provider::tests::handoff_witness_is_exact_plan_purpose_for_metadata_coordinator_and_target_learner ... ok
+test distribution_metadata_read_provider::tests::held_probe_allows_committed_load_only_update_but_rejects_epoch_change ... ok
+test distribution_metadata_read_provider::tests::leadership_or_joint_configuration_change_invalidates_round ... ok
+test distribution_metadata_read_provider::tests::limits_and_busy_admission_fail_closed ... ok
+test distribution_metadata_read_provider::tests::response_nonce_quorum_identity_and_deadline_cannot_be_reused ... ok
+test distribution_metadata_read_provider::tests::role_scope_rejects_wrong_peer_epoch_nonce_and_response_challenge ... ok
+test distribution_metadata_read_provider::tests::four_silent_sorted_voters_do_not_starve_healthy_nine_node_quorum ... ok
+test distribution_metadata_read_provider::tests::stale_epoch_wrong_caller_and_expired_parent_refuse ... ok
+test distribution_metadata_read_provider::tests::tls::actual_mtls_range_leader_acquires_from_different_metadata_leader_without_silent_voter_or_data_latch ... ok
+test distribution_metadata_read_provider::tests::tls::actual_mtls_role_witness_binds_the_real_recipient_and_initiator ... ok
+test distribution_metadata_read_provider::tests::tls::unwired_server_and_non_range_leader_refuse_acquisition ... ok
+test distribution_metadata_read_provider::tests::sliced_probes_never_admit_an_unavailable_quorum ... ok
+
+test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 629 filtered out; finished in 1.26s
+

@@ -41,6 +41,8 @@ use crate::error::{BicDbError, Result};
 mod image_install_state;
 pub(crate) use image_install_state::ImageInstallPurpose;
 use image_install_state::{ImageInstallIntent, IMAGE_INSTALL_RANGE_LOG_FORMAT};
+mod image_install_fence;
+pub(crate) use image_install_fence::{NativeImageInstallRole, TargetImageInstallFence};
 
 mod native_prefix;
 pub(crate) use native_prefix::{NativeRangeCommandIntent, NativeRangeCommitCertificate};

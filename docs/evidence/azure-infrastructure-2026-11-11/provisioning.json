@@ -67,19 +67,21 @@
     "production": false,
     "physical_scale": false
   },
-  "resources_ready": "five_vms_succeeded_and_ssh_mounts_verified",
+  "resources_ready": "experiment_group_deleted_and_absence_confirmed",
   "pricing": {
     "compute_per_vm_usd_per_hour": 0.107,
     "compute_total_usd_per_hour": 0.535,
-    "premium_disks": "WestEurope reference5P6+5P10, not a NorthEurope bill",
+    "premium_disks": "NorthEurope refreshed P6/P10 retail estimates; actual invoice unverified",
     "disk_price_refresh": "NorthEurope retry succeeded at04:49UTC; publicIP queryHTTP429",
     "public_ip_and_egress": "bounded exploratory setup; actual invoice not measured",
-    "compute_plus_disks_and_optional_mounts_usd_per_hour": 0.7512534246575343
+    "compute_plus_disks_and_optional_mounts_usd_per_hour": 0.7512534246575343,
+    "prior_disk_quote": "WestEurope initial reference retained; initial NorthEurope HTTP429 then succeeded"
   },
   "verified_at_utc": "2026-11-11T04:03:36.704607+00:00",
   "bootstrap_probe": {
     "first_attempt": "nodes0-3_ready;node4_ssh_exit255_before_vm_creation_completed",
     "second_attempt": "all_five_ready",
     "qualification_interpretation": "infrastructure_readiness_only_no_database_workload"
-  }
+  },
+  "deleted_at_utc": "2026-11-11T06:52:33.536155+00:00"
 }

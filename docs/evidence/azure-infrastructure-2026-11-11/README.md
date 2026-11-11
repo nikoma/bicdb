@@ -91,3 +91,39 @@ network, taxes and any account-specific adjustments. These are retail planning
 rates, not an actual invoice. The separate bounded public-IP query returned
 HTTP429; no public-IP price is fabricated. The original failed query remains
 part of the provenance rather than being relabeled successful.
+
+## Final teardown receipt
+
+After the parent and driver confirmed that all original/fault/diagnostic stopped
+databases, logs, ledgers and process evidence were exported and hash-checked
+outside Azure, exact-group deletion was requested at **06:48:28 UTC**. Azure
+confirmed absence at **06:52:33 UTC on 2026-11-11**. A separate subscription
+inventory query then found zero resources belonging to that group.
+
+`deletion-receipt.json` records the identity guards and pre-delete scope: five
+VMs, ten managed disks, five NICs, one public IP, one VNet and one NSG, **23
+resources total**. `azure-vms-before-delete.json` preserves the final allowlisted
+Azure models and power states. Guest VM power state is distinct from stopped
+BicDB processes; the driver verified engine shutdown before its final exports.
+
+Only after confirmed absence were this run's persistent cleanup timer/service
+files removed. Both now report `not-found` and `inactive`, with no unit files
+remaining. No other resource group or systemd service was removed. Provider
+registrations remain ordinary subscription setup; no quota or billing policy
+was changed. No experiment cloud resource remains allocated. The task-owned
+private evidence and test credentials remain outside the public bundle.
+
+The retained cleanup and teardown helper sources show the exact group/tag guards,
+subscription pinning, bounded Azure calls, retry behavior and receipt collection.
+They read task-private runtime state; they are evidence helpers, not general
+production administration commands. Their file hashes are in `sha256s.json`.
+
+`cost-estimate.json` conservatively applies all five VM/disk rates across the
+whole interval from initial allocation planning through confirmed deletion:
+about **USD 2.25** for compute/disks/optional mount meters, before public IP,
+network, tax and account adjustments. Some resources were allocated later, so
+this is an estimate using an intentionally long interval, **not an Azure bill**.
+Actual invoiced cost remains unverified. The approved USD 25/eight-hour envelope
+was not extended. Workload results, including failed verification observations,
+are preserved in the separate parent experiment evidence; deleting resources
+does not change their outcomes or qualify the system.

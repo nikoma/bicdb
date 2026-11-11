@@ -1,0 +1,38 @@
+{
+  "group_identity_sha256": "22daf499758beb75a00e35fc2d6c5f39ac7635caf987c0d04e2df25b52e4e8fd",
+  "requested_at_utc": "2026-11-11T06:48:28.188308+00:00",
+  "identity_guards_passed": true,
+  "resource_types_before": {
+    "Microsoft.Network/virtualNetworks": 1,
+    "Microsoft.Network/networkSecurityGroups": 1,
+    "Microsoft.Network/publicIPAddresses": 1,
+    "Microsoft.Network/networkInterfaces": 5,
+    "Microsoft.Compute/virtualMachines": 5,
+    "Microsoft.Compute/disks": 10
+  },
+  "resource_count_before": 23,
+  "deleted_group_confirmed_absent": true,
+  "workload_evidence_export": "parent authorized deletion after export",
+  "delete_request_exit": 0,
+  "confirmed_absent_at_utc": "2026-11-11T06:52:33.536155+00:00",
+  "owned_cleanup_units_removed": true,
+  "subscription_inventory_remaining_experiment_resources": [],
+  "cleanup_unit_checks": [
+    {
+      "unit_type": "timer",
+      "state_values": [
+        "not-found",
+        "inactive"
+      ],
+      "unit_file_present": false
+    },
+    {
+      "unit_type": "service",
+      "state_values": [
+        "not-found",
+        "inactive"
+      ],
+      "unit_file_present": false
+    }
+  ]
+}

@@ -29,6 +29,9 @@ const MAX_RECORDS: usize = 16_384;
 const MAX_BYTES: usize = 8 * 1024 * 1024;
 const MAX_STEP_BYTES: usize = 9 * 1024 * 1024;
 
+mod finalized_recovery;
+pub(crate) use finalized_recovery::FinalizedNativeRecoveryImage;
+
 fn invalid(detail: impl Into<String>) -> BicDbError {
     BicDbError::Cluster(format!("native image installer: {}", detail.into()))
 }

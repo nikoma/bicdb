@@ -40,6 +40,8 @@ use crate::distribution_supervisor::ClusterBackupMetadata;
 use crate::error::{BicDbError, Result};
 
 mod native_image_base;
+mod native_image_ready;
+pub(crate) use native_image_ready::FinalizedNativeImageCatalogueObservation;
 pub(crate) use native_image_base::NativeImageCatalogueAdoptionReceipt;
 use native_image_base::{NativeImageCatalogueBase, NATIVE_IMAGE_CATALOG_FORMAT};
 mod image_install_obligations;

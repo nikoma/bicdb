@@ -885,12 +885,8 @@ impl ClusterDataNodeService {
         scope: &crate::distribution_range_consensus::RecoveryFenceScope,
         cancellation: &crate::CancellationToken,
     ) -> Result<()> {
-        let db = loop {
-            cancellation.check()?;
-            if let Some(db) = self.db.try_read_for(std::time::Duration::from_millis(5)) {
-                break db;
-            }
-        };
+        cancellation.check()?;
+        let db = try_database_read(&self.db)?;
         let native = db.native_recovery_admission(
             role.cluster_id(),
             role.bootstrap_id(),
@@ -917,12 +913,8 @@ impl ClusterDataNodeService {
         actual.require_live_request()?;
         self.range_mutations
             .validate_quiescent_frozen(actual.current_range().id, frozen)?;
-        let db = loop {
-            cancellation.check()?;
-            if let Some(db) = self.db.try_read_for(std::time::Duration::from_millis(5)) {
-                break db;
-            }
-        };
+        cancellation.check()?;
+        let db = try_database_read(&self.db)?;
         let native = db.native_recovery_admission(
             actual.cluster_id(),
             actual.bootstrap_id(),
@@ -989,12 +981,8 @@ impl ClusterDataNodeService {
         cancellation.check()?;
         self.range_mutations
             .validate_quiescent_frozen(scope.range_id, frozen)?;
-        let db = loop {
-            cancellation.check()?;
-            if let Some(db) = self.db.try_read_for(std::time::Duration::from_millis(5)) {
-                break db;
-            }
-        };
+        cancellation.check()?;
+        let db = try_database_read(&self.db)?;
         let native = db.native_recovery_admission(
             role.cluster_id(),
             role.bootstrap_id(),
@@ -1039,12 +1027,8 @@ impl ClusterDataNodeService {
         cancellation.check()?;
         self.range_mutations
             .validate_quiescent_frozen(scope.range_id, frozen)?;
-        let db = loop {
-            cancellation.check()?;
-            if let Some(db) = self.db.try_read_for(std::time::Duration::from_millis(5)) {
-                break db;
-            }
-        };
+        cancellation.check()?;
+        let db = try_database_read(&self.db)?;
         let native = db.native_recovery_admission(
             role.cluster_id(),
             role.bootstrap_id(),
@@ -1100,12 +1084,8 @@ impl ClusterDataNodeService {
         cancellation.check()?;
         decision.require_recipient_role(role)?;
         let controlled = self.range_mutations.try_controlled_mutation(frozen)?;
-        let db = loop {
-            cancellation.check()?;
-            if let Some(db) = self.db.try_read_for(std::time::Duration::from_millis(5)) {
-                break db;
-            }
-        };
+        cancellation.check()?;
+        let db = try_database_read(&self.db)?;
         let native = db.native_recovery_admission(
             role.cluster_id(),
             role.bootstrap_id(),
@@ -1139,12 +1119,8 @@ impl ClusterDataNodeService {
         cancellation.check()?;
         admission.require_recipient_role(role)?;
         let controlled = self.range_mutations.try_controlled_mutation(frozen)?;
-        let db = loop {
-            cancellation.check()?;
-            if let Some(db) = self.db.try_read_for(std::time::Duration::from_millis(5)) {
-                break db;
-            }
-        };
+        cancellation.check()?;
+        let db = try_database_read(&self.db)?;
         let native = db.native_recovery_admission(
             role.cluster_id(),
             role.bootstrap_id(),

@@ -238,13 +238,21 @@ pub(super) fn continue_actual_compacted_recovery(
                 .lock()
                 .test_require_image_history_obligations_current(&target_obligations)
                 .unwrap();
-            assert_eq!(
+            // Beginning an actual image install invalidates the old native
+            // source observation even before destructive row clear. Do not
+            // relabel the partial target as a known empty/ready R0 replica.
+            let partial = target_db
+                .read()
+                .native_range_prefix_observation(range.id)
+                .unwrap();
+            assert_eq!(partial.native_applied_index, None);
+            assert!(
                 target_db
                     .read()
-                    .native_range_prefix_observation(range.id)
-                    .unwrap()
-                    .native_applied_index,
-                Some(0)
+                    .range_mutation_gate()
+                    .try_enter(range.id)
+                    .is_err(),
+                "partial image must retain the actual ordinary mutation refusal"
             );
         },
         install,

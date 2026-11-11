@@ -16,6 +16,9 @@ const MAX_WIRE: usize = 272 * 1024;
 fn stage_key(range: RangeId) -> String {
     format!("history-stage:active:{}", range.get())
 }
+fn published_stage_key(range: RangeId, generation: Uuid) -> String {
+    format!("history-stage:published:{}:{generation}", range.get())
+}
 fn initial_chain() -> String {
     hex::encode(sha2::Sha256::digest(b"bicdb.range-image.history-wire.v1\0"))
 }
@@ -504,6 +507,28 @@ impl BicDb {
                 header.published_native_page_xid = Some(xid);
                 header.checksum_sha256 = header.checksum()?;
                 header.validate()?;
+                // Preserve the prior base's publication evidence when a later
+                // install starts a new active staging generation.
+                let published_key = native_key(&published_stage_key(
+                    proof.range_id(),
+                    proof.history_generation(),
+                ));
+                if paged
+                    .store()
+                    .get_as_of(&own_snapshot, &published_key)
+                    .map_err(|e| BicDbError::PagedStorage(e.to_string()))?
+                    .is_some()
+                {
+                    return Err(invalid("native history generation was already published"));
+                }
+                paged
+                    .store()
+                    .put(
+                        xid,
+                        &published_key,
+                        &bounded_json(&header, MAX_NATIVE_RECEIPT_BYTES)?,
+                    )
+                    .map_err(|e| BicDbError::PagedStorage(e.to_string()))?;
                 paged
                     .store()
                     .put(
@@ -517,6 +542,54 @@ impl BicDb {
             .ok_or_else(|| invalid("native history publication has no page store"))?;
         drop(controlled);
         Ok(xid)
+    }
+
+    /// Read-only coupling check for an actual opaque installed receipt. This
+    /// does not recreate a StageProof or confer mutation/config authority.
+    #[allow(clippy::too_many_arguments)]
+    pub(super) fn validate_published_native_history_binding(
+        &self,
+        range: RangeId,
+        generation: Uuid,
+        index: u64,
+        genesis: &str,
+        head: &str,
+        page_xid: u64,
+        birth_id: Uuid,
+        birth_sha256: &str,
+        attempt: Uuid,
+        session: Uuid,
+        nonce: Uuid,
+        source_receipt_sha256: &str,
+    ) -> Result<()> {
+        let header: StageHeader = self
+            .read_native_range_image_record(&published_stage_key(range, generation))?
+            .ok_or_else(|| {
+                invalid("installed history has no actual immutable publication record")
+            })?;
+        header.validate()?;
+        if header.source.range_id != range
+            || header.generation != generation
+            || header.source.range_index != index
+            || header.source.logical_genesis_sha256 != genesis
+            || header.source.logical_history_sha256 != head
+            || header.published_native_page_xid != Some(page_xid)
+            || header.target_birth_id != birth_id
+            || header.target_birth_sha256 != birth_sha256
+            || header.attempt_id != attempt
+            || header.source.session_id != session
+            || header.source.nonce != nonce
+            || header.source.native_receipt_sha256 != source_receipt_sha256
+            || !header.cursor.complete()
+            || !header.audit_complete
+            || !header.target_point_matched
+            || !header.remaining_commands.is_empty()
+        {
+            return Err(invalid(
+                "installed receipt and actual history publication differ",
+            ));
+        }
+        Ok(())
     }
 
     fn read_history_stage(&self, range: RangeId) -> Result<StageHeader> {

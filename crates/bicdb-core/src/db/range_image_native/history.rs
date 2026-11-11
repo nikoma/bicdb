@@ -88,7 +88,7 @@ impl NativeLogicalHistoryPoint {
 }
 pub(super) fn actual_history_point(
     birth: &NativeDatabaseBirth,
-    base: &NativeGenesisReceipt,
+    base: &NativeRangeBaseBinding,
     prefix: Option<&NativeCertifiedRangePrefix>,
 ) -> NativeLogicalHistoryPoint {
     NativeLogicalHistoryPoint {
@@ -98,7 +98,7 @@ pub(super) fn actual_history_point(
         range_index: prefix.map_or(base.range_index, |prefix| prefix.range_index()),
         logical_genesis_sha256: base.logical_genesis_sha256.clone(),
         logical_history_sha256: prefix
-            .map_or(base.logical_genesis_sha256.as_str(), |prefix| {
+            .map_or(base.logical_history_sha256.as_str(), |prefix| {
                 prefix.logical_history_sha256()
             })
             .to_string(),
@@ -336,7 +336,7 @@ impl BicDb {
         bounded_json(&step, MAX_HISTORY_STEP_BYTES)?;
         Ok(step)
     }
-    pub(super) fn read_native_history_entry(
+    pub(in crate::db) fn read_native_history_entry(
         &self,
         range: RangeId,
         generation: Uuid,

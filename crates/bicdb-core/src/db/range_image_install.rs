@@ -152,6 +152,9 @@ pub(crate) struct NativeInstalledRangeImageIntegrity {
     database_incarnation: String,
 }
 impl NativeInstalledRangeImageIntegrity {
+    pub(crate) fn source_native_receipt_sha256(&self) -> &str {
+        &self.receipt.source_native_receipt_sha256
+    }
     pub(crate) fn history_generation(&self) -> Uuid {
         self.receipt.history_generation
     }
@@ -379,6 +382,9 @@ impl TargetNativeImageSnapshotBound {
     }
 }
 impl NativeInstalledRangeImageBase {
+    pub(crate) fn source_native_receipt_sha256(&self) -> &str {
+        &self.receipt.source_native_receipt_sha256
+    }
     pub(crate) fn history_generation(&self) -> Uuid {
         self.receipt.history_generation
     }

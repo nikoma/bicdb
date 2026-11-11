@@ -1058,6 +1058,7 @@ pub(crate) fn eval_db_catalog_function_value(
                             None
                         }
                     })
+                    .or(pg_table_row_regtype_name(db, oid)?)
                     .unwrap_or_else(|| "???".to_string()),
             };
             Ok(Some(SqlValue::String(formatted)))

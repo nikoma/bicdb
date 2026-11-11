@@ -1967,6 +1967,31 @@ pub fn pg_table_row_array_element_oid(db: &BicDb, oid: i32) -> Result<Option<i32
         .map_err(|_| SqlError::numeric_value_out_of_range("table row type OID exceeds int4"))
 }
 
+pub(crate) fn pg_table_row_regtype_name(db: &BicDb, oid: i64) -> Result<Option<String>> {
+    let index = row_type_oid_index(db)?;
+    let Some((position, array)) = index
+        .row
+        .get(&oid)
+        .map(|&position| (position, false))
+        .or_else(|| index.array.get(&oid).map(|&position| (position, true)))
+    else {
+        return Ok(None);
+    };
+    let schema = &index.schemas[position];
+    let display = crate::eval::rewrite_helpers::logical_relation_name(&schema.name)
+        .unwrap_or_else(|| schema.name.clone());
+    let name = if schema.schema_name.eq_ignore_ascii_case("public") {
+        pg_quote_ident(&display)
+    } else {
+        format!(
+            "{}.{}",
+            pg_quote_ident(&schema.schema_name),
+            pg_quote_ident(&display)
+        )
+    };
+    Ok(Some(if array { format!("{name}[]") } else { name }))
+}
+
 pub fn pg_is_table_row_type_oid(db: &BicDb, oid: i32) -> Result<bool> {
     let index = row_type_oid_index(db)?;
     let oid = i64::from(oid);

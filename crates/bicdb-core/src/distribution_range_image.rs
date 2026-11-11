@@ -214,6 +214,9 @@ impl RangeImageCapture {
         }
         let wait = cancellation.child_with_deadline(Instant::now() + wait_budget);
         wait.check()?;
+        // The old-data-quorum cut does not itself qualify a native image.
+        // Require the actual persisted base's exact metadata transition too.
+        cut.validate_source_lineage_configuration(&lineage)?;
         let (gate, reserved, bindings) = {
             let database = read_database(&db)?;
             let gate = database.range_mutation_gate();

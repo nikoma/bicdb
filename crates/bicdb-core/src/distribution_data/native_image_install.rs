@@ -80,9 +80,10 @@ impl ClusterDataNodeService {
             role.local_node_id(),
             role.local_member_incarnation(),
         )?;
+        let scope = crate::distribution_range_consensus::RecoveryFenceScope::from_role(&role)?;
         let catalog = self
             .range_writes
-            .observe_recovery_resolved_prefix(&role, &native)?;
+            .observe_recovery_resolved_prefix(&role, &native, &scope)?;
         db.attest_local_native_recovery_ready(
             native,
             role,

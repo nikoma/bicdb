@@ -82,6 +82,7 @@ impl NativeRangeReadPhysical {
         self.require_lifetime()?;
         self.require_catalogue_binding(catalogue)?;
         Ok(crate::distribution_native_read::NativeRangeReadFacts {
+            evidence_version: crate::distribution_native_read::NATIVE_RANGE_READ_VERSION,
             scope_sha256: self.scope.checksum_sha256()?,
             challenge,
             node_id: self.point.node_id.clone(),

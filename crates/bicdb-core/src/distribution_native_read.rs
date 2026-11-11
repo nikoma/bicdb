@@ -4,6 +4,7 @@ use crate::distribution::{ClusterId, ClusterNodeId, RangeDescriptor, RangeReplic
 use crate::distribution_consensus::MetadataRestoreActivation;
 use crate::distribution_range_recovery::RecoveryMemberIdentity;
 use crate::{CancellationToken, Result};
+pub(crate) const NATIVE_RANGE_READ_VERSION: u32 = 1;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::time::{Duration, Instant};
@@ -79,6 +80,7 @@ impl NativeRangeReadScope {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct NativeRangeReadRequest {
+    pub protocol_version: u32,
     pub scope: NativeRangeReadScope,
     pub challenge: Uuid,
     pub budget_ms: u64,
@@ -86,7 +88,11 @@ pub(crate) struct NativeRangeReadRequest {
 impl NativeRangeReadRequest {
     pub(crate) fn cancellation(&self, parent: &CancellationToken) -> Result<CancellationToken> {
         self.scope.validate()?;
-        if self.challenge.is_nil() || self.budget_ms == 0 || self.budget_ms > 5000 {
+        if self.protocol_version != NATIVE_RANGE_READ_VERSION
+            || self.challenge.is_nil()
+            || self.budget_ms == 0
+            || self.budget_ms > 5000
+        {
             return Err(invalid("invalid read challenge/budget"));
         }
         let token =
@@ -99,6 +105,7 @@ impl NativeRangeReadRequest {
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct NativeRangeReadFacts {
+    pub evidence_version: u32,
     pub scope_sha256: String,
     pub challenge: Uuid,
     pub node_id: ClusterNodeId,
@@ -135,7 +142,7 @@ impl LocalNativeRangeReadObservation {
         catalogue: crate::distribution_range_consensus::NativeRangeReadCatalogue,
         cancellation: CancellationToken,
     ) -> Result<Self> {
-        cancellation.check()?;
+        let cancellation = request.cancellation(&cancellation)?;
         if !physical.matches_scope(&request.scope)? {
             return Err(invalid("actual local observation scope differs"));
         }

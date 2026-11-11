@@ -8,6 +8,7 @@ fn native_read_observation_recovered_serving_requires_actual_activated_open() {
     let topology = fixture.current.read().clone();
     let role = fixture.ready_role(&scope);
     let request = NativeRangeReadRequest {
+        protocol_version: crate::distribution_native_read::NATIVE_RANGE_READ_VERSION,
         scope: NativeRangeReadScope {
             cluster_id: topology.cluster_id.clone(),
             bootstrap_id: role.bootstrap_id(),

@@ -40,6 +40,7 @@ impl Fixture {
             })
             .collect();
         let request = NativeRangeReadRequest {
+            protocol_version: NATIVE_RANGE_READ_VERSION,
             scope: NativeRangeReadScope {
                 cluster_id: topology.cluster_id.clone(),
                 bootstrap_id: spec.bootstrap_id,
@@ -187,7 +188,7 @@ fn native_read_observation_rejects_actual_raw_prepare_and_cq_ahead_of_native() {
 #[test]
 fn native_read_observation_scope_cancellation_and_store_replacement_are_not_permissions() {
     let mut fixture = Fixture::new(true);
-    for variant in 0..4 {
+    for variant in 0..5 {
         let mut request = fixture.request.clone();
         match variant {
             0 => request.scope.range.epoch += 1,
@@ -200,7 +201,7 @@ fn native_read_observation_scope_cancellation_and_store_replacement_are_not_perm
                     .unwrap()
                     .incarnation += 1
             }
-            _ => {
+            3 => {
                 request
                     .scope
                     .members
@@ -208,6 +209,7 @@ fn native_read_observation_scope_cancellation_and_store_replacement_are_not_perm
                     .unwrap()
                     .active_certificate_sha256 = Some("e".repeat(64))
             }
+            _ => request.protocol_version = 0,
         }
         assert!(fixture
             .service()

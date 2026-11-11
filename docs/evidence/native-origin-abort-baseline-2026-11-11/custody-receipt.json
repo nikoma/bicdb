@@ -1,0 +1,11 @@
+{
+  "custody_root": "/root/.local/state/bicdb/ha-scaling-2026-11-11/private/native-origin-abort-eafa6949",
+  "manifest_sha256": "c737ba3f64c9629150c3340506627468880f83aea037e471ea681b63faabcf90",
+  "files": 52,
+  "bytes": 405693,
+  "source_destination_hash_parity": true,
+  "files_and_directories_fsynced": true,
+  "completed_unix": 1794429879.2868836,
+  "contains_generated_test_database_keys": true,
+  "global_credentials_included": false
+}

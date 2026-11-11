@@ -90,12 +90,6 @@ fn live_enrolled_fixture(
         fixture.call(name, &scope, false).unwrap();
         fixture.wait_idle();
     }
-    fixture
-}
-
-#[test]
-fn native_read_rpc_actual_tls_enrolled_births_require_actual_metadata_and_peer_facts() {
-    let fixture = live_enrolled_fixture(None);
     for name in ["n0", "n1", "n2"] {
         fixture.call(name, &scope, true).unwrap();
         fixture.wait_idle();
@@ -116,6 +110,12 @@ fn native_read_rpc_actual_tls_enrolled_births_require_actual_metadata_and_peer_f
             .unwrap();
         fixture.wait_idle();
     }
+    fixture
+}
+
+#[test]
+fn native_read_rpc_actual_tls_enrolled_births_require_actual_metadata_and_peer_facts() {
+    let fixture = live_enrolled_fixture(None);
     let parent = CancellationToken::uncancelable();
     let business = Uuid::now_v7();
     let metadata = fresh_metadata(&fixture, business, &parent);

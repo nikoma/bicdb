@@ -1157,8 +1157,35 @@ mod tests {
         assert!(cut.validate_source_lineage_configuration(&lineage).is_err());
         cut.range_index = 0;
         cut.validate_source_lineage_configuration(&lineage).unwrap();
-        // Actual empty native genesis is R=0. This does not mint the pending
-        // installed-image or certified-suffix producer for R>0.
+        // Exercise the production capture entry too: direct validator tests
+        // must not leave the actual image path unwired.
+        drop(frozen);
+        let capture_frozen = gate.try_freeze(base.id, cut.session_id()).unwrap();
+        let mut capture = crate::distribution_range_image::RangeImageCapture::begin(
+            Arc::clone(&database),
+            cut,
+            capture_frozen,
+            lineage,
+            Duration::from_secs(3),
+            &CancellationToken::uncancelable(),
+        )
+        .unwrap();
+        let options = crate::RangeSnapshotOptions::default();
+        loop {
+            let cursor = capture.cursor().clone();
+            let step = capture
+                .export_step(&cursor, &options, &CancellationToken::uncancelable())
+                .unwrap();
+            if step.complete {
+                break;
+            }
+        }
+        let seal = capture.completed_seal().unwrap();
+        assert_eq!(seal.record_count, 0);
+        assert_eq!(seal.range_index, 0);
+        assert_eq!(seal.bootstrap_id, bootstrap);
+        // This actual healthy empty-genesis path is R=0, not proof of the
+        // pending installed-image or certified-suffix producer for R>0.
     }
 
     #[cfg(feature = "tls-replication")]

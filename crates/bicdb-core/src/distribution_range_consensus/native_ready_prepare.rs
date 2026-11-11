@@ -118,6 +118,43 @@ impl PreparedNativeRecoveryReady {
     pub(crate) fn native_database_incarnation(&self) -> &str {
         self.physical.native_admission().database_incarnation()
     }
+    /// A peer's independently challenged READ-ONLY role can inspect the exact
+    /// prepared state. It cannot become the coordinator's mutation admission.
+    pub(crate) fn require_current_for_observer(
+        &self,
+        db: &crate::BicDb,
+        store: &RangeWriteStore,
+        observer: &crate::distribution_range_recovery::RecoveryObservationRoleAdmission,
+        requested_scope: &RecoveryFenceScope,
+    ) -> Result<()> {
+        observer.require_scope(requested_scope)?;
+        observer.require_native_identity(self.physical.native_admission())?;
+        self.physical.require_owned_materialization_current(db)?;
+        store.require_durable_recovery_catalog()?;
+        store.require_no_image_install(self.scope.range_id)?;
+        let saved = store
+            .catalog
+            .recovery_fences
+            .get(&self.scope.range_id)
+            .ok_or_else(|| range_write_error("prepared observation lost its actual saved fence"))?;
+        if !self.scope.same_session(requested_scope)
+            || !saved.scope.same_session(requested_scope)
+            || saved.native_database_incarnation != self.native_database_incarnation()
+            || saved.local_node_id != *observer.local_node_id()
+            || saved.local_member_incarnation != observer.local_member_incarnation()
+            || store.catalog.node_id != *observer.local_node_id()
+            || store.catalog.cluster_id != *observer.cluster_id()
+            || self.store_open_id != store.open_id
+            || self.catalog_sha256 != store.recovery_range_catalog_sha256(self.scope.range_id)?
+            || self.point != NativePreparedPoint::from_actual(&self.physical)
+            || !matches!(&saved.phase, RecoveryFencePhase::NativePrepared(point) if point == &self.point)
+        {
+            return Err(range_write_error(
+                "read-only prepared observation has stale native/store/session identity",
+            ));
+        }
+        Ok(())
+    }
     pub(crate) fn require_current(&self, db: &crate::BicDb, store: &RangeWriteStore) -> Result<()> {
         self.physical.require_physical_current(db)?;
         self.require_current_under_role(db, store, self.role())

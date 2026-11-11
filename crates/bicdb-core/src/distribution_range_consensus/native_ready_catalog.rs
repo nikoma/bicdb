@@ -6,6 +6,29 @@ use crate::distribution_range_recovery::{
     RecoveryImageHistoryObligationsV1, RecoveryNativeHistoryPointV1, RecoveryNativePendingHistoryV1,
 };
 
+fn insert_complete_fenced_obligation(
+    values: &mut BTreeMap<u64, String>,
+    index: u64,
+    checksum: &str,
+) -> Result<()> {
+    use crate::distribution_range_recovery::{
+        fenced_obligation_limit_error, MAX_FENCED_IRREVERSIBLE_COMMANDS,
+    };
+    if let Some(previous) = values.get(&index) {
+        if previous != checksum {
+            return Err(range_write_error(
+                "current certification conflicts with retained irreversible history",
+            ));
+        }
+    } else {
+        if values.len() >= MAX_FENCED_IRREVERSIBLE_COMMANDS {
+            return Err(fenced_obligation_limit_error());
+        }
+        values.insert(index, checksum.to_owned());
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 pub(crate) fn native_ready_test_command(
     cluster: ClusterId,
@@ -57,18 +80,18 @@ impl RangeWriteStore {
                 RangeWriteState::QuorumCommitted | RangeWriteState::Applied
             )
         }) {
-            irreversible_command_sha256
-                .insert(entry.command.index, entry.command.checksum_sha256.clone());
+            insert_complete_fenced_obligation(
+                &mut irreversible_command_sha256,
+                entry.command.index,
+                &entry.command.checksum_sha256,
+            )?;
         }
         for (index, marker) in &saved.historical_certifications {
-            if irreversible_command_sha256
-                .insert(*index, marker.command_sha256.clone())
-                .is_some_and(|prior| prior != marker.command_sha256)
-            {
-                return Err(range_write_error(
-                    "current certification conflicts with retained irreversible history",
-                ));
-            }
+            insert_complete_fenced_obligation(
+                &mut irreversible_command_sha256,
+                *index,
+                &marker.command_sha256,
+            )?;
         }
         let native_point = safety
             .history_point()

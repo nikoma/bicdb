@@ -5,9 +5,9 @@ use crate::distribution_range_consensus::{
     PreparedNativeRecoveryReady, RangeWriteProgress, RangeWriteStore,
 };
 use crate::CancellationToken;
+use super::image_history::MAX_NATIVE_READY_IRREVERSIBLE_COMMANDS;
 
 const NATIVE_READY_EVIDENCE_VERSION: u32 = 1;
-const MAX_OBLIGATIONS: usize = 2048;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -121,7 +121,7 @@ impl NativeReadyReply {
             || self.progress.last_index != self.range_index
             || self.progress.resolved_through != self.range_index
             || self.progress.compacted_through > self.range_index
-            || self.irreversible_command_sha256.len() > MAX_OBLIGATIONS
+            || self.irreversible_command_sha256.len() > MAX_NATIVE_READY_IRREVERSIBLE_COMMANDS
             || self
                 .irreversible_command_sha256
                 .iter()

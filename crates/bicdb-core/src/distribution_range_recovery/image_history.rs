@@ -6,7 +6,21 @@ use crate::distribution_range_consensus::{RangeWriteProgress, RecoveryFenceScope
 use crate::Result;
 use std::collections::BTreeMap;
 
-const MAX_IRREVERSIBLE_COMMANDS: usize = 1024;
+/// A closed ready point has at most the retained resolved suffix plus the
+/// independently retained historical certification map. A fence must also
+/// represent an ordinary unresolved command following that resolved suffix.
+/// These are supported COMPLETE reply bounds, not a claim that every possible
+/// raw-log backlog has this size. Larger histories require another bounded
+/// protocol; none of their checksums may be silently omitted here.
+pub(super) const MAX_NATIVE_READY_IRREVERSIBLE_COMMANDS: usize = 2 * 1024;
+pub(crate) const MAX_FENCED_IRREVERSIBLE_COMMANDS: usize =
+    MAX_NATIVE_READY_IRREVERSIBLE_COMMANDS + 1;
+
+pub(crate) fn fenced_obligation_limit_error() -> crate::BicDbError {
+    invalid(format!(
+        "fenced history exceeds the complete {MAX_FENCED_IRREVERSIBLE_COMMANDS}-command obligation reply bound; paginated history is required and no partial evidence is admitted"
+    ))
+}
 fn digest(value: &str) -> bool {
     value.len() == 64 && value.bytes().all(|byte| byte.is_ascii_hexdigit())
 }
@@ -53,6 +67,9 @@ impl RecoveryImageHistoryObligationsV1 {
         scope: &RecoveryFenceScope,
         progress: &RangeWriteProgress,
     ) -> Result<()> {
+        if self.irreversible_command_sha256.len() > MAX_FENCED_IRREVERSIBLE_COMMANDS {
+            return Err(fenced_obligation_limit_error());
+        }
         if self.format_version != 1
             || self.node_id != progress.node_id
             || self.range_id != scope.range_id
@@ -61,7 +78,6 @@ impl RecoveryImageHistoryObligationsV1 {
             || self.compacted_through != progress.compacted_through
             || self.compacted_through > progress.resolved_through
             || progress.resolved_through > self.last_index
-            || self.irreversible_command_sha256.len() > MAX_IRREVERSIBLE_COMMANDS
             || self
                 .irreversible_command_sha256
                 .iter()

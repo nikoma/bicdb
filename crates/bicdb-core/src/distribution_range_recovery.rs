@@ -28,6 +28,7 @@ mod recovery_order_tests;
 mod image_history;
 pub(crate) use image_compatibility::{RecoverySourceHistoryRound, VerifiedRecoverySourceHistory};
 pub(crate) use image_history::{
+    fenced_obligation_limit_error, MAX_FENCED_IRREVERSIBLE_COMMANDS,
     RecoveryImageHistoryObligationsV1, RecoveryNativeHistoryPointV1, RecoveryNativePendingHistoryV1,
 };
 mod native_completion;

@@ -589,6 +589,55 @@ impl NetworkFixture {
         scope.require_role(&role).unwrap();
         role
     }
+    fn all_r1_prepared() -> (Self, RecoveryFenceScope) {
+        let fixture = Self::new_ready_network(true, true, false);
+        let scope = fixture.scope();
+        for name in ["n0", "n1", "n2"] {
+            fixture.call(name, &scope, false).unwrap();
+            fixture.wait_idle();
+        }
+        for name in ["n0", "n1", "n2"] {
+            fixture.call(name, &scope, true).unwrap();
+            fixture.wait_idle();
+        }
+        for name in ["n0", "n1", "n2"] {
+            fixture.prepare_ready(name, &scope).unwrap();
+            fixture.wait_idle();
+        }
+        (fixture, scope)
+    }
+    fn completion_request(
+        &self,
+        scope: &RecoveryFenceScope,
+    ) -> crate::distribution_range_recovery::NativeCompletionRequest {
+        crate::distribution_range_recovery::NativeCompletionRequest {
+            scope: scope.clone(),
+            challenge: Uuid::now_v7(),
+            budget_ms: 3500,
+        }
+    }
+    fn complete(
+        &self,
+        name: &str,
+        scope: &RecoveryFenceScope,
+    ) -> Result<crate::distribution_range_recovery::NativeCompletionObservation> {
+        self.clients[&node("n1")].complete_native_recovery_observation(
+            &node(name),
+            &self.completion_request(scope),
+            &CancellationToken::uncancelable(),
+        )
+    }
+    fn completion_status(
+        &self,
+        name: &str,
+        scope: &RecoveryFenceScope,
+    ) -> Result<crate::distribution_range_recovery::NativeCompletionObservation> {
+        self.clients[&node("n1")].observe_native_completion_observation(
+            &node(name),
+            &self.completion_request(scope),
+            &CancellationToken::uncancelable(),
+        )
+    }
     fn native_index(&self, name: &str) -> u64 {
         self.native.databases[&node(name)]
             .read()
@@ -993,4 +1042,167 @@ fn native_ready_actual_tls_fast_clean_zero_minority_does_not_starve_matching_one
     assert_eq!(fixture.native_index("n1"), 1);
     // Genuine native/certified states, no caller-set floor or fake observation.
     // The lagging minority remains unavailable for serving until actual repair.
+}
+
+#[test]
+fn native_completion_actual_tls_sequential_replicas_keep_frozen_pins_and_duplicate_sha() {
+    use crate::distribution_range_recovery::FrozenNativeReadyStage;
+    let (fixture, scope) = NetworkFixture::all_r1_prepared();
+    assert!(fixture.completion_status("n0", &scope).is_err());
+    fixture.wait_idle();
+    let mut hashes = BTreeMap::new();
+    let before = fixture
+        .native
+        .databases
+        .iter()
+        .map(|(id, db)| (id.clone(), db.read().current_commit_seq()))
+        .collect::<BTreeMap<_, _>>();
+    for name in ["n0", "n1", "n2"] {
+        let result = fixture.complete(name, &scope).unwrap();
+        fixture.wait_idle();
+        assert_eq!(
+            result.reply().ready.stage,
+            FrozenNativeReadyStage::NativeCompletedFrozen
+        );
+        assert_eq!(result.reply().ready.range_index, 1);
+        hashes.insert(node(name), result.reply().native_serving_sha256.clone());
+        let status = fixture.status_ready(name, &scope).unwrap();
+        fixture.wait_idle();
+        assert_eq!(
+            status.reply().stage,
+            FrozenNativeReadyStage::NativeCompletedFrozen
+        );
+    }
+    for name in ["n0", "n1", "n2"] {
+        let repeated = fixture.complete(name, &scope).unwrap();
+        fixture.wait_idle();
+        assert_eq!(repeated.reply().native_serving_sha256, hashes[&node(name)]);
+        let status = fixture.completion_status(name, &scope).unwrap();
+        fixture.wait_idle();
+        assert_eq!(status.reply().native_serving_sha256, hashes[&node(name)]);
+        let db = fixture.native.databases[&node(name)].read();
+        assert_eq!(db.current_commit_seq(), before[&node(name)]);
+        assert!(db.range_mutation_gate().try_enter(scope.range_id).is_err());
+    }
+    // These are actual incoming Complete/readonly TLS RPCs with fresh peer QQ.
+    // Completed-Frozen is not Activated, a normal new-write or StrongGet grant.
+}
+
+#[test]
+fn native_completion_actual_tls_wrong_actor_cannot_complete_but_current_voter_can_observe() {
+    use crate::distribution_range_recovery::FrozenNativeReadyStage;
+    let (fixture, scope) = NetworkFixture::all_r1_prepared();
+    let wrong = fixture.clients[&node("n2")].complete_native_recovery_observation(
+        &node("n0"),
+        &fixture.completion_request(&scope),
+        &CancellationToken::uncancelable(),
+    );
+    assert!(
+        wrong.is_err(),
+        "authenticated voter2 is not current data leader1"
+    );
+    fixture.wait_idle();
+    assert!(fixture.completion_status("n0", &scope).is_err());
+    fixture.wait_idle();
+    let prepared = fixture.status_ready("n0", &scope).unwrap();
+    fixture.wait_idle();
+    assert_eq!(
+        prepared.reply().stage,
+        FrozenNativeReadyStage::NativePrepared
+    );
+    let complete = fixture.complete("n0", &scope).unwrap();
+    fixture.wait_idle();
+    let observed = fixture.clients[&node("n2")]
+        .observe_native_completion_observation(
+            &node("n0"),
+            &fixture.completion_request(&scope),
+            &CancellationToken::uncancelable(),
+        )
+        .unwrap();
+    fixture.wait_idle();
+    assert_eq!(
+        observed.reply().native_serving_sha256,
+        complete.reply().native_serving_sha256
+    );
+    let mut wrong_scope = scope.clone();
+    wrong_scope.recovery_nonce = Uuid::now_v7();
+    assert!(fixture.completion_status("n0", &wrong_scope).is_err());
+    fixture.wait_idle();
+    assert_eq!(
+        fixture
+            .completion_status("n0", &scope)
+            .unwrap()
+            .reply()
+            .native_serving_sha256,
+        complete.reply().native_serving_sha256
+    );
+    fixture.wait_idle();
+}
+
+#[test]
+fn native_completion_actual_tls_canceled_socket_after_real_persistence_recovers_by_readonly_status()
+{
+    use crate::distribution_range_recovery::FrozenNativeReadyStage;
+    let (fixture, scope) = NetworkFixture::all_r1_prepared();
+    for name in ["n0", "n1"] {
+        fixture.complete(name, &scope).unwrap();
+        fixture.wait_idle();
+    }
+    let barrier = fixture.runtimes[&node("n2")].test_install_completion_reply_barrier();
+    let client = Arc::clone(&fixture.clients[&node("n1")]);
+    let request = fixture.completion_request(&scope);
+    let token = CancellationToken::uncancelable()
+        .child_with_deadline(Instant::now() + Duration::from_secs(5));
+    let worker_token = token.clone();
+    let worker = std::thread::spawn(move || {
+        client
+            .complete_native_recovery_observation(&node("n2"), &request, &worker_token)
+            .map(|o| o.reply().native_serving_sha256.clone())
+    });
+    let deadline = Instant::now() + Duration::from_secs(3);
+    while !barrier.entered() {
+        if Instant::now() >= deadline {
+            barrier.release();
+            panic!(
+                "actual completion producer never reached its post-persistence/pre-reply boundary"
+            );
+        }
+        std::thread::sleep(Duration::from_millis(1));
+    }
+    // The real producer has completed and the TLS server has not sent its
+    // reply. Cancel closes the ACTUAL client socket through its I/O watcher.
+    let canceled_at = Instant::now();
+    token.cancel();
+    let result = worker.join().unwrap();
+    barrier.release();
+    assert!(
+        result.is_err(),
+        "the client must not receive a completion ACK"
+    );
+    assert!(
+        canceled_at.elapsed() < Duration::from_secs(2),
+        "client cancellation did not bound its real socket"
+    );
+    fixture.wait_idle();
+    let observed = fixture.completion_status("n2", &scope).unwrap();
+    fixture.wait_idle();
+    assert_eq!(
+        observed.reply().ready.stage,
+        FrozenNativeReadyStage::NativeCompletedFrozen
+    );
+    assert_eq!(observed.reply().ready.range_index, 1);
+    let retry = fixture.complete("n2", &scope).unwrap();
+    fixture.wait_idle();
+    assert_eq!(
+        retry.reply().native_serving_sha256,
+        observed.reply().native_serving_sha256
+    );
+    assert!(fixture.native.databases[&node("n2")]
+        .read()
+        .range_mutation_gate()
+        .try_enter(scope.range_id)
+        .is_err());
+    // Real lost incoming reply, not a synthetic failure after parsing success.
+    // This preserves an UNKNOWN client outcome until fresh readonly resolution;
+    // no activation, new-write, StrongGet or physical-fault qualification.
 }

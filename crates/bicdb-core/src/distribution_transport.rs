@@ -954,9 +954,15 @@ fn handle_cluster_data_connection(
             })?;
             let token =
                 CancellationToken::new(Arc::new(AtomicBool::new(false)), Some(request_deadline));
-            return runtime
-                .complete_native_recovery(caller, &request, &token)
-                .map(|o| ClusterDataResponse::NativeCompletion(o.into_reply()));
+            let observation = runtime.complete_native_recovery(caller, &request, &token)?;
+            #[cfg(test)]
+            {
+                runtime.test_wait_completion_reply(&token)?;
+                observation.require_live()?;
+            }
+            return Ok(ClusterDataResponse::NativeCompletion(
+                observation.into_reply(),
+            ));
         }
         if let ClusterDataRequest::ObserveNativeCompletion { request } = request.request {
             let runtime = recovery_runtime

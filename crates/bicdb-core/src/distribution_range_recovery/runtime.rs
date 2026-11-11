@@ -37,6 +37,23 @@ struct Sessions {
     contexts: usize,
 }
 
+#[cfg(test)]
+#[derive(Debug, Default)]
+pub(crate) struct NativeCompletionReplyBarrier {
+    entered: std::sync::atomic::AtomicBool,
+    released: std::sync::atomic::AtomicBool,
+}
+#[cfg(test)]
+impl NativeCompletionReplyBarrier {
+    pub(crate) fn entered(&self) -> bool {
+        self.entered.load(std::sync::atomic::Ordering::SeqCst)
+    }
+    pub(crate) fn release(&self) {
+        self.released
+            .store(true, std::sync::atomic::Ordering::SeqCst);
+    }
+}
+
 #[derive(Debug)]
 pub(crate) struct RangeRecoveryRuntime {
     service: Arc<Mutex<ClusterDataNodeService>>,
@@ -46,6 +63,8 @@ pub(crate) struct RangeRecoveryRuntime {
     sessions: Arc<Mutex<Sessions>>,
     participant_transport:
         Option<Arc<dyn crate::distribution_range_consensus::RangeWriteTransport>>,
+    #[cfg(test)]
+    test_completion_reply_barrier: Mutex<Option<Arc<NativeCompletionReplyBarrier>>>,
 }
 struct Operation {
     sessions: Arc<Mutex<Sessions>>,
@@ -417,6 +436,8 @@ impl RangeRecoveryRuntime {
             gate,
             sessions: Arc::new(Mutex::new(Sessions::default())),
             participant_transport: None,
+            #[cfg(test)]
+            test_completion_reply_barrier: Mutex::new(None),
         }
     }
     pub(crate) fn with_participant_transport(
@@ -425,6 +446,32 @@ impl RangeRecoveryRuntime {
     ) -> Self {
         self.participant_transport = Some(transport);
         self
+    }
+    #[cfg(test)]
+    pub(crate) fn test_install_completion_reply_barrier(
+        &self,
+    ) -> Arc<NativeCompletionReplyBarrier> {
+        let barrier = Arc::new(NativeCompletionReplyBarrier::default());
+        let mut slot = self.test_completion_reply_barrier.lock();
+        assert!(slot.is_none());
+        *slot = Some(Arc::clone(&barrier));
+        barrier
+    }
+    #[cfg(test)]
+    pub(crate) fn test_wait_completion_reply(&self, token: &CancellationToken) -> Result<()> {
+        // One-shot test-only reply loss boundary, after the ACTUAL producer
+        // returned validated native-WAL completion evidence. No DB/service lock.
+        let barrier = self.test_completion_reply_barrier.lock().take();
+        if let Some(barrier) = barrier {
+            barrier
+                .entered
+                .store(true, std::sync::atomic::Ordering::SeqCst);
+            while !barrier.released.load(std::sync::atomic::Ordering::SeqCst) {
+                token.check()?;
+                std::thread::sleep(Duration::from_millis(1));
+            }
+        }
+        Ok(())
     }
     #[cfg(test)]
     pub(crate) fn test_active_context_count(&self) -> usize {

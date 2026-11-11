@@ -1,8 +1,284 @@
 {
   "source_version": "1.0.468-beta",
+  "tested_source_revision": "7d2c4cb6e5016766f2552fa8086b9f47cf9cc034",
   "parent_commit": "ecf6f60a2ae4433c02bc4352331b53c23dcd9c9d",
-  "final_versioned_local_tests": "pending_shared_build_slot",
-  "remote_ci": "not_yet_run",
+  "source_identity_files": [
+    {
+      "path": "Cargo.lock",
+      "sha256": "1c8c3239e6a926383134e83a40b1aac526b3cef7fd5e7646b35ae23305478f72"
+    },
+    {
+      "path": "POSTGRES_COMPATIBILITY.md",
+      "sha256": "53d13c64c67cedff55b04a8dcc60327c4d9dd422e3f1f768e93d9b0338bf02ce"
+    },
+    {
+      "path": "crates/bicdb-analytics/Cargo.toml",
+      "sha256": "6720ffd4403a28b79cd0b5cbe23ffcc9ec9a6d800fc0a6567d773f504058802c"
+    },
+    {
+      "path": "crates/bicdb-app-host/Cargo.toml",
+      "sha256": "97ef5641f96537e180e524d519645aeb8187c17435d94cd7b7c7c565cb15eb16"
+    },
+    {
+      "path": "crates/bicdb-app-runtime/Cargo.toml",
+      "sha256": "bf97d38c94f2a62a003a8db2c46f635cbe3c2a3ad477026000bd0e14eec83bfc"
+    },
+    {
+      "path": "crates/bicdb-bench/Cargo.toml",
+      "sha256": "f2c3dedb976b3464a935264a4f7790e5a2648b4f4aca7be84441cc75b3702e8e"
+    },
+    {
+      "path": "crates/bicdb-blob-s3/Cargo.toml",
+      "sha256": "71fc81ea16c26fc299d2fc504dbb2867990dd3277781cb50363bb3e993142c55"
+    },
+    {
+      "path": "crates/bicdb-cell-admission/Cargo.toml",
+      "sha256": "aa77dd23f44626e5d3cb3e818d7d556eb82239926e152df81c38c533fea1cdd4"
+    },
+    {
+      "path": "crates/bicdb-cell-device/Cargo.toml",
+      "sha256": "b887a1c88b638c15e7ea272f135fa0491882cbead5d82a6eae8c6c6ef6407625"
+    },
+    {
+      "path": "crates/bicdb-cell-grant/Cargo.toml",
+      "sha256": "ee601ba6b8882b7f33fd6239fc271eef6a5ded69efcce8fd47f2b9b10bfbb9d0"
+    },
+    {
+      "path": "crates/bicdb-cell-ha/Cargo.toml",
+      "sha256": "b50b17508abc5f26c98587b69c939ac7a951ddaa9dd7e1103053b035c4ef1482"
+    },
+    {
+      "path": "crates/bicdb-cell/Cargo.toml",
+      "sha256": "88c9e3e62e3aebd9dc7fce9efff5f8e36650f47e3ac41b69f4da94c041fb9f96"
+    },
+    {
+      "path": "crates/bicdb-cli/Cargo.toml",
+      "sha256": "73db2bc92f23f5cca2bc91a47684b177382042354470e75b8a7b1e55d598b1b9"
+    },
+    {
+      "path": "crates/bicdb-core/Cargo.toml",
+      "sha256": "74c558c176fe6a1f18c9003a5a7995623d32709cd72a5415f7d09bb1389db30d"
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_consensus.rs",
+      "sha256": "137e8c77ad17e66fd25bbfaefa71beab4b1863eaa6f638cbdd3e97cab595c1d2"
+    },
+    {
+      "path": "crates/bicdb-extension/Cargo.toml",
+      "sha256": "27d0134afacc88171d47bad3409b8577ffe2d0f5588fbbfaf4e1cdbb7fb07216"
+    },
+    {
+      "path": "crates/bicdb-fleet/Cargo.toml",
+      "sha256": "42993b317831d561009b03858fd3d07f82ee4c316611b50e643cf831c17cd46a"
+    },
+    {
+      "path": "crates/bicdb-lua/Cargo.toml",
+      "sha256": "597d71bf81db8b1c219c88a538a882ef3eb9cbe677b1afab62d9e13f856c7c44"
+    },
+    {
+      "path": "crates/bicdb-page/Cargo.toml",
+      "sha256": "a2a4082a6856af4271bb310da533341045d6b96559e5f3ff0f44346f2108a4c6"
+    },
+    {
+      "path": "crates/bicdb-pgwire/Cargo.toml",
+      "sha256": "b23d0d23ed994fc9be3b2b51e2fc4bbf18b1e5c7326e87c46dea14cefe9272e7"
+    },
+    {
+      "path": "crates/bicdb-provider-email/Cargo.toml",
+      "sha256": "79cfef4700d8fea8abc6f4a5b793b4a6b769ea505b9f40e5f38538e02f4ec73c"
+    },
+    {
+      "path": "crates/bicdb-provider-embeddings/Cargo.toml",
+      "sha256": "c973a80cc908fd86550e3565a7bfddc9fb36999a244c3228c606d94f1c3a308c"
+    },
+    {
+      "path": "crates/bicdb-provider-grpc/Cargo.toml",
+      "sha256": "32d6ed3e6c5a023ddcccb1a727abf357abbe84772704d7d190a2c8a0cfb7d731"
+    },
+    {
+      "path": "crates/bicdb-provider-llm/Cargo.toml",
+      "sha256": "779a7dfba5e2e2c49674f6d2edd20fd137f8d65876e14a4bbe60046184b64a2b"
+    },
+    {
+      "path": "crates/bicdb-provider-redis/Cargo.toml",
+      "sha256": "607ad8ad9b114963e55a0307f62fbbc2a50c64ef439b9d35601433cdbd00f73d"
+    },
+    {
+      "path": "crates/bicdb-provider-tokenizer/Cargo.toml",
+      "sha256": "1f0b9c86497864ae174939eb89895d369ca3ff43a3bed6c44743c40bb03eb375"
+    },
+    {
+      "path": "crates/bicdb-resp/Cargo.toml",
+      "sha256": "706f167d1b90b047b36fff1ff60a124dce80fb15e20f5fb4de9416356e1b7037"
+    },
+    {
+      "path": "crates/bicdb-script/Cargo.toml",
+      "sha256": "5ff61bce9bdb89d1b66ccae89e4de0e38d1aa1d5e51801d87ba98c9526e6dde6"
+    },
+    {
+      "path": "crates/bicdb-sql/Cargo.toml",
+      "sha256": "249aa741fb9006b30b551265dc23de0f88fd568c2f34ee3ecefc7c0b4099e016"
+    },
+    {
+      "path": "crates/bicdb-sync/Cargo.toml",
+      "sha256": "768cfe9443a9a5be17a0df0a9ac71cc85e942d29663bcdbac64eb65db496c6e1"
+    },
+    {
+      "path": "crates/bicdb-wasm/Cargo.toml",
+      "sha256": "f96bc1e2c49f41a8d2df8572b2be3c883ead2233d5a8b5669c04191746490539"
+    },
+    {
+      "path": "crates/bicdb-workflow/Cargo.toml",
+      "sha256": "8ab28866b203f5ae6f71b2ac93e5c284679aca044e2b8fec1853dc7a38b3069f"
+    }
+  ],
+  "runs": [
+    {
+      "source_revision": "7d2c4cb6e5016766f2552fa8086b9f47cf9cc034",
+      "dirty_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "command": [
+        "cargo",
+        "test",
+        "--release",
+        "--locked",
+        "-p",
+        "bicdb-core",
+        "--config",
+        "profile.release.package.bicdb-core.opt-level=0",
+        "--config",
+        "profile.release.package.bicdb-core.debug=0",
+        "--lib",
+        "distribution_consensus::tests::",
+        "--",
+        "--nocapture"
+      ],
+      "environment": {
+        "CARGO_TARGET_DIR": "/tmp/bicdb-azure-artifact-target",
+        "CARGO_BUILD_JOBS": "1",
+        "CARGO_INCREMENTAL": "0",
+        "RUST_TEST_THREADS": "2"
+      },
+      "compiler": "rustc 1.96.0 (ac68faa20 2026-05-25)",
+      "start_unix": 1794397064.982455,
+      "end_unix": 1794397133.0220366,
+      "exit_code": 0,
+      "guard_stop_reason": null,
+      "pause_episodes": 0,
+      "minimum_available_bytes": 19227693056,
+      "test_result": {
+        "status": "ok",
+        "passed": 19,
+        "failed": 0,
+        "ignored": 0
+      }
+    },
+    {
+      "source_revision": "7d2c4cb6e5016766f2552fa8086b9f47cf9cc034",
+      "dirty_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "command": [
+        "cargo",
+        "test",
+        "--release",
+        "--locked",
+        "-p",
+        "bicdb-core",
+        "--config",
+        "profile.release.package.bicdb-core.opt-level=0",
+        "--config",
+        "profile.release.package.bicdb-core.debug=0",
+        "--lib",
+        "restore_activation",
+        "--",
+        "--nocapture"
+      ],
+      "environment": {
+        "CARGO_TARGET_DIR": "/tmp/bicdb-azure-artifact-target",
+        "CARGO_BUILD_JOBS": "1",
+        "CARGO_INCREMENTAL": "0",
+        "RUST_TEST_THREADS": "2"
+      },
+      "compiler": "rustc 1.96.0 (ac68faa20 2026-05-25)",
+      "start_unix": 1794397145.7448816,
+      "end_unix": 1794397146.765096,
+      "exit_code": 0,
+      "guard_stop_reason": null,
+      "pause_episodes": 0,
+      "minimum_available_bytes": 21934575616,
+      "test_result": {
+        "status": "ok",
+        "passed": 5,
+        "failed": 0,
+        "ignored": 0
+      }
+    }
+  ],
   "archived_foundation_results_are_delivery_tests": false,
-  "binary_release_or_deployment_produced": false
+  "static_checks": {
+    "bump_version_check": "PASS; 29 packages synchronized at468",
+    "cargo_fmt_all_check": "PASS",
+    "open_core_boundary": "PASS",
+    "licensing": "PASS",
+    "git_diff_check": "PASS"
+  },
+  "remote_ci": {
+    "status_at_record_creation": "pending",
+    "status_url": "https://github.com/nikoma/bicdb/pull/144/checks",
+    "record_does_not_predict_later_status": true
+  },
+  "binary_release_or_deployment_produced": false,
+  "physical_faults_or_qualification": false,
+  "engine_scope": "lower metadata restore lineage only; no provider DTO APIs",
+  "evidence_only_descendant_rule": "Reuse these checks only while all source_identity_files match; later evidence-only commits do not change tested runtime code or version metadata.",
+  "retained_evidence": [
+    {
+      "path": "checks/delivery-consensus-inputs.json",
+      "bytes": 706,
+      "sha256": "e6830ad8dc133b8361f256703041e00ed32104269b690ae04cf8025bd11b61d4"
+    },
+    {
+      "path": "checks/delivery-consensus-result.json",
+      "bytes": 887,
+      "sha256": "e408a50509fd17f34039614695c67e4407c64e08acc4cdc5a8b858b4f9293352"
+    },
+    {
+      "path": "checks/delivery-consensus-resources.jsonl",
+      "bytes": 18614,
+      "sha256": "e02bd8b95e70ede68b1971dc1b3c1500bce470e7357542bc4c6edd1542053306"
+    },
+    {
+      "path": "checks/delivery-consensus.stdout.gz",
+      "bytes": 680,
+      "sha256": "a8ed47b94913dad785464688b6115ee832bb3a04a18a585c440658517ef12eac"
+    },
+    {
+      "path": "checks/delivery-consensus.stderr.gz",
+      "bytes": 8203,
+      "sha256": "680ebc7d9bff95e7e447578213f2426cf736102648f15e161b7e9e4cb257f6d2"
+    },
+    {
+      "path": "checks/delivery-activation-inputs.json",
+      "bytes": 693,
+      "sha256": "8abaa861022fbd8aa5062e8a84f6f08fa34bac74ee2f728b9b4dc6d3d01e1cc0"
+    },
+    {
+      "path": "checks/delivery-activation-result.json",
+      "bytes": 874,
+      "sha256": "93b38dce0285f408fd503e860afe4647741c5b3f7b7848654c5756b60447c9e8"
+    },
+    {
+      "path": "checks/delivery-activation-resources.jsonl",
+      "bytes": 274,
+      "sha256": "6ef8e4f185811054c68cffee87dde8afd1796ee74390ed00aa279ba059ce68db"
+    },
+    {
+      "path": "checks/delivery-activation.stdout.gz",
+      "bytes": 318,
+      "sha256": "faf186f3e93b60ab07d0d852301e141232c1054ca0705a4b89caeddcf43c8f30"
+    },
+    {
+      "path": "checks/delivery-activation.stderr.gz",
+      "bytes": 8128,
+      "sha256": "0067e31d810a9298b5fd9c9eae4660701fd714622f06a0de44e4ec44fc680eea"
+    }
+  ]
 }

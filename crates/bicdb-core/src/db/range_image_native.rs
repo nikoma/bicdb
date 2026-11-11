@@ -15,7 +15,9 @@ mod history_stage;
 mod installed_anchor;
 mod serving_configuration;
 use serving_configuration::NativeRecoveredServingConfiguration;
-pub(crate) use serving_configuration::{NativeActivationDecisionReceipt, NativeRecoveredServingReceipt};
+pub(crate) use serving_configuration::{
+    NativeActivationDecisionReceipt, NativeRecoveredServingReceipt,
+};
 #[cfg(test)]
 pub(crate) mod rf3_fixture;
 use certified_prefix::NativeCertifiedRangePrefix;
@@ -37,7 +39,7 @@ thread_local! {
 pub(super) use certified_prefix::NativeRangeScopeRegistry;
 pub(crate) use certified_prefix::{
     KnownNativeRecoveryPrefix, NativeRangeInstallSafety, NativeRangePendingApply,
-    NativeRecoveryAppliedReceipt,
+    NativeRecoveryAppliedReceipt, NativeReplicaMaterialization,
 };
 
 pub(super) fn native_key(key: &str) -> Vec<u8> {

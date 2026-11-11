@@ -15,6 +15,7 @@ mod native_completion;
 mod native_completion_quorum;
 mod native_ready;
 mod native_ready_quorum;
+mod normal_apply;
 mod participants;
 
 const MAX_CONTEXTS: usize = 4;

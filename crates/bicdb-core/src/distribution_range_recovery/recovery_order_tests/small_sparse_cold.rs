@@ -48,6 +48,11 @@ fn fence_pair(
 #[test]
 fn actual_small_sparse_current_quorum_and_strict_cold_reopen_preserve_decision() {
     let mut fixture = ActualNativeRf3Fixture::new();
+    // Exercise authenticated native replay for reachable replicas. Drop only
+    // Apply1 to n2 to retain the original actual CQ1/native0 precondition;
+    // later admission must really repair it rather than project generic rows.
+    fixture.transport.enable_native_delivery();
+    fixture.transport.drop_native_apply_once(node("n2"), 1);
     fixture.root.disable_cleanup(true);
     eprintln!(
         "SMALL_SPARSE_COLD_ORIGINAL_ROOT {}",

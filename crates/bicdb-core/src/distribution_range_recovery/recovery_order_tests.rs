@@ -161,6 +161,11 @@ fn wait_for_contexts(receivers: &BTreeMap<ClusterNodeId, Arc<RangeRecoveryRuntim
 #[test]
 fn actual_gap_refusal_preserves_durable_observations_and_retained_prefix_recovers() {
     let fixture = ActualNativeRf3Fixture::new();
+    // Exercise authenticated native replay for reachable replicas. Drop only
+    // Apply1 to n2 to retain the original actual CQ1/native0 precondition;
+    // later admission must really repair it rather than project generic rows.
+    fixture.transport.enable_native_delivery();
+    fixture.transport.drop_native_apply_once(node("n2"), 1);
     let range = fixture
         .topology
         .read()

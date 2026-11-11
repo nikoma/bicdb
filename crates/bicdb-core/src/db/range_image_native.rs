@@ -413,6 +413,81 @@ impl FreshRangeGenesisAuthority {
     pub(crate) fn node_id(&self) -> &ClusterNodeId {
         &self.birth.spec.node_id
     }
+
+    /// Actual NEW factory fact only. Missing old-disk enrollment is never
+    /// repaired by this check. The metadata publication seam separately
+    /// requires initial generation one or an unassigned learner.
+    pub(crate) fn require_unwritten_enrollment_database(
+        &self,
+        database: &BicDb,
+        topology: &crate::distribution::ClusterTopology,
+    ) -> Result<NativeRecoveryAdmission> {
+        self.birth.validate()?;
+        topology.validate()?;
+        let spec = &self.birth.spec;
+        let actual = database.native_recovery_admission(
+            &spec.cluster_id,
+            spec.bootstrap_id,
+            &spec.node_id,
+            spec.member_incarnation,
+        )?;
+        if database.path.canonicalize()? != self.root
+            || actual.birth_id != self.birth.birth_id
+            || actual.birth_sha256 != self.birth.checksum_sha256
+            || topology.cluster_id != spec.cluster_id
+            || topology.range_image_bootstrap_id != Some(spec.bootstrap_id)
+            || actual.restore_activation.as_ref() != spec.restore_activation.as_ref()
+        {
+            return Err(invalid(
+                "enrollment requires the actual completed factory birth and initial domain",
+            ));
+        }
+        for (id, member) in &spec.initial_members {
+            let node = topology
+                .nodes
+                .get(id)
+                .ok_or_else(|| invalid("initial enrollment member is absent"))?;
+            if node.incarnation != member.incarnation
+                || node.tls_certificate_sha256 != member.tls_certificate_sha256
+                || node.pending_tls_certificate_sha256 != member.pending_tls_certificate_sha256
+            {
+                return Err(invalid("initial enrollment member identity differs"));
+            }
+        }
+        let expected: BTreeMap<_, _> = spec
+            .initial_ranges
+            .iter()
+            .map(|r| (r.id, crate::distribution_native_read::canonical_range(r)))
+            .collect();
+        let current: BTreeMap<_, _> = topology
+            .ranges
+            .values()
+            .filter(|r| {
+                r.replicas.iter().any(|replica| {
+                    replica.node_id == spec.node_id && replica.role == RangeReplicaRole::Voter
+                })
+            })
+            .map(|r| (r.id, crate::distribution_native_read::canonical_range(r)))
+            .collect();
+        if expected != current {
+            return Err(invalid(
+                "factory initial voter ranges differ from enrollment topology",
+            ));
+        }
+        for range in &spec.initial_ranges {
+            let point = database.native_range_prefix_observation(range.id)?;
+            if point.native_applied_index != Some(0)
+                || point.pending_command_index.is_some()
+                || point.materialized_pending_index.is_some()
+                || point.invalidated
+            {
+                return Err(invalid(
+                    "bootstrap enrollment requires actual unwritten native genesis",
+                ));
+            }
+        }
+        Ok(actual)
+    }
 }
 impl SourceRangeImageLineage {
     /// Target-local MVCC visibility bound from actual native materialization.

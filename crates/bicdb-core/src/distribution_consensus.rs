@@ -731,6 +731,7 @@ impl MetadataReadAcquireResponse {
             self.committed_topology.range_image_bootstrap_id,
             new.range_image_bootstrap_id,
         )?;
+        crate::distribution::validate_native_store_birth_transition(&self.committed_topology, new)?;
         validate_side(new, &self.new_voters, &self.fresh_new_voters)?;
         if let Some(activation) = &self.restore_activation {
             validate_historical_activation_against_topology(
@@ -1388,6 +1389,7 @@ impl MetadataConsensusStore {
     ) -> Result<Self> {
         bootstrap_topology.validate()?;
         let expected_image_domain = bootstrap_topology.range_image_bootstrap_id;
+        let expected_birth_topology = bootstrap_topology.clone();
         if expected_image_domain.is_some() && !fsync {
             return Err(metadata_error("native range image metadata requires fsync"));
         }
@@ -1423,6 +1425,10 @@ impl MetadataConsensusStore {
             Err(error) => return Err(error.into()),
         };
         validate_state(&state)?;
+        crate::distribution::validate_native_store_birth_snapshot(
+            &expected_birth_topology,
+            &state.committed_topology,
+        )?;
         crate::distribution::ensure_range_image_domain(
             expected_image_domain,
             state.committed_topology.range_image_bootstrap_id,
@@ -1927,6 +1933,14 @@ impl MetadataConsensusStore {
         }
         topology.validate()?;
         self.ensure_cluster(&topology.cluster_id)?;
+        crate::distribution::validate_native_store_birth_transition(
+            self.state
+                .log
+                .last()
+                .map(|entry| &entry.topology)
+                .unwrap_or(&self.state.committed_topology),
+            &topology,
+        )?;
         crate::distribution::ensure_range_image_domain(
             self.state.committed_topology.range_image_bootstrap_id,
             topology.range_image_bootstrap_id,
@@ -2094,6 +2108,7 @@ impl MetadataConsensusStore {
                 entry.topology.range_image_bootstrap_id,
             )?;
         }
+        self.validate_native_birth_append(&request)?;
         self.step_down(request.term, Some(request.leader_id));
         self.mark_election_activity();
         if let Some(snapshot) = request.snapshot {
@@ -2144,6 +2159,89 @@ impl MetadataConsensusStore {
             match_index,
             conflict_index: match_index.saturating_add(1),
         })
+    }
+
+    fn validate_native_birth_append(&self, request: &MetadataAppendRequest) -> Result<()> {
+        let mut candidate = self.state.clone();
+        if let Some(snapshot) = &request.snapshot {
+            if snapshot.last_included_index >= candidate.commit_index {
+                snapshot.topology.validate()?;
+                crate::distribution::validate_native_store_birth_snapshot(
+                    &candidate.committed_topology,
+                    &snapshot.topology,
+                )?;
+                // A committed snapshot supersedes uncommitted proposals. Only
+                // a matching log anchor permits retaining its later suffix.
+                let matching_anchor = if snapshot.last_included_index == candidate.base_index {
+                    snapshot.last_included_term == candidate.base_term
+                } else {
+                    candidate.log.iter().any(|entry| {
+                        entry.index == snapshot.last_included_index
+                            && entry.term == snapshot.last_included_term
+                    })
+                };
+                candidate.base_index = snapshot.last_included_index;
+                candidate.base_term = snapshot.last_included_term;
+                candidate.commit_index = snapshot.last_included_index;
+                candidate.committed_topology = snapshot.topology.clone();
+                candidate.committed_restore_activation = snapshot.restore_activation.clone();
+                if matching_anchor {
+                    candidate
+                        .log
+                        .retain(|entry| entry.index > snapshot.last_included_index);
+                } else {
+                    candidate.log.clear();
+                }
+            }
+        }
+        let previous_term = if request.prev_log_index == candidate.base_index {
+            Some(candidate.base_term)
+        } else {
+            candidate
+                .log
+                .iter()
+                .find(|entry| entry.index == request.prev_log_index)
+                .map(|entry| entry.term)
+        };
+        if previous_term != Some(request.prev_log_term) {
+            return validate_state(&candidate);
+        }
+        for incoming in &request.entries {
+            if incoming.index <= candidate.base_index {
+                continue;
+            }
+            validate_log_entry_shape(incoming, &candidate.cluster_id)?;
+            if let Some(position) = candidate
+                .log
+                .iter()
+                .position(|entry| entry.index == incoming.index)
+            {
+                if candidate.log[position] != *incoming {
+                    if candidate.log[position].term == incoming.term {
+                        return Err(metadata_error(
+                            "conflicting metadata entry at the same term and index",
+                        ));
+                    }
+                    // Different-term uncommitted proposals are replaceable.
+                    // validate_state below still checks every incoming transition
+                    // against the committed identity anchor and prior entries.
+                    candidate.log.truncate(position);
+                    candidate.log.push(incoming.clone());
+                }
+            } else if incoming.index
+                == candidate
+                    .log
+                    .last()
+                    .map(|entry| entry.index)
+                    .unwrap_or(candidate.base_index)
+                    .saturating_add(1)
+            {
+                candidate.log.push(incoming.clone());
+            } else {
+                return validate_state(&candidate);
+            }
+        }
+        validate_state(&candidate)
     }
 
     pub fn record_append_response(
@@ -2235,6 +2333,7 @@ impl MetadataConsensusStore {
     }
 
     fn commit_entry(&mut self, entry: MetadataLogEntry) -> Result<()> {
+        validate_state(&self.state)?;
         validate_log_entry_shape(&entry, &self.state.cluster_id)?;
         crate::distribution::ensure_range_image_domain(
             self.state.committed_topology.range_image_bootstrap_id,
@@ -2286,18 +2385,31 @@ impl MetadataConsensusStore {
                 "snapshot conflicts with the committed metadata index",
             ));
         }
+        crate::distribution::validate_native_store_birth_snapshot(
+            &self.state.committed_topology,
+            &snapshot.topology,
+        )?;
+        let matching_anchor =
+            self.term_at(snapshot.last_included_index) == Some(snapshot.last_included_term);
         validate_committed_activation_progress(
             self.state.committed_restore_activation.as_ref(),
             snapshot.restore_activation.as_ref(),
         )?;
-        self.state.base_index = snapshot.last_included_index;
-        self.state.base_term = snapshot.last_included_term;
-        self.state.commit_index = snapshot.last_included_index;
-        self.state.committed_topology = snapshot.topology;
-        self.state.committed_restore_activation = snapshot.restore_activation;
-        self.state
-            .log
-            .retain(|entry| entry.index > snapshot.last_included_index);
+        let mut candidate = self.state.clone();
+        candidate.base_index = snapshot.last_included_index;
+        candidate.base_term = snapshot.last_included_term;
+        candidate.commit_index = snapshot.last_included_index;
+        candidate.committed_topology = snapshot.topology;
+        candidate.committed_restore_activation = snapshot.restore_activation;
+        if matching_anchor {
+            candidate
+                .log
+                .retain(|entry| entry.index > snapshot.last_included_index);
+        } else {
+            candidate.log.clear();
+        }
+        validate_state(&candidate)?;
+        self.state = candidate;
         Ok(())
     }
 
@@ -2383,6 +2495,7 @@ impl MetadataConsensusStore {
     }
 
     fn persist(&self) -> Result<()> {
+        validate_state(&self.state)?;
         fs::create_dir_all(&self.root)?;
         let mut envelope = MetadataConsensusEnvelope {
             format_version: CLUSTER_METADATA_CONSENSUS_FORMAT_VERSION,
@@ -2513,6 +2626,10 @@ fn validate_state(state: &MetadataConsensusState) -> Result<()> {
         if entry.index != expected {
             return Err(metadata_error("metadata log indexes are not contiguous"));
         }
+        crate::distribution::validate_native_store_birth_transition(
+            &latest_topology,
+            &entry.topology,
+        )?;
         if entry.leadership_barrier {
             if entry.topology.generation < latest_generation {
                 return Err(metadata_error(
@@ -3888,3 +4005,6 @@ mod tests {
         assert!(reopened.committed_restore_activation().is_none());
     }
 }
+
+#[cfg(test)]
+mod native_store_birth_tests;

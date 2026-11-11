@@ -47,7 +47,9 @@ mod native_completion;
 mod native_image_install;
 mod native_range_read;
 mod native_ready;
-pub(crate) use native_range_read::ActualServiceNativeReadEvidence;
+pub(crate) use native_range_read::{
+    ActualServiceNativeReadEvidence, ActualServiceNativeReadProbeEvidence,
+};
 
 pub const RANGE_LEARNER_APPLY_FORMAT_VERSION: u32 = 1;
 pub const DEFAULT_RANGE_LEARNER_APPLY_STATE: &str = "cluster-range-learner-apply.json";

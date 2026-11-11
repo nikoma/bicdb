@@ -294,6 +294,18 @@ impl ActualNativeRf3Fixture {
         network: &BTreeMap<ClusterNodeId, (String, String)>,
         initial_ranges: u32,
     ) -> Self {
+        Self::new_with_initial_enrollment(network, initial_ranges, false)
+    }
+    pub(crate) fn new_with_enrolled_network_precondition(
+        network: &BTreeMap<ClusterNodeId, (String, String)>,
+    ) -> Self {
+        Self::new_with_initial_enrollment(network, 1, true)
+    }
+    fn new_with_initial_enrollment(
+        network: &BTreeMap<ClusterNodeId, (String, String)>,
+        initial_ranges: u32,
+        enroll: bool,
+    ) -> Self {
         assert!(matches!(initial_ranges, 1 | 2));
         let root = tempfile::tempdir().unwrap();
         let cluster = ClusterId::new("actual-native-rf3-origin").unwrap();
@@ -376,6 +388,13 @@ impl ActualNativeRf3Fixture {
         let mut databases = BTreeMap::new();
         let mut specs = BTreeMap::new();
         let mut schema = None;
+        // Explicit new-cluster fixture before any native factory, app write
+        // or metadata-consensus store exists. Existing defaults are unchanged.
+        if enroll {
+            topology.generation = 1;
+            topology.history.truncate(1);
+        }
+        let mut enrollments = Vec::new();
         for node in topology.nodes.values() {
             let spec = RangeImageBirthSpec {
                 cluster_id: cluster.clone(),
@@ -415,8 +434,18 @@ impl ActualNativeRf3Fixture {
                 .unwrap();
                 drop(frozen);
             }
+            if enroll {
+                enrollments.push(crate::distribution_native_admission::ActualNativeStoreEnrollment::from_actual_factory(
+                    &genesis, &db.read(), &topology,
+                ).unwrap());
+            }
             databases.insert(node.id.clone(), db);
             specs.insert(node.id.clone(), spec);
+        }
+        for enrollment in enrollments {
+            enrollment
+                .bind_initial_or_unassigned_learner(&mut topology)
+                .unwrap();
         }
         for node in topology.nodes.values_mut() {
             node.labels.insert(

@@ -45,6 +45,34 @@ pub(crate) struct NativeRangeReadPhysical {
     cancellation: CancellationToken,
 }
 impl NativeRangeReadPhysical {
+    /// Compare a lower peer point with actual immutable local history. This
+    /// does not manufacture a local visibility bound or admit that peer.
+    pub(crate) fn require_ancestor(
+        &self,
+        db: &BicDb,
+        index: u64,
+        h0: &str,
+        history: &str,
+    ) -> Result<()> {
+        self.require_lifetime()?;
+        self.native.require_current(db)?;
+        let _journal = db.try_native_image_journal()?;
+        if h0 != self.point.h0 || index > self.point.range_index {
+            return Err(invalid("peer point is outside actual local native history"));
+        }
+        let expected = if index == 0 {
+            self.point.h0.clone()
+        } else {
+            db.read_native_history_entry(self.scope.range.id, self.point.history_generation, index)?
+                .commitment_sha256
+        };
+        if expected != history {
+            return Err(invalid(
+                "lower peer conflicts with actual local native history",
+            ));
+        }
+        self.require_lifetime()
+    }
     pub(crate) fn local_visibility(&self) -> &NativeReadLocalDbSequence {
         &self.local_b
     }

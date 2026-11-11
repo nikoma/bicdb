@@ -102,9 +102,55 @@ struct ObservedTlsTransport {
     inner: Arc<TcpClusterRelocationTransport>,
     hold: Arc<ProbeHold>,
     ready_hold: Arc<ProbeHold>,
+    read_hold: Arc<ProbeHold>,
+    read_expired_once: Arc<AtomicBool>,
+    read_n2_successful_calls: Arc<std::sync::atomic::AtomicUsize>,
     lag_status_seen: Arc<AtomicBool>,
 }
 impl RangeWriteTransport for ObservedTlsTransport {
+    fn observe_current_native_range(
+        &self,
+        destination: &ClusterNodeId,
+        request: &crate::distribution_native_read::NativeRangeReadProbeRequest,
+        parent: &CancellationToken,
+    ) -> Result<crate::distribution_native_read::NativeRangeReadObservation> {
+        if destination == &node("n2") && self.read_hold.armed.load(Ordering::SeqCst) {
+            while !self.read_hold.entered.load(Ordering::SeqCst) {
+                parent.check()?;
+                std::thread::sleep(Duration::from_millis(1));
+            }
+        }
+        let actual = self
+            .inner
+            .observe_current_native_range(destination, request, parent)?;
+        if destination == &node("n2") {
+            self.read_n2_successful_calls.fetch_add(1, Ordering::SeqCst);
+        }
+
+        if destination == &node("n2") && self.read_expired_once.swap(false, Ordering::SeqCst) {
+            let until =
+                parent.deadline().expect("bounded actual read attempt") + Duration::from_millis(5);
+            while Instant::now() < until {
+                std::thread::sleep(Duration::from_millis(1));
+            }
+            // Return a genuinely authenticated but expired observation once.
+            // It must constrain history, never count as a vote or reset TTL.
+            return Ok(actual);
+        }
+
+        if destination == &node("n0") && self.read_hold.armed.load(Ordering::SeqCst) {
+            self.read_hold.entered.store(true, Ordering::SeqCst);
+            // Test-only uncancellable return barrier AFTER the genuine TLS
+            // response. Its held result is not counted in a candidate.
+            let until = Instant::now() + Duration::from_secs(5);
+            while !self.read_hold.released.load(Ordering::SeqCst) && Instant::now() < until {
+                std::thread::sleep(Duration::from_millis(1));
+            }
+        }
+        parent.check()?;
+        Ok(actual)
+    }
+
     fn observe_native_completion_observation(
         &self,
         destination: &ClusterNodeId,
@@ -237,6 +283,9 @@ struct NetworkFixture {
     servers: Vec<ClusterDataServerHandle>,
     hold: Arc<ProbeHold>,
     ready_hold: Arc<ProbeHold>,
+    read_hold: Arc<ProbeHold>,
+    read_expired_once: Arc<AtomicBool>,
+    read_n2_successful_calls: Arc<std::sync::atomic::AtomicUsize>,
     lag_status_seen: Arc<AtomicBool>,
     _keys: tempfile::TempDir,
 }
@@ -254,13 +303,13 @@ impl NetworkFixture {
         data_leader: &str,
         metadata_leader: &str,
     ) -> Self {
-        Self::new_network_mode(
+        Self::new_ready_network_with_enrollment(
             wired,
             all_nodes,
             lagging_two,
             data_leader,
             metadata_leader,
-            true,
+            false,
         )
     }
     fn new_network_mode(
@@ -270,6 +319,65 @@ impl NetworkFixture {
         data_leader: &str,
         metadata_leader: &str,
         historical_transition: bool,
+    ) -> Self {
+        Self::new_network_mode_with_enrollment(
+            wired,
+            all_nodes,
+            lagging_two,
+            data_leader,
+            metadata_leader,
+            historical_transition,
+            false,
+            None,
+        )
+    }
+    fn new_ready_network_with_enrollment(
+        wired: bool,
+        all_nodes: bool,
+        lagging_two: bool,
+        data_leader: &str,
+        metadata_leader: &str,
+        enroll: bool,
+    ) -> Self {
+        Self::new_with_initial_metadata_edit(
+            wired,
+            all_nodes,
+            lagging_two,
+            data_leader,
+            metadata_leader,
+            enroll,
+            None,
+        )
+    }
+    fn new_with_initial_metadata_edit(
+        wired: bool,
+        all_nodes: bool,
+        lagging_two: bool,
+        data_leader: &str,
+        metadata_leader: &str,
+        enroll: bool,
+        initial_edit: Option<fn(&mut ClusterTopology, &ActualNativeRf3Fixture, &Path)>,
+    ) -> Self {
+        Self::new_network_mode_with_enrollment(
+            wired,
+            all_nodes,
+            lagging_two,
+            data_leader,
+            metadata_leader,
+            true,
+            enroll,
+            initial_edit,
+        )
+    }
+    fn new_network_mode_with_enrollment(
+        wired: bool,
+        all_nodes: bool,
+        lagging_two: bool,
+        data_leader: &str,
+        metadata_leader: &str,
+        historical_transition: bool,
+        enroll: bool,
+        initial_edit: Option<fn(&mut ClusterTopology, &ActualNativeRf3Fixture, &Path)>,
     ) -> Self {
         assert!((data_leader == "n1" && metadata_leader == "n2") || all_nodes);
         assert!(!lagging_two || all_nodes);
@@ -296,7 +404,11 @@ impl NetworkFixture {
                 )
             })
             .collect();
-        let native = ActualNativeRf3Fixture::new_with_network_precondition(&network);
+        let native = if enroll {
+            ActualNativeRf3Fixture::new_with_enrolled_network_precondition(&network)
+        } else {
+            ActualNativeRf3Fixture::new_with_network_precondition(&network)
+        };
         if lagging_two {
             native.transport.set_unavailable(&node("n2"), true);
         }
@@ -326,6 +438,10 @@ impl NetworkFixture {
             range.leader = node(data_leader);
         } else {
             assert_eq!(data_leader, "n0");
+        }
+        // INITIAL metadata fixture, before any consensus-store creation.
+        if let Some(edit) = initial_edit {
+            edit(&mut topology, &native, keys.path());
         }
         topology.validate().unwrap();
         let config = |id: &ClusterNodeId| ClusterNetworkTransportConfig {
@@ -423,6 +539,9 @@ impl NetworkFixture {
             .collect::<BTreeMap<_, _>>();
         let hold = Arc::new(ProbeHold::default());
         let ready_hold = Arc::new(ProbeHold::default());
+        let read_hold = Arc::new(ProbeHold::default());
+        let read_expired_once = Arc::new(AtomicBool::new(false));
+        let read_n2_successful_calls = Arc::new(std::sync::atomic::AtomicUsize::new(0));
         let lag_status_seen = Arc::new(AtomicBool::new(false));
         let runtimes = live_names
             .iter()
@@ -445,6 +564,21 @@ impl NetworkFixture {
                             Arc::clone(&ready_hold)
                         } else {
                             Arc::new(ProbeHold::default())
+                        },
+                        read_hold: if name == "n1" {
+                            Arc::clone(&read_hold)
+                        } else {
+                            Arc::new(ProbeHold::default())
+                        },
+                        read_expired_once: if name == "n1" {
+                            Arc::clone(&read_expired_once)
+                        } else {
+                            Arc::new(AtomicBool::new(false))
+                        },
+                        read_n2_successful_calls: if name == "n1" {
+                            Arc::clone(&read_n2_successful_calls)
+                        } else {
+                            Arc::new(std::sync::atomic::AtomicUsize::new(0))
                         },
                         lag_status_seen: Arc::clone(&lag_status_seen),
                     }))
@@ -485,6 +619,9 @@ impl NetworkFixture {
             servers,
             hold,
             ready_hold,
+            read_hold,
+            read_expired_once,
+            read_n2_successful_calls,
             lag_status_seen,
             _keys: keys,
         }
@@ -1288,3 +1425,6 @@ mod native_normal_tls;
 
 #[cfg(test)]
 mod native_read_observation_tests;
+
+#[cfg(test)]
+mod native_read_rpc_tests;

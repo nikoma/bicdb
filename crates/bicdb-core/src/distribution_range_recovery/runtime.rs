@@ -13,6 +13,7 @@ use std::sync::Arc;
 mod native_activation;
 mod native_completion;
 mod native_completion_quorum;
+mod native_read;
 mod native_ready;
 mod native_ready_quorum;
 mod normal_apply;
@@ -68,6 +69,8 @@ pub(crate) struct RangeRecoveryRuntime {
         Option<Arc<dyn crate::distribution_range_consensus::RangeWriteTransport>>,
     #[cfg(test)]
     test_completion_reply_barrier: Mutex<Option<Arc<NativeCompletionReplyBarrier>>>,
+    #[cfg(test)]
+    test_read_io_barrier: Mutex<Option<Arc<native_read::NativeReadIoBarrier>>>,
 }
 struct Operation {
     sessions: Arc<Mutex<Sessions>>,
@@ -441,6 +444,8 @@ impl RangeRecoveryRuntime {
             participant_transport: None,
             #[cfg(test)]
             test_completion_reply_barrier: Mutex::new(None),
+            #[cfg(test)]
+            test_read_io_barrier: Mutex::new(None),
         }
     }
     pub(crate) fn with_participant_transport(

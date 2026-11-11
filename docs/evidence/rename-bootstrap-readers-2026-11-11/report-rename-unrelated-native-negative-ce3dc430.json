@@ -1,0 +1,28 @@
+{
+  "source": "ce3dc430e0fe3f8daca5f2f4ec22807dc61c82e3",
+  "scope": "Next unresolved scoped-admission gate, tests-only PostgreSQL transactional DDL control. Pending native writer touches only unrelated collection; rename must proceed, native commits during SQLowner, SQLcommit/rollback mustretain nativeACK acrossreopen. Intended2stores x2decisions, firstfailure stopsnegative; do not claimlatercells. OracleimplicitDDL semantics excluded. Core/SQLruntime unchanged afterc3cebootstrapqualification.",
+  "started_unix": 1794387641.506975,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "rename_unrelated_transactions",
+        "--",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794387641.5071347,
+      "exit": 101,
+      "finished_unix": 1794387755.3215148
+    }
+  ],
+  "status": "failed",
+  "finished_unix": 1794387755.3216822
+}

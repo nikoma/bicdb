@@ -66,4 +66,15 @@ and final source integration, broad CI, standard binary, independent ACK/VM
 and application acceptance. These results do not establish stored materialized
 view semantics or Oracle implicit-DDL behavior.
 
+The next tests-only source `ce3dc430` establishes a concrete remaining scoped
+admission failure. Its first EmbeddedMemory/rollback case refuses ALTER because
+a different native transaction has a pending write and lock in an unrelated
+collection. Later intended matrix cells are not reached. Native PostgreSQL
+16.13 passes both corresponding schedules: the unrelated peer commits before
+the rename owner's COMMIT or ROLLBACK, and its row survives either decision.
+The native control uses and drops a private schema in the dedicated control
+database. These receipts are retained separately; the failing regression must
+be fixed before the rename prototype can be delivered. The completed bootstrap
+checks do not satisfy this gate.
+
 `sha256s.json` identifies the retained receipts and old-reader result.

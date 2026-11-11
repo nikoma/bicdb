@@ -20,6 +20,24 @@ const CASES: &[(&str,&str)] = &[
 ];
 
 #[test]
+fn qualified_outer_reference_does_not_bind_a_shadowing_inner_alias() {
+    for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
+        let root = tempfile::tempdir().unwrap();
+        let mut db =
+            BicDb::open_with_config(root.path(), DbConfig::default().with_storage_mode(mode))
+                .unwrap();
+        let mut session = SqlSession::new(&mut db);
+        session.execute("CREATE TABLE source(id INT PRIMARY KEY,payload TEXT); INSERT INTO source VALUES(1,'kept'),(2,'second'); CREATE TABLE other(id INT,payload TEXT); INSERT INTO other VALUES(1,'wrong'),(2,'also wrong')").unwrap();
+        for query in [
+            "SELECT source.id,(SELECT public.source.payload FROM other source WHERE source.id=public.source.id) FROM public.source ORDER BY source.id",
+            "SELECT source.id,(WITH source AS (SELECT id,payload FROM other) SELECT public.source.payload FROM source WHERE source.id=public.source.id) FROM public.source ORDER BY source.id",
+        ] {
+            assert_eq!(session.execute(query).unwrap().rows, vec![vec![SqlValue::Int(1),SqlValue::String("kept".into())],vec![SqlValue::Int(2),SqlValue::String("second".into())]], "{query}");
+        }
+    }
+}
+
+#[test]
 fn view_query_scopes_keep_their_rows_after_rename_and_reopen() {
     for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
         for (case, query) in CASES {
@@ -40,6 +58,16 @@ fn view_query_scopes_keep_their_rows_after_rename_and_reopen() {
                     .execute(&format!("CREATE VIEW observed AS {query}"))
                     .unwrap_or_else(|e| panic!("{mode} {case} CREATE: {e}"));
                 let expected = session.execute("SELECT * FROM observed").unwrap().rows;
+                if *case == "qualified_correlated_shadow" {
+                    // Native PG16 independently returns this row on both sides
+                    // of the rename. Do not freeze an erroneous pre-rename
+                    // binding to `other AS source` as the expected result.
+                    assert_eq!(
+                        expected,
+                        vec![vec![SqlValue::Int(1), SqlValue::String("kept".into())]],
+                        "{mode} before rename"
+                    );
+                }
                 session
                     .execute("ALTER TABLE source RENAME TO renamed")
                     .unwrap();

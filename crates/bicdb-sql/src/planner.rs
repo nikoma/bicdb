@@ -416,6 +416,9 @@ impl SlotRowLookup {
         if let Some(value) = self.value_for_key(row, &full_key) {
             return Some(value.clone());
         }
+        if crate::slot_types::current_schema_qualifier_matches(parts) == Some(false) {
+            return None;
+        }
         let qualified_column = format!("{}.{}", parts[parts.len() - 2], parts[parts.len() - 1]);
         if let Some(value) = self.value_for_key(row, &qualified_column) {
             return Some(value.clone());
@@ -3718,10 +3721,12 @@ pub(crate) fn target_record_field_from_parts(
             table_has_field(schema, field).then(|| (field.clone(), Some(table.to_string())))
         }
         parts if parts.len() > 2 => {
-            let qualifier = &parts[parts.len() - 2];
+            // A schema qualification names the physical relation, never an
+            // inner alias that happens to have the same trailing name.
+            let qualifier = relation_name_from_parts(&parts[..parts.len() - 1]).ok()?;
             let field = parts.last()?;
-            if qualifier.eq_ignore_ascii_case(alias) || qualifier.eq_ignore_ascii_case(table) {
-                table_has_field(schema, field).then(|| (field.clone(), Some(qualifier.clone())))
+            if qualifier == table {
+                table_has_field(schema, field).then(|| (field.clone(), Some(table.to_string())))
             } else {
                 None
             }

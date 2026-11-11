@@ -101,18 +101,17 @@ pub(crate) fn parse_statements(sql: &str) -> Result<Vec<Statement>> {
 
     ensure_parser_stack_margin();
     reject_oversized_sql(sql)?;
-    let dialect = PostgreSqlDialect {};
     let parse_sql = rewrite_postgres_parse_compat(sql);
     let sql_for_parse = parse_sql.as_deref().unwrap_or(sql);
     reject_deep_parse_nesting(sql_for_parse)?;
-    let mut statements = match Parser::parse_sql(&dialect, sql_for_parse) {
+    let mut statements = match crate::table_queries::parse(sql_for_parse) {
         Ok(statements) => statements,
         Err(original) => {
             let rewritten = crate::lock_lists::rewrite(sql_for_parse)?;
             let candidate = rewritten.as_deref().unwrap_or(sql_for_parse);
             reject_oversized_sql(candidate)?;
             let parsed = if rewritten.is_some() {
-                Parser::parse_sql(&dialect, candidate)
+                crate::table_queries::parse(candidate)
             } else {
                 Err(original)
             };
@@ -135,6 +134,7 @@ pub(crate) fn parse_statements(sql: &str) -> Result<Vec<Statement>> {
     // it — the precedence visitor below, the evaluator, and even Drop all
     // overflow the stack (aborting the process) on a hostile AST.
     reject_deep_expressions(&statements)?;
+    crate::table_queries::reject_unlowered(&statements)?;
     restore_postgres_distinct_boolean_precedence(&mut statements);
     restore_postgres_whole_row_function_args(&mut statements);
     Ok(statements)
@@ -4655,12 +4655,18 @@ pub(crate) fn hydrate_view_column_type(db: &BicDb, column: &mut ColumnSchema) ->
     if column.user_type.is_some() || pg_type_oid_by_name(&column.pg_type).is_some() {
         return Ok(());
     }
-    let Some(oid) = pg_user_type_oid_by_name(db, &column.pg_type)? else { return Ok(()); };
+    let Some(oid) = pg_user_type_oid_by_name(db, &column.pg_type)? else {
+        return Ok(());
+    };
     if let Some(user_type) = load_user_type_by_oid(db, i64::from(oid))? {
         column.user_type = Some(user_type.column_type(user_type.array_oid == i64::from(oid)));
-    } else if let Some(schema) = list_schemas(db)?.into_iter().find(|schema|
-        schema.row_type_oid() == i64::from(oid) || schema.row_array_type_oid() == i64::from(oid)) {
-        column.user_type = Some(table_row_type_column(&schema, schema.row_array_type_oid() == i64::from(oid)));
+    } else if let Some(schema) = list_schemas(db)?.into_iter().find(|schema| {
+        schema.row_type_oid() == i64::from(oid) || schema.row_array_type_oid() == i64::from(oid)
+    }) {
+        column.user_type = Some(table_row_type_column(
+            &schema,
+            schema.row_array_type_oid() == i64::from(oid),
+        ));
     }
     Ok(())
 }

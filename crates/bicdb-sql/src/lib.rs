@@ -69,6 +69,7 @@ mod builtin_signatures;
 mod identity;
 pub mod oracle;
 pub mod sql_text;
+mod table_queries;
 pub use identity::{
     bicdb_version_banner, postgres_version_banner, BICDB_VERSION, POSTGRES_COMPATIBILITY_VERSION,
     POSTGRES_COMPATIBILITY_VERSION_NUM,

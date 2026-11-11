@@ -1767,7 +1767,9 @@ pub(crate) fn inherit_view_source_column_types(
     columns: &mut [ColumnSchema],
 ) -> Result<()> {
     let SetExpr::Select(select) = query.body.as_ref() else {
-        for column in columns { hydrate_view_column_type(db, column)?; }
+        for column in columns {
+            hydrate_view_column_type(db, column)?;
+        }
         return Ok(());
     };
     // Infer expressions and every joined relation without executing the view.
@@ -1841,7 +1843,9 @@ pub(crate) fn inherit_view_source_column_types(
         // An outer join can make a NOT NULL source column nullable. View
         // columns remain conservatively nullable as PostgreSQL reports them.
     }
-    for column in columns { hydrate_view_column_type(db, column)?; }
+    for column in columns {
+        hydrate_view_column_type(db, column)?;
+    }
     Ok(())
 }
 

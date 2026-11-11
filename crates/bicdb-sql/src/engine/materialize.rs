@@ -2241,11 +2241,16 @@ impl<'db> SqlEngine<'db> {
 
     /// Metadata-only source labels for catalog query rebinding. Never evaluate
     /// projections, functions, policies or row locks to discover column names.
-    pub(crate) fn describe_from_labels(&self, from: &[TableWithJoins]) -> Option<Vec<(String, Vec<String>)>> {
+    pub(crate) fn describe_from_labels(
+        &self,
+        from: &[TableWithJoins],
+    ) -> Option<Vec<(String, Vec<String>)>> {
         let mut labels = Vec::new();
         for item in from {
             self.collect_describe_relation_labels(&item.relation, &mut labels)?;
-            for join in &item.joins { self.collect_describe_relation_labels(&join.relation, &mut labels)?; }
+            for join in &item.joins {
+                self.collect_describe_relation_labels(&join.relation, &mut labels)?;
+            }
         }
         Some(labels)
     }

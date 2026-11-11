@@ -33,7 +33,6 @@ impl Scope {
 
 #[derive(Debug, Default)]
 struct State {
-    registrations: FxHashMap<u64, Weak<Bindings>>,
     scopes: BTreeMap<u64, Scope>,
     next_serial: u64,
 }
@@ -61,6 +60,7 @@ impl State {
 #[derive(Debug, Default)]
 pub(super) struct CatalogAdmission {
     state: RwLock<State>,
+    registrations: Mutex<FxHashMap<u64, Weak<Bindings>>>,
     active: AtomicUsize,
 }
 
@@ -73,17 +73,19 @@ impl CatalogAdmission {
     }
 
     pub(super) fn register(&self, owner: TransactionId, bindings: &Arc<Bindings>) {
-        self.state
-            .write()
-            .registrations
+        self.registrations
+            .lock()
             .insert(owner.0, Arc::downgrade(bindings));
     }
 
     pub(super) fn finish(&self, owner: TransactionId) {
         // Uses only owned shared handles: never dereference a database during
         // Transaction::drop, including while another thread owns its write lock.
+        self.registrations.lock().remove(&owner.0);
+        if self.active.load(AtomicOrdering::Acquire) == 0 {
+            return;
+        }
         let mut state = self.state.write();
-        state.registrations.remove(&owner.0);
         state.scopes.retain(|_, scope| scope.owner != owner);
         self.active
             .store(state.scopes.len(), AtomicOrdering::Release);
@@ -173,7 +175,9 @@ impl Transaction {
         for name in &names {
             validate_collection_name(name)?;
         }
-        let mut state = self.catalog_admission.state.write();
+        // Resolve the immutable identities under the caller's database guard
+        // before entering admission. Never wait for a collection lock while
+        // holding the global scope gate or the registration registry.
         let incarnations = names
             .iter()
             .filter_map(|name| db.collections.get(name))
@@ -184,6 +188,7 @@ impl Transaction {
             names,
             incarnations,
         };
+        let mut state = self.catalog_admission.state.write();
         for name in &scope.names {
             state.check_access(self.id, name, None)?;
         }
@@ -201,7 +206,7 @@ impl Transaction {
                 ));
             }
         }
-        for (id, bindings) in &state.registrations {
+        for (id, bindings) in self.catalog_admission.registrations.lock().iter() {
             if *id == self.id.0 {
                 continue;
             }
@@ -258,5 +263,27 @@ impl Transaction {
             .active
             .store(state.scopes.len(), AtomicOrdering::Release);
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn scope_and_registration_drop_use_only_owned_handles_after_database_drop() {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open(root.path()).unwrap();
+        db.create_collection("source").unwrap();
+        let owner = db.begin_transaction().unwrap();
+        let token = owner
+            .reserve_catalog_collections(&["source".into(), "renamed".into()])
+            .unwrap();
+        let admission = Arc::downgrade(&db.catalog_admission);
+        drop(db);
+        assert!(admission.upgrade().is_some());
+        drop(owner);
+        assert!(admission.upgrade().is_none());
+        assert!(token.admission.upgrade().is_none());
     }
 }

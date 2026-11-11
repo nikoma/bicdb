@@ -895,3 +895,106 @@ fn actual_rf3_nonempty_finalized_image_prepares_without_an_unfenced_window() {
     drop(reopened);
     std::fs::remove_dir_all(root).unwrap();
 }
+
+#[test]
+fn actual_adopted_image_compacted_marker_conflict_refuses_native_preparation() {
+    let mut fixture = CurrentRepairFixture::new();
+    let target = Arc::clone(&fixture.origin.databases[&node("n1")]);
+    let attempt = Uuid::now_v7();
+    let install = fixture.begin(attempt);
+    let verified = fixture.materialize(install);
+    let role = fixture.role();
+    let adopted = fixture
+        .service
+        .lock()
+        .adopt_native_range_image_catalogue(
+            verified,
+            &NativeImageInstallRole::CurrentVoterRepair(&role),
+            &CancellationToken::uncancelable(),
+        )
+        .unwrap();
+    // Deliberately corrupt REAL durable catalogue metadata after its actual
+    // image adoption. This is not a legal quorum/authority operation and is
+    // not attributed to Azure or an observed production failure.
+    fixture
+        .service
+        .lock()
+        .test_corrupt_adopted_image_marker(&fixture.scope, 1, "0".repeat(64))
+        .unwrap();
+    let role = fixture.role();
+    let (freeze, finalization) = fixture
+        .service
+        .lock()
+        .finalize_native_range_image_catalogue(
+            adopted,
+            &NativeImageInstallRole::CurrentVoterRepair(&role),
+            &CancellationToken::uncancelable(),
+        )
+        .unwrap();
+    let NativeImageInstallFreeze::Recovery(lease) = freeze else {
+        panic!("actual Runtime lease required");
+    };
+    let role = fixture.role();
+    let image = lease
+        .return_after_catalogue_adoption(
+            finalization,
+            &NativeImageInstallRole::CurrentVoterRepair(&role),
+            &CancellationToken::uncancelable(),
+        )
+        .unwrap();
+    // The opaque receipt binds the newly observed map, including the injected
+    // bad marker. Hashing that map alone cannot prove agreement with native H.
+    let frozen = fixture.runtimes[&node("n1")]
+        .source_capture_freeze(&fixture.scope)
+        .unwrap();
+    let role = fixture.role();
+    let error = fixture
+        .service
+        .lock()
+        .prepare_finalized_native_recovery_image(
+            image,
+            role,
+            Arc::clone(&frozen),
+            &CancellationToken::uncancelable(),
+        )
+        .unwrap_err();
+    assert!(
+        error.to_string().contains(
+            "finalized image historical certification marker conflicts with actual native history"
+        ),
+        "{error}"
+    );
+    let persisted: serde_json::Value = serde_json::from_slice(
+        &std::fs::read(target.read().data_path().join(DEFAULT_RANGE_WRITE_LOG)).unwrap(),
+    )
+    .unwrap();
+    let key = fixture.range.id.get().to_string();
+    assert_eq!(
+        persisted["catalog"]["recovery_fences"][&key]["phase"],
+        "Active"
+    );
+    assert_eq!(
+        persisted["catalog"]["image_install_intents"][&key]["attempt_id"],
+        attempt.to_string()
+    );
+    assert_eq!(
+        persisted["catalog"]["native_image_bases"][&key]["attempt_id"],
+        attempt.to_string()
+    );
+    assert!(target
+        .read()
+        .get("items", &fixture.selected_key)
+        .unwrap()
+        .is_some());
+    assert!(fixture
+        .service
+        .lock()
+        .require_persisted_recovery_scope(&fixture.scope)
+        .is_err());
+    assert!(target
+        .read()
+        .range_mutation_gate()
+        .try_enter(fixture.range.id)
+        .is_err());
+    eprintln!("RF3_IMAGE_MARKER_CORRUPTION_REFUSAL {error}");
+}

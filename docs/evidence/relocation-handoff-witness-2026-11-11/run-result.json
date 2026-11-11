@@ -1,0 +1,23 @@
+{
+  "phase": "run",
+  "command": [
+    "ionice",
+    "-c",
+    "2",
+    "-n",
+    "7",
+    "nice",
+    "-n",
+    "10",
+    "/tmp/bicdb-range-handoff-evidence/attempt-3/handoff-characterization",
+    "/tmp/bicdb-range-handoff-evidence/attempt-3/runtime"
+  ],
+  "started_unix": 1794391000.6503372,
+  "ended_unix": 1794391044.3079097,
+  "exit_code": 0,
+  "guard_stop_reason": null,
+  "min_available_bytes": 26864521216,
+  "max_owned_allocated_bytes": 95399936,
+  "maximum_wall_seconds": 600,
+  "engine_or_cargo_build": false
+}

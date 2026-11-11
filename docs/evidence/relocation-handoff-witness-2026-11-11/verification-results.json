@@ -1,0 +1,25 @@
+[
+  {
+    "check": "witness",
+    "command": [
+      "python3",
+      "/tmp/bicdb-range-handoff-characterization/scripts/verify-relocation-handoff-characterization.py",
+      "/tmp/bicdb-range-handoff-characterization/docs/evidence/relocation-handoff-witness-2026-11-11"
+    ],
+    "exit_code": 0,
+    "verifier_sha256": "e4b8eca3594bb334285601faef7b9d053f1b54e9d2fe2c64a2efd7a739476b46",
+    "engine_rerun": false
+  },
+  {
+    "check": "preservation-target",
+    "command": [
+      "python3",
+      "/tmp/bicdb-range-handoff-characterization/scripts/verify-relocation-handoff-characterization.py",
+      "/tmp/bicdb-range-handoff-characterization/docs/evidence/relocation-handoff-witness-2026-11-11",
+      "--require-preserved"
+    ],
+    "exit_code": 1,
+    "verifier_sha256": "e4b8eca3594bb334285601faef7b9d053f1b54e9d2fe2c64a2efd7a739476b46",
+    "engine_rerun": false
+  }
+]

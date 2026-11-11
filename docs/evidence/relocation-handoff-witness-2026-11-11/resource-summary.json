@@ -1,0 +1,39 @@
+{
+  "build": {
+    "elapsed_seconds": 12.516398668289185,
+    "exit_code": 0,
+    "minimum_available_bytes": 25084153856,
+    "maximum_io_full_avg10_percent": 0.0,
+    "paused_samples": 0,
+    "maximum_owned_allocated_bytes": 9834496,
+    "maximum_wall_seconds": 180,
+    "guard_stop_reason": null,
+    "pause_episodes_observed": 0,
+    "estimated_paused_seconds_from_samples": 0
+  },
+  "run": {
+    "elapsed_seconds": 43.657572507858276,
+    "exit_code": 0,
+    "minimum_available_bytes": 26864521216,
+    "maximum_io_full_avg10_percent": 17.42,
+    "paused_samples": 52,
+    "maximum_owned_allocated_bytes": 95399936,
+    "maximum_wall_seconds": 600,
+    "guard_stop_reason": null,
+    "pause_episodes_observed": 2,
+    "estimated_paused_seconds_from_samples": 26.095874547958374
+  },
+  "guard": {
+    "minimum_available_ram_bytes": 12884901888,
+    "emergency_ram_bytes": 8589934592,
+    "minimum_free_disk_bytes": 8589934592,
+    "maximum_owned_allocated_bytes": 2147483648,
+    "io_full_avg10_pause_above_percent": 15,
+    "resume_below_percent": 5,
+    "maximum_pause_seconds": 60,
+    "only_owned_process_group_controlled": true,
+    "nice": 10,
+    "ionice_class": 2,
+    "ionice_priority": 7
+  }
+}

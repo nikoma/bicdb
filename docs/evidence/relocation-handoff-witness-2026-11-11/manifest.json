@@ -1,0 +1,27 @@
+{
+  "runtime_source": "d49a391b3c6157f90f29e9f2f5214143c60f9f4b",
+  "runtime_version": "1.0.463-beta",
+  "fixture_revision": "34084933f00b26017379f59d5a6ee79fcd9f6ca8",
+  "runtime_core_rlib_sha256": "dc714b001a0fe8758473c2c4ef80158474d7426e16630926edb65b6cc35f0356",
+  "source_fixture_sha256": "97eb8188487249c37fd1336e56ff44f07175522e2c19aa028c07e959a367f592",
+  "portable_reports": [
+    {
+      "source_path": "/tmp/bicdb-range-handoff-evidence/attempt-3/runtime/control/report.json",
+      "source_sha256": "67bc054f3f4eeba8a2b00f9f28122f5296f2278899fd540dfbfebe8f472a0f8a",
+      "portable_path": "control.json",
+      "portable_sha256": "5759f3298b82bac56d81b2e9162213a5dc44659ade695bed6e1e15484a71842b",
+      "transform": "JSON whitespace only; parsed equality verified"
+    },
+    {
+      "source_path": "/tmp/bicdb-range-handoff-evidence/attempt-3/runtime/cleanup-first/report.json",
+      "source_sha256": "1f9300169a70e6acd1878b31ca359c62f60b38e8e23e43c229fe1a913838469b",
+      "portable_path": "cleanup-first.json",
+      "portable_sha256": "fce777847961da3013aee377a3316585cbeb6096af131d1bac16376d46c81751",
+      "transform": "JSON whitespace only; parsed equality verified"
+    }
+  ],
+  "engine_recompiled": false,
+  "attempts_1_and_2_compile_failures_retained_private": true,
+  "dynamic_scope": "local in-process trusted core APIs; fsync=true; no TLS; no injected process/VM fault",
+  "no_azure_cause_or_irretrievable_loss_proof": true
+}

@@ -1,0 +1,1 @@
+{"witness_validity": "PASS", "healthy_control": "PASS", "four_voter_quorum_guard": "PASS", "handoff_ack_visibility": "FAILED_CORRECTNESS", "old_node1_data_and_node0_catalog_retained": true, "irretrievable_data_loss_proven": false, "azure_cause_proven": false, "physical_or_production_qualification": false}

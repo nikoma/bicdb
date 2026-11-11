@@ -5,7 +5,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use bicdb_core::{
     CancellationToken, ClusterId, ClusterNode, ClusterNodeId, ClusterRelocationDriver,
     ClusterSupervisor, ClusterSupervisorConfig, DistributionConfig, DistributionStore,
-    RebalanceOptions, RelocationDriveOutcome, RelocationId, RelocationPhase, Result,
+    PlannedReplicaMove, RebalanceOptions, RebalancePlan, RelocationDriveOutcome, RelocationId,
+    RelocationPhase, ReplicaMoveReason, Result,
 };
 
 struct OwnedDirectory(PathBuf);
@@ -32,7 +33,7 @@ impl Drop for OwnedDirectory {
 }
 
 struct OneBlockedMove {
-    blocked: RelocationId,
+    blocked: Option<RelocationId>,
     visited: Vec<RelocationId>,
 }
 
@@ -47,7 +48,7 @@ impl ClusterRelocationDriver for OneBlockedMove {
     ) -> Result<RelocationDriveOutcome> {
         cancellation.check()?;
         self.visited.push(id);
-        if id == self.blocked {
+        if Some(id) == self.blocked {
             return Ok(RelocationDriveOutcome::Deferred);
         }
         if store.relocation(id).unwrap().phase == RelocationPhase::LearnerAllocated {
@@ -61,8 +62,12 @@ impl ClusterRelocationDriver for OneBlockedMove {
     }
 }
 
-#[test]
-fn one_deferred_move_does_not_starve_other_ranges() {
+fn relocation_fixture() -> (
+    OwnedDirectory,
+    DistributionStore,
+    ClusterNodeId,
+    Vec<RelocationId>,
+) {
     let directory = OwnedDirectory::new();
     let actor = ClusterNodeId::new("n1").unwrap();
     let config = DistributionConfig {
@@ -100,15 +105,25 @@ fn one_deferred_move_does_not_starve_other_ranges() {
     let plan = store.plan_rebalance(&options, 30).unwrap();
     let ids = store.apply_rebalance_plan(&plan, &actor, 30).unwrap();
     assert!(ids.len() > 1, "fixture needs independent pending moves");
-    let supervisor = ClusterSupervisor::new(ClusterSupervisorConfig {
+    (directory, store, actor, ids)
+}
+
+fn bounded_supervisor() -> ClusterSupervisor {
+    ClusterSupervisor::new(ClusterSupervisorConfig {
         heartbeat_each_tick: false,
         refresh_topology_each_tick: false,
         max_relocation_steps_per_tick: 1,
         ..ClusterSupervisorConfig::default()
     })
-    .unwrap();
+    .unwrap()
+}
+
+#[test]
+fn one_deferred_move_does_not_starve_other_ranges() {
+    let (_directory, mut store, _actor, ids) = relocation_fixture();
+    let supervisor = bounded_supervisor();
     let mut driver = OneBlockedMove {
-        blocked: ids[0],
+        blocked: Some(ids[0]),
         visited: Vec::new(),
     };
     for tick in 0..ids.len() {
@@ -132,7 +147,90 @@ fn one_deferred_move_does_not_starve_other_ranges() {
         driver.visited
     );
     assert_eq!(
-        store.relocation(driver.blocked).unwrap().phase,
+        store.relocation(ids[0]).unwrap().phase,
         RelocationPhase::LearnerAllocated
+    );
+}
+
+#[test]
+fn newly_queued_moves_do_not_postpone_an_existing_moves_next_turn() {
+    let (_directory, mut store, actor, ids) = relocation_fixture();
+    let supervisor = bounded_supervisor();
+    let mut driver = OneBlockedMove {
+        blocked: Some(ids[0]),
+        visited: Vec::new(),
+    };
+    supervisor
+        .tick(
+            &mut store,
+            &mut driver,
+            31,
+            &CancellationToken::uncancelable(),
+        )
+        .unwrap();
+    assert_eq!(driver.visited, vec![ids[0]]);
+
+    // The transient blocker has cleared. New work must join behind work that
+    // was already waiting; monotonically increasing IDs cannot delay its turn.
+    driver.blocked = None;
+    store
+        .join_node(
+            ClusterNode::new(
+                ClusterNodeId::new("n3").unwrap(),
+                "127.0.0.1:9446",
+                1,
+                1_000_000,
+                32,
+            )
+            .unwrap(),
+            &actor,
+            32,
+        )
+        .unwrap();
+    let range = store
+        .topology()
+        .ranges
+        .values()
+        .find(|range| {
+            store
+                .topology()
+                .active_relocation_for_range(range.id)
+                .is_none()
+        })
+        .unwrap();
+    // Allocate independent work through the public operator-plan boundary.
+    let plan = RebalancePlan {
+        id: "later-independent-move".into(),
+        topology_generation: store.topology().generation,
+        created_at_ms: 33,
+        replica_moves: vec![PlannedReplicaMove {
+            range_id: range.id,
+            expected_epoch: range.epoch,
+            source: Some(actor.clone()),
+            target: ClusterNodeId::new("n3").unwrap(),
+            estimated_bytes: 1,
+            reason: ReplicaMoveReason::LoadBalance,
+        }],
+        leader_transfers: Vec::new(),
+        unplaced_ranges: Vec::new(),
+        estimated_bytes_in_flight: 1,
+    };
+    let later_ids = store.apply_rebalance_plan(&plan, &actor, 33).unwrap();
+    assert!(!later_ids.is_empty(), "fixture requires newly queued work");
+    for tick in 0..ids.len() {
+        supervisor
+            .tick(
+                &mut store,
+                &mut driver,
+                34 + tick as u64,
+                &CancellationToken::uncancelable(),
+            )
+            .unwrap();
+    }
+    assert_eq!(
+        store.relocation(ids[0]).unwrap().phase,
+        RelocationPhase::SnapshotCopying,
+        "new arrivals postponed an existing move: attempted={:?}, new={later_ids:?}",
+        driver.visited
     );
 }

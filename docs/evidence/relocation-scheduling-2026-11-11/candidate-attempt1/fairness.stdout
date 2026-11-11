@@ -1,0 +1,12 @@
+
+running 2 tests
+test newly_queued_moves_do_not_postpone_an_existing_moves_next_turn ... FAILED
+test one_deferred_move_does_not_starve_other_ranges ... ok
+
+failures:
+
+failures:
+    newly_queued_moves_do_not_postpone_an_existing_moves_next_turn
+
+test result: FAILED. 1 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+

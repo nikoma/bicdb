@@ -1,0 +1,28 @@
+{
+  "git_head": "925d5f3e7030d4211739b75813baa1e0e13d5df9",
+  "uncommitted_patch_sha256": "c3df22b63394507caef1dd789053df05391db96f6c663607eb2b749e7ce8cab5",
+  "source_version": "1.0.463-beta",
+  "scope": "focused controller validation; dependency optimization retained, core opt-level=0/debug=0",
+  "physical_qualification": false,
+  "name": "fairness",
+  "command": [
+    "cargo",
+    "test",
+    "--release",
+    "--locked",
+    "-p",
+    "bicdb-core",
+    "--config",
+    "profile.release.package.bicdb-core.opt-level=0",
+    "--config",
+    "profile.release.package.bicdb-core.debug=0",
+    "--test",
+    "distribution_supervisor_fairness",
+    "--",
+    "--nocapture"
+  ],
+  "exit_code": 101,
+  "interrupted_reason": null,
+  "elapsed_seconds": 120.02500517386943,
+  "minimum_available_bytes": 24546152448
+}

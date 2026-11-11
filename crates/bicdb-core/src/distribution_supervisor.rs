@@ -1,10 +1,11 @@
 //! Automatic cluster controller, bounded relocation driver boundary, metrics,
 //! and operational compatibility contracts.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
+use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
@@ -507,6 +508,10 @@ pub struct ClusterSupervisorReport {
 pub struct ClusterSupervisor {
     config: ClusterSupervisorConfig,
     planner: Option<Box<dyn ClusterPlacementPlanner>>,
+    // Scheduling state only: durable relocation phases remain in the store.
+    // Starting at the oldest move on every tick lets a deferred prefix starve
+    // independent ranges indefinitely.
+    relocation_queue: Mutex<VecDeque<RelocationId>>,
 }
 
 impl ClusterSupervisor {
@@ -525,6 +530,7 @@ impl ClusterSupervisor {
         Ok(Self {
             config,
             planner: None,
+            relocation_queue: Mutex::new(VecDeque::new()),
         })
     }
 
@@ -536,6 +542,7 @@ impl ClusterSupervisor {
         Ok(Self {
             config,
             planner: Some(planner),
+            relocation_queue: Mutex::new(VecDeque::new()),
         })
     }
 
@@ -615,7 +622,7 @@ impl ClusterSupervisor {
             (None, Vec::new())
         };
 
-        let active = store
+        let mut eligible = store
             .topology()
             .relocations
             .values()
@@ -623,8 +630,23 @@ impl ClusterSupervisor {
                 relocation.is_active() && relocation.phase != RelocationPhase::Failed
             })
             .map(|relocation| relocation.id)
-            .take(self.config.max_relocation_steps_per_tick)
-            .collect::<Vec<_>>();
+            .collect::<BTreeSet<_>>();
+        let active = {
+            let mut queue = self.relocation_queue.lock();
+            // Drop completed/failed work, retain the order of existing work,
+            // and append new moves behind it. A monotonic ID cursor alone can
+            // starve older deferred work when new moves keep arriving.
+            queue.retain(|id| eligible.remove(id));
+            queue.extend(eligible);
+            let steps = self.config.max_relocation_steps_per_tick.min(queue.len());
+            (0..steps)
+                .map(|_| {
+                    let id = queue.pop_front().expect("bounded by queue length");
+                    queue.push_back(id);
+                    id
+                })
+                .collect::<Vec<_>>()
+        };
         let mut progressed = Vec::new();
         let mut deferred = Vec::new();
         let mut failures = BTreeMap::new();

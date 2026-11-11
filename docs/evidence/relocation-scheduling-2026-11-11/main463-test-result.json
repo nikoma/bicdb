@@ -1,0 +1,8 @@
+{
+  "source_revision": "d49a391b3c6157f90f29e9f2f5214143c60f9f4b",
+  "version": "1.0.463-beta",
+  "test_binary_sha256": "2b9f4eaa3c671fcc43a7d61b9488ae2fe92e1ba095432a93a1cbda7b6fb79422",
+  "exit_code": 101,
+  "elapsed_seconds": 0.052202715538442135,
+  "physical_ha_qualification": false
+}

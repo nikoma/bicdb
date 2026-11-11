@@ -1,0 +1,11 @@
+
+running 1 test
+test one_deferred_move_does_not_starve_other_ranges ... FAILED
+
+failures:
+
+failures:
+    one_deferred_move_does_not_starve_other_ranges
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+

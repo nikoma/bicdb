@@ -81,7 +81,11 @@ pub(super) fn apply(
         delete_schema(session.db_mut()?, old)?;
         stage("old_schema_removed");
         *schema = updated;
-        session.save_session_schema(schema)?;
+        // The relation keeps its identity and ACL. Creation defaults may
+        // have changed since it was created; applying them to this new name
+        // would grant access that the original relation never had. Its exact
+        // old/new catalog rows are already covered by the durable journal.
+        save_schema(session.db_mut()?, schema)?;
         stage("new_schema_saved");
         for mut sequence in list_sequences(session.db_ref())? {
             if sequence.owned_by_table.as_deref() == Some(old) {

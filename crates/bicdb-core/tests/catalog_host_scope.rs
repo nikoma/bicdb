@@ -285,6 +285,42 @@ fn host_authority_keeps_grant_checks_and_database_identity() {
 }
 
 #[test]
+fn a_sibling_scope_cannot_finalize_while_overlapping_internal_work_is_pending() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open(root.path()).unwrap();
+    db.create_collection("catalog").unwrap();
+    db.insert("catalog", seed(0)).unwrap();
+    let owner = db.begin_transaction().unwrap();
+    let first = owner
+        .reserve_catalog_collections(&["catalog".into(), "first".into()])
+        .unwrap();
+    let second = owner
+        .reserve_catalog_collections(&["catalog".into(), "second".into()])
+        .unwrap();
+    owner.retain_catalog_scope(&first, "journal-first").unwrap();
+    owner
+        .retain_catalog_scope(&second, "journal-second")
+        .unwrap();
+    let mut internal = {
+        let _access = db.enter_catalog_scope(&second).unwrap();
+        db.begin_transaction().unwrap()
+    };
+    internal.update("catalog", seed(8)).unwrap();
+    assert!(db.finish_catalog_scope(&first).is_err());
+    assert!(db.finish_catalog_scope(&second).is_err());
+    internal.rollback().unwrap();
+    db.finish_catalog_scope(&first).unwrap();
+    db.finish_catalog_scope(&second).unwrap();
+    owner.rollback().unwrap();
+    assert_eq!(
+        db.get("catalog", "seed").unwrap().unwrap().metadata["value"],
+        0
+    );
+    db.check_catalog_recovery_quiescent().unwrap();
+    db.close().unwrap();
+}
+
+#[test]
 fn internal_begin_and_finalization_have_one_atomic_winner() {
     for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
         let root = tempfile::tempdir().unwrap();

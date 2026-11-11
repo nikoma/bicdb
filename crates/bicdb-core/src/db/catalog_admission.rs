@@ -60,6 +60,16 @@ struct Registration {
 }
 
 impl Scope {
+    fn overlaps(&self, other: &Scope) -> bool {
+        !self.names.is_disjoint(&other.names)
+            || self.incarnations.iter().any(|left| {
+                other
+                    .incarnations
+                    .iter()
+                    .any(|right| Arc::ptr_eq(left, right))
+            })
+    }
+
     fn covers(&self, name: &str, incarnation: Option<&Arc<()>>) -> bool {
         self.names.contains(name)
             || incarnation.is_some_and(|current| {
@@ -125,6 +135,17 @@ pub(super) struct CatalogAdmission {
 }
 
 impl CatalogAdmission {
+    fn has_overlapping_children(&self, state: &State, serial: u64) -> bool {
+        let Some(target) = state.scopes.get(&serial) else {
+            return false;
+        };
+        self.registrations.lock().values().any(|entry| {
+            entry
+                .actor_scope
+                .and_then(|actor| state.scopes.get(&actor))
+                .is_some_and(|scope| scope.overlaps(target))
+        })
+    }
     pub(super) fn check_name_access(
         &self,
         owner: TransactionId,
@@ -470,10 +491,7 @@ impl Transaction {
         }
         if self
             .catalog_admission
-            .registrations
-            .lock()
-            .values()
-            .any(|entry| entry.actor_scope == Some(token.serial))
+            .has_overlapping_children(&state, token.serial)
         {
             return Err(BicDbError::TransactionConflict(
                 "internal catalog work is still pending".into(),
@@ -580,13 +598,18 @@ impl BicDb {
         let mut state = self.catalog_admission.state.write();
         self.catalog_admission.validate_token(&state, token)?;
         let registrations = self.catalog_admission.registrations.lock();
-        if registrations.contains_key(&token.owner.0)
-            || registrations
-                .values()
-                .any(|entry| entry.actor_scope == Some(token.serial))
-        {
+        if registrations.contains_key(&token.owner.0) {
             return Err(BicDbError::TransactionConflict(
                 "catalog owner or internal work is still active".into(),
+            ));
+        }
+        drop(registrations);
+        if self
+            .catalog_admission
+            .has_overlapping_children(&state, token.serial)
+        {
+            return Err(BicDbError::TransactionConflict(
+                "overlapping internal catalog work is still active".into(),
             ));
         }
         let scope = state.scopes.get_mut(&token.serial).unwrap();
@@ -613,10 +636,7 @@ impl BicDb {
         self.catalog_admission.validate_token(&state, token)?;
         if self
             .catalog_admission
-            .registrations
-            .lock()
-            .values()
-            .any(|entry| entry.actor_scope == Some(token.serial))
+            .has_overlapping_children(&state, token.serial)
         {
             return Err(BicDbError::TransactionConflict(
                 "internal catalog work is still pending at finalization".into(),

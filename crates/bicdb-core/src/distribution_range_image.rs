@@ -17,7 +17,9 @@ use crate::distribution::{
     ClusterId, ClusterNodeId, RangeId, RangeSnapshotBatch, RangeSnapshotOptions,
 };
 use crate::distribution_range_handoff::CertifiedRangeImageCut;
-use crate::distribution_range_mutation::{FrozenRangeMutationPermit, RangeMutationGate};
+use crate::distribution_range_mutation::{
+    FrozenRangeMutationPermit, RangeMutationGate, SourceCaptureReadPin,
+};
 use crate::{BicDb, BicDbError, CancellationToken, CollectionMeta, Result};
 
 mod history_export;
@@ -138,7 +140,8 @@ pub(crate) struct LocalRangeImageSealV1 {
 pub(crate) struct RangeImageCapture {
     db: Arc<RwLock<BicDb>>,
     gate: RangeMutationGate,
-    frozen: FrozenRangeMutationPermit,
+    source_read_pin: SourceCaptureReadPin,
+    frozen: Arc<FrozenRangeMutationPermit>,
     cut: NativeRangeImageSourceCut,
     range_index: RangeIndexCut,
     reserved: ReservedDbUpperBound,
@@ -299,12 +302,13 @@ impl RangeImageCapture {
     pub(crate) fn begin(
         db: Arc<RwLock<BicDb>>,
         cut: impl Into<NativeRangeImageSourceCut>,
-        frozen: FrozenRangeMutationPermit,
+        frozen: impl Into<Arc<FrozenRangeMutationPermit>>,
         lineage: SourceRangeImageLineage,
         wait_budget: Duration,
         cancellation: &CancellationToken,
     ) -> Result<Self> {
         let cut = cut.into();
+        let frozen = frozen.into();
         if wait_budget.is_zero()
             || wait_budget > MAX_CAPTURE_WAIT
             || frozen.owner() != cut.session_id()
@@ -316,10 +320,11 @@ impl RangeImageCapture {
         // The old-data-quorum cut does not itself qualify a native image.
         // Require the actual persisted base's exact metadata transition too.
         cut.validate_source_lineage_configuration(&lineage)?;
-        let (gate, reserved, bindings) = {
+        let (gate, reserved, bindings, source_read_pin) = {
             let database = read_database(&db)?;
             let gate = database.range_mutation_gate();
             gate.validate_quiescent_frozen(cut.range().id, &frozen)?;
+            let source_read_pin = gate.try_source_capture_read_pin(cut.range().id, &frozen)?;
             database.validate_source_range_image_lineage(
                 &lineage,
                 cut.range().id,
@@ -332,6 +337,7 @@ impl RangeImageCapture {
                 gate,
                 ReservedDbUpperBound(database.current_commit_seq()),
                 bindings,
+                source_read_pin,
             )
         };
         loop {
@@ -339,6 +345,7 @@ impl RangeImageCapture {
             let reached = {
                 let database = read_database(&db)?;
                 gate.validate_quiescent_frozen(cut.range().id, &frozen)?;
+                gate.validate_source_capture_read_pin(cut.range().id, &source_read_pin)?;
                 database.validate_range_image_bindings(&bindings)?;
                 database.replication_shippable_seq() >= reserved.0
             };
@@ -362,6 +369,7 @@ impl RangeImageCapture {
         Ok(Self {
             db,
             gate,
+            source_read_pin,
             frozen,
             cut,
             range_index,
@@ -424,6 +432,8 @@ impl RangeImageCapture {
         }
         self.gate
             .validate_quiescent_frozen(self.cut.range().id, &self.frozen)?;
+        self.gate
+            .validate_source_capture_read_pin(self.cut.range().id, &self.source_read_pin)?;
         database.validate_range_image_bindings(&self.bindings)?;
         database.validate_source_range_image_lineage(
             &self.lineage,

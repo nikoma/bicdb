@@ -147,17 +147,28 @@ impl ParticipantPool {
                     index,
                     budget_ms: remaining_ms(&token)?,
                 };
-                self.jobs
-                    .try_send(Job {
-                        phase,
-                        node: node.clone(),
-                        request,
-                        cancellation: token,
-                    })
-                    .map_err(|_| invalid("bounded participant job queue is busy"))?;
-                outstanding.insert(node, attempt + 1);
+                match self.jobs.try_send(Job {
+                    phase,
+                    node: node.clone(),
+                    request,
+                    cancellation: token,
+                }) {
+                    Ok(()) => {
+                        outstanding.insert(node, attempt + 1);
+                    }
+                    Err(mpsc::TrySendError::Full(_)) => {
+                        // A canceled prior phase may still occupy bounded
+                        // queue slots. Do not turn healthy quorum progress
+                        // into an admission failure or add more workers.
+                        queue.push_front((node, attempt));
+                        break;
+                    }
+                    Err(mpsc::TrySendError::Disconnected(_)) => {
+                        return Err(invalid("participant job workers disconnected"))
+                    }
+                }
             }
-            if outstanding.is_empty() {
+            if outstanding.is_empty() && queue.is_empty() {
                 return Err(invalid(&format!(
                     "current participant quorum unavailable: {}",
                     last_error.unwrap_or_else(|| "no qualifying observations".into())

@@ -65,6 +65,11 @@ pub(super) struct CatalogAdmission {
 }
 
 impl CatalogAdmission {
+    pub(super) fn check_name_access(&self, owner: TransactionId, name: &str) -> Result<()> {
+        if self.active.load(AtomicOrdering::Acquire) != 0 {
+            self.state.read().check_access(owner, name, None)?;
+        }
+        Ok(())
     pub(super) fn register(&self, owner: TransactionId, bindings: &Arc<Bindings>) {
         self.state
             .write()
@@ -130,6 +135,23 @@ impl CatalogAdmission {
 }
 
 impl Transaction {
+    pub(super) fn ensure_unprotected_collection_access(
+        &self,
+        collection: &str,
+        operation: SecureOperation,
+    ) -> Result<()> {
+        let result = self
+            .db_ref()
+            .ensure_unprotected_legacy_access(collection, operation);
+        if matches!(result, Err(BicDbError::CollectionNotFound(_))) {
+            // Existing relations keep the original policy/grant error order.
+            // A moved-away reserved name must not leak an intermediate
+            // NotFound result before the transaction reaches its bind gate.
+            self.catalog_admission.check_name_access(self.id, collection)?;
+        }
+        result
+    }
+
     /// Reserve exact collection names and their current runtime identities.
     /// Existing observations on any protected identity refuse admission;
     /// later transactions refuse access until release, commit, rollback or

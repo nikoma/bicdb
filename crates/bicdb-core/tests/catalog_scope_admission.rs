@@ -28,12 +28,27 @@ fn scoped_native_rename_keeps_unrelated_ack_and_blocks_later_access_to_both_name
             .unwrap();
         for reader in [&already_begun, &db.begin_transaction().unwrap()] {
             for name in names() {
-                assert!(matches!(
-                    reader.get(&name, "owned"),
-                    Err(BicDbError::TransactionConflict(_))
-                ));
+                let result = reader.get(&name, "owned");
+                assert!(
+                    matches!(result, Err(BicDbError::TransactionConflict(_))),
+                    "{mode} {name}: {result:?}"
+                );
+                assert!(reader
+                    .try_lock_visible_record(None, &name, "owned")
+                    .is_err());
             }
         }
+        let mut later_writer = db.begin_transaction().unwrap();
+        for name in names() {
+            let result = later_writer.insert(&name, Record::new("forbidden"));
+            assert!(
+                matches!(result, Err(BicDbError::TransactionConflict(_))),
+                "{mode} {name}: {result:?}"
+            );
+        }
+        assert_eq!(later_writer.write_len(), 0);
+        assert_eq!(later_writer.lock_len(), 0);
+        later_writer.rollback().unwrap();
         assert!(owner.get("renamed", "owned").unwrap().is_some());
         other.commit().unwrap();
         // A statement snapshot refresh must not release ownership or the

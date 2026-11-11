@@ -15777,7 +15777,7 @@ impl Transaction {
     pub fn get(&self, collection: &str, id: &str) -> Result<Option<Arc<Record>>> {
         let db = self.db_ref();
         db.check_recovery_state()?;
-        db.ensure_unprotected_legacy_access(collection, SecureOperation::Read)?;
+        self.ensure_unprotected_collection_access(collection, SecureOperation::Read)?;
         let result = self.get_visible_unchecked(collection, id);
         self.fenced(result)
     }
@@ -16191,7 +16191,7 @@ impl Transaction {
     /// only then is the primary key consulted to overlay a pending write.
     pub fn get_by_rowid(&self, collection: &str, rowid: RowId) -> Result<Option<Arc<Record>>> {
         let db = self.db_ref();
-        db.ensure_unprotected_legacy_access(collection, SecureOperation::Read)?;
+        self.ensure_unprotected_collection_access(collection, SecureOperation::Read)?;
         self.bind_collection_incarnation(collection)?;
         let has_pending = self.has_pending_writes(collection);
         let state = db.collection_state(collection)?;
@@ -16237,8 +16237,7 @@ impl Transaction {
         collection: &str,
         rowids: &[RowId],
     ) -> Result<Vec<Option<Arc<Record>>>> {
-        self.db_ref()
-            .ensure_unprotected_legacy_access(collection, SecureOperation::Read)?;
+        self.ensure_unprotected_collection_access(collection, SecureOperation::Read)?;
         self.get_records_by_rowids_visible(collection, rowids)
     }
 
@@ -16342,8 +16341,7 @@ impl Transaction {
         collection: &str,
         rowids: &[RowId],
     ) -> Result<Vec<Option<Arc<StoredRecord>>>> {
-        self.db_ref()
-            .ensure_unprotected_legacy_access(collection, SecureOperation::Read)?;
+        self.ensure_unprotected_collection_access(collection, SecureOperation::Read)?;
         self.get_stored_by_rowids_visible(collection, rowids)
     }
 
@@ -16416,8 +16414,7 @@ impl Transaction {
         collection: &str,
         pks: &[String],
     ) -> Result<Vec<Option<Arc<Record>>>> {
-        self.db_ref()
-            .ensure_unprotected_legacy_access(collection, SecureOperation::Read)?;
+        self.ensure_unprotected_collection_access(collection, SecureOperation::Read)?;
         self.get_records_by_pks_visible(collection, pks)
     }
 
@@ -16487,7 +16484,7 @@ impl Transaction {
 
     pub fn scan_collection(&self, collection: &str) -> Result<Vec<Record>> {
         let db = self.db_ref();
-        db.ensure_unprotected_legacy_access(collection, SecureOperation::Read)?;
+        self.ensure_unprotected_collection_access(collection, SecureOperation::Read)?;
         self.scan_collection_visible_unchecked(collection)
     }
 
@@ -16502,7 +16499,7 @@ impl Transaction {
         cancellation.check()?;
         let db = self.db_ref();
         db.check_recovery_state()?;
-        db.ensure_unprotected_legacy_access(collection, SecureOperation::Read)?;
+        self.ensure_unprotected_collection_access(collection, SecureOperation::Read)?;
         let state = db.collection_state(collection)?;
         if state.paged_lazy {
             let (Some(paged), Some(snapshot)) = (&db.paged_records, &self.paged_snapshot) else {
@@ -16952,8 +16949,7 @@ impl Transaction {
         collection: &str,
         id_prefix: &str,
     ) -> Result<Vec<String>> {
-        self.db_ref()
-            .ensure_unprotected_legacy_access(collection, SecureOperation::Read)?;
+        self.ensure_unprotected_collection_access(collection, SecureOperation::Read)?;
         self.scan_collection_record_ids_with_prefix_unchecked(collection, id_prefix)
     }
 
@@ -17302,7 +17298,7 @@ impl Transaction {
     /// bookkeeping and access checks as [`Self::get`].
     pub fn get_stored(&self, collection: &str, id: &str) -> Result<Option<VisibleRow>> {
         let db = self.db_ref();
-        db.ensure_unprotected_legacy_access(collection, SecureOperation::Read)?;
+        self.ensure_unprotected_collection_access(collection, SecureOperation::Read)?;
         self.get_stored_visible_unchecked(collection, id)
     }
 
@@ -17387,7 +17383,7 @@ impl Transaction {
         pks: &[String],
     ) -> Result<Vec<Option<VisibleRow>>> {
         let db = self.db_ref();
-        db.ensure_unprotected_legacy_access(collection, SecureOperation::Read)?;
+        self.ensure_unprotected_collection_access(collection, SecureOperation::Read)?;
         self.bind_collection_incarnation(collection)?;
         let has_pending = self.has_pending_writes(collection);
         let snapshot = self.snapshot_tx;
@@ -17707,7 +17703,7 @@ impl Transaction {
         let mut writes = Vec::with_capacity(ids.len());
         let db = self.db_ref();
         if enforce_legacy_access {
-            db.ensure_unprotected_legacy_access(collection, SecureOperation::Delete)?;
+            self.ensure_unprotected_collection_access(collection, SecureOperation::Delete)?;
         }
         self.bind_collection_incarnation(collection)?;
         for (id, statement_snapshot) in ids {
@@ -18162,7 +18158,7 @@ impl Transaction {
             // it runs through a shared &BicDb and can execute concurrently.
             let db = self.db_ref();
             if enforce_legacy_access {
-                db.ensure_unprotected_legacy_access(collection, SecureOperation::Write)?;
+                self.ensure_unprotected_collection_access(collection, SecureOperation::Write)?;
             }
             self.bind_collection_incarnation(collection)?;
             let (mut next_dim, policy) = {
@@ -18353,7 +18349,7 @@ impl Transaction {
         let mut writes = Vec::with_capacity(rows.len());
         {
             let db = self.db_ref();
-            db.ensure_unprotected_legacy_access(collection, SecureOperation::Write)?;
+            self.ensure_unprotected_collection_access(collection, SecureOperation::Write)?;
             self.bind_collection_incarnation(collection)?;
             let (mut next_dim, policy) = {
                 let state = db.collection_state(collection)?;
@@ -18441,7 +18437,7 @@ impl Transaction {
         let mut writes = Vec::with_capacity(records.len());
         {
             let db = self.db_ref();
-            db.ensure_unprotected_legacy_access(collection, SecureOperation::Write)?;
+            self.ensure_unprotected_collection_access(collection, SecureOperation::Write)?;
             self.bind_collection_incarnation(collection)?;
             let mut next_dim = db.collection_state(collection)?.meta.vector_dim;
             for (record, statement_snapshot, repair) in records {
@@ -18580,7 +18576,7 @@ impl Transaction {
             Some(grant) => {
                 self.validate_mutation_grant_operation(grant, collection, id, operation)?
             }
-            None => db.ensure_unprotected_legacy_access(collection, SecureOperation::Write)?,
+            None => self.ensure_unprotected_collection_access(collection, SecureOperation::Write)?,
         }
         self.bind_collection_incarnation(collection)?;
         if wait {
@@ -18661,7 +18657,7 @@ impl Transaction {
         }
         let tx_id = self.id;
         let db = self.db_ref();
-        db.ensure_unprotected_legacy_access(collection, SecureOperation::Write)?;
+        self.ensure_unprotected_collection_access(collection, SecureOperation::Write)?;
         self.bind_collection_incarnation(collection)?;
         if reservation {
             db.lock_tx_first_record_for_reservation(tx_id, collection, id, &self.locked_keys)?;
@@ -18727,7 +18723,7 @@ impl Transaction {
                 id,
                 MutationOperation::Delete,
             )?,
-            None => db.ensure_unprotected_legacy_access(collection, SecureOperation::Delete)?,
+            None => self.ensure_unprotected_collection_access(collection, SecureOperation::Delete)?,
         }
         self.bind_collection_incarnation(collection)?;
         self.lock_row_for_write(tx_id, collection, id, true)?;

@@ -30,6 +30,8 @@ pub(crate) struct ActualNativeRf3ServiceTransport {
     services: BTreeMap<ClusterNodeId, Arc<Mutex<ClusterDataNodeService>>>,
     observations: Mutex<Vec<ActualNativeRf3RpcObservation>>,
     unavailable: Mutex<BTreeSet<ClusterNodeId>>,
+    native_delivery: std::sync::atomic::AtomicBool,
+    native_drop_once: Mutex<Option<(ClusterNodeId, u64)>>,
 }
 impl ActualNativeRf3ServiceTransport {
     fn range(&self, id: RangeId, epoch: u64) -> Result<RangeDescriptor> {
@@ -66,6 +68,13 @@ impl ActualNativeRf3ServiceTransport {
             });
         result
     }
+    pub(crate) fn enable_native_delivery(&self) {
+        self.native_delivery
+            .store(true, std::sync::atomic::Ordering::SeqCst);
+    }
+    pub(crate) fn drop_native_apply_once(&self, node: ClusterNodeId, index: u64) {
+        *self.native_drop_once.lock() = Some((node, index));
+    }
     pub(crate) fn set_unavailable(&self, node: &ClusterNodeId, unavailable: bool) {
         let mut nodes = self.unavailable.lock();
         if unavailable {
@@ -79,6 +88,76 @@ impl ActualNativeRf3ServiceTransport {
     }
 }
 impl RangeWriteTransport for ActualNativeRf3ServiceTransport {
+    fn observe_native_origin(
+        &self,
+        node: &ClusterNodeId,
+        request: &crate::distribution_native_apply::NativeOriginStatusRequest,
+        parent: &CancellationToken,
+    ) -> Result<crate::distribution_native_apply::NativeReplicaApplyObservation> {
+        parent.check()?;
+        let range = self.range(request.range_id, request.range_epoch)?;
+        self.service(node)?.lock().observe_native_embedded_ordinary(
+            &range,
+            &self.caller,
+            request.challenge,
+        )
+    }
+    fn recertify_native_origin(
+        &self,
+        node: &ClusterNodeId,
+        command: &RangeWriteCommand,
+        parent: &CancellationToken,
+    ) -> Result<RangeWriteAck> {
+        parent.check()?;
+        self.prepare_range_write(node, command)?;
+        parent.check()?;
+        self.commit_range_write(node, command)?;
+        parent.check()?;
+        self.certify_range_write(node, command)
+    }
+    fn apply_native_origin(
+        &self,
+        node: &ClusterNodeId,
+        command: &RangeWriteCommand,
+        certificate: &crate::distribution_range_consensus::NativeRangeCommitCertificate,
+        parent: &CancellationToken,
+    ) -> Result<crate::distribution_native_apply::NativeReplicaApplyObservation> {
+        parent.check()?;
+        let mut loss = self.native_drop_once.lock();
+        let drop_once = loss
+            .as_ref()
+            .is_some_and(|(n, i)| n == node && *i == command.index);
+        if drop_once {
+            *loss = None;
+        }
+        drop(loss);
+        let result = if !self
+            .native_delivery
+            .load(std::sync::atomic::Ordering::SeqCst)
+            || drop_once
+        {
+            Err(invalid("fixture native Apply delivery disabled; authenticated current-leader instruction required"))
+        } else {
+            let range = self.range(command.range_id, command.range_epoch)?;
+            self.service(node)?.lock().apply_native_embedded_origin(
+                &range,
+                &self.caller,
+                command,
+                certificate,
+                parent,
+            )
+        };
+        self.observations
+            .lock()
+            .push(ActualNativeRf3RpcObservation {
+                operation: "apply",
+                destination: node.clone(),
+                command_sha256: Some(command.checksum_sha256.clone()),
+                state: result.as_ref().ok().map(|_| RangeWriteState::Applied),
+                error: result.as_ref().err().map(ToString::to_string),
+            });
+        result
+    }
     fn range_write_progress(
         &self,
         node: &ClusterNodeId,
@@ -366,6 +445,8 @@ impl ActualNativeRf3Fixture {
             services: services.clone(),
             observations: Mutex::new(Vec::new()),
             unavailable: Mutex::new(BTreeSet::new()),
+            native_delivery: std::sync::atomic::AtomicBool::new(false),
+            native_drop_once: Mutex::new(None),
         });
         let coordinator = Arc::new(
             RangeWriteCoordinator::new_schema_fenced(
@@ -445,17 +526,27 @@ fn native_rf3_actual_services_ack_origin_while_bare_replica_apply_remains_refuse
                 && row.state == Some(state)
                 && row.error.is_none()));
         }
-        assert!(rows.iter().any(|row| row.operation == "apply"
-            && row.state.is_none()
-            && row
-                .error
-                .as_deref()
-                .is_some_and(|error| error.contains("authenticated current-leader instruction"))));
+        // This fixture deliberately drops native instructions to preserve the
+        // historical raw-CQ/native0 precondition. Independently exercise the
+        // actual bare receiver; a fixture delivery error is not that proof.
+        assert!(rows
+            .iter()
+            .any(|row| row.operation == "apply" && row.state.is_none()));
         let service = fixture.services[node].lock();
         let probe = service
             .probe_range_write_for_peer(range, leader, 1)
             .unwrap();
         let entry = probe.entry.unwrap();
+        drop(service);
+        let bare = fixture.services[node]
+            .lock()
+            .apply_certified_range_write(range, leader, &entry.command)
+            .unwrap_err();
+        assert!(
+            bare.to_string()
+                .contains("authenticated current-leader instruction"),
+            "{bare}"
+        );
         assert_eq!(entry.state, RangeWriteState::QuorumCommitted);
         assert_eq!(probe.progress.last_index, 1);
         assert_eq!(probe.progress.resolved_through, 0);
@@ -570,3 +661,48 @@ fn actual_rf3_two_initial_ranges_have_real_genesis_and_independent_origin_indice
 
 #[cfg(test)]
 mod reopen;
+#[test]
+fn native_normal_apply_actual_rf3_services_materialize_two_acks_and_lost_apply_catchup() {
+    let fixture = ActualNativeRf3Fixture::new();
+    fixture.transport.enable_native_delivery();
+    let lag = ClusterNodeId::new("n2").unwrap();
+    fixture.transport.drop_native_apply_once(lag.clone(), 1);
+    fixture.append("native-normal-first").unwrap();
+    let topology = fixture.topology.read().clone();
+    let range = topology.ranges.values().next().unwrap();
+    assert_eq!(
+        fixture.databases[&lag]
+            .read()
+            .current_native_range_source_lineage(range.id)
+            .unwrap()
+            .range_index(),
+        0
+    );
+    assert!(fixture.databases[&lag]
+        .read()
+        .get("items", "native-normal-first")
+        .unwrap()
+        .is_none());
+    fixture.append("native-normal-second").unwrap();
+    for (id, database) in &fixture.databases {
+        let database = database.read();
+        assert_eq!(
+            database
+                .current_native_range_source_lineage(range.id)
+                .unwrap()
+                .range_index(),
+            2,
+            "{id}"
+        );
+        for key in ["native-normal-first", "native-normal-second"] {
+            assert!(database.get("items", key).unwrap().is_some(), "{id}/{key}");
+        }
+        assert_eq!(
+            fixture.services[id]
+                .lock()
+                .range_write_progress(range.id)
+                .resolved_through,
+            2
+        );
+    }
+}

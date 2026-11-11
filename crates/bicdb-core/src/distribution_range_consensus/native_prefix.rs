@@ -21,6 +21,8 @@ pub(crate) struct NativeRangeCommandIntent {
     range: RangeDescriptor,
     expected_base: RangeDescriptor,
     historical_recovery: bool,
+    origin_scope_version: u32,
+    restore_activation: Option<crate::distribution_consensus::MetadataRestoreActivation>,
     members: BTreeMap<ClusterNodeId, RangeImageBirthMember>,
     schema_sha256: String,
     scope_sha256: String,
@@ -34,6 +36,19 @@ pub(crate) struct NativeRangeCommandIntent {
 pub(crate) enum NativeRangeCertificateEvidence {
     #[default]
     OriginCertificateQuorum,
+    AuthenticatedLeaderInstruction {
+        leader_node_id: ClusterNodeId,
+        leader_incarnation: u64,
+        peer_certificate_sha256: Option<String>,
+        plaintext_loopback: bool,
+        bootstrap_id: Uuid,
+        range_epoch: u64,
+        metadata_context_id: Uuid,
+        metadata_term: u64,
+        metadata_read_index: u64,
+        restore_activation: Option<crate::distribution_consensus::MetadataRestoreActivation>,
+        scope_sha256: String,
+    },
     HistoricalCurrentCertificateQuorum {
         recovery_nonce: Uuid,
         configuration_sha256: String,
@@ -46,6 +61,35 @@ impl NativeRangeCertificateEvidence {
         matches!(self, Self::OriginCertificateQuorum)
     }
     pub(crate) fn validate(&self) -> Result<()> {
+        if let Self::AuthenticatedLeaderInstruction {
+            leader_incarnation,
+            bootstrap_id,
+            range_epoch,
+            metadata_context_id,
+            metadata_term,
+            metadata_read_index,
+            scope_sha256,
+            peer_certificate_sha256,
+            ..
+        } = self
+        {
+            if *leader_incarnation == 0
+                || bootstrap_id.is_nil()
+                || *range_epoch == 0
+                || metadata_context_id.is_nil()
+                || *metadata_term == 0
+                || *metadata_read_index == 0
+                || scope_sha256.len() != 64
+                || !scope_sha256.bytes().all(|b| b.is_ascii_hexdigit())
+                || peer_certificate_sha256
+                    .as_ref()
+                    .is_some_and(|s| s.len() != 64 || !s.bytes().all(|b| b.is_ascii_hexdigit()))
+            {
+                return Err(range_write_error(
+                    "damaged authenticated leader materialization provenance",
+                ));
+            }
+        }
         if let Self::HistoricalCurrentCertificateQuorum {
             recovery_nonce,
             configuration_sha256,
@@ -205,6 +249,8 @@ impl NativeRangeCommandIntent {
             range: current.clone(),
             expected_base: base.clone(),
             historical_recovery: true,
+            origin_scope_version: 0,
+            restore_activation: known.restore_activation().cloned(),
             members,
             schema_sha256: known.schema_sha256().to_string(),
             scope_sha256: hex::encode(Sha256::digest(scope)),
@@ -334,16 +380,29 @@ impl NativeRangeCommandIntent {
             range: range.clone(),
             expected_base,
             historical_recovery: false,
+            origin_scope_version: 1,
+            restore_activation: None,
             members,
             schema_sha256,
             scope_sha256: hex::encode(Sha256::digest(scope)),
         })
     }
     pub(crate) fn validate_native_base(&self, lineage: &SourceRangeImageLineage) -> Result<()> {
+        if lineage.range_index().checked_add(1) != Some(self.range_index) {
+            return Err(range_write_error(
+                "native command would skip the actual materialized prefix",
+            ));
+        }
+        self.validate_native_configuration(lineage)
+    }
+    pub(crate) fn validate_native_configuration(
+        &self,
+        lineage: &SourceRangeImageLineage,
+    ) -> Result<()> {
         if lineage.cluster_id() != &self.cluster_id
             || lineage.bootstrap_id() != self.bootstrap_id
-            || lineage.range_index().checked_add(1) != Some(self.range_index)
             || lineage.schema_sha256() != self.schema_sha256
+            || lineage.restore_activation() != self.restore_activation.as_ref()
             || !same_range_configuration(
                 if self.historical_recovery {
                     lineage.base_range()
@@ -371,6 +430,136 @@ impl NativeRangeCommandIntent {
             }
         }
         Ok(())
+    }
+    /// Actual originating database binding, before any durable Prepare/CQ.
+    /// Scope-v1 pending bytes are never relabelled as this new scope.
+    pub(super) fn plan_source(
+        command: &RangeWriteCommand,
+        range: &RangeDescriptor,
+        topology: &ClusterTopology,
+        source: &SourceRangeImageLineage,
+    ) -> Result<Self> {
+        let mut plan = Self::plan(command, range, topology)?;
+        plan.origin_scope_version = crate::distribution_native_apply::NATIVE_ORIGIN_SCOPE_VERSION;
+        plan.restore_activation = source.restore_activation().cloned();
+        plan.scope_sha256 = plan.origin_scope_v2()?;
+        Ok(plan)
+    }
+    fn origin_scope_v2(&self) -> Result<String> {
+        let mut range = self.range.clone();
+        range.approximate_bytes = 0;
+        range.approximate_qps = 0;
+        range.replicas.sort_by_key(|replica| replica.id);
+        Ok(hex::encode(Sha256::digest(
+            crate::distribution_range_image::bounded_json(
+                &(
+                    "bicdb.native.origin.scope.v2",
+                    &self.cluster_id,
+                    self.bootstrap_id,
+                    range,
+                    &self.members,
+                    &self.schema_sha256,
+                    &self.restore_activation,
+                ),
+                MAX_NATIVE_SCOPE_BYTES,
+            )?,
+        )))
+    }
+    pub(crate) fn from_authenticated_leader(
+        command: &RangeWriteCommand,
+        role: &crate::distribution_range_recovery::RecoveryRoleAdmission,
+    ) -> Result<Self> {
+        role.require_live_request()?;
+        validate_native_recovery_command_size(command)?;
+        command.validate()?;
+        let range = role.current_range();
+        if !matches!(
+            role.purpose(),
+            crate::distribution_consensus::MetadataRecoveryRolePurpose::NormalRecovery
+        ) || command.cluster_id != *role.cluster_id()
+            || command.range_id != range.id
+            || command.range_epoch != range.epoch
+            || command.leader_node_id != range.leader
+            || role.initiator_node_id() != &range.leader
+        {
+            return Err(range_write_error(
+                "ordinary native instruction is outside fresh current leader scope",
+            ));
+        }
+        let members = role
+            .member_credentials()
+            .iter()
+            .map(|(id, member)| {
+                (
+                    id.clone(),
+                    RangeImageBirthMember {
+                        incarnation: member.incarnation,
+                        tls_certificate_sha256: member.active_certificate_sha256.clone(),
+                        pending_tls_certificate_sha256: member.pending_certificate_sha256.clone(),
+                    },
+                )
+            })
+            .collect::<BTreeMap<_, _>>();
+        if members.is_empty() || members.len() > MAX_NATIVE_DATA_VOTERS {
+            return Err(range_write_error(
+                "ordinary native instruction voter bound exceeded",
+            ));
+        }
+        let mut expected_base = range.clone();
+        if let Some(relocation) = role.committed_relocation() {
+            if relocation.learner_epoch == range.epoch {
+                if relocation.expected_epoch.checked_add(1) != Some(range.epoch)
+                    || range
+                        .replicas
+                        .iter()
+                        .filter(|r| {
+                            r.id == relocation.target_replica_id
+                                && r.node_id == relocation.target
+                                && r.role == RangeReplicaRole::Learner
+                        })
+                        .count()
+                        != 1
+                {
+                    return Err(range_write_error(
+                        "native instruction learner predecessor differs",
+                    ));
+                }
+                expected_base.epoch = relocation.expected_epoch;
+                expected_base
+                    .replicas
+                    .retain(|r| r.id != relocation.target_replica_id);
+            }
+        }
+        let mut plan = Self {
+            command_id: command.command_id.clone(),
+            command_checksum_sha256: command.checksum_sha256.clone(),
+            origin_transaction_id: command.transaction_id,
+            mutations_sha256: crate::db::admission_mutations_sha256(&command.mutations)?,
+            range_index: command.index,
+            cluster_id: role.cluster_id().clone(),
+            bootstrap_id: role.bootstrap_id(),
+            range: range.clone(),
+            expected_base,
+            historical_recovery: false,
+            origin_scope_version: crate::distribution_native_apply::NATIVE_ORIGIN_SCOPE_VERSION,
+            restore_activation: role.restore_activation().cloned(),
+            members,
+            schema_sha256: role
+                .expected_schema_sha256()
+                .ok_or_else(|| range_write_error("native instruction requires verified schema"))?
+                .into(),
+            scope_sha256: String::new(),
+        };
+        plan.scope_sha256 = plan.origin_scope_v2()?;
+        Ok(plan)
+    }
+    pub(crate) fn origin_scope_version(&self) -> u32 {
+        self.origin_scope_version
+    }
+    pub(crate) fn restore_activation(
+        &self,
+    ) -> Option<&crate::distribution_consensus::MetadataRestoreActivation> {
+        self.restore_activation.as_ref()
     }
     pub(super) fn certify(
         &self,

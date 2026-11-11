@@ -254,6 +254,23 @@ impl NetworkFixture {
         data_leader: &str,
         metadata_leader: &str,
     ) -> Self {
+        Self::new_network_mode(
+            wired,
+            all_nodes,
+            lagging_two,
+            data_leader,
+            metadata_leader,
+            true,
+        )
+    }
+    fn new_network_mode(
+        wired: bool,
+        all_nodes: bool,
+        lagging_two: bool,
+        data_leader: &str,
+        metadata_leader: &str,
+        historical_transition: bool,
+    ) -> Self {
         assert!((data_leader == "n1" && metadata_leader == "n2") || all_nodes);
         assert!(!lagging_two || all_nodes);
         let live_names = if all_nodes {
@@ -302,10 +319,14 @@ impl NetworkFixture {
             .read()
             .clear_commit_admission();
         let mut topology = native.topology.read().clone();
-        topology.generation += 1;
-        let range = topology.ranges.values_mut().next().unwrap();
-        range.epoch += 1;
-        range.leader = node(data_leader);
+        if historical_transition {
+            topology.generation += 1;
+            let range = topology.ranges.values_mut().next().unwrap();
+            range.epoch += 1;
+            range.leader = node(data_leader);
+        } else {
+            assert_eq!(data_leader, "n0");
+        }
         topology.validate().unwrap();
         let config = |id: &ClusterNodeId| ClusterNetworkTransportConfig {
             connect_timeout_ms: 50,
@@ -1259,3 +1280,8 @@ mod activation_smoke;
 
 #[cfg(test)]
 mod activation_tests;
+
+#[cfg(test)]
+mod activation_rplusone;
+
+mod native_normal_tls;

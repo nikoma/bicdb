@@ -48,7 +48,7 @@ use crate::distribution_metadata_read_provider::{
 };
 use crate::distribution_range_consensus::{
     RangeWriteAck, RangeWriteCommand, RangeWriteProbe, RangeWriteProgress, RangeWriteRepairBatch,
-    RangeWriteRepairLimits, RangeWriteTransport,
+    RangeWriteRepairLimits, RangeWriteState, RangeWriteTransport,
 };
 use crate::distribution_schema_rollout::{
     ClusterSchemaActivationTransport, ClusterSchemaFinalizationTransport,
@@ -133,6 +133,16 @@ impl AuthenticatedRecoveryProbeReply {
     }
 }
 
+#[derive(Debug)]
+pub(crate) struct AuthenticatedNativeReplicaReply {
+    reply: crate::distribution_native_apply::NativeReplicaProgressReply,
+}
+impl AuthenticatedNativeReplicaReply {
+    pub(crate) fn into_reply(self) -> crate::distribution_native_apply::NativeReplicaProgressReply {
+        self.reply
+    }
+}
+
 fn transport_error(message: impl Into<String>) -> BicDbError {
     BicDbError::Cluster(message.into())
 }
@@ -150,12 +160,36 @@ struct ClusterDataRequestEnvelope<Request = ClusterDataRequest> {
 // Same private envelope and variant names as the actual sender, borrowing the
 // bounded command for a validation-only pass before any durable admission.
 #[derive(Serialize)]
+struct NativeOriginApplyRequestRef<'a> {
+    protocol_version: u32,
+    command: &'a RangeWriteCommand,
+    bootstrap_id: Uuid,
+    restore_activation: Option<&'a crate::distribution_consensus::MetadataRestoreActivation>,
+    origin_scope_sha256: &'a str,
+    challenge: Uuid,
+    budget_ms: u64,
+}
+
+#[derive(Serialize)]
 enum NativeCommandRequestRef<'a> {
-    PrepareRangeWrite { command: &'a RangeWriteCommand },
-    CommitRangeWrite { command: &'a RangeWriteCommand },
-    CertifyRangeWrite { command: &'a RangeWriteCommand },
-    ApplyRangeWrite { command: &'a RangeWriteCommand },
-    AbortRangeWrite { command: &'a RangeWriteCommand },
+    ApplyNativeOrigin {
+        request: NativeOriginApplyRequestRef<'a>,
+    },
+    PrepareRangeWrite {
+        command: &'a RangeWriteCommand,
+    },
+    CommitRangeWrite {
+        command: &'a RangeWriteCommand,
+    },
+    CertifyRangeWrite {
+        command: &'a RangeWriteCommand,
+    },
+    ApplyRangeWrite {
+        command: &'a RangeWriteCommand,
+    },
+    AbortRangeWrite {
+        command: &'a RangeWriteCommand,
+    },
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -304,6 +338,12 @@ enum ClusterDataRequest {
     ApplyRangeWrite {
         command: RangeWriteCommand,
     },
+    ApplyNativeOrigin {
+        request: crate::distribution_native_apply::NativeOriginApplyRequest,
+    },
+    ObserveNativeOrigin {
+        request: crate::distribution_native_apply::NativeOriginStatusRequest,
+    },
     AbortRangeWrite {
         command: RangeWriteCommand,
     },
@@ -392,6 +432,8 @@ impl ClusterDataRequest {
             | Self::ExportRangeDigestBucket { range_id, .. }
             | Self::ApplyRangeDigestRepair { range_id, .. } => Some(*range_id),
             Self::ApplyRangeWriteRepair { batch, .. } => Some(batch.range_id),
+            Self::ApplyNativeOrigin { request } => Some(request.command.range_id),
+            Self::ObserveNativeOrigin { request } => Some(request.range_id),
             Self::RecoveryEpochFence { request } => Some(request.scope.range_id),
             Self::RecoveryFencedProbe { request } => Some(request.scope.range_id),
             Self::PrepareNativeReady { request } | Self::ObserveNativeReady { request } => {
@@ -454,6 +496,7 @@ enum ClusterDataResponse {
     RecoveryFencedProbe(crate::distribution_range_recovery::RecoveryFencedProbeReply),
     NativeReady(crate::distribution_range_recovery::NativeReadyReply),
     NativeCompletion(crate::distribution_range_recovery::NativeCompletionReply),
+    NativeReplica(crate::distribution_native_apply::NativeReplicaProgressReply),
     RangeWrite(RangeWriteAck),
     RangeWriteProgress(RangeWriteProgress),
     RangeWriteRepair(RangeWriteRepairBatch),
@@ -872,6 +915,30 @@ fn handle_cluster_data_connection(
             return provider
                 .acquire_recovery_role(caller, request, &cancellation)
                 .map(ClusterDataResponse::MetadataRecoveryRole);
+        }
+        if let ClusterDataRequest::ApplyNativeOrigin { request } = request.request {
+            let runtime = recovery_runtime
+                .ok_or_else(|| transport_error("ordinary native receiver is not wired"))?;
+            let caller = authenticated_caller.as_ref().ok_or_else(|| {
+                transport_error("ordinary native Apply requires an authenticated member")
+            })?;
+            let token =
+                CancellationToken::new(Arc::new(AtomicBool::new(false)), Some(request_deadline));
+            return runtime
+                .apply_native_ordinary(caller, request, &token)
+                .map(|actual| ClusterDataResponse::NativeReplica(actual.into_reply()));
+        }
+        if let ClusterDataRequest::ObserveNativeOrigin { request } = request.request {
+            let runtime = recovery_runtime
+                .ok_or_else(|| transport_error("ordinary native status receiver is not wired"))?;
+            let caller = authenticated_caller.as_ref().ok_or_else(|| {
+                transport_error("ordinary native status requires an authenticated member")
+            })?;
+            let token =
+                CancellationToken::new(Arc::new(AtomicBool::new(false)), Some(request_deadline));
+            return runtime
+                .observe_native_ordinary(caller, &request, &token)
+                .map(|actual| ClusterDataResponse::NativeReplica(actual.into_reply()));
         }
         if let ClusterDataRequest::RecoveryEpochFence { request } = request.request {
             let runtime = recovery_runtime
@@ -1810,6 +1877,10 @@ fn dispatch_cluster_data_request(
                     .certify_range_write(&range, caller_node_id, &command)?,
             ))
         }
+        ClusterDataRequest::ApplyNativeOrigin { .. }
+        | ClusterDataRequest::ObserveNativeOrigin { .. } => Err(transport_error(
+            "ordinary native requests require the fresh-role receiver",
+        )),
         ClusterDataRequest::ApplyRangeWrite { command } => {
             let range = published_topology
                 .read()
@@ -3530,6 +3601,64 @@ impl TcpClusterRelocationTransport {
             )),
         }
     }
+    /// Invalid/replayed wire characterization only. Production senders use the
+    /// actual-certificate constructor, never this DTO entry point.
+    #[cfg(test)]
+    pub(crate) fn test_send_native_origin_request(
+        &self,
+        destination: &ClusterNodeId,
+        request: crate::distribution_native_apply::NativeOriginApplyRequest,
+        parent: &CancellationToken,
+    ) -> Result<crate::distribution_native_apply::NativeReplicaApplyObservation> {
+        self.native_replica_observation(
+            destination,
+            ClusterDataRequest::ApplyNativeOrigin {
+                request: request.clone(),
+            },
+            request.bootstrap_id,
+            request.command.range_id,
+            request.command.range_epoch,
+            request.challenge,
+            parent,
+        )
+    }
+    fn native_replica_observation(
+        &self,
+        destination: &ClusterNodeId,
+        payload: ClusterDataRequest,
+        bootstrap_id: Uuid,
+        range_id: RangeId,
+        range_epoch: u64,
+        challenge: Uuid,
+        parent: &CancellationToken,
+    ) -> Result<crate::distribution_native_apply::NativeReplicaApplyObservation> {
+        parent.check()?;
+        let (response, peer) =
+            self.call_with_read_participant_cancellable(parent, destination, payload)?;
+        match response {
+            ClusterDataResponse::NativeReplica(reply) => {
+                if &reply.node_id != destination
+                    || peer.node_id() != destination
+                    || peer.member_incarnation() != reply.member_incarnation
+                    || reply.bootstrap_id != bootstrap_id
+                    || reply.range_id != range_id
+                    || reply.range_epoch != range_epoch
+                    || reply.challenge != challenge
+                {
+                    return Err(transport_error(
+                        "native replica reply identity/domain/challenge differs",
+                    ));
+                }
+                crate::distribution_native_apply::NativeReplicaApplyObservation::from_transport(
+                    AuthenticatedNativeReplicaReply { reply },
+                )
+            }
+            response => Err(unexpected_response(
+                "actual native replica materialization/status",
+                response,
+            )),
+        }
+    }
     pub(crate) fn complete_native_recovery_observation(
         &self,
         destination: &ClusterNodeId,
@@ -3912,6 +4041,159 @@ fn unexpected_response(expected: &str, response: ClusterDataResponse) -> BicDbEr
 }
 
 impl RangeWriteTransport for TcpClusterRelocationTransport {
+    fn validate_native_origin_pre_admission(
+        &self,
+        voters: &[ClusterNodeId],
+        command: &RangeWriteCommand,
+        intent: &crate::distribution_range_consensus::NativeRangeCommandIntent,
+    ) -> Result<()> {
+        crate::distribution_range_consensus::validate_native_recovery_command_size(command)?;
+        if self.config.max_frame_bytes
+            < crate::distribution_range_consensus::MIN_NATIVE_RECOVERY_FRAME_BYTES
+        {
+            return Err(transport_error(
+                "native ordinary transport requires >=4MiB complete frames",
+            ));
+        }
+        for destination in voters {
+            let request = NativeCommandRequestRef::ApplyNativeOrigin {
+                request: NativeOriginApplyRequestRef {
+                    protocol_version: crate::distribution_native_apply::NATIVE_ORIGIN_SCOPE_VERSION,
+                    command,
+                    bootstrap_id: intent.bootstrap_id(),
+                    restore_activation: intent.restore_activation(),
+                    origin_scope_sha256: intent.scope_sha256(),
+                    challenge: Uuid::nil(),
+                    budget_ms: crate::distribution_native_apply::NATIVE_ORDINARY_BUDGET_MS,
+                },
+            };
+            crate::distribution_range_consensus::validate_native_json_size(
+                &ClusterDataRequestEnvelope {
+                    protocol_version: CLUSTER_DATA_PROTOCOL_VERSION,
+                    cluster_id: self.cluster_id.clone(),
+                    caller_node_id: self.caller_node_id.clone(),
+                    destination_node_id: destination.clone(),
+                    request_id: u64::MAX,
+                    request,
+                },
+                self.config.max_frame_bytes,
+            )?;
+        }
+        Ok(())
+    }
+    fn apply_native_origin(
+        &self,
+        destination: &ClusterNodeId,
+        command: &RangeWriteCommand,
+        certificate: &crate::distribution_range_consensus::NativeRangeCommitCertificate,
+        parent: &CancellationToken,
+    ) -> Result<crate::distribution_native_apply::NativeReplicaApplyObservation> {
+        let request = crate::distribution_native_apply::NativeOriginApplyRequest::from_certificate(
+            command,
+            certificate,
+            parent,
+        )?;
+        let token = request.token(parent)?;
+        crate::distribution_range_consensus::validate_native_json_size(
+            &ClusterDataRequestEnvelope {
+                protocol_version: CLUSTER_DATA_PROTOCOL_VERSION,
+                cluster_id: self.cluster_id.clone(),
+                caller_node_id: self.caller_node_id.clone(),
+                destination_node_id: destination.clone(),
+                request_id: u64::MAX,
+                request: ClusterDataRequest::ApplyNativeOrigin {
+                    request: request.clone(),
+                },
+            },
+            self.config.max_frame_bytes,
+        )?;
+        self.native_replica_observation(
+            destination,
+            ClusterDataRequest::ApplyNativeOrigin {
+                request: request.clone(),
+            },
+            request.bootstrap_id,
+            command.range_id,
+            command.range_epoch,
+            request.challenge,
+            &token,
+        )
+    }
+    fn observe_native_origin(
+        &self,
+        destination: &ClusterNodeId,
+        request: &crate::distribution_native_apply::NativeOriginStatusRequest,
+        parent: &CancellationToken,
+    ) -> Result<crate::distribution_native_apply::NativeReplicaApplyObservation> {
+        let token = request.token(parent)?;
+        self.native_replica_observation(
+            destination,
+            ClusterDataRequest::ObserveNativeOrigin {
+                request: request.clone(),
+            },
+            request.bootstrap_id,
+            request.range_id,
+            request.range_epoch,
+            request.challenge,
+            &token,
+        )
+    }
+    fn recertify_native_origin(
+        &self,
+        destination: &ClusterNodeId,
+        command: &RangeWriteCommand,
+        parent: &CancellationToken,
+    ) -> Result<RangeWriteAck> {
+        crate::distribution_range_consensus::validate_native_recovery_command_size(command)?;
+        for payload in [
+            ClusterDataRequest::PrepareRangeWrite {
+                command: command.clone(),
+            },
+            ClusterDataRequest::CommitRangeWrite {
+                command: command.clone(),
+            },
+        ] {
+            match self
+                .call_with_read_participant_cancellable(parent, destination, payload)?
+                .0
+            {
+                ClusterDataResponse::RangeWrite(ack)
+                    if ack.node_id == *destination
+                        && ack.range_id == command.range_id
+                        && ack.range_epoch == command.range_epoch
+                        && ack.index == command.index
+                        && matches!(
+                            ack.state,
+                            RangeWriteState::Prepared
+                                | RangeWriteState::Committed
+                                | RangeWriteState::QuorumCommitted
+                                | RangeWriteState::Applied
+                        ) => {}
+                other => {
+                    return Err(unexpected_response(
+                        "native replay durable command staging",
+                        other,
+                    ))
+                }
+            }
+        }
+        match self
+            .call_with_read_participant_cancellable(
+                parent,
+                destination,
+                ClusterDataRequest::CertifyRangeWrite {
+                    command: command.clone(),
+                },
+            )?
+            .0
+        {
+            ClusterDataResponse::RangeWrite(ack) => Ok(ack),
+            other => Err(unexpected_response(
+                "native replay actual certification",
+                other,
+            )),
+        }
+    }
     fn observe_native_completion_observation(
         &self,
         destination: &ClusterNodeId,

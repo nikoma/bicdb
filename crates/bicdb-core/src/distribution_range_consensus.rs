@@ -92,6 +92,7 @@ pub(crate) use native_limits::{
     validate_native_recovery_entry_size, MAX_NATIVE_RECOVERY_ENTRY_BYTES,
     MIN_NATIVE_RECOVERY_FRAME_BYTES,
 };
+mod native_normal;
 mod native_prefix;
 #[cfg(test)]
 pub(crate) use native_prefix::tests::{
@@ -1559,6 +1560,45 @@ pub struct RangeWriteAck {
 }
 
 pub trait RangeWriteTransport: std::fmt::Debug + Send + Sync + 'static {
+    fn apply_native_origin(
+        &self,
+        _destination: &ClusterNodeId,
+        _command: &RangeWriteCommand,
+        _certificate: &NativeRangeCommitCertificate,
+        _parent: &CancellationToken,
+    ) -> Result<crate::distribution_native_apply::NativeReplicaApplyObservation> {
+        Err(range_write_error(
+            "authenticated ordinary native Apply transport is not wired",
+        ))
+    }
+    fn validate_native_origin_pre_admission(
+        &self,
+        _voters: &[ClusterNodeId],
+        command: &RangeWriteCommand,
+        _intent: &NativeRangeCommandIntent,
+    ) -> Result<()> {
+        validate_native_recovery_command_size(command)
+    }
+    fn observe_native_origin(
+        &self,
+        _destination: &ClusterNodeId,
+        _request: &crate::distribution_native_apply::NativeOriginStatusRequest,
+        _parent: &CancellationToken,
+    ) -> Result<crate::distribution_native_apply::NativeReplicaApplyObservation> {
+        Err(range_write_error(
+            "authenticated ordinary native status transport is not wired",
+        ))
+    }
+    fn recertify_native_origin(
+        &self,
+        _destination: &ClusterNodeId,
+        _command: &RangeWriteCommand,
+        _parent: &CancellationToken,
+    ) -> Result<RangeWriteAck> {
+        Err(range_write_error(
+            "bounded ordinary native recertification transport is not wired",
+        ))
+    }
     fn observe_native_completion_observation(
         &self,
         _destination: &ClusterNodeId,
@@ -2615,6 +2655,9 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
             .collect::<Vec<_>>();
         resolved_watermarks.sort_unstable_by(|left, right| right.cmp(left));
         let quorum_resolved = resolved_watermarks[quorum - 1];
+        if self.native_image_mode && local.resolved_through < quorum_resolved {
+            return Err(range_write_error("native leader prefix requires fresh certified native recovery/image before generic replay"));
+        }
         let mut local_resolved = local.resolved_through;
         for _ in 0..self.repair_limits.max_batches_per_admission {
             if local_resolved >= quorum_resolved {
@@ -2832,6 +2875,9 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
             } else {
                 RangeWriteState::Aborted
             };
+            if self.native_image_mode {
+                return Err(range_write_error("native unresolved leader tail requires fresh native recovery; generic resolution cannot publish a native prefix"));
+            }
             let progress = self
                 .local_service
                 .lock()
@@ -2859,6 +2905,9 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
     }
 
     fn repair_voter(&self, range: &RangeDescriptor, voter: &ClusterNodeId) -> Result<()> {
+        if self.native_image_mode {
+            return Err(range_write_error("native repair requires actual source context and authenticated native materialization"));
+        }
         let local_progress = self.local_service.lock().range_write_progress(range.id);
         let mut remote = self
             .transport
@@ -3017,9 +3066,12 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
                 &self.local_node_id,
                 incarnation,
             )?;
-            let plan = NativeRangeCommandIntent::plan(&command, &range, &topology)?;
             let lineage = database.current_native_range_source_lineage(range.id)?;
+            let plan =
+                NativeRangeCommandIntent::plan_source(&command, &range, &topology, &lineage)?;
             plan.validate_native_base(&lineage)?;
+            self.transport
+                .validate_native_origin_pre_admission(&voters, &command, &plan)?;
             Some(plan)
         } else {
             None
@@ -3038,7 +3090,12 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
         let mut prepared_nodes = Vec::new();
         let mut repair_failures = Vec::new();
         for voter in voters.iter().filter(|node| **node != self.local_node_id) {
-            if let Err(error) = self.repair_voter(&range, voter) {
+            let repaired = if let Some(database) = native_database {
+                self.repair_native_voter(database, &range, voter, authority)
+            } else {
+                self.repair_voter(&range, voter)
+            };
+            if let Err(error) = repaired {
                 repair_failures.push(format!("{voter}: {error}"));
             } else if let Ok(ack) = self.transport.prepare_range_write(voter, &command) {
                 if self.validate_ack(voter, &command, &ack).is_ok()
@@ -3176,12 +3233,22 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
             };
             // A native Apply instruction is never emitted by an early ACK.
             // Actual distinct certificate quorum must already be established.
-            if certificate.is_some() {
+            if let Some(certificate) = &certificate {
+                let budget = CancellationToken::uncancelable().child_with_deadline(
+                    std::time::Instant::now()
+                        + std::time::Duration::from_millis(
+                            crate::distribution_native_apply::NATIVE_ORDINARY_BUDGET_MS,
+                        ),
+                );
                 for voter in certified_nodes
                     .iter()
                     .filter(|node| **node != self.local_node_id)
                 {
-                    let _ = self.transport.apply_range_write(voter, &command);
+                    // The actual QQ exists before any authenticated native
+                    // instruction. A lost materialization reply is not rollback.
+                    let _ =
+                        self.transport
+                            .apply_native_origin(voter, &command, certificate, &budget);
                 }
             }
             Some(NativeRangeAcknowledgementEvidence {

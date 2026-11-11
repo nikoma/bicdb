@@ -3,7 +3,7 @@
 use super::*;
 use crate::distribution_range_recovery::{NativeCompletionRequest, NativeCompletionStage};
 
-fn data_zero_scope(fixture: &NetworkFixture) -> RecoveryFenceScope {
+pub(super) fn data_zero_scope(fixture: &NetworkFixture) -> RecoveryFenceScope {
     let actor = fixture.clients[&node("n0")].local_metadata_read_participant();
     let range = fixture
         .current
@@ -63,7 +63,7 @@ fn data_zero_scope(fixture: &NetworkFixture) -> RecoveryFenceScope {
     round.finish().unwrap();
     scope
 }
-fn completion(scope: &RecoveryFenceScope) -> NativeCompletionRequest {
+pub(super) fn completion(scope: &RecoveryFenceScope) -> NativeCompletionRequest {
     NativeCompletionRequest {
         scope: scope.clone(),
         challenge: Uuid::now_v7(),

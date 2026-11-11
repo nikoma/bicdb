@@ -40,6 +40,7 @@ use crate::{
 };
 
 mod native_activation;
+mod native_apply;
 mod native_completion;
 mod native_image_install;
 mod native_ready;
@@ -1812,6 +1813,11 @@ impl ClusterDataNodeService {
         authority: &RangeMutationAuthority<'_>,
     ) -> Result<RangeWriteProgress> {
         batch.validate(limits)?;
+        if !batch.entries.is_empty()
+            && try_database_read(&self.db)?.native_range_image_birth_present()
+        {
+            return Err(data_error("generic range suffix cannot materialize native history; use the authenticated native path"));
+        }
         let mut progress = self.range_writes.progress(range.id);
         if progress.resolved_through < batch.previous_resolved_index {
             return Err(data_error(format!(

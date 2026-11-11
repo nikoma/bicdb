@@ -6,7 +6,9 @@ use crate::distribution_range_consensus::{
     NativeRangeCertificateEvidence, NativeRangeCommandIntent, NativeRangeCommitCertificate,
 };
 use crate::distribution_range_mutation::RangeMutationAuthority;
+mod ordinary_apply;
 mod recovery_apply;
+pub(crate) use ordinary_apply::NativeReplicaMaterialization;
 pub(crate) use recovery_apply::{KnownNativeRecoveryPrefix, NativeRecoveryAppliedReceipt};
 
 fn pending_key(range: RangeId) -> String {
@@ -291,7 +293,11 @@ impl NativeCertifiedRangePrefix {
         base: &NativeRangeBaseBinding,
     ) -> Result<()> {
         self.certificate_evidence.validate()?;
-        if self.certificate_evidence.is_origin() != self.recovery_attempt.is_none() {
+        if matches!(
+            self.certificate_evidence,
+            NativeRangeCertificateEvidence::HistoricalCurrentCertificateQuorum { .. }
+        ) != self.recovery_attempt.is_some()
+        {
             return Err(invalid(
                 "native prefix certificate kind and actual recovery attempt differ",
             ));
@@ -302,6 +308,51 @@ impl NativeCertifiedRangePrefix {
                 &self.materialized,
                 &self.certificate_evidence,
             )?;
+        }
+        match &self.certificate_evidence {
+            NativeRangeCertificateEvidence::AuthenticatedLeaderInstruction {
+                leader_node_id,
+                leader_incarnation,
+                peer_certificate_sha256,
+                plaintext_loopback,
+                bootstrap_id,
+                range_epoch,
+                restore_activation,
+                scope_sha256,
+                ..
+            } => {
+                let member = base.base_members.get(leader_node_id).ok_or_else(|| {
+                    invalid("native materialization leader is not in actual base")
+                })?;
+                let pin = match (
+                    &member.tls_certificate_sha256,
+                    &member.pending_tls_certificate_sha256,
+                ) {
+                    (None, None) => *plaintext_loopback && peer_certificate_sha256.is_none(),
+                    (a, p) => peer_certificate_sha256
+                        .as_deref()
+                        .is_some_and(|sha| a.as_deref() == Some(sha) || p.as_deref() == Some(sha)),
+                };
+                if !self.certified_voters.is_empty()
+                    || self.required_quorum != 0
+                    || *bootstrap_id != birth.spec.bootstrap_id
+                    || *range_epoch < base.range.epoch
+                    || member.incarnation != *leader_incarnation
+                    || !pin
+                    || restore_activation.as_ref() != base.restore_activation.as_ref()
+                    || scope_sha256 != &self.scope_sha256
+                {
+                    return Err(invalid("native authenticated materialization cannot claim a local certificate quorum"));
+                }
+            }
+            _ => {
+                if self.required_quorum == 0
+                    || self.certified_voters.len() < self.required_quorum
+                    || self.certified_voters.len() > 64
+                {
+                    return Err(invalid("native prefix lacks its actual quorum evidence"));
+                }
+            }
         }
         if self.format_version != 2
             || self.birth_id != birth.birth_id
@@ -314,15 +365,49 @@ impl NativeCertifiedRangePrefix {
             || self.history_generation != base.history_generation
             || self.logical_genesis_sha256 != base.logical_genesis_sha256
             || self.logical_history_sha256.len() != 64
-            || self.certified_voters.len() < self.required_quorum
-            || self.required_quorum == 0
-            || self.certified_voters.len() > 64
             || self.materialized.actual_mutations_sha256 != self.mutations_sha256
             || self.checksum()? != self.checksum_sha256
         {
             return Err(invalid("damaged/mismatched native certified prefix"));
         }
         Ok(())
+    }
+}
+
+enum NativeCompletionMaterializationEvidence<'a> {
+    Quorum(&'a NativeRangeCommitCertificate),
+    Leader(&'a crate::distribution_native_apply::NativeLeaderInstructionAdmission),
+}
+impl NativeCompletionMaterializationEvidence<'_> {
+    fn require_live(&self) -> Result<()> {
+        match self {
+            Self::Quorum(_) => Ok(()),
+            Self::Leader(admission) => admission.require_live(),
+        }
+    }
+    fn intent(&self) -> &NativeRangeCommandIntent {
+        match self {
+            Self::Quorum(q) => q.intent(),
+            Self::Leader(a) => a.intent(),
+        }
+    }
+    fn certified_voters(&self) -> BTreeSet<ClusterNodeId> {
+        match self {
+            Self::Quorum(q) => q.certified_voters().clone(),
+            Self::Leader(_) => BTreeSet::new(),
+        }
+    }
+    fn required_quorum(&self) -> usize {
+        match self {
+            Self::Quorum(q) => q.required_quorum(),
+            Self::Leader(_) => 0,
+        }
+    }
+    fn evidence(&self) -> NativeRangeCertificateEvidence {
+        match self {
+            Self::Quorum(q) => q.evidence().clone(),
+            Self::Leader(a) => a.materialization_evidence(),
+        }
     }
 }
 
@@ -482,6 +567,15 @@ impl BicDb {
         mutations: &[CommitAdmissionMutation],
         authority: &RangeMutationAuthority<'_>,
     ) -> Result<()> {
+        self.apply_native_origin_certificate(certificate, mutations, authority, false)
+    }
+    pub(crate) fn apply_native_origin_certificate(
+        &self,
+        certificate: &NativeRangeCommitCertificate,
+        mutations: &[CommitAdmissionMutation],
+        authority: &RangeMutationAuthority<'_>,
+        imported_projection: bool,
+    ) -> Result<()> {
         if !certificate.evidence().is_origin() {
             return Err(invalid(
                 "historical materialization requires exact current-session native recovery adapter",
@@ -510,6 +604,7 @@ impl BicDb {
         let mut transaction = self.begin_transaction()?;
         let pending = self.prepare_native_range_command(intent, transaction.id().0, authority)?;
         transaction.bypass_commit_admission = true;
+        transaction.imported_projection = imported_projection;
         transaction.range_mutation_claim = Some(authority.claim());
         transaction.set_snapshot_isolation(false, 0)?;
         let result = (|| {
@@ -612,7 +707,8 @@ impl BicDb {
         let base = anchor.binding();
         self.validate_native_range_base_history(&birth, &base)?;
         let prefix = self.read_native_certified_range_prefix(&birth, &base)?;
-        let serving = self.read_native_recovered_serving_configuration(&birth, &base, prefix.as_ref())?;
+        let serving =
+            self.read_native_recovered_serving_configuration(&birth, &base, prefix.as_ref())?;
         let lineage = SourceRangeImageLineage {
             birth,
             _anchor: anchor,
@@ -808,16 +904,31 @@ impl BicDb {
         receipt: &NativeWalApplyReceipt,
         authority: &RangeMutationAuthority<'_>,
     ) -> Result<()> {
+        self.complete_native_range_command_with_evidence(
+            pending,
+            NativeCompletionMaterializationEvidence::Quorum(certificate),
+            receipt,
+            authority,
+        )
+    }
+    fn complete_native_range_command_with_evidence(
+        &self,
+        pending: &NativeRangePendingApply,
+        proof: NativeCompletionMaterializationEvidence<'_>,
+        receipt: &NativeWalApplyReceipt,
+        authority: &RangeMutationAuthority<'_>,
+    ) -> Result<()> {
+        proof.require_live()?;
+        let intent = proof.intent();
         let _journal = self
             .native_range_image_journal
             .try_lock()
             .ok_or_else(|| invalid("native journal busy after certification"))?;
         let record = self.require_native_pending(pending, receipt, authority)?;
-        if certificate.intent().scope_sha256() != pending.intent.scope_sha256()
-            || certificate.intent().command_id() != pending.intent.command_id()
-            || certificate.intent().command_checksum_sha256()
-                != pending.intent.command_checksum_sha256()
-            || certificate.intent().mutations_sha256() != pending.intent.mutations_sha256()
+        if intent.scope_sha256() != pending.intent.scope_sha256()
+            || intent.command_id() != pending.intent.command_id()
+            || intent.command_checksum_sha256() != pending.intent.command_checksum_sha256()
+            || intent.mutations_sha256() != pending.intent.mutations_sha256()
         {
             return Err(invalid(
                 "native completion certificate does not match pending command",
@@ -879,9 +990,9 @@ impl BicDb {
             mutations_sha256: record.mutations_sha256,
             scope_sha256: record.scope_sha256,
             materialized,
-            certified_voters: certificate.certified_voters().clone(),
-            required_quorum: certificate.required_quorum(),
-            certificate_evidence: certificate.evidence().clone(),
+            certified_voters: proof.certified_voters(),
+            required_quorum: proof.required_quorum(),
+            certificate_evidence: proof.evidence(),
             recovery_attempt: record.recovery_attempt,
             global_image_generation: record.global_image_generation,
             range_image_generation: record.range_image_generation,
@@ -911,6 +1022,7 @@ impl BicDb {
             Ok(())
         })?
         .ok_or_else(|| invalid("native completion has no page store"))?;
+        proof.require_live()?;
         Ok(())
     }
 }

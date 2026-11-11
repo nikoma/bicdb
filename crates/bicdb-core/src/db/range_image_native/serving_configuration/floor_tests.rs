@@ -76,6 +76,11 @@ fn actual_native_floor_vetoes_lower_and_same_epoch_drift_after_copied_logical_ro
     let (root, db, topology, spec) = native_origin_fixture();
     let range = topology.ranges.values().next().unwrap().clone();
     seed_actual_origin(&db, topology.clone(), &spec, range.id, 1);
+    let acknowledged_key = (0..)
+        .map(|index| format!("stage-actual-origin-{index}"))
+        .find(|key| topology.range_for_key("items", key).unwrap().id == range.id)
+        .unwrap();
+    let acknowledged_record = db.read().get("items", &acknowledged_key).unwrap().unwrap();
     let path = db.read().data_path().to_path_buf();
     let authentic_old_catalogue = std::fs::read(path.join(DEFAULT_RANGE_WRITE_LOG)).unwrap();
     let mut higher = topology.clone();
@@ -204,6 +209,10 @@ fn actual_native_floor_vetoes_lower_and_same_epoch_drift_after_copied_logical_ro
         Some(serving.clone())
     );
     assert_eq!(copied.local_namespace_identity("items").unwrap(), uid);
+    assert_eq!(
+        copied.get("items", &acknowledged_key).unwrap(),
+        Some(acknowledged_record.clone())
+    );
     let lower_providers = test_recovery_metadata_cluster(
         &root.path().join("older-metadata-negative"),
         &topology,
@@ -339,6 +348,10 @@ fn actual_native_floor_vetoes_lower_and_same_epoch_drift_after_copied_logical_ro
         Some(serving)
     );
     assert_eq!(copied.local_namespace_identity("items").unwrap(), uid);
+    assert_eq!(
+        copied.get("items", &acknowledged_key).unwrap(),
+        Some(acknowledged_record)
+    );
     eprintln!(
         "NATIVE_SERVING_FLOOR_NEGATIVES {}",
         serde_json::json!({"actual_floor_epoch":range.epoch+1,"lower_metadata_epoch":range.epoch,"native_range_index":1,"copied_authentic_logical_rollback":true,"lower_role_refused":true,"same_epoch_semantic_drift_refused":true,"physical_qualification":false})

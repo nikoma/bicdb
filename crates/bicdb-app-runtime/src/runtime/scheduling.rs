@@ -918,7 +918,8 @@ pub(crate) fn validate_additive_contracts(
                         .iter()
                         .all(|old_field| old_field.name != field.as_str())
             });
-        if new.version_field != old.version_field
+        if (new.version_field != old.version_field
+            && !adds_initial_optimistic_version(old, new, candidate))
             || !tenant_partition_is_tightening(old, new)
             || new.workspace_field != old.workspace_field
             || !old.immutable_fields.is_subset(&new.immutable_fields)
@@ -1204,6 +1205,54 @@ pub(crate) fn validate_blob_contract_evolution(
         ));
     }
     Ok(())
+}
+
+/// Adding optimistic concurrency is a policy tightening only when a new,
+/// server-owned integer counter is initialized by the signed migration.
+/// Renaming/removing a counter or reinterpreting existing writable data is not
+/// additive and remains refused by the caller.
+pub(crate) fn adds_initial_optimistic_version(
+    previous: &bicdb_extension::abi_v2::ResourceContractV1,
+    next: &bicdb_extension::abi_v2::ResourceContractV1,
+    candidate: &bicdb_extension::abi_v2::ApplicationManifestV2,
+) -> bool {
+    if previous.version_field.is_some() {
+        return false;
+    }
+    let Some(name) = next.version_field.as_ref() else {
+        return false;
+    };
+    if previous.fields.iter().any(|field| &field.name == name)
+        || next.create_fields.contains(name)
+        || next.update_fields.contains(name)
+    {
+        return false;
+    }
+    let Some(field) = next.fields.iter().find(|field| &field.name == name) else {
+        return false;
+    };
+    if field.nullable
+        || field.generated
+        || field.field_type != bicdb_extension::abi_v2::FieldType::Int64
+        || !matches!(
+            field.value_type.as_ref(),
+            Some(ApplicationRouteParameterTypeV1::Int)
+        )
+        || field.default_json.as_deref() != Some("1")
+    {
+        return false;
+    }
+    candidate.migrations.iter().any(|migration| {
+        migration.transformations.iter().any(|step| {
+            matches!(step,
+                MigrationStep::BackfillField {
+                    resource,
+                    field,
+                    expression: ApplicationExpressionV1::Literal { value },
+                } if resource == &previous.name && field == name && value == &json!(1)
+            )
+        })
+    })
 }
 
 pub(crate) fn has_signed_field_backfill(

@@ -861,12 +861,26 @@ impl ApplicationRuntime {
         trusted_handler: Option<Arc<dyn TrustedHttpHandler>>,
     ) -> Result<HttpServerHandle> {
         policy.validate()?;
-        let tls = axum_server::tls_rustls::RustlsConfig::from_pem_file(
-            certificate.as_ref(),
-            private_key.as_ref(),
-        )
-        .await
+        // Other enabled providers can also bring in Rustls's ring feature.
+        // Select this listener's crypto provider explicitly instead of relying
+        // on a process-global default that panics when both features are set.
+        let certificate_bytes = tokio::fs::read(certificate.as_ref()).await?;
+        let private_key_bytes = tokio::fs::read(private_key.as_ref()).await?;
+        let certificates = rustls_pemfile::certs(&mut std::io::Cursor::new(certificate_bytes))
+            .collect::<std::io::Result<Vec<_>>>()?;
+        let private_key = rustls_pemfile::private_key(&mut std::io::Cursor::new(
+            private_key_bytes,
+        ))?
+        .ok_or_else(|| AppRuntimeError::Provider("TLS private key is missing".to_string()))?;
+        let config = rustls::ServerConfig::builder_with_provider(Arc::new(
+            rustls::crypto::aws_lc_rs::default_provider(),
+        ))
+        .with_safe_default_protocol_versions()
+        .map_err(|error| AppRuntimeError::Provider(error.to_string()))?
+        .with_no_client_auth()
+        .with_single_cert(certificates, private_key)
         .map_err(|error| AppRuntimeError::Provider(error.to_string()))?;
+        let tls = axum_server::tls_rustls::RustlsConfig::from_config(Arc::new(config));
         let listener = std::net::TcpListener::bind(address)?;
         listener.set_nonblocking(true)?;
         let address = listener.local_addr()?;

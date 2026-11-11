@@ -1,0 +1,11 @@
+
+running 1 test
+test distribution_range_image_install::current_repair_tests::actual_prepared_serving_record_survives_a_second_current_voter_image_attempt ... FAILED
+
+failures:
+
+failures:
+    distribution_range_image_install::current_repair_tests::actual_prepared_serving_record_survives_a_second_current_voter_image_attempt
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 669 filtered out; finished in 6.23s
+

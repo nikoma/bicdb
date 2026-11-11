@@ -2622,6 +2622,7 @@ impl<'db> SqlSession<'db> {
             tx.set_snapshot_isolation(true, floor)?;
             tx.set_statement_write_conflict_check(true)?;
         }
+        tx.defer_statement_snapshot()?;
         Ok(tx)
     }
 
@@ -3127,6 +3128,10 @@ impl<'db> SqlSession<'db> {
     /// Statement text through the profiled executor; a read-only transaction
     /// checks a single statement before it runs.
     fn execute_text_statements(&mut self, sql: &str) -> Result<SqlResult> {
+        self.acquire_postgres_statement_snapshot(|| {
+            (!sql.contains(';') || split_sql_statements(sql).len() == 1)
+                && postgres_execution_requires_snapshot(sql)
+        })?;
         self.refresh_client_statement_snapshot()?;
         if !self.transaction_read_only() {
             return self.execute_profiled(sql);
@@ -3589,6 +3594,29 @@ impl<'db> SqlSession<'db> {
         Ok(())
     }
 
+    fn acquire_postgres_statement_snapshot(
+        &mut self,
+        requires_snapshot: impl FnOnce() -> bool,
+    ) -> Result<()> {
+        if !self.column_references_checkable()
+            || !self
+                .tx
+                .as_ref()
+                .is_some_and(|tx| !tx.statement_snapshot_acquired())
+            || oracle::preview_routine_language_enabled(self.db_ref())?
+            || !requires_snapshot()
+        {
+            return Ok(());
+        }
+        let floor = self
+            .snapshot_floor
+            .max(crate::statement_context::latest_independent_commit());
+        if let Some(tx) = self.tx.as_mut() {
+            tx.acquire_statement_snapshot(floor)?;
+        }
+        Ok(())
+    }
+
     /// Column references are checked for client statements only: routine and
     /// trigger bodies resolve their variables through frames this check does
     /// not model.
@@ -3830,6 +3858,9 @@ impl<'db> SqlSession<'db> {
 
     fn execute_parsed_statement_in_sql(&mut self, statement: &Statement) -> Result<SqlResult> {
         self.ensure_read_only_statement(statement)?;
+        self.acquire_postgres_statement_snapshot(|| {
+            postgres_execution_requires_snapshot(&statement.to_string())
+        })?;
         self.refresh_client_statement_snapshot()?;
         if let Some(result) = self.apply_instead_rule(statement)? {
             return Ok(result);
@@ -3883,12 +3914,19 @@ impl<'db> SqlSession<'db> {
                 self.apply_transaction_modes(modes)?;
                 Ok(SqlResult::command("BEGIN"))
             }
+            Statement::Commit { chain: true, .. } => self.finish_chained_transaction(true),
             Statement::Commit { .. } => self.commit(),
-            Statement::Rollback { savepoint, .. } => {
+            Statement::Rollback {
+                savepoint, chain, ..
+            } => {
                 if let Some(savepoint) = savepoint {
                     return self.rollback_to_savepoint(savepoint);
                 }
-                self.rollback_current_transaction()
+                if *chain {
+                    self.finish_chained_transaction(false)
+                } else {
+                    self.rollback_current_transaction()
+                }
             }
             Statement::Savepoint { name } => self.create_savepoint(name),
             Statement::ReleaseSavepoint { name } => self.release_savepoint(name),
@@ -3912,6 +3950,43 @@ impl<'db> SqlSession<'db> {
             self.oracle_autonomous_active = true;
         }
         result
+    }
+
+    fn finish_chained_transaction(&mut self, commit: bool) -> Result<SqlResult> {
+        let tx = self
+            .tx
+            .as_ref()
+            .ok_or_else(|| SqlError::InvalidTransactionState {
+                message: "AND CHAIN requires an active transaction".into(),
+            })?;
+        let fixed = tx.isolation() != bicdb_core::TransactionIsolation::ReadCommitted;
+        let read_only = self.transaction_read_only();
+        let isolation = self
+            .session_gucs
+            .get("transaction_isolation")
+            .cloned()
+            .unwrap_or(self.default_transaction_isolation()?.into());
+        let oracle = oracle::preview_routine_language_enabled(self.db_ref())?;
+        let result = if commit {
+            self.commit()?
+        } else {
+            self.rollback_current_transaction()?
+        };
+
+        let mut next = self.begin_session_transaction()?;
+        let floor = self
+            .snapshot_floor
+            .max(crate::statement_context::latest_independent_commit());
+        if oracle {
+            next.set_snapshot_isolation(fixed, floor)?;
+        } else {
+            next.set_deferred_snapshot_isolation(fixed, floor)?;
+        }
+        next.set_statement_write_conflict_check(oracle && fixed)?;
+        self.set_transaction_read_only_label(read_only)?;
+        self.set_transaction_isolation_label(&isolation)?;
+        self.tx = Some(next);
+        Ok(result)
     }
 
     /// Internal rollback cleanup must run even if the statement was canceled.
@@ -4818,7 +4893,34 @@ impl<'db> SqlSession<'db> {
 
     fn apply_transaction_modes(&mut self, modes: &[TransactionMode]) -> Result<()> {
         let oracle_preview = oracle::preview_routine_language_enabled(self.db_ref())?;
-        validate_profile_transaction_modes(modes, oracle_preview)?;
+        let level = modes.iter().find_map(|mode| match mode {
+            TransactionMode::IsolationLevel(level) => Some(level),
+            _ => None,
+        });
+        let isolation_label = level.map(transaction_defaults::isolation_label);
+        let same_isolation = isolation_label.is_some_and(|requested| {
+            self.session_gucs
+                .get("transaction_isolation")
+                .is_some_and(|current| current == requested)
+        });
+        if oracle_preview {
+            validate_profile_transaction_modes(modes, true)?;
+        } else {
+            validate_postgres_transaction_modes(modes, self.transaction_read_only())?;
+            if isolation_label.is_some()
+                && !same_isolation
+                && self
+                    .tx
+                    .as_ref()
+                    .is_some_and(Transaction::statement_snapshot_acquired)
+            {
+                return Err(SqlError::data_exception(
+                    "25001",
+                    "SET TRANSACTION ISOLATION LEVEL must be called before any query",
+                    None,
+                ));
+            }
+        }
         if let Some(read_only) = modes.iter().find_map(|mode| match mode {
             TransactionMode::AccessMode(TransactionAccessMode::ReadOnly) => Some(true),
             TransactionMode::AccessMode(TransactionAccessMode::ReadWrite) => Some(false),
@@ -4851,10 +4953,9 @@ impl<'db> SqlSession<'db> {
             }
             self.set_transaction_read_only_label(read_only)?;
         }
-        let level = modes.iter().find_map(|mode| match mode {
-            TransactionMode::IsolationLevel(level) => Some(level),
-            _ => None,
-        });
+        if !oracle_preview && same_isolation {
+            return Ok(());
+        }
         let Some(level) = level else {
             return Ok(());
         };
@@ -4876,7 +4977,11 @@ impl<'db> SqlSession<'db> {
                     "SET TRANSACTION must be first statement of transaction",
                 ));
             }
-            tx.set_snapshot_isolation(fixed, floor)?;
+            if oracle_preview {
+                tx.set_snapshot_isolation(fixed, floor)?;
+            } else {
+                tx.set_deferred_snapshot_isolation(fixed, floor)?;
+            }
             tx.set_statement_write_conflict_check(oracle_preview && fixed)?;
             self.set_transaction_isolation_label(transaction_defaults::isolation_label(level))?;
         }

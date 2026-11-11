@@ -86,6 +86,28 @@ async fn read_only_survives_wire_messages_prepared_execution_and_pool_reuse() {
             .get::<_, i64>(0),
         3
     );
+    for ending in ["COMMIT AND CHAIN", "ROLLBACK AND CHAIN"] {
+        let outside = client.batch_execute(ending).await.unwrap_err();
+        assert_eq!(outside.code().unwrap().code(), "25P01");
+        client
+            .batch_execute("BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY")
+            .await
+            .unwrap();
+        client.batch_execute(ending).await.unwrap();
+        for (setting, expected) in [
+            ("SHOW transaction_read_only", "on"),
+            ("SHOW transaction_isolation", "repeatable read"),
+        ] {
+            let row = client.query_one(setting, &[]).await.unwrap();
+            assert_eq!(row.get::<_, String>(0), expected);
+        }
+        let error = client
+            .execute("INSERT INTO guarded VALUES($1)", &[&9i32])
+            .await
+            .unwrap_err();
+        assert_eq!(error.code().unwrap().code(), "25006");
+        client.batch_execute("ROLLBACK").await.unwrap();
+    }
     drop(client);
     drop(other);
     connection_task.abort();

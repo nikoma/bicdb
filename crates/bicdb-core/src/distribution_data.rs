@@ -902,6 +902,45 @@ impl ClusterDataNodeService {
             .preflight_recovery_fence(role, &native, scope)
     }
 
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn preflight_recovery_image_transfer(
+        &mut self,
+        source: &crate::distribution_range_image::TentativeNativeRangeImageSourceAuthorization<'_>,
+        role: &crate::distribution_range_consensus::NativeImageInstallRole<'_>,
+        frozen: &crate::distribution_range_mutation::FrozenRangeMutationPermit,
+        purpose: crate::distribution_range_consensus::ImageInstallPurpose,
+        attempt_id: Uuid,
+        cancellation: &crate::CancellationToken,
+    ) -> Result<crate::distribution_range_consensus::NativeImageInstallTransferPreflight> {
+        cancellation.check()?;
+        let actual = role.role();
+        actual.require_live_request()?;
+        self.range_mutations
+            .validate_quiescent_frozen(actual.current_range().id, frozen)?;
+        let db = loop {
+            cancellation.check()?;
+            if let Some(db) = self.db.try_read_for(std::time::Duration::from_millis(5)) {
+                break db;
+            }
+        };
+        let native = db.native_recovery_admission(
+            actual.cluster_id(),
+            actual.bootstrap_id(),
+            actual.local_node_id(),
+            actual.local_member_incarnation(),
+        )?;
+        self.range_writes.preflight_recovery_image_install(
+            &db,
+            &native,
+            source,
+            role,
+            frozen,
+            purpose,
+            attempt_id,
+            cancellation,
+        )
+    }
+
     /// Receiver-only: the runtime already owns the drained range freeze and
     /// acquired an independently fresh role before taking this service latch.
     pub(crate) fn fence_native_recovery(

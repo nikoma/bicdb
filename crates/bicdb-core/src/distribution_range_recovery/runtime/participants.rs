@@ -366,6 +366,42 @@ impl RangeRecoveryRuntime {
             &cancellation,
         )
     }
+    /// Negative fault injection after the same ACTUAL independent decision,
+    /// current-role and owned controlled mutation boundaries as production.
+    #[cfg(test)]
+    pub(crate) fn test_certify_sparse_historical_with(
+        &self,
+        initiator: &MetadataReadParticipant,
+        request: &RecoveryHistoricalCommandRequest,
+        parent: &CancellationToken,
+        write: impl FnOnce(&std::path::Path, &[u8], bool) -> Result<()>,
+    ) -> Result<RecoveryHistoryObservation> {
+        let cancellation = request.cancellation(parent)?;
+        let operation = self.reserve(request.scope.range_id)?;
+        let (decision, frozen, _pool) =
+            self.historical_decision(initiator, request, &cancellation, &operation)?;
+        let role = decision.authority().role();
+        {
+            let mut service = loop {
+                cancellation.check()?;
+                if let Some(s) = self.service.try_lock_for(LATCH_POLL) {
+                    break s;
+                }
+            };
+            service.test_certify_sparse_native_historical_command_with(
+                role,
+                &decision,
+                &frozen,
+                &cancellation,
+                write,
+            )?;
+        }
+        self.observe_history_inner(
+            &self.provider.local_participant(),
+            &request.probe()?,
+            &cancellation,
+        )
+    }
     pub(crate) fn apply_historical(
         &self,
         initiator: &MetadataReadParticipant,

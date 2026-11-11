@@ -117,5 +117,11 @@ fn complete_fenced_obligation_envelope_and_maximum_entry_fit_native_frame_floor(
             .len(),
         MAX_NATIVE_RECOVERY_ENTRY_BYTES
     );
+    let mut omitted = serde_json::to_value(&reply).unwrap();
+    omitted.as_object_mut().unwrap().remove("sparse_decision");
+    assert!(
+        serde_json::from_value::<RecoveryFencedProbeReply>(omitted).is_err(),
+        "an old wire reply cannot silently omit sparse-decision observation support"
+    );
     println!("structural_full_native_obligation_envelope_bytes={bytes} frame_floor={MIN_NATIVE_RECOVERY_FRAME_BYTES} complete_checksums={}", expected.len());
 }

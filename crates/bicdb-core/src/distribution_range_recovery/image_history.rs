@@ -216,6 +216,37 @@ mod obligation_bound_tests {
     use super::*;
 
     #[test]
+    fn sparse_obligations_require_explicit_v2_and_never_claim_a_raw_applied_floor() {
+        // Structural wire shape only: no native producer, authenticated peer,
+        // selected decision or ready/read authority is created here.
+        let (scope, mut progress, mut history) = test_only_structural_fence_dtos(1);
+        progress.last_index = 0;
+        progress.resolved_through = 0;
+        progress.compacted_through = 0;
+        history.last_index = 0;
+        history.compacted_through = 0;
+        history.native_point = None;
+        history.pending_native = None;
+        history.irreversible_command_sha256 = BTreeMap::from([(7, "a".repeat(64))]);
+        history.sparse_committed_command_sha256 = Some(history.irreversible_command_sha256.clone());
+        history.format_version = 2;
+        history.require_shape(&scope, &progress).unwrap();
+        let mut missing = serde_json::to_value(&history).unwrap();
+        missing
+            .as_object_mut()
+            .unwrap()
+            .remove("sparse_committed_command_sha256");
+        let decoded: RecoveryImageHistoryObligationsV1 = serde_json::from_value(missing).unwrap();
+        assert!(decoded.require_shape(&scope, &progress).is_err());
+        history.format_version = 1;
+        assert!(history.require_shape(&scope, &progress).is_err());
+        history.format_version = 2;
+        history.sparse_committed_command_sha256 = Some(BTreeMap::new());
+        assert!(history.require_shape(&scope, &progress).is_err());
+        assert_eq!((progress.last_index, progress.resolved_through), (0, 0));
+    }
+
+    #[test]
     fn complete_fenced_obligation_bound_preserves_every_entry_and_refuses_overflow() {
         let (scope, progress, image) =
             test_only_structural_fence_dtos(MAX_FENCED_IRREVERSIBLE_COMMANDS);

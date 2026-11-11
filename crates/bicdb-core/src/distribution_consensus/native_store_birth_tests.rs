@@ -558,3 +558,171 @@ fn native_birth_committed_majority_snapshot_discards_only_uncommitted_binding_an
 ) {
     replace_uncommitted_birth_with_actual_majority(true);
 }
+
+fn anchor_from_actual_vote(
+    leader: &mut MetadataConsensusStore,
+    follower: &mut MetadataConsensusStore,
+) {
+    let vote = leader.start_election().unwrap();
+    let response = follower.handle_vote_request(vote).unwrap();
+    assert!(response.vote_granted);
+    leader
+        .become_leader(&BTreeSet::from([
+            leader.state.node_id.clone(),
+            response.voter_id,
+        ]))
+        .unwrap();
+    let response = follower
+        .handle_append_request(leader.append_request_from(1, 8).unwrap())
+        .unwrap();
+    assert!(response.success);
+    let peer = response.node_id.clone();
+    assert!(leader.record_append_response(&peer, &response).unwrap());
+}
+
+#[test]
+fn native_birth_unbound_voter_two_step_demotion_enrollment_cannot_change_actual_store() {
+    let mut initial = born();
+    let old_voter = ClusterNodeId::new("n2").unwrap();
+    initial.nodes.insert(
+        old_voter.clone(),
+        ClusterNode::new(old_voter.clone(), "127.0.0.1:10002", 1, 1000, 1).unwrap(),
+    );
+    initial.validate().unwrap();
+    let root = tempfile::tempdir().unwrap();
+    let peer_root = tempfile::tempdir().unwrap();
+    let mut leader = open(root.path(), &initial);
+    let mut peer = MetadataConsensusStore::open(
+        peer_root.path(),
+        initial.cluster_id.clone(),
+        old_voter.clone(),
+        initial.clone(),
+        true,
+    )
+    .unwrap();
+    anchor_from_actual_vote(&mut leader, &mut peer);
+    let before = leader.state.clone();
+    let bytes = fs::read(root.path().join(DEFAULT_CLUSTER_METADATA_CONSENSUS_STATE)).unwrap();
+    let mut demoted = initial.clone();
+    demoted.generation += 1;
+    demoted.nodes.get_mut(&old_voter).unwrap().metadata_role = MetadataMemberRole::Learner;
+    demoted.validate().unwrap();
+    assert!(leader
+        .propose_topology(demoted.clone())
+        .unwrap_err()
+        .to_string()
+        .contains("same incarnation"));
+    assert_eq!(leader.state, before);
+    assert_eq!(
+        fs::read(root.path().join(DEFAULT_CLUSTER_METADATA_CONSENSUS_STATE)).unwrap(),
+        bytes
+    );
+    // The second step cannot smuggle a new birth into the rejected demotion.
+    // This serialized DATA fixture grants no actual factory authority.
+    let mut enrolled = demoted.clone();
+    enrolled
+        .nodes
+        .get_mut(&old_voter)
+        .unwrap()
+        .native_store_birth_v1 = Some(binding(initial.range_image_bootstrap_id.unwrap(), 1));
+    assert!(leader.propose_topology(enrolled).is_err());
+    assert_eq!(leader.state, before);
+    assert_eq!(
+        fs::read(root.path().join(DEFAULT_CLUSTER_METADATA_CONSENSUS_STATE)).unwrap(),
+        bytes
+    );
+    assert!(leader
+        .install_snapshot(MetadataSnapshot {
+            last_included_index: 20,
+            last_included_term: 2,
+            topology: demoted,
+            restore_activation: None
+        })
+        .is_err());
+    assert_eq!(leader.state, before);
+    let mut erased = initial.clone();
+    erased.nodes.remove(&old_voter);
+    assert!(crate::distribution::validate_native_store_birth_snapshot(&initial, &erased).is_err());
+    assert_eq!(
+        fs::read(root.path().join(DEFAULT_CLUSTER_METADATA_CONSENSUS_STATE)).unwrap(),
+        bytes
+    );
+    let id = ClusterNodeId::new("n4").unwrap();
+    let mut fresh = initial.clone();
+    fresh.generation += 1;
+    let mut node = ClusterNode::new(id.clone(), "127.0.0.1:10004", 1, 1000, 1)
+        .unwrap()
+        .as_metadata_learner();
+    node.native_store_birth_v1 = Some(binding(initial.range_image_bootstrap_id.unwrap(), 1));
+    fresh.nodes.insert(id, node);
+    fresh.validate().unwrap();
+    assert!(
+        leader.propose_topology(fresh).is_ok(),
+        "genuinely unknown learner enrollment remains available"
+    );
+}
+
+#[test]
+fn native_birth_unbound_native_replacement_requires_new_incarnation_but_generic_legacy_demotion_remains(
+) {
+    let mut initial = born();
+    let id = ClusterNodeId::new("n2").unwrap();
+    initial.nodes.insert(
+        id.clone(),
+        ClusterNode::new(id.clone(), "127.0.0.1:10002", 1, 1000, 1).unwrap(),
+    );
+    let mut replacement = initial.clone();
+    let node = replacement.nodes.get_mut(&id).unwrap();
+    node.incarnation = 2;
+    node.metadata_role = MetadataMemberRole::Learner;
+    assert!(
+        crate::distribution::validate_native_store_birth_transition(&initial, &replacement)
+            .is_err(),
+        "active predecessor cannot be replaced"
+    );
+    initial.nodes.get_mut(&id).unwrap().lifecycle = ClusterNodeLifecycle::Decommissioned;
+    assert!(
+        crate::distribution::validate_native_store_birth_transition(&initial, &replacement).is_ok(),
+        "new-incarnation learner can replace a decommissioned unbound voter"
+    );
+    replacement.nodes.get_mut(&id).unwrap().incarnation = 1;
+    assert!(
+        crate::distribution::validate_native_store_birth_transition(&initial, &replacement)
+            .is_err()
+    );
+    assert!(
+        crate::distribution::validate_native_store_birth_snapshot(&initial, &replacement).is_err()
+    );
+    // Separate NEW legacy fixture, not a downgrade or migration of native state.
+    let mut legacy = topology();
+    legacy.nodes.insert(
+        id.clone(),
+        ClusterNode::new(id.clone(), "127.0.0.1:10002", 1, 1000, 1).unwrap(),
+    );
+    let root = tempfile::tempdir().unwrap();
+    let peer_root = tempfile::tempdir().unwrap();
+    let mut leader = open(root.path(), &legacy);
+    let mut peer = MetadataConsensusStore::open(
+        peer_root.path(),
+        legacy.cluster_id.clone(),
+        id.clone(),
+        legacy.clone(),
+        true,
+    )
+    .unwrap();
+    anchor_from_actual_vote(&mut leader, &mut peer);
+    let mut demoted = legacy.clone();
+    demoted.generation += 1;
+    demoted.nodes.get_mut(&id).unwrap().metadata_role = MetadataMemberRole::Learner;
+    assert!(leader.propose_topology(demoted).is_ok());
+    assert!(leader
+        .state
+        .log
+        .iter()
+        .all(|entry| entry.topology.range_image_bootstrap_id.is_none()
+            && entry
+                .topology
+                .nodes
+                .values()
+                .all(|node| node.native_store_birth_v1.is_none())));
+}

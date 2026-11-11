@@ -155,6 +155,12 @@ impl NativeRecoveredServingReceipt {
     pub(crate) fn range_index(&self) -> u64 {
         self.record.activation_index
     }
+    pub(crate) fn native_receipt_at_activation_sha256(&self) -> &str {
+        &self.record.native_receipt_at_activation_sha256
+    }
+    pub(crate) fn local_visibility_at_activation(&self) -> u64 {
+        self.record.local_visibility_at_activation
+    }
     pub(crate) fn scope(&self) -> &RecoveryFenceScope {
         &self.record.scope
     }
@@ -177,6 +183,30 @@ fn key(range_id: RangeId) -> String {
 }
 fn history_key(range_id: RangeId, checksum: &str) -> String {
     format!("serving-configuration-history/{range_id}/{checksum}")
+}
+enum NativeServingDecision<'a> {
+    Closed(&'a ClosedNativeReadyQuorum),
+    Completed(&'a crate::distribution_range_recovery::NativeCompletionQuorum),
+}
+impl NativeServingDecision<'_> {
+    fn require_recipient_role(&self, fresh: &RecoveryRoleAdmission) -> Result<()> {
+        match self {
+            Self::Closed(q) => q.require_recipient_role(fresh),
+            Self::Completed(q) => q.require_recipient_role(fresh),
+        }
+    }
+    fn require_local_prepared(
+        &self,
+        p: &PreparedNativeRecoveryReady,
+        db: &BicDb,
+        s: &RangeWriteStore,
+        f: &RecoveryRoleAdmission,
+    ) -> Result<()> {
+        match self {
+            Self::Closed(q) => q.require_local_prepared(p, db, s, f),
+            Self::Completed(q) => q.require_local_prepared(p, db, s, f),
+        }
+    }
 }
 impl BicDb {
     pub(super) fn read_native_recovered_serving_configuration(
@@ -220,6 +250,76 @@ impl BicDb {
             ));
         }
         Ok(Some(record))
+    }
+    /// Historical completion anchor only. The actual native head may exceed
+    /// R; this cannot become NativeReady or a current-prefix/read permit.
+    pub(crate) fn observe_native_activated_completion_anchor(
+        &self,
+        observer: &crate::distribution_range_recovery::RecoveryObservationRoleAdmission,
+        scope: &RecoveryFenceScope,
+        serving_sha: &str,
+        r: u64,
+        h0: &str,
+        h: &str,
+    ) -> Result<NativeRecoveredServingReceipt> {
+        observer.require_scope(scope)?;
+        self.check_recovery_state()?;
+        let _journal = self.try_native_image_journal()?;
+        let actual = self.current_native_range_source_lineage(scope.range_id)?;
+        let record = actual
+            .serving
+            .as_ref()
+            .ok_or_else(|| invalid("activated anchor has no actual native serving record"))?;
+        let canonical = |range: &RangeDescriptor| {
+            let mut r = range.clone();
+            r.approximate_bytes = 0;
+            r.approximate_qps = 0;
+            r.replicas.sort_by_key(|r| r.id);
+            r
+        };
+        let native = self.native_recovery_admission(
+            observer.cluster_id(),
+            observer.bootstrap_id(),
+            observer.local_node_id(),
+            observer.local_member_incarnation(),
+        )?;
+        observer.require_native_identity(&native)?;
+        if record.checksum_sha256 != serving_sha
+            || !record.scope.same_session(scope)
+            || !record.binds_current_base(&actual.base)
+            || record.activation_index != r
+            || record.logical_genesis_sha256 != h0
+            || record.activation_history_sha256 != h
+            || actual.range_index() < r
+            || actual.logical_genesis_sha256() != h0
+            || canonical(actual.native_write_range()?) != canonical(observer.current_range())
+            || observer.expected_schema_sha256() != Some(actual.schema_sha256())
+            || actual.restore_activation() != observer.restore_activation()
+            || observer.member_credentials().iter().any(|(id, m)| {
+                actual.base_members().get(id).is_none_or(|a| {
+                    a.incarnation != m.incarnation
+                        || a.tls_certificate_sha256 != m.active_certificate_sha256
+                        || a.pending_tls_certificate_sha256 != m.pending_certificate_sha256
+                })
+            })
+        {
+            return Err(invalid(
+                "activated completion anchor differs from actual current same-voter native domain",
+            ));
+        }
+        let point =
+            self.read_native_history_entry(scope.range_id, actual.base.history_generation, r)?;
+        if point.commitment_sha256 != h {
+            return Err(invalid(
+                "activated completion anchor is missing from actual native history",
+            ));
+        }
+        let receipt = NativeRecoveredServingReceipt {
+            native,
+            record: record.clone(),
+        };
+        receipt.require_current(self)?;
+        Ok(receipt)
     }
     /// Read-only reissue from ACTUAL native WAL state plus an existing owned
     /// materialization pin. This is not a fresh quorum or activation authority.
@@ -265,6 +365,34 @@ impl BicDb {
         prepared: &PreparedNativeRecoveryReady,
         store: &RangeWriteStore,
         quorum: &ClosedNativeReadyQuorum,
+        fresh: &RecoveryRoleAdmission,
+    ) -> Result<NativeRecoveredServingReceipt> {
+        self.persist_native_serving_from_decision(
+            prepared,
+            store,
+            NativeServingDecision::Closed(quorum),
+            fresh,
+        )
+    }
+    pub(crate) fn persist_native_serving_from_completion_decision(
+        &self,
+        prepared: &PreparedNativeRecoveryReady,
+        store: &RangeWriteStore,
+        quorum: &crate::distribution_range_recovery::NativeCompletionQuorum,
+        fresh: &RecoveryRoleAdmission,
+    ) -> Result<NativeRecoveredServingReceipt> {
+        self.persist_native_serving_from_decision(
+            prepared,
+            store,
+            NativeServingDecision::Completed(quorum),
+            fresh,
+        )
+    }
+    fn persist_native_serving_from_decision(
+        &self,
+        prepared: &PreparedNativeRecoveryReady,
+        store: &RangeWriteStore,
+        quorum: NativeServingDecision<'_>,
         fresh: &RecoveryRoleAdmission,
     ) -> Result<NativeRecoveredServingReceipt> {
         prepared.require_current_under_role(self, store, fresh)?;

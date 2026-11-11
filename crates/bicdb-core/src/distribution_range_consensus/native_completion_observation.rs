@@ -39,6 +39,82 @@ impl RangeWriteStore {
             .into_reply();
         self.project_native_completion(ready, prepared)
     }
+    pub(crate) fn observe_activated_completion_for_observer(
+        &self,
+        db: &crate::BicDb,
+        observer: &RecoveryObservationRoleAdmission,
+        request: &NativeCompletionRequest,
+    ) -> Result<LocalNativeCompletionEvidence> {
+        observer.require_scope(&request.scope)?;
+        self.require_durable_recovery_catalog()?;
+        self.require_native_phase_format(request.scope.range_id)?;
+        self.require_no_image_install(request.scope.range_id)?;
+        let saved = self
+            .catalog
+            .recovery_fences
+            .get(&request.scope.range_id)
+            .ok_or_else(|| range_write_error("no actual activated completion record"))?;
+        if !saved.scope.same_session(&request.scope)
+            || saved.local_node_id != *observer.local_node_id()
+            || saved.local_member_incarnation != observer.local_member_incarnation()
+            || self.catalog.node_id != *observer.local_node_id()
+            || &self.catalog.cluster_id != observer.cluster_id()
+            || db.data_path().canonicalize()? != self.root.canonicalize()?
+        {
+            return Err(range_write_error(
+                "activated anchor actual store/member/scope mismatch",
+            ));
+        }
+        let recovery_state::RecoveryFencePhase::NativeActivated(activated) = &saved.phase else {
+            return Err(range_write_error("no durable activated decision"));
+        };
+        activated.validate()?;
+        let completed = &activated.completed;
+        let point = &completed.point;
+        let native = db.native_recovery_admission(
+            observer.cluster_id(),
+            observer.bootstrap_id(),
+            observer.local_node_id(),
+            observer.local_member_incarnation(),
+        )?;
+        observer.require_native_identity(&native)?;
+        let receipt = db.observe_native_activated_completion_anchor(
+            observer,
+            &request.scope,
+            &completed.native_serving_sha256,
+            point.range_index(),
+            point.logical_genesis_sha256(),
+            point.logical_history_sha256(),
+        )?;
+        if receipt.native_receipt_at_activation_sha256() != point.native_receipt_sha256()
+            || receipt.local_visibility_at_activation() != point.local_visibility_sequence()
+        {
+            return Err(range_write_error(
+                "activated anchor differs from actual native completion receipt",
+            ));
+        }
+        Ok(LocalNativeCompletionEvidence {
+            reply: NativeCompletionReply {
+                stage: crate::distribution_range_recovery::NativeCompletionStage::ActivatedAnchor,
+                evidence_version: 1,
+                scope: request.scope.clone(),
+                challenge: request.challenge,
+                observed_metadata_context_id: observer.metadata_context_id(),
+                observed_metadata_term: observer.metadata_term(),
+                observed_metadata_read_index: observer.metadata_read_index(),
+                node_id: self.catalog.node_id.clone(),
+                member_incarnation: observer.local_member_incarnation(),
+                store_open_id: self.open_id,
+                native_database_incarnation: native.database_incarnation().to_owned(),
+                range_index: point.range_index(),
+                logical_genesis_sha256: point.logical_genesis_sha256().to_owned(),
+                logical_history_sha256: point.logical_history_sha256().to_owned(),
+                native_receipt_sha256: point.native_receipt_sha256().to_owned(),
+                local_visibility_sequence_at_completion: point.local_visibility_sequence(),
+                native_serving_sha256: completed.native_serving_sha256.clone(),
+            },
+        })
+    }
     fn project_native_completion(
         &self,
         ready: crate::distribution_range_recovery::NativeReadyReply,
@@ -66,10 +142,10 @@ impl RangeWriteStore {
             ));
         }
         Ok(LocalNativeCompletionEvidence {
-            reply: NativeCompletionReply {
+            reply: NativeCompletionReply::from_frozen_projection(
                 ready,
-                native_serving_sha256: completed.native_serving_sha256.clone(),
-            },
+                completed.native_serving_sha256.clone(),
+            )?,
         })
     }
 }

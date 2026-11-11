@@ -39,8 +39,9 @@ use crate::{
     SchemaCompatibilityAuthority, SchemaCompatibilityFingerprint, SignedClusterSchemaBundle,
 };
 
-mod native_image_install;
+mod native_activation;
 mod native_completion;
+mod native_image_install;
 mod native_ready;
 
 pub const RANGE_LEARNER_APPLY_FORMAT_VERSION: u32 = 1;
@@ -970,6 +971,8 @@ impl ClusterDataNodeService {
         self.range_mutations
             .validate_quiescent_frozen(preflight.range_id(), frozen)?;
         cancellation.check()?;
+        self.range_mutations
+            .invalidate_serving_generation(preflight.range_id());
         frozen.try_rotate_owner(preflight.attempt_id())
     }
 
@@ -1043,9 +1046,7 @@ impl ClusterDataNodeService {
             ));
         }
         drop(db);
-        finalization.return_owned_image_to_recovery(
-            &self.range_writes, role, scope, frozen, parent,
-        )
+        finalization.return_owned_image_to_recovery(&self.range_writes, role, scope, frozen, parent)
     }
 
     /// Receiver-only: the runtime already owns the drained range freeze and

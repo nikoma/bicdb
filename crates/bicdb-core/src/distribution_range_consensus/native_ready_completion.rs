@@ -67,6 +67,42 @@ impl NativeRecoveryCompletedFrozenReceipt {
         Ok(())
     }
 }
+enum NativeCompletionDecision {
+    Closed(ClosedNativeReadyQuorum),
+    Completed(crate::distribution_range_recovery::NativeCompletionQuorum),
+}
+impl NativeCompletionDecision {
+    fn require_recipient_role(&self, f: &RecoveryRoleAdmission) -> Result<()> {
+        match self {
+            Self::Closed(q) => q.require_recipient_role(f),
+            Self::Completed(q) => q.require_recipient_role(f),
+        }
+    }
+    fn require_local_prepared(
+        &self,
+        p: &PreparedNativeRecoveryReady,
+        db: &crate::BicDb,
+        s: &RangeWriteStore,
+        f: &RecoveryRoleAdmission,
+    ) -> Result<()> {
+        match self {
+            Self::Closed(q) => q.require_local_prepared(p, db, s, f),
+            Self::Completed(q) => q.require_local_prepared(p, db, s, f),
+        }
+    }
+    fn persist_native(
+        &self,
+        p: &PreparedNativeRecoveryReady,
+        db: &crate::BicDb,
+        s: &RangeWriteStore,
+        f: &RecoveryRoleAdmission,
+    ) -> Result<NativeRecoveredServingReceipt> {
+        match self {
+            Self::Closed(q) => db.persist_native_recovered_serving_configuration(p, s, q, f),
+            Self::Completed(q) => db.persist_native_serving_from_completion_decision(p, s, q, f),
+        }
+    }
+}
 impl RangeWriteStore {
     pub(crate) fn complete_native_recovery_frozen(
         &mut self,
@@ -102,10 +138,40 @@ impl RangeWriteStore {
         fresh: &RecoveryRoleAdmission,
         write: impl FnOnce(&Path, &[u8], bool) -> Result<()>,
     ) -> Result<NativeRecoveryCompletedFrozenReceipt> {
+        self.persist_native_completion_decision_with(
+            db,
+            prepared,
+            NativeCompletionDecision::Closed(quorum),
+            fresh,
+            write,
+        )
+    }
+    pub(crate) fn adopt_native_completion_decision(
+        &mut self,
+        db: &crate::BicDb,
+        prepared: &PreparedNativeRecoveryReady,
+        quorum: crate::distribution_range_recovery::NativeCompletionQuorum,
+        fresh: &RecoveryRoleAdmission,
+    ) -> Result<NativeRecoveryCompletedFrozenReceipt> {
+        self.persist_native_completion_decision_with(
+            db,
+            prepared,
+            NativeCompletionDecision::Completed(quorum),
+            fresh,
+            crate::storage::write_atomic,
+        )
+    }
+    fn persist_native_completion_decision_with(
+        &mut self,
+        db: &crate::BicDb,
+        prepared: &PreparedNativeRecoveryReady,
+        quorum: NativeCompletionDecision,
+        fresh: &RecoveryRoleAdmission,
+        write: impl FnOnce(&Path, &[u8], bool) -> Result<()>,
+    ) -> Result<NativeRecoveryCompletedFrozenReceipt> {
         quorum.require_local_prepared(prepared, db, self, fresh)?;
         // FIRST: actual native-WAL configuration, while Prepared blocks writes.
-        let native =
-            db.persist_native_recovered_serving_configuration(prepared, self, &quorum, fresh)?;
+        let native = quorum.persist_native(prepared, db, self, fresh)?;
         let scope = prepared.scope().clone();
         let completed = NativeCompletedPoint {
             point: prepared.actual_prepared_point(),

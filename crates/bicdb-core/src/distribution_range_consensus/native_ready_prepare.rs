@@ -34,6 +34,21 @@ impl NativePreparedPoint {
         }
         Ok(())
     }
+    pub(super) fn range_index(&self) -> u64 {
+        self.range_index
+    }
+    pub(super) fn logical_genesis_sha256(&self) -> &str {
+        &self.logical_genesis_sha256
+    }
+    pub(super) fn logical_history_sha256(&self) -> &str {
+        &self.logical_history_sha256
+    }
+    pub(super) fn native_receipt_sha256(&self) -> &str {
+        &self.native_receipt_sha256
+    }
+    pub(super) fn local_visibility_sequence(&self) -> u64 {
+        self.local_visibility_sequence
+    }
     fn from_actual(physical: &LocalNativeRecoveryReady) -> Self {
         Self {
             format_version: 1,
@@ -47,6 +62,12 @@ impl NativePreparedPoint {
 }
 
 pub(super) fn validate_native_prepared_catalog(catalog: &RangeWriteCatalog) -> Result<()> {
+    if !matches!(
+        catalog.format_version,
+        1..=super::native_activation::NATIVE_ACTIVATED_FORMAT
+    ) {
+        return Err(range_write_error("unknown native catalogue format"));
+    }
     for (range_id, record) in &catalog.recovery_fences {
         let (point, minimum_format) = match &record.phase {
             RecoveryFencePhase::NativePrepared(point) => (point, NATIVE_READY_CATALOG_FORMAT),
@@ -55,6 +76,13 @@ pub(super) fn validate_native_prepared_catalog(catalog: &RangeWriteCatalog) -> R
                 (
                     &completed.point,
                     super::native_ready_completion::NATIVE_COMPLETED_CATALOG_FORMAT,
+                )
+            }
+            RecoveryFencePhase::NativeActivated(activated) => {
+                activated.validate()?;
+                (
+                    &activated.completed.point,
+                    super::native_activation::NATIVE_ACTIVATED_FORMAT,
                 )
             }
             _ => continue,
@@ -70,16 +98,26 @@ pub(super) fn validate_native_prepared_catalog(catalog: &RangeWriteCatalog) -> R
                     record.scope.purpose,
                     MetadataRecoveryRolePurpose::NormalRecovery
                 )
-                || log.last_index != point.range_index
-                || log.resolved_through != point.range_index
+                || if matches!(record.phase, RecoveryFencePhase::NativeActivated(_)) {
+                    log.last_index < point.range_index || log.resolved_through < point.range_index
+                } else {
+                    log.last_index != point.range_index || log.resolved_through != point.range_index
+                }
                 || log.current_epoch != record.scope.range_epoch
                 || catalog.image_install_intents.contains_key(range_id)
-                || log.entries.values().any(|entry| {
-                    !matches!(
-                        entry.state,
-                        RangeWriteState::Applied | RangeWriteState::Aborted
-                    )
-                })
+                || log
+                    .entries
+                    .values()
+                    .filter(|entry| {
+                        !matches!(record.phase, RecoveryFencePhase::NativeActivated(_))
+                            || entry.command.index <= point.range_index
+                    })
+                    .any(|entry| {
+                        !matches!(
+                            entry.state,
+                            RangeWriteState::Applied | RangeWriteState::Aborted
+                        )
+                    })
             {
                 return Err(range_write_error(
                     "native preparation disagrees with actual resolved catalogue",
@@ -107,6 +145,94 @@ struct NativeReadyCatalogueBinding {
     native_completed_serving_sha256: Option<String>,
 }
 impl PreparedNativeRecoveryReady {
+    pub(crate) fn require_completed_for_activation(
+        &self,
+        db: &crate::BicDb,
+        store: &RangeWriteStore,
+        fresh: &RecoveryRoleAdmission,
+    ) -> Result<crate::db::NativeRecoveredServingReceipt> {
+        self.require_current_under_role(db, store, fresh)?;
+        let saved = &store.catalog.recovery_fences[&self.scope.range_id];
+        let RecoveryFencePhase::NativeCompleted(point) = &saved.phase else {
+            return Err(range_write_error(
+                "activation requires actual completed-frozen state",
+            ));
+        };
+        db.observe_native_recovered_serving_for_physical(
+            &self.physical,
+            &self.scope,
+            &point.native_serving_sha256,
+        )
+    }
+    pub(crate) fn require_activated_materialization(
+        &self,
+        db: &crate::BicDb,
+        store: &RangeWriteStore,
+        fresh: &RecoveryRoleAdmission,
+    ) -> Result<crate::db::NativeRecoveredServingReceipt> {
+        self.validate_activated_refsync(db, store, fresh)?;
+        store.require_durable_recovery_catalog()?;
+        let RecoveryFencePhase::NativeActivated(activated) =
+            &store.catalog.recovery_fences[&self.scope.range_id].phase
+        else {
+            unreachable!("validated phase")
+        };
+        db.observe_native_recovered_serving_for_physical(
+            &self.physical,
+            &self.scope,
+            &activated.completed.native_serving_sha256,
+        )
+    }
+    pub(super) fn validate_activated_refsync(
+        &self,
+        db: &crate::BicDb,
+        store: &RangeWriteStore,
+        fresh: &RecoveryRoleAdmission,
+    ) -> Result<()> {
+        self.scope.require_role(fresh)?;
+        self.physical.require_owned_materialization_current(db)?;
+        store.require_no_image_install(self.scope.range_id)?;
+        validate_native_prepared_catalog(&store.catalog)?;
+        store.require_native_recovery_identity(fresh, self.physical.native_admission())?;
+        let saved = store
+            .catalog
+            .recovery_fences
+            .get(&self.scope.range_id)
+            .ok_or_else(|| range_write_error("activation lost its actual saved record"))?;
+        let RecoveryFencePhase::NativeActivated(activated) = &saved.phase else {
+            return Err(range_write_error("no actual durable native activation"));
+        };
+        let binding = self
+            .binding
+            .try_lock()
+            .ok_or_else(|| range_write_error("owned native binding busy at activation release"))?;
+        let completed_phase = RecoveryFencePhase::NativeCompleted(activated.completed.clone());
+        if self.store_open_id != store.open_id
+            || !saved.scope.same_session(&self.scope)
+            || saved.native_database_incarnation != self.native_database_incarnation()
+            || saved.local_node_id != *fresh.local_node_id()
+            || saved.local_member_incarnation != fresh.local_member_incarnation()
+            || activated.completed.point != self.point
+            || self.point != NativePreparedPoint::from_actual(&self.physical)
+            || binding.native_completed_serving_sha256.as_deref()
+                != Some(activated.completed.native_serving_sha256.as_str())
+            || binding.catalog_sha256 != activated.completed_catalog_sha256
+            || store.recovery_range_catalog_sha256_with_phase(
+                self.scope.range_id,
+                Some(&completed_phase),
+            )? != activated.completed_catalog_sha256
+        {
+            return Err(range_write_error(
+                "activation changed state beyond the exact saved completed phase",
+            ));
+        }
+        db.observe_native_recovered_serving_for_physical(
+            &self.physical,
+            &self.scope,
+            &activated.completed.native_serving_sha256,
+        )?;
+        Ok(())
+    }
     pub(super) fn actual_prepared_point(&self) -> NativePreparedPoint {
         self.point.clone()
     }
@@ -243,6 +369,7 @@ impl PreparedNativeRecoveryReady {
         observer.require_native_identity(self.physical.native_admission())?;
         self.physical.require_owned_materialization_current(db)?;
         store.require_durable_recovery_catalog()?;
+        store.require_native_phase_format(self.scope.range_id)?;
         store.require_no_image_install(self.scope.range_id)?;
         let saved = store
             .catalog
@@ -303,6 +430,7 @@ impl RangeWriteStore {
         scope: &RecoveryFenceScope,
     ) -> Result<()> {
         self.require_durable_recovery_catalog()?;
+        self.require_native_phase_format(scope.range_id)?;
         self.require_no_image_install(scope.range_id)?;
         self.require_native_recovery_identity(role, native)?;
         scope.require_role(role)?;

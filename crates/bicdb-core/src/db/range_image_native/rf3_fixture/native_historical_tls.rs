@@ -105,6 +105,15 @@ struct ObservedTlsTransport {
     lag_status_seen: Arc<AtomicBool>,
 }
 impl RangeWriteTransport for ObservedTlsTransport {
+    fn observe_native_completion_observation(
+        &self,
+        destination: &ClusterNodeId,
+        request: &crate::distribution_range_recovery::NativeCompletionRequest,
+        parent: &CancellationToken,
+    ) -> Result<crate::distribution_range_recovery::NativeCompletionObservation> {
+        self.inner
+            .observe_native_completion_observation(destination, request, parent)
+    }
     fn observe_native_ready_observation(
         &self,
         destination: &ClusterNodeId,
@@ -1046,7 +1055,7 @@ fn native_ready_actual_tls_fast_clean_zero_minority_does_not_starve_matching_one
 
 #[test]
 fn native_completion_actual_tls_sequential_replicas_keep_frozen_pins_and_duplicate_sha() {
-    use crate::distribution_range_recovery::FrozenNativeReadyStage;
+    use crate::distribution_range_recovery::{FrozenNativeReadyStage, NativeCompletionStage};
     let (fixture, scope) = NetworkFixture::all_r1_prepared();
     assert!(fixture.completion_status("n0", &scope).is_err());
     fixture.wait_idle();
@@ -1073,11 +1082,8 @@ fn native_completion_actual_tls_sequential_replicas_keep_frozen_pins_and_duplica
     for name in ["n0", "n1", "n2"] {
         let result = fixture.complete(name, &scope).unwrap();
         fixture.wait_idle();
-        assert_eq!(
-            result.reply().ready.stage,
-            FrozenNativeReadyStage::NativeCompletedFrozen
-        );
-        assert_eq!(result.reply().ready.range_index, 1);
+        assert_eq!(result.reply().stage, NativeCompletionStage::CompletedFrozen);
+        assert_eq!(result.reply().range_index, 1);
         hashes.insert(node(name), result.reply().native_serving_sha256.clone());
         let status = fixture.status_ready(name, &scope).unwrap();
         fixture.wait_idle();
@@ -1108,7 +1114,7 @@ fn native_completion_actual_tls_sequential_replicas_keep_frozen_pins_and_duplica
 
 #[test]
 fn native_completion_actual_tls_wrong_actor_cannot_complete_but_current_voter_can_observe() {
-    use crate::distribution_range_recovery::FrozenNativeReadyStage;
+    use crate::distribution_range_recovery::{FrozenNativeReadyStage, NativeCompletionStage};
     let (fixture, scope) = NetworkFixture::all_r1_prepared();
     let wrong = fixture.clients[&node("n2")].complete_native_recovery_observation(
         &node("n0"),
@@ -1160,7 +1166,7 @@ fn native_completion_actual_tls_wrong_actor_cannot_complete_but_current_voter_ca
 #[test]
 fn native_completion_actual_tls_canceled_socket_after_real_persistence_recovers_by_readonly_status()
 {
-    use crate::distribution_range_recovery::FrozenNativeReadyStage;
+    use crate::distribution_range_recovery::{FrozenNativeReadyStage, NativeCompletionStage};
     let (fixture, scope) = NetworkFixture::all_r1_prepared();
     for name in ["n0", "n1"] {
         fixture.complete(name, &scope).unwrap();
@@ -1205,10 +1211,10 @@ fn native_completion_actual_tls_canceled_socket_after_real_persistence_recovers_
     let observed = fixture.completion_status("n2", &scope).unwrap();
     fixture.wait_idle();
     assert_eq!(
-        observed.reply().ready.stage,
-        FrozenNativeReadyStage::NativeCompletedFrozen
+        observed.reply().stage,
+        NativeCompletionStage::CompletedFrozen
     );
-    assert_eq!(observed.reply().ready.range_index, 1);
+    assert_eq!(observed.reply().range_index, 1);
     let retry = fixture.complete("n2", &scope).unwrap();
     fixture.wait_idle();
     assert_eq!(

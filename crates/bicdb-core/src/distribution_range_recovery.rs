@@ -28,9 +28,14 @@ pub(crate) use image_compatibility::{RecoverySourceHistoryRound, VerifiedRecover
 pub(crate) use image_history::{
     RecoveryImageHistoryObligationsV1, RecoveryNativeHistoryPointV1, RecoveryNativePendingHistoryV1,
 };
+mod native_completion_quorum;
+pub(crate) use native_completion_quorum::{
+    NativeCompletionQuorum, NativeCompletionQuorumRound, NativeCompletionSelection,
+};
 mod native_completion;
 pub(crate) use native_completion::{
     NativeCompletionObservation, NativeCompletionReply, NativeCompletionRequest,
+    NativeCompletionStage,
 };
 mod native_ready;
 pub(crate) use native_ready::{
@@ -247,6 +252,7 @@ pub(crate) enum RecoveryFenceObservationPhase {
     ActiveRecovery,
     NativePrepared,
     NativeCompletedFrozen,
+    NativeActivatedAnchor,
     CompletedEpochAuthority,
 }
 
@@ -823,6 +829,18 @@ impl RecoveryObservationRoleAdmission {
     }
     pub(crate) fn bootstrap_id(&self) -> Uuid {
         self.fresh.bootstrap_id()
+    }
+    pub(crate) fn current_range(&self) -> &RangeDescriptor {
+        self.fresh.current_range()
+    }
+    pub(crate) fn expected_schema_sha256(&self) -> Option<&str> {
+        self.fresh.expected_schema_sha256()
+    }
+    pub(crate) fn restore_activation(&self) -> Option<&MetadataRestoreActivation> {
+        self.fresh.restore_activation()
+    }
+    pub(crate) fn member_credentials(&self) -> &BTreeMap<ClusterNodeId, RecoveryMemberIdentity> {
+        self.fresh.member_credentials()
     }
     /// Readonly provenance only; this does not expose the underlying mutation
     /// role or convert an observation purpose into recovery permission.

@@ -63,6 +63,8 @@ pub(crate) use range_image_install::{
     NativeTargetImageVerificationProgress, NativeTargetImageVerifier,
     TargetNativeImageSnapshotBound,
 };
+mod native_activation;
+pub(crate) use native_activation::NativeActivatedOpenGuard;
 mod native_recovery_ready;
 mod range_image_native;
 pub(crate) use native_recovery_ready::{LocalNativeRecoveryReady, NativeLocalVisibilitySequence};

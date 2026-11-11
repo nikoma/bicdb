@@ -29,10 +29,12 @@ use installed_anchor::{NativeRangeBaseBinding, NativeRangeImageAnchor};
 #[cfg(test)]
 thread_local! {
     static TEST_REJECT_NATIVE_AFTER_ADMISSION: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    static TEST_REJECT_NATIVE_AFTER_LOCAL_WAL: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
 pub(super) use certified_prefix::NativeRangeScopeRegistry;
 pub(crate) use certified_prefix::{
     KnownNativeRecoveryPrefix, NativeRangeInstallSafety, NativeRangePendingApply,
+    NativeRecoveryAppliedReceipt,
 };
 
 pub(super) fn native_key(key: &str) -> Vec<u8> {
@@ -488,6 +490,14 @@ impl BicDb {
     #[cfg(test)]
     pub(crate) fn test_reject_next_native_after_admission() {
         TEST_REJECT_NATIVE_AFTER_ADMISSION.with(|reject| reject.set(true));
+    }
+    #[cfg(test)]
+    pub(crate) fn test_reject_next_native_after_local_wal() {
+        TEST_REJECT_NATIVE_AFTER_LOCAL_WAL.with(|reject| reject.set(true));
+    }
+    #[cfg(test)]
+    pub(super) fn test_native_after_local_wal_rejected(&self) -> bool {
+        TEST_REJECT_NATIVE_AFTER_LOCAL_WAL.with(|reject| reject.replace(false))
     }
     #[cfg(test)]
     pub(super) fn test_native_admission_rejected(&self) -> bool {

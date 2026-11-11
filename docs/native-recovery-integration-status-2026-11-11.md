@@ -15,6 +15,8 @@ merge/push verification, and independent physical qualification.
 | Local physical prefix proof and actual local MVCC sequence | Passed component tests | Private `10a10ba6`; [32 distinct tests](evidence/local-native-readiness-2026-11-11/README.md), eight specifically exercise local readiness | New assembled source must be revalidated; no leader/serving or strong-read permit |
 | Actual native image publication and full history beyond raw payload retention | Passed component tests | Private `8a7ddf6e`; [34 distinct tests](evidence/native-nonzero-target-install-2026-11-11/README.md), including R1 and R1025 | Actual current-voter recovery, activation, RPCs, faults and physical scale-out remain open |
 | Current-quorum source compatibility and physical repair-cut producer | Passed initial genesis component scenarios; nonempty/fault cases open | Private `da378dd9`/1.0.471-beta; [56 distinct integrated tests](evidence/native-recovery-compose-471-2026-11-11/README.md), including actual RF3-configured genesis source verification/capture and poisoned retry | Nonempty quorum-compatible cut, authenticated conflicting-history negatives, actual repair completion and activation |
+| Nonempty physical image catalogue adoption/finalization | Passed five component tests | Private `9e37d812`/1.0.471-beta; [38-test replay/adoption bundle](evidence/native-catalogue-historical-recovery-2026-11-11/README.md) | Actual Runtime-owned CurrentVoterRepair choreography and qualified completion/activation remain open |
+| Historical native row/WAL replay | Passed two component tests | Same `9e37d812`; actual current certificate quorum, old-WAL cut/reopen/new local WAL and original command identity | Actual authenticated participant RPCs, normal replica Apply, recovery completion, new write and strong-read qualification remain open |
 | Replica/leader/strong-read readiness separation | Not tested end-to-end; implementation incomplete | Local physical proof is opaque and owns its actual read pin; permanent source promises and target refusal remain | Qualified serving configuration, complete historical recovery, leader recovery, and actual strong-read barrier/endpoint |
 | Audit/sync/broker effects in distributed range decisions | Failed source coverage against the complete-effect requirement; runtime loss not tested | Source analysis below | Exact original effects and replay identity must survive leader loss; ordinary row checks cannot qualify this |
 | Four-to-five-node expansion and sustained gain after convergence | Failed original qualification; new physical campaign not tested | Original Azure evidence remains authoritative; no new campaign | Zero lost ACKs, correct consistency/routing, bounded fault-safe convergence, stable five-node throughput comparison |
@@ -45,6 +47,18 @@ not establish a serving configuration, authorize a new leader, or permit a
 successful strong read. Activation still requires independent old/new quorum
 safety and a durable configuration ancestry receipt. The physical capture anchor
 and intended future configuration must remain distinct.
+
+A verified native image can now be adopted as an explicit format-6 catalogue
+snapshot, with the actual image R/H/receipt and birth/attempt identity retained.
+This does not invent per-command Applied labels. Every image/recovery/promise
+refusal remains; counter advancement is not activation. Five actual component
+tests cover adoption, no new admission, idempotent retry without row replay,
+persist-acknowledgment ambiguity/re-fsync, strict close/reopen/reissue, and sealed
+finalization rejecting a foreign freeze. The two historical native tests also
+establish actual local replay with a current certificate majority and fresh WAL
+after cutting an older local WAL. Their explicit current metadata configuration
+is a test precondition, not an automatic failover test. All result/source scopes
+are in the separate 38-test bundle.
 
 The earlier global-catalogue digest was too conservative for availability:
 unrelated ranges could invalidate an otherwise frozen local proof. A range-scoped
@@ -155,3 +169,30 @@ The original and instrumented Azure test resource groups were deleted and deleti
 was verified. No new Azure allocation is authorized by this report. The original
 USD25/eight-hour window has expired. Prepare and locally qualify a concrete pinned
 binary and experiment plan before requesting a renewed spend/time window.
+
+
+## Additional bounded-recovery gates from source review
+
+These are source-grounded limitations/hypotheses, not demonstrated Azure causes
+or observed acknowledged-data loss:
+
+- **Not tested / source contract gap:** historical command/entry transport has a
+  2 MiB bound, while native origin admission did not enforce the same complete
+  recovery-entry and configured transport-frame bounds before durable quorum
+  work. A Native-mode pre-admission safeguard is being tested separately; it is
+  a limited contract and does not qualify existing larger-value workloads.
+- **Not tested / liveness hypothesis:** a clean donor prefix below a certified
+  unresolved tail may be unable to provide an image, while a far-behind current
+  voter rejects certifying that tail because its raw log is not contiguous. The
+  smallest genuine characterization uses three ACKs, donor native2/CQ3 and a
+  healthy peer native/raw0 after the original source becomes unavailable. Do not
+  bypass the native floor or create fake Applied/ACK lists to make it pass.
+- **Not tested:** actual normal writes to a DIFFERENT range during source capture
+  still need a running-origin test. Source review finds normal admitted origin
+  skips the unscoped database permit; direct unscoped writes intentionally remain
+  blocked. Earlier high-B tests seeded other ranges before capture and do not
+  prove this concurrent availability property.
+- **Not tested:** transfer cancellation before any image intent needs a distinct
+  unchanged-preflight return proof. After intent/physical changes, an exclusive
+  attempted install must remain fenced and use actual resume/adoption evidence.
+  A blind Drop cannot grant a return to ordinary recovery or user admission.

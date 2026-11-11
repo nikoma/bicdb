@@ -580,7 +580,10 @@ pub(crate) fn enable_sql_catalog_intents(root: &Path) -> Result<()> {
 pub(crate) fn enable_sql_rename_intents(root: &Path) -> Result<()> {
     let mut metadata = read_or_legacy_metadata(root)?;
     validate_supported(&metadata)?;
-    if metadata.feature_flags.insert(SQL_RENAME_INTENTS_FEATURE_FLAG.into()) {
+    if metadata
+        .feature_flags
+        .insert(SQL_RENAME_INTENTS_FEATURE_FLAG.into())
+    {
         persist_metadata(root, &metadata, true)?;
     }
     Ok(())

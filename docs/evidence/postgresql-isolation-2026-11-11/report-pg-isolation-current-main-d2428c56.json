@@ -1,0 +1,165 @@
+{
+  "source": "d2428c565aa62b7625e2e54b7586a6d79f646180",
+  "scope": "Integrated public472 parent. Fix test fixture required startup profile declaration, retain PostgreSQL historical controls and independently execute Oracle snapshot expectations. First exact focused control includes primary MIN/MAX, both stores. Stop on any failure before broad validation. Then wire RR/SSI/snapshot, RLS/index plans and broad Core/SQL libraries/generalSQL/fullOracle/protocol/read-only suites. No original application assertion/timeout changes; not full application or production acceptance.",
+  "started_unix": 1794419648.4458785,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-pgwire",
+        "--test",
+        "fixed_snapshot_index_visibility"
+      ],
+      "started_unix": 1794419648.4461572,
+      "exit": 0,
+      "finished_unix": 1794419831.5843801
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-pgwire",
+        "--test",
+        "fixed_snapshot_boundary",
+        "--test",
+        "writable_repeatable_read",
+        "--test",
+        "serializable_dependencies"
+      ],
+      "started_unix": 1794419831.5846066,
+      "exit": 0,
+      "finished_unix": 1794419857.8043807
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "rls_index_candidates",
+        "--test",
+        "explain_matches_execution",
+        "--test",
+        "plan_diagnostics"
+      ],
+      "started_unix": 1794419857.8046215,
+      "exit": 0,
+      "finished_unix": 1794420059.7083929
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--lib",
+        "--",
+        "--test-threads=4"
+      ],
+      "started_unix": 1794420059.7086747,
+      "exit": 0,
+      "finished_unix": 1794420132.4202201
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--lib",
+        "--",
+        "--test-threads=4"
+      ],
+      "started_unix": 1794420132.420496,
+      "exit": 0,
+      "finished_unix": 1794420339.880073
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "sql",
+        "--",
+        "--test-threads=4"
+      ],
+      "started_unix": 1794420339.8802962,
+      "exit": 0,
+      "finished_unix": 1794420378.632073
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-pgwire",
+        "--test",
+        "oracle_hr",
+        "--test",
+        "protocol",
+        "--test",
+        "read_only_transactions",
+        "--",
+        "--test-threads=4"
+      ],
+      "started_unix": 1794420378.6323607,
+      "exit": 0,
+      "finished_unix": 1794420437.4945002
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "session_statement_snapshots",
+        "--test",
+        "pg_snapshot"
+      ],
+      "started_unix": 1794420437.4947236,
+      "exit": 0,
+      "finished_unix": 1794420446.4608645
+    }
+  ],
+  "status": "focused_passed",
+  "finished_unix": 1794420446.4614449
+}

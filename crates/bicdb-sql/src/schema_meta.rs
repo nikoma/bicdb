@@ -2129,9 +2129,26 @@ pub fn pg_user_type_oid_by_name(db: &BicDb, type_name: &str) -> Result<Option<i3
         .strip_suffix("[]")
         .map(|name| (name.trim(), true))
         .unwrap_or((type_name, false));
-    let (schema_name, name) = crate::eval::alias_schema_and_name(type_name);
-    let schema_name = schema_name.as_deref().unwrap_or("public");
-    let name = name.as_str();
+    // Stored routine/collection declarations carry canonical spelling,
+    // including Oracle uppercase and quoted mixed-case identities. The SQL
+    // alias helper folds unquoted words and cannot resolve those declarations.
+    // Tokenize separators so quoted dots/escaped quotes remain one identity,
+    // while preserving the spelling accepted by this catalog API before it
+    // acquired scoped read admission.
+    let Ok(tokens) = Tokenizer::new(&PostgreSqlDialect {}, type_name).tokenize() else {
+        return Ok(None);
+    };
+    let parts = tokens
+        .into_iter()
+        .filter(|token| !matches!(token, Token::Whitespace(_)))
+        .collect::<Vec<_>>();
+    let (schema_name, name) = match parts.as_slice() {
+        [Token::Word(name)] => ("public", name.value.as_str()),
+        [Token::Word(schema), Token::Period, Token::Word(name)] => {
+            (schema.value.as_str(), name.value.as_str())
+        }
+        _ => return Ok(None),
+    };
     let oid = if let Some(user_type) = load_user_type(db, schema_name, name)? {
         if array {
             user_type.array_oid

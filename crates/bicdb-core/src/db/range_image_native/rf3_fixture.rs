@@ -416,7 +416,9 @@ fn native_rf3_actual_services_ack_origin_while_bare_replica_apply_remains_refuse
                 .as_deref()
                 .is_some_and(|error| error.contains("authenticated current-leader instruction"))));
         let service = fixture.services[node].lock();
-        let probe = service.store().probe(range.id, range.epoch, 1).unwrap();
+        let probe = service
+            .probe_range_write_for_peer(range, leader, 1)
+            .unwrap();
         let entry = probe.entry.unwrap();
         assert_eq!(entry.state, RangeWriteState::QuorumCommitted);
         assert_eq!(probe.progress.last_index, 1);

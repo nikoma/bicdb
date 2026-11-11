@@ -9,6 +9,22 @@ const IMAGES: &str = "__bicdb_rename_images";
 const GC: &str = "__bicdb_rename_gc";
 const GC_BATCH: usize = 128;
 
+pub(super) fn scope_collections() -> [&'static str; 2] {
+    [HEADERS, IMAGES]
+}
+
+/// A durable absent header proves that the business decision consumed this
+/// journal. Finalize before any post-commit SQL catalog work is attempted.
+pub(super) fn finish_committed(db: &BicDb, id: &str) -> Result<()> {
+    if load(db, id)?.is_some() {
+        return Err(invalid("cannot release an undecided rename scope"));
+    }
+    if let Some(scope) = db.catalog_scope_for_context(id)? {
+        db.finish_catalog_scope(&scope)?;
+    }
+    Ok(())
+}
+
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct GcCursor {
@@ -307,12 +323,25 @@ pub(super) fn undo_session(session: &mut SqlSession<'_>, id: &str) -> Result<()>
 }
 
 fn rollback_inner(db: &mut BicDb, id: &str, mut owner: Option<&mut Transaction>) -> Result<()> {
-    match owner.as_deref() {
-        Some(tx) => db.check_catalog_undo_owner(tx)?,
-        None => db.check_catalog_recovery_quiescent()?,
-    }
     let Some(mut header) = load(db, id)? else {
+        finish_committed(db, id)?;
         return Ok(());
+    };
+    let scope = db.catalog_scope_for_context(id)?;
+    let access = if let Some(scope) = &scope {
+        match owner.as_deref() {
+            Some(tx) => tx.check_catalog_scope_owner(scope)?,
+            None => db.resume_catalog_scope_for_recovery(scope)?,
+        }
+        Some(db.enter_catalog_scope(scope)?)
+    } else {
+        // Startup and legacy journals have no runtime reservation. Their
+        // recovery still requires the original global admission checks.
+        match owner.as_deref() {
+            Some(tx) => db.check_catalog_undo_owner(tx)?,
+            None => db.check_catalog_recovery_quiescent()?,
+        }
+        None
     };
     let remaining = header.remaining.unwrap_or(header.count);
     // Validate the complete remaining image inventory before any repair. Its
@@ -344,6 +373,9 @@ fn rollback_inner(db: &mut BicDb, id: &str, mut owner: Option<&mut Transaction>)
                 }
                 let name = backing_name(db, &storage, namespace_id)?;
                 storage_for(db, &name)?;
+                if let Some(scope) = &scope {
+                    db.check_catalog_scope_resources(scope, &[], &[(name.clone(), id.clone())])?;
+                }
                 if name == SCHEMA_COLLECTION {
                     if let Some(record) = previous {
                         let schema: TableSchema = serde_json::from_value(record.metadata)?;
@@ -366,6 +398,9 @@ fn rollback_inner(db: &mut BicDb, id: &str, mut owner: Option<&mut Transaction>)
                 require_user_relation_name(&new)?;
                 if old == new {
                     return Err(invalid("invalid rename effect"));
+                }
+                if let Some(scope) = &scope {
+                    db.check_catalog_scope_resources(scope, &[old.clone(), new.clone()], &[])?;
                 }
                 let matches = names
                     .iter()
@@ -451,6 +486,10 @@ fn rollback_inner(db: &mut BicDb, id: &str, mut owner: Option<&mut Transaction>)
         persist_header(db, &header)?;
     }
     db.delete(HEADERS, &header.id)?;
+    drop(access);
+    if let Some(scope) = &scope {
+        db.finish_catalog_scope(scope)?;
+    }
     Ok(())
 }
 

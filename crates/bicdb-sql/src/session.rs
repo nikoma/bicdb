@@ -2126,6 +2126,21 @@ impl SqlSessionDdlUndoLog {
     pub fn len(&self) -> usize {
         self.entries.len()
     }
+
+    /// Native hosts that commit outside SqlSession must release only rename
+    /// scopes whose durable business decision consumed the journal header.
+    pub fn finish_committed_catalog_scopes(&self, db: &BicDb) -> Result<()> {
+        finish_committed_catalog_scopes(db, &self.entries)
+    }
+}
+
+fn finish_committed_catalog_scopes(db: &BicDb, entries: &[DdlUndo]) -> Result<()> {
+    for entry in entries {
+        if let DdlUndo::RestoreRenameJournal { id, .. } = entry {
+            rename_journal::finish_committed(db, id)?;
+        }
+    }
+    Ok(())
 }
 
 #[derive(Clone, Debug)]
@@ -4357,6 +4372,7 @@ impl<'db> SqlSession<'db> {
             self.snapshot_floor = self.snapshot_floor.max(committed_sequence);
         }
         let committed_catalog_work = !self.ddl_undo.is_empty();
+        finish_committed_catalog_scopes(self.db_ref(), &self.ddl_undo)?;
         self.ddl_undo.clear();
         self.savepoints.clear();
         self.commit_guc_transaction();

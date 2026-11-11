@@ -394,6 +394,7 @@ pub(crate) fn commit_buffered_transaction(
                     crate::deliver_notifications(server, state.connection_id, notifications);
                 }
                 let committed_ddl = !state.tx_ddl_undo.is_empty();
+                let committed_catalog_scopes = std::mem::take(&mut state.tx_ddl_undo);
                 clear_open_transaction_state(server, state);
                 server
                     .advisory_locks
@@ -411,6 +412,7 @@ pub(crate) fn commit_buffered_transaction(
                     drop(tx);
                     let admission = server.try_admit_write()?;
                     let mut db = server.write_db_with_admission(&admission)?;
+                    committed_catalog_scopes.finish_committed_catalog_scopes(&db)?;
                     bicdb_sql::finish_committed_recycle_bin_purges(&mut db)?;
                 }
                 return Ok(SqlResult::command("COMMIT"));

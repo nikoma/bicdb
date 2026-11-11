@@ -1,6 +1,6 @@
-//! SQL rename producer for the durable before-image journal. This prototype
-//! retains conservative native quiescence checks. Scoped admission, replica
-//! consistency and final crash/performance qualification remain gates.
+//! SQL rename producer for the durable before-image journal. Reserve the
+//! dependency closure before capture and retain it until a durable decision
+//! or complete undo. Replica and final application qualification remain gates.
 use super::*;
 
 #[inline]
@@ -44,10 +44,6 @@ pub(super) fn apply(
     }
     // Fail shared-session fallback before publishing a journal or format flag.
     session.db_mut()?;
-    match session.tx.as_ref() {
-        Some(tx) => session.db_ref().check_catalog_undo_owner(tx)?,
-        None => session.db_ref().check_catalog_recovery_quiescent()?,
-    }
     let previous = schema.clone();
     let mut updated = previous.clone();
     // Legacy descriptors derive these identities from the original name.
@@ -66,9 +62,44 @@ pub(super) fn apply(
     let views = rename_views::plan_queries(session.db_ref(), old, new)?;
     let dependencies =
         rename_dependencies::RenameDependencies::plan(session.db_ref(), &previous, &updated)?;
-    let prepared = dependencies.capture(session.db_mut()?, old, new)?;
-    stage("captured");
+    // Namespace activation is a trusted initialization operation, never a
+    // retroactive assignment to a live/undecided before-image.
+    if !session.db_ref().local_namespace_identity_feature_active() {
+        rename_journal::initialize_rename_journal_identities(session.db_mut()?)?;
+    }
     let explicit = session.tx.is_some();
+    let mut implicit_owner = if explicit {
+        None
+    } else {
+        Some(session.db_ref().begin_transaction()?)
+    };
+    let owner = session.tx.as_ref().or(implicit_owner.as_ref()).unwrap();
+    let scope = dependencies.reserve(owner)?;
+    let access = match session.db_ref().enter_catalog_scope(&scope) {
+        Ok(access) => access,
+        Err(error) => {
+            let _ = owner.release_catalog_scope(&scope);
+            return Err(error.into());
+        }
+    };
+    let prepared = match dependencies.capture(session.db_mut()?, old, new) {
+        Ok(prepared) => prepared,
+        Err(error) => {
+            drop(access);
+            let owner = session.tx.as_ref().or(implicit_owner.as_ref()).unwrap();
+            let _ = owner.release_catalog_scope(&scope);
+            return Err(error);
+        }
+    };
+    let owner = session.tx.as_ref().or(implicit_owner.as_ref()).unwrap();
+    if let Err(error) = owner.retain_catalog_scope(&scope, prepared.id()) {
+        rename_journal::discard_unapplied_capture(session.db_ref(), &prepared)?;
+        drop(access);
+        let _ = owner.release_catalog_scope(&scope);
+        return Err(error.into());
+    }
+    stage("captured");
+    let undo_len = session.ddl_undo.len();
     if explicit {
         session.ddl_undo.push(DdlUndo::RestoreRenameJournal {
             id: prepared.id().into(),
@@ -141,11 +172,23 @@ pub(super) fn apply(
         sql_index_definitions_cache_clear();
         Ok(())
     })();
+    if explicit {
+        // The durable closure contains every effect above. Individual helper
+        // undo entries would run without the journal's scope and duplicate
+        // repair; retain exactly its one retryable journal entry instead.
+        session.ddl_undo.truncate(undo_len + 1);
+    }
+    drop(access);
     if let Err(error) = result {
         if !explicit {
             // If durability is fenced, this refuses and retains the manifest
             // for startup recovery. Never erase uncertain durable evidence.
-            rename_journal::rollback(session.db_mut()?, prepared.id())?;
+            rename_journal::rollback_owned(
+                session.db_mut()?,
+                prepared.id(),
+                implicit_owner.as_mut().unwrap(),
+            )?;
+            implicit_owner.take().unwrap().rollback()?;
         }
         return Err(error);
     }
@@ -154,9 +197,9 @@ pub(super) fn apply(
     match session.tx.as_mut() {
         Some(tx) => rename_journal::decide(&prepared, tx)?,
         None => {
-            let mut tx = session.db_ref().begin_transaction()?;
-            rename_journal::decide(&prepared, &mut tx)?;
-            tx.commit()?;
+            rename_journal::decide(&prepared, implicit_owner.as_mut().unwrap())?;
+            implicit_owner.take().unwrap().commit()?;
+            rename_journal::finish_committed(session.db_ref(), prepared.id())?;
         }
     }
     stage(if explicit {

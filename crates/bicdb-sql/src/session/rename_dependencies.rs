@@ -10,6 +10,17 @@ pub(super) struct RenameDependencies {
 }
 
 impl RenameDependencies {
+    pub(super) fn reserve(&self, owner: &Transaction) -> Result<bicdb_core::CatalogScopeToken> {
+        let mut names = self.relations.clone();
+        names.extend(
+            rename_journal::scope_collections()
+                .iter()
+                .map(|name| (*name).into()),
+        );
+        let records = self.metadata.iter().cloned().collect::<Vec<_>>();
+        Ok(owner.reserve_catalog_resources(&names.into_iter().collect::<Vec<_>>(), &records)?)
+    }
+
     /// Includes absent destination keys, so rollback removes newly published
     /// schemas, grants and trigger identities without touching unrelated keys.
     pub(super) fn plan(db: &BicDb, previous: &TableSchema, updated: &TableSchema) -> Result<Self> {

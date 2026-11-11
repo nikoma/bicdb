@@ -830,9 +830,61 @@ impl Transaction {
         scope.context = Some(context.to_string());
         Ok(())
     }
+
+    /// Validate the live business owner before a trusted host re-enters its
+    /// durable undo context. Possession of another owner's journal identifier
+    /// does not authorize that transaction to repair the journal.
+    pub fn check_catalog_scope_owner(&self, token: &CatalogScopeToken) -> Result<()> {
+        self.db_ref().check_recovery_state()?;
+        let state = self.catalog_admission.state.read();
+        self.catalog_admission.validate_token(&state, token)?;
+        if self.state != TxState::Pending
+            || token.owner != self.id
+            || self.catalog_actor_scope.is_some()
+        {
+            return Err(BicDbError::TransactionConflict(
+                "catalog scope has a different live business owner".into(),
+            ));
+        }
+        state.check_actor(Some(token.serial))
+    }
 }
 
 impl BicDb {
+    /// Check an undo image against the already reserved runtime scope before
+    /// applying any image. This validates coverage; it grants no authority.
+    pub fn check_catalog_scope_resources(
+        &self,
+        token: &CatalogScopeToken,
+        names: &[String],
+        records: &[(String, String)],
+    ) -> Result<()> {
+        self.check_recovery_state()?;
+        let state = self.catalog_admission.state.read();
+        self.catalog_admission.validate_token(&state, token)?;
+        state.check_actor(Some(token.serial))?;
+        let scope = &state.scopes[&token.serial];
+        if names.iter().any(|name| !scope.names.contains(name)) {
+            return Err(BicDbError::TransactionConflict(
+                "undo relation is outside its reserved catalog scope".into(),
+            ));
+        }
+        for (collection, id) in records {
+            let incarnation = self
+                .collections
+                .get(collection)
+                .map(|current| Arc::clone(&current.read().incarnation));
+            if !scope.covers_record(collection, incarnation.as_ref(), Some(id))
+                || !scope.allows_record(collection, incarnation.as_ref(), Some(id))
+            {
+                return Err(BicDbError::TransactionConflict(
+                    "undo record is outside its reserved catalog scope".into(),
+                ));
+            }
+        }
+        Ok(())
+    }
+
     /// Select the actual statement owner, or explicitly mask an enclosing
     /// owner's identity after a statement ended its transaction. An unowned
     /// context grants no access to another owner's reserved catalog.

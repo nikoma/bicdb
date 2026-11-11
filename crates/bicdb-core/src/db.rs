@@ -66,6 +66,10 @@ pub(crate) use range_image_install::{
 mod native_recovery_ready;
 mod range_image_native;
 pub(crate) use native_recovery_ready::{LocalNativeRecoveryReady, NativeLocalVisibilitySequence};
+#[cfg(test)]
+pub(crate) use range_image_native::rf3_fixture::{
+    ActualNativeRf3Fixture, ActualNativeRf3RpcObservation,
+};
 pub(crate) use range_image_native::{
     FreshRangeGenesisAuthority, NativeHistoryPublicationBinding, NativeHistoryStage,
     NativeHistoryStageProgress, NativeHistoryTargetContext, NativeLogicalHistoryEntryV1,

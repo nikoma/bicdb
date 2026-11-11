@@ -13,6 +13,8 @@ mod certified_prefix;
 mod history;
 mod history_stage;
 mod installed_anchor;
+#[cfg(test)]
+pub(crate) mod rf3_fixture;
 use certified_prefix::NativeCertifiedRangePrefix;
 pub(crate) use history::{
     NativeLogicalHistoryEntryV1, NativeLogicalHistoryOutcomeV1, NativeLogicalHistoryPoint,

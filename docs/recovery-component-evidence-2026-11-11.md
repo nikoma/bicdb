@@ -17,6 +17,14 @@ historical tested version below.
 | [Serving/image failure baseline](evidence/native-serving-image-baseline-2026-11-11/README.md) | `1978a0ea8eec099ab5285c7ff5d30118ae5c1825`; package 1.0.471-beta | Expected failure: 0 passed, 1 failed | Retained serving record A blocks physical readiness after compatible image B; separate earlier wrong-recipient fixture also preserved |
 | [Authenticated frozen completion](evidence/native-completion-participants-2026-11-11/README.md) | `cad84207e8a4329db47449e43f658325d8f8cf55`; package 1.0.471-beta | 66 distinct focused tests, 67 executions | Actual incoming Complete/readonly TLS, post-persistence canceled socket and floor-preserving image controls; state remains NativeCompletedFrozen |
 
+
+| [Certification preflight and recovery order](evidence/native-recovery-order-2026-11-11/README.md) | `9eace333`, `021ba5c4`, `7d2f84a5`, `e68fa21f`; full IDs in receipt | **Failed**, then separate **1 PASS**, **22 PASS**, and large-case **failure** | Pure gap refusal formerly poisoned durable observations; larger fixture first exceeded complete-obligation reply bound |
+| [Complete obligation capacity](evidence/native-complete-obligation-capacity-2026-11-11/README.md) | `d2c202202943f047618784994b929a49738cd627`; package 1.0.471-beta | **21 distinct PASS** | Actual copied 1025-ACK fixture retains every obligation and all ACK digests; compacted gap, native catch-up and activation remain unproved |
+| [Generic repair failure baseline](evidence/native-generic-repair-baseline-2026-11-11/README.md) | `035fd22f40028a4d7c23e4a086af19791674677f` | **Failed** positive catch-up test | Generic repair reports success/raw Applied while native history becomes unknown; not an Azure attribution |
+| [Late Prepared failure baseline](evidence/native-late-prepared-baseline-2026-11-11/README.md) | `e3572fc655fe0dff9e634f56c5c01019ab8de173` | **Failed** positive completion test | Activated+Prepared available quorum cannot complete in that earlier source; ACK remains readable |
+| [Native abort failure baseline](evidence/native-origin-abort-baseline-2026-11-11/README.md) | `eafa6949a78ea4e97f1ea3271ff97f2de27d20c6` | **Failed** positive continuation test | Failed prepare leaves raw Aborted1/native0; restored quorum still cannot ACK the next transaction |
+| [Protected activation decision](evidence/native-activation-decision-2026-11-11/README.md) | `7b36642b444dc57051dde1fbb369f15ddb3cc3e1`, then separate `1cd28523c2f8a3970635dcae4ca43977727b1afe` | **10 distinct PASS**, then **1 separate PASS** | Protected prior decision repairs original late-follower test; later genuine ACK2 and late activation of old R1 tested separately. Late R2 catch-up and strong reads not tested |
+
 The bundles overlap; their counts must not be added. Each retains commands,
 resource samples, warnings, prior failed attempts and source bytes or a complete
 patch against a pinned public source. The 44-test bundle includes its exact
@@ -43,14 +51,21 @@ separate failed baseline and later 66-test source preserve both sides of that
 counterexample: the original failure remains failed, while the later source
 keeps A as a historical floor and obtains a new closed quorum for B. The GREEN
 witness retains assertions and logs but no post-test database archive. Neither
-source establishes a successful ordinary write after recovery.
+of those older cohorts establishes a successful ordinary write after recovery.
+The later, separately pinned 1cd follow-up does: actual nodes 0 and 2 ACK write 2,
+then nodes 0 and 1 complete/activate the old R1 decision. Node 1 remains honestly
+at R1, without row 2 and without current Ready; this is not an R2 catch-up result.
 
 No bundle establishes physical scale-out, sustained throughput gain, hardware
-RPO/RTO or production p50/p95/p99. Actual incoming RecoveryComplete is exercised
-only to the frozen state in the 66-test receipt. Ordinary new writes after
-recovery, serving configuration activation, ordinary remote native Apply,
-complete audit/sync/broker effects, StrongGet and fault-safe four-to-five-node
-relocation remain outside these claims. General distributed SQL and atomic
+RPO/RTO or production p50/p95/p99. The activation receipt exercises a trusted
+local Runtime activation API after actual authenticated completion observations;
+it does not establish an incoming Activate endpoint or operator/controller
+integration. Ordinary remote native Apply/catch-up, complete audit/sync/broker
+effects, StrongGet and fault-safe four-to-five-node relocation remain outside
+these claims. The late follower's current R2 catch-up remains **not tested**;
+the original Azure visibility cause and convergence cause remain **inconclusive**.
+All failures above are private-prototype findings unless a receipt explicitly
+identifies a public runtime; no source-level fix alone establishes qualification. General distributed SQL and atomic
 multi-range transactions are not supplied by this component evidence. The
 [HA/scaling audit](ha-horizontal-scaling-audit-2026-11-10.md) and
 [Azure results](azure-scale-out-results-2026-11-11.md) remain the operational

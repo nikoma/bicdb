@@ -1,5 +1,33 @@
 # Native recovery engineering status — November 11, 2026
 
+## Subsequent source-pinned findings
+
+The original snapshot below is historical. Later component work is indexed in
+[the evidence matrix](recovery-component-evidence-2026-11-11.md); counts from
+separate revisions overlap and must not be summed. All later engine compositions
+remain unmerged private prototypes with source package metadata 1.0.471-beta.
+Publishing this documentation does not qualify or deploy those engines.
+
+| Finding / requirement | Classification | Exact evidence and next deterministic gate |
+| --- | --- | --- |
+| Pure certification-gap refusal poisons persistence status | **Failed baseline; focused fix passed** | `9eace333` fails; `7d2f84a5` passes 22 tests with unchanged catalog bytes after refusal. Retain failure; integrate and qualify the eventual runtime separately. |
+| First fence cannot describe 1025 real irreversible commands | **Failed baseline; focused fix passed** | `e68fa21f` fails before later recovery. `d2c20220` passes 21 controls including all hashes 2..1026 and 1025 cold ACK digests; next test must finish the compacted-prefix/uncertain-tail recovery with actual current quorum. |
+| Generic catch-up invalidates native history | **Failed** | `035fd22f` reports successful repair/raw Applied but native becomes unknown. Reproduce two genuine writes with Apply1 dropped, then require actual native catch-up and a real second ACK; refusal alone does not close availability. |
+| Activated+Prepared healthy quorum cannot finish old completion | **Failed baseline; focused fix passed** | `e3572fc6` fails; unchanged late-follower test passes at `7b36642b` using the protected prior native decision. Separate `1cd28523` ACKs write 2 on 0+2 and late-activates R1 on 0+1 after node 2's data endpoint stops. |
+| Native aborted slot prevents next write | **Failed** | `eafa6949` leaves raw Aborted1/native0 and cannot ACK a second call after restoring quorum. Next test requires actual canonical no-data abort history and real second ACK, without replacing a rollback with an empty transaction. |
+| Lagging follower catches up to new R2 after late R1 activation | **Not tested** | The 1cd follower honestly remains R1, has no row 2 and refuses Ready. Add native follower Apply/catch-up and verify actual history and values. |
+| Strong reads, bounded end-to-end routing and complete rebalance | **Not tested by these candidates** | Require real serving admission, current authority/read barrier, actual MVCC snapshot, stale-route refresh and controller convergence. |
+| Original Azure temporary invisibility / 300-second nonconvergence causes | **Inconclusive** | Preserve the original forensics and incomplete error corpus; private deterministic failures are not causal attribution. |
+| Physical four-to-five expansion and sustained capacity gain | **Not tested on these candidates** | Build and identify the operator artifact before a new isolated campaign. Original failed Azure run remains failed. |
+
+For full reproductions, raw results, failure boundaries, source reconstruction
+and restricted raw-root custody hashes, use the linked cohort receipts rather
+than this progress table. The protected activation tests are local/loopback
+component evidence. No VM/power-loss RPO/RTO, stable-five-node throughput,
+p50/p95/p99 or production admission follows.
+
+## Original 72-test snapshot
+
 **Milestone 1 is incomplete. Production admission and the failed Azure
 qualification remain unchanged.**
 

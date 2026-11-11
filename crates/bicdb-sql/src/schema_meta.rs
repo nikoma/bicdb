@@ -511,22 +511,20 @@ fn routine_user_type_column(db: &BicDb, name: &str) -> Result<Option<UserTypeCol
         return Ok(None);
     };
     let oid = i64::from(oid);
-    if let Some(user_type) = load_user_type_by_oid(db, oid)? {
-        return Ok(Some(user_type.column_type(user_type.array_oid == oid)));
-    }
-    // A relation's composite type belongs to its table schema, rather than
-    // the standalone user-type catalog. Bind the same cached OID identity
-    // used by row descriptions, including the distinct array identity.
-    let index = row_type_oid_index(db)?;
-    let Some((position, array)) = index
-        .row
-        .get(&oid)
-        .map(|&position| (position, false))
-        .or_else(|| index.array.get(&oid).map(|&position| (position, true)))
-    else {
-        return Ok(None);
-    };
-    Ok(Some(table_row_type_column(&index.schemas[position], array)))
+    Ok(match catalog_oid(db, oid)? {
+        Some(CatalogOid::User(types, position)) => {
+            let ty = &types[position];
+            Some(ty.column_type(ty.array_oid == oid))
+        }
+        Some(CatalogOid::Row(index, position)) => {
+            let schema = &index.schemas[position];
+            Some(table_row_type_column(
+                schema,
+                schema.row_array_type_oid() == oid,
+            ))
+        }
+        None => None,
+    })
 }
 
 pub(crate) fn cast_routine_return_value(
@@ -1114,6 +1112,14 @@ pub(crate) fn load_schema(db: &BicDb, table: &str) -> Result<Option<TableSchema>
 
 pub(crate) fn list_schemas_raw(db: &BicDb) -> Result<Vec<TableSchema>> {
     check_sql_catalog_read(db, SCHEMA_COLLECTION, None)?;
+    schema_catalog_snapshot_raw(db)
+}
+
+// Internal catalog snapshots may assemble indexes before the selected key is
+// known. They never authorize observation; callers must admit the exact hit
+// (or a conservative whole-catalog miss) before exposing any metadata.
+fn schema_catalog_snapshot_raw(db: &BicDb) -> Result<Vec<TableSchema>> {
+    db.check_recovery_state()?;
     #[cfg(test)]
     SQL_SCHEMA_LIST_RAW_LOADS.with(|loads| *loads.borrow_mut() += 1);
 
@@ -1132,10 +1138,17 @@ pub(crate) fn list_schemas_raw(db: &BicDb) -> Result<Vec<TableSchema>> {
 
 pub(crate) fn list_schemas_shared(db: &BicDb) -> Result<std::sync::Arc<Vec<TableSchema>>> {
     check_sql_catalog_read(db, SCHEMA_COLLECTION, None)?;
+    schema_catalog_snapshot_shared(db)
+}
+
+fn schema_catalog_snapshot_shared(db: &BicDb) -> Result<std::sync::Arc<Vec<TableSchema>>> {
+    db.check_recovery_state()?;
     if let Some(schemas) = sql_schema_list_cache_get(db) {
         return Ok(schemas);
     }
-    let schemas = std::sync::Arc::new(reconcile_partition_schemas(list_schemas_raw(db)?));
+    let schemas = std::sync::Arc::new(reconcile_partition_schemas(schema_catalog_snapshot_raw(
+        db,
+    )?));
     for schema in schemas.iter() {
         sql_schema_cache_set(db, &schema.name, Some(std::sync::Arc::new(schema.clone())));
     }
@@ -1768,6 +1781,11 @@ pub(crate) fn user_type_key(schema_name: &str, name: &str) -> String {
 
 pub(crate) fn list_user_types(db: &BicDb) -> Result<Vec<UserTypeSchema>> {
     check_sql_catalog_read(db, USER_TYPE_COLLECTION, None)?;
+    user_type_catalog_snapshot_raw(db)
+}
+
+fn user_type_catalog_snapshot_raw(db: &BicDb) -> Result<Vec<UserTypeSchema>> {
+    db.check_recovery_state()?;
     let records = match db.scan_collection(USER_TYPE_COLLECTION) {
         Ok(records) => records,
         Err(BicDbError::CollectionNotFound(_)) => return Ok(Vec::new()),
@@ -1791,7 +1809,12 @@ pub(crate) fn load_user_type(
     // Same identity as the stored key (`user_type_key`), served from the
     // generation-validated list instead of a point read + JSON decode per
     // lookup: routine expression evaluation asks for user types per row.
-    let types = user_types_shared(db)?;
+    check_sql_catalog_read(
+        db,
+        USER_TYPE_COLLECTION,
+        Some(&user_type_key(schema_name, name)),
+    )?;
+    let types = user_type_catalog_snapshot(db)?;
     Ok(types
         .iter()
         .find(|user_type| user_type.schema_name == schema_name && user_type.name == name)
@@ -1818,8 +1841,8 @@ thread_local! {
         std::cell::RefCell::new(rustc_hash::FxHashMap::default());
 }
 
-fn row_type_oid_index(db: &BicDb) -> Result<std::sync::Arc<RowTypeOidIndex>> {
-    check_sql_catalog_read(db, SCHEMA_COLLECTION, None)?;
+fn row_type_catalog_snapshot(db: &BicDb) -> Result<std::sync::Arc<RowTypeOidIndex>> {
+    db.check_recovery_state()?;
     let key = db.instance_id();
     let generation = db.collection_generation(SCHEMA_COLLECTION);
     let hit = ROW_TYPE_OID_INDEX.with(|memo| {
@@ -1831,7 +1854,7 @@ fn row_type_oid_index(db: &BicDb) -> Result<std::sync::Arc<RowTypeOidIndex>> {
     if let Some(hit) = hit {
         return Ok(hit);
     }
-    let schemas = (*list_schemas_shared(db)?).clone();
+    let schemas = (*schema_catalog_snapshot_shared(db)?).clone();
     let mut row = rustc_hash::FxHashMap::default();
     let mut array = rustc_hash::FxHashMap::default();
     for (position, schema) in schemas.iter().enumerate() {
@@ -1850,8 +1873,8 @@ fn row_type_oid_index(db: &BicDb) -> Result<std::sync::Arc<RowTypeOidIndex>> {
     Ok(index)
 }
 
-fn user_types_shared(db: &BicDb) -> Result<std::sync::Arc<Vec<UserTypeSchema>>> {
-    check_sql_catalog_read(db, USER_TYPE_COLLECTION, None)?;
+fn user_type_catalog_snapshot(db: &BicDb) -> Result<std::sync::Arc<Vec<UserTypeSchema>>> {
+    db.check_recovery_state()?;
     let key = db.instance_id();
     let generation = db.collection_generation(USER_TYPE_COLLECTION);
     let hit = USER_TYPES_MEMO.with(|memo| {
@@ -1863,7 +1886,7 @@ fn user_types_shared(db: &BicDb) -> Result<std::sync::Arc<Vec<UserTypeSchema>>> 
     if let Some(hit) = hit {
         return Ok(hit);
     }
-    let types = std::sync::Arc::new(list_user_types(db)?);
+    let types = std::sync::Arc::new(user_type_catalog_snapshot_raw(db)?);
     USER_TYPES_MEMO.with(|memo| {
         memo.borrow_mut()
             .insert(key, (generation, std::sync::Arc::clone(&types)));
@@ -1872,14 +1895,57 @@ fn user_types_shared(db: &BicDb) -> Result<std::sync::Arc<Vec<UserTypeSchema>>> 
 }
 
 pub(crate) fn load_user_type_by_oid(db: &BicDb, oid: i64) -> Result<Option<UserTypeSchema>> {
-    let types = user_types_shared(db)?;
-    if types.is_empty() {
+    Ok(match catalog_oid(db, oid)? {
+        Some(CatalogOid::User(types, position)) => Some(types[position].clone()),
+        _ => None,
+    })
+}
+
+// These variants retain their generation-validated storage; the selected
+// record has already passed admission before the variant can be returned.
+enum CatalogOid {
+    User(std::sync::Arc<Vec<UserTypeSchema>>, usize),
+    Row(std::sync::Arc<RowTypeOidIndex>, usize),
+}
+
+fn catalog_oid(db: &BicDb, oid: i64) -> Result<Option<CatalogOid>> {
+    db.check_recovery_state()?;
+    if i32::try_from(oid).ok().is_some_and(|oid| {
+        crate::pg_types::pg_type_spec_by_oid(oid).is_some()
+            || crate::pg_types::pg_array_element_spec_by_oid(oid).is_some()
+    }) {
+        // Built-in numeric OIDs are immutable. Name resolution still admits
+        // user-defined names, including quoted names that resemble built-ins.
         return Ok(None);
     }
-    Ok(types
+    let types = user_type_catalog_snapshot(db)?;
+    if let Some(position) = types
         .iter()
-        .find(|user_type| user_type.oid == oid || user_type.array_oid == oid)
-        .cloned())
+        .position(|ty| ty.oid == oid || ty.array_oid == oid)
+    {
+        let ty = &types[position];
+        check_sql_catalog_read(
+            db,
+            USER_TYPE_COLLECTION,
+            Some(&user_type_key(&ty.schema_name, &ty.name)),
+        )?;
+        return Ok(Some(CatalogOid::User(types, position)));
+    }
+    let index = row_type_catalog_snapshot(db)?;
+    if let Some(position) = index
+        .row
+        .get(&oid)
+        .or_else(|| index.array.get(&oid))
+        .copied()
+    {
+        check_sql_catalog_read(db, SCHEMA_COLLECTION, Some(&index.schemas[position].name))?;
+        return Ok(Some(CatalogOid::Row(index, position)));
+    }
+    // A miss cannot prove that pending catalog work does not own this OID.
+    // Preserve conservative admission instead of treating refusal as unknown.
+    check_sql_catalog_read(db, USER_TYPE_COLLECTION, None)?;
+    check_sql_catalog_read(db, SCHEMA_COLLECTION, None)?;
+    Ok(None)
 }
 
 pub(crate) fn user_type_comment_by_oid(db: &BicDb, oid: i64) -> Result<Option<String>> {
@@ -1947,16 +2013,18 @@ pub fn pg_user_type_oid_by_name(db: &BicDb, type_name: &str) -> Result<Option<i3
         } else {
             user_type.oid
         }
-    } else if let Some(schema) = list_schemas(db)?.into_iter().find(|schema| {
+    } else if let Some(schema) = schema_catalog_snapshot_shared(db)?.iter().find(|schema| {
         schema.schema_name.eq_ignore_ascii_case(schema_name)
             && schema.name.eq_ignore_ascii_case(name)
     }) {
+        check_sql_catalog_read(db, SCHEMA_COLLECTION, Some(&schema.name))?;
         if array {
             schema.row_array_type_oid()
         } else {
             schema.row_type_oid()
         }
     } else {
+        check_sql_catalog_read(db, SCHEMA_COLLECTION, None)?;
         return Ok(None);
     };
     i32::try_from(oid)
@@ -1965,25 +2033,23 @@ pub fn pg_user_type_oid_by_name(db: &BicDb, type_name: &str) -> Result<Option<i3
 }
 
 pub fn pg_table_row_array_element_oid(db: &BicDb, oid: i32) -> Result<Option<i32>> {
-    let index = row_type_oid_index(db)?;
-    let Some(&position) = index.array.get(&i64::from(oid)) else {
+    let Some(CatalogOid::Row(index, position)) = catalog_oid(db, i64::from(oid))? else {
         return Ok(None);
     };
-    i32::try_from(index.schemas[position].row_type_oid())
+    let schema = &index.schemas[position];
+    if schema.row_array_type_oid() != i64::from(oid) {
+        return Ok(None);
+    }
+    i32::try_from(schema.row_type_oid())
         .map(Some)
         .map_err(|_| SqlError::numeric_value_out_of_range("table row type OID exceeds int4"))
 }
 
 pub(crate) fn pg_table_row_regtype_name(db: &BicDb, oid: i64) -> Result<Option<String>> {
-    let index = row_type_oid_index(db)?;
-    let Some((position, array)) = index
-        .row
-        .get(&oid)
-        .map(|&position| (position, false))
-        .or_else(|| index.array.get(&oid).map(|&position| (position, true)))
-    else {
+    let Some(CatalogOid::Row(index, position)) = catalog_oid(db, oid)? else {
         return Ok(None);
     };
+    let array = index.schemas[position].row_array_type_oid() == oid;
     let schema = &index.schemas[position];
     let display = crate::eval::rewrite_helpers::logical_relation_name(&schema.name)
         .unwrap_or_else(|| schema.name.clone());
@@ -2000,56 +2066,61 @@ pub(crate) fn pg_table_row_regtype_name(db: &BicDb, oid: i64) -> Result<Option<S
 }
 
 pub fn pg_is_table_row_type_oid(db: &BicDb, oid: i32) -> Result<bool> {
-    let index = row_type_oid_index(db)?;
-    let oid = i64::from(oid);
-    if index.row.contains_key(&oid) || index.array.contains_key(&oid) {
-        return Ok(true);
-    }
-    Ok(
-        load_user_type_by_oid(db, i64::from(oid))?.is_some_and(|user_type| {
-            user_type.oid == i64::from(oid)
-                && matches!(user_type.kind, UserTypeKind::Composite { .. })
-        }),
-    )
+    Ok(match catalog_oid(db, i64::from(oid))? {
+        Some(CatalogOid::Row(..)) => true,
+        Some(CatalogOid::User(types, position)) => {
+            let ty = &types[position];
+            ty.oid == i64::from(oid) && matches!(ty.kind, UserTypeKind::Composite { .. })
+        }
+        None => false,
+    })
 }
 
 pub fn pg_table_row_type_definition(
     db: &BicDb,
     oid: i32,
 ) -> Result<Option<(String, Vec<(String, String)>)>> {
-    if let Some(user_type) = load_user_type_by_oid(db, i64::from(oid))? {
-        if user_type.oid == i64::from(oid) {
-            if let UserTypeKind::Composite { attributes, .. } = user_type.kind {
-                let type_name = if user_type.schema_name.eq_ignore_ascii_case("public") {
-                    user_type.name
-                } else {
-                    format!("{}.{}", user_type.schema_name, user_type.name)
-                };
-                let fields = attributes
-                    .into_iter()
-                    .filter(|attribute| !attribute.dropped)
-                    .map(|attribute| (attribute.name, attribute.pg_type))
-                    .collect();
-                return Ok(Some((type_name, fields)));
+    match catalog_oid(db, i64::from(oid))? {
+        Some(CatalogOid::User(types, position)) => {
+            let ty = &types[position];
+            if ty.oid == i64::from(oid) {
+                if let UserTypeKind::Composite { attributes, .. } = &ty.kind {
+                    let name = if ty.schema_name.eq_ignore_ascii_case("public") {
+                        ty.name.clone()
+                    } else {
+                        format!("{}.{}", ty.schema_name, ty.name)
+                    };
+                    return Ok(Some((
+                        name,
+                        attributes
+                            .iter()
+                            .filter(|a| !a.dropped)
+                            .map(|a| (a.name.clone(), a.pg_type.clone()))
+                            .collect(),
+                    )));
+                }
             }
         }
-    }
-    for schema in list_schemas(db)? {
-        if schema.row_type_oid() != i64::from(oid) {
-            continue;
+        Some(CatalogOid::Row(index, position)) => {
+            let schema = &index.schemas[position];
+            if schema.row_type_oid() == i64::from(oid) {
+                let name = if schema.schema_name.eq_ignore_ascii_case("public") {
+                    schema.name.clone()
+                } else {
+                    format!("{}.{}", schema.schema_name, schema.name)
+                };
+                return Ok(Some((
+                    name,
+                    schema
+                        .columns
+                        .iter()
+                        .filter(|c| !c.hidden)
+                        .map(|c| (c.name.clone(), c.pg_type.clone()))
+                        .collect(),
+                )));
+            }
         }
-        let type_name = if schema.schema_name.eq_ignore_ascii_case("public") {
-            schema.name.clone()
-        } else {
-            format!("{}.{}", schema.schema_name, schema.name)
-        };
-        let fields = schema
-            .columns
-            .iter()
-            .filter(|column| !column.hidden)
-            .map(|column| (column.name.clone(), column.pg_type.clone()))
-            .collect();
-        return Ok(Some((type_name, fields)));
+        None => {}
     }
     Ok(None)
 }

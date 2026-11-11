@@ -15756,12 +15756,24 @@ impl Transaction {
             Err(error) => return Err(error),
         }
         if self.last_pending_write(collection, id).is_none() {
-            let changed = Self::latest_committed_record_sequence(db, collection, id)?
-                .is_none_or(|version| version > self.applied_snapshot);
+            let version = Self::latest_committed_record_sequence(db, collection, id)?;
+            let changed = version.is_none_or(|version| version > self.applied_snapshot);
             if changed {
                 return Err(BicDbError::TransactionConflict(format!(
                     "row changed since locking query snapshot: {collection}:{id}"
                 )));
+            }
+            if self.isolation == TransactionIsolation::ReadCommitted {
+                // This successful locking read returns the current statement's
+                // row. Its pinned version supersedes an earlier unlocked read,
+                // including when statement refresh already advanced snapshot.
+                if let Some(version) = version {
+                    self.observed_record_versions
+                        .lock()
+                        .entry(collection.to_string())
+                        .or_default()
+                        .insert(id.to_string(), version);
+                }
             }
         }
         Ok(true)
@@ -15843,18 +15855,24 @@ impl Transaction {
         }
         if self.last_pending_write(collection, id).is_none() {
             let max_tx = Self::latest_committed_record_sequence(db, collection, id)?;
+            if self.isolation == TransactionIsolation::ReadCommitted {
+                // The lock pins this version. Remember it even when the next
+                // SQL statement already refreshed past an earlier unlocked
+                // observation; otherwise a current locking read returns fresh
+                // data but its subsequent write still conflicts with that read.
+                if let Some(max_tx) = max_tx {
+                    self.observed_record_versions
+                        .lock()
+                        .entry(collection.to_string())
+                        .or_default()
+                        .insert(id.to_string(), max_tx);
+                }
+            }
             if max_tx.is_none_or(|max_tx| max_tx > self.applied_snapshot) {
                 if self.isolation == TransactionIsolation::ReadCommitted {
                     // The lock pins the row from here on: this transaction now
                     // works on its latest version, not the stale one it read
                     // before waiting (which would otherwise fail its writes).
-                    if let Some(max_tx) = max_tx {
-                        self.observed_record_versions
-                            .lock()
-                            .entry(collection.to_string())
-                            .or_default()
-                            .insert(id.to_string(), max_tx);
-                    }
                     return Ok(false);
                 }
                 return Err(BicDbError::TransactionConflict(format!(

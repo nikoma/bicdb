@@ -305,7 +305,7 @@ impl BicDb {
         crate::format::enable_current_image_proposal(&self.path)?;
         let _journal = self.try_native_image_journal()?;
         binding.require_current(store, self, native, source, role, frozen)?;
-        safety.require_current(self, native, frozen)?;
+        safety.require_current_under_journal(self, native, frozen, &_journal)?;
         catalogue.require_current(store)?;
         let parent = binding.parent_proposal(store)?;
         let prior = parent
@@ -411,7 +411,7 @@ impl BicDb {
         .ok_or_else(|| invalid("protected proposal requires actual native page store"))?;
         drop(controlled);
         binding.require_current(store, self, native, source, role, frozen)?;
-        safety.require_current(self, native, frozen)?;
+        safety.require_current_under_journal(self, native, frozen, &_journal)?;
         catalogue.require_current(store)?;
         current.require_live_request()?;
         let pointer = NativeCurrentImageProposalPointer {

@@ -222,7 +222,22 @@ impl NativeRangeInstallSafety {
         admission: &NativeRecoveryAdmission,
         frozen: &FrozenRangeMutationPermit,
     ) -> Result<()> {
-        let current = database.native_range_install_safety(admission, self.range_id, frozen)?;
+        let journal = database.try_native_image_journal()?;
+        self.require_current_under_journal(database, admission, frozen, &journal)
+    }
+    pub(in crate::db) fn require_current_under_journal(
+        &self,
+        database: &BicDb,
+        admission: &NativeRecoveryAdmission,
+        frozen: &FrozenRangeMutationPermit,
+        journal: &NativeImageJournalGuard<'_>,
+    ) -> Result<()> {
+        let current = database.native_range_install_safety_under_journal(
+            admission,
+            self.range_id,
+            frozen,
+            journal,
+        )?;
         if self.database_incarnation != current.database_incarnation
             || self.birth_id != current.birth_id
             || self.records_sha256 != current.records_sha256

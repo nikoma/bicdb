@@ -120,9 +120,11 @@ impl HistoricalCommandDecisionRound {
         authority: Arc<FreshRangeRecoveryAuthority>,
         command: RangeWriteCommand,
     ) -> Result<Self> {
+        // Bound borrowed complete shape before checksum validation allocates
+        // a serialized command buffer, including for rejected peer input.
+        crate::distribution_range_consensus::validate_native_recovery_command_size(&command)?;
         command.validate()?;
         authority.require_historical_scope(&command)?;
-        crate::distribution_range_consensus::validate_native_recovery_command_size(&command)?;
         Ok(Self {
             authority,
             command,

@@ -227,6 +227,9 @@ impl NativeInstalledRangeImageIntegrity {
     ) -> Option<&crate::distribution_consensus::MetadataRestoreActivation> {
         self.receipt.restore_activation.as_ref()
     }
+    pub(crate) fn source_native_receipt_sha256(&self) -> &str {
+        &self.receipt.source_native_receipt_sha256
+    }
     pub(crate) fn native_receipt_sha256(&self) -> &str {
         &self.receipt.checksum_sha256
     }
@@ -313,6 +316,10 @@ pub(crate) struct NativeTargetImageVerifier {
     complete: bool,
     invalid: bool,
     recover_completed: bool,
+    recovered_base: Option<NativeInstalledRangeImageBase>,
+    history_audit_next: u64,
+    history_audit_head: Option<String>,
+    history_audit_complete: bool,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum NativeTargetImageVerificationProgress {
@@ -346,6 +353,9 @@ impl NativeTargetImageVerifier {
                 "bounded target verification scope/physical image changed",
             ));
         }
+        if let Some(base) = &self.recovered_base {
+            base.require_current(database, admission)?;
+        }
         database.validate_range_image_bindings(bindings)
     }
 }
@@ -361,6 +371,7 @@ impl VerifiedNativeTargetImageContents {
         self.state
             .require_current(database, fence, admission, bindings, source)?;
         if !self.state.complete
+            || !self.state.history_audit_complete
             || database.replication_shippable_seq() < self.state.reserved
             || database.current_visibility_watermark() < self.state.reserved
         {
@@ -456,6 +467,9 @@ impl NativeInstalledRangeImageBase {
         &self,
     ) -> Option<&crate::distribution_consensus::MetadataRestoreActivation> {
         self.receipt.restore_activation.as_ref()
+    }
+    pub(crate) fn source_native_receipt_sha256(&self) -> &str {
+        &self.receipt.source_native_receipt_sha256
     }
     pub(crate) fn native_receipt_sha256(&self) -> &str {
         &self.receipt.checksum_sha256
@@ -677,6 +691,21 @@ impl BicDb {
                 "complete target portable catalog differs from completed source",
             ));
         }
+        let recovered_base = if recover_completed {
+            let base = self
+                .native_installed_range_image_base(admission, fence.range().id)?
+                .ok_or_else(|| invalid("completed verification lost installed anchor"))?;
+            if base.range_index() != seal.range_index
+                || base.logical_genesis_sha256() != seal.logical_genesis_sha256
+                || base.logical_history_sha256() != seal.logical_history_sha256
+                || base.source_native_receipt_sha256() != seal.source_native_receipt_sha256
+            {
+                return Err(invalid("completed target history/source anchor differs"));
+            }
+            Some(base)
+        } else {
+            None
+        };
         Ok(NativeTargetImageVerifier {
             database_incarnation: self.incarnation.clone(),
             birth_id: admission.birth_id(),
@@ -696,6 +725,10 @@ impl BicDb {
             complete: bindings.collections().is_empty(),
             invalid: false,
             recover_completed,
+            recovered_base,
+            history_audit_next: 0,
+            history_audit_head: None,
+            history_audit_complete: !recover_completed,
         })
     }
 
@@ -727,6 +760,53 @@ impl BicDb {
         }
         if self.current_visibility_watermark() < state.reserved {
             return Ok(NativeTargetImageVerificationProgress::WaitingForVisibility);
+        }
+        if !state.history_audit_complete {
+            let base = state
+                .recovered_base
+                .as_ref()
+                .ok_or_else(|| invalid("completed history audit has no actual anchor"))?;
+            let mut next = state.history_audit_next;
+            let mut head = state.history_audit_head.clone();
+            let mut complete = false;
+            for _ in 0..256 {
+                cancellation.check()?;
+                let entry = self.read_native_history_entry(
+                    fence.range().id,
+                    base.history_generation(),
+                    next,
+                )?;
+                entry.validate_shape()?;
+                if entry.range_id != fence.range().id
+                    || entry.index != next
+                    || (next == 0
+                        && (entry.outcome != NativeLogicalHistoryOutcomeV1::Genesis
+                            || entry.commitment_sha256 != base.logical_genesis_sha256()))
+                    || (next > 0 && head.as_deref() != Some(entry.previous_sha256.as_str()))
+                {
+                    return Err(invalid(
+                        "actual installed history is missing/reordered/forked",
+                    ));
+                }
+                head = Some(entry.commitment_sha256);
+                next = next
+                    .checked_add(1)
+                    .ok_or_else(|| invalid("installed history audit overflow"))?;
+                if entry.index == base.range_index() {
+                    if head.as_deref() != Some(base.logical_history_sha256()) {
+                        return Err(invalid("actual installed complete history head differs"));
+                    }
+                    complete = true;
+                    break;
+                }
+            }
+            state.require_current(self, fence, admission, bindings, source)?;
+            fence.require_live_role(role)?;
+            cancellation.check()?;
+            state.history_audit_next = next;
+            state.history_audit_head = head;
+            state.history_audit_complete = complete;
+            return Ok(NativeTargetImageVerificationProgress::Scanning);
         }
         if state.complete {
             return Ok(NativeTargetImageVerificationProgress::Complete);
@@ -830,6 +910,7 @@ impl BicDb {
         )?;
         state.require_current(self, fence, admission, bindings, source)?;
         if !state.complete
+            || !state.history_audit_complete
             || self.replication_shippable_seq() < state.reserved
             || self.current_visibility_watermark() < state.reserved
             || state.records != state.expected_records

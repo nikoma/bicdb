@@ -113,43 +113,51 @@ impl RenameDependencies {
         new: &str,
     ) -> Result<rename_journal::PreparedRename> {
         let mut prepared = rename_journal::prepare(db)?;
-        rename_journal::capture_rename(db, &mut prepared, old, new)?;
-        for (collection, id) in &self.metadata {
-            rename_journal::capture_row(db, &mut prepared, collection, id)?;
-        }
-        for collection in &self.value_tables {
-            let tx = db.begin_transaction()?;
-            let mut after: Option<String> = None;
-            loop {
-                let lower = after
-                    .as_deref()
-                    .map(std::ops::Bound::Excluded)
-                    .unwrap_or(std::ops::Bound::Unbounded);
-                let (ids, complete) = tx.scan_collection_record_key_candidates_in_range_unchecked(
-                    collection,
-                    lower,
-                    std::ops::Bound::Unbounded,
-                    false,
-                    128,
-                )?;
-                if ids.is_empty() && !complete {
-                    return Err(SqlError::InvalidSql(
-                        "rename dependency scan made no progress".into(),
-                    ));
-                }
-                for id in &ids {
-                    // Key scans are candidates. Resolve visibility through the
-                    // normal read gate, never capture tombstones as live rows.
-                    if tx.get(collection, id)?.is_some() {
-                        rename_journal::capture_row(db, &mut prepared, collection, id)?;
-                    }
-                }
-                if complete {
-                    break;
-                }
-                after = ids.last().cloned();
+        let captured = (|| -> Result<()> {
+            rename_journal::capture_rename(db, &mut prepared, old, new)?;
+            for (collection, id) in &self.metadata {
+                rename_journal::capture_row(db, &mut prepared, collection, id)?;
             }
-            tx.rollback()?;
+            for collection in &self.value_tables {
+                let tx = db.begin_transaction()?;
+                let mut after: Option<String> = None;
+                loop {
+                    let lower = after
+                        .as_deref()
+                        .map(std::ops::Bound::Excluded)
+                        .unwrap_or(std::ops::Bound::Unbounded);
+                    let (ids, complete) = tx
+                        .scan_collection_record_key_candidates_in_range_unchecked(
+                            collection,
+                            lower,
+                            std::ops::Bound::Unbounded,
+                            false,
+                            128,
+                        )?;
+                    if ids.is_empty() && !complete {
+                        return Err(SqlError::InvalidSql(
+                            "rename dependency scan made no progress".into(),
+                        ));
+                    }
+                    for id in &ids {
+                        // Key scans are candidates. Resolve visibility through the
+                        // normal read gate, never capture tombstones as live rows.
+                        if tx.get(collection, id)?.is_some() {
+                            rename_journal::capture_row(db, &mut prepared, collection, id)?;
+                        }
+                    }
+                    if complete {
+                        break;
+                    }
+                    after = ids.last().cloned();
+                }
+                tx.rollback()?;
+            }
+            Ok(())
+        })();
+        if let Err(error) = captured {
+            rename_journal::discard_unapplied_capture(db, &prepared)?;
+            return Err(error);
         }
         Ok(prepared)
     }
@@ -323,6 +331,40 @@ mod tests {
             db.close().unwrap();
         }
     }
+    #[test]
+    fn failed_capture_cannot_undo_a_later_acknowledged_write_on_reopen() {
+        for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
+            let root = tempfile::tempdir().unwrap();
+            let config = DbConfig::default().with_storage_mode(mode);
+            let mut db = BicDb::open_with_config(root.path(), config.clone()).unwrap();
+            SqlSession::new(&mut db).execute(
+                "CREATE TABLE original(id INT PRIMARY KEY,payload INT); INSERT INTO original VALUES(1,10)").unwrap();
+            let before = load_schema(&db, "original").unwrap().unwrap();
+            let mut after = before.clone();
+            after.name = "renamed".into();
+            let mut plan = RenameDependencies::plan(&db, &before, &after).unwrap();
+            // Fail after several real before-images have become durable,
+            // while still before the producer is allowed to mutate a source.
+            plan.metadata
+                .insert(("missing_capture_collection".into(), "key".into()));
+            assert!(plan.capture(&mut db, "original", "renamed").is_err());
+            assert!(rename_journal::pending(&db).unwrap().is_empty());
+            SqlSession::new(&mut db)
+                .execute("UPDATE original SET payload=99 WHERE id=1")
+                .unwrap();
+            db.close().unwrap();
+            let mut db = BicDb::open_with_config(root.path(), config).unwrap();
+            assert_eq!(
+                SqlSession::new(&mut db)
+                    .execute("SELECT payload FROM original")
+                    .unwrap()
+                    .rows,
+                vec![vec![SqlValue::Int(99)]]
+            );
+            db.close().unwrap();
+        }
+    }
+
     #[test]
     fn legacy_view_type_spellings_are_captured_by_oid_before_rename() {
         let root = tempfile::tempdir().unwrap();

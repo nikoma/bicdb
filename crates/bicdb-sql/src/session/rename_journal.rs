@@ -203,6 +203,16 @@ pub(super) fn decide(prepared: &PreparedRename, tx: &mut Transaction) -> Result<
     Ok(())
 }
 
+/// Capture failed before any domain mutator ran. Resolve the manifest now,
+/// independently of the caller's transaction: leaving a live undo intent could
+/// otherwise reverse a later acknowledged write during the next startup.
+pub(super) fn discard_unapplied_capture(db: &BicDb, prepared: &PreparedRename) -> Result<()> {
+    let mut tx = db.begin_transaction()?;
+    decide(prepared, &mut tx)?;
+    tx.commit()?;
+    Ok(())
+}
+
 fn load(db: &BicDb, id: &str) -> Result<Option<Header>> {
     let Some(record) = db.get(HEADERS, id)? else {
         return Ok(None);

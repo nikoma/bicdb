@@ -13,9 +13,11 @@
   "full_general_sql_tests_passed": 419,
   "test_executions_passed_including_repeated_subset": 1340,
   "unique_test_count_claimed": false,
-  "socket_wire_qualified_here": false,
+  "socket_wire_qualified_here": true,
   "all_workspace_qualified_here": false,
   "application_qualified": false,
   "vm_fault_or_production_qualified": false,
-  "binary_or_deployment_produced": false
+  "binary_or_deployment_produced": false,
+  "socket_wire_source": "410441d3bc91eadba7314253ea9e46daa6e4afe3",
+  "socket_wire_tests_passed": 1
 }

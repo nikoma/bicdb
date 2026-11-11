@@ -43,6 +43,13 @@ Each reference uses and removes private temporary schemas; the protected
 application schemas are unchanged. These are language/metadata references,
 not PostgreSQL restart or BicDB durability qualification.
 
+The test-only source `410441d3` also passes the existing real-socket extended
+query composite regression with an added SQL identity routine. The original
+direct table-row assertions remain. Parse/Bind/Describe/Execute requests binary
+results, and the routine must return the identical composite OID, binary format
+and record bytes. Its production code is unchanged from `221aeeda`. This is a
+local protocol check, not final deployment or mixed-version HA qualification.
+
 This evidence precedes final source versioning and parent integration. Later
 versioned heads require their own final-source validation. The standalone
 change covers routine calls and metadata; the separate SQL scoped rename and

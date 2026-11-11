@@ -11,6 +11,7 @@ pub(super) struct NativeActivatedPoint {
     pub(super) completed: NativeCompletedPoint,
     pub(super) completed_catalog_sha256: String,
     pub(super) completion_quorum_sha256: String,
+    pub(super) native_activation_sha256: String,
 }
 impl NativeActivatedPoint {
     pub(super) fn validate(&self) -> Result<()> {
@@ -18,6 +19,7 @@ impl NativeActivatedPoint {
         if [
             &self.completed_catalog_sha256,
             &self.completion_quorum_sha256,
+            &self.native_activation_sha256,
         ]
         .iter()
         .any(|s| s.len() != 64 || !s.bytes().all(|b| b.is_ascii_hexdigit()))
@@ -37,6 +39,7 @@ pub(crate) struct NativeActivationReceipt {
     scope: RecoveryFenceScope,
     activated: NativeActivatedPoint,
     native: crate::db::NativeRecoveredServingReceipt,
+    native_decision: crate::db::NativeActivationDecisionReceipt,
     quorum: NativeCompletionQuorum,
 }
 impl NativeActivationReceipt {
@@ -63,6 +66,17 @@ impl NativeActivationReceipt {
             .require_prepared_identity_point(prepared, fresh)?;
         self.scope.require_role(fresh)?;
         self.native.require_current(db)?;
+        self.native_decision.require_current(db)?;
+        if self.native_decision.checksum_sha256() != self.activated.native_activation_sha256
+            || self.native_decision.completion_quorum_sha256()
+                != self.activated.completion_quorum_sha256
+            || self.native_decision.native_serving_sha256() != self.native.checksum_sha256()
+            || !self.native_decision.scope().same_session(&self.scope)
+        {
+            return Err(range_write_error(
+                "activation receipt differs from its protected native-WAL decision",
+            ));
+        }
         prepared.require_activated_materialization(db, store, fresh)?;
         store.require_native_activation_control(self.scope.range_id)?;
         if self.store_open_id != store.open_id
@@ -135,7 +149,7 @@ impl RangeWriteStore {
             self.persist_recovery_catalog()?;
         }
         self.require_native_activation_control(range)?;
-        let (activated, native) = match &self
+        let (activated, native, native_decision) = match &self
             .catalog
             .recovery_fences
             .get(&range)
@@ -144,12 +158,15 @@ impl RangeWriteStore {
         {
             RecoveryFencePhase::NativeCompleted(completed) => {
                 let native = prepared.require_completed_for_activation(db, self, fresh)?;
+                let native_decision =
+                    db.persist_native_activation_decision(prepared, self, &quorum, fresh)?;
                 let activated = NativeActivatedPoint {
                     completed: completed.clone(),
                     completed_catalog_sha256: self.recovery_range_catalog_sha256(range)?,
-                    completion_quorum_sha256: quorum.decision_sha256()?,
+                    completion_quorum_sha256: native_decision.completion_quorum_sha256().to_owned(),
+                    native_activation_sha256: native_decision.checksum_sha256().to_owned(),
                 };
-                (activated, native)
+                (activated, native, native_decision)
             }
             RecoveryFencePhase::NativeActivated(activated) => {
                 // Exact idempotent re-fsync before any new open admission. The
@@ -159,7 +176,23 @@ impl RangeWriteStore {
                     self.persist_recovery_catalog()?;
                 }
                 let native = prepared.require_activated_materialization(db, self, fresh)?;
-                (activated, native)
+                let p = &activated.completed.point;
+                let native_decision = db.observe_native_activation_decision_for_role(
+                    fresh,
+                    prepared.scope(),
+                    &activated.native_activation_sha256,
+                    &activated.completed.native_serving_sha256,
+                    p.range_index(),
+                    p.logical_genesis_sha256(),
+                    p.logical_history_sha256(),
+                )?;
+                if native_decision.completion_quorum_sha256() != activated.completion_quorum_sha256
+                {
+                    return Err(range_write_error(
+                        "actual native/cataloque activation quorum commitments disagree",
+                    ));
+                }
+                (activated, native, native_decision)
             }
             _ => {
                 return Err(range_write_error(
@@ -180,6 +213,7 @@ impl RangeWriteStore {
             scope: prepared.scope().clone(),
             activated,
             native,
+            native_decision,
             quorum,
         };
         receipt.require_current(db, self, prepared, fresh)?;

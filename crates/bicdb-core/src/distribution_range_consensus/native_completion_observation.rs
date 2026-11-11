@@ -86,6 +86,20 @@ impl RangeWriteStore {
             point.logical_genesis_sha256(),
             point.logical_history_sha256(),
         )?;
+        let activation = db.observe_native_activation_decision_for_observer(
+            observer,
+            &request.scope,
+            &activated.native_activation_sha256,
+            &completed.native_serving_sha256,
+            point.range_index(),
+            point.logical_genesis_sha256(),
+            point.logical_history_sha256(),
+        )?;
+        if activation.completion_quorum_sha256() != activated.completion_quorum_sha256 {
+            return Err(range_write_error(
+                "actual protected activation/cataloque commitments disagree",
+            ));
+        }
         if receipt.native_receipt_at_activation_sha256() != point.native_receipt_sha256()
             || receipt.local_visibility_at_activation() != point.local_visibility_sequence()
         {
@@ -112,9 +126,7 @@ impl RangeWriteStore {
                 native_receipt_sha256: point.native_receipt_sha256().to_owned(),
                 local_visibility_sequence_at_completion: point.local_visibility_sequence(),
                 native_serving_sha256: completed.native_serving_sha256.clone(),
-                // Deliberately unbound until the protected native-WAL decision
-                // consumer is composed; shape validation refuses this anchor.
-                activation_decision_sha256: None,
+                activation_decision_sha256: Some(activation.checksum_sha256().to_owned()),
             },
         })
     }

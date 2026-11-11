@@ -320,6 +320,25 @@ impl NetworkFixture {
         metadata_leader: &str,
         enroll: bool,
     ) -> Self {
+        Self::new_with_initial_metadata_edit(
+            wired,
+            all_nodes,
+            lagging_two,
+            data_leader,
+            metadata_leader,
+            enroll,
+            None,
+        )
+    }
+    fn new_with_initial_metadata_edit(
+        wired: bool,
+        all_nodes: bool,
+        lagging_two: bool,
+        data_leader: &str,
+        metadata_leader: &str,
+        enroll: bool,
+        initial_edit: Option<fn(&mut ClusterTopology, &ActualNativeRf3Fixture, &Path)>,
+    ) -> Self {
         assert!((data_leader == "n1" && metadata_leader == "n2") || all_nodes);
         assert!(!lagging_two || all_nodes);
         let live_names = if all_nodes {
@@ -376,6 +395,11 @@ impl NetworkFixture {
         let range = topology.ranges.values_mut().next().unwrap();
         range.epoch += 1;
         range.leader = node(data_leader);
+        // Declared INITIAL metadata fixture before consensus-store creation.
+        // Used to test a real physical-birth mismatch, never a live rewrite.
+        if let Some(edit) = initial_edit {
+            edit(&mut topology, &native, keys.path());
+        }
         topology.validate().unwrap();
         let config = |id: &ClusterNodeId| ClusterNetworkTransportConfig {
             connect_timeout_ms: 50,

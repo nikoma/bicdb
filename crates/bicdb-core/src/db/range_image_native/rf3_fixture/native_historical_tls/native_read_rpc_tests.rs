@@ -73,15 +73,29 @@ fn native_read_rpc_actual_tls_fresh_metadata_unadmitted_candidate() {
     assert!(candidate.require_lifetime().is_err());
 }
 
-#[test]
-fn native_read_rpc_actual_tls_enrolled_births_require_actual_metadata_and_peer_facts() {
-    let fixture =
-        NetworkFixture::new_ready_network_with_enrollment(true, true, false, "n1", "n2", true);
+fn live_enrolled_fixture(
+    initial_edit: Option<fn(&mut ClusterTopology, &ActualNativeRf3Fixture, &Path)>,
+) -> NetworkFixture {
+    let fixture = NetworkFixture::new_with_initial_metadata_edit(
+        true,
+        true,
+        false,
+        "n1",
+        "n2",
+        true,
+        initial_edit,
+    );
     let scope = fixture.scope();
     for name in ["n0", "n1", "n2"] {
         fixture.call(name, &scope, false).unwrap();
         fixture.wait_idle();
     }
+    fixture
+}
+
+#[test]
+fn native_read_rpc_actual_tls_enrolled_births_require_actual_metadata_and_peer_facts() {
+    let fixture = live_enrolled_fixture(None);
     for name in ["n0", "n1", "n2"] {
         fixture.call(name, &scope, true).unwrap();
         fixture.wait_idle();
@@ -122,6 +136,85 @@ fn native_read_rpc_actual_tls_enrolled_births_require_actual_metadata_and_peer_f
     assert!(checked.require_lifetime().is_err());
     fixture.wait_idle();
     // Birth continuity checked, not a StrongGet or row/absence permission.
+}
+
+fn initial_metadata_binds_another_genuine_birth(
+    topology: &mut ClusterTopology,
+    native: &ActualNativeRf3Fixture,
+    root: &Path,
+) {
+    let spec = native.specs[&node("n1")].clone();
+    let config = DbConfig::default()
+        .with_fsync(true)
+        .with_storage_mode(StorageMode::ServerPaged)
+        .with_paged_buffer_pool_bytes(8 * 1024 * 1024);
+    let (mut db, factory) = BicDb::create_new_range_image_database(
+        &root.join("other-actual-native-birth"),
+        config,
+        spec.clone(),
+    )
+    .unwrap();
+    db.create_collection("items").unwrap();
+    let db = Arc::new(RwLock::new(db));
+    for range in &spec.initial_ranges {
+        let gate = db.read().range_mutation_gate();
+        let frozen = gate.try_freeze(range.id, Uuid::now_v7()).unwrap();
+        BicDb::initialize_range_image_genesis(
+            &db,
+            &factory,
+            range,
+            &frozen,
+            Duration::from_secs(3),
+            &CancellationToken::uncancelable(),
+        )
+        .unwrap();
+    }
+    let actual = db
+        .read()
+        .native_recovery_admission(
+            &spec.cluster_id,
+            spec.bootstrap_id,
+            &spec.node_id,
+            spec.member_incarnation,
+        )
+        .unwrap();
+    let binding = crate::distribution::NativeStoreBirthV1::from_actual_native(&actual).unwrap();
+    assert_ne!(
+        binding.birth_id(),
+        topology.nodes[&node("n1")]
+            .native_store_birth_v1
+            .as_ref()
+            .unwrap()
+            .birth_id()
+    );
+    // INITIAL mismatch fixture, before metadata-store creation. It is not a
+    // live birth rewrite, and the returned peer facts still come from A.
+    topology
+        .nodes
+        .get_mut(&node("n1"))
+        .unwrap()
+        .native_store_birth_v1 = Some(binding);
+}
+
+#[test]
+fn native_read_rpc_actual_tls_genuine_other_birth_in_metadata_cannot_admit_local_a() {
+    let fixture = live_enrolled_fixture(Some(initial_metadata_binds_another_genuine_birth));
+    let parent = CancellationToken::uncancelable();
+    let business = Uuid::now_v7();
+    let candidate = fixture.runtimes[&node("n1")]
+        .acquire_native_read_candidate(
+            fresh_metadata(&fixture, business, &parent),
+            business,
+            Uuid::now_v7(),
+            &parent,
+        )
+        .unwrap();
+    assert!(candidate
+        .check_enrolled_voter_births()
+        .unwrap_err()
+        .to_string()
+        .contains("actual read voter birth differs"));
+    fixture.wait_idle();
 }
 
 #[test]

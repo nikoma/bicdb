@@ -34,9 +34,12 @@ impl ActualNativeStoreEnrollment {
         })
     }
 
-    /// Trusted initialization seam, NOT an upgrade of an existing unbound
-    /// voter. A live learner proposal must subsequently advance its generation
-    /// and pass the ordinary metadata consensus publication path.
+    /// Initial CONFIGURATION builder, not fresh-store authority. Generation
+    /// one is only an initial-plan shape: an existing metadata consensus store
+    /// MUST reject an unbound voter upgrade even at generation one. Initial
+    /// voter bindings must precede actual fresh metadata-store creation.
+    /// A live learner proposal must subsequently advance its generation and
+    /// pass the ordinary metadata consensus publication path.
     pub(crate) fn bind_initial_or_unassigned_learner(
         self,
         topology: &mut ClusterTopology,

@@ -2576,7 +2576,7 @@ fn handle_frontend_message(
         match tag {
             b'd' => {
                 if let Err(error) = copy_in_data(state, &payload) {
-                    abort_copy_in(state);
+                    abort_copy_in(server, state)?;
                     state.failed_queries += 1;
                     server.failed_queries.fetch_add(1, Ordering::SeqCst);
                     state.record_query_error(&server.config.sql_profile);
@@ -2620,7 +2620,7 @@ fn handle_frontend_message(
                 }
             },
             b'f' => {
-                abort_copy_in(state);
+                abort_copy_in(server, state)?;
                 let message = cstring_payload(&payload).unwrap_or("COPY failed");
                 state.failed_queries += 1;
                 server.failed_queries.fetch_add(1, Ordering::SeqCst);
@@ -2637,11 +2637,11 @@ fn handle_frontend_message(
             // this mode, and the subsequent Sync supplies ReadyForQuery.
             b'S' | b'H' => {}
             b'X' => {
-                abort_copy_in(state);
+                abort_copy_in(server, state)?;
                 return Ok(false);
             }
             _ => {
-                abort_copy_in(state);
+                abort_copy_in(server, state)?;
                 state.discard_until_sync = true;
                 error_response(
                     stream,
@@ -2972,6 +2972,7 @@ struct CopyInState {
     inserted_rows: usize,
     spill: Option<CopySpillState>,
     started_guc_transaction: bool,
+    owns_serializable_transaction: bool,
     extended: bool,
 }
 
@@ -3500,6 +3501,21 @@ fn execute_server_query(
                 if state.failed_transaction {
                     return Err(PgWireError::InFailedTransaction);
                 }
+                let owns_serializable_transaction = !state.in_transaction
+                    && !bicdb_sql::oracle::is_oracle_profile(&server.config.sql_profile)
+                    && state
+                        .session_state
+                        .default_transaction_isolation(&server.config.sql_profile)?
+                        == "serializable";
+                if owns_serializable_transaction {
+                    begin_buffered_transaction(server, state)?;
+                    if let Err(error) =
+                        acquire_postgres_statement_snapshot(server, state, None, || true)
+                    {
+                        rollback_open_transaction(server, state)?;
+                        return Err(error);
+                    }
+                }
                 let started_guc_transaction = !state.session_state.transaction_active();
                 if started_guc_transaction {
                     state.session_state.begin_transaction();
@@ -3514,10 +3530,11 @@ fn execute_server_query(
                     inserted_rows: 0,
                     spill: None,
                     started_guc_transaction,
+                    owns_serializable_transaction,
                     extended: false,
                 });
                 if let Err(error) = enforce_persistent_connection_memory(state, &server.config) {
-                    abort_copy_in(state);
+                    abort_copy_in(server, state)?;
                     return Err(error);
                 }
                 let copy = &state

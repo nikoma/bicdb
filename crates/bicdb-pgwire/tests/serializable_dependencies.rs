@@ -1,5 +1,6 @@
 use bicdb_core::{BicDb, DbConfig, StorageMode};
 use bicdb_pgwire::{PgWireConfig, PgWireServer};
+use futures_util::SinkExt;
 use std::{net::TcpListener, thread, time::Duration};
 use tokio_postgres::{Client, NoTls};
 
@@ -396,6 +397,46 @@ async fn serializable_tracks_row_and_predicate_dependencies() {
             [(101, 10)],
             "{mode:?}: implicit batch retained an aborted write"
         );
+
+        {
+            let sink = a.copy_in("COPY ssi_scope FROM STDIN").await.unwrap();
+            tokio::pin!(sink);
+            b.batch_execute("BEGIN ISOLATION LEVEL SERIALIZABLE READ ONLY DEFERRABLE")
+                .await
+                .unwrap();
+            let read = b.query_one("SELECT count(*) FROM ssi_scope WHERE id=103", &[]);
+            tokio::pin!(read);
+            assert!(
+                tokio::time::timeout(Duration::from_millis(200), &mut read)
+                    .await
+                    .is_err(),
+                "{mode:?}: COPY did not hold a Serializable snapshot during input"
+            );
+            sink.send(&b"103\t40\n"[..]).await.unwrap();
+            assert_eq!(sink.finish().await.unwrap(), 1);
+            let count = tokio::time::timeout(Duration::from_secs(5), &mut read)
+                .await
+                .expect("safe snapshot did not resume after COPY finished")
+                .unwrap()
+                .get::<_, i64>(0);
+            assert_eq!(count, 0, "{mode:?}: waiting reader saw a later COPY commit");
+            b.batch_execute("COMMIT").await.unwrap();
+        }
+        {
+            let sink = a.copy_in("COPY ssi_scope FROM STDIN").await.unwrap();
+            tokio::pin!(sink);
+            sink.send(&b"104\t50\n"[..]).await.unwrap();
+            // Dropping the sink sends CopyFail. The implicit transaction must
+            // be gone when this connection's next query runs.
+        }
+        let rows = a
+            .query("SELECT id FROM ssi_scope WHERE id>=103 ORDER BY id", &[])
+            .await
+            .unwrap()
+            .into_iter()
+            .map(|row| row.get::<_, i32>(0))
+            .collect::<Vec<_>>();
+        assert_eq!(rows, [103], "{mode:?}: aborted COPY retained its input");
 
         drop((a, b, peer));
         a_task.abort();

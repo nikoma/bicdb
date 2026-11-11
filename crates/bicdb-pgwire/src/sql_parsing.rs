@@ -1879,8 +1879,27 @@ pub(crate) fn finish_copy_in(
         .copy_in
         .as_ref()
         .is_some_and(|copy| copy.started_guc_transaction);
+    let owns_serializable_transaction = state
+        .copy_in
+        .as_ref()
+        .is_some_and(|copy| copy.owns_serializable_transaction);
     let result = delegation::validate_delegation(server, state)
         .and_then(|_| finish_copy_in_inner(server, state));
+    let result = if owns_serializable_transaction {
+        let result = result.and_then(|count| {
+            let deadline = (!server.config.query_timeout.is_zero())
+                .then(|| Instant::now() + server.config.query_timeout);
+            let cancellation = CancellationToken::new(state.cancel_token.clone(), deadline);
+            commit_buffered_transaction(server, state, &cancellation)?;
+            Ok(count)
+        });
+        if result.is_err() && state.in_transaction {
+            rollback_open_transaction(server, state)?;
+        }
+        result
+    } else {
+        result
+    };
     if result.is_err() {
         state.copy_in = None;
     }
@@ -1902,14 +1921,15 @@ pub(crate) fn finish_copy_in(
     result
 }
 
-pub(crate) fn abort_copy_in(state: &mut ConnectionState) {
-    let started_guc_transaction = state
-        .copy_in
-        .take()
-        .is_some_and(|copy| copy.started_guc_transaction);
-    if started_guc_transaction {
-        state.session_state.rollback_transaction();
+pub(crate) fn abort_copy_in(server: &Arc<PgWireServer>, state: &mut ConnectionState) -> Result<()> {
+    if let Some(copy) = state.copy_in.take() {
+        if copy.owns_serializable_transaction {
+            rollback_open_transaction(server, state)?;
+        } else if copy.started_guc_transaction {
+            state.session_state.rollback_transaction();
+        }
     }
+    Ok(())
 }
 
 pub(crate) fn finish_copy_in_inner(

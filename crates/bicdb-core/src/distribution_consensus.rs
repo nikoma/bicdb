@@ -2170,24 +2170,28 @@ impl MetadataConsensusStore {
                     &candidate.committed_topology,
                     &snapshot.topology,
                 )?;
-                for pending in candidate
-                    .log
-                    .iter()
-                    .filter(|entry| entry.index <= snapshot.last_included_index)
-                {
-                    crate::distribution::validate_native_store_birth_preservation(
-                        &pending.topology,
-                        &snapshot.topology,
-                    )?;
-                }
+                // A committed snapshot supersedes uncommitted proposals. Only
+                // a matching log anchor permits retaining its later suffix.
+                let matching_anchor = if snapshot.last_included_index == candidate.base_index {
+                    snapshot.last_included_term == candidate.base_term
+                } else {
+                    candidate.log.iter().any(|entry| {
+                        entry.index == snapshot.last_included_index
+                            && entry.term == snapshot.last_included_term
+                    })
+                };
                 candidate.base_index = snapshot.last_included_index;
                 candidate.base_term = snapshot.last_included_term;
                 candidate.commit_index = snapshot.last_included_index;
                 candidate.committed_topology = snapshot.topology.clone();
                 candidate.committed_restore_activation = snapshot.restore_activation.clone();
-                candidate
-                    .log
-                    .retain(|entry| entry.index > snapshot.last_included_index);
+                if matching_anchor {
+                    candidate
+                        .log
+                        .retain(|entry| entry.index > snapshot.last_included_index);
+                } else {
+                    candidate.log.clear();
+                }
             }
         }
         let previous_term = if request.prev_log_index == candidate.base_index {
@@ -2213,13 +2217,14 @@ impl MetadataConsensusStore {
                 .position(|entry| entry.index == incoming.index)
             {
                 if candidate.log[position] != *incoming {
-                    // A conflicting term cannot erase a pending immutable identity.
-                    for displaced in &candidate.log[position..] {
-                        crate::distribution::validate_native_store_birth_preservation(
-                            &displaced.topology,
-                            &incoming.topology,
-                        )?;
+                    if candidate.log[position].term == incoming.term {
+                        return Err(metadata_error(
+                            "conflicting metadata entry at the same term and index",
+                        ));
                     }
+                    // Different-term uncommitted proposals are replaceable.
+                    // validate_state below still checks every incoming transition
+                    // against the committed identity anchor and prior entries.
                     candidate.log.truncate(position);
                     candidate.log.push(incoming.clone());
                 }
@@ -2384,17 +2389,8 @@ impl MetadataConsensusStore {
             &self.state.committed_topology,
             &snapshot.topology,
         )?;
-        for pending in self
-            .state
-            .log
-            .iter()
-            .filter(|entry| entry.index <= snapshot.last_included_index)
-        {
-            crate::distribution::validate_native_store_birth_preservation(
-                &pending.topology,
-                &snapshot.topology,
-            )?;
-        }
+        let matching_anchor =
+            self.term_at(snapshot.last_included_index) == Some(snapshot.last_included_term);
         validate_committed_activation_progress(
             self.state.committed_restore_activation.as_ref(),
             snapshot.restore_activation.as_ref(),
@@ -2405,9 +2401,13 @@ impl MetadataConsensusStore {
         candidate.commit_index = snapshot.last_included_index;
         candidate.committed_topology = snapshot.topology;
         candidate.committed_restore_activation = snapshot.restore_activation;
-        candidate
-            .log
-            .retain(|entry| entry.index > snapshot.last_included_index);
+        if matching_anchor {
+            candidate
+                .log
+                .retain(|entry| entry.index > snapshot.last_included_index);
+        } else {
+            candidate.log.clear();
+        }
         validate_state(&candidate)?;
         self.state = candidate;
         Ok(())

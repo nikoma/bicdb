@@ -13,8 +13,7 @@ use crate::replication::{CommitFrame, ReplicationTlsConfig};
 
 mod native_store_birth;
 pub(crate) use native_store_birth::{
-    validate_native_store_birth_preservation, validate_native_store_birth_snapshot,
-    validate_native_store_birth_transition,
+    validate_native_store_birth_snapshot, validate_native_store_birth_transition,
 };
 pub use native_store_birth::{NativeStoreBirthV1, NATIVE_STORE_BIRTH_TOPOLOGY_FORMAT_VERSION};
 

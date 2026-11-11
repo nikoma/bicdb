@@ -239,7 +239,9 @@ fn native_birth_append_validates_pending_sequence_before_any_mutation_or_overwri
     let pending = store.state.clone();
     assert!(store
         .handle_append_request(append(&initial, vec![entry(1, rewrite)]))
-        .is_err());
+        .unwrap_err()
+        .to_string()
+        .contains("same term and index"));
     assert_eq!(store.state, pending);
     drop(store);
     let reopened = open(root.path(), &initial);
@@ -380,4 +382,179 @@ fn native_birth_existing_metadata_cannot_upgrade_unbound_initial_voter_on_reopen
         .nodes
         .values()
         .all(|node| node.native_store_birth_v1.is_none()));
+}
+
+/// Three fsynced metadata stores, actual vote/append/probe handlers, and no
+/// canned quorum replies. This is an in-process Raft metadata regression;
+/// it is not a native row, TLS, automatic-election or physical-fault test.
+fn replace_uncommitted_birth_with_actual_majority(use_snapshot: bool) {
+    let mut initial = born();
+    for name in ["n2", "n3"] {
+        let id = ClusterNodeId::new(name).unwrap();
+        initial.nodes.insert(
+            id.clone(),
+            ClusterNode::new(id, format!("127.0.0.1:1000{}", &name[1..]), 1, 1000, 1).unwrap(),
+        );
+    }
+    let learner_id = ClusterNodeId::new("n4").unwrap();
+    initial.nodes.insert(
+        learner_id.clone(),
+        ClusterNode::new(learner_id.clone(), "127.0.0.1:10004", 1, 1000, 1)
+            .unwrap()
+            .as_metadata_learner(),
+    );
+    initial.validate().unwrap();
+    let roots = [
+        tempfile::tempdir().unwrap(),
+        tempfile::tempdir().unwrap(),
+        tempfile::tempdir().unwrap(),
+    ];
+    let mut stores = roots.iter().zip(["n1", "n2", "n3"]).map(|(root, name)| {
+        MetadataConsensusStore::open(
+            root.path(),
+            initial.cluster_id.clone(),
+            ClusterNodeId::new(name).unwrap(),
+            initial.clone(),
+            true,
+        )
+        .unwrap()
+    });
+    let mut m0 = stores.next().unwrap();
+    let mut m1 = stores.next().unwrap();
+    let mut m2 = stores.next().unwrap();
+    let n0 = ClusterNodeId::new("n1").unwrap();
+    let n1 = ClusterNodeId::new("n2").unwrap();
+    let n2 = ClusterNodeId::new("n3").unwrap();
+    let election = m0.start_election().unwrap();
+    assert_eq!(election.term, 1);
+    let mut votes = BTreeSet::from([n0.clone()]);
+    for voter in [&mut m1, &mut m2] {
+        let response = voter.handle_vote_request(election.clone()).unwrap();
+        assert!(response.vote_granted);
+        votes.insert(response.voter_id);
+    }
+    m0.become_leader(&votes).unwrap();
+    for follower in [&mut m1, &mut m2] {
+        let response = follower
+            .handle_append_request(m0.append_request_from(1, 8).unwrap())
+            .unwrap();
+        let peer = response.node_id.clone();
+        assert!(response.success);
+        m0.record_append_response(&peer, &response).unwrap();
+    }
+    // Propagate the actual first-term committed barrier to both followers.
+    for follower in [&mut m1, &mut m2] {
+        assert!(
+            follower
+                .handle_append_request(m0.append_request_from(2, 8).unwrap())
+                .unwrap()
+                .success
+        );
+        assert_eq!(follower.status().commit_index, 1);
+    }
+    let mut proposed = initial.clone();
+    proposed.generation += 1;
+    proposed
+        .nodes
+        .get_mut(&learner_id)
+        .unwrap()
+        .native_store_birth_v1 = Some(binding(initial.range_image_bootstrap_id.unwrap(), 1));
+    let uncommitted = m0.propose_topology(proposed.clone()).unwrap();
+    assert_eq!(uncommitted.index, 2);
+    assert_eq!(uncommitted.term, 1);
+    assert_eq!(m0.status().commit_index, 1);
+    assert!(m0.state.log.last().unwrap().topology.nodes[&learner_id]
+        .native_store_birth_v1
+        .is_some());
+    assert!(m1.committed_topology().nodes[&learner_id]
+        .native_store_birth_v1
+        .is_none());
+    assert!(m2.committed_topology().nodes[&learner_id]
+        .native_store_birth_v1
+        .is_none());
+    // M0 is partitioned. M1 actually wins term 2 using M2's real vote.
+    let election = m1.start_election().unwrap();
+    assert_eq!(election.term, 2);
+    let response = m2.handle_vote_request(election).unwrap();
+    assert!(response.vote_granted);
+    m1.become_leader(&BTreeSet::from([n1.clone(), response.voter_id]))
+        .unwrap();
+    let actual_overwrite = m1.append_request_from(2, 8).unwrap();
+    assert!(actual_overwrite.snapshot.is_none());
+    assert_eq!(actual_overwrite.entries.len(), 1);
+    assert_eq!(actual_overwrite.entries[0].term, 2);
+    let response = m2.handle_append_request(actual_overwrite.clone()).unwrap();
+    assert!(response.success);
+    assert!(m1.record_append_response(&n2, &response).unwrap());
+    assert_eq!(m1.status().commit_index, 2);
+    assert!(
+        m2.handle_append_request(m1.append_request_from(3, 8).unwrap())
+            .unwrap()
+            .success
+    );
+    assert_eq!(m2.status().commit_index, 2);
+    drop(m2); // The remaining live quorum must now be M0 + M1.
+    let request = if use_snapshot {
+        let request = m1.append_request_from(1, 8).unwrap();
+        assert!(request.snapshot.is_some());
+        request
+    } else {
+        actual_overwrite
+    };
+    let response = m0.handle_append_request(request).unwrap();
+    assert!(response.success);
+    m1.record_append_response(&n0, &response).unwrap();
+    assert!(
+        m0.handle_append_request(m1.append_request_from(3, 8).unwrap())
+            .unwrap()
+            .success
+    );
+    assert_eq!(m0.status().commit_index, 2);
+    assert_eq!(m0.committed_topology(), m1.committed_topology());
+    assert!(m0.committed_topology().nodes[&learner_id]
+        .native_store_birth_v1
+        .is_none());
+    assert!(m0.state.log.is_empty());
+    // Fresh request-correlated metadata quorum, not cached match indexes.
+    let local = MetadataReadParticipant::from_transport(n1.clone(), 1, None, true);
+    let mut context = m1
+        .begin_read_authority(Uuid::new_v4(), Duration::from_secs(2), &local)
+        .unwrap();
+    let request = m1.read_authority_probe(&context, &n0, 3, 8).unwrap();
+    let response = m0.handle_read_authority_probe(request.clone()).unwrap();
+    let ack = MetadataReadAck::from_transport(
+        &request,
+        &n0,
+        MetadataReadParticipant::from_transport(n0.clone(), 1, None, true),
+        response,
+    )
+    .unwrap();
+    assert!(m1.record_read_authority_ack(&mut context, &ack).unwrap());
+    let authority = m1.finish_read_authority(context).unwrap();
+    assert_eq!(authority.read_index(), 2);
+    assert_eq!(authority.topology(), m0.committed_topology());
+    drop(m0);
+    let reopened = MetadataConsensusStore::open(
+        roots[0].path(),
+        initial.cluster_id.clone(),
+        n0,
+        initial,
+        true,
+    )
+    .unwrap();
+    assert_eq!(reopened.status().commit_index, 2);
+    assert!(reopened.committed_topology().nodes[&learner_id]
+        .native_store_birth_v1
+        .is_none());
+}
+
+#[test]
+fn native_birth_higher_term_majority_overwrites_only_uncommitted_binding_and_forms_fresh_quorum() {
+    replace_uncommitted_birth_with_actual_majority(false);
+}
+
+#[test]
+fn native_birth_committed_majority_snapshot_discards_only_uncommitted_binding_and_forms_fresh_quorum(
+) {
+    replace_uncommitted_birth_with_actual_majority(true);
 }

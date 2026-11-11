@@ -567,3 +567,6 @@ fn actual_rf3_two_initial_ranges_have_real_genesis_and_independent_origin_indice
     // Real local RF3 origin services, not ordinary follower materialization or
     // actual participant image/config activation. Native remote Apply stays refused.
 }
+
+#[cfg(test)]
+mod reopen;

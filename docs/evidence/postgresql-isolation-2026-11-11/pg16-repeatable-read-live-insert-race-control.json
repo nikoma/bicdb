@@ -1,0 +1,17 @@
+{
+  "server_version": "16.13 (Debian 16.13-1.pgdg13+1)",
+  "results": [
+    {
+      "owner": "COMMIT",
+      "wait_verified": true,
+      "sqlstate": "40001",
+      "value": 11
+    },
+    {
+      "owner": "ROLLBACK",
+      "wait_verified": true,
+      "sqlstate": "00000",
+      "value": 20
+    }
+  ]
+}

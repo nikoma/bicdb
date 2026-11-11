@@ -1,0 +1,7 @@
+{
+  "server_version": "16.13 (Debian 16.13-1.pgdg13+1)",
+  "observed_wait": "SafeSnapshot",
+  "value_at_first_read": 10,
+  "value_after_later_peer_commit": 10,
+  "read_only_insert_sqlstate": "25006"
+}

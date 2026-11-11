@@ -1,0 +1,66 @@
+{
+  "status": "passed",
+  "server_version": "16.13 (Debian 16.13-1.pgdg13+1)",
+  "results": [
+    {
+      "predicate": "v=10",
+      "plan": [
+        "Sort",
+        "  Sort Key: id",
+        "  ->  Index Scan using ssi_scope_value on ssi_scope",
+        "        Index Cond: (v = 10)"
+      ],
+      "old": [
+        [
+          1
+        ]
+      ],
+      "current": []
+    },
+    {
+      "predicate": "v=11",
+      "plan": [
+        "Sort",
+        "  Sort Key: id",
+        "  ->  Index Scan using ssi_scope_value on ssi_scope",
+        "        Index Cond: (v = 11)"
+      ],
+      "old": [],
+      "current": [
+        [
+          1
+        ]
+      ]
+    },
+    {
+      "predicate": "v BETWEEN 9 AND 10",
+      "plan": [
+        "Sort",
+        "  Sort Key: id",
+        "  ->  Index Scan using ssi_scope_value on ssi_scope",
+        "        Index Cond: ((v >= 9) AND (v <= 10))"
+      ],
+      "old": [
+        [
+          1
+        ]
+      ],
+      "current": []
+    },
+    {
+      "predicate": "v BETWEEN 11 AND 12",
+      "plan": [
+        "Sort",
+        "  Sort Key: id",
+        "  ->  Index Scan using ssi_scope_value on ssi_scope",
+        "        Index Cond: ((v >= 11) AND (v <= 12))"
+      ],
+      "old": [],
+      "current": [
+        [
+          1
+        ]
+      ]
+    }
+  ]
+}

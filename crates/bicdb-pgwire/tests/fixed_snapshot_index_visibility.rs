@@ -97,6 +97,8 @@ async fn verify_fixed_index_visibility(profile: &str, levels: &[&str]) {
                 ),
                 ("SELECT min(k) FROM history", vec![10]),
                 ("SELECT max(k) FROM history", vec![20]),
+                ("SELECT min(id) FROM history", vec![1]),
+                ("SELECT max(id) FROM history", vec![2]),
                 (
                     "SELECT id FROM history WHERE body @> '{\"status\":\"open\"}'::jsonb",
                     vec![1],

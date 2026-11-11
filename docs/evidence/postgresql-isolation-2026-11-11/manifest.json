@@ -19,6 +19,10 @@
     "bytes": 769,
     "sha256": "1ab3599b45b23c365514f3319eb07ea3ad7e672c8fae21d6ddc9864a8043c4f2"
   },
+  "pg-fixed-index-repair-7f7d10d1-v2.json": {
+    "bytes": 1508,
+    "sha256": "202b9cac042978d78b05395aba050fc0b6fc8685893042a5971da72e8ef37ae5"
+  },
   "pg-isolation-integration-c097e1c5.json": {
     "bytes": 1859,
     "sha256": "1635cc26a70bd3f1701fb1ed990bdb9352260a94688195b9cd07effdc1844797"
@@ -71,9 +75,21 @@
     "bytes": 2670,
     "sha256": "f7d9d647b43ec2da01e3e8377a4b58b8f84b4c572ed30a69fa282ce8fc00f991"
   },
+  "public471-DBTest-source.json": {
+    "bytes": 722,
+    "sha256": "e965852e0bdadb4197113df35c3190aaebefdaaf1ceb0988f239b0ccb624dcbb"
+  },
+  "public471-DBTest.xml": {
+    "bytes": 60844,
+    "sha256": "8adc3b7a62aaaf2200c919b52f42a21a792b0c446e047f1088de41312443ff61"
+  },
   "report-pg-fixed-index-negative-2d29fb83.json": {
     "bytes": 870,
     "sha256": "1413900a2d5a2d88e712dd438d8b4af1950a2ff1b4c776ec408e99955aa38db1"
+  },
+  "report-pg-fixed-index-repair-7f7d10d1-v2.json": {
+    "bytes": 1074,
+    "sha256": "28bd3b3fec96e613c8decf094bb5d82e711eb0d27e22262ccb1e6d4c52a51e0c"
   },
   "report-pg-isolation-integration-c097e1c5.json": {
     "bytes": 2723,
@@ -82,6 +98,10 @@
   "tc-step-pg-fixed-index-negative-2d29fb83.log": {
     "bytes": 112133,
     "sha256": "1d6245d2fee53ade4ec04677b99d14740ba44fcaee47a5c2faf98e40cf1eaf6a"
+  },
+  "tc-step-pg-fixed-index-repair-7f7d10d1-v2.log": {
+    "bytes": 105264,
+    "sha256": "cca19402f39519e50a83d90d0f57df0112b666a1e21a1db901b78b8d6f518d4d"
   },
   "tc-step-pg-isolation-integration-c097e1c5.log": {
     "bytes": 485633,

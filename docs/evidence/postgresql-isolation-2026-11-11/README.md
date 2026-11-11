@@ -14,7 +14,7 @@ iDempiere application or change its original assertions or 10-second deadlines.
 | `c40f74b6b4f7aa853d6588f95bf7a9b4331f78f6` | Earlier private RR/SSI implementation, before integration with current main. |
 | `c097e1c5e78f1a39ef176ab80ca5a0eda1c3489e` | Integrated runtime on public 471, preserving native deferred snapshot admission, current routing deadlines and routine changes. All six focused commands passed, 57 test executions. Includes SET and AND CHAIN stale-write controls in both stores. |
 | `2d29fb83b8986786f40d1ccfdd435b1c608c13ba` | Tests-only historical-index control on that runtime. Failed with 12 observed mismatches: equality, range and JSONB GIN probes lost old rows in writable/read-only Repeatable Read in both stores. Serializable cases passed. Full failing log retained. |
-| `7f7d10d1252bddc533fe61d0b641c6912bb8242f` | Candidate repair: historical visibility and avoidance of current-only plans depend on fixed isolation, separately from SSI graph registration. Focused validation pending when this evidence was first assembled. |
+| `7f7d10d1252bddc533fe61d0b641c6912bb8242f` | Candidate repair: historical visibility and avoidance of current-only plans depend on fixed isolation, separately from SSI graph registration. PostgreSQL historical visibility passed in both stores. The separate Oracle fixture failed during connection startup because it omitted the required profile option; no Oracle historical assertions ran. The next test-only change declares that option. Broad validation was refused by its prerequisite after this failure; it did not run. |
 
 The native PostgreSQL 16.13 controls preserve actual queries, plans and values.
 The initial historical-index control passed 28 observations; the expanded

@@ -45,6 +45,7 @@ mod native_durability;
 use native_durability::ServiceStoragePolicy;
 mod native_completion;
 mod native_image_install;
+mod current_image_resume;
 mod native_range_read;
 mod native_ready;
 pub(crate) use native_range_read::ActualServiceNativeReadEvidence;

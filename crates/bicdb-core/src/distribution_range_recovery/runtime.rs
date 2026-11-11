@@ -10,6 +10,7 @@ use parking_lot::Mutex;
 use std::collections::BTreeSet;
 use std::sync::Arc;
 
+mod current_image_resume;
 mod native_activation;
 mod native_completion;
 mod native_completion_quorum;
@@ -36,6 +37,7 @@ struct Session {
 #[derive(Debug, Default)]
 struct Sessions {
     current: BTreeMap<RangeId, Session>,
+    installing:BTreeMap<RangeId,current_image_resume::InstallingResumeSession>,
     active: BTreeSet<RangeId>,
     contexts: usize,
 }
@@ -555,7 +557,7 @@ impl RangeRecoveryRuntime {
                 session.scope = scope.clone();
                 return Ok(Arc::clone(session.frozen.as_ref().unwrap()));
             }
-            if sessions.current.len() >= MAX_SESSIONS {
+            if sessions.current.len()+sessions.installing.len() >= MAX_SESSIONS {
                 return Err(invalid("receiver recovery session bound reached"));
             }
         }

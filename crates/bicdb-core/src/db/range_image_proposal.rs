@@ -54,7 +54,7 @@ impl ProtectedCurrentImagePreimageV1 {
             .chain(self.irreversible_commands.keys().next_back().copied())
             .max()
     }
-    fn validate(&self) -> Result<()> {
+    pub(crate) fn validate(&self) -> Result<()> {
         if !digest(&self.native_records_sha256)
             || !digest(&self.catalogue_sha256)
             || self.irreversible_commands.len() > 65_536

@@ -25,6 +25,8 @@ fn invalid(message: &str) -> BicDbError {
 mod image_compatibility;
 mod image_history;
 mod image_proposal;
+mod installing_fence;
+pub(crate) use installing_fence::{CurrentImageInstallingEvidence, CurrentImageInstallingObservation, CurrentImageInstallingRequest};
 pub(crate) use image_proposal::{HistoricalCurrentImageAcceptanceV1, HistoricalCurrentImageSourceAcceptance};
 #[cfg(test)]
 mod recovery_order_tests;

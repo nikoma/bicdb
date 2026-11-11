@@ -50,6 +50,8 @@ mod image_install_obligations;
 pub(crate) use image_install_obligations::TargetImageCatalogHistoryObligations;
 mod image_install_state;
 mod image_proposal_state;
+mod image_install_resume;
+pub(crate) use image_install_resume::CurrentImageInstallingAdmission;
 use image_proposal_state::IMAGE_PROPOSAL_CATALOG_FORMAT;
 pub(crate) use image_proposal_state::{NativeCurrentImageProposalPointer, NativeImageProposalIntentBinding};
 mod native_completion_observation;

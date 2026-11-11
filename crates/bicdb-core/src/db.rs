@@ -1076,6 +1076,7 @@ impl ClusterSchemaBundle {
             &self.collections,
             &self.indexes,
             &self.structural_records,
+            &self.required_reader_features,
         )?;
         if calculated != self.fingerprint {
             return Err(BicDbError::Cluster(
@@ -1108,6 +1109,7 @@ fn calculate_schema_compatibility_fingerprint(
     collections: &[CollectionMeta],
     indexes: &[IndexDefinition],
     structural_records: &[ClusterSchemaCatalogRecord],
+    required_reader_features: &[String],
 ) -> Result<SchemaCompatibilityFingerprint> {
     #[derive(Serialize)]
     struct StructuralRecord<'a> {
@@ -1122,6 +1124,8 @@ fn calculate_schema_compatibility_fingerprint(
         user_collections: Vec<&'a CollectionMeta>,
         indexes: Vec<&'a IndexDefinition>,
         structural_records: Vec<StructuralRecord<'a>>,
+        #[serde(skip_serializing_if = "<[String]>::is_empty")]
+        required_reader_features: &'a [String],
     }
 
     let mut user_collections = collections
@@ -1146,6 +1150,7 @@ fn calculate_schema_compatibility_fingerprint(
         user_collections,
         indexes,
         structural_records,
+        required_reader_features,
     };
     let fingerprint = SchemaCompatibilityFingerprint {
         format_version: SCHEMA_COMPATIBILITY_FORMAT_VERSION,

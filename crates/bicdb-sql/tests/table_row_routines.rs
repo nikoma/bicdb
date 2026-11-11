@@ -89,3 +89,26 @@ fn scalar_table_row_routine_preserves_value_and_type_after_reopen() {
 fn array_table_row_routine_preserves_value_and_type_after_reopen() {
     check(true);
 }
+
+#[test]
+fn qualified_table_row_regtypes_use_logical_sql_names() {
+    for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
+        let root = tempfile::tempdir().unwrap();
+        let mut db =
+            BicDb::open_with_config(root.path(), DbConfig::default().with_storage_mode(mode))
+                .unwrap();
+        {
+            let mut sql = SqlSession::new(&mut db);
+            sql.execute(r#"CREATE SCHEMA reporting; CREATE TABLE reporting."MixedType"(id INT)"#)
+                .unwrap();
+            assert_eq!(
+                sql.execute(r#"SELECT 'reporting."MixedType"'::regtype::text,format_type('reporting."MixedType"[]'::regtype::oid,-1)"#).unwrap().rows,
+                vec![vec![
+                    SqlValue::String(r#"reporting."MixedType""#.into()),
+                    SqlValue::String(r#"reporting."MixedType"[]"#.into())
+                ]]
+            );
+        }
+        db.close().unwrap();
+    }
+}

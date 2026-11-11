@@ -1,0 +1,104 @@
+{
+  "actual_raw_applied_cannot_mint_native_floor_tested": true,
+  "authenticated_read_probe_rpc_tested": false,
+  "ci_tested": false,
+  "current_r2_not_old_activation_anchor_tested": true,
+  "deployed": false,
+  "external_ack_ledger_written": false,
+  "fresh_membership_authority_from_observation": false,
+  "gate_stamp_aba_negative_tested": true,
+  "healthy_closed_sparse_read_birth_negative_tested": false,
+  "host_new_birth_continuation_qualification": false,
+  "large_schema_or_range_latency_bound_tested": false,
+  "legacy_get_changed": false,
+  "local_read_observation_tested": true,
+  "native_catalog_fsync_false_negative_tested": false,
+  "passing_tests": 9,
+  "patch_sha256": "5c5f436ae91bb2d560fc8c88711a9862dc18ea93a6ba95ffd4bd194127618bee",
+  "prior_source_deltas": [
+    {
+      "patch_sha256": "21a5c132ef034df0e43842d75416eaaba388705a463f23bf3c1a0445dea94594",
+      "path": "source-2b99c1e5.patch.gz",
+      "source_revision": "2b99c1e56f6d9f0429af4c0a9b8648e9e44c8dc3"
+    },
+    {
+      "patch_sha256": "ad46efbfd43905b773ae8509d44595b9301c88a083a4e798dd0dc51285a8b19b",
+      "path": "source-1c7d5ef9.patch.gz",
+      "source_revision": "1c7d5ef917435a7ff2c1c27a96f43977deb2d80e"
+    }
+  ],
+  "private_custody": {
+    "bytes": 1648434,
+    "files": 94,
+    "manifest_sha256": "07296d900ed993c48bc4978b6e8271273bbd4baae6a71e2ed9d0274af2435618",
+    "only_retained_successful_r2_roots": [
+      "v2",
+      "v3"
+    ],
+    "other_successful_temporary_databases_archived": false,
+    "raw_database_keys_private": true,
+    "source_databases_reopened_for_custody": false
+  },
+  "production_qualified": false,
+  "public_engine_merge_tested": false,
+  "public_patch_base": "b0e2498842be7b01e355bb8da1cc249ff16be056",
+  "read_quorum_tested": false,
+  "request_scope_is_untrusted": true,
+  "row_snapshot_barrier_tested": false,
+  "runs": [
+    {
+      "exit_code": 101,
+      "failed_test_ids": [],
+      "name": "read-foundation-v1",
+      "passed_test_ids": [],
+      "source_revision": "2b99c1e56f6d9f0429af4c0a9b8648e9e44c8dc3"
+    },
+    {
+      "exit_code": 101,
+      "failed_test_ids": [
+        "distribution_native_read::tests::native_read_observation_rejects_actual_raw_prepare_and_cq_ahead_of_native"
+      ],
+      "name": "read-foundation-v2",
+      "passed_test_ids": [
+        "db::range_image_native::rf3_fixture::native_historical_tls::native_read_observation_tests::native_read_observation_recovered_serving_requires_actual_activated_open",
+        "db::range_image_native::rf3_fixture::native_historical_tls::native_read_observation_tests::native_read_observation_uses_current_r2_not_activation_anchor_and_refuses_cq_only_peer",
+        "distribution_native_read::tests::native_read_observation_actual_cold_open_invalidates_old_lifetime",
+        "distribution_native_read::tests::native_read_observation_actual_genesis_and_r1_use_target_local_data_b",
+        "distribution_native_read::tests::native_read_observation_failed_mutation_and_health_invalidate_owned_observation",
+        "distribution_range_mutation::native_read_stamp_tests::native_read_stamp_invalidates_database_freeze_and_controlled_paths",
+        "distribution_range_mutation::native_read_stamp_tests::native_read_stamp_never_allocates_and_failed_writer_cannot_aba",
+        "distribution_native_read::tests::native_read_observation_scope_cancellation_and_store_replacement_are_not_permissions"
+      ],
+      "source_revision": "1c7d5ef917435a7ff2c1c27a96f43977deb2d80e"
+    },
+    {
+      "exit_code": 0,
+      "failed_test_ids": [],
+      "name": "read-foundation-v3",
+      "passed_test_ids": [
+        "db::range_image_native::rf3_fixture::native_historical_tls::native_read_observation_tests::native_read_observation_recovered_serving_requires_actual_activated_open",
+        "db::range_image_native::rf3_fixture::native_historical_tls::native_read_observation_tests::native_read_observation_uses_current_r2_not_activation_anchor_and_refuses_cq_only_peer",
+        "distribution_native_read::tests::native_read_observation_actual_cold_open_invalidates_old_lifetime",
+        "distribution_native_read::tests::native_read_observation_actual_genesis_and_r1_use_target_local_data_b",
+        "distribution_native_read::tests::native_read_observation_failed_mutation_and_health_invalidate_owned_observation",
+        "distribution_native_read::tests::native_read_observation_rejects_actual_raw_prepare_and_cq_ahead_of_native",
+        "distribution_range_mutation::native_read_stamp_tests::native_read_stamp_invalidates_database_freeze_and_controlled_paths",
+        "distribution_range_mutation::native_read_stamp_tests::native_read_stamp_never_allocates_and_failed_writer_cannot_aba",
+        "distribution_native_read::tests::native_read_observation_scope_cancellation_and_store_replacement_are_not_permissions"
+      ],
+      "source_revision": "6d07ded1ec9e44d688f2263a7804c236b3aa9f14"
+    }
+  ],
+  "source_revision": "6d07ded1ec9e44d688f2263a7804c236b3aa9f14",
+  "source_version": "1.0.471-beta",
+  "strong_get_tested": false,
+  "target_local_b_not_range_r_tested": true,
+  "test_executable": {
+    "bytes": 135192976,
+    "mutable_shared_path": true,
+    "path": "/tmp/bicdb-azure-artifact-target/release/deps/bicdb_core-b0702f49611c59ed",
+    "release_binary": false,
+    "sha256": "d960579506a7a13435dc75db18ebbcfd33a29f0b4dfd8abaf82a6a7c6b89e3f6"
+  },
+  "worktree": "/tmp/bicdb-native-range-read-observation"
+}

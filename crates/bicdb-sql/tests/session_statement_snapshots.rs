@@ -20,14 +20,21 @@ fn imported_native_fixed_snapshot_is_not_advanced_by_its_first_sql_statement() {
         native.set_snapshot_isolation(true, 0).unwrap();
         let original_watermark = native.visibility_watermark();
         let mut peer = db.begin_transaction().unwrap();
-        peer.insert("statement_rows", Record::new("other")
-            .with_metadata(serde_json::json!({"rowkey":2,"payload":20}))).unwrap();
+        peer.insert(
+            "statement_rows",
+            Record::new("other").with_metadata(serde_json::json!({"rowkey":2,"payload":20})),
+        )
+        .unwrap();
         peer.commit().unwrap();
         let mut sql = SqlSession::new_shared(&db).with_pending_transaction(native);
-        assert_eq!(sql.execute("SELECT rowkey FROM statement_rows ORDER BY rowkey").unwrap().rows,
-            vec![vec![SqlValue::Int(1)]]);
+        assert_eq!(
+            sql.execute("SELECT rowkey FROM statement_rows ORDER BY rowkey")
+                .unwrap()
+                .rows,
+            vec![vec![SqlValue::Int(1)]]
+        );
         let native = sql.take_pending_transaction().unwrap();
-        assert_eq!(native.visibility_watermark(),original_watermark);
+        assert_eq!(native.visibility_watermark(), original_watermark);
         native.rollback().unwrap();
     }
 }

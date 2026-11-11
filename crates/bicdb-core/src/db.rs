@@ -14978,7 +14978,9 @@ impl Transaction {
         if self.statement_snapshot_acquired {
             return Ok(());
         }
-        if self.statement_snapshot_deferred && self.isolation == TransactionIsolation::RepeatableRead {
+        if self.statement_snapshot_deferred
+            && self.isolation == TransactionIsolation::RepeatableRead
+        {
             self.set_snapshot_isolation(true, floor)?;
         }
         self.statement_snapshot_deferred = false;

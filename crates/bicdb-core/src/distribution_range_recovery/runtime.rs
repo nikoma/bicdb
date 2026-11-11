@@ -561,6 +561,23 @@ mod tests {
             .unwrap(),
         ));
         let runtime = RangeRecoveryRuntime::new(Arc::clone(&service), Arc::clone(&provider));
+        // Readonly peer probes must coexist with the one mutating collector,
+        // but all reservations share a finite cap and detached work retains it.
+        let exclusive = runtime.reserve(range.id).unwrap();
+        let draining_worker = Arc::clone(&exclusive);
+        let observers = (0..3)
+            .map(|_| runtime.reserve_observer(range.id).unwrap())
+            .collect::<Vec<_>>();
+        assert!(runtime.reserve_observer(range.id).is_err());
+        assert!(runtime.reserve(range.id).is_err());
+        drop(observers);
+        drop(exclusive);
+        assert!(
+            runtime.reserve(range.id).is_err(),
+            "worker still owns exclusive reservation"
+        );
+        drop(draining_worker);
+        drop(runtime.reserve(range.id).unwrap());
         let parent = CancellationToken::uncancelable()
             .child_with_deadline(Instant::now() + Duration::from_secs(5));
         let role_for = |purpose: MetadataRecoveryRolePurpose, nonce: Uuid| {
@@ -594,6 +611,18 @@ mod tests {
         };
         let normal = role_for(MetadataRecoveryRolePurpose::NormalRecovery, Uuid::now_v7());
         let normal_scope = RecoveryFenceScope::from_role(&normal).unwrap();
+        {
+            let _blocked_database = db.write();
+            let started = Instant::now();
+            assert!(service
+                .lock()
+                .preflight_native_recovery(&normal, &normal_scope, &parent)
+                .is_err());
+            assert!(
+                started.elapsed() < Duration::from_millis(200),
+                "service cannot wait for an outer DB writer while holding its latch"
+            );
+        }
         let first = runtime
             .fence_epoch(
                 &provider.local_participant(),

@@ -70,7 +70,8 @@ fn parse_inference_statements(db: &BicDb, sql: &str) -> Result<Vec<Statement>> {
     let parse_sql = rewrite_postgres_parse_compat(sql);
     let sql_for_parse = parse_sql.as_deref().unwrap_or(sql);
     reject_oversized_sql(sql_for_parse)?;
-    reject_deep_parse_nesting(sql_for_parse)?;
+    let bounded_sql = crate::boolean_parse::prepare(sql_for_parse)?;
+    let sql_for_parse = bounded_sql.as_ref();
     let statements = match Parser::parse_sql(&PostgreSqlDialect {}, sql_for_parse) {
         Ok(statements) => statements,
         Err(error) => oracle::lock_waits::parse_lowered(sql_for_parse)?

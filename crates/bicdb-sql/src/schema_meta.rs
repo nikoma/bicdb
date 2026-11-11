@@ -104,7 +104,8 @@ pub(crate) fn parse_statements(sql: &str) -> Result<Vec<Statement>> {
     let dialect = PostgreSqlDialect {};
     let parse_sql = rewrite_postgres_parse_compat(sql);
     let sql_for_parse = parse_sql.as_deref().unwrap_or(sql);
-    reject_deep_parse_nesting(sql_for_parse)?;
+    let bounded_sql = crate::boolean_parse::prepare(sql_for_parse)?;
+    let sql_for_parse = bounded_sql.as_ref();
     let mut statements = match Parser::parse_sql(&dialect, sql_for_parse) {
         Ok(statements) => statements,
         Err(original) => {

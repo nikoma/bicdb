@@ -18,7 +18,7 @@ fn growing_grid_filter_remains_executable_and_describable() {
         let directory = tempfile::tempdir().unwrap();
         let mut db = BicDb::open_with_config(
             directory.path(),
-            DbConfig::default().with_storage_mode(mode),
+            DbConfig::default().with_storage_mode(mode.clone()),
         )
         .unwrap();
         let mut session = SqlSession::new(&mut db);

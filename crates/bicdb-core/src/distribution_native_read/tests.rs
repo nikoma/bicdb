@@ -216,6 +216,18 @@ fn native_read_observation_scope_cancellation_and_store_replacement_are_not_perm
             .observe_current_native_range(&request, &CancellationToken::uncancelable())
             .is_err());
     }
+    let mut load_only = fixture.request.clone();
+    load_only.scope.range.approximate_bytes = 123456;
+    load_only.scope.range.approximate_qps = 789;
+    let load_observation = fixture
+        .service()
+        .observe_current_native_range(&load_only, &CancellationToken::uncancelable())
+        .unwrap();
+    assert_eq!(
+        load_observation.facts().scope_sha256,
+        fixture.request.scope.checksum_sha256().unwrap()
+    );
+    load_observation.require_current(fixture.service()).unwrap();
     let parent = CancellationToken::uncancelable().child();
     let cancelled = fixture
         .service()

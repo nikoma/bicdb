@@ -10,6 +10,9 @@ This is Track C, independent of distributed SQL design and durability qualificat
 
 See the [consolidated actual-results report](azure-scale-out-results-2026-11-11.md)
 for measured latency, failure, reconciliation and qualification boundaries.
+The [per-finding dispositions and issue reports](azure-original-run-forensics-2026-11-11.md)
+classify the original attempt as failed and separate known results from missing
+traces and tests. A new instrumented reproduction is a separate experiment.
 
 The owner authorized the $25/eight-hour disposable experiment. Subscription
 quota and region restrictions reduced allocation to five North Europe

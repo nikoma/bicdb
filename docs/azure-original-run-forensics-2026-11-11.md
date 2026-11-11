@@ -1,5 +1,8 @@
 # Original Azure run: findings, unresolved causes and next tests
 
+**Overall disposition: failed scale-out qualification attempt.** Useful partial
+results do not make it a scaling success.
+
 This report examines the **original, immutable failed run** and its already
 completed diagnosis. It does not include a new reproduction, engine change,
 additional restart or production qualification. Runtime: **1.0.461-beta**, source
@@ -37,6 +40,20 @@ performed. A passed observation is not production qualification.
 | Unchanged PostgreSQL business SQL and multi-range atomicity | Not tested | These experiments used immutable-event append/get; missing general SQL capabilities are covered by the source audit. |
 | Independent physical-host/device power loss, general RPO/RTO, production qualification | Not tested | Guest-off observations do not establish these gates. The full qualification programme remains unpassed. |
 
+| Additional original-run finding | Status | Scope |
+|---|---|---|
+| External per-attempt/per-ACK fsynced ledger reconciliation | Passed | All 107 external ACKs matched after process reopen and guest-off recovery. This ledger does not expose stock CLI internal retries. |
+| Guest-off fresh-write witness and targeted reconciliation | Passed | Five calls wholly inside the confirmed-off interval; all 38 targeted ACKs later matched. Guest RAM loss, not device/host power loss. |
+| Three uncertain targeted call outcomes retained | Passed | Later reads found one whole record present/two absent; timeout was not treated as rollback. |
+| Exact event restoring original A/B visibility | Inconclusive | First retained successes followed restart, policy polling and background recovery; no causal event trace was retained. |
+| Full original failed-attempt/retry classification | Inconclusive | Only 20 sampled error strings out of 404 failed calls; the other bodies, paths and retry histories are unavailable. |
+| Raw successful/failed per-call latency capture | Not tested | Only successful-call percentile aggregates were retained by the native workload. |
+| Stable, uninterrupted 15-minute five-node comparison after complete convergence | Not tested | The long run aborted before it; the short phase checked convergence only at entry. |
+| Optional cleanup-overlapped classification | Inconclusive | All 20 calls are excluded because their measurement scope overlapped owned shutdown. |
+| Original control-plane model recovery | Passed | Activity Log recovered five VM, ten disk and five NIC creation responses; this is creation configuration, not runtime limits or physical placement. |
+| Original cloud I/O/network/throttle/burst time series | Inconclusive | Fifteen post-delete resource metric queries returned unavailable; missing metrics do not mean zero use/throttling. |
+| Deletion and removal of owned cleanup units | Passed | Exact group absent and separate inventory zero at 06:52:33 UTC; all 23 scoped resources removed. |
+
 ## The two originally unverified ACKs
 
 The public original bundle contains generated test keys. The projection uses
@@ -46,6 +63,19 @@ SHA-256 of the full `namespace/key` identity to join those keys to range histori
 |---|---|---:|---|
 | A | `04fbba34f4a4eac064060eefd057b8e4a964a79cc9874330811898e6f09711e7` | 41 | 11 / 74 / n2 |
 | B | `de0055b2ef2e46c099356896ad745859a636b0594c4846d8bc8659af41ec75f0` | 11 | 11 / 55 / n0 |
+
+The exact generated record identities are preserved as:
+
+- A: `scale-83da6383fbae4ba38d8d15f621d03cbb/25d1dbd975814f4f9b0c5225b7658d2d-10-636`
+- B: `scale-83da6383fbae4ba38d8d15f621d03cbb/25d1dbd975814f4f9b0c5225b7658d2d-14-184`
+
+Both expected payloads are 1,024 literal ASCII `x` bytes, SHA-256
+`49abd65bbf7f7e40c7055093ed2e3fd75f2f602f2c5fcf955c213e3135eb03f7`.
+The expected event metadata includes run `25d1dbd975814f4f9b0c5225b7658d2d`;
+its compact run-then-payload JSON serialization has SHA-256
+`f82c46851ac2de3fd190935afbfca9183c0d76b15d49445399b38f8a3619a18e`,
+as reconstructed by the retained cold-catalog helper. Hashing a different JSON
+key order produces different bytes; payload equality is also checked structurally.
 
 These ranges follow the exact versioned hash in
 [`distribution.rs::distribution_key_token`](../crates/bicdb-core/src/distribution.rs)
@@ -169,6 +199,11 @@ from n0/n1/n1, resuming at `learner_allocated`. Their retained error is
 failures, not a demonstrated common cause for all unfinished moves or the two
 Get failures. Later cold-export failed-move counts are cleanup-confounded and
 must not be substituted for this pre-cleanup diagnostic boundary.
+
+The [recovered infrastructure evidence](evidence/azure-postdelete-forensics-2026-11-11/README.md)
+retains original creation models, unavailable historical metric responses and
+published SKU/disk limits queried after deletion. Those ceilings are not measured
+throttling, a recovered latency trace or a proven cause of the convergence failure.
 
 ## The 404 failed logical operations
 

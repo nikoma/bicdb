@@ -148,6 +148,15 @@ received on a nonleader is rejected rather than transparently forwarded.
 A PostgreSQL multi-host connection can select a whole-database primary in mode 1;
 it cannot choose many range leaders for mode 2 by itself.
 
+The immutable-event binding describes eventual consistency. Its Get handler
+checks the published range epoch, named leader and schema, then reads local
+committed MVCC state. It has no explicit per-Get quorum read-index, minimum
+applied/read-your-ACK position or completed leader-recovery barrier. This does
+not establish linearizable visibility across ownership changes. The
+[original-run forensics](azure-original-run-forensics-2026-11-11.md) distinguishes
+that source contract from the two unverified reads, whose actual original
+responses/routes were not retained and cannot be called allowed stale reads.
+
 [distribution.rs](../crates/bicdb-core/src/distribution.rs)
 `distribution_key_token(namespace, key)` computes SHA-256 over a versioned domain,
 length-delimited namespace and exact key, using the first eight bytes as the

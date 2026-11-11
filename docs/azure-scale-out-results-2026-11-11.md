@@ -1,11 +1,21 @@
 # Azure four-to-five-node experiment: actual results
 
-**Automatic movement observed; capacity gain and fault-safe rebalance remain unqualified.**
+**Failed scale-out qualification attempt, with useful partial results.**
+Automatic movement was observed; capacity gain and fault-safe rebalance remain
+unqualified. This run is not a scaling success.
 The owner authorized an isolated $25/eight-hour Azure experiment. The experiment
 ran on 2026-11-11 UTC with optimized **1.0.461-beta**, source
 `b05385d4b033edf0db03f3eccf4bdd86f7c8eddb`, binary SHA-256
 `15ad8ad644c92fd9248020c19b1fad9d4f62e6dceef8d4bc43f1415a8ff4e028`.
 No database engine feature or production deployment was changed.
+
+The [finding dispositions and issue reports](azure-original-run-forensics-2026-11-11.md)
+classify each result as passed, failed, inconclusive or not tested, preserve the
+two original record identities/range histories, and specify the next smallest
+deterministic tests. **404 is the number of failed logical calls, not HTTP 404.**
+Only 20 error samples exist; complete classification of the other 384 calls,
+original per-key routes/retries and raw latency reconstruction is unavailable.
+The separate instrumented reproduction does not alter this failed run.
 
 ## Actual configuration and evidence
 
@@ -65,6 +75,11 @@ benchmarks or an equal-latency/error-budget capacity result.
 | Short recovered 5 | 63.18 | 1.95 | 0 | 64 | 3505.353 / 8935.123 / 11856.031 | 10.352 / 96.335 / 146.509 |
 | Longer steady 4, 16 workers | 907.00 | 8.37 | 0 | 3804 | 3097.119 / 8003.782 / 11135.865 | 96.034 / 595.940 / 904.493 |
 | Longer growth 4→5, aborted | 927.50 | 2.96 | 404 | 1223 | 4862.509 / 15487.779 / 21462.305 | 120.009 / 946.799 / 1939.600 |
+
+The short `steady-5` name is a harness phase label: a converged checkpoint
+preceded it, but uninterrupted zero-relocation operation throughout that window
+was not established. Its goodput is not a stable fifteen-minute post-convergence
+capacity comparison. Relocation-window results must remain separate from it.
 
 The longer run never reached steady-five, its later fault, or recovered-five
 phases. Growth failed 404 of 3,150 logical operations (about 12.8%); these are
@@ -150,3 +165,36 @@ Neither a source version bump, this optimized build, portable evidence checks,
 nor the observed guest deployment qualifies the newer integrated binary.
 The original [stronger experiment plan](scale-out-experiment-2026-11-11.md)
 and 1/5/20 TB certification gates remain unpassed.
+The production gate is unchanged: zero lost acknowledged commits, correct
+read consistency and routing, bounded fault-safe rebalance, and demonstrated
+sustained throughput gain after convergence. This failed attempt does not meet
+that gate. Engine implementation fixes remain separate from this evidence and
+documentation delivery.
+
+## Teardown and delivery validation
+
+Azure confirmed the exact guarded experiment group absent at **2026-11-11
+06:52:33 UTC**. A separate subscription inventory query found zero remaining
+resources in that group. All 23 scoped resources were removed: five VMs, ten
+managed disks, five NICs, one public IP, one VNet and one NSG. Only after absence
+was confirmed were this task's persistent cleanup timer/service removed;
+both then reported not-found/inactive. The
+[infrastructure evidence](evidence/azure-infrastructure-2026-11-11/README.md)
+retains the sanitized deletion receipt. Original and final stopped-state database,
+log and ledger archives remain on the external controller with matching export
+hashes. No further VM restart or trial was performed.
+
+The eight-hour retail planning estimate was about USD 6.01 before IP/network/tax;
+**the actual invoice is unverified**. Resource deletion, not the price estimate,
+is the evidence that these allocations are no longer running.
+
+At source delivery version **1.0.464-beta**, 47 platform Python tests and 12
+portable-evidence regression tests passed. Build identity (including hashing the
+retained executable), short-smoke, guest-off, longer-failure and cold-catalog
+verifiers passed their evidence-consistency checks. The cold-catalog check was
+also rerun against all five original private archives. Version synchronization
+and locked metadata identified all 29 BicDB packages consistently; syntax, local
+links, bounded credential/address-pattern scans and whitespace checks passed.
+These checks verify the documentation/test tools and retained evidence. They do
+not mean that the failed native cluster trial passed or that this newer runtime
+was physically tested, built, released, production-qualified or deployed.

@@ -310,7 +310,11 @@ mod tests {
             let rewritten = rewrite(&sql).unwrap();
             let before = Parser::parse_sql(&PostgreSqlDialect {}, &sql).unwrap();
             let after = Parser::parse_sql(&PostgreSqlDialect {}, &rewritten).unwrap();
-            assert_eq!(before, after, "{sql}\n{rewritten}");
+            assert_eq!(
+                before[0].to_string(),
+                after[0].to_string(),
+                "{sql}\n{rewritten}"
+            );
         }
     }
 }

@@ -1966,14 +1966,13 @@ impl<'db> SqlSession<'db> {
                     .as_deref()
                     .map(std::ops::Bound::Excluded)
                     .unwrap_or(std::ops::Bound::Unbounded);
-                let (ids, complete) = reader
-                    .scan_collection_record_key_candidates_in_range_unchecked(
-                        &schema.name,
-                        lower,
-                        std::ops::Bound::Unbounded,
-                        false,
-                        128,
-                    )?;
+                let (ids, complete) = reader.scan_collection_record_key_batch_in_range_unchecked(
+                    &schema.name,
+                    lower,
+                    std::ops::Bound::Unbounded,
+                    false,
+                    128,
+                )?;
                 if ids.is_empty() && !complete {
                     return Err(SqlError::InvalidSql(
                         "rename value scan made no progress".into(),

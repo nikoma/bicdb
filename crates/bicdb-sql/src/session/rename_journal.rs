@@ -457,7 +457,7 @@ fn collect_orphan_batch(
     let lower = after
         .map(std::ops::Bound::Excluded)
         .unwrap_or(std::ops::Bound::Unbounded);
-    let (ids, complete) = match reader.scan_collection_record_key_candidates_in_range_unchecked(
+    let (ids, complete) = match reader.scan_collection_record_key_batch_in_range_unchecked(
         IMAGES,
         lower,
         std::ops::Bound::Unbounded,

@@ -17080,6 +17080,90 @@ impl Transaction {
         Ok((ids, complete))
     }
 
+    /// A hard-bounded sibling of the range locator scan. Returns at most
+    /// `limit` keys, including resident/touched and pending overlays; scratch
+    /// storage is bounded independently of collection or write-set size.
+    /// Resident shards are examined to choose the nearest keys without making
+    /// an all-row locator vector. Paged collections retain their range seek.
+    /// Candidates still require normal visibility/authorization checks.
+    pub fn scan_collection_record_key_batch_in_range_unchecked(
+        &self,
+        collection: &str,
+        lower: Bound<&str>,
+        upper: Bound<&str>,
+        descending: bool,
+        limit: usize,
+    ) -> Result<(Vec<String>, bool)> {
+        if limit == 0 {
+            return Err(BicDbError::Unsupported(
+                "key batch limit must be positive".into(),
+            ));
+        }
+        let db = self.db_ref();
+        self.bind_collection_incarnation(collection)?;
+        let state = db.collection_state(collection)?;
+        let paged = if state.paged_lazy {
+            match (&self.paged_snapshot, &db.paged_records) {
+                (Some(snapshot), Some(paged)) => paged
+                    .scan_ids_in_range(snapshot, collection, lower, upper, descending, limit)?,
+                _ => Vec::new(),
+            }
+        } else {
+            Vec::new()
+        };
+        let page_complete = paged.len() < limit;
+        let boundary = (!page_complete).then(|| paged.last().expect("nonzero limit").clone());
+        let mut keys = BTreeSet::<String>::new();
+        let mut truncated = false;
+        let mut include = |id: &str| {
+            if !record_id_in_range(id, lower, upper)
+                || boundary.as_ref().is_some_and(|boundary| {
+                    if descending {
+                        id < boundary.as_str()
+                    } else {
+                        id > boundary.as_str()
+                    }
+                })
+                || keys.contains(id)
+            {
+                return;
+            }
+            if keys.len() == limit {
+                truncated = true;
+                if descending {
+                    if id <= keys.first().expect("nonzero limit").as_str() {
+                        return;
+                    }
+                    keys.pop_first();
+                } else {
+                    if id >= keys.last().expect("nonzero limit").as_str() {
+                        return;
+                    }
+                    keys.pop_last();
+                }
+            }
+            keys.insert(id.to_string());
+        };
+        for id in &paged {
+            include(id);
+        }
+        for shard in state.read_all() {
+            for versions in shard.versions.values() {
+                if let Some(version) = versions.first() {
+                    include(&version.record.id);
+                }
+            }
+        }
+        for write in self.pending_writes_for_collection(collection) {
+            include(&write.record_id);
+        }
+        let mut keys = keys.into_iter().collect::<Vec<_>>();
+        if descending {
+            keys.reverse();
+        }
+        Ok((keys, page_complete && !truncated))
+    }
+
     /// Key-only locator candidates at this transaction's pinned paged snapshot,
     /// plus touched and pending keys. This is deliberately a superset: resolve
     /// each candidate through transaction visibility and authorization before

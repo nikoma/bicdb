@@ -911,8 +911,19 @@ fn native_ready_actual_tls_fast_clean_zero_minority_does_not_starve_matching_one
     let runtime = Arc::clone(&fixture.runtimes[&node("n1")]);
     let actor = fixture.actor();
     let request = fixture.ready_request(&scope);
-    let worker = std::thread::spawn(move || {
-        runtime.acquire_closed_native_ready(&actor, &request, &CancellationToken::uncancelable())
+    let worker = std::thread::spawn(move || -> Result<(u64, u64, BTreeSet<ClusterNodeId>)> {
+        let (local, quorum) = runtime.acquire_closed_native_ready(
+            &actor,
+            &request,
+            &CancellationToken::uncancelable(),
+        )?;
+        // Keep the actual authority/physical proof on its producing thread;
+        // return only diagnostic getters rather than imposing a Send contract.
+        Ok((
+            local.range_index(),
+            quorum.range_index(),
+            quorum.distinct_member_ids().cloned().collect(),
+        ))
     });
     let deadline = Instant::now() + Duration::from_secs(2);
     while !fixture.ready_hold.entered.load(Ordering::SeqCst)
@@ -927,17 +938,11 @@ fn native_ready_actual_tls_fast_clean_zero_minority_does_not_starve_matching_one
     assert!(fixture.native.services[&node("n1")].try_lock().is_some());
     assert!(fixture.native.databases[&node("n1")].try_write().is_some());
     fixture.ready_hold.release();
-    let (local, quorum) = worker.join().unwrap().unwrap();
+    let (local_index, quorum_index, members) = worker.join().unwrap().unwrap();
     fixture.wait_idle();
-    assert_eq!(local.range_index(), 1);
-    assert_eq!(quorum.range_index(), 1);
-    assert_eq!(
-        quorum
-            .distinct_member_ids()
-            .cloned()
-            .collect::<BTreeSet<_>>(),
-        BTreeSet::from([node("n0"), node("n1")])
-    );
+    assert_eq!(local_index, 1);
+    assert_eq!(quorum_index, 1);
+    assert_eq!(members, BTreeSet::from([node("n0"), node("n1")]));
     assert_eq!(fixture.native_index("n2"), 0);
     assert_eq!(fixture.native_index("n0"), 1);
     assert_eq!(fixture.native_index("n1"), 1);

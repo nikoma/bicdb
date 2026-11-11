@@ -40,6 +40,13 @@ fn check(array: bool) {
                 .unwrap()
                 .rows;
             assert_eq!(signature.len(), 1);
+            let type_oid = sql
+                .execute(&format!("SELECT '{pg_type}'::regtype::oid"))
+                .unwrap()
+                .rows[0][0]
+                .clone();
+            assert_eq!(signature[0][1], type_oid);
+            assert_eq!(signature[0][0].to_cell(), type_oid.to_cell());
         }
         db.close().unwrap();
         let mut db = BicDb::open_with_config(root.path(), cfg).unwrap();

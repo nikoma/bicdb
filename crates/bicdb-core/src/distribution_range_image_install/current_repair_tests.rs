@@ -1335,6 +1335,20 @@ fn actual_prepared_serving_record_survives_a_second_current_voter_image_attempt(
     )
     .unwrap();
     std::fs::write(retained.join("serving-image-witness-after-b.json"),serde_json::to_vec_pretty(&serde_json::json!({"catalogue":after,"serving_record":target.read().test_native_serving_record_json(fixture.range.id).unwrap(),"result":second.as_ref().map(|prepared|prepared.range_index()).map_err(|error|error.to_string())})).unwrap()).unwrap();
+    std::fs::File::open(retained.join("serving-image-witness-after-b.json"))
+        .unwrap()
+        .sync_all()
+        .unwrap();
+    std::fs::File::open(&retained).unwrap().sync_all().unwrap();
+    assert_eq!(
+        target
+            .read()
+            .test_native_serving_record_json(fixture.range.id)
+            .unwrap()
+            .unwrap(),
+        serving_a,
+        "the prior durable native serving record/floor must remain unchanged",
+    );
     assert!(second.is_ok(),"a new actual compatible image must prepare without deleting the prior durable serving epoch fence: {:?}",second.as_ref().err());
     let prepared = second.unwrap();
     assert_eq!(prepared.range_index(), 1);

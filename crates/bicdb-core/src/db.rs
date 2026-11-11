@@ -15768,11 +15768,7 @@ impl Transaction {
                 // row. Its pinned version supersedes an earlier unlocked read,
                 // including when statement refresh already advanced snapshot.
                 if let Some(version) = version {
-                    self.observed_record_versions
-                        .lock()
-                        .entry(collection.to_string())
-                        .or_default()
-                        .insert(id.to_string(), version);
+                    self.remember_locked_read_committed_version(collection, id, version);
                 }
             }
         }
@@ -15861,11 +15857,7 @@ impl Transaction {
                 // observation; otherwise a current locking read returns fresh
                 // data but its subsequent write still conflicts with that read.
                 if let Some(max_tx) = max_tx {
-                    self.observed_record_versions
-                        .lock()
-                        .entry(collection.to_string())
-                        .or_default()
-                        .insert(id.to_string(), max_tx);
+                    self.remember_locked_read_committed_version(collection, id, max_tx);
                 }
             }
             if max_tx.is_none_or(|max_tx| max_tx > self.applied_snapshot) {
@@ -17487,6 +17479,22 @@ impl Transaction {
         self.fenced(result)
     }
 
+    /// A SQL locking/recheck operation pins this committed version. It may
+    /// replace an earlier unlocked observation, including on a freshness fast
+    /// path after a statement refresh. An existing buffered write keeps its
+    /// original dependency; an ordinary native re-read remains conservative.
+    fn remember_locked_read_committed_version(&self, collection: &str, id: &str, version: u64) {
+        if self.isolation == TransactionIsolation::ReadCommitted
+            && self.last_pending_write(collection, id).is_none()
+        {
+            self.observed_record_versions
+                .lock()
+                .entry(collection.to_string())
+                .or_default()
+                .insert(id.to_string(), version);
+        }
+    }
+
     fn conflict_snapshot_for_write(
         &self,
         collection: &str,
@@ -18469,6 +18477,7 @@ impl Transaction {
         let Some(max_tx) = Self::latest_committed_record_sequence(db, collection, id)? else {
             return Ok(Some((None, 0)));
         };
+        self.remember_locked_read_committed_version(collection, id, max_tx);
         if max_tx <= self.applied_snapshot {
             // Fresh row: everything at or below the un-floored APPLIED
             // watermark was physically applied before this transaction began,
@@ -18541,6 +18550,7 @@ impl Transaction {
         let Some(max_tx) = Self::latest_committed_record_sequence(db, collection, id)? else {
             return Ok(Some((None, 0)));
         };
+        self.remember_locked_read_committed_version(collection, id, max_tx);
         if max_tx <= self.applied_snapshot {
             return Ok(None);
         }
@@ -18604,6 +18614,7 @@ impl Transaction {
         let Some(max_tx) = Self::latest_committed_record_sequence(db, collection, id)? else {
             return Ok(None);
         };
+        self.remember_locked_read_committed_version(collection, id, max_tx);
         // See read_committed_update_record: freshness is judged against the
         // un-floored applied watermark, never the floored snapshot.
         if max_tx <= self.applied_snapshot {

@@ -162,6 +162,8 @@ impl Transaction {
     /// later transactions refuse access until release, commit, rollback or
     /// drop. Absent destination names are protected too. No durable state is
     /// changed, and this grants no mutation authority or SQL catalog visibility.
+    /// As with other Transaction operations, the host must hold its ordinary
+    /// database execution guard; this is not a replacement for that guard.
     pub fn reserve_catalog_collections(&self, names: &[String]) -> Result<CatalogScopeToken> {
         let db = self.db_ref();
         db.check_recovery_state()?;

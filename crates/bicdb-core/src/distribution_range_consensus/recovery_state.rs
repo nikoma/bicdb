@@ -61,7 +61,7 @@ impl RecoveryFenceScope {
             purpose: role.purpose().clone(),
         })
     }
-    pub(super) fn validate(&self) -> Result<()> {
+    pub(crate) fn validate(&self) -> Result<()> {
         if self.protocol_version != 1
             || self.bootstrap_id.is_nil()
             || self.range_epoch == 0

@@ -1515,6 +1515,29 @@ pub struct RangeWriteAck {
 }
 
 pub trait RangeWriteTransport: std::fmt::Debug + Send + Sync + 'static {
+    fn prepare_native_ready_observation(
+        &self,
+        destination: &ClusterNodeId,
+        request: &crate::distribution_range_recovery::NativeReadyRequest,
+        parent: &CancellationToken,
+    ) -> Result<crate::distribution_range_recovery::NativeReadyObservation> {
+        let _ = (destination, request, parent);
+        Err(range_write_error(
+            "transport does not support actual native preparation",
+        ))
+    }
+    fn observe_native_ready_observation(
+        &self,
+        destination: &ClusterNodeId,
+        request: &crate::distribution_range_recovery::NativeReadyRequest,
+        parent: &CancellationToken,
+    ) -> Result<crate::distribution_range_recovery::NativeReadyObservation> {
+        let _ = (destination, request, parent);
+        Err(range_write_error(
+            "transport does not support actual native-ready observations",
+        ))
+    }
+
     fn recovery_historical_command_observation(
         &self,
         destination: &ClusterNodeId,

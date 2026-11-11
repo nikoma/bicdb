@@ -1,0 +1,143 @@
+{
+  "format": 1,
+  "source_commit": "d49a391b3c6157f90f29e9f2f5214143c60f9f4b",
+  "linked_core_version": "1.0.463-beta",
+  "policy_source": "b05385d4b033edf0db03f3eccf4bdd86f7c8eddb",
+  "policy_files_sha256": {
+    "distribution_events.rs": "4e7322c6cedec5452f328ff0522a49bbb0edd909e2d3acad7cdb5ab55b8adb89",
+    "distribution_transport.rs": "aa61490cddd464588f0ffbfe7f10d93de578471b9bda1617e86f421274a09092",
+    "distribution.rs": "a3d5c523e4fc3dccc54afab909b885a30af2b743fbf8864b820202908817a33d",
+    "replication_transport.rs": "90e1fb4ef9b6a428c027940e0dc6883a2f02b02537a67d4575f0faa0e7caa48b"
+  },
+  "source_sha256": "07b96ffe4725f13a6632b9da9955f8fab627a252467b8f4b6b3723df87d138e3",
+  "rustc": "rustc 1.96.0 (ac68faa20 2026-05-25)",
+  "argv": [
+    "rustc",
+    "--crate-name",
+    "bicdb_trace_wire_worker",
+    "--edition=2021",
+    "/tmp/bicdb-event-trace-build-463-v2/wire-worker.executed.rs",
+    "-o",
+    "/tmp/bicdb-event-trace-build-463-v2/wire-worker",
+    "-C",
+    "opt-level=1",
+    "-C",
+    "debuginfo=0",
+    "-C",
+    "lto=off",
+    "-C",
+    "codegen-units=1",
+    "-L",
+    "dependency=/tmp/bicdb-azure-artifact-target/release/deps",
+    "--extern",
+    "serde_json=/tmp/bicdb-azure-artifact-target/release/deps/libserde_json-6161d00796a1441f.rlib",
+    "--extern",
+    "sha2=/tmp/bicdb-azure-artifact-target/release/deps/libsha2-e98894dbca273d11.rlib",
+    "--extern",
+    "bicdb_core=/tmp/bicdb-azure-artifact-target/release/deps/libbicdb_core-263009a48412a831.rlib",
+    "-L",
+    "native=/tmp/bicdb-azure-artifact-target/release/build/aws-lc-sys-118f531f8aca1c9b/out",
+    "-L",
+    "native=/tmp/bicdb-azure-artifact-target/release/build/ittapi-sys-e4db93329cd9a579/out",
+    "-L",
+    "native=/tmp/bicdb-azure-artifact-target/release/build/libmimalloc-sys-a89a2f11fc46f2bf/out",
+    "-L",
+    "native=/tmp/bicdb-azure-artifact-target/release/build/mlua-sys-be15ccb52c2d9228/out/lib",
+    "-L",
+    "native=/tmp/bicdb-azure-artifact-target/release/build/psm-431af746e707fd4e/out",
+    "-L",
+    "native=/tmp/bicdb-azure-artifact-target/release/build/ring-ebc8e9ae7dc2cd9b/out",
+    "-L",
+    "native=/tmp/bicdb-azure-artifact-target/release/build/rquickjs-sys-13e9b0ff74c4f5f7/out",
+    "-L",
+    "native=/tmp/bicdb-azure-artifact-target/release/build/wasmtime-66ababe414b746d8/out",
+    "-L",
+    "native=/tmp/bicdb-azure-artifact-target/release/build/wasmtime-internal-jit-debug-9d6af88ebfc10c96/out",
+    "-L",
+    "native=/tmp/bicdb-azure-artifact-target/release/build/zstd-sys-f73f289660bb2177/out"
+  ],
+  "libraries": {
+    "serde_json": {
+      "path": "/tmp/bicdb-azure-artifact-target/release/deps/libserde_json-6161d00796a1441f.rlib",
+      "sha256": "0c4bd532a265b9d147d523d49c69272aa6405d47e5c9d70972032fc1541276c9"
+    },
+    "sha2": {
+      "path": "/tmp/bicdb-azure-artifact-target/release/deps/libsha2-e98894dbca273d11.rlib",
+      "sha256": "df5eaa58af87472e459f7f943d8c65b9da8e8a583596f3f3c4908e9d1e98046e"
+    },
+    "bicdb_core": {
+      "path": "/tmp/bicdb-azure-artifact-target/release/deps/libbicdb_core-263009a48412a831.rlib",
+      "sha256": "dc714b001a0fe8758473c2c4ef80158474d7426e16630926edb65b6cc35f0356"
+    }
+  },
+  "started_unix_ns": 1794382757688500502,
+  "minimum_available_bytes": 8589934592,
+  "build_jobs": 1,
+  "engine_recompiled": false,
+  "memory_samples": [
+    {
+      "unix_ns": 1794382757689303115,
+      "available_bytes": 17835540480
+    },
+    {
+      "unix_ns": 1794382758189540375,
+      "available_bytes": 17009569792
+    },
+    {
+      "unix_ns": 1794382758689759943,
+      "available_bytes": 17601454080
+    },
+    {
+      "unix_ns": 1794382759189967760,
+      "available_bytes": 17474244608
+    },
+    {
+      "unix_ns": 1794382759690221642,
+      "available_bytes": 16591007744
+    },
+    {
+      "unix_ns": 1794382760190457612,
+      "available_bytes": 16977940480
+    },
+    {
+      "unix_ns": 1794382760690669177,
+      "available_bytes": 16875642880
+    },
+    {
+      "unix_ns": 1794382761190915506,
+      "available_bytes": 15943815168
+    },
+    {
+      "unix_ns": 1794382761691127413,
+      "available_bytes": 16642908160
+    },
+    {
+      "unix_ns": 1794382762191348957,
+      "available_bytes": 16490119168
+    },
+    {
+      "unix_ns": 1794382762691636995,
+      "available_bytes": 15411093504
+    },
+    {
+      "unix_ns": 1794382763191894528,
+      "available_bytes": 15937339392
+    },
+    {
+      "unix_ns": 1794382763692177107,
+      "available_bytes": 16458633216
+    },
+    {
+      "unix_ns": 1794382764192370771,
+      "available_bytes": 16781402112
+    }
+  ],
+  "exit_code": 0,
+  "completed_unix_ns": 1794382764692486912,
+  "binary_sha256": "b8cc2607220e32f705a23fd6b7d4f41c22298cd1b0ec92cc8e83847783ef8d2c",
+  "binary_bytes": 38531912,
+  "frozen_worker": "/tmp/bicdb-azure-artifact-463-evidence/frozen-wire-worker-b8cc2607",
+  "frozen_unix_ns": 1794384259562585734,
+  "frozen_sha256": "b8cc2607220e32f705a23fd6b7d4f41c22298cd1b0ec92cc8e83847783ef8d2c",
+  "ldd": "\tlinux-vdso.so.1 (0x00007ffcf9921000)\n\tlibgcc_s.so.1 => /lib/x86_64-linux-gnu/libgcc_s.so.1 (0x000076b635854000)\n\tlibc.so.6 => /lib/x86_64-linux-gnu/libc.so.6 (0x000076b634e00000)\n\t/lib64/ld-linux-x86-64.so.2 (0x000076b63589b000)\n"
+}

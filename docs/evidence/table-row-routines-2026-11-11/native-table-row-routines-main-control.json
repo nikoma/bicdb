@@ -1,0 +1,40 @@
+{
+  "status": "passed",
+  "started_unix": 1794397486.6936681,
+  "protected_application_schema_mutated": false,
+  "cases": [
+    {
+      "array": false,
+      "result": [
+        [
+          "kept",
+          "typed_row"
+        ]
+      ],
+      "signature": [
+        [
+          "91444",
+          91444
+        ]
+      ]
+    },
+    {
+      "array": true,
+      "result": [
+        [
+          "kept",
+          "typed_row[]"
+        ]
+      ],
+      "signature": [
+        [
+          "91452",
+          91452
+        ]
+      ]
+    }
+  ],
+  "server_version": "16.13 (Debian 16.13-1.pgdg13+1)",
+  "temporary_schemas_removed": true,
+  "finished_unix": 1794397486.8063726
+}

@@ -16,6 +16,9 @@ const MAX_WIRE: usize = 272 * 1024;
 fn stage_key(range: RangeId) -> String {
     format!("history-stage:active:{}", range.get())
 }
+fn published_stage_key(range: RangeId, generation: Uuid) -> String {
+    format!("history-stage:published:{}:{generation}", range.get())
+}
 fn initial_chain() -> String {
     hex::encode(sha2::Sha256::digest(b"bicdb.range-image.history-wire.v1\0"))
 }
@@ -180,6 +183,8 @@ struct StageHeader {
     audit_next_index: u64,
     audit_head: Option<String>,
     audit_complete: bool,
+    #[serde(default)]
+    published_native_page_xid: Option<u64>,
     checksum_sha256: String,
 }
 impl StageHeader {
@@ -208,6 +213,9 @@ impl StageHeader {
             || self.cursor.complete() != (self.verified_entries == total)
             || self.audit_next_index > total
             || self.audit_complete != (self.audit_next_index == total)
+            || self
+                .published_native_page_xid
+                .is_some_and(|xid| xid == 0 || !self.audit_complete)
         {
             return Err(invalid("damaged/inconsistent native history stage header"));
         }
@@ -302,7 +310,376 @@ impl StagedNativeHistoryProof {
     }
 }
 
+/// Values derived from an actual fully audited staged spine. Only the private
+/// atomic native publisher creates this binding inside its page transaction.
+/// A consumer writes these values into the completed native base receipt;
+/// they grant no committed range configuration or read readiness.
+pub(crate) struct NativeHistoryPublicationBinding<'a> {
+    proof: &'a StagedNativeHistoryProof,
+}
+impl NativeHistoryPublicationBinding<'_> {
+    pub(crate) fn history_generation(&self) -> Uuid {
+        self.proof.history_generation()
+    }
+    pub(crate) fn verified_through(&self) -> u64 {
+        self.proof.verified_through()
+    }
+    pub(crate) fn logical_genesis_sha256(&self) -> &str {
+        self.proof.logical_genesis_sha256()
+    }
+    pub(crate) fn logical_history_sha256(&self) -> &str {
+        self.proof.logical_history_sha256()
+    }
+    pub(crate) fn source_native_receipt_sha256(&self) -> &str {
+        self.proof.source_native_receipt_sha256()
+    }
+    pub(crate) fn target_birth_id(&self) -> Uuid {
+        self.proof.target_birth_id()
+    }
+    pub(crate) fn target_birth_sha256(&self) -> &str {
+        self.proof.target_birth_sha256()
+    }
+    pub(crate) fn attempt_id(&self) -> Uuid {
+        self.proof.attempt_id()
+    }
+    pub(crate) fn source_session_id(&self) -> Uuid {
+        self.proof.source_session_id()
+    }
+    pub(crate) fn source_nonce(&self) -> Uuid {
+        self.proof.source_nonce()
+    }
+    pub(crate) fn range_id(&self) -> RangeId {
+        self.proof.range_id()
+    }
+}
+
 impl BicDb {
+    /// Couple the actual completed native base pointer to old-prefix retirement
+    /// in ONE ordered native page-WAL transaction. Source completion, full
+    /// stored history audit, actual target data/root/UID/visibility proof and
+    /// current immutable catalog/native obligations are independently required.
+    /// No physical data copy or O(R) history copy occurs in this transaction.
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn with_staged_native_history_publication<F>(
+        &self,
+        proof: &StagedNativeHistoryProof,
+        context: &NativeHistoryTargetContext<'_>,
+        source: &crate::distribution_range_image::CompletedNativeRangeImageSource,
+        contents: &super::super::range_image_install::VerifiedNativeTargetImageContents,
+        bindings: &RangeImageDbBindings,
+        cancellation: &CancellationToken,
+        publish_base: F,
+    ) -> Result<bicdb_page::Xid>
+    where
+        F: FnOnce(
+            &crate::paged_collection::PagedRecords,
+            bicdb_page::Xid,
+            &NativeHistoryPublicationBinding<'_>,
+        ) -> Result<()>,
+    {
+        cancellation.check()?;
+        source.require_current()?;
+        let authorization = source.authorize_target_install()?;
+        let journal = self.try_native_image_journal()?;
+        context.require_current_under_journal(self, &journal)?;
+        let mut header = self.read_history_stage(proof.range_id())?;
+        if self.incarnation != proof.database_incarnation
+            || header.stage_id != proof.stage_id
+            || header != proof.header
+            || header.checksum_sha256 != proof.header_sha256
+            || header.source != HistorySourceScope::actual(&authorization)?
+            || !header.audit_complete
+            || !header.cursor.complete()
+            || !header.target_point_matched
+            || !header.remaining_commands.is_empty()
+            || header.published_native_page_xid.is_some()
+            || source.seal().logical_genesis_sha256 != proof.logical_genesis_sha256()
+            || source.seal().logical_history_sha256 != proof.logical_history_sha256()
+            || source.seal().history_entries
+                != proof
+                    .verified_through()
+                    .checked_add(1)
+                    .ok_or_else(|| invalid("native publication history length overflow"))?
+            || !self.native_range_image_installing(proof.range_id())?
+        {
+            return Err(invalid(
+                "native history publication proof/source/dirty scope changed",
+            ));
+        }
+        // Re-read immutable stored endpoints after actual persisted full audit;
+        // no active history keys can be overwritten by the stager.
+        for (index, expected) in [
+            (0, proof.logical_genesis_sha256()),
+            (proof.verified_through(), proof.logical_history_sha256()),
+        ] {
+            if self
+                .read_native_history_entry(proof.range_id(), proof.history_generation(), index)?
+                .commitment_sha256
+                != expected
+            {
+                return Err(invalid("native publication staged endpoint changed"));
+            }
+        }
+        contents.require_current(self, context.fence, context.admission, bindings, source)?;
+        cancellation.check()?;
+        let (actual_global_generation, actual_range_generation) =
+            self.native_range_image_generation_pair(proof.range_id())?;
+        let controlled = self
+            .range_mutations
+            .try_controlled_mutation(context.frozen)?;
+        let binding = NativeHistoryPublicationBinding { proof };
+        let xid = self
+            .in_paged_transaction(|paged, xid| {
+                cancellation.check()?;
+                publish_base(paged, xid, &binding)?;
+                // Read our OWN actual page transaction. A no-op callback or
+                // an old receipt must never retire native lower bounds.
+                let mut own_snapshot = paged.latest_snapshot();
+                own_snapshot.xid = xid;
+                let encoded = paged
+                    .store()
+                    .get_as_of(
+                        &own_snapshot,
+                        &native_key(&format!("install:base:{}", proof.range_id().get())),
+                    )
+                    .map_err(|e| BicDbError::PagedStorage(e.to_string()))?
+                    .ok_or_else(|| invalid("native publisher wrote no completed base"))?;
+                if encoded.len() > MAX_NATIVE_RECEIPT_BYTES {
+                    return Err(invalid("native published base exceeds byte bound"));
+                }
+                let base: serde_json::Value = serde_json::from_slice(&encoded)?;
+                let matches =
+                    |name: &str, expected: serde_json::Value| base.get(name) == Some(&expected);
+                if !matches(
+                    "cluster_id",
+                    serde_json::json!(context.admission.cluster_id()),
+                ) || !matches(
+                    "bootstrap_id",
+                    serde_json::json!(context.admission.bootstrap_id()),
+                ) || !matches(
+                    "target_node_id",
+                    serde_json::json!(context.admission.local_node_id()),
+                ) || !matches(
+                    "target_member_incarnation",
+                    serde_json::json!(context.admission.local_member_incarnation()),
+                ) || !matches(
+                    "restore_activation",
+                    serde_json::json!(context.admission.restore_activation()),
+                ) || !matches("purpose", serde_json::json!(context.fence.purpose()))
+                    || !matches("capture_range", serde_json::json!(context.fence.range()))
+                    || !matches(
+                        "intended_activation_range",
+                        serde_json::json!(context.fence.intended_activation_range()),
+                    )
+                    || !matches(
+                        "base_members",
+                        serde_json::json!(source.cut().capture_members()),
+                    )
+                    || !matches(
+                        "intended_activation_members",
+                        serde_json::json!(context.fence.intended_activation_members()),
+                    )
+                    || !matches(
+                        "source_purpose",
+                        serde_json::json!(context.fence.source_purpose()),
+                    )
+                    || !matches(
+                        "intent_sha256",
+                        serde_json::json!(context.fence.intent_sha256()),
+                    )
+                    || !matches(
+                        "old_config_sha256",
+                        serde_json::json!(context.fence.old_config_sha256()),
+                    )
+                    || !matches(
+                        "intended_config_sha256",
+                        serde_json::json!(context.fence.intended_config_sha256()),
+                    )
+                    || !matches("schema_sha256", serde_json::json!(bindings.schema_sha256()))
+                    || !matches(
+                        "reader_features",
+                        serde_json::json!(bindings.reader_features()),
+                    )
+                    || !matches(
+                        "local_namespace_ids",
+                        serde_json::json!(bindings.namespace_ids()),
+                    )
+                    || !matches(
+                        "portable_catalog_sha256",
+                        serde_json::json!(source.seal().portable_catalog_sha256),
+                    )
+                    || !matches(
+                        "image_root_sha256",
+                        serde_json::json!(source.seal().image_root_sha256),
+                    )
+                    || !matches(
+                        "record_count",
+                        serde_json::json!(source.seal().record_count),
+                    )
+                    || !matches(
+                        "serialized_record_bytes",
+                        serde_json::json!(source.seal().serialized_record_bytes),
+                    )
+                    || !matches(
+                        "global_image_generation",
+                        serde_json::json!(actual_global_generation),
+                    )
+                    || !matches(
+                        "range_image_generation",
+                        serde_json::json!(actual_range_generation),
+                    )
+                    || !matches(
+                        "reserved_db_upper_bound",
+                        serde_json::json!(contents.actual_local_visibility_sequence()),
+                    )
+                    || !matches(
+                        "min_snapshot_db_sequence",
+                        serde_json::json!(contents.actual_observed_min_snapshot_sequence()),
+                    )
+                    || !matches("native_page_xid", serde_json::json!(xid))
+                    || !matches("birth_id", serde_json::json!(binding.target_birth_id()))
+                    || !matches(
+                        "birth_sha256",
+                        serde_json::json!(binding.target_birth_sha256()),
+                    )
+                    || !matches("attempt_id", serde_json::json!(binding.attempt_id()))
+                    || !matches("session_id", serde_json::json!(binding.source_session_id()))
+                    || !matches("nonce", serde_json::json!(binding.source_nonce()))
+                    || !matches("range_index", serde_json::json!(binding.verified_through()))
+                    || !matches(
+                        "history_verified_through",
+                        serde_json::json!(binding.verified_through()),
+                    )
+                    || !matches(
+                        "history_generation",
+                        serde_json::json!(binding.history_generation()),
+                    )
+                    || !matches(
+                        "logical_genesis_sha256",
+                        serde_json::json!(binding.logical_genesis_sha256()),
+                    )
+                    || !matches(
+                        "logical_history_sha256",
+                        serde_json::json!(binding.logical_history_sha256()),
+                    )
+                    || !matches(
+                        "source_native_receipt_sha256",
+                        serde_json::json!(binding.source_native_receipt_sha256()),
+                    )
+                    || paged
+                        .store()
+                        .get_as_of(
+                            &own_snapshot,
+                            &native_key(&format!("install:active:{}", proof.range_id().get())),
+                        )
+                        .map_err(|e| BicDbError::PagedStorage(e.to_string()))?
+                        .is_some()
+                {
+                    return Err(invalid(
+                        "native publisher base/active/history transaction binding differs",
+                    ));
+                }
+                // The completed receipt's new local history generation is written
+                // by the trusted publisher closure in this same transaction.
+                // Retire only exact old range journals already covered by the
+                // actual immutable target compatibility observation.
+                for key in [
+                    format!("pending:{}", proof.range_id().get()),
+                    format!("prefix:{}", proof.range_id().get()),
+                ] {
+                    paged
+                        .store()
+                        .delete(xid, &native_key(&key))
+                        .map_err(|e| BicDbError::PagedStorage(e.to_string()))?;
+                }
+                header.published_native_page_xid = Some(xid);
+                header.checksum_sha256 = header.checksum()?;
+                header.validate()?;
+                // Preserve the prior base's publication evidence when a later
+                // install starts a new active staging generation.
+                let published_key = native_key(&published_stage_key(
+                    proof.range_id(),
+                    proof.history_generation(),
+                ));
+                if paged
+                    .store()
+                    .get_as_of(&own_snapshot, &published_key)
+                    .map_err(|e| BicDbError::PagedStorage(e.to_string()))?
+                    .is_some()
+                {
+                    return Err(invalid("native history generation was already published"));
+                }
+                paged
+                    .store()
+                    .put(
+                        xid,
+                        &published_key,
+                        &bounded_json(&header, MAX_NATIVE_RECEIPT_BYTES)?,
+                    )
+                    .map_err(|e| BicDbError::PagedStorage(e.to_string()))?;
+                paged
+                    .store()
+                    .put(
+                        xid,
+                        &native_key(&stage_key(proof.range_id())),
+                        &bounded_json(&header, MAX_NATIVE_RECEIPT_BYTES)?,
+                    )
+                    .map_err(|e| BicDbError::PagedStorage(e.to_string()))?;
+                Ok(())
+            })?
+            .ok_or_else(|| invalid("native history publication has no page store"))?;
+        drop(controlled);
+        Ok(xid)
+    }
+
+    /// Read-only coupling check for an actual opaque installed receipt. This
+    /// does not recreate a StageProof or confer mutation/config authority.
+    #[allow(clippy::too_many_arguments)]
+    pub(super) fn validate_published_native_history_binding(
+        &self,
+        range: RangeId,
+        generation: Uuid,
+        index: u64,
+        genesis: &str,
+        head: &str,
+        page_xid: u64,
+        birth_id: Uuid,
+        birth_sha256: &str,
+        attempt: Uuid,
+        session: Uuid,
+        nonce: Uuid,
+        source_receipt_sha256: &str,
+    ) -> Result<()> {
+        let header: StageHeader = self
+            .read_native_range_image_record(&published_stage_key(range, generation))?
+            .ok_or_else(|| {
+                invalid("installed history has no actual immutable publication record")
+            })?;
+        header.validate()?;
+        if header.source.range_id != range
+            || header.generation != generation
+            || header.source.range_index != index
+            || header.source.logical_genesis_sha256 != genesis
+            || header.source.logical_history_sha256 != head
+            || header.published_native_page_xid != Some(page_xid)
+            || header.target_birth_id != birth_id
+            || header.target_birth_sha256 != birth_sha256
+            || header.attempt_id != attempt
+            || header.source.session_id != session
+            || header.source.nonce != nonce
+            || header.source.native_receipt_sha256 != source_receipt_sha256
+            || !header.cursor.complete()
+            || !header.audit_complete
+            || !header.target_point_matched
+            || !header.remaining_commands.is_empty()
+        {
+            return Err(invalid(
+                "installed receipt and actual history publication differ",
+            ));
+        }
+        Ok(())
+    }
+
     fn read_history_stage(&self, range: RangeId) -> Result<StageHeader> {
         let header: StageHeader = self
             .read_native_range_image_record(&stage_key(range))?
@@ -330,6 +707,7 @@ impl BicDb {
             || header.native_irreversible_sha256 != context.safety.irreversible_records_sha256()
             || header.catalog_sha256 != context.catalog.range_log_sha256()
             || header.source != HistorySourceScope::actual(source)?
+            || header.published_native_page_xid.is_some()
         {
             return Err(invalid(
                 "native history stage/attempt/source/target binding changed",
@@ -457,6 +835,7 @@ impl BicDb {
             audit_next_index: 0,
             audit_head: None,
             audit_complete: false,
+            published_native_page_xid: None,
             checksum_sha256: String::new(),
         };
         header.checksum_sha256 = header.checksum()?;
@@ -786,7 +1165,12 @@ mod tests {
     /// This fixture uses actual fresh native schema/genesis and, when requested,
     /// ordinary RF1 origin transactions before the permanent handoff promise.
     /// Staging never clears or installs data rows and grants no membership.
-    fn exercise_stage(command_count: usize, tamper: bool, tear_stored_entry: bool) {
+    fn exercise_stage(
+        command_count: usize,
+        tamper: bool,
+        tear_stored_entry: bool,
+        conflict_catalog: bool,
+    ) {
         let mut fixture =
             Fixture::new_with_ranges_and_before_handoff(2, |db, topology, spec, _| {
                 let selected = topology.ranges.values().next().unwrap().id;
@@ -825,6 +1209,33 @@ mod tests {
             "fresh learner has no native floor"
         );
         let mut store = fixture.store();
+        if conflict_catalog {
+            assert_eq!(command_count, 1);
+            let key = (0..)
+                .map(|i| format!("stage-conflicting-catalog-{i}"))
+                .find(|key| fixture.topology.range_for_key("items", key).unwrap().id == range_id)
+                .unwrap();
+            let command = crate::distribution_range_consensus::test_catalog_command(
+                fixture.topology.cluster_id.clone(),
+                fixture.range(),
+                1,
+                &crate::CommitAdmissionIntent {
+                    transaction_id: 90001,
+                    mutations: vec![crate::CommitAdmissionMutation {
+                        collection: "items".into(),
+                        record_id: key.clone(),
+                        record: Some(crate::Record::new(key)),
+                    }],
+                },
+            )
+            .unwrap();
+            // Actual local catalog transitions, not a hand-edited JSON log or
+            // caller-filtered obligation list. This intentionally incompatible
+            // replica fixture is not a demonstrated distributed fork schedule.
+            store.prepare(command.clone()).unwrap();
+            store.commit(&command).unwrap();
+            store.certify(&command).unwrap();
+        }
         let role = fixture.role();
         let install_role = NativeImageInstallRole::CommittedHandoff(&role);
         let fence = {
@@ -932,6 +1343,37 @@ mod tests {
                         &CancellationToken::uncancelable()
                     )
                     .is_err());
+            }
+            if conflict_catalog && step.history.first_index == 1 {
+                let error = target
+                    .read()
+                    .append_native_history_stage(
+                        &stage,
+                        &context,
+                        &auth,
+                        stage.stage_id(),
+                        &step,
+                        &CancellationToken::uncancelable(),
+                    )
+                    .unwrap_err();
+                assert!(error
+                    .to_string()
+                    .contains("contradicts actual CQ/Applied/native-pending"));
+                assert!(target
+                    .read()
+                    .finish_native_history_stage(&stage, &context, &auth)
+                    .is_err());
+                assert!(target
+                    .read()
+                    .audit_native_history_stage_step(
+                        &stage,
+                        &context,
+                        &auth,
+                        1,
+                        &CancellationToken::uncancelable()
+                    )
+                    .is_err());
+                return;
             }
             let progress = target
                 .read()
@@ -1042,14 +1484,20 @@ mod tests {
         proof
             .require_current(&target.read(), &context, &auth)
             .unwrap();
-        assert!(
-            target
-                .read()
-                .get("items", "stage-actual-origin-0")
-                .unwrap()
-                .is_none(),
-            "history staging copies no data rows"
-        );
+        for key in (0..)
+            .map(|i| format!("stage-actual-origin-{i}"))
+            .filter(|key| fixture.topology.range_for_key("items", key).unwrap().id == range_id)
+            .take(command_count)
+        {
+            assert!(
+                fixture.source.read().get("items", &key).unwrap().is_some(),
+                "fixture genuinely committed source payload"
+            );
+            assert!(
+                target.read().get("items", &key).unwrap().is_none(),
+                "history staging copies no data rows"
+            );
+        }
         assert!(
             target
                 .read()
@@ -1060,14 +1508,18 @@ mod tests {
     }
     #[test]
     fn native_history_stage_actual_empty_spine_requires_stored_audit_and_is_idempotent() {
-        exercise_stage(0, false, false)
+        exercise_stage(0, false, false, false)
     }
     #[test]
     fn native_history_stage_actual_origin_spine_rejects_corrupt_and_late_frames() {
-        exercise_stage(1, true, false)
+        exercise_stage(1, true, false, false)
+    }
+    #[test]
+    fn native_history_stage_actual_retained_catalog_command_conflict_refuses_before_data() {
+        exercise_stage(1, false, false, true)
     }
     #[test]
     fn native_history_stage_missing_stored_entry_refuses_proof() {
-        exercise_stage(1, false, true)
+        exercise_stage(1, false, true, false)
     }
 }

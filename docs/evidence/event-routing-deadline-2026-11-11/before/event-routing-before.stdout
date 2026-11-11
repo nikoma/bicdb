@@ -1,0 +1,13 @@
+
+running 2 tests
+test distribution_transport::event_client_retry_tests::silent_event_route_leaves_budget_for_discovery_and_retry ... FAILED
+test distribution_transport::event_client_retry_tests::silent_discovery_member_cannot_exhaust_the_retry_budget ... FAILED
+
+failures:
+
+failures:
+    distribution_transport::event_client_retry_tests::silent_discovery_member_cannot_exhaust_the_retry_budget
+    distribution_transport::event_client_retry_tests::silent_event_route_leaves_budget_for_discovery_and_retry
+
+test result: FAILED. 0 passed; 2 failed; 0 ignored; 0 measured; 508 filtered out; finished in 5.11s
+

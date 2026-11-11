@@ -11,7 +11,31 @@ transparent distributed SQL and recoverable multi-range SQL transactions to
 ordinary PostgreSQL applications. Independent-machine sustained throughput
 scaling and fault-safe rebalance of the current artifact remain unqualified.
 
+## Instrumented current-runtime replay — 2026-11-11
+
+The [complete 1.0.463-beta replay evidence](evidence/azure-instrumented-replay-2026-11-11/README.md)
+retains every available operation, retry, uncertainty, error and latency sample.
+Neither diagnostic reached the fifth-node join: the first stopped on incomplete
+observer coverage, and the second failed write availability after a graceful
+restart. All 3,261 known ACK keys subsequently matched their expected values;
+3,258 crossed that restart and three were created afterward. Seven uncertain
+writes were present and one was absent; absence is not proof of rollback.
+These eventual-read observations do not establish strong-read correctness or a
+physical RPO. There is no stable five-node throughput comparison.
+
+All 23 owned Azure resources were verified deleted at 09:49:21 UTC. Full private
+journals, database archives, provider metadata and frozen binary identities have
+restricted durable custody; public projections preserve exact failure accounting
+and explicitly hash omitted bodies. Original 461 evidence and its missing
+historical request details remain unchanged. The follow-up evidence merge does
+not change engine behavior or qualify a newer source version.
+
 ## P0 source follow-up — 2026-11-11
+
+The [independent event-routing deadline repair](event-routing-deadline-2026-11-11.md)
+reproduces two silent-socket retry failures on 1.0.468-beta and records five
+passing candidate TCP tests. Event reads remain eventual; this result does not
+qualify strong reads, image recovery, rebalance or the failed Azure run.
 
 The [P0 correctness and recovery report](p0-range-recovery-progress-2026-11-11.md)
 records newer source fixes and exact local evidence for fair relocation turns,

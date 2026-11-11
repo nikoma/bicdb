@@ -1,0 +1,30 @@
+{
+  "git_head": "226d9fd80ecd9dbf249fd4fee5984b61311fed47",
+  "uncommitted_patch_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "source_version": "1.0.466-beta",
+  "scope": "versioned final P0 component validation after native465 integration; core opt-level=0/debug=0, dependency optimization retained",
+  "physical_qualification": false,
+  "environment_override": {
+    "BICDB_PAGED_UNIQUE_APPLY_PROBE": "1"
+  },
+  "name": "all-core-units",
+  "command": [
+    "cargo",
+    "test",
+    "--release",
+    "--locked",
+    "-p",
+    "bicdb-core",
+    "--config",
+    "profile.release.package.bicdb-core.opt-level=0",
+    "--config",
+    "profile.release.package.bicdb-core.debug=0",
+    "--lib",
+    "--",
+    "--nocapture"
+  ],
+  "exit_code": 0,
+  "interrupted_reason": null,
+  "elapsed_seconds": 90.02307746838778,
+  "minimum_available_bytes": 23849066496
+}

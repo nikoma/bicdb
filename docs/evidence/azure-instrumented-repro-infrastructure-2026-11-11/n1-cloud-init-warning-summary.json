@@ -1,0 +1,13 @@
+{
+  "classification": "cloud-init recoverable IMDS probe warning; no BicDB process involved",
+  "observed_url": "http://169.254.169.254/metadata/reprovisiondata?api-version=2019-06-01",
+  "http_status": 404,
+  "response_body": "not established by warning/status output; full raw cloud-init logs and journal retained privately for inspection",
+  "matches": [
+    {
+      "archive_member": "var/log/cloud-init.log",
+      "line_number": 384,
+      "line": "2026-11-11 08:49:59,876 - azure.py[WARNING]: Polling IMDS failed attempt 1 with exception: UrlError('404 Client Error: Not Found for url: http://169.254.169.254/metadata/reprovisiondata?api-version=2019-06-01')"
+    }
+  ]
+}

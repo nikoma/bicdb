@@ -1,0 +1,28 @@
+{
+  "source": "a51de2226838a0e393eb34889cccefe90cecc666",
+  "scope": "Standalone baseline control on frozen PR145 source1129/469 (actualmain468 atsubmission). Tests only, no private Native/rename code. Default cast to table row resolves beforeandafterreopen, procedurecallerpath; exact pg_get_function_result TABLEcolumns and SETOF output bothpg_procrowanddirectOID paths; SECURITY DEFINER defaults must honor caller deniedsecret, explicitargsallowed, GRANTthenallowsdefault forscalar/procedure/setfunction. Recordactual reachedcases; preserveallassertions. NativePG16.13 header andcallercontrols pass. No publicationversionreserved; otherthread470queuedafter469. Noapp/HA/VM proof.",
+  "started_unix": 1794404154.4365144,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "routine_header_metadata",
+        "--",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794404154.4366412,
+      "exit": 101,
+      "finished_unix": 1794404268.689046
+    }
+  ],
+  "status": "failed",
+  "finished_unix": 1794404268.6892748
+}

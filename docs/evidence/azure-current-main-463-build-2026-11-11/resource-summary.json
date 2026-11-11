@@ -1,0 +1,13 @@
+{
+  "sampling_interval_seconds": 2,
+  "sample_count": 1355,
+  "first_sample_utc": "2026-11-11T07:36:22.838429+00:00",
+  "last_sample_utc": "2026-11-11T08:21:31.321597+00:00",
+  "minimum_available_bytes": 14585372672,
+  "minimum_disk_free_bytes": 42416242688,
+  "minimum_swap_free_bytes": 118784,
+  "paused_samples": 0,
+  "minimum_available_gate_bytes": 12884901888,
+  "pause_on_full_psi_avg10_above_percent": 1.0,
+  "only_owned_build_process_group_can_be_paused_or_stopped": true
+}

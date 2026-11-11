@@ -1,0 +1,32 @@
+{
+  "source_commit": "8a7ddf6ead2bce6e3a41e04fdf68af1a7df3cf57",
+  "command": [
+    "cargo",
+    "test",
+    "--release",
+    "--locked",
+    "-p",
+    "bicdb-core",
+    "--config",
+    "profile.release.package.bicdb-core.opt-level=0",
+    "--config",
+    "profile.release.package.bicdb-core.debug=0",
+    "--lib",
+    "image_install",
+    "--",
+    "--test-threads=2"
+  ],
+  "started_at_unix": 1794411208.9772205,
+  "ended_at_unix": 1794411485.015852,
+  "exit_code": 0,
+  "resource_stop_reason": null,
+  "min_available_bytes": 22344196096,
+  "resource_pause_count": 0,
+  "compiler": "rustc 1.96.0 (ac68faa20 2026-05-25)",
+  "environment": {
+    "CARGO_TARGET_DIR": "/tmp/bicdb-azure-artifact-target",
+    "CARGO_BUILD_JOBS": "1",
+    "CARGO_INCREMENTAL": "0",
+    "RUST_TEST_THREADS": "2"
+  }
+}

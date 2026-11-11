@@ -5275,4 +5275,133 @@ mod event_client_retry_tests {
         assert_eq!(value, Some(serde_json::json!({"kept": true})));
         assert!(started.elapsed() < Duration::from_millis(2500));
     }
+
+    #[test]
+    fn permanently_silent_old_leader_refreshes_from_another_member() {
+        let root = tempfile::tempdir().unwrap();
+        let old_listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let new_listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        old_listener.set_nonblocking(true).unwrap();
+        new_listener.set_nonblocking(true).unwrap();
+        let config = crate::DistributionConfig {
+            enabled: true,
+            node_address: old_listener.local_addr().unwrap().to_string(),
+            initial_ranges: 1,
+            replication_factor: 1,
+            transport: ClusterNetworkTransportConfig {
+                connect_timeout_ms: 100,
+                io_timeout_ms: 5_000,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let store = DistributionStore::initialize_at(root.path(), config, false, 1000).unwrap();
+        let old_id = store.config().node_id.clone();
+        let new_id = ClusterNodeId::new("zz-new-route").unwrap();
+        assert!(old_id < new_id, "the silent member must be probed first");
+        let mut initial = store.topology().clone();
+        let mut member = initial.nodes[&old_id].clone();
+        member.id = new_id.clone();
+        member.address = new_listener.local_addr().unwrap().to_string();
+        initial.nodes.insert(new_id.clone(), member);
+        initial.validate().unwrap();
+        let mut moved = initial.clone();
+        moved.generation += 1;
+        let range = moved.ranges.values_mut().next().unwrap();
+        range.epoch += 1;
+        range.leader = new_id.clone();
+        range.replicas[0].node_id = new_id.clone();
+        let moved_epoch = range.epoch;
+        let snapshot = ClusterBootstrapSnapshot {
+            topology: moved,
+            config_template: store.config().clone(),
+            metadata_leader_id: None,
+        };
+        snapshot.validate().unwrap();
+        let client = crate::ClusterEventClient::new(store.config(), initial)
+            .unwrap()
+            .with_request_timeout(Duration::from_secs(3))
+            .unwrap();
+        let max_frame_bytes = store.config().transport.max_frame_bytes;
+        let stop = Arc::new(AtomicBool::new(false));
+        let stopping = Arc::clone(&stop);
+        let old_requests = Arc::new(AtomicUsize::new(0));
+        let seen_old = Arc::clone(&old_requests);
+        let old_server = thread::spawn(move || {
+            let until = Instant::now() + Duration::from_secs(8);
+            let mut held = Vec::new();
+            while !stopping.load(Ordering::SeqCst) {
+                assert!(Instant::now() < until);
+                match old_listener.accept() {
+                    Ok((stream, _)) => {
+                        seen_old.fetch_add(1, Ordering::SeqCst);
+                        held.push(stream);
+                        assert!(held.len() <= 32);
+                    }
+                    Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                        thread::sleep(Duration::from_millis(2));
+                    }
+                    Err(error) => panic!("old listener failed: {error}"),
+                }
+            }
+        });
+        let stopping = Arc::clone(&stop);
+        let served = Arc::new(AtomicUsize::new(0));
+        let seen_new = Arc::clone(&served);
+        let new_server = thread::spawn(move || {
+            let until = Instant::now() + Duration::from_secs(8);
+            while !stopping.load(Ordering::SeqCst) {
+                assert!(Instant::now() < until);
+                let mut stream = match new_listener.accept() {
+                    Ok((stream, _)) => stream,
+                    Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                        thread::sleep(Duration::from_millis(2));
+                        continue;
+                    }
+                    Err(error) => panic!("new listener failed: {error}"),
+                };
+                stream
+                    .set_read_timeout(Some(Duration::from_secs(2)))
+                    .unwrap();
+                let request: ClusterDataRequestEnvelope =
+                    recv_json_frame(&mut stream, max_frame_bytes).unwrap();
+                let response = match request.request {
+                    ClusterDataRequest::FetchBootstrapSnapshot => {
+                        ClusterDataResponse::BootstrapSnapshot(snapshot.clone())
+                    }
+                    ClusterDataRequest::ApplicationEvent(event) => {
+                        assert_eq!(request.destination_node_id, new_id);
+                        assert_eq!(event.range_epoch, moved_epoch);
+                        seen_new.fetch_add(1, Ordering::SeqCst);
+                        ClusterDataResponse::ApplicationEvent(crate::ClusterEventResponse::Value {
+                            value: Some(serde_json::json!({"kept": true})),
+                        })
+                    }
+                    request => panic!("unexpected healthy member request: {request:?}"),
+                };
+                send_json_frame(
+                    &mut stream,
+                    &ClusterDataResponseEnvelope {
+                        protocol_version: request.protocol_version,
+                        cluster_id: request.cluster_id,
+                        source_node_id: request.destination_node_id,
+                        request_id: request.request_id,
+                        response: Ok(response),
+                    },
+                    max_frame_bytes,
+                )
+                .unwrap();
+            }
+        });
+        let started = Instant::now();
+        let result = client.get("retry", "kept");
+        let elapsed = started.elapsed();
+        stop.store(true, Ordering::SeqCst);
+        old_server.join().unwrap();
+        new_server.join().unwrap();
+        assert_eq!(result.unwrap(), Some(serde_json::json!({"kept": true})));
+        assert!(elapsed < Duration::from_millis(3500), "{elapsed:?}");
+        assert!(old_requests.load(Ordering::SeqCst) >= 2);
+        assert_eq!(served.load(Ordering::SeqCst), 1);
+    }
 }

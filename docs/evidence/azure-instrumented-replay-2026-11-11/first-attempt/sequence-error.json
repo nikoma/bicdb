@@ -1,0 +1,4 @@
+{
+  "error": "RuntimeError('baseline telemetry/planned-completion gate failed; no growth dispatched')",
+  "unix_ns": 1794388860943028932
+}

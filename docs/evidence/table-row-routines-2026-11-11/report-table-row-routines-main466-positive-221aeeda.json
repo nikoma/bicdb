@@ -1,0 +1,130 @@
+{
+  "source": "221aeeda361cdd3f1a2e0b46984ee7242ff92cd6",
+  "scope": "Coherent standalone main466 routine/type metadata batch after real43db scalar cast/array declaration failures. At34620, both payloads now correct but original stronger metadata checks actuallyfail: arraypgtypeof::text shows physical _typed_row; scalarpg_proc resultOID25 instead of actual1125911383. Preserve assertions. Fix pg_proc type lookup to include registered table types while preserving builtins; central generation-cached row type name formatter supplies regtype text and format_type, quotes logical/schema identifiers, canonicalarray[]. Standalone custom-type formatting retains existing lookup priority and lazy table fallback. Add actual format_type/OID/procedure assertions and qualified quoted row-name control, both stores. Native PostgreSQL all scalar/array function/type,procedure and quoted namespace references pass. Six focused then broad SQL commands on exact candidate. No private rename/native scope changes, no claim original application/VM accepted. Version469 reservation remains contingent on real467/468delivery and final-source checks/CI. At3e, both scalar/array function+procedure payload/type/OID/format/reopen tests PASS; qualified quoted-name control actuallyfails regtype text input lookup. Shared existing alias resolver already supports logical isolated table names but fallback loses array identity, and regtype text/routine lookup bypassed it. This source reuses shared resolver with correct array OID, propagates real lookup errors instead of swallowing, preserves every original assertion. Only the one qualified-name test failed at3e; remaining command groups did not run. This final coherent candidate needs fresh focus and broad results; do not report prior source broad tests as this revision.",
+  "started_unix": 1794398979.044268,
+  "steps": [
+    {
+      "command": [
+        "python3",
+        "scripts/bump-version.py",
+        "--check"
+      ],
+      "started_unix": 1794398979.0443437,
+      "exit": 0,
+      "finished_unix": 1794398979.0913942
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "table_row_routines",
+        "--test",
+        "version_identity",
+        "--",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794398979.0915098,
+      "exit": 0,
+      "finished_unix": 1794399058.9595296
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "user_type_management",
+        "--test",
+        "composite_types",
+        "--test",
+        "domain_types",
+        "--test",
+        "base_types",
+        "--test",
+        "pseudo_types",
+        "--test",
+        "element_polymorphic_routines",
+        "--test",
+        "routine_row_transaction_identity",
+        "--test",
+        "oid_aliases",
+        "--",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794399058.9597464,
+      "exit": 0,
+      "finished_unix": 1794399084.4583535
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "sql",
+        "routine",
+        "--",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794399084.458531,
+      "exit": 0,
+      "finished_unix": 1794399089.3426046
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--lib",
+        "--",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794399089.3427901,
+      "exit": 0,
+      "finished_unix": 1794399334.8248107
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "sql",
+        "--",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794399334.8250551,
+      "exit": 0,
+      "finished_unix": 1794399368.0866952
+    }
+  ],
+  "status": "focused_passed",
+  "finished_unix": 1794399368.08689
+}

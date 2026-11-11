@@ -1,0 +1,18 @@
+{
+  "status": "passed",
+  "started_unix": 1794397780.6996176,
+  "protected_application_schema_mutated": false,
+  "cases": [
+    {
+      "array": false,
+      "call_succeeded": true
+    },
+    {
+      "array": true,
+      "call_succeeded": true
+    }
+  ],
+  "server_version": "16.13 (Debian 16.13-1.pgdg13+1)",
+  "temporary_schemas_removed": true,
+  "finished_unix": 1794397780.821551
+}

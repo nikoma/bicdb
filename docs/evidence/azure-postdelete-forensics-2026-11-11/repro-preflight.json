@@ -159,5 +159,7 @@
   "physical_host_independence_verified": false,
   "metadata_capture": "full model/instance view/resource/disk/NIC/effective NSG+routes+metric definitions API responses private; sanitized allowlisted summary public",
   "metric_stream_requirement": "Azure metric definitions determine available throttling/burst counters; do not substitute guest counters for missing provider telemetry",
-  "allocation_gate": "root GO only after per-operation instrumentation and evidence export verified; reject if time remaining cannot cover trial+export+deletion margin"
+  "allocation_gate": "root GO only after per-operation instrumentation and evidence export verified; reject if time remaining cannot cover trial+export+deletion margin",
+  "minimum_admission_margin_minutes": 120,
+  "latest_allocation_go_utc": "2026-11-11T09:22:51Z"
 }

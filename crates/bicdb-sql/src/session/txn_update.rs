@@ -3690,6 +3690,8 @@ impl<'db> SqlSession<'db> {
             return Ok(None);
         };
         self.ensure_routine_execute_privilege(name)?;
+        let args = self.complete_routine_default_args(&routine, args)?;
+        let args = args.as_ref();
         if let Some(value) = self.eval_inline_return_function(&routine, args)? {
             return Ok(Some(value));
         }
@@ -4114,6 +4116,55 @@ impl<'db> SqlSession<'db> {
         frame.oracle_procedural_evaluation = ir.oracle_procedural_evaluation;
         frame.oracle_error_diagnostics = ir.oracle_error_diagnostics.clone();
         Ok(frame)
+    }
+
+    pub(crate) fn eval_routine_default_expr(&self, expr: &Expr) -> Result<SqlValue> {
+        // Defaults need the database's type catalog, but cannot capture an
+        // unrelated caller frame's local variables or expression-node memos.
+        self.sql_engine()
+            .with_shared_routine_vars(Arc::new(BTreeMap::new()))
+            .with_routine_slots(None)
+            .with_routine_ir(None)
+            .with_ir_owned_statement(false)
+            .with_operand_type_memo(false)
+            .eval_select_constant_expr(expr)
+    }
+
+    pub(crate) fn complete_routine_default_args<'a>(
+        &self,
+        routine: &CachedRoutine,
+        args: &'a [SqlValue],
+    ) -> Result<std::borrow::Cow<'a, [SqlValue]>> {
+        // PostgreSQL evaluates omitted arguments as the caller, before entering
+        // a SECURITY DEFINER body. Oracle has its own parameter binding rules.
+        if oracle::preview_routine_language_version(&routine.schema.language).is_some()
+            || routine
+                .ir
+                .params
+                .iter()
+                .filter(|p| p.mode != RoutineArgMode::Out)
+                .count()
+                <= args.len()
+        {
+            return Ok(std::borrow::Cow::Borrowed(args));
+        }
+        let mut completed = args.to_vec();
+        for param in routine
+            .ir
+            .params
+            .iter()
+            .filter(|p| p.mode != RoutineArgMode::Out)
+            .skip(args.len())
+        {
+            let default = param.default_expr.as_ref().ok_or_else(|| {
+                SqlError::InvalidSql(format!(
+                    "stored routine argument {} is missing",
+                    completed.len() + 1
+                ))
+            })?;
+            completed.push(self.eval_routine_default_expr(default)?);
+        }
+        Ok(std::borrow::Cow::Owned(completed))
     }
 
     /// One generation read per routine call covers both catalogs whose

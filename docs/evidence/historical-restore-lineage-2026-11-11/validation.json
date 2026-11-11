@@ -1,0 +1,295 @@
+{
+  "scope": "local_metadata_consensus_restore_lineage_regression_and_fix_not_qualification",
+  "base_commit": "81e65ccf80b30839f535311658742de6460abf56",
+  "base_version": "1.0.466-beta",
+  "source_states": [
+    {
+      "kind": "baseline",
+      "commit": "1586ba823ca8e978b65e4374ee9c9038b27363a1",
+      "path": "crates/bicdb-core/src/distribution_consensus.rs",
+      "uncompressed_sha256": "09125f5efafa84698f76fea41bcb08cfbdc2f58a021747a130aecdfc35eae725",
+      "retained": "source/baseline-distribution_consensus.rs.gz"
+    },
+    {
+      "kind": "candidate",
+      "commit": "8bf444aed155258dbfad202a965778dfee2fbb6f",
+      "path": "crates/bicdb-core/src/distribution_consensus.rs",
+      "uncompressed_sha256": "b6a913a4c9555176cd5edb98874cb37549e5ff9f840826e88d42797b707d298e",
+      "retained": "source/candidate-distribution_consensus.rs.gz"
+    }
+  ],
+  "runs": [
+    {
+      "source_revision": "1586ba823ca8e978b65e4374ee9c9038b27363a1",
+      "dirty_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "command": [
+        "cargo",
+        "test",
+        "--release",
+        "--locked",
+        "-p",
+        "bicdb-core",
+        "--config",
+        "profile.release.package.bicdb-core.opt-level=0",
+        "--config",
+        "profile.release.package.bicdb-core.debug=0",
+        "--lib",
+        "restore_activation_historical_lineage_survives_load_commit_reopen_and_snapshot",
+        "--",
+        "--nocapture"
+      ],
+      "environment": {
+        "CARGO_TARGET_DIR": "/tmp/bicdb-azure-artifact-target",
+        "CARGO_BUILD_JOBS": "1",
+        "CARGO_INCREMENTAL": "0",
+        "RUST_TEST_THREADS": "2"
+      },
+      "compiler": "rustc 1.96.0 (ac68faa20 2026-05-25)",
+      "start_unix": 1794395756.2257543,
+      "end_unix": 1794395826.264055,
+      "exit_code": 101,
+      "guard_stop_reason": null,
+      "pause_episodes": 0,
+      "minimum_available_bytes": 19037380608,
+      "classification": "baseline_defect_reproduced",
+      "test_result": {
+        "status": "FAILED",
+        "passed": 0,
+        "failed": 1,
+        "ignored": 0
+      }
+    },
+    {
+      "source_revision": "598d5d3cf48e50cc94ade36a8a6ef6e6d9977cfa",
+      "dirty_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "command": [
+        "cargo",
+        "test",
+        "--release",
+        "--locked",
+        "-p",
+        "bicdb-core",
+        "--config",
+        "profile.release.package.bicdb-core.opt-level=0",
+        "--config",
+        "profile.release.package.bicdb-core.debug=0",
+        "--lib",
+        "restore_activation",
+        "--",
+        "--nocapture"
+      ],
+      "environment": {
+        "CARGO_TARGET_DIR": "/tmp/bicdb-azure-artifact-target",
+        "CARGO_BUILD_JOBS": "1",
+        "CARGO_INCREMENTAL": "0",
+        "RUST_TEST_THREADS": "2"
+      },
+      "compiler": "rustc 1.96.0 (ac68faa20 2026-05-25)",
+      "start_unix": 1794396060.811708,
+      "end_unix": 1794396077.8348982,
+      "exit_code": 101,
+      "guard_stop_reason": null,
+      "pause_episodes": 0,
+      "minimum_available_bytes": 20200157184,
+      "classification": "test_fixture_compile_error_not_runtime_result",
+      "test_result": null
+    },
+    {
+      "source_revision": "8bf444aed155258dbfad202a965778dfee2fbb6f",
+      "dirty_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "command": [
+        "cargo",
+        "test",
+        "--release",
+        "--locked",
+        "-p",
+        "bicdb-core",
+        "--config",
+        "profile.release.package.bicdb-core.opt-level=0",
+        "--config",
+        "profile.release.package.bicdb-core.debug=0",
+        "--lib",
+        "restore_activation",
+        "--",
+        "--nocapture"
+      ],
+      "environment": {
+        "CARGO_TARGET_DIR": "/tmp/bicdb-azure-artifact-target",
+        "CARGO_BUILD_JOBS": "1",
+        "CARGO_INCREMENTAL": "0",
+        "RUST_TEST_THREADS": "2"
+      },
+      "compiler": "rustc 1.96.0 (ac68faa20 2026-05-25)",
+      "start_unix": 1794396108.2243059,
+      "end_unix": 1794396169.2621312,
+      "exit_code": 0,
+      "guard_stop_reason": null,
+      "pause_episodes": 0,
+      "minimum_available_bytes": 19303649280,
+      "classification": "focused_fix_pass",
+      "test_result": {
+        "status": "ok",
+        "passed": 5,
+        "failed": 0,
+        "ignored": 0
+      }
+    },
+    {
+      "source_revision": "8bf444aed155258dbfad202a965778dfee2fbb6f",
+      "dirty_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "command": [
+        "cargo",
+        "test",
+        "--release",
+        "--locked",
+        "-p",
+        "bicdb-core",
+        "--config",
+        "profile.release.package.bicdb-core.opt-level=0",
+        "--config",
+        "profile.release.package.bicdb-core.debug=0",
+        "--lib",
+        "distribution_consensus::tests::",
+        "--",
+        "--nocapture"
+      ],
+      "environment": {
+        "CARGO_TARGET_DIR": "/tmp/bicdb-azure-artifact-target",
+        "CARGO_BUILD_JOBS": "1",
+        "CARGO_INCREMENTAL": "0",
+        "RUST_TEST_THREADS": "2"
+      },
+      "compiler": "rustc 1.96.0 (ac68faa20 2026-05-25)",
+      "start_unix": 1794396183.8117287,
+      "end_unix": 1794396184.830651,
+      "exit_code": 0,
+      "guard_stop_reason": null,
+      "pause_episodes": 0,
+      "minimum_available_bytes": 22128840704,
+      "classification": "metadata_consensus_regressions_pass",
+      "test_result": {
+        "status": "ok",
+        "passed": 19,
+        "failed": 0,
+        "ignored": 0
+      }
+    }
+  ],
+  "no_mtls_exercise": true,
+  "no_physical_fault": true,
+  "no_azure_experiment": true,
+  "no_strong_row_endpoint": true,
+  "new_restore_admission_exact_validation_preserved": true,
+  "retained_evidence": [
+    {
+      "path": "checks/consensus-1-inputs.json",
+      "bytes": 706,
+      "sha256": "d6cfe0af569c229cfcbeb99de4ec2b876de6a1172fa6e58ba48945568bdeaa80"
+    },
+    {
+      "path": "checks/consensus-1-resources.jsonl",
+      "bytes": 273,
+      "sha256": "7a53f0bf1fa02dce8cd0b1aa9be492c7b9046c72a8c0bd30122be929b653bb4d"
+    },
+    {
+      "path": "checks/consensus-1-result.json",
+      "bytes": 887,
+      "sha256": "fd849bbb3c9276e3bbbae8ac76fa0c700c4fe75f5238a1cbec3249c46cfbb49a"
+    },
+    {
+      "path": "checks/consensus-1.stderr.gz",
+      "bytes": 8690,
+      "sha256": "d050314038b554fa442dbe7a8076f237814ad9bfb50e83a2fbe4c37795a161b4"
+    },
+    {
+      "path": "checks/consensus-1.stdout.gz",
+      "bytes": 679,
+      "sha256": "e4afe2be4d0f9938845d5b6196a285ea71521b4130642a28e5c830bb1d64d1aa"
+    },
+    {
+      "path": "checks/green-1-inputs.json",
+      "bytes": 693,
+      "sha256": "7908a24813b491b4f87f1d6dcb99f4a717c112eaf7b730a290ac8ae29340d6db"
+    },
+    {
+      "path": "checks/green-1-resources.jsonl",
+      "bytes": 4653,
+      "sha256": "219de6b9d3e43a41d1d6b7c7225ae966a8fe0861e19f1adadc34a43d2e0833ce"
+    },
+    {
+      "path": "checks/green-1-result.json",
+      "bytes": 876,
+      "sha256": "0bb90916abd7f03d9cfacef53513e645dd069fe87078d3f07e2a8bf01e35f129"
+    },
+    {
+      "path": "checks/green-1.stderr.gz",
+      "bytes": 2148,
+      "sha256": "00f6afdbe60f4b36fd3035f07d0ace2383c895567d392074fc0383250fa961e5"
+    },
+    {
+      "path": "checks/green-1.stdout.gz",
+      "bytes": 20,
+      "sha256": "f61f27bd17de546264aa58f40f3aafaac7021e0ef69c17f6b1b4cd7664a037ec"
+    },
+    {
+      "path": "checks/green-2-inputs.json",
+      "bytes": 693,
+      "sha256": "4e3717f6df7c14b0b6a4bddae50e110c020d55e94241000c5addb57581409678"
+    },
+    {
+      "path": "checks/green-2-resources.jsonl",
+      "bytes": 16699,
+      "sha256": "a1b15c4c8178c6638e0d22f16a331ac1cfb96e48b5f23d7b442327b6ad309081"
+    },
+    {
+      "path": "checks/green-2-result.json",
+      "bytes": 875,
+      "sha256": "5598cc423fda8b6e099c430bd69869bed9336e09099e88426be653cb50c9930c"
+    },
+    {
+      "path": "checks/green-2.stderr.gz",
+      "bytes": 8743,
+      "sha256": "9e927673ef5442958b6ca8b4644fb383e94a489fbc2797c2b17de314ae5f8737"
+    },
+    {
+      "path": "checks/green-2.stdout.gz",
+      "bytes": 318,
+      "sha256": "364af5762012d15f63e4d38e98af3511d53c7a641b9eabb342059cb6cf19fd11"
+    },
+    {
+      "path": "checks/red-1-inputs.json",
+      "bytes": 753,
+      "sha256": "fc655ee0cde132377a73fb32979bb855543e45bd36eadf707b01534661efea89"
+    },
+    {
+      "path": "checks/red-1-resources.jsonl",
+      "bytes": 19096,
+      "sha256": "25e3a3060097cd9d1c18beaddb03a30e105a7a1b398f8868b2d1fefa6ee2e0f5"
+    },
+    {
+      "path": "checks/red-1-result.json",
+      "bytes": 936,
+      "sha256": "fc5037e1cdb03175dbc0e417f276e2de3ba72ff5f07779249e4c471b53a55083"
+    },
+    {
+      "path": "checks/red-1.stderr.gz",
+      "bytes": 8976,
+      "sha256": "428d467b9d9e8078498eeae50e3019ea639644ac53212552c82d546d41988020"
+    },
+    {
+      "path": "checks/red-1.stdout.gz",
+      "bytes": 210,
+      "sha256": "6ada0ea4cf574461159d20ded6285b20a436b98cc9f7293efc19f811beae1272"
+    },
+    {
+      "path": "source/baseline-distribution_consensus.rs.gz",
+      "bytes": 19529,
+      "sha256": "43ce2790e87e940ba98ce424577144369aee13d864dba64c3a7702a74b80d348"
+    },
+    {
+      "path": "source/candidate-distribution_consensus.rs.gz",
+      "bytes": 21572,
+      "sha256": "55ece69859476392115c5e31a353288965e89fd39e49c2a799d5c2940cbec658"
+    }
+  ]
+}

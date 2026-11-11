@@ -1,0 +1,5 @@
+{
+  "code": 0,
+  "stdout": "{\"complete_run_record\": true, \"database_ack_reply_identities\": 1, \"dispatch_fenced\": false, \"durable_client_acks\": 1, \"full_wire_response_bodies\": 181, \"individual_rpc_calls\": 284, \"logical_attempts\": 9, \"oracle_expectation\": \"read-your-ACK\", \"pending_observation_ids\": [], \"planned_termination\": true, \"qualification_status\": \"not_qualified\", \"reconciliation\": null, \"rpc_failures\": 117, \"server_declared_read_contract\": \"eventual/local-applied-on-named-leader\", \"server_internal_retries_observed\": false, \"strong_read_proof\": false, \"trace_valid\": true, \"unfinished_rpc_ids\": [], \"unterminated_logical_ids\": []}\n",
+  "stderr": ""
+}

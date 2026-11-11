@@ -1,0 +1,16 @@
+{
+  "finished_unix_ns": 1794390169286829737,
+  "attempt_id": "30cf5a05bde64ced88bd576e8b9950ea",
+  "data_run": "8186dd18b83f4195b1319a85a1ee3498",
+  "output": "<controller-task>/light-30cf5a05bde64ced88bd576e8b9950ea",
+  "classification": "separate_diagnostic_only",
+  "all_trace_paths": [
+    "<controller-task>/8186dd18b83f4195b1319a85a1ee3498/baseline-4/trace.jsonl",
+    "<controller-task>/8186dd18b83f4195b1319a85a1ee3498/cloud-smoke/trace.jsonl",
+    "<controller-task>/light-30cf5a05bde64ced88bd576e8b9950ea/two-target-fixture/trace.jsonl",
+    "<controller-task>/light-30cf5a05bde64ced88bd576e8b9950ea/light-steady-4/trace.jsonl",
+    "<controller-task>/light-30cf5a05bde64ced88bd576e8b9950ea/two-target-finally-reconciliation/trace.jsonl",
+    "<controller-task>/light-30cf5a05bde64ced88bd576e8b9950ea/light-finally-reconciliation-0/trace.jsonl",
+    "<controller-task>/light-30cf5a05bde64ced88bd576e8b9950ea/light-finally-reconciliation-1/trace.jsonl"
+  ]
+}

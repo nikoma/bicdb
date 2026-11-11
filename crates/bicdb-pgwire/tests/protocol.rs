@@ -6646,7 +6646,9 @@ fn extended_query_table_rows_use_composite_oid_and_binary_codec() {
     send_query(
         &mut client,
         "CREATE TABLE wire_composite_rows (id INT PRIMARY KEY, name TEXT NOT NULL); \
-         INSERT INTO wire_composite_rows VALUES (1, 'Ada');",
+         INSERT INTO wire_composite_rows VALUES (1, 'Ada'); \
+         CREATE FUNCTION wire_row_identity(arg wire_composite_rows) RETURNS wire_composite_rows \
+         LANGUAGE sql AS 'SELECT arg';",
     );
     read_until_ready(&mut client);
     send_query(
@@ -6674,6 +6676,22 @@ fn extended_query_table_rows_use_composite_oid_and_binary_codec() {
     expected.extend_from_slice(&25_i32.to_be_bytes());
     expected.extend_from_slice(&3_i32.to_be_bytes());
     expected.extend_from_slice(b"Ada");
+    let (oids, formats, rows, status) = read_binary_query_result_with_oids(&mut client);
+    assert_eq!(status, b'I');
+    assert_eq!(oids, vec![type_oid]);
+    assert_eq!(formats, vec![1]);
+    assert_eq!(rows, vec![vec![expected.clone()]]);
+
+    send_parse(
+        &mut client,
+        "routine_composite_binary",
+        "SELECT wire_row_identity(p) FROM wire_composite_rows p",
+        &[],
+    );
+    send_bind_binary(&mut client, "", "routine_composite_binary", &[], &[1]);
+    send_describe_portal(&mut client, "");
+    send_execute(&mut client, "");
+    send_sync(&mut client);
     let (oids, formats, rows, status) = read_binary_query_result_with_oids(&mut client);
     assert_eq!(status, b'I');
     assert_eq!(oids, vec![type_oid]);

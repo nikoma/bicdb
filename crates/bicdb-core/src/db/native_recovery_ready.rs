@@ -379,6 +379,32 @@ fn voters(range: &RangeDescriptor) -> BTreeMap<crate::ReplicaId, ClusterNodeId> 
 }
 
 impl LocalNativeRecoveryReady {
+    pub(crate) fn physical_base_range(&self) -> &RangeDescriptor {
+        self.lineage.base_range()
+    }
+    /// Reuses this actual owned source pin; a reported history frame cannot
+    /// be substituted by the caller. Every bounded step revalidates the local
+    /// native receipt, DB open, catalogue and original request cancellation.
+    pub(crate) fn export_actual_history_step(
+        &self,
+        db: &BicDb,
+        store: &RangeWriteStore,
+        first_index: u64,
+        cancellation: &CancellationToken,
+    ) -> Result<NativeLogicalHistoryStepV1> {
+        self.require_current(db, store)?;
+        let token = cancellation.child_with_deadline(self.role.deadline());
+        let step = db.export_native_logical_history_step_with_source_pin(
+            &self.lineage,
+            &self.frozen,
+            &self.pin,
+            first_index,
+            256,
+            &token,
+        )?;
+        self.require_current(db, store)?;
+        Ok(step)
+    }
     pub(crate) fn role(&self) -> &RecoveryRoleAdmission {
         &self.role
     }

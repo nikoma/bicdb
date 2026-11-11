@@ -6,14 +6,21 @@ use parking_lot::RwLock;
 use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
-use crate::db::{NativeInstalledRangeImageBase, NativeRecoveryAdmission, RangeImageDbBindings};
+use crate::db::{
+    NativeHistoryStage, NativeHistoryStageProgress, NativeHistoryTargetContext,
+    NativeInstalledRangeImageBase, NativeRangeInstallSafety, NativeRecoveryAdmission,
+    NativeTargetImageVerificationProgress, NativeTargetImageVerifier, RangeImageDbBindings,
+    StagedNativeHistoryProof,
+};
 use crate::distribution::{distribution_key_token, RangeSnapshotOptions};
 use crate::distribution_range_consensus::{
-    ImageInstallPurpose, NativeImageInstallRole, RangeWriteStore, TargetImageInstallFence,
+    ImageInstallPurpose, NativeImageInstallRole, RangeWriteStore,
+    TargetImageCatalogHistoryObligations, TargetImageInstallFence,
 };
 use crate::distribution_range_image::{
     bounded_json, canonical_range_image_catalog, content_hasher, CompletedNativeRangeImageSource,
-    RangeImageCursorV1, RangeImageStepV1, TentativeNativeRangeImageSourceAuthorization,
+    RangeImageCursorV1, RangeImageHistoryStepV1, RangeImageStepV1,
+    TentativeNativeRangeImageSourceAuthorization,
 };
 use crate::distribution_range_mutation::{FrozenRangeMutationPermit, RangeMutationAuthority};
 use crate::{BicDb, BicDbError, CancellationToken, CollectionMeta, Result};
@@ -47,6 +54,11 @@ pub(crate) struct NativeRangeImageInstaller {
     fence: TargetImageInstallFence,
     bindings: RangeImageDbBindings,
     source_reserved_db_upper_bound: u64,
+    safety: NativeRangeInstallSafety,
+    catalog: TargetImageCatalogHistoryObligations,
+    history_stage: NativeHistoryStage,
+    history_proof: Option<StagedNativeHistoryProof>,
+    destructive_started: bool,
     clear_collection: usize,
     clear_after: Option<String>,
     cleared: bool,
@@ -57,6 +69,143 @@ pub(crate) struct NativeRangeImageInstaller {
     bytes: u64,
     complete: bool,
     previous_step: Option<RangeImageStepV1>,
+}
+
+/// Owns the unchanged target image and actual source certificate across bounded
+/// verification steps. Callers release service/DB locks and renew fresh roles
+/// between steps; neither waiting nor a partial scan manufactures readiness.
+pub(crate) struct NativeRangeImageVerification {
+    database: Arc<RwLock<BicDb>>,
+    admission: NativeRecoveryAdmission,
+    frozen: FrozenRangeMutationPermit,
+    fence: TargetImageInstallFence,
+    bindings: RangeImageDbBindings,
+    source: CompletedNativeRangeImageSource,
+    verifier: NativeTargetImageVerifier,
+    history: Option<(
+        NativeRangeInstallSafety,
+        TargetImageCatalogHistoryObligations,
+        StagedNativeHistoryProof,
+    )>,
+    recover_completed: bool,
+}
+impl NativeRangeImageVerification {
+    pub(crate) fn advance(
+        &mut self,
+        store: &RangeWriteStore,
+        role: &NativeImageInstallRole<'_>,
+        cancellation: &CancellationToken,
+    ) -> Result<NativeTargetImageVerificationProgress> {
+        self.source.require_current()?;
+        let db = self
+            .database
+            .try_read()
+            .ok_or_else(|| invalid("target DB busy during bounded verification"))?;
+        store.validate_native_image_install_fence(
+            &self.fence,
+            &db,
+            &self.admission,
+            role,
+            &self.frozen,
+        )?;
+        if let Some((safety, catalog, proof)) = &self.history {
+            let context = NativeHistoryTargetContext::new(
+                &db,
+                store,
+                &self.fence,
+                &self.admission,
+                safety,
+                catalog,
+                role,
+                &self.frozen,
+            )?;
+            proof.require_current(&db, &context, &self.source.authorize_target_install()?)?;
+        } else if !self.recover_completed {
+            return Err(invalid("bounded verification has no actual staged history"));
+        }
+        db.advance_native_target_image_verification(
+            &mut self.verifier,
+            &self.fence,
+            &self.admission,
+            &self.frozen,
+            &self.bindings,
+            role,
+            &self.source,
+            cancellation,
+        )
+    }
+    pub(crate) fn finish(
+        self,
+        store: &RangeWriteStore,
+        role: &NativeImageInstallRole<'_>,
+        cancellation: &CancellationToken,
+    ) -> Result<VerifiedNativeRangeImageInstall> {
+        self.source.require_current()?;
+        let db = self
+            .database
+            .try_read()
+            .ok_or_else(|| invalid("target DB busy before verified native publication"))?;
+        store.validate_native_image_install_fence(
+            &self.fence,
+            &db,
+            &self.admission,
+            role,
+            &self.frozen,
+        )?;
+        let contents = db.finish_native_target_image_verification(
+            self.verifier,
+            &self.fence,
+            &self.admission,
+            &self.frozen,
+            &self.bindings,
+            role,
+            &self.source,
+            cancellation,
+        )?;
+        let history_context = self
+            .history
+            .as_ref()
+            .map(|(safety, catalog, _)| {
+                NativeHistoryTargetContext::new(
+                    &db,
+                    store,
+                    &self.fence,
+                    &self.admission,
+                    safety,
+                    catalog,
+                    role,
+                    &self.frozen,
+                )
+            })
+            .transpose()?;
+        let history = match (&self.history, &history_context) {
+            (Some((_, _, proof)), Some(context)) => Some((proof, context)),
+            _ => None,
+        };
+        let base = db.finish_native_target_image_install(
+            &self.fence,
+            &self.admission,
+            &self.frozen,
+            &self.bindings,
+            role,
+            &self.source,
+            self.recover_completed,
+            contents,
+            history,
+            cancellation,
+        )?;
+        drop(db);
+        let verified = VerifiedNativeRangeImageInstall {
+            database: self.database,
+            admission: self.admission,
+            frozen: self.frozen,
+            fence: self.fence,
+            source: self.source,
+            base,
+        };
+        verified.require_current(store, role)?;
+        Ok(verified)
+    }
 }
 
 /// Not deserializable. Its construction consumed the actual complete source
@@ -113,7 +262,7 @@ impl NativeRangeImageInstaller {
         purpose: ImageInstallPurpose,
         attempt_id: Uuid,
         cancellation: &CancellationToken,
-    ) -> Result<VerifiedNativeRangeImageInstall> {
+    ) -> Result<NativeRangeImageVerification> {
         cancellation.check()?;
         source.require_current()?;
         let db = database
@@ -126,7 +275,7 @@ impl NativeRangeImageInstaller {
         let fence = store.reacquire_completed_native_image_install(
             &db, &admission, &source, role, &frozen, purpose, attempt_id, &prior,
         )?;
-        let base = db.finish_native_target_image_install(
+        let verifier = db.begin_native_target_image_verification(
             &fence,
             &admission,
             &frozen,
@@ -137,16 +286,17 @@ impl NativeRangeImageInstaller {
             cancellation,
         )?;
         drop(db);
-        let verified = VerifiedNativeRangeImageInstall {
+        Ok(NativeRangeImageVerification {
             database,
             admission,
             frozen,
             fence,
+            bindings,
             source,
-            base,
-        };
-        verified.require_current(store, role)?;
-        Ok(verified)
+            verifier,
+            history: None,
+            recover_completed: true,
+        })
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -192,6 +342,19 @@ impl NativeRangeImageInstaller {
         // The catalog refusal is already durably confirmed. From this point
         // any crash/timeout is dirty/unready until a fresh authorized restart.
         db.begin_native_target_image_install(&fence, &admission, &frozen, &bindings)?;
+        let catalog_obligations =
+            store.image_install_catalog_history_obligations(fence.range().id)?;
+        let context = NativeHistoryTargetContext::new(
+            &db,
+            store,
+            &fence,
+            &admission,
+            &safety,
+            &catalog_obligations,
+            role,
+            &frozen,
+        )?;
+        let history_stage = db.begin_native_history_stage(&context, source)?;
         let catalog = canonical_range_image_catalog(
             source.cut().cluster_id(),
             source.cut().range(),
@@ -213,6 +376,11 @@ impl NativeRangeImageInstaller {
             fence,
             bindings,
             source_reserved_db_upper_bound,
+            safety,
+            catalog: catalog_obligations,
+            history_stage,
+            history_proof: None,
+            destructive_started: false,
             clear_collection: 0,
             clear_after: None,
             cleared: complete,
@@ -229,11 +397,111 @@ impl NativeRangeImageInstaller {
     pub(crate) fn fence(&self) -> &TargetImageInstallFence {
         &self.fence
     }
-    fn require_history_before_rows(&self) -> Result<()> {
-        if self.fence.source_range_index() != 0 {
+    pub(crate) fn history_stage_id(&self) -> Uuid {
+        self.history_stage.stage_id()
+    }
+    pub(crate) fn stage_history_step(
+        &mut self,
+        store: &RangeWriteStore,
+        role: &NativeImageInstallRole<'_>,
+        source: &TentativeNativeRangeImageSourceAuthorization<'_>,
+        stage_id: Uuid,
+        step: &RangeImageHistoryStepV1,
+        cancellation: &CancellationToken,
+    ) -> Result<NativeHistoryStageProgress> {
+        if self.destructive_started || self.history_proof.is_some() {
             return Err(invalid(
-                "nonzero image rows require the opaque full staged-history compatibility proof",
+                "history staging is sealed before target data changes",
             ));
+        }
+        let db = self
+            .database
+            .try_read()
+            .ok_or_else(|| invalid("target DB busy during history stage"))?;
+        let context = NativeHistoryTargetContext::new(
+            &db,
+            store,
+            &self.fence,
+            &self.admission,
+            &self.safety,
+            &self.catalog,
+            role,
+            &self.frozen,
+        )?;
+        db.append_native_history_stage(
+            &self.history_stage,
+            &context,
+            source,
+            stage_id,
+            step,
+            cancellation,
+        )
+    }
+    pub(crate) fn audit_history_step(
+        &mut self,
+        store: &RangeWriteStore,
+        role: &NativeImageInstallRole<'_>,
+        source: &TentativeNativeRangeImageSourceAuthorization<'_>,
+        max_entries: usize,
+        cancellation: &CancellationToken,
+    ) -> Result<NativeHistoryStageProgress> {
+        if self.destructive_started {
+            return Err(invalid("cannot restage after target data changes"));
+        }
+        let db = self
+            .database
+            .try_read()
+            .ok_or_else(|| invalid("target DB busy during history audit"))?;
+        let context = NativeHistoryTargetContext::new(
+            &db,
+            store,
+            &self.fence,
+            &self.admission,
+            &self.safety,
+            &self.catalog,
+            role,
+            &self.frozen,
+        )?;
+        let progress = db.audit_native_history_stage_step(
+            &self.history_stage,
+            &context,
+            source,
+            max_entries,
+            cancellation,
+        )?;
+        if progress.audit_complete {
+            self.history_proof =
+                Some(db.finish_native_history_stage(&self.history_stage, &context, source)?);
+        }
+        Ok(progress)
+    }
+    fn require_history_before_rows(
+        &self,
+        store: &RangeWriteStore,
+        role: &NativeImageInstallRole<'_>,
+        source: &TentativeNativeRangeImageSourceAuthorization<'_>,
+    ) -> Result<()> {
+        let db = self
+            .database
+            .try_read()
+            .ok_or_else(|| invalid("target DB busy checking history"))?;
+        let context = NativeHistoryTargetContext::new(
+            &db,
+            store,
+            &self.fence,
+            &self.admission,
+            &self.safety,
+            &self.catalog,
+            role,
+            &self.frozen,
+        )?;
+        self.history_proof
+            .as_ref()
+            .ok_or_else(|| invalid("target data changes require full actual staged history"))?
+            .require_current(&db, &context, source)?;
+        if !self.destructive_started {
+            self.safety
+                .require_current(&db, &self.admission, &self.frozen)?;
         }
         Ok(())
     }
@@ -259,11 +527,12 @@ impl NativeRangeImageInstaller {
         &mut self,
         store: &RangeWriteStore,
         role: &NativeImageInstallRole<'_>,
+        source: &TentativeNativeRangeImageSourceAuthorization<'_>,
         cancellation: &CancellationToken,
     ) -> Result<bool> {
         cancellation.check()?;
         self.validate(store, role)?;
-        self.require_history_before_rows()?;
+        self.require_history_before_rows(store, role, source)?;
         if self.cleared {
             return Ok(true);
         }
@@ -288,6 +557,7 @@ impl NativeRangeImageInstaller {
         let controlled = db
             .range_mutation_gate()
             .try_controlled_mutation(&self.frozen)?;
+        self.destructive_started = true;
         db.delete_range_records_as_local_with_mutation(
             self.fence.range(),
             &meta.name,
@@ -315,12 +585,13 @@ impl NativeRangeImageInstaller {
         attempt_id: Uuid,
         store: &RangeWriteStore,
         role: &NativeImageInstallRole<'_>,
+        source: &TentativeNativeRangeImageSourceAuthorization<'_>,
         step: &RangeImageStepV1,
         cancellation: &CancellationToken,
     ) -> Result<()> {
         cancellation.check()?;
         self.validate(store, role)?;
-        self.require_history_before_rows()?;
+        self.require_history_before_rows(store, role, source)?;
         if attempt_id != self.fence.attempt_id() || !self.cleared {
             return Err(invalid(
                 "late attempt or target stale-key clear is incomplete",
@@ -363,6 +634,7 @@ impl NativeRangeImageInstaller {
             let controlled = db
                 .range_mutation_gate()
                 .try_controlled_mutation(&self.frozen)?;
+            self.destructive_started = true;
             db.apply_range_snapshot_batch_preinstalled_with_mutation(
                 self.fence.range(),
                 meta,
@@ -383,16 +655,16 @@ impl NativeRangeImageInstaller {
         Ok(())
     }
 
-    pub(crate) fn complete(
+    pub(crate) fn begin_verification(
         self,
         store: &RangeWriteStore,
         role: &NativeImageInstallRole<'_>,
         source: CompletedNativeRangeImageSource,
         cancellation: &CancellationToken,
-    ) -> Result<VerifiedNativeRangeImageInstall> {
+    ) -> Result<NativeRangeImageVerification> {
         source.require_current()?;
         self.validate(store, role)?;
-        self.require_history_before_rows()?;
+        self.require_history_before_rows(store, role, &source.authorize_target_install()?)?;
         let seal = source.seal();
         if !self.cleared
             || !self.complete
@@ -415,7 +687,7 @@ impl NativeRangeImageInstaller {
             .database
             .try_read()
             .ok_or_else(|| invalid("target DB busy before native image verification"))?;
-        let base = db.finish_native_target_image_install(
+        let verifier = db.begin_native_target_image_verification(
             &self.fence,
             &self.admission,
             &self.frozen,
@@ -426,16 +698,22 @@ impl NativeRangeImageInstaller {
             cancellation,
         )?;
         drop(db);
-        let verified = VerifiedNativeRangeImageInstall {
+        Ok(NativeRangeImageVerification {
             database: self.database,
             admission: self.admission,
             frozen: self.frozen,
             fence: self.fence,
+            bindings: self.bindings,
             source,
-            base,
-        };
-        verified.require_current(store, role)?;
-        Ok(verified)
+            verifier,
+            history: Some((
+                self.safety,
+                self.catalog,
+                self.history_proof
+                    .ok_or_else(|| invalid("complete data has no full history proof"))?,
+            )),
+            recover_completed: false,
+        })
     }
 }
 
@@ -823,6 +1101,13 @@ pub(crate) mod tests {
             .unwrap()
         }
         fn begin(&self, store: &mut RangeWriteStore, attempt: Uuid) -> NativeRangeImageInstaller {
+            self.try_begin(store, attempt).unwrap()
+        }
+        fn try_begin(
+            &self,
+            store: &mut RangeWriteStore,
+            attempt: Uuid,
+        ) -> Result<NativeRangeImageInstaller> {
             let target = self.target();
             let admission = target
                 .read()
@@ -855,15 +1140,74 @@ pub(crate) mod tests {
                 ImageInstallPurpose::RelocationLearner,
                 attempt,
             )
-            .unwrap()
         }
-        fn clear(&self, store: &RangeWriteStore, install: &mut NativeRangeImageInstaller) {
+        fn clear(&mut self, store: &RangeWriteStore, install: &mut NativeRangeImageInstaller) {
+            // Complete and audit the ACTUAL inactive target history before
+            // any stale row removal, even for empty R0 sources.
+            loop {
+                let step = {
+                    let capture = self.capture.as_mut().unwrap();
+                    let cursor = capture.history_cursor().clone();
+                    capture
+                        .export_history_step(&cursor, 256, &CancellationToken::uncancelable())
+                        .unwrap()
+                };
+                let role = self.role();
+                let auth = self
+                    .capture
+                    .as_ref()
+                    .unwrap()
+                    .authorize_target_install()
+                    .unwrap();
+                let progress = install
+                    .stage_history_step(
+                        store,
+                        &NativeImageInstallRole::CommittedHandoff(&role),
+                        &auth,
+                        install.history_stage_id(),
+                        &step,
+                        &CancellationToken::uncancelable(),
+                    )
+                    .unwrap();
+                if progress.cursor.complete() {
+                    break;
+                }
+            }
             loop {
                 let role = self.role();
+                let auth = self
+                    .capture
+                    .as_ref()
+                    .unwrap()
+                    .authorize_target_install()
+                    .unwrap();
+                if install
+                    .audit_history_step(
+                        store,
+                        &NativeImageInstallRole::CommittedHandoff(&role),
+                        &auth,
+                        256,
+                        &CancellationToken::uncancelable(),
+                    )
+                    .unwrap()
+                    .audit_complete
+                {
+                    break;
+                }
+            }
+            loop {
+                let role = self.role();
+                let auth = self
+                    .capture
+                    .as_ref()
+                    .unwrap()
+                    .authorize_target_install()
+                    .unwrap();
                 if install
                     .clear_step(
                         store,
                         &NativeImageInstallRole::CommittedHandoff(&role),
+                        &auth,
                         &CancellationToken::uncancelable(),
                     )
                     .unwrap()
@@ -880,11 +1224,18 @@ pub(crate) mod tests {
                     .export_step(&cursor, &options(), &CancellationToken::uncancelable())
                     .unwrap();
                 let role = self.role();
+                let auth = self
+                    .capture
+                    .as_ref()
+                    .unwrap()
+                    .authorize_target_install()
+                    .unwrap();
                 install
                     .install_step(
                         install.fence().attempt_id(),
                         store,
                         &NativeImageInstallRole::CommittedHandoff(&role),
+                        &auth,
                         &step,
                         &CancellationToken::uncancelable(),
                     )
@@ -893,7 +1244,6 @@ pub(crate) mod tests {
                     break;
                 }
             }
-            self.export_history();
         }
         fn export_history(&mut self) {
             loop {
@@ -947,6 +1297,55 @@ pub(crate) mod tests {
         }
     }
 
+    fn finish_verification(
+        fixture: &Fixture,
+        store: &RangeWriteStore,
+        mut verification: NativeRangeImageVerification,
+    ) -> VerifiedNativeRangeImageInstall {
+        let mut complete = false;
+        for _ in 0..128 {
+            let role = fixture.role();
+            if verification
+                .advance(
+                    store,
+                    &NativeImageInstallRole::CommittedHandoff(&role),
+                    &CancellationToken::uncancelable(),
+                )
+                .unwrap()
+                == NativeTargetImageVerificationProgress::Complete
+            {
+                complete = true;
+                break;
+            }
+        }
+        assert!(complete, "bounded R0 fixture verification did not complete");
+        let role = fixture.role();
+        verification
+            .finish(
+                store,
+                &NativeImageInstallRole::CommittedHandoff(&role),
+                &CancellationToken::uncancelable(),
+            )
+            .unwrap()
+    }
+    fn verify_install(
+        fixture: &Fixture,
+        store: &RangeWriteStore,
+        install: NativeRangeImageInstaller,
+        source: CompletedNativeRangeImageSource,
+    ) -> VerifiedNativeRangeImageInstall {
+        let role = fixture.role();
+        let verification = install
+            .begin_verification(
+                store,
+                &NativeImageInstallRole::CommittedHandoff(&role),
+                source,
+                &CancellationToken::uncancelable(),
+            )
+            .unwrap();
+        finish_verification(fixture, store, verification)
+    }
+
     #[test]
     fn actual_native_r0_copy_removes_extra_rows_and_preserves_target_namespace_identity() {
         let mut fixture = Fixture::new();
@@ -996,15 +1395,7 @@ pub(crate) mod tests {
         fixture.clear(&store, &mut install);
         fixture.copy(&store, &mut install);
         let source = fixture.capture.take().unwrap().complete().unwrap();
-        let role = fixture.role();
-        let verified = install
-            .complete(
-                &store,
-                &NativeImageInstallRole::CommittedHandoff(&role),
-                source,
-                &CancellationToken::uncancelable(),
-            )
-            .unwrap();
+        let verified = verify_install(&fixture, &store, install, source);
         assert_eq!(verified.base().range_index(), 0);
         assert_eq!(
             verified.base().local_namespace_ids(),
@@ -1041,6 +1432,482 @@ pub(crate) mod tests {
             .require_no_image_install(fixture.range().id)
             .is_err());
     }
+    #[test]
+    fn actual_native_r1_install_uses_target_local_visibility_and_preserves_other_range_rows() {
+        let mut fixture =
+            Fixture::new_with_ranges_and_before_handoff(2, |db, topology, spec, _| {
+                let ranges = topology
+                    .ranges
+                    .values()
+                    .map(|range| range.id)
+                    .collect::<Vec<_>>();
+                // Genuine independent range commits distinguish global DB sequence
+                // from the selected range's one command. No sequence is assigned.
+                crate::distribution_range_consensus::seed_actual_origin(
+                    db,
+                    topology.clone(),
+                    spec,
+                    ranges[1],
+                    4,
+                );
+                crate::distribution_range_consensus::seed_actual_origin(
+                    db,
+                    topology.clone(),
+                    spec,
+                    ranges[0],
+                    1,
+                );
+            });
+        let target = fixture.target();
+        let source_r = fixture
+            .capture
+            .as_ref()
+            .unwrap()
+            .authorize_target_install()
+            .unwrap()
+            .cut()
+            .range_index();
+        assert_eq!(source_r, 1);
+        let source_b = fixture.source.read().current_commit_seq();
+        assert_ne!(source_b, source_r);
+        let selected = fixture.range().clone();
+        let other = fixture
+            .topology
+            .ranges
+            .values()
+            .find(|r| r.id != selected.id)
+            .unwrap()
+            .clone();
+        let source_key = (0..)
+            .map(|i| format!("stage-actual-origin-{i}"))
+            .find(|key| selected.contains_token(distribution_key_token("items", key)))
+            .unwrap();
+        let expected = fixture
+            .source
+            .read()
+            .get("items", &source_key)
+            .unwrap()
+            .unwrap();
+        let target_uid = target.read().local_namespace_identity("items").unwrap();
+        let mut retained = Vec::new();
+        // These are explicitly unacknowledged learner physical writes. Each
+        // real local transaction advances the target's own MVCC sequence.
+        for key in (0..)
+            .map(|i| format!("other-target-{i}"))
+            .filter(|key| other.contains_token(distribution_key_token("items", key)))
+            .take(17)
+        {
+            let row =
+                crate::Record::new(key.clone()).with_metadata(serde_json::json!({"retained":true}));
+            target
+                .read()
+                .apply_range_snapshot_batch_preinstalled(
+                    &other,
+                    &CollectionMeta::standard("items"),
+                    &RangeSnapshotBatch {
+                        collection: "items".into(),
+                        range_id: other.id,
+                        range_epoch: other.epoch,
+                        snapshot_commit_sequence: 0,
+                        resume_after_key: key.clone(),
+                        serialized_record_bytes: serde_json::to_vec(&row).unwrap().len(),
+                        records: vec![row],
+                    },
+                )
+                .unwrap();
+            retained.push(key);
+        }
+        let stale =
+            crate::Record::new(source_key.clone()).with_metadata(serde_json::json!({"stale":true}));
+        target
+            .read()
+            .apply_range_snapshot_batch_preinstalled(
+                &selected,
+                &CollectionMeta::standard("items"),
+                &RangeSnapshotBatch {
+                    collection: "items".into(),
+                    range_id: selected.id,
+                    range_epoch: selected.epoch,
+                    snapshot_commit_sequence: 0,
+                    resume_after_key: source_key.clone(),
+                    serialized_record_bytes: serde_json::to_vec(&stale).unwrap().len(),
+                    records: vec![stale],
+                },
+            )
+            .unwrap();
+        let target_before = target.read().current_commit_seq();
+        assert!(target_before > source_b && target_before > source_r);
+        drop(target);
+        let mut store = fixture.store();
+        let mut install = fixture.begin(&mut store, Uuid::now_v7());
+        {
+            let role = fixture.role();
+            let auth = fixture
+                .capture
+                .as_ref()
+                .unwrap()
+                .authorize_target_install()
+                .unwrap();
+            assert!(
+                install
+                    .clear_step(
+                        &store,
+                        &NativeImageInstallRole::CommittedHandoff(&role),
+                        &auth,
+                        &CancellationToken::uncancelable()
+                    )
+                    .is_err(),
+                "no destructive clear before actual full history audit"
+            );
+        }
+        fixture.clear(&store, &mut install);
+        fixture.copy(&store, &mut install);
+        let source = fixture.capture.take().unwrap().complete().unwrap();
+        let verified = verify_install(&fixture, &store, install, source);
+        assert_eq!(verified.base().range_index(), source_r);
+        assert!(verified.base().target_snapshot_bound().get() > target_before);
+        assert_ne!(verified.base().target_snapshot_bound().get(), source_b);
+        assert_eq!(verified.base().history_verified_through(), source_r);
+        {
+            let db = fixture.target();
+            let db = db.read();
+            assert_eq!(
+                db.get("items", &source_key).unwrap().unwrap().as_ref(),
+                expected.as_ref(),
+                "ordinary target MVCC get must see the exact copied value"
+            );
+            for key in &retained {
+                assert_eq!(
+                    db.get("items", key).unwrap().unwrap().metadata,
+                    serde_json::json!({"retained":true})
+                );
+            }
+            assert_eq!(db.local_namespace_identity("items").unwrap(), target_uid);
+        }
+        drop(verified);
+        fixture.reopen_target();
+        assert_eq!(
+            fixture
+                .target()
+                .read()
+                .get("items", &source_key)
+                .unwrap()
+                .unwrap()
+                .as_ref(),
+            expected.as_ref()
+        );
+        for key in retained {
+            assert!(fixture
+                .target()
+                .read()
+                .get("items", &key)
+                .unwrap()
+                .is_some());
+        }
+        assert!(
+            fixture
+                .store()
+                .require_no_image_install(selected.id)
+                .is_err(),
+            "native image is not membership/catalog activation"
+        );
+    }
+
+    #[test]
+    fn actual_native_r1025_install_preserves_full_history_after_command_payload_compaction() {
+        let mut fixture =
+            Fixture::new_with_ranges_and_before_handoff(2, |db, topology, spec, _| {
+                let ranges = topology.ranges.values().map(|r| r.id).collect::<Vec<_>>();
+                crate::distribution_range_consensus::seed_actual_origin(
+                    db,
+                    topology.clone(),
+                    spec,
+                    ranges[1],
+                    3,
+                );
+                crate::distribution_range_consensus::seed_actual_origin(
+                    db,
+                    topology.clone(),
+                    spec,
+                    ranges[0],
+                    1025,
+                );
+            });
+        let range_id = fixture.range().id;
+        let source_b = fixture.source.read().current_commit_seq();
+        assert!(
+            source_b > 1025,
+            "actual other-range commits make DBseq distinct from R"
+        );
+        let source_store = RangeWriteStore::open(
+            fixture.source.read().data_path(),
+            fixture.topology.cluster_id.clone(),
+            node("n1"),
+            true,
+        )
+        .unwrap();
+        let progress = source_store.progress(range_id);
+        assert_eq!(progress.resolved_through, 1025);
+        assert_eq!(
+            progress.compacted_through, 1,
+            "actual first command payload has passed normal retention"
+        );
+        let obligations = source_store
+            .image_install_catalog_history_obligations(range_id)
+            .unwrap();
+        assert_eq!(obligations.irrevocable_commands().len(), 1024);
+        drop(obligations);
+        drop(source_store);
+        let keys = (0..)
+            .map(|i| format!("stage-actual-origin-{i}"))
+            .filter(|key| {
+                fixture
+                    .range()
+                    .contains_token(distribution_key_token("items", key))
+            })
+            .take(1025)
+            .collect::<Vec<_>>();
+        for key in &keys {
+            assert_eq!(
+                fixture
+                    .source
+                    .read()
+                    .get("items", key)
+                    .unwrap()
+                    .unwrap()
+                    .as_ref(),
+                &crate::Record::new(key)
+            );
+        }
+        let target_uid = fixture
+            .target()
+            .read()
+            .local_namespace_identity("items")
+            .unwrap();
+        let mut store = fixture.store();
+        let mut install = fixture.begin(&mut store, Uuid::now_v7());
+        fixture.clear(&store, &mut install);
+        fixture.copy(&store, &mut install);
+        let source = fixture.capture.take().unwrap().complete().unwrap();
+        assert_eq!(source.seal().range_index, 1025);
+        assert_eq!(source.seal().history_entries, 1026);
+        assert!(
+            source.seal().history_steps >= 5,
+            "bounded history includes genesis and all commands"
+        );
+        let verified = verify_install(&fixture, &store, install, source);
+        assert_eq!(verified.base().range_index(), 1025);
+        assert_eq!(verified.base().history_verified_through(), 1025);
+        assert!(verified.base().target_snapshot_bound().get() < 1025,
+            "target uses its own actual small local MVCC bound, never source range index or source DBseq");
+        {
+            let db = fixture.target();
+            let db = db.read();
+            for key in &keys {
+                assert_eq!(
+                    db.get("items", key).unwrap().unwrap().as_ref(),
+                    &crate::Record::new(key),
+                    "ordinary target MVCC get must see every copied row after payload retention"
+                );
+            }
+            assert_eq!(db.local_namespace_identity("items").unwrap(), target_uid);
+        }
+        drop(verified);
+        fixture.reopen_target();
+        for key in keys {
+            assert_eq!(
+                fixture
+                    .target()
+                    .read()
+                    .get("items", &key)
+                    .unwrap()
+                    .unwrap()
+                    .as_ref(),
+                &crate::Record::new(key)
+            );
+        }
+        assert!(
+            fixture.store().require_no_image_install(range_id).is_err(),
+            "physical copy and complete history do not activate membership or catalog floor"
+        );
+    }
+
+    #[test]
+    fn actual_installed_r1_floor_survives_physical_invalidation_and_reopen_without_readiness() {
+        let mut fixture =
+            Fixture::new_with_ranges_and_before_handoff(2, |db, topology, spec, _| {
+                let selected = topology.ranges.values().next().unwrap().id;
+                crate::distribution_range_consensus::seed_actual_origin(
+                    db,
+                    topology.clone(),
+                    spec,
+                    selected,
+                    1,
+                );
+            });
+        let mut store = fixture.store();
+        let mut install = fixture.begin(&mut store, Uuid::now_v7());
+        fixture.clear(&store, &mut install);
+        fixture.copy(&store, &mut install);
+        let source = fixture.capture.take().unwrap().complete().unwrap();
+        let verified = verify_install(&fixture, &store, install, source);
+        let receipt = verified.base().native_receipt_sha256().to_string();
+        let history = verified.base().logical_history_sha256().to_string();
+        drop(verified);
+        {
+            let target = fixture.target();
+            let db = target.read();
+            let extra = (0..)
+                .map(|i| format!("after-image-unacknowledged-{i}"))
+                .find(|key| {
+                    fixture
+                        .range()
+                        .contains_token(distribution_key_token("items", key))
+                })
+                .unwrap();
+            let row = crate::Record::new(extra.clone());
+            // Trusted physical learner mutation, explicitly NOT an acknowledged
+            // quorum commit or a new native certified prefix. It invalidates
+            // current source contents without erasing the prior durable floor.
+            db.apply_range_snapshot_batch_preinstalled(
+                fixture.range(),
+                &CollectionMeta::standard("items"),
+                &RangeSnapshotBatch {
+                    collection: "items".into(),
+                    range_id: fixture.range().id,
+                    range_epoch: fixture.range().epoch,
+                    snapshot_commit_sequence: 0,
+                    resume_after_key: extra,
+                    serialized_record_bytes: serde_json::to_vec(&row).unwrap().len(),
+                    records: vec![row],
+                },
+            )
+            .unwrap();
+        }
+        for reopen in [false, true] {
+            if reopen {
+                fixture.reopen_target();
+            }
+            let target = fixture.target();
+            let db = target.read();
+            let native = db
+                .native_recovery_admission(
+                    &fixture.topology.cluster_id,
+                    fixture.topology.range_image_bootstrap_id.unwrap(),
+                    &node("n2"),
+                    fixture.target_spec.member_incarnation,
+                )
+                .unwrap();
+            assert!(
+                db.native_installed_range_image_base(&native, fixture.range().id)
+                    .is_err(),
+                "invalidated image must not remain a source/ready anchor"
+            );
+            let integrity = db
+                .native_installed_range_image_integrity(&native, fixture.range().id)
+                .unwrap()
+                .unwrap();
+            assert_eq!(integrity.range_index(), 1);
+            assert_eq!(integrity.native_receipt_sha256(), receipt);
+            assert_eq!(integrity.logical_history_sha256(), history);
+            let frozen = db
+                .range_mutation_gate()
+                .try_freeze(fixture.range().id, Uuid::now_v7())
+                .unwrap();
+            let safety = db
+                .native_range_install_safety(&native, fixture.range().id, &frozen)
+                .unwrap();
+            assert!(safety.source_invalidated());
+            assert_eq!(safety.maximum_irreversible_index(), Some(1));
+            assert_eq!(safety.history_point().unwrap().range_index(), 1);
+            assert_eq!(
+                safety.history_point().unwrap().logical_history_sha256(),
+                history
+            );
+            safety.require_current(&db, &native, &frozen).unwrap();
+            assert!(
+                db.native_range_prefix_observation(fixture.range().id)
+                    .unwrap()
+                    .invalidated
+            );
+            assert!(store.require_no_image_install(fixture.range().id).is_err());
+        }
+    }
+
+    #[test]
+    fn native_partial_attempt_refuses_recreated_namespace_until_fresh_authorized_attempt() {
+        let mut fixture = Fixture::new();
+        let original_uid = fixture
+            .target()
+            .read()
+            .local_namespace_identity("items")
+            .unwrap();
+        let attempt = Uuid::now_v7();
+        let mut store = fixture.store();
+        let partial = fixture.begin(&mut store, attempt);
+        drop(partial);
+        drop(store);
+        {
+            let target = fixture.target();
+            let mut db = target.write();
+            assert!(db.drop_collection("items").unwrap());
+            db.create_collection("items").unwrap();
+            assert_ne!(
+                db.local_namespace_identity("items").unwrap(),
+                original_uid,
+                "actual hard drop/recreate has a fresh local namespace lineage"
+            );
+        }
+        fixture.reopen_target();
+        let recreated_uid = fixture
+            .target()
+            .read()
+            .local_namespace_identity("items")
+            .unwrap();
+        let mut store = fixture.store();
+        let error = match fixture.try_begin(&mut store, attempt) {
+            Err(error) => error,
+            Ok(_) => panic!("old attempt must not silently bind the recreated physical backing"),
+        };
+        assert!(error.to_string().contains("recreated namespace"), "{error}");
+        assert!(store.require_no_image_install(fixture.range().id).is_err());
+        assert!(
+            fixture
+                .target()
+                .read()
+                .native_range_prefix_observation(fixture.range().id)
+                .unwrap()
+                .invalidated
+        );
+        // Explicitly restart from a fresh actual role/attempt. No prior receipt,
+        // numeric floor or target UUID is transplanted onto the new backing.
+        let mut restarted = fixture.begin(&mut store, Uuid::now_v7());
+        fixture.clear(&store, &mut restarted);
+        fixture.copy(&store, &mut restarted);
+        let source = fixture.capture.take().unwrap().complete().unwrap();
+        let verified = verify_install(&fixture, &store, restarted, source);
+        assert_eq!(
+            fixture
+                .target()
+                .read()
+                .local_namespace_identity("items")
+                .unwrap(),
+            recreated_uid
+        );
+        assert_ne!(recreated_uid, original_uid);
+        assert!(store.require_no_image_install(fixture.range().id).is_err());
+        drop(verified);
+        fixture.reopen_target();
+        assert_eq!(
+            fixture
+                .target()
+                .read()
+                .local_namespace_identity("items")
+                .unwrap(),
+            recreated_uid
+        );
+    }
+
     #[test]
     fn partial_native_attempt_reopen_stays_unready_and_new_attempt_rejects_late_chunks() {
         let mut fixture = Fixture::new();
@@ -1080,6 +1947,25 @@ pub(crate) mod tests {
             .native_installed_range_image_base(&admission, fixture.range().id)
             .is_err());
         drop(fixture.capture.take());
+        // A real fresh metadata snapshot may carry changed load estimates;
+        // these do not change the handoff configuration/session or data proof.
+        let range_id = fixture.range().id;
+        fixture.topology.generation += 1;
+        fixture
+            .topology
+            .ranges
+            .values_mut()
+            .find(|range| range.id == range_id)
+            .unwrap()
+            .approximate_bytes = 999;
+        fixture
+            .topology
+            .ranges
+            .values_mut()
+            .find(|range| range.id == range_id)
+            .unwrap()
+            .approximate_qps = 777;
+        fixture.topology.validate().unwrap();
         fixture.recapture();
         let mut store = fixture.store();
         let new_attempt = Uuid::now_v7();
@@ -1091,21 +1977,19 @@ pub(crate) mod tests {
                 old_attempt,
                 &store,
                 &NativeImageInstallRole::CommittedHandoff(&role),
+                &fixture
+                    .capture
+                    .as_ref()
+                    .unwrap()
+                    .authorize_target_install()
+                    .unwrap(),
                 &step,
                 &CancellationToken::uncancelable()
             )
             .is_err());
         fixture.copy(&store, &mut new);
         let source = fixture.capture.take().unwrap().complete().unwrap();
-        let role = fixture.role();
-        let verified = new
-            .complete(
-                &store,
-                &NativeImageInstallRole::CommittedHandoff(&role),
-                source,
-                &CancellationToken::uncancelable(),
-            )
-            .unwrap();
+        let verified = verify_install(&fixture, &store, new, source);
         assert_eq!(verified.fence().attempt_id(), new_attempt);
     }
     #[test]
@@ -1117,15 +2001,7 @@ pub(crate) mod tests {
         fixture.clear(&store, &mut install);
         fixture.copy(&store, &mut install);
         let source = fixture.capture.take().unwrap().complete().unwrap();
-        let role = fixture.role();
-        let verified = install
-            .complete(
-                &store,
-                &NativeImageInstallRole::CommittedHandoff(&role),
-                source,
-                &CancellationToken::uncancelable(),
-            )
-            .unwrap();
+        let verified = verify_install(&fixture, &store, install, source);
         let first_receipt = verified.base().native_receipt_sha256().to_string();
         let source_open = fixture
             .source
@@ -1190,11 +2066,12 @@ pub(crate) mod tests {
             &CancellationToken::uncancelable(),
         )
         .unwrap();
+        let recovered = finish_verification(&fixture, &store, recovered);
         assert_eq!(recovered.fence().attempt_id(), attempt);
-        assert_ne!(
+        assert_eq!(
             recovered.base().native_receipt_sha256(),
             first_receipt,
-            "recovery confirms a new actual native receipt fsync"
+            "recovery revalidates the exact already-published native anchor without retiring a second prefix"
         );
         assert!(store.require_no_image_install(fixture.range().id).is_err());
     }

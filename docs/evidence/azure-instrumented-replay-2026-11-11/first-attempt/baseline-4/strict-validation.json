@@ -1,0 +1,5 @@
+{
+  "code": 1,
+  "stdout": "",
+  "stderr": "Traceback (most recent call last):\n  File \"/tmp/bicdb-instrumented-client-ready-v3/trace_client.py\", line 1126, in <module>\n    raise SystemExit(main())\n                     ^^^^^^\n  File \"/tmp/bicdb-instrumented-client-ready-v3/trace_client.py\", line 1081, in main\n    print(json.dumps(validate_trace(a.journal, a.allow_incomplete), sort_keys=True))\n                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/tmp/bicdb-instrumented-client-ready-v3/trace_client.py\", line 701, in validate_trace\n    require(run_complete and planned_termination and operations and (not missing) and (not pending) and (not dispatch_fenced), 'incomplete or resource-fenced logical/RPC/run trace')\n  File \"/tmp/bicdb-instrumented-client-ready-v3/trace_client.py\", line 602, in require\n    raise ValueError(message)\nValueError: incomplete or resource-fenced logical/RPC/run trace\n"
+}

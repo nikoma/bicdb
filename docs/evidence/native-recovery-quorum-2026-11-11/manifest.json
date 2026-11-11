@@ -1,0 +1,20 @@
+{
+  "algorithm": "sha256",
+  "files": {
+    "README.md": "81aa76d9bcf53ee2e96a312d8b353d6f042f9c7ba6d8f0ffda09a1b5f8a4f395",
+    "v1/actual-recovery-fence-quorum-resources.json.gz": "9241613cc3c4677182e543e83340b577ba42e5ebb2ebbbefe1300fc0a147c515",
+    "v1/actual-recovery-fence-quorum-result.json": "f5d66b2322e91f068907378bff953d2b02d9df20575d063c86c0d883ab374ab8",
+    "v1/actual-recovery-fence-quorum.stderr.gz": "ed52ce459f5865c1700606066975960a4073afb507232370e1af4b3e0f8885d5",
+    "v1/actual-recovery-fence-quorum.stdout.gz": "d85128de3c7c6314ab6e6f97b4a2ff763c1befab35f30258d92c17424dc9f088",
+    "v1/candidate-validation.json": "e0e0919a2fe91abd4fb05148d77ba97816a8bd92be5f00f2bbd9c82aa21a2ffb",
+    "v1/candidate.patch": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "v1/run.py": "aa8f95ce5fd4f096ca2d41c870d0d0d8a6f69fc6c5b5ad099928542f25344dbd",
+    "v2/actual-recovery-fence-quorum-resources.json.gz": "61c37ab4c9bdf961d332a1c19704375a831bb4e0b192a47ef0d6b468387d48ac",
+    "v2/actual-recovery-fence-quorum-result.json": "c1acd104b50b9f1e3ee2d61371116ef39c89ba55cb9abcbc5bc0efcd8eb9acb6",
+    "v2/actual-recovery-fence-quorum.stderr.gz": "53c02fa7b4dd01e13534beee0c76fd2c7a028bf0f1b8b57117c5545b3ff7425c",
+    "v2/actual-recovery-fence-quorum.stdout.gz": "8a98b519f6ef88bb2110c5dddef58929b3bbfb9a1d756a3c4d41b624b9539ced",
+    "v2/candidate-validation.json": "6cb678aeb89790ffe90bf5c883160bfb3fe3aa04d25da0f5522c2b08d1c5b008",
+    "v2/candidate.patch": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "v2/run.py": "cf0c80fd3ae7a7ad027299bb2672e30e27ec8265de40a5306a4c408e896728aa"
+  }
+}

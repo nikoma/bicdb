@@ -12,17 +12,17 @@ use crate::distribution_range_recovery::{HandoffRoleAdmission, RecoveryRoleAdmis
 
 use super::image_install_state::{ImageInstallIntent, MAX_INSTALL_INTENTS};
 
-fn semantic_range(left: &RangeDescriptor, right: &RangeDescriptor) -> bool {
-    let mut a = left.clone();
-    let mut b = right.clone();
-    a.approximate_bytes = 0;
-    a.approximate_qps = 0;
-    b.approximate_bytes = 0;
-    b.approximate_qps = 0;
-    a.replicas.sort_by_key(|replica| replica.id);
-    b.replicas.sort_by_key(|replica| replica.id);
-    a == b
+fn canonical_range(range: &RangeDescriptor) -> RangeDescriptor {
+    let mut range = range.clone();
+    range.approximate_bytes = 0;
+    range.approximate_qps = 0;
+    range.replicas.sort_by_key(|replica| replica.id);
+    range
 }
+fn semantic_range(left: &RangeDescriptor, right: &RangeDescriptor) -> bool {
+    canonical_range(left) == canonical_range(right)
+}
+
 fn credentials(
     identity: &crate::distribution_range_recovery::RecoveryMemberIdentity,
 ) -> crate::db::RangeImageBirthMember {
@@ -196,6 +196,14 @@ impl TargetImageInstallFence {
     }
     pub(crate) fn intended_config_sha256(&self) -> &str {
         &self.intent.intended_config_sha256
+    }
+    pub(crate) fn intended_activation_range(&self) -> &RangeDescriptor {
+        &self.intent.intended_range
+    }
+    pub(crate) fn intended_activation_members(
+        &self,
+    ) -> &BTreeMap<ClusterNodeId, crate::db::RangeImageBirthMember> {
+        &self.intent.intended_members
     }
     pub(crate) fn activation_epoch(&self) -> u64 {
         self.intent.activation_epoch
@@ -498,7 +506,7 @@ impl RangeWriteStore {
         let intent = ImageInstallIntent {
             cluster_id: cut.cluster_id().clone(),
             bootstrap_id: source.bootstrap_id(),
-            range: cut.range().clone(),
+            range: canonical_range(cut.range()),
             purpose,
             attempt_id,
             session_id: cut.session_id(),
@@ -516,7 +524,7 @@ impl RangeWriteStore {
             old_config_sha256: cut.old_config_sha256().to_string(),
             intended_config_sha256: cut.new_config_sha256().to_string(),
             activation_epoch: cut.activation_epoch(),
-            intended_range,
+            intended_range: canonical_range(&intended_range),
             intended_members,
             current_voter_credentials: current
                 .member_credentials()

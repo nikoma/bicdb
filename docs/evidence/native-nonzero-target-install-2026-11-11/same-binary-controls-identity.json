@@ -1,0 +1,10 @@
+{
+  "source_commit": "8a7ddf6ead2bce6e3a41e04fdf68af1a7df3cf57",
+  "captured_at_unix": 1794411536.0198066,
+  "binary_path": "/tmp/bicdb-azure-artifact-target/release/deps/bicdb_core-2804d0c8b396b15a",
+  "binary_sha256": "b11c62e01f769a25d78f0e0927dd784f874c9433427397a9d89daba3705a5747",
+  "binary_bytes": 122254096,
+  "prior_compile_receipt_sha256": "4213c1f99ad3a6effc0294219b3145877e998eeee166d546c6545b5da2b59230",
+  "native_control_monitor_sha256": "39f7680301eb3ddfadc6608cdf942eac9f53aa712e6b55c70f7faa06a0be8009",
+  "scope": "same unchanged executable after actual attempt5 compile; no Cargo build in controls"
+}

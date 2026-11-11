@@ -1,0 +1,31 @@
+{
+  "git_head": "218d9073309b4c5205ef07ebb940b0926e289c85",
+  "uncommitted_patch_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "source_version": "1.0.466-beta",
+  "scope": "actual native birth/receiver drain/fsynced data-fence quorum aggregation; registered-identity simulated metadata transport; no native range floor/NativeReady/StrongGet/physical qualification; core opt-level=0/debug=0",
+  "physical_qualification": false,
+  "environment_override": {},
+  "name": "actual-recovery-fence-quorum",
+  "command": [
+    "cargo",
+    "test",
+    "--release",
+    "--locked",
+    "-p",
+    "bicdb-core",
+    "--features",
+    "tls-replication",
+    "--config",
+    "profile.release.package.bicdb-core.opt-level=0",
+    "--config",
+    "profile.release.package.bicdb-core.debug=0",
+    "--lib",
+    "distribution_range_recovery::quorum::tests",
+    "--",
+    "--nocapture"
+  ],
+  "exit_code": 0,
+  "interrupted_reason": null,
+  "elapsed_seconds": 78.02289933990687,
+  "minimum_available_bytes": 22894997504
+}

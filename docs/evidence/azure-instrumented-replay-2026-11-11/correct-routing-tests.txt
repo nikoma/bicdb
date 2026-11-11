@@ -1,0 +1,8 @@
+test_duplicate_descriptor_id_is_rejected (test_correct_range_routing.RangeRoutingTests.test_duplicate_descriptor_id_is_rejected) ... ok
+test_missing_descriptor_is_rejected_instead_of_null_projection (test_correct_range_routing.RangeRoutingTests.test_missing_descriptor_is_rejected_instead_of_null_projection) ... ok
+test_nonzero_token_map_key_is_distinct_from_range_id (test_correct_range_routing.RangeRoutingTests.test_nonzero_token_map_key_is_distinct_from_range_id) ... ok
+
+----------------------------------------------------------------------
+Ran 3 tests in 0.000s
+
+OK

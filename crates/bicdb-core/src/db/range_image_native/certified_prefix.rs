@@ -272,7 +272,7 @@ impl NativeCertifiedRangePrefix {
     pub(super) fn validate(
         &self,
         birth: &NativeDatabaseBirth,
-        base: &NativeGenesisReceipt,
+        base: &NativeRangeBaseBinding,
     ) -> Result<()> {
         if self.format_version != 2
             || self.birth_id != birth.birth_id
@@ -358,21 +358,7 @@ impl BicDb {
         let birth = self
             .read_native_birth()?
             .ok_or_else(|| invalid("install safety has no native birth"))?;
-        // Until the installed-anchor adapter is composed, a known installed
-        // contract is unsupported, not an absent/zero native history.
-        if self
-            .read_native_range_image_record::<serde_json::Value>(&format!(
-                "install:base:{}",
-                range_id.get()
-            ))?
-            .is_some()
-        {
-            return Err(invalid(
-                "installed native base requires its composed safety adapter",
-            ));
-        }
-        let base: Option<NativeGenesisReceipt> =
-            self.read_native_range_image_record(&genesis_key(range_id))?;
+        let base = self.actual_native_range_integrity_binding(&birth, range_id)?;
         if base.is_none()
             && birth
                 .spec
@@ -386,12 +372,7 @@ impl BicDb {
         }
         let prefix = match &base {
             Some(base) => {
-                base.validate()?;
-                if base.birth_id != birth.birth_id || base.birth_sha256 != birth.checksum_sha256 {
-                    return Err(invalid(
-                        "native install safety base belongs to another birth",
-                    ));
-                }
+                self.validate_native_range_base_history(&birth, base)?;
                 self.read_native_certified_range_prefix(&birth, base)?
             }
             None => {
@@ -540,11 +521,11 @@ impl BicDb {
     pub(super) fn read_native_certified_range_prefix(
         &self,
         birth: &NativeDatabaseBirth,
-        base: &NativeGenesisReceipt,
+        base: &NativeRangeBaseBinding,
     ) -> Result<Option<NativeCertifiedRangePrefix>> {
         let prefix: Option<NativeCertifiedRangePrefix> =
             self.read_native_range_image_record(&prefix_key(base.range.id))?;
-        self.validate_native_genesis_history(birth, base)?;
+        self.validate_native_range_base_history(birth, base)?;
         if let Some(prefix) = &prefix {
             prefix.validate(birth, base)?;
             let entry = self.read_native_history_entry(
@@ -586,25 +567,37 @@ impl BicDb {
         }
         Ok(())
     }
-    pub(crate) fn current_native_range_source_lineage(
+    pub(super) fn native_range_source_lineage_contract(
         &self,
         range_id: RangeId,
     ) -> Result<SourceRangeImageLineage> {
         let birth = self
             .read_native_birth()?
             .ok_or_else(|| invalid("no native birth"))?;
-        let receipt: NativeGenesisReceipt = self
-            .read_native_range_image_record(&genesis_key(range_id))?
-            .ok_or_else(|| invalid("no trusted native base; image repair required"))?;
-        receipt.validate()?;
-        let prefix = self.read_native_certified_range_prefix(&birth, &receipt)?;
+        let anchor = self.actual_native_range_anchor(&birth, range_id)?;
+        let base = anchor.binding();
+        self.validate_native_range_base_history(&birth, &base)?;
+        let prefix = self.read_native_certified_range_prefix(&birth, &base)?;
         let lineage = SourceRangeImageLineage {
             birth,
-            receipt,
+            _anchor: anchor,
+            base,
             prefix,
             current_database_incarnation: self.incarnation.clone(),
             current_schema_generation: self.schema_compatibility.generation(),
         };
+        self.validate_source_range_image_lineage_contract(
+            &lineage,
+            range_id,
+            lineage.range_index(),
+        )?;
+        Ok(lineage)
+    }
+    pub(crate) fn current_native_range_source_lineage(
+        &self,
+        range_id: RangeId,
+    ) -> Result<SourceRangeImageLineage> {
+        let lineage = self.native_range_source_lineage_contract(range_id)?;
         self.validate_source_range_image_lineage(&lineage, range_id, lineage.range_index())?;
         Ok(lineage)
     }
@@ -794,8 +787,8 @@ impl BicDb {
         let birth = self
             .read_native_birth()?
             .ok_or_else(|| invalid("no native birth"))?;
-        let base: NativeGenesisReceipt = self
-            .read_native_range_image_record(&genesis_key(record.range_id))?
+        let base = self
+            .actual_native_range_integrity_binding(&birth, record.range_id)?
             .ok_or_else(|| invalid("native completion base disappeared"))?;
         let old = self.read_native_certified_range_prefix(&birth, &base)?;
         let previous_index = old
@@ -808,7 +801,7 @@ impl BicDb {
             });
         let previous_logical_sha = old
             .as_ref()
-            .map_or(base.logical_genesis_sha256.as_str(), |previous| {
+            .map_or(base.logical_history_sha256.as_str(), |previous| {
                 previous.logical_history_sha256.as_str()
             });
         let history_entry = history::NativeLogicalHistoryEntryV1::applied(

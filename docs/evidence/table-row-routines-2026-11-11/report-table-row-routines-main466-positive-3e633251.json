@@ -1,0 +1,40 @@
+{
+  "source": "3e6332519da14d3d5db8fb6a89642efb3607b0b3",
+  "scope": "Coherent standalone main466 routine/type metadata batch after real43db scalar cast/array declaration failures. At34620, both payloads now correct but original stronger metadata checks actuallyfail: arraypgtypeof::text shows physical _typed_row; scalarpg_proc resultOID25 instead of actual1125911383. Preserve assertions. Fix pg_proc type lookup to include registered table types while preserving builtins; central generation-cached row type name formatter supplies regtype text and format_type, quotes logical/schema identifiers, canonicalarray[]. Standalone custom-type formatting retains existing lookup priority and lazy table fallback. Add actual format_type/OID/procedure assertions and qualified quoted row-name control, both stores. Native PostgreSQL all scalar/array function/type,procedure and quoted namespace references pass. Six focused then broad SQL commands on exact candidate. No private rename/native scope changes, no claim original application/VM accepted. Version469 reservation remains contingent on real467/468delivery and final-source checks/CI.",
+  "started_unix": 1794398624.6615071,
+  "steps": [
+    {
+      "command": [
+        "python3",
+        "scripts/bump-version.py",
+        "--check"
+      ],
+      "started_unix": 1794398624.6616044,
+      "exit": 0,
+      "finished_unix": 1794398624.7097793
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "table_row_routines",
+        "--test",
+        "version_identity",
+        "--",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794398624.7098715,
+      "exit": 101,
+      "finished_unix": 1794398718.748716
+    }
+  ],
+  "status": "failed",
+  "finished_unix": 1794398718.7489674
+}

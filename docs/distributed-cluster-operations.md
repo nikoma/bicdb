@@ -284,8 +284,14 @@ bicdb cluster rebalance /srv/bicdb --json
 bicdb cluster rebalance /srv/bicdb --apply
 ```
 
-The planner separately balances replica bytes, replica count, and leaders. It
-does not place new replicas on suspect, dead, draining, or decommissioned
+The default planner redistributes replicas by count and balances leader counts.
+Estimated range bytes rank movement candidates and contribute to capacity and
+in-flight limits; they do not provide an independent bytes-only imbalance trigger.
+At source 1.0.461-beta, the default host does not populate live per-range byte/QPS
+estimates or observed node used bytes. Zero replica-byte skew with zero estimates
+is not verified physical byte balance. See the
+[source and observed-input follow-up](distributed-placement-load-inputs-2026-11-11.md).
+The planner does not place new replicas on suspect, dead, draining, or decommissioned
 nodes. Per-node move counts and total bytes in flight are bounded. Active
 relocations fence a range from receiving a second concurrent move.
 

@@ -78,7 +78,16 @@ split/merge, including `0` and `u64::MAX`.
 ## Phase 3 — Replica and leader balancing
 
 - [x] Produce deterministic replica-placement plans from topology and capacity.
-- [x] Balance bytes, replica count, and leaders separately.
+- [x] Balance replica counts and leader counts; rank range-move candidates by
+  estimated bytes and enforce projected capacity/in-flight byte limits.
+- [ ] Populate authoritative live per-range byte/QPS and node-used-byte inputs
+  in the default host, expose unknown/stale statistics, and trigger byte balancing
+  even when replica counts are equal. The earlier checked byte-balance wording
+  overstated the default integration: source 1.0.461-beta has a load-update API
+  but no shipped caller, and the redistribution trigger is count-based. See the
+  [source/input follow-up](distributed-placement-load-inputs-2026-11-11.md).
+- [ ] Implement and qualify traffic-aware leader/hotspot placement. A stored QPS
+  field used by anti-entropy is not a QPS-based placement algorithm.
 - [x] Exclude dead, decommissioned, and draining nodes from new placement.
 - [x] Prefer failure-domain diversity before load equality.
 - [x] Limit concurrent moves per node and total bytes in flight.

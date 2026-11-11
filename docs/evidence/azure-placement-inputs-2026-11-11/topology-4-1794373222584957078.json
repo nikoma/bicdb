@@ -1,0 +1,371 @@
+{
+  "all_range_bytes_zero": true,
+  "all_range_qps_zero": true,
+  "completed_n4_relocations": 0,
+  "completed_n4_snapshot_bytes": 0,
+  "node_inputs": [
+    {
+      "capacity_bytes": 100000000000,
+      "node_id": "n0",
+      "used_bytes": 0
+    },
+    {
+      "capacity_bytes": 100000000000,
+      "node_id": "n1",
+      "used_bytes": 0
+    },
+    {
+      "capacity_bytes": 100000000000,
+      "node_id": "n2",
+      "used_bytes": 0
+    },
+    {
+      "capacity_bytes": 100000000000,
+      "node_id": "n3",
+      "used_bytes": 0
+    }
+  ],
+  "range_inputs": [
+    {
+      "approximate_bytes": 0,
+      "approximate_qps": 0,
+      "range_id": 1
+    },
+    {
+      "approximate_bytes": 0,
+      "approximate_qps": 0,
+      "range_id": 2
+    },
+    {
+      "approximate_bytes": 0,
+      "approximate_qps": 0,
+      "range_id": 3
+    },
+    {
+      "approximate_bytes": 0,
+      "approximate_qps": 0,
+      "range_id": 4
+    },
+    {
+      "approximate_bytes": 0,
+      "approximate_qps": 0,
+      "range_id": 5
+    },
+    {
+      "approximate_bytes": 0,
+      "approximate_qps": 0,
+      "range_id": 6
+    },
+    {
+      "approximate_bytes": 0,
+      "approximate_qps": 0,
+      "range_id": 7
+    },
+    {
+      "approximate_bytes": 0,
+      "approximate_qps": 0,
+      "range_id": 8
+    },
+    {
+      "approximate_bytes": 0,
+      "approximate_qps": 0,
+      "range_id": 9
+    },
+    {
+      "approximate_bytes": 0,
+      "approximate_qps": 0,
+      "range_id": 10
+    },
+    {
+      "approximate_bytes": 0,
+      "approximate_qps": 0,
+      "range_id": 11
+    },
+    {
+      "approximate_bytes": 0,
+      "approximate_qps": 0,
+      "range_id": 12
+    },
+    {
+      "approximate_bytes": 0,
+      "approximate_qps": 0,
+      "range_id": 13
+    },
+    {
+      "approximate_bytes": 0,
+      "approximate_qps": 0,
+      "range_id": 14
+    },
+    {
+      "approximate_bytes": 0,
+      "approximate_qps": 0,
+      "range_id": 15
+    },
+    {
+      "approximate_bytes": 0,
+      "approximate_qps": 0,
+      "range_id": 16
+    },
+    {
+      "approximate_bytes": 0,
+      "approximate_qps": 0,
+      "range_id": 17
+    },
+    {
+      "approximate_bytes": 0,
+      "approximate_qps": 0,
+      "range_id": 18
+    },
+    {
+      "approximate_bytes": 0,
+      "approximate_qps": 0,
+      "range_id": 19
+    },
+    {
+      "approximate_bytes": 0,
+      "approximate_qps": 0,
+      "range_id": 20
+    },
+    {
+      "approximate_bytes": 0,
+      "approximate_qps": 0,
+      "range_id": 21
+    },
+    {
+      "approximate_bytes": 0,
+      "approximate_qps": 0,
+      "range_id": 22
+    },
+    {
+      "approximate_bytes": 0,
+      "approximate_qps": 0,
+      "range_id": 23
+    },
+    {
+      "approximate_bytes": 0,
+      "approximate_qps": 0,
+      "range_id": 24
+    },
+    {
+      "approximate_bytes": 0,
+      "approximate_qps": 0,
+      "range_id": 25
+    },
+    {
+      "approximate_bytes": 0,
+      "approximate_qps": 0,
+      "range_id": 26
+    },
+    {
+      "approximate_bytes": 0,
+      "approximate_qps": 0,
+      "range_id": 27
+    },
+    {
+      "approximate_bytes": 0,
+      "approximate_qps": 0,
+      "range_id": 28
+    },
+    {
+      "approximate_bytes": 0,
+      "approximate_qps": 0,
+      "range_id": 29
+    },
+    {
+      "approximate_bytes": 0,
+      "approximate_qps": 0,
+      "range_id": 30
+    },
+    {
+      "approximate_bytes": 0,
+      "approximate_qps": 0,
+      "range_id": 31
+    },
+    {
+      "approximate_bytes": 0,
+      "approximate_qps": 0,
+      "range_id": 32
+    },
+    {
+      "approximate_bytes": 0,
+      "approximate_qps": 0,
+      "range_id": 33
+    },
+    {
+      "approximate_bytes": 0,
+      "approximate_qps": 0,
+      "range_id": 34
+    },
+    {
+      "approximate_bytes": 0,
+      "approximate_qps": 0,
+      "range_id": 35
+    },
+    {
+      "approximate_bytes": 0,
+      "approximate_qps": 0,
+      "range_id": 36
+    },
+    {
+      "approximate_bytes": 0,
+      "approximate_qps": 0,
+      "range_id": 37
+    },
+    {
+      "approximate_bytes": 0,
+      "approximate_qps": 0,
+      "range_id": 38
+    },
+    {
+      "approximate_bytes": 0,
+      "approximate_qps": 0,
+      "range_id": 39
+    },
+    {
+      "approximate_bytes": 0,
+      "approximate_qps": 0,
+      "range_id": 40
+    },
+    {
+      "approximate_bytes": 0,
+      "approximate_qps": 0,
+      "range_id": 41
+    },
+    {
+      "approximate_bytes": 0,
+      "approximate_qps": 0,
+      "range_id": 42
+    },
+    {
+      "approximate_bytes": 0,
+      "approximate_qps": 0,
+      "range_id": 43
+    },
+    {
+      "approximate_bytes": 0,
+      "approximate_qps": 0,
+      "range_id": 44
+    },
+    {
+      "approximate_bytes": 0,
+      "approximate_qps": 0,
+      "range_id": 45
+    },
+    {
+      "approximate_bytes": 0,
+      "approximate_qps": 0,
+      "range_id": 46
+    },
+    {
+      "approximate_bytes": 0,
+      "approximate_qps": 0,
+      "range_id": 47
+    },
+    {
+      "approximate_bytes": 0,
+      "approximate_qps": 0,
+      "range_id": 48
+    },
+    {
+      "approximate_bytes": 0,
+      "approximate_qps": 0,
+      "range_id": 49
+    },
+    {
+      "approximate_bytes": 0,
+      "approximate_qps": 0,
+      "range_id": 50
+    },
+    {
+      "approximate_bytes": 0,
+      "approximate_qps": 0,
+      "range_id": 51
+    },
+    {
+      "approximate_bytes": 0,
+      "approximate_qps": 0,
+      "range_id": 52
+    },
+    {
+      "approximate_bytes": 0,
+      "approximate_qps": 0,
+      "range_id": 53
+    },
+    {
+      "approximate_bytes": 0,
+      "approximate_qps": 0,
+      "range_id": 54
+    },
+    {
+      "approximate_bytes": 0,
+      "approximate_qps": 0,
+      "range_id": 55
+    },
+    {
+      "approximate_bytes": 0,
+      "approximate_qps": 0,
+      "range_id": 56
+    },
+    {
+      "approximate_bytes": 0,
+      "approximate_qps": 0,
+      "range_id": 57
+    },
+    {
+      "approximate_bytes": 0,
+      "approximate_qps": 0,
+      "range_id": 58
+    },
+    {
+      "approximate_bytes": 0,
+      "approximate_qps": 0,
+      "range_id": 59
+    },
+    {
+      "approximate_bytes": 0,
+      "approximate_qps": 0,
+      "range_id": 60
+    },
+    {
+      "approximate_bytes": 0,
+      "approximate_qps": 0,
+      "range_id": 61
+    },
+    {
+      "approximate_bytes": 0,
+      "approximate_qps": 0,
+      "range_id": 62
+    },
+    {
+      "approximate_bytes": 0,
+      "approximate_qps": 0,
+      "range_id": 63
+    },
+    {
+      "approximate_bytes": 0,
+      "approximate_qps": 0,
+      "range_id": 64
+    }
+  ],
+  "snapshot_metrics": {
+    "active_relocations": 0,
+    "failed_relocations": 0,
+    "generated_at_ms": 1794373222268,
+    "leader_skew": 0,
+    "leaders_total": 64,
+    "nodes_dead": 0,
+    "nodes_decommissioned": 0,
+    "nodes_draining": 0,
+    "nodes_live": 4,
+    "nodes_suspect": 0,
+    "nodes_total": 4,
+    "ranges_total": 64,
+    "replica_byte_skew": 0,
+    "replica_skew": 0,
+    "replicas_total": 192,
+    "topology_generation": 2132,
+    "unavailable_ranges": 0,
+    "under_replicated_ranges": 0
+  },
+  "source_commit": "b05385d4b033edf0db03f3eccf4bdd86f7c8eddb"
+}

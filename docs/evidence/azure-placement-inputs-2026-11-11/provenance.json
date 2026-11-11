@@ -1,0 +1,26 @@
+{
+  "exports": [
+    {
+      "source_artifact": "topology-4-1794373222584957078.json",
+      "source_raw_sha256": "9b8cc306b22cf1ffc088ddf072a8f5abe7216663d5ef248e02def68b9cd1c4d6",
+      "export_artifact": "topology-4-1794373222584957078.json",
+      "export_sha256": "af1f8424bf36cf3d42d5668333cb5fc19b4b67a713c34a9e3abf0d0681310c8e",
+      "transformation": "Allowlisted numeric planner/metric inputs and completed-movement counters; no network/certificate/account identities"
+    },
+    {
+      "source_artifact": "topology-5-1794373382138058536.json",
+      "source_raw_sha256": "049c192ee453ecc6619c719e1a62e4944ad9086f70e5195649c8a2a5cc483e23",
+      "export_artifact": "topology-5-1794373382138058536.json",
+      "export_sha256": "6423aaced87994122ea8378d0cdef13aea82b1c8afb2f08d48b8a8205b4a5687",
+      "transformation": "Allowlisted numeric planner/metric inputs and completed-movement counters; no network/certificate/account identities"
+    },
+    {
+      "source_artifact": "topology-5-1794373662849916481.json",
+      "source_raw_sha256": "c5b676b4715418e9f72c26fdbcbd1c018f3450c8481a768df42a005a32608aec",
+      "export_artifact": "topology-5-1794373662849916481.json",
+      "export_sha256": "df5c8b145696aa572e816a94a2a9bfe54974dcb5eb0e7015bf2c36891d8edba8",
+      "transformation": "Allowlisted numeric planner/metric inputs and completed-movement counters; no network/certificate/account identities"
+    }
+  ],
+  "raw_sources_retained_privately": true
+}

@@ -42,6 +42,22 @@ def verify(root,repo=None):
     assert 'stage-actual-origin-0' in gzip.decompress((root/'runs'/'corrected-native-decision'/'stderr.gz').read_bytes()).decode()
     patch=gzip.decompress((root/'engine.patch.gz').read_bytes());assert sha(patch)==c['patch_sha256']
     for d in c['earlier_source_deltas']:assert sha(gzip.decompress((root/d['path']).read_bytes()))==d['sha256']
+    follow=root/'followup-1cd';fc=json.loads((follow/'claims.json').read_text());fr=json.loads((follow/'result.json').read_text());fi=json.loads((follow/'inputs.json').read_text())
+    assert fc['source_revision']==fr['source_revision']=='1cd28523c2f8a3970635dcae4ca43977727b1afe' and all(fr[k]==v for k,v in fi.items())
+    assert fc['test_count']==1 and fc['actual_new_application_ack'] is True
+    for key in ['late_follower_caught_up_r2','incoming_activate_rpc_tested','strong_get_tested','physical_qualification','production_qualified']:assert fc[key] is False,key
+    assert fr['exit_code']==0 and fr['dirty_diff_sha256']==sha(b'') and fr['guard_stop_reason'] is None and fr['pause_episodes']==0
+    assert 'test result: ok. 1 passed; 0 failed; 0 ignored;' in (follow/'stdout').read_text()
+    fs=[json.loads(s) for s in gzip.decompress((follow/'resources.jsonl.gz').read_bytes()).decode().splitlines()]
+    assert fs and min(s['available_bytes'] for s in fs)==fr['minimum_available_bytes'] and all(not s['paused'] and s['available_bytes']>=12*2**30 and s['disk_free_bytes']>=8*2**30 for s in fs)
+    assert f'Compiling bicdb-core v1.0.471-beta ({TREE}/crates/bicdb-core)' in gzip.decompress((follow/'stderr.gz').read_bytes()).decode()
+    recover=json.loads((follow/'rplusone-coordinator-recovery.json').read_text());origin=json.loads((follow/'rplusone-origin-result.json').read_text());late=json.loads((follow/'rplusone-late-activation-report.json').read_text())
+    assert recover['result']==1 and recover['error'] is None and recover['cached_epoch_seeded'] is False
+    assert origin['acknowledged'] is True and origin['source_native']['native_applied_index']==2 and origin['late_node_native']['native_applied_index']==origin['late_node_raw']['last_index']==1
+    assert late['actual_new_application_ack'] is True and late['source_actual_native']==2 and late['late_actual_native']==1 and late['late_row2_present'] is False and late['current_native_catchup_of_late_follower_proven'] is False
+    assert late['source_activated_anchor']['range_index']==late['late_activated_anchor']['range_index']==1 and late['old_r1_decision_not_ready_or_current_head'] is True
+    ledger=[json.loads(s) for s in (follow/'controller-rplusone-ack.jsonl').read_text().splitlines()];assert len(ledger)==1 and ledger[0]['range_index']==2 and ledger[0]['key']=='actual-rplusone-after-activation'
+    followpatch=gzip.decompress((follow/'source-from-7b.patch.gz').read_bytes());assert sha(followpatch)==fc['patch_sha256']
     reconstructed=False
     if repo:
         assert subprocess.check_output(['git','rev-parse',BASE+'^{commit}'],cwd=repo,text=True).strip()==BASE
@@ -53,7 +69,11 @@ def verify(root,repo=None):
             source=json.loads((root/'source-files.json').read_text());assert {r['path'] for r in source}=={p.relative_to(tmp).as_posix() for p in (tmp/'crates/bicdb-core/src').rglob('*') if p.is_file()}
             for r in source:
                 b=(tmp/r['path']).read_bytes();assert len(b)==r['bytes'] and sha(b)==r['sha256'],r['path']
+            subprocess.run(['git','apply','--whitespace=nowarn','-'],input=followpatch,cwd=tmp,capture_output=True,check=True,timeout=60)
+            follow_source=json.loads((follow/'source-files.json').read_text());assert {r['path'] for r in follow_source}=={p.relative_to(tmp).as_posix() for p in (tmp/'crates/bicdb-core/src').rglob('*') if p.is_file()}
+            for r in follow_source:
+                b=(tmp/r['path']).read_bytes();assert len(b)==r['bytes'] and sha(b)==r['sha256'],r['path']
         reconstructed=True
-    return {'source_revision':REV,'passing_tests':10,'separate_expected_or_fixture_failures':3,'retained_evidence_verified':True,'source_reconstructed':reconstructed,'rust_tests_rerun':False,'new_application_ack_after_activation':False,'production_qualified':False}
+    return {'source_revision':REV,'passing_tests':10,'followup_revision':fc['source_revision'],'followup_passing_tests':1,'followup_actual_ack_r2':True,'late_follower_caught_up_r2':False,'separate_expected_or_fixture_failures':3,'retained_evidence_verified':True,'source_reconstructed':reconstructed,'rust_tests_rerun':False,'production_qualified':False}
 if __name__=='__main__':
     p=argparse.ArgumentParser();p.add_argument('directory',nargs='?',default=Path(__file__).parent);p.add_argument('--repo');a=p.parse_args();print(json.dumps(verify(a.directory,a.repo),sort_keys=True))

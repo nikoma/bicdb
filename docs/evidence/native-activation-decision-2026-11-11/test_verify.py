@@ -23,4 +23,7 @@ class TamperTests(unittest.TestCase):
         path=self.root/'runs/selected-key-decision/resources.jsonl.gz';rows=[json.loads(s) for s in gzip.decompress(path.read_bytes()).decode().splitlines()];rows[0]['paused']=True
         tmp=path.with_name(path.name+'.tmp');tmp.write_bytes(gzip.compress(('\n'.join(json.dumps(r) for r in rows)+'\n').encode(),mtime=0));os.replace(tmp,path);manifest(self.root)
         with self.assertRaises(AssertionError):v.verify(self.root)
+    def test_old_anchor_cannot_claim_current_follower_catchup(self):
+        path=self.root/'followup-1cd/claims.json';c=json.loads(path.read_text());c['late_follower_caught_up_r2']=True;write(path,c);manifest(self.root)
+        with self.assertRaises(AssertionError):v.verify(self.root)
 if __name__=='__main__':unittest.main()

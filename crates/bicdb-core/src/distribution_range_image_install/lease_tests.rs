@@ -168,10 +168,26 @@ impl LeaseFixture {
             .range_mutation_gate()
             .try_enter(self.scope.range_id)
             .is_err());
-        self.service
+        let catalog = self.persisted_catalog();
+        let key = self.scope.range_id.get().to_string();
+        let saved = &catalog["catalog"]["recovery_fences"][&key];
+        assert_eq!(saved["phase"], "Active");
+        assert_eq!(saved["scope"], serde_json::to_value(&self.scope).unwrap());
+        let has_image_intent = catalog["catalog"]["image_install_intents"]
+            .get(&key)
+            .is_some();
+        let generic = self
+            .service
             .lock()
-            .require_persisted_recovery_scope(&self.scope)
-            .unwrap();
+            .require_persisted_recovery_scope(&self.scope);
+        if has_image_intent {
+            assert!(
+                generic.is_err(),
+                "generic recovery must still refuse the retained image intent"
+            );
+        } else {
+            generic.unwrap();
+        }
     }
     fn begin(
         &self,

@@ -59,7 +59,8 @@ mod integrity_reservations;
 mod pitr_maintenance;
 mod range_image_native;
 pub(crate) use range_image_native::{
-    FreshRangeGenesisAuthority, RangeImageBirthMember, RangeImageBirthSpec, SourceRangeImageLineage,
+    FreshRangeGenesisAuthority, NativeRangePrefixObservation, NativeRecoveryAdmission,
+    RangeImageBirthMember, RangeImageBirthSpec, SourceRangeImageLineage,
 };
 mod range_image_bindings;
 pub(crate) use range_image_bindings::RangeImageDbBindings;

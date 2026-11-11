@@ -38,6 +38,9 @@ use crate::distribution_range_mutation::{
 use crate::distribution_supervisor::ClusterBackupMetadata;
 use crate::error::{BicDbError, Result};
 
+mod native_prefix;
+pub(crate) use native_prefix::{NativeRangeCommandIntent, NativeRangeCommitCertificate};
+
 pub const RANGE_WRITE_LOG_FORMAT_VERSION: u32 = 3;
 pub const RANGE_WRITE_PROTOCOL_VERSION: u32 = 2;
 pub const DEFAULT_RANGE_WRITE_LOG: &str = "cluster-range-write-log.json";

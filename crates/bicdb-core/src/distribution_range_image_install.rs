@@ -6,7 +6,10 @@ use parking_lot::RwLock;
 use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
-use crate::db::{NativeInstalledRangeImageBase, NativeRecoveryAdmission, RangeImageDbBindings};
+use crate::db::{
+    NativeInstalledRangeImageBase, NativeRecoveryAdmission, NativeTargetImageVerificationProgress,
+    NativeTargetImageVerifier, RangeImageDbBindings,
+};
 use crate::distribution::{distribution_key_token, RangeSnapshotOptions};
 use crate::distribution_range_consensus::{
     ImageInstallPurpose, NativeImageInstallRole, RangeWriteStore, TargetImageInstallFence,
@@ -57,6 +60,102 @@ pub(crate) struct NativeRangeImageInstaller {
     bytes: u64,
     complete: bool,
     previous_step: Option<RangeImageStepV1>,
+}
+
+/// Owns the unchanged target image and actual source certificate across bounded
+/// verification steps. Callers release service/DB locks and renew fresh roles
+/// between steps; neither waiting nor a partial scan manufactures readiness.
+pub(crate) struct NativeRangeImageVerification {
+    database: Arc<RwLock<BicDb>>,
+    admission: NativeRecoveryAdmission,
+    frozen: FrozenRangeMutationPermit,
+    fence: TargetImageInstallFence,
+    bindings: RangeImageDbBindings,
+    source: CompletedNativeRangeImageSource,
+    verifier: NativeTargetImageVerifier,
+    recover_completed: bool,
+}
+impl NativeRangeImageVerification {
+    pub(crate) fn advance(
+        &mut self,
+        store: &RangeWriteStore,
+        role: &NativeImageInstallRole<'_>,
+        cancellation: &CancellationToken,
+    ) -> Result<NativeTargetImageVerificationProgress> {
+        self.source.require_current()?;
+        let db = self
+            .database
+            .try_read()
+            .ok_or_else(|| invalid("target DB busy during bounded verification"))?;
+        store.validate_native_image_install_fence(
+            &self.fence,
+            &db,
+            &self.admission,
+            role,
+            &self.frozen,
+        )?;
+        db.advance_native_target_image_verification(
+            &mut self.verifier,
+            &self.fence,
+            &self.admission,
+            &self.frozen,
+            &self.bindings,
+            role,
+            &self.source,
+            cancellation,
+        )
+    }
+    pub(crate) fn finish(
+        self,
+        store: &RangeWriteStore,
+        role: &NativeImageInstallRole<'_>,
+        cancellation: &CancellationToken,
+    ) -> Result<VerifiedNativeRangeImageInstall> {
+        self.source.require_current()?;
+        let db = self
+            .database
+            .try_read()
+            .ok_or_else(|| invalid("target DB busy before verified native publication"))?;
+        store.validate_native_image_install_fence(
+            &self.fence,
+            &db,
+            &self.admission,
+            role,
+            &self.frozen,
+        )?;
+        let contents = db.finish_native_target_image_verification(
+            self.verifier,
+            &self.fence,
+            &self.admission,
+            &self.frozen,
+            &self.bindings,
+            role,
+            &self.source,
+            cancellation,
+        )?;
+        let base = db.finish_native_target_image_install(
+            &self.fence,
+            &self.admission,
+            &self.frozen,
+            &self.bindings,
+            role,
+            &self.source,
+            self.recover_completed,
+            contents,
+            cancellation,
+        )?;
+        drop(db);
+        let verified = VerifiedNativeRangeImageInstall {
+            database: self.database,
+            admission: self.admission,
+            frozen: self.frozen,
+            fence: self.fence,
+            source: self.source,
+            base,
+        };
+        verified.require_current(store, role)?;
+        Ok(verified)
+    }
 }
 
 /// Not deserializable. Its construction consumed the actual complete source
@@ -113,7 +212,7 @@ impl NativeRangeImageInstaller {
         purpose: ImageInstallPurpose,
         attempt_id: Uuid,
         cancellation: &CancellationToken,
-    ) -> Result<VerifiedNativeRangeImageInstall> {
+    ) -> Result<NativeRangeImageVerification> {
         cancellation.check()?;
         source.require_current()?;
         let db = database
@@ -126,7 +225,7 @@ impl NativeRangeImageInstaller {
         let fence = store.reacquire_completed_native_image_install(
             &db, &admission, &source, role, &frozen, purpose, attempt_id, &prior,
         )?;
-        let base = db.finish_native_target_image_install(
+        let verifier = db.begin_native_target_image_verification(
             &fence,
             &admission,
             &frozen,
@@ -137,16 +236,16 @@ impl NativeRangeImageInstaller {
             cancellation,
         )?;
         drop(db);
-        let verified = VerifiedNativeRangeImageInstall {
+        Ok(NativeRangeImageVerification {
             database,
             admission,
             frozen,
             fence,
+            bindings,
             source,
-            base,
-        };
-        verified.require_current(store, role)?;
-        Ok(verified)
+            verifier,
+            recover_completed: true,
+        })
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -383,13 +482,13 @@ impl NativeRangeImageInstaller {
         Ok(())
     }
 
-    pub(crate) fn complete(
+    pub(crate) fn begin_verification(
         self,
         store: &RangeWriteStore,
         role: &NativeImageInstallRole<'_>,
         source: CompletedNativeRangeImageSource,
         cancellation: &CancellationToken,
-    ) -> Result<VerifiedNativeRangeImageInstall> {
+    ) -> Result<NativeRangeImageVerification> {
         source.require_current()?;
         self.validate(store, role)?;
         self.require_history_before_rows()?;
@@ -415,7 +514,7 @@ impl NativeRangeImageInstaller {
             .database
             .try_read()
             .ok_or_else(|| invalid("target DB busy before native image verification"))?;
-        let base = db.finish_native_target_image_install(
+        let verifier = db.begin_native_target_image_verification(
             &self.fence,
             &self.admission,
             &self.frozen,
@@ -426,16 +525,16 @@ impl NativeRangeImageInstaller {
             cancellation,
         )?;
         drop(db);
-        let verified = VerifiedNativeRangeImageInstall {
+        Ok(NativeRangeImageVerification {
             database: self.database,
             admission: self.admission,
             frozen: self.frozen,
             fence: self.fence,
+            bindings: self.bindings,
             source,
-            base,
-        };
-        verified.require_current(store, role)?;
-        Ok(verified)
+            verifier,
+            recover_completed: false,
+        })
     }
 }
 
@@ -947,6 +1046,55 @@ pub(crate) mod tests {
         }
     }
 
+    fn finish_verification(
+        fixture: &Fixture,
+        store: &RangeWriteStore,
+        mut verification: NativeRangeImageVerification,
+    ) -> VerifiedNativeRangeImageInstall {
+        let mut complete = false;
+        for _ in 0..128 {
+            let role = fixture.role();
+            if verification
+                .advance(
+                    store,
+                    &NativeImageInstallRole::CommittedHandoff(&role),
+                    &CancellationToken::uncancelable(),
+                )
+                .unwrap()
+                == NativeTargetImageVerificationProgress::Complete
+            {
+                complete = true;
+                break;
+            }
+        }
+        assert!(complete, "bounded R0 fixture verification did not complete");
+        let role = fixture.role();
+        verification
+            .finish(
+                store,
+                &NativeImageInstallRole::CommittedHandoff(&role),
+                &CancellationToken::uncancelable(),
+            )
+            .unwrap()
+    }
+    fn verify_install(
+        fixture: &Fixture,
+        store: &RangeWriteStore,
+        install: NativeRangeImageInstaller,
+        source: CompletedNativeRangeImageSource,
+    ) -> VerifiedNativeRangeImageInstall {
+        let role = fixture.role();
+        let verification = install
+            .begin_verification(
+                store,
+                &NativeImageInstallRole::CommittedHandoff(&role),
+                source,
+                &CancellationToken::uncancelable(),
+            )
+            .unwrap();
+        finish_verification(fixture, store, verification)
+    }
+
     #[test]
     fn actual_native_r0_copy_removes_extra_rows_and_preserves_target_namespace_identity() {
         let mut fixture = Fixture::new();
@@ -996,15 +1144,7 @@ pub(crate) mod tests {
         fixture.clear(&store, &mut install);
         fixture.copy(&store, &mut install);
         let source = fixture.capture.take().unwrap().complete().unwrap();
-        let role = fixture.role();
-        let verified = install
-            .complete(
-                &store,
-                &NativeImageInstallRole::CommittedHandoff(&role),
-                source,
-                &CancellationToken::uncancelable(),
-            )
-            .unwrap();
+        let verified = verify_install(&fixture, &store, install, source);
         assert_eq!(verified.base().range_index(), 0);
         assert_eq!(
             verified.base().local_namespace_ids(),
@@ -1097,15 +1237,7 @@ pub(crate) mod tests {
             .is_err());
         fixture.copy(&store, &mut new);
         let source = fixture.capture.take().unwrap().complete().unwrap();
-        let role = fixture.role();
-        let verified = new
-            .complete(
-                &store,
-                &NativeImageInstallRole::CommittedHandoff(&role),
-                source,
-                &CancellationToken::uncancelable(),
-            )
-            .unwrap();
+        let verified = verify_install(&fixture, &store, new, source);
         assert_eq!(verified.fence().attempt_id(), new_attempt);
     }
     #[test]
@@ -1117,15 +1249,7 @@ pub(crate) mod tests {
         fixture.clear(&store, &mut install);
         fixture.copy(&store, &mut install);
         let source = fixture.capture.take().unwrap().complete().unwrap();
-        let role = fixture.role();
-        let verified = install
-            .complete(
-                &store,
-                &NativeImageInstallRole::CommittedHandoff(&role),
-                source,
-                &CancellationToken::uncancelable(),
-            )
-            .unwrap();
+        let verified = verify_install(&fixture, &store, install, source);
         let first_receipt = verified.base().native_receipt_sha256().to_string();
         let source_open = fixture
             .source
@@ -1190,6 +1314,7 @@ pub(crate) mod tests {
             &CancellationToken::uncancelable(),
         )
         .unwrap();
+        let recovered = finish_verification(&fixture, &store, recovered);
         assert_eq!(recovered.fence().attempt_id(), attempt);
         assert_ne!(
             recovered.base().native_receipt_sha256(),

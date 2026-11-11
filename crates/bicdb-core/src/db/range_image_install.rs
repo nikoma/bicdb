@@ -134,6 +134,85 @@ pub(crate) struct NativeInstalledRangeImageBase {
     schema_generation: u64,
 }
 
+/// Owned progress from actual native target scans; no serde/numeric constructor.
+pub(crate) struct NativeTargetImageVerifier {
+    database_incarnation: String,
+    birth_id: Uuid,
+    intent_sha256: String,
+    reserved: u64,
+    generations: (Uuid, Uuid),
+    catalog_sha256: String,
+    content: sha2::Sha256,
+    expected_root: String,
+    expected_records: u64,
+    expected_bytes: u64,
+    collection: usize,
+    after: Option<String>,
+    min_snapshot: Option<u64>,
+    records: u64,
+    bytes: u64,
+    complete: bool,
+    invalid: bool,
+    recover_completed: bool,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum NativeTargetImageVerificationProgress {
+    WaitingForDurability,
+    WaitingForVisibility,
+    Scanning,
+    Complete,
+}
+pub(crate) struct VerifiedNativeTargetImageContents {
+    state: NativeTargetImageVerifier,
+}
+impl NativeTargetImageVerifier {
+    fn require_current(
+        &self,
+        database: &BicDb,
+        fence: &TargetImageInstallFence,
+        admission: &NativeRecoveryAdmission,
+        bindings: &RangeImageDbBindings,
+        source: &crate::distribution_range_image::CompletedNativeRangeImageSource,
+    ) -> Result<()> {
+        if self.invalid
+            || self.database_incarnation != database.incarnation
+            || self.birth_id != admission.birth_id()
+            || self.intent_sha256 != fence.intent_sha256()
+            || self.expected_root != source.seal().image_root_sha256
+            || self.expected_records != source.seal().record_count
+            || self.expected_bytes != source.seal().serialized_record_bytes
+            || self.generations != database.native_range_image_generation_pair(fence.range().id)?
+        {
+            return Err(invalid(
+                "bounded target verification scope/physical image changed",
+            ));
+        }
+        database.validate_range_image_bindings(bindings)
+    }
+}
+impl VerifiedNativeTargetImageContents {
+    fn require_current(
+        &self,
+        database: &BicDb,
+        fence: &TargetImageInstallFence,
+        admission: &NativeRecoveryAdmission,
+        bindings: &RangeImageDbBindings,
+        source: &crate::distribution_range_image::CompletedNativeRangeImageSource,
+    ) -> Result<()> {
+        self.state
+            .require_current(database, fence, admission, bindings, source)?;
+        if !self.state.complete
+            || database.replication_shippable_seq() < self.state.reserved
+            || database.current_visibility_watermark() < self.state.reserved
+        {
+            return Err(invalid(
+                "complete target proof lost its actual local durable/visible bound",
+            ));
+        }
+        Ok(())
+    }
+}
+
 /// Actual target-global snapshot/durability domain, distinct from consensus R
 /// and from the source's reservation B. Only a native installed base issues it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -304,10 +383,8 @@ impl BicDb {
         Ok(())
     }
 
-    /// Recompute the complete actual target image under the still-owned
-    /// freeze, then order its native receipt after every data/index page txn.
-    /// Source wire receipts and native row counts alone cannot call this path.
-    pub(crate) fn finish_native_target_image_install(
+    #[allow(clippy::too_many_arguments)]
+    fn require_native_target_image_scope(
         &self,
         fence: &TargetImageInstallFence,
         admission: &NativeRecoveryAdmission,
@@ -317,8 +394,7 @@ impl BicDb {
         source: &crate::distribution_range_image::CompletedNativeRangeImageSource,
         recover_completed: bool,
         cancellation: &CancellationToken,
-    ) -> Result<NativeInstalledRangeImageBase> {
-        use crate::distribution_range_image::content_hasher;
+    ) -> Result<()> {
         let seal = source.seal();
         if fence.source_range_index() != 0 {
             return Err(invalid(
@@ -390,12 +466,34 @@ impl BicDb {
         } else {
             return Err(invalid("no actual native Installing record"));
         }
-        let reserved = self.current_commit_seq();
-        if self.replication_shippable_seq() < reserved {
-            return Err(invalid(
-                "target actual durable prefix has not reached captured B; retry outside DB locks",
-            ));
-        }
+        Ok(())
+    }
+
+    /// Capture actual target B exactly once. Waiting/scan progress is returned
+    /// by bounded steps, so callers release database/service locks between them.
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn begin_native_target_image_verification(
+        &self,
+        fence: &TargetImageInstallFence,
+        admission: &NativeRecoveryAdmission,
+        frozen: &FrozenRangeMutationPermit,
+        bindings: &RangeImageDbBindings,
+        role: &NativeImageInstallRole<'_>,
+        source: &crate::distribution_range_image::CompletedNativeRangeImageSource,
+        recover_completed: bool,
+        cancellation: &CancellationToken,
+    ) -> Result<NativeTargetImageVerifier> {
+        self.require_native_target_image_scope(
+            fence,
+            admission,
+            frozen,
+            bindings,
+            role,
+            source,
+            recover_completed,
+            cancellation,
+        )?;
+        let seal = source.seal();
         let catalog = canonical_range_image_catalog(
             fence.cluster_id(),
             fence.range(),
@@ -410,66 +508,202 @@ impl BicDb {
                 "complete target portable catalog differs from completed source",
             ));
         }
-        let mut content = content_hasher(&catalog);
-        let mut records = 0u64;
-        let mut bytes = 0u64;
-        let mut min_snapshot = None::<u64>;
-        let options = crate::distribution::RangeSnapshotOptions::default();
-        // The scan includes every target key, including keys never mentioned
-        // by a copied batch. Thus extras cannot hide behind the source cursor.
-        for meta in bindings.collections() {
-            let mut after = None::<String>;
-            loop {
-                cancellation.check()?;
-                fence.require_live_role(role)?;
-                self.validate_range_image_bindings(bindings)?;
-                let export = self.for_each_range_snapshot_batch_with_cancellation(
-                    &meta.name,
-                    fence.range(),
-                    after.as_deref(),
-                    &options,
-                    16_384,
-                    cancellation,
-                    |batch| {
-                        for record in batch.records {
-                            let encoded = bounded_json(&record, 8 * 1024 * 1024)?;
-                            for frame in [meta.name.as_bytes(), encoded.as_slice()] {
-                                content.update((frame.len() as u64).to_be_bytes());
-                                content.update(frame);
-                            }
-                            records = records
-                                .checked_add(1)
-                                .ok_or_else(|| invalid("target record count overflow"))?;
-                            bytes = bytes
-                                .checked_add(encoded.len() as u64)
-                                .ok_or_else(|| invalid("target byte count overflow"))?;
-                        }
-                        Ok(false)
-                    },
-                )?;
-                if export.snapshot_commit_sequence < reserved {
-                    return Err(invalid("actual target snapshot below captured target B"));
-                }
-                min_snapshot = Some(min_snapshot.map_or(export.snapshot_commit_sequence, |old| {
-                    old.min(export.snapshot_commit_sequence)
-                }));
-                if export.completed {
-                    break;
-                }
-                if export.resume_after_key <= after {
-                    return Err(invalid("target complete scan failed to advance"));
-                }
-                after = export.resume_after_key;
-            }
+        Ok(NativeTargetImageVerifier {
+            database_incarnation: self.incarnation.clone(),
+            birth_id: admission.birth_id(),
+            intent_sha256: fence.intent_sha256().to_string(),
+            reserved: self.current_commit_seq(),
+            generations: self.native_range_image_generation_pair(fence.range().id)?,
+            catalog_sha256,
+            content: crate::distribution_range_image::content_hasher(&catalog),
+            expected_root: seal.image_root_sha256.clone(),
+            expected_records: seal.record_count,
+            expected_bytes: seal.serialized_record_bytes,
+            collection: 0,
+            after: None,
+            min_snapshot: None,
+            records: 0,
+            bytes: 0,
+            complete: bindings.collections().is_empty(),
+            invalid: false,
+            recover_completed,
+        })
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn advance_native_target_image_verification(
+        &self,
+        state: &mut NativeTargetImageVerifier,
+        fence: &TargetImageInstallFence,
+        admission: &NativeRecoveryAdmission,
+        frozen: &FrozenRangeMutationPermit,
+        bindings: &RangeImageDbBindings,
+        role: &NativeImageInstallRole<'_>,
+        source: &crate::distribution_range_image::CompletedNativeRangeImageSource,
+        cancellation: &CancellationToken,
+    ) -> Result<NativeTargetImageVerificationProgress> {
+        self.require_native_target_image_scope(
+            fence,
+            admission,
+            frozen,
+            bindings,
+            role,
+            source,
+            state.recover_completed,
+            cancellation,
+        )?;
+        state.require_current(self, fence, admission, bindings, source)?;
+        if self.replication_shippable_seq() < state.reserved {
+            return Ok(NativeTargetImageVerificationProgress::WaitingForDurability);
         }
-        if records != seal.record_count
-            || bytes != seal.serialized_record_bytes
-            || hex::encode(content.finalize()) != seal.image_root_sha256
+        if self.current_visibility_watermark() < state.reserved {
+            return Ok(NativeTargetImageVerificationProgress::WaitingForVisibility);
+        }
+        if state.complete {
+            return Ok(NativeTargetImageVerificationProgress::Complete);
+        }
+        let meta = &bindings.collections()[state.collection];
+        let mut content = state.content.clone();
+        let mut records = state.records;
+        let mut bytes = state.bytes;
+        let exported = self.for_each_range_snapshot_batch_with_cancellation(
+            &meta.name,
+            fence.range(),
+            state.after.as_deref(),
+            &crate::distribution::RangeSnapshotOptions::default(),
+            16_384,
+            cancellation,
+            |batch| {
+                for record in batch.records {
+                    let encoded = bounded_json(&record, 8 * 1024 * 1024)?;
+                    for frame in [meta.name.as_bytes(), encoded.as_slice()] {
+                        content.update((frame.len() as u64).to_be_bytes());
+                        content.update(frame);
+                    }
+                    records = records
+                        .checked_add(1)
+                        .ok_or_else(|| invalid("target record count overflow"))?;
+                    bytes = bytes
+                        .checked_add(encoded.len() as u64)
+                        .ok_or_else(|| invalid("target byte count overflow"))?;
+                }
+                Ok(false)
+            },
+        )?;
+        if exported.snapshot_commit_sequence < state.reserved {
+            return Ok(NativeTargetImageVerificationProgress::WaitingForVisibility);
+        }
+        let (collection, after) = if exported.completed {
+            (state.collection + 1, None)
+        } else {
+            if exported.resume_after_key <= state.after {
+                return Err(invalid(
+                    "bounded target verification cursor failed to advance",
+                ));
+            }
+            (state.collection, exported.resume_after_key)
+        };
+        let complete = collection == bindings.collections().len();
+        if complete
+            && (records != state.expected_records
+                || bytes != state.expected_bytes
+                || hex::encode(content.clone().finalize()) != state.expected_root)
         {
+            state.invalid = true;
             return Err(invalid(
                 "actual complete target contents differ from completed source (including extras)",
             ));
         }
+        state.require_current(self, fence, admission, bindings, source)?;
+        fence.require_live_role(role)?;
+        cancellation.check()?;
+        state.content = content;
+        state.records = records;
+        state.bytes = bytes;
+        state.min_snapshot = Some(
+            state
+                .min_snapshot
+                .map_or(exported.snapshot_commit_sequence, |old| {
+                    old.min(exported.snapshot_commit_sequence)
+                }),
+        );
+        state.collection = collection;
+        state.after = after;
+        state.complete = complete;
+        Ok(if complete {
+            NativeTargetImageVerificationProgress::Complete
+        } else {
+            NativeTargetImageVerificationProgress::Scanning
+        })
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn finish_native_target_image_verification(
+        &self,
+        state: NativeTargetImageVerifier,
+        fence: &TargetImageInstallFence,
+        admission: &NativeRecoveryAdmission,
+        frozen: &FrozenRangeMutationPermit,
+        bindings: &RangeImageDbBindings,
+        role: &NativeImageInstallRole<'_>,
+        source: &crate::distribution_range_image::CompletedNativeRangeImageSource,
+        cancellation: &CancellationToken,
+    ) -> Result<VerifiedNativeTargetImageContents> {
+        self.require_native_target_image_scope(
+            fence,
+            admission,
+            frozen,
+            bindings,
+            role,
+            source,
+            state.recover_completed,
+            cancellation,
+        )?;
+        state.require_current(self, fence, admission, bindings, source)?;
+        if !state.complete
+            || self.replication_shippable_seq() < state.reserved
+            || self.current_visibility_watermark() < state.reserved
+            || state.records != state.expected_records
+            || state.bytes != state.expected_bytes
+            || hex::encode(state.content.clone().finalize()) != state.expected_root
+        {
+            return Err(invalid(
+                "target complete-content proof is incomplete/not locally visible and durable",
+            ));
+        }
+        Ok(VerifiedNativeTargetImageContents { state })
+    }
+
+    /// Publish only after the actual bounded complete-image producer finished.
+    pub(crate) fn finish_native_target_image_install(
+        &self,
+        fence: &TargetImageInstallFence,
+        admission: &NativeRecoveryAdmission,
+        frozen: &FrozenRangeMutationPermit,
+        bindings: &RangeImageDbBindings,
+        role: &NativeImageInstallRole<'_>,
+        source: &crate::distribution_range_image::CompletedNativeRangeImageSource,
+        recover_completed: bool,
+        contents: VerifiedNativeTargetImageContents,
+        cancellation: &CancellationToken,
+    ) -> Result<NativeInstalledRangeImageBase> {
+        let seal = source.seal();
+        self.require_native_target_image_scope(
+            fence,
+            admission,
+            frozen,
+            bindings,
+            role,
+            source,
+            recover_completed,
+            cancellation,
+        )?;
+        contents.require_current(self, fence, admission, bindings, source)?;
+        let reserved = contents.state.reserved;
+        let min_snapshot = contents.state.min_snapshot;
+        let records = contents.state.records;
+        let bytes = contents.state.bytes;
+        let catalog_sha256 = contents.state.catalog_sha256.clone();
         self.validate_range_image_bindings(bindings)?;
         self.range_mutations
             .validate_quiescent_frozen(fence.range().id, frozen)?;

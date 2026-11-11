@@ -59,7 +59,8 @@ mod integrity_reservations;
 mod pitr_maintenance;
 mod range_image_install;
 pub(crate) use range_image_install::{
-    NativeInstalledRangeImageBase, TargetNativeImageSnapshotBound,
+    NativeInstalledRangeImageBase, NativeTargetImageVerificationProgress,
+    NativeTargetImageVerifier, TargetNativeImageSnapshotBound,
 };
 mod range_image_native;
 pub(crate) use range_image_native::{

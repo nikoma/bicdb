@@ -29,6 +29,47 @@ fn database(path: &std::path::Path, mode: StorageMode) -> BicDb {
 }
 
 #[test]
+fn inspecting_exact_scope_coverage_does_not_delegate_or_release_authority() {
+    for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
+        let root = tempfile::tempdir().unwrap();
+        let db = database(root.path(), mode.clone());
+        let owner = db.begin_transaction().unwrap();
+        let token = reserve(&owner, &["first"]).unwrap();
+        assert!(db
+            .catalog_scope_covers_record(&token, "catalog", "first")
+            .unwrap());
+        assert!(!db
+            .catalog_scope_covers_record(&token, "catalog", "second")
+            .unwrap());
+        assert!(!db
+            .catalog_scope_covers_record(&token, "another", "first")
+            .unwrap());
+        let mut foreign = db.begin_transaction().unwrap();
+        assert!(foreign.check_catalog_scope_owner(&token).is_err());
+        assert!(matches!(
+            foreign.update("catalog", value("first", 99)),
+            Err(BicDbError::TransactionConflict(_))
+        ));
+        assert_eq!(foreign.write_len(), 0);
+        foreign.rollback().unwrap();
+        let elsewhere = tempfile::tempdir().unwrap();
+        let other_db = database(elsewhere.path(), mode);
+        assert!(other_db
+            .catalog_scope_covers_record(&token, "catalog", "first")
+            .is_err());
+        owner.release_catalog_scope(&token).unwrap();
+        assert!(db
+            .catalog_scope_covers_record(&token, "catalog", "first")
+            .is_err());
+        owner.rollback().unwrap();
+        assert_eq!(
+            db.get("catalog", "first").unwrap().unwrap().metadata["value"],
+            0
+        );
+    }
+}
+
+#[test]
 fn a_catalog_record_reservation_leaves_an_unrelated_record_readable() {
     for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
         let root = tempfile::tempdir().unwrap();

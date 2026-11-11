@@ -136,6 +136,15 @@ fn validate_creation(intent: &CreationIntent, id: &str) -> Result<()> {
 }
 
 fn rollback_creation(db: &mut BicDb, intent: &CreationIntent) -> Result<()> {
+    rollback_creation_with_owner(db, intent, None, &[])
+}
+
+fn rollback_creation_with_owner(
+    db: &mut BicDb,
+    intent: &CreationIntent,
+    owner: Option<&Transaction>,
+    contexts: &[String],
+) -> Result<()> {
     let collections = db.collections();
     let target = collections.iter().find(|meta| meta.name == intent.table);
     let staged = collections.iter().find(|meta| meta.name == intent.storage);
@@ -151,20 +160,67 @@ fn rollback_creation(db: &mut BicDb, intent: &CreationIntent) -> Result<()> {
     if target.is_some() {
         // Every removed object belongs to the independently proven backing;
         // never prune a collection merely because its logical name was reused.
-        delete_schema(db, &intent.table)?;
-        for grant in list_privileges(db)? {
+        let (grants, triggers, sequences) = {
+            // Full rollback consumed the business reader. Re-enter only the
+            // independently checked undecided context while discovering this
+            // backing's metadata; mutation guards below are per record.
+            let _access = super::rename_journal::record_mutation_access(
+                db,
+                owner,
+                contexts,
+                SCHEMA_COLLECTION,
+                &intent.table,
+            )?;
+            (
+                list_privileges(db)?,
+                list_triggers(db)?,
+                list_sequences(db)?,
+            )
+        };
+        {
+            let _access = super::rename_journal::record_mutation_access(
+                db,
+                owner,
+                contexts,
+                SCHEMA_COLLECTION,
+                &intent.table,
+            )?;
+            delete_schema(db, &intent.table)?;
+        }
+        for grant in grants {
             if grant.object_type == PrivilegeObjectType::Table && grant.object_name == intent.table
             {
+                let _access = super::rename_journal::record_mutation_access(
+                    db,
+                    owner,
+                    contexts,
+                    PRIVILEGE_COLLECTION,
+                    &privilege_key(&grant),
+                )?;
                 delete_privilege(db, &grant)?;
             }
         }
-        for trigger in list_triggers(db)? {
+        for trigger in triggers {
             if trigger.table_name == intent.table {
+                let _access = super::rename_journal::record_mutation_access(
+                    db,
+                    owner,
+                    contexts,
+                    TRIGGER_COLLECTION,
+                    &trigger_key(&intent.table, &trigger.name),
+                )?;
                 delete_trigger(db, &trigger.name, Some(&intent.table))?;
             }
         }
-        for sequence in list_sequences(db)? {
+        for sequence in sequences {
             if sequence.owned_by_table.as_deref() == Some(&intent.table) {
+                let _access = super::rename_journal::record_mutation_access(
+                    db,
+                    owner,
+                    contexts,
+                    SEQUENCE_COLLECTION,
+                    &sequence.name,
+                )?;
                 delete_sequence(db, &sequence.name)?;
             }
         }
@@ -176,13 +232,20 @@ fn rollback_creation(db: &mut BicDb, intent: &CreationIntent) -> Result<()> {
     Ok(())
 }
 
-pub(super) fn undo_creation(db: &mut BicDb, id: &str) -> Result<()> {
-    let record = db
+pub(super) fn undo_session_creation(session: &mut SqlSession<'_>, id: &str) -> Result<()> {
+    let record = session
+        .db_ref()
         .get(CREATIONS, id)?
         .ok_or_else(|| SqlError::InvalidSql("missing replacement creation intent".into()))?;
     let intent: CreationIntent = serde_json::from_value(record.metadata.clone())?;
     validate_creation(&intent, id)?;
-    rollback_creation(db, &intent)
+    let contexts = session.rename_journal_contexts();
+    let owner = session.tx.take();
+    let result = session
+        .db_mut()
+        .and_then(|db| rollback_creation_with_owner(db, &intent, owner.as_ref(), &contexts));
+    session.tx = owner;
+    result
 }
 #[derive(Clone, Serialize, Deserialize)]
 struct MoveIntent {

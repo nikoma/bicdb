@@ -4761,10 +4761,58 @@ impl<'db> SqlSession<'db> {
         })));
     }
 
+    fn rename_journal_contexts(&self) -> Vec<String> {
+        self.ddl_undo
+            .iter()
+            .filter_map(|undo| match undo {
+                DdlUndo::RestoreRenameJournal { id, .. } => Some(id.clone()),
+                _ => None,
+            })
+            .collect()
+    }
+
+    /// Scope only the actual native metadata writer. Preparatory work, default
+    /// ACLs and unrelated metadata keep their own normal admission checks.
+    fn catalog_record_mutation_access(
+        &self,
+        collection: &str,
+        record: &str,
+    ) -> Result<Option<bicdb_core::CatalogScopeAccess>> {
+        let Some(owner) = self.tx.as_ref() else {
+            return Ok(None);
+        };
+        rename_journal::record_mutation_access(
+            self.db_ref(),
+            Some(owner),
+            &self.rename_journal_contexts(),
+            collection,
+            record,
+        )
+    }
+
+    fn catalog_record_undo_access(
+        &self,
+        collection: &str,
+        record: &str,
+    ) -> Result<Option<bicdb_core::CatalogScopeAccess>> {
+        rename_journal::record_mutation_access(
+            self.db_ref(),
+            self.tx.as_ref(),
+            &self.rename_journal_contexts(),
+            collection,
+            record,
+        )
+    }
+
     pub(crate) fn save_session_schema(&mut self, schema: &TableSchema) -> Result<()> {
         let previous = load_schema(self.db_ref(), &schema.name)?;
         let created = previous.is_none();
-        save_schema(self.db_mut()?, schema)?;
+        let record = prepare_schema_record(self.db_mut()?, schema)?;
+        {
+            let _access = self.catalog_record_mutation_access(SCHEMA_COLLECTION, &schema.name)?;
+            self.db_mut()?.insert(SCHEMA_COLLECTION, record)?;
+        }
+        cache_saved_schema(self.db_ref(), schema);
         if self.tx.is_some() {
             match previous.clone() {
                 Some(schema) => self.ddl_undo.push(DdlUndo::RestoreSchema { schema }),
@@ -4790,7 +4838,10 @@ impl<'db> SqlSession<'db> {
         } else {
             None
         };
-        delete_schema(self.db_mut()?, table)?;
+        {
+            let _access = self.catalog_record_mutation_access(SCHEMA_COLLECTION, table)?;
+            delete_schema(self.db_mut()?, table)?;
+        }
         for grant in list_privileges(self.db_ref())? {
             if grant.object_type == PrivilegeObjectType::Table && grant.object_name == table {
                 self.delete_session_privilege(&grant)?;
@@ -5027,6 +5078,13 @@ impl<'db> SqlSession<'db> {
                         old_table: old_table.clone(),
                     })
                 }
+                Some(DdlUndo::DropCollection {
+                    name,
+                    creation_intent: Some(id),
+                }) => Some(DdlUndo::DropCollection {
+                    name: name.clone(),
+                    creation_intent: Some(id.clone()),
+                }),
                 _ => None,
             };
             if let Some(undo) = retryable {
@@ -5066,7 +5124,7 @@ impl<'db> SqlSession<'db> {
                 creation_intent,
             } => {
                 if let Some(id) = creation_intent {
-                    recycle_bin_journal::undo_creation(self.db_mut()?, &id)?;
+                    recycle_bin_journal::undo_session_creation(self, &id)?;
                 } else {
                     let _ = self.db_mut()?.drop_collection(&name)?;
                 }
@@ -5115,10 +5173,17 @@ impl<'db> SqlSession<'db> {
                 let _ = self.db_mut()?.rename_index(&new_name, &old_name)?;
             }
             DdlUndo::DeleteSchema { table } => {
+                let _access = self.catalog_record_undo_access(SCHEMA_COLLECTION, &table)?;
                 delete_schema(self.db_mut()?, &table)?;
             }
             DdlUndo::RestoreSchema { schema } => {
-                save_schema(self.db_mut()?, &schema)?;
+                let record = prepare_schema_record(self.db_mut()?, &schema)?;
+                {
+                    let _access =
+                        self.catalog_record_undo_access(SCHEMA_COLLECTION, &schema.name)?;
+                    self.db_mut()?.insert(SCHEMA_COLLECTION, record)?;
+                }
+                cache_saved_schema(self.db_ref(), &schema);
             }
             DdlUndo::DeleteSequence { sequence } => {
                 let _ = delete_sequence(self.db_mut()?, &sequence)?;
@@ -5148,9 +5213,13 @@ impl<'db> SqlSession<'db> {
                 save_user_type(self.db_mut()?, &user_type)?;
             }
             DdlUndo::DeletePrivilege { grant } => {
+                let _access =
+                    self.catalog_record_undo_access(PRIVILEGE_COLLECTION, &privilege_key(&grant))?;
                 delete_privilege(self.db_mut()?, &grant)?;
             }
             DdlUndo::RestorePrivilege { grant } => {
+                let _access =
+                    self.catalog_record_undo_access(PRIVILEGE_COLLECTION, &privilege_key(&grant))?;
                 save_privilege(self.db_mut()?, &grant)?;
             }
             DdlUndo::RestoreFromRecycleBin { bin_name, target } => {

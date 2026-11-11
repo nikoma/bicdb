@@ -322,6 +322,41 @@ pub(super) fn undo_session(session: &mut SqlSession<'_>, id: &str) -> Result<()>
     result
 }
 
+/// Delegate one trusted metadata mutation through an existing rename fence.
+/// The caller supplies only journal identities already held in its undo log;
+/// a logical table name or a donor UUID never grants this authority. Normal
+/// statement callers must provide their actual pending business transaction.
+/// Owner-less calls are restricted to undo after its native owner was consumed.
+pub(super) fn record_mutation_access(
+    db: &BicDb,
+    owner: Option<&Transaction>,
+    contexts: &[String],
+    collection: &str,
+    record: &str,
+) -> Result<Option<bicdb_core::CatalogScopeAccess>> {
+    for id in contexts {
+        let Some(scope) = db.catalog_scope_for_context(id)? else {
+            continue;
+        };
+        if !db.catalog_scope_covers_record(&scope, collection, record)? {
+            continue;
+        }
+        // A durable business decision must never be reopened by generic undo.
+        // Startup has no runtime scope and retains its independent admission.
+        if load(db, id)?.is_none() {
+            return Err(invalid(
+                "metadata mutation requires an undecided rename journal",
+            ));
+        }
+        match owner {
+            Some(owner) => owner.check_catalog_scope_owner(&scope)?,
+            None => db.resume_catalog_scope_for_recovery(&scope)?,
+        }
+        return Ok(Some(db.enter_catalog_scope(&scope)?));
+    }
+    Ok(None)
+}
+
 fn rollback_inner(db: &mut BicDb, id: &str, mut owner: Option<&mut Transaction>) -> Result<()> {
     let Some(mut header) = load(db, id)? else {
         finish_committed(db, id)?;
@@ -626,6 +661,70 @@ mod tests {
 
     fn row(id: &str, value: i64) -> Record {
         Record::new(id).with_metadata(serde_json::json!({"value":value}))
+    }
+
+    #[test]
+    fn metadata_delegation_requires_the_real_owner_and_an_undecided_journal() {
+        for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
+            let root = tempfile::tempdir().unwrap();
+            let mut db = BicDb::open_with_config(
+                root.path(),
+                DbConfig::default().with_fsync(true).with_storage_mode(mode),
+            )
+            .unwrap();
+            db.create_collection("catalog").unwrap();
+            db.insert("catalog", row("reserved", 10)).unwrap();
+            initialize_rename_journal_identities(&mut db).unwrap();
+            let owner = db.begin_transaction().unwrap();
+            let scope = owner
+                .reserve_catalog_resources(
+                    &[HEADERS.into(), IMAGES.into()],
+                    &[("catalog".into(), "reserved".into())],
+                )
+                .unwrap();
+            let prepared = {
+                let _access = db.enter_catalog_scope(&scope).unwrap();
+                prepare(&mut db).unwrap()
+            };
+            owner.retain_catalog_scope(&scope, prepared.id()).unwrap();
+            let contexts = vec![prepared.id().to_string()];
+            let foreign = db.begin_transaction().unwrap();
+            assert!(
+                record_mutation_access(&db, Some(&foreign), &contexts, "catalog", "reserved")
+                    .is_err()
+            );
+            assert!(record_mutation_access(&db, None, &contexts, "catalog", "reserved").is_err());
+            assert!(
+                record_mutation_access(&db, Some(&owner), &contexts, "catalog", "other")
+                    .unwrap()
+                    .is_none()
+            );
+            {
+                let _access =
+                    record_mutation_access(&db, Some(&owner), &contexts, "catalog", "reserved")
+                        .unwrap()
+                        .unwrap();
+                db.insert("catalog", row("reserved", 20)).unwrap();
+                assert!(db.insert("catalog", row("other", 99)).is_err());
+            }
+            foreign.rollback().unwrap();
+            owner.rollback().unwrap();
+            {
+                let _access = record_mutation_access(&db, None, &contexts, "catalog", "reserved")
+                    .unwrap()
+                    .unwrap();
+                db.insert("catalog", row("reserved", 10)).unwrap();
+                db.delete(HEADERS, prepared.id()).unwrap();
+            }
+            assert!(record_mutation_access(&db, None, &contexts, "catalog", "reserved").is_err());
+            db.finish_catalog_scope(&scope).unwrap();
+            assert_eq!(
+                db.get("catalog", "reserved").unwrap().unwrap().metadata["value"],
+                10
+            );
+            assert!(db.get("catalog", "other").unwrap().is_none());
+            db.close().unwrap();
+        }
     }
 
     #[test]

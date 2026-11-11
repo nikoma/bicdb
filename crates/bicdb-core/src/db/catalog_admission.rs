@@ -851,6 +851,37 @@ impl Transaction {
 }
 
 impl BicDb {
+    /// Inspect exact record coverage without entering or reopening the scope.
+    /// This grants no mutation authority. A trusted host must independently
+    /// validate its live business owner or durable undecided recovery context
+    /// before entering a matching scope for an internal metadata operation.
+    pub fn catalog_scope_covers_record(
+        &self,
+        token: &CatalogScopeToken,
+        collection: &str,
+        id: &str,
+    ) -> Result<bool> {
+        self.check_recovery_state()?;
+        // Resolve collection identity before taking the admission gate, just
+        // as reservation and complete undo-inventory validation do.
+        let incarnation = self
+            .collections
+            .get(collection)
+            .map(|current| Arc::clone(&current.read().incarnation));
+        let state = self.catalog_admission.state.read();
+        self.catalog_admission.validate_token(&state, token)?;
+        let scope = &state.scopes[&token.serial];
+        if !scope.covers_record(collection, incarnation.as_ref(), Some(id)) {
+            return Ok(false);
+        }
+        if !scope.allows_record(collection, incarnation.as_ref(), Some(id)) {
+            return Err(BicDbError::TransactionConflict(
+                "catalog record backing was replaced after reservation".into(),
+            ));
+        }
+        Ok(true)
+    }
+
     /// Check an undo image against the already reserved runtime scope before
     /// applying any image. This validates coverage; it grants no authority.
     pub fn check_catalog_scope_resources(

@@ -1,0 +1,268 @@
+{
+  "runtime_source": "b05385d4b033edf0db03f3eccf4bdd86f7c8eddb",
+  "runtime_version": "1.0.461-beta",
+  "method": "Read tar archive members only; no extraction, engine open, replay, VM access or mutation.",
+  "original_pre_diagnosis_cold_archives": true,
+  "archive_receipt_sha256": "31164afe461bc46331187590a1a348b5d2561561ed07e6b3affbec60e369dd32",
+  "original_ledger_member_sha256": {
+    "steady-4": "9d11409d54f8564e4d87e69331f60a790b274ee0b4b7390a016301f3467e6b7e",
+    "growth-4-to-5": "3d343876e080fc026b970f21a75a3955b0a1281f5c03c21be0f136ff1c1deb09"
+  },
+  "nodes": [
+    {
+      "node": 0,
+      "original_archive_sha256": "715102a2cbbdc3af2c38a76e9fb9235a512aeae390daa6300cfcadb0cc7a3e23",
+      "original_catalog_sha256": "caf838845f409399a3ecbf1b1c1e262a9d2bd8c223f4194796ef1301f9721b0c",
+      "catalog_bytes": 9081753,
+      "catalog_checksum_valid": true,
+      "command_checksums_validated": 4043,
+      "range_count": 49,
+      "entry_states": {
+        "applied": 3994,
+        "aborted": 46,
+        "prepared": 1,
+        "quorum_committed": 2
+      },
+      "matching_ack_mutation_occurrences": 3891,
+      "ack_identity_payload_mismatch_occurrences": 0,
+      "watermark_and_entry_index_checks_passed": true
+    },
+    {
+      "node": 1,
+      "original_archive_sha256": "0e41786e146a89f3f45e60647e30addc737e5849dbf43cedd8040bd45a6e24e2",
+      "original_catalog_sha256": "ca0763fe441ee7f9cdb9b635a090bb002ddb2016dea85dd387f57867f4f41b88",
+      "catalog_bytes": 8886642,
+      "catalog_checksum_valid": true,
+      "command_checksums_validated": 3956,
+      "range_count": 50,
+      "entry_states": {
+        "applied": 3917,
+        "aborted": 34,
+        "prepared": 3,
+        "committed": 2
+      },
+      "matching_ack_mutation_occurrences": 3832,
+      "ack_identity_payload_mismatch_occurrences": 0,
+      "watermark_and_entry_index_checks_passed": true
+    },
+    {
+      "node": 2,
+      "original_archive_sha256": "74bb92c062e8828894bc904f303cc7761d2bf0b6e7e29ec89a96feb19db75113",
+      "original_catalog_sha256": "d81bb0ba2b2e232a575209aeabf45239009444851fc80fd0fe1d4112bd6382bf",
+      "catalog_bytes": 8786069,
+      "catalog_checksum_valid": true,
+      "command_checksums_validated": 3911,
+      "range_count": 48,
+      "entry_states": {
+        "applied": 3878,
+        "aborted": 33
+      },
+      "matching_ack_mutation_occurrences": 3802,
+      "ack_identity_payload_mismatch_occurrences": 0,
+      "watermark_and_entry_index_checks_passed": true
+    },
+    {
+      "node": 3,
+      "original_archive_sha256": "d7215e9e7ee8a9df3c5853ecd9a2eb18bb2267010b05003999e6055676ee0f82",
+      "original_catalog_sha256": "ef1503a538fa89745711751d116ec972ad818cc7bceccbd4803d6e347ce1e554",
+      "catalog_bytes": 8743718,
+      "catalog_checksum_valid": true,
+      "command_checksums_validated": 3892,
+      "range_count": 49,
+      "entry_states": {
+        "applied": 3840,
+        "prepared": 2,
+        "aborted": 49,
+        "committed": 1
+      },
+      "matching_ack_mutation_occurrences": 3719,
+      "ack_identity_payload_mismatch_occurrences": 0,
+      "watermark_and_entry_index_checks_passed": true
+    },
+    {
+      "node": 4,
+      "original_archive_sha256": "db3a4c4726d0aec3e697d40578493bcb4daf6909a74041fc763854d4d5687172",
+      "original_catalog_sha256": "ac805a9bece03062c755d09aeb45dd07fd204f1c1b9e6be5aa61449f55e9951e",
+      "catalog_bytes": 6413886,
+      "catalog_checksum_valid": true,
+      "command_checksums_validated": 2855,
+      "range_count": 36,
+      "entry_states": {
+        "applied": 2802,
+        "aborted": 52,
+        "committed": 1
+      },
+      "matching_ack_mutation_occurrences": 2659,
+      "ack_identity_payload_mismatch_occurrences": 0,
+      "watermark_and_entry_index_checks_passed": true
+    }
+  ],
+  "phases": {
+    "steady-4": {
+      "ack_count": 3804,
+      "with_exact_payload_in_any_retained_command": 3804,
+      "with_exact_payload_in_any_applied_or_quorum_committed_command": 3804,
+      "with_exact_payload_in_any_applied_command": 3804,
+      "with_exact_payload_in_certified_command_at_or_below_resolved_watermark": 3804,
+      "catalog_count_with_matching_certified_command_histogram": {
+        "3": 1608,
+        "4": 2075,
+        "5": 121
+      },
+      "max_catalog_count_for_same_exact_certified_command_histogram": {
+        "3": 1608,
+        "4": 2075,
+        "5": 121
+      },
+      "no_retained_matching_command_record_id_sha256": []
+    },
+    "growth-4-to-5": {
+      "ack_count": 1223,
+      "with_exact_payload_in_any_retained_command": 1223,
+      "with_exact_payload_in_any_applied_or_quorum_committed_command": 1223,
+      "with_exact_payload_in_any_applied_command": 1223,
+      "with_exact_payload_in_certified_command_at_or_below_resolved_watermark": 1223,
+      "catalog_count_with_matching_certified_command_histogram": {
+        "2": 8,
+        "3": 731,
+        "4": 481,
+        "5": 3
+      },
+      "max_catalog_count_for_same_exact_certified_command_histogram": {
+        "2": 8,
+        "3": 731,
+        "4": 481,
+        "5": 3
+      },
+      "no_retained_matching_command_record_id_sha256": []
+    }
+  },
+  "all_known_acknowledgments": {
+    "ack_count": 5027,
+    "with_exact_payload_in_any_retained_command": 5027,
+    "with_exact_payload_in_any_applied_or_quorum_committed_command": 5027,
+    "with_exact_payload_in_any_applied_command": 5027,
+    "with_exact_payload_in_certified_command_at_or_below_resolved_watermark": 5027,
+    "catalog_count_with_matching_certified_command_histogram": {
+      "2": 8,
+      "3": 2339,
+      "4": 2556,
+      "5": 124
+    },
+    "max_catalog_count_for_same_exact_certified_command_histogram": {
+      "2": 8,
+      "3": 2339,
+      "4": 2556,
+      "5": 124
+    },
+    "no_retained_matching_command_record_id_sha256": []
+  },
+  "original_two_unverified": [
+    {
+      "record_id_sha256": "04fbba34f4a4eac064060eefd057b8e4a964a79cc9874330811898e6f09711e7",
+      "summary": {
+        "ack_count": 1,
+        "with_exact_payload_in_any_retained_command": 1,
+        "with_exact_payload_in_any_applied_or_quorum_committed_command": 1,
+        "with_exact_payload_in_any_applied_command": 1,
+        "with_exact_payload_in_certified_command_at_or_below_resolved_watermark": 1,
+        "catalog_count_with_matching_certified_command_histogram": {
+          "4": 1
+        },
+        "max_catalog_count_for_same_exact_certified_command_histogram": {
+          "4": 1
+        },
+        "no_retained_matching_command_record_id_sha256": []
+      },
+      "matching_observations": [
+        {
+          "node": 0,
+          "state": "applied",
+          "exact": true,
+          "observed_metadata_sha256": "f82c46851ac2de3fd190935afbfca9183c0d76b15d49445399b38f8a3619a18e",
+          "resolved_through_covers_index": true
+        },
+        {
+          "node": 2,
+          "state": "applied",
+          "exact": true,
+          "observed_metadata_sha256": "f82c46851ac2de3fd190935afbfca9183c0d76b15d49445399b38f8a3619a18e",
+          "resolved_through_covers_index": true
+        },
+        {
+          "node": 3,
+          "state": "applied",
+          "exact": true,
+          "observed_metadata_sha256": "f82c46851ac2de3fd190935afbfca9183c0d76b15d49445399b38f8a3619a18e",
+          "resolved_through_covers_index": true
+        },
+        {
+          "node": 4,
+          "state": "applied",
+          "exact": true,
+          "observed_metadata_sha256": "f82c46851ac2de3fd190935afbfca9183c0d76b15d49445399b38f8a3619a18e",
+          "resolved_through_covers_index": true
+        }
+      ]
+    },
+    {
+      "record_id_sha256": "de0055b2ef2e46c099356896ad745859a636b0594c4846d8bc8659af41ec75f0",
+      "summary": {
+        "ack_count": 1,
+        "with_exact_payload_in_any_retained_command": 1,
+        "with_exact_payload_in_any_applied_or_quorum_committed_command": 1,
+        "with_exact_payload_in_any_applied_command": 1,
+        "with_exact_payload_in_certified_command_at_or_below_resolved_watermark": 1,
+        "catalog_count_with_matching_certified_command_histogram": {
+          "4": 1
+        },
+        "max_catalog_count_for_same_exact_certified_command_histogram": {
+          "4": 1
+        },
+        "no_retained_matching_command_record_id_sha256": []
+      },
+      "matching_observations": [
+        {
+          "node": 0,
+          "state": "applied",
+          "exact": true,
+          "observed_metadata_sha256": "f82c46851ac2de3fd190935afbfca9183c0d76b15d49445399b38f8a3619a18e",
+          "resolved_through_covers_index": true
+        },
+        {
+          "node": 1,
+          "state": "applied",
+          "exact": true,
+          "observed_metadata_sha256": "f82c46851ac2de3fd190935afbfca9183c0d76b15d49445399b38f8a3619a18e",
+          "resolved_through_covers_index": true
+        },
+        {
+          "node": 3,
+          "state": "applied",
+          "exact": true,
+          "observed_metadata_sha256": "f82c46851ac2de3fd190935afbfca9183c0d76b15d49445399b38f8a3619a18e",
+          "resolved_through_covers_index": true
+        },
+        {
+          "node": 4,
+          "state": "applied",
+          "exact": true,
+          "observed_metadata_sha256": "f82c46851ac2de3fd190935afbfca9183c0d76b15d49445399b38f8a3619a18e",
+          "resolved_through_covers_index": true
+        }
+      ]
+    }
+  ],
+  "row_visibility_verified": false,
+  "quorum_certificate_signatures_independently_verified": false,
+  "physical_host_independence_verified": false,
+  "production_qualified": false,
+  "limitations": [
+    "Applied/quorum_committed are durable local catalog states, not independently verified voter signatures or end-to-end row reads.",
+    "Catalog checksums are unkeyed integrity checks, not authenticity attestations.",
+    "Absent catalog history can result from snapshot-installed prefixes, relocation cleanup or compaction; it does not prove absent rows or lost commits.",
+    "Matching entries in several guest catalogs do not establish independent physical hosts.",
+    "Reconciliation covers retained immutable-event ACK identities/payloads only, not pages, indexes, FTS, queues, audit sinks or production crash safety."
+  ],
+  "per_ack_observations_sha256": "e8e6803f03e083a8bb79b52bf09508a932c20e03b3dd2fbc182fc033c61f3524"
+}

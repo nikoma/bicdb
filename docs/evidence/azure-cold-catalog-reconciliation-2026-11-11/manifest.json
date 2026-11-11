@@ -1,0 +1,9 @@
+{
+  "format": 1,
+  "reconciliation_script_sha256": "fee7608671bbaf66a15bec004dadf11668bc0c40c89ae6a41a4025a50031ba28",
+  "files": {
+    "README.md": "051263d0dd46628635abb02c3ba780b88b727583df11a77df7dbf8d711b9b4a8",
+    "per-ack-catalog-observations.json.gz": "e8e6803f03e083a8bb79b52bf09508a932c20e03b3dd2fbc182fc033c61f3524",
+    "summary.json": "4c234e5c326245d89bb6e816a7c1de7a37e8421c608980e8ac1c07ef2343b13a"
+  }
+}

@@ -191,6 +191,13 @@ pub(crate) struct CompletedNativeRangeImageSource {
 }
 
 impl CompletedNativeRangeImageSource {
+    /// Retains the same actual source capture while catalog/native finalization
+    /// is retried after a target process reopen. This does not authorize erase.
+    pub(crate) fn authorize_target_install(
+        &self,
+    ) -> Result<TentativeNativeRangeImageSourceAuthorization<'_>> {
+        self.capture.authorize_target_install()
+    }
     pub(crate) fn require_current(&self) -> Result<()> {
         let database = read_database(&self.capture.db)?;
         self.capture.validate(&database)

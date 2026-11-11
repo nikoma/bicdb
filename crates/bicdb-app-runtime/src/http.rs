@@ -3608,8 +3608,16 @@ fn error_response_with_request_id(
     let error = match error {
         AppRuntimeError::ApplicationFailure { code, message, .. } => {
             let message_key = carrier_error_message_key(&code, &message);
+            let status = match code.as_str() {
+                "unauthorized" | "unauthenticated" => StatusCode::UNAUTHORIZED,
+                "forbidden" => StatusCode::FORBIDDEN,
+                "not_found" => StatusCode::NOT_FOUND,
+                "conflict" | "version_conflict" | "idempotency_conflict" => StatusCode::CONFLICT,
+                "rate_limited" | "too_many_requests" => StatusCode::TOO_MANY_REQUESTS,
+                _ => StatusCode::BAD_REQUEST,
+            };
             return (
-                StatusCode::BAD_REQUEST,
+                status,
                 [("content-type", "application/problem+json")],
                 json!({
                     "code": code,

@@ -2408,7 +2408,6 @@ pub(crate) fn describe_result(
             None => result_column_types_with_db(&db, result, source_sql)?,
         };
         row_description_with_db(stream, &db, result, &column_types, result_formats)
-            .inspect_err(|e| eprintln!("DESCRIBE DIAGNOSTIC row description: {e}"))
     }
 }
 

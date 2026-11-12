@@ -62,11 +62,9 @@ fn prepare(stream: &mut TcpStream, statement: &str, sql: &str) {
     send(stream, b'P', &payload);
     send(stream, b'S', &[]);
     assert!(ready(stream).iter().all(|(tag, _)| *tag != b'E'));
-    let response = describe(stream, statement);
-    assert!(
-        response.iter().any(|(tag, _)| *tag == b'T'),
-        "{statement}: {response:?}"
-    );
+    assert!(describe(stream, statement)
+        .iter()
+        .any(|(tag, _)| *tag == b'T'));
 }
 
 fn codes(messages: &[(u8, Vec<u8>)]) -> Vec<String> {

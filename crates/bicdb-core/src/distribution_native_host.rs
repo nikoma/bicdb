@@ -84,11 +84,11 @@ impl NativeClusterBootstrapPlan {
             // This initial facade supports bounded record collection plans.
             // Arbitrary SQL/global DDL is a different contract.
             if collection.name.is_empty()
-                || collection.name.len() > 128
+                || collection.name.len() > 255
                 || !collection
                     .name
                     .bytes()
-                    .all(|c| c.is_ascii_alphanumeric() || matches!(c, b'_' | b'-' | b'.'))
+                    .all(|c| c.is_ascii_alphanumeric() || matches!(c, b'_' | b'-'))
                 || collection.name.starts_with("__bicdb_")
                 || !names.insert(collection.name.clone())
             {

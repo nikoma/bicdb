@@ -1429,3 +1429,6 @@ mod native_read_observation_tests;
 mod host_metadata_tests;
 #[cfg(test)]
 mod native_read_rpc_tests;
+
+#[cfg(test)]
+mod native_strong_point_tests;

@@ -11,12 +11,14 @@ use std::time::{Duration, Instant};
 use uuid::Uuid;
 mod quorum;
 mod rpc;
+#[cfg(feature = "tls-replication")]
 mod strong;
 pub(crate) use quorum::{NativeReadQuorumCandidate, NativeReadQuorumRound};
 pub(crate) use rpc::{
     require_peer, NativeRangeReadObservation, NativeRangeReadProbeReply,
     NativeRangeReadProbeRequest,
 };
+#[cfg(feature = "tls-replication")]
 pub(crate) use strong::{
     NativeStrongPointReadOutcome, NativeStrongPointReadRequest, NativeStrongPointReadUnavailable,
     NativeStrongPointReadValue, NativeStrongReadStage,

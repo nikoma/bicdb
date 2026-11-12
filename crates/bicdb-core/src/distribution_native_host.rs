@@ -17,6 +17,15 @@ use uuid::Uuid;
 
 const SEED_MANIFEST: &str = "native-bootstrap-seed.json";
 const MAX_PLAN_BYTES: usize = 2 * 1024 * 1024;
+mod initial_offer;
+#[cfg(feature = "tls-replication")]
+mod provisional_listener;
+pub(crate) use initial_offer::{
+    NativeInitialBirthOfferObservation, NativeInitialBirthOfferRequest,
+    NativeInitialBirthOfferResponse,
+};
+#[cfg(feature = "tls-replication")]
+pub(crate) use provisional_listener::NativeProvisionalHost;
 fn invalid(detail: &str) -> BicDbError {
     BicDbError::Cluster(format!("native host bootstrap: {detail}"))
 }

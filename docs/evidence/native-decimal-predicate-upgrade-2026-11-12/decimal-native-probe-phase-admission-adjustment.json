@@ -1,0 +1,4 @@
+{
+  "reason": "Known standard release completed its server Cargo and moved to its actual CLI Cargo PID803486 birth160013859, same source/repo/target and cgroup. Both helper queues were under32MiB, no Cargo/rustc and no source/test receipt. Stopped only those owned waiting queues and resubmitted fresh labels admitting this exact live CLI phase. Standard build never stopped. This is a pre-compilation admission adjustment, not a failed product test or restart due to elapsed observation.",
+  "recorded_unix": 1794469178.3901916
+}

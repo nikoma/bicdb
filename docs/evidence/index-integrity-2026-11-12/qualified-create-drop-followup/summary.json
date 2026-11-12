@@ -1,0 +1,14 @@
+{
+  "source": "64b7d2806197358eb33b13bf2c8805827517d411",
+  "passed": 253,
+  "failed": 0,
+  "SQL_index_and_rollback": 8,
+  "original_oracle_hr": 50,
+  "protocol": 195,
+  "prior_failure": {
+    "source": "0bde07e509677254e2bb1cb8fc62ead09c0bf17f",
+    "original_oracle_hr": "49PASS1FAIL qualifiedOracleCREATE/DROP lookup couldnotresolveencodedstoredidentity"
+  },
+  "correction": "Resolve both exact CREATE identities within selectednamespace and retainexactstoredidentityfordrop; refuseambiguousowners; keepconstraintpreflightandcaseexactness. Originalwireassertionsunchanged.",
+  "reuse_limit": "Focusedresults source64. Indexdelivery fresh487 followsHA485source+reserved486docs; finalexactheadCIrequired. Root486wasunmergedsupersededcandidateonly,nobinary/release/deployment. No finalapplicationqualification."
+}

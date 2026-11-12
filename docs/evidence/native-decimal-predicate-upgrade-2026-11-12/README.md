@@ -1,0 +1,9 @@
+# Native Decimal predicate upgrade negative control
+
+Actual pending source `777e82cf829cbee94b881054a29b686a271a75b6` changes the shared Native Decimal predicate comparison. This control creates a real paged partial unique index with production Core code identical to published main482, closes it, copies the exact closed files and opens only that copy using Core code identical to the candidate. The only helper-source delta in either build is the same example program. Production Core source equality, source/binary hashes and exact observations are recorded.
+
+The old comparator excludes `0.5000000000000000000001 > 0.5`, so the old physical generation omits the acknowledged record. The candidate evaluates it as true but accepts the old generation with an empty lookup. Native verification reports one missing/wrong entry and invalid status. A new row with the same unique business key and amount0.75 is accepted, leaving two rows. This establishes an unsafe existing-index transition; it is neither a hypothetical source-review concern nor an application-only scope issue.
+
+The original old fixture was not opened by the candidate and all its bytes remain unchanged. No catalog, index, format or page file was edited. The build helper is a source-scoped diagnostic, not a merged release or crash qualification. The earlier SQL ordinary-index preparation did not serialize a Native predicate and is explicitly not evidence for this case.
+
+PR158 was returned to draft after this result; its source and useful CI runs were preserved. PR160 is already draft and composes that source. Delivery needs generic automatic read/write admission for existing affected generations and an authenticated complete transition/rebuild, with interruption and old-reader gates. Fresh-store positives and the separate signed application unique-scope transition do not prove that behavior.

@@ -1,0 +1,28 @@
+{
+  "source": "b616aa25a2f468ad3647140dbb836086009dd9e8",
+  "scope": "Build only the same cross-version Native predicate helper against exact candidate777 production Core source; no product tests inferred. Creator must make actual old Decimal partial index, candidate must open a copy. Existing SQL ordinary-index fixture had no Native predicate and does not test this upgrade. Source equivalence to base verified; no Native source changes or fabricated format files.",
+  "started_unix": 1794469215.3914976,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "build",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--example",
+        "decimal_predicate_upgrade_probe"
+      ],
+      "started_unix": 1794469215.3915863,
+      "exit": 0,
+      "finished_unix": 1794469245.310972
+    }
+  ],
+  "status": "focused_passed",
+  "binary": "/root/bicdb-durability-s3/qualification-artifacts-debug/b616aa25a2f468ad3647140dbb836086009dd9e8/decimal_predicate_upgrade_probe",
+  "binary_sha256": "44fd82ab66c18f3d3603852f4d1f8dd005b22c8e3678043bd19d84c96312bf12",
+  "finished_unix": 1794469245.3914998
+}

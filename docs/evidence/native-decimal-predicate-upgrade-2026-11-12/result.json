@@ -1,0 +1,214 @@
+{
+  "status": "upgrade_gap_reproduced",
+  "application_qualified": false,
+  "source_modified": false,
+  "old_fixture_modified": false,
+  "started_unix": 1794469431.08998,
+  "old": {
+    "source": "1e6ea47c58dd1f3783640ee8747037855c3ad5b4",
+    "binary": "/root/bicdb-durability-s3/qualification-artifacts-debug/1e6ea47c58dd1f3783640ee8747037855c3ad5b4/decimal_predicate_upgrade_probe",
+    "binary_sha256": "bccebdb42b158ea900589061d89994d4c0d38d9deacfe7db590500511eea821f",
+    "receipt": "/root/bicdb-durability-s3/report-decimal-native-probe-old-v2.json",
+    "receipt_sha256": "637892e7cfd275d58376bc50e019f12fc86b0c8a80011d18ea4b8188aadb34f4",
+    "scope": "helper build only"
+  },
+  "candidate": {
+    "source": "b616aa25a2f468ad3647140dbb836086009dd9e8",
+    "binary": "/root/bicdb-durability-s3/qualification-artifacts-debug/b616aa25a2f468ad3647140dbb836086009dd9e8/decimal_predicate_upgrade_probe",
+    "binary_sha256": "44fd82ab66c18f3d3603852f4d1f8dd005b22c8e3678043bd19d84c96312bf12",
+    "receipt": "/root/bicdb-durability-s3/report-decimal-native-probe-candidate777-v2.json",
+    "receipt_sha256": "7aa01de8a07582381f47d2a9ccef198ddba25d6a6404279ff57b8587eeb9f1f7",
+    "scope": "helper build only"
+  },
+  "producer_sha256": "59d4b3fa273556d54c6a640db9ba49784c26ba746642f18bc38274e5577ee429",
+  "old_observation": {
+    "action": "create",
+    "definitions": [
+      {
+        "collection": "precision_probe",
+        "fields": [
+          {
+            "MetadataPath": [
+              "business_key"
+            ]
+          }
+        ],
+        "kind": "b_tree",
+        "name": "native_decimal_partial",
+        "predicate": {
+          "left": {
+            "field": {
+              "MetadataPath": [
+                "amount"
+              ]
+            },
+            "op": "field"
+          },
+          "op": "binary",
+          "operator": "greater",
+          "right": {
+            "op": "literal",
+            "value": "0.5"
+          },
+          "value_type": "decimal"
+        },
+        "unique": true
+      }
+    ],
+    "duplicate_attempt": null,
+    "index_ids": [],
+    "predicate_matches_acknowledged_row": false,
+    "rows_after": 1,
+    "rows_before": 1,
+    "status": "observed_and_closed",
+    "verification": [
+      {
+        "collection": "precision_probe",
+        "duplicate_entries": 0,
+        "expected_records": 0,
+        "index_name": "native_decimal_partial",
+        "indexed_records": 0,
+        "kind": "b_tree",
+        "last_verified_unix_ms": null,
+        "missing_entries": 0,
+        "size_bytes": 0,
+        "stale_entries": 0,
+        "valid": true,
+        "wrong_entries": 0
+      }
+    ],
+    "version": "1.0.482-beta"
+  },
+  "closed_old_files": {
+    ".backup-write.lock": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "btree-index-builds/d979b32d3881d30540f1e17685cd6d35e240e52343c35dc2b60d72e90148ee92.json": {
+      "bytes": 928,
+      "sha256": "2272bddfad7df4f30a760d984da81311806571ccb9a20ec0d82659f2709270da"
+    },
+    "collections.json": {
+      "bytes": 156,
+      "sha256": "3027d9e601b04511db9ff2fdb22d6c0a9e9245a141e3aa9de0f122c9fb65e51a"
+    },
+    "commit-seq.floor": {
+      "bytes": 6,
+      "sha256": "a7c6882a45dbaefd37c17f1da98fee82c0ba4fa5d79908d624741725ff887328"
+    },
+    "events/events.seg": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "format.json": {
+      "bytes": 192,
+      "sha256": "54f5d977028abbac7ea27f18181076c5ca63c6f052bbea62c647aec3a9302123"
+    },
+    "fts-index-generations.json": {
+      "bytes": 122,
+      "sha256": "e9c2c1d98446999699d27a85d1e695bc29fab6b08df24e15835e6720e5c5abbe"
+    },
+    "incarnations.log": {
+      "bytes": 119,
+      "sha256": "d909ad595b5fea294ab9cd077d0742410272ab6a261f629d9db77e4ec882a960"
+    },
+    "indexes.json": {
+      "bytes": 625,
+      "sha256": "43d73f312ab8b7951718d12c5c453481f523c510e21a89269b9b097b09dd312b"
+    },
+    "mesh_signing_key.json": {
+      "bytes": 127,
+      "sha256": "89fae1d3d204c02afdf5560b66fc2639215a174749f9c4694613b8f5f494998b"
+    },
+    "paged/store.lock": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "paged/store.pages": {
+      "bytes": 40960,
+      "sha256": "8b35ab2d1c44aa6ac919ae8b8833184b6e507db49b4d4e1bb63f08270cbdc19b"
+    },
+    "paged/store.wal": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "store.lock": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "sync_state.json": {
+      "bytes": 340,
+      "sha256": "83b1ef4733d604c549ff381e9c2e645e5f07de2b67ade974f9f11607c307e175"
+    },
+    "transactions.log": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  },
+  "candidate_observation": {
+    "action": "verify",
+    "definitions": [
+      {
+        "collection": "precision_probe",
+        "fields": [
+          {
+            "MetadataPath": [
+              "business_key"
+            ]
+          }
+        ],
+        "kind": "b_tree",
+        "name": "native_decimal_partial",
+        "predicate": {
+          "left": {
+            "field": {
+              "MetadataPath": [
+                "amount"
+              ]
+            },
+            "op": "field"
+          },
+          "op": "binary",
+          "operator": "greater",
+          "right": {
+            "op": "literal",
+            "value": "0.5"
+          },
+          "value_type": "decimal"
+        },
+        "unique": true
+      }
+    ],
+    "duplicate_attempt": {
+      "status": "accepted"
+    },
+    "index_ids": [],
+    "predicate_matches_acknowledged_row": true,
+    "rows_after": 2,
+    "rows_before": 1,
+    "status": "observed_and_closed",
+    "verification": [
+      {
+        "collection": "precision_probe",
+        "duplicate_entries": 0,
+        "expected_records": 1,
+        "index_name": "native_decimal_partial",
+        "indexed_records": 0,
+        "kind": "b_tree",
+        "last_verified_unix_ms": null,
+        "missing_entries": 1,
+        "size_bytes": 0,
+        "stale_entries": 0,
+        "valid": false,
+        "wrong_entries": 1
+      }
+    ],
+    "version": "1.0.483-beta"
+  },
+  "source_candidate": "777e82cf829cbee94b881054a29b686a271a75b6",
+  "source_old": "f43583da4c34209e810c5e6a8f5925831b2949a1",
+  "helper_source_only_adds_example": true,
+  "old_fixture_unchanged": true,
+  "processes_stopped": true,
+  "finished_unix": 1794469431.255106
+}

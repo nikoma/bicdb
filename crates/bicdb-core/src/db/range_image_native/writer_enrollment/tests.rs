@@ -365,3 +365,57 @@ fn native_writer_born_v2_raw_imports_refuse_without_invalidating_genesis() {
     assert_eq!(after.range_index(), 0);
     assert_eq!(after.native_receipt_sha256(), initial_sha);
 }
+
+#[test]
+fn native_abort_birth_registration_refuses_missing_or_foreign_range_catalogue_at_r0() {
+    let (_root, db, spec, _) = fresh();
+    let path = db.read().data_path().to_path_buf();
+    let native = db
+        .read()
+        .native_recovery_admission(
+            &spec.cluster_id,
+            spec.bootstrap_id,
+            &spec.node_id,
+            spec.member_incarnation,
+        )
+        .unwrap();
+    assert_eq!(native.abort_protocol_version(), 1);
+    let binding = NativeStoreBirthV1::from_actual_native(&native).unwrap();
+    assert_eq!(binding.abort_protocol_version(), 1);
+    let registered = db
+        .read()
+        .native_abort_catalogue_store_id()
+        .unwrap()
+        .unwrap();
+    let original = std::fs::read(path.join(DEFAULT_RANGE_WRITE_LOG)).unwrap();
+    for range in &spec.initial_ranges {
+        assert_eq!(
+            db.read()
+                .current_native_range_source_lineage(range.id)
+                .unwrap()
+                .range_index(),
+            0
+        );
+    }
+    drop(native);
+    drop(db);
+    // A registered empty native database is still an existing voter store.
+    // Missing JSON is not permission to reset its never-Commit evidence.
+    std::fs::remove_file(path.join(DEFAULT_RANGE_WRITE_LOG)).unwrap();
+    assert!(BicDb::open_range_image_database(&path, config(), &spec).is_err());
+    let (_other_root, other, _, _) = fresh();
+    let foreign = std::fs::read(other.read().data_path().join(DEFAULT_RANGE_WRITE_LOG)).unwrap();
+    assert_ne!(
+        other.read().native_abort_catalogue_store_id().unwrap(),
+        Some(registered)
+    );
+    crate::storage::write_atomic(&path.join(DEFAULT_RANGE_WRITE_LOG), &foreign, true).unwrap();
+    assert!(BicDb::open_range_image_database(&path, config(), &spec).is_err());
+    // Restore the exact retained original, not a generated empty catalogue.
+    crate::storage::write_atomic(&path.join(DEFAULT_RANGE_WRITE_LOG), &original, true).unwrap();
+    let (reopened, _) = BicDb::open_range_image_database(&path, config(), &spec).unwrap();
+    assert_eq!(
+        reopened.native_abort_catalogue_store_id().unwrap(),
+        Some(registered)
+    );
+}

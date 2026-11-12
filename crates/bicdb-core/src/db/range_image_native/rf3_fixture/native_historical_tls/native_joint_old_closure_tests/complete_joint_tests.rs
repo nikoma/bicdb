@@ -946,20 +946,32 @@ fn exercise_fresh_open_while_frozen(
     let mut lost_target = None;
     for local in [node("n3"), node("n1"), node("n2")] {
         let mut complete = false;
-        for attempt in 0..3 {
+        // Preserve three pre-receipt attempts; reserve ONE additional phase
+        // solely to recover the deliberate first-actual-receipt reply loss.
+        let limit = if local == node("n3") { 4 } else { 3 };
+        for attempt in 0..limit {
+            if attempt == 3 && lost_target.is_none() {
+                break;
+            }
+            let attempt_started = Instant::now();
+            let mut stage = "begin-fresh-open".to_owned();
             let result = (|| -> crate::Result<()> {
                 let mut round = published.begin_fresh_open_phase(Duration::from_secs(4))?;
                 for id in [node("n1"), node("n2"), node("n3")] {
+                    stage = format!("collect-{id}");
                     round.acquire_actual_member(&fixture.clients[&id], &node("n1"))?;
                 }
+                stage = "finish-full-open-round".into();
                 let round = Arc::new(round.finish()?);
+                stage = "local-post-QQ-MQ-and-binding".into();
                 let open = round.acquire_local_open(&fixture.clients[&local], &node("n1"))?;
                 assert!(round
                     .acquire_local_open(&fixture.clients[&local], &node("n1"))
                     .is_err());
+                stage = "actual-activate-or-reconcile-catalogue".into();
                 let receipt = Arc::new(open.persist_local_catalogue_activation(parent)?);
                 assert!(open.persist_local_catalogue_activation(parent).is_err());
-                if local == node("n3") && attempt == 0 {
+                if local == node("n3") && lost_target.is_none() {
                     let sha = receipt.activation_sha256()?;
                     let before = fixture.native.services[&local]
                         .lock()
@@ -994,12 +1006,13 @@ fn exercise_fresh_open_while_frozen(
                 activations.insert(local.clone(), receipt);
                 Ok(())
             })();
+            eprintln!("ACTUAL_JOINT_OPEN_RESULT node={local} attempt={attempt} stage={stage} elapsed_ms={} error={:?}",attempt_started.elapsed().as_millis(),result.as_ref().err());
             match result {
                 Ok(()) => {
                     complete = true;
                     break;
                 }
-                Err(crate::BicDbError::QueryTimedOut) if attempt < 2 => eprintln!(
+                Err(crate::BicDbError::QueryTimedOut) if attempt + 1 < limit => eprintln!(
                     "ACTUAL_JOINT_OPEN fresh-current-retry node={local} attempt={attempt}"
                 ),
                 Err(e) => panic!("genuine fresh open phase failed for {local}: {e}"),

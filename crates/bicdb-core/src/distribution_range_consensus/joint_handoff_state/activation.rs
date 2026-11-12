@@ -378,6 +378,12 @@ impl RangeWriteStore {
         frozen: &FrozenRangeMutationPermit,
         parent: &CancellationToken,
     ) -> Result<NativeJointCatalogueActivationReceipt> {
+        #[cfg(test)]
+        let mut trace = crate::distribution_range_handoff::NativeJointPhaseTrace::new(
+            "open-kernel-catalogue-total",
+            &self.catalog.node_id,
+            admission.cancellation(),
+        );
         parent.check()?;
         admission.require_external_publications_current()?;
         admission.committed().require_current(database)?;
@@ -495,7 +501,10 @@ impl RangeWriteStore {
         if existing.is_none() && image.is_some() {
             self.catalog.image_install_intents.remove(&range);
         }
-        self.persist()?;
+        let persisted = self.persist();
+        #[cfg(test)]
+        eprintln!("ACTUAL_JOINT_OPEN_CATALOGUE_PERSIST node={} success={} uncertain={} range={} activation_sha={}",self.catalog.node_id,persisted.is_ok(),self.recovery_persistence_uncertain,range,candidate.checksum().unwrap_or_else(|e|format!("diagnostic-unavailable:{e}")));
+        persisted?;
         self.recovery_persistence_uncertain = false;
         drop(controlled);
         let receipt = NativeJointCatalogueActivationReceipt {
@@ -506,6 +515,8 @@ impl RangeWriteStore {
         };
         parent.check()?;
         receipt.require_current(database, self)?;
+        #[cfg(test)]
+        trace.complete();
         Ok(receipt)
     }
     /// A catalogue activation is a refusal until an actual same-open guard is

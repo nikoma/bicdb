@@ -158,10 +158,28 @@ impl ActualServiceNativeJointPreparedEvidence {
         fresh: &CommittedNativeJointDecisionObservation,
         bridge: Arc<crate::db::NativeJointServingBridgeReceipt>,
     ) -> Result<Arc<crate::db::NativeWriterHostState>> {
+        #[cfg(test)]
+        let mut trace = crate::distribution_range_handoff::NativeJointPhaseTrace::from_deadline(
+            "open-actual-service-current",
+            &service.node_id,
+            fresh.deadline(),
+        );
         let database = checked_database_read(&service.db, &service.storage_policy)?;
         service.require_native_catalog_database(&database)?;
         service.require_native_writer_host_for_range(&database, fresh.data().activation_range())?;
+        #[cfg(test)]
+        let mut native_trace =
+            crate::distribution_range_handoff::NativeJointPhaseTrace::from_deadline(
+                "open-native-locked-read-scope",
+                &service.node_id,
+                fresh.deadline(),
+            );
         let scope = bridge.current_read_scope(&database)?;
+        #[cfg(test)]
+        {
+            native_trace.complete();
+            drop(native_trace);
+        }
         self.committed
             .require_historical_audit_with_native_read_scope(&scope)?;
         fresh.require_current_with_native_read_scope(&scope)?;
@@ -224,6 +242,8 @@ impl ActualServiceNativeJointPreparedEvidence {
         }
         let writer = service.range_writes.native_writer_host_state()?;
         writer.require_database(&database, fresh.data().activation_range())?;
+        #[cfg(test)]
+        trace.complete();
         Ok(writer)
     }
     pub(crate) fn require_phase_writer_lifetime(
@@ -296,6 +316,12 @@ impl ClusterDataNodeService {
         actual: &ActualServiceNativeJointPreparedEvidence,
         parent: &CancellationToken,
     ) -> Result<crate::distribution_range_consensus::NativeJointCatalogueActivationReceipt> {
+        #[cfg(test)]
+        let mut trace = crate::distribution_range_handoff::NativeJointPhaseTrace::new(
+            "open-service-activate-or-recover-total",
+            &self.node_id,
+            admission.cancellation(),
+        );
         parent.check()?;
         admission.require_external_publications_current()?;
         admission.require_local_open_preparation(self)?;
@@ -319,6 +345,11 @@ impl ClusterDataNodeService {
                 &recovered,
                 actual.lease.try_frozen()?,
             )?;
+            #[cfg(test)]
+            {
+                eprintln!("ACTUAL_JOINT_OPEN_RECOVERED exact-protected-activation=true node={} no-catalogue-rewrite=true",self.node_id);
+                trace.complete();
+            }
             return Ok(recovered);
         }
         let receipt = self
@@ -337,6 +368,8 @@ impl ClusterDataNodeService {
             &receipt,
             actual.lease.try_frozen()?,
         )?;
+        #[cfg(test)]
+        trace.complete();
         Ok(receipt)
     }
     pub(crate) fn require_local_native_joint_activation(

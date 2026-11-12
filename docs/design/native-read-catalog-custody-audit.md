@@ -1,9 +1,12 @@
 # Native read candidate: missing range-catalog custody
 
-Classification: **source-backed hypothesis; runtime reproduction not yet
-executed**. This is an open delivery gate for the unmerged read foundation,
-not an established defect in a deployed release or an explanation of the
-historical Azure trial.
+Classification update: **confirmed unsafe Strong absence in the unmerged
+candidate**. The original inspection was a source-backed hypothesis at
+480db3b5. The [paired runtime reproduction and unchanged retained artifact](../evidence/native-read-catalogue-loss-2026-11-12/README.md)
+at 3d0041e09 returned the acknowledged value from the intact copy and successful
+absence after removing only its twin's n1 catalog. This is an open delivery gate,
+not an established defect in a deployed single-host release or an explanation
+of the historical Azure trial.
 
 The inspected isolated candidate is
 `480db3b52820919b0c18a48e15cccda38fe7c1c1`, based on public main486. The larger

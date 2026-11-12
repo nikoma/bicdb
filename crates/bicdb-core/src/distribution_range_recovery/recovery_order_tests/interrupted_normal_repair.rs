@@ -111,6 +111,13 @@ pub(super) fn exercise_interrupted_normal_image(
         .unwrap()
         .logical_history_sha256()
         .to_owned();
+    let acknowledged_command = fixture.services[&source_id]
+        .lock()
+        .probe_range_write_for_peer(&range, &source_id, 1)
+        .unwrap()
+        .entry
+        .unwrap()
+        .command;
     let future_source = node("n2");
     let future_source_uid = fixture.databases[&future_source]
         .read()
@@ -422,10 +429,11 @@ pub(super) fn exercise_interrupted_normal_image(
         .lock()
         .test_image_history_obligations(range.id)
         .unwrap();
-    assert_eq!(
-        obligations.irrevocable_commands(),
-        &BTreeMap::from([(2, tail.command.checksum_sha256.clone())])
-    );
+    let mut expected_obligations = BTreeMap::from([(2, tail.command.checksum_sha256.clone())]);
+    if acknowledged_target {
+        expected_obligations.insert(1, acknowledged_command.checksum_sha256.clone());
+    }
+    assert_eq!(obligations.irrevocable_commands(), &expected_obligations);
     let stage_id = install.as_ref().map(|i| i.history_stage_id());
     if matches!(stop, ImageStop::AfterClear) {
         stage_and_clear_actual_current_repair_image(

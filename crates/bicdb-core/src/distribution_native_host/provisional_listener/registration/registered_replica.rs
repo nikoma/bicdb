@@ -3,9 +3,8 @@
 //! readiness or a Strong permit. Native image/joint wire/controller remain open.
 use super::*;
 use crate::distribution_consensus::HostMetadataReadObservation;
-use crate::distribution_data::ClusterServiceOpenGuard;
+use crate::distribution_data::{ClusterServiceOpenGuard, RangeWriteServiceSlotGuard};
 use crate::distribution_native_host::NativeUnassignedLearnerFactory;
-use crate::distribution_range_consensus::RangeWriteStoreOpenGuard;
 use crate::distribution_range_recovery::RangeRecoveryRuntime;
 use std::sync::Weak;
 
@@ -28,7 +27,7 @@ pub(crate) struct NativeRegisteredReplicaAdmission {
     service: Weak<Mutex<ClusterDataNodeService>>,
     runtime: Weak<RangeRecoveryRuntime>,
     database: ClusterServiceOpenGuard,
-    store: RangeWriteStoreOpenGuard,
+    store: RangeWriteServiceSlotGuard,
     live: Weak<AtomicBool>,
     metadata_store_id: Uuid,
     database_incarnation: String,

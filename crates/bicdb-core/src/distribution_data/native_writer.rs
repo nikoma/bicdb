@@ -63,6 +63,7 @@ impl ClusterDataNodeService {
     ) -> Result<()> {
         self.validate_native_writer_enrollment(database, policy)?;
         self.range_writes
+            .current_mut()
             .install_native_writer_host_state(database, policy, state)
     }
     pub(crate) fn require_native_writer_host_for_range(

@@ -67,6 +67,7 @@ impl ClusterDataNodeService {
             .validate_controlled(role.current_range().id, &controlled)?;
         let out = self
             .range_writes
+            .current_mut()
             .certify_existing_installing_decision(&db, &native, role, decision, frozen)?;
         parent.check()?;
         decision.require_live()?;
@@ -126,6 +127,7 @@ impl ClusterDataNodeService {
         )?;
         let out = self
             .range_writes
+            .current_mut()
             .handover_installing_replacement_refusal(&db, &native, source, role, frozen, attempt)?;
         parent.check()?;
         Ok(out)
@@ -168,6 +170,7 @@ impl ClusterDataNodeService {
             r.local_member_incarnation(),
         )?;
         self.range_writes
+            .current_mut()
             .test_replacement_proposal_before_handover(&db, &native, source, role, frozen, attempt)
     }
 }
@@ -189,6 +192,7 @@ impl ClusterDataNodeService {
             role.local_member_incarnation(),
         )?;
         self.range_writes
+            .current_mut()
             .resync_installing_committed_refusal(&db, &native, role, admission, frozen)?;
         parent.check()
     }
@@ -218,6 +222,7 @@ impl ClusterDataNodeService {
             .validate_controlled(role.current_range().id, &controlled)?;
         let out = self
             .range_writes
+            .current_mut()
             .test_certify_existing_installing_decision_with(
                 &db, &native, role, decision, frozen, write,
             )?;

@@ -20,6 +20,7 @@ impl ClusterDataNodeService {
             source.local_member_incarnation(),
         )?;
         self.range_writes
+            .current_mut()
             .start_native_abort_attempt(database, &native, range, command, authority)
     }
     pub(crate) fn commit_native_range_write_with_context(
@@ -37,7 +38,7 @@ impl ClusterDataNodeService {
         self.range_writes
             .preflight_actual_native_commit_entry(command)?;
         database.native_abort_mark_ever_commit(command, range, authority)?;
-        let state = self.range_writes.commit(command)?;
+        let state = self.range_writes.current_mut().commit(command)?;
         self.range_write_ack(command, state)
     }
     pub(crate) fn finish_native_prepare_only_rejection(
@@ -48,6 +49,7 @@ impl ClusterDataNodeService {
     ) -> Result<()> {
         self.require_native_catalog_database(database)?;
         self.range_writes
+            .current_mut()
             .finish_native_prepare_only_rejection(database, rejected, cleaned)
     }
     pub(super) fn ensure_native_abort_prepare_start(
@@ -125,7 +127,7 @@ impl ClusterDataNodeService {
             &self.node_id,
             role.local_member_incarnation(),
         )?;
-        let result = self.range_writes.promise_actual_native_abort(
+        let result = self.range_writes.current_mut().promise_actual_native_abort(
             &db,
             &native,
             role,
@@ -172,6 +174,7 @@ impl ClusterDataNodeService {
             return Err(data_error("injected recovery response loss after actual canonical Abort native WAL before raw mark"));
         }
         self.range_writes
+            .current_mut()
             .mark_actual_native_abort_resolved(&db, &native, role, quorum, &receipt)?;
         parent.check()?;
         drop(controlled);

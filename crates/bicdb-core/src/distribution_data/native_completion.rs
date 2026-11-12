@@ -21,6 +21,7 @@ impl ClusterDataNodeService {
         request.scope.require_role(fresh)?;
         let db = checked_database_read(&self.db, &self.storage_policy)?;
         self.range_writes
+            .current_mut()
             .complete_native_recovery_frozen(&db, prepared, quorum, fresh)?;
         // A canceled/lost response after durability never erases the completed
         // refusal. A fresh readonly request can attest the retained proof.
@@ -40,6 +41,7 @@ impl ClusterDataNodeService {
         request.scope.require_role(fresh)?;
         let db = checked_database_read(&self.db, &self.storage_policy)?;
         self.range_writes
+            .current_mut()
             .adopt_native_completion_decision(&db, prepared, quorum, fresh)?;
         parent.check()?;
         self.range_writes
@@ -57,6 +59,7 @@ impl ClusterDataNodeService {
         request.scope.require_role(fresh)?;
         let db = checked_database_read(&self.db, &self.storage_policy)?;
         self.range_writes
+            .current_mut()
             .adopt_native_activated_decision(&db, prepared, decision, fresh)?;
         parent.check()?;
         self.range_writes

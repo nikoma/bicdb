@@ -50,7 +50,7 @@ impl ClusterDataNodeService {
         self.validate_range_write(range, admission.peer_node_id(), command)?;
         self.range_writes.normal_native_write_allowed(command)?;
         if !matches!(
-            self.range_writes.state(command)?,
+            self.range_writes.current_mut().state(command)?,
             RangeWriteState::QuorumCommitted | RangeWriteState::Applied
         ) {
             return Err(data_error(
@@ -65,7 +65,7 @@ impl ClusterDataNodeService {
         let actual = database.apply_native_origin_instruction(admission, &authority, parent)?;
         self.range_writes.normal_native_write_allowed(command)?;
         actual.require_current(&database)?;
-        self.range_writes.mark_applied(command)?;
+        self.range_writes.current_mut().mark_applied(command)?;
         let result = NativeReplicaApplyObservation::from_native_materialization(
             &actual,
             self.range_writes.progress(range.id),
@@ -115,7 +115,7 @@ impl ClusterDataNodeService {
             || certificate.intent().command_id() != command.command_id
             || !certificate.evidence().is_origin()
             || !matches!(
-                self.range_writes.state(command)?,
+                self.range_writes.current_mut().state(command)?,
                 RangeWriteState::QuorumCommitted | RangeWriteState::Applied
             )
         {
@@ -140,7 +140,7 @@ impl ClusterDataNodeService {
             )?;
         }
         self.range_writes.normal_native_write_allowed(command)?;
-        self.range_writes.mark_applied(command)?;
+        self.range_writes.current_mut().mark_applied(command)?;
         let actual = database.observe_native_embedded_replica(range, Some(command))?;
         NativeReplicaApplyObservation::from_native_materialization(
             &actual,

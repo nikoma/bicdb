@@ -185,6 +185,46 @@ fn native_registered_replica_receiver_actual_tls_preserves_owner_and_refuses_bla
             .range_store_open_id,
         store.id()
     );
+    // Actual service-slot replacement while the OLD genuine object stays
+    // alive. A Weak<old Store> alone would incorrectly remain live here.
+    // This is a different root, so same-root DirectoryLock exclusion cannot
+    // stand in for the receiver's current-slot check.
+    let replacement_root = tempfile::tempdir().unwrap();
+    let replacement = crate::distribution_range_consensus::RangeWriteStore::open(
+        replacement_root.path(),
+        current.cluster_id.clone(),
+        node(4),
+        true,
+    )
+    .unwrap();
+    let retained_old = service
+        .lock()
+        .test_replace_native_range_write_store(replacement);
+    let retained_lifetime = retained_old.listener_open_guard();
+    retained_lifetime.require_live().unwrap();
+    assert_eq!(retained_old.recovery_store_open_id(), store.id());
+    assert!(store.require_live().is_err());
+    assert!(
+        !host
+            .replica_receiver_status(&token)
+            .unwrap()
+            .unwrap()
+            .receiver_ready
+    );
+    {
+        // Rejection precedes the service latch even with the old Store live.
+        let _busy_service = service.lock();
+        assert!(client
+            .native_event_get_cancellable(&token, &node(4), &get)
+            .is_err());
+    }
+    // Test cleanup restores the exact old object, NOT its revoked binding.
+    let replaced = service
+        .lock()
+        .test_replace_native_range_write_store(retained_old);
+    assert!(store.require_live().is_err(), "no binding ABA on restore");
+    retained_lifetime.require_live().unwrap();
+    drop(replaced);
     drop(metadata);
     drop(service);
     host.stop_owned_metadata(&token).unwrap();

@@ -55,6 +55,7 @@ impl ClusterDataNodeService {
                 // phase, native birth/open and fresh scope. Errors are never
                 // ignored or converted into an Active/counter fallback.
                 self.range_writes
+            .current_mut()
                     .refsync_native_prepared_refusal(&db, &native, &role, &frozen, parent)?;
             }
             _ => {
@@ -78,6 +79,7 @@ impl ClusterDataNodeService {
         )?;
         let prepared = self
             .range_writes
+            .current_mut()
             .prepare_native_recovery_ready(&db, physical)?;
         let evidence = self.range_writes.observe_prepared_native_for_role(
             &db,
@@ -105,6 +107,7 @@ impl ClusterDataNodeService {
             role.local_member_incarnation(),
         )?;
         self.range_writes
+            .current_mut()
             .refsync_native_prepared_refusal(&db, &native, role, frozen, parent)?;
         if self.range_writes.recovery_observation_phase(&request.scope)?
             == crate::distribution_range_recovery::RecoveryFenceObservationPhase::NativeCompletedFrozen {

@@ -64,6 +64,12 @@ impl NativeJointOpenPhaseRound {
         self.original.prepared.require_original_caller()?;
         let actor = client.local_metadata_read_participant();
         let node = actor.node_id();
+        #[cfg(test)]
+        let mut trace = crate::distribution_range_handoff::NativeJointPhaseTrace::new(
+            "open-collect-member-total",
+            node,
+            &self.cancellation,
+        );
         let old = self
             .original
             .prepared
@@ -76,12 +82,23 @@ impl NativeJointOpenPhaseRound {
             return Err(invalid("fresh open duplicate/changed recipient"));
         }
         let business = Uuid::now_v7();
+        #[cfg(test)]
+        let mut mq_trace = crate::distribution_range_handoff::NativeJointPhaseTrace::new(
+            "open-collect-member-hostMQ",
+            node,
+            &self.cancellation,
+        );
         let metadata = client.acquire_host_metadata_observation(
             leader,
             business,
             remaining(&self.cancellation)?,
             &self.cancellation,
         )?;
+        #[cfg(test)]
+        {
+            mq_trace.complete();
+            drop(mq_trace);
+        }
         let (committed, writer) = {
             let mut service = old
                 .service
@@ -111,9 +128,17 @@ impl NativeJointOpenPhaseRound {
         self.members
             .insert(node.clone(), OpenMember { committed, writer });
         self.poisoned = false;
+        #[cfg(test)]
+        trace.complete();
         Ok(())
     }
     pub(crate) fn finish(self) -> Result<NativeJointOpenPhaseQuorum> {
+        #[cfg(test)]
+        let mut trace = crate::distribution_range_handoff::NativeJointPhaseTrace::new(
+            "open-close-all-member-round",
+            &self.original.data().activation_range().leader,
+            &self.cancellation,
+        );
         self.cancellation.check()?;
         if self.poisoned || self.members.keys().ne(self.original.receipts.keys()) {
             return Err(invalid(
@@ -127,6 +152,8 @@ impl NativeJointOpenPhaseRound {
             claimed: std::sync::atomic::AtomicBool::new(false),
         };
         result.require_current()?;
+        #[cfg(test)]
+        trace.complete();
         Ok(result)
     }
 }
@@ -214,6 +241,12 @@ impl NativeJointOpenPhaseQuorum {
         if self.original.data().new_members()[node].incarnation != actor.member_incarnation() {
             return Err(invalid("fresh open local incarnation changed"));
         }
+        #[cfg(test)]
+        let mut trace = crate::distribution_range_handoff::NativeJointPhaseTrace::new(
+            "open-local-post-QQ-MQ-and-binding",
+            node,
+            &self.cancellation,
+        );
         let business = Uuid::now_v7();
         // Distinct actual post-all-member MQ, no DB/service latch across I/O.
         let metadata = client.acquire_host_metadata_observation(
@@ -243,6 +276,8 @@ impl NativeJointOpenPhaseQuorum {
             fresh,
         };
         result.require_live()?;
+        #[cfg(test)]
+        trace.complete();
         Ok(result)
     }
     pub(super) fn require_post_quorum(

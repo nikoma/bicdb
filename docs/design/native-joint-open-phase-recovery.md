@@ -119,3 +119,37 @@ ABA, controller restart and genuinely new cold recovery require their own
 actual producers/controls. That work remains open, along with new-leader ACK2,
 Strong, cleanup, fresh fifth learner, remote joint RPCs, lower-R/missing-member
 repair, post-joint NoData, automatic controller and physical testing.
+
+## First execution and opt-in custody follow-up
+
+Integrated source 5056d857 CI 43209913124/job 131154586387 compiled (all-target
+and isolated consumer passed), but the open case failed 0/1 in 37.31s with
+three target timeouts. Its successful preceding all-three publication does not
+prove catalogue activation. Original logs did not identify the exact open
+substage or show a completed catalogue persist. The retained CI artifact
+contained logs/source identity only: `TempDir::keep` paths on a discarded
+runner were NOT persistent native-state custody. This lack of native cut
+evidence remains explicit.
+
+The follow-up adds test-only component timings and an opt-in
+`BICDB_TEST_EVIDENCE_ROOT` panic capture. It actually stops/drains listeners and
+checks runtime contexts, then holds the actual service, metadata, DB and native
+journal locks. It copies only actual database trees and explicit actual
+`strong-meta-*` directories. The private TLS root is never copied; credential
+file extensions are rejected. Limits are 4096 files, 64MiB/file, 256MiB total.
+Copies and manifest/directories are fsynced, each source file is rehashed and the
+complete source file set is checked after copying. `BICDB_TEST_SOURCE_SHA`, if
+provided by the runner, is retained separately from non-authoritative workflow
+SHA. Partial/refused capture has an explicit error manifest.
+
+The original engine owners remain alive. No checkpoint, engine reopen, repair
+or floor mutation is invoked. This is an observed-stable, locked raw-files cut;
+it is NOT claimed to be an atomic power-loss image or a verified replay/clean
+shutdown. A later reconstruction must verify the manifest and replay a COPY.
+The new capture hook itself is source-only until execution.
+
+The lost-target fault is now keyed to the FIRST actual returned durable target
+receipt (newly persisted or recovered), rather than lucky attempt zero. Three
+pre-receipt phase attempts remain; one additional bounded phase is reserved
+solely to reconcile that deliberately lost receipt. Every phase still uses the
+unchanged four-second/original-caller bounds.

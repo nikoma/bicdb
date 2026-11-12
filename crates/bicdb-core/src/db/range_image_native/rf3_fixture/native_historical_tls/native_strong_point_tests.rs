@@ -10,6 +10,9 @@ use crate::distribution_native_read::{
 };
 use crate::distribution_range_consensus::RangeWriteCoordinator;
 
+#[path = "native_strong_failure_capture.rs"]
+mod failure_capture;
+
 type Coordinator = RangeWriteCoordinator<TcpClusterRelocationTransport>;
 struct EnforcedNetwork {
     native: ActualNativeRf3Fixture,
@@ -405,6 +408,7 @@ impl Drop for EnforcedNetwork {
         // Copy/reconcile only after all process owners have exited; this neither
         // opens nor changes the retained databases or metadata stores.
         if std::thread::panicking() {
+            self.capture_actual_failure_cut();
             for (label, root) in [
                 ("DATABASES", &mut self.native.root),
                 ("METADATA_AND_PRIVATE_TLS", &mut self._keys),

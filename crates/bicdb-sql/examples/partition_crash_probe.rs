@@ -63,10 +63,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             write_new(Path::new(&args[3]), &snapshot(&db)?)?;
             db.close()?;
         }
-        "apply" => {
+        "apply" | "io_fail" => {
             assert_eq!(args.len(), 5, "MODE apply DATABASE CASE EXTERNAL_ACK_FILE");
             let mut db = BicDb::open_with_config(path, config)?;
             let before_sequence = db.last_commit_seq();
+            let failure = if args[1] == "io_fail" {
+                Some(bicdb_page::test_faults::arm_io_failure(
+                    &std::env::var("PARTITION_FAIL_SITE")?,
+                    db.data_path(),
+                    std::env::var("PARTITION_FAIL_NTH")?.parse()?,
+                    std::env::var("PARTITION_FAIL_PERSISTENT")? == "1",
+                ))
+            } else {
+                None
+            };
             // Arm only after open, scoped to this disposable database. This
             // reaches existing Native I/O boundaries in either storage mode
             // without adding a product-only upgrade shortcut or crash hook.
@@ -114,7 +124,31 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             } else {
                 assert_eq!(args[3], "parent_heap");
             }
-            let applied = bicdb_sql::apply_partition_upgrade(&mut db, Some(&plan))?;
+            let outcome = bicdb_sql::apply_partition_upgrade(&mut db, Some(&plan));
+            if let Some(failure) = failure {
+                assert!(failure.fired() > 0, "requested I/O failure was not reached");
+                let error = outcome.expect_err("injected I/O failure was acknowledged");
+                // Even a one-shot fault must fence this handle after the I/O
+                // condition is removed. A failure report is never an ACK.
+                drop(failure);
+                let later = db.insert(
+                    "low",
+                    bicdb_core::Record::new("9")
+                        .with_metadata(json!({"k":9,"payload":"forbidden-post-failure-write"})),
+                );
+                assert!(
+                    later.is_err(),
+                    "failed migration handle acknowledged another write"
+                );
+                write_new(
+                    Path::new(&args[4]),
+                    &json!({"upgrade_acknowledged":false,"error":error.to_string(),"sqlstate":error.sqlstate(),"after_failure_write_refused":true,"after_failure_error":later.unwrap_err().to_string()}),
+                )?;
+                // Preserve the actual failed state for another process. A
+                // graceful database close is not this fault's recovery path.
+                std::process::exit(0);
+            }
+            let applied = outcome?;
             assert!(!applied.already_applied);
             // The controller observes this independent, fsynced ACK only after
             // apply returned. Recovery must preserve the complete new state.

@@ -2012,7 +2012,19 @@ impl<'db> SqlSession<'db> {
         }
         let using_rows = self.delete_using_row_set(delete.using.as_deref(), &ctes)?;
         let target_columns = Arc::new(row_output_columns(&table, &target_alias, schema.as_ref()));
-        let records_to_delete = {
+        let records_to_delete = if let Some(parent) = schema
+            .as_ref()
+            .filter(|schema| schema.partitioning.is_some())
+        {
+            self.partition_delete_candidates(
+                delete,
+                &ctes,
+                parent,
+                &target_alias,
+                using_rows.as_ref(),
+                target_columns.clone(),
+            )?
+        } else {
             let build_row_engine = |outer_row: Option<OuterSlotRow>| {
                 let engine = self.sql_engine_with_ctes(ctes.clone());
                 if let Some(outer_row) = outer_row {
@@ -2118,6 +2130,7 @@ impl<'db> SqlSession<'db> {
                                 &using_rows.columns,
                             )?;
                             records.push(DeleteCandidate {
+                                physical_table: None,
                                 record,
                                 columns: predicate_columns.clone(),
                                 row,
@@ -2190,6 +2203,7 @@ impl<'db> SqlSession<'db> {
                     }
                     if seen_record_ids.insert(record.id.clone()) {
                         records.push(DeleteCandidate {
+                            physical_table: None,
                             record,
                             columns: target_columns.clone(),
                             row: target_row,
@@ -2219,6 +2233,7 @@ impl<'db> SqlSession<'db> {
             records_to_delete
         };
         let mut deleted_record_ids = Vec::new();
+        let mut deleted_sources = Vec::new();
         let mut deleted_record_snapshots = Vec::new();
         let can_read_committed_recheck = self.tx.is_some();
         for (idx, mut candidate) in records_to_delete.into_iter().enumerate() {
@@ -2226,16 +2241,21 @@ impl<'db> SqlSession<'db> {
                 self.cancellation.check()?;
             }
             let mut statement_snapshot = 0;
+            let physical_table = candidate.physical_table.as_deref().unwrap_or(&table);
             if can_read_committed_recheck {
                 let candidate_id = candidate.record.id.clone();
-                let signed_grant = self.signed_mutation_grant(&table);
+                let signed_grant = self.signed_mutation_grant(physical_table);
                 let refreshed = match self.tx.as_mut() {
                     Some(tx) => match signed_grant {
                         Some(grant) => tx
-                            .read_committed_delete_record_with_grant(grant, &table, &candidate_id)
+                            .read_committed_delete_record_with_grant(
+                                grant,
+                                physical_table,
+                                &candidate_id,
+                            )
                             .map_err(SqlError::from)?,
                         None => tx
-                            .read_committed_delete_record(&table, &candidate_id)
+                            .read_committed_delete_record(physical_table, &candidate_id)
                             .map_err(SqlError::from)?,
                     },
                     None => None,
@@ -2274,11 +2294,33 @@ impl<'db> SqlSession<'db> {
             if !self.apply_before_delete_row_triggers(&table, schema.as_ref(), &record)? {
                 continue;
             }
+            deleted_sources.push(candidate.physical_table);
             deleted_record_ids.push(record.id.clone());
             deleted_record_snapshots.push(statement_snapshot);
             deleted_records.push(record);
         }
-        let deleted = if deleted_record_snapshots
+        let deleted = if schema
+            .as_ref()
+            .is_some_and(|schema| schema.partitioning.is_some())
+        {
+            let mut groups: BTreeMap<String, Vec<(String, u64)>> = BTreeMap::new();
+            for ((id, snapshot), source) in deleted_record_ids
+                .iter()
+                .cloned()
+                .zip(deleted_record_snapshots)
+                .zip(deleted_sources)
+            {
+                groups
+                    .entry(source.expect("partition candidate has a physical source"))
+                    .or_default()
+                    .push((id, snapshot));
+            }
+            let mut count = 0;
+            for (source, rows) in groups {
+                count += self.delete_session_records_with_statement_snapshots(&source, rows)?;
+            }
+            count
+        } else if deleted_record_snapshots
             .iter()
             .any(|snapshot| *snapshot != 0)
         {

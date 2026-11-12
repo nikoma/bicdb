@@ -340,3 +340,51 @@ fn parent_routes_through_attached_partitioned_subtree_and_preserves_leaf_ack() {
             .is_err());
     });
 }
+
+#[test]
+fn parent_delete_using_and_returning_follow_physical_sources_and_roll_back() {
+    with_stores(|db| {
+        let mut sql = SqlSession::new(db);
+        sql.execute("CREATE TABLE p(k INT,payload TEXT) PARTITION BY RANGE(k)")
+            .unwrap();
+        sql.execute("CREATE TABLE ack_leaf PARTITION OF p FOR VALUES FROM(0) TO(10)")
+            .unwrap();
+        sql.execute("CREATE TABLE high PARTITION OF p FOR VALUES FROM(10) TO(20)")
+            .unwrap();
+        sql.execute("INSERT INTO p VALUES(1,'original-ack'),(11,'delete-high')")
+            .unwrap();
+        sql.execute("CREATE TABLE selector(k INT)").unwrap();
+        sql.execute("INSERT INTO selector VALUES(11),(11)").unwrap();
+        sql.execute("BEGIN").unwrap();
+        assert_eq!(
+            sql.execute(
+                "DELETE FROM p USING selector WHERE p.k=selector.k RETURNING p.k,p.payload"
+            )
+            .unwrap()
+            .rows,
+            vec![vec![
+                SqlValue::Int(11),
+                SqlValue::String("delete-high".into())
+            ]]
+        );
+        assert_eq!(
+            sql.execute("SELECT count(*) FROM high").unwrap().rows,
+            vec![vec![SqlValue::Int(0)]]
+        );
+        sql.execute("ROLLBACK").unwrap();
+        assert_eq!(
+            sql.execute("SELECT k FROM high").unwrap().rows,
+            vec![vec![SqlValue::Int(11)]]
+        );
+        sql.execute("DELETE FROM p USING selector WHERE p.k=selector.k")
+            .unwrap();
+        assert_eq!(
+            sql.execute("SELECT count(*) FROM high").unwrap().rows,
+            vec![vec![SqlValue::Int(0)]]
+        );
+        assert_eq!(
+            sql.execute("SELECT k FROM p").unwrap().rows,
+            vec![vec![SqlValue::Int(1)]]
+        );
+    });
+}

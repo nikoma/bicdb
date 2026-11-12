@@ -67,6 +67,9 @@ pub(crate) struct UpdateAssignmentCandidate {
 
 #[derive(Clone, Debug)]
 pub(crate) struct DeleteCandidate {
+    /// Present only for a partition-tree scan. A record ID alone is not a
+    /// physical row identity across distinct collections.
+    pub(crate) physical_table: Option<String>,
     pub(crate) record: Record,
     pub(crate) columns: Arc<Vec<String>>,
     pub(crate) row: SlotRow,

@@ -486,7 +486,7 @@ async fn backup_control_survives_oracle_identifier_rewriting_and_postgres_quotin
             tokio::time::sleep(Duration::from_millis(20)).await;
         }
         let cancelled = json(&admin, &format!("SELECT \"bicdb_backup_cancel\"('{id}')")).await;
-        assert_eq!(cancelled["cancelled"], false);
+        assert_eq!(cancelled["cancellation_requested"], false);
         let restored_path = root.path().join("restored");
         bicdb_core::restore_backup(
             repository.join("profile_dispatch.bicbackup"),

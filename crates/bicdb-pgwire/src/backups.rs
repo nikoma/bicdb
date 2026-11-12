@@ -307,7 +307,23 @@ pub(crate) fn execute(
         return Ok(None);
     };
     let function_name = function.name.to_string();
-    let operation = function_name.to_ascii_lowercase();
+    let [part] = function.name.0.as_slice() else {
+        return Ok(None);
+    };
+    let Some(identifier) = part.as_ident() else {
+        return Ok(None);
+    };
+    // Oracle normalizes unquoted function names to quoted uppercase before
+    // this server dispatcher. Match the identifier's value, retaining normal
+    // PostgreSQL case sensitivity for explicitly quoted identifiers. Keep
+    // the original spelling below for the strict standalone-call check.
+    let operation = if identifier.quote_style.is_none()
+        || bicdb_sql::oracle::is_oracle_profile(&server.config.sql_profile)
+    {
+        identifier.value.to_ascii_lowercase()
+    } else {
+        identifier.value.clone()
+    };
     if !matches!(
         operation.as_str(),
         "bicdb_backup_start" | "bicdb_backup_status" | "bicdb_backup_cancel"

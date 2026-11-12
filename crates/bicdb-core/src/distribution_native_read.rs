@@ -9,10 +9,21 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::time::{Duration, Instant};
 use uuid::Uuid;
+#[cfg(feature = "tls-replication")]
+mod event_dispatch;
+#[cfg(feature = "tls-replication")]
+mod event_wire;
 mod quorum;
 mod rpc;
 #[cfg(feature = "tls-replication")]
 mod strong;
+#[cfg(feature = "tls-replication")]
+pub(crate) use event_dispatch::NativeStrongEventDispatcher;
+#[cfg(feature = "tls-replication")]
+pub(crate) use event_wire::{
+    NativeEventGetReply, NativeEventGetRequest, NativeEventGetResult,
+    NativeEventGetUnavailableCode, NativeEventReadMode, NativeEventRoute, NativeEventValue,
+};
 pub(crate) use quorum::{NativeReadQuorumCandidate, NativeReadQuorumRound};
 pub(crate) use rpc::{
     require_peer, NativeRangeReadObservation, NativeRangeReadProbeReply,
@@ -20,8 +31,8 @@ pub(crate) use rpc::{
 };
 #[cfg(feature = "tls-replication")]
 pub(crate) use strong::{
-    NativeStrongPointReadOutcome, NativeStrongPointReadRequest, NativeStrongPointReadUnavailable,
-    NativeStrongPointReadValue, NativeStrongReadStage,
+    NativeStrongPointReadAudit, NativeStrongPointReadOutcome, NativeStrongPointReadRequest,
+    NativeStrongPointReadUnavailable, NativeStrongPointReadValue, NativeStrongReadStage,
 };
 
 pub(crate) fn invalid(detail: &str) -> crate::BicDbError {

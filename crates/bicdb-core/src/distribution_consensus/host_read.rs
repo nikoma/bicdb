@@ -234,6 +234,9 @@ impl HostMetadataReadObservation {
     pub(crate) fn requester_incarnation(&self) -> u64 {
         self.response.request.requester_incarnation
     }
+    pub(crate) fn metadata_leader_id(&self) -> &ClusterNodeId {
+        &self.response.evidence.metadata_leader_id
+    }
     pub(crate) fn context_id(&self) -> Uuid {
         self.response.evidence.context_id
     }

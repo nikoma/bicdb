@@ -62,7 +62,7 @@ impl NativeStrongPointReadRequest {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) enum NativeStrongReadStage {
     Request,
     Route,
@@ -94,7 +94,8 @@ pub(crate) enum NativeStrongPointReadOutcome {
 }
 
 /// Audit data, not a serializable permission or a new serving/read authority.
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct NativeStrongPointReadAudit {
     pub business_request_id: Uuid,
     pub challenge: Uuid,
@@ -107,6 +108,7 @@ pub(crate) struct NativeStrongPointReadAudit {
     pub snapshot_sequence: u64,
     pub first_metadata_context_id: Uuid,
     pub final_metadata_context_id: Uuid,
+    pub final_metadata_generation: u64,
     pub final_metadata_term: u64,
     pub final_metadata_read_index: u64,
 }
@@ -308,6 +310,7 @@ impl PendingNativePointRead {
             snapshot_sequence: self.snapshot_sequence,
             first_metadata_context_id: round.metadata.context_id(),
             final_metadata_context_id: final_metadata.context_id(),
+            final_metadata_generation: last.generation,
             final_metadata_term: final_metadata.term(),
             final_metadata_read_index: final_metadata.read_index(),
         };

@@ -294,12 +294,12 @@ impl ActualNativeRf3Fixture {
         network: &BTreeMap<ClusterNodeId, (String, String)>,
         initial_ranges: u32,
     ) -> Self {
-        Self::new_with_initial_enrollment(network, initial_ranges, false, false)
+        Self::new_with_initial_enrollment(network, initial_ranges, false, false, false)
     }
     pub(crate) fn new_with_enrolled_network_precondition(
         network: &BTreeMap<ClusterNodeId, (String, String)>,
     ) -> Self {
-        Self::new_with_initial_enrollment(network, 1, true, false)
+        Self::new_with_initial_enrollment(network, 1, true, false, false)
     }
     /// Fresh born-v2 fixture. There are NO application writes, recovery calls,
     /// or legacy hook installation before the caller installs all host policies.
@@ -307,13 +307,20 @@ impl ActualNativeRf3Fixture {
         network: &BTreeMap<ClusterNodeId, (String, String)>,
         initial_ranges: u32,
     ) -> Self {
-        Self::new_with_initial_enrollment(network, initial_ranges, true, true)
+        Self::new_with_initial_enrollment(network, initial_ranges, true, true, false)
+    }
+    pub(crate) fn new_with_enforced_event_network(
+        network: &BTreeMap<ClusterNodeId, (String, String)>,
+        initial_ranges: u32,
+    ) -> Self {
+        Self::new_with_initial_enrollment(network, initial_ranges, true, true, true)
     }
     fn new_with_initial_enrollment(
         network: &BTreeMap<ClusterNodeId, (String, String)>,
         initial_ranges: u32,
         enroll: bool,
         enforce_from_birth: bool,
+        event_schema: bool,
     ) -> Self {
         assert!(matches!(initial_ranges, 1 | 2));
         let root = tempfile::tempdir().unwrap();
@@ -422,6 +429,10 @@ impl ActualNativeRf3Fixture {
             }
             .unwrap();
             db.create_collection("items").unwrap();
+            if event_schema {
+                db.create_collection(crate::CLUSTER_EVENTS_COLLECTION)
+                    .unwrap();
+            }
             drop(db);
             let (db, genesis) =
                 BicDb::open_range_image_database(&path, config.clone(), &spec).unwrap();

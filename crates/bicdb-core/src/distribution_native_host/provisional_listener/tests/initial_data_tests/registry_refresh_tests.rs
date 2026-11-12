@@ -222,10 +222,10 @@ fn native_initial_data_registry_original_writer_replacement_refuses_before_new_a
     assert!(gateway.append("items", &key, expected.clone()).unwrap());
     assert_eq!(gateway.get_strong("items", &key).unwrap(), Some(expected));
     let id = crate::cluster_event_record_id("items", &key).unwrap();
-    let range = topology
+    let selected = topology
         .range_for_key(crate::CLUSTER_EVENTS_COLLECTION, &id)
-        .unwrap()
-        .id;
+        .unwrap();
+    let range = selected.id;
     let database = &f.hosts[0].seed.database;
     let before = point(&database.read(), range);
     let row = database
@@ -233,20 +233,84 @@ fn native_initial_data_registry_original_writer_replacement_refuses_before_new_a
         .get(crate::CLUSTER_EVENTS_COLLECTION, &id)
         .unwrap()
         .unwrap();
+    let old = controls[0]
+        .initial_data_status(&budget(1000))
+        .unwrap()
+        .unwrap()
+        .writer_binding_diagnostic
+        .unwrap();
+    assert_eq!(old["observed_bound_registration_active"], true);
+    // Produce the actual sealed preparation while original MQ/slot/writer
+    // are live. Replacement must not relabel this earlier successful capture.
+    let original = budget(5000);
+    let captured = controls[0]
+        .test_prepare_initial_data_registry_refresh(&original)
+        .unwrap();
     let replacement = controls[0]
         .test_replace_initial_data_writer_after_identity_check(&node(0), &budget(5000))
         .unwrap();
+    original.check().unwrap();
+    let replacement_binding = replacement.guard.binding_diagnostic();
+    assert_ne!(
+        old["persisted_policy_registration_generation"],
+        replacement_binding["persisted_policy_registration_generation"]
+    );
+    assert_ne!(
+        old["persisted_policy_coordinator_id"],
+        replacement_binding["persisted_policy_coordinator_id"]
+    );
+    assert_eq!(
+        replacement_binding["observed_bound_registration_active"],
+        true
+    );
+    assert_eq!(replacement_binding["observed_binding_lifetime_live"], true);
+    let revoked = controls[0]
+        .initial_data_status(&budget(1000))
+        .unwrap()
+        .unwrap()
+        .writer_binding_diagnostic
+        .unwrap();
+    assert_eq!(
+        revoked["persisted_policy_registration_generation"],
+        old["persisted_policy_registration_generation"]
+    );
+    assert_ne!(revoked["observed_bound_registration_active"], true);
+    assert_eq!(revoked["observed_weak_directory_alive"], true);
+    assert_eq!(revoked["observed_binding_lifetime_live"], false);
     assert!(database
         .read()
         .test_current_native_writer_registry_audit()
         .unwrap()
         .is_none());
-    let error = controls[0]
-        .test_force_initial_data_registry_refresh(&budget(5000))
+
+    // First distinguish the ACTUAL earlier ingress fence: a new automatic
+    // fresh-MQ attempt reaches the revoked old listener and must refuse there.
+    let fresh = budget(5000);
+    let live_error = controls[0]
+        .test_force_initial_data_registry_refresh(&fresh)
         .unwrap_err();
+    fresh.check().unwrap();
     assert!(
-        error.to_string().contains("original writer object"),
-        "{error}"
+        live_error
+            .to_string()
+            .contains("native writer hook lifetime ended")
+            || live_error
+                .to_string()
+                .contains("native writer hook/open is no longer current"),
+        "{live_error}"
+    );
+    // Also exercise the kernel independently with the genuinely captured
+    // preparation. No new network proof or production fence is bypassed.
+    original.check().unwrap();
+    let kernel_error = controls[0]
+        .test_apply_initial_data_registry_refresh(captured, &original)
+        .unwrap_err();
+    original.check().unwrap();
+    assert!(
+        kernel_error
+            .to_string()
+            .contains("current Store/writer object changed"),
+        "{kernel_error}"
     );
     assert!(database
         .read()
@@ -262,10 +326,32 @@ fn native_initial_data_registry_original_writer_replacement_refuses_before_new_a
             .as_deref(),
         Some(row.as_ref())
     );
+    replacement
+        .guard
+        .require_for_coordinator(&database.read(), selected, &replacement.coordinator)
+        .unwrap();
     for control in &mut controls {
         control.stop(&budget(5000)).unwrap();
     }
-    // The old owner's cleanup must never clear the replacement's hook.
+    // Old cleanup cannot retire the replacement. Verify the actual current
+    // native hook, not only a saved generation string, before retiring it.
+    replacement
+        .guard
+        .require_for_coordinator(&database.read(), selected, &replacement.coordinator)
+        .unwrap();
+    assert_eq!(
+        replacement.guard.binding_diagnostic()["observed_bound_registration_active"],
+        true
+    );
+    assert_eq!(point(&database.read(), range), before);
+    assert_eq!(
+        database
+            .read()
+            .get(crate::CLUSTER_EVENTS_COLLECTION, &id)
+            .unwrap()
+            .as_deref(),
+        Some(row.as_ref())
+    );
     assert!(replacement
         .guard
         .retire_if_current(&database.read(), &replacement.coordinator)

@@ -51,10 +51,12 @@ use crate::distribution_metadata_read_provider::{
 mod host_metadata;
 mod initial_birth;
 mod initial_preparation;
+mod learner_birth;
 mod native_abort;
 use crate::distribution_native_host::{
     NativeInitialBirthOfferRequest, NativeInitialBirthOfferResponse,
-    NativeInitialPreparationRequest, NativeInitialPreparationResponse,
+    NativeInitialPreparationRequest, NativeInitialPreparationResponse, NativeLearnerBirthRequest,
+    NativeLearnerBirthResponse,
 };
 use crate::distribution_range_consensus::{
     RangeWriteAck, RangeWriteCommand, RangeWriteProbe, RangeWriteProgress, RangeWriteRepairBatch,
@@ -78,6 +80,7 @@ pub(crate) use initial_birth::AuthenticatedNativeInitialBirthReply;
 pub(crate) use initial_preparation::{
     AuthenticatedNativeInitialConfigurationDataReply, AuthenticatedNativeInitialPreparationReply,
 };
+pub(crate) use learner_birth::AuthenticatedNativeLearnerBirthReply;
 pub(crate) use native_abort::{
     AuthenticatedNativeAbortCandidateReply, AuthenticatedNativeAbortPromiseReply,
 };
@@ -343,6 +346,9 @@ enum ClusterDataRequest {
     NativeInitialPreparation {
         request: NativeInitialPreparationRequest,
     },
+    NativeLearnerBirth {
+        request: NativeLearnerBirthRequest,
+    },
     AcquireMetadataRecoveryRole {
         request: MetadataRecoveryRoleRequest,
     },
@@ -523,6 +529,7 @@ impl ClusterDataRequest {
             | Self::HostMetadataReadAcquire { .. }
             | Self::NativeInitialBirthOffer { .. }
             | Self::NativeInitialPreparation { .. }
+            | Self::NativeLearnerBirth { .. }
             | Self::AcquireMetadataRecoveryRole { .. } => None,
         }
     }
@@ -578,6 +585,7 @@ enum ClusterDataResponse {
     HostMetadataReadAcquire(HostMetadataReadAcquireResponse),
     NativeInitialBirthOffer(NativeInitialBirthOfferResponse),
     NativeInitialPreparation(NativeInitialPreparationResponse),
+    NativeLearnerBirth(NativeLearnerBirthResponse),
     NativeInitialConfigurationData(
         crate::distribution_native_host::NativeInitialConfigurationDataResponse,
     ),
@@ -843,6 +851,7 @@ pub(crate) fn start_cluster_data_server_with_recovery_runtime(
         local_identity,
         initial_birth_provider,
         initial_preparation_provider,
+        learner_birth_provider,
         initial_consensus_only,
         service_store_open_id,
     ) = {
@@ -856,6 +865,7 @@ pub(crate) fn start_cluster_data_server_with_recovery_runtime(
             ),
             service.initial_birth_provider(),
             service.initial_preparation_provider(),
+            service.learner_birth_provider(),
             service.initial_consensus_only(),
             service.native_initial_listener_store_open_id(),
         )
@@ -913,6 +923,7 @@ pub(crate) fn start_cluster_data_server_with_recovery_runtime(
                     let local_identity = local_identity.clone();
                     let initial_birth_provider = initial_birth_provider.clone();
                     let initial_preparation_provider = initial_preparation_provider.clone();
+                    let learner_birth_provider = learner_birth_provider.clone();
                     // Own the slot BEFORE spawning: if OS thread creation
                     // fails, dropping the closure must not leak drain custody.
                     let active_connection = ActiveConnection(active);
@@ -948,6 +959,7 @@ pub(crate) fn start_cluster_data_server_with_recovery_runtime(
                                     recovery_runtime.as_ref(),
                                     initial_birth_provider.as_ref(),
                                     initial_preparation_provider.as_ref(),
+                                    learner_birth_provider.as_ref(),
                                     initial_consensus_only,
                                     request_deadline,
                                 )
@@ -968,6 +980,7 @@ pub(crate) fn start_cluster_data_server_with_recovery_runtime(
                                 recovery_runtime.as_ref(),
                                 initial_birth_provider.as_ref(),
                                 initial_preparation_provider.as_ref(),
+                                learner_birth_provider.as_ref(),
                                 initial_consensus_only,
                                 request_deadline,
                             )
@@ -1061,6 +1074,9 @@ fn handle_cluster_data_connection(
     initial_preparation_provider: Option<
         &std::sync::Weak<crate::distribution_native_host::NativeProvisionalNode>,
     >,
+    learner_birth_provider: Option<
+        &std::sync::Weak<crate::distribution_native_host::NativeLearnerBirthProvider>,
+    >,
     initial_consensus_only: bool,
     request_deadline: Instant,
 ) -> Result<()> {
@@ -1094,6 +1110,31 @@ fn handle_cluster_data_connection(
             request.expected_native_destination.as_ref(),
             request.request.requires_native_metadata_destination(),
         )?;
+        if let ClusterDataRequest::NativeLearnerBirth {
+            request: learner_request,
+        } = &request.request
+        {
+            if learner_request.requester != caller_node_id {
+                return Err(transport_error(
+                    "learner birth request cannot relabel authenticated envelope caller",
+                ));
+            }
+            let provider = learner_birth_provider
+                .and_then(std::sync::Weak::upgrade)
+                .ok_or_else(|| {
+                    transport_error("actual provisional learner factory is not active")
+                })?;
+            let peer = provider.authenticated_peer(
+                &caller_node_id,
+                peer_certificate_sha256,
+                config.dev_localhost_plaintext,
+            )?;
+            let token =
+                CancellationToken::new(Arc::new(AtomicBool::new(false)), Some(request_deadline));
+            return provider
+                .observe(&peer, learner_request.clone(), &token)
+                .map(ClusterDataResponse::NativeLearnerBirth);
+        }
         let topology_guard = topology.read();
         let caller = topology_guard.nodes.get(&request.caller_node_id);
         authorize_cluster_data_caller(
@@ -1122,6 +1163,17 @@ fn handle_cluster_data_connection(
         // Refuse an expired actual DB before acquiring service/DB latches.
         // Retaining an outer Arc or a directory lock cannot revive this open.
         local_open.require_live()?;
+        // Presence is immutable for this listener's entire life. A dead Weak
+        // can never expose metadata votes, generic import or ordinary data.
+        if learner_birth_provider.is_some() {
+            match &request.request {
+                ClusterDataRequest::Ping => return Ok(ClusterDataResponse::Pong),
+                ClusterDataRequest::NativeLearnerBirth { .. } => {}
+                _ => return Err(transport_error(
+                    "provisional learner listener permits only actual birth observation and ping",
+                )),
+            }
+        }
         // Attaching an initial factory makes this listener provisional for its
         // ENTIRE lifetime. A Weak expiry must not expose ordinary scans,
         // digests, mutations or consensus endpoints by falling through.
@@ -3018,6 +3070,9 @@ fn dispatch_cluster_data_request(
         ClusterDataRequest::NativeInitialBirthOffer { .. } => Err(transport_error(
             "initial birth acquisition requires its actual factory provider",
         )),
+        ClusterDataRequest::NativeLearnerBirth { .. } => Err(transport_error(
+            "actual provisional learner birth handler is not active",
+        )),
     }
 }
 
@@ -4593,6 +4648,7 @@ impl TcpClusterRelocationTransport {
                 | ClusterDataRequest::HostMetadataReadAcquire { .. }
                 | ClusterDataRequest::NativeInitialBirthOffer { .. }
                 | ClusterDataRequest::NativeInitialPreparation { .. }
+                | ClusterDataRequest::NativeLearnerBirth { .. }
                 | ClusterDataRequest::AcquireMetadataRecoveryRole { .. }
                 | ClusterDataRequest::RecoveryEpochFence { .. }
                 | ClusterDataRequest::RecoveryFencedProbe { .. }

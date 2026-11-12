@@ -285,6 +285,35 @@ fn native_event_endpoint_enrolled_identity_legacy_coordinator_refuses_before_rec
         .is_none());
     drop(db);
     wrong.database.read().clear_commit_admission();
+    // Actual local and all real enrolled peer catalogues remain at genesis:
+    // neither recovery nor admission reached Prepare.
+    let range = wrong
+        .topology
+        .read()
+        .range_for_key("items", "legacy-must-not-prepare")
+        .unwrap()
+        .clone();
+    assert_eq!(
+        wrong
+            .service
+            .lock()
+            .probe_range_write_for_peer(&range, &node("n0"), 1)
+            .unwrap()
+            .progress
+            .last_index,
+        0
+    );
+    for service in enrolled.native.services.values() {
+        assert_eq!(
+            service
+                .lock()
+                .probe_range_write_for_peer(&range, &node("n0"), 1)
+                .unwrap()
+                .progress
+                .last_index,
+            0
+        );
+    }
     enrolled.idle();
 }
 

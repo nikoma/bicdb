@@ -465,8 +465,13 @@ fn native_joint_actual_complete_image_target_becomes_leader_ack_and_strong_read(
         .unwrap()
         .clone();
     assert_eq!(&activation_range, plan.activation_range());
+    let preparation_started = std::time::Instant::now();
     let mut prepared_round: Option<NativeJointPreparedServingRound> = None;
     for (local, (service, lease)) in decision.into_new_serving_owners().unwrap() {
+        eprintln!(
+            "ACTUAL_JOINT_PHASE prepare-begin node={local} elapsed_ms={}",
+            preparation_started.elapsed().as_millis()
+        );
         let business = Uuid::now_v7();
         let mq = fixture.clients[&local]
             .acquire_host_metadata_observation(
@@ -487,6 +492,10 @@ fn native_joint_actual_complete_image_target_becomes_leader_ack_and_strong_read(
         };
         let observation =
             NativeJointPreparedServingObservation::from_actual_service(actual, service).unwrap();
+        eprintln!(
+            "ACTUAL_JOINT_PHASE prepare-complete node={local} elapsed_ms={}",
+            preparation_started.elapsed().as_millis()
+        );
         if let Some(round) = &mut prepared_round {
             round.record(observation).unwrap();
         } else {
@@ -497,9 +506,38 @@ fn native_joint_actual_complete_image_target_becomes_leader_ack_and_strong_read(
     let prepared = Arc::new(prepared_round.unwrap().finish().unwrap());
     let mut publication = prepared.serving_publication_round().unwrap();
     for local in [node("n1"), node("n2"), node("n3")] {
-        let admission = prepared
-            .acquire_local_activation(&fixture.clients[&local], &node("n1"), &parent)
-            .unwrap();
+        let current = prepared.require_current();
+        eprintln!(
+            "ACTUAL_JOINT_PHASE activation-preflight node={local} elapsed_ms={} result={current:?}",
+            preparation_started.elapsed().as_millis()
+        );
+        current.unwrap();
+        let acquisition_started = std::time::Instant::now();
+        let admission =
+            prepared.acquire_local_activation(&fixture.clients[&local], &node("n1"), &parent);
+        eprintln!(
+            "ACTUAL_JOINT_PHASE activation-acquired node={local} elapsed_ms={} acquisition_ms={} error={:?}",
+            preparation_started.elapsed().as_millis(),
+            acquisition_started.elapsed().as_millis(),
+            admission.as_ref().err()
+        );
+        if admission.is_err() {
+            for (id, store) in &fixture.metadata {
+                if let Some(store) = store.try_lock() {
+                    let status = store.status();
+                    eprintln!(
+                        "ACTUAL_JOINT_PHASE activation-failure-metadata node={id} term={} commit={} last={} generation={}",
+                        status.current_term,
+                        status.commit_index,
+                        status.last_log_index,
+                        status.topology_generation
+                    );
+                } else {
+                    eprintln!("ACTUAL_JOINT_PHASE activation-failure-metadata node={id} busy=true");
+                }
+            }
+        }
+        let admission = admission.unwrap();
         publication
             .publish_actual_local_member(&admission, &parent)
             .unwrap();

@@ -1,0 +1,52 @@
+{
+  "source": "64b7d2806197358eb33b13bf2c8805827517d411",
+  "scope": "Correct actionable PR161 GitHub oracle_hr qualified CREATE/DROP identity regression; preserve exact namespace/case/constraint guards. Run all index controls and unchanged original oracle_hr50 and protocol195 before final delivery version/head checks.",
+  "started_unix": 1794473923.775991,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "drop_constraint_indexes",
+        "--test",
+        "rollback_index_admission",
+        "--",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794473923.776176,
+      "exit": 0,
+      "finished_unix": 1794474040.3693979
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "--no-fail-fast",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-pgwire",
+        "--test",
+        "oracle_hr",
+        "--test",
+        "protocol",
+        "--",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794474040.3696337,
+      "exit": 0,
+      "finished_unix": 1794474285.4205394
+    }
+  ],
+  "status": "focused_passed",
+  "finished_unix": 1794474285.4207308
+}

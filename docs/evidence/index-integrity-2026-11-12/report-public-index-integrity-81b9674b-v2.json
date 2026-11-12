@@ -1,0 +1,47 @@
+{
+  "source": "81b9674b40c18513681b4fd20748d41e9917b724",
+  "scope": "Backport the complete validated index drop integrity and retry-retention batch onto actual public main482 without Native/core or private rename changes. Seven new tests plus existing SQL authorization/catalog/constraint/version tests, case-mapped unit, wire protocol/backups/ACL/read-only. This is pre-version delivery implementation; fresh next-unused merge version will be selected after coordinated ERP483 publication. No default partition or promoted rename qualification claimed.",
+  "started_unix": 1794468018.403915,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "--no-fail-fast",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "drop_constraint_indexes",
+        "--test",
+        "rollback_index_admission",
+        "--test",
+        "constraint_diagnostics",
+        "--test",
+        "catalog_default_and_index_columns",
+        "--test",
+        "raw_ddl_authorization",
+        "--test",
+        "object_ddl_authorization",
+        "--test",
+        "ddl_authorization_holes",
+        "--test",
+        "ownership_authorization",
+        "--test",
+        "set_role_drops_privilege",
+        "--test",
+        "version_identity",
+        "--",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794468018.4042234,
+      "exit": 101,
+      "finished_unix": 1794468066.0926297
+    }
+  ],
+  "status": "failed",
+  "finished_unix": 1794468066.092802
+}

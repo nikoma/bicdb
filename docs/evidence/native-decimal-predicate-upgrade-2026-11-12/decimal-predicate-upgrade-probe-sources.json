@@ -1,0 +1,18 @@
+[
+  {
+    "kind": "old",
+    "base": "f43583da4c34209e810c5e6a8f5925831b2949a1",
+    "source": "1e6ea47c58dd1f3783640ee8747037855c3ad5b4",
+    "source_ref": "refs/bicdb-proof/decimal-predicate-upgrade-old",
+    "example_sha256": "b4e79fd4ce432a0c13374e301ab94133104091e13834de0d0c00500af290f407",
+    "production_core_src_identical": true
+  },
+  {
+    "kind": "candidate777",
+    "base": "777e82cf829cbee94b881054a29b686a271a75b6",
+    "source": "b616aa25a2f468ad3647140dbb836086009dd9e8",
+    "source_ref": "refs/bicdb-proof/decimal-predicate-upgrade-candidate777",
+    "example_sha256": "b4e79fd4ce432a0c13374e301ab94133104091e13834de0d0c00500af290f407",
+    "production_core_src_identical": true
+  }
+]

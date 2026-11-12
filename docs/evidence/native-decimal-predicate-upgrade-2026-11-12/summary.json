@@ -1,0 +1,24 @@
+{
+  "status": "actionable_native_upgrade_failure",
+  "reviewed_candidate": "777e82cf829cbee94b881054a29b686a271a75b6",
+  "old_production_core_source": "f43583da4c34209e810c5e6a8f5925831b2949a1",
+  "actual": "New reader accepts old Native Decimal partial unique-index generation. Acknowledged row matches new predicate but lookup omits it, verifier reports1missing/wrong and invalid, new duplicate accepted. Old closed fixture unchanged; candidate uses copied actual files, no metadata editing.",
+  "required_before_delivery": "Automatic read/write admission of existing generations under versioned predicate semantics, safe complete rebuild/transition with interrupted-state and old-reader fences; preserve ACK/uniqueness across process and clean reopens. Fresh-store or application-specific scope transitions are insufficient for arbitrary existing Native Decimal predicates.",
+  "root_action": "PR158 converted to draft to hold unsafe delivery; source and running CI unchanged. PR160 already draft and depends on158. Root public index254 checks independent and do not include this Core change.",
+  "helper_build_receipts_are_not_test_passes": true,
+  "prior_sql_fixture": "Ordinary SQL CREATE INDEX fixture did not persist a Native predicate; it cannot certify this upgrade and is superseded by the actual Native API creator here.",
+  "inputs": {
+    "build-decimal-native-probe-candidate777-v2.json": "7aa01de8a07582381f47d2a9ccef198ddba25d6a6404279ff57b8587eeb9f1f7",
+    "build-decimal-native-probe-old-v2.json": "637892e7cfd275d58376bc50e019f12fc86b0c8a80011d18ea4b8188aadb34f4",
+    "candidate-reader.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "candidate-reader.stdout": "f2277023c0a5bb7ecec12867f1006ab805a57bf10a07fb3d3d4dafec6a034f3d",
+    "decimal-native-probe-phase-admission-adjustment.json": "d72b97f19b26b31153628addb1b5a065db576ece450d6b1eae6c102087c6798f",
+    "decimal-predicate-upgrade-probe-sources.json": "71971e499b9fda5c459b437d69aac4ec3f21860de8d2c5eff964297cf6e7fc2e",
+    "decimal_predicate_upgrade_probe.rs": "b4e79fd4ce432a0c13374e301ab94133104091e13834de0d0c00500af290f407",
+    "old-creator.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "old-creator.stdout": "605fb3e0ebd8ee8565c44130b4ffb3ed5d5ed8eb27c51e96bc5c51bad24d5e8d",
+    "result.json": "27126829c04d252e60bcf0352c303a7706ee99eb6359d57ba676326a87db576f",
+    "run_native_decimal_predicate_upgrade_control.py": "59d4b3fa273556d54c6a640db9ba49784c26ba746642f18bc38274e5577ee429"
+  },
+  "recorded_unix": 1794469578.2918556
+}

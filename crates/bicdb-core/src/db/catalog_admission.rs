@@ -374,6 +374,7 @@ impl CatalogAdmission {
         state.scopes.retain(|serial, scope| {
             scope.owner_live
                 || scope.context.is_some()
+                || (scope.parent.is_some() && !scope.closing)
                 || registrations
                     .values()
                     .any(|entry| entry.actor_scope == Some(*serial))

@@ -63,6 +63,14 @@ fn catalog_publication_resources_are_temporary_and_recovery_keeps_the_actual_par
             repair.insert("base", row(1)).unwrap();
             repair.insert("derived", row(1)).unwrap();
             repair.commit().unwrap();
+            // Recovery has consumed its business owner. Completing the first
+            // internal transaction must not retire the still-live access
+            // guard before its following atomic catalog publication.
+            db.check_catalog_read_access("derived", Some("one"))
+                .unwrap();
+            let mut next = db.begin_transaction().unwrap();
+            next.insert("derived", row(1)).unwrap();
+            next.commit().unwrap();
         }
         db.finish_catalog_scope(&parent).unwrap();
         assert!(db.catalog_admission.state.read().scopes.is_empty());

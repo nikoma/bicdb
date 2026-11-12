@@ -372,6 +372,20 @@ impl NativeJointOpenAdmission {
     pub(crate) fn cancellation(&self) -> &crate::CancellationToken {
         &self.cancellation
     }
+    pub(crate) fn original_writer_for_activation(
+        &self,
+        database: &crate::BicDb,
+        store: &crate::distribution_range_consensus::RangeWriteStore,
+    ) -> Result<(Arc<crate::db::NativeWriterHostState>, std::path::PathBuf)> {
+        self.require_live()?;
+        let actual = self.local.actual.require_original_writer(database, store)?;
+        let (original, root) = self.local.actual.original_writer_for_continuation()?;
+        if !Arc::ptr_eq(&actual, &original) {
+            return Err(invalid("joint activation changed preparation writer"));
+        }
+        self.require_live()?;
+        Ok((original, root))
+    }
     pub(crate) fn require_live(&self) -> Result<()> {
         self.cancellation.check()?;
         self.fresh.require_metadata_current()?;

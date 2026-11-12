@@ -106,3 +106,47 @@ are unchanged. No new persisted format, token lifetime, permission constructor,
 physical-history scan or post-joint NoData support is added. Formatting/static
 checks are the only local validation; the exact three fault controls and full
 terminal handoff need remote execution on the corrected source.
+
+
+## Original-TTL release writer continuity (source-only successor)
+
+The separately confirmed `e8d263bac30f59f48b7c71a478304760fc564b82`
+regression concerned fresh collection after actual writer reinstallation. The
+original receipt release paths had an adjacent source-only gap: image-target
+`NativeJointImageReleaseOwner::release` and surviving-voter
+`NativeJointHandoffRuntime::release_activated_new_member` validated the current
+host and protected activation, but their activation receipt retained no original
+writer registration. No false activation or lost ACK was demonstrated on those
+original release paths.
+
+`NativeJointCatalogueActivationReceipt` now retains the original prepared writer
+Arc and actual catalogue root. Both native activation persistence and exact-fact
+recovery obtain it from the admission's original prepared evidence before any
+write or receipt construction. Receipt liveness checks original registration,
+open/health and range coverage without borrowing the DB or native journal.
+Currentness also checks pointer equality with the actual Store writer and the
+actual borrowed DB. Persistence checks it again before mutation, mint and return.
+Thus the existing original image and survivor release paths refuse a replaced
+registration before dropping their retained freeze owner. The serialized
+`NativeJointCatalogueActivationFact`, activation checksum, original request
+cancellation/deadline and immutable native audit do not change. A historical fact
+alone still grants no release or renewed authority.
+
+Two new unexecuted controls in `complete_joint_tests/original_release_writer_tests.rs`
+use distinct typed image-target/surviving-voter continuations. Each starts with the
+real same-open nonempty handoff, all-three protected native publications, a full
+actual fresh three-member open phase and independent local post-quorum MQ. It
+persists one actual local activation, drains duplicate preparation owners, then
+installs a genuine fresh same-config Host-MQ writer policy before calling that
+recipient's ORIGINAL release API. Request-only checks must pass before reinstall
+and after refusal: expiry cannot satisfy the writer-identity assertion. The
+control requires exact catalogue bytes, native R/H/local-B/history generation,
+namespace UID and original ACK row to remain unchanged and the actual freeze to
+remain held. Pre-receipt timeouts have at most three genuine bounded attempts;
+no returned receipt TTL is extended. These controls do not replace the full
+all-three activation/release + ACK2/Strong terminal test, and do not qualify cold
+or intentional writer-replacement recovery.
+
+This successor has only formatting and source checks locally; no Cargo or
+runtime result is claimed. The preserved 87d revision and its CI scope remain
+separate.

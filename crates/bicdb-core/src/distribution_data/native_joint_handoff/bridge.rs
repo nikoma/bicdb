@@ -61,7 +61,7 @@ impl ActualServiceNativeJointPreparedEvidence {
         self.writer
             .require_range(self.committed.data().activation_range())
     }
-    fn require_original_writer(
+    pub(crate) fn require_original_writer(
         &self,
         database: &BicDb,
         store: &crate::distribution_range_consensus::RangeWriteStore,

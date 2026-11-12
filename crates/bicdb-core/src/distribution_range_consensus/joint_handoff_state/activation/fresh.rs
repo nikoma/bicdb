@@ -11,13 +11,14 @@ impl NativeJointCatalogueActivationReceipt {
         scope: &crate::db::NativeJointBridgeReadScope<'_>,
         store: &RangeWriteStore,
     ) -> Result<()> {
-        self.require_live()?;
+        self.require_original_writer_current(scope.database(), store)?;
         let fact = NativeJointCatalogueActivationFact {
             store_open_id: self.store_open_id,
             activated: self.activated.clone(),
             native: self.native.clone(),
         };
-        fact.require_current_with_scope(scope, store)
+        fact.require_current_with_scope(scope, store)?;
+        self.require_original_writer_current(scope.database(), store)
     }
 }
 impl RangeWriteStore {
@@ -27,6 +28,8 @@ impl RangeWriteStore {
         admission: &NativeJointOpenAdmission,
     ) -> Result<Option<NativeJointCatalogueActivationReceipt>> {
         admission.require_live()?;
+        let (writer, writer_root) = admission.original_writer_for_activation(database, self)?;
+
         let native = admission.native_receipt();
         let range = native.data().old_range().id;
         // An absence result grants nothing and performs no write. The complete
@@ -64,10 +67,13 @@ impl RangeWriteStore {
                 range_write_error("exact native activation disappeared during local recovery")
             })?;
         self.require_joint_open_phase_not_released(&fact)?;
+        writer.require_store(&writer_root, self.open_id)?;
         let receipt = NativeJointCatalogueActivationReceipt {
             store_open_id: fact.store_open_id,
             activated: fact.activated,
             native: fact.native,
+            writer,
+            writer_root,
             cancellation: admission.cancellation().clone(),
         };
         receipt.require_current_with_scope(&scope, self)?;
@@ -86,6 +92,8 @@ impl RangeWriteStore {
         parent: &CancellationToken,
     ) -> Result<NativeJointCatalogueActivationReceipt> {
         parent.check()?;
+        let (writer, writer_root) = admission.original_writer_for_activation(database, self)?;
+
         // Nonwaiting cross-service checks happen BEFORE this local journal.
         #[cfg(test)]
         let mut external_trace = crate::distribution_range_handoff::NativeJointPhaseTrace::new(
@@ -166,6 +174,7 @@ impl RangeWriteStore {
                 "fresh activation changed permanent plan/session/nonce",
             ));
         }
+        writer.require_database(database, data.activation_range())?;
         self.recovery_persistence_uncertain = true;
         state.serving_activation = Some(candidate.clone());
         // Missing raw log is possible only at an actually verified genesis
@@ -193,10 +202,13 @@ impl RangeWriteStore {
         drop(controlled);
         #[cfg(test)]
         test_cuts::after_persist()?;
+        writer.require_store(&writer_root, self.open_id)?;
         let receipt = NativeJointCatalogueActivationReceipt {
             store_open_id: self.open_id,
             activated: candidate,
             native: native.clone(),
+            writer,
+            writer_root,
             cancellation: admission.cancellation().clone(),
         };
         receipt.require_current_with_scope(&scope, self)?;

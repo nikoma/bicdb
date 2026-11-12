@@ -5,6 +5,8 @@
 use super::*;
 #[path = "complete_joint_tests/open_adversarial_tests.rs"]
 mod open_adversarial_tests;
+#[path = "complete_joint_tests/original_release_writer_tests.rs"]
+mod original_release_writer_tests;
 use crate::distribution_range_consensus::{
     ImageInstallPurpose, NativeImageInstallRole, RecoveryFenceScope,
 };
@@ -339,6 +341,7 @@ enum JointTestOutcome {
     OriginalCallerRejected,
     FrozenOpenOnly,
     AdversarialOnly,
+    OriginalReleaseWriterRejected,
 }
 
 #[test]
@@ -367,6 +370,14 @@ fn native_joint_fresh_open_phase_reconciles_exact_target_epoch_and_lost_catalogu
 }
 
 fn run_complete_joint(mode: u8) -> JointTestOutcome {
+    run_complete_joint_with_original_release_control(mode, None)
+}
+
+fn run_complete_joint_with_original_release_control(
+    mode: u8,
+    control: Option<original_release_writer_tests::OriginalReleaseControl>,
+) -> JointTestOutcome {
+    assert!(control.is_none() || mode == 0);
     let parent = CancellationToken::uncancelable();
     let mut fixture = EnforcedNetwork::new_with_metadata_members(4);
     fixture.native.root.disable_cleanup(true);
@@ -580,6 +591,28 @@ fn run_complete_joint(mode: u8) -> JointTestOutcome {
             return JointTestOutcome::AdversarialOnly;
         }
         return JointTestOutcome::PublicationOnly;
+    }
+
+    if let Some(control) = control {
+        let published =
+            exercise_fresh_native_publication(&fixture, &prepared, &parent, old.id, false);
+        let release =
+            original_release_writer_tests::prepare(&fixture, &published, &parent, control);
+        // Drain genuine duplicate owners before the attempted ORIGINAL release.
+        // No Frozen/pin or old receipt is recreated for this negative.
+        drop(published);
+        drop(prepared);
+        drop(closed);
+        original_release_writer_tests::reject_after_reenrollment(
+            &fixture,
+            &runtimes,
+            &parent,
+            old.id,
+            &key,
+            &acknowledged,
+            release,
+        );
+        return JointTestOutcome::OriginalReleaseWriterRejected;
     }
 
     let release_continuation = if mode == 0 {

@@ -75,6 +75,9 @@ pub(crate) struct NativeJointCatalogueActivationReceipt {
     store_open_id: Uuid,
     activated: NativeJointCatalogueActivation,
     native: Arc<crate::db::NativeJointServingBridgeReceipt>,
+    // Request continuity only; never serialized into the durable fact below.
+    writer: Arc<crate::db::NativeWriterHostState>,
+    writer_root: PathBuf,
     cancellation: CancellationToken,
 }
 /// Actual protected catalogue/native fact, with NO request permission or TTL.
@@ -183,6 +186,28 @@ impl NativeJointCatalogueActivationReceipt {
         &self.native
     }
     pub(crate) fn require_live(&self) -> Result<()> {
+        self.cancellation.check()?;
+        self.writer
+            .require_store(&self.writer_root, self.store_open_id)?;
+        self.writer.require_range(&self.activated.range)
+    }
+    fn require_original_writer_current(
+        &self,
+        database: &crate::BicDb,
+        store: &RangeWriteStore,
+    ) -> Result<()> {
+        self.require_live()?;
+        if !Arc::ptr_eq(&self.writer, &store.native_writer_host_state()?) {
+            return Err(range_write_error(
+                "original joint activation writer registration changed",
+            ));
+        }
+        self.writer
+            .require_database(database, &self.activated.range)?;
+        self.require_live()
+    }
+    #[cfg(test)]
+    pub(crate) fn test_original_request_live(&self) -> Result<()> {
         self.cancellation.check()
     }
     pub(crate) fn require_current(
@@ -190,7 +215,7 @@ impl NativeJointCatalogueActivationReceipt {
         database: &crate::BicDb,
         store: &RangeWriteStore,
     ) -> Result<()> {
-        self.require_live()?;
+        self.require_original_writer_current(database, store)?;
         self.native.require_current(database)?;
         store.require_native_catalog_durability(database.data_path())?;
         store.require_native_writer_host_base()?;
@@ -213,7 +238,7 @@ impl NativeJointCatalogueActivationReceipt {
                 "joint native/catalogue activation actual open/binding changed",
             ));
         }
-        Ok(())
+        self.require_original_writer_current(database, store)
     }
 }
 impl RangeWriteStore {
@@ -363,6 +388,8 @@ impl RangeWriteStore {
         if admission.has_fresh_open_phase() {
             return self.recover_fresh_native_joint_activation(database, admission);
         }
+
+        let (writer, writer_root) = admission.original_writer_for_activation(database, self)?;
         admission.require_live()?;
         admission.committed().require_current(database)?;
         let Some(fact) =
@@ -371,10 +398,13 @@ impl RangeWriteStore {
             return Ok(None);
         };
         self.require_joint_open_phase_not_released(&fact)?;
+        writer.require_store(&writer_root, self.open_id)?;
         let receipt = NativeJointCatalogueActivationReceipt {
             store_open_id: fact.store_open_id,
             activated: fact.activated,
             native: fact.native,
+            writer,
+            writer_root,
             cancellation: admission.cancellation().clone(),
         };
         receipt.require_current(database, self)?;
@@ -388,6 +418,7 @@ impl RangeWriteStore {
         database: &crate::BicDb,
         admission: &NativeJointOpenAdmission,
     ) -> Result<()> {
+        let (writer, writer_root) = admission.original_writer_for_activation(database, self)?;
         if !self.recovery_persistence_uncertain {
             return Ok(());
         }
@@ -422,9 +453,11 @@ impl RangeWriteStore {
                 "cannot re-fsync an unrelated uncertain joint activation",
             ));
         }
+        writer.require_database(database, native.data().activation_range())?;
         self.persist()?;
         self.recovery_persistence_uncertain = false;
-        Ok(())
+        writer.require_store(&writer_root, self.open_id)?;
+        admission.require_live()
     }
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn persist_native_joint_catalogue_activation(
@@ -454,6 +487,8 @@ impl RangeWriteStore {
             return result;
         }
         parent.check()?;
+        let (writer, writer_root) = admission.original_writer_for_activation(database, self)?;
+
         admission.require_external_publications_current()?;
         admission.committed().require_current(database)?;
         let native = admission.native_receipt();
@@ -554,6 +589,7 @@ impl RangeWriteStore {
         }
         // Retiring the exact adopted image refusal and recording the new
         // CLOSED activation happen in the SAME fsynced catalogue publication.
+        writer.require_database(database, data.activation_range())?;
         self.recovery_persistence_uncertain = true;
         state.serving_activation = Some(candidate.clone());
         self.catalog
@@ -576,10 +612,13 @@ impl RangeWriteStore {
         persisted?;
         self.recovery_persistence_uncertain = false;
         drop(controlled);
+        writer.require_store(&writer_root, self.open_id)?;
         let receipt = NativeJointCatalogueActivationReceipt {
             store_open_id: self.open_id,
             activated: candidate,
             native,
+            writer,
+            writer_root,
             cancellation: admission.cancellation().clone(),
         };
         parent.check()?;

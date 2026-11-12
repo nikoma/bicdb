@@ -1,0 +1,38 @@
+{
+  "README.md": {
+    "bytes": 3753,
+    "sha256": "39022e7e056564dfe1b3b07049f69de0f76bb57d36df178cc5dca1fc86e36a11"
+  },
+  "controller/partition-native-authority-baseline.json": {
+    "bytes": 1568,
+    "sha256": "61119580dbf4fcdf8ec0a00b5dde1bba93fb140c96524d39c1fb00db28815ac0"
+  },
+  "controller/partition-native-identity-observed-focused.json": {
+    "bytes": 2706,
+    "sha256": "34e3acd62bacb051d95ff0be8de14dc59bd215c0a43b9c9c07054e8dabbc9e4e"
+  },
+  "controller/partition-native-identity-update-focused.json": {
+    "bytes": 2399,
+    "sha256": "aec33eb4250b88055bb45d7cd9c67670b6bec3d3f0a6009d46b23aca061d5da5"
+  },
+  "raw-manifest.json": {
+    "bytes": 1733,
+    "sha256": "3ec6fc7ab805318a6127c2352db4e91bddb51e9be91a149bb44744e66e43a75d"
+  },
+  "report-partition-native-authority-baseline.json": {
+    "bytes": 1085,
+    "sha256": "0b5aa2ffdd15646ad441a6117b250dd2769b19a8674ddd4dd0baa61872ed2859"
+  },
+  "report-partition-native-identity-update-focused.json": {
+    "bytes": 2138,
+    "sha256": "f9467f79932218a6a4146de3356a6dace08720625af05e5be9298f22c8cc6eef"
+  },
+  "tc-step-partition-native-authority-baseline.log.gz": {
+    "bytes": 37693,
+    "sha256": "2b0506b01beb0f37bc77d9b5ff40c835266afded5f451d2c4bf1a7ac253b6031"
+  },
+  "tc-step-partition-native-identity-update-focused.log.gz": {
+    "bytes": 72004,
+    "sha256": "622b37b7077e09faf5e5866cb34685980605a39a0edc20281c39dc4acca8b510"
+  }
+}

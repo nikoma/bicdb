@@ -1,0 +1,32 @@
+{
+  "source": "3545a445ac4b2c8d4f937ca0eeff254a1d184999",
+  "scope": "Test-only overexact5aa productionruntime. Nativeprotected routing negatives preserveallACKs/NativeSeq/reopens; sameleafUpdategrant positive; generatedcomputedPKUpdategrant mustremainoneactualUpdate withoutDelete/Insertpermissions andoneaudit, oldIDretired. Originalassertionsnotweakened. This is securitygatebaseline, not claimedpass. Otherbroad5aa continues unchanged; Coreunchanged. VM56 qualification independentlyverifying.",
+  "started_unix": 1794512909.64345,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--no-fail-fast",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "partition_native_authority",
+        "--test",
+        "mutation_authority",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794512909.643567,
+      "exit": 101,
+      "finished_unix": 1794513028.643104
+    }
+  ],
+  "status": "failed",
+  "finished_unix": 1794513028.6432853
+}

@@ -184,6 +184,8 @@ struct ClusterDataRequestEnvelope<Request = ClusterDataRequest> {
     cluster_id: ClusterId,
     caller_node_id: ClusterNodeId,
     destination_node_id: ClusterNodeId,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    expected_native_destination: Option<crate::distribution::NativeStoreBirthV1>,
     request_id: u64,
     request: Request,
 }
@@ -515,8 +517,24 @@ struct ClusterDataResponseEnvelope {
     protocol_version: u32,
     cluster_id: ClusterId,
     source_node_id: ClusterNodeId,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    actual_native_source: Option<crate::distribution::NativeStoreBirthV1>,
     request_id: u64,
     response: std::result::Result<ClusterDataResponse, ClusterDataRemoteError>,
+}
+
+impl ClusterDataRequest {
+    fn requires_native_metadata_destination(&self) -> bool {
+        matches!(
+            self,
+            Self::MetadataVote { .. }
+                | Self::MetadataAppend { .. }
+                | Self::MetadataReadProbe { .. }
+                | Self::MetadataReadAcquire { .. }
+                | Self::HostMetadataReadAcquire { .. }
+                | Self::AcquireMetadataRecoveryRole { .. }
+        )
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -816,6 +834,27 @@ pub(crate) fn start_cluster_data_server_with_recovery_runtime(
             service.native_initial_listener_store_open_id(),
         )
     };
+    // Capture from the real DB, never a published-topology declaration. This
+    // work completes before exposing the listener; operations later check the
+    // immutable identity/open without taking service or database latches.
+    local_identity.3.require_metadata_destination(
+        &local_identity.0,
+        &local_identity.1,
+        local_identity.3.native_destination_birth(),
+        false,
+    )?;
+    if let Some(consensus) = &metadata_consensus {
+        consensus
+            .try_lock()
+            .ok_or_else(|| transport_error("metadata store busy before listener attachment"))?
+            .require_listener_database(&local_identity.3)?;
+    }
+    if let Some(provider) = &metadata_read_provider {
+        let consensus = metadata_consensus.as_ref().ok_or_else(|| {
+            transport_error("metadata provider has no attached actual consensus store")
+        })?;
+        provider.bind_listener_database(consensus, &local_identity.3)?;
+    }
     let thread = thread::spawn(move || {
         while !thread_shutdown.load(Ordering::SeqCst) {
             match listener.accept() {
@@ -1023,6 +1062,12 @@ fn handle_cluster_data_connection(
                 request.destination_node_id, local_node_id
             )));
         }
+        local_open.require_metadata_destination(
+            &local_cluster_id,
+            &local_node_id,
+            request.expected_native_destination.as_ref(),
+            request.request.requires_native_metadata_destination(),
+        )?;
         let topology_guard = topology.read();
         let caller = topology_guard.nodes.get(&request.caller_node_id);
         authorize_cluster_data_caller(
@@ -1225,6 +1270,7 @@ fn handle_cluster_data_connection(
                     topology,
                     &caller_node_id,
                     ClusterDataRequest::ApplicationEvent(get.legacy_request()),
+                    Some(&local_open),
                 )?;
                 let ClusterDataResponse::ApplicationEvent(crate::ClusterEventResponse::Value {
                     value,
@@ -1445,9 +1491,11 @@ fn handle_cluster_data_connection(
             topology,
             &caller_node_id,
             request.request,
+            Some(&local_open),
         )
     })();
     let response = ClusterDataResponseEnvelope {
+        actual_native_source: local_open.native_destination_birth().cloned(),
         protocol_version: CLUSTER_DATA_PROTOCOL_VERSION,
         cluster_id: local_cluster_id,
         source_node_id: local_node_id,
@@ -1841,6 +1889,7 @@ fn dispatch_cluster_data_request(
     published_topology: &RwLock<ClusterTopology>,
     caller_node_id: &ClusterNodeId,
     request: ClusterDataRequest,
+    listener_database: Option<&ClusterServiceOpenGuard>,
 ) -> Result<ClusterDataResponse> {
     if let Some(range_id) = request.range_id_for_schema_fence() {
         require_local_schema_compatibility(service, published_topology, range_id)?;
@@ -2805,8 +2854,12 @@ fn dispatch_cluster_data_request(
             }
             let consensus = metadata_consensus
                 .ok_or_else(|| transport_error("metadata consensus is not active on this node"))?;
+            let mut consensus = consensus.lock();
+            if let Some(actual) = listener_database {
+                consensus.require_listener_database(actual)?;
+            }
             Ok(ClusterDataResponse::MetadataVote(
-                consensus.lock().handle_vote_request(request)?,
+                consensus.handle_vote_request(request)?,
             ))
         }
         ClusterDataRequest::MetadataAppend { request } => {
@@ -2820,6 +2873,9 @@ fn dispatch_cluster_data_request(
             let (response, committed, commit_advanced) = {
                 let mut consensus = consensus.lock();
                 let commit_before = consensus.status().commit_index;
+                if let Some(actual) = listener_database {
+                    consensus.require_listener_database(actual)?;
+                }
                 let response = consensus.handle_append_request(request)?;
                 let committed = consensus.committed_topology().clone();
                 let commit_advanced = consensus.status().commit_index > commit_before;
@@ -2856,6 +2912,9 @@ fn dispatch_cluster_data_request(
             let (response, committed, commit_advanced) = {
                 let mut consensus = consensus.lock();
                 let commit_before = consensus.status().commit_index;
+                if let Some(actual) = listener_database {
+                    consensus.require_listener_database(actual)?;
+                }
                 let response = consensus.handle_read_authority_probe(request)?;
                 let committed = consensus.committed_topology().clone();
                 let commit_advanced = consensus.status().commit_index > commit_before;
@@ -2928,6 +2987,7 @@ pub(crate) fn test_dispatch_metadata_append_with_actual_store(
     caller: &ClusterNodeId,
     request: MetadataAppendRequest,
 ) -> Result<MetadataAppendResponse> {
+    let actual_open = service.lock().listener_open_guard();
     match dispatch_cluster_data_request(
         service.as_ref(),
         None,
@@ -2936,6 +2996,7 @@ pub(crate) fn test_dispatch_metadata_append_with_actual_store(
         published,
         caller,
         ClusterDataRequest::MetadataAppend { request },
+        Some(&actual_open),
     )? {
         ClusterDataResponse::MetadataAppend(reply) => Ok(reply),
         _ => Err(transport_error(
@@ -3104,6 +3165,7 @@ impl TcpClusterBootstrapClient {
     ) -> Result<(ClusterDataResponse, Option<String>)> {
         let request_id = self.next_request_id.fetch_add(1, Ordering::Relaxed);
         let envelope = ClusterDataRequestEnvelope {
+            expected_native_destination: None,
             protocol_version: CLUSTER_DATA_PROTOCOL_VERSION,
             cluster_id: self.cluster_id.clone(),
             caller_node_id: self.caller_node_id.clone(),
@@ -4092,6 +4154,7 @@ impl TcpClusterRelocationTransport {
         };
         crate::distribution_range_consensus::validate_native_json_size(
             &ClusterDataRequestEnvelope {
+                expected_native_destination: None,
                 protocol_version: CLUSTER_DATA_PROTOCOL_VERSION,
                 cluster_id: self.cluster_id.clone(),
                 caller_node_id: self.caller_node_id.clone(),
@@ -4155,6 +4218,7 @@ impl TcpClusterRelocationTransport {
         };
         crate::distribution_range_consensus::validate_native_json_size(
             &ClusterDataRequestEnvelope {
+                expected_native_destination: None,
                 protocol_version: CLUSTER_DATA_PROTOCOL_VERSION,
                 cluster_id: self.cluster_id.clone(),
                 caller_node_id: self.caller_node_id.clone(),
@@ -4204,6 +4268,7 @@ impl TcpClusterRelocationTransport {
         };
         crate::distribution_range_consensus::validate_native_json_size(
             &ClusterDataRequestEnvelope {
+                expected_native_destination: None,
                 protocol_version: CLUSTER_DATA_PROTOCOL_VERSION,
                 cluster_id: self.cluster_id.clone(),
                 caller_node_id: self.caller_node_id.clone(),
@@ -4357,6 +4422,7 @@ impl TcpClusterRelocationTransport {
         };
         crate::distribution_range_consensus::validate_native_json_size(
             &ClusterDataRequestEnvelope {
+                expected_native_destination: None,
                 protocol_version: CLUSTER_DATA_PROTOCOL_VERSION,
                 cluster_id: self.cluster_id.clone(),
                 caller_node_id: self.caller_node_id.clone(),
@@ -4499,7 +4565,13 @@ impl TcpClusterRelocationTransport {
         let deadline = cancellation
             .deadline()
             .map_or(network_deadline, |parent| parent.min(network_deadline));
-        let (address, expected_certificate_sha256, pending_certificate_sha256, incarnation) = {
+        let (
+            address,
+            expected_certificate_sha256,
+            pending_certificate_sha256,
+            incarnation,
+            expected_native_destination,
+        ) = {
             let topology = loop {
                 cancellation.check()?;
                 if Instant::now() >= deadline {
@@ -4519,15 +4591,26 @@ impl TcpClusterRelocationTransport {
                     "cluster node {destination_node_id} is decommissioned"
                 )));
             }
+            if request.requires_native_metadata_destination() {
+                if let Some(birth) = &node.native_store_birth_v1 {
+                    birth.validate_for(topology.range_image_bootstrap_id, node.incarnation)?;
+                }
+            }
             (
                 node.address.clone(),
                 node.tls_certificate_sha256.clone(),
                 node.pending_tls_certificate_sha256.clone(),
                 node.incarnation,
+                if request.requires_native_metadata_destination() {
+                    node.native_store_birth_v1.clone()
+                } else {
+                    None
+                },
             )
         };
         let request_id = self.next_request_id.fetch_add(1, Ordering::Relaxed);
         let envelope = ClusterDataRequestEnvelope {
+            expected_native_destination: expected_native_destination.clone(),
             protocol_version: CLUSTER_DATA_PROTOCOL_VERSION,
             cluster_id: self.cluster_id.clone(),
             caller_node_id: self.caller_node_id.clone(),
@@ -4616,6 +4699,9 @@ impl TcpClusterRelocationTransport {
             || response.cluster_id != self.cluster_id
             || response.source_node_id != *destination_node_id
             || response.request_id != request_id
+            || expected_native_destination
+                .as_ref()
+                .is_some_and(|expected| response.actual_native_source.as_ref() != Some(expected))
         {
             return Err(transport_error(
                 "cluster data RPC response identity or protocol mismatch",
@@ -4701,6 +4787,7 @@ impl RangeWriteTransport for TcpClusterRelocationTransport {
             };
             crate::distribution_range_consensus::validate_native_json_size(
                 &ClusterDataRequestEnvelope {
+                    expected_native_destination: None,
                     protocol_version: CLUSTER_DATA_PROTOCOL_VERSION,
                     cluster_id: self.cluster_id.clone(),
                     caller_node_id: self.caller_node_id.clone(),
@@ -4728,6 +4815,7 @@ impl RangeWriteTransport for TcpClusterRelocationTransport {
         let token = request.token(parent)?;
         crate::distribution_range_consensus::validate_native_json_size(
             &ClusterDataRequestEnvelope {
+                expected_native_destination: None,
                 protocol_version: CLUSTER_DATA_PROTOCOL_VERSION,
                 cluster_id: self.cluster_id.clone(),
                 caller_node_id: self.caller_node_id.clone(),
@@ -4902,6 +4990,7 @@ impl RangeWriteTransport for TcpClusterRelocationTransport {
                 NativeCommandRequestRef::AbortRangeWrite { command },
             ] {
                 let envelope = ClusterDataRequestEnvelope {
+                    expected_native_destination: None,
                     protocol_version: CLUSTER_DATA_PROTOCOL_VERSION,
                     cluster_id: self.cluster_id.clone(),
                     caller_node_id: self.caller_node_id.clone(),
@@ -5469,6 +5558,7 @@ mod tests {
             .unwrap();
         assert_eq!(transport.next_request_id.load(Ordering::SeqCst), 1);
         let borrowed = ClusterDataRequestEnvelope {
+            expected_native_destination: None,
             protocol_version: CLUSTER_DATA_PROTOCOL_VERSION,
             cluster_id: topology.cluster_id.clone(),
             caller_node_id: caller.clone(),
@@ -5477,6 +5567,7 @@ mod tests {
             request: NativeCommandRequestRef::CertifyRangeWrite { command: &command },
         };
         let actual = ClusterDataRequestEnvelope {
+            expected_native_destination: None,
             protocol_version: CLUSTER_DATA_PROTOCOL_VERSION,
             cluster_id: topology.cluster_id.clone(),
             caller_node_id: caller.clone(),
@@ -6045,6 +6136,7 @@ mod tests {
             &published,
             &wrong_leader,
             request.clone(),
+            None,
         )
         .unwrap_err();
         assert!(error.to_string().contains("is not metadata leader"));
@@ -6057,6 +6149,7 @@ mod tests {
             &published,
             &node_id,
             request.clone(),
+            None,
         )
         .unwrap();
         let second = dispatch_cluster_data_request(
@@ -6067,6 +6160,7 @@ mod tests {
             &published,
             &node_id,
             request,
+            None,
         )
         .unwrap();
         let (first, second) = match (first, second) {
@@ -6100,6 +6194,7 @@ mod tests {
             &published,
             &node_id,
             activation.clone(),
+            None,
         )
         .unwrap_err();
         assert!(error.to_string().contains(
@@ -6134,6 +6229,7 @@ mod tests {
             &published,
             &node_id,
             wrong_base,
+            None,
         )
         .unwrap_err();
         assert!(error.to_string().contains(
@@ -6148,6 +6244,7 @@ mod tests {
             &published,
             &node_id,
             activation,
+            None,
         )
         .unwrap();
         let receipt = match response {
@@ -6194,6 +6291,7 @@ mod tests {
             &published,
             &node_id,
             finalization.clone(),
+            None,
         )
         .unwrap_err();
         assert!(error
@@ -6221,6 +6319,7 @@ mod tests {
             &published,
             &wrong_leader,
             finalization.clone(),
+            None,
         )
         .unwrap_err();
         assert!(error.to_string().contains("is not metadata leader"));
@@ -6232,6 +6331,7 @@ mod tests {
             &published,
             &node_id,
             finalization.clone(),
+            None,
         )
         .unwrap();
         let retried_finalization = dispatch_cluster_data_request(
@@ -6242,6 +6342,7 @@ mod tests {
             &published,
             &node_id,
             finalization,
+            None,
         )
         .unwrap();
         let (first_finalization, retried_finalization) =
@@ -6704,6 +6805,7 @@ mod event_client_retry_tests {
                 send_json_frame(
                     &mut stream,
                     &ClusterDataResponseEnvelope {
+                        actual_native_source: None,
                         protocol_version: request.protocol_version,
                         cluster_id: request.cluster_id,
                         source_node_id: request.destination_node_id,
@@ -6878,6 +6980,7 @@ mod event_client_retry_tests {
                 send_json_frame(
                     &mut stream,
                     &ClusterDataResponseEnvelope {
+                        actual_native_source: None,
                         protocol_version: request.protocol_version,
                         cluster_id: request.cluster_id,
                         source_node_id: request.destination_node_id,

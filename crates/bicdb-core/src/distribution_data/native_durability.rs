@@ -11,6 +11,11 @@ pub(crate) struct ClusterServiceOpenGuard {
     health: Arc<bicdb_page::DurabilityHealth>,
     database_root: PathBuf,
     database_incarnation: String,
+    native_destination: Option<(
+        ClusterId,
+        ClusterNodeId,
+        crate::distribution::NativeStoreBirthV1,
+    )>,
 }
 impl ClusterServiceOpenGuard {
     fn capture(database: &BicDb) -> Result<Self> {
@@ -19,6 +24,7 @@ impl ClusterServiceOpenGuard {
             health: database.native_metadata_owner_health()?,
             database_root: database.data_path().canonicalize()?,
             database_incarnation: database.incarnation_id().into(),
+            native_destination: database.native_metadata_listener_identity()?,
         })
     }
     pub(crate) fn require_live(&self) -> Result<()> {
@@ -37,6 +43,53 @@ impl ClusterServiceOpenGuard {
             ));
         }
         database.check_recovery_state()
+    }
+    pub(crate) fn native_destination_birth(
+        &self,
+    ) -> Option<&crate::distribution::NativeStoreBirthV1> {
+        self.native_destination.as_ref().map(|(_, _, birth)| birth)
+    }
+    pub(crate) fn require_metadata_destination(
+        &self,
+        cluster: &ClusterId,
+        node: &ClusterNodeId,
+        expected: Option<&crate::distribution::NativeStoreBirthV1>,
+        countable: bool,
+    ) -> Result<()> {
+        self.require_live()?;
+        if let Some((actual_cluster, actual_node, actual_birth)) = &self.native_destination {
+            if actual_cluster != cluster
+                || actual_node != node
+                || expected.is_some_and(|birth| birth != actual_birth)
+                || (countable
+                    && actual_birth.writer_enforcement_version() == 1
+                    && expected.is_none())
+            {
+                return Err(data_error(
+                    "metadata RPC destination differs from actual native birth/incarnation",
+                ));
+            }
+        } else if expected.is_some() {
+            return Err(data_error(
+                "metadata RPC expected a native birth on an unbound actual database",
+            ));
+        }
+        Ok(())
+    }
+    pub(crate) fn require_owned_metadata_open(
+        &self,
+        owner_open: &std::sync::Weak<()>,
+        cluster: &ClusterId,
+        node: &ClusterNodeId,
+        birth: &crate::distribution::NativeStoreBirthV1,
+    ) -> Result<()> {
+        self.require_metadata_destination(cluster, node, Some(birth), true)?;
+        if !std::sync::Weak::ptr_eq(&self.open, owner_open) {
+            return Err(data_error(
+                "metadata store is not owned by this actual service database open",
+            ));
+        }
+        Ok(())
     }
 }
 

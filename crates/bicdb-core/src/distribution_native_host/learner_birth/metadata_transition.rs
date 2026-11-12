@@ -9,7 +9,7 @@ mod control;
 #[cfg(test)]
 mod validation_barrier;
 
-fn lock_owned_member_metadata<'a>(
+pub(in crate::distribution_native_host) fn lock_owned_member_metadata<'a>(
     metadata: &'a Mutex<MetadataConsensusStore>,
     observed: &HostMetadataReadObservation,
     business: Uuid,
@@ -93,16 +93,17 @@ impl NativeUnassignedLearnerHost {
         business: Uuid,
         parent: &CancellationToken,
     ) -> Result<bool> {
+        observed.require_live_request(business)?;
+        let token = parent.child_with_deadline(observed.deadline());
+        token.check()?;
         let metadata = self
             .metadata_transition
             .metadata
             .as_ref()
             .ok_or_else(|| invalid("actual Registered metadata owner absent"))?;
         let proof = {
-            let store = metadata
-                .try_lock()
-                .ok_or_else(|| invalid("Registered catch-up store busy"))?;
-            store.observe_registered_native_metadata_catchup(observed, business, parent)?
+            let store = lock_owned_member_metadata(metadata, observed, business, &token)?;
+            store.observe_registered_native_metadata_catchup(observed, business, &token)?
         };
         self.provider.factory.require_registered_metadata_catchup(
             &proof,
@@ -110,11 +111,17 @@ impl NativeUnassignedLearnerHost {
             business,
             &self.provider.network,
         )?;
-        let store = metadata
-            .try_lock()
-            .ok_or_else(|| invalid("Registered catch-up owner changed/busy"))?;
+        // The actual factory/DB validation above spans NO metadata guard.
+        // Reacquire the SAME store under the original MQ/caller budget, then
+        // revalidate the unchanged sealed proof; waiting cannot grant READY.
+        #[cfg(test)]
+        validation_barrier::after_actual_factory_validation(&token)?;
+        let store = lock_owned_member_metadata(metadata, observed, business, &token)?;
         proof.require_current(&store)?;
-        proof.local_installed_current()
+        let current = proof.local_installed_current()?;
+        observed.require_live_request(business)?;
+        token.check()?;
+        Ok(current)
     }
 
     pub(in crate::distribution_native_host) fn validate_owned_metadata_member(

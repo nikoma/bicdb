@@ -55,6 +55,17 @@ impl NativeUnassignedLearnerHost {
     pub(crate) fn test_owned_metadata_validation_barrier() -> Arc<OwnedMetadataValidationBarrier> {
         Arc::new(OwnedMetadataValidationBarrier::default())
     }
+    pub(crate) fn test_validate_registered_metadata_catchup_after_factory(
+        &self,
+        observed: &HostMetadataReadObservation,
+        business: Uuid,
+        parent: &CancellationToken,
+        barrier: Arc<OwnedMetadataValidationBarrier>,
+    ) -> Result<bool> {
+        let previous = ACTIVE.with(|slot| slot.replace(Some(barrier)));
+        let _restore = Restore(previous);
+        self.validate_registered_metadata_catchup(observed, business, parent)
+    }
     pub(crate) fn test_validate_owned_metadata_member_after_factory(
         &self,
         observed: &HostMetadataReadObservation,

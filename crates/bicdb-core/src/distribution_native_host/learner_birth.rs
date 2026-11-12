@@ -8,6 +8,7 @@ use crate::distribution_transport::{ClusterDataServerHandle, TcpClusterRelocatio
 use parking_lot::Mutex;
 use std::time::Instant;
 mod metadata_transition;
+pub(super) use metadata_transition::lock_owned_member_metadata;
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]

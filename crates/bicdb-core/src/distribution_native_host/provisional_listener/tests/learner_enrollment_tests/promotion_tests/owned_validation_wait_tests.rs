@@ -2,7 +2,12 @@
 use super::*;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-fn exercise(cancel: bool) {
+#[derive(Clone, Copy)]
+enum Validation {
+    OwnedMember,
+    RegisteredCatchup,
+}
+fn exercise(cancel: bool, validation: Validation) {
     let f = EnrollmentFixture::new();
     let (factory, mut host) = f.factory("actual-owned-member-validation-wait");
     let id = start_owned(&f, &mut host);
@@ -104,12 +109,22 @@ fn exercise(cancel: bool) {
             }
             drop(store);
         });
-        let result = host.test_validate_owned_metadata_member_after_factory(
-            &observed,
-            business,
-            &original,
-            barrier.clone(),
-        );
+        let result = match validation {
+            Validation::OwnedMember => host.test_validate_owned_metadata_member_after_factory(
+                &observed,
+                business,
+                &original,
+                barrier.clone(),
+            ),
+            Validation::RegisteredCatchup => host
+                .test_validate_registered_metadata_catchup_after_factory(
+                    &observed,
+                    business,
+                    &original,
+                    barrier.clone(),
+                )
+                .map(|local_installed_current| assert!(local_installed_current)),
+        };
         finished.store(true, Ordering::Release);
         holder.join().unwrap();
         result
@@ -158,9 +173,18 @@ fn exercise(cancel: bool) {
 }
 #[test]
 fn native_owned_metadata_validation_waits_for_actual_final_store_then_keeps_same_proof() {
-    exercise(false);
+    exercise(false, Validation::OwnedMember);
 }
 #[test]
 fn native_owned_metadata_validation_original_cancel_exits_while_actual_final_store_held() {
-    exercise(true);
+    exercise(true, Validation::OwnedMember);
+}
+
+#[test]
+fn native_registered_metadata_catchup_waits_for_actual_final_store_with_same_proof() {
+    exercise(false, Validation::RegisteredCatchup);
+}
+#[test]
+fn native_registered_metadata_catchup_original_cancel_exits_while_actual_final_store_held() {
+    exercise(true, Validation::RegisteredCatchup);
 }

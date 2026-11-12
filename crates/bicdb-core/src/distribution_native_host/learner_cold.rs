@@ -1,5 +1,6 @@
 //! All-owner cold learner restart. No dead listener is relabelled as drained;
 //! no historical C/UUID is relabelled as current quorum or data admission.
+use super::learner_birth::lock_owned_member_metadata;
 use super::*;
 use crate::distribution::ClusterNetworkTransportConfig;
 use crate::distribution_consensus::{HostMetadataReadObservation, MetadataConsensusStore};
@@ -72,15 +73,16 @@ impl NativeColdLearnerMetadataHost {
         business: Uuid,
         parent: &CancellationToken,
     ) -> Result<bool> {
+        observed.require_live_request(business)?;
+        let token = parent.child_with_deadline(observed.deadline());
+        token.check()?;
         let metadata = self
             .metadata
             .as_ref()
             .ok_or_else(|| invalid("actual Registered metadata owner absent"))?;
         let proof = {
-            let store = metadata
-                .try_lock()
-                .ok_or_else(|| invalid("Registered catch-up store busy"))?;
-            store.observe_registered_native_metadata_catchup(observed, business, parent)?
+            let store = lock_owned_member_metadata(metadata, observed, business, &token)?;
+            store.observe_registered_native_metadata_catchup(observed, business, &token)?
         };
         self.factory.require_registered_metadata_catchup(
             &proof,
@@ -88,11 +90,14 @@ impl NativeColdLearnerMetadataHost {
             business,
             &self.network,
         )?;
-        let store = metadata
-            .try_lock()
-            .ok_or_else(|| invalid("Registered catch-up owner changed/busy"))?;
+        // Factory/native validation occurs after the first guard is dropped.
+        // This is the SAME original proof and store, not a fresh-role retry.
+        let store = lock_owned_member_metadata(metadata, observed, business, &token)?;
         proof.require_current(&store)?;
-        proof.local_installed_current()
+        let current = proof.local_installed_current()?;
+        observed.require_live_request(business)?;
+        token.check()?;
+        Ok(current)
     }
 
     pub(in crate::distribution_native_host) fn validate_owned_metadata_member(
@@ -101,6 +106,9 @@ impl NativeColdLearnerMetadataHost {
         business: Uuid,
         parent: &CancellationToken,
     ) -> Result<()> {
+        observed.require_live_request(business)?;
+        let token = parent.child_with_deadline(observed.deadline());
+        token.check()?;
         let open = self
             .service
             .as_ref()
@@ -113,18 +121,16 @@ impl NativeColdLearnerMetadataHost {
             .as_ref()
             .ok_or_else(|| invalid("actual cold metadata backend absent"))?;
         let proof = {
-            let store = metadata
-                .try_lock()
-                .ok_or_else(|| invalid("cold owned member busy"))?;
+            let store = lock_owned_member_metadata(metadata, observed, business, &token)?;
             store.require_listener_database(&open)?;
-            store.observe_owned_native_metadata_member(observed, business, parent)?
+            store.observe_owned_native_metadata_member(observed, business, &token)?
         };
         self.factory
             .require_owned_metadata_member(&proof, observed, business, &self.network)?;
-        let store = metadata
-            .try_lock()
-            .ok_or_else(|| invalid("cold owned member changed/busy"))?;
-        proof.require_current(&store)
+        let store = lock_owned_member_metadata(metadata, observed, business, &token)?;
+        proof.require_current(&store)?;
+        observed.require_live_request(business)?;
+        token.check()
     }
 
     pub(in crate::distribution_native_host) fn factory_owner(

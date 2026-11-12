@@ -444,6 +444,7 @@ pub use distribution_supervisor::{
 pub use distribution_transport::{
     start_cluster_data_server, start_cluster_data_server_on_listener_with_metadata_read_provider,
     start_cluster_data_server_with_metadata_read_provider, ClusterDataServerHandle,
+    ClusterRpcEvidence, ClusterRpcEvidenceLimits, ClusterRpcEvidenceObserver,
     TcpClusterBootstrapClient, TcpClusterRelocationTransport,
 };
 pub use encryption::{

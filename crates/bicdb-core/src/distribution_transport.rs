@@ -50,6 +50,8 @@ use crate::distribution_io::DeadlineTcpStream;
 use crate::distribution_metadata_read_provider::{
     MetadataReadProbeTransport, MetadataReadProvider,
 };
+mod evidence;
+pub use evidence::{ClusterRpcEvidence, ClusterRpcEvidenceLimits, ClusterRpcEvidenceObserver};
 mod host_metadata;
 mod initial_birth;
 mod initial_data_listener;
@@ -3739,6 +3741,7 @@ pub struct TcpClusterRelocationTransport {
     client_certificate_sha256: Option<String>,
     caller_incarnation: u64,
     next_request_id: AtomicU64,
+    evidence: Option<Arc<evidence::Observer>>,
 }
 
 impl std::fmt::Debug for TcpClusterRelocationTransport {
@@ -3900,7 +3903,33 @@ impl TcpClusterRelocationTransport {
             client_certificate_sha256,
             caller_incarnation,
             next_request_id: AtomicU64::new(1),
+            evidence: None,
         })
+    }
+
+    /// Optional exact per-RPC diagnostics. The observer cannot supply replies
+    /// or authority; its persistence failure permanently fences this observed
+    /// transport. This transport acquires no engine latch for callbacks; a
+    /// caller opting in must itself hold no engine guard. Sink IO must be
+    /// bounded by its host; original RPC deadlines are never renewed.
+    pub fn with_rpc_evidence_observer(
+        mut self,
+        observer: Arc<dyn ClusterRpcEvidenceObserver>,
+        limits: ClusterRpcEvidenceLimits,
+    ) -> Result<Self> {
+        if self.evidence.is_some() {
+            return Err(transport_error(
+                "RPC evidence observer cannot be replaced or rearmed",
+            ));
+        }
+        self.evidence = Some(evidence::Observer::new(observer, limits)?);
+        Ok(self)
+    }
+    pub(crate) fn require_rpc_evidence_current(&self) -> Result<()> {
+        match &self.evidence {
+            Some(observer) => observer.require_current(),
+            None => Ok(()),
+        }
     }
 
     pub fn install_topology(&self, topology: ClusterTopology) -> Result<bool> {
@@ -5005,6 +5034,68 @@ impl TcpClusterRelocationTransport {
         MetadataReadParticipant,
         Option<crate::distribution::NativeStoreBirthV1>,
     )> {
+        let Some(observer) = &self.evidence else {
+            return self.call_with_native_destination_inner(
+                cancellation,
+                destination_node_id,
+                request,
+                None,
+                None,
+            );
+        };
+        // Diagnostic IO consumes the same network/caller window; it cannot
+        // move the original connect/read deadline into the future.
+        let network_deadline = Instant::now() + Duration::from_millis(self.config.io_timeout_ms);
+        let deadline = cancellation
+            .deadline()
+            .map_or(network_deadline, |parent| parent.min(network_deadline));
+        let mut observed = evidence::Attempt::begin(
+            observer.clone(),
+            &self.caller_node_id,
+            destination_node_id,
+            &request,
+            cancellation,
+            deadline,
+        )?;
+        let result = self.call_with_native_destination_inner(
+            cancellation,
+            destination_node_id,
+            request,
+            Some(&mut observed),
+            Some(network_deadline),
+        );
+        if !matches!(&result, Err(BicDbError::RpcEvidenceFailure { .. })) {
+            observed.finish(&result)?;
+            let after_evidence = cancellation.check().and_then(|()| {
+                if Instant::now() >= deadline {
+                    Err(std::io::Error::new(
+                        std::io::ErrorKind::TimedOut,
+                        "cluster RPC original deadline expired during evidence recording",
+                    )
+                    .into())
+                } else {
+                    Ok(())
+                }
+            });
+            if let Err(error) = after_evidence {
+                observed.return_boundary_error(&error)?;
+                return Err(error);
+            }
+        }
+        result
+    }
+    fn call_with_native_destination_inner(
+        &self,
+        cancellation: &CancellationToken,
+        destination_node_id: &ClusterNodeId,
+        request: ClusterDataRequest,
+        mut observed: Option<&mut evidence::Attempt>,
+        observed_network_deadline: Option<Instant>,
+    ) -> Result<(
+        ClusterDataResponse,
+        MetadataReadParticipant,
+        Option<crate::distribution::NativeStoreBirthV1>,
+    )> {
         cancellation.check()?;
         let numeric_metadata_read = matches!(
             &request,
@@ -5030,7 +5121,8 @@ impl TcpClusterRelocationTransport {
                 | ClusterDataRequest::RecoveryCertifySparseHistorical { .. }
                 | ClusterDataRequest::RecoveryApplyHistorical { .. }
         );
-        let network_deadline = Instant::now() + Duration::from_millis(self.config.io_timeout_ms);
+        let network_deadline = observed_network_deadline
+            .unwrap_or_else(|| Instant::now() + Duration::from_millis(self.config.io_timeout_ms));
         let deadline = cancellation
             .deadline()
             .map_or(network_deadline, |parent| parent.min(network_deadline));
@@ -5040,6 +5132,7 @@ impl TcpClusterRelocationTransport {
             pending_certificate_sha256,
             incarnation,
             expected_native_destination,
+            route_generation,
         ) = {
             let topology = loop {
                 cancellation.check()?;
@@ -5075,6 +5168,7 @@ impl TcpClusterRelocationTransport {
                 } else {
                     None
                 },
+                topology.generation,
             )
         };
         let request_id = self.next_request_id.fetch_add(1, Ordering::Relaxed);
@@ -5087,6 +5181,14 @@ impl TcpClusterRelocationTransport {
             request_id,
             request,
         };
+        if let Some(observed) = observed.as_deref_mut() {
+            observed.dispatch(
+                &envelope,
+                route_generation,
+                &address,
+                self.config.max_frame_bytes,
+            )?;
+        }
         // Check the address from the same locked snapshot used for this
         // dispatch; a concurrent topology change cannot introduce DNS after
         // metadata-read preflight has admitted a numeric endpoint.
@@ -5130,11 +5232,16 @@ impl TcpClusterRelocationTransport {
                     pending_certificate_sha256.as_deref(),
                     Some(&peer_certificate_sha256),
                 )?;
-                send_json_frame(&mut stream, &envelope, self.config.max_frame_bytes)?;
-                let response = recv_json_frame::<ClusterDataResponseEnvelope>(
-                    &mut stream,
-                    self.config.max_frame_bytes,
-                )?;
+                let response = if let Some(observed) = observed.as_deref_mut() {
+                    observed.send(&mut stream)?;
+                    observed.receive(&mut stream, self.config.max_frame_bytes)?
+                } else {
+                    send_json_frame(&mut stream, &envelope, self.config.max_frame_bytes)?;
+                    recv_json_frame::<ClusterDataResponseEnvelope>(
+                        &mut stream,
+                        self.config.max_frame_bytes,
+                    )?
+                };
                 (response, Some(peer_certificate_sha256))
             } else {
                 let mut stream = DeadlineTcpStream::new(stream, cancellation.clone(), deadline);
@@ -5144,15 +5251,25 @@ impl TcpClusterRelocationTransport {
                     pending_certificate_sha256.as_deref(),
                     None,
                 )?;
-                send_json_frame(&mut stream, &envelope, self.config.max_frame_bytes)?;
-                let response = recv_json_frame::<ClusterDataResponseEnvelope>(
-                    &mut stream,
-                    self.config.max_frame_bytes,
-                )?;
+                let response = if let Some(observed) = observed.as_deref_mut() {
+                    observed.send(&mut stream)?;
+                    observed.receive(&mut stream, self.config.max_frame_bytes)?
+                } else {
+                    send_json_frame(&mut stream, &envelope, self.config.max_frame_bytes)?;
+                    recv_json_frame::<ClusterDataResponseEnvelope>(
+                        &mut stream,
+                        self.config.max_frame_bytes,
+                    )?
+                };
                 (response, None)
             };
             Ok(pair)
         })();
+        if let (Some(observed), Err(error)) = (observed.as_deref_mut(), &exchange) {
+            if !matches!(error, BicDbError::RpcEvidenceFailure { .. }) {
+                observed.exchange_error(error)?;
+            }
+        }
         // Preserve caller cancellation semantics and reject late decoded
         // responses. Socket progress does not renew the whole RPC budget.
         cancellation.check()?;

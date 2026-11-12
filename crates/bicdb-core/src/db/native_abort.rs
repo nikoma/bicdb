@@ -57,17 +57,33 @@ impl BicDb {
             || tx.native_admission_recovery_release.is_some()
             || tx.state != TxState::Pending
         {
+            tx.native_prepare_only_rejection = Some((admission, rejected));
             tx.receipt_native_admission_unknown();
             return Err(BicDbError::CommitOutcomeUnknown {
-            sequence: tx.committed_seq, transaction_id: Some(tx.id.0), incarnation: self.incarnation.clone(),
-            detail: "prepare-only cleanup reached an admitted/WAL attempt; no no-effect proof issued".into(),
-        });
+                sequence: tx.committed_seq,
+                transaction_id: Some(tx.id.0),
+                incarnation: self.incarnation.clone(),
+                detail: "prepare-only cleanup reached an admitted/WAL attempt; no no-effect proof issued; lease retained until actual cleanup".into(),
+            });
         }
+        // Hash the original actual buffers before clearing them. Even a
+        // binding error must not skip real cleanup or release the lease first.
+        let actual_mutations = actual_transaction_mutations_sha256(tx);
+        if let Err(cleanup) = self.rollback_transaction_without_outcome_receipt(tx) {
+            tx.native_prepare_only_rejection = Some((admission, rejected));
+            tx.receipt_native_admission_unknown();
+            return Err(BicDbError::CommitOutcomeUnknown {
+                sequence: None,
+                transaction_id: Some(tx.id.0),
+                incarnation: self.incarnation.clone(),
+                detail: format!("prepare-only Core cleanup failed; lease retained: {cleanup}"),
+            });
+        }
+        tx.clear_native_rejected_effect_buffers();
         let publication = (|| -> Result<()> {
-            // The inner commit has returned: page/unique/exclusion/postgres commit
-            // guards have actually dropped. Release the actual locks and every
-            // deferred effect/write buffer before publishing the no-effect intent.
-            let actual_mutations_sha256 = actual_transaction_mutations_sha256(tx)?;
+            // Page/unique/exclusion/postgres guards and actual record locks and
+            // buffers have all finished before any no-effect proof is minted.
+            let actual_mutations_sha256 = actual_mutations?;
             if actual_mutations_sha256 != admission_mutations_sha256(&rejected.command().mutations)?
             {
                 return Err(BicDbError::Cluster(
@@ -75,8 +91,6 @@ impl BicDb {
                         .into(),
                 ));
             }
-            self.rollback_transaction_without_outcome_receipt(tx)?;
-            tx.clear_native_rejected_effect_buffers();
             let no_effect = NativeTransactionNoEffect {
                 transaction_id: tx.id.0,
                 database_incarnation: self.incarnation.clone(),
@@ -145,9 +159,15 @@ impl BicDb {
                 "uncertain admission crossed its actual before-WAL cleanup boundary".into(),
             ))
         };
-        // The lease is held through real lock/state/buffer cleanup. This emits
-        // neither CoreNoEffect nor Aborted, and never removes an actual decision.
-        drop(attempt);
+        // The lease is held through real lock/state/buffer cleanup. If that
+        // boundary cannot be established, keep it in the actual transaction;
+        // Transaction::drop releases record locks before its owned fields drop.
+        // This emits neither CoreNoEffect nor Aborted.
+        if cleanup.is_err() {
+            tx.native_uncertain_admission = Some(attempt);
+        } else {
+            drop(attempt);
+        }
         tx.receipt_native_admission_unknown();
         Err(BicDbError::CommitOutcomeUnknown {
             sequence: tx.committed_seq,

@@ -1706,10 +1706,10 @@ impl BicDb {
             .map(|(name, physical)| (name.clone(), physical.clone()))
             .collect();
         let catalog = IndexCatalog {
-            decimal_predicate_semantics_version: indexes
-                .iter()
-                .any(decimal_predicate::affected)
-                .then_some(decimal_predicate::COMPARISON_VERSION),
+            decimal_predicate_semantics_version: (self.decimal_predicates_current
+                && indexes.iter().any(decimal_predicate::affected))
+            .then_some(decimal_predicate::COMPARISON_VERSION),
+            decimal_predicate_upgrade: self.decimal_predicate_upgrade.clone(),
             indexes,
             btree_bindings,
         };

@@ -14,7 +14,7 @@ impl ClusterDataNodeService {
         request: &NativeReadyRequest,
     ) -> Result<()> {
         request.scope.require_role(role)?;
-        let db = try_database_read(&self.db)?;
+        let db = checked_database_read(&self.db, &self.storage_policy)?;
         let native = db.native_recovery_admission(
             role.cluster_id(),
             role.bootstrap_id(),
@@ -33,7 +33,7 @@ impl ClusterDataNodeService {
     ) -> Result<(PreparedNativeRecoveryReady, LocalNativeReadyEvidence)> {
         parent.check()?;
         request.scope.require_role(&role)?;
-        let db = try_database_read(&self.db)?;
+        let db = checked_database_read(&self.db, &self.storage_policy)?;
         let native = db.native_recovery_admission(
             role.cluster_id(),
             role.bootstrap_id(),
@@ -97,7 +97,7 @@ impl ClusterDataNodeService {
         parent: &CancellationToken,
     ) -> Result<LocalNativeReadyEvidence> {
         parent.check()?;
-        let db = try_database_read(&self.db)?;
+        let db = checked_database_read(&self.db, &self.storage_policy)?;
         let native = db.native_recovery_admission(
             role.cluster_id(),
             role.bootstrap_id(),
@@ -124,7 +124,7 @@ impl ClusterDataNodeService {
         parent: &CancellationToken,
     ) -> Result<LocalNativeReadyEvidence> {
         parent.check()?;
-        let db = try_database_read(&self.db)?;
+        let db = checked_database_read(&self.db, &self.storage_policy)?;
         let evidence = self
             .range_writes
             .observe_prepared_native_for_observer(&db, prepared, observer, request)?;

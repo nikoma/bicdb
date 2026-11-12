@@ -22,7 +22,7 @@ pub(crate) struct ActualServiceNativeJointOldEvidence {
 }
 impl ActualServiceNativeJointOldEvidence {
     pub(crate) fn require_current(&self, service: &ClusterDataNodeService) -> Result<()> {
-        let database = try_database_read(&service.db)?;
+        let database = checked_database_read(&service.db, &service.storage_policy)?;
         service.require_native_catalog_database(&database)?;
         self.native.require_closed_fact_current(
             &database,
@@ -64,7 +64,7 @@ impl ClusterDataNodeService {
     ) -> Result<ActualServiceNativeJointOldEvidence> {
         parent.check()?;
         plan.require_role(&role)?;
-        let database = try_database_read(&self.db)?;
+        let database = checked_database_read(&self.db, &self.storage_policy)?;
         self.storage_policy.require_database(&database)?;
         let admission = database.native_recovery_admission(
             role.cluster_id(),
@@ -145,7 +145,7 @@ impl ClusterDataNodeService {
         frozen: &FrozenRangeMutationPermit,
         pin: Option<&SourceCaptureReadPin>,
     ) -> Result<()> {
-        let database = try_database_read(&self.db)?;
+        let database = checked_database_read(&self.db, &self.storage_policy)?;
         self.require_native_catalog_database(&database)?;
         if native.native_admission().local_node_id() != &self.node_id
             || frozen.owner() != plan.promise().session_id
@@ -188,7 +188,7 @@ impl ActualServiceNativeJointConstraints {
         self,
         service: &ClusterDataNodeService,
     ) -> Result<NativeJointIrrevocableFacts> {
-        let database = try_database_read(&service.db)?;
+        let database = checked_database_read(&service.db, &service.storage_policy)?;
         self.plan.require_actual_native(&self.native)?;
         self.native.require_current(&database)?;
         self.catalogue.require_current(&service.range_writes)?;
@@ -246,7 +246,7 @@ impl ClusterDataNodeService {
     ) -> Result<ActualServiceNativeJointConstraints> {
         parent.check()?;
         plan.require_role(role)?;
-        let database = try_database_read(&self.db)?;
+        let database = checked_database_read(&self.db, &self.storage_policy)?;
         self.require_native_catalog_database(&database)?;
         let native = database.native_recovery_admission(
             role.cluster_id(),
@@ -320,7 +320,7 @@ impl ClusterDataNodeService {
         command: Option<&str>,
     ) -> Result<()> {
         self.require_native_joint_old_observation(plan, native, promise, frozen, Some(pin))?;
-        let database = try_database_read(&self.db)?;
+        let database = checked_database_read(&self.db, &self.storage_policy)?;
         let lineage = database.current_native_range_source_lineage(plan.old_range().id)?;
         if index > lineage.range_index() || h0 != lineage.logical_genesis_sha256() {
             return Err(data_error(
@@ -354,7 +354,7 @@ impl ClusterDataNodeService {
         index: u64,
     ) -> Result<(String, Option<String>)> {
         self.require_native_joint_old_observation(plan, native, promise, frozen, Some(pin))?;
-        let database = try_database_read(&self.db)?;
+        let database = checked_database_read(&self.db, &self.storage_policy)?;
         let lineage = database.current_native_range_source_lineage(plan.old_range().id)?;
         let step = database.export_native_logical_history_step_with_source_pin(
             &lineage,
@@ -389,7 +389,7 @@ impl ClusterDataNodeService {
         cut: crate::distribution_range_handoff::CertifiedRangeImageCut,
     ) -> Result<ActualServiceNativeJointCaptureInputs> {
         self.require_native_joint_old_observation(plan, native, promise, &frozen, Some(&pin))?;
-        let lineage = try_database_read(&self.db)?
+        let lineage = checked_database_read(&self.db, &self.storage_policy)?
             .current_native_range_source_lineage(plan.old_range().id)?;
         if cut.source_id() != &self.node_id
             || cut.range_index() != native.range_index()
@@ -442,7 +442,7 @@ impl ActualServiceNativeJointNewEvidence {
         self.plan.require_role(self.role.role())
     }
     pub(crate) fn require_current(&self, service: &ClusterDataNodeService) -> Result<()> {
-        let database = try_database_read(&service.db)?;
+        let database = checked_database_read(&service.db, &service.storage_policy)?;
         service.require_native_catalog_database(&database)?;
         self.plan
             .require_actual_native(self.image.native_admission())?;
@@ -496,7 +496,7 @@ impl ClusterDataNodeService {
         parent.check()?;
         let plan = old.plan();
         plan.require_role(role.role())?;
-        let database = try_database_read(&self.db)?;
+        let database = checked_database_read(&self.db, &self.storage_policy)?;
         self.require_native_catalog_database(&database)?;
         plan.require_actual_native(image.native_admission())?;
         image.require_current_with_database(
@@ -612,7 +612,7 @@ impl ClusterDataNodeService {
                 "joint old publisher belongs to another actual service/session",
             ));
         }
-        let database = try_database_read(&self.db)?;
+        let database = checked_database_read(&self.db, &self.storage_policy)?;
         self.require_native_catalog_database(&database)?;
         native.require_current(
             &database,
@@ -660,7 +660,7 @@ impl ActualServiceNativeJointNewEvidence {
             ));
         }
         self.require_current(service)?;
-        let database = try_database_read(&service.db)?;
+        let database = checked_database_read(&service.db, &service.storage_policy)?;
         service.require_native_catalog_database(&database)?;
         let gate = database.range_mutation_gate();
         gate.validate_quiescent_frozen(admission.data().old_range().id, self.frozen.as_frozen())?;
@@ -686,7 +686,7 @@ impl ClusterDataNodeService {
         &self,
         receipt: &crate::db::NativeJointDecisionReceipt,
     ) -> Result<()> {
-        let database = try_database_read(&self.db)?;
+        let database = checked_database_read(&self.db, &self.storage_policy)?;
         self.require_native_catalog_database(&database)?;
         if receipt.local_node_id() != &self.node_id {
             return Err(data_error("actual decision belongs to another service"));
@@ -760,7 +760,7 @@ impl ClusterDataNodeService {
             .nodes
             .get(&self.node_id)
             .ok_or_else(|| data_error("joint committed local member absent"))?;
-        let database = try_database_read(&self.db)?;
+        let database = checked_database_read(&self.db, &self.storage_policy)?;
         self.require_native_catalog_database(&database)?;
         self.require_native_writer_host_for_range(&database, descriptor)?;
         let native = database.native_recovery_admission(

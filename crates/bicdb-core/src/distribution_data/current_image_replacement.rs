@@ -14,7 +14,7 @@ impl ClusterDataNodeService {
         parent: &CancellationToken,
     ) -> Result<InstallingCommittedAdmission> {
         parent.check()?;
-        let db = try_database_read(&self.db)?;
+        let db = checked_database_read(&self.db, &self.storage_policy)?;
         let native = db.native_recovery_admission(
             role.cluster_id(),
             role.bootstrap_id(),
@@ -33,7 +33,7 @@ impl ClusterDataNodeService {
         parent: &CancellationToken,
     ) -> Result<crate::distribution_range_consensus::LocalInstallingCommittedFence> {
         parent.check()?;
-        let db = try_database_read(&self.db)?;
+        let db = checked_database_read(&self.db, &self.storage_policy)?;
         let native = db.native_recovery_admission(
             role.cluster_id(),
             role.bootstrap_id(),
@@ -56,7 +56,7 @@ impl ClusterDataNodeService {
         decision.require_live()?;
         let role = decision.authority().role();
         let controlled = self.range_mutations.try_controlled_mutation(frozen)?;
-        let db = try_database_read(&self.db)?;
+        let db = checked_database_read(&self.db, &self.storage_policy)?;
         let native = db.native_recovery_admission(
             role.cluster_id(),
             role.bootstrap_id(),
@@ -81,7 +81,7 @@ impl ClusterDataNodeService {
         authority: Arc<crate::distribution_range_recovery::FreshInstallingCommittedAuthority>,
         source: &crate::db::LocalNativeRecoveryReady,
     ) -> Result<crate::distribution_range_recovery::CurrentImageReplacementHistoryRound> {
-        let db = try_database_read(&self.db)?;
+        let db = checked_database_read(&self.db, &self.storage_policy)?;
         crate::distribution_range_recovery::CurrentImageReplacementHistoryRound::begin(
             authority,
             source,
@@ -95,7 +95,7 @@ impl ClusterDataNodeService {
         source: &crate::db::LocalNativeRecoveryReady,
         parent: &CancellationToken,
     ) -> Result<bool> {
-        let db = try_database_read(&self.db)?;
+        let db = checked_database_read(&self.db, &self.storage_policy)?;
         round.advance(source, &db, &self.range_writes, parent)
     }
     pub(crate) fn finish_current_image_replacement_history(
@@ -103,7 +103,7 @@ impl ClusterDataNodeService {
         round: crate::distribution_range_recovery::CurrentImageReplacementHistoryRound,
         source: &crate::db::LocalNativeRecoveryReady,
     ) -> Result<crate::distribution_range_image::CertifiedRecoveryImageCut> {
-        let db = try_database_read(&self.db)?;
+        let db = checked_database_read(&self.db, &self.storage_policy)?;
         let history = round.finish(source, &db, &self.range_writes)?;
         crate::distribution_range_image::CertifiedRecoveryImageCut::from_verified_replacement_source_history(history,source,&db,&self.range_writes)
     }
@@ -117,7 +117,7 @@ impl ClusterDataNodeService {
     ) -> Result<crate::distribution_range_consensus::InstallingRefusalHandoverReceipt> {
         parent.check()?;
         let r = role.role();
-        let db = try_database_read(&self.db)?;
+        let db = checked_database_read(&self.db, &self.storage_policy)?;
         let native = db.native_recovery_admission(
             r.cluster_id(),
             r.bootstrap_id(),
@@ -137,7 +137,7 @@ impl ClusterDataNodeService {
         parent: &CancellationToken,
     ) -> Result<()> {
         parent.check()?;
-        let db = try_database_read(&self.db)?;
+        let db = checked_database_read(&self.db, &self.storage_policy)?;
         let native = db.native_recovery_admission(
             role.cluster_id(),
             role.bootstrap_id(),
@@ -160,7 +160,7 @@ impl ClusterDataNodeService {
     ) -> Result<crate::distribution_range_consensus::InstallingRefusalHandoverReceipt> {
         parent.check()?;
         let r = role.role();
-        let db = try_database_read(&self.db)?;
+        let db = checked_database_read(&self.db, &self.storage_policy)?;
         let native = db.native_recovery_admission(
             r.cluster_id(),
             r.bootstrap_id(),
@@ -181,7 +181,7 @@ impl ClusterDataNodeService {
         parent: &CancellationToken,
     ) -> Result<()> {
         parent.check()?;
-        let db = try_database_read(&self.db)?;
+        let db = checked_database_read(&self.db, &self.storage_policy)?;
         let native = db.native_recovery_admission(
             role.cluster_id(),
             role.bootstrap_id(),
@@ -207,7 +207,7 @@ impl ClusterDataNodeService {
         decision.require_live()?;
         let role = decision.authority().role();
         let controlled = self.range_mutations.try_controlled_mutation(frozen)?;
-        let db = try_database_read(&self.db)?;
+        let db = checked_database_read(&self.db, &self.storage_policy)?;
         let native = db.native_recovery_admission(
             role.cluster_id(),
             role.bootstrap_id(),

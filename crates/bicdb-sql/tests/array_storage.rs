@@ -523,15 +523,46 @@ fn declared_array_rank_survives_catalog_storage_and_restart() {
 }
 
 #[test]
-fn every_registered_array_type_is_persistent_and_storable() {
+fn supported_registered_arrays_persist_and_catalog_only_arrays_refuse_storage() {
     let root = tempfile::tempdir().unwrap();
     let mut db = BicDb::open(root.path()).unwrap();
     let registered = PG_TYPE_REGISTRY
         .all()
         .iter()
-        .filter(|spec| !spec.pseudo)
+        .filter(|spec| spec.canonical_storage_supported())
         .filter_map(|spec| spec.array_oid.map(|array_oid| (spec.name, array_oid)))
         .collect::<Vec<_>>();
+
+    // Known catalog descriptors do not imply an implemented durable carrier.
+    // Exercise explicit refusal for each such array, including an empty array,
+    // while retaining the original storage and reopen checks below unchanged.
+    for spec in PG_TYPE_REGISTRY
+        .all()
+        .iter()
+        .filter(|spec| !spec.pseudo && !spec.canonical_storage_supported())
+    {
+        if let Some(array_oid) = spec.array_oid {
+            let mut session = SqlSession::new(&mut db);
+            let error = session
+                .execute(&format!(
+                    "CREATE TABLE unsupported_array_{} (values {}[])",
+                    spec.oid, spec.name
+                ))
+                .unwrap_err();
+            assert_eq!(error.sqlstate(), "0A000");
+            let descriptor = session
+                .execute(&format!("SELECT NULL::{}[] AS values WHERE 1=0", spec.name))
+                .unwrap();
+            assert_eq!(
+                descriptor.column_types,
+                vec![Some(format!("{}[]", spec.name))]
+            );
+            assert_eq!(
+                bicdb_sql::pg_type_oid_by_name(&format!("{}[]", spec.name)),
+                Some(array_oid)
+            );
+        }
+    }
 
     {
         let mut session = SqlSession::new(&mut db);

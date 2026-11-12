@@ -46,7 +46,7 @@ impl ActualServiceNativeJointPreparedEvidence {
         &self.prepared
     }
     pub(crate) fn require_current(&self, service: &ClusterDataNodeService) -> Result<()> {
-        let database = try_database_read(&service.db)?;
+        let database = checked_database_read(&service.db, &service.storage_policy)?;
         service.require_native_catalog_database(&database)?;
         service.require_native_writer_host_for_range(
             &database,
@@ -100,7 +100,7 @@ impl ClusterDataNodeService {
     ) -> Result<crate::distribution_range_consensus::NativeJointCatalogueActivationReceipt> {
         parent.check()?;
         admission.require_external_publications_current()?;
-        let database = try_database_read(&self.db)?;
+        let database = checked_database_read(&self.db, &self.storage_policy)?;
         self.storage_policy.require_database(&database)?;
         self.range_writes
             .refsync_native_joint_catalogue_activation(&database, admission)?;
@@ -133,7 +133,7 @@ impl ClusterDataNodeService {
         &self,
         receipt: &crate::distribution_range_consensus::NativeJointCatalogueActivationReceipt,
     ) -> Result<()> {
-        let database = try_database_read(&self.db)?;
+        let database = checked_database_read(&self.db, &self.storage_policy)?;
         self.require_native_catalog_database(&database)?;
         self.require_native_writer_host_for_range(&database, receipt.range())?;
         receipt.require_current(&database, &self.range_writes)
@@ -142,7 +142,7 @@ impl ClusterDataNodeService {
         &self,
         receipt: &crate::distribution_range_consensus::NativeJointCatalogueActivationReceipt,
     ) -> Result<()> {
-        let database = try_database_read(&self.db)?;
+        let database = checked_database_read(&self.db, &self.storage_policy)?;
         self.require_native_catalog_database(&database)?;
         self.require_native_writer_host_for_range(&database, receipt.range())?;
         self.range_writes
@@ -152,7 +152,7 @@ impl ClusterDataNodeService {
         &self,
         receipt: &crate::db::NativeJointServingBridgeReceipt,
     ) -> Result<()> {
-        let database = try_database_read(&self.db)?;
+        let database = checked_database_read(&self.db, &self.storage_policy)?;
         self.require_native_catalog_database(&database)?;
         self.require_native_writer_host_for_range(&database, receipt.data().activation_range())?;
         if receipt.local_node_id() != &self.node_id {
@@ -171,7 +171,7 @@ impl ClusterDataNodeService {
         parent.check()?;
         admission.require_external_preparations_current()?;
         actual.require_current(self)?;
-        let database = try_database_read(&self.db)?;
+        let database = checked_database_read(&self.db, &self.storage_policy)?;
         self.require_native_catalog_database(&database)?;
         self.require_native_writer_host_for_range(&database, admission.data().activation_range())?;
         if actual.prepared.local_node_id() != &self.node_id {
@@ -197,7 +197,7 @@ impl ClusterDataNodeService {
         parent: &CancellationToken,
     ) -> Result<ActualServiceNativeJointPreparedEvidence> {
         parent.check()?;
-        let database = try_database_read(&self.db)?;
+        let database = checked_database_read(&self.db, &self.storage_policy)?;
         self.require_native_catalog_database(&database)?;
         committed.require_current(&database)?;
         if matches!(&lease, NativeJointServingLease::Survivor(_))

@@ -363,10 +363,16 @@ fn actual_gap_refusal_preserves_durable_observations_and_retained_prefix_recover
         budget_ms: 5000,
     };
     for id in [node("n0"), node("n1")] {
+        // A quorum result may precede cancellation/drain of unused observer
+        // callbacks. Their actual owned operation must finish before this
+        // sequential control starts another exclusive round; do not clear
+        // the ownership fence or relabel a transient busy result as recovery.
+        wait_for_contexts(&runtimes);
         runtimes[&id]
             .certify_historical(&initiator, &prefix_request, &parent)
             .unwrap();
     }
+    wait_for_contexts(&runtimes);
     runtimes[&node("n1")]
         .apply_historical(&initiator, &prefix_request, &parent)
         .unwrap();
@@ -393,10 +399,12 @@ fn actual_gap_refusal_preserves_durable_observations_and_retained_prefix_recover
         1
     );
 
+    wait_for_contexts(&runtimes);
     runtimes[&node("n1")]
         .certify_historical(&initiator, &tail_request, &parent)
         .unwrap();
     for id in [node("n0"), node("n1")] {
+        wait_for_contexts(&runtimes);
         runtimes[&id]
             .apply_historical(&initiator, &tail_request, &parent)
             .unwrap();

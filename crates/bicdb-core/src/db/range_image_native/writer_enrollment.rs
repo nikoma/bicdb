@@ -250,7 +250,19 @@ impl BicDb {
         &self,
         transaction: &Transaction,
     ) -> Result<()> {
-        if transaction.writes.is_empty() || self.actual_native_writer_enforcement_version()? == 0 {
+        if self.actual_native_writer_enforcement_version()? == 0 {
+            return Ok(());
+        }
+        // A queue-only transaction has no record routing key and must not
+        // bypass the range protocol merely because writes is empty. Mixed
+        // record/broker transactions likewise need effects in the replicated
+        // command before they can promise a durable distributed outcome.
+        if !transaction.pending_broker_publishes.lock().is_empty() {
+            return Err(BicDbError::Unsupported(
+                "native range commands do not yet replicate broker effects; transaction refused before range Prepare or application WAL".into(),
+            ));
+        }
+        if transaction.writes.is_empty() {
             return Ok(());
         }
         if transaction.bypass_commit_admission {

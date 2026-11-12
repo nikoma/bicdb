@@ -52,7 +52,7 @@ fn ranges_sha256(plan: &NativeClusterBootstrapPlan, node: &ClusterNodeId) -> Res
         plan.local_spec(node)?.initial_ranges,
     ))?)))
 }
-fn require_pinned_peer(
+pub(super) fn require_pinned_peer(
     peer: &MetadataReadParticipant,
     plan: &NativeClusterBootstrapPlan,
     node: &ClusterNodeId,
@@ -83,7 +83,7 @@ impl NativeProvisionalNode {
         cluster: &crate::ClusterId,
         node: &ClusterNodeId,
     ) -> Result<()> {
-        self.require_unregistered()?;
+        self.require_initial_preparation_surface()?;
         if !Arc::ptr_eq(actual, &self.database)
             || cluster != &self.spec.cluster_id
             || node != &self.spec.node_id

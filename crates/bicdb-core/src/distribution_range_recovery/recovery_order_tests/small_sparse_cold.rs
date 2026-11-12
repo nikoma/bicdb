@@ -363,19 +363,28 @@ fn actual_small_sparse_current_quorum_and_strict_cold_reopen_preserve_decision()
         renewed_scope.recovery_nonce
     );
     assert_eq!(recertified.fence().progress().last_index, 0);
-    assert!(runtimes[&node("n1")]
+    // The preceding quorum may complete before its unused observer workers
+    // release their actual operation ownership. Wait for bounded volatile
+    // drain before testing the semantic sparse-history refusal, without
+    // clearing a fence, changing history or re-fsyncing either store.
+    wait_for_contexts(&runtimes);
+    let not_ready = runtimes[&node("n1")]
         .prepare_native_ready(
             &actor,
             &NativeReadyRequest {
                 scope: renewed_scope.clone(),
                 challenge: Uuid::now_v7(),
-                budget_ms: 5000
+                budget_ms: 5000,
             },
-            &parent
+            &parent,
         )
-        .unwrap_err()
-        .to_string()
-        .contains("sparse history is not fully materialized"));
+        .unwrap_err();
+    assert!(
+        not_ready
+            .to_string()
+            .contains("sparse history is not fully materialized"),
+        "expected actual sparse-history refusal after callback drain, got {not_ready}"
+    );
     // Explicit wrong-backing negative: create another REAL physical birth with
     // the same member/bootstrap/schema and place only an inert copied logical
     // catalogue beside it. No edited DTO or forged admission is used.

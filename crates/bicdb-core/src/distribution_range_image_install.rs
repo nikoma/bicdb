@@ -473,6 +473,7 @@ impl NativeRangeImageInstaller {
         let db = database
             .try_read()
             .ok_or_else(|| invalid("target DB busy before completed image recovery"))?;
+        admission.require_current(&db)?;
         let bindings = db.capture_range_image_bindings()?;
         frozen.require_install_start(
             store,
@@ -534,6 +535,7 @@ impl NativeRangeImageInstaller {
         let db = database
             .try_read()
             .ok_or_else(|| invalid("target DB busy before install"))?;
+        admission.require_current(&db)?;
         let bindings = db.capture_range_image_bindings()?;
         if source.bindings().collections() != bindings.collections()
             || source.bindings().schema_sha256() != bindings.schema_sha256()
@@ -1100,6 +1102,8 @@ pub(crate) mod tests {
             .with_storage_mode(StorageMode::ServerPaged)
             .with_paged_buffer_pool_bytes(8 * 1024 * 1024)
     }
+    mod reborrow_tests;
+
     pub(crate) struct Fixture {
         pub(crate) root: tempfile::TempDir,
         pub(crate) topology: ClusterTopology,

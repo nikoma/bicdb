@@ -5,7 +5,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use parking_lot::RwLock;
+use parking_lot::{Mutex, RwLock};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use uuid::Uuid;
@@ -44,7 +44,8 @@ mod native_apply;
 mod native_durability;
 mod native_joint_handoff;
 mod native_writer;
-use native_durability::ServiceStoragePolicy;
+pub(crate) use native_durability::ClusterServiceOpenGuard;
+use native_durability::{checked_database_read, checked_database_write, ServiceStoragePolicy};
 pub(crate) use native_joint_handoff::{
     ActualServiceNativeJointCaptureInputs, ActualServiceNativeJointCommittedEvidence,
     ActualServiceNativeJointConstraints, ActualServiceNativeJointNewEvidence,
@@ -754,6 +755,9 @@ pub struct ClusterDataNodeService {
     fsync: bool,
     initial_birth_provider:
         Option<std::sync::Weak<crate::distribution_native_host::NativeProvisionalNode>>,
+    initial_preparation_provider:
+        Option<std::sync::Weak<crate::distribution_native_host::NativeProvisionalNode>>,
+    initial_consensus_only: bool,
 }
 
 impl ClusterDataNodeService {
@@ -881,6 +885,8 @@ impl ClusterDataNodeService {
             schema_activation_limits,
             fsync,
             initial_birth_provider: None,
+            initial_preparation_provider: None,
+            initial_consensus_only: false,
         };
         service.recover_committed_range_writes()?;
         Ok(service)
@@ -919,6 +925,56 @@ impl ClusterDataNodeService {
     ) -> Option<std::sync::Weak<crate::distribution_native_host::NativeProvisionalNode>> {
         self.initial_birth_provider.clone()
     }
+    pub(crate) fn initial_preparation_provider(
+        &self,
+    ) -> Option<std::sync::Weak<crate::distribution_native_host::NativeProvisionalNode>> {
+        self.initial_preparation_provider.clone()
+    }
+    pub(crate) fn native_initial_listener_store_open_id(&self) -> Uuid {
+        self.range_writes.recovery_store_open_id()
+    }
+    pub(crate) fn initial_consensus_only(&self) -> bool {
+        self.initial_consensus_only
+    }
+    pub(crate) fn transition_initial_preparation_listener(
+        &mut self,
+        actual: &Arc<Mutex<Self>>,
+        drained: &crate::distribution_transport::DrainedClusterDataListener,
+        permit: &crate::distribution_native_host::NativeInitialConsensusPermit,
+        seed: &Arc<crate::distribution_native_host::NativeProvisionalNode>,
+    ) -> Result<()> {
+        drained.require_service(actual)?;
+        drained.require_store(self.native_initial_listener_store_open_id())?;
+        permit.require_live()?;
+        seed.require_same_initial_database(&self.db, &self.cluster_id, &self.node_id)?;
+        let db = checked_database_read(&self.db, &self.storage_policy)?;
+        let node = permit
+            .configuration()
+            .nodes
+            .get(&self.node_id)
+            .ok_or_else(|| data_error("local member absent from barrier C"))?;
+        let record = db
+            .read_native_initial_preparation(
+                &self.cluster_id,
+                permit
+                    .configuration()
+                    .range_image_bootstrap_id
+                    .ok_or_else(|| data_error("initial bootstrap absent"))?,
+                &self.node_id,
+                node.incarnation,
+            )?
+            .ok_or_else(|| data_error("durable exposure missing"))?;
+        if record.stage()!=crate::distribution_native_host::NativeInitialPreparationStage::ConsensusExposedHistorical
+            || record.configuration()!=permit.configuration() || self.initial_birth_provider.is_none() {
+            return Err(data_error("stopped actual service lacks exact protected initial exposure"));
+        }
+        // Only the NEW listener observes these fields. The drained listener's
+        // captured Some remains immutable and can never become general service.
+        self.initial_birth_provider = None;
+        self.initial_preparation_provider = Some(Arc::downgrade(seed));
+        self.initial_consensus_only = true;
+        Ok(())
+    }
     pub(crate) fn require_persisted_recovery_scope(
         &self,
         scope: &crate::distribution_range_consensus::RecoveryFenceScope,
@@ -938,7 +994,7 @@ impl ClusterDataNodeService {
         cancellation: &crate::CancellationToken,
     ) -> Result<()> {
         cancellation.check()?;
-        let db = try_database_read(&self.db)?;
+        let db = checked_database_read(&self.db, &self.storage_policy)?;
         let native = db.native_recovery_admission(
             role.cluster_id(),
             role.bootstrap_id(),
@@ -966,7 +1022,7 @@ impl ClusterDataNodeService {
         self.range_mutations
             .validate_quiescent_frozen(actual.current_range().id, frozen)?;
         cancellation.check()?;
-        let db = try_database_read(&self.db)?;
+        let db = checked_database_read(&self.db, &self.storage_policy)?;
         let native = db.native_recovery_admission(
             actual.cluster_id(),
             actual.bootstrap_id(),
@@ -1000,6 +1056,7 @@ impl ClusterDataNodeService {
         let db = self.db.try_read().ok_or_else(|| {
             BicDbError::Cluster("native DB is busy before image freeze transfer".into())
         })?;
+        self.storage_policy.require_database(&db)?;
         let actual = role.role();
         let native = db.native_recovery_admission(
             actual.cluster_id(),
@@ -1033,7 +1090,7 @@ impl ClusterDataNodeService {
         parent: &crate::CancellationToken,
     ) -> Result<()> {
         parent.check()?;
-        let db = try_database_read(&self.db)?;
+        let db = checked_database_read(&self.db, &self.storage_policy)?;
         let actual = role.role();
         let native = db.native_recovery_admission(
             actual.cluster_id(),
@@ -1073,7 +1130,7 @@ impl ClusterDataNodeService {
     ) -> Result<crate::distribution_range_image_install::FinalizedNativeRecoveryImage> {
         parent.check()?;
         scope.require_role(role.role())?;
-        let db = try_database_read(&self.db)?;
+        let db = checked_database_read(&self.db, &self.storage_policy)?;
         let actual = role.role();
         let native = db.native_recovery_admission(
             actual.cluster_id(),
@@ -1109,7 +1166,7 @@ impl ClusterDataNodeService {
         self.range_mutations
             .validate_quiescent_frozen(scope.range_id, frozen)?;
         cancellation.check()?;
-        let db = try_database_read(&self.db)?;
+        let db = checked_database_read(&self.db, &self.storage_policy)?;
         let native = db.native_recovery_admission(
             role.cluster_id(),
             role.bootstrap_id(),
@@ -1155,7 +1212,7 @@ impl ClusterDataNodeService {
         self.range_mutations
             .validate_quiescent_frozen(scope.range_id, frozen)?;
         cancellation.check()?;
-        let db = try_database_read(&self.db)?;
+        let db = checked_database_read(&self.db, &self.storage_policy)?;
         let native = db.native_recovery_admission(
             role.cluster_id(),
             role.bootstrap_id(),
@@ -1297,7 +1354,7 @@ impl ClusterDataNodeService {
         decision.require_recipient_role(role)?;
         let controlled = self.range_mutations.try_controlled_mutation(frozen)?;
         cancellation.check()?;
-        let db = try_database_read(&self.db)?;
+        let db = checked_database_read(&self.db, &self.storage_policy)?;
         let native = db.native_recovery_admission(
             role.cluster_id(),
             role.bootstrap_id(),
@@ -1330,7 +1387,7 @@ impl ClusterDataNodeService {
         admission.require_recipient_role(role)?;
         let controlled = self.range_mutations.try_controlled_mutation(frozen)?;
         cancellation.check()?;
-        let db = try_database_read(&self.db)?;
+        let db = checked_database_read(&self.db, &self.storage_policy)?;
         let native = db.native_recovery_admission(
             role.cluster_id(),
             role.bootstrap_id(),
@@ -1359,7 +1416,7 @@ impl ClusterDataNodeService {
     }
 
     pub fn schema_compatibility_fingerprint(&self) -> Result<SchemaCompatibilityFingerprint> {
-        try_database_read(&self.db)?.schema_compatibility_fingerprint()
+        checked_database_read(&self.db, &self.storage_policy)?.schema_compatibility_fingerprint()
     }
 
     pub fn verified_schema_compatibility_sha256(&self) -> Option<String> {
@@ -1408,7 +1465,8 @@ impl ClusterDataNodeService {
             bundle.verify()?;
             return Ok(false);
         }
-        try_database_write(&self.db)?.install_cluster_schema_bundle(bundle)
+        checked_database_write(&self.db, &self.storage_policy)?
+            .install_cluster_schema_bundle(bundle)
     }
 
     pub fn stage_signed_schema_bundle(
@@ -1421,17 +1479,19 @@ impl ClusterDataNodeService {
                 "cluster schema staging has no host-configured trusted signing keys",
             ));
         }
-        let state = try_database_write(&self.db)?.stage_signed_cluster_schema_bundle(
-            signed_bundle,
-            &self.schema_signing_keys,
-            self.schema_stage_limits,
-            now_ms,
-        )?;
-        self.schema_compatibility_window = Some(
-            try_database_read(&self.db)?.verify_cluster_schema_compatibility_window(
+        let state = checked_database_write(&self.db, &self.storage_policy)?
+            .stage_signed_cluster_schema_bundle(
+                signed_bundle,
                 &self.schema_signing_keys,
-                self.schema_activation_limits,
-            )?,
+                self.schema_stage_limits,
+                now_ms,
+            )?;
+        self.schema_compatibility_window = Some(
+            checked_database_read(&self.db, &self.storage_policy)?
+                .verify_cluster_schema_compatibility_window(
+                    &self.schema_signing_keys,
+                    self.schema_activation_limits,
+                )?,
         );
         Ok(ClusterSchemaStageReceipt {
             stage_id: state.stage_id,
@@ -1458,7 +1518,7 @@ impl ClusterDataNodeService {
                 "cluster schema activation has no host-configured trusted signing keys",
             ));
         }
-        let mut db = try_database_write(&self.db)?;
+        let mut db = checked_database_write(&self.db, &self.storage_policy)?;
         let stage =
             db.load_cluster_schema_stage(&self.schema_signing_keys, self.schema_stage_limits)?;
         if stage.stage_id != expected_stage_id
@@ -1524,7 +1584,7 @@ impl ClusterDataNodeService {
             ));
         }
         activation.validate_completion_for_node(&self.node_id)?;
-        let mut db = try_database_write(&self.db)?;
+        let mut db = checked_database_write(&self.db, &self.storage_policy)?;
         let finalized = db.finalize_cluster_schema_activation(
             &self.schema_signing_keys,
             self.schema_activation_limits,
@@ -1833,11 +1893,12 @@ impl ClusterDataNodeService {
                 self.range_writes.commit(command)?;
                 let state = self.range_writes.certify(command)?;
                 if state != RangeWriteState::Applied {
-                    try_database_read(&self.db)?.apply_admitted_mutations_with_mutation(
-                        command.range_id,
-                        &command.mutations,
-                        authority,
-                    )?;
+                    checked_database_read(&self.db, &self.storage_policy)?
+                        .apply_admitted_mutations_with_mutation(
+                            command.range_id,
+                            &command.mutations,
+                            authority,
+                        )?;
                     self.range_writes.mark_applied(command)?;
                 }
             }
@@ -1860,7 +1921,8 @@ impl ClusterDataNodeService {
     ) -> Result<RangeWriteProgress> {
         batch.validate(limits)?;
         if !batch.entries.is_empty()
-            && try_database_read(&self.db)?.native_range_image_birth_present()
+            && checked_database_read(&self.db, &self.storage_policy)?
+                .native_range_image_birth_present()
         {
             return Err(data_error("generic range suffix cannot materialize native history; use the authenticated native path"));
         }
@@ -1891,11 +1953,12 @@ impl ClusterDataNodeService {
                     self.range_writes.commit(&entry.command)?;
                     let state = self.range_writes.certify(&entry.command)?;
                     if state != RangeWriteState::Applied {
-                        try_database_read(&self.db)?.apply_admitted_mutations_with_mutation(
-                            entry.command.range_id,
-                            &entry.command.mutations,
-                            authority,
-                        )?;
+                        checked_database_read(&self.db, &self.storage_policy)?
+                            .apply_admitted_mutations_with_mutation(
+                                entry.command.range_id,
+                                &entry.command.mutations,
+                                authority,
+                            )?;
                         self.range_writes.mark_applied(&entry.command)?;
                     }
                 }
@@ -2074,7 +2137,8 @@ impl ClusterDataNodeService {
     ) -> Result<RangeWriteAck> {
         self.range_mutations.validate(range.id, authority)?;
         self.validate_range_write(range, caller, command)?;
-        if try_database_read(&self.db)?.native_range_image_birth_present() {
+        if checked_database_read(&self.db, &self.storage_policy)?.native_range_image_birth_present()
+        {
             return Err(data_error("native Apply requires an authenticated current-leader instruction; raw caller/CQ replay is insufficient"));
         }
         let state = self.range_writes.state(command)?;
@@ -2088,11 +2152,12 @@ impl ClusterDataNodeService {
             )));
         }
         if state != RangeWriteState::Applied {
-            try_database_read(&self.db)?.apply_admitted_mutations_with_mutation(
-                command.range_id,
-                &command.mutations,
-                authority,
-            )?;
+            checked_database_read(&self.db, &self.storage_policy)?
+                .apply_admitted_mutations_with_mutation(
+                    command.range_id,
+                    &command.mutations,
+                    authority,
+                )?;
             self.range_writes.mark_applied(command)?;
         }
         self.range_write_ack(command, RangeWriteState::Applied)
@@ -2156,7 +2221,8 @@ impl ClusterDataNodeService {
     }
 
     fn recover_committed_range_writes(&mut self) -> Result<()> {
-        if try_database_read(&self.db)?.native_range_image_birth_present() {
+        if checked_database_read(&self.db, &self.storage_policy)?.native_range_image_birth_present()
+        {
             // Native history must be resolved under fresh recovery authority
             // and actual certificate quorum. A bare local CQ is not enough
             // to publish or even re-attest a physical native prefix on open.
@@ -2166,11 +2232,12 @@ impl ClusterDataNodeService {
             let gate = self.range_mutations.clone();
             let permit = gate.try_enter(command.range_id)?;
             let authority = &RangeMutationAuthority::Mutation(&permit);
-            try_database_read(&self.db)?.apply_admitted_mutations_with_mutation(
-                command.range_id,
-                &command.mutations,
-                authority,
-            )?;
+            checked_database_read(&self.db, &self.storage_policy)?
+                .apply_admitted_mutations_with_mutation(
+                    command.range_id,
+                    &command.mutations,
+                    authority,
+                )?;
             self.range_writes.mark_applied(&command)?;
         }
         Ok(())
@@ -2672,11 +2739,12 @@ impl ClusterDataNodeService {
         let mut next = state;
         next.record_applied(batch, limits)?;
         self.ensure_range_digest_fence(range, caller, &digest_state, now_ms)?;
-        try_database_read(&self.db)?.apply_range_anti_entropy_mutations_as_local_with_mutation(
-            range,
-            &batch.mutations,
-            authority,
-        )?;
+        checked_database_read(&self.db, &self.storage_policy)?
+            .apply_range_anti_entropy_mutations_as_local_with_mutation(
+                range,
+                &batch.mutations,
+                authority,
+            )?;
         // The data RPC holds the node service mutex for this whole method, so a
         // prepare cannot release the fence between the two checks and commit.
         self.ensure_range_digest_fence(range, caller, &digest_state, now_ms)?;
@@ -2750,7 +2818,7 @@ impl ClusterDataNodeService {
         // (or one that will fail): labelling a snapshot with it lets
         // catch-up skip that commit's rows.
         let (collections, empty_snapshot_commit_sequence) = {
-            let source = try_database_read(&self.db)?;
+            let source = checked_database_read(&self.db, &self.storage_policy)?;
             (source.collections(), source.replication_shippable_seq())
         };
         let cursor = resume_after_key.map(decode_cursor).transpose()?;
@@ -2776,16 +2844,17 @@ impl ClusterDataNodeService {
             .as_ref()
             .and_then(|cursor| cursor.after_id.as_deref());
         let mut exported_batch = None;
-        let export = try_database_read(&self.db)?.for_each_range_snapshot_batch(
-            &collection_meta.name,
-            range,
-            after_id,
-            options,
-            |batch| {
-                exported_batch = Some(batch);
-                Ok(false)
-            },
-        )?;
+        let export = checked_database_read(&self.db, &self.storage_policy)?
+            .for_each_range_snapshot_batch(
+                &collection_meta.name,
+                range,
+                after_id,
+                options,
+                |batch| {
+                    exported_batch = Some(batch);
+                    Ok(false)
+                },
+            )?;
         if let Some(mut batch) = exported_batch {
             batch.resume_after_key = encode_cursor(&CollectionScanCursor {
                 collection: collection_meta.name.clone(),
@@ -2889,7 +2958,7 @@ impl ClusterDataNodeService {
                 collection_meta,
                 batch,
             } => {
-                let missing = !try_database_read(&self.db)?
+                let missing = !checked_database_read(&self.db, &self.storage_policy)?
                     .collections()
                     .iter()
                     .any(|meta| meta.name == batch.collection);
@@ -2897,7 +2966,7 @@ impl ClusterDataNodeService {
                 // bundle. Preserve their one-time installation path, while
                 // ordinary copied rows use shared access below.
                 if missing {
-                    let mut db = try_database_write(&self.db)?;
+                    let mut db = checked_database_write(&self.db, &self.storage_policy)?;
                     return self.learner.apply_snapshot_batch_with(
                         relocation,
                         relocation.snapshot_resume_after_key.as_deref(),
@@ -2913,7 +2982,7 @@ impl ClusterDataNodeService {
                         },
                     );
                 }
-                let db = try_database_read(&self.db)?;
+                let db = checked_database_read(&self.db, &self.storage_policy)?;
                 self.learner.apply_snapshot_batch_with(
                     relocation,
                     relocation.snapshot_resume_after_key.as_deref(),
@@ -2973,7 +3042,7 @@ impl ClusterDataNodeService {
                 "range catch-up frame limit must be between 1 and 1000000",
             ));
         }
-        let source = try_database_read(&self.db)?;
+        let source = checked_database_read(&self.db, &self.storage_policy)?;
         let source_commit_sequence = source.current_commit_seq();
         if durable_commit_sequence > source_commit_sequence {
             return Err(data_error(format!(
@@ -3017,7 +3086,7 @@ impl ClusterDataNodeService {
         self.range_mutations.validate(range.id, authority)?;
         self.ensure_target(relocation)?;
         let needs_catalog_install = {
-            let db = try_database_read(&self.db)?;
+            let db = checked_database_read(&self.db, &self.storage_policy)?;
             let collections = db
                 .collections()
                 .into_iter()
@@ -3030,7 +3099,7 @@ impl ClusterDataNodeService {
                 .any(|write| !collections.contains(&write.collection))
         };
         if needs_catalog_install {
-            let mut db = try_database_write(&self.db)?;
+            let mut db = checked_database_write(&self.db, &self.storage_policy)?;
             return self.learner.apply_commit_frames_with(
                 relocation,
                 &batch.frames,
@@ -3038,7 +3107,7 @@ impl ClusterDataNodeService {
                 |frame| db.apply_range_commit_frame_as_local_with_mutation(range, frame, authority),
             );
         }
-        let db = try_database_read(&self.db)?;
+        let db = checked_database_read(&self.db, &self.storage_policy)?;
         self.learner.apply_commit_frames_with(
             relocation,
             &batch.frames,
@@ -3089,7 +3158,7 @@ impl ClusterDataNodeService {
                 "range cleanup record limit must be greater than zero",
             ));
         }
-        let collections = try_database_read(&self.db)?.collections();
+        let collections = checked_database_read(&self.db, &self.storage_policy)?.collections();
         let cursor = resume_after_key.map(decode_cursor).transpose()?;
         let collection_index = match cursor.as_ref() {
             Some(cursor) => collections
@@ -3120,19 +3189,14 @@ impl ClusterDataNodeService {
             max_record_bytes: 8 * 1024 * 1024,
         };
         let mut ids = Vec::new();
-        let export = try_database_read(&self.db)?.for_each_range_snapshot_batch(
-            &collection,
-            range,
-            after_id,
-            &options,
-            |batch| {
+        let export = checked_database_read(&self.db, &self.storage_policy)?
+            .for_each_range_snapshot_batch(&collection, range, after_id, &options, |batch| {
                 ids = batch.records.into_iter().map(|record| record.id).collect();
                 Ok(false)
-            },
-        )?;
+            })?;
         if !ids.is_empty() {
             let after_id = ids.last().cloned().expect("non-empty cleanup batch");
-            let deleted = try_database_read(&self.db)?
+            let deleted = checked_database_read(&self.db, &self.storage_policy)?
                 .delete_range_records_as_local_with_mutation(range, &collection, &ids, authority)?;
             return Ok(CleanupProgress {
                 resume_after_key: Some(encode_cursor(&CollectionScanCursor {

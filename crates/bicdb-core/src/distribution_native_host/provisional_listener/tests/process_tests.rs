@@ -18,6 +18,8 @@ struct ChildConfig {
     stop: PathBuf,
     plan: NativeClusterBootstrapPlan,
     network: ClusterNetworkTransportConfig,
+    #[serde(default)]
+    live_metadata: bool,
 }
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -58,12 +60,18 @@ fn native_initial_birth_process_child() {
         NativeProvisionalNode::open_unregistered(
             &config.database,
             db_config(),
-            config.plan,
+            config.plan.clone(),
             &local,
             &token,
         )
     } else {
-        NativeProvisionalNode::create(&config.database, db_config(), config.plan, &local, &token)
+        NativeProvisionalNode::create(
+            &config.database,
+            db_config(),
+            config.plan.clone(),
+            &local,
+            &token,
+        )
     }
     .unwrap();
     let ready = ChildReady {
@@ -73,9 +81,14 @@ fn native_initial_birth_process_child() {
         birth_sha256: seed.manifest.birth_sha256.clone(),
         binary_sha256: binary_sha256(),
     };
-    let host = NativeProvisionalHost::start(Arc::new(seed), config.network, &token).unwrap();
+    let host =
+        NativeProvisionalHost::start(Arc::new(seed), config.network.clone(), &token).unwrap();
     crate::storage::write_atomic(&config.ready, &serde_json::to_vec(&ready).unwrap(), true)
         .unwrap();
+    if config.live_metadata {
+        startup_tests::drive_startup(host, &config);
+        return;
+    }
     let deadline = Instant::now() + Duration::from_secs(90);
     // A parent process termination cannot leave unbounded orphan listeners.
     while !config.stop.exists() && Instant::now() < deadline {
@@ -218,6 +231,7 @@ fn native_initial_birth_process_four_independent_factories_and_cold_restart() {
             stop: stop.clone(),
             plan: plan.clone(),
             network: network.clone(),
+            live_metadata: false,
         };
         crate::storage::write_atomic(&configuration, &serde_json::to_vec(&config).unwrap(), true)
             .unwrap();
@@ -312,3 +326,5 @@ fn native_initial_birth_process_four_independent_factories_and_cold_restart() {
     }
     processes.graceful_stop();
 }
+
+mod startup_tests;

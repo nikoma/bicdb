@@ -361,56 +361,68 @@ fn parent_default_savepoint_rollback_restores_exact_child_definitions() {
 }
 
 #[test]
-fn identity_add_with_existing_partitions_matches_pg16_without_catalog_side_effects() {
+fn identity_add_populates_existing_partitions_and_shares_one_sequence() {
     for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
         let root = tempfile::tempdir().unwrap();
-        let mut db = BicDb::open_with_config(root.path(), config(mode)).unwrap();
+        let cfg = config(mode);
+        let mut db = BicDb::open_with_config(root.path(), cfg.clone()).unwrap();
         setup(&mut db);
-        SqlSession::new(&mut db)
-            .execute("INSERT INTO p VALUES(1,'ack',10)")
-            .unwrap();
-        let before = db.current_commit_seq();
-        let schemas: Vec<_> = ["p", "low", "high"]
-            .iter()
-            .map(|name| {
-                db.get("__bicdb_pg_schema", name)
+        let mut sql = SqlSession::new(&mut db);
+        sql.execute("INSERT INTO p VALUES(1,'ack',10)").unwrap();
+        sql.execute("ALTER TABLE p ADD COLUMN ident BIGINT GENERATED ALWAYS AS IDENTITY (START WITH 100 INCREMENT BY 5)").unwrap();
+        sql.execute("INSERT INTO low(k) VALUES(2)").unwrap();
+        sql.execute("INSERT INTO high(k) VALUES(12)").unwrap();
+        sql.execute("INSERT INTO p(k) VALUES(3)").unwrap();
+        drop(sql);
+        for _ in 0..2 {
+            let mut sql = SqlSession::new(&mut db);
+            assert_eq!(
+                sql.execute("SELECT k,payload,qty,ident FROM p ORDER BY k")
                     .unwrap()
+                    .rows,
+                vec![
+                    vec![
+                        SqlValue::Int(1),
+                        SqlValue::String("ack".into()),
+                        SqlValue::Int(10),
+                        SqlValue::Int(100)
+                    ],
+                    vec![
+                        SqlValue::Int(2),
+                        SqlValue::String("low".into()),
+                        SqlValue::Int(10),
+                        SqlValue::Int(105)
+                    ],
+                    vec![
+                        SqlValue::Int(3),
+                        SqlValue::String("parent".into()),
+                        SqlValue::Int(10),
+                        SqlValue::Int(115)
+                    ],
+                    vec![
+                        SqlValue::Int(12),
+                        SqlValue::String("high".into()),
+                        SqlValue::Int(20),
+                        SqlValue::Int(110)
+                    ],
+                ]
+            );
+            assert_eq!(
+                sql.execute("SELECT last_value FROM p_ident_seq")
                     .unwrap()
-                    .metadata
-                    .clone()
-            })
-            .collect();
-        let error=SqlSession::new(&mut db).execute("ALTER TABLE p ADD COLUMN ident BIGINT GENERATED ALWAYS AS IDENTITY (START WITH 100 INCREMENT BY 5)").unwrap_err();
-        assert_eq!(error.sqlstate(), "42P16");
-        assert!(error
-            .to_string()
-            .contains("cannot recursively add identity column"));
-        assert_eq!(db.current_commit_seq(), before);
-        let after: Vec<_> = ["p", "low", "high"]
-            .iter()
-            .map(|name| {
-                db.get("__bicdb_pg_schema", name)
-                    .unwrap()
-                    .unwrap()
-                    .metadata
-                    .clone()
-            })
-            .collect();
-        assert_eq!(after, schemas);
-        assert_eq!(
-            SqlSession::new(&mut db)
-                .execute("SELECT count(*) FROM pg_class WHERE relname='p_ident_seq'")
-                .unwrap()
-                .rows,
-            vec![vec![SqlValue::Int(0)]]
-        );
-        assert_eq!(rows(&mut db), vec![row(1, "ack", SqlValue::Int(10))]);
+                    .rows,
+                vec![vec![SqlValue::Int(115)]]
+            );
+            drop(sql);
+            db.close().unwrap();
+            db = BicDb::open_with_config(root.path(), cfg.clone()).unwrap();
+        }
         db.close().unwrap();
     }
 }
 
 #[test]
-fn identity_created_before_partitions_belongs_to_the_parent_in_pg16() {
+fn identity_created_before_partitions_is_shared_by_parent_and_children() {
     for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
         let root = tempfile::tempdir().unwrap();
         let cfg = config(mode);
@@ -423,14 +435,13 @@ fn identity_created_before_partitions_belongs_to_the_parent_in_pg16() {
             "INSERT INTO p(k) VALUES(1)",
         ] {sql.execute(text).unwrap();}
         assert_eq!(sql.execute("SELECT is_identity,column_default FROM information_schema.columns WHERE table_name='low' AND column_name='ident'").unwrap().rows,vec![vec![SqlValue::String("NO".into()),SqlValue::Null]]);
+        sql.execute("INSERT INTO low(k) VALUES(2)").unwrap();
         assert_eq!(
-            sql.execute("INSERT INTO low(k) VALUES(2)")
+            sql.execute("INSERT INTO low(k,ident) VALUES(3,9000)")
                 .unwrap_err()
                 .sqlstate(),
-            "23502"
+            "428C9"
         );
-        sql.execute("INSERT INTO low(k,ident) VALUES(2,9000)")
-            .unwrap();
         sql.execute("INSERT INTO p(k) VALUES(3)").unwrap();
         drop(sql);
         for _ in 0..2 {
@@ -441,15 +452,15 @@ fn identity_created_before_partitions_belongs_to_the_parent_in_pg16() {
                     .rows,
                 vec![
                     vec![SqlValue::Int(1), SqlValue::Int(100)],
-                    vec![SqlValue::Int(2), SqlValue::Int(9000)],
-                    vec![SqlValue::Int(3), SqlValue::Int(105)]
+                    vec![SqlValue::Int(2), SqlValue::Int(105)],
+                    vec![SqlValue::Int(3), SqlValue::Int(110)]
                 ]
             );
             assert_eq!(
                 sql.execute("SELECT last_value FROM p_ident_seq")
                     .unwrap()
                     .rows,
-                vec![vec![SqlValue::Int(105)]]
+                vec![vec![SqlValue::Int(110)]]
             );
             drop(sql);
             db.close().unwrap();

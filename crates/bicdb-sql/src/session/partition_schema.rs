@@ -49,19 +49,7 @@ impl SqlSession<'_> {
         definition: &ColumnDef,
         if_not_exists: bool,
     ) -> Result<bool> {
-        if identity_options(definition)?.is_some() {
-            // PostgreSQL 16 rejects this before creating an owned sequence.
-            // Do not leave an orphan sequence after a later forest mismatch.
-            if !partition::children(self.db_ref(), schema)?.is_empty() {
-                return Err(SqlError::data_exception(
-                    "42P16",
-                    "cannot recursively add identity column to table that has child tables",
-                    None,
-                ));
-            }
-            return Ok(false);
-        }
-        if serial_type(&definition.data_type).is_some() {
+        if serial_type(&definition.data_type).is_some() || identity_options(definition)?.is_some() {
             return Ok(false);
         }
         let mut column = column_schema_from_def(self.db_ref(), definition)?;

@@ -587,23 +587,12 @@ impl<'db> SqlSession<'db> {
         );
         let primary_key_name = (!parent.has_hidden_primary_key())
             .then(|| default_primary_key_name(&partition.partition_table));
-        let mut columns = parent.columns.clone();
-        for column in &mut columns {
-            if column.identity.take().is_some() {
-                // PostgreSQL 16's identity belongs to the named parent. A
-                // direct partition INSERT does not inherit its generator;
-                // routed parent INSERTs already supplied the generated value.
-                column.default_sequence = None;
-                column.default_value = None;
-                column.default_expr = None;
-            }
-        }
         let child = TableSchema {
             name: partition.partition_table,
             schema_name: partition.partition_schema,
             row_type_oid: Some(row_type_oid),
             row_array_type_oid: Some(row_array_type_oid),
-            columns,
+            columns: parent.columns.clone(),
             primary_key_name,
             indexes: Vec::new(),
             constraints: parent.constraints.clone(),

@@ -1,6 +1,7 @@
-//! Local owner for actual handoff drains. Failed/expired operations retain the
-//! freeze and permanent refusals. Only a later actual activation/cleanup proof
-//! may release ownership; there is no TTL release or mutable reset method.
+//! Local owner for actual handoff drains. Before activation, failed/expired
+//! operations retain the freeze and permanent refusals. After actual activation
+//! authorizes release, retain its original receipt for bounded same-open retry;
+//! there is no TTL release, replacement freeze or mutable reset method.
 use super::*;
 use crate::distribution_data::{ActualServiceNativeJointConstraints, ClusterDataNodeService};
 use crate::distribution_range_mutation::{FrozenRangeMutationPermit, RangeMutationGate};
@@ -11,15 +12,21 @@ use std::sync::Arc;
 
 const MAX_LOCAL_JOINT_SESSIONS: usize = 64;
 const MAX_LOCAL_JOINT_OPERATIONS: usize = 4;
-struct HeldFreeze {
+enum RetainedExclusion {
+    Frozen(Arc<FrozenRangeMutationPermit>),
+    // The real owner has dropped; retain the ORIGINAL actual receipt and TTL.
+    // This is retry state, never a replacement freeze or an armed-open proof.
+    Released(Arc<crate::distribution_range_consensus::NativeJointCatalogueActivationReceipt>),
+}
+struct RetainedSession {
     scope_sha256: String,
     session_id: Uuid,
     nonce: Uuid,
-    frozen: Arc<FrozenRangeMutationPermit>,
+    exclusion: RetainedExclusion,
 }
 #[derive(Default)]
 struct Sessions {
-    frozen: BTreeMap<RangeId, HeldFreeze>,
+    retained: BTreeMap<RangeId, RetainedSession>,
     active: BTreeSet<RangeId>,
 }
 pub(crate) struct NativeJointHandoffRuntime {
@@ -43,7 +50,7 @@ impl NativeJointHandoffRuntime {
     /// proof-authorized cleanup. There is no timeout or caller reset path.
     pub(crate) fn release_activated_new_member(
         &self,
-        receipt: &crate::distribution_range_consensus::NativeJointCatalogueActivationReceipt,
+        receipt: Arc<crate::distribution_range_consensus::NativeJointCatalogueActivationReceipt>,
     ) -> Result<()> {
         let range = receipt.range().id;
         let _operation = self.operation(range)?;
@@ -56,39 +63,70 @@ impl NativeJointHandoffRuntime {
                 "joint freeze release is not this actual NEW member",
             ));
         }
+        let scope_sha256 = data.plan_sha256()?;
+        let activation_sha256 = receipt.activation_sha256()?;
         {
             let service = self
                 .service
                 .try_lock()
                 .ok_or_else(|| invalid("joint release service busy"))?;
-            service.require_local_native_joint_activation(receipt)?;
+            service.require_local_native_joint_activation(&receipt)?;
         }
         let mut sessions = self
             .sessions
             .try_lock()
             .ok_or_else(|| invalid("joint release sessions busy"))?;
         let held = sessions
-            .frozen
-            .get(&range)
-            .ok_or_else(|| invalid("joint release has no retained actual frozen owner"))?;
+            .retained
+            .get_mut(&range)
+            .ok_or_else(|| invalid("joint release has no retained actual session"))?;
         if held.session_id != data.promise().session_id
             || held.nonce != data.promise().nonce
-            || held.scope_sha256 != data.plan_sha256()?
-            || Arc::strong_count(&held.frozen) != 1
+            || held.scope_sha256 != scope_sha256
         {
             return Err(invalid(
-                "joint release waits for exact session/readers/old decision owners to drain",
+                "joint release changed its retained permanent session",
             ));
         }
-        self.gate.validate_quiescent_frozen(range, &held.frozen)?;
-        let released = sessions.frozen.remove(&range).unwrap();
+        let (original, dropped_owner) = match &held.exclusion {
+            RetainedExclusion::Frozen(frozen) => {
+                if Arc::strong_count(frozen) != 1 {
+                    return Err(invalid(
+                        "joint release waits for exact session/readers/old decision owners to drain",
+                    ));
+                }
+                self.gate.validate_quiescent_frozen(range, frozen)?;
+                // Publish bounded retry ownership BEFORE dropping the only real
+                // Frozen. Every later failure retains this original proof/TTL.
+                let dropped_owner = std::mem::replace(
+                    &mut held.exclusion,
+                    RetainedExclusion::Released(receipt.clone()),
+                );
+                (receipt.clone(), Some(dropped_owner))
+            }
+            RetainedExclusion::Released(original) => {
+                original.require_live()?;
+                if original.store_open_id() != receipt.store_open_id()
+                    || original.activation_sha256()? != activation_sha256
+                    || original.native_bridge_sha256() != receipt.native_bridge_sha256()
+                {
+                    return Err(invalid(
+                        "joint release retry changed its actual activation/open/receipt",
+                    ));
+                }
+                // Use the retained ORIGINAL receipt for the final same-open
+                // check and arm, never the retry's potentially later budget.
+                (original.clone(), None)
+            }
+        };
         drop(sessions);
-        drop(released);
+        drop(dropped_owner);
         let service = self
             .service
             .try_lock()
-            .ok_or_else(|| invalid("joint arm service busy after owner release"))?;
-        service.arm_local_native_joint_open(receipt)
+            .ok_or_else(|| invalid("joint arm service busy after owner release; retry retained"))?;
+        original.require_live()?;
+        service.arm_local_native_joint_open(&original)
     }
     pub(crate) fn new(service: Arc<Mutex<ClusterDataNodeService>>) -> Result<Self> {
         let (gate, node) = {
@@ -135,21 +173,27 @@ impl NativeJointHandoffRuntime {
                 .sessions
                 .try_lock()
                 .ok_or_else(|| invalid("joint sessions busy"))?;
-            if let Some(existing) = sessions.frozen.get(&range) {
+            if let Some(existing) = sessions.retained.get(&range) {
                 if existing.scope_sha256 != scope
                     || existing.session_id != plan.promise().session_id
                     || existing.nonce != plan.promise().nonce
-                    || existing.frozen.owner() != existing.session_id
                 {
                     return Err(invalid(
                         "joint runtime retains a different permanent session",
                     ));
                 }
-                self.gate
-                    .validate_quiescent_frozen(range, &existing.frozen)?;
-                return Ok(existing.frozen.clone());
+                let RetainedExclusion::Frozen(frozen) = &existing.exclusion else {
+                    return Err(invalid(
+                        "joint session already released its real owner; exact activation retry only",
+                    ));
+                };
+                if frozen.owner() != existing.session_id {
+                    return Err(invalid("joint runtime frozen owner changed"));
+                }
+                self.gate.validate_quiescent_frozen(range, frozen)?;
+                return Ok(frozen.clone());
             }
-            if sessions.frozen.len() >= MAX_LOCAL_JOINT_SESSIONS {
+            if sessions.retained.len() >= MAX_LOCAL_JOINT_SESSIONS {
                 return Err(invalid("joint runtime retained-session capacity"));
             }
         }
@@ -170,19 +214,20 @@ impl NativeJointHandoffRuntime {
         // Record ownership BEFORE the next cancellation/role check and BEFORE
         // any durable operation. A later error leaves this real freeze owned.
         let mut sessions = self.sessions.lock();
-        if sessions.frozen.contains_key(&range) || sessions.frozen.len() >= MAX_LOCAL_JOINT_SESSIONS
+        if sessions.retained.contains_key(&range)
+            || sessions.retained.len() >= MAX_LOCAL_JOINT_SESSIONS
         {
             return Err(invalid(
                 "joint runtime concurrent freeze owner/capacity changed",
             ));
         }
-        sessions.frozen.insert(
+        sessions.retained.insert(
             range,
-            HeldFreeze {
+            RetainedSession {
                 scope_sha256: scope,
                 session_id: plan.promise().session_id,
                 nonce: plan.promise().nonce,
-                frozen: frozen.clone(),
+                exclusion: RetainedExclusion::Frozen(frozen.clone()),
             },
         );
         drop(sessions);

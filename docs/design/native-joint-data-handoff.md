@@ -229,3 +229,29 @@ This merge has syntax/format and diff checks only. It has not been compiled or
 executed; Root's independent CI results for its parent revision do not validate
 this combined joint source. No full activation, new-configuration ACK, Strong
 read, cleanup, automatic controller or physical result is claimed here.
+
+
+## Same-open release retry
+
+Once actual native and catalogue activation authorize this member's release,
+the runtime stores an `Arc` of that actual activation receipt before dropping
+the unique real frozen owner. A later service/DB latch or validation failure
+retains this bounded per-range state. It does not create a freeze, substitute a
+serving guard, or mark an open armed. Retrying requires the identical permanent
+plan/session/nonce, store-open, native bridge and activation binding. Arming
+uses the retained original receipt and cancellation/deadline, even if a caller
+supplies a later equivalent receipt. The unchanged actual guard still requires
+current DB/store/native state and a real gate observation of complete drain.
+
+The retained state also prevents an old closure call from reacquiring a freeze
+after authorized release. Successful idempotent retries retain the same state
+within the existing 64-session bound; there is no timeout eviction or mutable
+reset. A changed open, invalidated generation, expired original authority, or
+lost runtime still needs a separately qualified reattestation path. This change
+does not solve those cold/expired cases.
+
+No genuine activated joint receipt is produced by the current component
+fixtures, so this retry correction has formatting/diff checks only. A later
+actual activated lifecycle test must force a failure after owner drop, verify
+the unarmed refusal, and retry with the original live receipt before claiming
+this boundary executed.

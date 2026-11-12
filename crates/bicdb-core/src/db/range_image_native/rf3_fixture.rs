@@ -360,6 +360,19 @@ impl ActualNativeRf3Fixture {
                 )
                 .unwrap();
         }
+        // Additional INITIAL metadata members are explicit fixture inputs.
+        // They own no data replicas and receive no invented genesis floor.
+        for (id, (address, _)) in network {
+            if !metadata.topology().nodes.contains_key(id) {
+                metadata
+                    .join_node(
+                        ClusterNode::new(id.clone(), address.clone(), 1, 1_000_000, 1).unwrap(),
+                        &leader,
+                        1,
+                    )
+                    .unwrap();
+            }
+        }
         let mut topology = metadata.topology().clone();
         // Explicit INITIAL topology fixture, before any birth/data/genesis.
         // Do not represent this as executing an online learner-promotion plan.
@@ -421,7 +434,16 @@ impl ActualNativeRf3Fixture {
                 member_incarnation: node.incarnation,
                 initial_members: members.clone(),
                 restore_activation: None,
-                initial_ranges: ranges.clone(),
+                initial_ranges: ranges
+                    .iter()
+                    .filter(|range| {
+                        range
+                            .replicas
+                            .iter()
+                            .any(|r| r.node_id == node.id && r.role == RangeReplicaRole::Voter)
+                    })
+                    .cloned()
+                    .collect(),
             };
             let path = root.path().join(node.id.as_str());
             let (mut db, _) = if enforce_from_birth {
@@ -446,7 +468,7 @@ impl ActualNativeRf3Fixture {
             }
             let db = Arc::new(RwLock::new(db));
             let gate = db.read().range_mutation_gate();
-            for range in &ranges {
+            for range in &spec.initial_ranges {
                 let frozen = gate.try_freeze(range.id, Uuid::now_v7()).unwrap();
                 BicDb::initialize_range_image_genesis(
                     &db,

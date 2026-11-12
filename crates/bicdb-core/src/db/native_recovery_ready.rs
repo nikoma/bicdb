@@ -1333,7 +1333,7 @@ impl BicDb {
             || base.placement != range.placement
             || base.epoch > range.epoch
             || voters(base) != voters(range)
-            || lineage.base_members() != &members
+            || lineage.physical_range_members()? != members
             || !members.contains_key(role.local_node_id())
             || catalogue.resolved_index() != lineage.range_index()
         {

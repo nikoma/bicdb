@@ -162,6 +162,7 @@ impl BicDb {
         self.check_recovery_state()?;
         let fingerprint = self.schema_compatibility_fingerprint()?;
         let lineage = self.current_native_range_source_lineage(scope.range.id)?;
+        let actual_members = lineage.native_write_members()?;
         if lineage.cluster_id() != &scope.cluster_id
             || lineage.bootstrap_id() != scope.bootstrap_id
             || canonical_range(lineage.native_write_range()?) != canonical_range(&scope.range)
@@ -173,7 +174,7 @@ impl BicDb {
                 .get(lineage.local_node_id())
                 .is_some_and(|m| m.incarnation == lineage.local_member_incarnation())
             || scope.members.iter().any(|(node, m)| {
-                lineage.base_members().get(node).is_none_or(|a| {
+                actual_members.get(node).is_none_or(|a| {
                     a.incarnation != m.incarnation
                         || a.tls_certificate_sha256 != m.active_certificate_sha256
                         || a.pending_tls_certificate_sha256 != m.pending_certificate_sha256

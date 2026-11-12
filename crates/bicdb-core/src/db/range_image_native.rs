@@ -525,6 +525,47 @@ impl SourceRangeImageLineage {
             None => Ok(&self.base.range),
         }
     }
+    /// Physical voter credentials derived from the immutable descriptor,
+    /// excluding unrelated metadata-only birth members. The birth map stays
+    /// intact and no caller-selected member list can enter this projection.
+    pub(crate) fn physical_range_members(
+        &self,
+    ) -> Result<BTreeMap<ClusterNodeId, RangeImageBirthMember>> {
+        self.members_for_native_range(&self.base.range)
+    }
+    fn members_for_native_range(
+        &self,
+        range: &RangeDescriptor,
+    ) -> Result<BTreeMap<ClusterNodeId, RangeImageBirthMember>> {
+        let mut members = BTreeMap::new();
+        for replica in range
+            .replicas
+            .iter()
+            .filter(|r| r.role == RangeReplicaRole::Voter)
+        {
+            let member = self
+                .base
+                .base_members
+                .get(&replica.node_id)
+                .ok_or_else(|| {
+                    invalid("actual native range voter has no bound birth credential")
+                })?;
+            if members
+                .insert(replica.node_id.clone(), member.clone())
+                .is_some()
+            {
+                return Err(invalid("actual native range has duplicate voter identity"));
+            }
+        }
+        Ok(members)
+    }
+    /// Current ordinary data-voter domain. A joint override will be selected
+    /// only from the independently protected native handoff bridge.
+    pub(crate) fn native_write_members(
+        &self,
+    ) -> Result<BTreeMap<ClusterNodeId, RangeImageBirthMember>> {
+        self.members_for_native_range(self.native_write_range()?)
+    }
     pub(crate) fn base_range_index(&self) -> u64 {
         self.base.range_index
     }

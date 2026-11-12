@@ -721,6 +721,27 @@ impl RangeWriteStore {
         {
             serde_json::to_writer(&mut hash, &("sparse-committed-history-v1", sparse))?;
         }
+        if let Some(current) = self
+            .catalog
+            .installing_committed_certifications
+            .as_ref()
+            .and_then(|m| m.get(&range_id))
+            .filter(|m| !m.is_empty())
+        {
+            serde_json::to_writer(
+                &mut hash,
+                &("Installing-existing-committed-provenance-v1", current),
+            )?;
+        }
+        if let Some(h) = self
+            .catalog
+            .installing_recovery_handovers
+            .as_ref()
+            .and_then(|m| m.get(&range_id))
+            .filter(|m| !m.is_empty())
+        {
+            serde_json::to_writer(&mut hash, &("Installing-refusal-handover-history-v1", h))?;
+        }
         Ok(hex::encode(hash.0.finalize()))
     }
     /// No row/WAL Apply occurs here. Only an independently observed committed
@@ -1087,6 +1108,7 @@ impl RangeWriteStore {
     ) -> Result<()> {
         role.require_live_request()?;
         self.require_sparse_native_binding(role.current_range().id, native)?;
+        self.require_installing_certification_native_binding(role.current_range().id, native)?;
         if !self.fsync
             || !crate::format::range_image_install_active(&self.root)?
             || &self.catalog.cluster_id != role.cluster_id()

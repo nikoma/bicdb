@@ -16,7 +16,7 @@ reopen of all three actual stores before their final safety assertions. Both
 finish at committed index 4 with the original topology. In the baseline this
 replaces C's earlier falsely committed topology; in the fixed case that proposal
 remained uncommitted. The baseline regression fails as expected; do not hide it
-or classify its complete workflow as green. Other still-live jobs are reported
+or classify its complete workflow as green. Other check results are reported
 separately in the [finding](../../design/metadata-append-frontier-safety-2026-11-12.md).
 
 `manifest.json` records original GitHub artifact IDs, source/run IDs, verified

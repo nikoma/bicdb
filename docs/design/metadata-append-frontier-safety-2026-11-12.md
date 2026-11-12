@@ -83,6 +83,11 @@ It does not truncate an unrelated uncommitted suffix merely to make its
 reported tail equal the sender's prefix. The native owned-ACK implementation
 must bind this corrected frontier **before** sealing the reply digest.
 
+This is a receiver-side repair. An older receiver can still return the
+demonstrated over-ACK; the unchanged wire format does not establish safe rolling
+mixed-version operation. Qualification must identify the exact revisions of all
+counted metadata replicas.
+
 Mixed-version operation, arbitrary fault schedules, full operational failover,
 physical scale-out, acknowledged application-commit preservation and production
 qualification are **not tested** by this reproduction. The original failed

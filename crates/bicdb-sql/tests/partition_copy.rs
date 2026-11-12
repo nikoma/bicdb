@@ -163,12 +163,19 @@ fn copy_preserves_parent_insert_privilege_and_rls_without_child_sql_grants() {
             "42501"
         );
         sql.execute("RESET ROLE").unwrap();
+        // The COPY checks above deliberately had no SELECT policy. Give the
+        // verification query one only after the allowed/refused writes have
+        // finished; FORCE RLS otherwise correctly hides this postcondition.
+        sql.execute("CREATE POLICY verify_ack ON p FOR SELECT USING(true)")
+            .unwrap();
         assert_eq!(
             sql.execute("SELECT k FROM p ORDER BY k").unwrap().rows,
             vec![vec![SqlValue::Int(1)], vec![SqlValue::Int(2)]]
         );
         drop(sql);
         assert!(db.scan_collection("p").unwrap().is_empty());
+        assert_eq!(db.scan_collection("low").unwrap().len(), 2);
+        assert!(db.scan_collection("high").unwrap().is_empty());
         db.close().unwrap();
     }
 }

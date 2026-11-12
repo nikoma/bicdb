@@ -7,6 +7,10 @@ use crate::{BicDb, CancellationToken};
 use parking_lot::{Mutex, RwLock};
 use std::sync::{Arc, OnceLock};
 
+mod append_ack;
+pub(crate) use append_ack::NativeMetadataAppendProvenance;
+pub use append_ack::NativeMetadataAppendReceiver;
+
 pub(super) const NATIVE_METADATA_CONSENSUS_FORMAT: u32 = 2;
 fn owners() -> &'static Mutex<BTreeSet<usize>> {
     static OWNERS: OnceLock<Mutex<BTreeSet<usize>>> = OnceLock::new();
@@ -29,6 +33,8 @@ pub(super) struct NativeMetadataStoreOwner {
     actual_directory: std::sync::Weak<bicdb_page::DirectoryLock>,
     key: usize,
     actor: Option<NativeMetadataActorBinding>,
+    // Captured only from the protected Registered receipt, never the JSON alone.
+    registered_store_id: Option<Uuid>,
 }
 #[derive(Debug)]
 struct NativeMetadataActorBinding {
@@ -74,6 +80,7 @@ impl NativeMetadataStoreOwner {
                 actual_directory,
                 key,
                 actor: None,
+                registered_store_id: None,
             })
         })();
         if result.is_err() {
@@ -470,6 +477,7 @@ impl MetadataConsensusStore {
             .try_read()
             .ok_or_else(|| metadata_error("initial DB busy sealing original preparation"))?
             .finish_native_metadata_store(&record, &topology)?;
+        store.native_owner.as_mut().unwrap().registered_store_id = Some(record.store_id());
         cancellation.check()?;
         Ok(store)
     }
@@ -576,6 +584,7 @@ impl MetadataConsensusStore {
             .try_read()
             .ok_or_else(|| metadata_error("native DB busy during metadata registration"))?
             .finish_native_metadata_store(&prepared, &topology)?;
+        store.native_owner.as_mut().unwrap().registered_store_id = Some(prepared.store_id());
         cancellation.check()?;
         Ok(store)
     }
@@ -644,6 +653,7 @@ impl MetadataConsensusStore {
                 .ok_or_else(|| metadata_error("native DB busy binding reopened actor"))?;
             owner.bind_actual_actor(&actual_database, &state.committed_topology, &node)?;
         }
+        owner.registered_store_id = Some(receipt.store_id());
         cancellation.check()?;
         state.role = MetadataConsensusRole::Follower;
         state.leader_id = None;

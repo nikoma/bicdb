@@ -29,6 +29,8 @@ mod native_metadata_store;
 pub(crate) use host_read::{
     HostMetadataReadAcquireRequest, HostMetadataReadAcquireResponse, HostMetadataReadObservation,
 };
+pub(crate) use native_metadata_store::NativeMetadataAppendProvenance;
+pub use native_metadata_store::NativeMetadataAppendReceiver;
 #[cfg(test)]
 pub(crate) use native_metadata_store::NativeMetadataInitializationCut;
 pub(crate) use native_metadata_store::NativeMetadataPreVoteFact;
@@ -913,7 +915,7 @@ pub struct MetadataAppendRequest {
     pub snapshot: Option<MetadataSnapshot>,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct MetadataAppendResponse {
     pub cluster_id: ClusterId,
     pub term: u64,
@@ -921,6 +923,11 @@ pub struct MetadataAppendResponse {
     pub success: bool,
     pub match_index: u64,
     pub conflict_index: u64,
+    /// Actual persisted receiver identity data; decoding it does not attest an ACK.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub native_receiver: Option<NativeMetadataAppendReceiver>,
+    #[serde(skip)]
+    pub(crate) native_provenance: Option<NativeMetadataAppendProvenance>,
 }
 
 /// A new, request-correlated authority round. This is not a cached heartbeat.
@@ -1679,6 +1686,7 @@ impl MetadataConsensusStore {
             // probe can never count as a fresh voter acknowledgement.
             append.success = false;
             append.match_index = 0;
+            append.native_provenance = None;
         }
         Ok(MetadataReadProbeResponse {
             protocol_version: METADATA_READ_AUTHORITY_PROTOCOL_VERSION,
@@ -2201,14 +2209,7 @@ impl MetadataConsensusStore {
         if self.require_native_metadata_actor_current(false).is_err() {
             return Ok(self.append_response(false, match_index.saturating_add(1)));
         }
-        Ok(MetadataAppendResponse {
-            cluster_id: self.state.cluster_id.clone(),
-            term: self.state.current_term,
-            node_id: self.state.node_id.clone(),
-            success: true,
-            match_index,
-            conflict_index: match_index.saturating_add(1),
-        })
+        self.successful_owned_append_response()
     }
 
     fn validate_native_birth_append(&self, request: &MetadataAppendRequest) -> Result<()> {
@@ -2334,6 +2335,7 @@ impl MetadataConsensusStore {
             )));
         }
         self.require_native_metadata_actor_current(true)?;
+        self.require_current_native_append_ack(expected_node_id, response)?;
         self.match_index
             .entry(expected_node_id.clone())
             .and_modify(|known| *known = (*known).max(response.match_index))
@@ -2544,6 +2546,8 @@ impl MetadataConsensusStore {
             success,
             match_index: if success { self.last_log_index() } else { 0 },
             conflict_index,
+            native_receiver: None,
+            native_provenance: None,
         }
     }
 
@@ -3248,6 +3252,8 @@ mod tests {
             success: true,
             match_index: entry.index,
             conflict_index: entry.index.saturating_add(1),
+            native_receiver: None,
+            native_provenance: None,
         };
         assert!(!leader
             .record_append_response(&ClusterNodeId::new("n2").unwrap(), &n2)
@@ -3288,6 +3294,8 @@ mod tests {
             success: true,
             match_index: entry.index,
             conflict_index: entry.index + 1,
+            native_receiver: None,
+            native_provenance: None,
         };
         assert!(!leader
             .record_append_response(&response.node_id, &response)
@@ -3331,6 +3339,8 @@ mod tests {
             success: true,
             match_index: entry.index,
             conflict_index: entry.index.saturating_add(1),
+            native_receiver: None,
+            native_provenance: None,
         };
         assert!(!leader
             .record_append_response(&ClusterNodeId::new("n2").unwrap(), &n2)
@@ -4002,6 +4012,8 @@ mod tests {
             success: true,
             match_index: minority_entry.index,
             conflict_index: minority_entry.index.saturating_add(1),
+            native_receiver: None,
+            native_provenance: None,
         };
         assert!(!n1
             .record_append_response(&ClusterNodeId::new("n2").unwrap(), &delayed_minority_ack,)

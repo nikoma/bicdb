@@ -32,7 +32,7 @@ pub(crate) use native_bootstrap_plan::plan_initial_native_topology;
 // retains actual-destination fencing; mixed-version handoff is unqualified.
 // Unsupported typed reads are never downgraded into legacy Get.
 // Version 26 adds explicit readonly observation of existing permanent abort votes.
-pub const CLUSTER_DATA_PROTOCOL_VERSION: u32 = 26;
+pub const CLUSTER_DATA_PROTOCOL_VERSION: u32 = 27;
 /// Reserved heartbeat label carrying the canonical local schema identity.
 /// Once the range leader advertises this label, placement and data operations
 /// are fenced to nodes advertising the identical schema.

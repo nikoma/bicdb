@@ -201,6 +201,7 @@ impl BicDb {
             // Before the first shadow writes any data, its ownership, exact
             // definitions and source horizon are in the atomic native catalog.
             self.persist_index_catalog()?;
+            test_process_cut("after_plan");
         }
         self.validate_decimal_upgrade_plan()?;
         let count = self
@@ -236,7 +237,9 @@ impl BicDb {
                 self.create_index(entry.shadow.clone())?;
             }
             let completed = self.load_paged_btree_build(&entry.shadow.name, limits)?;
+            test_process_cut("after_build");
             self.publish_decimal_upgrade_replacement(position, &completed)?;
+            test_process_cut("after_replacement");
         }
         self.validate_decimal_upgrade_plan()?;
         for entry in &self
@@ -256,6 +259,7 @@ impl BicDb {
         // publishing the semantic certificate. A failed checkpoint keeps the
         // durable plan and admission fence for the next recovery attempt.
         self.checkpoint_for_resume()?;
+        test_process_cut("before_certificate");
         let old_plan = self.decimal_predicate_upgrade.take();
         self.decimal_predicates_current = true;
         if let Err(error) = self.persist_index_catalog() {
@@ -263,6 +267,7 @@ impl BicDb {
             self.decimal_predicate_upgrade = old_plan;
             return Err(error);
         }
+        test_process_cut("after_certificate");
         Ok(())
     }
 
@@ -437,5 +442,180 @@ impl BicDb {
         self.index_generation.fetch_add(1, AtomicOrdering::Relaxed);
         self.schema_compatibility.invalidate();
         self.check_recovery_state()
+    }
+}
+
+// The cut seam exists only in the Core unit-test binary. Production builds
+// cannot activate it through an environment variable.
+#[inline]
+fn test_process_cut(point: &str) {
+    #[cfg(test)]
+    if std::env::var("BICDB_TEST_DECIMAL_UPGRADE_CUT").as_deref() == Ok(point) {
+        std::process::abort();
+    }
+    let _ = point;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+    use sha2::{Digest, Sha256};
+
+    fn config() -> DbConfig {
+        DbConfig::default()
+            .with_fsync(true)
+            .with_storage_mode(StorageMode::ServerPaged)
+            .with_paged_buffer_pool_bytes(8 * 1024 * 1024)
+    }
+
+    fn copy_actual_old_fixture(root: &Path) {
+        let source = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("tests/fixtures/decimal-predicate-legacy-main482");
+        let manifest: serde_json::Value =
+            serde_json::from_slice(&fs::read(source.join("FIXTURE.json")).unwrap()).unwrap();
+        for (name, identity) in manifest["files"].as_object().unwrap() {
+            let bytes = fs::read(source.join(name)).unwrap();
+            assert_eq!(bytes.len() as u64, identity["bytes"].as_u64().unwrap());
+            assert_eq!(
+                hex::encode(Sha256::digest(&bytes)),
+                identity["sha256"].as_str().unwrap()
+            );
+            let target = root.join(name);
+            fs::create_dir_all(target.parent().unwrap()).unwrap();
+            fs::write(target, bytes).unwrap();
+        }
+    }
+
+    #[test]
+    #[ignore = "subprocess entry point; invoked only by the parent process-cut controls"]
+    fn child_upgrade() {
+        let root =
+            std::env::var_os("BICDB_TEST_DECIMAL_UPGRADE_PATH").expect("owned child store path");
+        let mut db = BicDb::open_with_config(Path::new(&root), config()).unwrap();
+        db.close().unwrap();
+        panic!("process did not reach the required cut");
+    }
+
+    fn cut(root: &Path, point: &str) {
+        let output = std::process::Command::new(std::env::current_exe().unwrap())
+            .args([
+                "--ignored",
+                "--exact",
+                "db::decimal_predicate::tests::child_upgrade",
+                "--nocapture",
+            ])
+            .current_dir(root)
+            .env("BICDB_TEST_DECIMAL_UPGRADE_PATH", root)
+            .env("BICDB_TEST_DECIMAL_UPGRADE_CUT", point)
+            .output()
+            .unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::process::ExitStatusExt;
+            assert_eq!(
+                output.status.signal(),
+                Some(libc::SIGABRT),
+                "{point}: stdout={} stderr={}",
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr)
+            );
+        }
+        #[cfg(not(unix))]
+        assert!(!output.status.success());
+    }
+
+    fn verify_ack_uniqueness_and_reopens(root: &Path) {
+        for reopen in 0..3 {
+            let mut db = BicDb::open_with_config(root, config()).unwrap();
+            assert_eq!(
+                db.lookup_index(
+                    "native_decimal_partial",
+                    &[IndexValue::String("same".into())]
+                )
+                .unwrap(),
+                vec!["acknowledged".to_string()],
+                "reopen={reopen}"
+            );
+            assert_eq!(
+                db.get("precision_probe", "acknowledged")
+                    .unwrap()
+                    .unwrap()
+                    .metadata,
+                json!({"amount":"0.5000000000000000000001","business_key":"same"})
+            );
+            assert_eq!(db.collection_record_count("precision_probe").unwrap(), 1);
+            assert!(db
+                .insert(
+                    "precision_probe",
+                    Record::new("duplicate")
+                        .with_metadata(json!({"amount":"0.75","business_key":"same"}))
+                )
+                .is_err());
+            assert!(db.get("precision_probe", "duplicate").unwrap().is_none());
+            assert!(db
+                .verify_indexes_consistently()
+                .unwrap()
+                .iter()
+                .all(|report| report.valid));
+            db.close().unwrap();
+        }
+    }
+
+    #[test]
+    fn owned_decimal_transition_survives_five_process_publication_cuts() {
+        for point in [
+            "after_plan",
+            "after_build",
+            "after_replacement",
+            "before_certificate",
+            "after_certificate",
+        ] {
+            let root = tempfile::tempdir().unwrap();
+            copy_actual_old_fixture(root.path());
+            cut(root.path(), point);
+            verify_ack_uniqueness_and_reopens(root.path());
+            let catalog: serde_json::Value =
+                serde_json::from_slice(&fs::read(root.path().join(DEFAULT_INDEX_CATALOG)).unwrap())
+                    .unwrap();
+            assert_eq!(
+                catalog["decimal_predicate_semantics_version"],
+                json!(COMPARISON_VERSION)
+            );
+            assert!(catalog.get("decimal_predicate_upgrade").is_none());
+            assert_eq!(catalog["indexes"].as_array().unwrap().len(), 1);
+        }
+    }
+
+    #[test]
+    fn changed_owner_definition_and_horizon_cannot_adopt_an_upgrade_plan() {
+        for corruption in ["version", "horizon", "shadow_alias", "omitted_definition"] {
+            let root = tempfile::tempdir().unwrap();
+            copy_actual_old_fixture(root.path());
+            cut(root.path(), "after_plan");
+            let path = root.path().join(DEFAULT_INDEX_CATALOG);
+            let mut catalog: serde_json::Value =
+                serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+            let plan = &mut catalog["decimal_predicate_upgrade"];
+            match corruption {
+                "version" => plan["version"] = json!(COMPARISON_VERSION + 1),
+                "horizon" => {
+                    plan["source_commit_seq"] =
+                        json!(plan["source_commit_seq"].as_u64().unwrap() + 1)
+                }
+                "shadow_alias" => {
+                    plan["replacements"][0]["shadow"]["name"] =
+                        plan["replacements"][0]["original"]["name"].clone()
+                }
+                "omitted_definition" => plan["replacements"] = json!([]),
+                _ => unreachable!(),
+            }
+            fs::write(path, serde_json::to_vec_pretty(&catalog).unwrap()).unwrap();
+            let error = BicDb::open_with_config(root.path(), config()).unwrap_err();
+            assert!(
+                error.to_string().contains("Decimal predicate transition"),
+                "{corruption}: {error}"
+            );
+        }
     }
 }

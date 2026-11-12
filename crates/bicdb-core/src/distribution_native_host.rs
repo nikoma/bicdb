@@ -536,7 +536,7 @@ impl NativeProvisionalNode {
     fn require_unregistered(&self) -> Result<()> {
         self.database
             .try_read()
-            .ok_or_else(|| invalid("factory busy checking protected metadata"))?
+            .ok_or_else(|| invalid("actual initial factory is busy checking protected metadata; retry without enrolling"))?
             .require_native_metadata_uninitialized()?;
         for path in [
             crate::distribution::DEFAULT_CLUSTER_TOPOLOGY,

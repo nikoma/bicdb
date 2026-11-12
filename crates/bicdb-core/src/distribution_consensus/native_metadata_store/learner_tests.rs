@@ -84,6 +84,27 @@ fn native_metadata_learner_cannot_vote_and_cached_legacy_store_cannot_adopt_enfo
     replicate(&mut stores);
     assert_eq!(stores[&node(0)].committed_topology(), &with_learner);
 
+    let mut unbound_promotion = with_learner.clone();
+    unbound_promotion.generation += 1;
+    unbound_promotion
+        .nodes
+        .get_mut(&node(3))
+        .unwrap()
+        .metadata_role = MetadataMemberRole::Voter;
+    let before_unbound = stores[&node(0)].status().last_log_index;
+    let error = stores
+        .get_mut(&node(0))
+        .unwrap()
+        .propose_topology(unbound_promotion)
+        .unwrap_err();
+    assert!(
+        error
+            .to_string()
+            .contains("requires committed actual factory enrollment"),
+        "{error}"
+    );
+    assert_eq!(stores[&node(0)].status().last_log_index, before_unbound);
+
     // Genuine pre-enrollment legacy learner: its own current configuration
     // permits metadata catch-up, never a vote for an eligible other candidate.
     let legacy_root = f.root.path().join("unenrolled-learner-meta");
@@ -164,6 +185,23 @@ fn native_metadata_learner_cannot_vote_and_cached_legacy_store_cannot_adopt_enfo
         .propose_topology(bound.clone())
         .unwrap();
     replicate(&mut stores);
+    let mut premature = bound.clone();
+    premature.generation += 1;
+    premature.nodes.get_mut(&node(3)).unwrap().metadata_role = MetadataMemberRole::Voter;
+    let before_premature = stores[&node(0)].status().last_log_index;
+    let error = stores
+        .get_mut(&node(0))
+        .unwrap()
+        .propose_topology(premature.clone())
+        .unwrap_err();
+    assert!(
+        error
+            .to_string()
+            .contains("requires actual caught-up metadata acknowledgement"),
+        "{error}"
+    );
+    assert_eq!(stores[&node(0)].status().last_log_index, before_premature);
+
     let error = legacy
         .handle_append_request(stores[&node(0)].append_request_from(1, 64).unwrap())
         .unwrap_err();
@@ -218,4 +256,34 @@ fn native_metadata_learner_cannot_vote_and_cached_legacy_store_cannot_adopt_enfo
             .vote_granted
     );
     assert!(owned.start_election().is_err());
+    stores
+        .get_mut(&node(0))
+        .unwrap()
+        .record_append_response(&node(3), &ack)
+        .unwrap();
+    stores
+        .get_mut(&node(0))
+        .unwrap()
+        .propose_topology(premature.clone())
+        .unwrap();
+    replicate(&mut stores);
+    assert_eq!(stores[&node(0)].committed_topology(), &premature);
+    let promoted_ack = owned
+        .handle_append_request(stores[&node(0)].append_request_from(1, 64).unwrap())
+        .unwrap();
+    assert!(promoted_ack.success);
+    assert_eq!(owned.committed_topology(), &premature);
+    let current = stores[&node(0)].status();
+    assert!(
+        owned
+            .handle_vote_request(MetadataVoteRequest {
+                cluster_id: initial.cluster_id.clone(),
+                term: current.current_term,
+                candidate_id: node(0),
+                last_log_index: current.last_log_index,
+                last_log_term: current.last_log_term,
+            })
+            .unwrap()
+            .vote_granted
+    );
 }

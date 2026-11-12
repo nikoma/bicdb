@@ -274,6 +274,53 @@ impl MetadataConsensusStore {
         fact.require_current()?;
         Ok(fact)
     }
+    pub(super) fn require_native_learner_promotions_ready(
+        &self,
+        proposed: &ClusterTopology,
+    ) -> Result<()> {
+        let enforced_cluster = self
+            .state
+            .committed_topology
+            .nodes
+            .values()
+            .chain(proposed.nodes.values())
+            .any(|node| {
+                node.native_store_birth_v1
+                    .as_ref()
+                    .is_some_and(|birth| birth.writer_enforcement_version() == 1)
+            });
+        if !enforced_cluster {
+            return Ok(());
+        }
+        for (id, next) in &proposed.nodes {
+            let Some(previous) = self.state.committed_topology.nodes.get(id) else {
+                continue;
+            };
+            if previous.metadata_role != MetadataMemberRole::Learner
+                || next.metadata_role != MetadataMemberRole::Voter
+            {
+                continue;
+            }
+            if !known_born_v2(&self.state.committed_topology, id) {
+                return Err(metadata_error(
+                    "native learner promotion requires committed actual factory enrollment",
+                ));
+            }
+            // This is the leader's actual replication progress, not the
+            // installed-index number submitted by a promotion caller. The
+            // authenticated transport and owned receiver bind the ACK to the
+            // physical native member before record_append_response counts it.
+            if self.state.commit_index == 0
+                || self.match_index.get(id).copied().unwrap_or(0) < self.state.commit_index
+            {
+                return Err(metadata_error(
+                    "native learner promotion requires actual caught-up metadata acknowledgement",
+                ));
+            }
+        }
+        Ok(())
+    }
+
     pub(super) fn require_native_metadata_actor_current(&self, voter: bool) -> Result<()> {
         self.require_native_metadata_owner_current()?;
         if let Some(owner) = &self.native_owner {

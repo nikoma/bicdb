@@ -1986,6 +1986,7 @@ impl MetadataConsensusStore {
             self.state.committed_topology.range_image_bootstrap_id,
             topology.range_image_bootstrap_id,
         )?;
+        self.require_native_learner_promotions_ready(&topology)?;
         let latest_generation = self
             .state
             .log

@@ -1,0 +1,52 @@
+{
+  "rename-main465-integration-7138ffa9": {
+    "test_results": [
+      "test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.61s",
+      "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.75s",
+      "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s",
+      "test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.28s",
+      "test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.63s",
+      "test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.71s",
+      "test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.57s",
+      "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.69s",
+      "test result: ok. 20 passed; 0 failed; 0 ignored; 0 measured; 875 filtered out; finished in 75.94s",
+      "test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s",
+      "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.67s",
+      "test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.04s",
+      "test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.58s",
+      "test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.64s",
+      "test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 415 filtered out; finished in 0.22s",
+      "test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s",
+      "test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s",
+      "test result: ok. 32 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.86s",
+      "test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 23.01s",
+      "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.55s"
+    ],
+    "tests_passed": 132,
+    "failure_excerpt": null
+  },
+  "rename-routine-type-control-f229a4ba": {
+    "test_results": [
+      "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s"
+    ],
+    "tests_passed": 0,
+    "failure_excerpt": "failures:\n\n---- table_rename_preserves_routine_row_and_array_type_identity stdout ----\n\nthread 'table_rename_preserves_routine_row_and_array_type_identity' (3949416) panicked at crates/bicdb-sql/tests/rename_routine_row_types.rs:19:258:\ncalled `Result::unwrap()` on an `Err` value: Unsupported(\"array element type source is not registered\")\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n\n\nfailures:\n    table_rename_preserves_routine_row_and_array_type_identity\n\ntest result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s\n\nerror: test failed, to rerun pass `-p bicdb-sql --test rename_routine_row_types`\n{\"source\": \"f229a4baf867ba2f3a0c81d710367b19ccfa470d\", \"scope\": \"Tests-only next dependency identity control. Scalar and array routine signatures bind table row type OIDs. PostgreSQL16.13 two reference cases pass: signatures show renamed names with unchanged argument/return OIDs during owner transaction, commit/rollback, and old spelling reuse. BicDB intended both stores and commit/rollback plus reopen, first failure stops. Runtime identical to 7138 merged-main465 integration; do not assume success or failure, inspect actual result. Not completed SQL scoped admission, application or VM qualification.\", \"started_unix\": 1794395945.694315, \"steps\": [{\"command\": [\"cargo\", \"+1.96.0\", \"test\", \"--locked\", \"-j\", \"1\", \"-p\", \"bicdb-sql\", \"--test\", \"rename_routine_row_types\"], \"started_unix\": 1794395945.694405, \"exit\": 101, \"finished_unix\": 1794395948.7964232}], \"status\": \"failed\", \"finished_unix\": 1794395948.7966409}\n"
+  },
+  "rename-routine-type-positive-5e74ff58": {
+    "test_results": [
+      "test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.19s",
+      "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 5.06s",
+      "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.66s",
+      "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.62s",
+      "test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 19.90s",
+      "test result: ok. 20 passed; 0 failed; 0 ignored; 0 measured; 875 filtered out; finished in 28.80s",
+      "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 418 filtered out; finished in 0.10s",
+      "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 418 filtered out; finished in 0.20s",
+      "test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.17s",
+      "test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.96s",
+      "test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.95s"
+    ],
+    "tests_passed": 52,
+    "failure_excerpt": null
+  }
+}

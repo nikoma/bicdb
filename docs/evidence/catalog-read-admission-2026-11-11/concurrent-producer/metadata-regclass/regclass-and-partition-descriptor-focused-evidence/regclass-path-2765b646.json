@@ -1,0 +1,37 @@
+{
+  "source": "2765b646c2675ddf922c8650c4820a3618056af2",
+  "scope": "Batch regclass activepath, exactOIDlookup+retryablecatalogadmission, emptyeffectivepath. Actual663original95 advancedthroughrename+metadata+newparent butfailed42P01unqualifiedLOWERparam::regclass. NativePG16.13 control15semanticchecks+preparedcount1,0,1,0 retained. NewSQL3andwire1x2stores+independentACK+2reopens; existingOIDaliases/oidsemantics/dumpschema/catalogowner plusfullwireprotocol integration. Productionexperimentalflagsunchanged; working481notdeliveryreservation; originalapp/assertions/waitsunchanged. Ownseparaterepo/target/lock; noTCsourceorstandardreleaseinterruption.",
+  "started_unix": 1794457785.4483893,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "--no-fail-fast",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "regclass_search_path",
+        "--test",
+        "oid_aliases",
+        "--test",
+        "oid_semantics",
+        "--test",
+        "pg_dump_schema_qualified_restore",
+        "--test",
+        "catalog_read_owner",
+        "--",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794457785.4484937,
+      "exit": 101,
+      "finished_unix": 1794458002.6278195
+    }
+  ],
+  "status": "failed",
+  "finished_unix": 1794458002.6280808
+}

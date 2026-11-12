@@ -1766,7 +1766,11 @@ impl<'db> SqlEngine<'db> {
                     let schema = load_schema_shared(self.db_ref(), &resolved)
                         .ok()
                         .flatten()?;
-                    let table_oid = table_oids(self.db_ref()).get(&resolved).copied()? as i32;
+                    // This schema has already passed exact-row admission.
+                    // Derive its stored OID directly: building the global OID
+                    // directory would observe unrelated schema rows on a cold
+                    // Describe and unnecessarily block their later DDL.
+                    let table_oid = table_relation_oid(&schema) as i32;
                     // Type inference folds its lookup keys. Origin metadata
                     // must use persisted identifiers, including quoted names
                     // that differ only in case.
@@ -2239,6 +2243,22 @@ impl<'db> SqlEngine<'db> {
         Some(columns)
     }
 
+    /// Metadata-only source labels for catalog query rebinding. Never evaluate
+    /// projections, functions, policies or row locks to discover column names.
+    pub(crate) fn describe_from_labels(
+        &self,
+        from: &[TableWithJoins],
+    ) -> Option<Vec<(String, Vec<String>)>> {
+        let mut labels = Vec::new();
+        for item in from {
+            self.collect_describe_relation_labels(&item.relation, &mut labels)?;
+            for join in &item.joins {
+                self.collect_describe_relation_labels(&join.relation, &mut labels)?;
+            }
+        }
+        Some(labels)
+    }
+
     fn collect_describe_relation_labels(
         &self,
         factor: &TableFactor,
@@ -2264,6 +2284,19 @@ impl<'db> SqlEngine<'db> {
                             .iter()
                             .filter(|c| !c.hidden)
                             .map(|c| c.name.clone())
+                            .collect(),
+                        false,
+                    )
+                } else if is_virtual_table(&table) {
+                    // Virtual catalogs have declared labels but no physical
+                    // collection for the ordinary relation-name resolver.
+                    // Match relation_table_columns precedence so Describe
+                    // never executes a catalog query to discover its labels.
+                    (
+                        self.relation_table_columns(&table, &[])?
+                            .0
+                            .into_iter()
+                            .map(|(name, _)| name)
                             .collect(),
                         false,
                     )

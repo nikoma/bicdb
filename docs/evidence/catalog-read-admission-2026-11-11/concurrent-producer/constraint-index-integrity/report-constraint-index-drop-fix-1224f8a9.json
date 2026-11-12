@@ -1,0 +1,29 @@
+{
+  "source": "1224f8a9920f34ad0a6e6fef78a37cdf87412239",
+  "scope": "Preflight complete DROP INDEX statement, resolve namespace/live path/exact quoted spelling, protect declared primary/unique/exclusion-owned indexes before any mutation, update materialized-view descriptor alongside Native removal. Original DEFAULT/rollback/portable gates stay open; references from FK to standalone unique indexes remain a separate audit. Full new5 semantic tests bothstores first; then relevant existing constraint/index/authority regressions.",
+  "started_unix": 1794466033.6676722,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "drop_constraint_indexes",
+        "--",
+        "--test-threads=1",
+        "--nocapture"
+      ],
+      "started_unix": 1794466033.6679432,
+      "exit": 0,
+      "finished_unix": 1794466127.1783817
+    }
+  ],
+  "status": "focused_passed",
+  "finished_unix": 1794466127.178556
+}

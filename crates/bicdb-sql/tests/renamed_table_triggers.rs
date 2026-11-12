@@ -28,6 +28,7 @@ fn renamed_trigger_keeps_firing_and_rejecting_rows_after_restart() {
         let root = tempfile::tempdir().unwrap();
         let config = DbConfig::default().with_storage_mode(mode);
         let mut db = BicDb::open_with_config(root.path(), config.clone()).unwrap();
+        bicdb_sql::initialize_rename_journal_identities(&mut db).unwrap();
         {
             let mut sql = SqlSession::new(&mut db);
             setup(&mut sql, true);
@@ -76,6 +77,7 @@ fn trigger_binding_returns_to_old_name_at_savepoint_and_full_rollback() {
         let mut db =
             BicDb::open_with_config(root.path(), DbConfig::default().with_storage_mode(mode))
                 .unwrap();
+        bicdb_sql::initialize_rename_journal_identities(&mut db).unwrap();
         let mut sql = SqlSession::new(&mut db);
         // An unindexed relation keeps this regression independent of the
         // separate transactional offline-index-builder failure.

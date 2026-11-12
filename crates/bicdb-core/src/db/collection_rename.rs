@@ -47,6 +47,59 @@ pub(crate) enum CatalogOp {
 }
 
 impl BicDb {
+    pub(crate) fn validate_replication_reader_requirements(frame: &CommitFrame) -> Result<()> {
+        let require = |name: &str| -> Result<()> {
+            let feature = match name {
+                "__bicdb_rename_intents" | "__bicdb_rename_images" | "__bicdb_rename_gc" => {
+                    Some(format::SQL_RENAME_INTENTS_FEATURE_FLAG)
+                }
+                "__bicdb_recycle_intents"
+                | "__bicdb_recycle_purges"
+                | "__bicdb_recycle_creations" => Some(format::SQL_CATALOG_INTENTS_FEATURE_FLAG),
+                _ => None,
+            };
+            if let Some(feature) = feature {
+                if !frame
+                    .required_reader_features
+                    .iter()
+                    .any(|present| present == feature)
+                {
+                    return Err(BicDbError::Replication(format!(
+                        "replicated collection `{name}` requires reader capability `{feature}`"
+                    )));
+                }
+            }
+            Ok(())
+        };
+        for write in &frame.writes {
+            require(&write.collection)?;
+            if let Some(meta) = &write.collection_meta {
+                require(&meta.name)?;
+            }
+            if write.collection == CATALOG_LOG_COLLECTION
+                && write.operation != ReplicationOperationType::Delete
+            {
+                let record: Record = serde_json::from_slice(&write.payload)?;
+                let op: CatalogOp = serde_json::from_value(record.metadata)?;
+                match op {
+                    CatalogOp::Create { name, .. }
+                    | CatalogOp::Drop { name }
+                    | CatalogOp::MeshAuthorization { name, .. } => require(&name)?,
+                    CatalogOp::Rename { from, to } => {
+                        require(&from)?;
+                        require(&to)?;
+                    }
+                    CatalogOp::IndexCatalog { definitions } => {
+                        for definition in definitions {
+                            require(&definition.collection)?;
+                        }
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
     /// The physical storage name of a logical collection.
     pub(crate) fn storage_name_of(&self, collection: &str) -> String {
         self.storage_aliases
@@ -89,6 +142,19 @@ impl BicDb {
 
     fn replicates_catalog(&self) -> bool {
         self.config.replication.enabled && self.ha_node.role() == NodeRole::Primary
+    }
+
+    /// Additional Native backings touched by catalog operations. A trusted
+    /// host must declare these resources before delegating scoped DDL effects;
+    /// the names are owned here, alongside the actual catalog-log writer.
+    /// This exposes the resource inventory and changes no replication format,
+    /// lifecycle operation, mutation grant or durability requirement.
+    pub fn catalog_operation_scope_collections(&self) -> &'static [&'static str] {
+        if self.replicates_catalog() {
+            &[CATALOG_LOG_COLLECTION]
+        } else {
+            &[]
+        }
     }
 
     /// On a replication primary, ships `op` to standbys (see
@@ -471,6 +537,8 @@ impl BicDb {
                 "pending catalog redo belongs to another cluster",
             ));
         }
+        Self::validate_replication_reader_requirements(&frame)?;
+        self.install_replicated_reader_features(&frame.required_reader_features)?;
         if frame.commit_seq <= self.current_commit_seq() {
             self.apply_replicated_catalog_ops(&frame)?;
         }
@@ -574,10 +642,42 @@ impl BicDb {
 }
 
 impl BicDb {
+    /// Validate a host's live catalog-undo owner. Startup recovery still
+    /// requires complete quiescence; live undo may retain only this pending
+    /// transaction. This does not grant mutation authority or relax rename's
+    /// checks on native grants, incarnations, or row-lock ownership.
+    pub fn check_catalog_undo_owner(&self, tx: &Transaction) -> Result<()> {
+        self.check_recovery_state()?;
+        if !std::ptr::eq(tx.db.as_ptr(), self) || !Arc::ptr_eq(&tx.tx_states, &self.tx_states) {
+            return Err(BicDbError::Unsupported(
+                "catalog undo owner belongs to a different database".into(),
+            ));
+        }
+        if tx.state != TxState::Pending {
+            return Err(BicDbError::TransactionNotPending);
+        }
+        let other_pending = self.tx_states.shards.iter().any(|shard| {
+            shard
+                .lock()
+                .iter()
+                .any(|(id, state)| *id != tx.id.0 && *state == TxState::Pending)
+        });
+        let other_locks = self.write_locks.values_any(|owner| *owner != tx.id);
+        if other_pending || other_locks {
+            return Err(BicDbError::TransactionConflict(
+                "cannot undo catalog while another transaction is pending or holds row locks"
+                    .into(),
+            ));
+        }
+        self.validate_transaction_collection_incarnations(tx)?;
+        self.check_recovery_state()
+    }
+
     /// Rename a collection and retain one transaction's writes/read observations
     /// on that same backing. Catalog mutation requires an exclusive database
-    /// borrow and no other pending transaction or retained row lock; its host
-    /// remains responsible for transactional DDL undo. Native grants retain
+    /// borrow and either a declared catalog scope or no other pending native
+    /// transaction/retained row lock. The host remains responsible for SQL
+    /// catalog visibility and transactional DDL undo. Native grants retain
     /// their immutable relation restrictions.
     pub fn rename_collection_preserving_pending_writes(
         &mut self,
@@ -611,21 +711,26 @@ impl BicDb {
         }
         // A Transaction retains database access independently of this exclusive
         // borrow. Only the supplied transaction's overlays are rebound below;
-        // another live transaction would retain the old logical name and lock
-        // identities. Refuse before publishing any catalog change. Check locks
-        // separately because a completed transaction may still be releasing its
-        // locks, and a SELECT FOR UPDATE need not have buffered any writes.
-        let other_pending = self.tx_states.shards.iter().any(|shard| {
-            shard
-                .lock()
-                .iter()
-                .any(|(id, state)| *id != tx.id.0 && *state == TxState::Pending)
-        });
-        let other_locks = self.write_locks.values_any(|owner| *owner != tx.id);
-        if other_pending || other_locks {
-            return Err(BicDbError::TransactionConflict(
-                "cannot rename while another transaction is pending or holds row locks".into(),
-            ));
+        // A declared scope atomically excludes prior and future observations of
+        // both names/backing. Without one, keep the conservative global gate:
+        // other owners' overlays cannot be rebound by this operation. Locks
+        // are checked separately while a completed transaction releases them.
+        if !self
+            .catalog_admission
+            .owner_covers(tx.id, tx.catalog_actor_scope, old, new)
+        {
+            let other_pending = self.tx_states.shards.iter().any(|shard| {
+                shard
+                    .lock()
+                    .iter()
+                    .any(|(id, state)| *id != tx.id.0 && *state == TxState::Pending)
+            });
+            let other_locks = self.write_locks.values_any(|owner| *owner != tx.id);
+            if other_pending || other_locks {
+                return Err(BicDbError::TransactionConflict(
+                    "cannot rename while another transaction is pending or holds row locks".into(),
+                ));
+            }
         }
         // Application grants/commit validators are bound to authored relation
         // names. Rebinding an already-authorized write would change that

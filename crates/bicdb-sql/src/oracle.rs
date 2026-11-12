@@ -476,24 +476,75 @@ pub(crate) fn validate_routine_language(db: &BicDb, language: &str) -> Result<()
 /// Initialize the profile already recorded by this store before exposing SQL.
 /// This never chooses a new profile for an unprovisioned database.
 pub fn initialize_existing_database_profile(db: &mut BicDb) -> Result<()> {
-    recover_interrupted_recycle_bin_renames(db)?;
+    db.check_recovery_state()?;
     let profile = match db.get(PROFILE_COLLECTION, "profile") {
-        Err(BicDbError::CollectionNotFound(_)) => return Ok(()),
+        Err(BicDbError::CollectionNotFound(_)) => None,
         Err(error) => return Err(error.into()),
         Ok(None) => return Err(unsupported("SQL profile marker is missing")),
-        Ok(Some(record)) => record
-            .metadata
-            .get("profile")
-            .and_then(JsonValue::as_str)
-            .map(str::to_string)
-            .ok_or_else(|| unsupported("SQL profile marker has no profile identity"))?,
+        Ok(Some(record)) => Some(
+            record
+                .metadata
+                .get("profile")
+                .and_then(JsonValue::as_str)
+                .map(str::to_string)
+                .ok_or_else(|| unsupported("SQL profile marker has no profile identity"))?,
+        ),
     };
-    ensure_database_profile(db, &profile)?;
+    if let Some(profile) = &profile {
+        validate_database_profile_selection(db, profile)?;
+    }
+    recover_interrupted_recycle_bin_renames(db)?;
+    if let Some(profile) = profile {
+        ensure_database_profile_inner(db, &profile)?;
+    }
+    if !db.is_standby_role() {
+        initialize_rename_journal_identities(db)?;
+    }
     db.check_recovery_state()?;
     Ok(())
 }
 
 pub fn ensure_database_profile(db: &mut BicDb, profile: &str) -> Result<()> {
+    db.check_recovery_state()?;
+    // A wrong serve flag must not repair or convert a differently profiled
+    // store before reporting the mismatch.
+    validate_database_profile_selection(db, profile)?;
+    recover_interrupted_recycle_bin_renames(db)?;
+    let result = ensure_database_profile_inner(db, profile);
+    db.check_recovery_state()?;
+    result?;
+    if !db.is_standby_role() {
+        initialize_rename_journal_identities(db)?;
+    }
+    Ok(())
+}
+
+fn validate_database_profile_selection(db: &BicDb, profile: &str) -> Result<()> {
+    if !is_known_profile(profile) {
+        return Err(unsupported(format!("unknown SQL profile {profile}")));
+    }
+    match db.get(PROFILE_COLLECTION, "profile") {
+        Ok(Some(marker)) if matches_profile(&marker.metadata, profile) => Ok(()),
+        Ok(Some(_)) => Err(unsupported(
+            "database SQL profile does not match server configuration",
+        )),
+        Ok(None) => Err(unsupported("SQL profile marker is missing")),
+        Err(BicDbError::CollectionNotFound(_)) => {
+            if profile != POSTGRES_PROFILE
+                && (!list_schemas(db)?.is_empty()
+                    || db.collections().iter().any(|c| !c.name.starts_with("__")))
+            {
+                return Err(unsupported(
+                    "Oracle profile must be provisioned on an empty database",
+                ));
+            }
+            Ok(())
+        }
+        Err(error) => Err(error.into()),
+    }
+}
+
+fn ensure_database_profile_inner(db: &mut BicDb, profile: &str) -> Result<()> {
     if !is_known_profile(profile) {
         return Err(unsupported(format!("unknown SQL profile {profile}")));
     }
@@ -510,11 +561,8 @@ pub fn ensure_database_profile(db: &mut BicDb, profile: &str) -> Result<()> {
                 "database SQL profile does not match server configuration",
             ));
         }
-        // Recovered before-images may contain legacy case-index definitions.
-        // Resolve catalog moves before deciding that the profile is case-ready.
-        if is_oracle_profile(profile) {
-            recover_interrupted_recycle_bin_renames(db)?;
-        }
+        // The public entrypoints resolved primary catalog moves before
+        // reaching profile migrations; hot standbys retain the source prefix.
         // Upgrade legacy preview foreign keys before serving any sessions.
         // No row values or validation state are changed by this marker upgrade.
         if profile == ORACLE_PREVIEW_PROFILE
@@ -4287,5 +4335,86 @@ mod postgres_catalog_boundary_tests {
                 SqlValue::String("records".into()),
                 SqlValue::String("public".into())
             ]));
+    }
+}
+
+#[cfg(test)]
+mod rename_namespace_profile_tests {
+    use super::*;
+    use bicdb_core::{DbConfig, StorageMode};
+
+    #[test]
+    fn profile_initialization_precedes_transactional_rename_and_remains_idempotent() {
+        for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
+            for profile in [POSTGRES_PROFILE, ORACLE_PREVIEW_PROFILE] {
+                let root = tempfile::tempdir().unwrap();
+                let mut db = BicDb::open_with_config(
+                    root.path(),
+                    DbConfig::default()
+                        .with_fsync(true)
+                        .with_storage_mode(mode.clone()),
+                )
+                .unwrap();
+                ensure_database_profile(&mut db, profile).unwrap();
+                assert!(db.local_namespace_identity_feature_active());
+                SqlSession::new(&mut db)
+                    .execute("CREATE TABLE identity_source(id INTEGER PRIMARY KEY)")
+                    .unwrap();
+                let identity = db
+                    .local_namespace_identity("identity_source")
+                    .unwrap()
+                    .unwrap();
+                {
+                    let mut session = SqlSession::new(&mut db);
+                    session.execute("BEGIN").unwrap();
+                    session
+                        .execute("INSERT INTO identity_source VALUES (7)")
+                        .unwrap();
+                    session
+                        .execute("ALTER TABLE identity_source RENAME TO identity_target")
+                        .unwrap();
+                    session.execute("ROLLBACK").unwrap();
+                }
+                assert_eq!(
+                    db.local_namespace_identity("identity_source").unwrap(),
+                    Some(identity)
+                );
+                assert!(!db.has_collection("identity_target"));
+                assert!(SqlSession::new(&mut db)
+                    .execute("SELECT id FROM identity_source")
+                    .unwrap()
+                    .rows
+                    .is_empty());
+                let peer = db.begin_transaction().unwrap();
+                assert_eq!(initialize_rename_journal_identities(&mut db).unwrap(), 0);
+                if profile == POSTGRES_PROFILE {
+                    ensure_database_profile(&mut db, profile).unwrap();
+                } else {
+                    // Oracle's pre-existing case-index migration entrypoint
+                    // is startup-only, even when its ready marker exists.
+                    // Namespace initialization must not relax that boundary.
+                    assert!(matches!(
+                        ensure_database_profile(&mut db, profile),
+                        Err(SqlError::BicDb(BicDbError::Compaction(_)))
+                    ));
+                }
+                assert_eq!(
+                    db.local_namespace_identity("identity_source").unwrap(),
+                    Some(identity)
+                );
+                peer.rollback().unwrap();
+                ensure_database_profile(&mut db, profile).unwrap();
+                db.close().unwrap();
+            }
+        }
+    }
+
+    #[test]
+    fn invalid_profile_selection_cannot_activate_namespace_identities() {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open(root.path()).unwrap();
+        assert!(ensure_database_profile(&mut db, "unknown-profile").is_err());
+        assert!(!db.local_namespace_identity_feature_active());
+        db.close().unwrap();
     }
 }

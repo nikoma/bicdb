@@ -1,0 +1,117 @@
+{
+  "source": "f5090de8df6c7d432dbed66e3b57c6c21df43a98",
+  "source_version": "1.0.481-beta (private development source, not a public version claim)",
+  "status": "focused_batch_passed",
+  "test_binaries": 13,
+  "passed": 266,
+  "results": [
+    {
+      "passed": 6,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "passed": 7,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "passed": 7,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "passed": 4,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "passed": 5,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "passed": 12,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "passed": 5,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 910
+    },
+    {
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "passed": 20,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "passed": 195,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    }
+  ],
+  "native_pg16_drop_refusals": 5,
+  "original_application_test_assertions_and_timeouts_unchanged": true,
+  "broad_workspace_run": false,
+  "original95_rerun_on_this_source": false,
+  "merged": false,
+  "remaining_gates": [
+    "DEFAULT partition runtime/data routing",
+    "pending-owner rollback rebuild and retry state",
+    "authenticated portable Native origin producer/resolver",
+    "final original1464 both profiles and durability/HA qualification"
+  ],
+  "inputs": {
+    "native-pg16-control/control.sql": "208900122cc5849015f8db12dacf04a388f822f96eb65f471ecc899da2868951",
+    "native-pg16-control/result.json": "d641e05c169e452b88dc9d3d21c56cf928f9b459b703e634cd236dbfd6719bbf",
+    "native-pg16-control/stderr": "bd7442a0cc9e009692887e4d9d7897ed070fca8acdc1e2f474785585ac4c7e2e",
+    "native-pg16-control/stdout": "043745ded23c5d17334e73c3466cfbf60e13092aff5af4b11d73b6ccc8abe304",
+    "report-constraint-index-case-negative-a499113c.json": "b6c203fefb13b3e6d8b0b5aa1c422430835e10d8304899a6f28cd0149eeff829",
+    "report-constraint-index-drop-fix-1224f8a9.json": "0c09f141289d2be60cfd7217ae63459c4120e9cc48b4db0c148b2da52876e44c",
+    "report-constraint-index-drop-repro-852ee479.json": "285ec9d3413240bb03ca36484d3956b5e886fd68123698a6d0ddfd99f11a78d7",
+    "report-constraint-index-final-f5090de8.json": "8c3d3b18cc83beb43ec3ad94f3f3667c5a18d359f3a5b9e42445209b75a912fb",
+    "report-constraint-index-valid-repro-43768d16.json": "9fc3290c8b480450937c0663a0cbfcf6da8680bedeb786d2b84d653bd2238b71",
+    "tc-step-constraint-index-case-negative-a499113c.log.gz": "8dc377042b837ef52dd8d17ec708c0e604332e86f3750136835e1b5dfa39f622",
+    "tc-step-constraint-index-drop-fix-1224f8a9.log.gz": "81c19abdd6381c5d0136ac638bfece9acd4a560d77c69d548cc36d263fa5e859",
+    "tc-step-constraint-index-drop-repro-852ee479.log.gz": "e8133e815181945382f8332552960d646b099d0d74ef0246805cb459077ca10e",
+    "tc-step-constraint-index-final-f5090de8.log.gz": "1ba94c1f182fd3ab5e9b42a41550168e1c19a25ab1303630dd2faeab6e3d04d5",
+    "tc-step-constraint-index-valid-repro-43768d16.log.gz": "dd012efe53dc68a11f1e71c6c5820d1ff71b50b7c17beeadfde71fd10934ac00"
+  },
+  "recorded_unix": 1794467063.0126805,
+  "retained_agent_compile_failure": "852ee479 E0382 test fixture; no product tests executed",
+  "valid_negative": "43768d16: 1 passed, 4 failed; missing dependency refusal, statement preflight and materialized-view descriptor removal. Dotted case identity control passed; the ASCII case negative a499 was required to reproduce case aliasing."
+}

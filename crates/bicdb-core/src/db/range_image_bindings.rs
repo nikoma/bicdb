@@ -375,6 +375,7 @@ mod tests {
             .unwrap();
         let record = Record::new("trusted-copy");
         let batch = RangeSnapshotBatch {
+            required_reader_features: Vec::new(),
             collection: "items".into(),
             range_id: range.id,
             range_epoch: range.epoch,

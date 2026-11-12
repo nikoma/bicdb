@@ -1,0 +1,92 @@
+{
+  "status": "passed",
+  "started_unix": 1794401215.2660964,
+  "protected_application_schema_mutated": false,
+  "cases": [
+    {
+      "decision": "commit",
+      "before": [
+        [
+          "91483",
+          "IN arg source[]",
+          "CREATE OR REPLACE PROCEDURE rename_proc_5478df8fe66f.hold_proc_array(IN arg source[])\n LANGUAGE sql\nAS $procedure$SELECT 1$procedure$\n"
+        ],
+        [
+          "91484",
+          "IN arg source",
+          "CREATE OR REPLACE PROCEDURE rename_proc_5478df8fe66f.hold_proc_record(IN arg source)\n LANGUAGE sql\nAS $procedure$SELECT 1$procedure$\n"
+        ]
+      ],
+      "inside": [
+        [
+          "91483",
+          "IN arg renamed[]",
+          "CREATE OR REPLACE PROCEDURE rename_proc_5478df8fe66f.hold_proc_array(IN arg renamed[])\n LANGUAGE sql\nAS $procedure$SELECT 1$procedure$\n"
+        ],
+        [
+          "91484",
+          "IN arg renamed",
+          "CREATE OR REPLACE PROCEDURE rename_proc_5478df8fe66f.hold_proc_record(IN arg renamed)\n LANGUAGE sql\nAS $procedure$SELECT 1$procedure$\n"
+        ]
+      ],
+      "after": [
+        [
+          "91483",
+          "IN arg renamed[]",
+          "CREATE OR REPLACE PROCEDURE rename_proc_5478df8fe66f.hold_proc_array(IN arg renamed[])\n LANGUAGE sql\nAS $procedure$SELECT 1$procedure$\n"
+        ],
+        [
+          "91484",
+          "IN arg renamed",
+          "CREATE OR REPLACE PROCEDURE rename_proc_5478df8fe66f.hold_proc_record(IN arg renamed)\n LANGUAGE sql\nAS $procedure$SELECT 1$procedure$\n"
+        ]
+      ],
+      "calls_succeeded": true,
+      "old_name_reuse_checked": true
+    },
+    {
+      "decision": "rollback",
+      "before": [
+        [
+          "91498",
+          "IN arg source[]",
+          "CREATE OR REPLACE PROCEDURE rename_proc_a7973f6cc1a8.hold_proc_array(IN arg source[])\n LANGUAGE sql\nAS $procedure$SELECT 1$procedure$\n"
+        ],
+        [
+          "91499",
+          "IN arg source",
+          "CREATE OR REPLACE PROCEDURE rename_proc_a7973f6cc1a8.hold_proc_record(IN arg source)\n LANGUAGE sql\nAS $procedure$SELECT 1$procedure$\n"
+        ]
+      ],
+      "inside": [
+        [
+          "91498",
+          "IN arg renamed[]",
+          "CREATE OR REPLACE PROCEDURE rename_proc_a7973f6cc1a8.hold_proc_array(IN arg renamed[])\n LANGUAGE sql\nAS $procedure$SELECT 1$procedure$\n"
+        ],
+        [
+          "91499",
+          "IN arg renamed",
+          "CREATE OR REPLACE PROCEDURE rename_proc_a7973f6cc1a8.hold_proc_record(IN arg renamed)\n LANGUAGE sql\nAS $procedure$SELECT 1$procedure$\n"
+        ]
+      ],
+      "after": [
+        [
+          "91498",
+          "IN arg source[]",
+          "CREATE OR REPLACE PROCEDURE rename_proc_a7973f6cc1a8.hold_proc_array(IN arg source[])\n LANGUAGE sql\nAS $procedure$SELECT 1$procedure$\n"
+        ],
+        [
+          "91499",
+          "IN arg source",
+          "CREATE OR REPLACE PROCEDURE rename_proc_a7973f6cc1a8.hold_proc_record(IN arg source)\n LANGUAGE sql\nAS $procedure$SELECT 1$procedure$\n"
+        ]
+      ],
+      "calls_succeeded": true,
+      "old_name_reuse_checked": false
+    }
+  ],
+  "server_version": "16.13 (Debian 16.13-1.pgdg13+1)",
+  "temporary_schemas_removed": true,
+  "finished_unix": 1794401215.3974853
+}

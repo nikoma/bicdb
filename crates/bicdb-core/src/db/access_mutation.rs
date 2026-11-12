@@ -899,6 +899,7 @@ impl BicDb {
         before_registration: impl FnOnce(),
     ) -> Result<Transaction> {
         self.check_recovery_state()?;
+        let catalog_actor_scope = self.catalog_admission.ambient_actor()?;
         // A standby may begin transactions to read; any write is refused when
         // it is buffered and a read-only commit takes no sequence number (see
         // `commit_transaction`).
@@ -923,6 +924,15 @@ impl BicDb {
             applied_watermark = current;
             snapshot_tx = TransactionId(current.max(min_snapshot));
         }
+        let collection_incarnations = Arc::new(Mutex::new(FxHashMap::default()));
+        if let Err(error) =
+            self.catalog_admission
+                .register(tx_id, &collection_incarnations, catalog_actor_scope)
+        {
+            self.tx_states.remove(&tx_id.0);
+            self.active_snapshots.decr_remove(snapshot_tx.0);
+            return Err(error);
+        }
         Ok(Transaction {
             db: NonNull::from(self),
             id: tx_id,
@@ -933,7 +943,9 @@ impl BicDb {
             // provide a more exact mutation boundary.
             applied_snapshot: applied_watermark,
             observed_record_versions: Mutex::new(FxHashMap::default()),
-            collection_incarnations: Mutex::new(FxHashMap::default()),
+            collection_incarnations,
+            catalog_admission: Arc::clone(&self.catalog_admission),
+            catalog_actor_scope,
             statement_write_conflicts: false,
             statement_snapshot_acquired: false,
             statement_snapshot_deferred: false,

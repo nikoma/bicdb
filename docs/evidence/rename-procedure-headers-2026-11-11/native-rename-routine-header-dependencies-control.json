@@ -1,0 +1,90 @@
+{
+  "status": "passed",
+  "started_unix": 1794402717.9654064,
+  "protected_application_schema_mutated": false,
+  "cases": [
+    {
+      "decision": "commit",
+      "probes": [
+        {
+          "phase": "before",
+          "default_result": [
+            [
+              "kept"
+            ]
+          ],
+          "output_declaration": "TABLE(item source)",
+          "procedure_call_succeeded": true
+        },
+        {
+          "phase": "inside",
+          "default_result": [
+            [
+              "kept"
+            ]
+          ],
+          "output_declaration": "TABLE(item renamed)",
+          "procedure_call_succeeded": true
+        },
+        {
+          "phase": "after",
+          "default_result": [
+            [
+              "kept"
+            ]
+          ],
+          "output_declaration": "TABLE(item renamed)",
+          "procedure_call_succeeded": true
+        },
+        {
+          "phase": "old_spelling_reused",
+          "default_result": [
+            [
+              "kept"
+            ]
+          ],
+          "output_declaration": "TABLE(item renamed)",
+          "procedure_call_succeeded": true
+        }
+      ]
+    },
+    {
+      "decision": "rollback",
+      "probes": [
+        {
+          "phase": "before",
+          "default_result": [
+            [
+              "kept"
+            ]
+          ],
+          "output_declaration": "TABLE(item source)",
+          "procedure_call_succeeded": true
+        },
+        {
+          "phase": "inside",
+          "default_result": [
+            [
+              "kept"
+            ]
+          ],
+          "output_declaration": "TABLE(item renamed)",
+          "procedure_call_succeeded": true
+        },
+        {
+          "phase": "after",
+          "default_result": [
+            [
+              "kept"
+            ]
+          ],
+          "output_declaration": "TABLE(item source)",
+          "procedure_call_succeeded": true
+        }
+      ]
+    }
+  ],
+  "server_version": "16.13 (Debian 16.13-1.pgdg13+1)",
+  "temporary_schemas_removed": true,
+  "finished_unix": 1794402718.0817482
+}

@@ -1924,6 +1924,7 @@ pub(crate) mod tests {
                 fixture.range(),
                 &CollectionMeta::standard("items"),
                 &RangeSnapshotBatch {
+                    required_reader_features: Vec::new(),
                     collection: "items".into(),
                     range_id: fixture.range().id,
                     range_epoch: fixture.range().epoch,
@@ -2058,6 +2059,7 @@ pub(crate) mod tests {
                     &other,
                     &CollectionMeta::standard("items"),
                     &RangeSnapshotBatch {
+                        required_reader_features: Vec::new(),
                         collection: "items".into(),
                         range_id: other.id,
                         range_epoch: other.epoch,
@@ -2078,6 +2080,7 @@ pub(crate) mod tests {
                 &selected,
                 &CollectionMeta::standard("items"),
                 &RangeSnapshotBatch {
+                    required_reader_features: Vec::new(),
                     collection: "items".into(),
                     range_id: selected.id,
                     range_epoch: selected.epoch,
@@ -2326,6 +2329,7 @@ pub(crate) mod tests {
                 fixture.range(),
                 &CollectionMeta::standard("items"),
                 &RangeSnapshotBatch {
+                    required_reader_features: Vec::new(),
                     collection: "items".into(),
                     range_id: fixture.range().id,
                     range_epoch: fixture.range().epoch,

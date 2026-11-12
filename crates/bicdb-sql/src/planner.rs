@@ -420,6 +420,9 @@ impl SlotRowLookup {
         if let Some(value) = self.value_for_key(row, &full_key) {
             return Some(value.clone());
         }
+        if crate::slot_types::current_schema_qualifier_matches(parts) == Some(false) {
+            return None;
+        }
         let qualified_column = format!("{}.{}", parts[parts.len() - 2], parts[parts.len() - 1]);
         if let Some(value) = self.value_for_key(row, &qualified_column) {
             return Some(value.clone());
@@ -2338,6 +2341,9 @@ impl BoundExprScope {
             if let Some(id) = self.cols.exact.get(&full.to_ascii_lowercase()) {
                 return Some(*id);
             }
+            if crate::slot_types::current_schema_qualifier_matches(parts) == Some(false) {
+                return None;
+            }
             if parts.len() >= 2 {
                 let qualified = format!("{}.{}", parts[parts.len() - 2], parts[parts.len() - 1]);
                 return self.cols.qualified_case_id(&qualified).or_else(|| {
@@ -3482,7 +3488,13 @@ pub(crate) fn column_ref_from_expr(expr: &Expr) -> Option<ColumnRef> {
         }),
         Expr::CompoundIdentifier(idents) => {
             let field = idents.last()?.value.clone();
-            let qualifier = (idents.len() >= 2).then(|| idents[idents.len() - 2].value.clone());
+            let qualifier = (idents.len() >= 2).then(|| {
+                idents[..idents.len() - 1]
+                    .iter()
+                    .map(ident_value)
+                    .collect::<Vec<_>>()
+                    .join(".")
+            });
             Some(ColumnRef { qualifier, field })
         }
         Expr::Nested(expr) | Expr::Collate { expr, .. } => column_ref_from_expr(expr),
@@ -3503,10 +3515,8 @@ pub(crate) fn normalize_table_field_expr(
             table_has_field(schema, &field.value).then_some(Expr::Identifier(field))
         }
         Expr::CompoundIdentifier(idents) if idents.len() >= 2 => {
-            let qualifier = &idents[idents.len() - 2].value;
-            if !qualifier.eq_ignore_ascii_case(alias) && !qualifier.eq_ignore_ascii_case(table) {
-                return None;
-            }
+            let parts = idents.iter().map(ident_value).collect::<Vec<_>>();
+            target_record_field_from_parts(table, alias, schema, &parts)?;
             let mut field = idents.last()?.clone();
             field.value = ident_value(&field);
             table_has_field(schema, &field.value).then_some(Expr::Identifier(field))
@@ -3722,10 +3732,12 @@ pub(crate) fn target_record_field_from_parts(
             table_has_field(schema, field).then(|| (field.clone(), Some(table.to_string())))
         }
         parts if parts.len() > 2 => {
-            let qualifier = &parts[parts.len() - 2];
+            // A schema qualification names the physical relation, never an
+            // inner alias that happens to have the same trailing name.
+            let qualifier = relation_name_from_parts(&parts[..parts.len() - 1]).ok()?;
             let field = parts.last()?;
-            if qualifier.eq_ignore_ascii_case(alias) || qualifier.eq_ignore_ascii_case(table) {
-                table_has_field(schema, field).then(|| (field.clone(), Some(qualifier.clone())))
+            if qualifier == table {
+                table_has_field(schema, field).then(|| (field.clone(), Some(table.to_string())))
             } else {
                 None
             }

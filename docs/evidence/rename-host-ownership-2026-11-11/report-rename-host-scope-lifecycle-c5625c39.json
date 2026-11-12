@@ -1,0 +1,91 @@
+{
+  "source": "c5625c392f4ccb665a4fea32c82c81bc9d65caa9",
+  "scope": "Host-owned in-memory catalog reservations prerequisite for SQL rollback/failedcommit gap. Explicitretain context survives nativeowner rollback/drop; scopednonSend threadguard delegates onlyboundeddeclaredcollections to internalNativeTx, normalclients/grants stayfenced. Parentcommit freezesnewchild creation and refusesanypendingdelegates; exacthostfinish refuseslivechildren; successOwneroutcomeCommitted cannotresumeasundecidedundo; failedpredecisioncommit reopensscopeforcleanup. Runtime-onlyparentdrop revokes bufferedchildren and keepsfenceuntilchilddrop. Foreignbufferedcommit DBidentity check precedesscopechanges. New7tests xstores whereapplicable,64begin/finalize races. Scopeisruntimeonly: durableSQLjournal/header resource inventory,SQLproducer/metadata/type/routine/Describe/replica integration stillOPEN, ce3SQLnegative notpassing; nodisk/powerloss/application/productionclaim.",
+  "started_unix": 1794392759.9709115,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--test",
+        "catalog_host_scope",
+        "--",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794392759.9710877,
+      "exit": 0,
+      "finished_unix": 1794392788.1541839
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--test",
+        "catalog_scope_admission",
+        "--test",
+        "collection_rename_admission",
+        "--test",
+        "transaction_isolation",
+        "--test",
+        "mutation_grants"
+      ],
+      "started_unix": 1794392788.1544108,
+      "exit": 0,
+      "finished_unix": 1794392792.34042
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--lib",
+        "catalog_admission::tests",
+        "--",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794392792.3406303,
+      "exit": 0,
+      "finished_unix": 1794392826.6929283
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--test",
+        "live_replication",
+        "--test",
+        "replication_durable_frames",
+        "--test",
+        "replication_journal"
+      ],
+      "started_unix": 1794392826.6932144,
+      "exit": 0,
+      "finished_unix": 1794392918.5483708
+    }
+  ],
+  "status": "focused_passed",
+  "finished_unix": 1794392918.5486772
+}

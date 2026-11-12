@@ -1,0 +1,28 @@
+{
+  "source": "47f1b0384ca54210b81ce67a64ebfed1a2309d0c",
+  "scope": "Tests-only nextSQLownerread-context integration on c5edexactNativecatalogrows runtime. Five tests: cold/warm unrelatedSQLandDescribemustcontinue under Source+destinationdata/meta reservations whileSourcepoint/Describerefuse; importedNativeownerSQLmustreadownmetadata; ownerreadcontextmustchangeacrossCOMMITinsidesingleSQLbatch; existingexplicitSQLcatalogreadmustpinmetadatauntiltxends. ExactNativeRows positivejob runs first, actualoutcome recordedseparately; recordreachedcells. Do notpretendSQLproducerorwirecachedDescribealreadyimplemented. Private471notpublicationversionreserved,noglobalownerquiescencegate relaxed.",
+  "started_unix": 1794408521.8809536,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "catalog_read_owner",
+        "--",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794408521.8811657,
+      "exit": 101,
+      "finished_unix": 1794408525.4018059
+    }
+  ],
+  "status": "failed",
+  "finished_unix": 1794408525.4022903
+}

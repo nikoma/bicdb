@@ -1,0 +1,104 @@
+{
+  "status": "passed",
+  "started_unix": 1794395910.0456104,
+  "protected_application_schema_mutated": false,
+  "cases": [
+    {
+      "decision": "commit",
+      "before": [
+        [
+          "91393",
+          91393,
+          "arg source[]",
+          "source[]"
+        ],
+        [
+          "91394",
+          91394,
+          "arg source",
+          "source"
+        ]
+      ],
+      "inside_rename": [
+        [
+          "91393",
+          91393,
+          "arg renamed[]",
+          "renamed[]"
+        ],
+        [
+          "91394",
+          91394,
+          "arg renamed",
+          "renamed"
+        ]
+      ],
+      "after": [
+        [
+          "91393",
+          91393,
+          "arg renamed[]",
+          "renamed[]"
+        ],
+        [
+          "91394",
+          91394,
+          "arg renamed",
+          "renamed"
+        ]
+      ],
+      "same_argument_and_result_oids": true,
+      "old_name_reuse_checked": true
+    },
+    {
+      "decision": "rollback",
+      "before": [
+        [
+          "91408",
+          91408,
+          "arg source[]",
+          "source[]"
+        ],
+        [
+          "91409",
+          91409,
+          "arg source",
+          "source"
+        ]
+      ],
+      "inside_rename": [
+        [
+          "91408",
+          91408,
+          "arg renamed[]",
+          "renamed[]"
+        ],
+        [
+          "91409",
+          91409,
+          "arg renamed",
+          "renamed"
+        ]
+      ],
+      "after": [
+        [
+          "91408",
+          91408,
+          "arg source[]",
+          "source[]"
+        ],
+        [
+          "91409",
+          91409,
+          "arg source",
+          "source"
+        ]
+      ],
+      "same_argument_and_result_oids": true,
+      "old_name_reuse_checked": false
+    }
+  ],
+  "temporary_schemas_removed": true,
+  "server_version": "16.13 (Debian 16.13-1.pgdg13+1)",
+  "finished_unix": 1794395910.1647573
+}

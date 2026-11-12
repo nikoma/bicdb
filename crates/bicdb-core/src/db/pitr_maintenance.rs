@@ -704,6 +704,8 @@ impl BicDb {
             user_collections: Vec<CollectionMeta>,
             indexes: Vec<IndexDefinition>,
             structural_records: Vec<StructuralRecord>,
+            #[serde(skip_serializing_if = "Vec::is_empty")]
+            required_reader_features: Vec<String>,
         }
 
         let schema_generation = self.schema_compatibility.generation();
@@ -735,6 +737,7 @@ impl BicDb {
             user_collections,
             indexes,
             structural_records,
+            required_reader_features: format::required_reader_features(&self.path)?,
         };
         let structural_catalog_record_count = payload.structural_records.len();
         let user_collection_count = payload.user_collections.len();
@@ -763,7 +766,9 @@ impl BicDb {
     }
 
     pub fn cluster_schema_bundle(&self) -> Result<ClusterSchemaBundle> {
+        let schema_generation = self.schema_compatibility.generation();
         let fingerprint = self.schema_compatibility_fingerprint()?;
+        let required_reader_features = format::required_reader_features(&self.path)?;
         let indexes = self.index_definitions();
         let indexed_collections = indexes
             .iter()
@@ -798,13 +803,23 @@ impl BicDb {
             (&left.collection, &left.record.id).cmp(&(&right.collection, &right.record.id))
         });
         let mut bundle = ClusterSchemaBundle {
-            format_version: CLUSTER_SCHEMA_BUNDLE_FORMAT_VERSION,
+            format_version: if required_reader_features.is_empty() {
+                1
+            } else {
+                CLUSTER_SCHEMA_BUNDLE_FORMAT_VERSION
+            },
             fingerprint,
             collections,
             indexes,
             structural_records,
             checksum_sha256: String::new(),
+            required_reader_features,
         };
+        if self.schema_compatibility.generation() != schema_generation {
+            return Err(BicDbError::Cluster(
+                "schema changed while exporting compatibility bundle; retry after the current schema operation completes".into(),
+            ));
+        }
         bundle.checksum_sha256 = bundle.calculate_checksum()?;
         bundle.verify()?;
         Ok(bundle)
@@ -818,6 +833,15 @@ impl BicDb {
         limits.validate()?;
         desired.verify()?;
         let current = self.cluster_schema_bundle()?;
+        if current
+            .required_reader_features
+            .iter()
+            .any(|feature| !desired.required_reader_features.contains(feature))
+        {
+            return Err(BicDbError::Cluster(
+                "online cluster schema staging cannot remove sticky reader capabilities".into(),
+            ));
+        }
         if current.fingerprint.sha256 == desired.fingerprint.sha256 {
             return Err(BicDbError::Cluster(
                 "cluster schema bundle is already active".to_string(),
@@ -1195,6 +1219,7 @@ impl BicDb {
             ));
         }
         let bundle = &stage.signed_bundle.bundle;
+        self.install_replicated_reader_features(&bundle.required_reader_features)?;
         let current = self.schema_compatibility_fingerprint()?;
         if current.sha256 == bundle.fingerprint.sha256 {
             state.collection_cursor = bundle.collections.len();
@@ -1558,8 +1583,10 @@ impl BicDb {
         self.require_native_generic_import_allowed()?;
         self.ensure_writable("install cluster schema bundle")?;
         bundle.verify()?;
+        let previous_fingerprint = self.schema_compatibility_fingerprint()?;
+        self.install_replicated_reader_features(&bundle.required_reader_features)?;
         if self.schema_compatibility_fingerprint()?.sha256 == bundle.fingerprint.sha256 {
-            return Ok(false);
+            return Ok(previous_fingerprint.sha256 != bundle.fingerprint.sha256);
         }
         for meta in self
             .collections()
@@ -1944,6 +1971,7 @@ impl BicDb {
         // outside this export and are recovered from the commit-frame suffix.
         let snapshot_tx = self.begin_transaction()?;
         let snapshot_commit_sequence = snapshot_tx.applied_snapshot;
+        let required_reader_features = format::required_reader_features(&self.path)?;
         let paged_snapshot = snapshot_tx.paged_snapshot.as_ref().ok_or_else(|| {
             BicDbError::Cluster("range snapshot has no paged MVCC snapshot".to_string())
         })?;
@@ -2002,6 +2030,7 @@ impl BicDb {
                             resume_after_key,
                             serialized_record_bytes: batch_bytes,
                             records: batch_records,
+                            required_reader_features: required_reader_features.clone(),
                         })? {
                             stopped = true;
                             return Ok(false);
@@ -2033,6 +2062,7 @@ impl BicDb {
                             resume_after_key,
                             serialized_record_bytes: batch_bytes,
                             records: batch_records,
+                            required_reader_features: required_reader_features.clone(),
                         })? {
                             stopped = true;
                             return Ok(false);
@@ -2081,6 +2111,7 @@ impl BicDb {
                 resume_after_key,
                 serialized_record_bytes: batch_bytes,
                 records: batch_records,
+                required_reader_features: required_reader_features.clone(),
             })? {
                 stopped = true;
             }

@@ -1919,6 +1919,7 @@ mod tests {
             .unwrap();
         let record = Record::new(key.clone()).with_metadata(json!({"from":"raw-copy"}));
         let batch = RangeSnapshotBatch {
+            required_reader_features: Vec::new(),
             collection: "items".into(),
             range_id: range.id,
             range_epoch: range.epoch,
@@ -1988,6 +1989,7 @@ mod tests {
         let mut meta = CollectionMeta::standard("items");
         meta.storage_name = Some("\0receipt".into());
         let batch = RangeSnapshotBatch {
+            required_reader_features: Vec::new(),
             collection: "items".into(),
             range_id: expected.initial_ranges[0].id,
             range_epoch: 1,

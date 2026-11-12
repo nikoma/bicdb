@@ -92,16 +92,24 @@ pub(crate) fn header(sql: &str) -> Result<Option<sqlparser::ast::CreateFunction>
     Ok(Some(function))
 }
 
-pub(super) fn render(mut function: sqlparser::ast::CreateFunction) -> Result<String> {
+pub(crate) fn render(mut function: sqlparser::ast::CreateFunction) -> Result<String> {
     function.return_type = None;
-    let mut source = tokens(&render_sql(&Statement::CreateFunction(function)))?;
-    let index = source
-        .iter()
-        .take(4)
-        .position(|t| word(t, "FUNCTION"))
-        .ok_or_else(|| SqlError::InvalidSql("invalid procedure header".into()))?;
-    source[index] = tokens("PROCEDURE")?.remove(0);
-    Ok(join(&source))
+    let rendered = render_sql(&Statement::CreateFunction(function));
+    // The AST serializer owns canonical spacing and body-literal escaping.
+    // Change only its leading declaration kind; joining all tokens would
+    // introduce spaces inside array types and throughout the saved header.
+    for (prefix, replacement) in [
+        (
+            "CREATE OR REPLACE FUNCTION ",
+            "CREATE OR REPLACE PROCEDURE ",
+        ),
+        ("CREATE FUNCTION ", "CREATE PROCEDURE "),
+    ] {
+        if let Some(rest) = rendered.strip_prefix(prefix) {
+            return Ok(format!("{replacement}{rest}"));
+        }
+    }
+    Err(SqlError::InvalidSql("invalid procedure header".into()))
 }
 
 #[cfg(test)]

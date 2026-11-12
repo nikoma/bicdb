@@ -13,6 +13,9 @@ pub const REPLICATION_PROTOCOL_VERSION: u32 = 1;
 /// Commit frames carrying the original event journal. Legacy frame checksums
 /// remain unchanged; old readers reject this version rather than omit history.
 pub const REPLICATION_JOURNAL_PROTOCOL_VERSION: u32 = 2;
+/// Carries checksummed reader capabilities. Older receivers must reject these
+/// frames instead of applying data without its durable compatibility fence.
+pub const REPLICATION_READER_FEATURES_PROTOCOL_VERSION: u32 = 3;
 pub const DEFAULT_REPLICATION_STREAM_ID: &str = "default";
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -189,6 +192,8 @@ pub struct CommitFrame {
     pub writes: Vec<ReplicationWrite>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub journal: Vec<crate::event::Event>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub required_reader_features: Vec<String>,
     pub compressed: bool,
     pub encryption_metadata: Option<Vec<u8>>,
     pub checksum: [u8; 32],
@@ -215,6 +220,7 @@ impl CommitFrame {
             timestamp,
             writes,
             journal: Vec::new(),
+            required_reader_features: Vec::new(),
             compressed: false,
             encryption_metadata: None,
             checksum: [0; 32],
@@ -230,23 +236,63 @@ impl CommitFrame {
     }
 
     pub fn verify_checksum(&self) -> Result<()> {
+        if !matches!(
+            self.protocol_version,
+            REPLICATION_PROTOCOL_VERSION
+                | REPLICATION_JOURNAL_PROTOCOL_VERSION
+                | REPLICATION_READER_FEATURES_PROTOCOL_VERSION
+        ) {
+            return Err(replication_error(format!(
+                "unsupported replication protocol version {}",
+                self.protocol_version
+            )));
+        }
         if self.protocol_version == REPLICATION_PROTOCOL_VERSION && !self.journal.is_empty() {
             return Err(replication_error(
                 "legacy replication frame cannot carry an unchecked journal",
+            ));
+        }
+        if self.protocol_version < REPLICATION_READER_FEATURES_PROTOCOL_VERSION
+            && !self.required_reader_features.is_empty()
+        {
+            return Err(replication_error(
+                "legacy replication frame cannot carry unchecked reader capabilities",
+            ));
+        }
+        if self.protocol_version == REPLICATION_READER_FEATURES_PROTOCOL_VERSION
+            && self.required_reader_features.is_empty()
+        {
+            return Err(replication_error(
+                "reader-capability frame has no capabilities",
             ));
         }
         let actual = self.calculate_checksum();
         if actual != self.checksum {
             return Err(replication_error("replication frame checksum mismatch"));
         }
+        crate::format::validate_replicated_reader_features(&self.required_reader_features)?;
         Ok(())
     }
 
     pub fn with_journal(mut self, journal: Vec<crate::event::Event>) -> Self {
-        self.protocol_version = REPLICATION_JOURNAL_PROTOCOL_VERSION;
+        self.protocol_version = self
+            .protocol_version
+            .max(REPLICATION_JOURNAL_PROTOCOL_VERSION);
         self.journal = journal;
         self.checksum = self.calculate_checksum();
         self
+    }
+
+    pub fn with_required_reader_features(mut self, features: Vec<String>) -> Result<Self> {
+        self.required_reader_features.extend(features);
+        self.required_reader_features.sort();
+        self.required_reader_features.dedup();
+        crate::format::validate_replicated_reader_features(&self.required_reader_features)?;
+        if !self.required_reader_features.is_empty() {
+            self.protocol_version = REPLICATION_READER_FEATURES_PROTOCOL_VERSION;
+        }
+        self.checksum = self.calculate_checksum();
+        Ok(self)
     }
 
     pub fn encode_deterministic(&self) -> Vec<u8> {
@@ -298,6 +344,12 @@ impl CommitFrame {
                     out,
                     &serde_json::to_vec(event).expect("event JSON is serializable"),
                 );
+            }
+        }
+        if self.protocol_version >= REPLICATION_READER_FEATURES_PROTOCOL_VERSION {
+            put_u32(out, self.required_reader_features.len() as u32);
+            for feature in &self.required_reader_features {
+                put_string(out, feature);
             }
         }
         match &self.encryption_metadata {
@@ -508,6 +560,53 @@ pub(crate) fn replication_error(message: impl Into<String>) -> BicDbError {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn reader_capability_checksums_and_protocol_cannot_be_downgraded() {
+        let legacy = CommitFrame::new("cluster", "source", "default", 1, 1, 0, Vec::new());
+        let frame = legacy
+            .clone()
+            .with_required_reader_features(vec![
+                crate::format::SQL_RENAME_INTENTS_FEATURE_FLAG.into()
+            ])
+            .unwrap()
+            .with_journal(Vec::new());
+        assert_eq!(
+            frame.protocol_version,
+            REPLICATION_READER_FEATURES_PROTOCOL_VERSION
+        );
+        frame.verify_checksum().unwrap();
+        assert_eq!(
+            serde_json::from_slice::<CommitFrame>(&serde_json::to_vec(&frame).unwrap()).unwrap(),
+            frame
+        );
+        let mut modified = frame.clone();
+        modified.required_reader_features[0] =
+            crate::format::SQL_CATALOG_INTENTS_FEATURE_FLAG.into();
+        assert!(modified.verify_checksum().is_err());
+        for version in [
+            REPLICATION_PROTOCOL_VERSION,
+            REPLICATION_JOURNAL_PROTOCOL_VERSION,
+        ] {
+            let mut downgraded = frame.clone();
+            downgraded.protocol_version = version;
+            downgraded.checksum = downgraded.calculate_checksum();
+            assert!(downgraded.verify_checksum().is_err());
+        }
+        let mut future = frame.clone();
+        future.required_reader_features = vec!["future_reader_v999".into()];
+        future.checksum = future.calculate_checksum();
+        assert!(future.verify_checksum().is_err());
+        let plain = legacy
+            .clone()
+            .with_required_reader_features(Vec::new())
+            .unwrap();
+        assert_eq!(
+            plain.encode_deterministic(),
+            legacy.encode_deterministic(),
+            "legacy bytes stay unchanged without new capabilities"
+        );
+    }
 
     #[test]
     fn commit_frame_checksum_detects_payload_changes() {

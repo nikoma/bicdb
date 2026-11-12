@@ -436,6 +436,9 @@ pub(crate) fn row_value_from_parts_opt(row: &SqlRow, parts: &[String]) -> Option
     if let Some(value) = row_value_for_key(row, &full_key) {
         return Some(value.clone());
     }
+    if crate::slot_types::current_schema_qualifier_matches(parts) == Some(false) {
+        return None;
+    }
     let qualified_column = format!("{}.{}", parts[0], parts[1]);
     if let Some(value) = row_value_for_key(row, &qualified_column) {
         return if parts.len() == 2 {
@@ -5256,16 +5259,32 @@ pub(crate) fn virtual_table_column_types(table: &str) -> Option<Vec<(String, Opt
             ("column_default", "varchar"),
             ("is_nullable", "varchar"),
             ("data_type", "varchar"),
+            ("character_maximum_length", "int4"),
+            ("character_octet_length", "int4"),
+            ("numeric_precision", "int4"),
+            ("numeric_precision_radix", "int4"),
+            ("numeric_scale", "int4"),
+            ("datetime_precision", "int4"),
+            ("interval_type", "varchar"),
+            ("interval_precision", "int4"),
+            ("character_set_catalog", "name"),
+            ("character_set_schema", "name"),
+            ("character_set_name", "name"),
+            ("collation_catalog", "name"),
+            ("collation_schema", "name"),
+            ("collation_name", "name"),
+            ("domain_catalog", "name"),
             ("domain_schema", "name"),
             ("domain_name", "name"),
             ("udt_catalog", "name"),
             ("udt_schema", "name"),
             ("udt_name", "name"),
-            ("character_maximum_length", "int4"),
-            ("character_octet_length", "int4"),
-            ("collation_catalog", "name"),
-            ("collation_schema", "name"),
-            ("collation_name", "name"),
+            ("scope_catalog", "name"),
+            ("scope_schema", "name"),
+            ("scope_name", "name"),
+            ("maximum_cardinality", "int4"),
+            ("dtd_identifier", "name"),
+            ("is_self_referencing", "varchar"),
             ("is_identity", "varchar"),
             ("identity_generation", "varchar"),
             ("identity_start", "varchar"),
@@ -5273,7 +5292,9 @@ pub(crate) fn virtual_table_column_types(table: &str) -> Option<Vec<(String, Opt
             ("identity_maximum", "varchar"),
             ("identity_minimum", "varchar"),
             ("identity_cycle", "varchar"),
-            ("dtd_identifier", "name"),
+            ("is_generated", "varchar"),
+            ("generation_expression", "varchar"),
+            ("is_updatable", "varchar"),
         ],
         "information_schema.element_types" => &[
             ("object_catalog", "name"),
@@ -5597,6 +5618,55 @@ pub(crate) fn virtual_table_column_types(table: &str) -> Option<Vec<(String, Opt
             ("abbrev", "text"),
             ("utc_offset", "interval"),
             ("is_dst", "bool"),
+        ],
+        "pg_tables" => &[
+            ("schemaname", "name"),
+            ("tablename", "name"),
+            ("tableowner", "name"),
+            ("tablespace", "name"),
+            ("hasindexes", "bool"),
+            ("hasrules", "bool"),
+            ("hastriggers", "bool"),
+            ("rowsecurity", "bool"),
+        ],
+        "pg_indexes" => &[
+            ("schemaname", "name"),
+            ("tablename", "name"),
+            ("indexname", "name"),
+            ("tablespace", "name"),
+            ("indexdef", "text"),
+        ],
+        "pg_inherits" => &[
+            ("inhrelid", "oid"),
+            ("inhparent", "oid"),
+            ("inhseqno", "int4"),
+            ("inhdetachpending", "bool"),
+        ],
+        "pg_partitioned_table" => &[
+            ("partrelid", "oid"),
+            ("partstrat", "char"),
+            ("partnatts", "int2"),
+            ("partdefid", "oid"),
+            ("partattrs", "int2vector"),
+            ("partclass", "oidvector"),
+            ("partcollation", "oidvector"),
+            ("partexprs", "pg_node_tree"),
+        ],
+        "pg_attrdef" => &[
+            ("oid", "oid"),
+            ("adrelid", "oid"),
+            ("adnum", "int2"),
+            ("adbin", "pg_node_tree"),
+        ],
+        "pg_sequence" => &[
+            ("seqrelid", "oid"),
+            ("seqtypid", "oid"),
+            ("seqstart", "int8"),
+            ("seqincrement", "int8"),
+            ("seqmax", "int8"),
+            ("seqmin", "int8"),
+            ("seqcache", "int8"),
+            ("seqcycle", "bool"),
         ],
         "pg_index" => &[
             ("indexrelid", "oid"),
@@ -6491,7 +6561,7 @@ pub(crate) fn relation_oid_literal_value(db: &BicDb, expr: &Expr) -> Result<Opti
             let SqlValue::String(name) = value else {
                 return Ok(None);
             };
-            return Ok(resolve_regclass_oid(db, &name));
+            return resolve_regclass_oid(db, &name);
         }
         Expr::Nested(expr) => return relation_oid_literal_value(db, expr),
         _ => eval_constant_expr(expr)?,

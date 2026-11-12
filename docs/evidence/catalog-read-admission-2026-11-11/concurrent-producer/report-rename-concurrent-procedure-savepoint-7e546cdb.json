@@ -1,0 +1,128 @@
+{
+  "source": "7e546cdb45fb91f94837913af3da58300d366245",
+  "scope": "Coherent private producer closure:4885 actualwire commit/autocommit/fullrollback passed; failures identifiedwireSAVEPOINT lost businessowner, interpretedCALL/WASM autocommit forgot host finalization, and original standalone embedding fixture omitted required trusted UUID startup initialization. Preserve all capturedfailures. Attach/return same pendingowner throughwireundo even onerror, finalize auto procedure decisions afterdurability, add compiled-wrapper real SQL+ACK test without changing compiler declared-type guard, and add startupinitializer beforefixture owners without changing business/reopen assertions. Core production byte-identical4885 (its25scopecontrolsPASS); collect new6native/CALL/compiled,15wireinclRR/SSI,FK/cache/readowner/journal and related rename targets. Full source app/HA/VM/replica mapping remain open.",
+  "started_unix": 1794433691.7793703,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--lib",
+        "session::rename_table::tests::concurrent_rename_",
+        "--",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794433691.779755,
+      "exit": 0,
+      "finished_unix": 1794433823.005997
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-pgwire",
+        "--test",
+        "catalog_read_admission",
+        "--",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794433823.0062792,
+      "exit": 0,
+      "finished_unix": 1794433988.0624566
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--no-fail-fast",
+        "--test",
+        "rename_unrelated_transactions",
+        "--test",
+        "catalog_fk_read_admission",
+        "--test",
+        "catalog_read_admission",
+        "--test",
+        "catalog_read_owner",
+        "--test",
+        "catalog_read_routine_transitions",
+        "--",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794433988.0626357,
+      "exit": 0,
+      "finished_unix": 1794434142.1116126
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--lib",
+        "session::rename_journal::tests::",
+        "--",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794434142.1117997,
+      "exit": 0,
+      "finished_unix": 1794434153.4007988
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--no-fail-fast",
+        "--test",
+        "schema_table_rename",
+        "--test",
+        "table_rename_views",
+        "--test",
+        "rename_pending_composites",
+        "--test",
+        "renamed_foreign_keys",
+        "--test",
+        "renamed_table_triggers",
+        "--test",
+        "rename_routine_row_types",
+        "--test",
+        "rename_routine_header_dependencies",
+        "--test",
+        "rename_default_privileges",
+        "--",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794434153.4010136,
+      "exit": 101,
+      "finished_unix": 1794434207.8447924
+    }
+  ],
+  "status": "failed",
+  "finished_unix": 1794434207.8450499
+}

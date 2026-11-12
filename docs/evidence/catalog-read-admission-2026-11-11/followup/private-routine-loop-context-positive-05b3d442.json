@@ -1,0 +1,75 @@
+{
+  "repo": "/root/bicdb-sql-rename-journal",
+  "label": "private-routine-loop-context-positive-05b3d442",
+  "source": "05b3d442b08deeb811b34736db2da9468e794186",
+  "source_ref": "refs/bicdb-proof/private-routine-loop-context-positive-05b3d442",
+  "base": "c173fa783fb8323fe02c41fb7eda96f130bc29c3",
+  "wait_units": [],
+  "scope": "Actual3901 tests-only loopcontrol: BOTH tests fail firstEmbeddedMemory cell with catalogreadownernolongeractive afterbodyCOMMIT; NativePostgreSQL16.13 samebothconditions pass, ownschema removed. Current05b3 selectsactualpending/anonymous catalogreadowner at EACH routineexpression evaluation so structuralWHILE guard cannotrestoreendedowner. No newNativecorecode: reuse658e Core25focused+516library3ignored+isolated1; source658all6commands passed:62focus+Corelibrary516+SQLlibrary891(4ignored)+general419. NewSQLfocus first then fullSQLlib/general on05b3; do notreport658broad asnew05runtime. Originalassertionsunchanged, globalDDL/namespace/recovery gates unchanged; fullproducer/metadatafamilies/wire/identity/nesteddefaultdependency stillopen. Public471 separate.",
+  "commands": [
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-sql",
+      "--test",
+      "catalog_read_routine_transitions",
+      "--test",
+      "catalog_read_owner",
+      "--test",
+      "catalog_read_admission",
+      "--test",
+      "session_statement_snapshots",
+      "--test",
+      "read_only_transactions",
+      "--test",
+      "routine_header_metadata",
+      "--test",
+      "rename_routine_header_dependencies",
+      "--test",
+      "table_row_routines",
+      "--",
+      "--test-threads=1"
+    ],
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-sql",
+      "--lib",
+      "--",
+      "--test-threads=1"
+    ],
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-sql",
+      "--test",
+      "sql",
+      "--",
+      "--test-threads=1"
+    ]
+  ],
+  "required_receipts": [
+    {
+      "path": "report-private-routine-loop-context-control-3901da53.json",
+      "equals": {
+        "source": "3901da53e7928af000817f2042659fd886824213",
+        "status": "failed"
+      }
+    }
+  ]
+}

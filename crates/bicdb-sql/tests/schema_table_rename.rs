@@ -1,7 +1,7 @@
 //! RENAME preserves a relation's namespace, including quoted identifiers and
 //! a same-named relation in public. PostgreSQL and Oracle checks stay separate.
 use bicdb_core::{BicDb, DbConfig, StorageMode};
-use bicdb_sql::{oracle, SqlResult, SqlSession};
+use bicdb_sql::{ensure_primary_key_indexes, oracle, SqlResult, SqlSession, SqlValue};
 
 fn execute(db: &mut BicDb, source: &str, oracle_profile: bool) -> bicdb_sql::Result<SqlResult> {
     let lowered = if oracle_profile {
@@ -133,6 +133,141 @@ fn postgres_rename_checks_type_collision_in_the_owning_schema() {
                 .unwrap_err()
                 .sqlstate(),
             "42601"
+        );
+    }
+}
+
+#[test]
+fn postgres_parent_rename_keeps_partition_links_after_name_reuse_and_reopen() {
+    let query = "SELECT ns.nspname, parent.relname, child.relname
+                 FROM pg_catalog.pg_inherits i
+                 JOIN pg_catalog.pg_class parent ON parent.oid = i.inhparent
+                 JOIN pg_catalog.pg_namespace ns ON ns.oid = parent.relnamespace
+                 JOIN pg_catalog.pg_class child ON child.oid = i.inhrelid
+                 WHERE child.relname IN ('part_child', 'shadow_child')
+                 ORDER BY child.relname";
+    let expected_links = |parent: &str| {
+        vec![
+            vec![
+                SqlValue::String("rename_part".into()),
+                SqlValue::String(parent.into()),
+                SqlValue::String("part_child".into()),
+            ],
+            vec![
+                SqlValue::String("public".into()),
+                SqlValue::String("part_parent".into()),
+                SqlValue::String("shadow_child".into()),
+            ],
+        ]
+    };
+    for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
+        let root = tempfile::tempdir().unwrap();
+        let config = DbConfig::default().with_storage_mode(mode);
+        let mut db = BicDb::open_with_config(root.path(), config.clone()).unwrap();
+        {
+            let mut sql = SqlSession::new(&mut db);
+            for statement in [
+                "CREATE SCHEMA rename_part",
+                "CREATE TABLE rename_part.part_parent(id INT) PARTITION BY LIST (id)",
+                "CREATE TABLE rename_part.replacement(id INT) PARTITION BY LIST (id)",
+                "CREATE TABLE public.part_parent(id INT) PARTITION BY LIST (id)",
+                "CREATE TABLE public.part_child PARTITION OF rename_part.part_parent FOR VALUES IN (1)",
+                "CREATE TABLE public.shadow_child PARTITION OF public.part_parent FOR VALUES IN (1)",
+            ] {
+                sql.execute(statement).unwrap();
+            }
+            assert_eq!(
+                sql.execute(query).unwrap().rows,
+                expected_links("part_parent")
+            );
+            sql.execute("ALTER TABLE rename_part.part_parent RENAME TO renamed")
+                .unwrap();
+            assert_eq!(sql.execute(query).unwrap().rows, expected_links("renamed"));
+            sql.execute("ALTER TABLE rename_part.replacement RENAME TO part_parent")
+                .unwrap();
+        }
+        drop(db);
+        let mut db = BicDb::open_with_config(root.path(), config).unwrap();
+        let mut sql = SqlSession::new(&mut db);
+        assert_eq!(sql.execute(query).unwrap().rows, expected_links("renamed"));
+    }
+}
+
+#[test]
+fn postgres_reuses_renamed_table_name_without_reusing_the_old_primary_index() {
+    let indexes = "SELECT tablename, indexname FROM pg_catalog.pg_indexes
+                   WHERE schemaname = 'rename_pk' ORDER BY tablename";
+    for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
+        let root = tempfile::tempdir().unwrap();
+        let config = DbConfig::default().with_storage_mode(mode);
+        let mut db = BicDb::open_with_config(root.path(), config.clone()).unwrap();
+        {
+            let mut sql = SqlSession::new(&mut db);
+            for statement in [
+                "CREATE SCHEMA rename_pk",
+                "CREATE TABLE rename_pk.source(rowkey INT PRIMARY KEY)",
+                "INSERT INTO rename_pk.source VALUES (1)",
+                "ALTER TABLE rename_pk.source RENAME TO archived",
+                "CREATE TABLE rename_pk.source(rowkey INT, PRIMARY KEY (rowkey))",
+                "INSERT INTO rename_pk.source VALUES (1), (2)",
+                "CREATE TABLE inferred_source(id INT)",
+                "ALTER TABLE inferred_source RENAME TO inferred_archived",
+                "CREATE TABLE inferred_source(id INT)",
+            ] {
+                sql.execute(statement).unwrap();
+            }
+        }
+        drop(db);
+        let mut db = BicDb::open_with_config(root.path(), config).unwrap();
+        ensure_primary_key_indexes(&mut db).unwrap();
+        assert_eq!(
+            text_rows(&mut db, indexes, false),
+            vec![
+                vec!["archived", "source_pkey"],
+                vec!["source", "source_pkey1"]
+            ]
+        );
+        let mut sql = SqlSession::new(&mut db);
+        assert_eq!(
+            sql.execute("SELECT rowkey FROM rename_pk.archived")
+                .unwrap()
+                .rows,
+            vec![vec![SqlValue::Int(1)]]
+        );
+        assert_eq!(
+            sql.execute("INSERT INTO rename_pk.source VALUES (2)")
+                .unwrap_err()
+                .sqlstate(),
+            "23505"
+        );
+        sql.execute(
+            "ALTER TABLE inferred_source ADD CONSTRAINT inferred_restored_pk PRIMARY KEY (id)",
+        )
+        .unwrap();
+        drop(sql);
+        ensure_primary_key_indexes(&mut db).unwrap();
+        assert_eq!(
+            text_rows(
+                &mut db,
+                "SELECT indexname FROM pg_catalog.pg_indexes WHERE tablename = 'inferred_source'",
+                false,
+            ),
+            vec![vec!["inferred_restored_pk"]]
+        );
+        let mut sql = SqlSession::new(&mut db);
+        sql.execute("ALTER TABLE inferred_source DROP CONSTRAINT inferred_restored_pk")
+            .unwrap();
+        sql.execute("ALTER TABLE inferred_source ADD PRIMARY KEY (id)")
+            .unwrap();
+        drop(sql);
+        ensure_primary_key_indexes(&mut db).unwrap();
+        assert_eq!(
+            text_rows(
+                &mut db,
+                "SELECT indexname FROM pg_catalog.pg_indexes WHERE tablename = 'inferred_source'",
+                false,
+            ),
+            vec![vec!["inferred_source_pkey1"]]
         );
     }
 }

@@ -516,6 +516,7 @@ impl<'db> SqlSession<'db> {
             row_array_type_oid: Some(row_array_type_oid),
             columns,
             primary_key_name,
+            implicit_primary_key_name: None,
             indexes,
             constraints,
             rls_enabled: source.rls_enabled,
@@ -594,6 +595,7 @@ impl<'db> SqlSession<'db> {
             row_array_type_oid: Some(row_array_type_oid),
             columns: parent.columns.clone(),
             primary_key_name,
+            implicit_primary_key_name: None,
             indexes: Vec::new(),
             constraints: parent.constraints.clone(),
             rls_enabled: false,
@@ -1083,6 +1085,7 @@ impl<'db> SqlSession<'db> {
 
     pub(crate) fn execute_statement(&mut self, statement: &Statement) -> Result<SqlResult> {
         self.ensure_read_only_statement(statement)?;
+        recycle_bin::ensure_replica_catalog_statement_ready(self.db_ref(), statement)?;
         // User-defined operators bind to their functions before execution.
         let bound = match crate::pg_operators::operators_to_bind(self.db_ref(), statement)? {
             Some(operators) => crate::pg_operators::bind_statement_operators(

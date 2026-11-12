@@ -1,0 +1,47 @@
+{
+  "source": "21e26367ce25a6020a5e3b3b2f69ea90ceaaa6b5",
+  "scope": "Coherent private ownership+ACL batch. c562 lifecycle all4groups passed; overlap refinement now refusesfinalizing siblingtokenswhileoverlappingchildworkpending. ActualSQLnegative36/ece: laterrole SELECTsource deniedbeforeRename but canreadkeptafterRename; NativePG16.13 commit/rollbackcontrols pass. Rename rawsave ofjournal-capturedschema preservesoldACL anddoesnotapplynewcreationdefaults; genuinelynewobjects stillreceivecurrentdefaults. Nativehostscope lifecycle isruntimeonly; SQL scopedproducer/metadata/type/routine/Describe bridge anddurableheaderinventory stillOPEN, ce3SQLnativeunrelatedwriterregression notpassing. Not broadworkspace/VM/application/OracleimplicitDDL/production qualification.",
+  "started_unix": 1794393842.1914759,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--test",
+        "catalog_host_scope",
+        "--test",
+        "catalog_scope_admission",
+        "--",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794393842.1916645,
+      "exit": 0,
+      "finished_unix": 1794393873.1441495
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "rename_default_privileges"
+      ],
+      "started_unix": 1794393873.1443737,
+      "exit": 101,
+      "finished_unix": 1794393985.419633
+    }
+  ],
+  "status": "failed",
+  "finished_unix": 1794393985.4198816
+}

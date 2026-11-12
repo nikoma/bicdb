@@ -173,6 +173,7 @@ impl BicDb {
         if cursor.sent_seq >= shippable {
             return Ok(Vec::new());
         }
+        let reader_features = format::required_reader_features(&self.path)?;
         let target = shippable.min(cursor.sent_seq.saturating_add(limit.max(1) as u64));
         let path = self.tx_log_path();
         // One descriptor for the anchor check, the read and the new anchor.
@@ -305,11 +306,12 @@ impl BicDb {
                 timestamp,
                 tx_writes,
             );
-            out.push(if self.config.replication.record_journal {
+            let frame = if self.config.replication.record_journal {
                 frame.with_journal(journal)
             } else {
                 frame
-            });
+            };
+            out.push(frame.with_required_reader_features(reader_features.clone())?);
             sent = seq;
         }
         cursor.sent_seq = sent;

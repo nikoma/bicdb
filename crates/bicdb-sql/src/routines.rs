@@ -2812,6 +2812,7 @@ pub(crate) fn find_top_level_operator(sql: &str, operator: &str) -> Option<usize
 }
 
 pub(crate) fn list_routines(db: &BicDb) -> Result<Vec<RoutineSchema>> {
+    check_sql_catalog_read(db, ROUTINE_COLLECTION, None)?;
     let records = match db.scan_collection(ROUTINE_COLLECTION) {
         Ok(records) => records,
         Err(BicDbError::CollectionNotFound(_)) => return Ok(Vec::new()),
@@ -3375,6 +3376,7 @@ pub(crate) fn alter_table_rename_table(
                 schema.name = new_table.to_string();
                 if schema.primary_key_name.is_none() {
                     schema.primary_key_name = primary_key_name;
+                    schema.implicit_primary_key_name = None;
                 }
                 for mut sequence in sequences {
                     sequence.owned_by_table = Some(new_table.to_string());
@@ -3427,6 +3429,7 @@ pub(crate) fn alter_table_rename_table(
         schema.name = new_table.to_string();
         if schema.primary_key_name.is_none() {
             schema.primary_key_name = primary_key_name;
+            schema.implicit_primary_key_name = None;
         }
         for sequence in &sequences {
             let mut sequence = sequence.clone();

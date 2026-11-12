@@ -884,7 +884,10 @@ impl RangeSnapshotOptions {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[path = "distribution/snapshot_wire.rs"]
+mod snapshot_wire;
+
+#[derive(Clone, Debug, PartialEq)]
 pub struct RangeSnapshotBatch {
     pub collection: String,
     pub range_id: RangeId,
@@ -894,6 +897,18 @@ pub struct RangeSnapshotBatch {
     pub resume_after_key: String,
     pub serialized_record_bytes: usize,
     pub records: Vec<Record>,
+    /// Portable SQL/data interpretation requirements, installed before rows.
+    pub required_reader_features: Vec<String>,
+}
+
+impl RangeSnapshotBatch {
+    pub(crate) fn verify_reader_requirements(&self) -> Result<()> {
+        crate::format::validate_replicated_reader_features(&self.required_reader_features)?;
+        crate::format::validate_collection_reader_features(
+            &self.collection,
+            &self.required_reader_features,
+        )
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]

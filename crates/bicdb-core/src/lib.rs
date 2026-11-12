@@ -173,6 +173,7 @@ pub use db::index_key_upper;
 pub use db::index_predicate_matches;
 pub use db::row_lock_waits_active;
 pub use db::AuthenticationStrength;
+pub use db::CatalogCreatedCollectionUndo;
 pub use db::ChangedRecord;
 pub use db::CollectionCacheStamp;
 pub use db::DeferredMaterializeStats;
@@ -190,13 +191,14 @@ pub use db::{
     decode_fts_posting_payload, decode_fts_posting_payload_into, fts_impact_bucket,
     fts_impact_bucket_upper_edge, fts_rank_conjunctive, fts_rank_single_term,
     full_text_oversized_terms_skipped, full_text_term_is_indexable, paged_tid_hint_stats,
-    parse_repair_decimal, BicDb, BlockGate, BypassPolicy, ClusterSchemaActivationAdvance,
-    ClusterSchemaActivationLimits, ClusterSchemaActivationPhase, ClusterSchemaActivationState,
-    ClusterSchemaBundle, ClusterSchemaCatalogRecord, ClusterSchemaCompatibilityWindow,
-    ClusterSchemaFinalizationState, ClusterSchemaOnlinePlan, ClusterSchemaStageLimits,
-    ClusterSchemaStageState, CollectionCompactionReport, CollectionStats, ColumnStatistics,
-    CompactionOptions, CompactionReport, DbConfig, DbSnapshot, DbStats, EventHorizonReport,
-    FtsQueryBudget, FtsQueryLimits, FullTextBuildLifecycleState, FullTextBuildLifecycleStatus,
+    parse_repair_decimal, BicDb, BlockGate, BypassPolicy, CatalogReadAccess, CatalogScopeAccess,
+    CatalogScopeToken, ClusterSchemaActivationAdvance, ClusterSchemaActivationLimits,
+    ClusterSchemaActivationPhase, ClusterSchemaActivationState, ClusterSchemaBundle,
+    ClusterSchemaCatalogRecord, ClusterSchemaCompatibilityWindow, ClusterSchemaFinalizationState,
+    ClusterSchemaOnlinePlan, ClusterSchemaStageLimits, ClusterSchemaStageState,
+    CollectionCompactionReport, CollectionStats, ColumnStatistics, CompactionOptions,
+    CompactionReport, DbConfig, DbSnapshot, DbStats, EventHorizonReport, FtsQueryBudget,
+    FtsQueryLimits, FullTextBuildLifecycleState, FullTextBuildLifecycleStatus,
     FullTextBuildProgress, FullTextBuildRecommendedAction, FullTextBuildReconcileOutcome,
     FullTextBuildReconcileReport, FullTextOpenMetrics, FullTextPublishedGeneration,
     FullTextReadSession, GeofenceTransition, GeofenceTransitionKind, HaApplyReport, HaRole,

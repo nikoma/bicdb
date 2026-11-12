@@ -142,19 +142,21 @@ pub fn infer_query_result_columns(
     db: &BicDb,
     sql: &str,
 ) -> Result<Option<Vec<(String, Option<String>)>>> {
-    let _schemas = SqlSchemaCacheScope::new();
-    if oracle::collections::declaration(db, sql)?.is_some() {
-        return Ok(None);
-    }
-    let mut statements = parse_inference_statements(db, sql)?;
-    if statements.len() != 1 {
-        return Ok(None);
-    }
-    let Statement::Query(query) = statements.remove(0) else {
-        return Ok(None);
-    };
-    let engine = SqlEngine::new(db);
-    Ok(engine.query_output_columns(&query))
+    validate_catalog_reads(db, || {
+        let _schemas = SqlSchemaCacheScope::new();
+        if oracle::collections::declaration(db, sql)?.is_some() {
+            return Ok(None);
+        }
+        let mut statements = parse_inference_statements(db, sql)?;
+        if statements.len() != 1 {
+            return Ok(None);
+        }
+        let Statement::Query(query) = statements.remove(0) else {
+            return Ok(None);
+        };
+        let engine = SqlEngine::new(db);
+        Ok(engine.query_output_columns(&query))
+    })
 }
 
 /// Resolve a projection that has no top-level FROM clause. This is the subset
@@ -188,21 +190,23 @@ pub fn infer_query_result_column_metadata(
     db: &BicDb,
     sql: &str,
 ) -> Result<Option<Vec<SqlColumnMetadata>>> {
-    let _schemas = SqlSchemaCacheScope::new();
-    if oracle::collections::declaration(db, sql)?.is_some() {
-        return Ok(None);
-    }
-    let mut statements = parse_inference_statements(db, sql)?;
-    if statements.len() != 1 {
-        return Ok(None);
-    }
-    let Statement::Query(query) = statements.remove(0) else {
-        return Ok(None);
-    };
-    let SetExpr::Select(select) = query.body.as_ref() else {
-        return Ok(None);
-    };
-    Ok(SqlEngine::new(db).select_column_metadata(select))
+    validate_catalog_reads(db, || {
+        let _schemas = SqlSchemaCacheScope::new();
+        if oracle::collections::declaration(db, sql)?.is_some() {
+            return Ok(None);
+        }
+        let mut statements = parse_inference_statements(db, sql)?;
+        if statements.len() != 1 {
+            return Ok(None);
+        }
+        let Statement::Query(query) = statements.remove(0) else {
+            return Ok(None);
+        };
+        let SetExpr::Select(select) = query.body.as_ref() else {
+            return Ok(None);
+        };
+        Ok(SqlEngine::new(db).select_column_metadata(select))
+    })
 }
 
 fn infer_describe_columns(
@@ -210,44 +214,46 @@ fn infer_describe_columns(
     sql: &str,
     explicit_from: bool,
 ) -> Result<Option<Vec<(String, Option<String>)>>> {
-    let _schemas = SqlSchemaCacheScope::new();
-    if oracle::collections::declaration(db, sql)?.is_some() {
-        return Ok(None);
-    }
-    let mut statements = parse_inference_statements(db, sql)?;
-    if statements.len() != 1 {
-        return Ok(None);
-    }
-    let Statement::Query(query) = statements.remove(0) else {
-        return Ok(None);
-    };
-    let SetExpr::Select(select) = query.body.as_ref() else {
-        return Ok(None);
-    };
-    let new_projection = !select.from.is_empty() && !query_has_row_locks(&query);
-    if new_projection && !explicit_from {
-        return Ok(None);
-    }
-    let engine = SqlEngine::new(db);
-    let columns = if explicit_from
-        && select.projection.iter().any(|item| {
-            matches!(
-                item,
-                SelectItem::Wildcard(_) | SelectItem::QualifiedWildcard(..)
-            )
-        }) {
-        engine.query_describe_output_columns(&query)
-    } else {
-        engine.query_output_columns(&query)
-    };
-    if new_projection
-        && columns
-            .as_ref()
-            .is_some_and(|columns| columns.iter().any(|(_, kind)| kind.is_none()))
-    {
-        return Ok(None);
-    }
-    Ok(columns)
+    validate_catalog_reads(db, || {
+        let _schemas = SqlSchemaCacheScope::new();
+        if oracle::collections::declaration(db, sql)?.is_some() {
+            return Ok(None);
+        }
+        let mut statements = parse_inference_statements(db, sql)?;
+        if statements.len() != 1 {
+            return Ok(None);
+        }
+        let Statement::Query(query) = statements.remove(0) else {
+            return Ok(None);
+        };
+        let SetExpr::Select(select) = query.body.as_ref() else {
+            return Ok(None);
+        };
+        let new_projection = !select.from.is_empty() && !query_has_row_locks(&query);
+        if new_projection && !explicit_from {
+            return Ok(None);
+        }
+        let engine = SqlEngine::new(db);
+        let columns = if explicit_from
+            && select.projection.iter().any(|item| {
+                matches!(
+                    item,
+                    SelectItem::Wildcard(_) | SelectItem::QualifiedWildcard(..)
+                )
+            }) {
+            engine.query_describe_output_columns(&query)
+        } else {
+            engine.query_output_columns(&query)
+        };
+        if new_projection
+            && columns
+                .as_ref()
+                .is_some_and(|columns| columns.iter().any(|(_, kind)| kind.is_none()))
+        {
+            return Ok(None);
+        }
+        Ok(columns)
+    })
 }
 
 pub(crate) enum ComparisonStatement<'a> {
@@ -5105,6 +5111,7 @@ impl<'db> SqlEngine<'db> {
     pub(crate) fn execute_query(&self, query: &Query) -> Result<SqlResult> {
         let join_budget = crate::join_budget::QueryScope::enter();
         self.db_ref().check_recovery_state()?;
+        crate::session::recycle_bin::ensure_replica_catalog_ready(self.db_ref())?;
         self.require_from_relations_readable(query)?;
         validate_comparison_signatures(self, ComparisonStatement::Query(query))?;
         let _slot_types = crate::slot_types::push_frame();

@@ -275,6 +275,7 @@ mod tests {
             range_id: range.id,
             range_epoch: range.epoch,
             snapshot_commit_sequence: 1,
+            required_reader_features: Vec::new(),
             resume_after_key: "r".into(),
             serialized_record_bytes: bytes,
             records: vec![record],

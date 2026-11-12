@@ -1,0 +1,28 @@
+{
+  "source": "2970861b7bfaae7bedd18ba44e5dec497953b99f",
+  "scope": "Tests-only SQLcatalogreadercontrol on integratedprivate471runtime d1c. Nativefullcollection scope reservesSQLschema catalog, ordinarySQLpointread/pg_classscan/publicDescribe mustrefuse40001 beforecoldorwarmcachehits; SQLliteralSELECT1 andunrelatednativeACKmustcontinue. Scope release restoresvalidquery/metadata. Sixindependentcold/warmtests intendedbothstores; recordactualreachedcells/nofalsefullmatrixpass. Nativecoreexistingreservations intentionallynotSQLvisibility; addmissingSQLhostreadercontractbeforeproducerrelaxesanyglobalgate. Core rowscope/ownerreadonlycontext/metadataeffectbounds andfullDescribeproducerstillopen. No sourcepublicationversionreservedforprivatebranch, notpublicPR147finalsource257. Originalappassertions10stimeoutunchanged.",
+  "started_unix": 1794406267.6034596,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "catalog_read_admission",
+        "--",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794406267.6035507,
+      "exit": 101,
+      "finished_unix": 1794406270.7125962
+    }
+  ],
+  "status": "failed",
+  "finished_unix": 1794406270.7128358
+}

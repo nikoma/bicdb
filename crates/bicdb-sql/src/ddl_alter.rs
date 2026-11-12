@@ -253,13 +253,18 @@ pub(crate) fn alter_table_add_constraint(
         let existing_columns = primary_key_columns_for_schema(schema);
         if !existing_columns.is_empty() {
             if schema.primary_key_name.is_none() && existing_columns == columns {
+                let existing_name = schema.primary_key_constraint_name();
                 let name = primary_key
                     .name
                     .as_ref()
                     .map(ident_value)
-                    .unwrap_or_else(|| default_primary_key_name(table));
+                    .unwrap_or_else(|| existing_name.clone());
+                let rename = (name != existing_name
+                    && executable_primary_key_index_for_schema(db, schema).is_some())
+                .then(|| (existing_name, name.clone()));
                 schema.primary_key_name = Some(name);
-                return Ok(None);
+                schema.implicit_primary_key_name = None;
+                return Ok(rename);
             }
             return Err(SqlError::InvalidSql(format!(
                 "multiple primary keys for table \"{table}\" are not allowed"
@@ -270,7 +275,9 @@ pub(crate) fn alter_table_add_constraint(
             .name
             .as_ref()
             .map(ident_value)
-            .unwrap_or_else(|| default_primary_key_name(table));
+            .unwrap_or_else(|| {
+                allocate_primary_key_name(db, &schema.schema_name, table, &schema.constraints)
+            });
         apply_primary_key_constraint(db, table, schema, name, columns, not_valid)?;
         // Rows stored before the table had this key (pg_dump's CREATE TABLE,
         // COPY, then ADD CONSTRAINT ... PRIMARY KEY) are re-keyed, or key
@@ -548,6 +555,7 @@ pub(crate) fn apply_primary_key_constraint(
         column.nullable = false;
     }
     schema.primary_key_name = Some(name);
+    schema.implicit_primary_key_name = None;
     Ok(())
 }
 
@@ -638,6 +646,7 @@ pub(crate) fn alter_table_drop_constraint(
             column.primary_key = false;
         }
         schema.primary_key_name = None;
+        schema.implicit_primary_key_name = None;
         return Ok(Some(dropped_constraint.to_string()));
     }
     if !dropped_metadata_constraint && !if_exists {
@@ -664,6 +673,7 @@ pub(crate) fn alter_table_rename_constraint(
         && schema.primary_key_constraint_name() == old_name
     {
         schema.primary_key_name = Some(new_name.to_string());
+        schema.implicit_primary_key_name = None;
         return Ok(Some((old_name.to_string(), new_name.to_string())));
     }
     let renames_unique_index = schema.constraints.iter().any(|constraint| {
@@ -1711,10 +1721,7 @@ pub(crate) fn user_type_column_from_data_type(
         }
         return Ok(Some(user_type.column_type(array)));
     }
-    if let Some(schema) = list_schemas(db)?.into_iter().find(|schema| {
-        schema.schema_name.eq_ignore_ascii_case(&schema_name)
-            && schema.name.eq_ignore_ascii_case(&name)
-    }) {
+    if let Some(schema) = table_row_schema_by_type_name(db, &schema_name, &name)? {
         return Ok(Some(table_row_type_column(&schema, array)));
     }
     Err(SqlError::undefined_type(if schema_name == "public" {
@@ -1793,6 +1800,9 @@ pub(crate) fn inherit_view_source_column_types(
     columns: &mut [ColumnSchema],
 ) -> Result<()> {
     let SetExpr::Select(select) = query.body.as_ref() else {
+        for column in columns {
+            hydrate_view_column_type(db, column)?;
+        }
         return Ok(());
     };
     // Infer expressions and every joined relation without executing the view.
@@ -1858,11 +1868,16 @@ pub(crate) fn inherit_view_source_column_types(
             continue;
         }
         target.pg_type = source.pg_type.clone();
+        target.user_type = source.user_type.clone();
+        target.collation = source.collation.clone();
         target.type_modifier = source.type_modifier.clone();
         target.vector_dim = source.vector_dim;
         target.array_ndims = source.array_ndims;
         // An outer join can make a NOT NULL source column nullable. View
         // columns remain conservatively nullable as PostgreSQL reports them.
+    }
+    for column in columns {
+        hydrate_view_column_type(db, column)?;
     }
     Ok(())
 }

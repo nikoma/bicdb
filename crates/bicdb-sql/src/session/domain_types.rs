@@ -1392,7 +1392,6 @@ impl<'db> SqlSession<'db> {
                     }
                 }
                 AlterTableOperation::RenameTable { table_name } => {
-                    let previous_schema = schema.clone();
                     let target = match table_name {
                         RenameTableNameKind::To(name) | RenameTableNameKind::As(name) => name,
                     };
@@ -1414,64 +1413,7 @@ impl<'db> SqlSession<'db> {
                             Some(new_name.clone()),
                         ));
                     }
-                    let in_tx = self.tx.is_some();
-                    if let Some(undo) = alter_table_rename_table(
-                        self.db_mut()?,
-                        &table,
-                        &new_table,
-                        &mut schema,
-                        in_tx,
-                    )? {
-                        self.ddl_undo.push(undo);
-                    }
-                    // Foreign keys retain the referenced relation's identity
-                    // when PostgreSQL renames it. Our persisted metadata uses
-                    // collection names, so update every incoming reference,
-                    // including self references, with ordinary schema undo.
-                    for mut dependent in list_schemas(self.db_ref())? {
-                        let mut changed = false;
-                        for constraint in &mut dependent.constraints {
-                            if let ConstraintSchema::ForeignKey { foreign_table, .. } = constraint {
-                                if foreign_table == &table {
-                                    *foreign_table = new_table.clone();
-                                    changed = true;
-                                }
-                            }
-                        }
-                        if changed {
-                            self.save_session_schema(&dependent)?;
-                            if dependent.name == new_table {
-                                schema = dependent;
-                            }
-                        }
-                    }
-                    for mut grant in list_privileges(self.db_ref())? {
-                        if grant.object_type == PrivilegeObjectType::Table
-                            && grant.object_name == table
-                        {
-                            self.delete_session_privilege(&grant)?;
-                            grant.object_name = new_table.clone();
-                            self.save_session_privilege(&grant)?;
-                        }
-                    }
-                    // Trigger identity includes its owning relation. Rebind
-                    // through session metadata helpers so statement errors,
-                    // savepoints and full rollback restore both identities.
-                    for mut trigger in list_triggers(self.db_ref())? {
-                        if trigger.table_name == table {
-                            self.delete_session_trigger(&trigger.name, Some(&table))?;
-                            trigger.table_name = new_table.clone();
-                            self.save_session_trigger(&trigger)?;
-                        }
-                    }
-                    let renamed_type = table_row_type_schema(&schema)
-                        .column_type(false)
-                        .formatted_name();
-                    self.apply_table_row_type_change(
-                        &previous_schema,
-                        &schema,
-                        &CompositeAttributeMutation::RenameType { name: renamed_type },
-                    )?;
+                    rename_table::apply(self, &table, &new_table, &mut schema)?;
                     table = new_table;
                 }
                 AlterTableOperation::AlterColumn { column_name, op } => {
@@ -2246,18 +2188,7 @@ impl<'db> SqlSession<'db> {
         for view in list_views(self.db_ref())? {
             // Stored SQL uses logical, possibly qualified names. The physical
             // collection name for a non-public schema is not a SQL token.
-            let statements = parse_statements(&view.query_sql)?;
-            let references_table = sqlparser::ast::visit_relations(&statements, |name| {
-                let matches = relation_name(name).is_ok_and(|candidate| candidate == table)
-                    || name.0.len() == 1
-                        && object_name(name).is_ok_and(|candidate| candidate == table);
-                if matches {
-                    std::ops::ControlFlow::Break(())
-                } else {
-                    std::ops::ControlFlow::Continue(())
-                }
-            })
-            .is_break();
+            let references_table = view_dependencies::relations(&view.query_sql)?.contains(table);
             if references_table && sql_contains_identifier(&view.query_sql, column_name) {
                 return Err(SqlError::Unsupported(format!(
                     "cannot alter type of a column used by view or rule: view {} depends on column \"{column_name}\"",

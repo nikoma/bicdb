@@ -1233,7 +1233,7 @@ pub fn resolve_oid_alias_value(db: &BicDb, pg_type: &str, value: SqlValue) -> Re
         return Ok(SqlValue::Int(i64::from(oid)));
     }
     let oid = match pg_type {
-        "regclass" => resolve_regclass_oid(db, &input).and_then(|oid| u32::try_from(oid).ok()),
+        "regclass" => resolve_regclass_oid(db, &input)?.and_then(|oid| u32::try_from(oid).ok()),
         "regtype" => resolve_regtype_oid(db, &input)?,
         "regnamespace" => resolve_regnamespace_oid(db, &input)?,
         "regrole" => resolve_regrole_oid(db, &input)?,
@@ -1441,7 +1441,7 @@ fn normalize_alias_name(value: &str) -> String {
     }
 }
 
-fn alias_schema_and_name(value: &str) -> (Option<String>, String) {
+pub(crate) fn alias_schema_and_name(value: &str) -> (Option<String>, String) {
     let value = value.trim();
     let mut quoted = false;
     let mut separator = None;

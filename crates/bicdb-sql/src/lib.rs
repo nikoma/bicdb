@@ -70,6 +70,7 @@ mod builtin_signatures;
 mod identity;
 pub mod oracle;
 pub mod sql_text;
+mod table_queries;
 pub use identity::{
     bicdb_version_banner, postgres_version_banner, BICDB_VERSION, POSTGRES_COMPATIBILITY_VERSION,
     POSTGRES_COMPATIBILITY_VERSION_NUM,
@@ -237,7 +238,9 @@ pub(crate) use row_types::{
     eval_populate_record_call, populate_record_call, populate_record_value,
     rewrite_row_type_constructs, RECORD_STAR_MARKER,
 };
+mod catalog_reads;
 mod engine;
+pub(crate) use catalog_reads::{check_sql_catalog_read, validate_catalog_reads};
 mod external_sort;
 pub mod plan_diagnostics;
 mod predicate_contradiction;
@@ -3061,6 +3064,9 @@ struct TableSchema {
     columns: Vec<ColumnSchema>,
     #[serde(default)]
     primary_key_name: Option<String>,
+    /// Name allocated for an inferred `id` key if its default was already in use.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    implicit_primary_key_name: Option<String>,
     #[serde(default)]
     indexes: Vec<IndexSchema>,
     #[serde(default)]
@@ -5386,7 +5392,9 @@ impl TableSchema {
 
     fn primary_key_constraint_name(&self) -> String {
         self.primary_key_name
-            .clone()
+            .as_ref()
+            .or(self.implicit_primary_key_name.as_ref())
+            .cloned()
             .unwrap_or_else(|| default_primary_key_name(&self.name))
     }
 
@@ -5504,6 +5512,7 @@ pub fn ensure_embedded_table_schema(
         )),
         columns: Vec::new(),
         primary_key_name: None,
+        implicit_primary_key_name: None,
         indexes: Vec::new(),
         constraints: Vec::new(),
         rls_enabled: false,
@@ -5575,7 +5584,8 @@ pub fn ensure_embedded_table_schema(
         .find(|column| column.primary_key)
         .expect("validated primary key");
     if schema.primary_key_name.is_none() {
-        schema.primary_key_name = Some(default_primary_key_name(table));
+        schema.primary_key_name = Some(schema.primary_key_constraint_name());
+        schema.implicit_primary_key_name = None;
         changed = true;
     }
     if schema.primary_key() != requested_primary_key.name {

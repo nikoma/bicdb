@@ -1,0 +1,22 @@
+{
+  "fixed_source": "731eae2bad65514d2fa59202d87fba6814ebce63",
+  "passed": 9,
+  "scope": "New two-store full rollback retry+independent ACK and2 cleanreopens; six constraint-index controls; existing unrelated-native rename regression; existing rename-journal undo retention unit. Not a full suite or application/process-cut/VM qualification.",
+  "negative_source": "fbe13644ef3210f140cb4badd36c90c44823a056",
+  "negative": "0passed1failed: acknowledged Native executable index absent after full rollback retry reported success. Embedded control completed before paged failure.",
+  "source_version": "1.0.481-beta unmerged development source",
+  "original_app_assertions_unchanged": true,
+  "scope_limits": [
+    "Initial paged full rebuild still rejects a live foreign owner",
+    "Retry succeeds only after real blocker finishes",
+    "No savepoint completion claimed while its own Native owner remains pending",
+    "No durable cross-process undo inferred from this process-local retention fix"
+  ],
+  "inputs": {
+    "report-index-full-rollback-negative-fbe13644.json": "4f315ad2b0b5b63680a47f39e50b83530893edf0fa54a35f46807e912b0f4077",
+    "report-index-full-rollback-retain-731eae2b.json": "16f4dc0947e23c5ed06203ba5c2af34f14efa2a97752377749c82b2237ce656d",
+    "tc-step-index-full-rollback-negative-fbe13644.log.gz": "b3bd138d6e3421b288c14621c1da61f2b198f18e45ff0cecccb62af6038ca6ef",
+    "tc-step-index-full-rollback-retain-731eae2b.log.gz": "bcee387b7fd003cf208d4753ca6b0951e062293d39364b3e121674133edec702"
+  },
+  "recorded_unix": 1794468108.1592276
+}

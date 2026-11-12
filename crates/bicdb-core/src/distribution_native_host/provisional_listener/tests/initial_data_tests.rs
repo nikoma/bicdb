@@ -75,6 +75,7 @@ fn native_initial_data_genesis_refuses_same_root_same_birth_new_actual_open() {
     let birth = seed.manifest.birth_id;
     let old_open = seed.database.read().incarnation_id().to_string();
     let ended = Arc::downgrade(&seed.database);
+    let actual_open_ended = seed.database.read().native_metadata_owner_open_lifetime();
     let proof = seed
         .database
         .read()
@@ -84,6 +85,10 @@ fn native_initial_data_genesis_refuses_same_root_same_birth_new_actual_open() {
     assert!(
         ended.upgrade().is_none(),
         "all actual old DB owners must end before reopen"
+    );
+    assert!(
+        actual_open_ended.upgrade().is_none(),
+        "old inner BicDb open sentinel must end, not only its outer Arc"
     );
     let reopened = NativeProvisionalNode::open_unregistered(
         &path,

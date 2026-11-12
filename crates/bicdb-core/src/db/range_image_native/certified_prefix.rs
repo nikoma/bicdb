@@ -251,9 +251,9 @@ impl NativeRangeInstallSafety {
     }
 }
 
-/// Constant-size durable prefix extension; its native transaction follows the
-/// actual data/WAL apply. Previous native receipts form an ordered local
-/// history, not portable voter signatures or metadata authority.
+/// Constant-size durable prefix extension backed by actual data/WAL
+/// materialization or a separately proven native no-data decision. Previous
+/// receipts form local history, not portable signatures or metadata authority.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub(super) struct NativeCertifiedRangePrefix {
     format_version: u32,
@@ -295,6 +295,7 @@ impl NativeCertifiedRangePrefix {
                     .as_ref()
                     .expect("validated no-data prefix")
                     .local_data_visibility
+                    .get()
             },
             |materialized| materialized.local_wal_sequence,
         )

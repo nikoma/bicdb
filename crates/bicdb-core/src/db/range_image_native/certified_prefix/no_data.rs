@@ -12,13 +12,26 @@ use crate::distribution_range_recovery::{NativeAbortQuorum, RecoveryRoleAdmissio
 fn decision_key(range: RangeId, index: u64) -> String {
     format!("abort-decision:{range}:{index:020}")
 }
+/// A metadata-only decision inherits the ACTUAL predecessor's data bound.
+/// It is never an application WAL receipt, range index or read permission.
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(transparent)]
+pub(super) struct NoDataLocalVisibilityB(u64);
+impl NoDataLocalVisibilityB {
+    fn from_actual_source(source: &SourceRangeImageLineage) -> Self {
+        Self(source.actual_local_visibility_sequence())
+    }
+    pub(super) fn get(self) -> u64 {
+        self.0
+    }
+}
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub(super) struct NativeNoDataPrefixEvidence {
     pub(super) decision_sha256: String,
     pub(super) candidate_sha256: String,
     pub(super) native_page_xid: u64,
-    pub(super) local_data_visibility: u64,
+    pub(super) local_data_visibility: NoDataLocalVisibilityB,
     pub(super) data_voters: BTreeSet<ClusterNodeId>,
 }
 impl NativeNoDataPrefixEvidence {
@@ -60,7 +73,7 @@ struct NativeAbortDecisionRecord {
     post_quorum_metadata_term: u64,
     post_quorum_metadata_read_index: u64,
     native_page_xid: u64,
-    local_data_visibility: u64,
+    local_data_visibility: NoDataLocalVisibilityB,
     checksum_sha256: String,
 }
 impl NativeAbortDecisionRecord {
@@ -117,7 +130,7 @@ pub(crate) struct NativeRecoveryAbortedReceipt {
     range_index: u64,
     decision_sha256: String,
     logical_history_sha256: String,
-    local_data_visibility: u64,
+    local_data_visibility: NoDataLocalVisibilityB,
 }
 impl NativeRecoveryAbortedReceipt {
     pub(crate) fn range_index(&self) -> u64 {
@@ -130,7 +143,7 @@ impl NativeRecoveryAbortedReceipt {
         &self.decision_sha256
     }
     pub(crate) fn local_data_visibility(&self) -> u64 {
-        self.local_data_visibility
+        self.local_data_visibility.get()
     }
     pub(crate) fn require_current(&self, db: &BicDb, role: &RecoveryRoleAdmission) -> Result<()> {
         self.scope.require_role(role)?;
@@ -156,6 +169,7 @@ impl NativeRecoveryAbortedReceipt {
             self.range_index,
         )?;
         if record.checksum_sha256 != self.decision_sha256
+            || record.local_data_visibility != self.local_data_visibility
             || record.logical_history_sha256 != self.logical_history_sha256
             || entry.outcome != history::NativeLogicalHistoryOutcomeV1::Aborted
             || entry.commitment_sha256 != self.logical_history_sha256
@@ -323,7 +337,7 @@ impl BicDb {
             post_quorum_metadata_term: fresh.metadata_term(),
             post_quorum_metadata_read_index: fresh.metadata_read_index(),
             native_page_xid: 0,
-            local_data_visibility: source.actual_local_visibility_sequence(),
+            local_data_visibility: NoDataLocalVisibilityB::from_actual_source(&source),
             checksum_sha256: String::new(),
         };
         if record

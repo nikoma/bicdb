@@ -3,6 +3,7 @@
 //! stores/services, TLS metadata, the completed image and distinct data sets.
 //! Local opaque-object orchestration is NOT an operator/wire handoff test.
 use super::*;
+mod open_adversarial_tests;
 use crate::distribution_range_consensus::{
     ImageInstallPurpose, NativeImageInstallRole, RecoveryFenceScope,
 };
@@ -550,11 +551,13 @@ fn run_complete_joint(mode: u8) {
         }
         return;
     }
-    if mode == 1 || mode == 3 {
+    if mode == 1 || mode >= 3 {
         let published =
             exercise_fresh_native_publication(&fixture, &prepared, &parent, old.id, mode == 1);
         if mode == 3 {
             exercise_fresh_open_while_frozen(&fixture, &prepared, published, &parent, old.id);
+        } else if mode >= 4 {
+            open_adversarial_tests::exercise(&fixture, &prepared, published, &parent, old.id, mode);
         }
         return;
     }

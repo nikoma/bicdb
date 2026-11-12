@@ -2,6 +2,9 @@
 //! the local native journal scope; all local checks then share that REAL lock.
 use super::*;
 
+#[cfg(test)]
+mod test_cuts;
+
 impl NativeJointCatalogueActivationReceipt {
     pub(crate) fn require_current_with_scope(
         &self,
@@ -96,6 +99,8 @@ impl RangeWriteStore {
             external_trace.complete();
             drop(external_trace);
         }
+        #[cfg(test)]
+        test_cuts::after_external()?;
         let native = admission.native_receipt();
         let data = admission.data();
         let range = data.old_range().id;
@@ -186,6 +191,8 @@ impl RangeWriteStore {
         persisted?;
         self.recovery_persistence_uncertain = false;
         drop(controlled);
+        #[cfg(test)]
+        test_cuts::after_persist()?;
         let receipt = NativeJointCatalogueActivationReceipt {
             store_open_id: self.open_id,
             activated: candidate,

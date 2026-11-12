@@ -22,10 +22,12 @@ pub(super) struct CurrentJointRecoveryState {
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 struct ArchivedJointRefusal {
-    fence: RecoveryFenceRecord,
-    // The exact previous operation's floor survives a subsequent independent
-    // recovery. None is only for the original non-CurrentJoint refusal.
-    binding: Option<NativeCurrentJointBinding>,
+    // Survivors originally promise through protected joint old-close, which
+    // need not create a generic RecoveryFenceRecord. Preserve actual absence.
+    fence: Option<RecoveryFenceRecord>,
+    // Every archived representation keeps its actual original physical floor,
+    // exact local Option promise and protected closure identity.
+    binding: NativeCurrentJointBinding,
 }
 pub(super) fn validate_current_joint_catalog(catalog: &RangeWriteCatalog) -> Result<()> {
     if (catalog.format_version >= CURRENT_JOINT_CATALOG_FORMAT)
@@ -87,25 +89,30 @@ pub(super) fn validate_current_joint_catalog(catalog: &RangeWriteCatalog) -> Res
                 ));
             }
             for (nonce, archived) in &state.archived {
-                let old = &archived.fence;
-                old.validate()?;
-                if matches!(
-                    old.scope.purpose,
-                    MetadataRecoveryRolePurpose::CurrentJointRecovery { .. }
-                ) != archived.binding.is_some()
-                {
-                    return Err(range_write_error(
-                        "archived joint operation lost exact prior native floor binding",
-                    ));
-                }
                 if nonce.is_nil()
-                    || *nonce != old.scope.recovery_nonce
-                    || old.scope.range_id != *range
-                    || old.scope.cluster_id != catalog.cluster_id
-                    || old.local_node_id != catalog.node_id
                     || *nonce == state.scope.recovery_nonce
+                    || archived.binding.joint_decision_sha256 != state.binding.joint_decision_sha256
+                    || archived.binding.birth_id != state.binding.birth_id
+                    || archived.binding.store_id != state.binding.store_id
                 {
-                    return Err(range_write_error("damaged archived joint recovery refusal"));
+                    return Err(range_write_error("damaged archived joint recovery binding"));
+                }
+                if let Some(old) = &archived.fence {
+                    old.validate()?;
+                    if *nonce != old.scope.recovery_nonce
+                        || old.scope.range_id != *range
+                        || old.scope.cluster_id != catalog.cluster_id
+                        || old.local_node_id != catalog.node_id
+                    {
+                        return Err(range_write_error(
+                            "damaged archived optional generic recovery refusal",
+                        ));
+                    }
+                } else if *nonce != state.original_handoff_promise.nonce
+                    || archived.binding.local_handoff_promise.is_none()
+                    || archived.binding.local_old_close_sha256.is_none()
+                {
+                    return Err(range_write_error("missing generic refusal lacks exact original permanent native joint closure"));
                 }
             }
         }
@@ -245,7 +252,11 @@ impl RangeWriteStore {
             .and_then(|m| m.get(&range))
         {
             for old in state.archived.values() {
-                for (index, marker) in &old.fence.historical_certifications {
+                for (index, marker) in old
+                    .fence
+                    .iter()
+                    .flat_map(|fence| fence.historical_certifications.iter())
+                {
                     if markers
                         .insert(*index, marker.command_sha256.clone())
                         .is_some_and(|sha| sha != marker.command_sha256)
@@ -312,9 +323,7 @@ impl RangeWriteStore {
         fact.require_original_writer(original)?;
         fact.require_saved_binding(db, &saved.binding)?;
         for old in saved.archived.values() {
-            if let Some(binding) = &old.binding {
-                fact.require_saved_binding(db, binding)?;
-            }
+            fact.require_saved_binding(db, &old.binding)?;
         }
         parent.check()?;
         Ok(fact)
@@ -333,6 +342,41 @@ impl RangeWriteStore {
         fact.require_role(role)?;
         role.require_live_request()?;
         Ok(fact)
+    }
+    /// Decoder-only negative derived from the actual produced catalogue. No
+    /// live state is removed and this returns no admission/role/proof.
+    #[cfg(test)]
+    pub(crate) fn test_missing_current_joint_generic_custody(&self, range: RangeId) -> Result<()> {
+        let saved = self
+            .catalog
+            .recovery_fences
+            .get(&range)
+            .ok_or_else(|| range_write_error("actual current fence prerequisite missing"))?;
+        self.current_joint_scope_constraint(&saved.scope)?;
+        let mut damaged = self.catalog.clone();
+        damaged.recovery_fences.remove(&range);
+        validate_current_joint_catalog(&damaged)
+    }
+    fn next_joint_retired_nonces(
+        &self,
+        scope: &RecoveryFenceScope,
+        fact: &NativeCurrentJointRecoveryDomain,
+    ) -> Result<BTreeSet<Uuid>> {
+        let old = self.catalog.recovery_fences.get(&scope.range_id);
+        let mut retired = old
+            .map(|old| old.retired_nonces.clone())
+            .unwrap_or_default();
+        if let Some(old) = old.filter(|old| !old.scope.same_session(scope)) {
+            retired.insert(old.scope.recovery_nonce);
+        }
+        retired.insert(fact.data().promise().nonce);
+        retired.insert(fact.data().promise().session_id);
+        if retired.len() > 256 || retired.contains(&scope.recovery_nonce) {
+            return Err(range_write_error(
+                "joint recovery retired nonce bound/replay including original native promise",
+            ));
+        }
+        Ok(retired)
     }
     pub(crate) fn preflight_current_joint_recovery(
         &self,
@@ -381,70 +425,81 @@ impl RangeWriteStore {
             }
             fact.require_saved_binding(db, &state.binding)?;
         }
-        let old = self
-            .catalog
-            .recovery_fences
-            .get(&scope.range_id)
-            .ok_or_else(|| {
-                range_write_error("completed joint domain lost its original recovery refusal")
-            })?;
-        old.validate()?;
-        if old.scope.cluster_id != scope.cluster_id
-            || old.scope.bootstrap_id != scope.bootstrap_id
-            || old.scope.range_id != scope.range_id
-            || old.local_node_id != *role.local_node_id()
-            || old.local_member_incarnation != native.local_member_incarnation()
-            || old.scope.metadata_term > scope.metadata_term
-            || old.scope.metadata_read_index > scope.metadata_read_index
-        {
-            return Err(range_write_error("joint recovery changed actual old refusal identity/bootstrap or regressed metadata"));
-        }
-        if matches!(
-            old.scope.purpose,
-            MetadataRecoveryRolePurpose::CommittedHandoff { .. }
-        ) && old.scope.range_configuration_sha256 != fact.data().old_recovery_range_sha256()?
-        {
-            return Err(range_write_error(
-                "old handoff refusal changed protected OLD semantic domain",
-            ));
-        }
-        if old.scope.range_epoch > scope.range_epoch
-            || old.retired_nonces.contains(&scope.recovery_nonce)
-            || (!old.scope.same_session(scope) && old.retired_nonces.len() >= 256)
-        {
-            return Err(range_write_error(
-                "joint recovery regressed epoch/replayed nonce/exceeded refusal bound",
-            ));
-        }
-        match &old.scope.purpose {
-            MetadataRecoveryRolePurpose::CommittedHandoff {
-                relocation_id,
-                plan_id,
-                session_id,
-                nonce,
-            } if *relocation_id == fact.data().promise().relocation_id
-                && *plan_id == fact.data().promise().plan_id
-                && *session_id == fact.data().promise().session_id
-                && *nonce == fact.data().promise().nonce
-                && old.scope.range_epoch == fact.data().old_range().epoch => {}
-            MetadataRecoveryRolePurpose::NormalRecovery
-                if old.scope.range_epoch == scope.range_epoch
-                    && old.scope.range_configuration_sha256 == scope.range_configuration_sha256 => {
+        self.next_joint_retired_nonces(scope, fact)?;
+        if let Some(old) = self.catalog.recovery_fences.get(&scope.range_id) {
+            old.validate()?;
+            if old.scope.cluster_id != scope.cluster_id
+                || old.scope.bootstrap_id != scope.bootstrap_id
+                || old.scope.range_id != scope.range_id
+                || old.local_node_id != *role.local_node_id()
+                || old.local_member_incarnation != native.local_member_incarnation()
+                || old.scope.metadata_term > scope.metadata_term
+                || old.scope.metadata_read_index > scope.metadata_read_index
+            {
+                return Err(range_write_error("joint recovery changed actual old refusal identity/bootstrap or regressed metadata"));
             }
-            MetadataRecoveryRolePurpose::CurrentJointRecovery {
-                joint_decision_sha256,
-            } if joint_decision_sha256 == &fact.binding().joint_decision_sha256
-                && state.is_some() => {}
-            _ => {
+            if matches!(
+                old.scope.purpose,
+                MetadataRecoveryRolePurpose::CommittedHandoff { .. }
+            ) && old.scope.range_configuration_sha256
+                != fact.data().old_recovery_range_sha256()?
+            {
                 return Err(range_write_error(
-                    "old refusal is outside actual protected original/current joint domain",
-                ))
+                    "old handoff refusal changed protected OLD semantic domain",
+                ));
             }
-        }
-        if old.scope.same_session(scope) && !matches!(old.phase, RecoveryFencePhase::Active) {
-            return Err(range_write_error(
-                "joint prepared/completed operation cannot reset itself",
-            ));
+            if old.scope.range_epoch > scope.range_epoch
+                || old.retired_nonces.contains(&scope.recovery_nonce)
+                || (!old.scope.same_session(scope) && old.retired_nonces.len() >= 256)
+            {
+                return Err(range_write_error(
+                    "joint recovery regressed epoch/replayed nonce/exceeded refusal bound",
+                ));
+            }
+            match &old.scope.purpose {
+                MetadataRecoveryRolePurpose::CommittedHandoff {
+                    relocation_id,
+                    plan_id,
+                    session_id,
+                    nonce,
+                } if *relocation_id == fact.data().promise().relocation_id
+                    && *plan_id == fact.data().promise().plan_id
+                    && *session_id == fact.data().promise().session_id
+                    && *nonce == fact.data().promise().nonce
+                    && old.scope.range_epoch == fact.data().old_range().epoch => {}
+                MetadataRecoveryRolePurpose::NormalRecovery
+                    if old.scope.range_epoch == scope.range_epoch
+                        && old.scope.range_configuration_sha256
+                            == scope.range_configuration_sha256 => {}
+                MetadataRecoveryRolePurpose::CurrentJointRecovery {
+                    joint_decision_sha256,
+                } if joint_decision_sha256 == &fact.binding().joint_decision_sha256
+                    && state.is_some() => {}
+                _ => {
+                    return Err(range_write_error(
+                        "old refusal is outside actual protected original/current joint domain",
+                    ))
+                }
+            }
+            if old.scope.same_session(scope) && !matches!(old.phase, RecoveryFencePhase::Active) {
+                return Err(range_write_error(
+                    "joint prepared/completed operation cannot reset itself",
+                ));
+            }
+        } else {
+            // True original refusal on a surviving OLD member is the exact
+            // local permanent promise + protected OLD closure already checked
+            // by the actual fact producer. Do not invent a prior generic scope.
+            if state.is_some()
+                || fact.binding().local_handoff_promise.is_none()
+                || fact.binding().local_old_close_sha256.is_none()
+                || !fact.data().old_members().contains_key(role.local_node_id())
+            {
+                return Err(range_write_error("missing original generic refusal has no exact protected surviving-member custody"));
+            }
+            if self.catalog.recovery_fences.len() >= recovery_state::MAX_RECOVERY_FENCES {
+                return Err(range_write_error("recovery refusal catalog bound reached"));
+            }
         }
         if self
             .catalog
@@ -475,8 +530,11 @@ impl RangeWriteStore {
                 "joint recovery does not own new drained freeze",
             ));
         }
-        let old = self.catalog.recovery_fences[&scope.range_id].clone();
-        if old.scope.same_session(scope) {
+        let old = self.catalog.recovery_fences.get(&scope.range_id).cloned();
+        if old
+            .as_ref()
+            .is_some_and(|old| old.scope.same_session(scope))
+        {
             // Re-fsync EXACT existing refusal; never manufacture a new native
             // point, archive or scope on an exact durable retry. An unresolved
             // catalogue ambiguity remains closed at outer native-fact preflight.
@@ -497,16 +555,20 @@ impl RangeWriteStore {
             .current_joint_recoveries
             .as_ref()
             .and_then(|m| m.get(&scope.range_id))
-            .map(|s| s.binding.clone());
+            .map(|state| state.binding.clone())
+            .unwrap_or_else(|| fact.binding().clone());
+        let archived_nonce = old
+            .as_ref()
+            .map(|old| old.scope.recovery_nonce)
+            .unwrap_or(fact.data().promise().nonce);
         archived.insert(
-            old.scope.recovery_nonce,
+            archived_nonce,
             ArchivedJointRefusal {
-                fence: old.clone(),
+                fence: old,
                 binding: old_binding,
             },
         );
-        let mut retired = old.retired_nonces.clone();
-        retired.insert(old.scope.recovery_nonce);
+        let retired = self.next_joint_retired_nonces(scope, fact)?;
         let state = CurrentJointRecoveryState {
             binding: fact.binding().clone(),
             scope: scope.clone(),

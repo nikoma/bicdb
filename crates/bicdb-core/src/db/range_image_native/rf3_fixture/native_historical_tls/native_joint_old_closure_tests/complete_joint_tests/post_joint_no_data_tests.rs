@@ -243,6 +243,21 @@ pub(super) fn fresh_new_scope(
     let mut round = RecoveryFenceQuorumRound::begin(role, &parent).unwrap();
     let scope = round.scope().clone();
     let before_fences = diagnostic_cut(fixture, range, ack1, ack2, failed_key);
+    for survivor in [node("n1"), node("n2")] {
+        assert!(
+            before_fences[&survivor]["recovery_fence"].is_null(),
+            "genuine old-close survivor did not fabricate a generic recovery scope"
+        );
+        assert!(!before_fences[&survivor]["handoff_promise"].is_null());
+    }
+    assert!(
+        !before_fences[&range.leader]["recovery_fence"].is_null(),
+        "actual image target keeps its original generic image/handoff recovery refusal"
+    );
+    assert!(
+        before_fences[&range.leader]["handoff_promise"].is_null(),
+        "target never pretends to be an OLD promise voter"
+    );
     report(
         fixture,
         "actual-post-joint-before-new-fences.json",
@@ -343,9 +358,18 @@ pub(super) fn fresh_new_scope(
                 "{destination}: new fence preserves actual {field}"
             );
         }
-        let original_nonce = old["recovery_fence"]["scope"]["recovery_nonce"]
-            .as_str()
-            .unwrap();
+        let original_nonce = if old["recovery_fence"].is_null() {
+            assert!(
+                !old["handoff_promise"].is_null(),
+                "survivor original refusal is the actual permanent native joint promise"
+            );
+            assert!(!old["joint"]["old_closed_native_sha256"].is_null());
+            old["handoff_promise"]["nonce"].as_str().unwrap()
+        } else {
+            old["recovery_fence"]["scope"]["recovery_nonce"]
+                .as_str()
+                .unwrap()
+        };
         assert_eq!(
             after["current_joint_recovery"]["archived"][original_nonce]["fence"],
             old["recovery_fence"],
@@ -369,6 +393,22 @@ pub(super) fn fresh_new_scope(
             .unwrap()
             .iter()
             .any(|nonce| nonce == original_nonce));
+        assert_eq!(
+            after["current_joint_recovery"]["archived"][original_nonce]["binding"]
+                ["local_handoff_promise"],
+            old["handoff_promise"],
+            "original native refusal/floor is explicit even when optional generic fence is absent"
+        );
+        let lost_current = fixture.native.services[&destination]
+            .lock()
+            .test_missing_current_joint_generic_custody(range.id)
+            .unwrap_err();
+        assert!(
+            lost_current
+                .to_string()
+                .contains("current joint recovery constraints"),
+            "new current refusal custody cannot disappear: {lost_current}"
+        );
         round.record(Arc::new(actual)).unwrap();
     }
     round.finish().unwrap().require_live().unwrap();

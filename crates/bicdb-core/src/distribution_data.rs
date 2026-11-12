@@ -1177,6 +1177,15 @@ impl ClusterDataNodeService {
         parent.check()
     }
 
+    #[cfg(test)]
+    pub(crate) fn test_missing_current_joint_generic_custody(
+        &self,
+        range: crate::distribution::RangeId,
+    ) -> Result<()> {
+        self.range_writes
+            .test_missing_current_joint_generic_custody(range)
+    }
+
     pub(crate) fn preflight_native_recovery(
         &self,
         role: &crate::distribution_range_recovery::RecoveryRoleAdmission,

@@ -119,8 +119,7 @@ impl EnforcedNetwork {
                 (
                     id.clone(),
                     Arc::new(
-                        MetadataReadProvider::new(Arc::clone(store), Arc::clone(&clients[id]))
-                            .unwrap(),
+                        MetadataReadProvider::new(Arc::clone(store), clients[id].clone()).unwrap(),
                     ),
                 )
             })
@@ -136,7 +135,7 @@ impl EnforcedNetwork {
                             Arc::clone(&native.services[id]),
                             Arc::clone(&providers[id]),
                         )
-                        .with_participant_transport(Arc::clone(&clients[id])),
+                        .with_participant_transport(clients[id].clone()),
                     ),
                 )
             })

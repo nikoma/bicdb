@@ -31,7 +31,7 @@ fn replicate(
 ) -> Vec<String> {
     let mut refused = Vec::new();
     for _ in 0..3 {
-        for i in [0, 2] {
+        for i in [0, 2, 3] {
             let id = node(i);
             let request = stores[leader].append_request_from(1, 32).unwrap();
             #[cfg(feature = "tls-replication")]
@@ -87,7 +87,7 @@ fn native_metadata_actor_reused_pin_cannot_rebind_old_root_but_retirement_persis
     eprintln!("NATIVE_METADATA_ACTOR_ROOT {}", f.root.path().display());
     let initial = f.topology.read().clone();
     let leader = node(1);
-    let mut stores = (0..3)
+    let mut stores = (0..4)
         .map(|i| {
             let id = node(i);
             let store = MetadataConsensusStore::initialize_native_owned(
@@ -103,7 +103,7 @@ fn native_metadata_actor_reused_pin_cannot_rebind_old_root_but_retirement_persis
         .collect::<BTreeMap<_, _>>();
     let request = stores.get_mut(&leader).unwrap().start_election().unwrap();
     let mut votes = BTreeSet::from([leader.clone()]);
-    for i in [0, 2] {
+    for i in [0, 2, 3] {
         let reply = stores
             .get_mut(&node(i))
             .unwrap()
@@ -112,6 +112,11 @@ fn native_metadata_actor_reused_pin_cannot_rebind_old_root_but_retirement_persis
         assert!(reply.vote_granted);
         votes.insert(reply.voter_id);
     }
+    assert_eq!(
+        votes.len(),
+        4,
+        "every initial metadata vote is an actual Store response"
+    );
     stores
         .get_mut(&leader)
         .unwrap()
@@ -400,7 +405,7 @@ fn native_metadata_dispatch_replayed_durable_prefix_does_not_repair_older_cache(
     );
     let initial = fixture.topology.read().clone();
     let leader = node(1);
-    let mut stores = (0..3)
+    let mut stores = (0..4)
         .map(|i| {
             let id = node(i);
             let store = MetadataConsensusStore::initialize_native_owned(
@@ -416,7 +421,7 @@ fn native_metadata_dispatch_replayed_durable_prefix_does_not_repair_older_cache(
         .collect::<BTreeMap<_, _>>();
     let election = stores.get_mut(&leader).unwrap().start_election().unwrap();
     let mut votes = BTreeSet::from([leader.clone()]);
-    for i in [0, 2] {
+    for i in [0, 2, 3] {
         let reply = stores
             .get_mut(&node(i))
             .unwrap()
@@ -425,6 +430,11 @@ fn native_metadata_dispatch_replayed_durable_prefix_does_not_repair_older_cache(
         assert!(reply.vote_granted);
         votes.insert(reply.voter_id);
     }
+    assert_eq!(
+        votes.len(),
+        4,
+        "every initial metadata vote is an actual Store response"
+    );
     stores
         .get_mut(&leader)
         .unwrap()

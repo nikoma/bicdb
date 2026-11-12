@@ -46,10 +46,9 @@ impl ActorFixture {
         }
         let mut topology = distribution.topology().clone();
         // Genuine initial configuration, before creation of any database or
-        // consensus store. Only 0/1/2 vote in metadata; n0 has no data replica.
+        // consensus store. All four nodes vote in metadata; n0 has no data replica.
         topology.generation = 1;
         topology.history.truncate(1);
-        topology.nodes.get_mut(&node(3)).unwrap().metadata_role = MetadataMemberRole::Learner;
         for range in topology.ranges.values_mut() {
             assert_eq!(range.leader, node(1));
             assert_eq!(range.replicas.len(), 1);
@@ -66,6 +65,7 @@ impl ActorFixture {
             member.tls_certificate_sha256 = Some(network[id].1.clone());
         }
         topology.validate().unwrap();
+        assert!((0..4).all(|i| topology.is_metadata_voter(&node(i))));
         let members = topology
             .nodes
             .iter()

@@ -151,7 +151,14 @@ impl NativeJointOpenPhaseRound {
             members: self.members,
             claimed: std::sync::atomic::AtomicBool::new(false),
         };
-        result.require_current()?;
+        // Collection has already validated every actual member. This closes
+        // an aggregation, not an activation grant: retain all original caller,
+        // per-member MQ and writer lifetimes here. Activation still performs
+        // its COMPLETE final foreign sweep after the distinct post-quorum MQ,
+        // then validates the local proof under the actual native journal.
+        // A second identical full sweep here consumes the same bounded phase
+        // before that required final boundary without supplying authority.
+        result.require_live()?;
         #[cfg(test)]
         trace.complete();
         Ok(result)

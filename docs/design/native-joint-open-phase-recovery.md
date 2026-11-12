@@ -226,3 +226,31 @@ archive is therefore PARTIAL, distinct from the hook's completed local copy.
 No missing files were manufactured. Root separately enabled hidden-file upload
 for a future unchanged-runtime reproduction; that does not retroactively repair
 399 custody or establish replay/atomic-powerloss qualification.
+
+## Retained concurrent fault-control failure and closure correction
+
+At source `61eb4d92b5938349cf18a283e936eee45fa97e9d`,
+[run 43225435854](https://github.com/nikoma/bicdb/actions/runs/43225435854),
+Core job 131207285182 failed all three `open_adversarial_tests` in 38.19 seconds;
+all-target and isolated-consumer compilation passed. In each fixture the new
+scoped publication completed all three final members, including exact stored
+lost-reply reconciliation. Opening then exhausted its unchanged four-second
+phase before the intended fsync/cancellation or foreign-reenrollment fault cut.
+Those fault invariants remain untested by this failed cohort.
+
+The retained step-cancellation trace shows collection leaving 2,333 ms,
+then a second complete sweep at round closure leaving 1,022 ms. The independent
+post-quorum MQ left 946 ms; the required final foreign sweep exhausted the
+budget before the local native journal and catalogue fsync. This is observed
+CI validation cost, not a physical recovery measurement or Azure attribution.
+Raw job-log SHA-256:
+`39cc01a924073e23438497af2e30dcc82820ac36044e6ddde786ae53b79fb3f0`.
+
+The correction closes the already collected round using original-caller,
+per-member current MQ and actual writer-lifetime validation. It does not repeat
+the full native reads there. No collected observation becomes an activation
+permission: the distinct local post-quorum MQ, complete FINAL foreign-member
+sweep and exact local journal-backed proof remain required at mutation. No
+member, cancellation check, deadline or post-WAL validation is removed. The
+corrected cohort must execute the actual fault cuts before it can pass; this
+source correction has no executed passing claim yet.

@@ -9,6 +9,8 @@ use crate::distribution_range_mutation::{
     FrozenRangeMutationPermit, RangeMutationGate, RangeServingGeneration,
 };
 use std::sync::atomic::{AtomicBool, Ordering};
+mod current;
+pub(crate) use current::NativeJointOpenContinuity;
 
 #[derive(Debug)]
 pub(crate) struct NativeJointActivatedOpenGuard {

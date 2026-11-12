@@ -78,7 +78,9 @@ pub(crate) use native_metadata_store::NativeMetadataStoreRecord;
 mod native_activation;
 mod native_joint_activation;
 pub(crate) use native_activation::NativeActivatedOpenGuard;
-pub(crate) use native_joint_activation::NativeJointActivatedOpenGuard;
+pub(crate) use native_joint_activation::{
+    NativeJointActivatedOpenGuard, NativeJointOpenContinuity,
+};
 mod commit_admission_hook;
 mod native_recovery_ready;
 mod range_image_native;

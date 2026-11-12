@@ -123,7 +123,7 @@ mod native_writer;
 pub(crate) use joint_handoff_state::{
     NativeJointBridgeCatalogue, NativeJointCatalogueActivationFact,
     NativeJointCatalogueActivationReceipt, NativeJointOldCatalogPreflight,
-    NativeJointOldPromiseReceipt,
+    NativeJointOldPromiseReceipt, NativeJointReleaseCatalogue,
 };
 use joint_handoff_state::{NativeJointLocalState, NATIVE_JOINT_HANDOFF_CATALOG_FORMAT};
 #[cfg(test)]
@@ -814,7 +814,7 @@ pub struct RangeWriteStore {
     #[cfg(test)]
     test_native_commit_write_error_once: bool,
     native_activated_opens: BTreeMap<RangeId, crate::db::NativeActivatedOpenGuard>,
-    native_joint_activated_opens: BTreeMap<RangeId, crate::db::NativeJointActivatedOpenGuard>,
+    native_joint_activated_opens: BTreeMap<RangeId, Arc<crate::db::NativeJointActivatedOpenGuard>>,
     native_writer_host: Option<std::sync::Weak<crate::db::NativeWriterHostState>>,
     _native_abort_owner: Option<bicdb_page::DirectoryLock>,
 }

@@ -326,6 +326,56 @@ pub(crate) struct NativeJointBridgeReadScope<'a> {
     lineage: SourceRangeImageLineage,
 }
 impl NativeJointBridgeReadScope<'_> {
+    pub(crate) fn current_range_index(&self) -> u64 {
+        self.lineage.range_index()
+    }
+    pub(crate) fn current_logical_history_sha256(&self) -> &str {
+        self.lineage.logical_history_sha256()
+    }
+    pub(crate) fn current_local_visibility_sequence(&self) -> u64 {
+        self.lineage.actual_local_visibility_sequence()
+    }
+    pub(crate) fn require_complete_catalogue(
+        &self,
+        catalogue: &crate::distribution_range_consensus::NativeJointReleaseCatalogue,
+    ) -> Result<()> {
+        self.journal.require_database(self.database)?;
+        if catalogue.range_id() != self.native.data().old_range().id
+            || catalogue.native_r() != self.lineage.range_index()
+        {
+            return Err(invalid(
+                "joint release catalogue is not actual current native head",
+            ));
+        }
+        for (index, expected) in catalogue.decisions() {
+            let entry = self.database.read_native_history_entry(
+                catalogue.range_id(),
+                self.lineage.history_generation(),
+                *index,
+            )?;
+            let matches = match (expected, &entry.outcome) {
+                (
+                    crate::distribution_range_consensus::NativeReadCatalogueDecision::Applied(
+                        expected,
+                    ),
+                    NativeLogicalHistoryOutcomeV1::Applied {
+                        command_checksum_sha256,
+                    },
+                ) => expected == command_checksum_sha256,
+                (
+                    crate::distribution_range_consensus::NativeReadCatalogueDecision::Aborted,
+                    NativeLogicalHistoryOutcomeV1::Aborted,
+                ) => true,
+                _ => false,
+            };
+            if entry.index != *index || !matches {
+                return Err(invalid(
+                    "joint release contradicts actual retained command/native history",
+                ));
+            }
+        }
+        Ok(())
+    }
     pub(crate) fn database(&self) -> &BicDb {
         self.database
     }

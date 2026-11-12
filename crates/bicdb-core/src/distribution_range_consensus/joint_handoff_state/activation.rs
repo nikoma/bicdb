@@ -623,7 +623,7 @@ impl RangeWriteStore {
         }
         let guard = database.native_joint_activated_open_guard(self, receipt, frozen)?;
         self.native_joint_activated_opens
-            .insert(receipt.range().id, guard);
+            .insert(receipt.range().id, Arc::new(guard));
         Ok(())
     }
     pub(crate) fn arm_native_joint_activated_open(

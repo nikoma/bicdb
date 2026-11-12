@@ -99,6 +99,8 @@ async fn real_catalog_acl_describe_and_text_output_preserve_oid_and_permissions(
                     }
                     let user_column = client.prepare("SELECT relacl FROM acl_items WHERE 1=0").await.unwrap();
                     assert_eq!(user_column.columns()[0].type_().oid(), 25);
+                    let unavailable_codecs = rows(client.simple_query("SELECT typreceive,typsend FROM pg_catalog.pg_type WHERE oid=1033").await.unwrap());
+                    assert_eq!(unavailable_codecs, vec![vec![Some("-".into()), Some("-".into())]]);
                     let metadata = rows(client.simple_query("SELECT typname,typlen,typalign,typreceive::oid,typsend::oid,typarray FROM pg_catalog.pg_type WHERE oid=1033").await.unwrap());
                     assert_eq!(metadata, vec![vec![Some("aclitem".into()),Some("16".into()),Some("d".into()),Some("0".into()),Some("0".into()),Some("1034".into())]]);
                     let error = client.query("SELECT relacl FROM pg_catalog.pg_class WHERE relname IN ('acl_items','ACL_ITEMS')", &[]).await.unwrap_err();

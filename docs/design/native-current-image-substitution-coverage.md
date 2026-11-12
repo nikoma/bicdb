@@ -198,3 +198,51 @@ The default R0/sparse schedules retain their exact expected preimage0/raw0;
 only this explicitly selected seed mode expects preimage1/rawCQ2. Birth-v1
 component fixtures are not retroactively enrolled or qualified for Strong,
 born-v2 writer policy, independent processes, operator scale-out or physical HA.
+
+## Higher accepted-cut regression source
+
+A separate unexecuted test,
+`actual_installing_replacement_covers_higher_accepted_cut_after_cold_majority_ack2`,
+uses three actual fsynced services and the existing recovery/metadata backend
+paths. It changes no production guard or proof constructor. The test-only bus
+forwards only readonly NativeReady/NativeCompletion observations to their REAL
+Runtime receivers; it constructs no replies or quorum lists.
+
+P1 accepts actual source R1/H1 after ACK1. Its full history is staged/audited and
+the target receives the real row through P1's typed image grant, but no native
+base, catalogue adoption or target Ready is published. Every source capture,
+installer, data service, DB and Runtime owner is then dropped; weak DB checks
+must drain before a copied tree is opened. The target's exact P1 stage, UID,
+partial row and refusal remain unchanged.
+
+Closing the capture does not release the durable Active recovery fence into
+ordinary writes. On the new opens, with the target DATA path unavailable,
+ordinary voters0+2 must genuinely fence, prepare, collect closed ReadyQQ,
+persist CompletedQQ, protect/activate the serving decision and arm the owned
+physical freeze LAST. Only then is the actual recovered coordinator installed
+and allowed to ACK2; actual NativeApply on voter2 must establish R2/H2. The
+client ledger now has TWO real ACKs. No write is performed while an old P1
+capture/freeze remains live, and P1's nonce/permission is never revived.
+
+All owners close again before a second copied strict open. Source0 DATA becomes
+unavailable, and the existing actual metadata election/append path commits
+E2/leader2. Source2 is ALREADY materially R2 from genuine ACK2, so this test does
+not abuse `InstallingCommittedDecisionRound`: that producer correctly refuses
+a historical certification for command2 beyond P1's accepted R1. Instead, the
+fresh mixed Installing quorum and full replacement-history verifier check H1
+membership inside the actual R2 immutable chain and every observed obligation.
+The test explicitly rejects a forked H1 binding before beginning replacement.
+
+P2 retains P1 as a protected ancestor. Its actual target stage archive must
+report old acceptedR1/H1 and newR2/H2, with the exact old stage checksum. The
+new full history/audit/image/adoption/PreparedReady path must reconcile BOTH
+external ACK records, preserve target UID, use an actual new target MVCC bound
+separate from R2, and remain frozen. Old P1 proof/state is not deleted or reset.
+
+This is a SOURCE-ONLY regression until separately executed CI. The prior
+R0/nonzero-target cohorts do not prove it. RF3 is sufficient for this particular
+orderly-close schedule because actual ordinary0+2 recovery follows the end of
+all P1 owners; RF5 may still be needed for a schedule that keeps the original
+source capture frozen while an independent ordinary majority advances.
+The test remains one-process component evidence: it is not source-host loss,
+learner restart, new-target activation/Strong, operator or physical qualification.

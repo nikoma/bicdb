@@ -23,7 +23,7 @@ fn persist_json(root: &std::path::Path, name: &str, x: &serde_json::Value) {
     f.sync_all().unwrap();
     std::fs::File::open(root).unwrap().sync_all().unwrap();
 }
-fn commit_actual_higher_epoch(
+pub(super) fn commit_actual_higher_epoch(
     root: &std::path::Path,
     old: &crate::ClusterTopology,
     new: &crate::ClusterTopology,

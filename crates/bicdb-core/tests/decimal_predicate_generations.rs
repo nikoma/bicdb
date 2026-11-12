@@ -415,3 +415,74 @@ fn actual_old_keys_that_become_duplicates_refuse_admission_without_losing_either
         }
     }
 }
+
+#[test]
+fn every_upgrade_catalog_replacement_step_fails_closed_and_recovers_the_ack() {
+    use bicdb_page::test_faults::arm_io_failure;
+    let baseline = tempfile::tempdir().unwrap();
+    actual_legacy_fixture(baseline.path());
+    let observation = arm_io_failure("index_catalog.write", baseline.path(), u64::MAX, false);
+    let mut db =
+        BicDb::open_with_config(baseline.path(), config(StorageMode::ServerPaged)).unwrap();
+    let publications = observation.seen();
+    assert!(
+        publications >= 4,
+        "must include plan, shadow, replacement and certificate"
+    );
+    assert_eq!(observation.fired(), 0);
+    drop(observation);
+    db.close().unwrap();
+    for step in ["write", "sync", "rename", "dir_sync"] {
+        for nth in 1..=publications {
+            let root = tempfile::tempdir().unwrap();
+            actual_legacy_fixture(root.path());
+            let fault = arm_io_failure(&format!("index_catalog.{step}"), root.path(), nth, false);
+            let error =
+                BicDb::open_with_config(root.path(), config(StorageMode::ServerPaged)).unwrap_err();
+            assert_eq!(fault.fired(), 1, "{step} publication{nth}: {error}");
+            assert!(
+                root.path()
+                    .join(bicdb_core::DURABILITY_FAILURE_MARKER)
+                    .exists(),
+                "{step} publication{nth}: missing durability fence"
+            );
+            drop(fault);
+            for reopen in 0..3 {
+                let mut db =
+                    BicDb::open_with_config(root.path(), config(StorageMode::ServerPaged)).unwrap();
+                assert!(
+                    db.durability_state().is_healthy(),
+                    "{step} publication{nth} reopen{reopen}"
+                );
+                assert_eq!(
+                    db.lookup_index(
+                        "native_decimal_partial",
+                        &[IndexValue::String("same".into())]
+                    )
+                    .unwrap(),
+                    vec!["acknowledged".to_string()]
+                );
+                assert_eq!(
+                    db.get("precision_probe", "acknowledged")
+                        .unwrap()
+                        .unwrap()
+                        .metadata,
+                    acknowledged().metadata
+                );
+                assert!(db
+                    .insert(
+                        "precision_probe",
+                        Record::new("duplicate")
+                            .with_metadata(json!({"business_key":"same","amount":"0.75"}))
+                    )
+                    .is_err());
+                assert!(db
+                    .verify_indexes_consistently()
+                    .unwrap()
+                    .iter()
+                    .all(|report| report.valid));
+                db.close().unwrap();
+            }
+        }
+    }
+}

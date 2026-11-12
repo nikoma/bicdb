@@ -3,6 +3,7 @@
 //! stores/services, TLS metadata, the completed image and distinct data sets.
 //! Local opaque-object orchestration is NOT an operator/wire handoff test.
 use super::*;
+#[path = "complete_joint_tests/open_adversarial_tests.rs"]
 mod open_adversarial_tests;
 use crate::distribution_range_consensus::{
     ImageInstallPurpose, NativeImageInstallRole, RecoveryFenceScope,

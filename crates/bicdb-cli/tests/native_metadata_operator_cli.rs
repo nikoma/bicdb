@@ -974,3 +974,6 @@ fn native_metadata_operator_actual_cli_single_join_fresh_becomes_local_metadata_
         );
     }
 }
+
+#[path = "native_metadata_operator_cli/promoted_cold_tests.rs"]
+mod promoted_cold_tests;

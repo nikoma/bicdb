@@ -110,6 +110,10 @@ pub enum Command {
     /// Strict existing enrolled learner root; never recreates schema/genesis/metadata identity.
     ServeLearnerReopen {
         root: PathBuf,
+        /// Run typed metadata continuation/control/maintenance on this persisted owner.
+        /// Default reopen remains manual; this never registers or imports schema.
+        #[arg(long)]
+        automatic_metadata: bool,
         #[arg(long)]
         cluster_id: String,
         #[arg(long)]
@@ -307,6 +311,14 @@ fn own_network(cert: PathBuf, key: PathBuf, ca: PathBuf) -> ClusterNetworkTransp
 pub fn run(command: Command) -> Result<()> {
     let command_started = Instant::now();
     let automatic_join = matches!(&command, Command::JoinFresh { .. });
+    let automatic_metadata = automatic_join
+        || matches!(
+            &command,
+            Command::ServeLearnerReopen {
+                automatic_metadata: true,
+                ..
+            }
+        );
     // Registration returns committed CONFIG DATA only. The subsequent fresh
     // factory independently checks actual own MQ, TLS, schema and native birth.
     let command = match command {
@@ -587,6 +599,7 @@ pub fn run(command: Command) -> Result<()> {
         }
         | Command::ServeLearnerReopen {
             root,
+            automatic_metadata: _,
             cluster_id,
             seed_node_id,
             seed_address,
@@ -737,7 +750,7 @@ pub fn run(command: Command) -> Result<()> {
                     match refreshed {
                         Ok(next) => {
                             status = next;
-                            if automatic_join
+                            if automatic_metadata
                                 && status.birth_bound
                                 && !status.metadata_listener_owned
                             {
@@ -749,7 +762,7 @@ pub fn run(command: Command) -> Result<()> {
                         }
                         Err(e) => error = Some(e.to_string()),
                     }
-                    if automatic_join
+                    if automatic_metadata
                         && status.metadata_role == bicdb_core::MetadataMemberRole::Voter
                     {
                         match host.enable_metadata_control(&token) {
@@ -757,7 +770,7 @@ pub fn run(command: Command) -> Result<()> {
                             Err(e) => error = Some(e.to_string()),
                         }
                     }
-                    if automatic_join
+                    if automatic_metadata
                         && status.metadata_control_owned
                         && status
                             .metadata
@@ -769,7 +782,7 @@ pub fn run(command: Command) -> Result<()> {
                             Err(e) => error = Some(e.to_string()),
                         }
                     }
-                    if automatic_join && status.metadata_listener_owned {
+                    if automatic_metadata && status.metadata_listener_owned {
                         if let Err(e) = host.start_automatic_metadata(&lifetime) {
                             error = Some(e.to_string());
                         }

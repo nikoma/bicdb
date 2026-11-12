@@ -32,6 +32,19 @@ is claimed. Application1464/unchanged10s waits, UI400 backup/restore, independen
 ACK/process/fault/VM, Native protected authority, standby/HA and P1/P2 gates remain
 separate. P2 remains disabled. No standard server or CLI was built by this batch.
 
+The first broad Core command returned101: `page_log.sync:60` reported healthy
+rather than a reached/fenced injected failure. Its case directory and ACK ledgers
+are preserved privately on S3. Investigation proved that the broad runner's
+`--lib --tests` selection did not rebuild example programs: its durability child
+predated the run and lacked the current required-feature string. This invalidates
+current-source qualification of `commit_durability_crash`, `projection_chaos`
+and `ha_state_crash` from that first run; it does not establish a production
+durability defect or excuse the original failure. A separate source-c358 run
+explicitly rebuilt all three helpers, recorded their hashes/current feature
+marker, and is rerunning all three families with original sites/counts/fsync/ACK
+assertions unchanged. SQL/wire tests have no external example executable
+selectors and continue collecting results. Neither broad run is a pass yet.
+
 `qualification-summary.json` records exact sources and the two exported debug
 probe paths/hashes. `raw-manifest.json` verifies every fetched raw byte stream;
 stdout/stderr/build logs are losslessly compressed. `reproduction/` retains the

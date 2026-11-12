@@ -27,7 +27,26 @@
     "source": "c3588bf8b029ac8579f1336bf9d170d231648f29",
     "unit": "bicdb-partition-admission-broad",
     "status": "live_at_checkpoint_not_a_pass",
-    "scope": "allCore/SQL/PGwire unit+integration tests"
+    "scope": "allCore/SQL/PGwire unit+integration tests",
+    "core_first_command_exit": 101,
+    "qualification_correction": {
+      "stale_standard_child_sha256": "277e08f671f7cf5f3e4ac7dcbc83e6f8b595f445a268eb820515fb64560d73fa",
+      "old_child_mtime": 1794263428.4864097,
+      "broad_started": 1794498585.674856,
+      "old_child_missing_current_sql_feature": true,
+      "affected_current_source_qualification_not_proven": [
+        "commit_durability_crash",
+        "projection_chaos",
+        "ha_state_crash"
+      ],
+      "current_helpers_built_source": "c3588bf8b029ac8579f1336bf9d170d231648f29",
+      "current_custody": "validation-provenance/current-helper-custody.json",
+      "private_failure_custody": "validation-provenance/first-case-private-custody.json",
+      "rerun_unit": "bicdb-partition-current-helper-requalification",
+      "rerun_result": "live_pending",
+      "assertions_sites_counts_fsync_unchanged": true,
+      "SQL_pgwire_external_example_selector_audit": "none; existing broad continues; no passyet"
+    }
   },
   "prior_failures_preserved": [
     "fcf63PASS1localtriggercertificateFAIL",

@@ -388,3 +388,194 @@ fn parent_delete_using_and_returning_follow_physical_sources_and_roll_back() {
         );
     });
 }
+
+#[test]
+fn parent_mutations_use_one_commit_across_leaves() {
+    for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
+        let dir = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open_with_config(
+            dir.path(),
+            DbConfig::default()
+                .with_fsync(true)
+                .with_storage_mode(mode)
+                .with_paged_buffer_pool_bytes(8 * 1024 * 1024),
+        )
+        .unwrap();
+        {
+            let mut sql = SqlSession::new(&mut db);
+            sql.execute("CREATE TABLE p(k INT,payload TEXT) PARTITION BY RANGE(k)")
+                .unwrap();
+            sql.execute("CREATE TABLE low PARTITION OF p FOR VALUES FROM(0) TO(10)")
+                .unwrap();
+            sql.execute("CREATE TABLE high PARTITION OF p FOR VALUES FROM(10) TO(20)")
+                .unwrap();
+        }
+        let before = db.current_commit_seq();
+        SqlSession::new(&mut db)
+            .execute("INSERT INTO p VALUES(1,'low-ack'),(11,'high-ack')")
+            .unwrap();
+        assert_eq!(
+            db.current_commit_seq() - before,
+            1,
+            "one SQL INSERT must have one commit for both physical leaves"
+        );
+        let before = db.current_commit_seq();
+        SqlSession::new(&mut db).execute("DELETE FROM p").unwrap();
+        assert_eq!(
+            db.current_commit_seq() - before,
+            1,
+            "one SQL DELETE must have one commit for both physical leaves"
+        );
+        db.close().unwrap();
+    }
+}
+
+#[test]
+fn parent_update_from_moves_ack_with_returning_and_rolls_back_both_heaps() {
+    with_stores(|db| {
+        let mut sql = SqlSession::new(db);
+        sql.execute("CREATE TABLE p(k INT PRIMARY KEY,payload TEXT) PARTITION BY RANGE(k)")
+            .unwrap();
+        sql.execute("CREATE TABLE low PARTITION OF p FOR VALUES FROM(0) TO(10)")
+            .unwrap();
+        sql.execute("CREATE TABLE ack_leaf PARTITION OF p FOR VALUES FROM(10) TO(20)")
+            .unwrap();
+        sql.execute("INSERT INTO p VALUES(1,'original-ack')")
+            .unwrap();
+        sql.execute("CREATE TABLE src(old_k INT,new_k INT)")
+            .unwrap();
+        sql.execute("INSERT INTO src VALUES(1,11)").unwrap();
+        sql.execute("BEGIN").unwrap();
+        assert_eq!(
+            sql.execute(
+                "UPDATE p SET k=src.new_k FROM src WHERE p.k=src.old_k RETURNING p.k,p.payload"
+            )
+            .unwrap()
+            .rows,
+            vec![vec![
+                SqlValue::Int(11),
+                SqlValue::String("original-ack".into())
+            ]]
+        );
+        assert!(sql.execute("SELECT * FROM low").unwrap().rows.is_empty());
+        sql.execute("ROLLBACK").unwrap();
+        assert_eq!(
+            sql.execute("SELECT k FROM low").unwrap().rows,
+            vec![vec![SqlValue::Int(1)]]
+        );
+        assert!(sql
+            .execute("SELECT * FROM ack_leaf")
+            .unwrap()
+            .rows
+            .is_empty());
+        sql.execute("UPDATE p SET k=11 WHERE k=1").unwrap();
+        assert!(sql.execute("SELECT * FROM low").unwrap().rows.is_empty());
+        assert_eq!(
+            sql.execute("SELECT k FROM ack_leaf").unwrap().rows,
+            vec![vec![SqlValue::Int(11)]]
+        );
+    });
+}
+
+#[test]
+fn parent_update_duplicate_destination_keeps_every_ack_and_failed_statement_atomic() {
+    with_stores(|db| {
+        let mut sql = SqlSession::new(db);
+        sql.execute(
+            "CREATE TABLE p(k INT,id INT,payload TEXT,PRIMARY KEY(k,id)) PARTITION BY RANGE(k)",
+        )
+        .unwrap();
+        sql.execute("CREATE TABLE ack_leaf PARTITION OF p FOR VALUES FROM(0) TO(10)")
+            .unwrap();
+        sql.execute("CREATE TABLE high PARTITION OF p FOR VALUES FROM(10) TO(20)")
+            .unwrap();
+        sql.execute("INSERT INTO p VALUES(1,1,'original-ack'),(12,1,'destination-ack')")
+            .unwrap();
+        assert_eq!(
+            sql.execute("UPDATE p SET k=12 WHERE k=1")
+                .unwrap_err()
+                .sqlstate(),
+            "23505"
+        );
+        assert_eq!(
+            sql.execute("SELECT k,payload FROM p ORDER BY k")
+                .unwrap()
+                .rows,
+            vec![
+                vec![SqlValue::Int(1), SqlValue::String("original-ack".into())],
+                vec![
+                    SqlValue::Int(12),
+                    SqlValue::String("destination-ack".into())
+                ]
+            ]
+        );
+        sql.execute("INSERT INTO p VALUES(2,1,'second-source-ack')")
+            .unwrap();
+        assert_eq!(
+            sql.execute("UPDATE p SET k=k+10 WHERE k<10")
+                .unwrap_err()
+                .sqlstate(),
+            "23505"
+        );
+        assert_eq!(
+            sql.execute("SELECT k FROM p ORDER BY k").unwrap().rows,
+            vec![
+                vec![SqlValue::Int(1)],
+                vec![SqlValue::Int(2)],
+                vec![SqlValue::Int(12)]
+            ]
+        );
+        assert_eq!(
+            sql.execute("UPDATE p SET k=100 WHERE k<10")
+                .unwrap_err()
+                .sqlstate(),
+            "23514"
+        );
+        sql.execute("DELETE FROM p WHERE k=2").unwrap();
+    });
+}
+
+#[test]
+fn routed_update_uses_parent_policy_and_checks_new_row_before_destination_constraints() {
+    with_stores(|db| {
+        let mut sql = SqlSession::new(db);
+        sql.execute("CREATE ROLE moving_reader").unwrap();
+        sql.execute("CREATE TABLE p(k INT,payload TEXT) PARTITION BY RANGE(k)")
+            .unwrap();
+        sql.execute("CREATE TABLE low PARTITION OF p FOR VALUES FROM(0) TO(10)")
+            .unwrap();
+        sql.execute("CREATE TABLE ack_leaf PARTITION OF p FOR VALUES FROM(10) TO(20)")
+            .unwrap();
+        sql.execute("ALTER TABLE p ENABLE ROW LEVEL SECURITY")
+            .unwrap();
+        sql.execute("CREATE POLICY parent_policy ON p USING(k<15) WITH CHECK(k<15)")
+            .unwrap();
+        sql.execute("ALTER TABLE low ENABLE ROW LEVEL SECURITY")
+            .unwrap();
+        sql.execute("CREATE POLICY child_deny ON low USING(false) WITH CHECK(false)")
+            .unwrap();
+        sql.execute("INSERT INTO p VALUES(1,'original-ack')")
+            .unwrap();
+        sql.execute("GRANT SELECT,UPDATE ON p TO moving_reader")
+            .unwrap();
+        sql.execute("SET ROLE moving_reader").unwrap();
+        sql.execute("UPDATE p SET k=11 WHERE k=1").unwrap();
+        assert_eq!(
+            sql.execute("UPDATE p SET k=16 WHERE k=11")
+                .unwrap_err()
+                .sqlstate(),
+            "42501"
+        );
+        assert_eq!(
+            sql.execute("SELECT k FROM p").unwrap().rows,
+            vec![vec![SqlValue::Int(11)]]
+        );
+        assert_eq!(
+            sql.execute("UPDATE ack_leaf SET k=12")
+                .unwrap_err()
+                .sqlstate(),
+            "42501"
+        );
+        sql.execute("RESET ROLE").unwrap();
+    });
+}

@@ -36,5 +36,10 @@
   },
   "probe_sha256": "3aa9f3cba6281699feb002d28641613a0cb8a0b9ed5804c6b5cc4323531f99e2",
   "release_state": "Qualification probe only; no production CLI/release/deployment produced.",
-  "full_goal": "Broader original application/HA/partition/portable-origin/P1P2 work remains active."
+  "full_goal": "Broader original application/HA/partition/portable-origin/P1P2 work remains active.",
+  "initial_implementation_CI": {
+    "test_jobs_passed": 9,
+    "Rails_passed": true,
+    "final_evidence_head_CI_required": true
+  }
 }

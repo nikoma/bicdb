@@ -1,7 +1,7 @@
 {
   "README.md": {
-    "bytes": 3407,
-    "sha256": "0114b7f7ae79755736ff4eb2fa3a46fc3d6c8ab839b2561c5dc5319574cdcf0f"
+    "bytes": 3495,
+    "sha256": "b3c59f9c696e8d178fa03f1c74101d010f5fc039a796387d76b76da9b6f96027"
   },
   "recovery/README.md": {
     "bytes": 3311,
@@ -24,8 +24,8 @@
     "sha256": "de147ac0e6df333e514ca3775ef6726b0e0cd5d1030593f5357e96ab8922b11b"
   },
   "summary.json": {
-    "bytes": 1203,
-    "sha256": "86af092927ae32732f9ca26fbabe0c020ae1fcf44471bf496333a80232e72723"
+    "bytes": 1338,
+    "sha256": "1242cc393ffbb42172bd4c3258b4d468df530d745ccc2078566fe191ca09b9aa"
   },
   "validation/controller/canonical-native490-core-results.py": {
     "bytes": 2630,
@@ -42,6 +42,10 @@
   "validation/host-control/native490-version-queued-refresh.json": {
     "bytes": 436,
     "sha256": "936910b1df00ebf7e1cab1126d4aead7a3f076a65e68edbfcb2e135da0090bc7"
+  },
+  "validation/initial-implementation-CI.json": {
+    "bytes": 5176,
+    "sha256": "573fda75d7839aa7764b71139ed5199ee3cfd5a71dcec283ca07e250cdd7f228"
   },
   "validation/manifest.json": {
     "bytes": 1616,

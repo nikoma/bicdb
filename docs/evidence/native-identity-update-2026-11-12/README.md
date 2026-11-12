@@ -38,10 +38,12 @@ three stable reopens, valid indexes and continued refusal without authority.
 All externally acknowledged cases recover complete new state. See
 [recovery evidence](recovery/README.md) and [validation results](validation/).
 
-GitHub Core, SQL, protocol, community/boundary, licensing, formatting and selector
-jobs passed on that implementation revision; Rails passed too. The remaining
-workspace job was still running at this evidence checkpoint. The final PR head
-must satisfy all required CI before merge; no pending job is reported as passing.
+All nine GitHub test jobs passed on that implementation revision, including the
+remaining workspace, Core, SQL, protocol, community/boundary, licensing, formatting
+and selector jobs. Rails passed too; terminal CI metadata is retained in
+`validation/initial-implementation-CI.json`. The final evidence-only PR head must
+separately satisfy all required CI before merge; no pending check is reported as
+passing.
 This evidence does not imply a new production CLI, published release or verified
 deployment. The retained probe is explicitly a debug qualification artifact.
 

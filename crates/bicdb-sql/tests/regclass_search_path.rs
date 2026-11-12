@@ -48,6 +48,15 @@ fn regclass_uses_path_order_for_tables_sequences_views_indexes_and_quoted_names(
                 .sqlstate(),
             "42P01"
         );
+        for path in ["missing_schema", "''"] {
+            sql.execute(&format!("SET search_path={path}")).unwrap();
+            truth(&mut sql, "SELECT to_regclass('outside_path') IS NULL");
+            truth(&mut sql, "SELECT current_schema() IS NULL");
+            truth(
+                &mut sql,
+                "SELECT to_regclass('public.outside_path') IS NOT NULL",
+            );
+        }
     }
 }
 

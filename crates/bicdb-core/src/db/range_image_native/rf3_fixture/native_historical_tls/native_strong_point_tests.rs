@@ -453,7 +453,7 @@ fn native_strong_point_stale_route_and_missing_or_foreign_installed_hook_refuse(
     // registration generation. The old enrolled guard must not bless it.
     fixture.native.databases[&node("n0")]
         .read()
-        .install_commit_admission(Arc::clone(&fixture.coordinators[&node("n0")]));
+        .install_commit_admission(fixture.coordinators[&node("n0")].clone());
     let result = fixture.read(fixture.request(&key, &range), &parent);
     assert_eq!(
         unavailable(result).stage,

@@ -7,6 +7,7 @@
 pub(crate) mod deferred_constraints;
 mod domain_types;
 mod flashback;
+mod index_drop;
 mod merge;
 #[cfg(test)]
 mod timestamp_day_indexes;
@@ -4343,12 +4344,29 @@ impl<'db> SqlSession<'db> {
             // Includes implicit constraint indexes, which have no IndexSchema.
             internal_names.push(sql_index_storage_name(&schema.schema_name, name));
             for index in &schema.indexes {
-                if index.name.eq_ignore_ascii_case(name) {
+                if index.name == name {
                     internal_names.extend(
                         index
                             .internal_index_names
                             .iter()
                             .map(|name| sql_index_storage_name(&schema.schema_name, name)),
+                    );
+                }
+            }
+        }
+        for view in list_views(self.db_ref())? {
+            if table != Some(view.name.as_str()) {
+                continue;
+            }
+            let namespace = relation_catalog_namespace(self.db_ref(), &view.name)?;
+            internal_names.push(sql_index_storage_name(&namespace, name));
+            for index in &view.indexes {
+                if index.name == name {
+                    internal_names.extend(
+                        index
+                            .internal_index_names
+                            .iter()
+                            .map(|name| sql_index_storage_name(&namespace, name)),
                     );
                 }
             }
@@ -4359,10 +4377,10 @@ impl<'db> SqlSession<'db> {
             .into_iter()
             .filter(|definition| {
                 table.is_none_or(|table| definition.collection == table)
-                    && (definition.name.eq_ignore_ascii_case(name)
+                    && (definition.name == name
                         || internal_names
                             .iter()
-                            .any(|internal| internal.eq_ignore_ascii_case(&definition.name)))
+                            .any(|internal| internal == &definition.name))
             })
             .collect::<Vec<_>>();
         let mut executable_existed = false;
@@ -4440,6 +4458,17 @@ impl<'db> SqlSession<'db> {
             schema.indexes.retain(|index| index.name != index_name);
             if schema.indexes.len() != before {
                 self.save_session_schema(&schema)?;
+                removed = true;
+            }
+        }
+        for mut view in list_views(self.db_ref())? {
+            if table.is_some_and(|table| table != view.name) {
+                continue;
+            }
+            let before = view.indexes.len();
+            view.indexes.retain(|index| index.name != index_name);
+            if view.indexes.len() != before {
+                self.save_session_view(&view)?;
                 removed = true;
             }
         }
@@ -4811,6 +4840,16 @@ impl<'db> SqlSession<'db> {
                 self.ddl_undo.last().cloned()
             {
                 self.restore_partition_catalog(entries)?;
+                self.ddl_undo.pop();
+                continue;
+            }
+            // Full rebuilds can refuse a live foreign owner. Keep the index
+            // definition until restoration succeeds so a later ROLLBACK can
+            // retry after the blocker ends. Native admission stays intact.
+            if let Some(DdlUndo::RestoreIndex { definition }) = self.ddl_undo.last() {
+                self.apply_ddl_undo(DdlUndo::RestoreIndex {
+                    definition: definition.clone(),
+                })?;
                 self.ddl_undo.pop();
                 continue;
             }

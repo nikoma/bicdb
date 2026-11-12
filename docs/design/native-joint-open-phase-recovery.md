@@ -191,3 +191,38 @@ does not enlarge a phase, skip a participant, remove the target leader or satisf
 the release/new-ACK/Strong gates. If measurements show collection itself exceeds
 the original window, a separate real bounded collection protocol is required;
 repeating expired facts or silently increasing TTL is not a remedy.
+
+## Executed retained-timing diagnosis and scoped candidate
+
+The unchanged phase algorithm passed once at integrated source 656a8e6a
+(CI 43212523246/job 131163486234, 1/0 in 32.96s). Successful stdout was suppressed,
+so that run did not retain timing markers and did not exercise panic custody.
+It is not evidence that the earlier timeout cause/stability was fixed.
+
+A show-output rerun at exact source 399529dedeaba5d404098d091f733491c690067d
+(CI 43213581356/job 131167066109) failed 0/1 in 36.00s. All three target attempts
+exhausted their unchanged windows in activation/reconciliation, with durations
+4075ms, 4075ms and 4139ms. Collection took about 1.1s, complete-round validation
+about 1s, service prevalidation another 1s. The kernel entered with only
+438–628ms left and repeated peer validations until expiry. No completed
+catalogue-persist marker was emitted. Raw job SHA256:
+`11ff4f55a212003d83aeaf168ca46a3755b7a67b0c92803875b27eaeefa7f8bf`.
+
+This directly motivates the separate scoped execution candidate: preserve the
+complete final kernel checks while performing the same local proof under one
+real journal borrow and each external sweep once before that borrow. It does
+not justify a larger timeout or fewer participants. The candidate remains
+uncompiled/unexecuted locally; its first remote results must be recorded under
+its own exact integrated source. Original API paths and all fixture assertions
+remain. Higher protected abort/slot controls are also explicitly checked on the
+exact activated-catalogue branch before accepting the old cut.
+
+The 399 panic custody hook actually executed: manifest SHA256
+`c12af7b77ab0007361d2da1e0b073481b179aafd81648ccb32088cf5623e9eeb`, status
+`captured_observed_stable_with_live_engine_owners`. Artifact 13941814654 contained
+71/75 manifest files (4,257,680 bytes verified by Root); upload-artifact omitted
+the four zero-byte `databases/n{0,1,2,3}/.backup-write.lock` hidden files. The
+archive is therefore PARTIAL, distinct from the hook's completed local copy.
+No missing files were manufactured. Root separately enabled hidden-file upload
+for a future unchanged-runtime reproduction; that does not retroactively repair
+399 custody or establish replay/atomic-powerloss qualification.

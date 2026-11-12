@@ -295,7 +295,8 @@ pub(crate) fn resolve_regclass_oid(db: &BicDb, name: &str) -> Result<Option<i64>
         if let Some(path) = crate::search_path::active_path() {
             for schema in path.iter() {
                 let physical = relation_name_from_parts(&[schema.clone(), parts[0].clone()])?;
-                if let Some(oid) = resolve_regclass_physical_oid(db, &physical)? {
+                if let Some(oid) = resolve_regclass_physical_oid(db, &physical, schema, &parts[0])?
+                {
                     return Ok(Some(oid));
                 }
             }
@@ -306,10 +307,20 @@ pub(crate) fn resolve_regclass_oid(db: &BicDb, name: &str) -> Result<Option<i64>
     let Ok(physical) = relation_name_from_parts(&parts) else {
         return Ok(None);
     };
-    resolve_regclass_physical_oid(db, &physical)
+    let (namespace, logical_name): (&str, &str) = match parts.as_slice() {
+        [name] => ("public", name),
+        [schema, name] => (schema, name),
+        _ => relation_schema_and_name(&physical),
+    };
+    resolve_regclass_physical_oid(db, &physical, namespace, logical_name)
 }
 
-fn resolve_regclass_physical_oid(db: &BicDb, physical: &str) -> Result<Option<i64>> {
+fn resolve_regclass_physical_oid(
+    db: &BicDb,
+    physical: &str,
+    namespace: &str,
+    logical_name: &str,
+) -> Result<Option<i64>> {
     // Resolve exact metadata before any directory cache. Known relations must
     // neither observe unrelated schema rows nor reuse an OID through another
     // owner's pending rename. Reservation failures remain retryable errors.
@@ -327,12 +338,12 @@ fn resolve_regclass_physical_oid(db: &BicDb, physical: &str) -> Result<Option<i6
     {
         return Ok(Some(named_relation_oid(physical)));
     }
-    let (namespace, name) = relation_schema_and_name(physical);
+    // Index catalogs carry the logical name and owning namespace separately.
+    // Splitting a schema-encoded storage name would incorrectly select public.
     Ok(pg_class_rows(db)?.into_iter().find_map(|row| {
         (matches!(virtual_cell(&row, "relkind").to_cell().as_str(), "i" | "I")
-            && virtual_cell(&row, "relname").to_cell() == name
-            && sql_value_i64(&virtual_cell(&row, "relnamespace"))
-                == Some(namespace_oid(&namespace)))
+            && virtual_cell(&row, "relname").to_cell() == logical_name
+            && sql_value_i64(&virtual_cell(&row, "relnamespace")) == Some(namespace_oid(namespace)))
         .then(|| sql_value_i64(&virtual_cell(&row, "oid")))
         .flatten()
     }))

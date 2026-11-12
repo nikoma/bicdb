@@ -931,7 +931,7 @@ fn prepared_regclass_metadata_tracks_the_live_path_and_created_partition_parent(
             prepare(
                 &mut owner,
                 "partition_metadata",
-                "SELECT COUNT(*) FROM pg_constraint c WHERE conrelid=LOWER($1)::regclass",
+                "SELECT COUNT(*) FROM pg_constraint c WHERE conrelid=LOWER($1)::regclass AND contype='p'",
             );
             let count = |owner: &mut TcpStream| {
                 let mut bind = b"metadata_portal\0partition_metadata\0".to_vec();

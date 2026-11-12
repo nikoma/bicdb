@@ -27,6 +27,7 @@ fn regclass_uses_path_order_for_tables_sequences_views_indexes_and_quoted_names(
             "SELECT 'counter'::regclass::oid='app_a.counter'::regclass::oid",
             "SELECT 'target_view'::regclass::oid='app_a.target_view'::regclass::oid",
             "SELECT 'target_idx'::regclass::oid='app_a.target_idx'::regclass::oid",
+            "SELECT 'target_pkey'::regclass::oid='app_a.target_pkey'::regclass::oid",
             "SELECT '\"A.B\"'::regclass::oid='app_a.\"A.B\"'::regclass::oid",
             "SELECT to_regclass('outside_path') IS NULL",
             "SELECT to_regclass('public.outside_path') IS NOT NULL",
@@ -73,8 +74,11 @@ fn regclass_metadata_predicates_see_new_parent_identity_and_local_path_changes()
         sql.execute("CREATE SCHEMA app_a; CREATE SCHEMA app_b; CREATE TABLE app_a.target(id INT PRIMARY KEY); CREATE TABLE app_b.target(id INT PRIMARY KEY)").unwrap();
         sql.execute("SET search_path=app_a,app_b").unwrap();
         let count = |sql: &mut SqlSession<'_>| {
+            // Isolate identity resolution across catalog versions: BicDB's
+            // PostgreSQL18 catalog has NOT NULL rows absent from the PG16
+            // application reference. Primary-key cardinality agrees in both.
             sql.execute(
-                "SELECT COUNT(*) FROM pg_constraint c WHERE conrelid=LOWER('TARGET')::regclass",
+                "SELECT COUNT(*) FROM pg_constraint c WHERE conrelid=LOWER('TARGET')::regclass AND contype='p'",
             )
             .unwrap()
             .rows[0][0]

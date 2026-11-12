@@ -1115,6 +1115,11 @@ impl Evaluator<'_> {
         }
         let decimal_operands = left_type == Some(ApplicationExpressionTypeV1::Decimal)
             || right_type == Some(ApplicationExpressionTypeV1::Decimal);
+        // Date text is not chronologically sortable across BCE/extended years.
+        // Only actual typed Date operands use this path; strings/UUIDs and
+        // persisted SQL/index predicate semantics are intentionally unchanged.
+        let date_operands = left_type == Some(ApplicationExpressionTypeV1::Date)
+            && right_type == Some(ApplicationExpressionTypeV1::Date);
         match operator {
             "add" if value_type == Some(ApplicationExpressionTypeV1::String) => {
                 Ok(Value::String(format!(
@@ -1158,6 +1163,14 @@ impl Evaluator<'_> {
             "not_equal" if left.is_null() || right.is_null() => {
                 Ok(Value::Bool(left.is_null() != right.is_null()))
             }
+            "equal" if date_operands => date_compare(left, right, |ordering| ordering.is_eq()),
+            "not_equal" if date_operands => date_compare(left, right, |ordering| ordering.is_ne()),
+            "greater" if date_operands => date_compare(left, right, |ordering| ordering.is_gt()),
+            "greater_equal" if date_operands => {
+                date_compare(left, right, |ordering| ordering.is_ge())
+            }
+            "less" if date_operands => date_compare(left, right, |ordering| ordering.is_lt()),
+            "less_equal" if date_operands => date_compare(left, right, |ordering| ordering.is_le()),
             "equal" if decimal_operands => {
                 decimal_compare(left, right, |ordering| ordering.is_eq())
             }
@@ -2507,6 +2520,21 @@ fn decimal_compare(
     }
     let left = decimal(left, "comparison operand")?;
     let right = decimal(right, "comparison operand")?;
+    Ok(Value::Bool(predicate(left.cmp(&right))))
+}
+
+fn date_compare(
+    left: Value,
+    right: Value,
+    predicate: impl FnOnce(std::cmp::Ordering) -> bool,
+) -> Result<Value> {
+    // Equality's null guards run before this helper. Ordered comparisons on a
+    // nullable Date retain ordinary-program false-on-null behavior.
+    if left.is_null() || right.is_null() {
+        return Ok(Value::Bool(false));
+    }
+    let left = parse_time_date(left, "Date comparison")?;
+    let right = parse_time_date(right, "Date comparison")?;
     Ok(Value::Bool(predicate(left.cmp(&right))))
 }
 

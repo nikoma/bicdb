@@ -269,6 +269,15 @@ pub enum NativeInvariantExpression {
     Literal {
         value: serde_json::Value,
     },
+    /// Checked proleptic-Gregorian arithmetic on the existing native Date domain.
+    DateAddDays {
+        date: Box<NativeInvariantExpression>,
+        days: Box<NativeInvariantExpression>,
+    },
+    DateDifferenceDays {
+        end: Box<NativeInvariantExpression>,
+        start: Box<NativeInvariantExpression>,
+    },
     Unary {
         operator: NativeInvariantUnaryOperator,
         value: Box<NativeInvariantExpression>,

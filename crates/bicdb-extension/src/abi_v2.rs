@@ -6499,6 +6499,93 @@ impl ApplicationInvariantV1 {
     }
 }
 
+// Calendar signatures are checked against actual resource field types as well as
+// compiler-signed call metadata; a String/Time field cannot masquerade as Date.
+fn invariant_calendar_operand_type(
+    application: &ApplicationManifestV2,
+    subject: &ResourceContractV1,
+    bindings: &BTreeMap<String, String>,
+    expression: &ApplicationExpressionV1,
+) -> Option<ApplicationExpressionTypeV1> {
+    let field_type = |resource: &ResourceContractV1, name: &str| {
+        let field = resource.fields.iter().find(|field| field.name == name)?;
+        match field.field_type {
+            FieldType::Date => Some(ApplicationExpressionTypeV1::Date),
+            FieldType::Int64 => Some(ApplicationExpressionTypeV1::Int),
+            _ => None,
+        }
+    };
+    let nested =
+        |expression| invariant_calendar_operand_type(application, subject, bindings, expression);
+    match expression {
+        ApplicationExpressionV1::Variable { name } => field_type(subject, name),
+        ApplicationExpressionV1::Field { target, field } => {
+            let ApplicationExpressionV1::Variable { name } = target.as_ref() else {
+                return None;
+            };
+            let resource = if name == "subject" {
+                subject
+            } else {
+                let resource = bindings.get(name)?;
+                application
+                    .resources
+                    .iter()
+                    .find(|candidate| candidate.name == *resource)?
+            };
+            field_type(resource, field)
+        }
+        ApplicationExpressionV1::Literal { value } if value.as_i64().is_some() => {
+            Some(ApplicationExpressionTypeV1::Int)
+        }
+        ApplicationExpressionV1::Unary {
+            operator, value, ..
+        } if operator == "negate" && nested(value) == Some(ApplicationExpressionTypeV1::Int) => {
+            Some(ApplicationExpressionTypeV1::Int)
+        }
+        ApplicationExpressionV1::Binary {
+            operator,
+            left,
+            right,
+            ..
+        } if matches!(
+            operator.as_str(),
+            "add" | "subtract" | "multiply" | "divide"
+        ) && nested(left) == Some(ApplicationExpressionTypeV1::Int)
+            && nested(right) == Some(ApplicationExpressionTypeV1::Int) =>
+        {
+            Some(ApplicationExpressionTypeV1::Int)
+        }
+        // Recursive ABI validation establishes the exact calendar signature first.
+        ApplicationExpressionV1::Call {
+            kind: ApplicationCallKindV1::Builtin,
+            target,
+            ..
+        } if target == "time.add" => Some(ApplicationExpressionTypeV1::Date),
+        ApplicationExpressionV1::Call {
+            kind: ApplicationCallKindV1::Builtin,
+            target,
+            ..
+        } if target == "time.diff" => Some(ApplicationExpressionTypeV1::Int),
+        ApplicationExpressionV1::Aggregate {
+            function: ApplicationAggregateFunctionV1::Count,
+            ..
+        } => Some(ApplicationExpressionTypeV1::Int),
+        ApplicationExpressionV1::Aggregate {
+            function: ApplicationAggregateFunctionV1::Sum,
+            resource,
+            field: Some(field),
+            ..
+        } => {
+            let resource = application
+                .resources
+                .iter()
+                .find(|candidate| candidate.name == *resource)?;
+            field_type(resource, field).filter(|kind| *kind == ApplicationExpressionTypeV1::Int)
+        }
+        _ => None,
+    }
+}
+
 fn validate_invariant_expression(
     application: &ApplicationManifestV2,
     subject: &ResourceContractV1,
@@ -6610,6 +6697,61 @@ fn validate_invariant_expression(
             }
             recurse(left, bindings, dependencies)?;
             recurse(right, bindings, dependencies)
+        }
+        ApplicationExpressionV1::Call {
+            kind: ApplicationCallKindV1::Builtin,
+            target,
+            method,
+            result_type,
+            argument_types,
+            argument_item_types,
+            result_projection,
+            arguments,
+        } if matches!(target.as_str(), "time.add" | "time.diff") => {
+            if method.is_some()
+                || result_projection.is_some()
+                || argument_item_types.len() != arguments.len()
+                || argument_item_types.iter().any(Option::is_some)
+            {
+                return invalid("native invariant calendar calls require scalar arguments without projections or methods");
+            }
+            for argument in arguments {
+                recurse(&argument.value, bindings, dependencies)?;
+            }
+            let actual = |index: usize| {
+                invariant_calendar_operand_type(
+                    application,
+                    subject,
+                    bindings,
+                    &arguments[index].value,
+                )
+            };
+            let date = ApplicationExpressionTypeV1::Date;
+            let int = ApplicationExpressionTypeV1::Int;
+            if target == "time.add" {
+                if arguments.len() != 2
+                    || arguments[0].name.is_some()
+                    || arguments[1].name.as_deref() != Some("days")
+                    || *result_type != Some(date)
+                    || argument_types != &[date, int]
+                    || actual(0) != Some(date)
+                    || actual(1) != Some(int)
+                {
+                    return invalid("native invariant time.add requires exactly Date plus named days:Int and Date result");
+                }
+            } else if arguments.len() != 3
+                || arguments[0].name.is_some()
+                || arguments[1].name.is_some()
+                || arguments[2].name.as_deref() != Some("unit")
+                || !matches!(&arguments[2].value, ApplicationExpressionV1::Literal { value } if value.as_str() == Some("days"))
+                || *result_type != Some(int)
+                || argument_types != &[date, date, ApplicationExpressionTypeV1::String]
+                || actual(0) != Some(date)
+                || actual(1) != Some(date)
+            {
+                return invalid("native invariant time.diff requires exactly two Dates, literal unit:days and Int result");
+            }
+            Ok(())
         }
         ApplicationExpressionV1::Call {
             kind,

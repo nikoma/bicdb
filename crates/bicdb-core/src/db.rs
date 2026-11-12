@@ -5,6 +5,7 @@ mod commit_snapshot;
 mod decimal_predicate;
 mod deferred_materialize;
 mod exact_decimal_sum;
+mod native_calendar;
 use exact_decimal_sum::ExactDecimalSum;
 mod local_namespace_identity;
 pub use deferred_materialize::DeferredMaterializeStats;
@@ -8505,6 +8506,25 @@ fn invariant_numeric_binary(
     }
 }
 
+// Persisted index predicates retain their existing admission/generation contract.
+// Native commit predicates scan complete relations and compare Date chronologically,
+// including BCE/extended years; no lexical Date index may prune their candidates.
+fn compare_native_invariant_values(
+    left: &Value,
+    right: &Value,
+    value_type: NativeInvariantValueType,
+) -> Result<Option<Ordering>> {
+    if value_type == NativeInvariantValueType::Date && !left.is_null() && !right.is_null() {
+        native_calendar::compare(left, right).map(Some)
+    } else {
+        Ok(compare_predicate_values(
+            left,
+            right,
+            invariant_index_type(value_type),
+        ))
+    }
+}
+
 fn evaluate_native_invariant_expression(
     db: &BicDb,
     tx: &Transaction,
@@ -8524,6 +8544,44 @@ fn evaluate_native_invariant_expression(
                 ))
             })?,
         NativeInvariantExpression::Literal { value } => value.clone(),
+        NativeInvariantExpression::DateAddDays { date, days } => {
+            let date = evaluate_native_invariant_expression(
+                db,
+                tx,
+                subject_relation,
+                subject,
+                bindings,
+                date,
+            )?;
+            let days = evaluate_native_invariant_expression(
+                db,
+                tx,
+                subject_relation,
+                subject,
+                bindings,
+                days,
+            )?;
+            native_calendar::add_days(&date, &days)?
+        }
+        NativeInvariantExpression::DateDifferenceDays { end, start } => {
+            let end = evaluate_native_invariant_expression(
+                db,
+                tx,
+                subject_relation,
+                subject,
+                bindings,
+                end,
+            )?;
+            let start = evaluate_native_invariant_expression(
+                db,
+                tx,
+                subject_relation,
+                subject,
+                bindings,
+                start,
+            )?;
+            native_calendar::difference_days(&end, &start)?
+        }
         NativeInvariantExpression::Unary {
             operator,
             value,
@@ -8613,36 +8671,28 @@ fn evaluate_native_invariant_expression(
                     (Value::Array(left), right) => left.contains(right),
                     _ => false,
                 }),
-                NativeInvariantBinaryOperator::Equal => Value::Bool(
-                    left == right
-                        || compare_predicate_values(
-                            &left,
-                            &right,
-                            invariant_index_type(*value_type),
-                        ) == Some(Ordering::Equal),
-                ),
-                NativeInvariantBinaryOperator::NotEqual => Value::Bool(
-                    left != right
-                        && compare_predicate_values(
-                            &left,
-                            &right,
-                            invariant_index_type(*value_type),
-                        ) != Some(Ordering::Equal),
-                ),
+                NativeInvariantBinaryOperator::Equal => {
+                    let ordering = compare_native_invariant_values(&left, &right, *value_type)?;
+                    Value::Bool(left == right || ordering == Some(Ordering::Equal))
+                }
+                NativeInvariantBinaryOperator::NotEqual => {
+                    let ordering = compare_native_invariant_values(&left, &right, *value_type)?;
+                    Value::Bool(left != right && ordering != Some(Ordering::Equal))
+                }
                 NativeInvariantBinaryOperator::Greater => Value::Bool(
-                    compare_predicate_values(&left, &right, invariant_index_type(*value_type))
+                    compare_native_invariant_values(&left, &right, *value_type)?
                         .is_some_and(Ordering::is_gt),
                 ),
                 NativeInvariantBinaryOperator::GreaterEqual => Value::Bool(
-                    compare_predicate_values(&left, &right, invariant_index_type(*value_type))
+                    compare_native_invariant_values(&left, &right, *value_type)?
                         .is_some_and(|ordering| !ordering.is_lt()),
                 ),
                 NativeInvariantBinaryOperator::Less => Value::Bool(
-                    compare_predicate_values(&left, &right, invariant_index_type(*value_type))
+                    compare_native_invariant_values(&left, &right, *value_type)?
                         .is_some_and(Ordering::is_lt),
                 ),
                 NativeInvariantBinaryOperator::LessEqual => Value::Bool(
-                    compare_predicate_values(&left, &right, invariant_index_type(*value_type))
+                    compare_native_invariant_values(&left, &right, *value_type)?
                         .is_some_and(|ordering| !ordering.is_gt()),
                 ),
             }
@@ -8666,11 +8716,11 @@ fn evaluate_native_invariant_expression(
                     )
                 })
                 .collect::<Result<Vec<_>>>()?;
-            let value_type = invariant_index_type(*value_type);
+            let value_type = *value_type;
             Value::Bool(
-                compare_predicate_values(&values[0], &values[3], value_type)
+                compare_native_invariant_values(&values[0], &values[3], value_type)?
                     .is_some_and(Ordering::is_lt)
-                    && compare_predicate_values(&values[2], &values[1], value_type)
+                    && compare_native_invariant_values(&values[2], &values[1], value_type)?
                         .is_some_and(Ordering::is_lt),
             )
         }

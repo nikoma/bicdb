@@ -6223,6 +6223,72 @@ fn lower_carrier_invariant_expression(
             value_type: native_invariant_value_type((*left_type).or(*right_type).or(*value_type)),
         },
         ApplicationExpressionV1::Call {
+            kind: ApplicationCallKindV1::Builtin,
+            target,
+            arguments,
+            ..
+        } if target == "time.add" => NativeInvariantExpression::DateAddDays {
+            date: Box::new(lower_carrier_invariant_expression(
+                application,
+                subject_resource,
+                bindings,
+                &arguments
+                    .first()
+                    .ok_or_else(|| {
+                        AppRuntimeError::InvalidPackage(
+                            "native invariant calendar call lacks its first argument".into(),
+                        )
+                    })?
+                    .value,
+            )?),
+            days: Box::new(lower_carrier_invariant_expression(
+                application,
+                subject_resource,
+                bindings,
+                &arguments
+                    .get(1)
+                    .ok_or_else(|| {
+                        AppRuntimeError::InvalidPackage(
+                            "native invariant calendar call lacks its second argument".into(),
+                        )
+                    })?
+                    .value,
+            )?),
+        },
+        ApplicationExpressionV1::Call {
+            kind: ApplicationCallKindV1::Builtin,
+            target,
+            arguments,
+            ..
+        } if target == "time.diff" => NativeInvariantExpression::DateDifferenceDays {
+            end: Box::new(lower_carrier_invariant_expression(
+                application,
+                subject_resource,
+                bindings,
+                &arguments
+                    .first()
+                    .ok_or_else(|| {
+                        AppRuntimeError::InvalidPackage(
+                            "native invariant calendar call lacks its first argument".into(),
+                        )
+                    })?
+                    .value,
+            )?),
+            start: Box::new(lower_carrier_invariant_expression(
+                application,
+                subject_resource,
+                bindings,
+                &arguments
+                    .get(1)
+                    .ok_or_else(|| {
+                        AppRuntimeError::InvalidPackage(
+                            "native invariant calendar call lacks its second argument".into(),
+                        )
+                    })?
+                    .value,
+            )?),
+        },
+        ApplicationExpressionV1::Call {
             kind,
             target,
             arguments,

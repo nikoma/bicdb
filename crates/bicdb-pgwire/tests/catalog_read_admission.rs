@@ -788,3 +788,110 @@ fn prepared_information_schema_columns_keep_the_live_rename_owner_in_every_phase
         }
     }
 }
+
+#[test]
+fn cold_prepared_origins_observe_only_the_referenced_table_during_a_foreign_rename() {
+    // Each case has a new database and connection so a warmed global OID
+    // directory cannot hide an overly broad catalog observation at Describe.
+    for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
+        for sql in [
+            "SELECT id FROM unrelated WHERE id=$1",
+            "SELECT COUNT(*) FROM unrelated",
+            "SELECT payload FROM unrelated",
+            "SELECT ROW(id,payload)::unrelated FROM unrelated",
+        ] {
+            let root = tempfile::tempdir().unwrap();
+            let config = DbConfig::default()
+                .with_fsync(true)
+                .with_storage_mode(mode.clone());
+            let mut db = BicDb::open_with_config(root.path(), config.clone()).unwrap();
+            SqlSession::new(&mut db)
+                .execute("CREATE TABLE source(id INT PRIMARY KEY,payload INT); CREATE TABLE unrelated(id INT PRIMARY KEY,payload INT); INSERT INTO source VALUES(1,10); INSERT INTO unrelated VALUES(2,20)")
+                .unwrap();
+            bicdb_sql::initialize_rename_journal_identities(&mut db).unwrap();
+            let shared = Arc::new(RwLock::new(db));
+            let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+            let address = listener.local_addr().unwrap();
+            let server = PgWireServer::open_with_shared(
+                root.path(),
+                PgWireConfig {
+                    fsync: true,
+                    automatic_paged_checkpoint: false,
+                    ..Default::default()
+                },
+                Arc::clone(&shared),
+            )
+            .unwrap();
+            let serving = Arc::clone(&server);
+            let task =
+                thread::spawn(move || bicdb_pgwire::serve_existing_listener(serving, listener));
+            let mut owner = connect(address);
+            let mut preparer = connect(address);
+            let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                assert!(codes(&query(
+                    &mut preparer,
+                    "BEGIN; UPDATE unrelated SET payload=99 WHERE id=2"
+                ))
+                .is_empty());
+                prepare(&mut preparer, "cold_unrelated", sql);
+                let response = query(&mut owner, "BEGIN; ALTER TABLE source RENAME TO renamed");
+                assert!(
+                    codes(&response).is_empty(),
+                    "{mode} after preparing {sql}: {response:?}"
+                );
+                // The independent writer may still use its own table and ACK
+                // while the other transaction keeps the rename undecided.
+                assert_eq!(
+                    value(&query(
+                        &mut preparer,
+                        "SELECT payload FROM unrelated WHERE id=2"
+                    )),
+                    Some("99".into())
+                );
+                assert!(codes(&query(&mut preparer, "COMMIT")).is_empty());
+                assert_eq!(
+                    codes(&query(&mut preparer, "SELECT id FROM renamed")),
+                    vec!["40001"]
+                );
+                assert!(codes(&query(&mut owner, "ROLLBACK")).is_empty());
+            }));
+            for stream in [&mut owner, &mut preparer] {
+                send(stream, b'X', &[]);
+            }
+            drop(owner);
+            drop(preparer);
+            server.request_shutdown();
+            task.join().unwrap().unwrap();
+            drop(server);
+            Arc::try_unwrap(shared)
+                .expect("wire handlers must release the database before reopen")
+                .into_inner()
+                .close()
+                .unwrap();
+            if let Err(error) = outcome {
+                std::panic::resume_unwind(error);
+            }
+            for _ in 0..2 {
+                let mut reopened = BicDb::open_with_config(root.path(), config.clone()).unwrap();
+                bicdb_sql::oracle::initialize_existing_database_profile(&mut reopened).unwrap();
+                let mut session = SqlSession::new(&mut reopened);
+                assert_eq!(
+                    session
+                        .execute("SELECT payload FROM source WHERE id=1")
+                        .unwrap()
+                        .rows[0][0],
+                    bicdb_sql::SqlValue::Int(10)
+                );
+                assert_eq!(
+                    session
+                        .execute("SELECT payload FROM unrelated WHERE id=2")
+                        .unwrap()
+                        .rows[0][0],
+                    bicdb_sql::SqlValue::Int(99)
+                );
+                drop(session);
+                reopened.close().unwrap();
+            }
+        }
+    }
+}

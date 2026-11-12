@@ -1766,7 +1766,11 @@ impl<'db> SqlEngine<'db> {
                     let schema = load_schema_shared(self.db_ref(), &resolved)
                         .ok()
                         .flatten()?;
-                    let table_oid = table_oids(self.db_ref()).get(&resolved).copied()? as i32;
+                    // This schema has already passed exact-row admission.
+                    // Derive its stored OID directly: building the global OID
+                    // directory would observe unrelated schema rows on a cold
+                    // Describe and unnecessarily block their later DDL.
+                    let table_oid = table_relation_oid(&schema) as i32;
                     // Type inference folds its lookup keys. Origin metadata
                     // must use persisted identifiers, including quoted names
                     // that differ only in case.

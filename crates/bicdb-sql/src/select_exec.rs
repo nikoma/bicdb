@@ -1710,6 +1710,9 @@ pub(crate) fn order_by_needs_row_evaluator(order_by: &OrderBy) -> bool {
 
 pub(crate) fn expr_needs_row_evaluator(expr: &Expr) -> bool {
     match expr {
+        // System attributes come from the physical heap's MVCC metadata,
+        // never from an ordinary metadata field in a record projection.
+        Expr::Identifier(ident) if is_postgres_system_column(&ident.value) => true,
         Expr::Subquery(_) | Expr::InSubquery { .. } | Expr::Exists { .. } => true,
         // The record projection fast path has only the table schema and cannot
         // distinguish a relation alias (`p.id`) from a nested metadata path.

@@ -1972,6 +1972,12 @@ impl ClusterDataNodeService {
         self.range_write_ack(command, state)
     }
 
+    #[cfg(test)]
+    pub(crate) fn test_fail_native_commit_after_publication(&mut self) {
+        self.range_writes
+            .test_fail_native_commit_after_publication();
+    }
+
     pub fn certify_range_write(
         &mut self,
         range: &RangeDescriptor,

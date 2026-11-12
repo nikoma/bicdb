@@ -1,0 +1,41 @@
+{
+  "source_revision": "8e9642433d064d87c79fdf396194bdbf9289fadc",
+  "run_id": 43244356602,
+  "job_id": 131272939022,
+  "job_conclusion": "success",
+  "raw_bytes": 1608580,
+  "raw_sha256": "bcb3d5f9196a1ba4f34bc3dd921d219f1b77b96195ec6ea60ad32328f7720675",
+  "test_summaries": [
+    "2026-11-12T15:12:04.7333667Z test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 902 filtered out; finished in 7.37s"
+  ],
+  "test_observations": [
+    {
+      "line": 16428,
+      "test": "distribution_native_host::provisional_listener::tests::initial_data_tests::native_initial_data_genesis_refuses_same_root_same_birth_new_actual_open",
+      "result": "ok"
+    },
+    {
+      "line": 16429,
+      "test": "distribution_native_host::provisional_listener::tests::initial_data_tests::native_initial_data_genesis_refuses_changed_epoch_restore_and_actual_foreign_birth",
+      "result": "ok"
+    },
+    {
+      "line": 16430,
+      "test": "distribution_native_host::provisional_listener::tests::initial_data_tests::native_initial_data_actual_tls_cancel_partial_quorum_then_nonempty_is_not_new_genesis",
+      "result": "ok"
+    },
+    {
+      "line": 16432,
+      "test": "distribution_native_host::provisional_listener::tests::initial_data_tests::native_initial_data_actual_tls_drop_without_stop_ends_inner_owner_and_reopens_same_root",
+      "result": "ok"
+    }
+  ],
+  "classification": "passed_focused_lifecycle_controls",
+  "artifact_id": 13955069340,
+  "artifact_bytes": 40317,
+  "artifact_sha256": "218f175663715aad830ed0609503e4232de446d93649b07c05c00acd69a30e32",
+  "later_changed_source": "5db91d9de exact record/history assertions and fe811c036 nonwaiting Drop correction; not validated by this earlier pass",
+  "physical_qualified": false,
+  "public_operator_acceptance": false,
+  "production_qualified": false
+}

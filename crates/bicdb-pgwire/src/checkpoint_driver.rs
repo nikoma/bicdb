@@ -1166,7 +1166,7 @@ pub(crate) fn start_distribution_supervisor(
         ) {
             Ok(handle) => handle,
             Err(error) => {
-                eprintln!("bicdb cluster data listener error: {error}");
+                eprintln!("bicdb cluster data listener error: node={} cluster={} address={} error={error}", distribution.node_id, distribution.cluster_id, distribution.node_address);
                 server.request_shutdown();
                 return;
             }

@@ -1907,6 +1907,14 @@ mod tests {
             unused_loopback_address(),
             unused_loopback_address(),
         ];
+        eprintln!("METADATA_FAILOVER_FIXTURE declared_addresses={addresses:?}");
+        assert!(
+            addresses
+                .iter()
+                .enumerate()
+                .all(|(i, address)| addresses[..i].iter().all(|other| other != address)),
+            "fixture endpoints must be distinct before startup: {addresses:?}"
+        );
         let node_ids = [
             bicdb_core::ClusterNodeId::new("n1").unwrap(),
             bicdb_core::ClusterNodeId::new("n2").unwrap(),

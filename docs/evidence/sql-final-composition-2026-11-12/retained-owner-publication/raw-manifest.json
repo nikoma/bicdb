@@ -1,0 +1,122 @@
+{
+  "report-sql-partition-retained-owner-baseline.json": {
+    "stored_as": "report-sql-partition-retained-owner-baseline.json",
+    "raw_bytes": 927,
+    "raw_sha256": "fbb2d37496bb1dff4a48cacc9f73a8f703e7d9c22c8fe37ef0005f2cc1f060e9"
+  },
+  "tc-step-sql-partition-retained-owner-baseline.log": {
+    "stored_as": "tc-step-sql-partition-retained-owner-baseline.log.gz",
+    "raw_bytes": 299464,
+    "raw_sha256": "6b130ba7ce4aa80a8b24fbf861ba1aabbe3dbc7467c145db9049c5d28aca141d"
+  },
+  "report-sql-partition-retained-owner-publication-focused.json": {
+    "stored_as": "report-sql-partition-retained-owner-publication-focused.json",
+    "raw_bytes": 1077,
+    "raw_sha256": "3bf5b46083327bf39a0b55cce563e1e1ba90bbb16a671db94144ef3737acbd78"
+  },
+  "tc-step-sql-partition-retained-owner-publication-focused.log": {
+    "stored_as": "tc-step-sql-partition-retained-owner-publication-focused.log.gz",
+    "raw_bytes": 151673,
+    "raw_sha256": "8d9263d256a3ce633d3a8fbb95adba0cfb57df63b8e9eaed9887f4d0d5bf7a96"
+  },
+  "report-sql-partition-retained-owner-publication-focused-v2.json": {
+    "stored_as": "report-sql-partition-retained-owner-publication-focused-v2.json",
+    "raw_bytes": 1837,
+    "raw_sha256": "ac0f63cb4997cc794573783d39f400718dd792b86d5c600d3177bad02b9c73b7"
+  },
+  "tc-step-sql-partition-retained-owner-publication-focused-v2.log": {
+    "stored_as": "tc-step-sql-partition-retained-owner-publication-focused-v2.log.gz",
+    "raw_bytes": 451990,
+    "raw_sha256": "06fbcf6ede0a08160cede9cd98c4f850457fcdd8f3ae1f617321a345286c41ad"
+  },
+  "report-sql-partition-retained-owner-publication-focused-v3.json": {
+    "stored_as": "report-sql-partition-retained-owner-publication-focused-v3.json",
+    "raw_bytes": 2218,
+    "raw_sha256": "ed30013470d2f611016f75cfd80d50937ad406d50322be1ffb71cc65c0190c3c"
+  },
+  "tc-step-sql-partition-retained-owner-publication-focused-v3.log": {
+    "stored_as": "tc-step-sql-partition-retained-owner-publication-focused-v3.log.gz",
+    "raw_bytes": 451645,
+    "raw_sha256": "d68d6eca348c1b62a0721c5309a735e00b03fade8086200af3f8807579ea0979"
+  },
+  "report-sql-partition-owner-publication-related.json": {
+    "stored_as": "report-sql-partition-owner-publication-related.json",
+    "raw_bytes": 4664,
+    "raw_sha256": "a6d74a2f14cc799fa52fff17a17099acf8914ee8438c8fade8fc502b08fcb613"
+  },
+  "tc-step-sql-partition-owner-publication-related.log": {
+    "stored_as": "tc-step-sql-partition-owner-publication-related.log.gz",
+    "raw_bytes": 2424175,
+    "raw_sha256": "17e14d03098b3311743bdcd2e811b25ebe56a2d08d5009eb29b54187505c1685"
+  },
+  "report-sql-owner-publication-original95-probe-build.json": {
+    "stored_as": "report-sql-owner-publication-original95-probe-build.json",
+    "raw_bytes": 1249,
+    "raw_sha256": "ccd45a8d283038e85bce011d1778b29f8f159787a0bc001006cb5af3c139ee63"
+  },
+  "tc-step-sql-owner-publication-original95-probe-build.log": {
+    "stored_as": "tc-step-sql-owner-publication-original95-probe-build.log.gz",
+    "raw_bytes": 320888,
+    "raw_sha256": "37589a2a1b5623b2ddeb4188ae85a8cda2c988b2cb91214bf75031690a2cc953"
+  },
+  "controller/sql-partition-retained-owner-baseline.json": {
+    "stored_as": "controller/sql-partition-retained-owner-baseline.json",
+    "raw_bytes": 1141,
+    "raw_sha256": "53a0c7500b8c455c2f88a08c3f27b83c148a394b8f92b060dfd0d72064177604"
+  },
+  "controller/sql-partition-retained-owner-baseline-runner.py": {
+    "stored_as": "controller/sql-partition-retained-owner-baseline-runner.py",
+    "raw_bytes": 5033,
+    "raw_sha256": "679260d14e9f4351cf0ee9d15024270f66e9daf47959e0e7b6981b582bf6314b"
+  },
+  "controller/sql-partition-retained-owner-publication-focused.json": {
+    "stored_as": "controller/sql-partition-retained-owner-publication-focused.json",
+    "raw_bytes": 1914,
+    "raw_sha256": "adc481a8365413894a30119fcc0f01d5b52955e36983f8f4431435ce1d840009"
+  },
+  "controller/sql-partition-retained-owner-publication-focused-runner.py": {
+    "stored_as": "controller/sql-partition-retained-owner-publication-focused-runner.py",
+    "raw_bytes": 5033,
+    "raw_sha256": "679260d14e9f4351cf0ee9d15024270f66e9daf47959e0e7b6981b582bf6314b"
+  },
+  "controller/sql-partition-retained-owner-publication-focused-v2.json": {
+    "stored_as": "controller/sql-partition-retained-owner-publication-focused-v2.json",
+    "raw_bytes": 2263,
+    "raw_sha256": "ac96289d3079c21948f44b1c401c341bd6fa4e55844ccd2272d1a838e58c2562"
+  },
+  "controller/sql-partition-retained-owner-publication-focused-v2-runner.py": {
+    "stored_as": "controller/sql-partition-retained-owner-publication-focused-v2-runner.py",
+    "raw_bytes": 5033,
+    "raw_sha256": "679260d14e9f4351cf0ee9d15024270f66e9daf47959e0e7b6981b582bf6314b"
+  },
+  "controller/sql-partition-retained-owner-publication-focused-v3.json": {
+    "stored_as": "controller/sql-partition-retained-owner-publication-focused-v3.json",
+    "raw_bytes": 2648,
+    "raw_sha256": "1bce024eddb771901cc978bb2bbfda4cb161d145c75232618a7acdbb83ae3c6f"
+  },
+  "controller/sql-partition-retained-owner-publication-focused-v3-runner.py": {
+    "stored_as": "controller/sql-partition-retained-owner-publication-focused-v3-runner.py",
+    "raw_bytes": 5033,
+    "raw_sha256": "679260d14e9f4351cf0ee9d15024270f66e9daf47959e0e7b6981b582bf6314b"
+  },
+  "controller/sql-partition-owner-publication-related.json": {
+    "stored_as": "controller/sql-partition-owner-publication-related.json",
+    "raw_bytes": 3985,
+    "raw_sha256": "7a09775310749172ab17e0653e6809bc0f46e290dccfd12c1573719ebd48c51f"
+  },
+  "controller/sql-partition-owner-publication-related-runner.py": {
+    "stored_as": "controller/sql-partition-owner-publication-related-runner.py",
+    "raw_bytes": 5033,
+    "raw_sha256": "679260d14e9f4351cf0ee9d15024270f66e9daf47959e0e7b6981b582bf6314b"
+  },
+  "controller/sql-owner-publication-original95-probe-build.json": {
+    "stored_as": "controller/sql-owner-publication-original95-probe-build.json",
+    "raw_bytes": 1294,
+    "raw_sha256": "af29b0a95706254c3b92dcc4d122e001b83060a1d69f765e829504e4f2483d75"
+  },
+  "controller/sql-owner-publication-original95-probe-build-runner.py": {
+    "stored_as": "controller/sql-owner-publication-original95-probe-build-runner.py",
+    "raw_bytes": 5033,
+    "raw_sha256": "679260d14e9f4351cf0ee9d15024270f66e9daf47959e0e7b6981b582bf6314b"
+  }
+}

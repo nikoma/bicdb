@@ -1,0 +1,30 @@
+{
+  "source": "5392fb876ab96a4607728e424f141d77a9749d83",
+  "scope": "Actualoriginal95 4e94P1F certificate resource failure, identicalfocused094actual0P1F retained. NewNative temporaryderivedpublication borrowsactualparent and admits extras withforeignscope/observationfences; no permanent globalcertificate reservation or beforeimageauth. Native3controls thenoriginalpositiveSQLcommitrollback/NativeACK/fullhash/foreignread/tworeopens. No fullapplication/main/portableorigin/HAqualification claim. Fullgoalactive,P2productionoff,no spend.",
+  "started_unix": 1794525987.3165288,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--no-fail-fast",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--lib",
+        "catalog_publication_",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794525987.3166373,
+      "exit": 101,
+      "finished_unix": 1794526051.7456548
+    }
+  ],
+  "status": "failed",
+  "finished_unix": 1794526051.7458587
+}

@@ -87,7 +87,7 @@ impl<'db> SqlSession<'db> {
             match load_schema(self.db_ref(), &table) {
                 Ok(Some(schema))
                     if oracle::lob_storage::has_columns(&schema)
-                        || schema.partitioning.is_some()
+                        || schema.requires_row_move_plan()
                         || schema.partition_of.is_some()
                         || schema.constraints.iter().any(|constraint| {
                             matches!(
@@ -329,7 +329,9 @@ impl<'db> SqlSession<'db> {
             {
                 continue;
             }
-            if let Some(parent) = partition_identity {
+            if let Some(parent) =
+                partition_identity.or_else(|| schema.has_generated_primary_key().then_some(schema))
+            {
                 set_partition_update_column(
                     record,
                     Some(parent),

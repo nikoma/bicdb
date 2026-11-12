@@ -488,3 +488,19 @@ fn late_null_generated_keys_leave_every_previously_acknowledged_row_unchanged() 
         }
     }
 }
+
+#[test]
+fn before_changes_to_base_and_nongenerated_key_are_finalized_with_the_generated_key() {
+    for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
+        let root = tempfile::tempdir().unwrap();
+        let cfg = config(mode);
+        let mut db = BicDb::open_with_config(root.path(), cfg.clone()).unwrap();
+        let mut sql = SqlSession::new(&mut db);
+        for text in ["CREATE TABLE p(k INT,b INT,g INT GENERATED ALWAYS AS(b*2) STORED,PRIMARY KEY(k,g))","CREATE FUNCTION key_before_fn() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.g IS NOT NULL THEN RAISE EXCEPTION 'generated NEW visible'; END IF; NEW.k:=NEW.k+1; NEW.b:=NEW.b+1; NEW.g:=999; RETURN NEW; END $$","CREATE TRIGGER key_before BEFORE INSERT OR UPDATE ON p FOR EACH ROW EXECUTE FUNCTION key_before_fn()","INSERT INTO p(k,b) VALUES(1,2)","UPDATE p SET b=4 WHERE k=2"] {sql.execute(text).unwrap();}
+        drop(sql);
+        assert!(db.get("p", r#"["1","4"]"#).unwrap().is_none());
+        assert!(db.get("p", r#"["2","6"]"#).unwrap().is_none());
+        assert!(db.get("p", r#"["3","10"]"#).unwrap().is_some());
+        expect_reopens(db, root.path(), &cfg, &[[3, 5, 10]]);
+    }
+}

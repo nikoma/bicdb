@@ -6,6 +6,25 @@ operator binary, deployment, physical qualification or completion of that goal.
 Root owns the final PR rewrite, version selection, full CI, main merge and push.
 No version is reserved by this document.
 
+## Versioned delivery composition
+
+The working delivery is **1.0.489-beta**, prepared by the repository bump script
+after merging pinned prospective 488 source
+`34ba460941ddd011534b74d6054d59839bc9c84d` at composition
+`3cd044d94fafcd37dd91cd0a93db1d88cd631091`. The merge was clean, including
+`db.rs`, commit snapshot/PITR maintenance and format changes. The read/native
+mutation fences remain alongside the newer decimal/index/invariant changes.
+This is isolated candidate preparation; verified main is still 487 at this
+checkpoint. Before merge, the actual 488 main must be verified and the candidate
+must remain the next unused source patch. Any changed base requires integration
+and the affected validation again.
+
+All twenty-nine packages, internal requirements, tracked lockfiles and the
+current-source compatibility document are synchronized. Full final-source
+regression and stock Rails checks are required; older native231 or broad480
+passes do not qualify this newly composed versioned source. Full Abort/joint
+and public operator data serving are excluded as before.
+
 ## Current validation checkpoint (November 12)
 
 The preparation notes below retain their original source-specific history.

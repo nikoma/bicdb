@@ -467,6 +467,9 @@ pub(crate) fn execute_cluster_event(
             Ok(ClusterEventResponse::Appended { inserted: true })
         }
         ClusterEventOperation::Get { namespace, key } => {
+            if db.actual_native_writer_enforcement_version()? == 1 {
+                return Err(invalid("strong_point_read_unavailable: born-v2 Get requires the actual enrolled Strong dispatcher"));
+            }
             let id = cluster_event_record_id(&namespace, &key)?;
             let value = db
                 .get(CLUSTER_EVENTS_COLLECTION, &id)?

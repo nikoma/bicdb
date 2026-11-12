@@ -707,7 +707,11 @@ pub(crate) fn start_cluster_data_server_with_recovery_runtime(
     // validate the request envelope.
     let local_identity = {
         let service = service.lock();
-        (service.cluster_id().clone(), service.node_id().clone())
+        (
+            service.cluster_id().clone(),
+            service.node_id().clone(),
+            service.native_writer_enforcement_version()?,
+        )
     };
     let thread = thread::spawn(move || {
         while !thread_shutdown.load(Ordering::SeqCst) {
@@ -862,7 +866,7 @@ fn handle_cluster_data_connection(
     config: &ClusterNetworkTransportConfig,
     topology: &RwLock<ClusterTopology>,
     service: &Mutex<ClusterDataNodeService>,
-    local_identity: &(ClusterId, ClusterNodeId),
+    local_identity: &(ClusterId, ClusterNodeId, u32),
     control_store: Option<&Arc<Mutex<DistributionStore>>>,
     metadata_consensus: Option<&Arc<Mutex<MetadataConsensusStore>>>,
     metadata_distribution_store: Option<&Arc<Mutex<DistributionStore>>>,
@@ -874,7 +878,8 @@ fn handle_cluster_data_connection(
     let request = recv_json_frame::<ClusterDataRequestEnvelope>(stream, config.max_frame_bytes)?;
     let request_id = request.request_id;
     let caller_node_id = request.caller_node_id.clone();
-    let (local_cluster_id, local_node_id) = local_identity.clone();
+    let (local_cluster_id, local_node_id, local_writer_enforcement_version) =
+        local_identity.clone();
     let response = (|| {
         if request.protocol_version != CLUSTER_DATA_PROTOCOL_VERSION {
             return Err(transport_error(format!(
@@ -912,6 +917,15 @@ fn handle_cluster_data_connection(
             )
         });
         drop(topology_guard);
+        if local_writer_enforcement_version == 1
+            && matches!(&request.request, ClusterDataRequest::ApplicationEvent(event)
+                if matches!(&event.operation, crate::ClusterEventOperation::Get { .. }))
+        {
+            // The Core host's future Strong dispatcher must intercept here,
+            // outside DB/service latches. Until installed, born-v2 clients get
+            // an explicit unavailable error, never a bare false None/404.
+            return Err(transport_error("strong_point_read_unavailable: the enforced native host dispatcher is not installed; retry after host readiness"));
+        }
         if let ClusterDataRequest::MetadataReadAcquire { request } = request.request {
             let provider = metadata_read_provider.ok_or_else(|| {
                 transport_error("fresh metadata read acquisition provider is not active")

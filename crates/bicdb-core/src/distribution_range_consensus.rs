@@ -52,6 +52,7 @@ mod image_install_state;
 mod native_completion_observation;
 mod native_read_catalog;
 mod native_ready_catalog;
+mod strong_point_read;
 pub(crate) use native_completion_observation::LocalNativeCompletionEvidence;
 pub(crate) use native_read_catalog::{NativeRangeReadCatalogue, NativeReadCatalogueDecision};
 mod native_ready_observation;
@@ -3046,9 +3047,28 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
         }
         let range = self.resolve_range(intent)?;
         self.require_recovered_epoch(&range)?;
+        let mut reservation = if native_database.is_some() {
+            // Native callbacks may borrow an actual outer DB.write guard.
+            // Never wait on a point reader while holding that guard: fail
+            // before Prepare so the caller can retry after releasing it.
+            let reservation = self.try_reserve_range(range.id)?;
+            let current = self.resolve_range(intent)?;
+            if crate::distribution_native_read::canonical_range(&current)
+                != crate::distribution_native_read::canonical_range(&range)
+            {
+                return Err(range_write_error(
+                    "native range route changed before mutation admission; retry",
+                ));
+            }
+            self.require_recovered_epoch(&range)?;
+            reservation
+        } else {
+            self.reserve_recovered_range(&range)?
+        };
+        // A waiting writer must not enter native mutation admission while an
+        // actual point read holds this same logical range reservation.
         let mutation = self.range_mutations.try_enter(range.id)?;
         let authority = &RangeMutationAuthority::Mutation(&mutation);
-        let mut reservation = self.reserve_recovered_range(&range)?;
         let voters = range
             .replicas
             .iter()

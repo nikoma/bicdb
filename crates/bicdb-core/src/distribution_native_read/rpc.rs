@@ -94,6 +94,7 @@ impl NativeRangeReadFacts {
         require_peer(&request.scope, peer)?;
         let hash = |s: &str| s.len() == 64 && s.bytes().all(|b| b.is_ascii_hexdigit());
         if self.evidence_version != NATIVE_RANGE_READ_VERSION
+            || self.native_writer_enforcement_version > 1
             || self.scope_sha256 != request.scope.checksum_sha256()?
             || self.challenge != request.challenge
             || request.challenge.is_nil()

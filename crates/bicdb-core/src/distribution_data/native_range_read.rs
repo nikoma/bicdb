@@ -89,6 +89,7 @@ impl ClusterDataNodeService {
         let cancellation = request.cancellation(parent)?;
         let database = try_database_read(&self.db)?;
         self.require_native_catalog_database(&database)?;
+        self.require_native_writer_host_for_range(&database, &request.scope.range)?;
         database.schema_compatibility_fingerprint()?;
         let lineage = database.current_native_range_source_lineage(request.scope.range.id)?;
         if lineage.local_node_id() != &self.node_id || lineage.cluster_id() != &self.cluster_id {
@@ -137,6 +138,7 @@ impl ClusterDataNodeService {
         let database = try_database_read(&self.db)?;
         self.require_native_catalog_database(&database)?;
         let scope = observation.scope();
+        self.require_native_writer_host_for_range(&database, &scope.range)?;
         observation
             .physical()
             .native_admission()

@@ -262,3 +262,41 @@ retained committed-MQ deadline separately. It adds no deadline extension, proof
 refresh, cancellation replacement or authority constructor. A bounded retry with
 fresh actual phase authority would need its own durable-history/recovery proof;
 it cannot revive an expired old quorum object.
+
+## Main 486 documentation delivery and later component execution
+
+Main **1.0.486-beta**, `8fa5fd02474bdf52a6d9b8e182bcdd70061b490c`,
+merged documentation/evidence PR 163. Exact candidate `dda357ae2bb0ada4b830c4e5beca28bbfa1ebbc3`
+passed [full run 43192391620](https://github.com/nikoma/bicdb/actions/runs/43192391620),
+[Rails run 43192389304](https://github.com/nikoma/bicdb/actions/runs/43192389304),
+all-target/isolated-consumer compilation and static checks. Runtime features are
+unchanged from 485; no binary publication or deployment was produced. The merged
+[status](../ha-milestone1-status-2026-11-12.md) is revision-scoped, not a claim
+that the following unmerged native candidate runs on public main.
+
+| Exact source / executed run | Classification | Result and scope |
+| --- | --- | --- |
+| `80a2ff0b62867c8feeac490ce6534c8786be2bae`, [43198801014](https://github.com/nikoma/bicdb/actions/runs/43198801014), job 131116521452 | Passed, focused | Four cold learner controls / zero failed / zero ignored / 872 filtered, 8.60 s. Actual all-target-owner closure, copied stopped state, original sidecar/both Prepared cuts, same protected UUID, namespace IDs, real TLS bound ACK, Registered loss refusal, bind/cancel retry and strict old-codec rejection. Same-host Core tests, not independent-host or physical-power-loss qualification. All-target/isolated-consumer compilation passes. |
+| Same `80a2ff0b`, [43198805159](https://github.com/nikoma/bicdb/actions/runs/43198805159), job 131116534444 | Passed, focused | Higher accepted-cut test: one passed / zero failed / 875 filtered, 2.66 s. P1/R1, genuine 0+2 data recovery/ACK2, then P2/R2 with explicit H1 coverage and both-ACK reconciliation. Data-service delivery uses the declared local trusted-caller fixture, not mTLS or independent hosts. The first `df8f9676` run failed because its test committed a new topology in another metadata directory; the original retained metadata correctly refused the mismatched recovery role. The correction uses the SAME retained metadata directory; no admission guard changed. |
+| `c96f27427b855ab20d533eb30dfd3aa11f9fe194`, [43200324976](https://github.com/nikoma/bicdb/actions/runs/43200324976), job 131121746788 | Passed, focused | Nine Installing/replacement controls / zero failed / zero ignored / 867 filtered, 12.04 s, with actual durable vote replies in the shared metadata test-election helper. Includes earlier overlapping controls and the higher-cut case; do not add these totals as unique independent coverage. All-target/isolated-consumer compilation passes. |
+| `d46a12a466f703771f5aa1c94338ea8440b394c8`, [43195671022](https://github.com/nikoma/bicdb/actions/runs/43195671022), job 131105880933 | Passed, CLI | One real CLI process test / zero failed, 3.34 s: four actual executable processes, common startup/control commands, real authenticated registration of a fifth CONFIG identity and data refusal. No fifth backend at this source. All-target/isolated-consumer compilation passes. |
+| `c96f2742`, [43200333259](https://github.com/nikoma/bicdb/actions/runs/43200333259), job 131121776816 | Passed, CLI | One test / zero failed, 3.46 s. Adds an actual fifth factory/backend process, verified schema transfer, observed birth binding, owned metadata initialization and same-StoreUUID bound ACK catch-up. Explicit wrong own address refuses before root/control-file creation. All five data paths refuse. Manual protocol commands are not automatic join or data rebalance. All-target/isolated-consumer compilation passes. |
+| `2cc5debdb9cc180ad8a68013fac7e794608f875a`, [43201140398](https://github.com/nikoma/bicdb/actions/runs/43201140398), job 131124577734 | Passed, CLI | One test / zero failed, 3.62 s. Kills fifth process only after real bound ACK; captures actual stopped metadata AFTER kill/wait; same-root explicit cold command preserves protected StoreUUID, birth, schema, all namespace IDs, durable term/vote/base/log/commit/config and original-C fact, then gets a new actual bound ACK. Role/leader hints are not asserted as durable authority. Bound Learner/no-data scope only; no application commits or physical RPO/RTO claim. All-target/isolated-consumer compilation passes. |
+| `a8d36ca1ec944e2d60158154adc504b093c8f330`, [43203415424](https://github.com/nikoma/bicdb/actions/runs/43203415424), job 131132398365 | Failed | Fresh-phase controls: one passed / one failed / 876 filtered, 21.42 s. Original-caller expiry cannot be replaced by a later longer token (passing negative). Positive all-member publication expires at n2 after an actual native WAL publication, before final revalidation returns its receipt. This is uncertain completion, not proof of no write. Correction retains pending attempts, recovers exact protected receipts without changing original audits, and bounds each fresh phase to one local attempt. New correction requires execution; no longer timeout was substituted. |
+| `f74fbf4d8e30cba3d07166614ae4785474c5217f`, [43204503368](https://github.com/nikoma/bicdb/actions/runs/43204503368), job 131136135028 | Failed | Supervisor cohort: two passed / one failed / 878 filtered, 9.98 s. Real TLS election/current-term anchor/stability/healing and strict owned-MStore reopen controls pass. Invalid/stale test stops at an obsolete assumption that a committed compacted barrier still has a log entry. Corrected source tests actual malformed snapshot AND genuine pending-entry requests, retaining no-contact-renewal, stale and duplicate-worker assertions. Correction remains unexecuted. Core endpoint stop/drain is not a process kill; reopening MStore while retaining DB is not all-owner DB recovery. All-target/isolated-consumer compilation passes. |
+
+Raw-log SHA-256 values, respectively: cold Core
+`f3ef97856f2e9900d067c6a2816caf2df045fa72213a847cc708e70dcf361c21`;
+higher-cut `6fe291e204dfb96c2c0fa56994299d2fb8fd8e61488eca1f216e9a80dfad2d3d`;
+nine-case recovery `73763440c46d22b8295a78620daff6d311281c681d2e19ba4cdbcabbcbc9f19e`;
+four-process CLI `d7b5db0765bd3bd2b59c6971ece29aa280050c6d4785d99cbe955ddac80cbe7b`;
+fifth hot CLI `23c455b756e851183d7b5a2c0d40a9d58204970d72ee9459e8a0f578c7e09e33`;
+fifth cold CLI `6acfb3b9ad230d848de638ed85523125879be31d58c1d78a74908c12392ca646`.
+
+New automatic metadata joining/promotion and runtime wiring are SOURCE ONLY
+until their fresh Core and real CLI runs execute. Global Voter configuration
+alone does not establish local voting readiness; actual local committed C,
+protected identity and promotion-entry ACK must agree. Metadata voting or cold
+metadata continuity does not establish data Serving, automatic physical data
+relocation, all-replica activation/release, operational fault recovery, transparent
+SQL, stable five-node throughput or production admission. Those gates stay open.

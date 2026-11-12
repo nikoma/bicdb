@@ -214,8 +214,9 @@ jobs:
         run: |
           set -euo pipefail
           export BICDB_TEST_EVIDENCE_ROOT="$RUNNER_TEMP/native-core-evidence/fault-state"
+          export BICDB_TEST_SOURCE_SHA="$GITHUB_SHA"
           mkdir -p "$BICDB_TEST_EVIDENCE_ROOT"
-          cargo test -p bicdb-core --lib --locked "$BICDB_CORE_TEST_FILTER" -- --test-threads=4 \
+          cargo test -p bicdb-core --lib --locked "$BICDB_CORE_TEST_FILTER" -- --test-threads=4 --show-output \
             2>&1 | tee "$RUNNER_TEMP/native-core-evidence/tests.log"
       - name: Retain focused source, log and opted-in fault-state evidence
         if: always()
@@ -223,6 +224,7 @@ jobs:
         with:
           name: focused-core-${{ github.sha }}-${{ github.run_attempt }}
           retention-days: 3
+          include-hidden-files: true
           if-no-files-found: warn
           path: ${{ runner.temp }}/native-core-evidence/
 

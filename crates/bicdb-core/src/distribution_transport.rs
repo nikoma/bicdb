@@ -1228,6 +1228,7 @@ fn handle_cluster_data_connection(
                 ClusterDataRequest::Ping
                     | ClusterDataRequest::RegisterMetadataLearner { .. }
                     | ClusterDataRequest::FetchBootstrapSnapshot
+                    | ClusterDataRequest::ExportSchemaBundle { .. }
                     | ClusterDataRequest::MetadataVote { .. }
                     | ClusterDataRequest::MetadataAppend { .. }
                     | ClusterDataRequest::MetadataReadProbe { .. }
@@ -1270,6 +1271,19 @@ fn handle_cluster_data_connection(
                     return provider
                         .register(ingress)
                         .map(ClusterDataResponse::Topology);
+                }
+                ClusterDataRequest::ExportSchemaBundle {
+                    range_id,
+                    range_epoch,
+                } => {
+                    let peer = authenticated_caller.as_ref().ok_or_else(|| {
+                        transport_error(
+                            "native schema export requires registered authenticated caller",
+                        )
+                    })?;
+                    return provider
+                        .export_learner_schema(peer, *range_id, *range_epoch, &token)
+                        .map(ClusterDataResponse::SchemaBundle);
                 }
                 ClusterDataRequest::FetchBootstrapSnapshot => {
                     return provider
@@ -5536,6 +5550,34 @@ impl RangeDigestRepairTransport for TcpClusterRelocationTransport {
             }
             response => Err(unexpected_response("range digest repair state", response)),
         }
+    }
+}
+
+impl TcpClusterRelocationTransport {
+    pub(crate) fn export_native_learner_schema(
+        &self,
+        destination: &ClusterNodeId,
+        range: &RangeDescriptor,
+        parent: &CancellationToken,
+    ) -> Result<ClusterSchemaBundle> {
+        parent.check()?;
+        let reply = self.call_cancellable(
+            parent,
+            destination,
+            ClusterDataRequest::ExportSchemaBundle {
+                range_id: range.id,
+                range_epoch: range.epoch,
+            },
+        )?;
+        let ClusterDataResponse::SchemaBundle(bundle) = reply else {
+            return Err(transport_error(
+                "native schema source returned another response",
+            ));
+        };
+        crate::distribution_range_consensus::validate_native_json_size(&bundle, 2 * 1024 * 1024)?;
+        bundle.verify()?;
+        parent.check()?;
+        Ok(bundle)
     }
 }
 

@@ -8,8 +8,17 @@ use parking_lot::{Mutex, RwLock};
 use std::sync::{Arc, OnceLock};
 
 mod append_ack;
+mod owned_member;
+mod registered_catchup;
+pub(crate) use owned_member::NativeOwnedMetadataMemberObservation;
+pub(crate) use registered_catchup::NativeRegisteredMetadataCatchupObservation;
+mod learner_cold;
 #[cfg(feature = "tls-replication")]
 mod learner_enrollment;
+#[cfg(feature = "tls-replication")]
+mod learner_promotion;
+#[cfg(feature = "tls-replication")]
+pub(crate) use learner_promotion::NativeLearnerPromotionReadiness;
 #[cfg(feature = "tls-replication")]
 mod registration;
 pub(crate) use append_ack::NativeMetadataAppendProvenance;
@@ -187,6 +196,7 @@ impl Drop for NativeMetadataStoreOwner {
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum NativeMetadataInitializationCut {
+    AfterOriginalConfiguration,
     AfterProtectedPrepare,
     AfterStateFile,
 }
@@ -242,6 +252,13 @@ impl MetadataConsensusStore {
                 metadata_error("enforced metadata listener requires actual same-open owned store")
             })?;
             owner.require_current()?;
+            if owner.registered_store_id != self.state.native_store_id
+                || owner.registered_store_id.is_none()
+            {
+                return Err(metadata_error(
+                    "Prepared metadata cannot attach a countable listener",
+                ));
+            }
             let actor = owner
                 .actor
                 .as_ref()
@@ -393,6 +410,13 @@ impl MetadataConsensusStore {
     pub(super) fn require_native_metadata_actor_current(&self, voter: bool) -> Result<()> {
         self.require_native_metadata_owner_current()?;
         if let Some(owner) = &self.native_owner {
+            if owner.registered_store_id != self.state.native_store_id
+                || owner.registered_store_id.is_none()
+            {
+                return Err(metadata_error(
+                    "Prepared metadata cannot act as a countable actor",
+                ));
+            }
             owner.require_actor(&self.state.committed_topology, &self.state.node_id, voter)?;
         }
         Ok(())
@@ -505,7 +529,12 @@ impl MetadataConsensusStore {
             last_leader_contact_ms: unix_time_ms(),
             native_owner: Some(owner),
         };
-        store.native_initial_pre_vote_fact()?.require_current()?;
+        store.native_owner.as_ref().unwrap().require_actor(
+            &store.state.committed_topology,
+            &store.state.node_id,
+            true,
+        )?;
+        learner_cold::require_never_voted_state(&store.state)?;
         store.reset_match_indexes();
         store.persist()?;
         cancellation.check()?;
@@ -663,6 +692,27 @@ impl MetadataConsensusStore {
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => (),
             Err(e) => return Err(e.into()),
         }
+        if topology.nodes[&node].metadata_role == MetadataMemberRole::Learner {
+            let db = database
+                .try_read()
+                .ok_or_else(|| metadata_error("native DB busy before original configuration"))?;
+            if db
+                .native_metadata_initialization_record(
+                    &topology.cluster_id,
+                    topology
+                        .range_image_bootstrap_id
+                        .ok_or_else(|| metadata_error("native metadata bootstrap absent"))?,
+                    &node,
+                    topology.nodes[&node].incarnation,
+                )?
+                .is_some()
+            {
+                return Err(metadata_error("protected metadata already exists; strict reopen required before sidecar publication"));
+            }
+            learner_cold::persist_original_configuration(root, &topology)?;
+            cancellation.check()?;
+            cut(NativeMetadataInitializationCut::AfterOriginalConfiguration)?;
+        }
         let store_id = Uuid::now_v7();
         let state = MetadataConsensusState {
             format_version: NATIVE_METADATA_CONSENSUS_FORMAT,
@@ -690,10 +740,19 @@ impl MetadataConsensusStore {
         });
         // The new host retains the real owner as soon as its identity exists,
         // including failures during the first protected native publication.
-        let prepared = database
-            .try_read()
-            .ok_or_else(|| metadata_error("native DB busy before metadata prepare"))?
-            .prepare_native_metadata_store(factory, &topology, store_id)?;
+        let prepared = {
+            let actual = database
+                .try_read()
+                .ok_or_else(|| metadata_error("native DB busy before metadata prepare"))?;
+            retained
+                .as_ref()
+                .unwrap()
+                .native_owner
+                .as_ref()
+                .unwrap()
+                .require_current()?;
+            actual.prepare_native_metadata_store(factory, &topology, store_id)?
+        };
         cancellation.check()?;
         cut(NativeMetadataInitializationCut::AfterProtectedPrepare)?;
         let store = retained
@@ -723,6 +782,29 @@ impl MetadataConsensusStore {
         expected: ClusterTopology,
         cancellation: &CancellationToken,
     ) -> Result<Self> {
+        let mut retained = None;
+        Self::reopen_native_owned_retaining(
+            root.as_ref(),
+            database,
+            node,
+            expected,
+            cancellation,
+            &mut retained,
+        )?;
+        retained.ok_or_else(|| metadata_error("actual reopened owner absent"))
+    }
+
+    fn reopen_native_owned_retaining(
+        root: &Path,
+        database: Arc<RwLock<BicDb>>,
+        node: ClusterNodeId,
+        expected: ClusterTopology,
+        cancellation: &CancellationToken,
+        retained: &mut Option<Self>,
+    ) -> Result<()> {
+        if retained.is_some() {
+            return Err(metadata_error("reopen requires an empty actual owner slot"));
+        }
         cancellation.check()?;
         expected.validate()?;
         if !known_born_v2(&expected, &node) {
@@ -730,7 +812,6 @@ impl MetadataConsensusStore {
                 "native reopen requires enrolled born-v2 configuration",
             ));
         }
-        let root = root.as_ref();
         let mut owner = NativeMetadataStoreOwner::acquire(root, Arc::clone(&database), false)?;
         // No missing-file fallback. Read protected receipt BEFORE any metadata write.
         let receipt = database
@@ -784,18 +865,19 @@ impl MetadataConsensusStore {
         cancellation.check()?;
         state.role = MetadataConsensusRole::Follower;
         state.leader_id = None;
-        let mut store = Self {
+        *retained = Some(Self {
             root: root.to_path_buf(),
             fsync: true,
             state,
             match_index: BTreeMap::new(),
             last_leader_contact_ms: unix_time_ms(),
             native_owner: Some(owner),
-        };
+        });
+        let store = retained.as_mut().unwrap();
         store.reset_match_indexes();
         store.persist()?;
         cancellation.check()?;
-        Ok(store)
+        Ok(())
     }
 }
 

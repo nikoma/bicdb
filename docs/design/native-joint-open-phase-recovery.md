@@ -153,3 +153,76 @@ receipt (newly persisted or recovered), rather than lucky attempt zero. Three
 pre-receipt phase attempts remain; one additional bounded phase is reserved
 solely to reconcile that deliberately lost receipt. Every phase still uses the
 unchanged four-second/original-caller bounds.
+
+## Local execution-boundary refactor (unexecuted)
+
+The 505 logs lacked open substage spans, so its exact before/after-persist cause
+is not inferred. A separate diagnostic/custody checkpoint records those spans
+without changing the phase algorithm. The following source refactor addresses
+visible repeated work, and still needs its own compile/runtime feedback.
+
+For a fresh open, all nonwaiting external-participant checks now happen at the
+final kernel boundary before the local native journal is acquired. The same
+checked DB/service borrow then performs the complete original local preparation
+check under ONE actual native read scope, including exact old/new decision,
+metadata anchors, writer-registration Arc, full catalogue digest (with only the
+protected activation epoch transition), current/archive native preparation, real
+freeze/read pin, schema/UID/history/generation and strict local R/H/B. This is
+the same checker used by phase collection, not a weaker kernel substitute.
+
+Every captured resolved catalogue decision is read directly from the actual
+immutable native history under that scope. This replaces per-index source
+export calls that each revalidated the entire source lineage; no decision is
+filtered and no higher obligation may disappear from the actual catalogue
+digest. The scope/journal stays held through controlled catalogue fsync and
+exact receipt readback. It is dropped before installing the open generation.
+There is no native page-WAL acquisition inside this already-held journal.
+
+Recovery first checks whether any actual activation exists. An absence result
+grants nothing; the new-publication branch still performs the complete final
+checks. A present activation is fully verified under fresh full-set authority
+and the same local scope, yielding the exact existing record without rewriting
+it. Existing unarmed guards are checked and retained; new guards perform their
+complete constructor check once. No private current-proof cache survives the
+synchronous local call or becomes a serving permission.
+
+Original APIs keep their original validation path and deadlines. This refactor
+does not enlarge a phase, skip a participant, remove the target leader or satisfy
+the release/new-ACK/Strong gates. If measurements show collection itself exceeds
+the original window, a separate real bounded collection protocol is required;
+repeating expired facts or silently increasing TTL is not a remedy.
+
+## Executed retained-timing diagnosis and scoped candidate
+
+The unchanged phase algorithm passed once at integrated source 656a8e6a
+(CI 43212523246/job 131163486234, 1/0 in 32.96s). Successful stdout was suppressed,
+so that run did not retain timing markers and did not exercise panic custody.
+It is not evidence that the earlier timeout cause/stability was fixed.
+
+A show-output rerun at exact source 399529dedeaba5d404098d091f733491c690067d
+(CI 43213581356/job 131167066109) failed 0/1 in 36.00s. All three target attempts
+exhausted their unchanged windows in activation/reconciliation, with durations
+4075ms, 4075ms and 4139ms. Collection took about 1.1s, complete-round validation
+about 1s, service prevalidation another 1s. The kernel entered with only
+438–628ms left and repeated peer validations until expiry. No completed
+catalogue-persist marker was emitted. Raw job SHA256:
+`11ff4f55a212003d83aeaf168ca46a3755b7a67b0c92803875b27eaeefa7f8bf`.
+
+This directly motivates the separate scoped execution candidate: preserve the
+complete final kernel checks while performing the same local proof under one
+real journal borrow and each external sweep once before that borrow. It does
+not justify a larger timeout or fewer participants. The candidate remains
+uncompiled/unexecuted locally; its first remote results must be recorded under
+its own exact integrated source. Original API paths and all fixture assertions
+remain. Higher protected abort/slot controls are also explicitly checked on the
+exact activated-catalogue branch before accepting the old cut.
+
+The 399 panic custody hook actually executed: manifest SHA256
+`c12af7b77ab0007361d2da1e0b073481b179aafd81648ccb32088cf5623e9eeb`, status
+`captured_observed_stable_with_live_engine_owners`. Artifact 13941814654 contained
+71/75 manifest files (4,257,680 bytes verified by Root); upload-artifact omitted
+the four zero-byte `databases/n{0,1,2,3}/.backup-write.lock` hidden files. The
+archive is therefore PARTIAL, distinct from the hook's completed local copy.
+No missing files were manufactured. Root separately enabled hidden-file upload
+for a future unchanged-runtime reproduction; that does not retroactively repair
+399 custody or establish replay/atomic-powerloss qualification.

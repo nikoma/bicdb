@@ -2,6 +2,7 @@
 //! publication. It stays CLOSED until the real frozen owner is released and a
 //! same-open guard is armed. Old promises and history are never removed here.
 use super::*;
+mod fresh;
 use crate::distribution_consensus::MetadataRecoveryRolePurpose;
 use crate::distribution_range_handoff::NativeJointOpenAdmission;
 use crate::distribution_range_image_install::NativeImageCatalogueFinalization;
@@ -359,6 +360,9 @@ impl RangeWriteStore {
         database: &crate::BicDb,
         admission: &NativeJointOpenAdmission,
     ) -> Result<Option<NativeJointCatalogueActivationReceipt>> {
+        if admission.has_fresh_open_phase() {
+            return self.recover_fresh_native_joint_activation(database, admission);
+        }
         admission.require_live()?;
         admission.committed().require_current(database)?;
         let Some(fact) =
@@ -439,6 +443,16 @@ impl RangeWriteStore {
             &self.catalog.node_id,
             admission.cancellation(),
         );
+        if admission.has_fresh_open_phase() {
+            let result = self.persist_fresh_native_joint_activation(
+                database, admission, original, catalogue, image, frozen, parent,
+            );
+            #[cfg(test)]
+            if result.is_ok() {
+                trace.complete();
+            }
+            return result;
+        }
         parent.check()?;
         admission.require_external_publications_current()?;
         admission.committed().require_current(database)?;
@@ -680,11 +694,11 @@ impl RangeWriteStore {
         receipt: &NativeJointCatalogueActivationReceipt,
         frozen: &FrozenRangeMutationPermit,
     ) -> Result<()> {
-        receipt.require_current(database, self)?;
         database
             .range_mutation_gate()
             .validate_quiescent_frozen(receipt.range().id, frozen)?;
         if let Some(guard) = self.native_joint_activated_opens.get(&receipt.range().id) {
+            receipt.require_current(database, self)?;
             return guard.require_not_armed(self.open_id, &receipt.activation_sha256()?);
         }
         let guard = database.native_joint_activated_open_guard(self, receipt, frozen)?;

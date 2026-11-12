@@ -29,16 +29,23 @@ pub const METADATA_READ_AUTHORITY_PROTOCOL_VERSION: u32 = 1;
 pub const METADATA_READ_ACQUISITION_PROTOCOL_VERSION: u32 = 1;
 mod host_read;
 mod native_metadata_store;
+mod native_supervisor;
 pub(crate) use host_read::{
     HostMetadataReadAcquireRequest, HostMetadataReadAcquireResponse, HostMetadataReadObservation,
 };
 #[cfg(feature = "tls-replication")]
 pub(crate) use native_metadata_store::same_registration as same_native_registration;
-pub(crate) use native_metadata_store::NativeMetadataAppendProvenance;
+#[cfg(feature = "tls-replication")]
+pub(crate) use native_metadata_store::NativeLearnerPromotionReadiness;
 pub use native_metadata_store::NativeMetadataAppendReceiver;
 #[cfg(test)]
 pub(crate) use native_metadata_store::NativeMetadataInitializationCut;
 pub(crate) use native_metadata_store::NativeMetadataPreVoteFact;
+pub(crate) use native_metadata_store::{
+    NativeMetadataAppendProvenance, NativeOwnedMetadataMemberObservation,
+    NativeRegisteredMetadataCatchupObservation,
+};
+pub(crate) use native_supervisor::NativeMetadataSupervisorSnapshot;
 
 /// Wire request only. This is not a read authority or a row-read permit.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -2204,9 +2211,15 @@ impl MetadataConsensusStore {
                 entry.topology.range_image_bootstrap_id,
             )?;
         }
+        let mut next = request.prev_log_index.checked_add(1);
+        let mut contiguous = true;
+        for entry in &request.entries {
+            validate_log_entry_shape(entry, &self.state.cluster_id)?;
+            contiguous &= next == Some(entry.index);
+            next = entry.index.checked_add(1);
+        }
         self.validate_native_birth_append(&request)?;
         self.step_down(request.term, Some(request.leader_id));
-        self.mark_election_activity();
         let snapshot_frontier = request
             .snapshot
             .as_ref()
@@ -2220,6 +2233,9 @@ impl MetadataConsensusStore {
                 .min(self.last_log_index().saturating_add(1))
                 .max(self.state.base_index.saturating_add(1));
             self.persist()?;
+            if contiguous {
+                self.mark_election_activity();
+            }
             return Ok(self.append_response(false, conflict_index));
         }
         // A matching previous entry (and any installed snapshot) establishes
@@ -2260,7 +2276,9 @@ impl MetadataConsensusStore {
         }
         // Commit only this request's validated prefix, never an untouched tail.
         self.advance_follower_commit(request.leader_commit.min(matched_frontier))?;
-        self.persist_owned_append_response(matched_frontier)
+        let reply = self.persist_owned_append_response(matched_frontier)?;
+        self.mark_election_activity();
+        Ok(reply)
     }
 
     fn validate_native_birth_append(&self, request: &MetadataAppendRequest) -> Result<()> {

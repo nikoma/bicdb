@@ -203,6 +203,36 @@ impl NativeJointOpenPhaseQuorum {
         }
         self.require_live()
     }
+    pub(super) fn require_local_native_scope(
+        &self,
+        node: &ClusterNodeId,
+        store: &crate::distribution_range_consensus::RangeWriteStore,
+        scope: &crate::db::NativeJointBridgeReadScope<'_>,
+    ) -> Result<()> {
+        self.require_live()?;
+        let original = self
+            .original
+            .prepared
+            .observations
+            .get(node)
+            .ok_or_else(|| invalid("fresh open local scope changed member"))?;
+        let member = self
+            .members
+            .get(node)
+            .ok_or_else(|| invalid("fresh open local scope missing member"))?;
+        let writer = original.actual.require_local_open_scope(
+            scope,
+            store,
+            &member.committed,
+            self.original.receipts[node].clone(),
+        )?;
+        if !Arc::ptr_eq(&writer, &member.writer) {
+            return Err(invalid(
+                "fresh open local native scope writer generation changed",
+            ));
+        }
+        self.require_live()
+    }
     pub(super) fn require_member_current(&self, node: &ClusterNodeId) -> Result<()> {
         let service = self.original.prepared.observations[node]
             .service

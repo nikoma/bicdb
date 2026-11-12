@@ -33,6 +33,10 @@ mod learner_factory;
 #[cfg(feature = "tls-replication")]
 pub(crate) use learner_factory::NativeUnassignedLearnerFactory;
 #[cfg(feature = "tls-replication")]
+mod learner_cold;
+#[cfg(feature = "tls-replication")]
+pub(crate) use learner_cold::NativeColdLearnerMetadataHost;
+#[cfg(feature = "tls-replication")]
 mod learner_birth;
 #[cfg(feature = "tls-replication")]
 pub(crate) use learner_birth::{
@@ -51,12 +55,22 @@ pub(crate) use provisional_listener::{
     NativeMetadataRegistrationController, NativeProvisionalHost,
 };
 #[cfg(feature = "tls-replication")]
+mod metadata_supervisor;
+#[cfg(feature = "tls-replication")]
+use provisional_listener::{NativeMetadataControlBackend, NativeMetadataMaintenanceReport};
+#[cfg(feature = "tls-replication")]
 mod operator;
+#[cfg(feature = "tls-replication")]
+pub(crate) use metadata_supervisor::{NativeMetadataSupervisor, NativeMetadataSupervisorConfig};
 #[cfg(feature = "tls-replication")]
 pub use operator::{
     NativeMetadataBootstrapPlan, NativeMetadataCollection, NativeMetadataHost,
     NativeMetadataHostAction, NativeMetadataHostPhase, NativeMetadataHostStatus,
 };
+#[cfg(feature = "tls-replication")]
+mod operator_learner;
+#[cfg(feature = "tls-replication")]
+pub use operator_learner::{NativeMetadataLearnerHost, NativeMetadataLearnerStatus};
 fn invalid(detail: &str) -> BicDbError {
     BicDbError::Cluster(format!("native host bootstrap: {detail}"))
 }

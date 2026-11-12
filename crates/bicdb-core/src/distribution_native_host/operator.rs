@@ -45,7 +45,7 @@ impl NativeMetadataBootstrapPlan {
         )
     }
 }
-#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum NativeMetadataHostAction {
     Prepare,
@@ -53,6 +53,9 @@ pub enum NativeMetadataHostAction {
     Elect,
     EnableControl,
     Heartbeat,
+    StartLearnerMetadata,
+    EnrollLearner { node: ClusterNodeId },
+    CatchUpLearner { node: ClusterNodeId },
     Status,
     Stop,
 }
@@ -72,6 +75,10 @@ pub struct NativeMetadataHostStatus {
     pub node_id: ClusterNodeId,
     pub phase: NativeMetadataHostPhase,
     pub metadata: Option<MetadataConsensusStatus>,
+    pub last_enrolled_learner: Option<ClusterNodeId>,
+    pub last_caught_up_learner_store_id: Option<Uuid>,
+    pub last_metadata_maintenance: Option<serde_json::Value>,
+    pub last_metadata_promotion: Option<serde_json::Value>,
     pub data_serving: bool,
     pub data_refusal: &'static str,
 }
@@ -85,9 +92,14 @@ pub struct NativeMetadataHost {
     launch: Option<NativeInitialConsensusLaunch>,
     listener: Option<crate::distribution_transport::ClusterDataServerHandle>,
     control: Option<NativeMetadataControlHost>,
+    supervisor: Option<NativeMetadataSupervisor>,
     network: ClusterNetworkTransportConfig,
     template: DistributionConfig,
     phase: NativeMetadataHostPhase,
+    last_enrolled_learner: Option<ClusterNodeId>,
+    last_caught_up_learner_store_id: Option<Uuid>,
+    last_metadata_maintenance: Option<serde_json::Value>,
+    last_metadata_promotion: Option<serde_json::Value>,
 }
 impl NativeMetadataHost {
     pub fn start_fresh_metadata_only(
@@ -164,10 +176,43 @@ impl NativeMetadataHost {
             launch: None,
             listener: None,
             control: None,
+            supervisor: None,
             network,
             template,
             phase: NativeMetadataHostPhase::Provisional,
+            last_enrolled_learner: None,
+            last_caught_up_learner_store_id: None,
+            last_metadata_maintenance: None,
+            last_metadata_promotion: None,
         })
+    }
+    /// The process lifetime belongs here, never a bootstrap/action's 5s child.
+    /// This starts scheduling only; elected status cannot authorize Host MQ,
+    /// range recovery or data admission without their existing fresh proofs.
+    pub fn start_automatic_metadata(&mut self, parent: &CancellationToken) -> Result<()> {
+        parent.check()?;
+        if self.phase == NativeMetadataHostPhase::Stopped {
+            return Err(invalid(
+                "stopped native host cannot start metadata supervisor",
+            ));
+        }
+        if self.supervisor.is_some() {
+            return Ok(());
+        }
+        let supervisor = if let Some(control) = &self.control {
+            control.start_automatic_metadata(parent)?
+        } else if self.phase == NativeMetadataHostPhase::OwnedMetadata && self.listener.is_some() {
+            self.launch
+                .as_ref()
+                .ok_or_else(|| invalid("actual initial metadata owner missing"))?
+                .start_automatic_metadata(self.network.clone(), parent)?
+        } else {
+            return Err(invalid(
+                "automatic metadata requires exposed owned metadata listener",
+            ));
+        };
+        self.supervisor = Some(supervisor);
+        Ok(())
     }
     pub fn status(&self, parent: &CancellationToken) -> Result<NativeMetadataHostStatus> {
         parent.check()?;
@@ -190,9 +235,36 @@ impl NativeMetadataHost {
             node_id: self.template.node_id.clone(),
             phase: self.phase,
             metadata,
+            last_enrolled_learner: self.last_enrolled_learner.clone(),
+            last_caught_up_learner_store_id: self.last_caught_up_learner_store_id,
+            last_metadata_maintenance: self.last_metadata_maintenance.clone(),
+            last_metadata_promotion: self.last_metadata_promotion.clone(),
             data_serving: false,
             data_refusal: "metadata-only host: data/read/SQL/promotion endpoints are not installed",
         })
+    }
+    pub fn maintain_metadata(
+        &mut self,
+        parent: &CancellationToken,
+    ) -> Result<NativeMetadataHostStatus> {
+        let controller = self
+            .control
+            .as_ref()
+            .ok_or_else(|| invalid("actual native control owner required for maintenance"))?;
+        self.last_metadata_maintenance = Some(match controller.maintain_joins(parent) {
+            Ok(report) => {
+                let value = serde_json::to_value(&report)?;
+                if report.stage == "promoted_and_installed" {
+                    self.last_metadata_promotion = Some(value.clone());
+                }
+                value
+            }
+            Err(error) => {
+                serde_json::json!({"stage":"unavailable_or_pending", "error":error.to_string().chars().take(2048).collect::<String>()})
+            }
+        });
+        // Fresh diagnostic currentness, not a renewal of timed-out mutation.
+        self.status(parent)
     }
     /// Each finite action preserves its original caller deadline, including
     /// all network/IO/drain work. Failures retain actual owners for retry.
@@ -205,7 +277,7 @@ impl NativeMetadataHost {
         token.check()?;
         if self.phase == NativeMetadataHostPhase::Stopped
             && !matches!(
-                action,
+                &action,
                 NativeMetadataHostAction::Status | NativeMetadataHostAction::Stop
             )
         {
@@ -289,7 +361,32 @@ impl NativeMetadataHost {
                         .heartbeat_initial_metadata(&token)?;
                 }
             }
+            NativeMetadataHostAction::StartLearnerMetadata => {
+                return Err(invalid(
+                    "start-learner-metadata requires the separate actual learner owner",
+                ))
+            }
+            NativeMetadataHostAction::EnrollLearner { node } => {
+                self.last_enrolled_learner = Some(
+                    self.control
+                        .as_ref()
+                        .ok_or_else(|| invalid("owned native metadata control required"))?
+                        .ensure_enrolled_target(&node, &token)?,
+                );
+            }
+            NativeMetadataHostAction::CatchUpLearner { node } => {
+                self.last_caught_up_learner_store_id = Some(
+                    self.control
+                        .as_ref()
+                        .ok_or_else(|| invalid("owned native metadata control required"))?
+                        .catch_up_learner(&node, &token)?,
+                );
+            }
             NativeMetadataHostAction::Stop => {
+                if let Some(supervisor) = self.supervisor.as_mut() {
+                    supervisor.stop(&token)?;
+                }
+                self.supervisor.take();
                 if let Some(control) = self.control.as_mut() {
                     control.stop(&token)?;
                 }

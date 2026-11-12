@@ -37,6 +37,11 @@ impl NativeJointBridgeCatalogue {
         committed.require_current_with_native_read_scope(scope)?;
         fact.require_current_with_scope(scope, store)?;
         store.require_joint_open_phase_not_released(fact)?;
+        store.require_actual_abort_controls_covered(
+            scope.database(),
+            committed.data().old_range().id,
+            committed.data().range_index(),
+        )?;
         if self.store_open_id != store.open_id
             || self.decision_sha256 != committed.data().checksum_sha256()
             || self.local_decision_sha256 != committed.native_receipt().checksum_sha256()

@@ -136,3 +136,83 @@ full list/build/test output and target name, always uploaded on success/failure.
 Only the dedicated evidence subtree is uploaded. It never opts generated
 private TLS/database fixture roots into that subtree. Adding this workflow is
 not evidence of a CLI execution; a dispatched run must supply the actual result.
+
+## Fresh fifth factory and metadata backend: successor source
+
+A successor branch adds `serve-learner-fresh ROOT --cluster-id C --seed-node-id
+SEED --seed-address ADDR --node-id SELF --address SELF-ADDR --incarnation N`
+with explicit local TLS/control/status paths. It consumes actual authenticated
+bootstrap DATA, its OWN fresh HostMQ, a verified schema bundle obtained over the
+actual native control channel, and then a separately fresh OWN HostMQ into the
+existing from-birth `NativeUnassignedLearnerFactory::create`. The public
+`NativeMetadataLearnerHost` is opaque and exports no raw factory, service, DB,
+metadata store or proof constructors. It refuses existing paths and an already
+bound birth under the same identity; no generic directory provisioning occurs.
+
+The existing ExportSchemaBundle arm is newly supported ONLY by the separate
+immutable native metadata-control mode. Its narrow native handler validates the
+actual authenticated unassigned learner incarnation/pins, current source-voter
+membership/native birth, range/schema/restore domain and same-service actual
+DB/store open. It exports the actual verified bundle while capturing schema
+generation and actual namespace IDs. After dropping every local latch it
+acquires DISTINCT fresh own HostMQ, rejects any changed committed C/generation/
+restore/schema domain, and rechecks actual native DB/open/schema/UID facts before
+replying. Output is bounded verified schema DATA, not a fingerprint permission,
+row snapshot, birth offer or initial-all-C authority. The generic handler and
+old provisional/initial listener restrictions are unchanged. No new wire arm,
+shape, protocol version or old-peer fallback is added.
+
+The fifth process starts its real, permanently provisional birth listener and
+periodically acquires fresh OWN MQ to refresh the existing actual provider.
+Leader operator action `step ... --action enroll-learner --target-node-id SELF`
+uses the existing finite genuine observed-birth controller and actual old-voter
+metadata commit. It does not submit an arbitrary topology or accept a client
+birth hash as a binding. Fifth action `--action start-learner-metadata` obtains
+NEW OWN HostMQ, verifies that exact factory birth is committed, and calls the
+existing retained SAME-service stop/drain/protected-UUID/owned-metadata/new-
+listener transition. Initial factories and learner factories remain distinct.
+Cold reconstruction/Prepared continuation does not enter through these APIs.
+
+Leader action `--action catch-up-learner --target-node-id SELF` requires actual
+fresh owned-leader HostMQ and the exact bound Active nonvoting Learner. At most
+three16-entry accepted-frontier rounds deliver actual metadata Appends. Every
+reply must pass current native birth/pins/StoreUUID/response-body provenance
+validation before progress is counted. Completion requires a successful actual
+bound ACK covering the actual leader commit, followed by separately fresh MQ
+and unchanged committed domain. The returned StoreUUID is diagnostic data from
+that ACK, not promotion or data permission. The fifth hot status independently
+reads its actual retained protected owner and reports the same StoreUUID,
+metadata commit and unchanged actual namespace IDs. No role is promoted.
+
+The existing actual CLI process regression is extended to launch a fifth REAL
+CLI factory/backend, commit its observed birth, start/catch up its actual owned
+metadata, compare the bound ACK's protected StoreUUID with hot actual status,
+and require unchanged local namespace IDs/schema/birth. It then rejects another
+blank factory at a new path under the already-bound identity and checks Scan
+refusal across all FIVE receivers. The earlier CONFIG-only phase assertion is
+kept before fifth creation; that old result is not retroactively a backend
+qualification. This successor is source only until its exact remote compile/run.
+
+Still excluded: metadata voting promotion/joint metadata membership decision,
+data placement/Serving, ordinary write/Strong hooks on the fifth, proof-based
+cleanup, automatic enrollment/election/controller scheduling and all-owner cold
+startup. The cold learner work remains a separate owner/API and is not imported
+as an untested fallback. CLI status remains `data_serving:false` in every phase;
+no fifth data quorum, capacity, SQL, VM or physical/Azure result is implied.
+
+### Explicit learner endpoint negative
+
+The successor CLI regression additionally invokes `serve-learner-fresh` with
+its actual own TLS credentials and a valid numeric nonzero address DIFFERENT
+from its already quorum-committed registered address. It fetches real CONFIG
+over TLS and must reach the explicit registration/address comparison, fail and
+leave the proposed root/control/status files absent. The original correct-
+address fifth factory/backend path remains intact immediately afterward. This
+is a pre-factory local endpoint mismatch control, not a mutated/fabricated MQ,
+configuration or private proposal.
+
+The0076 facade also checks its explicit address/incarnation after both pre-
+factory fresh MQ observations and on later own-MQ refresh. There is no actual
+operator endpoint-drift mutation producer in this vertical, so a later endpoint
+change while a live owner exists remains UNTESTED. The initial mismatch control
+does not validate that distinct dynamic race or any relocation/rebind protocol.

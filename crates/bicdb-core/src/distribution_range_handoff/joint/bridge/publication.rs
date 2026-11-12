@@ -349,6 +349,9 @@ impl NativeJointOpenAdmission {
     pub(crate) fn committed(&self) -> &CommittedNativeJointDecisionObservation {
         &self.fresh
     }
+    pub(crate) fn local_preparation(&self) -> &crate::db::NativeJointServingPreparation {
+        self.local.actual.prepared()
+    }
     pub(crate) fn native_receipt(&self) -> Arc<crate::db::NativeJointServingBridgeReceipt> {
         self.receipt.clone()
     }
@@ -395,6 +398,21 @@ impl NativeJointOpenAdmission {
             }
         }
         Ok(())
+    }
+    pub(crate) fn require_local_native_scope(
+        &self,
+        scope: &crate::db::NativeJointBridgeReadScope<'_>,
+        store: &crate::distribution_range_consensus::RangeWriteStore,
+    ) -> Result<()> {
+        self.require_live()?;
+        scope.require_native(&self.receipt)?;
+        if let Some(phase) = &self.open_phase {
+            phase.require_local_native_scope(self.receipt.local_node_id(), store, scope)?;
+        }
+        Ok(())
+    }
+    pub(crate) fn has_fresh_open_phase(&self) -> bool {
+        self.open_phase.is_some()
     }
     pub(crate) fn require_local_open_preparation(
         &self,

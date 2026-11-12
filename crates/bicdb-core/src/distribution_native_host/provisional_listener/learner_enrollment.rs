@@ -32,9 +32,19 @@ impl NativeInitialConsensusLaunch {
         target: &ClusterNodeId,
         parent: &CancellationToken,
     ) -> Result<NativeLearnerMetadataEnrollment> {
+        NativeMetadataControlBackend::borrow_initial(self)
+            .enroll_registered_native_learner(target, parent)
+    }
+}
+impl NativeMetadataControlBackend {
+    pub(crate) fn enroll_registered_native_learner(
+        &self,
+        target: &ClusterNodeId,
+        parent: &CancellationToken,
+    ) -> Result<NativeLearnerMetadataEnrollment> {
         let token = parent.child_with_deadline(Instant::now() + Duration::from_secs(5));
         token.check()?;
-        let leader = &self.seed.spec.node_id;
+        let leader = &self.node_id;
         // All network work occurs outside service/DB/metadata latches. These
         // are distinct MQ contexts, both bounded by the ORIGINAL operation.
         let first_business = Uuid::now_v7();
@@ -65,7 +75,7 @@ impl NativeInitialConsensusLaunch {
             .ok_or_else(|| invalid("enrollment service busy"))?
             .listener_open_guard();
         let proposed = {
-            let mut store = self.lock_initial_metadata(&token)?;
+            let mut store = self.lock_metadata(&token)?;
             store.require_listener_database(&actual_open)?;
             store.propose_observed_native_learner_enrollment(
                 &birth,
@@ -75,11 +85,11 @@ impl NativeInitialConsensusLaunch {
             )?
         };
         let proposed_index = proposed.as_ref().map(|entry| entry.index);
-        self.heartbeat_initial_metadata(&token)?;
+        self.heartbeat(&token)?;
         token.check()?;
         birth.require_live()?;
         actual_open.require_live()?;
-        let store = self.lock_initial_metadata(&token)?;
+        let store = self.lock_metadata(&token)?;
         store.require_listener_database(&actual_open)?;
         let status = store.status();
         if status.role != MetadataConsensusRole::Leader

@@ -35,7 +35,7 @@ fn planned_network(count: usize) -> PlannedNetwork {
 }
 fn planned_network_with_spare(count: usize, spare: usize) -> PlannedNetwork {
     assert!(matches!(count, 3 | 4));
-    assert!(spare <= 1);
+    assert!(spare <= 2);
     let root = tempfile::tempdir().unwrap();
     let ca_key = KeyPair::generate().unwrap();
     let mut params = CertificateParams::default();
@@ -413,3 +413,5 @@ mod learner_birth_tests;
 mod learner_enrollment_tests;
 
 mod heartbeat_backlog_tests;
+
+mod metadata_supervisor_tests;

@@ -5,6 +5,8 @@ use crate::distribution_consensus::MetadataConsensusStore;
 use crate::distribution_metadata_read_provider::MetadataReadProvider;
 use crate::distribution_transport::DrainedClusterDataListener;
 
+mod control;
+
 const DIRECTORY: &str = "native-learner-metadata";
 #[derive(Default)]
 pub(super) struct NativeLearnerMetadataTransition {
@@ -16,9 +18,142 @@ pub(super) struct NativeLearnerMetadataTransition {
     provider: Option<Arc<MetadataReadProvider>>,
     pub(super) listener: Option<ClusterDataServerHandle>,
     stopping: bool,
+    supervisor: Option<NativeMetadataSupervisor>,
+    control: Option<NativeMetadataControlHost>,
     namespace_ids: Option<Vec<(String, Uuid)>>,
 }
 impl NativeUnassignedLearnerHost {
+    pub(in crate::distribution_native_host) fn start_automatic_metadata(
+        &mut self,
+        parent: &CancellationToken,
+    ) -> Result<()> {
+        parent.check()?;
+        let transition = &mut self.metadata_transition;
+        if (transition.listener.is_none()
+            && !transition.control.as_ref().is_some_and(|c| c.is_running()))
+            || transition.stopping
+        {
+            return Err(invalid(
+                "automatic learner metadata requires running Registered listener",
+            ));
+        }
+        if transition.supervisor.is_some() {
+            return Ok(());
+        }
+        if let Some(control) = &transition.control {
+            transition.supervisor = Some(control.start_automatic_metadata(parent)?);
+            return Ok(());
+        }
+        transition.supervisor = Some(NativeMetadataSupervisor::start(
+            Arc::clone(
+                transition
+                    .metadata
+                    .as_ref()
+                    .ok_or_else(|| invalid("owned metadata absent"))?,
+            ),
+            &self._service,
+            Arc::clone(
+                transition
+                    .topology
+                    .as_ref()
+                    .ok_or_else(|| invalid("owned routing absent"))?,
+            ),
+            self.provider.network.clone(),
+            NativeMetadataSupervisorConfig::default(),
+            parent,
+        )?);
+        Ok(())
+    }
+    /// Listener/catch-up only. False means local installed C/term/index still
+    /// lags current OWN MQ; it can NEVER replace strict owned-member READY.
+    pub(in crate::distribution_native_host) fn validate_registered_metadata_catchup(
+        &self,
+        observed: &HostMetadataReadObservation,
+        business: Uuid,
+        parent: &CancellationToken,
+    ) -> Result<bool> {
+        let metadata = self
+            .metadata_transition
+            .metadata
+            .as_ref()
+            .ok_or_else(|| invalid("actual Registered metadata owner absent"))?;
+        let proof = {
+            let store = metadata
+                .try_lock()
+                .ok_or_else(|| invalid("Registered catch-up store busy"))?;
+            store.observe_registered_native_metadata_catchup(observed, business, parent)?
+        };
+        self.provider.factory.require_registered_metadata_catchup(
+            &proof,
+            observed,
+            business,
+            &self.provider.network,
+        )?;
+        let store = metadata
+            .try_lock()
+            .ok_or_else(|| invalid("Registered catch-up owner changed/busy"))?;
+        proof.require_current(&store)?;
+        proof.local_installed_current()
+    }
+
+    pub(in crate::distribution_native_host) fn validate_owned_metadata_member(
+        &self,
+        observed: &HostMetadataReadObservation,
+        business: Uuid,
+        parent: &CancellationToken,
+    ) -> Result<()> {
+        let metadata = self
+            .metadata_transition
+            .metadata
+            .as_ref()
+            .ok_or_else(|| invalid("actual owned metadata backend required"))?;
+        let proof = {
+            let store = metadata
+                .try_lock()
+                .ok_or_else(|| invalid("owned metadata member busy"))?;
+            store.require_listener_database(&self.provider.actual_open)?;
+            store.observe_owned_native_metadata_member(observed, business, parent)?
+        };
+        // Never acquire a DB guard while holding the metadata mutex.
+        self.provider.factory.require_owned_metadata_member(
+            &proof,
+            observed,
+            business,
+            &self.provider.network,
+        )?;
+        let store = metadata
+            .try_lock()
+            .ok_or_else(|| invalid("owned metadata member changed/busy"))?;
+        proof.require_current(&store)
+    }
+
+    pub(in crate::distribution_native_host) fn owned_metadata_snapshot(
+        &self,
+        parent: &CancellationToken,
+    ) -> Result<Option<(Uuid, crate::MetadataConsensusStatus, bool)>> {
+        parent.check()?;
+        self.provider.actual_open.require_live()?;
+        let Some(metadata) = self.metadata_transition.metadata.as_ref() else {
+            return Ok(None);
+        };
+        let store = metadata
+            .try_lock()
+            .ok_or_else(|| invalid("owned learner metadata status busy"))?;
+        store.require_listener_database(&self.provider.actual_open)?;
+        let id = store.registered_native_metadata_member_store_id()?;
+        Ok(Some((
+            id,
+            store.status(),
+            (self.metadata_transition.listener.is_some()
+                || self
+                    .metadata_transition
+                    .control
+                    .as_ref()
+                    .is_some_and(|c| c.is_running()))
+                && !self.metadata_transition.stopping,
+        )))
+    }
+
     /// Current OWN learner MQ is mandatory. Enrollment's audit result is not
     /// accepted as authority, and all network acquisition happens in the caller.
     pub(crate) fn start_owned_metadata(
@@ -59,8 +194,16 @@ impl NativeUnassignedLearnerHost {
         token.check()?;
         self.provider.actual_open.require_live()?;
         let factory = Arc::clone(&self.provider.factory);
-        let current =
-            factory.enrolled_metadata_context(observed, business, &self.provider.network)?;
+        let registered_catchup = observed
+            .committed_topology(business)?
+            .nodes
+            .get(&factory.spec.node_id)
+            .is_some_and(|member| member.metadata_role == MetadataMemberRole::Voter);
+        let current = if registered_catchup {
+            factory.registered_metadata_context(observed, business, &self.provider.network)?
+        } else {
+            factory.enrolled_metadata_context(observed, business, &self.provider.network)?
+        };
         let (metadata_root, namespace_ids, record) = {
             let db = factory
                 .database
@@ -125,7 +268,16 @@ impl NativeUnassignedLearnerHost {
                 self.provider
                     .actual_open
                     .require_database(&actual_database)?;
-                if record.is_some() {
+                if registered_catchup {
+                    MetadataConsensusStore::recover_registered_native_metadata_retaining(
+                        &metadata_root,
+                        Arc::clone(&factory.database),
+                        observed,
+                        business,
+                        &token,
+                        &mut self.metadata_transition.retained,
+                    )?;
+                } else if record.is_some() {
                     self.metadata_transition.retained =
                         Some(MetadataConsensusStore::reopen_native_owned(
                             &metadata_root,
@@ -153,17 +305,27 @@ impl NativeUnassignedLearnerHost {
                 .retained
                 .as_ref()
                 .ok_or_else(|| invalid("actual retained metadata owner absent"))?;
-            store.registered_native_learner_store_id()?;
+            if registered_catchup {
+                store.registered_native_metadata_member_store_id()?;
+            } else {
+                store.registered_native_learner_store_id()?;
+            }
             self.metadata_transition.metadata = Some(Arc::new(Mutex::new(
                 self.metadata_transition.retained.take().unwrap(),
             )));
         }
         let metadata = Arc::clone(self.metadata_transition.metadata.as_ref().unwrap());
         let store_id = {
-            let id = metadata
-                .try_lock()
-                .ok_or_else(|| invalid("owned learner metadata busy"))?
-                .registered_native_learner_store_id()?;
+            let id = {
+                let store = metadata
+                    .try_lock()
+                    .ok_or_else(|| invalid("owned learner metadata busy"))?;
+                if registered_catchup {
+                    store.registered_native_metadata_member_store_id()?
+                } else {
+                    store.registered_native_learner_store_id()?
+                }
+            };
             // Release metadata BEFORE any DB borrow.
             let db = factory
                 .database
@@ -178,6 +340,9 @@ impl NativeUnassignedLearnerHost {
             }
             id
         };
+        if registered_catchup {
+            self.validate_registered_metadata_catchup(observed, business, &token)?;
+        }
         cut("registered")?;
         token.check()?;
         observed.require_live_request(business)?;
@@ -217,6 +382,23 @@ impl NativeUnassignedLearnerHost {
             token.check()?;
             return Ok(store_id);
         }
+        let catchup_proof = if registered_catchup {
+            let proof = {
+                let store = metadata
+                    .try_lock()
+                    .ok_or_else(|| invalid("Registered transition metadata busy"))?;
+                store.observe_registered_native_metadata_catchup(observed, business, &token)?
+            };
+            factory.require_registered_metadata_catchup(
+                &proof,
+                observed,
+                business,
+                &self.provider.network,
+            )?;
+            Some(proof)
+        } else {
+            None
+        };
         {
             let store = metadata
                 .try_lock()
@@ -226,12 +408,22 @@ impl NativeUnassignedLearnerHost {
                 .try_lock()
                 .ok_or_else(|| invalid("drained learner service busy"))?;
             // This path takes NO DB latch while holding metadata/service.
-            service.transition_enrolled_learner_metadata_listener(
-                &self._service,
-                self.metadata_transition.drained.as_ref().unwrap(),
-                &factory.database,
-                &store,
-            )?;
+            if let Some(proof) = &catchup_proof {
+                service.transition_registered_metadata_catchup_listener(
+                    &self._service,
+                    self.metadata_transition.drained.as_ref().unwrap(),
+                    &factory.database,
+                    &store,
+                    proof,
+                )?;
+            } else {
+                service.transition_enrolled_learner_metadata_listener(
+                    &self._service,
+                    self.metadata_transition.drained.as_ref().unwrap(),
+                    &factory.database,
+                    &store,
+                )?;
+            }
         }
         cut("before-bind")?;
         observed.require_live_request(business)?;
@@ -257,7 +449,11 @@ impl NativeUnassignedLearnerHost {
             cut("after-bind")?;
             observed.require_live_request(business)?;
             token.check()?;
-            factory.enrolled_metadata_context(observed, business, &self.provider.network)?;
+            if registered_catchup {
+                self.validate_registered_metadata_catchup(observed, business, &token)?;
+            } else {
+                factory.enrolled_metadata_context(observed, business, &self.provider.network)?;
+            }
             self.provider.actual_open.require_live()?;
             Ok(())
         })();
@@ -278,6 +474,13 @@ impl NativeUnassignedLearnerHost {
     /// The SAME service/range-store remains owned and permanently metadata-only.
     pub(crate) fn stop_owned_metadata(&mut self, parent: &CancellationToken) -> Result<()> {
         parent.check()?;
+        if let Some(supervisor) = self.metadata_transition.supervisor.as_mut() {
+            supervisor.stop(parent)?;
+            self.metadata_transition.supervisor.take();
+        }
+        if let Some(control) = self.metadata_transition.control.as_mut() {
+            control.stop(parent)?;
+        }
         if let Some(listener) = self.metadata_transition.listener.as_mut() {
             self.metadata_transition.stopping = true;
             listener.stop_and_drain(parent)?;

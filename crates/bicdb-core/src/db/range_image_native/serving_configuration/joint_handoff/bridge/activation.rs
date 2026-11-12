@@ -378,6 +378,49 @@ impl NativeJointBridgeReadScope<'_> {
         }
         Ok(())
     }
+    pub(crate) fn require_prepared_catalogue_history(
+        &self,
+        catalogue: &crate::distribution_range_consensus::NativeJointBridgeCatalogue,
+        admission: &crate::distribution_range_handoff::NativeJointOpenAdmission,
+        parent: &CancellationToken,
+    ) -> Result<()> {
+        self.journal.require_database(self.database)?;
+        for (index, expected) in catalogue.decisions() {
+            parent.check()?;
+            admission.require_live()?;
+            if *index == 0 || *index > self.lineage.range_index() {
+                return Err(invalid(
+                    "joint open history omitted an irreversible index beyond actual native cut",
+                ));
+            }
+            let entry = self.database.read_native_history_entry(
+                self.native.data().old_range().id,
+                self.lineage.history_generation(),
+                *index,
+            )?;
+            let matches = match (expected, &entry.outcome) {
+                (
+                    crate::distribution_range_consensus::NativeReadCatalogueDecision::Applied(
+                        expected,
+                    ),
+                    NativeLogicalHistoryOutcomeV1::Applied {
+                        command_checksum_sha256,
+                    },
+                ) => expected == command_checksum_sha256,
+                (
+                    crate::distribution_range_consensus::NativeReadCatalogueDecision::Aborted,
+                    NativeLogicalHistoryOutcomeV1::Aborted,
+                ) => true,
+                _ => false,
+            };
+            if entry.index != *index || !matches {
+                return Err(invalid(
+                    "frozen joint open contradicts actual complete retained/native command history",
+                ));
+            }
+        }
+        Ok(())
+    }
     pub(crate) fn database(&self) -> &BicDb {
         self.database
     }

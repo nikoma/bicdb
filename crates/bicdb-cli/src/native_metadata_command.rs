@@ -1,10 +1,10 @@
 //! Explicit metadata-only host. Never calls generic pgwire/MStore startup.
 use anyhow::{ensure, Context, Result};
+use bicdb_core::NativeMetadataLearnerHost;
 use bicdb_core::{
     CancellationToken, ClusterNetworkTransportConfig, ClusterNode, ClusterNodeId,
     NativeMetadataBootstrapPlan, NativeMetadataHost, NativeMetadataHostAction,
-    NativeMetadataHostPhase, NativeMetadataHostStatus, ReplicationTlsConfig,
-    TcpClusterBootstrapClient,
+    NativeMetadataHostPhase, ReplicationTlsConfig, TcpClusterBootstrapClient,
 };
 use clap::{Subcommand, ValueEnum};
 use serde::{Deserialize, Serialize};
@@ -20,6 +20,9 @@ pub enum Command {
     /// FRESH roots only. Starts metadata listeners; never SQL/data Serving.
     ServeFresh {
         root: PathBuf,
+        /// Manual election/heartbeat/enrollment scheduling; proof/admission guards stay mandatory.
+        #[arg(long)]
+        manual_enrollment: bool,
         #[arg(long)]
         plan: PathBuf,
         #[arg(long)]
@@ -42,6 +45,102 @@ pub enum Command {
         #[arg(long, default_value_t = 3600)]
         run_seconds: u64,
     },
+    /// Real fresh fifth factory/birth listener; metadata backend is a later action.
+    ServeLearnerFresh {
+        root: PathBuf,
+        #[arg(long)]
+        cluster_id: String,
+        #[arg(long)]
+        seed_node_id: String,
+        #[arg(long)]
+        seed_address: String,
+        #[arg(long)]
+        node_id: String,
+        #[arg(long)]
+        address: String,
+        #[arg(long, default_value_t = 1)]
+        incarnation: u64,
+        #[arg(long)]
+        cluster_tls_cert: PathBuf,
+        #[arg(long)]
+        cluster_tls_key: PathBuf,
+        #[arg(long)]
+        cluster_tls_ca: PathBuf,
+        #[arg(long)]
+        command_file: PathBuf,
+        #[arg(long)]
+        status_file: PathBuf,
+        #[arg(long, default_value_t = 8_388_608)]
+        buffer_pool_bytes: u64,
+        #[arg(long, default_value_t = 3600)]
+        run_seconds: u64,
+    },
+    /// Register and start ONE fresh metadata learner; automatic leader maintenance promotes it.
+    JoinFresh {
+        root: PathBuf,
+        #[arg(long)]
+        cluster_id: String,
+        #[arg(long)]
+        seed_node_id: String,
+        #[arg(long)]
+        seed_address: String,
+        #[arg(long)]
+        node_id: String,
+        #[arg(long)]
+        address: String,
+        #[arg(long, default_value_t = 1)]
+        incarnation: u64,
+        #[arg(long)]
+        cluster_tls_cert: PathBuf,
+        #[arg(long)]
+        cluster_tls_key: PathBuf,
+        #[arg(long)]
+        cluster_tls_ca: PathBuf,
+        #[arg(long)]
+        command_file: PathBuf,
+        #[arg(long)]
+        status_file: PathBuf,
+        #[arg(long, default_value_t = 1_099_511_627_776)]
+        capacity_bytes: u64,
+        #[arg(long, default_value_t = 8_388_608)]
+        buffer_pool_bytes: u64,
+        #[arg(long, default_value_t = 3600)]
+        run_seconds: u64,
+    },
+    /// Strict existing enrolled learner root; never recreates schema/genesis/metadata identity.
+    ServeLearnerReopen {
+        root: PathBuf,
+        /// Run typed metadata continuation/control/maintenance on this persisted owner.
+        /// Default reopen remains manual; this never registers or imports schema.
+        #[arg(long)]
+        automatic_metadata: bool,
+        #[arg(long)]
+        cluster_id: String,
+        #[arg(long)]
+        seed_node_id: String,
+        #[arg(long)]
+        seed_address: String,
+        #[arg(long)]
+        node_id: String,
+        #[arg(long)]
+        address: String,
+        #[arg(long, default_value_t = 1)]
+        incarnation: u64,
+        #[arg(long)]
+        cluster_tls_cert: PathBuf,
+        #[arg(long)]
+        cluster_tls_key: PathBuf,
+        #[arg(long)]
+        cluster_tls_ca: PathBuf,
+        #[arg(long)]
+        command_file: PathBuf,
+        #[arg(long)]
+        status_file: PathBuf,
+        #[arg(long, default_value_t = 8_388_608)]
+        buffer_pool_bytes: u64,
+        #[arg(long, default_value_t = 3600)]
+        run_seconds: u64,
+    },
     /// Send one local operator action; JSON commands are DATA, not capabilities.
     Step {
         #[arg(long)]
@@ -52,6 +151,8 @@ pub enum Command {
         sequence: u64,
         #[arg(long, value_enum)]
         action: Action,
+        #[arg(long)]
+        target_node_id: Option<String>,
         #[arg(long, default_value_t = 5000)]
         timeout_ms: u64,
     },
@@ -88,20 +189,36 @@ pub enum Action {
     Elect,
     EnableControl,
     Heartbeat,
+    EnrollLearner,
+    CatchUpLearner,
+    StartLearnerMetadata,
     Status,
     Stop,
 }
-impl From<Action> for NativeMetadataHostAction {
-    fn from(a: Action) -> Self {
-        match a {
-            Action::Prepare => Self::Prepare,
-            Action::Launch => Self::Launch,
-            Action::Elect => Self::Elect,
-            Action::EnableControl => Self::EnableControl,
-            Action::Heartbeat => Self::Heartbeat,
-            Action::Status => Self::Status,
-            Action::Stop => Self::Stop,
-        }
+impl Action {
+    fn into_core(self, target: Option<String>) -> Result<NativeMetadataHostAction> {
+        use NativeMetadataHostAction as C;
+        let needs_target = matches!(self, Self::EnrollLearner | Self::CatchUpLearner);
+        ensure!(
+            needs_target == target.is_some(),
+            "target-node-id is required ONLY for enroll-learner/catch-up-learner"
+        );
+        Ok(match self {
+            Self::Prepare => C::Prepare,
+            Self::Launch => C::Launch,
+            Self::Elect => C::Elect,
+            Self::EnableControl => C::EnableControl,
+            Self::Heartbeat => C::Heartbeat,
+            Self::EnrollLearner => C::EnrollLearner {
+                node: ClusterNodeId::new(target.unwrap())?,
+            },
+            Self::CatchUpLearner => C::CatchUpLearner {
+                node: ClusterNodeId::new(target.unwrap())?,
+            },
+            Self::StartLearnerMetadata => C::StartLearnerMetadata,
+            Self::Status => C::Status,
+            Self::Stop => C::Stop,
+        })
     }
 }
 #[derive(Serialize, Deserialize)]
@@ -113,11 +230,11 @@ struct Request {
     budget_ms: u64,
 }
 #[derive(Serialize)]
-struct Reply<'a> {
+struct Reply<'a, T: Serialize> {
     version: u32,
     sequence: u64,
     process_id: u32,
-    host: Option<&'a NativeMetadataHostStatus>,
+    host: Option<&'a T>,
     error: Option<String>,
     data_serving: bool,
 }
@@ -192,9 +309,103 @@ fn own_network(cert: PathBuf, key: PathBuf, ca: PathBuf) -> ClusterNetworkTransp
     }
 }
 pub fn run(command: Command) -> Result<()> {
+    let command_started = Instant::now();
+    let automatic_join = matches!(&command, Command::JoinFresh { .. });
+    let automatic_metadata = automatic_join
+        || matches!(
+            &command,
+            Command::ServeLearnerReopen {
+                automatic_metadata: true,
+                ..
+            }
+        );
+    // Registration returns committed CONFIG DATA only. The subsequent fresh
+    // factory independently checks actual own MQ, TLS, schema and native birth.
+    let command = match command {
+        Command::JoinFresh {
+            root,
+            cluster_id,
+            seed_node_id,
+            seed_address,
+            node_id,
+            address,
+            incarnation,
+            cluster_tls_cert,
+            cluster_tls_key,
+            cluster_tls_ca,
+            command_file,
+            status_file,
+            capacity_bytes,
+            buffer_pool_bytes,
+            run_seconds,
+        } => {
+            ensure!(!root.exists(), "join-fresh refuses an existing native root");
+            ensure!(
+                (1..=86400).contains(&run_seconds),
+                "join duration outside1..86400 seconds"
+            );
+            let endpoint: std::net::SocketAddr =
+                address.parse().context("join needs own numeric endpoint")?;
+            ensure!(endpoint.port() != 0, "join needs own fixed endpoint");
+            ensure!(
+                (8 * 1024 * 1024..=1024 * 1024 * 1024).contains(&buffer_pool_bytes),
+                "join buffer pool outside supported bound"
+            );
+            ensure!(
+                command_file != status_file && !command_file.exists() && !status_file.exists(),
+                "join control/status paths must differ and be absent"
+            );
+            let actual_root = root
+                .parent()
+                .filter(|p| !p.as_os_str().is_empty())
+                .unwrap_or(Path::new("."))
+                .canonicalize()?
+                .join(root.file_name().context("join root basename absent")?);
+            for path in [&command_file, &status_file] {
+                ensure!(
+                    !private_parent(path)?
+                        .join(path.file_name().context("join operator filename absent")?)
+                        .starts_with(&actual_root),
+                    "join operator files must stay outside native root"
+                );
+            }
+            run(Command::Register {
+                cluster_id: cluster_id.clone(),
+                seed_node_id: seed_node_id.clone(),
+                seed_address: seed_address.clone(),
+                node_id: node_id.clone(),
+                address: address.clone(),
+                incarnation,
+                capacity_bytes,
+                cluster_tls_cert: cluster_tls_cert.clone(),
+                cluster_tls_key: cluster_tls_key.clone(),
+                cluster_tls_ca: cluster_tls_ca.clone(),
+                timeout_ms: (run_seconds * 1000).min(5000),
+            })?;
+            Command::ServeLearnerFresh {
+                root,
+                cluster_id,
+                seed_node_id,
+                seed_address,
+                node_id,
+                address,
+                incarnation,
+                cluster_tls_cert,
+                cluster_tls_key,
+                cluster_tls_ca,
+                command_file,
+                status_file,
+                buffer_pool_bytes,
+                run_seconds,
+            }
+        }
+        other => other,
+    };
+    let reopening_learner = matches!(&command, Command::ServeLearnerReopen { .. });
     match command {
         Command::ServeFresh {
             root,
+            manual_enrollment,
             plan,
             node_id,
             address,
@@ -249,7 +460,7 @@ pub fn run(command: Command) -> Result<()> {
             })?;
             let lifetime = CancellationToken::new(
                 canceled,
-                Some(Instant::now() + Duration::from_secs(run_seconds)),
+                Some(command_started + Duration::from_secs(run_seconds)),
             );
             let mut host = NativeMetadataHost::start_fresh_metadata_only(
                 &root,
@@ -273,6 +484,7 @@ pub fn run(command: Command) -> Result<()> {
                 },
             )?;
             let mut sequence = 0;
+            let mut command_error: Option<String> = None;
             let mut last_tick = Instant::now();
             while lifetime.check().is_ok() && status.phase != NativeMetadataHostPhase::Stopped {
                 if command_file.exists() {
@@ -306,6 +518,7 @@ pub fn run(command: Command) -> Result<()> {
                                 Some(error.to_string())
                             }
                         };
+                        command_error = error.clone();
                         sequence = request.sequence;
                         // No successful phase/readiness claim is inferred on error.
                         write(
@@ -321,23 +534,41 @@ pub fn run(command: Command) -> Result<()> {
                         )?;
                     }
                 }
-                // Retained finite metadata maintenance, not election/data recovery.
-                if last_tick.elapsed() >= Duration::from_millis(500)
-                    && status
-                        .metadata
-                        .as_ref()
-                        .is_some_and(|m| m.role == bicdb_core::MetadataConsensusRole::Leader)
-                    && matches!(
-                        status.phase,
-                        NativeMetadataHostPhase::OwnedMetadata
-                            | NativeMetadataHostPhase::MetadataControl
-                    )
-                {
-                    let token =
-                        lifetime.child_with_deadline(Instant::now() + Duration::from_secs(1));
-                    if let Ok(next) = host.apply(NativeMetadataHostAction::Heartbeat, &token) {
+                if last_tick.elapsed() >= Duration::from_millis(500) {
+                    // The one general supervisor owns election/heartbeats. This
+                    // separately bounded controller owns CONFIG enrollment only.
+                    if status.phase == NativeMetadataHostPhase::MetadataControl {
+                        if !manual_enrollment {
+                            let _ = host.start_automatic_metadata(&lifetime);
+                        }
+                        if !manual_enrollment
+                            && status.metadata.as_ref().is_some_and(|m| {
+                                m.role == bicdb_core::MetadataConsensusRole::Leader
+                            })
+                        {
+                            let token = lifetime
+                                .child_with_deadline(Instant::now() + Duration::from_millis(1250));
+                            if let Ok(next) = host.maintain_metadata(&token) {
+                                status = next;
+                            }
+                        }
+                    }
+                    if let Ok(next) = host.status(
+                        &lifetime.child_with_deadline(Instant::now() + Duration::from_millis(250)),
+                    ) {
                         status = next;
                     }
+                    write(
+                        &status_file,
+                        &Reply {
+                            version: 1,
+                            sequence,
+                            process_id: std::process::id(),
+                            host: Some(&status),
+                            error: command_error.clone(),
+                            data_serving: false,
+                        },
+                    )?;
                     last_tick = Instant::now();
                 }
                 std::thread::sleep(Duration::from_millis(5));
@@ -350,11 +581,243 @@ pub fn run(command: Command) -> Result<()> {
                     .child_with_deadline(Instant::now() + Duration::from_secs(5)),
             )?;
         }
+        Command::ServeLearnerFresh {
+            root,
+            cluster_id,
+            seed_node_id,
+            seed_address,
+            node_id,
+            address,
+            incarnation,
+            cluster_tls_cert,
+            cluster_tls_key,
+            cluster_tls_ca,
+            command_file,
+            status_file,
+            buffer_pool_bytes,
+            run_seconds,
+        }
+        | Command::ServeLearnerReopen {
+            root,
+            automatic_metadata: _,
+            cluster_id,
+            seed_node_id,
+            seed_address,
+            node_id,
+            address,
+            incarnation,
+            cluster_tls_cert,
+            cluster_tls_key,
+            cluster_tls_ca,
+            command_file,
+            status_file,
+            buffer_pool_bytes,
+            run_seconds,
+        } => {
+            ensure!(
+                (1..=86400).contains(&run_seconds)
+                    && if reopening_learner {
+                        root.is_dir()
+                    } else {
+                        !root.exists()
+                    },
+                "learner requires bounded duration and the explicit fresh/reopen root mode"
+            );
+            ensure!(
+                command_file != status_file && !command_file.exists() && !status_file.exists(),
+                "learner operator files must differ and be absent"
+            );
+            let root_parent = root
+                .parent()
+                .filter(|p| !p.as_os_str().is_empty())
+                .unwrap_or(Path::new("."))
+                .canonicalize()?;
+            let actual_root = if reopening_learner {
+                root.canonicalize()?
+            } else {
+                root_parent.join(root.file_name().context("learner root basename absent")?)
+            };
+            for path in [&command_file, &status_file] {
+                ensure!(
+                    !private_parent(path)?
+                        .join(path.file_name().context("operator filename absent")?)
+                        .starts_with(&actual_root),
+                    "learner operator files must stay outside native root"
+                );
+            }
+            let canceled = Arc::new(AtomicBool::new(false));
+            let signal = Arc::clone(&canceled);
+            ctrlc::set_handler(move || {
+                signal.store(true, Ordering::SeqCst);
+            })?;
+            let lifetime = CancellationToken::new(
+                canceled,
+                Some(command_started + Duration::from_secs(run_seconds)),
+            );
+            let constructor = if reopening_learner {
+                NativeMetadataLearnerHost::reopen_metadata_only
+            } else {
+                NativeMetadataLearnerHost::start_fresh_metadata_only
+            };
+            let mut host = constructor(
+                &root,
+                bicdb_core::ClusterId::new(cluster_id)?,
+                ClusterNodeId::new(node_id)?,
+                &address,
+                incarnation,
+                ClusterNodeId::new(seed_node_id)?,
+                &seed_address,
+                own_network(cluster_tls_cert, cluster_tls_key, cluster_tls_ca),
+                buffer_pool_bytes,
+                &lifetime,
+            )?;
+            let mut status = host.refresh(&lifetime)?;
+            write(
+                &status_file,
+                &Reply {
+                    version: 1,
+                    sequence: 0,
+                    process_id: std::process::id(),
+                    host: Some(&status),
+                    error: None,
+                    data_serving: false,
+                },
+            )?;
+            let mut sequence = 0;
+            let mut command_error: Option<String> = None;
+            let mut last_refresh = Instant::now();
+            let mut stopping = false;
+            while lifetime.check().is_ok() && !stopping {
+                if command_file.exists() {
+                    let request: Request =
+                        serde_json::from_slice(&read_bounded(&command_file, 16 * 1024)?)?;
+                    ensure!(
+                        request.version == 1 && (1..=5000).contains(&request.budget_ms),
+                        "unsupported learner command version/budget"
+                    );
+                    if request.sequence > sequence {
+                        ensure!(
+                            request.sequence == sequence + 1,
+                            "learner sequence must advance exactly one"
+                        );
+                        let token = lifetime.child_with_deadline(
+                            Instant::now() + Duration::from_millis(request.budget_ms),
+                        );
+                        let result = match request.action {
+                            NativeMetadataHostAction::StartLearnerMetadata => {
+                                host.start_metadata(&token)
+                            }
+                            NativeMetadataHostAction::Elect => host.elect_metadata(&token),
+                            NativeMetadataHostAction::Status => host.refresh(&token),
+                            NativeMetadataHostAction::Stop => host.stop(&token).map(|_| {
+                                stopping = true;
+                                status.phase = "stopped";
+                                status.metadata_listener_owned = false;
+                                status.clone()
+                            }),
+                            _ => Err(bicdb_core::BicDbError::Unsupported(
+                                "learner owner permits only start-learner-metadata/elect/status/stop"
+                                    .into(),
+                            )),
+                        };
+                        let error = match result {
+                            Ok(next) => {
+                                status = next;
+                                None
+                            }
+                            Err(error) => Some(error.to_string()),
+                        };
+                        command_error = error.clone();
+                        sequence = request.sequence;
+                        write(
+                            &status_file,
+                            &Reply {
+                                version: 1,
+                                sequence,
+                                process_id: std::process::id(),
+                                host: Some(&status),
+                                error,
+                                data_serving: false,
+                            },
+                        )?;
+                    }
+                }
+                if last_refresh.elapsed() >= Duration::from_millis(500) && !stopping {
+                    let token =
+                        lifetime.child_with_deadline(Instant::now() + Duration::from_secs(2));
+                    let refreshed = host.refresh(&token);
+                    let mut error = None;
+                    match refreshed {
+                        Ok(next) => {
+                            status = next;
+                            if automatic_metadata
+                                && status.birth_bound
+                                && !status.metadata_listener_owned
+                            {
+                                match host.start_metadata(&token) {
+                                    Ok(next) => status = next,
+                                    Err(e) => error = Some(e.to_string()),
+                                }
+                            }
+                        }
+                        Err(e) => error = Some(e.to_string()),
+                    }
+                    if automatic_metadata
+                        && status.metadata_role == bicdb_core::MetadataMemberRole::Voter
+                    {
+                        match host.enable_metadata_control(&token) {
+                            Ok(next) => status = next,
+                            Err(e) => error = Some(e.to_string()),
+                        }
+                    }
+                    if automatic_metadata
+                        && status.metadata_control_owned
+                        && status
+                            .metadata
+                            .as_ref()
+                            .is_some_and(|m| m.role == bicdb_core::MetadataConsensusRole::Leader)
+                    {
+                        match host.maintain_metadata(&token) {
+                            Ok(next) => status = next,
+                            Err(e) => error = Some(e.to_string()),
+                        }
+                    }
+                    if automatic_metadata && status.metadata_listener_owned {
+                        if let Err(e) = host.start_automatic_metadata(&lifetime) {
+                            error = Some(e.to_string());
+                        }
+                    }
+                    write(
+                        &status_file,
+                        &Reply {
+                            version: 1,
+                            sequence,
+                            process_id: std::process::id(),
+                            host: Some(&status),
+                            error: if sequence > 0 {
+                                command_error.clone()
+                            } else {
+                                error
+                            },
+                            data_serving: false,
+                        },
+                    )?;
+                    last_refresh = Instant::now();
+                }
+                std::thread::sleep(Duration::from_millis(5));
+            }
+            host.stop(
+                &CancellationToken::uncancelable()
+                    .child_with_deadline(Instant::now() + Duration::from_secs(5)),
+            )?;
+        }
+        Command::JoinFresh { .. } => unreachable!("join-fresh is normalized before dispatch"),
         Command::Step {
             command_file,
             status_file,
             sequence,
             action,
+            target_node_id,
             timeout_ms,
         } => {
             ensure!(
@@ -371,7 +834,7 @@ pub fn run(command: Command) -> Result<()> {
                 &Request {
                     version: 1,
                     sequence,
-                    action: action.into(),
+                    action: action.into_core(target_node_id)?,
                     budget_ms: timeout_ms,
                 },
             )?;

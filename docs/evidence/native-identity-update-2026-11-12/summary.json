@@ -1,0 +1,40 @@
+{
+  "implementation": "6cafd400844f0dc11200afed52ab2f015009ecf2",
+  "base_main": "b9394418bdf9d87864c2c12d6fe81bb7d4039d53",
+  "source_version": "1.0.490-beta",
+  "evidence_commit_scope": "Documentation and evidence only after tested implementation; production code, tests, dependencies and versions unchanged. gitdiff of crates/Cargo.lock/POSTGRES_COMPATIBILITY.md/scripts/.github must remain zero.",
+  "full_Core": {
+    "passed": 1696,
+    "failed": 0,
+    "ignored": 17,
+    "Cargo_targets": 126,
+    "child_summaries_excluded": 1
+  },
+  "focused_Core_grants": {
+    "passed": 12,
+    "included_in_full_Core": true
+  },
+  "SQL_authority": {
+    "passed": 1,
+    "failed": 0
+  },
+  "SQL_version_identity": {
+    "passed": 2,
+    "failed": 0
+  },
+  "process_cuts": {
+    "passed": 38,
+    "failed": 0
+  },
+  "EIO_cases": {
+    "passed": 8,
+    "failed": 0
+  },
+  "KVM_cases": {
+    "passed": 10,
+    "failed": 0
+  },
+  "probe_sha256": "3aa9f3cba6281699feb002d28641613a0cb8a0b9ed5804c6b5cc4323531f99e2",
+  "release_state": "Qualification probe only; no production CLI/release/deployment produced.",
+  "full_goal": "Broader original application/HA/partition/portable-origin/P1P2 work remains active."
+}

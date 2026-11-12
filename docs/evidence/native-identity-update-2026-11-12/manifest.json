@@ -1,0 +1,74 @@
+{
+  "README.md": {
+    "bytes": 3407,
+    "sha256": "0114b7f7ae79755736ff4eb2fa3a46fc3d6c8ab839b2561c5dc5319574cdcf0f"
+  },
+  "recovery/README.md": {
+    "bytes": 3311,
+    "sha256": "96187271f9b391f186ec6d4d58017a103395e8652fb1bef392c8e8f96ef5a61a"
+  },
+  "recovery/archived-files.json": {
+    "bytes": 53437,
+    "sha256": "6307a17117e79e6f92fef5057301e4bb70ba4278521b7265af61d7406eb69eb1"
+  },
+  "recovery/manifest.json": {
+    "bytes": 525,
+    "sha256": "523fc50d7cf185d9fdb0047aa056079003403227941365abc01035bc2d16049a"
+  },
+  "recovery/source-scoped-results.tar.gz": {
+    "bytes": 39219,
+    "sha256": "b18427c81bb65e5b43944bdf11261b154cd4ab95d8a8e82cffec4760322e465b"
+  },
+  "recovery/summary.json": {
+    "bytes": 1146,
+    "sha256": "de147ac0e6df333e514ca3775ef6726b0e0cd5d1030593f5357e96ab8922b11b"
+  },
+  "summary.json": {
+    "bytes": 1203,
+    "sha256": "86af092927ae32732f9ca26fbabe0c020ae1fcf44471bf496333a80232e72723"
+  },
+  "validation/controller/canonical-native490-core-results.py": {
+    "bytes": 2630,
+    "sha256": "bc49eee1d8c13a8fea2653deb77202319c82ccc34348e4a2addf42ea65359bf2"
+  },
+  "validation/controller/native-identity-main490-validation.json": {
+    "bytes": 3485,
+    "sha256": "a20294a856dec1b45726b2c526e8f0cfb20215f4d6098dcbf245b09f8eb535f9"
+  },
+  "validation/controller/native-identity-main490-version-identity-v2.json": {
+    "bytes": 1499,
+    "sha256": "212b61264c405349664a8f19972b608a7559fa0cf7e3b66e9d2c33bc86133553"
+  },
+  "validation/host-control/native490-version-queued-refresh.json": {
+    "bytes": 436,
+    "sha256": "936910b1df00ebf7e1cab1126d4aead7a3f076a65e68edbfcb2e135da0090bc7"
+  },
+  "validation/manifest.json": {
+    "bytes": 1616,
+    "sha256": "47eccd66c7f56b4c0a16cd956565f728e12d57c056f212f7bf5a870a5d9d2763"
+  },
+  "validation/raw-manifest.json": {
+    "bytes": 2206,
+    "sha256": "21122ace17252f1440721d46ac6d3f78ff81b991209ccf09a8e95377e975c032"
+  },
+  "validation/report-native-identity-main490-canonical-Core.json": {
+    "bytes": 56051,
+    "sha256": "8e4c78df0cf3baf1dc7c6108e6c1f2cfa90616ffb9f8af4b5b746793114dede0"
+  },
+  "validation/report-native-identity-main490-validation.json": {
+    "bytes": 3642,
+    "sha256": "169ea0235bf8d97ee9f08d43300877200965b22c33f23dd173905e149135951b"
+  },
+  "validation/report-native-identity-main490-version-identity-v2.json": {
+    "bytes": 1030,
+    "sha256": "d6e8c509416b6663591e86620dfc1747dde4c0e49261b96b73614fdfd373ba23"
+  },
+  "validation/tc-step-native-identity-main490-validation.log.gz": {
+    "bytes": 224611,
+    "sha256": "22e7a99d6ba925bdd8d770204b05747e56fe4ab9f66da8e811bc9609b434adc5"
+  },
+  "validation/tc-step-native-identity-main490-version-identity-v2.log.gz": {
+    "bytes": 36308,
+    "sha256": "8a535438385130c0135b0d035025004c607b5a929d0309989fe658b281db3c43"
+  }
+}

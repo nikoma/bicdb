@@ -373,3 +373,6 @@ impl NativeProvisionalNode {
         })
     }
 }
+
+#[cfg(test)]
+mod tests;

@@ -16,6 +16,7 @@ pub(super) const CURRENT_JOINT_CATALOG_FORMAT: u32 = 16;
 pub(super) struct CurrentJointRecoveryState {
     binding: NativeCurrentJointBinding,
     scope: RecoveryFenceScope,
+    original_handoff_promise: RangeHandoffPromise,
     archived: BTreeMap<Uuid, ArchivedJointRefusal>,
 }
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -46,6 +47,12 @@ pub(super) fn validate_current_joint_catalog(catalog: &RangeWriteCatalog) -> Res
         }
         for (range, state) in states {
             state.scope.validate()?;
+            state.original_handoff_promise.validate()?;
+            if state.original_handoff_promise.range_id != *range {
+                return Err(range_write_error(
+                    "current joint archive changed original promised range",
+                ));
+            }
             if state.scope.range_id != *range
                 || state.binding.range.id != *range
                 || state.archived.len() > 256
@@ -88,6 +95,25 @@ pub(super) fn validate_current_joint_catalog(catalog: &RangeWriteCatalog) -> Res
     Ok(())
 }
 impl RangeWriteStore {
+    pub(crate) fn require_current_joint_handoff_constraints(
+        &self,
+        data: &crate::distribution_range_handoff::NativeJointDecisionData,
+    ) -> Result<()> {
+        let range = data.activation_range().id;
+        self.require_no_image_install(range)?;
+        if self.catalog.backup_fences.contains_key(&range)
+            || self
+                .catalog
+                .handoff_promises
+                .get(&range)
+                .is_some_and(|promise| promise != data.promise())
+        {
+            return Err(range_write_error(
+                "current joint recovery cannot bypass a DIFFERENT permanent handoff/backup refusal",
+            ));
+        }
+        Ok(())
+    }
     fn require_original_joint_recovery_writer(&self, range: RangeId) -> Result<()> {
         let original=self.current_joint_recovery_writers.get(&range).and_then(std::sync::Weak::upgrade)
             .ok_or_else(||range_write_error("original current-joint recovery writer owner unavailable; cold/new-operation rebind is unsupported"))?;
@@ -113,6 +139,18 @@ impl RangeWriteStore {
             return Ok(None);
         }
         self.current_joint_scope_constraint(&saved.scope)?;
+        let original = &self.catalog.current_joint_recoveries.as_ref().unwrap()[&range]
+            .original_handoff_promise;
+        if self
+            .catalog
+            .handoff_promises
+            .get(&range)
+            .is_some_and(|promise| promise != original)
+        {
+            return Err(range_write_error(
+                "current joint recovered open has a different permanent handoff refusal",
+            ));
+        }
         self.require_original_joint_recovery_writer(range)?;
         Ok(Some(&saved.scope))
     }
@@ -228,6 +266,11 @@ impl RangeWriteStore {
             ));
         }
         let saved = &self.catalog.current_joint_recoveries.as_ref().unwrap()[&scope.range_id];
+        if &saved.original_handoff_promise != fact.data().promise() {
+            return Err(range_write_error(
+                "saved current joint operation changed actual original permanent promise",
+            ));
+        }
         let original = self
             .current_joint_recovery_writers
             .get(&scope.range_id)
@@ -296,6 +339,11 @@ impl RangeWriteStore {
             .and_then(|m| m.get(&scope.range_id));
         if let Some(state) = state {
             self.require_original_joint_recovery_writer(scope.range_id)?;
+            if &state.original_handoff_promise != fact.data().promise() {
+                return Err(range_write_error(
+                    "prior joint operation changed original permanent promise",
+                ));
+            }
             if state.archived.contains_key(&scope.recovery_nonce) {
                 return Err(range_write_error(
                     "retired cross-epoch joint recovery nonce",
@@ -432,6 +480,7 @@ impl RangeWriteStore {
         let state = CurrentJointRecoveryState {
             binding: fact.binding().clone(),
             scope: scope.clone(),
+            original_handoff_promise: fact.data().promise().clone(),
             archived,
         };
         if serde_json::to_vec(&state)?.len() > 8 * 1024 * 1024 {

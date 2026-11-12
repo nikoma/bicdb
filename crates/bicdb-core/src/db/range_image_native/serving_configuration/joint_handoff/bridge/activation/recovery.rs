@@ -157,6 +157,7 @@ impl NativeCurrentJointRecoveryDomain {
             ));
         }
         self.native.require_current(db)?;
+        store.require_current_joint_handoff_constraints(self.data())?;
         let actual = store.native_writer_host_state()?;
         if !Arc::ptr_eq(&actual, &self.writer) {
             return Err(invalid(

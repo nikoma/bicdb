@@ -98,6 +98,15 @@ registry in the DATA extension. Additional DATA transitions or registry changes
 afterward need an explicit chained composition contract, not resetting the origin
 or silently teaching the metadata-only refresh to accept changed ranges.
 
+A single range's first transition is only a component milestone. The required
+four-to-five expansion must finish every planned range movement and leadership
+change, including multiple moves, retries and controller restarts. Before claiming
+that gate, define effective-policy ancestry across independent ranges and repeated
+transitions of the same range, with bounded retention and exact uncertain-write
+reconciliation. Pending publication for one range must not become an unexplained
+global admission outage. No one-range demonstration substitutes for convergence
+of the complete placement plan.
+
 Preserving this Arc avoids retargeting every live INITIAL dispatcher/admission
 owner and the original proof windows. Rotation remains possible as a separate
 typed handover, but ordinary reinstall is not the chosen publisher. A durable

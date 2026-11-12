@@ -326,7 +326,7 @@ impl RangeRecoveryRuntime {
                     break;
                 }
                 if outstanding == 0 && queue.is_empty() {
-                    return Err(invalid(format!("actual permanent AbortPromise quorum unavailable; participant failures: {failures:?}")));
+                    return Err(invalid(&format!("actual permanent AbortPromise quorum unavailable; participant failures: {failures:?}")));
                 }
                 match results.recv_timeout(LATCH_POLL) {
                     Ok((node, result)) => {

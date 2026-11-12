@@ -6432,10 +6432,10 @@ pub fn audit_application_unique_scope_references(
             }
             for row in db.scan_collection_unchecked(&child.name)? {
                 let value = row.metadata.get(&columns[0]);
-                if value.is_none_or(Value::is_null) {
+                if value.is_none_or(serde_json::Value::is_null) {
                     continue;
                 }
-                let id = value.and_then(Value::as_str).ok_or_else(|| {
+                let id = value.and_then(serde_json::Value::as_str).ok_or_else(|| {
                     SqlError::InvalidSql("malformed inbound SQL ID reference".into())
                 })?;
                 let target = targets.iter().find(|r| r.id == id).ok_or_else(|| {

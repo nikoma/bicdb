@@ -27,3 +27,6 @@ pub(crate) use decision::{
     NativeJointDecisionData, NativeJointDecisionPublicationAdmission,
     NativeJointDecisionPublicationRound, NativeJointDurableDecision, NativeJointPreparedDecision,
 };
+
+mod runtime;
+pub(crate) use runtime::NativeJointHandoffRuntime;

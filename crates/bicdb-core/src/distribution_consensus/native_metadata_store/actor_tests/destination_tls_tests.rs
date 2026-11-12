@@ -230,6 +230,26 @@ fn native_metadata_tls_reused_pin_old_destination_refuses_before_held_latches() 
     }
     leader.lock().become_leader(&votes).unwrap();
     replicate(leader, &client, &[0, 2, 3]);
+    // A real original TLS/envelope exchange seals the receiver's actual
+    // protected StoreUUID/birth, not a response reconstructed from JSON.
+    let owned_request = leader.lock().append_request_from(1, 32).unwrap();
+    let owned_reply = client.append_metadata(&node(0), owned_request).unwrap();
+    assert!(owned_reply.success);
+    assert!(owned_reply.native_receiver.is_some() && owned_reply.native_provenance.is_some());
+    let bare: MetadataAppendResponse =
+        serde_json::from_slice(&serde_json::to_vec(&owned_reply).unwrap()).unwrap();
+    assert_eq!(bare, owned_reply);
+    let progress_before = leader.lock().match_index.clone();
+    let error = leader
+        .lock()
+        .record_append_response(&node(0), &bare)
+        .unwrap_err();
+    assert!(error.to_string().contains("not a DTO"), "{error}");
+    assert_eq!(leader.lock().match_index, progress_before);
+    leader
+        .lock()
+        .record_append_response(&node(0), &owned_reply)
+        .unwrap();
     let mut retired = leader.lock().committed_topology().clone();
     retired.generation += 1;
     retired.nodes.get_mut(&node(0)).unwrap().lifecycle = ClusterNodeLifecycle::Decommissioned;

@@ -1427,6 +1427,8 @@ mod tests {
             success: true,
             match_index: barrier_index,
             conflict_index: barrier_index + 1,
+            native_receiver: None,
+            native_provenance: None,
         };
         metadata
             .record_append_response(&fixture.nodes[1], &response)

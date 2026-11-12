@@ -353,9 +353,10 @@ pub use distribution_consensus::{
     MetadataReadAcquireResponse, MetadataReadAnchor, MetadataReadAuthority, MetadataReadContext,
     MetadataReadObservation, MetadataReadParticipant, MetadataReadProbeRequest,
     MetadataReadProbeResponse, MetadataReadVoterProof, MetadataRestoreActivation, MetadataSnapshot,
-    MetadataVoteRequest, MetadataVoteResponse, CLUSTER_METADATA_CONSENSUS_FORMAT_VERSION,
-    DEFAULT_CLUSTER_METADATA_CONSENSUS_STATE, METADATA_READ_ACQUISITION_PROTOCOL_VERSION,
-    METADATA_READ_AUTHORITY_PROTOCOL_VERSION, METADATA_RESTORE_ACTIVATION_FORMAT_VERSION,
+    MetadataVoteRequest, MetadataVoteResponse, NativeMetadataAppendReceiver,
+    CLUSTER_METADATA_CONSENSUS_FORMAT_VERSION, DEFAULT_CLUSTER_METADATA_CONSENSUS_STATE,
+    METADATA_READ_ACQUISITION_PROTOCOL_VERSION, METADATA_READ_AUTHORITY_PROTOCOL_VERSION,
+    METADATA_RESTORE_ACTIVATION_FORMAT_VERSION,
 };
 pub use distribution_data::{
     CatchUpSourceBatch, ClusterDataNodeService, ClusterSchemaActivationReceipt,

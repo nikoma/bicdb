@@ -243,6 +243,21 @@ fn native_metadata_learner_cannot_vote_and_cached_legacy_store_cannot_adopt_enfo
         .any(|entry| entry.index == enrollment.index));
     let held_prebinding_ack = legacy.handle_append_request(prebinding_request).unwrap();
     assert!(held_prebinding_ack.success);
+    assert!(held_prebinding_ack.native_receiver.is_none());
+    assert!(held_prebinding_ack.native_provenance.is_none());
+    let held_json = serde_json::to_value(&held_prebinding_ack).unwrap();
+    assert_eq!(
+        held_json,
+        serde_json::json!({
+            "cluster_id": held_prebinding_ack.cluster_id,
+            "term": held_prebinding_ack.term,
+            "node_id": held_prebinding_ack.node_id,
+            "success": true,
+            "match_index": held_prebinding_ack.match_index,
+            "conflict_index": held_prebinding_ack.conflict_index,
+        }),
+        "legacy response bytes/fields must not acquire native identity data"
+    );
     assert_eq!(held_prebinding_ack.match_index, enrollment.index);
     assert_eq!(legacy.committed_topology(), &with_learner);
     assert!(legacy.native_owner.is_none() && legacy.state.native_store_id.is_none());
@@ -278,8 +293,9 @@ fn native_metadata_learner_cannot_vote_and_cached_legacy_store_cannot_adopt_enfo
 
     // The commit/reset has completed. A delayed ACK from the OLD unbound
     // request cannot become proof of current-birth OWNED metadata catch-up.
-    // This assertion is intentionally expected to expose the missing source
-    // guard until actual remote execution/fix; no test result is presumed.
+    // Exact baseline cdc remote execution exposed the missing source guard.
+    // This unchanged safety assertion must pass only after owned provenance
+    // is checked against the current committed native birth.
     let recorded = stores
         .get_mut(&node(0))
         .unwrap()
@@ -345,7 +361,47 @@ fn native_metadata_learner_cannot_vote_and_cached_legacy_store_cannot_adopt_enfo
         .handle_append_request(stores[&node(0)].append_request_from(1, 64).unwrap())
         .unwrap();
     assert!(ack.success);
+    assert!(ack.native_receiver.is_some() && ack.native_provenance.is_some());
+    assert_eq!(
+        ack.native_receiver.as_ref().unwrap().metadata_store_id(),
+        owned.state.native_store_id.unwrap()
+    );
+    assert_eq!(
+        ack.native_receiver.as_ref().unwrap().native_birth(),
+        bound.nodes[&node(3)]
+            .native_store_birth_v1
+            .as_ref()
+            .unwrap()
+    );
     assert_eq!(owned.committed_topology(), &bound);
+    // Identity data round-trips, but the actual owned ACK producer does not.
+    // Bare JSON and changes to any countable response field must refuse BEFORE
+    // recording numeric progress; a genuine unchanged owned ACK still works.
+    let serialized = serde_json::to_vec(&ack).unwrap();
+    let bare: MetadataAppendResponse = serde_json::from_slice(&serialized).unwrap();
+    assert_eq!(bare, ack);
+    assert!(bare.native_receiver.is_some() && bare.native_provenance.is_none());
+    let progress_before = stores[&node(0)].match_index.clone();
+    let state_before = stores[&node(0)].state.clone();
+    let bare_error = stores
+        .get_mut(&node(0))
+        .unwrap()
+        .record_append_response(&node(3), &bare)
+        .unwrap_err();
+    assert!(bare_error.to_string().contains("not a DTO"), "{bare_error}");
+    let mut modified = ack.clone();
+    modified.match_index += 1;
+    let modified_error = stores
+        .get_mut(&node(0))
+        .unwrap()
+        .record_append_response(&node(3), &modified)
+        .unwrap_err();
+    assert!(
+        modified_error.to_string().contains("body/pin mismatch"),
+        "{modified_error}"
+    );
+    assert_eq!(stores[&node(0)].match_index, progress_before);
+    assert_eq!(stores[&node(0)].state, state_before);
     assert!(owned.state.native_store_id.is_some());
     assert!(
         !owned
@@ -388,4 +444,14 @@ fn native_metadata_learner_cannot_vote_and_cached_legacy_store_cannot_adopt_enfo
             .unwrap()
             .vote_granted
     );
+    // A fsynced ACK is a durable fact, not a lease on the receiver staying
+    // alive. The actual owned store and physical DB can end after replying.
+    drop(owned);
+    drop(factory);
+    drop(db);
+    stores
+        .get_mut(&node(0))
+        .unwrap()
+        .record_append_response(&node(3), &promoted_ack)
+        .unwrap();
 }

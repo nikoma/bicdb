@@ -51,6 +51,7 @@ use crate::distribution_metadata_read_provider::{
 mod host_metadata;
 mod initial_birth;
 mod initial_preparation;
+pub(crate) mod metadata_append;
 use crate::distribution_native_host::{
     NativeInitialBirthOfferRequest, NativeInitialBirthOfferResponse,
     NativeInitialPreparationRequest, NativeInitialPreparationResponse,
@@ -3930,28 +3931,6 @@ impl TcpClusterRelocationTransport {
         )
     }
 
-    pub(crate) fn append_metadata_cancellable(
-        &self,
-        follower_node_id: &ClusterNodeId,
-        request: MetadataAppendRequest,
-        parent: &CancellationToken,
-    ) -> Result<MetadataAppendResponse> {
-        parent.check()?;
-        if request.leader_id != self.caller_node_id {
-            return Err(transport_error(
-                "metadata append leader must be the transport caller",
-            ));
-        }
-        match self.call_cancellable(
-            parent,
-            follower_node_id,
-            ClusterDataRequest::MetadataAppend { request },
-        )? {
-            ClusterDataResponse::MetadataAppend(response) => Ok(response),
-            response => Err(unexpected_response("metadata append", response)),
-        }
-    }
-
     pub fn local_metadata_read_participant(&self) -> MetadataReadParticipant {
         MetadataReadParticipant::from_transport(
             self.caller_node_id.clone(),
@@ -4541,6 +4520,20 @@ impl TcpClusterRelocationTransport {
         destination_node_id: &ClusterNodeId,
         request: ClusterDataRequest,
     ) -> Result<(ClusterDataResponse, MetadataReadParticipant)> {
+        self.call_with_native_destination_cancellable(cancellation, destination_node_id, request)
+            .map(|(response, peer, _)| (response, peer))
+    }
+
+    fn call_with_native_destination_cancellable(
+        &self,
+        cancellation: &CancellationToken,
+        destination_node_id: &ClusterNodeId,
+        request: ClusterDataRequest,
+    ) -> Result<(
+        ClusterDataResponse,
+        MetadataReadParticipant,
+        Option<crate::distribution::NativeStoreBirthV1>,
+    )> {
         cancellation.check()?;
         let numeric_metadata_read = matches!(
             &request,
@@ -4718,6 +4711,7 @@ impl TcpClusterRelocationTransport {
                         presented_certificate_sha256,
                         self.config.dev_localhost_plaintext,
                     ),
+                    expected_native_destination,
                 )
             })
             .map_err(|remote| {

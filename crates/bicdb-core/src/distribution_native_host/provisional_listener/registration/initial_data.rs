@@ -97,7 +97,9 @@ impl Drop for NativeInitialDataHost {
 }
 impl NativeInitialDataHost {
     pub(super) fn is_running(&self) -> bool {
-        self.listener.is_some()
+        // A failed finite drain retains the owner/handle for retry, but must
+        // not let the CLI restart a metadata supervisor on a stopping socket.
+        !self.stopping && self.listener.is_some()
     }
     fn new(
         initial: Arc<NativeInitialConsensusLaunch>,

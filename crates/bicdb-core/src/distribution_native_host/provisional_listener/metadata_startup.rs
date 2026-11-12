@@ -50,9 +50,19 @@ impl NativeInitialConsensusLaunch {
         for peer in peers {
             token.check()?;
             // No service/DB/metadata latch is held during network work.
-            let reply =
-                self.transport
-                    .request_metadata_vote_cancellable(&peer, request.clone(), &token)?;
+            let reply = match self.transport.request_metadata_vote_cancellable(
+                &peer,
+                request.clone(),
+                &token,
+            ) {
+                Ok(reply) => reply,
+                Err(_) => {
+                    // Durable acceptance of C is historical. An election
+                    // requires a current quorum, not all members still live.
+                    token.check()?;
+                    continue;
+                }
+            };
             if reply.term > request.term {
                 return Err(invalid("initial election observed a newer metadata term"));
             }
@@ -105,9 +115,16 @@ impl NativeInitialConsensusLaunch {
                 let request = self
                     .lock_initial_metadata(&token)?
                     .append_request_from(1, 16)?;
-                let reply = self
+                let reply = match self
                     .transport
-                    .append_metadata_cancellable(&peer, request, &token)?;
+                    .append_metadata_cancellable(&peer, request, &token)
+                {
+                    Ok(reply) => reply,
+                    Err(_) => {
+                        token.check()?;
+                        continue;
+                    }
+                };
                 self.lock_initial_metadata(&token)?
                     .record_append_response(&peer, &reply)?;
             }

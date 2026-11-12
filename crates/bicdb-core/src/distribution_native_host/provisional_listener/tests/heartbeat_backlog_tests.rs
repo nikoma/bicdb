@@ -472,3 +472,178 @@ fn native_initial_metadata_actual_tls_65_barriers_resume_across_finite_heartbeat
             "final_status":launches.iter().map(|launch| launch.metadata.lock().status()).collect::<Vec<_>>(),
             "application_wal_unchanged":true,"scope":"actual local native/TLS metadata replication only; no data ACK/Strong/VM/Azure claim"})).unwrap(), true).unwrap();
 }
+
+#[test]
+fn native_initial_metadata_actual_tls_midround_retirement_skips_stale_peer() {
+    let PlannedNetwork {
+        mut root,
+        plan,
+        networks,
+        ports,
+    } = planned_network_with_spare(4, 1);
+    root.disable_cleanup(true);
+    eprintln!(
+        "NATIVE_HEARTBEAT_RETIREMENT_PRIVATE_ROOT {}",
+        root.path().display()
+    );
+    // The fifth identity is a real planned TLS peer, registered only as an
+    // unbound nonvoting learner. No learner-birth RPC/enrollment is required.
+    let fifth = ClusterNode::new(
+        node(4),
+        ports[4].local_addr().unwrap().to_string(),
+        1,
+        1 << 30,
+        10,
+    )
+    .unwrap()
+    .as_metadata_learner()
+    .with_tls_certificate_sha256(
+        crate::replication_transport::replication_certificate_sha256(
+            &networks[4].tls.as_ref().unwrap().cert_path,
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    let seeds = (0..4)
+        .map(|i| {
+            Arc::new(
+                NativeProvisionalNode::create(
+                    &root.path().join(format!("db{i}")),
+                    db_config(),
+                    plan.clone(),
+                    &node(i),
+                    &budget(),
+                )
+                .unwrap(),
+            )
+        })
+        .collect::<Vec<_>>();
+    drop(ports);
+    let mut hosts = seeds
+        .iter()
+        .enumerate()
+        .map(|(i, seed)| {
+            NativeProvisionalHost::start(Arc::clone(seed), networks[i].clone(), &budget()).unwrap()
+        })
+        .collect::<Vec<_>>();
+    let configuration = hosts[0].observe_initial_configuration(&budget()).unwrap();
+    let permits = hosts
+        .iter()
+        .map(|host| {
+            host.prepare_common_initial_configuration(&configuration, &budget())
+                .unwrap()
+        })
+        .collect::<Vec<_>>();
+    let launches = hosts
+        .iter_mut()
+        .zip(&permits)
+        .map(|(host, permit)| host.finish_initial_consensus(permit, &budget()).unwrap())
+        .collect::<Vec<_>>();
+    let _listeners = launches
+        .iter()
+        .enumerate()
+        .map(|(i, launch)| {
+            launch
+                .start_metadata_listener(networks[i].clone(), &budget())
+                .unwrap()
+        })
+        .collect::<Vec<_>>();
+    launches[0].elect_initial_metadata(&budget()).unwrap();
+    let app_wal_before = seeds
+        .iter()
+        .map(|seed| {
+            let db = seed.database.read();
+            let stats = db.tx_log_handle().stats();
+            (stats.written_seq, stats.commits_written)
+        })
+        .collect::<Vec<_>>();
+    let mut registered = launches[0].metadata.lock().committed_topology().clone();
+    let mut fifth = fifth;
+    fifth.labels = registered.nodes[&node(0)].labels.clone();
+    registered.nodes.insert(node(4), fifth);
+    registered.generation += 1;
+    launches[0]
+        .metadata
+        .lock()
+        .propose_topology(registered.clone())
+        .unwrap();
+    launches[0].heartbeat_initial_metadata(&budget()).unwrap();
+    for launch in &launches {
+        assert_eq!(launch.metadata.lock().committed_topology(), &registered);
+    }
+    assert!(registered.ranges.values().all(|range| range
+        .replicas
+        .iter()
+        .all(|replica| replica.node_id != node(4))));
+    let captured_peers = registered
+        .nodes
+        .values()
+        .filter(|member| member.lifecycle == ClusterNodeLifecycle::Active && member.id != node(0))
+        .map(|member| member.id.clone())
+        .collect::<Vec<_>>();
+    assert_eq!(captured_peers, vec![node(1), node(2), node(3), node(4)]);
+    let mut retired = registered.clone();
+    retired.generation += 1;
+    retired.nodes.get_mut(&node(4)).unwrap().lifecycle = ClusterNodeLifecycle::Decommissioned;
+    let proposal = launches[0]
+        .metadata
+        .lock()
+        .propose_topology(retired.clone())
+        .unwrap();
+    // Real ACKs from the earlier peers1/2 form the four-voter majority and
+    // commit retirement during this actual heartbeat's captured peer loop.
+    // Peer4 has no owned metadata listener and must be skipped BEFORE building.
+    let heartbeat = launches[0].heartbeat_initial_metadata(&budget());
+    let statuses = launches
+        .iter()
+        .map(|launch| launch.metadata.lock().status())
+        .collect::<Vec<_>>();
+    let current = launches[0].metadata.lock().committed_topology().clone();
+    let strict_builder = launches[0]
+        .metadata
+        .lock()
+        .append_request_for_peer(&node(4), 16);
+    let app_wal_after = seeds
+        .iter()
+        .map(|seed| {
+            let db = seed.database.read();
+            assert!(!db.commit_admission_ready());
+            let stats = db.tx_log_handle().stats();
+            (stats.written_seq, stats.commits_written)
+        })
+        .collect::<Vec<_>>();
+    let summary = serde_json::json!({"captured_peers":captured_peers,"proposed_retirement":proposal,
+        "heartbeat":heartbeat.as_ref().map(|_| "ok").map_err(ToString::to_string),
+        "current_status":statuses,"current_topology":current,
+        "strict_inactive_builder":strict_builder.as_ref().map(|_| "request").map_err(ToString::to_string),
+        "application_wal_before":app_wal_before,"application_wal_after":app_wal_after,
+        "scope":"actual local native/TLS metadata retirement only; no learner birth/enrollment/data grant/VM/Azure claim"});
+    if let Some(evidence_root) = std::env::var_os("BICDB_TEST_EVIDENCE_ROOT") {
+        fs::create_dir_all(&evidence_root).unwrap();
+        let public = tempfile::Builder::new()
+            .prefix("native-metadata-midround-retirement-")
+            .tempdir_in(evidence_root)
+            .unwrap()
+            .keep();
+        crate::storage::write_atomic(
+            &public.join("retirement-result.json"),
+            &serde_json::to_vec_pretty(&summary).unwrap(),
+            true,
+        )
+        .unwrap();
+    }
+    eprintln!("NATIVE_HEARTBEAT_RETIREMENT_RESULT {summary}");
+    assert!(
+        heartbeat.is_ok(),
+        "stale retired peer aborted actual heartbeat: {heartbeat:?}"
+    );
+    assert_eq!(current, retired);
+    assert!(
+        strict_builder.is_err(),
+        "direct builder must continue refusing inactive members"
+    );
+    for status in &statuses {
+        assert_eq!(status.commit_index, proposal.index);
+    }
+    assert_eq!(app_wal_before, app_wal_after);
+}

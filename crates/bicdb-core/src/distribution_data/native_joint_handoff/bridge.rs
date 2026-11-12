@@ -53,7 +53,7 @@ pub(crate) struct ActualServiceNativeJointPreparedEvidence {
     pin: parking_lot::Mutex<Option<SourceCaptureReadPin>>,
 }
 impl ActualServiceNativeJointPreparedEvidence {
-    fn require_original_writer_lifetime(&self) -> Result<()> {
+    pub(crate) fn require_original_writer_lifetime(&self) -> Result<()> {
         self.writer.require_store(
             self.catalogue.database_root(),
             self.catalogue.store_open_id(),

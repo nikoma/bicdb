@@ -138,7 +138,12 @@ impl NativeJointPreparedServingRound {
             observations: self.observations,
             cancellation: self.cancellation,
         };
-        quorum.require_current()?;
+        // Each record already validated its actual service/native state.
+        // This quorum is still materialization audit, never a publication or
+        // serving grant. Every mutation keeps its final complete foreign sweep
+        // and exact local scope; do not spend the same original MQ window on
+        // another identical full sweep merely to aggregate those observations.
+        quorum.require_live()?;
         Ok(quorum)
     }
 }
@@ -191,8 +196,17 @@ impl NativeJointPreparedServingQuorum {
     pub(crate) fn data(&self) -> &NativeJointDecisionData {
         &self.data
     }
-    pub(crate) fn require_current(&self) -> Result<()> {
+    fn require_live(&self) -> Result<()> {
         self.cancellation.check()?;
+        self.require_original_caller()?;
+        for observation in self.observations.values() {
+            observation.actual.committed().require_metadata_current()?;
+            observation.actual.require_original_writer_lifetime()?;
+        }
+        self.cancellation.check()
+    }
+    pub(crate) fn require_current(&self) -> Result<()> {
+        self.require_live()?;
         for observation in self.observations.values() {
             observation.require_current()?;
         }

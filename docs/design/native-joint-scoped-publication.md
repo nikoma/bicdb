@@ -150,3 +150,49 @@ or intentional writer-replacement recovery.
 This successor has only formatting and source checks locally; no Cargo or
 runtime result is claimed. The preserved 87d revision and its CI scope remain
 separate.
+
+
+## Bounded current-scope successor after the nine-test batch (source only)
+
+Exact `eb5b454a578f77309900e2a248fc0b779391333e` ran all nine
+`complete_joint_tests` together with the unchanged four test threads and real
+budgets: CI43233276416/Core131233899683, 5 passed/4 failed/890 filtered,
+77.72s; compile passed. Raw log SHA-256:
+`f3779145fb319f664bed47f6d27bfc52ef5e5222db53b1bffde137d9f86ba1b0`.
+The surviving-voter original-release control passed. The image counterpart
+returned an actual receipt with 298ms remaining, then its independent native
+snapshot consumed that remainder before reinstall. The original-caller negative
+failed before its intended cut at initial prepared aggregation. The full terminal
+and all-Frozen-open tests expired in target final native scope after prior
+collection/foreign checks. These remain failed gates, not timing qualification or
+attribution to a physical host. The separate earlier ab261 three-fault pass keeps
+its own exact source scope.
+
+The successor removes an actual duplicate read: `current_read_scope` acquired the
+real native journal, called `receipt.require_current` (which already derived and
+validated actual SourceLineage), then derived SourceLineage again. A private
+receipt helper now returns that first validated lineage only after the same
+actual record, protected native anchor and exact current-pointer/archive checks.
+The scope retains the same journal through its lifetime. The public currentness
+API still returns unit; no cached, serialized or independently owned scope proof
+is exposed. Every retained outcome/local catalogue check and pre/post publication
+validation remains unchanged.
+
+Initial prepared-round `finish` is now bounded aggregation, like the separately
+reviewed fresh-phase finish. Every recorded observation was fully checked at
+record time. Finish retains original caller/deadline/cancellation, each original
+MQ's exact committed-domain binding and original writer lifetime checks, without
+another complete physical sweep. This quorum remains materialization audit, not
+publication or serving permission. The actual mutation paths retain their final
+complete foreign participant sweep, local actual kernel/journal scope and fresh
+post-quorum MQ checks; original and fresh publication paths are not weakened.
+Explicit `require_current` still performs its full physical validation.
+
+The image/survivor replacement controls now capture immutable R/H/local-B/history
+and namespace identity before acquiring the 4s receipt, while genuine Frozen
+owners are retained; exact equality is still checked after the actual reinstall
+and writer-identity refusal. Exact raw catalogue bytes are still captured after
+actual activation. Request-only liveness assertions before/after the cut remain,
+so expiry cannot green the control. There is no extended deadline, reduced
+participant set, test serialization or forced state. The same nine-test remote
+batch is required to validate this successor; only static checks were run here.

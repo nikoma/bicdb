@@ -98,7 +98,7 @@ impl NativeJointServingBridgeRecord {
         &self,
         database: &BicDb,
         native: &NativeRecoveryAdmission,
-    ) -> Result<()> {
+    ) -> Result<SourceRangeImageLineage> {
         let actual = database.current_native_range_source_lineage(self.prepared.range_id)?;
         self.require_actual_anchor(database, native, &actual.birth, &actual.base)?;
         if actual.range_index() < self.prepared.range_index
@@ -113,7 +113,7 @@ impl NativeJointServingBridgeRecord {
                 "joint bridge is ahead of actual validated native materialization",
             ));
         }
-        Ok(())
+        Ok(actual)
     }
     // No SourceLineage recursion: prefix validation may consume this protected
     // native domain, while actual local materialization is validated afterward.
@@ -444,9 +444,10 @@ impl NativeJointServingBridgeReceipt {
         database: &'a BicDb,
     ) -> Result<NativeJointBridgeReadScope<'a>> {
         let journal = database.try_native_image_journal()?;
-        self.require_current(database)?;
-        let lineage =
-            database.current_native_range_source_lineage(self.record.prepared.range_id)?;
+        // Validate the exact receipt, current pointer/archive and materialized
+        // anchor ONCE under this same retained journal. The returned lineage
+        // is that actual validated read, never a second unlocked observation.
+        let lineage = self.require_current_lineage(database)?;
         Ok(NativeJointBridgeReadScope {
             database,
             native: self,
@@ -483,8 +484,14 @@ impl NativeJointServingBridgeReceipt {
         )
     }
     pub(crate) fn require_current(&self, database: &BicDb) -> Result<()> {
+        self.require_current_lineage(database).map(|_| ())
+    }
+    // Private read reuse only. A borrowed scope acquires its journal BEFORE
+    // calling this and keeps it through all local validation; the ordinary
+    // currentness API above discards the lineage and returns no scoped grant.
+    fn require_current_lineage(&self, database: &BicDb) -> Result<SourceRangeImageLineage> {
         self.record.validate()?;
-        self.record.require_actual_point(database, &self.native)?;
+        let lineage = self.record.require_actual_point(database, &self.native)?;
         let range = self.record.prepared.range_id;
         let current: NativeJointServingBridgeRecord = database
             .read_native_range_image_record(&key(range))?
@@ -497,7 +504,7 @@ impl NativeJointServingBridgeReceipt {
         if current != self.record || archive != self.record {
             return Err(invalid("native joint bridge pointer/archive changed"));
         }
-        Ok(())
+        Ok(lineage)
     }
 }
 impl BicDb {

@@ -23,6 +23,24 @@ pub(super) struct OriginalReleaseAttempt {
     policy: SealedHostWriterEnrollment,
     receipt: Arc<NativeJointCatalogueActivationReceipt>,
     image_owner: Option<crate::distribution_data::NativeJointImageReleaseOwner>,
+    before_point: Point,
+}
+// Read-only fixture snapshot, never a grant. Captured before the new 4s
+// receipt; actual Frozen ownership and the scoped open proof preserve it.
+type Point = (u64, u64, Uuid, String, String, String, Option<Uuid>);
+fn point(fixture: &EnforcedNetwork, local: &ClusterNodeId, range: crate::RangeId) -> Point {
+    let database = fixture.native.databases[local].read();
+    assert!(database.range_mutation_gate().try_enter(range).is_err());
+    let source = database.current_native_range_source_lineage(range).unwrap();
+    (
+        source.range_index(),
+        source.actual_local_visibility_sequence(),
+        source.history_generation(),
+        source.logical_genesis_sha256().to_owned(),
+        source.logical_history_sha256().to_owned(),
+        source.native_receipt_sha256().to_owned(),
+        database.local_namespace_identity("items").unwrap(),
+    )
 }
 
 #[test]
@@ -53,6 +71,7 @@ pub(super) fn prepare(
     control: OriginalReleaseControl,
 ) -> OriginalReleaseAttempt {
     let local = control.node();
+    let before_point = point(fixture, &local, published.data().old_range().id);
     // Each attempt uses a distinct real Host MQ and complete full-member open
     // phase. Its 4s authority is never extended; pre-receipt expiry may retry
     // finitely, but a returned ORIGINAL receipt must remain live through cut.
@@ -89,6 +108,7 @@ pub(super) fn prepare(
                 policy,
                 receipt,
                 image_owner,
+                before_point: before_point.clone(),
             })
         })();
         match result {
@@ -119,19 +139,10 @@ pub(super) fn reject_after_reenrollment(
         .data_path()
         .join(crate::distribution_range_consensus::DEFAULT_RANGE_WRITE_LOG);
     let before_catalogue = std::fs::read(&catalogue_path).unwrap();
-    let before_point = {
-        let database = fixture.native.databases[&local].read();
-        let source = database.current_native_range_source_lineage(range).unwrap();
-        (
-            source.range_index(),
-            source.actual_local_visibility_sequence(),
-            source.history_generation(),
-            source.logical_genesis_sha256().to_owned(),
-            source.logical_history_sha256().to_owned(),
-            source.native_receipt_sha256().to_owned(),
-            database.local_namespace_identity("items").unwrap(),
-        )
-    };
+    // Keep actual catalogue bytes AFTER activation. The immutable native
+    // point was read while Frozen BEFORE acquiring this original receipt, so
+    // snapshot I/O cannot consume the writer-race cut's remaining 4s budget.
+    let before_point = &release.before_point;
     release
         .receipt
         .test_original_request_live()
@@ -181,7 +192,7 @@ pub(super) fn reject_after_reenrollment(
                 source.native_receipt_sha256().to_owned(),
                 database.local_namespace_identity("items").unwrap(),
             ),
-            before_point
+            *before_point
         );
         assert_eq!(
             database.get("items", key).unwrap().as_deref(),

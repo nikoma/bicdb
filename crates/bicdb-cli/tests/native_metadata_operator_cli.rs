@@ -260,6 +260,49 @@ fn native_metadata_operator_actual_cli_four_process_startup_registration_and_dat
         !root.join("db4").exists(),
         "registration must not provision a generic fifth DB"
     );
+    // Own actual TLS is insufficient when the explicitly supplied endpoint
+    // disagrees with the identity just committed through the real controller.
+    // Use another valid numeric nonzero address so this reaches the actual
+    // CONFIG comparison, not the earlier endpoint-syntax validation.
+    let other_port = TcpListener::bind("127.0.0.1:0").unwrap();
+    let wrong_address = other_port.local_addr().unwrap().to_string();
+    assert_ne!(wrong_address, addresses[4]);
+    let wrong_root = root.join("db4-wrong-address");
+    let wrong_command = root.join("wrong-address.command");
+    let wrong_status = root.join("wrong-address.status");
+    let mut wrong = binary();
+    wrong
+        .args(["cluster", "native-metadata", "serve-learner-fresh"])
+        .arg(&wrong_root)
+        .arg("--cluster-id")
+        .arg(config.cluster_id.as_str())
+        .arg("--seed-node-id")
+        .arg("n0")
+        .arg("--seed-address")
+        .arg(&addresses[0])
+        .arg("--node-id")
+        .arg("n4")
+        .arg("--address")
+        .arg(&wrong_address)
+        .arg("--command-file")
+        .arg(&wrong_command)
+        .arg("--status-file")
+        .arg(&wrong_status);
+    add_tls(&mut wrong, &root, 4);
+    let refused = wrong.output().unwrap();
+    assert!(!refused.status.success());
+    assert!(
+        String::from_utf8_lossy(&refused.stderr)
+            .contains("fresh learner registration/address/incarnation/birth differs"),
+        "wrong endpoint did not reach actual committed registration validation: {}",
+        String::from_utf8_lossy(&refused.stderr)
+    );
+    assert!(
+        !wrong_root.exists(),
+        "address mismatch must refuse BEFORE any factory root creation"
+    );
+    assert!(!wrong_command.exists() && !wrong_status.exists());
+    drop(other_port);
     // Continue with a REAL fifth native factory/process, not generic member
     // provisioning. The common seed-only TLS paths are never used by it.
     let (learner_command, learner_status) = paths(&root, 4);

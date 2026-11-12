@@ -199,3 +199,20 @@ cleanup, automatic enrollment/election/controller scheduling and all-owner cold
 startup. The cold learner work remains a separate owner/API and is not imported
 as an untested fallback. CLI status remains `data_serving:false` in every phase;
 no fifth data quorum, capacity, SQL, VM or physical/Azure result is implied.
+
+### Explicit learner endpoint negative
+
+The successor CLI regression additionally invokes `serve-learner-fresh` with
+its actual own TLS credentials and a valid numeric nonzero address DIFFERENT
+from its already quorum-committed registered address. It fetches real CONFIG
+over TLS and must reach the explicit registration/address comparison, fail and
+leave the proposed root/control/status files absent. The original correct-
+address fifth factory/backend path remains intact immediately afterward. This
+is a pre-factory local endpoint mismatch control, not a mutated/fabricated MQ,
+configuration or private proposal.
+
+The0076 facade also checks its explicit address/incarnation after both pre-
+factory fresh MQ observations and on later own-MQ refresh. There is no actual
+operator endpoint-drift mutation producer in this vertical, so a later endpoint
+change while a live owner exists remains UNTESTED. The initial mismatch control
+does not validate that distinct dynamic race or any relocation/rebind protocol.

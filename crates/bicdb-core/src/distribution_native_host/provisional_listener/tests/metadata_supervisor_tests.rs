@@ -235,19 +235,65 @@ fn native_owned_metadata_supervisor_actual_tls_invalid_and_stale_messages_do_not
             .success
     );
     assert_eq!(f.launch(1).metadata.lock().last_leader_contact_ms(), before);
-    let mut malformed = f
+    // The REAL committed current-term barrier has compacted to a snapshot.
+    // Corrupt a copy of that actual builder output, never the healthy FSM.
+    let mut malformed_snapshot = f
         .launch(0)
         .metadata
         .lock()
         .append_request_from(1, 16)
         .unwrap();
-    assert!(!malformed.entries.is_empty());
-    malformed.entries[0].topology.generation = 0;
-    assert!(f
+    let snapshot = malformed_snapshot
+        .snapshot
+        .as_mut()
+        .expect("committed barrier must supply its actual compacted snapshot");
+    assert!(snapshot.last_included_index > 0);
+    snapshot.topology.generation = 0;
+    let snapshot_error = f
         .launch(0)
         .transport
-        .append_metadata_cancellable(&node(1), malformed, &budget())
-        .is_err());
+        .append_metadata_cancellable(&node(1), malformed_snapshot, &budget())
+        .unwrap_err();
+    assert!(
+        snapshot_error.to_string().contains("generation"),
+        "{snapshot_error}"
+    );
+    assert_eq!(f.launch(1).metadata.lock().last_leader_contact_ms(), before);
+    // Exercise the entry path with an actual persisted, not-yet-replicated
+    // heartbeat proposal. This is legitimate current-leader CONFIG input; no
+    // compaction setting, term, vote or accepted position is changed by hand.
+    let entry = {
+        let mut store = f.launch(0).metadata.lock();
+        let mut topology = store.committed_topology().clone();
+        topology.generation += 1;
+        topology.nodes.get_mut(&node(0)).unwrap().last_heartbeat_ms = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_millis()
+            .try_into()
+            .unwrap();
+        let entry = store.propose_topology(topology).unwrap();
+        assert!(store.status().commit_index < entry.index);
+        entry
+    };
+    let mut malformed_entry = f
+        .launch(0)
+        .metadata
+        .lock()
+        .append_request_from(entry.index, 16)
+        .unwrap();
+    assert!(malformed_entry.snapshot.is_none());
+    assert_eq!(malformed_entry.entries, vec![entry]);
+    malformed_entry.entries[0].topology.generation = 0;
+    let entry_error = f
+        .launch(0)
+        .transport
+        .append_metadata_cancellable(&node(1), malformed_entry, &budget())
+        .unwrap_err();
+    assert!(
+        entry_error.to_string().contains("generation"),
+        "{entry_error}"
+    );
     assert_eq!(f.launch(1).metadata.lock().last_leader_contact_ms(), before);
     f.launch(0).heartbeat_initial_metadata(&budget()).unwrap();
     assert!(f.launch(1).metadata.lock().last_leader_contact_ms() > before);

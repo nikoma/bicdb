@@ -1,0 +1,34 @@
+{
+  "indexes": [
+    {
+      "name": "native_decimal_partial",
+      "collection": "precision_probe",
+      "fields": [
+        {
+          "MetadataPath": [
+            "business_key"
+          ]
+        }
+      ],
+      "unique": true,
+      "kind": "b_tree",
+      "predicate": {
+        "op": "binary",
+        "operator": "greater",
+        "left": {
+          "op": "field",
+          "field": {
+            "MetadataPath": [
+              "amount"
+            ]
+          }
+        },
+        "right": {
+          "op": "literal",
+          "value": "0.5"
+        },
+        "value_type": "decimal"
+      }
+    }
+  ]
+}

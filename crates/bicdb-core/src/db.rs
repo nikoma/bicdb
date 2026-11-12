@@ -2,7 +2,10 @@ mod access_mutation;
 mod branching;
 mod collection_rename;
 mod commit_snapshot;
+mod decimal_predicate;
 mod deferred_materialize;
+mod exact_decimal_sum;
+use exact_decimal_sum::ExactDecimalSum;
 mod local_namespace_identity;
 mod native_wal_apply;
 pub use deferred_materialize::DeferredMaterializeStats;
@@ -4001,6 +4004,8 @@ pub struct BicDb {
     /// tiny catalog is the atomic publication point for a completed build.
     fts_generations: Mutex<FtsGenerationCatalog>,
     btree_bindings: Mutex<BTreeMap<String, String>>,
+    decimal_predicates_current: bool,
+    decimal_predicate_upgrade: Option<decimal_predicate::UpgradePlan>,
     /// Shared, explicitly byte-bounded decoded posting cache. Entries are
     /// generation-qualified, so atomic publication cannot alias old data.
     fts_block_cache: Arc<crate::fts_cache::FullTextBlockCache>,
@@ -8774,6 +8779,12 @@ fn evaluate_native_invariant_expression(
         } => {
             let records = resulting_records_for_relation(db, tx, relation)?;
             let mut count = 0i64;
+            // Each input keeps Decimal's existing admission contract. The
+            // aggregate must not round an intermediate total before later
+            // positive/negative rows cancel it.
+            let mut decimal_sum = (*function == NativeInvariantAggregateFunction::Sum
+                && *value_type == NativeInvariantValueType::Decimal)
+                .then(ExactDecimalSum::default);
             let mut sum = match value_type {
                 NativeInvariantValueType::Decimal => Value::String("0".to_string()),
                 NativeInvariantValueType::Float64 => Value::from(0.0),
@@ -8805,17 +8816,23 @@ fn evaluate_native_invariant_expression(
                             BicDbError::CommitValidation("invariant sum lacks a field".to_string())
                         })?,
                     );
-                    sum = invariant_numeric_binary(
-                        NativeInvariantBinaryOperator::Add,
-                        &sum,
-                        &value,
-                        *value_type,
-                    )?;
+                    if let Some(decimal_sum) = &mut decimal_sum {
+                        decimal_sum.add(&value)?;
+                    } else {
+                        sum = invariant_numeric_binary(
+                            NativeInvariantBinaryOperator::Add,
+                            &sum,
+                            &value,
+                            *value_type,
+                        )?;
+                    }
                 }
             }
             match function {
                 NativeInvariantAggregateFunction::Count => Value::from(count),
-                NativeInvariantAggregateFunction::Sum => sum,
+                NativeInvariantAggregateFunction::Sum => {
+                    decimal_sum.map(ExactDecimalSum::finish).unwrap_or(sum)
+                }
             }
         }
     })
@@ -9265,6 +9282,10 @@ struct IndexCatalog {
     indexes: Vec<IndexDefinition>,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     btree_bindings: BTreeMap<String, String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    decimal_predicate_semantics_version: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    decimal_predicate_upgrade: Option<decimal_predicate::UpgradePlan>,
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -10046,7 +10067,7 @@ impl BicDb {
     }
 
     pub fn open_with_config(path: impl AsRef<Path>, config: DbConfig) -> Result<Self> {
-        Self::open_inner(path, config, None, None)
+        Self::open_inner(path, config, None, None, false)
     }
 
     pub fn open_with_encryption(
@@ -10054,7 +10075,7 @@ impl BicDb {
         config: DbConfig,
         encryption: EncryptionConfig,
     ) -> Result<Self> {
-        Self::open_inner(path, config, None, Some(encryption))
+        Self::open_inner(path, config, None, Some(encryption), false)
     }
 
     pub fn open_with_node_id(
@@ -10062,7 +10083,7 @@ impl BicDb {
         config: DbConfig,
         node_id: NodeId,
     ) -> Result<Self> {
-        Self::open_inner(path, config, Some(node_id), None)
+        Self::open_inner(path, config, Some(node_id), None, false)
     }
 
     pub fn open_with_node_id_and_encryption(
@@ -10071,7 +10092,39 @@ impl BicDb {
         node_id: NodeId,
         encryption: EncryptionConfig,
     ) -> Result<Self> {
-        Self::open_inner(path, config, Some(node_id), Some(encryption))
+        Self::open_inner(path, config, Some(node_id), Some(encryption), false)
+    }
+
+    /// Operator-only closed-store recovery entry. Never expose this handle to SQL,
+    /// HTTP, services or workers before the signed transition is admitted.
+    pub fn open_for_application_unique_scope(path: impl AsRef<Path>) -> Result<Self> {
+        Self::open_inner(path, DbConfig::default(), None, None, true)
+    }
+
+    fn ensure_application_scope_standalone_history(path: &Path) -> Result<()> {
+        for entry in fs::read_dir(path)? {
+            let name = entry?.file_name().to_string_lossy().to_ascii_lowercase();
+            if matches!(
+                name.as_str(),
+                "ha-node.json"
+                    | "ha-state.json"
+                    | "replication-state.json"
+                    | "consensus-state.json"
+            ) || name.starts_with("cluster")
+                || name.starts_with("virtual")
+            {
+                return Err(replication_error(format!(
+                    "offline application unique-scope transition excludes durable HA/distributed history or ambiguous topology marker `{name}`"
+                )));
+            }
+        }
+        Ok(())
+    }
+
+    /// Persist a reader compatibility fence before writing transition intent.
+    pub fn enable_application_unique_scope(&mut self) -> Result<()> {
+        self.ensure_writable("enable application unique scope transition")?;
+        format::enable_application_unique_scope(&self.path)
     }
 
     fn open_inner(
@@ -10079,6 +10132,7 @@ impl BicDb {
         config: DbConfig,
         configured_node_id: Option<NodeId>,
         encryption_config: Option<EncryptionConfig>,
+        application_scope_recovery: bool,
     ) -> Result<Self> {
         config.replication.validate()?;
         if config.replication.enabled
@@ -10091,6 +10145,29 @@ impl BicDb {
         }
         config.consensus.validate()?;
         let path = path.as_ref().to_path_buf();
+        if application_scope_recovery {
+            Self::ensure_application_scope_standalone_history(&path)?;
+        }
+        // A core fence protects raw SQL and every other opener, not merely the
+        // application host. Unknown/malformed states quarantine the store.
+        if !application_scope_recovery {
+            match fs::read(path.join(".application-unique-scope.json")) {
+                Ok(bytes) => {
+                    let value: serde_json::Value =
+                        serde_json::from_slice(&bytes).map_err(|error| {
+                            replication_error(format!("invalid unique-scope receipt: {error}"))
+                        })?;
+                    if !matches!(
+                        value.get("phase").and_then(serde_json::Value::as_str),
+                        Some("admitted" | "reverted")
+                    ) {
+                        return Err(replication_error("offline application unique-scope transition requires signed recovery or admission"));
+                    }
+                }
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                Err(error) => return Err(error.into()),
+            }
+        }
         online_backup::ensure_no_pending_restore(&path)?;
         // A standby bootstrap staged by the previous run is installed first.
         ha_bootstrap::finish_standby_bootstrap(&path)?;
@@ -10130,6 +10207,29 @@ impl BicDb {
                 path.display()
             ))
         })?;
+        // A core fence protects raw SQL and every other opener, not merely the
+        // application host. Unknown/malformed states quarantine the store.
+        if !application_scope_recovery {
+            match fs::read(path.join(".application-unique-scope.json")) {
+                Ok(bytes) => {
+                    let value: serde_json::Value =
+                        serde_json::from_slice(&bytes).map_err(|error| {
+                            replication_error(format!("invalid unique-scope receipt: {error}"))
+                        })?;
+                    if !matches!(
+                        value.get("phase").and_then(serde_json::Value::as_str),
+                        Some("admitted" | "reverted")
+                    ) {
+                        return Err(replication_error("offline application unique-scope transition requires signed recovery or admission"));
+                    }
+                }
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                Err(error) => return Err(error.into()),
+            }
+        }
+        if application_scope_recovery {
+            Self::ensure_application_scope_standalone_history(&path)?;
+        }
         // Recheck after claiming ownership: a restore may have started after
         // the read-only preflight and then died before this lock was acquired.
         online_backup::ensure_no_pending_restore(&path)?;
@@ -10143,6 +10243,8 @@ impl BicDb {
         storage::initialize_backup_write_gate(&path)?;
 
         let encryption = encryption::open_runtime(&path, encryption_config, config.fsync)?;
+        let decimal_admission =
+            decimal_predicate::check_open_admission(&path, &encryption, &effective_mode, &config)?;
         if effective_mode == StorageMode::ServerPaged
             && !path.join("paged/store.pages").try_exists()?
             && (path.join(COMMIT_SEQ_FLOOR_FILE).try_exists()?
@@ -11031,6 +11133,8 @@ impl BicDb {
             paged_maintenance_lock: Arc::new(Mutex::new(())),
             fts_generations: Mutex::new(fts_generations),
             btree_bindings: Mutex::new(btree_bindings),
+            decimal_predicates_current: decimal_admission.current,
+            decimal_predicate_upgrade: decimal_admission.plan,
             fts_block_cache,
             fts_open_metrics,
             sync_log: Mutex::new(sync_log),
@@ -11105,6 +11209,7 @@ impl BicDb {
         db.prepare_replication_journal_origin()?;
         db.flashback_after_open()?;
         db.verify_after_durability_failure()?;
+        db.finish_decimal_predicate_upgrade()?;
         db.auto_checkpoint_if_due();
         Ok(db)
     }
@@ -24126,6 +24231,53 @@ fn predicate_value_text(value: &Value) -> String {
     }
 }
 
+// Predicates must compare the complete fixed-point value. The repair parser is
+// deliberately restricted to 18 fractional digits; Decimal arithmetic can
+// produce up to 28, including insignificant trailing zeros. Do not round,
+// rescale into a bounded integer, or turn a valid comparison into `None`.
+fn compare_predicate_decimal_text(left: &str, right: &str) -> Option<Ordering> {
+    fn parts(text: &str) -> Option<(bool, &str, &str)> {
+        let text = text.trim();
+        let (negative, digits) = match text.strip_prefix('-') {
+            Some(rest) => (true, rest),
+            None => (false, text.strip_prefix('+').unwrap_or(text)),
+        };
+        let (integer, fraction) = digits.split_once('.').unwrap_or((digits, ""));
+        if (integer.is_empty() && fraction.is_empty())
+            || !integer.bytes().all(|byte| byte.is_ascii_digit())
+            || !fraction.bytes().all(|byte| byte.is_ascii_digit())
+        {
+            return None;
+        }
+        let integer = integer.trim_start_matches('0');
+        let fraction = fraction.trim_end_matches('0');
+        Some((
+            negative && (!integer.is_empty() || !fraction.is_empty()),
+            integer,
+            fraction,
+        ))
+    }
+    let (left_negative, left_integer, left_fraction) = parts(left)?;
+    let (right_negative, right_integer, right_fraction) = parts(right)?;
+    if left_negative != right_negative {
+        return Some(if left_negative {
+            Ordering::Less
+        } else {
+            Ordering::Greater
+        });
+    }
+    let magnitude = left_integer
+        .len()
+        .cmp(&right_integer.len())
+        .then_with(|| left_integer.cmp(right_integer))
+        .then_with(|| left_fraction.cmp(right_fraction));
+    Some(if left_negative {
+        magnitude.reverse()
+    } else {
+        magnitude
+    })
+}
+
 fn compare_predicate_values(
     left: &Value,
     right: &Value,
@@ -24144,14 +24296,7 @@ fn compare_predicate_values(
             let right = right
                 .as_str()
                 .unwrap_or_else(|| right.as_number().map_or("", |number| number.as_str()));
-            let (left_units, left_scale) = parse_repair_decimal(left)?;
-            let (right_units, right_scale) = parse_repair_decimal(right)?;
-            let scale = left_scale.max(right_scale);
-            align_decimal_scale(left_units, left_scale, scale)?.partial_cmp(&align_decimal_scale(
-                right_units,
-                right_scale,
-                scale,
-            )?)
+            compare_predicate_decimal_text(left, right)
         }
         IndexPredicateValueType::Bool => left.as_bool()?.partial_cmp(&right.as_bool()?),
         IndexPredicateValueType::String

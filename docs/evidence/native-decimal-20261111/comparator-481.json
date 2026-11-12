@@ -1,0 +1,65 @@
+{
+  "toolchain_lock": "/root/erp-modernization/artifacts/toolchain-lock-candidate-481.json",
+  "toolchain": {
+    "format": 1,
+    "execution_target": "ordinary native bicdb ABI v2",
+    "qualified": false,
+    "carrier": {
+      "version": "2.3.88",
+      "source": "843a2c1f7667be92552b2b7574ba9ac592e6b0cb",
+      "source_code_commit": "2b6d391c8fa93416a22630aeed8f06192cbbed26",
+      "artifact": "tools/carrier-2.3.88-843a2c1f",
+      "sha256": "013a164b03a3954a71beadff528b036bf2ca65a7cf8e3b0444483b37a5e5aff9"
+    },
+    "bicdb": {
+      "version": "1.0.481-beta",
+      "source": "f52d8baaeceb83db86e2efd43494238a959ff764",
+      "artifact": "tools/bicdb-1.0.481-beta-f52d8baa",
+      "sha256": "53dbb59018e78224e1701546f492e2f451acec649b072185544282d15c0a284b",
+      "build": {
+        "host": "ny7.walknorth.com",
+        "rustc": "1.96.0 (ac68faa20 2026-05-25)",
+        "cargo": "1.96.0 (30a34c682 2026-05-25)",
+        "command": "cargo build --locked -p bicdb-cli --release",
+        "jobs": 2,
+        "incremental": false,
+        "debug": 0,
+        "tests_built": false,
+        "lto": false,
+        "source_directory": "/opt/walknorth-erp-modernization/source-decimal481",
+        "elapsed_seconds": 963
+      },
+      "source_base": "3d102759fbf4a28c4376f8588c53421f63c83462",
+      "patches": [
+        "lossless-fixed-point-predicate-comparison"
+      ],
+      "source_code_commit": "f52d8baaeceb83db86e2efd43494238a959ff764"
+    },
+    "testing": {
+      "driver": "Node v22.23.1",
+      "rust_tests": false
+    },
+    "qualification_scope": "Candidate481: exact Decimal predicate comparisons through28 fractional digits; Node runtime, all-six-operator negative, consolidation, upgrade and recovery qualification pending"
+  },
+  "synthetic_verifier": true,
+  "real_issuer": false,
+  "hub": false,
+  "node_bigint_oracle": true,
+  "source_sha256": "73b51c30055af1bcbe43161ea1a038cb88e48e65ffcbf21a92522e9273c37c09",
+  "package_sha256": "d7f70cb4d4a650c72ea85a59ed23f05bd48eca282b975a6f4a671f741925e379",
+  "unchanged_reproducer_sha256": "3524cbe5cc785a6c7089914bc28236f3176bc80bdd3a029a0ad43ee57e923608",
+  "passed": true,
+  "pair_count": 51,
+  "correct_batches": 51,
+  "wrong_batches": 306,
+  "operators": [
+    "eq",
+    "ne",
+    "lt",
+    "le",
+    "gt",
+    "ge"
+  ],
+  "failures": [],
+  "crash_and_cold_restore": true
+}

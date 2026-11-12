@@ -43,7 +43,11 @@ pub const NATIVE_WRITER_ENROLLMENT_FEATURE_FLAG: &str = "native_writer_enrollmen
 pub const NATIVE_METADATA_STORE_FEATURE_FLAG: &str = "native_metadata_store_v1";
 pub const NATIVE_INITIAL_PREPARATION_FEATURE_FLAG: &str = "native_initial_preparation_v1";
 pub const ORACLE_SIMPLE_CASE_V1_FEATURE_FLAG: &str = "oracle_simple_case_v1";
+pub const APPLICATION_UNIQUE_SCOPE_FEATURE_FLAG: &str = "application_unique_scope_transition_v1";
+pub const DECIMAL_PREDICATE_COMPARISON_V1_FEATURE_FLAG: &str = "decimal_predicate_comparison_v1";
 const KNOWN_FEATURE_FLAGS: &[&str] = &[
+    DECIMAL_PREDICATE_COMPARISON_V1_FEATURE_FLAG,
+    APPLICATION_UNIQUE_SCOPE_FEATURE_FLAG,
     ORACLE_INVALID_ROUTINES_FEATURE_FLAG,
     ORACLE_SIMPLE_CASE_V1_FEATURE_FLAG,
     UNIQUE_NULLS_NOT_DISTINCT_FEATURE_FLAG,
@@ -96,6 +100,17 @@ fn feature_flags_lock(root: &Path) -> std::sync::Arc<parking_lot::Mutex<()>> {
     let lock = Arc::new(parking_lot::Mutex::new(()));
     locks.insert(path, Arc::downgrade(&lock));
     lock
+}
+
+pub(crate) fn enable_decimal_predicate_comparison_v1(root: &Path) -> Result<()> {
+    let lock = feature_flags_lock(root);
+    let _guard = lock.lock();
+    let mut metadata = read_or_legacy_metadata(root)?;
+    validate_supported(&metadata)?;
+    metadata
+        .feature_flags
+        .insert(DECIMAL_PREDICATE_COMPARISON_V1_FEATURE_FLAG.into());
+    persist_metadata(root, &metadata, true)
 }
 
 /// Which storage engine owns a database's durable state. See
@@ -1050,4 +1065,16 @@ mod local_identity_format_tests {
             });
         }
     }
+}
+
+/// Sticky fence: older native binaries must refuse an offline scope transition.
+pub(crate) fn enable_application_unique_scope(root: &Path) -> Result<()> {
+    let lock = feature_flags_lock(root);
+    let _guard = lock.lock();
+    let mut metadata = read_or_legacy_metadata(root)?;
+    validate_supported(&metadata)?;
+    metadata
+        .feature_flags
+        .insert(APPLICATION_UNIQUE_SCOPE_FEATURE_FLAG.into());
+    persist_metadata(root, &metadata, true)
 }

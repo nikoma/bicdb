@@ -1,0 +1,8 @@
+{
+  "function": "validate_index_definition",
+  "exact_function_sha256": {
+    "f43583da4c34209e810c5e6a8f5925831b2949a1": "e500f0628eb79d2edf1628083b0db679b4abdbc6368b2500d0d0177ba2ba06a5",
+    "efb648f46fa3f7b25df6410790e68e72361ac375": "e500f0628eb79d2edf1628083b0db679b4abdbc6368b2500d0d0177ba2ba06a5"
+  },
+  "conclusion": "AllvalidDecimalpredicatesareBTree,nonexclusion; nochangefromactualmain482. Newpreflightcallsunchangedvalidator; no futureallkindfeatureisrequired."
+}

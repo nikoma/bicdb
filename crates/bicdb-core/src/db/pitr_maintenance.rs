@@ -2840,7 +2840,37 @@ impl BicDb {
                     .into(),
             ));
         }
-        self.create_index_online_inner(definition, true).map(|_| ())
+        // A Decimal comparison needs an authoritative generation even when
+        // the corpus is empty. The checks above retain the target-row and
+        // pending-write fences of this capability-reduced initializer.
+        let decimal = decimal_predicate::affected(&definition);
+        let old_binding = if decimal {
+            validate_index_definition(&definition)?;
+            self.ensure_collection(&definition.collection)?;
+            self.validate_secure_index_definition(&definition)?;
+            self.enable_index_format_capabilities(&definition)?;
+            let physical = format!("{}.__btree.{}", definition.name, Uuid::new_v4());
+            self.publish_full_text_generation(&definition.name, &physical)?;
+            self.btree_bindings
+                .lock()
+                .insert(definition.name.clone(), physical)
+        } else {
+            None
+        };
+        let name = definition.name.clone();
+        let result = self.create_index_online_inner(definition, true).map(|_| ());
+        if decimal && result.is_err() {
+            let mut bindings = self.btree_bindings.lock();
+            match old_binding {
+                Some(physical) => {
+                    bindings.insert(name, physical);
+                }
+                None => {
+                    bindings.remove(&name);
+                }
+            }
+        }
+        result
     }
 
     pub fn create_index_online(
@@ -2927,6 +2957,11 @@ impl BicDb {
                 io_charge_bytes: limits.max_batch_bytes as u64,
             };
             let initial = self.begin_paged_btree_build(definition.clone(), limits, now)?;
+            // The synchronous wrapper advances a logical refill clock while
+            // building. A quick reopen can precede that persisted clock even
+            // though wall time never went backwards. Resume at the verified
+            // checkpoint horizon; retain the builder's monotonic clock check.
+            now = now.max(initial.updated_at_ms);
             let interrupted_previous = initial.resume_after_id.is_some()
                 || initial.phase != PagedBTreeBuildPhase::Building;
             let state = loop {

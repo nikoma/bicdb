@@ -1,0 +1,108 @@
+{
+  "kind": "actual unmodified Native state created and closed by old Core",
+  "creator_source": "5e0fa30b60ef8640e161b41ec2d882df61cc9d1d",
+  "production_core": "f43583da4c34209e810c5e6a8f5925831b2949a1",
+  "binary_sha256": "bc25d0ca9a63e2fb6ed394d259f9bf591ef00aeee79ab00264cdffe4d680837f",
+  "case": "embedded",
+  "excluded_unrelated_secret": "mesh_signing_key.json; original retained only in private closed S3 fixture",
+  "observation": {
+    "case": "embedded",
+    "definitions": [
+      {
+        "collection": "precision_probe",
+        "fields": [
+          {
+            "MetadataPath": [
+              "business_key"
+            ]
+          }
+        ],
+        "kind": "b_tree",
+        "name": "native_decimal_partial",
+        "predicate": {
+          "left": {
+            "field": {
+              "MetadataPath": [
+                "amount"
+              ]
+            },
+            "op": "field"
+          },
+          "op": "binary",
+          "operator": "greater",
+          "right": {
+            "op": "literal",
+            "value": "0.5"
+          },
+          "value_type": "decimal"
+        },
+        "unique": true
+      }
+    ],
+    "rows": 1,
+    "source_version": "1.0.482-beta",
+    "status": "actual_old_store_closed",
+    "verification": [
+      {
+        "collection": "precision_probe",
+        "duplicate_entries": 0,
+        "expected_records": 0,
+        "index_name": "native_decimal_partial",
+        "indexed_records": 0,
+        "kind": "b_tree",
+        "last_verified_unix_ms": 1794474988729,
+        "missing_entries": 0,
+        "size_bytes": 0,
+        "stale_entries": 0,
+        "valid": true,
+        "wrong_entries": 0
+      }
+    ]
+  },
+  "files": {
+    ".backup-write.lock": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "collections.json": {
+      "bytes": 156,
+      "sha256": "3027d9e601b04511db9ff2fdb22d6c0a9e9245a141e3aa9de0f122c9fb65e51a"
+    },
+    "events/events.seg": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "format.json": {
+      "bytes": 167,
+      "sha256": "81e9e5eefc2dc0a7836d9701a9c17416ca1303b975aec96cd66e3e53eb7881c0"
+    },
+    "incarnations.log": {
+      "bytes": 119,
+      "sha256": "a7aa1d60436474516cd359dc71746886ae0100dfeacbdbb3d356e2863f262de7"
+    },
+    "index-maintenance.json": {
+      "bytes": 362,
+      "sha256": "30c14e899af7119af6afa0f946b072f914d8b9095485f0ee382f89d9c589180a"
+    },
+    "indexes.json": {
+      "bytes": 625,
+      "sha256": "43d73f312ab8b7951718d12c5c453481f523c510e21a89269b9b097b09dd312b"
+    },
+    "store.lock": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "sync.log": {
+      "bytes": 259,
+      "sha256": "809fb4078ab243babe0aa265ace0271bd34278bdb82df640778f2c66eed71cbf"
+    },
+    "sync_state.json": {
+      "bytes": 340,
+      "sha256": "c4dadac1c4e5ddfcc4301c485ee846c569935cbccdd54613032f95201732e7f6"
+    },
+    "transactions.log": {
+      "bytes": 684,
+      "sha256": "2a15e6ebfa03ac002e58d3fc1cd58383cd6f32fd190e5f6f551ec07de80ef0ea"
+    }
+  }
+}

@@ -1,0 +1,128 @@
+{
+  "kind": "actual unmodified Native state created and closed by old Core",
+  "creator_source": "5e0fa30b60ef8640e161b41ec2d882df61cc9d1d",
+  "production_core": "f43583da4c34209e810c5e6a8f5925831b2949a1",
+  "binary_sha256": "bc25d0ca9a63e2fb6ed394d259f9bf591ef00aeee79ab00264cdffe4d680837f",
+  "case": "duplicate",
+  "excluded_unrelated_secret": "mesh_signing_key.json; original retained only in private closed S3 fixture",
+  "observation": {
+    "case": "duplicate",
+    "definitions": [
+      {
+        "collection": "precision_probe",
+        "fields": [
+          {
+            "MetadataPath": [
+              "business_key"
+            ]
+          }
+        ],
+        "kind": "b_tree",
+        "name": "native_decimal_partial",
+        "predicate": {
+          "left": {
+            "field": {
+              "MetadataPath": [
+                "amount"
+              ]
+            },
+            "op": "field"
+          },
+          "op": "binary",
+          "operator": "greater",
+          "right": {
+            "op": "literal",
+            "value": "0.5"
+          },
+          "value_type": "decimal"
+        },
+        "unique": true
+      }
+    ],
+    "rows": 2,
+    "source_version": "1.0.482-beta",
+    "status": "actual_old_store_closed",
+    "verification": [
+      {
+        "collection": "precision_probe",
+        "duplicate_entries": 0,
+        "expected_records": 0,
+        "index_name": "native_decimal_partial",
+        "indexed_records": 0,
+        "kind": "b_tree",
+        "last_verified_unix_ms": null,
+        "missing_entries": 0,
+        "size_bytes": 0,
+        "stale_entries": 0,
+        "valid": true,
+        "wrong_entries": 0
+      }
+    ]
+  },
+  "files": {
+    ".backup-write.lock": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "btree-index-builds/d979b32d3881d30540f1e17685cd6d35e240e52343c35dc2b60d72e90148ee92.json": {
+      "bytes": 942,
+      "sha256": "9a15ca3119169347955bb1efb134848870fbf133559195eb7469d0fcc7f50cc7"
+    },
+    "collections.json": {
+      "bytes": 156,
+      "sha256": "3027d9e601b04511db9ff2fdb22d6c0a9e9245a141e3aa9de0f122c9fb65e51a"
+    },
+    "commit-seq.floor": {
+      "bytes": 6,
+      "sha256": "96c671dff08033e909e8744500506f9033e60dfcef58d9aa7b9d49e7499f1b35"
+    },
+    "events/events.seg": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "format.json": {
+      "bytes": 192,
+      "sha256": "54f5d977028abbac7ea27f18181076c5ca63c6f052bbea62c647aec3a9302123"
+    },
+    "fts-index-generations.json": {
+      "bytes": 122,
+      "sha256": "e851e3e417c5dc44361f6dea86aacd76e3a6dc13b1438f3e295510da70ba3e40"
+    },
+    "incarnations.log": {
+      "bytes": 119,
+      "sha256": "948e56d335e5356a3b5d191a64ee3b37b0f832736ac92cea27c0516f4a07d2e2"
+    },
+    "indexes.json": {
+      "bytes": 625,
+      "sha256": "43d73f312ab8b7951718d12c5c453481f523c510e21a89269b9b097b09dd312b"
+    },
+    "paged/store.lock": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "paged/store.pages": {
+      "bytes": 40960,
+      "sha256": "bb59ddf3bd09819cbece12918e4b5a0c04da769f75f5c2245fa71e76d444fea4"
+    },
+    "paged/store.wal": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "store.lock": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "sync.log": {
+      "bytes": 525,
+      "sha256": "3be95a6c121ee3640ff269587931c302a7c725c35683327e7c065071bba1860c"
+    },
+    "sync_state.json": {
+      "bytes": 340,
+      "sha256": "063d0c044c51e1806d4522b3b32442bf9c06220aa9d3c0e89282661b1be23a6b"
+    },
+    "transactions.log": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  }
+}

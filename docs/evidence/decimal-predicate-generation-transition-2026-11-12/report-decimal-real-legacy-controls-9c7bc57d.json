@@ -1,0 +1,49 @@
+{
+  "source": "9c7bc57d4b0d767daec619704e1c0766e685d714",
+  "scope": "Actual old482 Native states: originalpaged+Embedded+multiple nested predicates+newlyconflictingunique keys. Requiredautomaticpositive+NativeACKinspection+2cleanreopens. Eight SIGABRT seams include pagecommit before/after buildcheckpoint, shadowcatalog beforeComplete, plan/replacement/certificate; sequentialcuts after each oftwoindexreplacements;4 corruptplan controls. Existing legal-indexkind contract preserved. Probe examplebuild only for independent oldreader control, notatest. No promotion until oldreader/IOfault/broad/finalcomposedchecks.",
+  "started_unix": 1794475113.9769323,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--lib",
+        "db::decimal_predicate::tests",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794475113.9771166,
+      "exit": 0,
+      "finished_unix": 1794475142.8307347
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--test",
+        "decimal_predicate_generations",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794475142.8309243,
+      "exit": 101,
+      "finished_unix": 1794475168.3655717
+    }
+  ],
+  "status": "failed",
+  "finished_unix": 1794475168.3658354
+}

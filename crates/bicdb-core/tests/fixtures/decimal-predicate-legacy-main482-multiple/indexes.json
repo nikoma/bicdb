@@ -1,0 +1,74 @@
+{
+  "indexes": [
+    {
+      "name": "native_decimal_partial",
+      "collection": "precision_probe",
+      "fields": [
+        {
+          "MetadataPath": [
+            "business_key"
+          ]
+        }
+      ],
+      "unique": true,
+      "kind": "b_tree",
+      "predicate": {
+        "op": "binary",
+        "operator": "greater",
+        "left": {
+          "op": "field",
+          "field": {
+            "MetadataPath": [
+              "amount"
+            ]
+          }
+        },
+        "right": {
+          "op": "literal",
+          "value": "0.5"
+        },
+        "value_type": "decimal"
+      }
+    },
+    {
+      "name": "nested_decimal_partial",
+      "collection": "precision_probe",
+      "fields": [
+        {
+          "MetadataPath": [
+            "business_key"
+          ]
+        }
+      ],
+      "unique": false,
+      "kind": "b_tree",
+      "predicate": {
+        "op": "unary",
+        "operator": "not",
+        "value": {
+          "op": "unary",
+          "operator": "not",
+          "value": {
+            "op": "binary",
+            "operator": "greater",
+            "left": {
+              "op": "field",
+              "field": {
+                "MetadataPath": [
+                  "amount"
+                ]
+              }
+            },
+            "right": {
+              "op": "literal",
+              "value": "0.5"
+            },
+            "value_type": "decimal"
+          },
+          "value_type": "bool"
+        },
+        "value_type": "bool"
+      }
+    }
+  ]
+}

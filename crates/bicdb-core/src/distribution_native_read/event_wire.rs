@@ -81,13 +81,16 @@ pub(crate) enum NativeEventGetUnavailableCode {
 #[serde(tag = "presence", rename_all = "snake_case", deny_unknown_fields)]
 pub(crate) enum NativeEventValue {
     Present { value: Value },
-    Absent,
+    // Use an empty STRUCT variant: serde's internally tagged unit variant
+    // accepts trailing fields even with deny_unknown_fields. A contradictory
+    // payload must fail decoding, never become a successful missing record.
+    Absent {},
 }
 impl From<Option<Value>> for NativeEventValue {
     fn from(value: Option<Value>) -> Self {
         match value {
             Some(value) => Self::Present { value },
-            None => Self::Absent,
+            None => Self::Absent {},
         }
     }
 }
@@ -95,13 +98,13 @@ impl NativeEventValue {
     pub(crate) fn into_option(self) -> Option<Value> {
         match self {
             Self::Present { value } => Some(value),
-            Self::Absent => None,
+            Self::Absent {} => None,
         }
     }
     fn as_ref(&self) -> Option<&Value> {
         match self {
             Self::Present { value } => Some(value),
-            Self::Absent => None,
+            Self::Absent {} => None,
         }
     }
 }
@@ -264,7 +267,8 @@ mod tests {
         }
         let present =
             serde_json::to_value(NativeEventValue::Present { value: Value::Null }).unwrap();
-        let absent = serde_json::to_value(NativeEventValue::Absent).unwrap();
+        let absent = serde_json::to_value(NativeEventValue::Absent {}).unwrap();
+        assert_eq!(absent, serde_json::json!({"presence":"absent"}));
         assert_ne!(present, absent);
         assert!(serde_json::from_value::<NativeEventValue>(
             serde_json::json!({"presence":"present"})
@@ -292,7 +296,7 @@ mod tests {
         let legacy = NativeEventGetReply::new(
             &request,
             NativeEventGetResult::LegacyValue {
-                value: NativeEventValue::Absent,
+                value: NativeEventValue::Absent {},
             },
         );
         assert!(legacy.validate_for(&request).is_err());

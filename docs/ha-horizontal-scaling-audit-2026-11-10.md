@@ -46,6 +46,32 @@ and zero resources in an independent subscription inventory filtered to their
 exact group identities. This is a current cleanup check, not a new VM campaign
 or a claim about unrelated Azure resources. No resources were created.
 
+See the [November 12 revision-scoped Milestone 1 status](ha-milestone1-status-2026-11-12.md)
+for the merged metadata repair, exact CI scope and remaining recovery/operator gates.
+
+## Current single-primary configuration correction — 2026-11-12 UTC
+
+At public main **1.0.482-beta**, `f43583da4c34209e810c5e6a8f5925831b2949a1`,
+the original 455 audit's unsafe synchronous-K configuration concern has a source
+repair. For automatic failover,
+`crates/bicdb-pgwire/src/high_availability.rs::validate` requires a nonzero
+synchronous standby count to be at least `group_size() / 2` and no greater than
+the configured voting peers; every voter must also be an allowed standby. Zero
+selects asynchronous operation. Observer confirmations do not satisfy the voting
+standby requirement. This is configuration validation and source/CI maturity,
+not physical zero-loss qualification. Timeout degradation and asynchronous mode
+retain their positive-loss-window contracts. The original 455 baseline below
+must not be read as a claim that this configuration guard is still missing.
+
+## Original metadata correlation — 2026-11-12 UTC
+
+A [read-only examination of the five original 461 archives](evidence/azure-original-metadata-correlation-2026-11-12/README.md)
+verifies their retained metadata checksums. The only equal committed-index pair
+agrees; the differing stopped-state indices are not one coherent snapshot.
+These files establish neither a causal link to the separately found bounded
+Append defect nor its absence during the earlier failure. Request-time visibility
+and the first restoring event for the two ACK records remain unresolved.
+
 ## P0 source follow-up — 2026-11-11
 
 The [revision-scoped recovery evidence matrix](recovery-component-evidence-2026-11-11.md)

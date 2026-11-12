@@ -73,3 +73,41 @@ indexes, are retained in restricted experiment custody. They show the same
 missing import; they do not establish that subsequent compilation is clean.
 The native-host operator loop, automatic recovery, joint data-membership
 handoff and independently reconciled physical expansion remain open gates.
+
+## Integrated run at `25aebf446105`
+
+[Tests run `43161126843`](https://github.com/nikoma/bicdb/actions/runs/43161126843)
+compiled all workspace test targets successfully. Core job `130992295118`
+then recorded **827 passed, four failed, eight ignored**, 178.63 seconds.
+The separate one-test child invocation is not added to these totals.
+[Rails run `43161126886`](https://github.com/nikoma/bicdb/actions/runs/43161126886)
+completed successfully, including its application assertions. These results
+are for `25aebf446105da552b9ba65205811271e00898b7`, working version
+1.0.481-beta, not for subsequent source.
+
+| Control at this source | Classification | Evidence and next check |
+| --- | --- | --- |
+| Retired actor/reused-pin control, stale same-cert destination before held latches, genuine native learner catch-up/promotion | Passed | Actual owned stores and authenticated TLS where specified by the individual control; not physical-host qualification |
+| Four actual processes: initial metadata election, host quorum and writer policies | Passed | The listener remains metadata-only. No data Ready, first ACK, expansion or automatic placement was tested. |
+| Original four-member/RF3 identity, retained-prefix recovery and sparse cold-reopen controls | Passed | Previously failed controls now execute successfully at this source; no Azure causal attribution follows |
+| `native_service_actual_open_cannot_be_revived_by_outer_arc_or_retained_directory` | Failed | Fixture created a new enforced store without completing its planned native genesis. Listener birth capture refused with `native recovery requires completed fsync image-aware factory`. Source `72d5a13a4` completes actual persisted-schema/genesis production before the original lifetime assertions; rerun required. |
+| Prepared cold copy and protected-proposal/metadata-cut cold copies | Failed | Both refused with `bootstrap enrollment requires actual unwritten native genesis`. Cold-loader investigation remains open; no reset or bypass is an acceptable repair. |
+| Exposed cold copy refusing pre-vote entry | Failed | The expected `MAY HAVE BEEN EXPOSED` classification assertion failed without recording the actual error. Keep the original no-reset/term assertions and capture the exact earlier refusal on rerun. |
+| New outer factory and original-cancellation controls at `1865e6b98` | Not tested | Actual four-member TLS metadata setup plus fifth registered learner source calls create, strict reopen and proposal APIs. It is not an executed fifth-node join or data relocation. |
+
+The entire Core job remains **failed**. Full compressed Core and Rails logs
+and their SHA-256 indexes are retained in restricted custody. Other jobs still
+running at this observation must be allowed to finish and recorded separately.
+Temporary Core database/TLS roots were not uploaded by the workflow.
+
+Separately, abort candidate `51be8f5ef88de8966b4502727f60e0931cf8f320`
+failed production compilation in
+[run `43161562507`](https://github.com/nikoma/bicdb/actions/runs/43161562507):
+missing `actual_transaction_mutations_sha256` imports and an import through
+private `db::range_image_native`. The reported unsized-`str` error followed
+the unresolved function. No abort test execution is claimed. Narrow imports
+and a single-record crate-visible reexport were corrected at
+`1ba3a30b18a2270cea0ecd3751a067baf15ed8b5`; its independent
+[run `43161948968`](https://github.com/nikoma/bicdb/actions/runs/43161948968)
+was still live at this observation. A compile fix does not establish
+canonical abort recovery, automatic recovery or post-handoff recovery.

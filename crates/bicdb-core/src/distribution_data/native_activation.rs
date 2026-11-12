@@ -16,9 +16,19 @@ impl ClusterDataNodeService {
     ) -> Result<NativeActivationReceipt> {
         parent.check()?;
         let db = checked_database_read(&self.db, &self.storage_policy)?;
-        self.range_writes
-            .current_mut()
-            .activate_native_recovery(&db, prepared, quorum, fresh)
+        if matches!(
+            fresh.purpose(),
+            crate::distribution_consensus::MetadataRecoveryRolePurpose::CurrentJointRecovery { .. }
+        ) {
+            let slot = self.native_replica_listener_store_open_guard();
+            self.range_writes
+                .current_mut()
+                .activate_native_recovery_owned(&db, prepared, quorum, fresh, &slot, parent)
+        } else {
+            self.range_writes
+                .current_mut()
+                .activate_native_recovery(&db, prepared, quorum, fresh)
+        }
     }
     pub(crate) fn arm_local_native_activation(
         &mut self,
@@ -30,9 +40,21 @@ impl ClusterDataNodeService {
     ) -> Result<()> {
         parent.check()?;
         let db = checked_database_read(&self.db, &self.storage_policy)?;
-        self.range_writes
-            .current_mut()
-            .arm_native_activation_open(&db, prepared, receipt, fresh, frozen)
+        if matches!(
+            fresh.purpose(),
+            crate::distribution_consensus::MetadataRecoveryRolePurpose::CurrentJointRecovery { .. }
+        ) {
+            let slot = self.native_replica_listener_store_open_guard();
+            self.range_writes
+                .current_mut()
+                .arm_native_activation_open_owned(
+                    &db, prepared, receipt, fresh, frozen, &slot, parent,
+                )
+        } else {
+            self.range_writes
+                .current_mut()
+                .arm_native_activation_open(&db, prepared, receipt, fresh, frozen)
+        }
     }
     pub(crate) fn require_current_native_activation(
         &self,

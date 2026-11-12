@@ -3,6 +3,8 @@
 //! stores/services, TLS metadata, the completed image and distinct data sets.
 //! Local opaque-object orchestration is NOT an operator/wire handoff test.
 use super::*;
+#[path = "complete_joint_tests/activation_scope_cut_tests.rs"]
+mod activation_scope_cut_tests;
 #[path = "complete_joint_tests/closed_policy_baseline_tests.rs"]
 mod closed_policy_baseline_tests;
 #[path = "complete_joint_tests/current_joint_authority_tests.rs"]
@@ -357,6 +359,7 @@ enum JointTestOutcome {
     FullHandoffThenCurrentJointActivationIdempotence,
     FullHandoffThenCurrentJointAuthorityRefusals,
     FullHandoffThenObserverScopeCuts,
+    FullHandoffThenActivationScopeCut,
 }
 
 #[test]
@@ -392,6 +395,7 @@ enum JointFullContinuation {
     PostJointNativeActivationIdempotence,
     CurrentJointAuthorityRefusals,
     ObserverScopeCuts,
+    ActivationScopeCut(activation_scope_cut_tests::ActivationScopeCut),
 }
 
 fn run_complete_joint(mode: u8) -> JointTestOutcome {
@@ -949,6 +953,20 @@ fn run_complete_joint_with_controls(
     assert_eq!(observed.record().map(|record| record.as_ref()), Some(&next));
     assert_eq!(observed.audit().range_index, 2);
     fixture.idle();
+    if let JointFullContinuation::ActivationScopeCut(cut) = continuation {
+        assert!(
+            release_continuation.is_some(),
+            "activation scope cuts require real all3 release/ACK2/Strong"
+        );
+        activation_scope_cut_tests::exercise(
+            &fixture,
+            &activation_range,
+            acknowledged.as_ref(),
+            &next,
+            cut,
+        );
+        return JointTestOutcome::FullHandoffThenActivationScopeCut;
+    }
     if continuation == JointFullContinuation::ObserverScopeCuts {
         assert!(
             release_continuation.is_some(),

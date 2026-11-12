@@ -148,6 +148,32 @@ impl NativeWriterHostState {
     pub(crate) fn require_topology(&self, topology: &crate::ClusterTopology) -> Result<()> {
         self.require_registry_topology(topology)
     }
+    /// Necessary mutable-boundary refusal inside an actual activation journal
+    /// scope. Full policy/birth/registry validation remains at scope entry/exit.
+    pub(in crate::db::range_image_native) fn require_activation_lifetime(
+        &self,
+        database: &BicDb,
+        range: &RangeDescriptor,
+    ) -> Result<()> {
+        let registration = self.require_lifetime()?;
+        database.check_recovery_state()?;
+        if database.incarnation_id() != self.record.database_incarnation
+            || database.data_path().canonicalize()? != self.root
+        {
+            return Err(invalid("native writer database/open changed"));
+        }
+        let hook = database.commit_admission.read();
+        if !Arc::ptr_eq(hook.registration(), &registration)
+            || hook
+                .native_writer()
+                .is_none_or(|state| !std::ptr::eq(state.as_ref(), self))
+        {
+            return Err(invalid(
+                "native writer policy is not the actual installed hook",
+            ));
+        }
+        self.require_range(range)
+    }
     pub(crate) fn require_database(&self, database: &BicDb, range: &RangeDescriptor) -> Result<()> {
         self.require_original_database(database, range)?;
         self.require_verified_registry_database(database)

@@ -38,6 +38,32 @@ impl NativeActivatedOpenGuard {
     }
 }
 impl BicDb {
+    pub(crate) fn native_activated_open_guard_in_scope(
+        &self,
+        scope: &crate::db::NativeActivationReadScope<'_>,
+        receipt: &NativeActivationReceipt,
+        frozen: &FrozenRangeMutationPermit,
+    ) -> Result<NativeActivatedOpenGuard> {
+        scope.require_identity(self, scope.prepared(), scope.store(), scope.role())?;
+        receipt.require_current_in_activation_scope(scope)?;
+        self.check_recovery_state()?;
+        let root = self._directory_lock.as_ref().ok_or_else(|| {
+            BicDbError::Cluster("native activation has no actual DB directory lifetime".into())
+        })?;
+        let generation = self
+            .range_mutations
+            .bind_serving_generation(receipt.scope().range_id, frozen)?;
+        // The existing generation guard is returned ONLY AFTER the callback's
+        // actual scope exit checks. Error drops it without publishing an open.
+        Ok(NativeActivatedOpenGuard {
+            directory: Arc::downgrade(root),
+            health: Arc::clone(&self.durability),
+            generation,
+            store_open_id: scope.store().recovery_store_open_id(),
+            scope: receipt.scope().clone(),
+            activation_sha256: receipt.activation_sha256()?,
+        })
+    }
     pub(crate) fn native_activated_open_guard(
         &self,
         store: &RangeWriteStore,

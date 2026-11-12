@@ -14,6 +14,8 @@ mod observer_scope;
 pub(crate) use observer_scope::NativeReadyObserverReadScope;
 mod completion_scope;
 pub(crate) use completion_scope::NativeCompletionReadScope;
+mod activation_scope;
+pub(crate) use activation_scope::NativeActivationReadScope;
 mod activation_decision;
 mod joint_handoff;
 pub(crate) use activation_decision::NativeActivationDecisionReceipt;

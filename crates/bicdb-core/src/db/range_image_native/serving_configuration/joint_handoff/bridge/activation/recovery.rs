@@ -199,6 +199,24 @@ impl NativeCurrentJointRecoveryDomain {
             observer.lineage(),
         )
     }
+    pub(in crate::db::range_image_native) fn require_current_in_activation_scope(
+        &self,
+        activation: &crate::db::NativeActivationReadScope<'_>,
+    ) -> Result<()> {
+        activation.require_identity(
+            activation.database(),
+            activation.prepared(),
+            activation.store(),
+            activation.role(),
+        )?;
+        let borrowed = self.native.read_scope_for_activation(activation)?;
+        drop(borrowed);
+        self.require_current_from_actual_lineage(
+            activation.database(),
+            activation.store(),
+            activation.lineage(),
+        )
+    }
     fn require_current_from_actual_lineage(
         &self,
         db: &BicDb,
@@ -254,6 +272,7 @@ impl NativeCurrentJointRecoveryDomain {
 enum CurrentJointBorrowedReadScope<'borrow, 'scope> {
     Completion(&'borrow crate::db::NativeCompletionReadScope<'scope>),
     Observer(&'borrow crate::db::NativeReadyObserverReadScope<'scope>),
+    Activation(&'borrow crate::db::NativeActivationReadScope<'scope>),
 }
 impl BicDb {
     /// Actual protected LOCAL original-promise proof, independent of a plan's
@@ -419,6 +438,23 @@ impl BicDb {
             Some(CurrentJointBorrowedReadScope::Observer(observer)),
         )
     }
+    pub(in crate::db::range_image_native) fn observe_current_joint_domain_in_activation_scope(
+        &self,
+        activation: &crate::db::NativeActivationReadScope<'_>,
+    ) -> Result<NativeCurrentJointRecoveryDomain> {
+        activation.require_identity(
+            self,
+            activation.prepared(),
+            activation.store(),
+            activation.role(),
+        )?;
+        self.observe_current_joint_recovery_domain_inner(
+            activation.store(),
+            activation.prepared().scope().range_id,
+            activation.parent(),
+            Some(CurrentJointBorrowedReadScope::Activation(activation)),
+        )
+    }
     fn observe_current_joint_recovery_domain_inner(
         &self,
         store: &RangeWriteStore,
@@ -469,6 +505,9 @@ impl BicDb {
             }
             Some(CurrentJointBorrowedReadScope::Observer(observer)) => {
                 receipt.read_scope_for_observer(observer)?
+            }
+            Some(CurrentJointBorrowedReadScope::Activation(activation)) => {
+                receipt.read_scope_for_activation(activation)?
             }
             None => receipt.current_read_scope(self)?,
         };
@@ -550,6 +589,15 @@ impl BicDb {
                     store,
                     observer.observer(),
                     observer.request(),
+                )?;
+            }
+            Some(CurrentJointBorrowedReadScope::Activation(activation)) => {
+                fact.require_current_from_actual_lineage(self, store, activation.lineage())?;
+                activation.require_identity(
+                    self,
+                    activation.prepared(),
+                    store,
+                    activation.role(),
                 )?;
             }
             None => fact.require_current(self, store)?,

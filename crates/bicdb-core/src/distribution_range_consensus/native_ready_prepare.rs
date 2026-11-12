@@ -549,6 +549,96 @@ impl PreparedNativeRecoveryReady {
     pub(crate) fn native_database_incarnation(&self) -> &str {
         self.physical.native_admission().database_incarnation()
     }
+    pub(crate) fn completed_serving_sha_for_activation(
+        &self,
+        store: &RangeWriteStore,
+    ) -> Result<String> {
+        match &store
+            .catalog
+            .recovery_fences
+            .get(&self.scope.range_id)
+            .ok_or_else(|| range_write_error("activation lost actual completed record"))?
+            .phase
+        {
+            RecoveryFencePhase::NativeCompleted(completed) => {
+                Ok(completed.native_serving_sha256.clone())
+            }
+            RecoveryFencePhase::NativeActivated(activated) => {
+                Ok(activated.completed.native_serving_sha256.clone())
+            }
+            _ => Err(range_write_error(
+                "activation requires actual completed serving commitment",
+            )),
+        }
+    }
+    /// One actual journal-held activation read: exact durable phase and the
+    /// unchanged Completed binding, never reinterpret Activated as Ready.
+    pub(crate) fn require_current_in_activation_scope(
+        &self,
+        scope: &crate::db::NativeActivationReadScope<'_>,
+    ) -> Result<()> {
+        let db = scope.database();
+        let store = scope.store();
+        let fresh = scope.role();
+        scope.require_identity(db, self, store, fresh)?;
+        store.require_current_joint_domain_in_activation_scope(scope)?;
+        store.require_durable_recovery_catalog()?;
+        store.require_no_image_install(self.scope.range_id)?;
+        validate_native_prepared_catalog(&store.catalog)?;
+        store.require_native_recovery_identity(fresh, self.physical.native_admission())?;
+        let saved = store
+            .catalog
+            .recovery_fences
+            .get(&self.scope.range_id)
+            .ok_or_else(|| range_write_error("activation scope lost actual refusal"))?;
+        let binding = self
+            .binding
+            .try_lock()
+            .ok_or_else(|| range_write_error("activation scope owned binding busy"))?;
+        let (completed, completed_digest) = match &saved.phase {
+            RecoveryFencePhase::NativeCompleted(point) => (
+                point,
+                store.recovery_range_catalog_sha256(self.scope.range_id)?,
+            ),
+            RecoveryFencePhase::NativeActivated(activated) => {
+                let completed_phase =
+                    RecoveryFencePhase::NativeCompleted(activated.completed.clone());
+                let actual = store.recovery_range_catalog_sha256_with_phase(
+                    self.scope.range_id,
+                    Some(&completed_phase),
+                )?;
+                if actual != activated.completed_catalog_sha256 {
+                    return Err(range_write_error(
+                        "activation scope changed original Completed catalogue commitment",
+                    ));
+                }
+                (&activated.completed, actual)
+            }
+            _ => {
+                return Err(range_write_error(
+                    "activation scope needs actual Completed or Activated phase",
+                ))
+            }
+        };
+        if self.store_open_id != store.open_id
+            || !saved.scope.same_session(&self.scope)
+            || saved.native_database_incarnation != self.native_database_incarnation()
+            || saved.local_node_id != *fresh.local_node_id()
+            || saved.local_member_incarnation != fresh.local_member_incarnation()
+            || completed.point != self.point
+            || self.point != NativePreparedPoint::from_actual(&self.physical)
+            || binding.catalog_sha256 != completed_digest
+            || binding.native_completed_serving_sha256.as_deref()
+                != Some(completed.native_serving_sha256.as_str())
+        {
+            return Err(range_write_error(
+                "activation scope changed actual Completed materialization/binding/session",
+            ));
+        }
+        scope.require_serving(&completed.native_serving_sha256)?;
+        scope.parent().check()?;
+        fresh.require_live_request()
+    }
     /// Only the actual nonescaping read-only journal scope may reuse lineage.
     pub(crate) fn require_current_in_observer_scope(
         &self,

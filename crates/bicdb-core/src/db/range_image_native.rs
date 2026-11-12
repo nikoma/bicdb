@@ -26,11 +26,12 @@ pub(crate) use writer_enrollment::{InstalledNativeWriterHostGuard, NativeWriterH
 mod serving_configuration;
 pub(crate) use native_read::{NativeRangeReadPhysical, NativeReadLocalDbSequence};
 pub(crate) use serving_configuration::{
-    NativeActivationDecisionReceipt, NativeCompletionReadScope, NativeCurrentJointBinding,
-    NativeCurrentJointRecoveryDomain, NativeJointBridgeReadScope, NativeJointDecisionReceipt,
-    NativeJointHistoricalCutScope, NativeJointOldCloseReceipt, NativeJointOldPhysicalProof,
-    NativeJointPreparedPublicationScope, NativeJointServingBridgeReceipt,
-    NativeJointServingPreparation, NativeReadyObserverReadScope, NativeRecoveredServingReceipt,
+    NativeActivationDecisionReceipt, NativeActivationReadScope, NativeCompletionReadScope,
+    NativeCurrentJointBinding, NativeCurrentJointRecoveryDomain, NativeJointBridgeReadScope,
+    NativeJointDecisionReceipt, NativeJointHistoricalCutScope, NativeJointOldCloseReceipt,
+    NativeJointOldPhysicalProof, NativeJointPreparedPublicationScope,
+    NativeJointServingBridgeReceipt, NativeJointServingPreparation, NativeReadyObserverReadScope,
+    NativeRecoveredServingReceipt,
 };
 use serving_configuration::{NativeJointServingDomain, NativeRecoveredServingConfiguration};
 #[cfg(test)]

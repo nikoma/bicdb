@@ -563,6 +563,41 @@ impl NativeJointServingBridgeReceipt {
             lineage: NativeJointScopeLineage::Borrowed(lineage),
         })
     }
+    pub(in crate::db::range_image_native) fn read_scope_for_activation<'a>(
+        &'a self,
+        activation: &'a crate::db::NativeActivationReadScope<'_>,
+    ) -> Result<NativeJointBridgeReadScope<'a>> {
+        let database = activation.database();
+        activation.require_identity(
+            database,
+            activation.prepared(),
+            activation.store(),
+            activation.role(),
+        )?;
+        activation.journal().require_database(database)?;
+        let lineage = activation.lineage();
+        let range = activation.prepared().scope().range_id;
+        if self.record.prepared.range_id != range
+            || lineage.base.range.id != range
+            || self.native.database_incarnation() != database.incarnation_id()
+            || self.native.birth_id() != lineage.birth.birth_id
+            || self.native.birth_sha256() != lineage.birth.checksum_sha256
+        {
+            return Err(invalid(
+                "borrowed activation bridge changed actual range/birth/DB open",
+            ));
+        }
+        self.record.validate()?;
+        self.record
+            .require_actual_point_from_lineage(database, &self.native, lineage)?;
+        self.require_pointer_archive(database)?;
+        Ok(NativeJointBridgeReadScope {
+            database,
+            native: self,
+            journal: NativeJointScopeJournal::Borrowed(activation.journal()),
+            lineage: NativeJointScopeLineage::Borrowed(lineage),
+        })
+    }
     pub(crate) fn checksum_sha256(&self) -> &str {
         &self.record.checksum_sha256
     }

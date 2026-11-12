@@ -1838,6 +1838,11 @@ impl LocalNativeRecoveryReady {
     /// scoped producer may call it at return after its full physical check.
     pub(crate) fn require_owned_pin_live(&self, db: &BicDb) -> Result<()> {
         self.native.require_current(db)?;
+        self.require_owned_pin_gate(db)
+    }
+    /// Necessary gate/pin refusal only; an actual native-journal scope must
+    /// independently run full admission/materialization at entry and exit.
+    pub(crate) fn require_owned_pin_gate(&self, db: &BicDb) -> Result<()> {
         let range_id = self.role.current_range().id;
         db.range_mutations.validate_frozen(range_id, &self.frozen)?;
         db.range_mutations

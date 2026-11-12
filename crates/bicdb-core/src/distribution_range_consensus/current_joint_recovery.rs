@@ -388,6 +388,24 @@ impl RangeWriteStore {
             observer.joint()?,
         )
     }
+    pub(crate) fn require_current_joint_domain_in_activation_scope(
+        &self,
+        activation: &crate::db::NativeActivationReadScope<'_>,
+    ) -> Result<()> {
+        activation.require_identity(
+            activation.database(),
+            activation.prepared(),
+            self,
+            activation.role(),
+        )?;
+        self.require_current_joint_scope_against_fact(
+            activation.database(),
+            activation.prepared().scope(),
+            activation.parent(),
+            activation.joint()?,
+        )?;
+        activation.joint()?.require_role(activation.role())
+    }
     pub(crate) fn require_current_joint_recovery_domain(
         &self,
         db: &crate::BicDb,

@@ -28,6 +28,13 @@ pub(crate) struct WriterMemberPolicy {
 }
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
+pub(crate) struct WriterMemberContinuity {
+    address: String,
+    lifecycle: ClusterNodeLifecycle,
+    labels: BTreeMap<String, String>,
+}
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct HostWriterPolicyFacts {
     pub(crate) cluster_id: ClusterId,
     pub(crate) bootstrap_id: Uuid,
@@ -40,6 +47,10 @@ pub(crate) struct HostWriterPolicyFacts {
     pub(crate) ranges: BTreeMap<RangeId, RangeDescriptor>,
     pub(crate) schema_sha256: String,
     pub(crate) restore_activation: Option<MetadataRestoreActivation>,
+    // None preserves prior policy bytes/checksum. It permits original policy
+    // checks only, NEVER retrospective member-baseline capture for refresh.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    member_continuity: Option<BTreeMap<ClusterNodeId, WriterMemberContinuity>>,
 }
 fn canonical_range(range: &RangeDescriptor) -> RangeDescriptor {
     let mut range = range.clone();
@@ -87,6 +98,7 @@ impl HostWriterPolicyFacts {
         }
         needed.insert(native.local_node_id().clone());
         let mut members = BTreeMap::new();
+        let mut continuity = BTreeMap::new();
         for id in needed {
             let node = topology
                 .nodes
@@ -107,6 +119,14 @@ impl HostWriterPolicyFacts {
                     "current voter schema differs from actual local schema",
                 ));
             }
+            continuity.insert(
+                id.clone(),
+                WriterMemberContinuity {
+                    address: node.address.clone(),
+                    lifecycle: node.lifecycle.clone(),
+                    labels: node.labels.clone(),
+                },
+            );
             members.insert(
                 id,
                 WriterMemberPolicy {
@@ -141,6 +161,7 @@ impl HostWriterPolicyFacts {
                 .collect(),
             schema_sha256: schema,
             restore_activation: restore,
+            member_continuity: Some(continuity),
         };
         crate::distribution_range_image::bounded_json(&facts, 256 * 1024)?;
         Ok(facts)
@@ -170,6 +191,31 @@ impl HostWriterPolicyFacts {
         {
             return Err(invalid(
                 "registry extension changed original DATA/birth/schema/restore/member domain",
+            ));
+        }
+        let old_continuity = previous.member_continuity.as_ref().ok_or_else(|| {
+            invalid(
+                "original native policy has no recorded member continuity; no retroactive refresh",
+            )
+        })?;
+        let new_continuity = self
+            .member_continuity
+            .as_ref()
+            .ok_or_else(|| invalid("registry successor lacks actual recorded member continuity"))?;
+        if old_continuity.len() != previous.members.len()
+            || old_continuity
+                .keys()
+                .any(|id| !previous.members.contains_key(id))
+            || new_continuity.len() != self.members.len()
+            || new_continuity
+                .keys()
+                .any(|id| !self.members.contains_key(id))
+            || old_continuity
+                .iter()
+                .any(|(id, member)| new_continuity.get(id) != Some(member))
+        {
+            return Err(invalid(
+                "registry extension changed previously accepted member address/lifecycle/labels",
             ));
         }
         if self
@@ -227,6 +273,22 @@ impl HostWriterPolicyFacts {
                 || node.labels.get(SCHEMA_COMPATIBILITY_NODE_LABEL) != Some(&self.schema_sha256)
             {
                 return Err(invalid("registered birth/member/schema identity changed"));
+            }
+        }
+        if let Some(continuity) = &self.member_continuity {
+            for (id, expected) in continuity {
+                let actual = topology
+                    .nodes
+                    .get(id)
+                    .ok_or_else(|| invalid("recorded writer member disappeared"))?;
+                if actual.address != expected.address
+                    || actual.lifecycle != expected.lifecycle
+                    || actual.labels != expected.labels
+                {
+                    return Err(invalid(
+                        "recorded writer member address/lifecycle/labels changed",
+                    ));
+                }
             }
         }
         for range in topology.ranges.values() {
@@ -299,6 +361,12 @@ impl SealedHostWriterEnrollment {
             database_incarnation: database.incarnation_id().into(),
             store_open_id: store.native_writer_store_open_id(),
         })
+    }
+    #[cfg(test)]
+    pub(crate) fn test_legacy_policy_without_member_continuity(&mut self) {
+        // Actual fresh MQ/native production remains unchanged; encode only the
+        // older OPTIONAL-None contract as a NEGATIVE, never a refresh grant.
+        self.facts.member_continuity = None;
     }
     pub(crate) fn stable_registry_audit(&self) -> Result<serde_json::Value> {
         let topology = self.metadata.committed_topology(self.business)?;

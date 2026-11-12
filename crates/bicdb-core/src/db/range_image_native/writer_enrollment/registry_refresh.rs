@@ -376,7 +376,10 @@ impl InstalledNativeWriterHostGuard {
         prepared.with_current_for_publication(database, coordinator, self, || {
             // Keep actual service SLOT and actual hook locked through cache
             // publication; even legacy clear/reinstall uses this hook lock.
-            let hook = database.commit_admission.read();
+            let hook = database
+                .commit_admission
+                .try_read()
+                .ok_or_else(|| invalid("registry final actual hook busy; no grant"))?;
             let registration = self.state.require_lifetime()?;
             if !Arc::ptr_eq(hook.registration(), &registration)
                 || hook
@@ -432,5 +435,16 @@ impl BicDb {
             .map(serde_json::to_value)
             .transpose()
             .map_err(Into::into)
+    }
+}
+
+#[cfg(test)]
+impl BicDb {
+    pub(crate) fn test_current_native_writer_policy_projection(&self) -> Result<serde_json::Value> {
+        let record: NativeWriterPolicyRecord = self
+            .read_native_range_image_record(POLICY_POINTER)?
+            .ok_or_else(|| invalid("test actual writer policy missing"))?;
+        record.validate()?;
+        Ok(serde_json::to_value(record)?)
     }
 }

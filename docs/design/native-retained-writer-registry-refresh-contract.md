@@ -150,3 +150,29 @@ The receiver remains an unassigned, DATA-refused prerequisite. Native image/
 joint wire, automatic placement/controller, transfer, SQL, physical deployment
 and full Milestone 1 remain separate gates. No production repair is included
 in this document or the expected-RED test branch.
+
+## Captured continuity baseline and compatibility refinement
+
+The original policy fact layout did not record member address, lifecycle or
+non-schema labels. NEW actual-MQ policy construction therefore records an
+optional `member_continuity` map for every needed member. `None` is omitted
+from serialization, preserving previous bytes/checksums and same-domain
+original-policy reading. It cannot authorize retrospective baseline capture:
+registry extension refuses an original None policy. Original policies remain
+immutable; no cold writer grant or implicit migration is introduced.
+
+Every extension compares against the LAST accepted protected extension's map,
+not just the initial cohort. Earlier-added voters remain bound on later
+additions. Metadata role is governed by the actual monotone committed-voter
+proof, not frozen as an unrelated immutable member field. Address, lifecycle
+and full-label equality is deliberately stricter than birth/pin identity:
+endpoint drift, drain/replacement and administrative label changes require a
+separately authorized transition and are not repaired by this first path.
+Complete facts and full MQ audits remain bounded; no labels are truncated.
+
+Additional unexecuted source controls use a genuine actual-MQ/native-WAL old
+None profile as a negative, and an actual bound fifth-voter promotion/first
+registry extension followed by a real five-voter committed label mutation.
+The latter must fail against the previously added member's saved continuity
+while retaining the exact accepted native audit. These are metadata-only
+component controls, not a new operator/relocation qualification.

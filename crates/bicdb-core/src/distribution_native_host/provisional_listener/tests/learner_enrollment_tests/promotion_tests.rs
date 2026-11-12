@@ -369,3 +369,5 @@ mod bootstrap_budget_tests;
 mod self_maintenance_tests;
 
 mod replica_receiver_tests;
+
+mod writer_registry_continuity_tests;

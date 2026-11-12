@@ -549,6 +549,45 @@ impl PreparedNativeRecoveryReady {
     pub(crate) fn native_database_incarnation(&self) -> &str {
         self.physical.native_admission().database_incarnation()
     }
+    /// Only the actual nonescaping read-only journal scope may reuse lineage.
+    pub(crate) fn require_current_in_observer_scope(
+        &self,
+        scope: &crate::db::NativeReadyObserverReadScope<'_>,
+    ) -> Result<()> {
+        let db = scope.database();
+        let store = scope.store();
+        let observer = scope.observer();
+        let requested_scope = &scope.request().scope;
+        scope.require_identity(db, self, store, observer, scope.request())?;
+        store.require_current_joint_domain_in_observer_scope(scope)?;
+        store.require_durable_recovery_catalog()?;
+        store.require_native_phase_format(self.scope.range_id)?;
+        store.require_no_image_install(self.scope.range_id)?;
+        let saved = store
+            .catalog
+            .recovery_fences
+            .get(&self.scope.range_id)
+            .ok_or_else(|| range_write_error("observer scope lost actual saved recovery fence"))?;
+        if !self.scope.same_session(requested_scope)
+            || !saved.scope.same_session(requested_scope)
+            || saved.native_database_incarnation != self.native_database_incarnation()
+            || saved.local_node_id != *observer.local_node_id()
+            || saved.local_member_incarnation != observer.local_member_incarnation()
+            || store.catalog.node_id != *observer.local_node_id()
+            || store.catalog.cluster_id != *observer.cluster_id()
+            || self.store_open_id != store.open_id
+            || self.point != NativePreparedPoint::from_actual(&self.physical)
+        {
+            return Err(range_write_error(
+                "observer scope changed actual Store/native/session identity",
+            ));
+        }
+        if let Some(sha) = self.require_binding_shape_current(store)? {
+            scope.require_serving(&sha)?;
+        }
+        observer.require_scope(requested_scope)?;
+        scope.parent().check()
+    }
     /// A peer's independently challenged READ-ONLY role can inspect the exact
     /// prepared state. It cannot become the coordinator's mutation admission.
     pub(crate) fn require_current_for_observer(

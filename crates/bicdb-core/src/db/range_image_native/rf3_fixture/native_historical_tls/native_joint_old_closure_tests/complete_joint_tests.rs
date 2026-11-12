@@ -7,6 +7,8 @@ use super::*;
 mod current_joint_authority_tests;
 #[path = "complete_joint_tests/native_activation_idempotence_tests.rs"]
 mod native_activation_idempotence_tests;
+#[path = "complete_joint_tests/observer_scope_cut_tests.rs"]
+mod observer_scope_cut_tests;
 #[path = "complete_joint_tests/open_adversarial_tests.rs"]
 mod open_adversarial_tests;
 #[path = "complete_joint_tests/original_release_writer_tests.rs"]
@@ -351,6 +353,7 @@ enum JointTestOutcome {
     FullHandoffThenPostJointNoDataAck4Strong,
     FullHandoffThenCurrentJointActivationIdempotence,
     FullHandoffThenCurrentJointAuthorityRefusals,
+    FullHandoffThenObserverScopeCuts,
 }
 
 #[test]
@@ -384,6 +387,7 @@ enum JointFullContinuation {
     PostJointNoDataRecovery,
     PostJointNativeActivationIdempotence,
     CurrentJointAuthorityRefusals,
+    ObserverScopeCuts,
 }
 
 fn run_complete_joint(mode: u8) -> JointTestOutcome {
@@ -914,6 +918,19 @@ fn run_complete_joint_with_controls(
     assert_eq!(observed.record().map(|record| record.as_ref()), Some(&next));
     assert_eq!(observed.audit().range_index, 2);
     fixture.idle();
+    if continuation == JointFullContinuation::ObserverScopeCuts {
+        assert!(
+            release_continuation.is_some(),
+            "scope cuts require real all-member release"
+        );
+        observer_scope_cut_tests::exercise(
+            &fixture,
+            &activation_range,
+            acknowledged.as_ref(),
+            &next,
+        );
+        return JointTestOutcome::FullHandoffThenObserverScopeCuts;
+    }
     if continuation == JointFullContinuation::CurrentJointAuthorityRefusals {
         assert!(
             release_continuation.is_some(),

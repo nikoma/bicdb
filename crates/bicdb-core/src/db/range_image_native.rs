@@ -30,7 +30,7 @@ pub(crate) use serving_configuration::{
     NativeCurrentJointRecoveryDomain, NativeJointBridgeReadScope, NativeJointDecisionReceipt,
     NativeJointHistoricalCutScope, NativeJointOldCloseReceipt, NativeJointOldPhysicalProof,
     NativeJointPreparedPublicationScope, NativeJointServingBridgeReceipt,
-    NativeJointServingPreparation, NativeRecoveredServingReceipt,
+    NativeJointServingPreparation, NativeReadyObserverReadScope, NativeRecoveredServingReceipt,
 };
 use serving_configuration::{NativeJointServingDomain, NativeRecoveredServingConfiguration};
 #[cfg(test)]

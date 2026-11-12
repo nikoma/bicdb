@@ -110,7 +110,7 @@ pub(crate) use range_image_native::{
     NativeCurrentJointRecoveryDomain, NativeJointBridgeReadScope, NativeJointDecisionReceipt,
     NativeJointHistoricalCutScope, NativeJointOldCloseReceipt, NativeJointOldPhysicalProof,
     NativeJointPreparedPublicationScope, NativeJointServingBridgeReceipt,
-    NativeJointServingPreparation,
+    NativeJointServingPreparation, NativeReadyObserverReadScope,
 };
 pub(crate) use range_image_native::{NativeRangeReadPhysical, NativeReadLocalDbSequence};
 mod range_image_bindings;

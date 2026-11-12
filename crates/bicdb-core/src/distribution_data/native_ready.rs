@@ -180,9 +180,19 @@ impl ClusterDataNodeService {
         let db = checked_database_read(&self.db, &self.storage_policy)?;
         #[cfg(test)]
         crate::distribution_range_recovery::NativeProbeTraceSpan::finish(db_trace);
-        let evidence = self
-            .range_writes
-            .observe_prepared_native_for_observer(&db, prepared, observer, request)?;
+        let evidence = if matches!(
+            request.scope.purpose,
+            crate::distribution_consensus::MetadataRecoveryRolePurpose::CurrentJointRecovery { .. }
+        ) {
+            let slot = self.native_replica_listener_store_open_guard();
+            self.range_writes
+                .observe_prepared_native_for_observer_scoped(
+                    &db, prepared, observer, request, &slot, parent,
+                )?
+        } else {
+            self.range_writes
+                .observe_prepared_native_for_observer(&db, prepared, observer, request)?
+        };
         parent.check()?;
         Ok(evidence)
     }

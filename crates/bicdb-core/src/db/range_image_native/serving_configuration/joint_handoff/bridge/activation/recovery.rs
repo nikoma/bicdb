@@ -180,6 +180,25 @@ impl NativeCurrentJointRecoveryDomain {
         crate::distribution_range_handoff::NativeJointPhaseTrace::finish_detail(lineage_trace);
         self.require_current_from_actual_lineage(db, store, &actual)
     }
+    pub(in crate::db::range_image_native) fn require_current_in_observer_scope(
+        &self,
+        observer: &crate::db::NativeReadyObserverReadScope<'_>,
+    ) -> Result<()> {
+        observer.require_identity(
+            observer.database(),
+            observer.prepared(),
+            observer.store(),
+            observer.observer(),
+            observer.request(),
+        )?;
+        let borrowed = self.native.read_scope_for_observer(observer)?;
+        drop(borrowed);
+        self.require_current_from_actual_lineage(
+            observer.database(),
+            observer.store(),
+            observer.lineage(),
+        )
+    }
     fn require_current_from_actual_lineage(
         &self,
         db: &BicDb,
@@ -231,6 +250,10 @@ impl NativeCurrentJointRecoveryDomain {
         crate::distribution_range_handoff::NativeJointPhaseTrace::finish_detail(writer_trace);
         Ok(())
     }
+}
+enum CurrentJointBorrowedReadScope<'borrow, 'scope> {
+    Completion(&'borrow crate::db::NativeCompletionReadScope<'scope>),
+    Observer(&'borrow crate::db::NativeReadyObserverReadScope<'scope>),
 }
 impl BicDb {
     /// Actual protected LOCAL original-promise proof, independent of a plan's
@@ -375,7 +398,25 @@ impl BicDb {
             completion.store(),
             completion.prepared().scope().range_id,
             &parent,
-            Some(completion),
+            Some(CurrentJointBorrowedReadScope::Completion(completion)),
+        )
+    }
+    pub(in crate::db::range_image_native) fn observe_current_joint_domain_in_observer_scope(
+        &self,
+        observer: &crate::db::NativeReadyObserverReadScope<'_>,
+    ) -> Result<NativeCurrentJointRecoveryDomain> {
+        observer.require_identity(
+            self,
+            observer.prepared(),
+            observer.store(),
+            observer.observer(),
+            observer.request(),
+        )?;
+        self.observe_current_joint_recovery_domain_inner(
+            observer.store(),
+            observer.request().scope.range_id,
+            observer.parent(),
+            Some(CurrentJointBorrowedReadScope::Observer(observer)),
         )
     }
     fn observe_current_joint_recovery_domain_inner(
@@ -383,7 +424,7 @@ impl BicDb {
         store: &RangeWriteStore,
         range: RangeId,
         parent: &CancellationToken,
-        completion: Option<&crate::db::NativeCompletionReadScope<'_>>,
+        borrowed: Option<CurrentJointBorrowedReadScope<'_, '_>>,
     ) -> Result<NativeCurrentJointRecoveryDomain> {
         parent.check()?;
         store.require_native_catalog_durability(self.data_path())?;
@@ -422,8 +463,13 @@ impl BicDb {
         let scope_trace = crate::distribution_range_handoff::NativeJointPhaseTrace::refresh_detail(
             "refresh-joint-factory-native-journal-scope-and-catalogue",
         );
-        let scope = match completion {
-            Some(completion) => receipt.read_scope_for_completion(completion)?,
+        let scope = match borrowed.as_ref() {
+            Some(CurrentJointBorrowedReadScope::Completion(completion)) => {
+                receipt.read_scope_for_completion(completion)?
+            }
+            Some(CurrentJointBorrowedReadScope::Observer(observer)) => {
+                receipt.read_scope_for_observer(observer)?
+            }
             None => receipt.current_read_scope(self)?,
         };
         let activated = store
@@ -490,13 +536,23 @@ impl BicDb {
             crate::distribution_range_handoff::NativeJointPhaseTrace::refresh_detail(
                 "refresh-joint-factory-final-fact-current",
             );
-        if let Some(completion) = completion {
-            // The current/archive/anchor were validated through THIS actual
-            // completion scope and have not left its retained native journal.
-            fact.require_current_from_actual_lineage(self, store, completion.lineage())?;
-            completion.require_identity(completion.prepared(), store, completion.role())?;
-        } else {
-            fact.require_current(self, store)?;
+        match borrowed.as_ref() {
+            Some(CurrentJointBorrowedReadScope::Completion(completion)) => {
+                // Same actual retained native journal, never a role conversion.
+                fact.require_current_from_actual_lineage(self, store, completion.lineage())?;
+                completion.require_identity(completion.prepared(), store, completion.role())?;
+            }
+            Some(CurrentJointBorrowedReadScope::Observer(observer)) => {
+                fact.require_current_from_actual_lineage(self, store, observer.lineage())?;
+                observer.require_identity(
+                    self,
+                    observer.prepared(),
+                    store,
+                    observer.observer(),
+                    observer.request(),
+                )?;
+            }
+            None => fact.require_current(self, store)?,
         }
         #[cfg(test)]
         crate::distribution_range_handoff::NativeJointPhaseTrace::finish_detail(recheck_trace);

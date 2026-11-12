@@ -370,6 +370,24 @@ impl RangeWriteStore {
         role.require_live_request()?;
         Ok(fact)
     }
+    pub(crate) fn require_current_joint_domain_in_observer_scope(
+        &self,
+        observer: &crate::db::NativeReadyObserverReadScope<'_>,
+    ) -> Result<()> {
+        observer.require_identity(
+            observer.database(),
+            observer.prepared(),
+            self,
+            observer.observer(),
+            observer.request(),
+        )?;
+        self.require_current_joint_scope_against_fact(
+            observer.database(),
+            &observer.request().scope,
+            observer.parent(),
+            observer.joint()?,
+        )
+    }
     pub(crate) fn require_current_joint_recovery_domain(
         &self,
         db: &crate::BicDb,

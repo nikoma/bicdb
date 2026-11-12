@@ -10,6 +10,8 @@ use crate::distribution_range_consensus::{
 };
 use crate::distribution_range_recovery::{ClosedNativeReadyQuorum, RecoveryRoleAdmission};
 
+mod observer_scope;
+pub(crate) use observer_scope::NativeReadyObserverReadScope;
 mod completion_scope;
 pub(crate) use completion_scope::NativeCompletionReadScope;
 mod activation_decision;

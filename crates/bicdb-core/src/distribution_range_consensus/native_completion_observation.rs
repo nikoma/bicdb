@@ -120,6 +120,29 @@ impl RangeWriteStore {
             .into_reply();
         self.project_native_completion(ready, prepared)
     }
+    pub(crate) fn observe_native_completion_for_observer_scoped(
+        &self,
+        db: &crate::BicDb,
+        prepared: &PreparedNativeRecoveryReady,
+        observer: &RecoveryObservationRoleAdmission,
+        request: &NativeCompletionRequest,
+        slot: &crate::distribution_data::RangeWriteServiceSlotGuard,
+        parent: &CancellationToken,
+    ) -> Result<LocalNativeCompletionEvidence> {
+        observer.require_scope(&request.scope)?;
+        self.refuse_unpersisted_completion(&request.scope)?;
+        let ready = self
+            .observe_prepared_native_for_observer_scoped(
+                db,
+                prepared,
+                observer,
+                &request.ready_request(),
+                slot,
+                parent,
+            )?
+            .into_reply();
+        self.project_native_completion(ready, prepared)
+    }
     pub(crate) fn observe_native_completion_for_observer(
         &self,
         db: &crate::BicDb,

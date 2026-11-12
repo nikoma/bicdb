@@ -208,6 +208,34 @@ impl RangeWriteStore {
             role.metadata_read_index(),
         )
     }
+    pub(crate) fn observe_prepared_native_for_observer_scoped(
+        &self,
+        db: &crate::BicDb,
+        prepared: &PreparedNativeRecoveryReady,
+        observer: &RecoveryObservationRoleAdmission,
+        request: &NativeReadyRequest,
+        slot: &crate::distribution_data::RangeWriteServiceSlotGuard,
+        parent: &CancellationToken,
+    ) -> Result<LocalNativeReadyEvidence> {
+        db.with_native_ready_observer_scope(
+            prepared,
+            self,
+            observer,
+            request,
+            slot,
+            parent,
+            |scope| {
+                scope.require_identity(db, prepared, self, observer, request)?;
+                self.project_prepared_native(
+                    prepared,
+                    request,
+                    observer.metadata_context_id(),
+                    observer.metadata_term(),
+                    observer.metadata_read_index(),
+                )
+            },
+        )
+    }
     pub(crate) fn observe_prepared_native_for_observer(
         &self,
         db: &crate::BicDb,

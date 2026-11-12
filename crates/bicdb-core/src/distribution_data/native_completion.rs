@@ -112,7 +112,13 @@ impl ClusterDataNodeService {
         let evidence = if self.range_writes.recovery_observation_phase(&request.scope)?==crate::distribution_range_recovery::RecoveryFenceObservationPhase::NativeActivatedAnchor {
             self.range_writes.observe_activated_completion_for_observer(&db,observer,request)?
         } else {
-            self.range_writes.observe_native_completion_for_observer(&db,prepared.ok_or_else(||data_error("completion has no actual retained frozen pin"))?,observer,request)?
+            let prepared = prepared.ok_or_else(||data_error("completion has no actual retained frozen pin"))?;
+            if matches!(request.scope.purpose, crate::distribution_consensus::MetadataRecoveryRolePurpose::CurrentJointRecovery { .. }) {
+                let slot = self.native_replica_listener_store_open_guard();
+                self.range_writes.observe_native_completion_for_observer_scoped(&db, prepared, observer, request, &slot, parent)?
+            } else {
+                self.range_writes.observe_native_completion_for_observer(&db, prepared, observer, request)?
+            }
         };
         parent.check()?;
         Ok(evidence)

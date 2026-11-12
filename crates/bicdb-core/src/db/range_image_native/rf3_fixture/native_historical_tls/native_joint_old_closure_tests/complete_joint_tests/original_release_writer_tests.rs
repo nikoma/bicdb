@@ -184,7 +184,7 @@ pub(super) fn reject_after_reenrollment(
             before_point
         );
         assert_eq!(
-            database.get("items", key).unwrap().as_ref(),
+            database.get("items", key).unwrap().as_deref(),
             Some(acknowledged)
         );
     }

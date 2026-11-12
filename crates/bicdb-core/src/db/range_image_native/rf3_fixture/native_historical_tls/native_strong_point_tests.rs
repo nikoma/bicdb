@@ -15,6 +15,7 @@ struct EnforcedNetwork {
     native: ActualNativeRf3Fixture,
     clients: BTreeMap<ClusterNodeId, Arc<TcpClusterRelocationTransport>>,
     metadata: BTreeMap<ClusterNodeId, Arc<Mutex<MetadataConsensusStore>>>,
+    providers: BTreeMap<ClusterNodeId, Arc<MetadataReadProvider>>,
     runtimes: BTreeMap<ClusterNodeId, Arc<RangeRecoveryRuntime>>,
     coordinators: BTreeMap<ClusterNodeId, Arc<Coordinator>>,
     hosts: BTreeMap<ClusterNodeId, Arc<InstalledNativeWriterHostGuard>>,
@@ -211,6 +212,7 @@ impl EnforcedNetwork {
             native,
             clients,
             metadata,
+            providers,
             runtimes,
             coordinators,
             hosts,
@@ -761,3 +763,5 @@ fn native_strong_point_policy_native_wal_publication_failure_fences_old_guard_an
     .is_some());
     fixture.idle();
 }
+
+mod after_transfer;

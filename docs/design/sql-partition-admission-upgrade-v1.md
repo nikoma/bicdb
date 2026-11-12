@@ -296,6 +296,28 @@ See `upgrade-recovery/README.md` and its source-scoped archive/manifest.
     SQLSTATE55000 and actionable inspection output. The explicit trusted offline
     plan is a real recovery path, not a fabricated replacement fixture.
 
+The generated-column batch at `5aa92dce` passes 123 focused tests and repeats
+all thirty genuine old482 controls, 152 process cuts and 96 actual EIO cases.
+Independent verification confirms exact coverage, original ACKs and file
+manifests, stable reopens, Native indexes and old-reader byte identity. The
+actual KVM matrix at example-only `0adf78ab` (identical production runtime)
+passes all 56 guest-memory-loss cases, including all eight externally
+acknowledged upgrades. Forty recover old state and sixteen new; all ACK cases
+recover complete new state. These pre-I/O/after-ACK cuts are not physical host
+power-loss, RF3 or distributed-capacity qualification. The first VM smoke had a
+host partial-serial-line parsing error; it is preserved, and the corrected
+second smoke and full matrix passed. See `generated-keys` and `vm-recovery`
+evidence beside the earlier recovery archive.
+
+The full earlier `6c16e66e` run is terminal green: Core 1,699 passed/17 ignored,
+SQL 2,573/4, protocol 491/2, zero failures. Core remains unchanged; the changed
+`5aa92dce` SQL/protocol broad run is still live. A new test-only Native-authority
+probe `3545a445` passes two cases and fails two: a generated-key logical UPDATE
+attempts Native DELETE using an UPDATE grant, and a missing-grant UPDATE reports
+XX000 instead of 42501. These are open delivery gates. No grant bypass or broader
+permission is an acceptable substitute for a real Native authorized identity
+update. The original assertions and failed logs are retained.
+
 ## Required evidence and remaining gates
 
 - Make all eight original old-store cases pass without editing old fixtures or

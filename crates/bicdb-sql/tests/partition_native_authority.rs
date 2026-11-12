@@ -39,7 +39,8 @@ fn grant(relation: &str) -> MutationGrantSpec {
         record_id_prefix: None,
         expected_version: None,
         version_field: None,
-        allowed_columns: BTreeSet::from(["k".into(), "b".into()]),
+        // Explicitly authorize the Native address as well as the SQL key fields.
+        allowed_columns: BTreeSet::from(["id".into(), "k".into(), "b".into()]),
         bulk: false,
         maximum_affected_rows: 1,
         cascade_relations: BTreeSet::new(),

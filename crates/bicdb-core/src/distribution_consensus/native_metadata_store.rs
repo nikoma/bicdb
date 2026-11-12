@@ -220,21 +220,53 @@ impl MetadataConsensusStore {
     pub(crate) fn inspect_native_store_identity(
         root: impl AsRef<Path>,
         store_id: Uuid,
-        cluster: &ClusterId,
-        node: &ClusterNodeId,
+        database: &BicDb,
+        native: &crate::db::NativeRecoveryAdmission,
+        original_member: &crate::distribution::ClusterNode,
     ) -> Result<()> {
+        native.require_current(database)?;
         let state = decode_state(&fs::read(
             root.as_ref().join(DEFAULT_CLUSTER_METADATA_CONSENSUS_STATE),
         )?)?;
         validate_state(&state)?;
         if state.native_store_id != Some(store_id)
-            || state.cluster_id != *cluster
-            || state.node_id != *node
+            || &state.cluster_id != native.cluster_id()
+            || &state.node_id != native.local_node_id()
+            || state.committed_topology.range_image_bootstrap_id != Some(native.bootstrap_id())
         {
             return Err(metadata_error(
                 "historical preparation metadata identity changed",
             ));
         }
+        let actual_birth = crate::distribution::NativeStoreBirthV1::from_actual_native(native)?;
+        let member = state
+            .committed_topology
+            .nodes
+            .get(native.local_node_id())
+            .ok_or_else(|| metadata_error("historical preparation actor was removed"))?;
+        let original_pins = original_member
+            .tls_certificate_sha256
+            .iter()
+            .chain(original_member.pending_tls_certificate_sha256.iter())
+            .collect::<BTreeSet<_>>();
+        let current_pins = member
+            .tls_certificate_sha256
+            .iter()
+            .chain(member.pending_tls_certificate_sha256.iter())
+            .collect::<BTreeSet<_>>();
+        if original_member.id != *native.local_node_id()
+            || original_member.incarnation != native.local_member_incarnation()
+            || member.lifecycle != ClusterNodeLifecycle::Active
+            || member.incarnation != native.local_member_incarnation()
+            || member.native_store_birth_v1.as_ref() != Some(&actual_birth)
+            || original_pins.is_empty()
+            || original_pins.is_disjoint(&current_pins)
+        {
+            return Err(metadata_error(
+                "historical preparation no longer names the actual authorized actor",
+            ));
+        }
+        native.require_current(database)?;
         Ok(())
     }
     pub(crate) fn native_initial_pre_vote_fact(&self) -> Result<NativeMetadataPreVoteFact<'_>> {

@@ -151,6 +151,27 @@ fn native_metadata_actor_reused_pin_cannot_rebind_old_root_but_retirement_persis
         .iter()
         .any(|e| e.contains("actual native metadata actor")));
     assert_eq!(stores[&node(0)].committed_topology(), &retired);
+    // Protected historical C acceptance must inspect actual durable identity,
+    // independently of any older published listener/cache view.
+    {
+        let db = f.databases[&node(0)].read();
+        let native = db
+            .native_recovery_admission(
+                &initial.cluster_id,
+                initial.range_image_bootstrap_id.unwrap(),
+                &node(0),
+                1,
+            )
+            .unwrap();
+        assert!(MetadataConsensusStore::inspect_native_store_identity(
+            f.root.path().join("actor-meta-n0"),
+            stores[&node(0)].state.native_store_id.unwrap(),
+            &db,
+            &native,
+            &initial.nodes[&node(0)],
+        )
+        .is_err());
+    }
     #[cfg(feature = "tls-replication")]
     assert_eq!(
         *f.topology.read(),

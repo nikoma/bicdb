@@ -330,11 +330,24 @@ impl NativeProvisionalNode {
                 self.validate_initial_configuration(record.configuration().clone())?;
             } else {
                 // Historical acceptance is not current topology/term or data readiness.
+                // Independently inspect durable membership, since a caller's
+                // published view can lag the successfully committed backend.
+                let db = self
+                    .database
+                    .try_read()
+                    .ok_or_else(|| invalid("historical initial DB busy"))?;
+                let native = db.native_recovery_admission(
+                    &self.spec.cluster_id,
+                    self.spec.bootstrap_id,
+                    &self.spec.node_id,
+                    self.spec.member_incarnation,
+                )?;
                 MetadataConsensusStore::inspect_native_store_identity(
                     self.root.join(INITIAL_METADATA_DIRECTORY),
                     record.peer_fact().store_id,
-                    &self.plan.topology.cluster_id,
-                    &self.spec.node_id,
+                    &db,
+                    &native,
+                    &self.plan.topology.nodes[&self.spec.node_id],
                 )?;
             }
             record
@@ -698,8 +711,9 @@ impl NativeProvisionalNode {
             MetadataConsensusStore::inspect_native_store_identity(
                 &path,
                 identity.store_id(),
-                &self.spec.cluster_id,
-                &self.spec.node_id,
+                &db,
+                &native,
+                &self.plan.topology.nodes[&self.spec.node_id],
             )?;
             let status = MetadataConsensusStore::inspect(&path)?;
             if status.current_term != 0

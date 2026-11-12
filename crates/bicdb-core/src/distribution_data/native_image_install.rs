@@ -23,7 +23,7 @@ impl ClusterDataNodeService {
         parent: &CancellationToken,
     ) -> Result<crate::distribution_range_consensus::PreparedNativeRecoveryReady> {
         let local = self.attest_native_recovery_ready(role, frozen, parent)?;
-        let db = try_database_read(&self.db)?;
+        let db = checked_database_read(&self.db, &self.storage_policy)?;
         self.range_writes.prepare_native_recovery_ready(&db, local)
     }
 
@@ -34,7 +34,7 @@ impl ClusterDataNodeService {
         role: &crate::distribution_range_recovery::RecoveryRoleAdmission,
         request: &crate::distribution_range_recovery::NativeReadyRequest,
     ) -> Result<crate::distribution_range_consensus::LocalNativeReadyEvidence> {
-        let db = try_database_read(&self.db)?;
+        let db = checked_database_read(&self.db, &self.storage_policy)?;
         self.range_writes
             .observe_prepared_native_for_role(&db, prepared, role, request)
     }
@@ -46,7 +46,7 @@ impl ClusterDataNodeService {
         quorum: &crate::distribution_range_recovery::ClosedNativeReadyQuorum,
         role: &crate::distribution_range_recovery::RecoveryRoleAdmission,
     ) -> Result<crate::db::NativeRecoveredServingReceipt> {
-        let db = try_database_read(&self.db)?;
+        let db = checked_database_read(&self.db, &self.storage_policy)?;
         db.persist_native_recovered_serving_configuration(
             prepared,
             &self.range_writes,
@@ -84,7 +84,7 @@ impl ClusterDataNodeService {
                 "finalized image preparation belongs to another service",
             ));
         }
-        let db = try_database_read(&self.db)?;
+        let db = checked_database_read(&self.db, &self.storage_policy)?;
         let physical = db.attest_finalized_native_recovery_image(
             image,
             role,
@@ -104,7 +104,7 @@ impl ClusterDataNodeService {
         source: &crate::db::LocalNativeRecoveryReady,
         target: ClusterNodeId,
     ) -> Result<crate::distribution_range_recovery::RecoverySourceHistoryRound> {
-        let db = try_database_read(&self.db)?;
+        let db = checked_database_read(&self.db, &self.storage_policy)?;
         crate::distribution_range_recovery::RecoverySourceHistoryRound::begin(
             authority,
             source,
@@ -120,7 +120,7 @@ impl ClusterDataNodeService {
         source: &crate::db::LocalNativeRecoveryReady,
         parent: &CancellationToken,
     ) -> Result<bool> {
-        let db = try_database_read(&self.db)?;
+        let db = checked_database_read(&self.db, &self.storage_policy)?;
         round.advance(source, &db, &self.range_writes, parent)
     }
 
@@ -129,7 +129,7 @@ impl ClusterDataNodeService {
         round: crate::distribution_range_recovery::RecoverySourceHistoryRound,
         source: &crate::db::LocalNativeRecoveryReady,
     ) -> Result<crate::distribution_range_image::CertifiedRecoveryImageCut> {
-        let db = try_database_read(&self.db)?;
+        let db = checked_database_read(&self.db, &self.storage_policy)?;
         let history = round.finish(source, &db, &self.range_writes)?;
         crate::distribution_range_image::CertifiedRecoveryImageCut::from_verified_source_history(
             history,
@@ -154,7 +154,7 @@ impl ClusterDataNodeService {
                 "native source observation belongs to another service",
             ));
         }
-        let db = try_database_read(&self.db)?;
+        let db = checked_database_read(&self.db, &self.storage_policy)?;
         let native = db.native_recovery_admission(
             role.cluster_id(),
             role.bootstrap_id(),
@@ -200,7 +200,7 @@ impl ClusterDataNodeService {
         cancellation.check()?;
         self.require_native_image_local_role(role)?;
         let native = {
-            let db = try_database_read(&self.db)?;
+            let db = checked_database_read(&self.db, &self.storage_policy)?;
             let actual = role.role();
             db.native_recovery_admission(
                 actual.cluster_id(),
@@ -236,7 +236,7 @@ impl ClusterDataNodeService {
         cancellation.check()?;
         self.require_native_image_local_role(role)?;
         let native = {
-            let db = try_database_read(&self.db)?;
+            let db = checked_database_read(&self.db, &self.storage_policy)?;
             let actual = role.role();
             db.native_recovery_admission(
                 actual.cluster_id(),

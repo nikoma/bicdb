@@ -19,7 +19,7 @@ impl ClusterDataNodeService {
     ) -> Result<LocalNativeCompletionEvidence> {
         parent.check()?;
         request.scope.require_role(fresh)?;
-        let db = try_database_read(&self.db)?;
+        let db = checked_database_read(&self.db, &self.storage_policy)?;
         self.range_writes
             .complete_native_recovery_frozen(&db, prepared, quorum, fresh)?;
         // A canceled/lost response after durability never erases the completed
@@ -38,7 +38,7 @@ impl ClusterDataNodeService {
     ) -> Result<LocalNativeCompletionEvidence> {
         parent.check()?;
         request.scope.require_role(fresh)?;
-        let db = try_database_read(&self.db)?;
+        let db = checked_database_read(&self.db, &self.storage_policy)?;
         self.range_writes
             .adopt_native_completion_decision(&db, prepared, quorum, fresh)?;
         parent.check()?;
@@ -55,7 +55,7 @@ impl ClusterDataNodeService {
     ) -> Result<LocalNativeCompletionEvidence> {
         parent.check()?;
         request.scope.require_role(fresh)?;
-        let db = try_database_read(&self.db)?;
+        let db = checked_database_read(&self.db, &self.storage_policy)?;
         self.range_writes
             .adopt_native_activated_decision(&db, prepared, decision, fresh)?;
         parent.check()?;
@@ -76,7 +76,7 @@ impl ClusterDataNodeService {
         parent: &CancellationToken,
     ) -> Result<LocalNativeCompletionEvidence> {
         parent.check()?;
-        let db = try_database_read(&self.db)?;
+        let db = checked_database_read(&self.db, &self.storage_policy)?;
         let evidence = if self.range_writes.recovery_observation_phase(&request.scope)?==crate::distribution_range_recovery::RecoveryFenceObservationPhase::NativeActivatedAnchor {
             self.range_writes.observe_activated_completion_for_observer(&db,observer,request)?
         } else {

@@ -459,6 +459,12 @@ fn native_service_actual_open_cannot_be_revived_by_outer_arc_or_retained_directo
     let old = std::mem::replace(&mut *db.write(), replacement);
     guard.require_live().unwrap();
     assert!(guard.require_database(&db.read()).is_err());
+    assert!(service
+        .schema_compatibility_fingerprint()
+        .unwrap_err()
+        .to_string()
+        .contains("another actual database/open"));
+    assert!(checked_database_write(&db, &service.storage_policy).is_err());
     drop(old);
 
     // Neither the same outer Arc nor a deliberately retained old directory

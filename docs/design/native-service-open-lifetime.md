@@ -18,7 +18,9 @@ catch-up evidence or permission to serve a strong read.
 
 The listener captures the guard with its immutable identity, and checks it after
 authentication before service or database latches. Storage-policy checks use the
-same fence. The legacy application-event dispatch also validates the actual
+same fence. Every service-owned database-read and database-write acquisition uses the checked
+borrow helpers, including schema inspection, schema mutations and ordinary snapshot export. The
+legacy application-event and schema-bundle dispatches also validate the actual
 borrowed database after obtaining its read guard, without holding the service
 mutex. This prevents a check of one actual database from authorizing an event
 against a replacement in the same outer handle.

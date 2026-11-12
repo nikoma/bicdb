@@ -113,6 +113,26 @@ impl ServiceStoragePolicy {
         database.check_recovery_state()
     }
 }
+/// Borrow only the database field for the returned guard. The policy check
+/// runs against that same borrow; the policy itself is not retained or locked.
+pub(super) fn checked_database_read<'a>(
+    database: &'a Arc<RwLock<BicDb>>,
+    policy: &ServiceStoragePolicy,
+) -> Result<parking_lot::RwLockReadGuard<'a, BicDb>> {
+    let borrowed = try_database_read(database)?;
+    policy.require_database(&borrowed)?;
+    Ok(borrowed)
+}
+
+pub(super) fn checked_database_write<'a>(
+    database: &'a Arc<RwLock<BicDb>>,
+    policy: &ServiceStoragePolicy,
+) -> Result<parking_lot::RwLockWriteGuard<'a, BicDb>> {
+    let borrowed = try_database_write(database)?;
+    policy.require_database(&borrowed)?;
+    Ok(borrowed)
+}
+
 impl ClusterDataNodeService {
     pub(crate) fn listener_open_guard(&self) -> ClusterServiceOpenGuard {
         self.storage_policy.actual_open.clone()

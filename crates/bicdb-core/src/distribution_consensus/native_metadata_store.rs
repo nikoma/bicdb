@@ -28,6 +28,14 @@ pub(super) struct NativeMetadataStoreOwner {
     actual_open: std::sync::Weak<()>,
     actual_directory: std::sync::Weak<bicdb_page::DirectoryLock>,
     key: usize,
+    actor: Option<NativeMetadataActorBinding>,
+}
+#[derive(Debug)]
+struct NativeMetadataActorBinding {
+    node: ClusterNodeId,
+    birth: crate::distribution::NativeStoreBirthV1,
+    incarnation: u64,
+    pins: BTreeSet<String>,
 }
 impl NativeMetadataStoreOwner {
     fn acquire(root: &Path, database: Arc<RwLock<BicDb>>, create: bool) -> Result<Self> {
@@ -65,12 +73,91 @@ impl NativeMetadataStoreOwner {
                 actual_open,
                 actual_directory,
                 key,
+                actor: None,
             })
         })();
         if result.is_err() {
             owners().lock().remove(&key);
         }
         result
+    }
+    fn bind_actual_actor(
+        &mut self,
+        db: &BicDb,
+        topology: &ClusterTopology,
+        node: &ClusterNodeId,
+    ) -> Result<()> {
+        self.require_current()?;
+        let member = topology
+            .nodes
+            .get(node)
+            .ok_or_else(|| metadata_error("native metadata local actor absent"))?;
+        let native = db.native_recovery_admission(
+            &topology.cluster_id,
+            topology
+                .range_image_bootstrap_id
+                .ok_or_else(|| metadata_error("native metadata bootstrap absent"))?,
+            node,
+            member.incarnation,
+        )?;
+        let birth = crate::distribution::NativeStoreBirthV1::from_actual_native(&native)?;
+        if member.native_store_birth_v1.as_ref() != Some(&birth) {
+            return Err(metadata_error(
+                "metadata actor configuration does not name actual local birth",
+            ));
+        }
+        let pins = member
+            .tls_certificate_sha256
+            .iter()
+            .chain(member.pending_tls_certificate_sha256.iter())
+            .cloned()
+            .collect();
+        self.actor = Some(NativeMetadataActorBinding {
+            node: node.clone(),
+            birth,
+            incarnation: native.local_member_incarnation(),
+            pins,
+        });
+        Ok(())
+    }
+    fn require_actor(
+        &self,
+        topology: &ClusterTopology,
+        node: &ClusterNodeId,
+        voter: bool,
+    ) -> Result<()> {
+        self.require_current()?;
+        let actor = self
+            .actor
+            .as_ref()
+            .ok_or_else(|| metadata_error("actual native metadata actor was not bound"))?;
+        let member = topology
+            .nodes
+            .get(node)
+            .ok_or_else(|| metadata_error("actual native metadata actor removed"))?;
+        let current_pins = member
+            .tls_certificate_sha256
+            .iter()
+            .chain(member.pending_tls_certificate_sha256.iter())
+            .cloned()
+            .collect::<BTreeSet<_>>();
+        let pins_match = if actor.pins.is_empty() {
+            current_pins.is_empty()
+        } else {
+            !actor.pins.is_disjoint(&current_pins)
+        };
+        if &actor.node != node
+            || actor.incarnation != member.incarnation
+            || member.native_store_birth_v1.as_ref() != Some(&actor.birth)
+            || member.lifecycle != ClusterNodeLifecycle::Active
+            || !pins_match
+            || (voter && member.metadata_role != MetadataMemberRole::Voter)
+        {
+            return Err(metadata_error(
+                "actual native metadata actor is retired/replaced/not eligible for this receipt",
+            ));
+        }
+        Ok(())
     }
     pub(super) fn require_current(&self) -> Result<()> {
         // No BicDb.{read,write}, file/network wait, or reverse lock acquisition.
@@ -97,7 +184,7 @@ pub(crate) struct NativeMetadataPreVoteFact<'a> {
 }
 impl NativeMetadataPreVoteFact<'_> {
     pub(crate) fn require_current(&self) -> Result<()> {
-        self.store.require_native_metadata_owner_current()?;
+        self.store.require_native_metadata_actor_current(true)?;
         let s = &self.store.state;
         if s.native_store_id.is_none()
             || s.current_term != 0
@@ -155,6 +242,20 @@ impl MetadataConsensusStore {
         fact.require_current()?;
         Ok(fact)
     }
+    pub(super) fn require_native_metadata_actor_current(&self, voter: bool) -> Result<()> {
+        self.require_native_metadata_owner_current()?;
+        if let Some(owner) = &self.native_owner {
+            owner.require_actor(&self.state.committed_topology, &self.state.node_id, voter)?;
+        }
+        Ok(())
+    }
+    pub(super) fn demote_native_retired_metadata_actor(&mut self) {
+        if self.native_owner.is_some() && self.require_native_metadata_actor_current(true).is_err()
+        {
+            self.state.role = MetadataConsensusRole::Follower;
+            self.state.leader_id = None;
+        }
+    }
     pub(super) fn require_native_metadata_owner_current(&self) -> Result<()> {
         if let Some(owner) = &self.native_owner {
             owner.require_current()?;
@@ -209,7 +310,7 @@ impl MetadataConsensusStore {
             ));
         }
         let root = root.as_ref();
-        let owner = NativeMetadataStoreOwner::acquire(root, Arc::clone(&database), true)?;
+        let mut owner = NativeMetadataStoreOwner::acquire(root, Arc::clone(&database), true)?;
         let state = match fs::read(root.join(DEFAULT_CLUSTER_METADATA_CONSENSUS_STATE)) {
             Ok(bytes) => decode_state(&bytes)?,
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => MetadataConsensusState {
@@ -238,6 +339,12 @@ impl MetadataConsensusStore {
             return Err(metadata_error(
                 "protected initial metadata identity/C changed",
             ));
+        }
+        {
+            let actual_database = database
+                .try_read()
+                .ok_or_else(|| metadata_error("initial DB busy binding resumed actor"))?;
+            owner.bind_actual_actor(&actual_database, &topology, &node)?;
         }
         let mut store = Self {
             root: root.to_path_buf(),
@@ -301,7 +408,14 @@ impl MetadataConsensusStore {
                 "native metadata initialization needs actual enrolled born-v2 configuration",
             ));
         }
-        let owner = NativeMetadataStoreOwner::acquire(root, Arc::clone(&database), true)?;
+        let mut owner = NativeMetadataStoreOwner::acquire(root, Arc::clone(&database), true)?;
+        owner.bind_actual_actor(
+            &database
+                .try_read()
+                .ok_or_else(|| metadata_error("native DB busy binding initial actor"))?,
+            &topology,
+            &node,
+        )?;
         let path = root.join(DEFAULT_CLUSTER_METADATA_CONSENSUS_STATE);
         match fs::symlink_metadata(&path) {
             Ok(_) => {
@@ -374,7 +488,7 @@ impl MetadataConsensusStore {
             ));
         }
         let root = root.as_ref();
-        let owner = NativeMetadataStoreOwner::acquire(root, Arc::clone(&database), false)?;
+        let mut owner = NativeMetadataStoreOwner::acquire(root, Arc::clone(&database), false)?;
         // No missing-file fallback. Read protected receipt BEFORE any metadata write.
         let receipt = database
             .try_read()
@@ -417,6 +531,13 @@ impl MetadataConsensusStore {
         if actual != receipt {
             return Err(metadata_error("protected metadata receipt changed"));
         }
+        owner.bind_actual_actor(
+            &database
+                .try_read()
+                .ok_or_else(|| metadata_error("native DB busy binding reopened actor"))?,
+            &state.committed_topology,
+            &node,
+        )?;
         cancellation.check()?;
         state.role = MetadataConsensusRole::Follower;
         state.leader_id = None;
@@ -437,3 +558,6 @@ impl MetadataConsensusStore {
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod actor_tests;

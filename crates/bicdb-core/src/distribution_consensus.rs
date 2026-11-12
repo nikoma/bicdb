@@ -1540,7 +1540,7 @@ impl MetadataConsensusStore {
     }
 
     fn validate_read_context(&self, context: &MetadataReadContext) -> Result<()> {
-        self.require_native_metadata_owner_current()?;
+        self.require_native_metadata_actor_current(true)?;
         if context.failed || Instant::now() >= context.deadline {
             return Err(metadata_error("read authority context failed or expired"));
         }
@@ -1569,7 +1569,7 @@ impl MetadataConsensusStore {
         budget: Duration,
         local: &MetadataReadParticipant,
     ) -> Result<MetadataReadContext> {
-        self.require_native_metadata_owner_current()?;
+        self.require_native_metadata_actor_current(true)?;
         let started = Instant::now();
         if read_request_id.is_nil() || budget.is_zero() || budget > Duration::from_secs(300) {
             return Err(metadata_error("read authority request/budget is invalid"));
@@ -1674,6 +1674,7 @@ impl MetadataConsensusStore {
             ));
         }
         let append = self.handle_append_request(request.append)?;
+        self.require_native_metadata_actor_current(true)?;
         Ok(MetadataReadProbeResponse {
             protocol_version: METADATA_READ_AUTHORITY_PROTOCOL_VERSION,
             context_id: request.context_id,
@@ -1875,7 +1876,7 @@ impl MetadataConsensusStore {
     }
 
     pub fn start_election(&mut self) -> Result<MetadataVoteRequest> {
-        self.require_native_metadata_owner_current()?;
+        self.require_native_metadata_actor_current(true)?;
         let voters = topology_voters(&self.state.committed_topology);
         if !voters.contains(&self.state.node_id) {
             return Err(metadata_error("non-voter cannot start an election"));
@@ -1914,7 +1915,10 @@ impl MetadataConsensusStore {
                 && request.last_log_index >= self.last_log_index());
         let may_vote = self.state.voted_for.is_none()
             || self.state.voted_for.as_ref() == Some(&request.candidate_id);
-        let granted = candidate_is_voter && log_is_current && may_vote;
+        let granted = candidate_is_voter
+            && log_is_current
+            && may_vote
+            && self.require_native_metadata_actor_current(true).is_ok();
         if granted {
             self.state.voted_for = Some(request.candidate_id);
             self.mark_election_activity();
@@ -1924,6 +1928,7 @@ impl MetadataConsensusStore {
     }
 
     pub fn become_leader(&mut self, votes: &BTreeSet<ClusterNodeId>) -> Result<()> {
+        self.require_native_metadata_actor_current(true)?;
         if self.state.role != MetadataConsensusRole::Candidate {
             return Err(metadata_error("only a candidate can become leader"));
         }
@@ -1957,6 +1962,7 @@ impl MetadataConsensusStore {
     }
 
     pub fn propose_topology(&mut self, topology: ClusterTopology) -> Result<MetadataLogEntry> {
+        self.require_native_metadata_actor_current(true)?;
         if self.state.role != MetadataConsensusRole::Leader {
             return Err(metadata_error("only the leader can propose topology"));
         }
@@ -2013,6 +2019,7 @@ impl MetadataConsensusStore {
         &mut self,
         activation: MetadataRestoreActivation,
     ) -> Result<MetadataLogEntry> {
+        self.require_native_metadata_actor_current(true)?;
         if self.state.role != MetadataConsensusRole::Leader {
             return Err(metadata_error(
                 "only the leader can propose restore activation",
@@ -2073,6 +2080,7 @@ impl MetadataConsensusStore {
         next_index: u64,
         max_entries: usize,
     ) -> Result<MetadataAppendRequest> {
+        self.require_native_metadata_actor_current(true)?;
         if self.state.role != MetadataConsensusRole::Leader {
             return Err(metadata_error("only the leader can append metadata"));
         }
@@ -2181,6 +2189,9 @@ impl MetadataConsensusStore {
         self.advance_follower_commit(request.leader_commit)?;
         let match_index = self.last_log_index();
         self.persist()?;
+        // Persist learned retirement/replacement FIRST, but never acknowledge
+        // catch-up/voting as the replacement physical incarnation.
+        self.require_native_metadata_actor_current(false)?;
         Ok(MetadataAppendResponse {
             cluster_id: self.state.cluster_id.clone(),
             term: self.state.current_term,
@@ -2313,6 +2324,7 @@ impl MetadataConsensusStore {
                 "append response from non-member {expected_node_id}"
             )));
         }
+        self.require_native_metadata_actor_current(true)?;
         self.match_index
             .entry(expected_node_id.clone())
             .and_modify(|known| *known = (*known).max(response.match_index))
@@ -2385,6 +2397,7 @@ impl MetadataConsensusStore {
         self.state
             .log
             .retain(|candidate| candidate.index > entry.index);
+        self.demote_native_retired_metadata_actor();
         self.reset_match_indexes();
         Ok(())
     }
@@ -2440,6 +2453,7 @@ impl MetadataConsensusStore {
         }
         validate_state(&candidate)?;
         self.state = candidate;
+        self.demote_native_retired_metadata_actor();
         Ok(())
     }
 

@@ -1901,8 +1901,13 @@ fn dispatch_cluster_data_request(
                 )));
             }
             drop(topology);
-            let db = service.lock().database();
-            let bundle = db.read().cluster_schema_bundle()?;
+            let (db, actual_open) = {
+                let service = service.lock();
+                (service.database(), service.listener_open_guard())
+            };
+            let database = db.read();
+            actual_open.require_database(&database)?;
+            let bundle = database.cluster_schema_bundle()?;
             Ok(ClusterDataResponse::SchemaBundle(bundle))
         }
         ClusterDataRequest::InstallSchemaBundle {

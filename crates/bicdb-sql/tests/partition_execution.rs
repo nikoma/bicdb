@@ -368,12 +368,16 @@ fn parent_primary_key_exists_probes_use_descendant_rows_instead_of_empty_parent_
                 .unwrap();
             sql.execute("CREATE INDEX empty_parent_probe ON p(k)")
                 .unwrap();
+            sql.execute("CREATE TABLE outer_numbers(n INT PRIMARY KEY)")
+                .unwrap();
+            sql.execute("INSERT INTO outer_numbers VALUES(1),(2),(3)")
+                .unwrap();
         }
         for reopen in 0..3 {
             let mut sql = SqlSession::new(&mut db);
             for statement in [
-                "SELECT g.n FROM generate_series(1,3) g(n) WHERE EXISTS(SELECT 1 FROM p WHERE p.k=g.n) ORDER BY g.n",
-                "SELECT g.n FROM generate_series(1,3) g(n) WHERE g.n IN(SELECT k FROM p) ORDER BY g.n",
+                "SELECT g.n FROM outer_numbers g WHERE EXISTS(SELECT 1 FROM p WHERE p.k=g.n) ORDER BY g.n",
+                "SELECT g.n FROM outer_numbers g WHERE g.n IN(SELECT k FROM p) ORDER BY g.n",
             ] {
                 assert_eq!(sql.execute(statement).unwrap().rows,vec![vec![SqlValue::Int(1)],vec![SqlValue::Int(2)]],"{statement} reopen{reopen}");
             }

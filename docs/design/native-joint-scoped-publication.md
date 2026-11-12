@@ -67,3 +67,42 @@ the coherent corrected source. The prior frozen-open/publication results apply
 to their earlier exact source, not this batch. Four-second bounds, complete
 participant sets and the remaining cold, repair, post-joint NoData, remote
 handoff and automatic-operator gates are unchanged.
+
+## Original writer-registration anchor (separate source correction)
+
+Exact `e8d263bac30f59f48b7c71a478304760fc564b82`, run `43227153532`,
+Core job `131213159621`, compiled and executed two passes/one failure,
+887 filtered, 28.44 seconds. The actual post-fsync step-cancel recovery and
+original-caller-cancel refusal passed. In the foreign reenrollment control the
+old phase correctly refused (`native writer hook lifetime ended`) and the local
+catalogue remained unchanged, but a NEW fresh phase accepted the replacement
+writer into the OLD preparation. The retained assertion therefore failed.
+Raw log SHA-256:
+`7a85bbf5d91f3622ca21cceb9cb11b3c47b0360f3d7cd7cd1f567ffd658bfaca`.
+This establishes erroneous fresh collection acceptance; it does not establish
+subsequent false activation, a new ACK or lost acknowledged data.
+
+The correction captures the actual installed `NativeWriterHostState` Arc at the
+sole preparation constructor BEFORE the native preparation producer/WAL. It
+checks that same registration again immediately before the producer and before
+returning evidence. Original, fresh preparation, open and local publication
+checks require exact object identity plus the existing actual database/root/
+store/range/lifetime checks. Each path returning a writer to a later phase
+returns this original live Arc, rather than adopting whichever writer is now
+installed. A cheap phase lifetime check compares that exact original object and
+its registration/schema/health lifetime without reacquiring a DB Arc lock or
+native journal.
+
+Reconciliation and image-owner capture also check this original anchor before
+any durable reconciliation. Release continuation transfers only that original
+writer Arc and its actual root/store binding; it retains no extra preparation,
+pin or Frozen owner. Each release collection and post-quorum observation must
+match the same original Arc. Thus dropping preparation objects to release a
+freeze cannot reset writer identity in a later phase.
+
+This is source-only on base `2c1b7d8be1f5672f2d26c106c8220ecf071a4971`.
+The existing foreign-writer assertions and four-second/original-caller budgets
+are unchanged. No new persisted format, token lifetime, permission constructor,
+physical-history scan or post-joint NoData support is added. Formatting/static
+checks are the only local validation; the exact three fault controls and full
+terminal handoff need remote execution on the corrected source.

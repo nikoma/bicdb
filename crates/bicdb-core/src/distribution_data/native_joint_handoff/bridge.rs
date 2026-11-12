@@ -46,10 +46,47 @@ pub(crate) struct ActualServiceNativeJointPreparedEvidence {
     committed: CommittedNativeJointDecisionObservation,
     prepared: crate::db::NativeJointServingPreparation,
     catalogue: NativeJointBridgeCatalogue,
+    // Captured BEFORE the native preparation producer. A later fresh MQ may
+    // revalidate this object, never replace its original writer registration.
+    writer: Arc<crate::db::NativeWriterHostState>,
     lease: NativeJointServingLease,
     pin: parking_lot::Mutex<Option<SourceCaptureReadPin>>,
 }
 impl ActualServiceNativeJointPreparedEvidence {
+    fn require_original_writer_lifetime(&self) -> Result<()> {
+        self.writer.require_store(
+            self.catalogue.database_root(),
+            self.catalogue.store_open_id(),
+        )?;
+        self.writer
+            .require_range(self.committed.data().activation_range())
+    }
+    fn require_original_writer(
+        &self,
+        database: &BicDb,
+        store: &crate::distribution_range_consensus::RangeWriteStore,
+    ) -> Result<Arc<crate::db::NativeWriterHostState>> {
+        self.require_original_writer_lifetime()?;
+        let actual = store.native_writer_host_state()?;
+        if !Arc::ptr_eq(&actual, &self.writer) {
+            return Err(data_error(
+                "joint preparation changed its original actual writer registration",
+            ));
+        }
+        self.writer
+            .require_database(database, self.committed.data().activation_range())?;
+        self.require_original_writer_lifetime()?;
+        Ok(self.writer.clone())
+    }
+    pub(crate) fn original_writer_for_continuation(
+        &self,
+    ) -> Result<(Arc<crate::db::NativeWriterHostState>, std::path::PathBuf)> {
+        self.require_original_writer_lifetime()?;
+        Ok((
+            self.writer.clone(),
+            self.catalogue.database_root().to_path_buf(),
+        ))
+    }
     pub(crate) fn committed(&self) -> &CommittedNativeJointDecisionObservation {
         &self.committed
     }
@@ -74,6 +111,7 @@ impl ActualServiceNativeJointPreparedEvidence {
                 "joint bridge preparation belongs to another service",
             ));
         }
+        self.require_original_writer(&database, &service.range_writes)?;
         self.prepared.require_current(
             &database,
             &service.range_writes,
@@ -95,6 +133,7 @@ impl ActualServiceNativeJointPreparedEvidence {
                 self.lease.frozen(),
             )?;
         }
+        self.require_original_writer(&database, &service.range_writes)?;
         #[cfg(test)]
         trace.complete();
         Ok(())
@@ -110,6 +149,7 @@ impl ActualServiceNativeJointPreparedEvidence {
         let database = checked_database_read(&service.db, &service.storage_policy)?;
         service.require_native_catalog_database(&database)?;
         service.require_native_writer_host_for_range(&database, fresh.data().activation_range())?;
+        self.require_original_writer(&database, &service.range_writes)?;
         self.committed.require_durable_fact_current(&database)?;
         fresh.require_current(&database)?;
         let old = self.committed.metadata_anchor();
@@ -150,9 +190,7 @@ impl ActualServiceNativeJointPreparedEvidence {
         } else {
             gate.validate_quiescent_frozen(fresh.data().old_range().id, self.lease.frozen())?;
         }
-        let writer = service.range_writes.native_writer_host_state()?;
-        writer.require_database(&database, fresh.data().activation_range())?;
-        Ok(writer)
+        self.require_original_writer(&database, &service.range_writes)
     }
     pub(crate) fn require_current_under_open_phase(
         &self,
@@ -169,6 +207,7 @@ impl ActualServiceNativeJointPreparedEvidence {
         let database = checked_database_read(&service.db, &service.storage_policy)?;
         service.require_native_catalog_database(&database)?;
         service.require_native_writer_host_for_range(&database, fresh.data().activation_range())?;
+        self.require_original_writer(&database, &service.range_writes)?;
         #[cfg(test)]
         let mut native_trace =
             crate::distribution_range_handoff::NativeJointPhaseTrace::from_deadline(
@@ -197,6 +236,7 @@ impl ActualServiceNativeJointPreparedEvidence {
         fresh: &CommittedNativeJointDecisionObservation,
         bridge: Arc<crate::db::NativeJointServingBridgeReceipt>,
     ) -> Result<Arc<crate::db::NativeWriterHostState>> {
+        self.require_original_writer(scope.database(), store)?;
         self.committed
             .require_historical_audit_with_native_read_scope(scope)?;
         fresh.require_current_with_native_read_scope(scope)?;
@@ -257,9 +297,7 @@ impl ActualServiceNativeJointPreparedEvidence {
                 .range_mutation_gate()
                 .validate_quiescent_frozen(fresh.data().old_range().id, self.lease.try_frozen()?)?;
         }
-        let writer = store.native_writer_host_state()?;
-        writer.require_database(scope.database(), fresh.data().activation_range())?;
-        Ok(writer)
+        self.require_original_writer(scope.database(), store)
     }
     pub(crate) fn require_local_publication_scope(
         &self,
@@ -267,6 +305,7 @@ impl ActualServiceNativeJointPreparedEvidence {
         store: &crate::distribution_range_consensus::RangeWriteStore,
         fresh: &CommittedNativeJointDecisionObservation,
     ) -> Result<Arc<crate::db::NativeWriterHostState>> {
+        self.require_original_writer(scope.database(), store)?;
         self.committed
             .require_historical_audit_with_publication_scope(scope)?;
         fresh.require_current_with_publication_scope(scope)?;
@@ -287,19 +326,19 @@ impl ActualServiceNativeJointPreparedEvidence {
                 "publication requires original actual read pins released",
             ));
         }
-        let writer = store.native_writer_host_state()?;
-        writer.require_database(scope.database(), fresh.data().activation_range())?;
-        Ok(writer)
+        self.require_original_writer(scope.database(), store)
     }
     pub(crate) fn require_phase_writer_lifetime(
         &self,
         writer: &crate::db::NativeWriterHostState,
     ) -> Result<()> {
-        writer.require_store(
-            self.catalogue.database_root(),
-            self.catalogue.store_open_id(),
-        )?;
-        writer.require_range(self.committed.data().activation_range())
+        if !std::ptr::eq(writer, self.writer.as_ref()) {
+            return Err(data_error(
+                "joint phase substituted the original actual writer registration",
+            ));
+        }
+        // No DB Arc lock or native journal reacquisition in this cheap check.
+        self.require_original_writer_lifetime()
     }
     pub(crate) fn release_read_pin_under_fresh_phase(
         &self,
@@ -346,6 +385,7 @@ impl ClusterDataNodeService {
         parent.check()?;
         host.require_live_request(business)?;
         let database = checked_database_read(&self.db, &self.storage_policy)?;
+        actual.require_original_writer(&database, &self.range_writes)?;
         self.range_writes.refsync_joint_activation_from_actual_host(
             &database,
             host,
@@ -373,6 +413,7 @@ impl ClusterDataNodeService {
             admission.require_local_open_preparation(self)?;
         }
         let database = checked_database_read(&self.db, &self.storage_policy)?;
+        actual.require_original_writer(&database, &self.range_writes)?;
         self.storage_policy.require_database(&database)?;
         self.range_writes
             .refsync_native_joint_catalogue_activation(&database, admission)?;
@@ -469,6 +510,7 @@ impl ClusterDataNodeService {
         parent.check()?;
         admission.require_publication_service_entry(self)?;
         let database = checked_database_read(&self.db, &self.storage_policy)?;
+        actual.require_original_writer(&database, &self.range_writes)?;
         self.require_native_catalog_database(&database)?;
         self.require_native_writer_host_for_range(&database, admission.data().activation_range())?;
         if actual.prepared.local_node_id() != &self.node_id {
@@ -502,6 +544,7 @@ impl ClusterDataNodeService {
             // scoped native reader. It never recreates an absent receipt.
             let database = checked_database_read(&self.db, &self.storage_policy)?;
             self.require_native_catalog_database(&database)?;
+            actual.require_original_writer(&database, &self.range_writes)?;
             self.require_native_writer_host_for_range(
                 &database,
                 admission.data().activation_range(),
@@ -529,6 +572,7 @@ impl ClusterDataNodeService {
         }
         let database = checked_database_read(&self.db, &self.storage_policy)?;
         self.require_native_catalog_database(&database)?;
+        actual.require_original_writer(&database, &self.range_writes)?;
         self.require_native_writer_host_for_range(&database, admission.data().activation_range())?;
         let result = database
             .read_existing_native_joint_serving_bridge(admission.committed(), &actual.prepared)?;
@@ -560,12 +604,20 @@ impl ClusterDataNodeService {
                 "joint preparation uses another service's actual committed evidence",
             ));
         }
+        let writer = self.range_writes.native_writer_host_state()?;
+        writer.require_database(&database, committed.data().activation_range())?;
         let catalogue = self.range_writes.observe_native_joint_bridge_catalogue(
             &database,
             &committed,
             lease.image(),
             lease.frozen(),
         )?;
+        if !Arc::ptr_eq(&writer, &self.range_writes.native_writer_host_state()?) {
+            return Err(data_error(
+                "joint writer registration changed before native preparation",
+            ));
+        }
+        writer.require_database(&database, committed.data().activation_range())?;
         let prepared = database.prepare_native_joint_serving(
             &committed,
             &self.range_writes,
@@ -582,6 +634,7 @@ impl ClusterDataNodeService {
             committed,
             prepared,
             catalogue,
+            writer,
             lease,
             pin: parking_lot::Mutex::new(Some(pin)),
         };

@@ -19,6 +19,7 @@ impl ActualServiceNativeJointPreparedEvidence {
         service: Arc<parking_lot::Mutex<ClusterDataNodeService>>,
         activation: Arc<NativeJointCatalogueActivationReceipt>,
     ) -> Result<NativeJointImageReleaseOwner> {
+        self.require_original_writer_lifetime()?;
         let NativeJointServingLease::Image { image, frozen } = &self.lease else {
             return Err(data_error(
                 "joint image release requires the actual Image serving lease",
@@ -35,7 +36,12 @@ impl ActualServiceNativeJointPreparedEvidence {
             let actual = service
                 .try_lock()
                 .ok_or_else(|| data_error("joint image release service busy"))?;
+            {
+                let database = checked_database_read(&actual.db, &actual.storage_policy)?;
+                self.require_original_writer(&database, &actual.range_writes)?;
+            }
             actual.require_native_joint_image_release(image, frozen.as_frozen(), &activation)?;
+            self.require_original_writer_lifetime()?;
         }
         Ok(NativeJointImageReleaseOwner {
             service,

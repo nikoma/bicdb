@@ -16,6 +16,9 @@ struct ReleaseMember {
     service: Arc<Mutex<ClusterDataNodeService>>,
     native: Arc<crate::db::NativeJointServingBridgeReceipt>,
     activation: Arc<NativeJointCatalogueActivationReceipt>,
+    // Retain only the original registration, never the Prepared/Frozen owner.
+    writer: Arc<crate::db::NativeWriterHostState>,
+    writer_root: std::path::PathBuf,
     owner: ReleaseOwner,
 }
 /// Aggregated immutable actual facts and original caller provenance ONLY.
@@ -91,6 +94,11 @@ impl NativeJointPublishedServingQuorum {
         for (node, native) in &self.receipts {
             let activation = activations[node].clone();
             let service = self.prepared.observations[node].service.clone();
+            let (writer, writer_root) = self.prepared.observations[node]
+                .actual
+                .original_writer_for_continuation()?;
+            writer.require_store(&writer_root, activation.store_open_id())?;
+
             if activation.native_bridge_sha256() != native.checksum_sha256()
                 || activation.native().native_database_incarnation()
                     != native.native_database_incarnation()
@@ -121,6 +129,8 @@ impl NativeJointPublishedServingQuorum {
                     service,
                     native: native.clone(),
                     activation,
+                    writer,
+                    writer_root,
                     owner,
                 },
             );
@@ -136,6 +146,12 @@ impl NativeJointPublishedServingQuorum {
 impl NativeJointReleaseContinuation {
     fn require_original(&self) -> Result<()> {
         self.caller.check()?;
+        for member in self.members.values() {
+            member
+                .writer
+                .require_store(&member.writer_root, member.activation.store_open_id())?;
+            member.writer.require_range(self.data.activation_range())?;
+        }
         // ONLY old MQ expiry is historical. Explicit old cancellation and the
         // original caller's independent deadline remain effective forever.
         if self.original_cancel.is_cancel_requested() {
@@ -247,7 +263,14 @@ impl NativeJointReleasePhaseRound {
             let actual = service
                 .try_lock()
                 .ok_or_else(|| invalid("joint release service busy"))?;
-            actual.observe_actual_joint_release_member(host, business, member.native.clone(), owner)
+            let evidence = actual.observe_actual_joint_release_member(
+                host,
+                business,
+                member.native.clone(),
+                owner,
+            )?;
+            evidence.require_original_writer_identity(&member.writer)?;
+            Ok(evidence)
         })?;
         self.cancellation = self
             .cancellation
@@ -327,7 +350,14 @@ impl NativeJointReleasePhaseQuorum {
             let actual = service
                 .try_lock()
                 .ok_or_else(|| invalid("joint release post-QQ service busy"))?;
-            actual.observe_actual_joint_release_member(host, business, member.native.clone(), owner)
+            let evidence = actual.observe_actual_joint_release_member(
+                host,
+                business,
+                member.native.clone(),
+                owner,
+            )?;
+            evidence.require_original_writer_identity(&member.writer)?;
+            Ok(evidence)
         })?;
         let (term, index, context) = post.committed().metadata_anchor();
         for observed in self.members.values() {

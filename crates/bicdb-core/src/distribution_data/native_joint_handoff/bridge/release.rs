@@ -39,6 +39,18 @@ fn require_original_dropped_binding(
     Ok(())
 }
 impl ActualServiceNativeJointReleaseEvidence {
+    pub(crate) fn require_original_writer_identity(
+        &self,
+        original: &Arc<crate::db::NativeWriterHostState>,
+    ) -> Result<()> {
+        self.require_live()?;
+        if !Arc::ptr_eq(original, &self.writer) {
+            return Err(data_error(
+                "joint release cannot replace preparation's original actual writer",
+            ));
+        }
+        Ok(())
+    }
     pub(crate) fn committed(&self) -> &CommittedNativeJointDecisionObservation {
         &self.committed
     }

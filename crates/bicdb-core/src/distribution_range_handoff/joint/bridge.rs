@@ -143,6 +143,31 @@ pub(crate) struct NativeJointPreparedServingQuorum {
     cancellation: crate::CancellationToken,
 }
 impl NativeJointPreparedServingQuorum {
+    #[cfg(test)]
+    pub(crate) fn test_original_budget_remaining_ms(
+        &self,
+    ) -> (Option<u128>, BTreeMap<ClusterNodeId, u128>) {
+        let now = std::time::Instant::now();
+        (
+            self.cancellation
+                .deadline()
+                .map(|deadline| deadline.saturating_duration_since(now).as_millis()),
+            self.observations
+                .iter()
+                .map(|(node, observation)| {
+                    (
+                        node.clone(),
+                        observation
+                            .actual
+                            .committed()
+                            .deadline()
+                            .saturating_duration_since(now)
+                            .as_millis(),
+                    )
+                })
+                .collect(),
+        )
+    }
     pub(crate) fn data(&self) -> &NativeJointDecisionData {
         &self.data
     }

@@ -508,17 +508,19 @@ fn native_joint_actual_complete_image_target_becomes_leader_ack_and_strong_read(
     for local in [node("n1"), node("n2"), node("n3")] {
         let current = prepared.require_current();
         eprintln!(
-            "ACTUAL_JOINT_PHASE activation-preflight node={local} elapsed_ms={} result={current:?}",
-            preparation_started.elapsed().as_millis()
+            "ACTUAL_JOINT_PHASE activation-preflight node={local} elapsed_ms={} remaining_original_ms={:?} result={current:?}",
+            preparation_started.elapsed().as_millis(),
+            prepared.test_original_budget_remaining_ms()
         );
         current.unwrap();
         let acquisition_started = std::time::Instant::now();
         let admission =
             prepared.acquire_local_activation(&fixture.clients[&local], &node("n1"), &parent);
         eprintln!(
-            "ACTUAL_JOINT_PHASE activation-acquired node={local} elapsed_ms={} acquisition_ms={} error={:?}",
+            "ACTUAL_JOINT_PHASE activation-acquired node={local} elapsed_ms={} acquisition_ms={} remaining_original_ms={:?} error={:?}",
             preparation_started.elapsed().as_millis(),
             acquisition_started.elapsed().as_millis(),
+            prepared.test_original_budget_remaining_ms(),
             admission.as_ref().err()
         );
         if admission.is_err() {

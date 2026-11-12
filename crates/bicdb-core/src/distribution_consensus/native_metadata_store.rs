@@ -8,6 +8,8 @@ use parking_lot::{Mutex, RwLock};
 use std::sync::{Arc, OnceLock};
 
 mod append_ack;
+mod owned_member;
+pub(crate) use owned_member::NativeOwnedMetadataMemberObservation;
 mod learner_cold;
 #[cfg(feature = "tls-replication")]
 mod learner_enrollment;

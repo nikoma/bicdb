@@ -35,11 +35,13 @@ pub(crate) use host_read::{
 };
 #[cfg(feature = "tls-replication")]
 pub(crate) use native_metadata_store::same_registration as same_native_registration;
-pub(crate) use native_metadata_store::NativeMetadataAppendProvenance;
 pub use native_metadata_store::NativeMetadataAppendReceiver;
 #[cfg(test)]
 pub(crate) use native_metadata_store::NativeMetadataInitializationCut;
 pub(crate) use native_metadata_store::NativeMetadataPreVoteFact;
+pub(crate) use native_metadata_store::{
+    NativeMetadataAppendProvenance, NativeOwnedMetadataMemberObservation,
+};
 pub(crate) use native_supervisor::NativeMetadataSupervisorSnapshot;
 
 /// Wire request only. This is not a read authority or a row-read permit.

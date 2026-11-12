@@ -19,6 +19,37 @@ pub(super) struct NativeLearnerMetadataTransition {
     namespace_ids: Option<Vec<(String, Uuid)>>,
 }
 impl NativeUnassignedLearnerHost {
+    pub(in crate::distribution_native_host) fn validate_owned_metadata_member(
+        &self,
+        observed: &HostMetadataReadObservation,
+        business: Uuid,
+        parent: &CancellationToken,
+    ) -> Result<()> {
+        let metadata = self
+            .metadata_transition
+            .metadata
+            .as_ref()
+            .ok_or_else(|| invalid("actual owned metadata backend required"))?;
+        let proof = {
+            let store = metadata
+                .try_lock()
+                .ok_or_else(|| invalid("owned metadata member busy"))?;
+            store.require_listener_database(&self.provider.actual_open)?;
+            store.observe_owned_native_metadata_member(observed, business, parent)?
+        };
+        // Never acquire a DB guard while holding the metadata mutex.
+        self.provider.factory.require_owned_metadata_member(
+            &proof,
+            observed,
+            business,
+            &self.provider.network,
+        )?;
+        let store = metadata
+            .try_lock()
+            .ok_or_else(|| invalid("owned metadata member changed/busy"))?;
+        proof.require_current(&store)
+    }
+
     pub(in crate::distribution_native_host) fn owned_metadata_snapshot(
         &self,
         parent: &CancellationToken,
@@ -32,7 +63,7 @@ impl NativeUnassignedLearnerHost {
             .try_lock()
             .ok_or_else(|| invalid("owned learner metadata status busy"))?;
         store.require_listener_database(&self.provider.actual_open)?;
-        let id = store.registered_native_learner_store_id()?;
+        let id = store.registered_native_metadata_member_store_id()?;
         Ok(Some((
             id,
             store.status(),

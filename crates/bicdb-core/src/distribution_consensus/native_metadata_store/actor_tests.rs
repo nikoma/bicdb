@@ -6,6 +6,8 @@ use crate::db::{RangeImageBirthMember, RangeImageBirthSpec};
 mod fixture;
 use crate::{DbConfig, StorageMode};
 use fixture::ActorFixture;
+#[cfg(feature = "tls-replication")]
+mod destination_tls_tests;
 use rcgen::{CertificateParams, KeyPair};
 fn node(i: usize) -> ClusterNodeId {
     ClusterNodeId::new(format!("n{i}")).unwrap()

@@ -50,11 +50,33 @@ fn assert_no_data(host: &NativeProvisionalHost) {
         .unwrap()
         .is_none());
 }
+fn metadata_client_for_configuration(
+    f: &Fixture,
+    configuration: &NativeInitialMetadataConfiguration,
+) -> TcpClusterRelocationTransport {
+    TcpClusterRelocationTransport::new(
+        configuration.topology.cluster_id.clone(),
+        node(0),
+        Arc::new(RwLock::new(configuration.topology.clone())),
+        f.networks[0].clone(),
+    )
+    .unwrap()
+}
+
 #[test]
 fn native_initial_preparation_tls_sequential_launch_uses_historical_same_c_after_first_vote() {
     let mut f = retained_fixture();
     let token = CancellationToken::uncancelable();
     let c = f.hosts[0].observe_initial_configuration(&token).unwrap();
+    // The provisional client intentionally has only the unenrolled plan.
+    // Countable metadata RPCs use the actual birth-bound initial C instead.
+    let metadata_client = TcpClusterRelocationTransport::new(
+        c.topology.cluster_id.clone(),
+        node(0),
+        Arc::new(RwLock::new(c.topology.clone())),
+        f.networks[0].clone(),
+    )
+    .unwrap();
     let original_service = Arc::clone(&f.hosts[0]._service);
     let original_store = original_service
         .lock()
@@ -75,8 +97,7 @@ fn native_initial_preparation_tls_sequential_launch_uses_historical_same_c_after
         drop(slot);
         assert_no_data(host);
     }
-    assert!(f.hosts[0]
-        .transport
+    assert!(metadata_client
         .request_metadata_vote(&node(1), vote(&f))
         .unwrap_err()
         .to_string()
@@ -120,8 +141,7 @@ fn native_initial_preparation_tls_sequential_launch_uses_historical_same_c_after
     }
     let mut voters = BTreeSet::from([node(0)]);
     for index in 1..3 {
-        let reply = f.hosts[0]
-            .transport
+        let reply = metadata_client
             .request_metadata_vote(&node(index), request.clone())
             .unwrap();
         assert!(reply.vote_granted);
@@ -135,8 +155,7 @@ fn native_initial_preparation_tls_sequential_launch_uses_historical_same_c_after
                 .lock()
                 .append_request_from(1, 16)
                 .unwrap();
-            let reply = f.hosts[0]
-                .transport
+            let reply = metadata_client
                 .append_metadata(&node(index), request)
                 .unwrap();
             launches[0]
@@ -164,8 +183,7 @@ fn native_initial_preparation_tls_sequential_launch_uses_historical_same_c_after
                 .lock()
                 .append_request_from(1, 16)
                 .unwrap();
-            let reply = f.hosts[0]
-                .transport
+            let reply = metadata_client
                 .append_metadata(&node(index), request)
                 .unwrap();
             launches[0]
@@ -252,8 +270,7 @@ fn native_initial_preparation_tls_foreign_c_and_incomplete_barrier_never_expose_
         .acquire_initial_preparation(&node(1), &f.plan, Some(changed), &token)
         .is_err());
     assert_eq!(serde_json::to_vec(&record(&f.hosts[1])).unwrap(), saved);
-    assert!(f.hosts[0]
-        .transport
+    assert!(metadata_client_for_configuration(&f, &c)
         .request_metadata_vote(&node(1), vote(&f))
         .is_err());
     assert_eq!(
@@ -305,8 +322,7 @@ fn native_initial_preparation_tls_original_cancel_cannot_relabel_accepted_fact()
         record(&f.hosts[1]).stage(),
         NativeInitialPreparationStage::PreparedNoVote
     );
-    assert!(f.hosts[0]
-        .transport
+    assert!(metadata_client_for_configuration(&f, &c)
         .request_metadata_vote(&node(1), vote(&f))
         .is_err());
 }
@@ -549,8 +565,7 @@ fn native_initial_preparation_tls_protected_proposal_and_both_metadata_cuts_resu
         )
         .unwrap();
         assert_eq!(discovered.topology, c.topology);
-        assert!(f.hosts[0]
-            .transport
+        assert!(metadata_client_for_configuration(&f, &c)
             .request_metadata_vote(&node(1), vote(&f))
             .is_err());
         let mut old = f.hosts.remove(1);
@@ -591,8 +606,7 @@ fn native_initial_preparation_tls_protected_proposal_and_both_metadata_cuts_resu
         assert_eq!(status.current_term, 0);
         assert!(status.voted_for.is_none());
         drop(metadata);
-        assert!(f.hosts[0]
-            .transport
+        assert!(metadata_client_for_configuration(&f, &c)
             .request_metadata_vote(&node(1), vote(&f))
             .is_err());
         host.shutdown().unwrap();

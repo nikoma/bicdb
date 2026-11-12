@@ -216,6 +216,32 @@ impl NativeMetadataPreVoteFact<'_> {
 }
 
 impl MetadataConsensusStore {
+    pub(crate) fn require_listener_database(
+        &self,
+        actual: &crate::distribution_data::ClusterServiceOpenGuard,
+    ) -> Result<()> {
+        actual.require_live()?;
+        if actual
+            .native_destination_birth()
+            .is_some_and(|birth| birth.writer_enforcement_version() == 1)
+        {
+            let owner = self.native_owner.as_ref().ok_or_else(|| {
+                metadata_error("enforced metadata listener requires actual same-open owned store")
+            })?;
+            owner.require_current()?;
+            let actor = owner
+                .actor
+                .as_ref()
+                .ok_or_else(|| metadata_error("metadata listener actor is not bound"))?;
+            actual.require_owned_metadata_open(
+                &owner.actual_open,
+                &self.state.cluster_id,
+                &self.state.node_id,
+                &actor.birth,
+            )?;
+        }
+        Ok(())
+    }
     /// Historical identity inspection only; no owner/read/quorum proof is minted.
     pub(crate) fn inspect_native_store_identity(
         root: impl AsRef<Path>,

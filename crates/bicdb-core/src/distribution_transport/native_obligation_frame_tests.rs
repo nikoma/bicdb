@@ -76,6 +76,7 @@ fn complete_fenced_obligation_envelope_and_maximum_entry_fit_native_frame_floor(
         scope,
     };
     let response = ClusterDataResponseEnvelope {
+        actual_native_source: None,
         protocol_version: CLUSTER_DATA_PROTOCOL_VERSION,
         cluster_id: topology.cluster_id.clone(),
         source_node_id: range.leader.clone(),

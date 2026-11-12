@@ -1,0 +1,22 @@
+{
+  "source": "35e6260fe117947b8c5baea1febf606d91b050b4",
+  "source_version": "1.0.482-beta development source atop actual main482; not a delivery version",
+  "status": "focused_passed",
+  "passed": 254,
+  "scope": "50 SQL integration tests (new7 + existing41 + version2), case-mapped library1, wire protocol195/backup5/ACL1/read-only2. All original application assertions unchanged; no full application or crash qualification.",
+  "base": "f43583da4c34209e810c5e6a8f5925831b2949a1",
+  "production_changes": "SQL index drop helpers and retry retention only; no Native Core or private rename changes",
+  "earlier_setup_failure": "First bundle omitted main482 prerequisite; no compilation or tests. V2 then failed compile on copied *bool at owned public-statement call site; no tests executed. 35e6260f fixes that adapter, actual all254 pass.",
+  "inputs": {
+    "first-submission-precondition.json": "6d5d8f7c578643f14dd45eac81dfb74a0c72e02d9633e61b5f65b79d7e03af86",
+    "native-pg16-control/control.sql": "208900122cc5849015f8db12dacf04a388f822f96eb65f471ecc899da2868951",
+    "native-pg16-control/result.json": "d641e05c169e452b88dc9d3d21c56cf928f9b459b703e634cd236dbfd6719bbf",
+    "native-pg16-control/stderr": "bd7442a0cc9e009692887e4d9d7897ed070fca8acdc1e2f474785585ac4c7e2e",
+    "native-pg16-control/stdout": "043745ded23c5d17334e73c3466cfbf60e13092aff5af4b11d73b6ccc8abe304",
+    "report-public-index-integrity-35e6260f.json": "1f810ef50c5e00cc994ddaee2639bf0ac02f3131d62e9cf4aed9326cf42242d6",
+    "report-public-index-integrity-81b9674b-v2.json": "c6380314c64851642cacfdfdf81d0569db79fcb3742182388a180123f90b8628",
+    "tc-step-public-index-integrity-35e6260f.log.gz": "a799e29d81aaceb0a82a688eeeb0bcb5c4d05e160c028fa9c1202b89ee0a0859",
+    "tc-step-public-index-integrity-81b9674b-v2.log.gz": "c1135171df9d904dbfb64a38b2881bd14713104202e63ecea602a8e7d5bec217"
+  },
+  "recorded_unix": 1794469468.383967
+}

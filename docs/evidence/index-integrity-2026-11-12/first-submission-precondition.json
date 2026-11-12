@@ -1,0 +1,8 @@
+{
+  "source": "81b9674b40c18513681b4fd20748d41e9917b724",
+  "status": "not_a_test_run",
+  "reason": "Isolated metadata repo did not have new main482 bundle prerequisite. Failed before checkout or receipt or compilation. V2 bundle includes history from known available2325842 base.",
+  "unit": "bicdb-public-index-integrity-81b9674b",
+  "next_unit": "bicdb-public-index-integrity-81b9674b-v2",
+  "recorded_unix": 1794468017.0415208
+}

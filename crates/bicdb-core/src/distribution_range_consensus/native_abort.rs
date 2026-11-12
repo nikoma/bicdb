@@ -27,6 +27,9 @@ fn stable_range(range: &RangeDescriptor) -> RangeDescriptor {
     r
 }
 impl NativeAbortDomain {
+    pub(crate) fn member_ids(&self) -> BTreeSet<ClusterNodeId> {
+        self.members.keys().cloned().collect()
+    }
     fn from_source(source: &SourceRangeImageLineage, range: &RangeDescriptor) -> Result<Self> {
         if stable_range(source.native_write_range()?) != stable_range(range) {
             return Err(range_write_error(
@@ -860,5 +863,125 @@ impl RangeWriteStore {
             },
             cancellation,
         })
+    }
+}
+
+impl RangeWriteStore {
+    pub(crate) fn preflight_native_abort_publication(
+        &self,
+        db: &crate::BicDb,
+        native: &NativeRecoveryAdmission,
+        role: &RecoveryRoleAdmission,
+        quorum: &crate::distribution_range_recovery::NativeAbortQuorum,
+    ) -> Result<()> {
+        quorum.require_recipient_role(role)?;
+        self.require_recovery_scope(role, native, &quorum.request().scope)?;
+        self.require_actual_abort_catalogue(db)?;
+        quorum.candidate().record().domain.require_role(role)?;
+        if self
+            .catalog
+            .handoff_promises
+            .contains_key(&role.current_range().id)
+            || self
+                .catalog
+                .backup_fences
+                .contains_key(&role.current_range().id)
+        {
+            return Err(range_write_error(
+                "ordinary same-voter abort cannot clear a handoff/backup promise",
+            ));
+        }
+        if let Some(entry) = self
+            .catalog
+            .ranges
+            .get(&role.current_range().id)
+            .and_then(|r| r.entries.get(&quorum.request().range_index))
+        {
+            if matches!(
+                entry.state,
+                RangeWriteState::Committed
+                    | RangeWriteState::QuorumCommitted
+                    | RangeWriteState::Applied
+            ) {
+                return Err(range_write_error("local irreversible decision needs already-decided adoption, not a new abort vote"));
+            }
+        }
+        Ok(())
+    }
+    pub(crate) fn mark_actual_native_abort_resolved(
+        &mut self,
+        db: &crate::BicDb,
+        native: &NativeRecoveryAdmission,
+        role: &RecoveryRoleAdmission,
+        quorum: &crate::distribution_range_recovery::NativeAbortQuorum,
+        receipt: &crate::db::NativeRecoveryAbortedReceipt,
+    ) -> Result<()> {
+        self.preflight_native_abort_publication(db, native, role, quorum)?;
+        receipt.require_current(db, role)?;
+        let command = &quorum.candidate().record().command;
+        if receipt.range_id() != command.range_id || receipt.range_index() != command.index {
+            return Err(range_write_error(
+                "native abort receipt describes another slot",
+            ));
+        }
+        let progress = self.progress(command.range_id);
+        if progress.resolved_through >= command.index {
+            // Actual immutable Aborted history was checked above. Do not
+            // rewind or reclassify any later catalogue entry on an old retry.
+            return Ok(());
+        }
+        if progress.resolved_through.checked_add(1) != Some(command.index)
+            || (progress.last_index != command.index
+                && progress.last_index.checked_add(1) != Some(command.index))
+        {
+            return Err(range_write_error(
+                "canonical abort cannot numerically repair a raw-prefix gap",
+            ));
+        }
+        let log = self
+            .catalog
+            .ranges
+            .entry(command.range_id)
+            .or_insert_with(|| RangeWriteLog {
+                current_epoch: role.current_range().epoch,
+                last_index: 0,
+                resolved_through: 0,
+                compacted_through: 0,
+                entries: BTreeMap::new(),
+            });
+        if let Some(entry) = log.entries.get_mut(&command.index) {
+            if entry.command != *command
+                || !matches!(
+                    entry.state,
+                    RangeWriteState::Prepared | RangeWriteState::Aborted
+                )
+            {
+                return Err(range_write_error(
+                    "canonical abort conflicts with another local command; retain original audit",
+                ));
+            }
+            entry.state = RangeWriteState::Aborted;
+        } else {
+            log.entries.insert(
+                command.index,
+                RangeWriteLogEntry {
+                    command: command.clone(),
+                    state: RangeWriteState::Aborted,
+                },
+            );
+            log.last_index = command.index;
+        }
+        advance_resolved(log);
+        let slot = self
+            .catalog
+            .native_abort_protocol
+            .as_mut()
+            .and_then(|p| p.ranges.get_mut(&command.range_id))
+            .and_then(|r| r.slots.get_mut(&command.index))
+            .ok_or_else(|| {
+                range_write_error("actual native abort has no permanent slot control")
+            })?;
+        slot.resolved_native_receipt_sha256 = Some(receipt.decision_sha256().into());
+        self.persist_recovery_catalog()
     }
 }

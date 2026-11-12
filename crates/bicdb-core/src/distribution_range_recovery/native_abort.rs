@@ -317,7 +317,12 @@ impl NativeAbortQuorum {
     pub(crate) fn require_recipient_role(&self, fresh: &RecoveryRoleAdmission) -> Result<()> {
         self.cancellation.check()?;
         self.request.scope.require_role(fresh)?;
-        if fresh.local_node_id() != self.role.local_node_id()
+        if fresh.context_id() == self.role.context_id()
+            || self
+                .votes
+                .values()
+                .any(|vote| vote.observed_metadata_context_id == fresh.context_id())
+            || fresh.local_node_id() != self.role.local_node_id()
             || fresh.local_member_incarnation() != self.role.local_member_incarnation()
             || fresh.metadata_term()
                 < self

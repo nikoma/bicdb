@@ -6,6 +6,9 @@ use crate::distribution_range_consensus::{
     NativeRangeCertificateEvidence, NativeRangeCommandIntent, NativeRangeCommitCertificate,
 };
 use crate::distribution_range_mutation::RangeMutationAuthority;
+mod no_data;
+use no_data::NativeNoDataPrefixEvidence;
+pub(crate) use no_data::NativeRecoveryAbortedReceipt;
 mod ordinary_apply;
 mod recovery_apply;
 pub(crate) use ordinary_apply::NativeReplicaMaterialization;
@@ -264,7 +267,10 @@ pub(super) struct NativeCertifiedRangePrefix {
     command_checksum_sha256: String,
     mutations_sha256: String,
     scope_sha256: String,
-    materialized: MaterializedNativeCommand,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    materialized: Option<MaterializedNativeCommand>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    no_data: Option<NativeNoDataPrefixEvidence>,
     certified_voters: BTreeSet<ClusterNodeId>,
     required_quorum: usize,
     #[serde(
@@ -283,7 +289,15 @@ pub(super) struct NativeCertifiedRangePrefix {
 }
 impl NativeCertifiedRangePrefix {
     pub(super) fn actual_local_visibility_sequence(&self) -> u64 {
-        self.materialized.local_wal_sequence
+        self.materialized.as_ref().map_or_else(
+            || {
+                self.no_data
+                    .as_ref()
+                    .expect("validated no-data prefix")
+                    .local_data_visibility
+            },
+            |materialized| materialized.local_wal_sequence,
+        )
     }
     fn checksum(&self) -> Result<String> {
         let mut unsigned = self.clone();
@@ -320,7 +334,9 @@ impl NativeCertifiedRangePrefix {
         if let Some(attempt) = &self.recovery_attempt {
             attempt.validate_prefix(
                 &self.command_checksum_sha256,
-                &self.materialized,
+                self.materialized.as_ref().ok_or_else(|| {
+                    invalid("applied recovery attempt lacks actual WAL materialization")
+                })?,
                 &self.certificate_evidence,
             )?;
         }
@@ -369,7 +385,27 @@ impl NativeCertifiedRangePrefix {
                 }
             }
         }
-        if self.format_version != 2
+        let materialization_shape = match (&self.materialized, &self.no_data) {
+            (Some(actual), None) => {
+                self.format_version == 2
+                    && actual.actual_mutations_sha256 == self.mutations_sha256
+                    && !matches!(
+                        self.certificate_evidence,
+                        NativeRangeCertificateEvidence::AbortPromiseQuorum { .. }
+                    )
+            }
+            (None, Some(no_data)) => {
+                self.format_version == 3
+                    && no_data.validate(self).is_ok()
+                    && birth.abort_protocol_version == Some(1)
+                    && matches!(
+                        self.certificate_evidence,
+                        NativeRangeCertificateEvidence::AbortPromiseQuorum { .. }
+                    )
+            }
+            _ => false,
+        };
+        if !materialization_shape
             || self.birth_id != birth.birth_id
             || self.base_receipt_sha256 != base.checksum_sha256
             || self.range_id != base.range.id
@@ -380,7 +416,6 @@ impl NativeCertifiedRangePrefix {
             || self.history_generation != base.history_generation
             || self.logical_genesis_sha256 != base.logical_genesis_sha256
             || self.logical_history_sha256.len() != 64
-            || self.materialized.actual_mutations_sha256 != self.mutations_sha256
             || self.checksum()? != self.checksum_sha256
         {
             return Err(invalid("damaged/mismatched native certified prefix"));
@@ -609,7 +644,9 @@ impl BicDb {
         let lineage = self.current_native_range_source_lineage(intent.range().id)?;
         if lineage.range_index() == intent.range_index() {
             if lineage.prefix.as_ref().is_some_and(|prefix| {
-                prefix.command_id == intent.command_id()
+                prefix.materialized.is_some()
+                    && prefix.no_data.is_none()
+                    && prefix.command_id == intent.command_id()
                     && prefix.command_checksum_sha256 == intent.command_checksum_sha256()
                     && prefix.scope_sha256 == intent.scope_sha256()
                     && prefix.mutations_sha256 == intent.mutations_sha256()
@@ -681,8 +718,13 @@ impl BicDb {
                 prefix.history_generation,
                 prefix.range_index,
             )?;
-            let expected = history::NativeLogicalHistoryOutcomeV1::Applied {
-                command_checksum_sha256: prefix.command_checksum_sha256.clone(),
+            let expected = if prefix.no_data.is_some() {
+                self.validate_native_abort_prefix_record(birth, base, prefix)?;
+                history::NativeLogicalHistoryOutcomeV1::Aborted
+            } else {
+                history::NativeLogicalHistoryOutcomeV1::Applied {
+                    command_checksum_sha256: prefix.command_checksum_sha256.clone(),
+                }
             };
             if entry.commitment_sha256 != prefix.logical_history_sha256 || entry.outcome != expected
             {
@@ -1008,7 +1050,8 @@ impl BicDb {
             command_checksum_sha256: record.command_checksum_sha256,
             mutations_sha256: record.mutations_sha256,
             scope_sha256: record.scope_sha256,
-            materialized,
+            materialized: Some(materialized),
+            no_data: None,
             certified_voters: proof.certified_voters(),
             required_quorum: proof.required_quorum(),
             certificate_evidence: proof.evidence(),

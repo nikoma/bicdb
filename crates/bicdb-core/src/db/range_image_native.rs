@@ -27,6 +27,7 @@ pub(crate) use serving_configuration::{
 #[cfg(test)]
 pub(crate) mod rf3_fixture;
 use certified_prefix::NativeCertifiedRangePrefix;
+pub(crate) use certified_prefix::NativeRecoveryAbortedReceipt;
 pub(crate) use history::{
     NativeLogicalHistoryEntryV1, NativeLogicalHistoryOutcomeV1, NativeLogicalHistoryPoint,
     NativeLogicalHistoryStepV1,

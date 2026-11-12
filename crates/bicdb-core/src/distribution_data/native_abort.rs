@@ -118,3 +118,39 @@ impl ClusterDataNodeService {
         result
     }
 }
+impl ClusterDataNodeService {
+    pub(crate) fn apply_native_abort_quorum(
+        &mut self,
+        role: &crate::distribution_range_recovery::RecoveryRoleAdmission,
+        quorum: &crate::distribution_range_recovery::NativeAbortQuorum,
+        frozen: &crate::distribution_range_mutation::FrozenRangeMutationPermit,
+        parent: &CancellationToken,
+    ) -> Result<crate::db::NativeRecoveryAbortedReceipt> {
+        let db = try_database_read(&self.db)?;
+        self.require_native_catalog_database(&db)?;
+        self.require_native_writer_host_for_range(&db, role.current_range())?;
+        self.range_mutations
+            .validate_quiescent_frozen(role.current_range().id, frozen)?;
+        let controlled = self.range_mutations.try_controlled_mutation(frozen)?;
+        let native = db.native_recovery_admission(
+            role.cluster_id(),
+            role.bootstrap_id(),
+            &self.node_id,
+            role.local_member_incarnation(),
+        )?;
+        let receipt = db.apply_native_abort_quorum(
+            &self.range_writes,
+            &native,
+            role,
+            quorum,
+            frozen,
+            &controlled,
+            parent,
+        )?;
+        self.range_writes
+            .mark_actual_native_abort_resolved(&db, &native, role, quorum, &receipt)?;
+        parent.check()?;
+        drop(controlled);
+        Ok(receipt)
+    }
+}

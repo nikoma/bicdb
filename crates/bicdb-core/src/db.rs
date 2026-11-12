@@ -89,8 +89,9 @@ pub(crate) use range_image_native::{
     NativeHistoryTargetContext, NativeLogicalHistoryEntryV1, NativeLogicalHistoryOutcomeV1,
     NativeLogicalHistoryPoint, NativeLogicalHistoryStepV1, NativeRangeInstallSafety,
     NativeRangePendingApply, NativeRangePrefixObservation, NativeRecoveredServingReceipt,
-    NativeRecoveryAdmission, NativeRecoveryAppliedReceipt, NativeWriterHostState,
-    RangeImageBirthMember, RangeImageBirthSpec, SourceRangeImageLineage, StagedNativeHistoryProof,
+    NativeRecoveryAbortedReceipt, NativeRecoveryAdmission, NativeRecoveryAppliedReceipt,
+    NativeWriterHostState, RangeImageBirthMember, RangeImageBirthSpec, SourceRangeImageLineage,
+    StagedNativeHistoryProof,
 };
 pub(crate) use range_image_native::{NativeRangeReadPhysical, NativeReadLocalDbSequence};
 mod range_image_bindings;

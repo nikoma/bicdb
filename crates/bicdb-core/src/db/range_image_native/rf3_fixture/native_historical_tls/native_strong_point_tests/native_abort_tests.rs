@@ -30,7 +30,22 @@ fn native_abort_actual_enforced_prepare_failure_canonical_metadata_history_then_
             .lock()
             .test_refuse_native_prepare_after_start(true);
     }
-    let failed = fixture.native.append(&failed_key).unwrap_err();
+    let database = fixture.native.databases[&node("n0")].write();
+    let app_wal_before = database.tx_log_handle().stats();
+    let mut tx = database.begin_transaction().unwrap();
+    tx.insert("items", Record::new(&failed_key)).unwrap();
+    let observer = tx.observe_outcome();
+    let failed = tx.commit().unwrap_err();
+    assert_eq!(observer.outcome(), crate::TransactionOutcome::Aborted);
+    assert_eq!(
+        database.tx_log_handle().stats().written_seq,
+        app_wal_before.written_seq
+    );
+    assert_eq!(
+        database.tx_log_handle().stats().commits_written,
+        app_wal_before.commits_written
+    );
+    drop(database);
     assert!(
         !matches!(&failed, BicDbError::CommitOutcomeUnknown { .. }),
         "prepare-only cleanup did not produce a definite no-effect result: {failed}"

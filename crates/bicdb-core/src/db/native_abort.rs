@@ -71,7 +71,7 @@ impl BicDb {
                         .into(),
                 ));
             }
-            self.rollback_transaction(tx)?;
+            self.rollback_transaction_without_outcome_receipt(tx)?;
             tx.rollback_write_receipts(0);
             tx.writes.clear();
             tx.write_index.clear();
@@ -96,7 +96,10 @@ impl BicDb {
             admission.native_prepare_only_cleaned(rejected, &no_effect, self)
         })();
         match publication {
-            Ok(()) => Err(error),
+            Ok(()) => {
+                tx.receipt_aborted();
+                Err(error)
+            }
             Err(publication) => {
                 tx.receipt_native_admission_unknown();
                 Err(BicDbError::CommitOutcomeUnknown {

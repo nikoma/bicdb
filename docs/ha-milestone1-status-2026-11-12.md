@@ -37,6 +37,44 @@ The original Azure qualification remains **FAILED**, and production admission
 remains unchanged. The following checkpoints retain their original revisions
 and pre-merge status; they are not newer claims that read489 is still unmerged.
 
+## Latest executed component result: ACK4/Strong and historical retry pass
+
+Exact unmerged candidate `eedf23d58e236cf62d61366349ad4de3bd52373b` passes
+three distinct component tests. [Run 43319425823](https://github.com/nikoma/bicdb/actions/runs/43319425823),
+Core `131535932600`, records **two passed, zero failed, 955 filtered, 100.89s**:
+the unchanged post-joint PrepareOnly → canonical Abort3 → all-member activation
+→ actual ACK4/Strong R4 positive, plus its separate post-ACK idempotence test.
+[Run 43319432266](https://github.com/nikoma/bicdb/actions/runs/43319432266), Core
+`131535951702`, records **one passed, zero failed, 956 filtered, 98.32s**: the
+actual copied-image target returns historical AnchorR3 at current R4, then
+refuses a deliberately removed immutable serving archive with the caller live.
+Both exact-source all-target and isolated-consumer jobs pass.
+
+The actual diagnostic confirms n3's physical members `[n0,n1,n2]` and protected
+effective/observer voters `[n1,n2,n3]`. The correction binds the NEW domain to
+actual native joint/serving records and archives. Historical AnchorR3 remains
+distinct from a current-prefix or Strong-read grant. Exact prior ACK payloads,
+actual R/H/B/UID and inherited commitments survive the tested paths.
+
+**This is not a passing whole-candidate qualification.** The sibling
+[run 43319438217](https://github.com/nikoma/bicdb/actions/runs/43319438217), Core
+`131535993682`, records **zero passed, four failed, 953 filtered, 81.00s**.
+All four cases reach target ACK2 but fail their StrongR2 prerequisite before
+CurrentJoint preparation, fault injection or the new timing spans. Their
+structured unavailable/timeout results do not establish false absence or durable
+loss. All-target/consumer checks pass; zero observer timing contexts were reached.
+[Exact failed prerequisite and custody scope](design/native-ready-observer-inner-result-eedf.md).
+
+The passed component uses fixture-level opaque protocol orchestration, writer
+re-enrollment prerequisites and explicit coordinator recovery. It does not prove
+automatic NativeHost repair, original-writer operational transition, a genuine
+fifth-node DATA move, online or 8 GiB transfer, crash/cold recovery, throughput,
+physical RPO/RTO, general SQL transparency or deployment. The independent
+no-reinstall image-policy baseline remains **failed**. Successful CI artifacts
+retain complete logs/source/compiler facts but **no database or WAL custody**.
+[Complete source-pinned receipt, raw logs, artifacts and offline verifier](evidence/native-current-joint-first-success-2026-11-12/README.md).
+Original Azure qualification and production admission remain unchanged.
+
 ## Executed 68b results: activation releases, then anchor projection refuses
 
 Exact source `68be040ebb00a4c606d519697f913e310c496812` has **failed full

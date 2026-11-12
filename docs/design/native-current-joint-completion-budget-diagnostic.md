@@ -11,9 +11,11 @@ canonical Abort3/native R3 assertions and native preparations. Read-only ZIP
 inspection of artifact 13961016835 shows n1's catalogue **NativeCompleted R3**,
 with serving checksum
 `4443fc6cebf1b617d84d744bc4efea9f257a83819b5cf7d2ad512074fa0deb2f`;
-n2 and n3 remain NativePrepared R3. Thus n1 reached durable native/catalogue
-completion and its response is uncertain. This is not evidence that no Complete
-or no NoData occurred. No Activate/ACK4/Strong R4 acceptance was reached.
+n2 and n3 remain NativePrepared R3. Durable native/catalogue completion was
+observed by the later custody capture, and its response is uncertain. The worker may have continued after the
+client timed out while custody waited on service/DB locks; this capture alone
+does not establish fsync-before-client-timeout ordering. This is not evidence
+that no Complete or no NoData occurred. No Activate/ACK4/Strong R4 acceptance was reached.
 
 Retained ZIP SHA-256:
 `c0ad6a769710cb715b2c96df238605ae57d0008a68d32448b319d37779f8958d`
@@ -34,3 +36,23 @@ quorum tokens and 4500ms budget remain unchanged. No additional network,
 journal acquisition or metadata/service lock is introduced. The next exact
 focused run must locate the first exhausted boundary before any optimization.
 Full recovery remains unqualified until actual Activate/ACK4/Strong succeeds.
+
+## Diagnostic attempt and fixture ordering successor
+
+The instrumented source a0ed97c26803a5ac9523f621c6fa94c41d2de20c, run
+43255635176 / Core 131312976958, failed earlier at fence `round.record` after
+three successful fence RPCs (64.37s whole test). It collected no Complete phase
+timings. The fixture had spent the original five-second collector budget on
+full native/row exports, archive assertions and fsynced diagnostic reports
+before counting each authentic response. This does not measure producer-only
+fence collection or qualify completion.
+
+The test-only ordering successor captures the immutable BEFORE state before
+starting that operation, counts each real challenged reply immediately, and
+finishes/requires live the actual full quorum under the SAME original token
+before doing deferred heavy verification. It retains every original native,
+raw, archive, UID, row and custody assertion. Actual Runtime Frozen owners remain
+held throughout verification. RPC/record/finish traces show actual remaining
+original budget; a producer/collector that still exceeds it continues to fail.
+Failures retain exact partial replies and snapshots before acceptance fails.
+No token is renewed, deadline extended, authority fabricated or guard removed.

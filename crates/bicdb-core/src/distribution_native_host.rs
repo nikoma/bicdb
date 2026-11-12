@@ -309,13 +309,11 @@ impl NativeProvisionalNode {
         cancellation.check()?;
         {
             let db = database.read();
-            let native = db.native_recovery_admission(
-                &spec.cluster_id,
-                spec.bootstrap_id,
-                &spec.node_id,
-                spec.member_incarnation,
-            )?;
-            if native.writer_enforcement_version() != 1 {
+            // Strict factory open verified the actual birth. Whole-factory
+            // recovery admission is deliberately unavailable until EVERY
+            // planned genesis is materialized below; do not ask for that
+            // completed capability while constructing it.
+            if db.actual_native_writer_enforcement_version()? != 1 {
                 return Err(invalid(
                     "a legacy birth cannot be upgraded into the enforced-writer domain",
                 ));

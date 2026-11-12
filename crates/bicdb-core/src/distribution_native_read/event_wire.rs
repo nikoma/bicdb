@@ -266,6 +266,14 @@ mod tests {
             serde_json::to_value(NativeEventValue::Present { value: Value::Null }).unwrap();
         let absent = serde_json::to_value(NativeEventValue::Absent).unwrap();
         assert_ne!(present, absent);
+        assert!(serde_json::from_value::<NativeEventValue>(
+            serde_json::json!({"presence":"present"})
+        )
+        .is_err());
+        assert!(serde_json::from_value::<NativeEventValue>(
+            serde_json::json!({"presence":"absent","value":null})
+        )
+        .is_err());
     }
     #[test]
     fn native_event_get_explicit_strong_rejects_legacy_and_foreign_correlation_projection() {

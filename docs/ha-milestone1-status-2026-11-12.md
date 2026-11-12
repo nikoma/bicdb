@@ -67,6 +67,34 @@ All three aac workspace/all-target and isolated no-default consumer compilation
 jobs passed. They do not change either failed cohort's classification, and do
 not validate the later test-only successor or subsequent composition.
 
+The [first aac receipt](evidence/native-writer-registry-first-aac-2026-11-12/README.md)
+retains all 54 strict journal records, distinct failed-command/stopped-state
+chronology, actual binary identity and separate fixture custody. Its portable
+and private checks, including four semantic tamper cases, passed independently
+at integration. They verify retained bytes and consistency, not engine replay
+or independent physical qualification.
+
+Hot owned-member correction `f5b419100beadaece29c3b3dcb85f88f6fd226a4`
+(integration `56f9a3c999fba329c349d3e6dda664dcfb64e4c6`) waits for the two short
+metadata borrows under the minimum of the original MQ expiry and caller
+deadline/cancellation, with the original final proof-current check intact.
+Cold-member and other service-lock paths are unchanged. Its two genuine mutex
+controls and the separate actual-TLS expired-delivery control **did not execute**
+in the first 56f Core jobs: three snapshot calls used a nonexistent `BicDb::scan`
+API and failed compilation. [Exact failed-build receipt](evidence/native-writer-registry-first-aac-2026-11-12/FAILED-BUILD-56f.md).
+Test-only correction `626736598093281a440ca500794846f9373bcb4c` uses the real
+`scan_collection` API without changing assertions. Earlier passing controls
+cannot validate this corrected source.
+
+The [correlated observer diagnostic](design/native-ready-peer-deadline-diagnostic.md)
+adds test-only peer budgets, receiver validation phases and actual operation-exit
+traces. Its first composition `be85db58c1c4f54b13372a9a966794d146d31722`
+also failed test compilation on those same three snapshot calls, before any
+observer telemetry or recovery test ran. No receiver-cost attribution or
+activation success follows. Corrected composition and final versioned-head
+regressions remain required; the original full positive's acceptance child is
+byte-identical to 883.
+
 The registry repair has a [retained-writer design contract](design/native-retained-writer-registry-refresh-contract.md)
 and a source-reviewed implementation in the unmerged candidate. Its companion
 learner change publishes the actual observed schema identity with the registered

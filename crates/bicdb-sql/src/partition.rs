@@ -704,11 +704,42 @@ pub(crate) fn validate_attachment(
 
 /// Validate an already attached forest without treating each child as a new
 /// attachment. Exact identities and every sibling bound are preflighted.
+pub(crate) fn validate_definition(schema: &TableSchema) -> Result<()> {
+    let Some(partitioning) = &schema.partitioning else {
+        return Ok(());
+    };
+    let covers = |columns: &[String]| {
+        partitioning
+            .key_columns
+            .iter()
+            .all(|key| columns.contains(key))
+    };
+    if !schema.has_hidden_primary_key() && !covers(&primary_key_columns_for_schema(schema)) {
+        return Err(SqlError::Unsupported(
+            "unique constraint on partitioned table must include all partitioning columns".into(),
+        ));
+    }
+    for constraint in &schema.constraints {
+        if let ConstraintSchema::Unique { columns, .. }
+        | ConstraintSchema::UniqueWithNullPolicy { columns, .. } = constraint
+        {
+            if !covers(columns) {
+                return Err(SqlError::Unsupported(
+                    "unique constraint on partitioned table must include all partitioning columns"
+                        .into(),
+                ));
+            }
+        }
+    }
+    Ok(())
+}
+
 pub(crate) fn validate_existing_tree(db: &BicDb, schemas: &[TableSchema]) -> Result<()> {
     for parent in schemas
         .iter()
         .filter(|schema| schema.partitioning.is_some())
     {
+        validate_definition(parent)?;
         let children = schemas
             .iter()
             .filter(|child| {

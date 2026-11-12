@@ -222,6 +222,13 @@ fn gather(db: &BicDb) -> Result<Snapshot> {
     scan(db, TRIGGER_COLLECTION, |raw| {
         let trigger: TriggerSchema = serde_json::from_value(raw.metadata.clone())?;
         if nodes.contains_key(&trigger.table_name) {
+            retained_bytes =
+                retained_bytes.saturating_add(serde_json::to_vec(&raw)?.len().saturating_mul(4));
+            if retained_bytes > db.query_work_memory_bytes() {
+                return Err(required(
+                    "inspection trigger metadata exceeds configured work memory",
+                ));
+            }
             hash_item(&mut hasher, (&raw.id, &raw))?;
             triggers.push(raw);
         }
@@ -244,6 +251,14 @@ fn gather(db: &BicDb) -> Result<Snapshot> {
                     .schema,
             );
             if stored != historical {
+                retained_bytes = retained_bytes
+                    .saturating_add(serde_json::to_vec(&stored)?.len().saturating_mul(4))
+                    .saturating_add(serde_json::to_vec(&historical)?.len().saturating_mul(4));
+                if retained_bytes > db.query_work_memory_bytes() {
+                    return Err(required(
+                        "inspection policy report exceeds configured work memory",
+                    ));
+                }
                 conflicts.push(PartitionPolicyConflict {
                     relation: node.schema.name.clone(),
                     stored,
@@ -528,9 +543,19 @@ pub fn apply_partition_upgrade(
     // Preflight every proposed destination and primary-key collision before
     // activating the sticky fence. Never collapse two acknowledged records.
     let mut destinations = BTreeSet::new();
+    let mut destination_bytes = 0usize;
     for source in snapshot.nodes.values() {
         scan(db, &source.schema.name, |row| {
             if let Some(target) = planned_destination(db, &snapshot, source, &row, &relocations)? {
+                destination_bytes = destination_bytes
+                    .saturating_add(target.len())
+                    .saturating_add(row.id.len())
+                    .saturating_add(128);
+                if destination_bytes > db.query_work_memory_bytes() {
+                    return Err(required(
+                        "upgrade destination plan exceeds configured work memory",
+                    ));
+                }
                 if target == source.schema.name
                     || !destinations.insert((target.clone(), row.id.clone()))
                 {
@@ -628,4 +653,40 @@ pub fn apply_partition_upgrade(
         sql_schema_cache_set(db, &schema.name, Some(Arc::new(schema.clone())));
     }
     Ok(applied)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn legacy_constraint_preflight_matches_native_pg_before_fence_or_publication() {
+        for mode in [
+            bicdb_core::StorageMode::EmbeddedMemory,
+            bicdb_core::StorageMode::ServerPaged,
+        ] {
+            for ddl in [
+                "CREATE TABLE p(k INT PRIMARY KEY,payload TEXT) PARTITION BY RANGE(payload)",
+                "CREATE TABLE p(k INT,payload TEXT,UNIQUE(payload)) PARTITION BY RANGE(k)",
+            ] {
+                let root = tempfile::tempdir().unwrap();
+                let mut db = BicDb::open_with_config(
+                    root.path(),
+                    bicdb_core::DbConfig::default()
+                        .with_storage_mode(mode.clone())
+                        .with_fsync(true)
+                        .with_paged_buffer_pool_bytes(8 * 1024 * 1024),
+                )
+                .unwrap();
+                // This models metadata accepted by the preceding parser. Real
+                // old-binary row/policy fixtures are qualified independently.
+                SqlSession::new(&mut db).execute(ddl).unwrap();
+                let before = db.collection_generation(SCHEMA_COLLECTION);
+                let error = apply_partition_upgrade(&mut db, None).unwrap_err();
+                assert_eq!(error.sqlstate(), "0A000");
+                assert!(!db.sql_partition_execution_feature_active());
+                assert_eq!(db.collection_generation(SCHEMA_COLLECTION), before);
+                db.close().unwrap();
+            }
+        }
+    }
 }

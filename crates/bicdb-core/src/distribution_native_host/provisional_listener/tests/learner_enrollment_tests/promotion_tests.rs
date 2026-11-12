@@ -361,3 +361,5 @@ fn native_metadata_promotion_pending_entry_and_held_ack_cannot_cross_actual_lead
     host.shutdown().unwrap();
     f.shutdown();
 }
+
+mod stale_seed_tests;

@@ -1031,14 +1031,25 @@ fn prepared_regclass_metadata_tracks_the_live_path_and_created_partition_parent(
 fn prepared_partition_index_metadata_keeps_the_owner_after_rename_and_parent_creation() {
     for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
         let root = tempfile::tempdir().unwrap();
-        let config = DbConfig::default().with_fsync(true).with_storage_mode(mode.clone());
+        let config = DbConfig::default()
+            .with_fsync(true)
+            .with_storage_mode(mode.clone());
         let mut db = BicDb::open_with_config(root.path(), config.clone()).unwrap();
         SqlSession::new(&mut db).execute("CREATE SCHEMA adempiere; CREATE TABLE adempiere.source(item_key INT PRIMARY KEY,payload TEXT); CREATE INDEX source_payload_idx ON adempiere.source(payload); INSERT INTO adempiere.source VALUES(1,'acknowledged')").unwrap();
         bicdb_sql::initialize_rename_journal_identities(&mut db).unwrap();
         let shared = Arc::new(RwLock::new(db));
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         let address = listener.local_addr().unwrap();
-        let server = PgWireServer::open_with_shared(root.path(), PgWireConfig { fsync: true, automatic_paged_checkpoint: false, ..Default::default() }, Arc::clone(&shared)).unwrap();
+        let server = PgWireServer::open_with_shared(
+            root.path(),
+            PgWireConfig {
+                fsync: true,
+                automatic_paged_checkpoint: false,
+                ..Default::default()
+            },
+            Arc::clone(&shared),
+        )
+        .unwrap();
         let serving = Arc::clone(&server);
         let task = thread::spawn(move || bicdb_pgwire::serve_existing_listener(serving, listener));
         let mut owner = connect(address);
@@ -1047,44 +1058,95 @@ fn prepared_partition_index_metadata_keeps_the_owner_after_rename_and_parent_cre
             assert!(codes(&query(&mut owner,"SET search_path=adempiere; BEGIN; ALTER TABLE source RENAME TO source_default_partition; CREATE TABLE source(item_key INT,payload TEXT) PARTITION BY LIST(item_key)")).is_empty());
             let mut parse = b"partition_indexes\0".to_vec();
             parse.extend_from_slice(b"SELECT indexname,indexdef FROM pg_indexes WHERE schemaname='adempiere' AND tablename=$1");
-            parse.push(0); parse.extend_from_slice(&0i16.to_be_bytes());
-            send(&mut owner,b'P',&parse);send(&mut owner,b'S',&[]);
+            parse.push(0);
+            parse.extend_from_slice(&0i16.to_be_bytes());
+            send(&mut owner, b'P', &parse);
+            send(&mut owner, b'S', &[]);
             assert!(codes(&ready(&mut owner)).is_empty());
-            let response = describe(&mut owner,"partition_indexes");
-            assert!(codes(&response).is_empty(),"{mode} statement Describe: {response:?}");
-            let header=&response.iter().find(|(tag,_)|*tag==b'T').unwrap().1;
-            assert_eq!(i16::from_be_bytes(header[..2].try_into().unwrap()),2);
-            let mut offset=2;
-            for expected_oid in [19u32,25] {
-                offset+=header[offset..].iter().position(|byte|*byte==0).unwrap()+1;
-                assert_eq!(u32::from_be_bytes(header[offset+6..offset+10].try_into().unwrap()),expected_oid);
-                offset+=18;
+            let response = describe(&mut owner, "partition_indexes");
+            assert!(
+                codes(&response).is_empty(),
+                "{mode} statement Describe: {response:?}"
+            );
+            let header = &response.iter().find(|(tag, _)| *tag == b'T').unwrap().1;
+            assert_eq!(i16::from_be_bytes(header[..2].try_into().unwrap()), 2);
+            let mut offset = 2;
+            for expected_oid in [19u32, 25] {
+                offset += header[offset..].iter().position(|byte| *byte == 0).unwrap() + 1;
+                assert_eq!(
+                    u32::from_be_bytes(header[offset + 6..offset + 10].try_into().unwrap()),
+                    expected_oid
+                );
+                offset += 18;
             }
-            let mut bind=b"index_portal\0partition_indexes\0".to_vec();
-            bind.extend_from_slice(&0i16.to_be_bytes());bind.extend_from_slice(&1i16.to_be_bytes());
-            let name=b"source_default_partition";bind.extend_from_slice(&(name.len() as i32).to_be_bytes());bind.extend_from_slice(name);bind.extend_from_slice(&0i16.to_be_bytes());
-            send(&mut owner,b'B',&bind);send(&mut owner,b'S',&[]);assert!(codes(&ready(&mut owner)).is_empty());
-            send(&mut owner,b'D',b"Pindex_portal\0");send(&mut owner,b'S',&[]);assert!(codes(&ready(&mut owner)).is_empty());
-            let mut execute=b"index_portal\0".to_vec();execute.extend_from_slice(&0i32.to_be_bytes());
-            send(&mut owner,b'E',&execute);send(&mut owner,b'S',&[]);let result=ready(&mut owner);
-            assert!(codes(&result).is_empty(),"{mode} Execute: {result:?}");
-            assert_eq!(result.iter().filter(|(tag,_)|*tag==b'D').count(),2);
+            let mut bind = b"index_portal\0partition_indexes\0".to_vec();
+            bind.extend_from_slice(&0i16.to_be_bytes());
+            bind.extend_from_slice(&1i16.to_be_bytes());
+            let name = b"source_default_partition";
+            bind.extend_from_slice(&(name.len() as i32).to_be_bytes());
+            bind.extend_from_slice(name);
+            bind.extend_from_slice(&0i16.to_be_bytes());
+            send(&mut owner, b'B', &bind);
+            send(&mut owner, b'S', &[]);
+            assert!(codes(&ready(&mut owner)).is_empty());
+            send(&mut owner, b'D', b"Pindex_portal\0");
+            send(&mut owner, b'S', &[]);
+            assert!(codes(&ready(&mut owner)).is_empty());
+            let mut execute = b"index_portal\0".to_vec();
+            execute.extend_from_slice(&0i32.to_be_bytes());
+            send(&mut owner, b'E', &execute);
+            send(&mut owner, b'S', &[]);
+            let result = ready(&mut owner);
+            assert!(codes(&result).is_empty(), "{mode} Execute: {result:?}");
+            assert_eq!(result.iter().filter(|(tag, _)| *tag == b'D').count(), 2);
             // Static descriptors expose no rows. Execution by a foreign owner
             // must retain the exact affected-catalog fence.
             assert_eq!(codes(&query(&mut other,"SELECT indexname,indexdef FROM pg_indexes WHERE schemaname='adempiere' AND tablename='source_default_partition'")),vec!["40001"]);
-            prepare(&mut owner,"all_indexes","SELECT * FROM pg_catalog.pg_indexes WHERE 1=0");
-            let response=describe(&mut owner,"all_indexes");
-            assert_eq!(i16::from_be_bytes(response.iter().find(|(tag,_)|*tag==b'T').unwrap().1[..2].try_into().unwrap()),5);
-            assert!(codes(&query(&mut owner,"ROLLBACK")).is_empty());
-            assert_eq!(value(&query(&mut other,"SELECT payload FROM adempiere.source WHERE item_key=1")),Some("acknowledged".into()));
+            prepare(
+                &mut owner,
+                "all_indexes",
+                "SELECT * FROM pg_catalog.pg_indexes WHERE 1=0",
+            );
+            let response = describe(&mut owner, "all_indexes");
+            assert_eq!(
+                i16::from_be_bytes(
+                    response.iter().find(|(tag, _)| *tag == b'T').unwrap().1[..2]
+                        .try_into()
+                        .unwrap()
+                ),
+                5
+            );
+            assert!(codes(&query(&mut owner, "ROLLBACK")).is_empty());
+            assert_eq!(
+                value(&query(
+                    &mut other,
+                    "SELECT payload FROM adempiere.source WHERE item_key=1"
+                )),
+                Some("acknowledged".into())
+            );
         }));
-        for stream in [&mut owner,&mut other] {send(stream,b'X',&[]);}
-        drop(owner);drop(other);server.request_shutdown();task.join().unwrap().unwrap();drop(server);
-        let mut db=Arc::try_unwrap(shared).unwrap().into_inner();db.close().unwrap();
-        if let Err(error)=outcome {std::panic::resume_unwind(error);}
+        for stream in [&mut owner, &mut other] {
+            send(stream, b'X', &[]);
+        }
+        drop(owner);
+        drop(other);
+        server.request_shutdown();
+        task.join().unwrap().unwrap();
+        drop(server);
+        let mut db = Arc::try_unwrap(shared).unwrap().into_inner();
+        db.close().unwrap();
+        if let Err(error) = outcome {
+            std::panic::resume_unwind(error);
+        }
         for _ in 0..2 {
-            let mut db=BicDb::open_with_config(root.path(),config.clone()).unwrap();
-            assert_eq!(SqlSession::new(&mut db).execute("SELECT payload FROM adempiere.source WHERE item_key=1").unwrap().rows,vec![vec![bicdb_sql::SqlValue::String("acknowledged".into())]]);
+            let mut db = BicDb::open_with_config(root.path(), config.clone()).unwrap();
+            assert_eq!(
+                SqlSession::new(&mut db)
+                    .execute("SELECT payload FROM adempiere.source WHERE item_key=1")
+                    .unwrap()
+                    .rows,
+                vec![vec![bicdb_sql::SqlValue::String("acknowledged".into())]]
+            );
             db.close().unwrap();
         }
     }

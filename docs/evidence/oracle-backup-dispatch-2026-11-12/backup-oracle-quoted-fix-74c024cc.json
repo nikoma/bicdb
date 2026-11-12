@@ -1,0 +1,28 @@
+{
+  "source": "74c024ccbaa39882d7616af8b5c27da3ece660fb",
+  "scope": "Dialect-aware backup dispatch fix plus actual start/status/cancel/restore on PostgreSQL and Oracle, preserving quoted identifier semantics and superuser/transaction restrictions. Reproducer is pinned to old implementation; wait for that exact process before source switch.",
+  "started_unix": 1794462494.9391227,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-pgwire",
+        "--test",
+        "online_backups",
+        "--",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794462494.9392633,
+      "exit": 101,
+      "finished_unix": 1794462519.1264334
+    }
+  ],
+  "status": "failed",
+  "finished_unix": 1794462519.1320434
+}

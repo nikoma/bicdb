@@ -1,0 +1,30 @@
+{
+  "source": "4950d69df7cc5d78cf3b469f4d60902f743cabdf",
+  "scope": "Source481 production dispatcher with corrected agent fixture startup option. Previous44683 and74c tests failed at omitted Oracle startup profile before SQL execution; retained as fixture failures. Actual full main481 UI execution already proves quoted function dispatch failure.",
+  "started_unix": 1794462586.7356014,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-pgwire",
+        "--test",
+        "online_backups",
+        "backup_control_survives_oracle_identifier_rewriting_and_postgres_quoting",
+        "--",
+        "--exact",
+        "--nocapture"
+      ],
+      "started_unix": 1794462586.7358232,
+      "exit": 101,
+      "finished_unix": 1794462602.1214502
+    }
+  ],
+  "status": "failed",
+  "finished_unix": 1794462602.121686
+}

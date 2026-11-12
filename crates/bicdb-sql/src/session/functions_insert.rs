@@ -629,6 +629,10 @@ impl<'db> SqlSession<'db> {
             drop_function.drop_behavior,
             Some(sqlparser::ast::DropBehavior::Cascade)
         );
+        // Resolve every requested function before checking dependencies or
+        // mutating any catalog. PostgreSQL reports a missing later function
+        // without deleting an earlier function or disarming its triggers.
+        let mut requested = Vec::new();
         for desc in &drop_function.func_desc {
             // Match CREATE's routine keys; table relation encoding is separate.
             let name = normalize_object_name(&object_name(&desc.name)?);
@@ -646,6 +650,10 @@ impl<'db> SqlSession<'db> {
                     "function \"{desc}\" does not exist"
                 )));
             };
+            requested.push((name, routine));
+        }
+        let mut prepared = Vec::new();
+        for (name, routine) in requested {
             let dependents = list_user_types(self.db_ref())?
                 .into_iter()
                 .filter(|user_type| base_type_uses_routine(user_type, &name))
@@ -664,6 +672,15 @@ impl<'db> SqlSession<'db> {
                     operator.id.display()
                 )));
             }
+            let triggers = self.routine_trigger_dependencies(&routine)?;
+            if !cascade && !triggers.is_empty() {
+                return Err(SqlError::dependent_objects_still_exist(format!(
+                    "cannot drop function {name} because triggers depend on it"
+                )));
+            }
+            prepared.push((routine, dependents, operators, triggers));
+        }
+        for (routine, dependents, operators, triggers) in prepared {
             if cascade && !operators.is_empty() {
                 let ids = operators
                     .iter()
@@ -678,7 +695,11 @@ impl<'db> SqlSession<'db> {
                 }
             }
             // CASCADE can already have removed the function with its type.
-            self.delete_session_routine(&routine)?;
+            if triggers.is_empty() {
+                self.delete_session_routine(&routine)?;
+            } else {
+                self.drop_routine_with_trigger_dependencies(&routine, &triggers)?;
+            }
         }
         Ok(SqlResult::command("DROP FUNCTION"))
     }

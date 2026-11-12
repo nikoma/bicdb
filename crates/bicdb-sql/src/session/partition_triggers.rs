@@ -107,6 +107,17 @@ impl SqlSession<'_> {
                         }
                     }
                 }
+                ROUTINE_COLLECTION => {
+                    if let Some(record) = record {
+                        let routine: RoutineSchema =
+                            serde_json::from_value(record.metadata.clone())?;
+                        if routine_storage_key(&routine) != *id {
+                            return Err(SqlError::InvalidSql(
+                                "routine catalog identity mismatch".into(),
+                            ));
+                        }
+                    }
+                }
                 _ => {
                     return Err(SqlError::InvalidSql(
                         "invalid partition catalog target".into(),
@@ -168,6 +179,74 @@ impl SqlSession<'_> {
                 .map(|entry| (entry.collection, entry.id, entry.previous))
                 .collect(),
             false,
+        )
+    }
+
+    /// Match the function object the existing trigger executor resolves,
+    /// rather than treating another overload with the same name as its owner.
+    pub(crate) fn routine_trigger_dependencies(
+        &self,
+        routine: &RoutineSchema,
+    ) -> Result<Vec<TriggerSchema>> {
+        let mut dependencies = Vec::new();
+        for trigger in list_triggers(self.db_ref())? {
+            let Some(bound) =
+                load_routine(self.db_ref(), RoutineKind::Function, &trigger.function_name)?
+            else {
+                continue;
+            };
+            if bound.schema == routine.schema
+                && routine_storage_key(&bound) == routine_storage_key(routine)
+                && catalog_routine_oid(&bound) == catalog_routine_oid(routine)
+            {
+                dependencies.push(trigger);
+            }
+        }
+        Ok(dependencies)
+    }
+
+    /// Publish a function deletion and all its dependent trigger records in
+    /// one Native transaction, retaining exact raw catalog records for undo.
+    pub(crate) fn drop_routine_with_trigger_dependencies(
+        &mut self,
+        routine: &RoutineSchema,
+        triggers: &[TriggerSchema],
+    ) -> Result<()> {
+        let mut changes = BTreeMap::new();
+        for trigger in triggers {
+            changes.insert(
+                (
+                    TRIGGER_COLLECTION,
+                    trigger_key(&trigger.table_name, &trigger.name),
+                ),
+                None,
+            );
+        }
+        changes.insert((ROUTINE_COLLECTION, routine_storage_key(routine)), None);
+        if routine.overload.is_none() {
+            if let Some(next) = routines_named(self.db_ref(), routine.kind, &routine.name)?
+                .into_iter()
+                .find(|other| other.overload.is_some())
+            {
+                changes.insert((ROUTINE_COLLECTION, routine_storage_key(&next)), None);
+                let mut promoted = next.clone();
+                promoted.catalog_oid = Some(catalog_routine_oid(&next));
+                promoted.overload = None;
+                let mut metadata = serde_json::to_value(&promoted)?;
+                metadata["catalog_oid"] = serde_json::json!(catalog_routine_oid(&promoted));
+                let id = routine_storage_key(&promoted);
+                changes.insert(
+                    (ROUTINE_COLLECTION, id.clone()),
+                    Some(Record::new(id).with_metadata(metadata)),
+                );
+            }
+        }
+        self.publish_partition_catalog(
+            changes
+                .into_iter()
+                .map(|((collection, id), record)| (collection, id, record))
+                .collect(),
+            true,
         )
     }
 

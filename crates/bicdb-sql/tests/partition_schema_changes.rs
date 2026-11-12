@@ -137,3 +137,97 @@ fn savepoint_and_full_rollback_restore_the_complete_partition_type_transition() 
         db.close().unwrap();
     }
 }
+
+#[test]
+fn parent_added_defaults_and_generated_values_reach_both_leaves_atomically() {
+    for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
+        let root = tempfile::tempdir().unwrap();
+        let cfg = config(mode);
+        let mut db = BicDb::open_with_config(root.path(), cfg.clone()).unwrap();
+        setup(&mut db, "20");
+        for ddl in [
+            "ALTER TABLE p ADD COLUMN note TEXT DEFAULT 'new' NOT NULL",
+            "ALTER TABLE p ADD COLUMN doubled INT GENERATED ALWAYS AS(qty*2) STORED",
+        ] {
+            let before = db.current_commit_seq();
+            SqlSession::new(&mut db).execute(ddl).unwrap();
+            assert_eq!(db.current_commit_seq() - before, 1);
+        }
+        for _ in 0..2 {
+            check_sql_partition_admission(&db).unwrap();
+            assert_eq!(
+                SqlSession::new(&mut db)
+                    .execute("SELECT k,note,doubled FROM p ORDER BY k")
+                    .unwrap()
+                    .rows,
+                vec![
+                    vec![
+                        SqlValue::Int(2),
+                        SqlValue::String("new".into()),
+                        SqlValue::Int(6)
+                    ],
+                    vec![
+                        SqlValue::Int(12),
+                        SqlValue::String("new".into()),
+                        SqlValue::Int(8)
+                    ],
+                ]
+            );
+            db.close().unwrap();
+            db = BicDb::open_with_config(root.path(), cfg.clone()).unwrap();
+        }
+        db.close().unwrap();
+    }
+}
+
+#[test]
+fn failed_partition_add_not_null_preserves_rows_schema_and_commit_sequence() {
+    for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open_with_config(root.path(), config(mode)).unwrap();
+        setup(&mut db, "20");
+        let before = raw_snapshot(&db);
+        let sequence = db.current_commit_seq();
+        assert_eq!(
+            SqlSession::new(&mut db)
+                .execute("ALTER TABLE p ADD COLUMN required TEXT NOT NULL")
+                .unwrap_err()
+                .sqlstate(),
+            "23502"
+        );
+        assert_eq!(db.current_commit_seq(), sequence);
+        assert_eq!(raw_snapshot(&db), before);
+        check_sql_partition_admission(&db).unwrap();
+        db.close().unwrap();
+    }
+}
+
+#[test]
+fn rollback_of_added_partition_default_restores_all_raw_rows_and_descriptors() {
+    for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
+        let root = tempfile::tempdir().unwrap();
+        let cfg = config(mode);
+        let mut db = BicDb::open_with_config(root.path(), cfg.clone()).unwrap();
+        setup(&mut db, "20");
+        let before = raw_snapshot(&db);
+        let mut sql = SqlSession::new(&mut db);
+        sql.execute("BEGIN").unwrap();
+        sql.execute("ALTER TABLE p ADD COLUMN note TEXT DEFAULT 'new'")
+            .unwrap();
+        assert_eq!(
+            sql.execute("SELECT COUNT(*) FROM p WHERE note='new'")
+                .unwrap()
+                .rows,
+            vec![vec![SqlValue::Int(2)]]
+        );
+        sql.execute("ROLLBACK").unwrap();
+        drop(sql);
+        for _ in 0..2 {
+            check_sql_partition_admission(&db).unwrap();
+            assert_eq!(raw_snapshot(&db), before);
+            db.close().unwrap();
+            db = BicDb::open_with_config(root.path(), cfg.clone()).unwrap();
+        }
+        db.close().unwrap();
+    }
+}

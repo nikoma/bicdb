@@ -1174,8 +1174,19 @@ impl<'db> SqlSession<'db> {
             schema.row_array_type_oid = Some(schema.row_array_type_oid());
         }
         let mut schema_dirty = false;
+        let mut partition_columns_published = true;
 
         for operation in &alter_table.operations {
+            if !matches!(
+                operation,
+                AlterTableOperation::AddColumn { .. }
+                    | AlterTableOperation::AlterColumn {
+                        op: AlterColumnOperation::SetDataType { .. },
+                        ..
+                    }
+            ) {
+                partition_columns_published = false;
+            }
             match operation {
                 AlterTableOperation::AddColumn {
                     column_def,
@@ -1186,6 +1197,16 @@ impl<'db> SqlSession<'db> {
                     if !*if_not_exists || schema.column(&ident_value(&column_def.name)).is_none() {
                         self.ensure_table_row_type_change_allowed(&schema)?;
                     }
+                    if schema.partitioning.is_some()
+                        && self.alter_partition_add_column(
+                            &mut schema,
+                            column_def,
+                            *if_not_exists,
+                        )?
+                    {
+                        continue;
+                    }
+                    partition_columns_published = false;
                     self.capture_table_state_undo(&table, &schema)?;
                     if !self.alter_table_add_generated_column(
                         &table,
@@ -1592,7 +1613,7 @@ impl<'db> SqlSession<'db> {
                 }
             }
         }
-        if schema.partitioning.is_some() {
+        if schema.partitioning.is_some() && !partition_columns_published {
             sync_partition_children_from_parent(self.db_mut()?, &schema)?;
         }
         Ok(SqlResult::command("ALTER TABLE"))
@@ -1829,7 +1850,7 @@ impl<'db> SqlSession<'db> {
         self.validate_planned_alter_foreign_keys(&planned)?;
 
         if schema.partitioning.is_some() {
-            self.publish_partition_type_change(&planned)?;
+            self.publish_partition_schema_change(&planned)?;
             *schema = updated_parent;
             return Ok(());
         }

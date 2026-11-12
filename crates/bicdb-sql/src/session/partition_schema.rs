@@ -8,7 +8,92 @@ pub(crate) struct TableState {
 }
 
 impl SqlSession<'_> {
-    pub(super) fn publish_partition_type_change(
+    pub(super) fn alter_partition_add_column(
+        &mut self,
+        schema: &mut TableSchema,
+        definition: &ColumnDef,
+        if_not_exists: bool,
+    ) -> Result<bool> {
+        if serial_type(&definition.data_type).is_some() || identity_options(definition)?.is_some() {
+            return Ok(false);
+        }
+        let mut column = column_schema_from_def(self.db_ref(), definition)?;
+        self.ensure_user_type_usage(column.user_type.as_ref())?;
+        if schema.column(&column.name).is_some() {
+            if if_not_exists {
+                return Ok(true);
+            }
+            return Err(SqlError::InvalidSql(format!(
+                "column \"{}\" of relation \"{}\" already exists",
+                column.name, schema.name
+            )));
+        }
+        column.default_value = column_default_value(definition)?;
+        let constraints = column_constraints_from_def(
+            &schema.name,
+            definition,
+            &column,
+            oracle::default_unique_null_policy(self.db_ref())?,
+        )?;
+        self.require_reference_privilege(&schema.name, &constraints)?;
+        let mut parent = schema.clone();
+        parent.add_column(column.clone());
+        parent.constraints.extend(constraints.clone());
+        partition::validate_definition(&parent)?;
+        for constraint in &constraints {
+            validate_constraint_columns(self.db_ref(), &parent.name, &parent, constraint)?;
+        }
+        let mut changes = vec![(schema.clone(), parent.clone())];
+        let candidates = list_schemas_raw(self.db_ref())?;
+        let mut cursor = 0;
+        while cursor < changes.len() {
+            let parent_name = changes[cursor].0.name.clone();
+            for child in candidates.iter().filter(|child| {
+                child
+                    .partition_of
+                    .as_ref()
+                    .is_some_and(|link| link.parent_table == parent_name)
+            }) {
+                let mut updated = child.clone();
+                updated.add_column(column.clone());
+                updated.constraints.extend(constraints.clone());
+                changes.push((child.clone(), updated));
+            }
+            cursor += 1;
+        }
+        let mut planned = Vec::with_capacity(changes.len());
+        for (previous, updated) in changes {
+            let mut records = self.db_ref().scan_collection(&previous.name)?;
+            for record in &mut records {
+                let value = if let Some(expression) = &column.generated_expr {
+                    let expression = Self::parse_default_expr(expression)?;
+                    self.eval_target_record_expr(
+                        &updated.name,
+                        &updated.name,
+                        &updated,
+                        record,
+                        &expression,
+                    )?
+                    .ok_or_else(|| {
+                        SqlError::Unsupported("unsupported generated column expression".into())
+                    })?
+                } else {
+                    self.default_value_for_column(Some(&updated), &column.name)?
+                        .unwrap_or(SqlValue::Null)
+                };
+                let value = cast_value_to_column_type(value, &column)?;
+                set_record_column(record, Some(&updated), &column.name, value)?;
+            }
+            self.validate_planned_alter_record_constraints(&updated, &records)?;
+            planned.push((previous, updated, records));
+        }
+        self.validate_planned_alter_foreign_keys(&planned)?;
+        self.publish_partition_schema_change(&planned)?;
+        *schema = parent;
+        Ok(true)
+    }
+
+    pub(super) fn publish_partition_schema_change(
         &mut self,
         planned: &[(TableSchema, TableSchema, Vec<Record>)],
     ) -> Result<()> {

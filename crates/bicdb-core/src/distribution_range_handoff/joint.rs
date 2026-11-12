@@ -36,10 +36,11 @@ pub(crate) use committed::CommittedNativeJointDecisionObservation;
 
 mod bridge;
 pub(crate) use bridge::{
-    NativeJointActivationAdmission, NativeJointOpenAdmission,
-    NativeJointPreparedServingObservation, NativeJointPreparedServingQuorum,
-    NativeJointPreparedServingRound, NativeJointPreparedServingVoteData,
-    NativeJointPublishedServingQuorum, NativeJointServingPublicationRound,
+    NativeJointActivationAdmission, NativeJointOpenAdmission, NativeJointPreparationPhaseQuorum,
+    NativeJointPreparationPhaseRound, NativeJointPreparedServingObservation,
+    NativeJointPreparedServingQuorum, NativeJointPreparedServingRound,
+    NativeJointPreparedServingVoteData, NativeJointPublishedServingQuorum,
+    NativeJointServingPublicationRound,
 };
 
 #[cfg(test)]

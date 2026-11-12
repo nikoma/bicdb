@@ -208,6 +208,18 @@ impl HostMetadataReadObservation {
             cancellation,
         })
     }
+    /// Historical audit check only: does not make an expired observation
+    /// live or expose its contents as current metadata authority.
+    pub(crate) fn require_historical_request_not_canceled(&self, business: Uuid) -> Result<()> {
+        crate::query_budget::check()?;
+        if self.cancellation.is_cancel_requested() {
+            return Err(crate::BicDbError::QueryCanceled);
+        }
+        if business != self.response.request.read_request_id {
+            return Err(metadata_error("historical host metadata request changed"));
+        }
+        Ok(())
+    }
     pub(crate) fn require_live_request(&self, business: Uuid) -> Result<()> {
         self.cancellation.check()?;
         if business != self.response.request.read_request_id || Instant::now() >= self.deadline {

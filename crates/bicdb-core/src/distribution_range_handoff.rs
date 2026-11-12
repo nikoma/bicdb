@@ -20,6 +20,7 @@ pub(crate) use joint::{
     NativeJointHandoffRuntime, NativeJointMaterializedFacts, NativeJointMaterializedQuorums,
     NativeJointNewObservation, NativeJointNewRound, NativeJointOldClosedQuorum,
     NativeJointOldObservation, NativeJointOldRound, NativeJointOpenAdmission,
+    NativeJointPreparationPhaseQuorum, NativeJointPreparationPhaseRound,
     NativeJointPreparedDecision, NativeJointPreparedServingObservation,
     NativeJointPreparedServingQuorum, NativeJointPreparedServingRound,
     NativeJointPreparedServingVoteData, NativeJointPublishedServingQuorum,

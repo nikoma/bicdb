@@ -7,7 +7,9 @@ use parking_lot::Mutex;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
+mod phase;
 mod publication;
+pub(crate) use phase::{NativeJointPreparationPhaseQuorum, NativeJointPreparationPhaseRound};
 pub(crate) use publication::{
     NativeJointOpenAdmission, NativeJointPublishedServingQuorum, NativeJointServingPublicationRound,
 };
@@ -48,6 +50,7 @@ impl NativeJointPreparedServingObservation {
 }
 
 pub(crate) struct NativeJointPreparedServingRound {
+    caller: crate::CancellationToken,
     data: NativeJointDecisionData,
     observations: BTreeMap<ClusterNodeId, Arc<NativeJointPreparedServingObservation>>,
     cancellation: crate::CancellationToken,
@@ -64,6 +67,7 @@ impl NativeJointPreparedServingRound {
         let cancellation = parent.child_with_deadline(first.actual.committed().deadline());
         cancellation.check()?;
         let mut round = Self {
+            caller: parent.child(),
             data: first.data().clone(),
             observations: BTreeMap::new(),
             cancellation,
@@ -126,6 +130,7 @@ impl NativeJointPreparedServingRound {
             ));
         }
         let quorum = NativeJointPreparedServingQuorum {
+            caller: self.caller,
             data: self.data,
             observations: self.observations,
             cancellation: self.cancellation,
@@ -138,11 +143,23 @@ impl NativeJointPreparedServingRound {
 /// Actual NEW materialized/prepared quorum, still not a serving grant. The
 /// original deadlines and owned physical freezes/pins remain retained.
 pub(crate) struct NativeJointPreparedServingQuorum {
+    caller: crate::CancellationToken,
     data: NativeJointDecisionData,
     observations: BTreeMap<ClusterNodeId, Arc<NativeJointPreparedServingObservation>>,
     cancellation: crate::CancellationToken,
 }
 impl NativeJointPreparedServingQuorum {
+    fn require_original_caller(&self) -> Result<()> {
+        self.caller.check()?;
+        if self.cancellation.is_cancel_requested() {
+            return Err(crate::BicDbError::QueryCanceled);
+        }
+        Ok(())
+    }
+    #[cfg(test)]
+    pub(crate) fn test_cancel_original_quorum(&self) {
+        self.cancellation.cancel();
+    }
     #[cfg(test)]
     pub(crate) fn test_original_budget_remaining_ms(
         &self,
@@ -182,6 +199,15 @@ impl NativeJointPreparedServingQuorum {
     /// This does NOT release a freeze, clear a promise or activate a catalogue.
     pub(super) fn release_read_pins_for_activation(&self) -> Result<()> {
         self.require_current()?;
+        let mut released = true;
+        for observation in self.observations.values() {
+            released &= observation.actual.read_pin_already_released()?;
+        }
+        if released {
+            // Idempotent path: still revalidate the ENTIRE actual set before
+            // and after. None cannot become Some on these same observations.
+            return self.require_current();
+        }
         for observation in self.observations.values() {
             observation.release_read_pin()?;
         }
@@ -205,6 +231,7 @@ pub(crate) struct NativeJointPreparedServingVoteData {
 /// The only native bridge publisher. Construction performs a real fresh Host
 /// MQ AFTER collection and retains the actual quorum and original deadlines.
 pub(crate) struct NativeJointActivationAdmission {
+    phase: Option<Arc<NativeJointPreparationPhaseQuorum>>,
     quorum: Arc<NativeJointPreparedServingQuorum>,
     local: Arc<NativeJointPreparedServingObservation>,
     fresh: CommittedNativeJointDecisionObservation,
@@ -286,6 +313,7 @@ impl NativeJointPreparedServingQuorum {
         }?;
         let cancellation = cancellation.child_with_deadline(fresh.deadline());
         let result = NativeJointActivationAdmission {
+            phase: None,
             quorum: self.clone(),
             local,
             fresh,
@@ -311,6 +339,17 @@ impl NativeJointPreparedServingQuorum {
     }
 }
 impl NativeJointActivationAdmission {
+    pub(crate) fn require_local_preparation_current(
+        &self,
+        service: &ClusterDataNodeService,
+    ) -> Result<()> {
+        self.require_live()?;
+        if let Some(phase) = &self.phase {
+            phase.require_member_with_service(self.local.local_node_id(), service)
+        } else {
+            self.local.actual.require_current(service)
+        }
+    }
     #[cfg(test)]
     pub(crate) fn test_phase_cancellation(&self) -> &crate::CancellationToken {
         &self.cancellation
@@ -326,6 +365,10 @@ impl NativeJointActivationAdmission {
     }
     pub(crate) fn require_live(&self) -> Result<()> {
         self.cancellation.check()?;
+        self.fresh.require_metadata_current()?;
+        if let Some(phase) = &self.phase {
+            phase.require_live()?;
+        }
         if self.fresh.data() != &self.quorum.data
             || self.fresh.native_receipt().local_node_id() != self.local.local_node_id()
         {
@@ -335,8 +378,13 @@ impl NativeJointActivationAdmission {
         }
         let (term, index, context) = self.fresh.metadata_anchor();
         for observation in self.quorum.observations.values() {
-            let (vote_term, vote_index, vote_context) =
-                observation.actual.committed().metadata_anchor();
+            let (vote_term, vote_index, vote_context) = if let Some(phase) = &self.phase {
+                phase
+                    .committed(observation.local_node_id())?
+                    .metadata_anchor()
+            } else {
+                observation.actual.committed().metadata_anchor()
+            };
             if context == vote_context || term < vote_term || index < vote_index {
                 return Err(invalid(
                     "joint activation metadata is not independently post-NEW-quorum",
@@ -351,7 +399,11 @@ impl NativeJointActivationAdmission {
         self.require_live()?;
         for (node, observation) in &self.quorum.observations {
             if node != self.local.local_node_id() {
-                observation.require_current()?;
+                if let Some(phase) = &self.phase {
+                    phase.require_member_current(node)?;
+                } else {
+                    observation.require_current()?;
+                }
             }
         }
         Ok(())
@@ -362,7 +414,10 @@ impl NativeJointActivationAdmission {
             .iter()
             .map(|(node, observation)| {
                 let actual = observation.actual.prepared();
-                let (term, index, context) = observation.actual.committed().metadata_anchor();
+                let (term, index, context) = self.phase.as_ref().map_or_else(
+                    || observation.actual.committed().metadata_anchor(),
+                    |phase| phase.observations[node].committed.metadata_anchor(),
+                );
                 (
                     node.clone(),
                     NativeJointPreparedServingVoteData {

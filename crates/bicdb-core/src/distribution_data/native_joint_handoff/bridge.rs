@@ -91,6 +91,93 @@ impl ActualServiceNativeJointPreparedEvidence {
         trace.complete();
         Ok(())
     }
+    /// Revalidation of the SAME actual preparation under a DIFFERENT live
+    /// recipient-bound MQ. The old committed observation is only a durable
+    /// fact here; it is not modified or made live by this method.
+    pub(crate) fn require_current_under_fresh_phase(
+        &self,
+        service: &ClusterDataNodeService,
+        fresh: &CommittedNativeJointDecisionObservation,
+    ) -> Result<Arc<crate::db::NativeWriterHostState>> {
+        let database = checked_database_read(&service.db, &service.storage_policy)?;
+        service.require_native_catalog_database(&database)?;
+        service.require_native_writer_host_for_range(&database, fresh.data().activation_range())?;
+        self.committed.require_durable_fact_current(&database)?;
+        fresh.require_current(&database)?;
+        let old = self.committed.metadata_anchor();
+        let current = fresh.metadata_anchor();
+        let preparation = self.prepared.metadata_anchor();
+        if fresh.data() != self.committed.data()
+            || fresh.native_receipt().checksum_sha256()
+                != self.committed.native_receipt().checksum_sha256()
+            || fresh.native_receipt().native_database_incarnation()
+                != self.prepared.native_database_incarnation()
+            || self.prepared.local_node_id() != &service.node_id
+            || current.0 < old.0
+            || current.1 < old.1
+            || current.2 == old.2
+            || current.0 < preparation.0
+            || current.1 < preparation.1
+            || current.2 == preparation.2
+        {
+            return Err(data_error(
+                "fresh joint phase changed original decision/open or reused old metadata",
+            ));
+        }
+        self.prepared.require_current(
+            &database,
+            &service.range_writes,
+            fresh,
+            &self.catalogue,
+            self.lease.image(),
+            self.lease.frozen(),
+        )?;
+        let pin = self
+            .pin
+            .try_lock()
+            .ok_or_else(|| data_error("fresh joint phase pin transition busy"))?;
+        let gate = database.range_mutation_gate();
+        if let Some(pin) = pin.as_ref() {
+            gate.validate_source_capture_read_pin(fresh.data().old_range().id, pin)?;
+        } else {
+            gate.validate_quiescent_frozen(fresh.data().old_range().id, self.lease.frozen())?;
+        }
+        let writer = service.range_writes.native_writer_host_state()?;
+        writer.require_database(&database, fresh.data().activation_range())?;
+        Ok(writer)
+    }
+    pub(crate) fn require_phase_writer_lifetime(
+        &self,
+        writer: &crate::db::NativeWriterHostState,
+    ) -> Result<()> {
+        writer.require_store(
+            self.catalogue.database_root(),
+            self.catalogue.store_open_id(),
+        )?;
+        writer.require_range(self.committed.data().activation_range())
+    }
+    pub(crate) fn release_read_pin_under_fresh_phase(
+        &self,
+        service: &ClusterDataNodeService,
+        fresh: &CommittedNativeJointDecisionObservation,
+    ) -> Result<()> {
+        self.require_current_under_fresh_phase(service, fresh)?;
+        self.pin
+            .try_lock()
+            .ok_or_else(|| data_error("fresh joint phase pin busy"))?
+            .take();
+        self.require_current_under_fresh_phase(service, fresh)?;
+        Ok(())
+    }
+    /// This Option is monotone: construction installs Some exactly once;
+    /// release only takes it. No API can reacquire a pin into THIS evidence.
+    pub(crate) fn read_pin_already_released(&self) -> Result<bool> {
+        Ok(self
+            .pin
+            .try_lock()
+            .ok_or_else(|| data_error("joint pin transition busy"))?
+            .is_none())
+    }
     /// Release only the owned read pin. The underlying real freeze and all
     /// permanent promises/install refusals remain retained by this evidence.
     pub(crate) fn release_read_pin(&self, service: &ClusterDataNodeService) -> Result<()> {
@@ -187,7 +274,7 @@ impl ClusterDataNodeService {
         );
         parent.check()?;
         admission.require_external_preparations_current()?;
-        actual.require_current(self)?;
+        admission.require_local_preparation_current(self)?;
         let database = checked_database_read(&self.db, &self.storage_policy)?;
         self.require_native_catalog_database(&database)?;
         self.require_native_writer_host_for_range(&database, admission.data().activation_range())?;
@@ -198,7 +285,7 @@ impl ClusterDataNodeService {
         }
         let result = database.publish_native_joint_serving_bridge(
             admission,
-            &actual.committed,
+            admission.committed(),
             &actual.prepared,
             &self.range_writes,
             &actual.catalogue,

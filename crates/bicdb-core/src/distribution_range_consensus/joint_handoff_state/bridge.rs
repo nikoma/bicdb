@@ -20,6 +20,9 @@ impl NativeJointBridgeCatalogue {
     pub(crate) fn checksum_sha256(&self) -> &str {
         self.obligations.range_log_sha256()
     }
+    pub(crate) fn database_root(&self) -> &std::path::Path {
+        self.obligations.database_root()
+    }
     pub(crate) fn store_open_id(&self) -> Uuid {
         self.store_open_id
     }

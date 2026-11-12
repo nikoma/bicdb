@@ -53,3 +53,24 @@ Copies were observed stable with actual engine owners alive. These are not
 stopped-owner images, atomic power-loss snapshots or independent engine replays.
 The JSON summary reads recorded reports and catalog bytes; it does not validate
 native page-WAL, quorum signatures or live read behavior after partial fencing.
+
+## Later exact diagnostic: same positive recovery acceptance still fails
+
+Source `31cdbb83d6972357a64f6078ccca7d3c981d9c55`,
+[run 43237027479](https://github.com/nikoma/bicdb/actions/runs/43237027479),
+Core job 131247014520: **zero passed, one failed**, 899 filtered, 56.14 seconds;
+all-target and isolated-consumer compilation passed. The test now records the
+exact destination, original request/metadata purpose and partial fence state
+before failing the same positive acceptance. It still reaches n3's exact
+NormalRecovery-over-handoff refusal. The protected prefix and original ACKs
+are unchanged; successful NoData apply, Ready and ACK4 are still not reached.
+A safe refusal is not successful recovery.
+
+Unchanged artifact13953157621 is retained in restricted custody: 350,094 bytes,
+SHA-256 `80c9c77895729d1624e1b418ef0b515d9fb00b1b9788a50172fcecf256ff7235`.
+All 81 manifest-listed files (5,517,882 bytes) verify against lengths and hashes,
+including the new refusal and partial-progress reports. The file set is exact.
+[The derived custody receipt](diagnostic-custody-receipt.json) does not expose
+generated key material. Owners were alive; no engine replay, stopped-owner
+snapshot or physical power-loss claim follows. Complete raw-job-log SHA-256:
+`a956b144d0f2c992621cc33734f8de1f428088973b80ad519c20f365ece2fb0a`.

@@ -8,16 +8,20 @@ No version is reserved by this document.
 
 ## Versioned delivery composition
 
-The working delivery is **1.0.489-beta**, prepared by the repository bump script
-after merging pinned prospective 488 source
-`34ba460941ddd011534b74d6054d59839bc9c84d` at composition
-`3cd044d94fafcd37dd91cd0a93db1d88cd631091`. The merge was clean, including
-`db.rs`, commit snapshot/PITR maintenance and format changes. The read/native
-mutation fences remain alongside the newer decimal/index/invariant changes.
-This is isolated candidate preparation; verified main is still 487 at this
-checkpoint. Before merge, the actual 488 main must be verified and the candidate
-must remain the next unused source patch. Any changed base requires integration
-and the affected validation again.
+The working delivery is **1.0.489-beta**. Its first composition used
+prospective 488 source `34ba460941ddd011534b74d6054d59839bc9c84d` at
+`3cd044d94fafcd37dd91cd0a93db1d88cd631091`; that base was superseded after
+its workspace export regression failed. The current composition
+`7d742557bad4433d743d80616cd5604a03c061c4`
+merges corrected prospective 488 source
+`d8fc122db55300fd019fffe95321403c30ef45be`. Its primary-only recovery exports
+avoid unrelated secondary-index decoding and reject foreground mutations.
+The merge was clean, including `db.rs` and `spatial_paged.rs`; it retains the
+read/native mutation fences and newer decimal/index/invariant changes.
+Verified main remains 487 at this checkpoint. Actual 488 main and the next
+unused source patch must be verified before merging this delivery. This new
+composition requires its own final affected checks; results for the older
+base are not transferred to it.
 
 All twenty-nine packages, internal requirements, tracked lockfiles and the
 current-source compatibility document are synchronized. Full final-source
@@ -26,6 +30,18 @@ passes do not qualify this newly composed versioned source. Full Abort/joint
 and public operator data serving are excluded as before.
 
 ## Current validation checkpoint (November 12)
+
+Versioned source `2f09872918406347f4dcdbfed1215b8d3c3be6bd` passed Core,
+SQL, PostgreSQL-wire, all-target/isolated-consumer compilation and formatting
+in [PR CI 43232044386](https://github.com/nikoma/bicdb/actions/runs/43232044386),
+and [stock Rails 43232044327](https://github.com/nikoma/bicdb/actions/runs/43232044327).
+The remaining-workspace job was still running when this update was prepared.
+Core library coverage is 846 passed, zero failed, nine ignored; integration
+invocations are not added to this count. These results belong to the superseded
+488-base composition, not `7d742557b` or an eventual main merge. In particular,
+a passing Core/SQL result cannot waive the earlier base's failed workspace
+export test. The corrected-base final delivery must pass the relevant suites.
+
 
 The preparation notes below retain their original source-specific history.
 Later read candidate `b08556c3f8ef5422833164d7efef90954846d93c` includes

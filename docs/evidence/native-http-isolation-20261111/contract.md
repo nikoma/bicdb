@@ -24,3 +24,5 @@ the ERP comparative statement capture and exact posting-proof reconciliation.
 The former 477 HTTP failure is preserved separately. A compiler preflight is not
 runtime qualification. The selected ordinary-native deployment and strict Cell
 signed-SQL restriction remain distinct. No Rust tests are requested or run.
+
+The minimal Node reproducer on477 is /tmp/bicdb-native-oidc-fR1GUU: RC writes/replay pass, RR/Serializable/local-branch commands fail with the active-RC strengthening error, a separate provider called under an explicit RC transaction remains rejected, and rejected writes leave no rows across crash/coldrestore. Carrier correctly rejects an invalid local nested transaction at compile time; the runtime negative uses two officially compiled federated applications, without patching compiler output. Corrected-runtime qualification is still pending.

@@ -11,10 +11,15 @@ use std::time::{Duration, Instant};
 use uuid::Uuid;
 mod quorum;
 mod rpc;
+mod strong;
 pub(crate) use quorum::{NativeReadQuorumCandidate, NativeReadQuorumRound};
 pub(crate) use rpc::{
     require_peer, NativeRangeReadObservation, NativeRangeReadProbeReply,
     NativeRangeReadProbeRequest,
+};
+pub(crate) use strong::{
+    NativeStrongPointReadOutcome, NativeStrongPointReadRequest, NativeStrongPointReadUnavailable,
+    NativeStrongPointReadValue, NativeStrongReadStage,
 };
 
 pub(crate) fn invalid(detail: &str) -> crate::BicDbError {
@@ -118,6 +123,8 @@ impl NativeRangeReadRequest {
 #[serde(deny_unknown_fields)]
 pub(crate) struct NativeRangeReadFacts {
     pub evidence_version: u32,
+    /// Actual birth requirement, not evidence of an installed host policy.
+    pub native_writer_enforcement_version: u32,
     pub scope_sha256: String,
     pub challenge: Uuid,
     pub node_id: ClusterNodeId,

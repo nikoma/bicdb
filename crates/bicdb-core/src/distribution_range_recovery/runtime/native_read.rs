@@ -131,6 +131,19 @@ impl RangeRecoveryRuntime {
         challenge: Uuid,
         parent: &CancellationToken,
     ) -> Result<NativeReadQuorumCandidate> {
+        let operation = self.reserve(metadata.request().range_id)?;
+        self.acquire_native_read_candidate_with_operation(
+            metadata, business, challenge, parent, operation,
+        )
+    }
+    pub(super) fn acquire_native_read_candidate_with_operation(
+        self: &Arc<Self>,
+        metadata: MetadataReadObservation,
+        business: Uuid,
+        challenge: Uuid,
+        parent: &CancellationToken,
+        operation: Arc<Operation>,
+    ) -> Result<NativeReadQuorumCandidate> {
         let mut round = NativeReadQuorumRound::begin(
             metadata,
             business,
@@ -142,7 +155,11 @@ impl RangeRecoveryRuntime {
         require_peer(&request.scope, &self.provider.local_participant())?;
         // Exclusive COLLECTOR reservation (max2) leaves receiver headroom.
         // Local inner probing reuses it rather than recursively reserving.
-        let operation = self.reserve(request.scope.range.id)?;
+        if operation.range != request.scope.range.id || !operation.exclusive {
+            return Err(invalid(
+                "native read collector operation is for another range/purpose",
+            ));
+        }
         let token = request.cancellation(parent)?;
         let worker_token = token.child();
         let _cancel = CancelRead(Some(worker_token.clone()));

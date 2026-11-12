@@ -79,12 +79,12 @@ pub(crate) fn scope_from_metadata(
 
 #[derive(Debug)]
 pub(crate) struct NativeReadQuorumRound {
-    metadata: MetadataReadObservation,
-    request: NativeRangeReadProbeRequest,
-    business: Uuid,
-    local_node: ClusterNodeId,
-    cancellation: CancellationToken,
-    observations: BTreeMap<ClusterNodeId, NativeRangeReadObservation>,
+    pub(super) metadata: MetadataReadObservation,
+    pub(super) request: NativeRangeReadProbeRequest,
+    pub(super) business: Uuid,
+    pub(super) local_node: ClusterNodeId,
+    pub(super) cancellation: CancellationToken,
+    pub(super) observations: BTreeMap<ClusterNodeId, NativeRangeReadObservation>,
     // Expired attempts never vote. Their authenticated immutable points still
     // constrain the verdict, so retry cannot erase known higher/conflict data.
     expired_constraints: Vec<NativeRangeReadFacts>,
@@ -284,8 +284,8 @@ impl NativeReadQuorumRound {
 /// conversion to a serving/strong-read permit. Root host enrollment is pending.
 #[derive(Debug)]
 pub(crate) struct NativeReadQuorumCandidate {
-    round: NativeReadQuorumRound,
-    matching: BTreeSet<ClusterNodeId>,
+    pub(super) round: NativeReadQuorumRound,
+    pub(super) matching: BTreeSet<ClusterNodeId>,
 }
 impl NativeReadQuorumCandidate {
     /// Birth-continuity check only. This consumes the ACTUAL fresh metadata
@@ -323,6 +323,7 @@ impl NativeReadQuorumCandidate {
                 || binding.birth_sha256() != facts.native_birth_sha256
                 || binding.node_incarnation() != facts.member_incarnation
                 || binding.bootstrap_id() != self.scope().bootstrap_id
+                || binding.writer_enforcement_version() != facts.native_writer_enforcement_version
             {
                 return Err(invalid(
                     "actual read voter birth differs from quorum-committed enrollment",
@@ -366,7 +367,7 @@ impl NativeReadQuorumCandidate {
 /// final fresh metadata observation remain mandatory separate producers.
 #[derive(Debug)]
 pub(crate) struct EnrolledNativeReadQuorum {
-    candidate: NativeReadQuorumCandidate,
+    pub(super) candidate: NativeReadQuorumCandidate,
 }
 impl EnrolledNativeReadQuorum {
     pub(crate) fn require_lifetime(&self) -> Result<()> {

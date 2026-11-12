@@ -19,6 +19,7 @@ mod native_ready;
 mod native_ready_quorum;
 mod normal_apply;
 mod participants;
+mod strong_point_read;
 
 const MAX_CONTEXTS: usize = 4;
 // A collector must leave capacity for the readonly peer observations needed
@@ -494,7 +495,21 @@ impl RangeRecoveryRuntime {
         self.reserve_context(range, false)
     }
     fn reserve_context(&self, range: RangeId, exclusive: bool) -> Result<Arc<Operation>> {
-        let mut sessions = self.sessions.lock();
+        self.reserve_context_locked(range, exclusive, self.sessions.lock())
+    }
+    fn try_reserve_point_context(&self, range: RangeId) -> Result<Arc<Operation>> {
+        let sessions = self
+            .sessions
+            .try_lock()
+            .ok_or_else(|| invalid("receiver contexts are busy before point-read admission"))?;
+        self.reserve_context_locked(range, true, sessions)
+    }
+    fn reserve_context_locked(
+        &self,
+        range: RangeId,
+        exclusive: bool,
+        mut sessions: parking_lot::MutexGuard<'_, Sessions>,
+    ) -> Result<Arc<Operation>> {
         if sessions
             .current
             .get(&range)

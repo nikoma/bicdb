@@ -19,7 +19,7 @@ No version is reserved by this document.
 | Persistence-producer correction | `64cb9f8e8eafcb69a19331401f6c0c4440d21e92`, cherry `6be6008baad63f85b97e6362448be9416fcbfc3e` | Actual fsynced persistence belongs inside the sealed response producer; preserve learned-retirement refusal |
 | Retired-member refusal | `a778b09926a8b853008114c20ce4048306dbe1cd`, cherry `4c31585fc715965e0bdf2115e25b373ccc8093c9` | Reject retained real ACKs after committed retirement without changing replication progress |
 
-The working source retains version1.0.481-beta. It jumps from base protocol24
+The original independent source at809 retained version1.0.481-beta. It jumps from base protocol24
 to protocol27 solely for native metadata ACK provenance; protocols25/26 feature
 code is not imported. No later Abort, joint-data handoff, learner-birth RPC25
 or their ancestry is imported. Earlier component and CI evidence remains tied
@@ -191,3 +191,11 @@ This new regression and the correction remain unexecuted on this branch.
 Preparation performed no Cargo invocation, database open, process test or VM
 operation. Formatting/diff and source-selection checks are reported separately
 from the required compilation and dynamic checks above.
+
+## Independent metadata candidate composition
+
+See [the source-only integration audit](native-read-metadata-485-integration.md)
+for mergec48c804d6 of preserved809 with PR162 candidatece023036, exact conflict
+resolution, read/routing invariants, local configuration override review and
+remote validation filters. That candidate inherits version1.0.485-beta; no new
+version, PR157 update, executed test or public delivery is claimed here.

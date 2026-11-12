@@ -605,3 +605,6 @@ fn native_abort_birth_registration_refuses_missing_or_foreign_range_catalogue_at
         Some(registered)
     );
 }
+
+#[path = "tests/custody_tests.rs"]
+mod custody_tests;

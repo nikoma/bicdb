@@ -12,6 +12,7 @@ use crate::distribution_range_image::{
 use crate::distribution_range_mutation::FrozenRangeMutationPermit;
 
 mod abort_catalogue;
+pub(crate) use abort_catalogue::NativeAbortCatalogueBootstrap;
 pub(crate) mod abort_history;
 mod certified_prefix;
 mod history;
@@ -479,6 +480,43 @@ pub(crate) struct SourceRangeImageLineage {
     current_schema_generation: u64,
 }
 
+/// Only the atomic NEW factory constructs this short-lived capability. Strict
+/// reopen returns no such token, even for a zero-index/no-policy prototype.
+pub(crate) struct FreshNativeCatalogueBootstrap<'a> {
+    database: &'a BicDb,
+    birth: &'a NativeDatabaseBirth,
+}
+impl FreshNativeCatalogueBootstrap<'_> {
+    pub(crate) fn require_non_abort_profile(&self) -> Result<()> {
+        if self.birth.abort_protocol_version.is_some() {
+            return Err(invalid(
+                "abort-aware fresh factory must use protected catalogue StoreUUID",
+            ));
+        }
+        Ok(())
+    }
+    pub(crate) fn require_current(&self) -> Result<(PathBuf, ClusterId, ClusterNodeId)> {
+        self.database.check_recovery_state()?;
+        let actual = self
+            .database
+            .read_native_birth()?
+            .ok_or_else(|| invalid("fresh catalogue has no actual native birth"))?;
+        if actual != *self.birth
+            || actual.format_version != 2
+            || !format::native_catalogue_custody_active(self.database.data_path())?
+        {
+            return Err(invalid(
+                "fresh catalogue capability changed native factory/birth",
+            ));
+        }
+        Ok((
+            self.database.data_path().to_path_buf(),
+            actual.spec.cluster_id,
+            actual.spec.node_id,
+        ))
+    }
+}
+
 impl FreshRangeGenesisAuthority {
     pub(crate) fn birth_id(&self) -> Uuid {
         self.birth.birth_id
@@ -913,6 +951,7 @@ impl BicDb {
         if enforce {
             format::enable_current_image_proposal(root)?;
             format::enable_native_writer_enrollment(root)?;
+            format::enable_native_catalogue_custody(root)?;
             if metadata_initialization {
                 format::enable_native_metadata_store(root)?;
             }
@@ -941,6 +980,20 @@ impl BicDb {
             )?,
             true,
         )?;
+        if enforce {
+            let fresh = FreshNativeCatalogueBootstrap {
+                database: &db,
+                birth: &birth,
+            };
+            fresh.require_current()?;
+            if birth.abort_protocol_version == Some(1) {
+                // One actual catalogue owner: protected Pending→exact15→
+                // Registered BEFORE factory exposure, never an empty12 retrofit.
+                db.initialize_native_abort_catalogue(&birth)?;
+            } else {
+                crate::distribution_range_consensus::RangeWriteStore::initialize_fresh_native_catalogue(&fresh)?;
+            }
+        }
         db.finish_native_genesis_initialization(&birth)?;
         let authority = FreshRangeGenesisAuthority {
             birth,

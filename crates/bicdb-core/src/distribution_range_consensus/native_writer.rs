@@ -37,6 +37,14 @@ impl RangeWriteStore {
                 "enforced native writer catalog requires fsync",
             ));
         }
+        if !self.catalogue_loaded_at_open {
+            return Err(BicDbError::NativeRangeCatalogueCustodyMissing);
+        }
+        if !crate::format::native_catalogue_custody_active(&self.root)? {
+            return Err(range_write_error(
+                "enforced native writer lacks catalogue custody reader fence",
+            ));
+        }
         let state = self
             .native_writer_host
             .as_ref()
@@ -91,6 +99,9 @@ impl RangeWriteStore {
     // Only open() calls this for already-validated, unchanged refusal data.
     // It cannot manufacture an enforced v1→QC migration or expose a data ACK.
     pub(super) fn persist_verified_open_catalog(&self) -> Result<()> {
+        if !self.catalogue_loaded_at_open {
+            return Err(BicDbError::NativeRangeCatalogueCustodyMissing);
+        }
         let envelope = RangeWriteEnvelope::new(self.catalog.clone())?;
         crate::storage::write_atomic(
             &self.root.join(DEFAULT_RANGE_WRITE_LOG),

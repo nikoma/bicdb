@@ -751,6 +751,11 @@ fn native_strong_point_born2_legacy_event_get_never_falls_back_to_empty_database
 fn native_strong_point_policy_native_wal_publication_failure_fences_old_guard_and_prepare() {
     let mut fixture = EnforcedNetwork::new();
     let (key, range) = fixture.seed();
+    let catalogue_path = fixture.native.databases[&node("n0")]
+        .read()
+        .data_path()
+        .join(crate::distribution_range_consensus::DEFAULT_RANGE_WRITE_LOG);
+    let before_catalogue = std::fs::read(&catalogue_path).unwrap();
     let command = fixture.native.services[&node("n0")]
         .lock()
         .probe_range_write_for_peer(&range, &node("n0"), 1)
@@ -798,6 +803,7 @@ fn native_strong_point_policy_native_wal_publication_failure_fences_old_guard_an
         error.to_string().contains("writer") || error.to_string().contains("policy"),
         "{error}"
     );
+    assert_eq!(std::fs::read(&catalogue_path).unwrap(), before_catalogue);
     assert_eq!(
         unavailable(fixture.read(
             fixture.request(&key, &range),

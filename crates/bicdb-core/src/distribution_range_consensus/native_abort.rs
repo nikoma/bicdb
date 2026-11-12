@@ -320,10 +320,13 @@ impl RangeWriteStore {
         store_id: Uuid,
     ) -> Result<()> {
         let bytes = Self::read_bounded_abort_catalogue(&root.join(DEFAULT_RANGE_WRITE_LOG))
-            .map_err(|e| {
-                range_write_error(format!(
-                    "registered native range catalogue missing; never reset: {e}"
-                ))
+            .map_err(|e| match e {
+                BicDbError::Io(ref io) if io.kind() == std::io::ErrorKind::NotFound => {
+                    BicDbError::NativeRangeCatalogueCustodyMissing
+                }
+                other => range_write_error(format!(
+                    "registered native range catalogue unavailable; never reset: {other}"
+                )),
             })?;
         if bytes.len() > 64 * 1024 * 1024 {
             return Err(range_write_error(
@@ -342,12 +345,12 @@ impl RangeWriteStore {
         Ok(())
     }
     pub(crate) fn initialize_abort_catalogue_identity(
-        root: &Path,
-        cluster: &ClusterId,
-        node: &ClusterNodeId,
-        store_id: Uuid,
-        writer_enforced: bool,
+        pending: &crate::db::NativeAbortCatalogueBootstrap<'_, '_>,
     ) -> Result<()> {
+        let (root, cluster, node, store_id, writer_enforced) = pending.require_current()?;
+        let root = root.as_path();
+        let cluster = &cluster;
+        let node = &node;
         if store_id.is_nil() {
             return Err(range_write_error("nil native range catalogue StoreID"));
         }
@@ -358,7 +361,7 @@ impl RangeWriteStore {
                 "native factory catalogue byte bound exceeded",
             ));
         }
-        let mut catalog = match fs::read(&path) {
+        let (mut catalog, existing) = match fs::read(&path) {
             Ok(bytes) => {
                 let old = serde_json::from_slice::<RangeWriteEnvelope>(&bytes)?.verify()?;
                 if &old.cluster_id != cluster || &old.node_id != node {
@@ -366,12 +369,10 @@ impl RangeWriteStore {
                         "fresh native catalogue belongs to another identity",
                     ));
                 }
-                if let Some(protocol) = &old.native_abort_protocol {
-                    if protocol.store_id != store_id {
-                        return Err(range_write_error(
-                            "pending native catalogue StoreID changed",
-                        ));
-                    }
+                if old.native_abort_protocol.as_ref().map(|p| p.store_id) != Some(store_id)
+                    || old.native_writer_enforcement_version != writer_enforced.then_some(1)
+                {
+                    return Err(range_write_error("pending native catalogue requires SAME protected StoreUUID/writer profile; protocol-None is never fresh authority"));
                 }
                 if !old.ranges.is_empty()
                     || !old.recovery_fences.is_empty()
@@ -387,30 +388,45 @@ impl RangeWriteStore {
                         .native_abort_protocol
                         .as_ref()
                         .is_some_and(|p| !p.ranges.is_empty())
+                    || old
+                        .installing_committed_certifications
+                        .as_ref()
+                        .is_some_and(|m| !m.is_empty())
+                    || old
+                        .installing_recovery_handovers
+                        .as_ref()
+                        .is_some_and(|m| !m.is_empty())
+                    || old
+                        .native_joint_handoffs
+                        .as_ref()
+                        .is_some_and(|m| !m.is_empty())
                 {
                     return Err(range_write_error(
                         "actual factory cannot initialize over a used range catalogue",
                     ));
                 }
-                old
+                (old, true)
             }
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => RangeWriteCatalog {
-                format_version: NATIVE_ABORT_CATALOG_FORMAT,
-                native_writer_enforcement_version: writer_enforced.then_some(1),
-                cluster_id: cluster.clone(),
-                node_id: node.clone(),
-                ranges: BTreeMap::new(),
-                backup_fences: BTreeMap::new(),
-                handoff_promises: BTreeMap::new(),
-                image_install_intents: BTreeMap::new(),
-                recovery_fences: BTreeMap::new(),
-                native_image_bases: BTreeMap::new(),
-                sparse_committed_decisions: Some(BTreeMap::new()),
-                installing_committed_certifications: Some(BTreeMap::new()),
-                installing_recovery_handovers: Some(BTreeMap::new()),
-                native_joint_handoffs: None,
-                native_abort_protocol: None,
-            },
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => (
+                RangeWriteCatalog {
+                    format_version: NATIVE_ABORT_CATALOG_FORMAT,
+                    native_writer_enforcement_version: writer_enforced.then_some(1),
+                    cluster_id: cluster.clone(),
+                    node_id: node.clone(),
+                    ranges: BTreeMap::new(),
+                    backup_fences: BTreeMap::new(),
+                    handoff_promises: BTreeMap::new(),
+                    image_install_intents: BTreeMap::new(),
+                    recovery_fences: BTreeMap::new(),
+                    native_image_bases: BTreeMap::new(),
+                    sparse_committed_decisions: Some(BTreeMap::new()),
+                    installing_committed_certifications: Some(BTreeMap::new()),
+                    installing_recovery_handovers: Some(BTreeMap::new()),
+                    native_joint_handoffs: None,
+                    native_abort_protocol: None,
+                },
+                false,
+            ),
             Err(e) => return Err(e.into()),
         };
         catalog.format_version = catalog.format_version.max(NATIVE_ABORT_CATALOG_FORMAT);
@@ -427,7 +443,15 @@ impl RangeWriteStore {
         }
         let envelope = RangeWriteEnvelope::new(catalog)?;
         envelope.clone().verify()?;
-        crate::storage::write_atomic(&path, &serde_json::to_vec_pretty(&envelope)?, true)?;
+        pending.require_current()?;
+        if existing {
+            // Exact original Pending/raw15 retry only; re-sync unchanged bytes,
+            // never adopt an arbitrary old empty catalogue or clear obligations.
+            crate::storage::write_atomic(&path, &serde_json::to_vec_pretty(&envelope)?, true)?;
+        } else {
+            Self::write_new_native_catalogue(root, &envelope)?;
+        }
+        pending.require_current()?;
         Self::require_abort_catalogue_identity(root, cluster, node, store_id)
     }
     pub(crate) fn reconcile_actual_abort_control(&mut self, database: &crate::BicDb) -> Result<()> {

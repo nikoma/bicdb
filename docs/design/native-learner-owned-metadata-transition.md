@@ -18,8 +18,8 @@ Only the new listener captures a metadata-only service mode. The old listener's
 captured provisional Some is never changed or broadened by Weak expiry. No second
 data service or range store is opened on the DB.
 
-A narrow learner-host constructor fills an actual MStore owner slot BEFORE its
-first state persistence. The former initializer delegates to the same private
+A narrow learner-host constructor fills an actual MStore owner slot as soon as
+its UUID exists, BEFORE protected Prepare and first state persistence. The former initializer delegates to the same private
 body, retaining its previous Result<Self>/drop-on-error behavior for old callers.
 The host's slot remains on cancellation/persist/registration failure. No retained
 in-memory state can stand in for actual protected Registered initialization.
@@ -54,10 +54,11 @@ The new actual TLS control sources cover:
   ACK; same-DB strict backend reopen preserving term/commit/UUID; unchanged local
   namespace, empty rows/no native floor/no writer; held-latch ordinary-data refusal
   and a genuine TLS candidate's vote refusal while the target is still Learner.
-- An error cut AFTER actual durable state-file publication, before registration:
-  actual retained owner and native StoreUUID, no metadata listener, unchanged file
-  and Prepared quarantine on independently fresh retry. This is not a physical
-  power-loss or fsync-error qualification.
+- Error cuts AFTER actual protected Prepare and AFTER actual durable state-file
+  publication, before registration: actual retained owner and matching native
+  StoreUUID, no metadata listener, unchanged file/absence and Prepared quarantine
+  on independently fresh retry. This is not a physical power-loss or fsync-error
+  qualification.
 - Cancellation after actual Registered ownership, real occupied-port bind failure,
   cancellation after actual listener bind, and independently fresh retries that
   retain the SAME MStore Arc/StoreUUID and genuinely drain the stopping listener.

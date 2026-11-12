@@ -212,67 +212,85 @@ fn native_enrolled_learner_same_service_metadata_tls_catchup_bound_ack_and_stric
 
 #[test]
 fn native_enrolled_learner_metadata_constructor_failure_retains_prepared_quarantine_identity() {
-    let f = EnrollmentFixture::new();
-    let (factory, mut host) = f.factory("actual-prepared-transition");
-    let token = CancellationToken::uncancelable();
-    f.launches[0]
-        .enroll_registered_native_learner(&node(4), &token)
-        .unwrap();
-    let (current, business) = own_mq(&f, &token);
-    let error = host
-        .test_start_owned_metadata_with(
-            &current,
-            business,
-            &token,
-            |cut| {
-                if cut == NativeMetadataInitializationCut::AfterStateFile {
-                    Err(std::io::Error::other("actual learner state-file cut").into())
-                } else {
-                    Ok(())
-                }
-            },
-            |_| Ok(()),
-        )
-        .unwrap_err();
-    assert!(
-        error.to_string().contains("actual learner state-file cut"),
-        "{error}"
-    );
-    let (id, registered) = protected_id(&factory);
-    assert!(!registered);
-    assert_eq!(
-        host.test_transition_custody(),
-        (true, true, false, false, false)
-    );
-    let path = factory
-        .database
-        .read()
-        .data_path()
-        .join("native-learner-metadata")
-        .join(crate::DEFAULT_CLUSTER_METADATA_CONSENSUS_STATE);
-    let bytes = std::fs::read(&path).unwrap();
-    let state: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
-    assert_eq!(state["state"]["native_store_id"], serde_json::json!(id));
-    let (retry, retry_business) = own_mq(&f, &token);
-    let error = host
-        .start_owned_metadata(&retry, retry_business, &token)
-        .unwrap_err();
-    assert!(
-        error
-            .to_string()
-            .contains("Prepared learner metadata initialization is quarantined"),
-        "{error}"
-    );
-    assert_eq!(protected_id(&factory), (id, false));
-    assert_eq!(std::fs::read(&path).unwrap(), bytes);
-    assert_eq!(
-        host.test_transition_custody(),
-        (true, true, false, false, false)
-    );
-    host.shutdown().unwrap();
-    f.shutdown();
+    for chosen_cut in [
+        NativeMetadataInitializationCut::AfterProtectedPrepare,
+        NativeMetadataInitializationCut::AfterStateFile,
+    ] {
+        let f = EnrollmentFixture::new();
+        let (factory, mut host) = f.factory("actual-prepared-transition");
+        let token = CancellationToken::uncancelable();
+        f.launches[0]
+            .enroll_registered_native_learner(&node(4), &token)
+            .unwrap();
+        let (current, business) = own_mq(&f, &token);
+        let error = host
+            .test_start_owned_metadata_with(
+                &current,
+                business,
+                &token,
+                |cut| {
+                    if cut == chosen_cut {
+                        Err(
+                            std::io::Error::other("actual learner protected initialization cut")
+                                .into(),
+                        )
+                    } else {
+                        Ok(())
+                    }
+                },
+                |_| Ok(()),
+            )
+            .unwrap_err();
+        assert!(
+            error
+                .to_string()
+                .contains("actual learner protected initialization cut"),
+            "{error}"
+        );
+        let (id, registered) = protected_id(&factory);
+        assert!(!registered);
+        assert_eq!(
+            host.test_transition_custody(),
+            (true, true, false, false, false)
+        );
+        let path = factory
+            .database
+            .read()
+            .data_path()
+            .join("native-learner-metadata")
+            .join(crate::DEFAULT_CLUSTER_METADATA_CONSENSUS_STATE);
+        assert_eq!(host.test_retained_metadata_identity(), Some(id));
+        let bytes = std::fs::read(&path).ok();
+        if chosen_cut == NativeMetadataInitializationCut::AfterStateFile {
+            let state: serde_json::Value = serde_json::from_slice(bytes.as_ref().unwrap()).unwrap();
+            assert_eq!(state["state"]["native_store_id"], serde_json::json!(id));
+        } else {
+            assert!(
+                bytes.is_none(),
+                "no state file exists before its first publication"
+            );
+        }
+        let (retry, retry_business) = own_mq(&f, &token);
+        let error = host
+            .start_owned_metadata(&retry, retry_business, &token)
+            .unwrap_err();
+        assert!(
+            error
+                .to_string()
+                .contains("Prepared learner metadata initialization is quarantined"),
+            "{error}"
+        );
+        assert_eq!(protected_id(&factory), (id, false));
+        assert_eq!(std::fs::read(&path).ok(), bytes);
+        assert_eq!(host.test_retained_metadata_identity(), Some(id));
+        assert_eq!(
+            host.test_transition_custody(),
+            (true, true, false, false, false)
+        );
+        host.shutdown().unwrap();
+        f.shutdown();
+    }
 }
-
 #[test]
 fn native_enrolled_learner_metadata_registered_cancel_and_bind_retry_keep_same_owned_uuid() {
     let f = EnrollmentFixture::new();

@@ -251,6 +251,11 @@ impl MetadataConsensusStore {
         }
         Ok(())
     }
+    #[cfg(test)]
+    pub(crate) fn test_native_metadata_identity(&self) -> Option<Uuid> {
+        self.state.native_store_id
+    }
+
     pub(crate) fn registered_native_learner_store_id(&self) -> Result<Uuid> {
         self.require_native_metadata_actor_current(false)?;
         let owner = self
@@ -655,12 +660,6 @@ impl MetadataConsensusStore {
             Err(e) => return Err(e.into()),
         }
         let store_id = Uuid::now_v7();
-        let prepared = database
-            .try_read()
-            .ok_or_else(|| metadata_error("native DB busy before metadata prepare"))?
-            .prepare_native_metadata_store(factory, &topology, store_id)?;
-        cancellation.check()?;
-        cut(NativeMetadataInitializationCut::AfterProtectedPrepare)?;
         let state = MetadataConsensusState {
             format_version: NATIVE_METADATA_CONSENSUS_FORMAT,
             native_store_id: Some(store_id),
@@ -685,6 +684,14 @@ impl MetadataConsensusStore {
             last_leader_contact_ms: unix_time_ms(),
             native_owner: Some(owner),
         });
+        // The new host retains the real owner as soon as its identity exists,
+        // including failures during the first protected native publication.
+        let prepared = database
+            .try_read()
+            .ok_or_else(|| metadata_error("native DB busy before metadata prepare"))?
+            .prepare_native_metadata_store(factory, &topology, store_id)?;
+        cancellation.check()?;
+        cut(NativeMetadataInitializationCut::AfterProtectedPrepare)?;
         let store = retained
             .as_mut()
             .expect("actual initializer retained its owner");

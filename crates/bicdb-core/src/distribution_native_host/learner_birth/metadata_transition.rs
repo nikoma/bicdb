@@ -364,4 +364,13 @@ impl NativeUnassignedLearnerHost {
                 .as_ref()
                 .is_some_and(|listener| listener.active_connections() == 0)
     }
+    #[cfg(test)]
+    pub(in crate::distribution_native_host) fn test_retained_metadata_identity(
+        &self,
+    ) -> Option<Uuid> {
+        self.metadata_transition
+            .retained
+            .as_ref()
+            .and_then(|store| store.test_native_metadata_identity())
+    }
 }

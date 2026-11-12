@@ -1,0 +1,8 @@
+{
+  "source": "e8c426a73a14c1d97851082b90b815da60d4ef82",
+  "unit": "bicdb-private-partition-e8c426a7-mtable95-v2",
+  "status": "submitted_waiting_exact_corrected_build",
+  "controller_sha256": "442c1a6ed8e470fc7e47f7107681d842c41e5ff754887787033dfc4938629693",
+  "spec_sha256": "362dfb9976e355702f89dd43b04f9673c1d0fb06993f1f316c3eb0cd4ff651b4",
+  "scope": "Retry only because first Core custody wrapper actually syntaxfailed before tests; first probe neverbuilt and first app neverlaunched. Oldfailedreceipts retained. Original95classes/bytecode/assertions/waits unchanged; same verifiedbaselineprivatecopy/globalapplicationlock/memorymonitor; diagnostic private489, not final1464/source/release/deployment qualification."
+}

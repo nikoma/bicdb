@@ -221,6 +221,7 @@ impl BicDb {
             })
             .ok_or_else(|| invalid("Core candidate has no protected writer-start"))?;
         if slot.command != record.command
+            || slot.domain != record.domain
             || slot.no_effect_sha256.as_deref() != Some(record.checksum_sha256.as_str())
             || slot.ever_commit
         {

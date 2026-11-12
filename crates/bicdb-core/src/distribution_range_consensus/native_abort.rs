@@ -71,6 +71,7 @@ impl NativeAbortDomain {
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub(super) struct NativeAbortSlot {
+    domain: NativeAbortDomain,
     command_id: String,
     command_sha256: String,
     transaction_id: u64,
@@ -122,7 +123,8 @@ impl NativeAbortProtocol {
                 ));
             }
             for (index, slot) in &record.slots {
-                if *index <= record.start_native_index
+                if slot.domain.range.id != *range
+                    || *index <= record.start_native_index
                     || slot.command_sha256.len() != 64
                     || slot.command_id.is_empty()
                     || slot.original_epoch == 0
@@ -345,6 +347,7 @@ impl RangeWriteStore {
                 .slots
                 .entry(record.command.index)
                 .or_insert_with(|| NativeAbortSlot {
+                    domain: record.domain.clone(),
                     command_id: record.command.command_id.clone(),
                     command_sha256: record.command.checksum_sha256.clone(),
                     transaction_id: record.command.transaction_id,
@@ -355,7 +358,8 @@ impl RangeWriteStore {
                     promise: None,
                     resolved_native_receipt_sha256: None,
                 });
-            if slot.command_sha256 != record.command.checksum_sha256
+            if slot.domain != record.domain
+                || slot.command_sha256 != record.command.checksum_sha256
                 || slot.command_id != record.command.command_id
                 || (slot.ever_commit && !record.ever_commit)
                 || slot.no_effect_sha256.is_some()
@@ -488,7 +492,8 @@ impl RangeWriteStore {
             .as_ref()
             .and_then(|p| p.ranges.get(&range.id))
         {
-            if existing.domain != domain
+            if (existing.domain != domain
+                && existing.slots.keys().any(|i| *i > source.range_index()))
                 || existing.native_birth_id != native.birth_id()
                 || existing.native_birth_sha256 != native.birth_sha256()
                 || existing.slots.len() >= MAX_ABORT_SLOTS
@@ -530,9 +535,14 @@ impl RangeWriteStore {
                 start_native_history_sha256: source.logical_history_sha256().into(),
                 slots: BTreeMap::new(),
             });
+        // The only advancing domain is the actual protected effective native
+        // lineage after every prior slot is physically covered. Old slot
+        // domains/audits stay intact; metadata alone cannot authorize this.
+        record.domain = domain.clone();
         record.slots.insert(
             command.index,
             NativeAbortSlot {
+                domain: domain.clone(),
                 command_id: command.command_id.clone(),
                 command_sha256: command.checksum_sha256.clone(),
                 transaction_id: command.transaction_id,

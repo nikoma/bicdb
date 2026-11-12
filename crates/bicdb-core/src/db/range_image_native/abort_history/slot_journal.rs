@@ -422,6 +422,19 @@ impl BicDb {
         role.require_native_identity(native)?;
         self.require_installed_native_writer_database_for_range(role.current_range())?;
         let source = self.current_native_range_source_lineage(request.scope.range_id)?;
+        record.domain.require_recovery_source(&source, role)?;
+        if matches!(
+            role.purpose(),
+            crate::distribution_consensus::MetadataRecoveryRolePurpose::CurrentJointRecovery { .. }
+        ) {
+            self.require_actual_current_joint_abort_domain(
+                &source.birth,
+                &source.base,
+                &request.scope,
+                &record.domain,
+                request.range_index,
+            )?;
+        }
         let _journal = self.try_native_image_journal()?;
         self.validate_source_range_image_lineage(
             &source,

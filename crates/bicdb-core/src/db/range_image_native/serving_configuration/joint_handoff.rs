@@ -12,7 +12,8 @@ use crate::distribution_range_mutation::{
 mod bridge;
 pub(in crate::db::range_image_native) use bridge::NativeJointServingDomain;
 pub(crate) use bridge::{
-    NativeJointBridgeReadScope, NativeJointHistoricalCutScope, NativeJointPreparedPublicationScope,
+    NativeCurrentJointBinding, NativeCurrentJointRecoveryDomain, NativeJointBridgeReadScope,
+    NativeJointHistoricalCutScope, NativeJointPreparedPublicationScope,
     NativeJointServingBridgeReceipt, NativeJointServingPreparation,
 };
 

@@ -9,7 +9,8 @@ mod activation;
 mod publication_scope;
 pub(in crate::db::range_image_native) use activation::NativeJointServingDomain;
 pub(crate) use activation::{
-    NativeJointBridgeReadScope, NativeJointHistoricalCutScope, NativeJointServingBridgeReceipt,
+    NativeCurrentJointBinding, NativeCurrentJointRecoveryDomain, NativeJointBridgeReadScope,
+    NativeJointHistoricalCutScope, NativeJointServingBridgeReceipt,
 };
 pub(crate) use publication_scope::NativeJointPreparedPublicationScope;
 

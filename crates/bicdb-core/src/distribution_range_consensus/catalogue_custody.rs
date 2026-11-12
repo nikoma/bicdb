@@ -44,6 +44,7 @@ impl RangeWriteStore {
             installing_recovery_handovers: None,
             native_joint_handoffs: None,
             native_abort_protocol: None,
+            current_joint_recoveries: None,
         };
         let envelope = RangeWriteEnvelope::new(catalogue)?;
         envelope.clone().verify()?;

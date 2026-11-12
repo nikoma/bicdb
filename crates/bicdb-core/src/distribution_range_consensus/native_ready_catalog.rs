@@ -124,6 +124,9 @@ impl RangeWriteStore {
                 &marker.command_sha256,
             )?;
         }
+        for (index, checksum) in self.archived_joint_certifications(scope.range_id)? {
+            insert_complete_fenced_obligation(&mut irreversible_command_sha256, index, &checksum)?;
+        }
         let sparse_commands = self.sparse_irreversible_commands(scope.range_id)?;
         for (index, checksum) in &sparse_commands {
             insert_complete_fenced_obligation(&mut irreversible_command_sha256, *index, checksum)?;
@@ -201,6 +204,14 @@ impl RangeWriteStore {
                 ));
             }
             verify(*index, &marker.command_sha256)?;
+        }
+        for (index, checksum) in self.archived_joint_certifications(observation.range_id())? {
+            if index > observation.resolved_index() {
+                return Err(range_write_error(
+                    "native readiness omits archived irreversible history",
+                ));
+            }
+            verify(index, &checksum)?;
         }
         for (index, checksum) in self.sparse_irreversible_commands(observation.range_id())? {
             if index > observation.resolved_index() {

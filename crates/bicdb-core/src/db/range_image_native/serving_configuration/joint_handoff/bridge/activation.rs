@@ -3,10 +3,12 @@
 //! record alone cannot release a freeze or admit an application operation.
 use super::*;
 mod continuity;
+mod recovery;
 use crate::distribution_range_handoff::{
     NativeJointActivationAdmission, NativeJointDecisionData, NativeJointPreparedServingVoteData,
 };
 pub(crate) use continuity::NativeJointHistoricalCutScope;
+pub(crate) use recovery::{NativeCurrentJointBinding, NativeCurrentJointRecoveryDomain};
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]

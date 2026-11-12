@@ -51,6 +51,22 @@ impl NativeAbortDomain {
         role: &RecoveryRoleAdmission,
     ) -> Result<()> {
         self.require_role(role)?;
+        if let crate::distribution_consensus::MetadataRecoveryRolePurpose::CurrentJointRecovery {
+            joint_decision_sha256,
+        } = role.purpose()
+        {
+            if source.current_joint_decision_sha256() != Some(joint_decision_sha256.as_str())
+                || self.range != stable_range(source.native_write_range()?)
+                || self.members != source.native_write_members()?
+                || self.schema_sha256 != source.schema_sha256()
+                || self.restore_activation.as_ref() != source.restore_activation()
+            {
+                return Err(range_write_error(
+                    "NoData current-domain proof differs from actual protected joint lineage",
+                ));
+            }
+            return Ok(());
+        }
         // This is a NO-DATA recovery check, not an ordinary write grant. A
         // historical-only serving floor may coexist with the actual physical
         // same-voter prefix which the fresh promises are about to resolve.
@@ -63,6 +79,29 @@ impl NativeAbortDomain {
             || self.restore_activation.as_ref() != source.restore_activation()
         {
             return Err(range_write_error("abort recovery needs actual same-voter physical history; joint-domain bridge is required otherwise"));
+        }
+        Ok(())
+    }
+    /// Historical stored-decision binding only. The caller must read the
+    /// protected bridge, not supply a decoded decision as live authority.
+    pub(crate) fn require_protected_joint_data(
+        &self,
+        data: &crate::distribution_range_handoff::NativeJointDecisionData,
+        scope: &RecoveryFenceScope,
+        index: u64,
+    ) -> Result<()> {
+        if !matches!(&scope.purpose,crate::distribution_consensus::MetadataRecoveryRolePurpose::CurrentJointRecovery {joint_decision_sha256} if joint_decision_sha256==data.checksum_sha256())
+            || self.cluster_id != *data.cluster_id()
+            || self.bootstrap_id != data.bootstrap_id()
+            || self.range != stable_range(data.activation_range())
+            || &self.members != data.new_members()
+            || self.schema_sha256 != data.schema_sha256()
+            || self.restore_activation.as_ref() != data.restore_activation()
+            || scope.range_epoch != data.activation_range().epoch
+            || scope.initiator_node_id != data.activation_range().leader
+            || index <= data.range_index()
+        {
+            return Err(range_write_error("stored current-joint NoData decision changed actual protected NEW domain or original cut"));
         }
         Ok(())
     }
@@ -95,6 +134,7 @@ impl NativeAbortDomain {
         if !matches!(
             role.purpose(),
             crate::distribution_consensus::MetadataRecoveryRolePurpose::NormalRecovery
+            | crate::distribution_consensus::MetadataRecoveryRolePurpose::CurrentJointRecovery { .. }
         ) || self.cluster_id != *role.cluster_id()
             || self.bootstrap_id != role.bootstrap_id()
             || self.range != stable_range(role.current_range())
@@ -155,6 +195,9 @@ pub(super) struct NativeAbortProtocol {
     ranges: BTreeMap<RangeId, NativeAbortRange>,
 }
 impl NativeAbortProtocol {
+    pub(super) fn store_id(&self) -> Uuid {
+        self.store_id
+    }
     pub(super) fn validate(&self) -> Result<()> {
         if self.store_id.is_nil() {
             return Err(range_write_error("native abort catalogue StoreID is nil"));
@@ -424,6 +467,7 @@ impl RangeWriteStore {
                     installing_recovery_handovers: Some(BTreeMap::new()),
                     native_joint_handoffs: None,
                     native_abort_protocol: None,
+                    current_joint_recoveries: None,
                 },
                 false,
             ),
@@ -966,6 +1010,12 @@ impl RangeWriteStore {
             .cancellation(parent)?
             .child_with_deadline(role.deadline());
         self.observe_fenced_recovery_history(role, native, &request.scope, None)?;
+        if matches!(
+            request.scope.purpose,
+            crate::distribution_consensus::MetadataRecoveryRolePurpose::CurrentJointRecovery { .. }
+        ) {
+            self.require_current_joint_scope_domain(db, &request.scope, &cancellation)?;
+        }
         self.require_actual_abort_catalogue(db)?;
         let record = db.observe_actual_native_no_effect(native, role, request)?;
         let slot = self
@@ -1023,6 +1073,17 @@ impl RangeWriteStore {
         self.require_recovery_scope(role, native, &request.scope)?;
         self.require_actual_abort_catalogue(db)?;
         candidate.require_for_role(role, request)?;
+        if matches!(
+            role.purpose(),
+            crate::distribution_consensus::MetadataRecoveryRolePurpose::CurrentJointRecovery { .. }
+        ) {
+            let fact = self.require_current_joint_recovery_domain(db, role)?;
+            if request.range_index <= fact.data().range_index() {
+                return Err(range_write_error(
+                    "new joint NoData cannot reinterpret original closed slots",
+                ));
+            }
+        }
         let command = &candidate.record().command;
         let actual_slots = db.native_abort_slot_inventory()?;
         let old = actual_slots.iter().find(|s| {
@@ -1245,10 +1306,23 @@ impl RangeWriteStore {
         self.require_recovery_scope(role, native, &quorum.request().scope)?;
         self.require_actual_abort_catalogue(db)?;
         quorum.candidate().record().domain.require_role(role)?;
+        let current_joint = matches!(
+            role.purpose(),
+            crate::distribution_consensus::MetadataRecoveryRolePurpose::CurrentJointRecovery { .. }
+        );
+        if current_joint {
+            let fact = self.require_current_joint_recovery_domain(db, role)?;
+            if quorum.request().range_index <= fact.data().range_index() {
+                return Err(range_write_error(
+                    "new joint NoData cannot resolve an original-domain slot",
+                ));
+            }
+        }
         if self
             .catalog
             .handoff_promises
             .contains_key(&role.current_range().id)
+            && !current_joint
             || self
                 .catalog
                 .backup_fences

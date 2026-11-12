@@ -45,7 +45,11 @@ impl NativeCompletionDecisionProvenance {
         scope.validate()?;
         let sha = |s: &str| s.len() == 64 && s.bytes().all(|b| b.is_ascii_hexdigit());
         if !self.scope.same_session(scope)
-            || !matches!(scope.purpose, MetadataRecoveryRolePurpose::NormalRecovery)
+            || !matches!(
+                scope.purpose,
+                MetadataRecoveryRolePurpose::NormalRecovery
+                    | MetadataRecoveryRolePurpose::CurrentJointRecovery { .. }
+            )
             || members.is_empty()
             || members.len() > 64
             || self.voters.len() > members.len()

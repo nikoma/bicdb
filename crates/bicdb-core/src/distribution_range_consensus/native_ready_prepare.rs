@@ -94,6 +94,7 @@ pub(super) fn validate_native_prepared_catalog(catalog: &RangeWriteCatalog) -> R
                 || !matches!(
                     record.scope.purpose,
                     MetadataRecoveryRolePurpose::NormalRecovery
+                        | MetadataRecoveryRolePurpose::CurrentJointRecovery { .. }
                 )
                 || if matches!(record.phase, RecoveryFencePhase::NativeActivated(_)) {
                     log.last_index < point.range_index || log.resolved_through < point.range_index
@@ -187,6 +188,12 @@ impl PreparedNativeRecoveryReady {
         fresh: &RecoveryRoleAdmission,
     ) -> Result<()> {
         self.scope.require_role(fresh)?;
+        if matches!(
+            fresh.purpose(),
+            MetadataRecoveryRolePurpose::CurrentJointRecovery { .. }
+        ) {
+            store.require_current_joint_recovery_domain(db, fresh)?;
+        }
         self.physical.require_owned_materialization_current(db)?;
         store.require_no_image_install(self.scope.range_id)?;
         validate_native_prepared_catalog(&store.catalog)?;
@@ -291,6 +298,12 @@ impl PreparedNativeRecoveryReady {
         fresh: &RecoveryRoleAdmission,
     ) -> Result<()> {
         self.scope.require_role(fresh)?;
+        if matches!(
+            fresh.purpose(),
+            MetadataRecoveryRolePurpose::CurrentJointRecovery { .. }
+        ) {
+            store.require_current_joint_recovery_domain(db, fresh)?;
+        }
         self.physical.require_owned_materialization_current(db)?;
         store.require_native_ready_scope(fresh, self.physical.native_admission(), &self.scope)?;
         let saved = store
@@ -363,6 +376,16 @@ impl PreparedNativeRecoveryReady {
         requested_scope: &RecoveryFenceScope,
     ) -> Result<()> {
         observer.require_scope(requested_scope)?;
+        if matches!(
+            requested_scope.purpose,
+            MetadataRecoveryRolePurpose::CurrentJointRecovery { .. }
+        ) {
+            store.require_current_joint_scope_domain(
+                db,
+                requested_scope,
+                &CancellationToken::new().child_with_deadline(observer.deadline()),
+            )?;
+        }
         observer.require_native_identity(self.physical.native_admission())?;
         self.physical.require_owned_materialization_current(db)?;
         store.require_durable_recovery_catalog()?;
@@ -403,6 +426,12 @@ impl PreparedNativeRecoveryReady {
     ) -> Result<()> {
         fresh.require_live_request()?;
         self.scope.require_role(fresh)?;
+        if matches!(
+            fresh.purpose(),
+            MetadataRecoveryRolePurpose::CurrentJointRecovery { .. }
+        ) {
+            store.require_current_joint_recovery_domain(db, fresh)?;
+        }
         self.physical.require_owned_materialization_current(db)?;
         store.require_native_ready_scope(fresh, self.physical.native_admission(), &self.scope)?;
         store.require_prepared_native_point_matches(&self.physical)?;
@@ -428,6 +457,7 @@ impl RangeWriteStore {
     ) -> Result<()> {
         self.require_durable_recovery_catalog()?;
         self.require_native_phase_format(scope.range_id)?;
+        self.current_joint_scope_constraint(scope)?;
         self.require_no_image_install(scope.range_id)?;
         self.require_native_recovery_identity(role, native)?;
         scope.require_role(role)?;
@@ -548,6 +578,7 @@ impl RangeWriteStore {
         if !matches!(
             physical.role().purpose(),
             MetadataRecoveryRolePurpose::NormalRecovery
+                | MetadataRecoveryRolePurpose::CurrentJointRecovery { .. }
         ) {
             return Err(range_write_error(
                 "normal native preparation cannot activate a handoff configuration",

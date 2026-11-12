@@ -7,6 +7,8 @@ use super::*;
 mod open_adversarial_tests;
 #[path = "complete_joint_tests/original_release_writer_tests.rs"]
 mod original_release_writer_tests;
+#[path = "complete_joint_tests/post_joint_no_data_tests.rs"]
+mod post_joint_no_data_tests;
 use crate::distribution_range_consensus::{
     ImageInstallPurpose, NativeImageInstallRole, RecoveryFenceScope,
 };
@@ -342,6 +344,7 @@ enum JointTestOutcome {
     FrozenOpenOnly,
     AdversarialOnly,
     OriginalReleaseWriterRejected,
+    FullHandoffThenPostJointNoDataAck4Strong,
 }
 
 #[test]
@@ -369,15 +372,44 @@ fn native_joint_fresh_open_phase_reconciles_exact_target_epoch_and_lost_catalogu
     run_complete_joint(3);
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum JointFullContinuation {
+    OriginalTerminalControls,
+    PostJointNoDataRecovery,
+}
+
 fn run_complete_joint(mode: u8) -> JointTestOutcome {
     run_complete_joint_with_original_release_control(mode, None)
+}
+
+fn run_complete_joint_with_continuation(
+    mode: u8,
+    continuation: JointFullContinuation,
+) -> JointTestOutcome {
+    run_complete_joint_with_controls(mode, None, continuation)
 }
 
 fn run_complete_joint_with_original_release_control(
     mode: u8,
     control: Option<original_release_writer_tests::OriginalReleaseControl>,
 ) -> JointTestOutcome {
+    run_complete_joint_with_controls(
+        mode,
+        control,
+        JointFullContinuation::OriginalTerminalControls,
+    )
+}
+
+fn run_complete_joint_with_controls(
+    mode: u8,
+    control: Option<original_release_writer_tests::OriginalReleaseControl>,
+    continuation: JointFullContinuation,
+) -> JointTestOutcome {
     assert!(control.is_none() || mode == 0);
+    assert!(
+        continuation == JointFullContinuation::OriginalTerminalControls
+            || (mode == 0 && control.is_none())
+    );
     let parent = CancellationToken::uncancelable();
     let mut fixture = EnforcedNetwork::new_with_metadata_members(4);
     fixture.native.root.disable_cleanup(true);
@@ -873,6 +905,20 @@ fn run_complete_joint_with_original_release_control(
     assert_eq!(observed.record().map(|record| record.as_ref()), Some(&next));
     assert_eq!(observed.audit().range_index, 2);
     fixture.idle();
+    if continuation == JointFullContinuation::PostJointNoDataRecovery {
+        assert!(
+            release_continuation.is_some(),
+            "post-joint prerequisite must use real all-member release continuation"
+        );
+        eprintln!("ACTUAL_POST_JOINT_NO_DATA_PREREQUISITE all3release=true targetACK2=true StrongR2=true no-ABA-invalidation-before-recovery=true");
+        post_joint_no_data_tests::exercise_actual_new_domain_prepare_only_recovery(
+            &fixture,
+            &activation_range,
+            acknowledged.as_ref(),
+            &next,
+        );
+        return JointTestOutcome::FullHandoffThenPostJointNoDataAck4Strong;
+    }
     if let Some(continuation) = &release_continuation {
         let stale = fresh_release_admission(&fixture, continuation, &node("n3")).unwrap();
         let gate = fixture.native.databases[&node("n3")]

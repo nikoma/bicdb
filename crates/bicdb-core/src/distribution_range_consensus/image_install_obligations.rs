@@ -194,6 +194,9 @@ impl RangeWriteStore {
                 insert_irrevocable(&mut irrevocable_commands, *index, &marker.command_sha256)?;
             }
         }
+        for (index, checksum) in self.archived_joint_certifications(range_id)? {
+            insert_irrevocable(&mut irrevocable_commands, index, &checksum)?;
+        }
         // This validates every complete sparse record and its actual ordered
         // history conflicts before exporting its checksum as an obligation.
         for (index, checksum) in self.sparse_irreversible_commands(range_id)? {
@@ -277,6 +280,17 @@ impl RangeWriteStore {
         {
             digest.update(crate::distribution_range_image::bounded_json(
                 &("Installing-refusal-handover-history-v1", h),
+                MAX_EXTENDED_OBSERVATION_BYTES,
+            )?);
+        }
+        if let Some(joint) = self
+            .catalog
+            .current_joint_recoveries
+            .as_ref()
+            .and_then(|m| m.get(&range_id))
+        {
+            digest.update(crate::distribution_range_image::bounded_json(
+                &("current-joint-refusal-archive-v1", joint),
                 MAX_EXTENDED_OBSERVATION_BYTES,
             )?);
         }

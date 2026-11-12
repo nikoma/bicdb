@@ -63,6 +63,9 @@ pub(crate) struct NativeWriterHostState {
     coordinator: Weak<dyn CommitAdmission>,
 }
 impl NativeWriterHostState {
+    pub(crate) fn registration_generation(&self) -> Uuid {
+        self.record.generation
+    }
     fn require_lifetime(&self) -> Result<Arc<CommitAdmissionRegistration>> {
         let registration = self
             .registration

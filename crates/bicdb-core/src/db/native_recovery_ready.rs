@@ -1200,6 +1200,12 @@ impl LocalNativeRecoveryReady {
     }
     pub(crate) fn require_current(&self, db: &BicDb, store: &RangeWriteStore) -> Result<()> {
         self.require_physical_current(db)?;
+        if matches!(
+            self.role.purpose(),
+            MetadataRecoveryRolePurpose::CurrentJointRecovery { .. }
+        ) {
+            store.require_current_joint_recovery_domain(db, &self.role)?;
+        }
         store.require_actual_abort_controls_covered(
             db,
             self.role.current_range().id,
@@ -1288,7 +1294,8 @@ impl BicDb {
         native.require_current(self)?;
         let range = role.current_range();
         let owner = match role.purpose() {
-            MetadataRecoveryRolePurpose::NormalRecovery => role.recovery_nonce(),
+            MetadataRecoveryRolePurpose::NormalRecovery
+            | MetadataRecoveryRolePurpose::CurrentJointRecovery { .. } => role.recovery_nonce(),
             MetadataRecoveryRolePurpose::CommittedHandoff { session_id, .. } => *session_id,
             MetadataRecoveryRolePurpose::ObserveFencedRecovery { .. } => {
                 return Err(invalid(
@@ -1307,7 +1314,19 @@ impl BicDb {
             .try_source_capture_read_pin(range.id, &frozen)?;
         let lineage = self.current_native_range_source_lineage(range.id)?;
         lineage.require_native_serving_role_floor(&role)?;
-        let base = lineage.base_range();
+        let joint_fact = if matches!(
+            role.purpose(),
+            MetadataRecoveryRolePurpose::CurrentJointRecovery { .. }
+        ) {
+            Some(store.require_current_joint_recovery_domain(self, &role)?)
+        } else {
+            None
+        };
+        let base = if joint_fact.is_some() {
+            lineage.native_write_range()?
+        } else {
+            lineage.base_range()
+        };
         let members = role
             .member_credentials()
             .iter()
@@ -1338,7 +1357,11 @@ impl BicDb {
             || base.placement != range.placement
             || base.epoch > range.epoch
             || voters(base) != voters(range)
-            || lineage.physical_range_members()? != members
+            || (if joint_fact.is_some() {
+                lineage.native_write_members()?
+            } else {
+                lineage.physical_range_members()?
+            }) != members
             || !members.contains_key(role.local_node_id())
             || catalogue.resolved_index() != lineage.range_index()
         {

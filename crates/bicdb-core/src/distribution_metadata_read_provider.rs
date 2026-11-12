@@ -927,6 +927,7 @@ mod tests {
                     coordinator_node_id: node(coordinator),
                     coordinator_incarnation: incarnation,
                     committed_handoff: None,
+                    current_joint_decision_sha256: None,
                 },
             );
             invalid.recovery_nonce = normal.recovery_nonce;

@@ -40,6 +40,8 @@ pub const NATIVE_RECOVERY_SERVING_FEATURE_FLAG: &str = "native_recovery_serving_
 pub const NATIVE_CATALOGUE_CUSTODY_FEATURE_FLAG: &str = "native_catalogue_custody_v1";
 pub const NATIVE_WRITER_ENROLLMENT_FEATURE_FLAG: &str = "native_writer_enrollment_v1";
 pub const NATIVE_JOINT_DATA_HANDOFF_FEATURE_FLAG: &str = "native_joint_data_handoff_v1";
+/// Local qualified recovery in an already activated joint domain.
+pub const NATIVE_CURRENT_JOINT_RECOVERY_FEATURE_FLAG: &str = "native_current_joint_recovery_v1";
 /// Local metadata-store initialization/ownership; excluded from portable schema.
 pub const NATIVE_METADATA_STORE_FEATURE_FLAG: &str = "native_metadata_store_v1";
 pub const NATIVE_INITIAL_PREPARATION_FEATURE_FLAG: &str = "native_initial_preparation_v1";
@@ -56,6 +58,7 @@ const KNOWN_FEATURE_FLAGS: &[&str] = &[
     NATIVE_RECOVERY_SERVING_FEATURE_FLAG,
     NATIVE_WRITER_ENROLLMENT_FEATURE_FLAG,
     NATIVE_JOINT_DATA_HANDOFF_FEATURE_FLAG,
+    NATIVE_CURRENT_JOINT_RECOVERY_FEATURE_FLAG,
     NATIVE_ABORT_HISTORY_FEATURE_FLAG,
     NATIVE_CATALOGUE_CUSTODY_FEATURE_FLAG,
     NATIVE_METADATA_STORE_FEATURE_FLAG,
@@ -848,6 +851,37 @@ pub(crate) fn native_joint_data_handoff_active(root: &Path) -> Result<bool> {
     Ok(metadata
         .feature_flags
         .contains(NATIVE_JOINT_DATA_HANDOFF_FEATURE_FLAG))
+}
+
+/// Reader refusal only; neither a metadata role nor a native/data quorum.
+/// Deliberately excluded from REPLICATED_READER_FEATURES.
+pub(crate) fn enable_native_current_joint_recovery(root: &Path) -> Result<()> {
+    let lock = feature_flags_lock(root);
+    let _guard = lock.lock();
+    let mut metadata = read_or_legacy_metadata(root)?;
+    validate_supported(&metadata)?;
+    if !metadata
+        .feature_flags
+        .contains(NATIVE_JOINT_DATA_HANDOFF_FEATURE_FLAG)
+        || !metadata
+            .feature_flags
+            .contains(NATIVE_ABORT_HISTORY_FEATURE_FLAG)
+    {
+        return Err(BicDbError::InvalidConfig(
+            "current joint recovery needs actual joint and abort reader fences".into(),
+        ));
+    }
+    metadata
+        .feature_flags
+        .insert(NATIVE_CURRENT_JOINT_RECOVERY_FEATURE_FLAG.into());
+    persist_metadata(root, &metadata, true)
+}
+pub(crate) fn native_current_joint_recovery_active(root: &Path) -> Result<bool> {
+    let metadata = read_or_legacy_metadata(root)?;
+    validate_supported(&metadata)?;
+    Ok(metadata
+        .feature_flags
+        .contains(NATIVE_CURRENT_JOINT_RECOVERY_FEATURE_FLAG))
 }
 
 pub(crate) fn enable_current_image_proposal(root: &Path) -> Result<()> {

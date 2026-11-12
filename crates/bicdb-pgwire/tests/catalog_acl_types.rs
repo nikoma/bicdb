@@ -117,6 +117,17 @@ async fn real_catalog_acl_describe_and_text_output_preserve_oid_and_permissions(
                     let error = client.query("SELECT relacl FROM pg_catalog.pg_class WHERE relname IN ('acl_items','ACL_ITEMS')", &[]).await.unwrap_err();
                     assert_eq!(error.as_db_error().unwrap().code().code(), "42883");
                     assert_eq!(rows(client.simple_query("SELECT 1").await.unwrap()), vec![vec![Some("1".into())]]);
+                    client.simple_query("BEGIN").await.unwrap();
+                    let transactional = client.query("SELECT relacl FROM pg_catalog.pg_class WHERE relname IN ('acl_items','ACL_ITEMS')", &[]).await.unwrap_err();
+                    assert_eq!(transactional.as_db_error().unwrap().code().code(), "42883");
+                    if profile == "postgres" {
+                        let failed = client.simple_query("SELECT 1").await.unwrap_err();
+                        assert_eq!(failed.as_db_error().unwrap().code().code(), "25P02");
+                    } else {
+                        assert_eq!(rows(client.simple_query("SELECT 1").await.unwrap()), vec![vec![Some("1".into())]]);
+                    }
+                    client.simple_query("ROLLBACK").await.unwrap();
+                    assert_eq!(rows(client.simple_query("SELECT 1").await.unwrap()), vec![vec![Some("1".into())]]);
                 }).await.expect("catalog metadata query exceeded its focused test bound");
             }).catch_unwind().await;
             drop(client);

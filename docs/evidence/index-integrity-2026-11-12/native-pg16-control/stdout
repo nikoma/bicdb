@@ -1,0 +1,13 @@
+BEGIN
+CREATE SCHEMA
+SET
+CREATE TABLE
+INSERT 0 1
+CREATE INDEX
+DO
+ acknowledged 
+--------------
+            1
+(1 row)
+
+ROLLBACK

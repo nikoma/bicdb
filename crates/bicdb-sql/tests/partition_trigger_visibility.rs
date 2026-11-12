@@ -66,7 +66,7 @@ fn run(label: &str, seed: &str, trigger: Option<&str>, mutation: &str) {
     for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
         let dir = tempfile::tempdir().unwrap();
         let cfg = DbConfig::default()
-            .with_storage_mode(mode)
+            .with_storage_mode(mode.clone())
             .with_fsync(true)
             .with_paged_buffer_pool_bytes(8 * 1024 * 1024);
         let mut db = BicDb::open_with_config(dir.path(), cfg.clone()).unwrap();
@@ -167,7 +167,7 @@ fn late_trigger_failure_rolls_back_prior_physical_writes_and_all_audit_effects()
             ("delete", "DELETE FROM p", "CREATE TRIGGER z_fail BEFORE DELETE ON low FOR EACH ROW EXECUTE FUNCTION late_fail()"),
         ] {
             let dir=tempfile::tempdir().unwrap();
-            let cfg=DbConfig::default().with_storage_mode(mode).with_fsync(true).with_paged_buffer_pool_bytes(8*1024*1024);
+            let cfg=DbConfig::default().with_storage_mode(mode.clone()).with_fsync(true).with_paged_buffer_pool_bytes(8*1024*1024);
             let mut db=BicDb::open_with_config(dir.path(),cfg.clone()).unwrap();
             {
                 let mut sql=SqlSession::new(&mut db);setup(&mut sql);
@@ -197,7 +197,7 @@ fn savepoint_undo_restores_source_deleted_by_destination_trigger_veto() {
     for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
         let dir = tempfile::tempdir().unwrap();
         let cfg = DbConfig::default()
-            .with_storage_mode(mode)
+            .with_storage_mode(mode.clone())
             .with_fsync(true)
             .with_paged_buffer_pool_bytes(8 * 1024 * 1024);
         let mut db = BicDb::open_with_config(dir.path(), cfg.clone()).unwrap();

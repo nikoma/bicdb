@@ -1,0 +1,134 @@
+{
+  "synthetic_verifier": true,
+  "real_issuer": false,
+  "human_hub": false,
+  "toolchain": {
+    "format": 1,
+    "execution_target": "ordinary native bicdb ABI v2",
+    "qualified": false,
+    "carrier": {
+      "version": "2.3.88",
+      "source": "843a2c1f7667be92552b2b7574ba9ac592e6b0cb",
+      "source_code_commit": "2b6d391c8fa93416a22630aeed8f06192cbbed26",
+      "artifact": "tools/carrier-2.3.88-843a2c1f",
+      "sha256": "013a164b03a3954a71beadff528b036bf2ca65a7cf8e3b0444483b37a5e5aff9"
+    },
+    "bicdb": {
+      "version": "1.0.481-beta",
+      "source": "f52d8baaeceb83db86e2efd43494238a959ff764",
+      "artifact": "tools/bicdb-1.0.481-beta-f52d8baa",
+      "sha256": "53dbb59018e78224e1701546f492e2f451acec649b072185544282d15c0a284b",
+      "build": {
+        "host": "ny7.walknorth.com",
+        "rustc": "1.96.0 (ac68faa20 2026-05-25)",
+        "cargo": "1.96.0 (30a34c682 2026-05-25)",
+        "command": "cargo build --locked -p bicdb-cli --release",
+        "jobs": 2,
+        "incremental": false,
+        "debug": 0,
+        "tests_built": false,
+        "lto": false,
+        "source_directory": "/opt/walknorth-erp-modernization/source-decimal481",
+        "elapsed_seconds": 963
+      },
+      "source_base": "3d102759fbf4a28c4376f8588c53421f63c83462",
+      "patches": [
+        "lossless-fixed-point-predicate-comparison"
+      ],
+      "source_code_commit": "f52d8baaeceb83db86e2efd43494238a959ff764"
+    },
+    "testing": {
+      "driver": "Node v22.23.1",
+      "rust_tests": false
+    },
+    "qualification_scope": "Candidate481: exact Decimal predicate comparisons through28 fractional digits; Node runtime, all-six-operator negative, consolidation, upgrade and recovery qualification pending"
+  },
+  "packages": [
+    {
+      "name": "foundation",
+      "version": "1.5.30",
+      "sha256": "0bf99359800673d8ef2abfcdbc62ecf4d6a229fe35a21030fbd5a9950c191eb5",
+      "artifact": "artifacts/candidate-packages/foundation/1.5.30/0bf99359800673d8ef2abfcdbc62ecf4d6a229fe35a21030fbd5a9950c191eb5.bicdb.json",
+      "source_archive": "artifacts/candidate-packages/foundation/1.5.30/source.tar.gz",
+      "source_archive_sha256": "c7e663744b504cd7e5328e43d4165093fb2f2d48405199da95593be0d013cc54",
+      "source_tree_sha256": "35f674b2e41c7f756a79da5f63b4743fad7eb6ca7609fe7687ff13ecb349a0e3"
+    },
+    {
+      "name": "catalog",
+      "version": "1.2.30",
+      "sha256": "cb9e4f17e5e542147134b609af01f1ca35805cd951a5e9cef373b4b6748e9854",
+      "artifact": "artifacts/candidate-packages/catalog/1.2.30/cb9e4f17e5e542147134b609af01f1ca35805cd951a5e9cef373b4b6748e9854.bicdb.json",
+      "source_archive": "artifacts/candidate-packages/catalog/1.2.30/source.tar.gz",
+      "source_archive_sha256": "f3f0fb132924a697e87cb7f8a70bce72c8d3e8938f764983a6cc9d4495a3dfba",
+      "source_tree_sha256": "63739e02e2e06300c0de96f099ee2a194da28307d457610c83495cddd87d0b18"
+    },
+    {
+      "name": "crm",
+      "version": "1.1.33",
+      "sha256": "6df2062c3486b0c84dbd618e35ab6299506376692180ab637cb1ece366c22beb",
+      "artifact": "artifacts/candidate-packages/crm/1.1.33/6df2062c3486b0c84dbd618e35ab6299506376692180ab637cb1ece366c22beb.bicdb.json",
+      "source_archive": "artifacts/candidate-packages/crm/1.1.33/source.tar.gz",
+      "source_archive_sha256": "b275f47a1c8d3b132df74f9c0bc7f9f3f3f40d3d8660006c37d24ee759e29d8a",
+      "source_tree_sha256": "de6ac3aea1fcff155c2618483e983abb2b9e429e2a12aaae95144e2ecf38cbc1"
+    },
+    {
+      "name": "sales",
+      "version": "1.4.34",
+      "sha256": "2693960d29d4d34351778990dee653370a4c07cb3739bbd2e4103bee42900763",
+      "artifact": "artifacts/candidate-packages/sales/1.4.34/2693960d29d4d34351778990dee653370a4c07cb3739bbd2e4103bee42900763.bicdb.json",
+      "source_archive": "artifacts/candidate-packages/sales/1.4.34/source.tar.gz",
+      "source_archive_sha256": "31dff48b66cfab90c891de286def1e47a8e3649faebcfeb1ea433202090bd85f",
+      "source_tree_sha256": "43748d096ae75c1a08b737d17475f1a45a0c83d2b2f2887fc4ec1da8042ae079"
+    },
+    {
+      "name": "accounting",
+      "version": "1.5.35",
+      "sha256": "5928508e08fec6d6ff12ca367615e17e82d677ec8f99d871d33f01a1d75cbe3a",
+      "artifact": "artifacts/candidate-packages/accounting/1.5.35/5928508e08fec6d6ff12ca367615e17e82d677ec8f99d871d33f01a1d75cbe3a.bicdb.json",
+      "source_archive": "artifacts/candidate-packages/accounting/1.5.35/source.tar.gz",
+      "source_archive_sha256": "ffbcbb8b3fae0e9444c0914b82be7996e3717f0f88e2cf76c74d0c951d0a5cb6",
+      "source_tree_sha256": "cea6375cc3bedd8804d9a65d65d8ec835b8f8d48c809f0168d1024c49b75e3b9"
+    },
+    {
+      "name": "inventory",
+      "version": "1.8.38",
+      "sha256": "f43c39c01a66cdadfa13bb585cda1a96a07d3dbe60bcb4bab7d4236ee4583cdd",
+      "artifact": "artifacts/candidate-packages/inventory/1.8.38/f43c39c01a66cdadfa13bb585cda1a96a07d3dbe60bcb4bab7d4236ee4583cdd.bicdb.json",
+      "source_archive": "artifacts/candidate-packages/inventory/1.8.38/source.tar.gz",
+      "source_archive_sha256": "919403904ae38591f70734a8c1b9a306b4b4f040d2f3e662215570b20ce47c77",
+      "source_tree_sha256": "90aa4ea01ca5faa748b25e8e80ade542a4fd8bd47b27541609172915c62301c9"
+    },
+    {
+      "name": "invoicing",
+      "version": "1.6.48",
+      "sha256": "73934476f764ba6aa8d3cb92ffcfaddc4901243e092c1c9f979ed09a816d7ca9",
+      "artifact": "artifacts/candidate-packages/invoicing/1.6.48/73934476f764ba6aa8d3cb92ffcfaddc4901243e092c1c9f979ed09a816d7ca9.bicdb.json",
+      "source_archive": "artifacts/candidate-packages/invoicing/1.6.48/source.tar.gz",
+      "source_archive_sha256": "f9c0c83e396380cb225ab0cab3c765b3c9c11019dd9b831361727fb7525cd048",
+      "source_tree_sha256": "18d843d26b96808dcf086e8c6f09a8b4fd250f950e9aa20ad99acf5aee6925ce"
+    },
+    {
+      "name": "expenses",
+      "version": "1.0.44",
+      "sha256": "2d09370bcb76bdbb88c864e9c64038b0767dc4d7859e891e0f464464629f68c3",
+      "artifact": "artifacts/candidate-packages/expenses/1.0.44/2d09370bcb76bdbb88c864e9c64038b0767dc4d7859e891e0f464464629f68c3.bicdb.json",
+      "source_archive": "artifacts/candidate-packages/expenses/1.0.44/source.tar.gz",
+      "source_archive_sha256": "194bff32ec1adc2d2cb74835491d4a3b7227c28e8c56369dd82c890d61901c48",
+      "source_tree_sha256": "eb8dc69989447b97d02a6198f774cf56eb198249f26c8a40324ad48a2fa63d44"
+    },
+    {
+      "name": "order-to-cash",
+      "version": "1.4.49",
+      "sha256": "01932830d24964c75f16071d9896bad5228ba21cd8cbf5e2f00218d7745cbcbc",
+      "artifact": "artifacts/candidate-packages/order-to-cash/1.4.49/01932830d24964c75f16071d9896bad5228ba21cd8cbf5e2f00218d7745cbcbc.bicdb.json",
+      "source_archive": "artifacts/candidate-packages/order-to-cash/1.4.49/source.tar.gz",
+      "source_archive_sha256": "e90e69432fdcfcc21348764929c4c22243bc7abe7d7c5b4b91d1acd2bd849c97",
+      "source_tree_sha256": "607d034471dce25cea05cb2ed9021cc48be741fc06286f9ac6a6b6998c3034b8"
+    }
+  ],
+  "http_records": 1260,
+  "process_exit_code": 0,
+  "raw_evidence": "evidence/native481-v20-full-financial.json",
+  "raw_log": "evidence/full-financial-assets-recognition-v20-native481.log",
+  "scope": "Existing books/FX/payables/cash/commercial invoices and credits/dimensions/supplier approval/comparative reports/fixed assets/recognition, authorization, concurrency, SIGKILL and cold restore"
+}

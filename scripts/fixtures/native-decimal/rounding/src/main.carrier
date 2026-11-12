@@ -1,0 +1,30 @@
+service ConsolidationRoundingReproducer {}
+auth jwt ProbeAuth {issuer:"https://auth.parau.org" audience:"walknorth-ehr-api" algorithm:"RS256" roles_claim:"roles"}
+role rounding_probe {title:"Isolated rounding reproducer"}
+doctype ProbeGroup {rounding_factor:Decimal}
+doctype ProbeRun {group_id:link ProbeGroup}
+doctype ProbeProof {
+ run_id:link ProbeRun amount:Decimal source_amount:Decimal translation_rate:Decimal ownership_factor:Decimal rounding_factor:Decimal use_snapshot:Bool
+}
+type ProbeInput {source_amount:Decimal translation_rate:Decimal ownership_factor:Decimal rounding_factor:Decimal use_snapshot:Bool}
+invariant ProbeJoinedRounding {
+ subject:ProbeProof
+ must_always: subject.use_snapshot || (exists r ProbeRun where r.id==subject.run_id && (exists g ProbeGroup where g.id==r.group_id && (subject.amount-subject.source_amount*subject.translation_rate*subject.ownership_factor)*g.rounding_factor<=1 && (subject.amount-subject.source_amount*subject.translation_rate*subject.ownership_factor)*g.rounding_factor>=-1))
+}
+invariant ProbeSnapshotRounding {
+ subject:ProbeProof
+ must_always: !subject.use_snapshot || ((subject.amount-subject.source_amount*subject.translation_rate*subject.ownership_factor)*subject.rounding_factor<=1 && (subject.amount-subject.source_amount*subject.translation_rate*subject.ownership_factor)*subject.rounding_factor>=-1 && (exists r ProbeRun where r.id==subject.run_id && (exists g ProbeGroup where g.id==r.group_id && g.rounding_factor==subject.rounding_factor)))
+}
+route POST "/rounding-reproducer/probe" protect ProbeAuth roles [rounding_probe] idempotent -> Json {
+ input:ProbeInput handler {
+ let amount=finance.round(input.source_amount*input.translation_rate*input.ownership_factor,2)
+ let delta=(amount-input.source_amount*input.translation_rate*input.ownership_factor)*input.rounding_factor
+ if delta>1 || delta< -1 {fail("invalid_rounding",json.stringify({amount:amount delta:delta}))}
+ transaction {
+  let group_id=uuid.new() let run_id=uuid.new() let group=ProbeGroup.bulk_insert([{id:group_id rounding_factor:input.rounding_factor}])
+  let run=ProbeRun.bulk_insert([{id:run_id group_id:group_id}])
+  let proof_id=uuid.new() let proof=ProbeProof.bulk_insert([{id:proof_id run_id:run_id amount:amount source_amount:input.source_amount translation_rate:input.translation_rate ownership_factor:input.ownership_factor rounding_factor:input.rounding_factor use_snapshot:input.use_snapshot}])
+  return {amount:amount action_delta:delta proof_id:proof_id}
+ }
+ }
+}

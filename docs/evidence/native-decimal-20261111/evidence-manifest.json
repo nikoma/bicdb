@@ -1,0 +1,43 @@
+{
+  "binary": "bicdb1.0.481-beta",
+  "binary_sha256": "53dbb59018e78224e1701546f492e2f451acec649b072185544282d15c0a284b",
+  "binary_source": "f52d8baaeceb83db86e2efd43494238a959ff764",
+  "compiler": "Carrier2.3.88",
+  "tests": "Node; no Rust tests built or run locally",
+  "human_hub": false,
+  "files": [
+    {
+      "file": "comparator-479.json",
+      "sha256": "a95fdce94395682d9b30557e89b6697577e830039b1bb253d515757447f94560",
+      "source": "/root/erp-modernization/private/intercompany-preparation/evidence/decimal-1794451479196/qualification.json"
+    },
+    {
+      "file": "comparator-481.json",
+      "sha256": "769713c791e10e6c5a63624869db26e035384ebb3be05a3131b382a87f2817e9",
+      "source": "/root/erp-modernization/private/intercompany-preparation/evidence/decimal-1794451891442/qualification.json"
+    },
+    {
+      "file": "consolidation-481.json",
+      "sha256": "3a29361ad75e7644bccc93504134cf8572fb1445035cd792a125996743bac04a",
+      "source": "/root/erp-modernization/private/intercompany-preparation/evidence/1794452167386/qualification.json"
+    },
+    {
+      "file": "portable-comparator-481.json",
+      "sha256": "49b522fbb248a09a8795bf4afa7fab027b6f7b694b2b8527b4bfbb4057f3197e",
+      "source": "/tmp/bicdb-native-decimal-Vm1CfI/evidence/qualification.json"
+    },
+    {
+      "file": "http-isolation-481.json",
+      "sha256": "9bca03c846746ec0298ddbcb3d4e1c5596c6e7f35fa585fc8e7361296bbd9ac6",
+      "source": "/tmp/bicdb-native-oidc-6WkiPf/results.json"
+    },
+    {
+      "file": "native-scenarios-v20-481.json",
+      "sha256": "b25abc19fdd0d7d972e3a06f53046eb562b7dde0373111792e70aa63503369cc"
+    },
+    {
+      "file": "financial-workflow-481-summary.json",
+      "sha256": "7b6a0c0dd171fbeeff9ab9b15271e0cfe15a4891381a4706b7a1d1eb12abfcd0"
+    }
+  ]
+}

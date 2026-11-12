@@ -1,0 +1,35 @@
+{
+  "toolchain_lock": null,
+  "toolchain": {
+    "bicdb": {
+      "artifact": "/root/erp-modernization/artifacts/tools/bicdb-1.0.481-beta-f52d8baa",
+      "sha256": "53dbb59018e78224e1701546f492e2f451acec649b072185544282d15c0a284b"
+    },
+    "carrier": {
+      "artifact": "/root/erp-modernization/artifacts/tools/carrier-2.3.88-843a2c1f",
+      "sha256": "013a164b03a3954a71beadff528b036bf2ca65a7cf8e3b0444483b37a5e5aff9"
+    }
+  },
+  "synthetic_verifier": true,
+  "real_issuer": false,
+  "hub": false,
+  "node_bigint_oracle": true,
+  "source_sha256": "73b51c30055af1bcbe43161ea1a038cb88e48e65ffcbf21a92522e9273c37c09",
+  "package_sha256": "82672ee7a7c00c7a356fc8c2ec2e500c7006221e6b2c46cbf94213b53132e161",
+  "arithmetic_reproducer_sha256": "a353ba553ae6a78f423d2ae8f4dc2c2cfed071589dfe5eab627f2d19338e1d44",
+  "arithmetic_source_unchanged": true,
+  "passed": true,
+  "pair_count": 51,
+  "correct_batches": 51,
+  "wrong_batches": 306,
+  "operators": [
+    "eq",
+    "ne",
+    "lt",
+    "le",
+    "gt",
+    "ge"
+  ],
+  "failures": [],
+  "crash_and_cold_restore": true
+}

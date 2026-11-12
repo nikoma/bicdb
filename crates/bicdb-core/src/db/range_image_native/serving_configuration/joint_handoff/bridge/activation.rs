@@ -708,6 +708,7 @@ impl NativeJointPreparedPublicationScope<'_> {
         }
         let actual = self.database.current_native_range_source_lineage(range)?;
         self.require_unchanged_post_lineage(&actual)?;
+        self.require_retained_history(&actual)?;
         receipt.record.require_actual_anchor(
             self.database,
             &receipt.native,

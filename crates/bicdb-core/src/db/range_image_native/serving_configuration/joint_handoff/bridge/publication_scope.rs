@@ -62,9 +62,7 @@ impl NativeJointServingPreparation {
                 ));
             }
         }
-        #[cfg(test)]
-        trace.complete();
-        Ok(NativeJointPreparedPublicationScope {
+        let scope = NativeJointPreparedPublicationScope {
             database,
             prepared: self,
             store,
@@ -74,7 +72,11 @@ impl NativeJointServingPreparation {
             frozen,
             journal,
             lineage,
-        })
+        };
+        scope.require_retained_history(&scope.lineage)?;
+        #[cfg(test)]
+        trace.complete();
+        Ok(scope)
     }
 }
 impl NativeJointPreparedPublicationScope<'_> {
@@ -120,6 +122,47 @@ impl NativeJointPreparedPublicationScope<'_> {
             return Err(invalid(
                 "publication scope substituted actual store/preparation/image/frozen owner",
             ));
+        }
+        Ok(())
+    }
+    /// Re-read EVERY captured retained resolution, even if the native head
+    /// and catalogue digest are unchanged. No numeric head can substitute for
+    /// a missing or different middle history entry. This is a bounded retained
+    /// map check, not a full 0..R export/ancestry proof.
+    pub(super) fn require_retained_history(&self, actual: &SourceRangeImageLineage) -> Result<()> {
+        self.journal.require_database(self.database)?;
+        for (index, expected) in self.catalogue.decisions() {
+            self.committed.require_current_metadata_only()?;
+            if *index == 0 || *index > actual.range_index() {
+                return Err(invalid(
+                    "publication retained resolution exceeds actual native materialized cut",
+                ));
+            }
+            let entry = self.database.read_native_history_entry(
+                self.prepared.record.range_id,
+                actual.history_generation(),
+                *index,
+            )?;
+            let matches = match (expected, &entry.outcome) {
+                (
+                    crate::distribution_range_consensus::NativeReadCatalogueDecision::Applied(
+                        expected,
+                    ),
+                    NativeLogicalHistoryOutcomeV1::Applied {
+                        command_checksum_sha256,
+                    },
+                ) => expected == command_checksum_sha256,
+                (
+                    crate::distribution_range_consensus::NativeReadCatalogueDecision::Aborted,
+                    NativeLogicalHistoryOutcomeV1::Aborted,
+                ) => true,
+                _ => false,
+            };
+            if entry.index != *index || !matches {
+                return Err(invalid(
+                    "publication retained resolution contradicts actual immutable native history",
+                ));
+            }
         }
         Ok(())
     }

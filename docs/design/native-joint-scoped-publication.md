@@ -44,6 +44,11 @@ stored records and independently rereads the current native source contract.
 It compares the actual poststate against the prior physical base/prefix,
 logical history, local B, namespace/schema identity and generations, and requires
 the effective new write domain to be the protected decision's exact new members.
+Every captured retained catalogue resolution is directly reread from the same
+actual history generation before and after publication; a missing middle entry
+or different Applied/Aborted outcome is refused even with an unchanged head and
+catalogue digest. This bounded retained-map check is not a full 0..R export or
+ancestry proof beyond retained entries.
 It also rechecks actual preparation/decision records, catalogue obligations,
 actual Controlled ownership, writer registration and current authority. The old
 lineage is a comparison baseline, never a substitute for the poststate.

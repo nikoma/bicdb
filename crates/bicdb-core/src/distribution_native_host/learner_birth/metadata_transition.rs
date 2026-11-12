@@ -57,6 +57,7 @@ impl NativeUnassignedLearnerHost {
     ) -> Result<Uuid> {
         let token = parent.child_with_deadline(observed.deadline());
         token.check()?;
+        self.provider.actual_open.require_live()?;
         let factory = Arc::clone(&self.provider.factory);
         let current =
             factory.enrolled_metadata_context(observed, business, &self.provider.network)?;
@@ -65,6 +66,7 @@ impl NativeUnassignedLearnerHost {
                 .database
                 .try_read()
                 .ok_or_else(|| invalid("learner DB busy before owned metadata"))?;
+            self.provider.actual_open.require_database(&db)?;
             let mut ids = db
                 .collections()
                 .into_iter()
@@ -114,6 +116,15 @@ impl NativeUnassignedLearnerHost {
         // No service/metadata latch is held by initialize/reopen's DB reads.
         if self.metadata_transition.metadata.is_none() {
             if self.metadata_transition.retained.is_none() {
+                // Keep the verified actual-open DB borrow through constructor
+                // work. No service/metadata mutex is held. Recursive reads are
+                // try-only; competing writers yield a retryable busy refusal.
+                let actual_database = factory.database.try_read().ok_or_else(|| {
+                    invalid("actual learner DB busy before metadata owner construction")
+                })?;
+                self.provider
+                    .actual_open
+                    .require_database(&actual_database)?;
                 if record.is_some() {
                     self.metadata_transition.retained =
                         Some(MetadataConsensusStore::reopen_native_owned(
@@ -135,6 +146,7 @@ impl NativeUnassignedLearnerHost {
                         &mut self.metadata_transition.retained,
                     )?;
                 }
+                drop(actual_database);
             }
             let store = self
                 .metadata_transition
@@ -157,6 +169,7 @@ impl NativeUnassignedLearnerHost {
                 .database
                 .try_read()
                 .ok_or_else(|| invalid("learner DB busy checking Registered identity"))?;
+            self.provider.actual_open.require_database(&db)?;
             let actual = db.read_native_metadata_store(&current, &factory.spec.node_id)?;
             if !actual.registered() || actual.store_id() != id {
                 return Err(invalid(
@@ -245,6 +258,7 @@ impl NativeUnassignedLearnerHost {
             observed.require_live_request(business)?;
             token.check()?;
             factory.enrolled_metadata_context(observed, business, &self.provider.network)?;
+            self.provider.actual_open.require_live()?;
             Ok(())
         })();
         if let Err(error) = finish {
@@ -258,6 +272,47 @@ impl NativeUnassignedLearnerHost {
         }
         // The old handle stays stopped. Its captured Some never broadens.
         Ok(store_id)
+    }
+
+    /// Explicit stopped-backend restart, never a term-zero reinitialization.
+    /// The SAME service/range-store remains owned and permanently metadata-only.
+    pub(crate) fn stop_owned_metadata(&mut self, parent: &CancellationToken) -> Result<()> {
+        parent.check()?;
+        if let Some(listener) = self.metadata_transition.listener.as_mut() {
+            self.metadata_transition.stopping = true;
+            listener.stop_and_drain(parent)?;
+            self.metadata_transition.listener.take();
+            self.metadata_transition.stopping = false;
+        }
+        Ok(())
+    }
+    pub(crate) fn close_stopped_owned_metadata(
+        &mut self,
+        parent: &CancellationToken,
+    ) -> Result<()> {
+        parent.check()?;
+        if self.metadata_transition.listener.is_some() || self.metadata_transition.stopping {
+            return Err(invalid(
+                "actual metadata listener must drain before backend close",
+            ));
+        }
+        if let Some(store) = self.metadata_transition.metadata.as_ref() {
+            store
+                .try_lock()
+                .ok_or_else(|| invalid("metadata busy before close"))?
+                .registered_native_learner_store_id()?;
+            let expected = if self.metadata_transition.provider.is_some() {
+                2
+            } else {
+                1
+            };
+            if Arc::strong_count(store) != expected {
+                return Err(invalid("actual learner metadata owner still borrowed"));
+            }
+            self.metadata_transition.provider.take();
+            self.metadata_transition.metadata.take();
+        }
+        Ok(())
     }
 
     #[cfg(test)]
@@ -288,5 +343,25 @@ impl NativeUnassignedLearnerHost {
         &self,
     ) -> Option<Arc<Mutex<MetadataConsensusStore>>> {
         self.metadata_transition.metadata.as_ref().map(Arc::clone)
+    }
+    #[cfg(test)]
+    pub(in crate::distribution_native_host) fn test_transition_custody(
+        &self,
+    ) -> (bool, bool, bool, bool, bool) {
+        (
+            self.metadata_transition.drained.is_some(),
+            self.metadata_transition.retained.is_some(),
+            self.metadata_transition.metadata.is_some(),
+            self.metadata_transition.listener.is_some(),
+            self.metadata_transition.stopping,
+        )
+    }
+    #[cfg(test)]
+    pub(in crate::distribution_native_host) fn test_old_listener_drained(&self) -> bool {
+        self.metadata_transition.drained.is_some()
+            && self
+                .listener
+                .as_ref()
+                .is_some_and(|listener| listener.active_connections() == 0)
     }
 }

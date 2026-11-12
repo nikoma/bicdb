@@ -524,3 +524,5 @@ fn native_registered_learner_enrollment_retries_only_exact_persisted_pending_ent
     host.shutdown().unwrap();
     f.shutdown();
 }
+
+mod metadata_transition_tests;

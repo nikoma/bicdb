@@ -115,3 +115,53 @@ Prepared older roots lacking full C, arbitrary membership/source transitions,
 post-promotion cold-host policy and same-UUID old term/vote-envelope rollback
 remain explicit gates. Neither a sidecar nor initialization identity proves
 those, and no HA/automatic-join/user-ACK claim follows from this design.
+
+## Follow-up: distinct current snapshot admission from OWN HostMQ
+
+A fresh current-MQ snapshot producer can remove the old-C-voter catch-up wedge,
+but existing HostMQ getters are insufficient by themselves. Source audit:
+`begin_read_authority` requires `term_at(commit)==current_term`, and the response
+validator requires `anchor.index==read_index` and `anchor.term==term`.
+However, `finish_read_authority` permits commit advance during the probes and
+returns the LATER committed C/applied index. Validation intentionally allows an
+older anchor generation/hash. Thus `term()/read_index()/committed_topology()`
+cannot automatically label that later C as a snapshot at the older (k,t).
+
+Smallest new sealed seam, inside `distribution_consensus/host_read.rs`: mint an
+opaque exact committed-snapshot observation ONLY when applied_index==read_index,
+anchor generation==C.generation and anchor SHA==`topology_checksum(C)` (plus all
+existing live original request/TLS/quorum checks). Use the actual anchor's k/t;
+otherwise refuse/reacquire within the original operation deadline. Never infer
+an entry term from an applied counter or topology generation. Existing HostMQ
+responses already contain these fields; no DTO constructor or new wire is needed.
+
+After exact original-C/UUID Prepared completion and actual Registered readback,
+a distinct `install_current_native_learner_snapshot` producer may consume that
+sealed observation plus actual owned DB/birth/MStore/current Active Learner/no
+ranges/schema/restore checks BEFORE the new listener is published. Build the
+whole state candidate before mutation. Require SAME protected StoreUUID and
+actual open, current snapshot index >= local commit, and normal native-birth/
+restore progression. Reject lower terms; on higher term clear voted_for ONLY
+through normal term advancement; on equal term retain its existing vote.
+Equal committed index must retain exact C/term/restore equality. Apply ordinary
+snapshot suffix retention rules and persist successfully before any admission
+receipt or endpoint. Preserve retained owner/state on ambiguity/cancellation.
+
+This is a narrowly proof-authorized local learner catch-up operation, not an
+Append from an arbitrary new leader or a general `install_snapshot(DTO)` API.
+The original full C sidecar and its protected hash remain immutable historical
+facts. A newly elected current leader absent from C1 is authenticated by the
+separate fresh MQ, never by C1's recorded audit fields. The result grants no
+vote, data readiness, Serving, read policy or ordinary writer. Real promotion
+and later metadata replication remain separate.
+
+Required actual controls: old leader replaced by a genuine current leader not
+in original C; exact Prepared completion followed by this sealed current
+snapshot and real subsequent Append; a held-probe round with actual concurrent
+C advancement that still yields valid general HostMQ but REFUSES this stricter
+snapshot observation; independently fresh stable reacquisition; actual same-term
+vote preservation/higher-term advancement and lower-term/index refusal; all-owner
+Registered reopen after persisted snapshot; missing/wrong original C must still
+refuse Prepared continuation. Keep this as a new unimplemented producer/test gate
+until separately executed; neither the prior 2c transition passes nor the full-C
+sidecar design qualifies it.

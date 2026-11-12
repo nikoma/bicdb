@@ -147,3 +147,26 @@ No joint or new learner-birth RPC test execution is claimed for that run.
 Subsequent startup-cancellation and same-open joint-release retry source
 changes also require independent validation; no complete activated handoff
 fixture or physical convergence result exists yet.
+
+
+## Focused native candidates and independent metadata defect
+
+These manual runs select Core library tests by substring. The complete suite
+matrix is visibly skipped; these are **focused results**, not full regression
+or physical qualification. Separate all-target and isolated no-default-Core
+consumer compilation checks passed in the runs below.
+
+| Exact source and executed run | Classification | Result and next action |
+| --- | --- | --- |
+| `cdc5203854bab7f5db194d44e8085977acef5b3c`, [43166739631](https://github.com/nikoma/bicdb/actions/runs/43166739631) | Failed | 227 passed, four failed, two ignored, 619 filtered out, 204.60 s. The genuine delayed unbound metadata ACK could promote after enrollment. Other failures were two fixture expectations and an orphan-replacement fixture permitting an additional native apply before its intended cut. Six native abort controls passed; this does not supply a remote operational recovery loop. |
+| `983addf4e5820da245e58a73adeaed0884c38bbf`, [43168817748](https://github.com/nikoma/bicdb/actions/runs/43168817748) | Failed | 230 passed, one failed, two ignored, 619 filtered out, 144.71 s. Native append provenance, the delayed-ACK regression, actual TLS actor-retirement and learner-birth observation controls passed. Orphan replacement stopped on an incorrect topology map-key lookup before its later assertions. `bb725beb11d698f9f4a4a6955196b875335cd89d` corrects that lookup using the actual range ID; that correction is not covered by this run. |
+| Independent read foundation `29f9e80c572638b8ff4fcefa01f70e8448535be9`, [43169260087](https://github.com/nikoma/bicdb/actions/runs/43169260087) | Passed | 222 passed, zero failed, two ignored, 616 filtered out, 228.17 s. This branch intentionally excludes Abort/Joint/new learner-birth RPC work. It remains a separate unmerged candidate and does not establish complete Milestone 1. |
+| Tests-only public-main baseline `e5abb9f9b842081385d0f93c5ab7abd75b6819df`, [43171290447](https://github.com/nikoma/bicdb/actions/runs/43171290447) | Failed | Zero passed, one failed, 538 filtered out, 0.07 s. A real bounded Append matching index 1 returns ACK 3 from an untouched divergent tail and can prematurely commit a distinct leader topology. Genuine majority recovery and strict reopen controls complete before the failing assertion. This is an independent metadata-consensus defect; no business-row loss or original Azure cause is established. |
+
+The first metadata baseline archives logs, not its temporary state directory.
+A separate retained-state rerun and fixed candidate are in flight. The narrow
+public-main fix and its reproducible report are being delivered separately from
+the larger native engine batch. The native ACK digest must be produced from the
+correct matched frontier; a valid physical birth alone cannot make a divergent
+suffix replication evidence. No run above qualifies operator join, remote joint
+data handoff, complete relocation, current physical RPO/RTO or capacity gain.

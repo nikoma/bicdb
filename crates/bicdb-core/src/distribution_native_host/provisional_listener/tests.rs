@@ -413,3 +413,5 @@ mod learner_birth_tests;
 mod learner_enrollment_tests;
 
 mod heartbeat_backlog_tests;
+
+mod metadata_supervisor_tests;

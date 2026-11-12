@@ -14,6 +14,20 @@ pub(crate) struct NativeInitialWriterEnrollment {
     pub(crate) metadata_read_index: u64,
 }
 impl NativeInitialConsensusLaunch {
+    pub(in crate::distribution_native_host) fn start_automatic_metadata(
+        &self,
+        network: ClusterNetworkTransportConfig,
+        parent: &CancellationToken,
+    ) -> Result<NativeMetadataSupervisor> {
+        NativeMetadataSupervisor::start(
+            Arc::clone(&self.metadata),
+            &self.service,
+            Arc::clone(&self.topology),
+            network,
+            NativeMetadataSupervisorConfig::default(),
+            parent,
+        )
+    }
     pub(in crate::distribution_native_host) fn lock_initial_metadata<'a>(
         &'a self,
         parent: &CancellationToken,

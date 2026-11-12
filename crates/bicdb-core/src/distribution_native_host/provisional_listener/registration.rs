@@ -510,6 +510,18 @@ impl NativeMetadataControlHost {
         token.check()?;
         Ok(id)
     }
+    pub(in crate::distribution_native_host) fn start_automatic_metadata(
+        &self,
+        parent: &CancellationToken,
+    ) -> Result<NativeMetadataSupervisor> {
+        if self.listener.is_none() {
+            return Err(invalid(
+                "automatic metadata requires owned control listener",
+            ));
+        }
+        self.launch
+            .start_automatic_metadata(self.network.clone(), parent)
+    }
     pub(crate) fn metadata_status(
         &self,
         parent: &CancellationToken,

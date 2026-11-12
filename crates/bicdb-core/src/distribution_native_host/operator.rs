@@ -90,6 +90,7 @@ pub struct NativeMetadataHost {
     launch: Option<NativeInitialConsensusLaunch>,
     listener: Option<crate::distribution_transport::ClusterDataServerHandle>,
     control: Option<NativeMetadataControlHost>,
+    supervisor: Option<NativeMetadataSupervisor>,
     network: ClusterNetworkTransportConfig,
     template: DistributionConfig,
     phase: NativeMetadataHostPhase,
@@ -171,12 +172,41 @@ impl NativeMetadataHost {
             launch: None,
             listener: None,
             control: None,
+            supervisor: None,
             network,
             template,
             phase: NativeMetadataHostPhase::Provisional,
             last_enrolled_learner: None,
             last_caught_up_learner_store_id: None,
         })
+    }
+    /// The process lifetime belongs here, never a bootstrap/action's 5s child.
+    /// This starts scheduling only; elected status cannot authorize Host MQ,
+    /// range recovery or data admission without their existing fresh proofs.
+    pub fn start_automatic_metadata(&mut self, parent: &CancellationToken) -> Result<()> {
+        parent.check()?;
+        if self.phase == NativeMetadataHostPhase::Stopped {
+            return Err(invalid(
+                "stopped native host cannot start metadata supervisor",
+            ));
+        }
+        if self.supervisor.is_some() {
+            return Ok(());
+        }
+        let supervisor = if let Some(control) = &self.control {
+            control.start_automatic_metadata(parent)?
+        } else if self.phase == NativeMetadataHostPhase::OwnedMetadata && self.listener.is_some() {
+            self.launch
+                .as_ref()
+                .ok_or_else(|| invalid("actual initial metadata owner missing"))?
+                .start_automatic_metadata(self.network.clone(), parent)?
+        } else {
+            return Err(invalid(
+                "automatic metadata requires exposed owned metadata listener",
+            ));
+        };
+        self.supervisor = Some(supervisor);
+        Ok(())
     }
     pub fn status(&self, parent: &CancellationToken) -> Result<NativeMetadataHostStatus> {
         parent.check()?;
@@ -322,6 +352,10 @@ impl NativeMetadataHost {
                 );
             }
             NativeMetadataHostAction::Stop => {
+                if let Some(supervisor) = self.supervisor.as_mut() {
+                    supervisor.stop(&token)?;
+                }
+                self.supervisor.take();
                 if let Some(control) = self.control.as_mut() {
                     control.stop(&token)?;
                 }

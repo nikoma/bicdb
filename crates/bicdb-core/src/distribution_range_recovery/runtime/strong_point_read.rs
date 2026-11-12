@@ -80,6 +80,33 @@ impl RangeRecoveryRuntime {
         parent: &CancellationToken,
     ) -> NativeStrongPointReadOutcome {
         use NativeStrongPointReadOutcome::{Observed, Unavailable};
+        // STRONG_TRACE_BEGIN
+        #[cfg(test)]
+        let _strong_context = crate::distribution_native_read::trace::Context::enter(
+            &self.local_node_id,
+            request.business_request_id,
+            request.challenge,
+            request.range_id,
+            request.range_epoch,
+            parent.deadline(),
+        );
+        #[cfg(test)]
+        let _strong_call = crate::distribution_native_read::trace::Span::current("strong-caller");
+        // STRONG_TRACE_END
+
+        // STRONG_TRACE_BEGIN
+        #[cfg(test)]
+        crate::distribution_native_read::trace::Span::detail(
+            "strong-original-allowances",
+            format_args!(
+                "request_budget_ms={} first_metadata_deadline_us={:?}",
+                request.budget_ms,
+                crate::distribution_native_read::trace::deadline_us(Some(
+                    first_metadata.deadline()
+                ))
+            ),
+        );
+        // STRONG_TRACE_END
         let Some(host) = host else {
             return Unavailable(NativeStrongPointReadUnavailable::new(
                 NativeStrongReadStage::WriterAdmission,
@@ -114,9 +141,34 @@ impl RangeRecoveryRuntime {
         let runtime = Arc::clone(self);
         let worker_token = token.clone();
         let (tx, rx) = mpsc::sync_channel(1);
+
+        // STRONG_TRACE_BEGIN
+        #[cfg(test)]
+        let strong_queued = Instant::now();
+        // STRONG_TRACE_END
         let spawned = std::thread::Builder::new()
             .name("native-strong-point".into())
             .spawn(move || {
+                // STRONG_TRACE_BEGIN
+                #[cfg(test)]
+                let _strong_context = crate::distribution_native_read::trace::Context::enter(
+                    &runtime.local_node_id,
+                    request.business_request_id,
+                    request.challenge,
+                    request.range_id,
+                    request.range_epoch,
+                    worker_token.deadline(),
+                );
+                #[cfg(test)]
+                let _strong_worker =
+                    crate::distribution_native_read::trace::Span::current("strong-worker");
+                #[cfg(test)]
+                crate::distribution_native_read::trace::Span::detail(
+                    "strong-worker",
+                    format_args!("queued_us={}", strong_queued.elapsed().as_micros()),
+                );
+                // STRONG_TRACE_END
+
                 let result = (|| {
                     let check = |stage, error| NativeStrongPointReadUnavailable::new(stage, error);
                     worker_token
@@ -124,13 +176,32 @@ impl RangeRecoveryRuntime {
                         .map_err(|e| check(NativeStrongReadStage::Canceled, e))?;
                     // No DB/service latch is held while waiting on the ACTUAL
                     // same map that serializes native origin/background recovery.
+
+                    // STRONG_TRACE_BEGIN
+                    #[cfg(test)]
+                    let strong_reservation =
+                        crate::distribution_native_read::trace::Span::current("strong-reservation");
+                    // STRONG_TRACE_END
                     let _reservation = coordinator
                         .reserve_native_point_read(request.range_id, &worker_token)
                         .map_err(|e| check(NativeStrongReadStage::Reservation, e))?;
+
+                    // STRONG_TRACE_BEGIN
+                    #[cfg(test)]
+                    drop(strong_reservation);
+                    // STRONG_TRACE_END
                     let range = coordinator
                         .require_strong_point_metadata(&first_metadata, &request)
                         .map_err(|e| check(NativeStrongReadStage::Route, e))?;
                     {
+                        // STRONG_TRACE_BEGIN
+                        #[cfg(test)]
+                        let strong_writer_service_wait =
+                            crate::distribution_native_read::trace::Span::current(
+                                "strong-writer-service-wait",
+                            );
+                        // STRONG_TRACE_END
+
                         let service = loop {
                             worker_token
                                 .check()
@@ -139,6 +210,11 @@ impl RangeRecoveryRuntime {
                                 break s;
                             }
                         };
+
+                        // STRONG_TRACE_BEGIN
+                        #[cfg(test)]
+                        drop(strong_writer_service_wait);
+                        // STRONG_TRACE_END
                         let database = service.database();
                         let database = database.try_read().ok_or_else(|| {
                             check(
@@ -152,6 +228,12 @@ impl RangeRecoveryRuntime {
                     let metadata_leader = first_metadata.metadata_leader_id().clone();
                     // Reuse ONE operation, including its local probe/final IO.
                     // No recursive fifth context or new recovery session is made.
+
+                    // STRONG_TRACE_BEGIN
+                    #[cfg(test)]
+                    let strong_data_quorum =
+                        crate::distribution_native_read::trace::Span::current("strong-data-quorum");
+                    // STRONG_TRACE_END
                     let candidate = runtime
                         .acquire_native_read_candidate_with_operation(
                             first_metadata,
@@ -161,9 +243,33 @@ impl RangeRecoveryRuntime {
                             Arc::clone(&operation),
                         )
                         .map_err(|e| check(NativeStrongReadStage::DataQuorum, e))?;
+
+                    // STRONG_TRACE_BEGIN
+                    #[cfg(test)]
+                    drop(strong_data_quorum);
+                    // STRONG_TRACE_END
+
+                    // STRONG_TRACE_BEGIN
+                    #[cfg(test)]
+                    let strong_birth_enrollment =
+                        crate::distribution_native_read::trace::Span::current(
+                            "strong-birth-enrollment",
+                        );
+                    // STRONG_TRACE_END
                     let enrolled = candidate
                         .check_enrolled_voter_births()
                         .map_err(|e| check(NativeStrongReadStage::WriterAdmission, e))?;
+
+                    // STRONG_TRACE_BEGIN
+                    #[cfg(test)]
+                    drop(strong_birth_enrollment);
+                    // STRONG_TRACE_END
+
+                    // STRONG_TRACE_BEGIN
+                    #[cfg(test)]
+                    let strong_snapshot =
+                        crate::distribution_native_read::trace::Span::current("strong-snapshot");
+                    // STRONG_TRACE_END
                     let pending = {
                         let service = loop {
                             worker_token
@@ -183,6 +289,11 @@ impl RangeRecoveryRuntime {
                             )
                             .map_err(|e| check(NativeStrongReadStage::Snapshot, e))?
                     };
+
+                    // STRONG_TRACE_BEGIN
+                    #[cfg(test)]
+                    drop(strong_snapshot);
+                    // STRONG_TRACE_END
                     #[cfg(test)]
                     if let Some(barrier) = runtime.test_point_snapshot_barrier.lock().take() {
                         barrier
@@ -211,6 +322,14 @@ impl RangeRecoveryRuntime {
                                 invalid("original point budget expired"),
                             )
                         })?;
+
+                    // STRONG_TRACE_BEGIN
+                    #[cfg(test)]
+                    let strong_final_metadata =
+                        crate::distribution_native_read::trace::Span::current(
+                            "strong-final-metadata",
+                        );
+                    // STRONG_TRACE_END
                     let final_metadata = metadata_transport
                         .acquire_metadata_read_observation(
                             &metadata_leader,
@@ -221,6 +340,16 @@ impl RangeRecoveryRuntime {
                             &worker_token,
                         )
                         .map_err(|e| check(NativeStrongReadStage::FinalMetadata, e))?;
+                    // STRONG_TRACE_BEGIN
+                    #[cfg(test)]
+                    drop(strong_final_metadata);
+                    #[cfg(test)]
+                    let strong_final_service_wait =
+                        crate::distribution_native_read::trace::Span::current(
+                            "strong-final-service-wait",
+                        );
+                    // STRONG_TRACE_END
+
                     let service = loop {
                         worker_token
                             .check()
@@ -229,15 +358,40 @@ impl RangeRecoveryRuntime {
                             break s;
                         }
                     };
+
+                    // STRONG_TRACE_BEGIN
+                    #[cfg(test)]
+                    drop(strong_final_service_wait);
+                    // STRONG_TRACE_END
                     coordinator
                         .require_strong_point_runtime(&runtime)
                         .map_err(|e| check(NativeStrongReadStage::FinalCurrentness, e))?;
+
+                    // STRONG_TRACE_BEGIN
+                    #[cfg(test)]
+                    let _strong_final_currentness =
+                        crate::distribution_native_read::trace::Span::current(
+                            "strong-final-currentness",
+                        );
+                    // STRONG_TRACE_END
                     pending
                         .finalize(final_metadata, &service, &coordinator, &worker_token)
                         .map_err(|e| check(NativeStrongReadStage::FinalCurrentness, e))
                 })();
                 // All actual local IO occurs on this worker. Its operation stays
                 // owned even when the caller abandons this bounded result channel.
+
+                // STRONG_TRACE_BEGIN
+                #[cfg(test)]
+                crate::distribution_native_read::trace::Span::detail(
+                    "strong-outcome",
+                    format_args!(
+                        "ok={} unavailable={:?}",
+                        result.is_ok(),
+                        result.as_ref().err()
+                    ),
+                );
+                // STRONG_TRACE_END
                 drop(operation);
                 let _ = tx.send(match result {
                     Ok(value) => Observed(value),
@@ -252,6 +406,14 @@ impl RangeRecoveryRuntime {
         }
         loop {
             if let Err(error) = token.check() {
+                // STRONG_TRACE_BEGIN
+                #[cfg(test)]
+                crate::distribution_native_read::trace::Span::detail(
+                    "strong-caller-token-refusal",
+                    format_args!("error={error}"),
+                );
+                // STRONG_TRACE_END
+
                 return Unavailable(NativeStrongPointReadUnavailable::new(
                     NativeStrongReadStage::Canceled,
                     error,
@@ -259,6 +421,20 @@ impl RangeRecoveryRuntime {
             }
             match rx.recv_timeout(LATCH_POLL) {
                 Ok(value) => {
+                    // STRONG_TRACE_BEGIN
+                    #[cfg(test)]
+                    crate::distribution_native_read::trace::Span::detail(
+                        "strong-caller-result",
+                        format_args!(
+                            "outcome={:?}",
+                            match &value {
+                                Observed(_) => "observed",
+                                Unavailable(_) => "unavailable",
+                            }
+                        ),
+                    );
+                    // STRONG_TRACE_END
+
                     if let Err(error) = token.check() {
                         return Unavailable(NativeStrongPointReadUnavailable::new(
                             NativeStrongReadStage::Canceled,

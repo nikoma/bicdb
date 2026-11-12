@@ -13,6 +13,11 @@ use uuid::Uuid;
 mod event_dispatch;
 #[cfg(feature = "tls-replication")]
 mod event_wire;
+
+// STRONG_TRACE_BEGIN
+#[cfg(test)]
+pub(crate) mod trace;
+// STRONG_TRACE_END
 mod quorum;
 mod rpc;
 #[cfg(feature = "tls-replication")]

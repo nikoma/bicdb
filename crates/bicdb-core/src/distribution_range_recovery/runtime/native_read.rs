@@ -21,6 +21,12 @@ impl Drop for CancelRead {
 struct ReadJob {
     node: ClusterNodeId,
     token: CancellationToken,
+    // STRONG_TRACE_BEGIN
+    #[cfg(test)]
+    attempt: usize,
+    #[cfg(test)]
+    queued: Instant,
+    // STRONG_TRACE_END
 }
 
 #[cfg(test)]
@@ -56,6 +62,21 @@ impl RangeRecoveryRuntime {
         parent: &CancellationToken,
     ) -> Result<NativeRangeReadObservation> {
         let token = request.cancellation(parent)?;
+
+        // STRONG_TRACE_BEGIN
+        #[cfg(test)]
+        let _read_context = crate::distribution_native_read::trace::Context::enter(
+            &self.local_node_id,
+            request.business_request_id,
+            request.challenge,
+            request.scope.range.id,
+            request.scope.range.epoch,
+            token.deadline(),
+        );
+        #[cfg(test)]
+        let _read_receiver =
+            crate::distribution_native_read::trace::Span::current("read-receiver-dispatch");
+        // STRONG_TRACE_END
         require_peer(&request.scope, caller)?;
         if caller.node_id() != &request.scope.range.leader {
             return Err(invalid(
@@ -71,8 +92,31 @@ impl RangeRecoveryRuntime {
         std::thread::Builder::new()
             .name("native-read-receiver".into())
             .spawn(move || {
+                // STRONG_TRACE_BEGIN
+                #[cfg(test)]
+                let _receiver_context = crate::distribution_native_read::trace::Context::enter(
+                    &runtime.local_node_id,
+                    request.business_request_id,
+                    request.challenge,
+                    request.scope.range.id,
+                    request.scope.range.epoch,
+                    worker_token.deadline(),
+                );
+                #[cfg(test)]
+                let _receiver_worker =
+                    crate::distribution_native_read::trace::Span::current("read-receiver-worker");
+                // STRONG_TRACE_END
                 let _operation = operation;
+
                 let result = runtime.observe_current_native_range_inner(&request, &worker_token);
+
+                // STRONG_TRACE_BEGIN
+                #[cfg(test)]
+                crate::distribution_native_read::trace::Span::detail(
+                    "read-receiver-result",
+                    format_args!("ok={} error={:?}", result.is_ok(), result.as_ref().err()),
+                );
+                // STRONG_TRACE_END
                 let _ = tx.send(result);
             })?;
         loop {
@@ -95,6 +139,20 @@ impl RangeRecoveryRuntime {
         request: &NativeRangeReadProbeRequest,
         token: &CancellationToken,
     ) -> Result<NativeRangeReadObservation> {
+        // STRONG_TRACE_BEGIN
+        #[cfg(test)]
+        let _read_context = crate::distribution_native_read::trace::Context::enter(
+            &self.local_node_id,
+            request.business_request_id,
+            request.challenge,
+            request.scope.range.id,
+            request.scope.range.epoch,
+            token.deadline(),
+        );
+        #[cfg(test)]
+        let read_service_wait =
+            crate::distribution_native_read::trace::Span::current("read-service-wait");
+        // STRONG_TRACE_END
         token.check()?;
         let service = loop {
             token.check()?;
@@ -102,7 +160,20 @@ impl RangeRecoveryRuntime {
                 break service;
             }
         };
+
+        // STRONG_TRACE_BEGIN
+        #[cfg(test)]
+        drop(read_service_wait);
+        #[cfg(test)]
+        let read_service_validation =
+            crate::distribution_native_read::trace::Span::current("read-service-validation");
+        // STRONG_TRACE_END
         let actual = service.observe_current_native_range_probe(request, token)?;
+
+        // STRONG_TRACE_BEGIN
+        #[cfg(test)]
+        drop(read_service_validation);
+        // STRONG_TRACE_END
         drop(service);
         #[cfg(test)]
         if let Some(barrier) = self.test_read_io_barrier.lock().take() {
@@ -161,6 +232,21 @@ impl RangeRecoveryRuntime {
             ));
         }
         let token = request.cancellation(parent)?;
+
+        // STRONG_TRACE_BEGIN
+        #[cfg(test)]
+        let _read_context = crate::distribution_native_read::trace::Context::enter(
+            &self.local_node_id,
+            request.business_request_id,
+            request.challenge,
+            request.scope.range.id,
+            request.scope.range.epoch,
+            token.deadline(),
+        );
+        #[cfg(test)]
+        let _read_collector =
+            crate::distribution_native_read::trace::Span::current("read-collector");
+        // STRONG_TRACE_END
         let worker_token = token.child();
         let _cancel = CancelRead(Some(worker_token.clone()));
         let members = request.scope.members.keys().cloned().collect::<Vec<_>>();
@@ -187,6 +273,15 @@ impl RangeRecoveryRuntime {
             std::thread::Builder::new()
                 .name("native-read-probe".into())
                 .spawn(move || {
+
+// STRONG_TRACE_BEGIN
+#[cfg(test)]
+let _probe_worker_context = crate::distribution_native_read::trace::Context::enter(
+    &runtime.local_node_id, request.business_request_id, request.challenge,
+    request.scope.range.id, request.scope.range.epoch, proof_token.deadline());
+#[cfg(test)]
+let _probe_worker = crate::distribution_native_read::trace::Span::current("read-probe-worker-owned-context");
+// STRONG_TRACE_END
                     let _operation = operation;
                     while worker.check().is_ok() {
                         let job = match rx.lock().recv_timeout(LATCH_POLL) {
@@ -194,6 +289,17 @@ impl RangeRecoveryRuntime {
                             Err(mpsc::RecvTimeoutError::Timeout) => continue,
                             Err(mpsc::RecvTimeoutError::Disconnected) => break,
                         };
+
+// STRONG_TRACE_BEGIN
+#[cfg(test)]
+let _job_context = crate::distribution_native_read::trace::Context::enter(
+    &runtime.local_node_id, request.business_request_id, request.challenge,
+    request.scope.range.id, request.scope.range.epoch, job.token.deadline());
+#[cfg(test)]
+let read_attempt = crate::distribution_native_read::trace::Span::current("read-attempt");
+#[cfg(test)]
+crate::distribution_native_read::trace::Span::detail("read-attempt", format_args!("peer={} attempt={} queued_us={} request_budget_ms={} parent_deadline_us={:?} local={}", job.node, job.attempt, job.queued.elapsed().as_micros(), request.budget_ms, crate::distribution_native_read::trace::deadline_us(proof_token.deadline()), job.node == runtime.local_node_id));
+// STRONG_TRACE_END
                         let result = job.token.check().and_then(|_| {
                             if job.node == runtime.local_node_id {
                                 runtime.observe_current_native_range_inner(&request, &proof_token)
@@ -207,6 +313,21 @@ impl RangeRecoveryRuntime {
                                     .observe_current_native_range(&job.node, &request, &job.token)
                             }
                         });
+
+// STRONG_TRACE_BEGIN
+#[cfg(test)]
+crate::distribution_native_read::trace::Span::detail("read-attempt-result", format_args!("peer={} attempt={} ok={} error={:?}", job.node, job.attempt, result.is_ok(), result.as_ref().err()));
+#[cfg(test)]
+drop(read_attempt);
+// STRONG_TRACE_END
+
+// STRONG_TRACE_BEGIN
+#[cfg(test)]
+if let Ok(observation) = &result {
+    let facts = observation.facts();
+    crate::distribution_native_read::trace::Span::detail("read-attempt-observed-point", format_args!("peer={} attempt={} R={} H={} local_B={} requested_metadata_context={}", job.node, job.attempt, facts.range_index, facts.logical_history_sha256, facts.local_visibility_db_sequence, request.requested_metadata_context_id));
+}
+// STRONG_TRACE_END
                         if out.send((job.node, result)).is_err() {
                             break;
                         }
@@ -226,6 +347,20 @@ impl RangeRecoveryRuntime {
                     outstanding
                         .remove(&node)
                         .ok_or_else(|| invalid("unexpected native read drain result"))?;
+
+                    // STRONG_TRACE_BEGIN
+                    #[cfg(test)]
+                    crate::distribution_native_read::trace::Span::detail(
+                        "read-result-received",
+                        format_args!(
+                            "peer={} ok={} error={:?} path=majority-drain",
+                            node,
+                            result.is_ok(),
+                            result.as_ref().err()
+                        ),
+                    );
+                    // STRONG_TRACE_END
+
                     match result {
                         Ok(observation) => {
                             round.record_attempt(observation)?;
@@ -255,8 +390,29 @@ impl RangeRecoveryRuntime {
                         Instant::now() + remaining / u32::try_from(waves + 2).unwrap_or(u32::MAX),
                     )
                 };
+
+                // STRONG_TRACE_BEGIN
+                #[cfg(test)]
+                crate::distribution_native_read::trace::Span::detail(
+                    "read-schedule",
+                    format_args!(
+                        "peer={} attempt={} waves={} outstanding={} child_deadline_us={:?}",
+                        node,
+                        attempt + 1,
+                        waves,
+                        outstanding.len(),
+                        crate::distribution_native_read::trace::deadline_us(child.deadline())
+                    ),
+                );
+                // STRONG_TRACE_END
                 tx.try_send(ReadJob {
                     node: node.clone(),
+                    // STRONG_TRACE_BEGIN
+                    #[cfg(test)]
+                    attempt: attempt + 1,
+                    #[cfg(test)]
+                    queued: Instant::now(),
+                    // STRONG_TRACE_END
                     token: child,
                 })
                 .map_err(|_| invalid("bounded native read job queue invariant failed"))?;
@@ -270,6 +426,19 @@ impl RangeRecoveryRuntime {
                     let attempt = outstanding
                         .remove(&node)
                         .ok_or_else(|| invalid("unexpected native read worker result"))?;
+
+                    // STRONG_TRACE_BEGIN
+                    #[cfg(test)]
+                    crate::distribution_native_read::trace::Span::detail(
+                        "read-result-received",
+                        format_args!(
+                            "peer={} ok={} error={:?}",
+                            node,
+                            result.is_ok(),
+                            result.as_ref().err()
+                        ),
+                    );
+                    // STRONG_TRACE_END
                     match result {
                         Ok(observation) => {
                             if !round.record_attempt(observation)? {
@@ -303,21 +472,79 @@ impl RangeRecoveryRuntime {
         // owned worker, retaining this same context through its actual drain.
         let runtime = Arc::clone(self);
         let finish_token = token.clone();
+        // STRONG_TRACE_BEGIN
+        #[cfg(test)]
+        let finish_labels = (
+            request.business_request_id,
+            request.challenge,
+            request.scope.range.id,
+            request.scope.range.epoch,
+        );
+        #[cfg(test)]
+        let finish_queued = Instant::now();
+        // STRONG_TRACE_END
+
         let (out, result) = mpsc::sync_channel(1);
         std::thread::Builder::new()
             .name("native-read-candidate".into())
             .spawn(move || {
                 let _operation = operation;
+
+                // STRONG_TRACE_BEGIN
+                #[cfg(test)]
+                let _finish_context = crate::distribution_native_read::trace::Context::enter(
+                    &runtime.local_node_id,
+                    finish_labels.0,
+                    finish_labels.1,
+                    finish_labels.2,
+                    finish_labels.3,
+                    finish_token.deadline(),
+                );
+                #[cfg(test)]
+                let read_finish =
+                    crate::distribution_native_read::trace::Span::current("read-finish-worker");
+                #[cfg(test)]
+                crate::distribution_native_read::trace::Span::detail(
+                    "read-finish-worker",
+                    format_args!("queued_us={}", finish_queued.elapsed().as_micros()),
+                );
+                // STRONG_TRACE_END
                 let verdict = (|| {
                     finish_token.check()?;
+
+                    // STRONG_TRACE_BEGIN
+                    #[cfg(test)]
+                    let finish_service_wait = crate::distribution_native_read::trace::Span::current(
+                        "read-finish-service-wait",
+                    );
+                    // STRONG_TRACE_END
                     let service = loop {
                         finish_token.check()?;
                         if let Some(service) = runtime.service.try_lock_for(LATCH_POLL) {
                             break service;
                         }
                     };
+
+                    // STRONG_TRACE_BEGIN
+                    #[cfg(test)]
+                    drop(finish_service_wait);
+                    #[cfg(test)]
+                    let _finish_validation = crate::distribution_native_read::trace::Span::current(
+                        "read-finish-validation",
+                    );
+                    // STRONG_TRACE_END
                     round.finish(&service)
                 })();
+
+                // STRONG_TRACE_BEGIN
+                #[cfg(test)]
+                crate::distribution_native_read::trace::Span::detail(
+                    "read-finish-result",
+                    format_args!("ok={} error={:?}", verdict.is_ok(), verdict.as_ref().err()),
+                );
+                #[cfg(test)]
+                drop(read_finish);
+                // STRONG_TRACE_END
                 let _ = out.send(verdict);
             })?;
         loop {

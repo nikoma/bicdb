@@ -163,7 +163,23 @@ impl NativeReadQuorumRound {
         &mut self,
         observation: NativeRangeReadObservation,
     ) -> Result<bool> {
+        // STRONG_TRACE_BEGIN
+        #[cfg(test)]
+        let _record = crate::distribution_native_read::trace::Span::current("read-record-attempt");
+        // STRONG_TRACE_END
+
         if observation.require_live().is_err() {
+            // STRONG_TRACE_BEGIN
+            #[cfg(test)]
+            crate::distribution_native_read::trace::Span::detail(
+                "read-record-expired-attempt",
+                format_args!(
+                    "peer={} action=retain-constraint-without-vote",
+                    observation.facts().node_id
+                ),
+            );
+            // STRONG_TRACE_END
+
             self.constrain_expired_attempt(&observation)?;
             return Ok(false);
         }
@@ -171,6 +187,14 @@ impl NativeReadQuorumRound {
         if result.is_err() {
             self.poisoned = true;
         }
+
+        // STRONG_TRACE_BEGIN
+        #[cfg(test)]
+        crate::distribution_native_read::trace::Span::detail(
+            "read-record-live-attempt",
+            format_args!("ok={} error={:?}", result.is_ok(), result.as_ref().err()),
+        );
+        // STRONG_TRACE_END
         result.map(|_| true)
     }
     pub(crate) fn constrain_expired_attempt(
@@ -244,6 +268,20 @@ impl NativeReadQuorumRound {
         self,
         service: &crate::ClusterDataNodeService,
     ) -> Result<NativeReadQuorumCandidate> {
+        // STRONG_TRACE_BEGIN
+        #[cfg(test)]
+        let _round_finish =
+            crate::distribution_native_read::trace::Span::current("read-round-finish");
+        #[cfg(test)]
+        crate::distribution_native_read::trace::Span::detail(
+            "read-round-finish",
+            format_args!(
+                "observations={} expired_constraints={}",
+                self.observations.len(),
+                self.expired_constraints.len()
+            ),
+        );
+        // STRONG_TRACE_END
         self.require_live()?;
         self.require_no_known_conflict()?;
         let local = self
@@ -253,6 +291,20 @@ impl NativeReadQuorumRound {
             .ok_or_else(|| invalid("actual same-service local read observation unavailable"))?;
         local.require_current(service)?;
         let point = local.facts();
+
+        // STRONG_TRACE_BEGIN
+        #[cfg(test)]
+        crate::distribution_native_read::trace::Span::detail(
+            "read-round-local-point",
+            format_args!(
+                "node={} R={} H={} local_B={}",
+                self.local_node,
+                point.range_index,
+                point.logical_history_sha256,
+                point.local_visibility_db_sequence
+            ),
+        );
+        // STRONG_TRACE_END
         let mut matching = BTreeSet::new();
         for (node, observation) in &self.observations {
             let facts = observation.facts();

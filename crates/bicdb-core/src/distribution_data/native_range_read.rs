@@ -55,6 +55,12 @@ impl ClusterDataNodeService {
         parent: &CancellationToken,
     ) -> Result<ActualServiceNativeReadProbeEvidence> {
         let cancellation = request.cancellation(parent)?;
+
+        // STRONG_TRACE_BEGIN
+        #[cfg(test)]
+        let _probe_service =
+            crate::distribution_native_read::trace::Span::current("read-probe-service");
+        // STRONG_TRACE_END
         let local = self.observe_current_native_range(request, &cancellation)?;
         cancellation.check()?;
         Ok(ActualServiceNativeReadProbeEvidence {
@@ -87,39 +93,131 @@ impl ClusterDataNodeService {
         parent: &CancellationToken,
     ) -> Result<LocalNativeRangeReadObservation> {
         let cancellation = request.cancellation(parent)?;
+
+        // STRONG_TRACE_BEGIN
+        #[cfg(test)]
+        let read_db_acquire =
+            crate::distribution_native_read::trace::Span::current("read-db-acquire");
+        // STRONG_TRACE_END
         let database = checked_database_read(&self.db, &self.storage_policy)?;
+
+        // STRONG_TRACE_BEGIN
+        #[cfg(test)]
+        drop(read_db_acquire);
+        // STRONG_TRACE_END
+
+        // STRONG_TRACE_BEGIN
+        #[cfg(test)]
+        let read_catalog_writer_admission =
+            crate::distribution_native_read::trace::Span::current("read-catalog-writer-admission");
+        // STRONG_TRACE_END
         self.require_native_catalog_database(&database)?;
         self.require_native_writer_host_for_range(&database, &request.scope.range)?;
+
+        // STRONG_TRACE_BEGIN
+        #[cfg(test)]
+        drop(read_catalog_writer_admission);
+        // STRONG_TRACE_END
+
+        // STRONG_TRACE_BEGIN
+        #[cfg(test)]
+        let read_schema = crate::distribution_native_read::trace::Span::current("read-schema");
+        // STRONG_TRACE_END
         database.schema_compatibility_fingerprint()?;
+
+        // STRONG_TRACE_BEGIN
+        #[cfg(test)]
+        drop(read_schema);
+        // STRONG_TRACE_END
+
+        // STRONG_TRACE_BEGIN
+        #[cfg(test)]
+        let read_current_lineage =
+            crate::distribution_native_read::trace::Span::current("read-current-lineage");
+        // STRONG_TRACE_END
         let lineage = database.current_native_range_source_lineage(request.scope.range.id)?;
+
+        // STRONG_TRACE_BEGIN
+        #[cfg(test)]
+        drop(read_current_lineage);
+        // STRONG_TRACE_END
         if lineage.local_node_id() != &self.node_id || lineage.cluster_id() != &self.cluster_id {
             return Err(data_error(
                 "native read source belongs to another actual service",
             ));
         }
+
+        // STRONG_TRACE_BEGIN
+        #[cfg(test)]
+        let read_native_admission =
+            crate::distribution_native_read::trace::Span::current("read-native-admission");
+        // STRONG_TRACE_END
         let native = database.native_recovery_admission(
             &self.cluster_id,
             request.scope.bootstrap_id,
             &self.node_id,
             lineage.local_member_incarnation(),
         )?;
+
+        // STRONG_TRACE_BEGIN
+        #[cfg(test)]
+        drop(read_native_admission);
+        // STRONG_TRACE_END
+
+        // STRONG_TRACE_BEGIN
+        #[cfg(test)]
+        let read_abort_controls =
+            crate::distribution_native_read::trace::Span::current("read-abort-controls");
+        // STRONG_TRACE_END
         self.range_writes.require_actual_abort_controls_covered(
             &database,
             request.scope.range.id,
             lineage.range_index(),
         )?;
+
+        // STRONG_TRACE_BEGIN
+        #[cfg(test)]
+        drop(read_abort_controls);
+        // STRONG_TRACE_END
+
+        // STRONG_TRACE_BEGIN
+        #[cfg(test)]
+        let read_catalog_observation =
+            crate::distribution_native_read::trace::Span::current("read-catalog-observation");
+        // STRONG_TRACE_END
         let catalogue = self.range_writes.observe_native_read_catalogue(
             &request.scope,
             lineage.range_index(),
             database.data_path(),
             &native,
         )?;
+
+        // STRONG_TRACE_BEGIN
+        #[cfg(test)]
+        drop(read_catalog_observation);
+        // STRONG_TRACE_END
+
+        // STRONG_TRACE_BEGIN
+        #[cfg(test)]
+        let read_physical = crate::distribution_native_read::trace::Span::current("read-physical");
+        // STRONG_TRACE_END
         let physical = database.observe_native_range_read_physical(
             &request.scope,
             &catalogue,
             native,
             &cancellation,
         )?;
+
+        // STRONG_TRACE_BEGIN
+        #[cfg(test)]
+        drop(read_physical);
+        // STRONG_TRACE_END
+
+        // STRONG_TRACE_BEGIN
+        #[cfg(test)]
+        let read_catalog_postcurrent =
+            crate::distribution_native_read::trace::Span::current("read-catalog-postcurrent");
+        // STRONG_TRACE_END
         catalogue.require_current(
             &self.range_writes,
             &request.scope,
@@ -127,6 +225,11 @@ impl ClusterDataNodeService {
             database.data_path(),
             physical.native_admission(),
         )?;
+
+        // STRONG_TRACE_BEGIN
+        #[cfg(test)]
+        drop(read_catalog_postcurrent);
+        // STRONG_TRACE_END
         cancellation.check()?;
         LocalNativeRangeReadObservation::from_actual_service(ActualServiceNativeReadEvidence {
             request: request.clone(),
@@ -139,6 +242,11 @@ impl ClusterDataNodeService {
         &self,
         observation: &LocalNativeRangeReadObservation,
     ) -> Result<()> {
+        // STRONG_TRACE_BEGIN
+        #[cfg(test)]
+        let _revalidate =
+            crate::distribution_native_read::trace::Span::current("read-local-revalidate");
+        // STRONG_TRACE_END
         observation.require_lifetime()?;
         let database = checked_database_read(&self.db, &self.storage_policy)?;
         self.require_native_catalog_database(&database)?;

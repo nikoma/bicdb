@@ -901,25 +901,35 @@ impl RangeWriteStore {
             None
         };
         let (mut catalog, existing_catalog) = match fs::read(&path) {
-            Ok(bytes) => (serde_json::from_slice::<RangeWriteEnvelope>(&bytes)?.verify()?, true),
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound && (enforced || abort_protocol) => return Err(BicDbError::NativeRangeCatalogueCustodyMissing),
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => (RangeWriteCatalog {
-                format_version: RANGE_WRITE_LOG_FORMAT_VERSION,
-                native_writer_enforcement_version: None,
-                native_joint_handoffs: None,
-                cluster_id: cluster_id.clone(),
-                node_id: node_id.clone(),
-                ranges: BTreeMap::new(),
-                backup_fences: BTreeMap::new(),
-                handoff_promises: BTreeMap::new(),
-                image_install_intents: BTreeMap::new(),
-                recovery_fences: BTreeMap::new(),
-                native_image_bases: BTreeMap::new(),
-                sparse_committed_decisions: None,
-                installing_committed_certifications: None,
-                installing_recovery_handovers: None,
-                native_abort_protocol: None,
-            }, false),
+            Ok(bytes) => (
+                serde_json::from_slice::<RangeWriteEnvelope>(&bytes)?.verify()?,
+                true,
+            ),
+            Err(error)
+                if error.kind() == std::io::ErrorKind::NotFound && (enforced || abort_protocol) =>
+            {
+                return Err(BicDbError::NativeRangeCatalogueCustodyMissing)
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => (
+                RangeWriteCatalog {
+                    format_version: RANGE_WRITE_LOG_FORMAT_VERSION,
+                    native_writer_enforcement_version: None,
+                    native_joint_handoffs: None,
+                    cluster_id: cluster_id.clone(),
+                    node_id: node_id.clone(),
+                    ranges: BTreeMap::new(),
+                    backup_fences: BTreeMap::new(),
+                    handoff_promises: BTreeMap::new(),
+                    image_install_intents: BTreeMap::new(),
+                    recovery_fences: BTreeMap::new(),
+                    native_image_bases: BTreeMap::new(),
+                    sparse_committed_decisions: None,
+                    installing_committed_certifications: None,
+                    installing_recovery_handovers: None,
+                    native_abort_protocol: None,
+                },
+                false,
+            ),
             Err(error) => return Err(error.into()),
         };
         if catalog.cluster_id != cluster_id || catalog.node_id != node_id {

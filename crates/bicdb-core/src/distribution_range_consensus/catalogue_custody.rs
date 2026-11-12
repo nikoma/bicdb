@@ -27,6 +27,7 @@ impl RangeWriteStore {
         fresh: &crate::db::FreshNativeCatalogueBootstrap<'_>,
     ) -> Result<()> {
         let (root, cluster_id, node_id) = fresh.require_current()?;
+        fresh.require_non_abort_profile()?;
         let catalogue = RangeWriteCatalog {
             format_version: NATIVE_WRITER_CATALOG_FORMAT,
             native_writer_enforcement_version: Some(1),
@@ -39,9 +40,24 @@ impl RangeWriteStore {
             recovery_fences: BTreeMap::new(),
             native_image_bases: BTreeMap::new(),
             sparse_committed_decisions: Some(BTreeMap::new()),
+            installing_committed_certifications: None,
+            installing_recovery_handovers: None,
+            native_joint_handoffs: None,
+            native_abort_protocol: None,
         };
         let envelope = RangeWriteEnvelope::new(catalogue)?;
         envelope.clone().verify()?;
+        Self::write_new_native_catalogue(&root, &envelope)?;
+        fresh.require_current()?;
+        Ok(())
+    }
+
+    // Byte publication ONLY. Callers must already own either the private NEW
+    // birth capability or the actual protected Pending StoreUUID capability.
+    pub(super) fn write_new_native_catalogue(
+        root: &Path,
+        envelope: &RangeWriteEnvelope,
+    ) -> Result<()> {
         #[cfg(test)]
         let failure = BOOTSTRAP_FAILURE.with(|cut| cut.take());
         #[cfg(test)]
@@ -66,8 +82,7 @@ impl RangeWriteStore {
         }
         file.sync_all()?;
         drop(file);
-        File::open(&root)?.sync_all()?;
-        fresh.require_current()?;
+        File::open(root)?.sync_all()?;
         #[cfg(test)]
         if failure == Some(FreshCatalogueTestCut::AfterDurable) {
             return Err(range_write_error(

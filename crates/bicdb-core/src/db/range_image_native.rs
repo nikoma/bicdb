@@ -12,6 +12,7 @@ use crate::distribution_range_image::{
 use crate::distribution_range_mutation::FrozenRangeMutationPermit;
 
 mod abort_catalogue;
+pub(crate) use abort_catalogue::NativeAbortCatalogueBootstrap;
 pub(crate) mod abort_history;
 mod certified_prefix;
 mod history;
@@ -486,6 +487,14 @@ pub(crate) struct FreshNativeCatalogueBootstrap<'a> {
     birth: &'a NativeDatabaseBirth,
 }
 impl FreshNativeCatalogueBootstrap<'_> {
+    pub(crate) fn require_non_abort_profile(&self) -> Result<()> {
+        if self.birth.abort_protocol_version.is_some() {
+            return Err(invalid(
+                "abort-aware fresh factory must use protected catalogue StoreUUID",
+            ));
+        }
+        Ok(())
+    }
     pub(crate) fn require_current(&self) -> Result<(PathBuf, ClusterId, ClusterNodeId)> {
         self.database.check_recovery_state()?;
         let actual = self
@@ -972,9 +981,18 @@ impl BicDb {
             true,
         )?;
         if enforce {
-            crate::distribution_range_consensus::RangeWriteStore::initialize_fresh_native_catalogue(
-                &FreshNativeCatalogueBootstrap { database: &db, birth: &birth },
-            )?;
+            let fresh = FreshNativeCatalogueBootstrap {
+                database: &db,
+                birth: &birth,
+            };
+            fresh.require_current()?;
+            if birth.abort_protocol_version == Some(1) {
+                // One actual catalogue owner: protected Pending→exact15→
+                // Registered BEFORE factory exposure, never an empty12 retrofit.
+                db.initialize_native_abort_catalogue(&birth)?;
+            } else {
+                crate::distribution_range_consensus::RangeWriteStore::initialize_fresh_native_catalogue(&fresh)?;
+            }
         }
         db.finish_native_genesis_initialization(&birth)?;
         let authority = FreshRangeGenesisAuthority {

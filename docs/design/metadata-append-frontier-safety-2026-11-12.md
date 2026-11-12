@@ -66,13 +66,14 @@ normal pull-request and main-push paths still run the complete suite matrix.
 | Tests-only `e5abb9f9b842081385d0f93c5ab7abd75b6819df`, [run 43171290447](https://github.com/nikoma/bicdb/actions/runs/43171290447) | Failed | One executed regression failed: returned ACK 3, matched frontier 1. All recovery/reopen assertions preceding that final assertion completed. Compilation and isolated consumer checks passed. The first run retained log evidence but did not upload the temporary state directory; do not claim that run archived raw state files. |
 | Retained-state baseline `c295916d0030f3fbd37962150cfd1f65dc70e752`, [run 43173136830](https://github.com/nikoma/bicdb/actions/runs/43173136830) | Failed | Zero passed, one failed, 538 filtered out, 0.08 s. Archived actual states and trace confirm ACK 3 for matched index 1, premature C commit index 3, subsequent replacement by genuine majority recovery, and strict reopen of all three stores. |
 | Fixed candidate `e0bb370fb1bad2cddc783b1b8f98775735281c05`, [run 43173148741](https://github.com/nikoma/bicdb/actions/runs/43173148741) | Passed | One passed, zero failed, 538 filtered out, 0.07 s. Archived actual states confirm ACK 1 and no premature topology commit (C commit index 0). Genuine majority recovery and strict reopen of all three stores pass. This is the focused test result, not a full-suite or physical qualification. |
+| Additional controls `6458bf6d0c121e647ae0a1f57fa85a06d16b4163`, [run 43174340023](https://github.com/nikoma/bicdb/actions/runs/43174340023) | Passed | Two passed, zero failed, 538 filtered out, 0.08 s. The original divergent-tail regression and genuine snapshot-plus-entry, duplicate partial-batch, empty-heartbeat, commit propagation and strict-reopen control pass. All-target and isolated consumer compilation checks pass. Full matrix is skipped in this focused manual run. |
 
 The [retained artifact comparison](../evidence/metadata-append-frontier-2026-11-12/README.md)
 includes both original CI ZIPs, hashes for every member and an offline custody
 verifier. All twelve state-envelope checksums match. This preserves the evidence
 beyond GitHub's temporary artifact retention. Additional genuine snapshot-plus-entry,
-bounded duplicate-batch and empty-heartbeat controls are prepared separately;
-their execution is not implied by the single-regression result above.
+bounded duplicate-batch and empty-heartbeat controls execute in the separate
+two-test run above. The original one-test artifact pair remains unchanged.
 
 ## Repair and remaining gates
 

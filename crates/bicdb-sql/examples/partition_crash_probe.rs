@@ -1,5 +1,6 @@
 //! Crash only disposable copies of genuine old stores. Expected snapshots and
-//! the ACK file live outside the database. This is not an application or VM test.
+//! the ACK file live outside the database. Optional VM pauses let an external
+//! controller discard guest RAM; the probe itself never resets a host or VM.
 use bicdb_core::{BicDb, DbConfig, StorageMode};
 use bicdb_sql::{PartitionPolicyDecision, PartitionRowRelocation, PartitionUpgradePlan};
 use serde::{Deserialize, Serialize};
@@ -43,6 +44,16 @@ fn write_new(path: &Path, value: &impl Serialize) -> Result<(), Box<dyn std::err
     file.sync_all()?;
     File::open(path.parent().unwrap())?.sync_all()?;
     Ok(())
+}
+
+fn pause_for_vm(site: &str) -> ! {
+    println!("PARTITION_VM_CUT_READY {}", json!({"site": site}));
+    std::io::stdout()
+        .flush()
+        .expect("flush external VM witness");
+    loop {
+        std::thread::park();
+    }
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -94,6 +105,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             bicdb_page::test_faults::volatile_tail_enabled(),
                         );
                     },
+                )
+            });
+            // These are the existing pre-I/O hooks, not post-sync claims.
+            // Keep the guest alive and paused until its controller records the
+            // witness and kills only that disposable QEMU process.
+            let _vm_pause = std::env::var("PARTITION_VM_PAUSE_IO").ok().map(|spec| {
+                let (site, count) = spec.rsplit_once(':').expect("SITE:HIT");
+                let label = site.to_owned();
+                bicdb_page::test_faults::arm_io_hook(
+                    site,
+                    db.data_path(),
+                    count.parse().unwrap(),
+                    move || pause_for_vm(&label),
                 )
             });
             let inspection = bicdb_sql::inspect_partition_upgrade(&db)?;
@@ -157,6 +181,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 &json!({"upgrade_acknowledged":true,"applied":applied,
                     "before_native_sequence":before_sequence,"after_native_sequence":db.last_commit_seq()}),
             )?;
+            if std::env::var("PARTITION_VM_PAUSE_AFTER_ACK").as_deref() == Ok("1") {
+                let ack: Value = serde_json::from_reader(File::open(&args[4])?)?;
+                println!("PARTITION_VM_ACK {ack}");
+                pause_for_vm("partition_upgrade.after_ack");
+            }
             bicdb_page::test_faults::crash_point("partition_upgrade.after_ack");
             db.close()?;
         }
@@ -169,6 +198,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let old: Snapshot = serde_json::from_reader(File::open(&args[3])?)?;
             let new: Snapshot = serde_json::from_reader(File::open(&args[4])?)?;
             let ack = std::env::var_os("PARTITION_CRASH_ACK").map(std::path::PathBuf::from);
+            if std::env::var("PARTITION_CRASH_REQUIRE_ACK").as_deref() == Ok("1") {
+                assert!(
+                    ack.as_ref().is_some_and(|p| p.is_file()),
+                    "missing required ACK"
+                );
+            }
             for reopen in 0..3 {
                 let db = BicDb::open_with_config(path, config.clone())?;
                 let actual = snapshot(&db)?;
@@ -179,6 +214,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 );
                 if ack.as_ref().is_some_and(|p| p.exists()) {
                     assert!(complete, "acknowledged upgrade rolled back");
+                }
+                if std::env::var("PARTITION_VM_REQUIRE_NEW").as_deref() == Ok("1") {
+                    assert!(complete, "externally acknowledged upgrade rolled back");
                 }
                 let certificate = if db.has_collection("__bicdb_pg_partition_certificate") {
                     db.get("__bicdb_pg_partition_certificate", "current")?

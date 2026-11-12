@@ -519,6 +519,16 @@ impl BicDb {
             prepared.local_node_id(),
             admission.test_phase_cancellation(),
         );
+        if admission.has_fresh_publication_phase() {
+            let result = self.publish_scoped_native_joint_bridge(
+                admission, original, prepared, store, catalogue, image, frozen, parent,
+            );
+            #[cfg(test)]
+            if result.is_ok() {
+                trace.complete();
+            }
+            return result;
+        }
         parent.check()?;
         admission.require_external_preparations_current()?;
         admission.committed().require_current(self)?;
@@ -640,5 +650,274 @@ impl BicDb {
             trace.complete();
         }
         Ok(receipt)
+    }
+}
+
+impl NativeJointPreparedPublicationScope<'_> {
+    /// Explicit POST-write proof: actual newly selected pointer AND archive,
+    /// plus an independently reread physical/native source contract. The old
+    /// scoped lineage is only a comparison baseline, never the poststate.
+    fn require_bridge_postcondition(
+        &self,
+        receipt: &NativeJointServingBridgeReceipt,
+        controlled: Option<&ControlledFrozenMutationPermit>,
+    ) -> Result<()> {
+        #[cfg(test)]
+        let mut trace = crate::distribution_range_handoff::NativeJointPhaseTrace::from_deadline(
+            "publication-poststate-new-pointer-archive-and-physical",
+            self.prepared.local_node_id(),
+            self.committed.deadline(),
+        );
+        self.journal.require_database(self.database)?;
+        let range = self.prepared.record.range_id;
+        let validate_owner = || -> Result<()> {
+            if let Some(controlled) = controlled {
+                self.database
+                    .range_mutation_gate()
+                    .validate(range, &RangeMutationAuthority::Controlled(controlled))
+            } else {
+                self.database
+                    .range_mutation_gate()
+                    .validate_quiescent_frozen(range, self.frozen)
+            }
+        };
+        validate_owner()?;
+        receipt.native.require_current(self.database)?;
+        receipt.record.validate()?;
+        if receipt.record.prepared != self.prepared.record
+            || &receipt.record.decision != self.committed.data()
+        {
+            return Err(invalid(
+                "scoped native publication returned another actual preparation/decision",
+            ));
+        }
+        for key in [
+            key(range),
+            archive_key(range, &receipt.record.checksum_sha256),
+        ] {
+            let actual: NativeJointServingBridgeRecord = self
+                .database
+                .read_native_range_image_record(&key)?
+                .ok_or_else(|| invalid("post-WAL native joint pointer/archive missing"))?;
+            actual.validate()?;
+            if actual != receipt.record {
+                return Err(invalid(
+                    "post-WAL native joint pointer/archive differs from actual receipt",
+                ));
+            }
+        }
+        let actual = self.database.current_native_range_source_lineage(range)?;
+        self.require_unchanged_post_lineage(&actual)?;
+        receipt.record.require_actual_anchor(
+            self.database,
+            &receipt.native,
+            &actual.birth,
+            &actual.base,
+        )?;
+        self.prepared.record.require_binding_with_actual(
+            self.database,
+            &self.prepared.native,
+            self.committed,
+            self.catalogue,
+            &actual,
+        )?;
+        // This checker does not demand controlled==0. The actual Controlled
+        // token above replaces quiescence during our own durable callback.
+        self.catalogue.require_current(
+            self.store,
+            self.database,
+            self.committed,
+            self.image,
+            self.frozen,
+        )?;
+        validate_owner()?;
+        #[cfg(test)]
+        trace.complete();
+        Ok(())
+    }
+    fn actual_existing_bridge(&self) -> Result<Option<NativeJointServingBridgeRecord>> {
+        let Some(record) = self
+            .database
+            .read_native_range_image_record::<NativeJointServingBridgeRecord>(&key(self
+                .prepared
+                .record
+                .range_id))?
+        else {
+            return Ok(None);
+        };
+        record.validate()?;
+        let (term, index, _) = self.committed.metadata_anchor();
+        if record.prepared != self.prepared.record
+            || &record.decision != self.committed.data()
+            || record.prepared.local_decision_sha256
+                != self.committed.native_receipt().checksum_sha256()
+            || term < record.post_quorum_metadata_term
+            || index < record.post_quorum_metadata_read_index
+        {
+            return Err(invalid(
+                "scoped native retry changed protected preparation/decision or regressed metadata",
+            ));
+        }
+        Ok(Some(record))
+    }
+    fn receipt_from_actual(
+        &self,
+        record: NativeJointServingBridgeRecord,
+    ) -> Result<NativeJointServingBridgeReceipt> {
+        let native = self.database.native_recovery_admission(
+            self.prepared.native.cluster_id(),
+            self.prepared.native.bootstrap_id(),
+            self.prepared.native.local_node_id(),
+            self.prepared.native.local_member_incarnation(),
+        )?;
+        Ok(NativeJointServingBridgeReceipt { native, record })
+    }
+}
+impl BicDb {
+    #[allow(clippy::too_many_arguments)]
+    fn publish_scoped_native_joint_bridge(
+        &self,
+        admission: &NativeJointActivationAdmission,
+        original: &CommittedNativeJointDecisionObservation,
+        prepared: &NativeJointServingPreparation,
+        store: &RangeWriteStore,
+        catalogue: &NativeJointBridgeCatalogue,
+        image: Option<&NativeImageCatalogueFinalization>,
+        frozen: &FrozenRangeMutationPermit,
+        parent: &CancellationToken,
+    ) -> Result<NativeJointServingBridgeReceipt> {
+        parent.check()?;
+        // Complete final SAME physical participant set, before the local
+        // journal. No foreign service/database or network call occurs below.
+        #[cfg(test)]
+        let mut foreign_trace = crate::distribution_range_handoff::NativeJointPhaseTrace::new(
+            "publication-final-foreign-before-journal",
+            prepared.local_node_id(),
+            admission.test_phase_cancellation(),
+        );
+        admission.require_external_preparations_current()?;
+        #[cfg(test)]
+        {
+            foreign_trace.complete();
+            drop(foreign_trace);
+        }
+
+        let scope =
+            prepared.publication_read_scope(self, store, original, catalogue, image, frozen)?;
+        admission.require_local_publication_scope(&scope, store)?;
+        if !self.config.fsync || !format::native_joint_data_handoff_active(self.data_path())? {
+            return Err(invalid(
+                "scoped native joint publication requires actual fsync/reader fence",
+            ));
+        }
+        let (term, index, context) = admission.committed().metadata_anchor();
+        let existing = scope.actual_existing_bridge()?;
+        let recovered = existing.is_some();
+        // Protected success is historical fact; preserve EXACT original QQ and
+        // post-QQ audit even when the new phase has a different MQ context.
+        let mut record = existing.unwrap_or_else(|| NativeJointServingBridgeRecord {
+            version: 1,
+            decision: admission.data().clone(),
+            prepared: prepared.record.clone(),
+            new_prepared: admission.votes(),
+            post_quorum_metadata_context_id: context,
+            post_quorum_metadata_term: term,
+            post_quorum_metadata_read_index: index,
+            native_page_xid: 0,
+            checksum_sha256: String::new(),
+        });
+        let controlled = if recovered {
+            None
+        } else {
+            Some(self.range_mutations.try_controlled_mutation(frozen)?)
+        };
+        if let Some(controlled) = &controlled {
+            self.range_mutations.validate(
+                record.prepared.range_id,
+                &RangeMutationAuthority::Controlled(controlled),
+            )?;
+            parent.check()?;
+            admission.require_local_publication_scope(&scope, store)?;
+            #[cfg(test)]
+            let mut wal_trace = crate::distribution_range_handoff::NativeJointPhaseTrace::new(
+                "bridge-native-page-wal",
+                prepared.local_node_id(),
+                admission.test_phase_cancellation(),
+            );
+            self.in_paged_transaction(|paged, xid| {
+                record.native_page_xid = xid;
+                record.checksum_sha256 = record.checksum()?;
+                record.validate()?;
+                let archive = archive_key(record.prepared.range_id, &record.checksum_sha256);
+                if self
+                    .read_native_range_image_record::<NativeJointServingBridgeRecord>(&archive)?
+                    .is_some()
+                {
+                    return Err(invalid(
+                        "scoped native archive exists without actual current pointer",
+                    ));
+                }
+                let bytes = bounded_json(&record, MAX_NATIVE_RECEIPT_BYTES)?;
+                for key in [archive, key(record.prepared.range_id)] {
+                    paged
+                        .store()
+                        .put(xid, &native_key(&key), &bytes)
+                        .map_err(|e| BicDbError::PagedStorage(e.to_string()))?;
+                }
+                Ok(())
+            })?
+            .ok_or_else(|| invalid("scoped native joint publisher has no actual page store"))?;
+            #[cfg(test)]
+            wal_trace.complete();
+        }
+        let receipt = scope.receipt_from_actual(record)?;
+        scope.require_bridge_postcondition(&receipt, controlled.as_ref())?;
+        admission.require_local_publication_scope(&scope, store)?;
+        drop(controlled);
+        self.range_mutations
+            .validate_quiescent_frozen(prepared.record.range_id, frozen)?;
+        drop(scope);
+        // Actual fsync may have succeeded while this phase expired/canceled.
+        // Such a return remains Unknown; the caller retains its pending marker.
+        parent.check()?;
+        admission.require_live()?;
+        #[cfg(test)]
+        eprintln!("ACTUAL_JOINT_SCOPED_PUBLICATION node={} recovered_exact_original_audit={} new-pointer-archive-and-unchanged-physical-poststate=true",prepared.local_node_id(),recovered);
+        Ok(receipt)
+    }
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn recover_scoped_native_joint_bridge(
+        &self,
+        admission: &NativeJointActivationAdmission,
+        prepared: &NativeJointServingPreparation,
+        store: &RangeWriteStore,
+        catalogue: &NativeJointBridgeCatalogue,
+        image: Option<&NativeImageCatalogueFinalization>,
+        frozen: &FrozenRangeMutationPermit,
+        parent: &CancellationToken,
+    ) -> Result<Option<NativeJointServingBridgeReceipt>> {
+        parent.check()?;
+        admission.require_external_preparations_current()?;
+        let scope = prepared.publication_read_scope(
+            self,
+            store,
+            admission.committed(),
+            catalogue,
+            image,
+            frozen,
+        )?;
+        admission.require_local_publication_scope(&scope, store)?;
+        let Some(record) = scope.actual_existing_bridge()? else {
+            parent.check()?;
+            admission.require_live()?;
+            return Ok(None);
+        };
+        let receipt = scope.receipt_from_actual(record)?;
+        scope.require_bridge_postcondition(&receipt, None)?;
+        admission.require_local_publication_scope(&scope, store)?;
+        drop(scope);
+        parent.check()?;
+        admission.require_live()?;
+        Ok(Some(receipt))
     }
 }

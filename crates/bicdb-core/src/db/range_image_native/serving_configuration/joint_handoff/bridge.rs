@@ -6,10 +6,12 @@ use crate::distribution_range_handoff::CommittedNativeJointDecisionObservation;
 use crate::distribution_range_image_install::NativeImageCatalogueFinalization;
 
 mod activation;
+mod publication_scope;
 pub(in crate::db::range_image_native) use activation::NativeJointServingDomain;
 pub(crate) use activation::{
     NativeJointBridgeReadScope, NativeJointHistoricalCutScope, NativeJointServingBridgeReceipt,
 };
+pub(crate) use publication_scope::NativeJointPreparedPublicationScope;
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
@@ -114,9 +116,22 @@ impl NativeJointServingPreparationRecord {
     ) -> Result<()> {
         native.require_current(database)?;
         committed.require_current(database)?;
+        let actual =
+            database.current_native_range_source_lineage(committed.data().old_range().id)?;
+        self.require_binding_with_actual(database, native, committed, catalogue, &actual)
+    }
+    fn require_binding_with_actual(
+        &self,
+        database: &BicDb,
+        native: &NativeRecoveryAdmission,
+        committed: &CommittedNativeJointDecisionObservation,
+        catalogue: &NativeJointBridgeCatalogue,
+        actual: &SourceRangeImageLineage,
+    ) -> Result<()> {
+        native.require_current(database)?;
+        committed.require_current(database)?;
         let data = committed.data();
         let (term, index, _) = committed.metadata_anchor();
-        let actual = database.current_native_range_source_lineage(data.old_range().id)?;
         let (global, range) = database.native_range_image_generation_pair(data.old_range().id)?;
         if self.birth_id != native.birth_id()
             || self.birth_sha256 != native.birth_sha256()

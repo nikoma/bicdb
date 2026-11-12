@@ -138,7 +138,10 @@ impl NativeJointPreparationPhaseRound {
             cancellation: self.cancellation,
             observations: self.observations,
         };
-        result.require_current()?;
+        // Collection already read every actual participant. Permission is
+        // closed by the complete FINAL foreign sweep + local journal scope,
+        // not an extra identical sweep before the post-quorum MQ.
+        result.require_live()?;
         Ok(result)
     }
 }
@@ -213,6 +216,23 @@ impl NativeJointPreparationPhaseQuorum {
         }
         self.require_live()
     }
+    pub(super) fn require_local_publication_writer(
+        &self,
+        node: &ClusterNodeId,
+        actual: &Arc<crate::db::NativeWriterHostState>,
+    ) -> Result<()> {
+        self.require_live()?;
+        if self
+            .observations
+            .get(node)
+            .is_none_or(|member| !Arc::ptr_eq(&member.writer, actual))
+        {
+            return Err(invalid(
+                "publication final scope actual writer registration changed",
+            ));
+        }
+        self.require_live()
+    }
     pub(crate) fn require_current(&self) -> Result<()> {
         self.require_live()?;
         for node in self.observations.keys() {
@@ -221,14 +241,18 @@ impl NativeJointPreparationPhaseQuorum {
         Ok(())
     }
     fn release_read_pins(&self) -> Result<()> {
-        self.require_current()?;
+        self.require_live()?;
         let mut released = true;
         for old in self.original.observations.values() {
             released &= old.actual.read_pin_already_released()?;
         }
         if released {
-            return self.require_current();
+            // None is a private monotone fact about THESE original objects.
+            // It grants no quiescence: final publication checks the actual
+            // Frozen/local point and all foreign members again.
+            return self.require_live();
         }
+        self.require_current()?;
         for (node, fresh) in &self.observations {
             let old = &self.original.observations[node];
             let service = old

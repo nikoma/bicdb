@@ -261,6 +261,36 @@ impl ActualServiceNativeJointPreparedEvidence {
         writer.require_database(scope.database(), fresh.data().activation_range())?;
         Ok(writer)
     }
+    pub(crate) fn require_local_publication_scope(
+        &self,
+        scope: &crate::db::NativeJointPreparedPublicationScope<'_>,
+        store: &crate::distribution_range_consensus::RangeWriteStore,
+        fresh: &CommittedNativeJointDecisionObservation,
+    ) -> Result<Arc<crate::db::NativeWriterHostState>> {
+        self.committed
+            .require_historical_audit_with_publication_scope(scope)?;
+        fresh.require_current_with_publication_scope(scope)?;
+        scope.require_owned_preparation(
+            &self.prepared,
+            &self.catalogue,
+            self.lease.image(),
+            self.lease.try_frozen()?,
+            store,
+        )?;
+        if self
+            .pin
+            .try_lock()
+            .ok_or_else(|| data_error("publication pin transition busy"))?
+            .is_some()
+        {
+            return Err(data_error(
+                "publication requires original actual read pins released",
+            ));
+        }
+        let writer = store.native_writer_host_state()?;
+        writer.require_database(scope.database(), fresh.data().activation_range())?;
+        Ok(writer)
+    }
     pub(crate) fn require_phase_writer_lifetime(
         &self,
         writer: &crate::db::NativeWriterHostState,
@@ -467,6 +497,25 @@ impl ClusterDataNodeService {
         parent: &CancellationToken,
     ) -> Result<Option<crate::db::NativeJointServingBridgeReceipt>> {
         parent.check()?;
+        if admission.has_fresh_publication_phase() {
+            // Final foreign sweep and all local proof checks are inside the
+            // scoped native reader. It never recreates an absent receipt.
+            let database = checked_database_read(&self.db, &self.storage_policy)?;
+            self.require_native_catalog_database(&database)?;
+            self.require_native_writer_host_for_range(
+                &database,
+                admission.data().activation_range(),
+            )?;
+            return database.recover_scoped_native_joint_bridge(
+                admission,
+                &actual.prepared,
+                &self.range_writes,
+                &actual.catalogue,
+                actual.lease.image(),
+                actual.lease.try_frozen()?,
+                parent,
+            );
+        }
         admission.require_external_preparations_current()?;
         admission.require_local_preparation_current(self)?;
         if actual.prepared.checksum_sha256() != admission.local_preparation().checksum_sha256()

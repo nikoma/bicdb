@@ -12,8 +12,8 @@ use crate::distribution_range_mutation::{
 mod bridge;
 pub(in crate::db::range_image_native) use bridge::NativeJointServingDomain;
 pub(crate) use bridge::{
-    NativeJointBridgeReadScope, NativeJointHistoricalCutScope, NativeJointServingBridgeReceipt,
-    NativeJointServingPreparation,
+    NativeJointBridgeReadScope, NativeJointHistoricalCutScope, NativeJointPreparedPublicationScope,
+    NativeJointServingBridgeReceipt, NativeJointServingPreparation,
 };
 
 /// Actual physical preflight under an owned/drained handoff freeze. No serde,

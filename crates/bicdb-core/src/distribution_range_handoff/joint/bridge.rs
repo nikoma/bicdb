@@ -371,6 +371,9 @@ impl NativeJointActivationAdmission {
     /// The fresh publisher's mandatory COMPLETE external+local physical
     /// validation occurs in the native pre-WAL boundary under the real local
     /// service/DB guard. Do not repeat that same sweep in each wrapper.
+    pub(crate) fn has_fresh_publication_phase(&self) -> bool {
+        self.phase.is_some()
+    }
     pub(crate) fn require_publication_service_entry(
         &self,
         service: &ClusterDataNodeService,
@@ -392,6 +395,22 @@ impl NativeJointActivationAdmission {
         } else {
             self.local.actual.require_current(service)
         }
+    }
+    pub(crate) fn require_local_publication_scope(
+        &self,
+        scope: &crate::db::NativeJointPreparedPublicationScope<'_>,
+        store: &crate::distribution_range_consensus::RangeWriteStore,
+    ) -> Result<()> {
+        self.require_live()?;
+        self.fresh.require_current_with_publication_scope(scope)?;
+        let writer =
+            self.local
+                .actual
+                .require_local_publication_scope(scope, store, &self.fresh)?;
+        if let Some(phase) = &self.phase {
+            phase.require_local_publication_writer(self.local.local_node_id(), &writer)?;
+        }
+        self.require_live()
     }
     #[cfg(test)]
     pub(crate) fn test_phase_cancellation(&self) -> &crate::CancellationToken {

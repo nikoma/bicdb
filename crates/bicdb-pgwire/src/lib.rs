@@ -4008,10 +4008,18 @@ fn execute_server_sql_for_describe_inner(
         let db = server.read_db_for_transaction_progress()?;
         let description =
             catalog_cache.with_schema_cache(&db, || -> Result<Option<SqlResult>> {
-                if let Some(columns) = infer_query_result_columns_for_describe(&db, sql)? {
+                if let Some(columns) = infer_query_result_columns_for_describe(&db, sql)
+                    .inspect_err(|e| eprintln!("DESCRIBE DIAGNOSTIC inference {sql}: {e}"))?
+                {
+                    eprintln!(
+                        "DESCRIBE DIAGNOSTIC inferred {} columns for {sql}",
+                        columns.len()
+                    );
                     let (names, types): (Vec<_>, Vec<_>) = columns.into_iter().unzip();
                     let mut result = SqlResult::empty(names).with_column_types(types);
-                    if let Some(metadata) = infer_query_result_column_metadata(&db, sql)? {
+                    if let Some(metadata) = infer_query_result_column_metadata(&db, sql)
+                        .inspect_err(|e| eprintln!("DESCRIBE DIAGNOSTIC origins {sql}: {e}"))?
+                    {
                         result = result.with_column_metadata(metadata);
                     }
                     return Ok(Some(result));
@@ -4022,6 +4030,7 @@ fn execute_server_sql_for_describe_inner(
             return Ok(result);
         }
     }
+    eprintln!("DESCRIBE DIAGNOSTIC executor fallback for {sql}");
     execute_server_db_sql(
         server,
         sql,

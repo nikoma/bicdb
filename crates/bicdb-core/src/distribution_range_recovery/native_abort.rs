@@ -166,6 +166,16 @@ impl NativeAbortCandidateObservation {
             ));
         }
         self.reply.record.domain.require_role(role)?;
+        let expected_birth = role.native_store_birth(&self.reply.node_id)?;
+        if expected_birth.abort_protocol_version() != 1
+            || expected_birth.writer_enforcement_version() != 1
+            || expected_birth.birth_id() != self.reply.record.birth_id()
+            || expected_birth.birth_sha256() != self.reply.record.birth_sha256()
+        {
+            return Err(invalid(
+                "actual abort candidate birth differs from independently fresh native enrollment",
+            ));
+        }
         require_member(
             role,
             &self.peer,
@@ -204,6 +214,9 @@ pub(crate) struct NativeAbortPromiseReply {
     pub store_open_id: Uuid,
     pub native_database_incarnation: String,
     pub candidate_sha256: String,
+    pub native_birth_id: Uuid,
+    pub native_birth_sha256: String,
+    pub abort_protocol_version: u32,
     pub predecessor_index: u64,
     pub predecessor_history_sha256: String,
     pub disposition: NativeAbortPromiseDisposition,
@@ -236,6 +249,9 @@ impl NativeAbortPromiseObservation {
             || reply.store_open_id.is_nil()
             || reply.native_database_incarnation.is_empty()
             || reply.candidate_sha256.len() != 64
+            || reply.native_birth_id.is_nil()
+            || reply.native_birth_sha256.len() != 64
+            || reply.abort_protocol_version != 1
             || reply.predecessor_index.checked_add(1) != Some(reply.request.range_index)
             || reply.predecessor_history_sha256.len() != 64
             || match &reply.disposition {
@@ -307,6 +323,14 @@ impl NativeAbortPromiseRound {
         let cancellation = request
             .cancellation(parent)?
             .child_with_deadline(role.deadline());
+        for node in role.member_credentials().keys() {
+            let binding = role.native_store_birth(node)?;
+            if binding.writer_enforcement_version() != 1 || binding.abort_protocol_version() != 1 {
+                return Err(invalid(
+                    "abort quorum requires actual fresh from-birth eligible current voters",
+                ));
+            }
+        }
         candidate.require_for_role(&role, &request)?;
         if request.candidate_sha256.as_deref() != Some(candidate.sha256()) {
             return Err(invalid(
@@ -333,6 +357,15 @@ impl NativeAbortPromiseRound {
                 &reply.node_id,
                 reply.member_incarnation,
             )?;
+            let binding = self.role.native_store_birth(&reply.node_id)?;
+            if binding.birth_id() != reply.native_birth_id
+                || binding.birth_sha256() != reply.native_birth_sha256
+                || binding.abort_protocol_version() != reply.abort_protocol_version
+            {
+                return Err(invalid(
+                    "abort vote actual birth differs from fresh metadata enrollment",
+                ));
+            }
             if !reply.request.scope.same_session(&self.request.scope)
                 || reply.request.range_index != self.request.range_index
                 || reply.request.origin_node_id != self.request.origin_node_id

@@ -28,6 +28,12 @@ pub(crate) struct NativeNoEffectIntentRecord {
     checksum_sha256: String,
 }
 impl NativeNoEffectIntentRecord {
+    pub(crate) fn birth_id(&self) -> Uuid {
+        self.birth_id
+    }
+    pub(crate) fn birth_sha256(&self) -> &str {
+        &self.birth_sha256
+    }
     pub(crate) fn checksum_sha256(&self) -> &str {
         &self.checksum_sha256
     }

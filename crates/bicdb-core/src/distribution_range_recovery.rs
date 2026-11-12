@@ -597,6 +597,18 @@ impl RecoveryRoleAdmission {
             handoff_target_identity,
         })
     }
+    pub(crate) fn native_store_birth(
+        &self,
+        node: &ClusterNodeId,
+    ) -> Result<&crate::distribution::NativeStoreBirthV1> {
+        self.require_live_request()?;
+        self.witness
+            .committed_topology(self.business_request_id(), self.recipient_challenge())?
+            .nodes
+            .get(node)
+            .and_then(|n| n.native_store_birth_v1.as_ref())
+            .ok_or_else(|| invalid("fresh metadata does not bind the actual native voter birth"))
+    }
     pub(crate) fn configuration_sha256(&self) -> Result<String> {
         use sha2::{Digest, Sha256};
         let mut replicas = self

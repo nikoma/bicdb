@@ -98,6 +98,7 @@ impl NativeAbortDecisionRecord {
             || self.actual_promises.len() < voters.len()/2+1 || self.actual_promises.len() > voters.len()
             || self.actual_promises.iter().any(|(id, p)| {
                 !voters.contains(id) || id != &p.node_id || !p.request.scope.same_session(&self.scope)
+                    || p.native_birth_id.is_nil() || p.native_birth_sha256.len() != 64 || p.abort_protocol_version != 1
                     || p.request.scope.validate().is_err() || p.request.range_index != self.range_index
                     || p.request.candidate_sha256.as_deref() != Some(self.candidate_sha256.as_str()) || p.candidate_sha256 != self.candidate_sha256
                     || p.predecessor_index != self.previous_index || p.predecessor_history_sha256 != self.previous_history_sha256

@@ -110,7 +110,15 @@ An unchanged original PostgreSQL application batch on the private debug binary
 at `6ef75198` passed 94 of 95 tests. The remaining partition test reached a
 prepared metadata query after its own rename, where protocol Describe entered
 a standalone transaction and received a catalog reservation conflict. The
-wire metadata ownership/descriptor follow-up remains under qualification.
+wire metadata ownership/descriptor corrections at `37891e076703` passed all
+20 focused wire tests. A second unchanged 95-test application run at private
+`2fe415214d74` still passed 94 and failed the partition test: a foreign live
+transaction had observed the whole schema catalog while describing an unrelated
+prepared query. A fresh-server protocol probe pinned this to statement Describe,
+with Parse alone permitting the rename. Private `663cb2e80cb1` now derives column
+origin OIDs directly from the admitted table schema and adds cold-cache foreign
+transaction regressions with independent ACKs and two reopens. This second
+correction and the application rerun remain under qualification.
 
 The authenticated portable binding producer/resolver described above remains
 unimplemented. Successful local cleanup does not close the original replica

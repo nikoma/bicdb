@@ -293,3 +293,118 @@ fn moving_between_different_child_keys_preserves_acknowledged_values_and_rollbac
         db.close().unwrap();
     }
 }
+
+#[test]
+fn parent_default_savepoint_rollback_restores_exact_child_definitions() {
+    for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
+        let root = tempfile::tempdir().unwrap();
+        let cfg = config(mode);
+        let mut db = BicDb::open_with_config(root.path(), cfg.clone()).unwrap();
+        setup(&mut db);
+        let before: Vec<_> = ["p", "low", "high"]
+            .iter()
+            .map(|name| {
+                db.get("__bicdb_pg_schema", name)
+                    .unwrap()
+                    .unwrap()
+                    .metadata
+                    .clone()
+            })
+            .collect();
+        let mut sql = SqlSession::new(&mut db);
+        for text in [
+            "BEGIN",
+            "SAVEPOINT s",
+            "ALTER TABLE p ALTER COLUMN qty SET DEFAULT 30",
+            "INSERT INTO low(k) VALUES(1)",
+            "ROLLBACK TO s",
+            "COMMIT",
+        ] {
+            sql.execute(text).unwrap();
+        }
+        drop(sql);
+        let after: Vec<_> = ["p", "low", "high"]
+            .iter()
+            .map(|name| {
+                db.get("__bicdb_pg_schema", name)
+                    .unwrap()
+                    .unwrap()
+                    .metadata
+                    .clone()
+            })
+            .collect();
+        assert_eq!(after, before);
+        assert_eq!(
+            SqlSession::new(&mut db)
+                .execute("SELECT count(*) FROM p")
+                .unwrap()
+                .rows,
+            vec![vec![SqlValue::Int(0)]]
+        );
+        let mut sql = SqlSession::new(&mut db);
+        sql.execute("INSERT INTO low(k) VALUES(1)").unwrap();
+        sql.execute("INSERT INTO high(k) VALUES(11)").unwrap();
+        drop(sql);
+        for _ in 0..2 {
+            assert_eq!(
+                rows(&mut db),
+                vec![
+                    row(1, "low", SqlValue::Int(10)),
+                    row(11, "high", SqlValue::Int(20))
+                ]
+            );
+            db.close().unwrap();
+            db = BicDb::open_with_config(root.path(), cfg.clone()).unwrap();
+        }
+        db.close().unwrap();
+    }
+}
+
+#[test]
+fn identity_add_with_existing_partitions_matches_pg16_without_catalog_side_effects() {
+    for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open_with_config(root.path(), config(mode)).unwrap();
+        setup(&mut db);
+        SqlSession::new(&mut db)
+            .execute("INSERT INTO p VALUES(1,'ack',10)")
+            .unwrap();
+        let before = db.current_commit_seq();
+        let schemas: Vec<_> = ["p", "low", "high"]
+            .iter()
+            .map(|name| {
+                db.get("__bicdb_pg_schema", name)
+                    .unwrap()
+                    .unwrap()
+                    .metadata
+                    .clone()
+            })
+            .collect();
+        let error=SqlSession::new(&mut db).execute("ALTER TABLE p ADD COLUMN ident BIGINT GENERATED ALWAYS AS IDENTITY (START WITH 100 INCREMENT BY 5)").unwrap_err();
+        assert_eq!(error.sqlstate(), "42P16");
+        assert!(error
+            .to_string()
+            .contains("cannot recursively add identity column"));
+        assert_eq!(db.current_commit_seq(), before);
+        let after: Vec<_> = ["p", "low", "high"]
+            .iter()
+            .map(|name| {
+                db.get("__bicdb_pg_schema", name)
+                    .unwrap()
+                    .unwrap()
+                    .metadata
+                    .clone()
+            })
+            .collect();
+        assert_eq!(after, schemas);
+        assert_eq!(
+            SqlSession::new(&mut db)
+                .execute("SELECT count(*) FROM pg_class WHERE relname='p_ident_seq'")
+                .unwrap()
+                .rows,
+            vec![vec![SqlValue::Int(0)]]
+        );
+        assert_eq!(rows(&mut db), vec![row(1, "ack", SqlValue::Int(10))]);
+        db.close().unwrap();
+    }
+}

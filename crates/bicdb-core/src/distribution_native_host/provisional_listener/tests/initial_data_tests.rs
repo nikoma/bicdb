@@ -329,6 +329,7 @@ fn native_initial_data_actual_tls_drop_without_stop_ends_inner_owner_and_reopens
         let snapshot = bootstrap
             .fetch_snapshot(&node(0), &configs[0].node_address)
             .unwrap();
+        let current_topology = snapshot.topology.clone();
         let gateway = crate::ClusterEventClient::new(&configs[0], snapshot.topology)
             .unwrap()
             .with_request_timeout(Duration::from_secs(2))
@@ -337,6 +338,38 @@ fn native_initial_data_actual_tls_drop_without_stop_ends_inner_owner_and_reopens
         let expected = serde_json::json!({"preserved":"ACK through the actually opened DATA owner", "mode":mode});
         assert!(gateway.append("items", key, expected.clone()).unwrap());
         assert_eq!(gateway.get_strong("items", key).unwrap(), Some(expected));
+        let id = crate::cluster_event_record_id("items", key).unwrap();
+        let selected = current_topology
+            .range_for_key(crate::CLUSTER_EVENTS_COLLECTION, &id)
+            .unwrap();
+        let materialized = f
+            .hosts
+            .iter()
+            .map(|host| {
+                let database = host.seed.database.read();
+                let record = database
+                    .get(crate::CLUSTER_EVENTS_COLLECTION, &id)
+                    .unwrap()
+                    .unwrap();
+                let native = database
+                    .current_native_range_source_lineage(selected.id)
+                    .unwrap();
+                assert_eq!(
+                    native.range_index(),
+                    1,
+                    "all three actual replicas must materialize the ACK before the Drop cut"
+                );
+                (
+                    (*record).clone(),
+                    native.range_index(),
+                    native.logical_genesis_sha256().to_string(),
+                    native.logical_history_sha256().to_string(),
+                )
+            })
+            .collect::<Vec<_>>();
+        assert!(materialized.iter().all(|point| point.1 == materialized[0].1
+            && point.2 == materialized[0].2
+            && point.3 == materialized[0].3));
         let specs = f
             .hosts
             .iter()
@@ -429,11 +462,15 @@ fn native_initial_data_actual_tls_drop_without_stop_ends_inner_owner_and_reopens
                     "cold local storage open cannot revive serving"
                 );
                 database.schema_compatibility_fingerprint().unwrap();
-                let id = crate::cluster_event_record_id("items", key).unwrap();
-                assert!(database
-                    .get(crate::CLUSTER_EVENTS_COLLECTION, &id)
-                    .unwrap()
-                    .is_some());
+                let row = database.get(crate::CLUSTER_EVENTS_COLLECTION, &id).unwrap();
+                assert!(row.is_some());
+                assert_eq!(row.as_deref(), Some(&materialized[i].0));
+                let native = database
+                    .current_native_range_source_lineage(selected.id)
+                    .unwrap();
+                assert_eq!(native.range_index(), materialized[i].1);
+                assert_eq!(native.logical_genesis_sha256(), materialized[i].2);
+                assert_eq!(native.logical_history_sha256(), materialized[i].3);
             }
         }
         drop(_root);

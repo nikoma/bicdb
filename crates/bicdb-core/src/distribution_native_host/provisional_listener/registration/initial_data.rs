@@ -24,6 +24,7 @@ pub struct NativeInitialDataStatus {
     pub strong_readiness: &'static str,
     pub replica_readiness: &'static str,
     pub ranges: Vec<NativeInitialDataRangeStatus>,
+    pub cleanup_quarantined_owners: usize,
 }
 
 /// Only this actual INITIAL owner constructs it after policy publication. It
@@ -95,7 +96,9 @@ impl Drop for NativeInitialDataHost {
         self.life.store(false, Ordering::Release);
         self.published.store(false, Ordering::Release);
         if let Some(dispatcher) = &self.dispatcher {
-            dispatcher.clear();
+            // Atomic ingress flags above are immediate. A contended binding
+            // is cleared by the retained cleanup worker, never waited on here.
+            dispatcher.try_clear_for_cleanup();
         }
         for listener in [&self.listener, &self.old_listener].into_iter().flatten() {
             listener.request_shutdown();
@@ -329,6 +332,7 @@ impl NativeInitialDataHost {
             strong_readiness:
                 "request-scoped fresh MQ/data QQ/MVCC/final MQ; publication is not readiness",
             ranges,
+            cleanup_quarantined_owners: NativeInitialDataCleanupSender::quarantined_owners(),
         })
     }
     pub(super) fn stop(&mut self, parent: &CancellationToken) -> Result<()> {
@@ -336,7 +340,10 @@ impl NativeInitialDataHost {
         self.life.store(false, Ordering::Release);
         self.published.store(false, Ordering::Release);
         if let Some(dispatcher) = &self.dispatcher {
-            dispatcher.clear();
+            while !dispatcher.try_clear_for_cleanup() {
+                parent.check()?;
+                std::thread::sleep(Duration::from_millis(5));
+            }
         }
         if let Some(listener) = self.listener.as_mut() {
             listener.stop_and_drain(parent)?;

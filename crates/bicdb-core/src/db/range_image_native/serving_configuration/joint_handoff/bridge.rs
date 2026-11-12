@@ -198,11 +198,20 @@ impl NativeJointServingPreparation {
         image: Option<&NativeImageCatalogueFinalization>,
         frozen: &FrozenRangeMutationPermit,
     ) -> Result<()> {
+        #[cfg(test)]
+        let mut trace = crate::distribution_range_handoff::NativeJointPhaseTrace::from_deadline(
+            "prepared-native-current",
+            self.local_node_id(),
+            committed.deadline(),
+        );
         catalogue.require_current(store, database, committed, image, frozen)?;
         database
             .range_mutations
             .validate_quiescent_frozen(self.record.range_id, frozen)?;
-        self.require_record_current(database, committed, catalogue)
+        self.require_record_current(database, committed, catalogue)?;
+        #[cfg(test)]
+        trace.complete();
+        Ok(())
     }
     fn require_record_current(
         &self,
@@ -210,6 +219,12 @@ impl NativeJointServingPreparation {
         committed: &CommittedNativeJointDecisionObservation,
         catalogue: &NativeJointBridgeCatalogue,
     ) -> Result<()> {
+        #[cfg(test)]
+        let mut trace = crate::distribution_range_handoff::NativeJointPhaseTrace::from_deadline(
+            "prepared-native-record-binding-readback",
+            self.local_node_id(),
+            committed.deadline(),
+        );
         self.record.validate()?;
         self.record
             .require_binding(database, &self.native, committed, catalogue)?;
@@ -227,6 +242,8 @@ impl NativeJointServingPreparation {
         if current != self.record || archive != self.record {
             return Err(invalid("NEW joint preparation current/archive changed"));
         }
+        #[cfg(test)]
+        trace.complete();
         Ok(())
     }
 }

@@ -218,6 +218,12 @@ impl NativeJointPreparedServingQuorum {
         metadata_leader: &ClusterNodeId,
         parent: &crate::CancellationToken,
     ) -> Result<NativeJointActivationAdmission> {
+        #[cfg(test)]
+        let mut phase_trace = NativeJointPhaseTrace::new(
+            "activation-acquire-total",
+            client.local_metadata_read_participant().node_id(),
+            &self.cancellation,
+        );
         self.require_current()?;
         let actor = client.local_metadata_read_participant();
         let local = self
@@ -244,23 +250,40 @@ impl NativeJointPreparedServingQuorum {
             .min(std::time::Duration::from_secs(5));
         let business = Uuid::now_v7();
         // No database/service guard is held during the actual metadata I/O.
-        let metadata = client.acquire_host_metadata_observation(
-            metadata_leader,
-            business,
-            remaining,
-            &cancellation,
-        )?;
+        let metadata = {
+            #[cfg(test)]
+            let mut trace =
+                NativeJointPhaseTrace::new("activation-host-mq", actor.node_id(), &cancellation);
+            let result = client.acquire_host_metadata_observation(
+                metadata_leader,
+                business,
+                remaining,
+                &cancellation,
+            )?;
+            #[cfg(test)]
+            trace.complete();
+            result
+        };
         let fresh = {
             let service = local
                 .service
                 .try_lock()
                 .ok_or_else(|| invalid("joint activation metadata binding service busy"))?;
-            service.observe_committed_native_joint_decision(
+            #[cfg(test)]
+            let mut trace = NativeJointPhaseTrace::new(
+                "activation-committed-local-binding",
+                actor.node_id(),
+                &cancellation,
+            );
+            let result = service.observe_committed_native_joint_decision(
                 metadata,
                 business,
                 self.data.old_range().id,
-            )?
-        };
+            )?;
+            #[cfg(test)]
+            trace.complete();
+            Ok::<_, BicDbError>(result)
+        }?;
         let cancellation = cancellation.child_with_deadline(fresh.deadline());
         let result = NativeJointActivationAdmission {
             quorum: self.clone(),
@@ -271,12 +294,27 @@ impl NativeJointPreparedServingQuorum {
         result.require_live()?;
         // Keep real freeze ownership. Only the physical read pins are released
         // to admit the counted native metadata writer which follows.
+        #[cfg(test)]
+        let mut pins_trace = NativeJointPhaseTrace::new(
+            "activation-release-revalidate-all-pins",
+            actor.node_id(),
+            &result.cancellation,
+        );
         self.release_read_pins_for_activation()?;
         result.require_live()?;
+        #[cfg(test)]
+        {
+            pins_trace.complete();
+            phase_trace.complete();
+        }
         Ok(result)
     }
 }
 impl NativeJointActivationAdmission {
+    #[cfg(test)]
+    pub(crate) fn test_phase_cancellation(&self) -> &crate::CancellationToken {
+        &self.cancellation
+    }
     pub(crate) fn data(&self) -> &NativeJointDecisionData {
         &self.quorum.data
     }
@@ -343,6 +381,12 @@ impl NativeJointActivationAdmission {
         &self,
         parent: &crate::CancellationToken,
     ) -> Result<crate::db::NativeJointServingBridgeReceipt> {
+        #[cfg(test)]
+        let mut trace = NativeJointPhaseTrace::new(
+            "activation-publish-total",
+            self.local.local_node_id(),
+            &self.cancellation,
+        );
         parent.check()?;
         self.require_external_preparations_current()?;
         let service = self
@@ -350,6 +394,9 @@ impl NativeJointActivationAdmission {
             .service
             .try_lock()
             .ok_or_else(|| invalid("joint activation local service busy"))?;
-        service.publish_local_native_joint_bridge(self, &self.local.actual, parent)
+        let result = service.publish_local_native_joint_bridge(self, &self.local.actual, parent)?;
+        #[cfg(test)]
+        trace.complete();
+        Ok(result)
     }
 }

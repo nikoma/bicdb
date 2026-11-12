@@ -48,6 +48,10 @@ use crate::distribution_metadata_read_provider::{
     MetadataReadProbeTransport, MetadataReadProvider,
 };
 mod host_metadata;
+mod initial_birth;
+use crate::distribution_native_host::{
+    NativeInitialBirthOfferRequest, NativeInitialBirthOfferResponse,
+};
 use crate::distribution_range_consensus::{
     RangeWriteAck, RangeWriteCommand, RangeWriteProbe, RangeWriteProgress, RangeWriteRepairBatch,
     RangeWriteRepairLimits, RangeWriteState, RangeWriteTransport,
@@ -66,6 +70,7 @@ use crate::replication_transport::{
 };
 use crate::{CancellationToken, ClusterSchemaBundle, SignedClusterSchemaBundle};
 pub(crate) use host_metadata::AuthenticatedHostMetadataReadReply;
+pub(crate) use initial_birth::AuthenticatedNativeInitialBirthReply;
 
 const FRAME_HEADER_BYTES: usize = 4;
 
@@ -319,6 +324,9 @@ enum ClusterDataRequest {
     HostMetadataReadAcquire {
         request: HostMetadataReadAcquireRequest,
     },
+    NativeInitialBirthOffer {
+        request: NativeInitialBirthOfferRequest,
+    },
     AcquireMetadataRecoveryRole {
         request: MetadataRecoveryRoleRequest,
     },
@@ -484,6 +492,7 @@ impl ClusterDataRequest {
             | Self::MetadataReadProbe { .. }
             | Self::MetadataReadAcquire { .. }
             | Self::HostMetadataReadAcquire { .. }
+            | Self::NativeInitialBirthOffer { .. }
             | Self::AcquireMetadataRecoveryRole { .. } => None,
         }
     }
@@ -520,6 +529,7 @@ enum ClusterDataResponse {
     MetadataReadProbe(MetadataReadProbeResponse),
     MetadataReadAcquire(MetadataReadAcquireResponse),
     HostMetadataReadAcquire(HostMetadataReadAcquireResponse),
+    NativeInitialBirthOffer(NativeInitialBirthOfferResponse),
     MetadataRecoveryRole(MetadataRecoveryRoleResponse),
     RecoveryEpochFence(crate::distribution_range_recovery::RecoveryEpochFenceReply),
     RecoveryFencedProbe(crate::distribution_range_recovery::RecoveryFencedProbeReply),
@@ -713,12 +723,15 @@ pub(crate) fn start_cluster_data_server_with_recovery_runtime(
     // These identities are immutable for the listener's lifetime. Metadata
     // heartbeats must not wait behind data-service row/snapshot I/O merely to
     // validate the request envelope.
-    let local_identity = {
+    let (local_identity, initial_birth_provider) = {
         let service = service.lock();
         (
-            service.cluster_id().clone(),
-            service.node_id().clone(),
-            service.native_writer_enforcement_version()?,
+            (
+                service.cluster_id().clone(),
+                service.node_id().clone(),
+                service.native_writer_enforcement_version()?,
+            ),
+            service.initial_birth_provider(),
         )
     };
     let thread = thread::spawn(move || {
@@ -751,6 +764,7 @@ pub(crate) fn start_cluster_data_server_with_recovery_runtime(
                     let tls = server_tls.as_ref().map(|tls| Arc::clone(&tls.config));
                     let config = config.clone();
                     let local_identity = local_identity.clone();
+                    let initial_birth_provider = initial_birth_provider.clone();
                     thread::spawn(move || {
                         let _active = ActiveConnection(active);
                         let _ = configure_stream(&stream, &config);
@@ -781,6 +795,7 @@ pub(crate) fn start_cluster_data_server_with_recovery_runtime(
                                     Some(&peer_certificate_sha256),
                                     metadata_read_provider.as_ref(),
                                     recovery_runtime.as_ref(),
+                                    initial_birth_provider.as_ref(),
                                     request_deadline,
                                 )
                             })
@@ -798,6 +813,7 @@ pub(crate) fn start_cluster_data_server_with_recovery_runtime(
                                 None,
                                 metadata_read_provider.as_ref(),
                                 recovery_runtime.as_ref(),
+                                initial_birth_provider.as_ref(),
                                 request_deadline,
                             )
                         };
@@ -881,6 +897,9 @@ fn handle_cluster_data_connection(
     peer_certificate_sha256: Option<&str>,
     metadata_read_provider: Option<&Arc<MetadataReadProvider>>,
     recovery_runtime: Option<&Arc<crate::distribution_range_recovery::RangeRecoveryRuntime>>,
+    initial_birth_provider: Option<
+        &std::sync::Weak<crate::distribution_native_host::NativeProvisionalNode>,
+    >,
     request_deadline: Instant,
 ) -> Result<()> {
     let request = recv_json_frame::<ClusterDataRequestEnvelope>(stream, config.max_frame_bytes)?;
@@ -925,6 +944,21 @@ fn handle_cluster_data_connection(
             )
         });
         drop(topology_guard);
+        if let ClusterDataRequest::NativeInitialBirthOffer { request } = request.request {
+            let provider = initial_birth_provider
+                .and_then(std::sync::Weak::upgrade)
+                .ok_or_else(|| {
+                    transport_error("actual provisional factory provider is not active")
+                })?;
+            let caller = authenticated_caller.as_ref().ok_or_else(|| {
+                transport_error("initial birth requires authenticated planned membership")
+            })?;
+            let cancellation =
+                CancellationToken::new(Arc::new(AtomicBool::new(false)), Some(request_deadline));
+            return provider
+                .observe_initial_birth(caller, request, &cancellation)
+                .map(ClusterDataResponse::NativeInitialBirthOffer);
+        }
         if let ClusterDataRequest::HostMetadataReadAcquire { request } = request.request {
             let provider = metadata_read_provider
                 .ok_or_else(|| transport_error("fresh host metadata provider is not active"))?;
@@ -2579,6 +2613,9 @@ fn dispatch_cluster_data_request(
         ClusterDataRequest::HostMetadataReadAcquire { .. } => Err(transport_error(
             "host metadata acquisition requires its authenticated runtime provider",
         )),
+        ClusterDataRequest::NativeInitialBirthOffer { .. } => Err(transport_error(
+            "initial birth acquisition requires its actual factory provider",
+        )),
     }
 }
 
@@ -3980,6 +4017,7 @@ impl TcpClusterRelocationTransport {
             ClusterDataRequest::MetadataReadProbe { .. }
                 | ClusterDataRequest::MetadataReadAcquire { .. }
                 | ClusterDataRequest::HostMetadataReadAcquire { .. }
+                | ClusterDataRequest::NativeInitialBirthOffer { .. }
                 | ClusterDataRequest::AcquireMetadataRecoveryRole { .. }
                 | ClusterDataRequest::RecoveryEpochFence { .. }
                 | ClusterDataRequest::RecoveryFencedProbe { .. }

@@ -406,3 +406,5 @@ mod process_tests;
 
 mod initial_preparation_tests;
 mod learner_factory_tests;
+
+mod heartbeat_backlog_tests;

@@ -15,6 +15,7 @@ pub(super) struct FreshPreparedMember {
 }
 pub(crate) struct NativeJointPreparationPhaseQuorum {
     original: Arc<NativeJointPreparedServingQuorum>,
+    activation_claimed: std::sync::atomic::AtomicBool,
     pub(super) cancellation: crate::CancellationToken,
     pub(super) observations: BTreeMap<ClusterNodeId, FreshPreparedMember>,
 }
@@ -133,6 +134,7 @@ impl NativeJointPreparationPhaseRound {
         }
         let result = NativeJointPreparationPhaseQuorum {
             original: self.original,
+            activation_claimed: std::sync::atomic::AtomicBool::new(false),
             cancellation: self.cancellation,
             observations: self.observations,
         };
@@ -244,7 +246,15 @@ impl NativeJointPreparationPhaseQuorum {
         client: &crate::distribution_transport::TcpClusterRelocationTransport,
         metadata_leader: &ClusterNodeId,
     ) -> Result<NativeJointActivationAdmission> {
-        self.require_current()?;
+        self.require_live()?;
+        if self
+            .activation_claimed
+            .swap(true, std::sync::atomic::Ordering::AcqRel)
+        {
+            return Err(invalid(
+                "fresh joint phase already selected its single local publication attempt",
+            ));
+        }
         let actor = client.local_metadata_read_participant();
         let local = self
             .original
@@ -257,6 +267,9 @@ impl NativeJointPreparationPhaseQuorum {
         {
             return Err(invalid("fresh phase activation actual recipient changed"));
         }
+        // This operation checks ALL actual members before AND after pin release.
+        // Do not add an identical third sweep before this same operation.
+        self.release_read_pins()?;
         let business = Uuid::now_v7();
         let metadata = client.acquire_host_metadata_observation(
             metadata_leader,
@@ -278,13 +291,12 @@ impl NativeJointPreparationPhaseQuorum {
         let cancellation = self.cancellation.child_with_deadline(fresh.deadline());
         let result = NativeJointActivationAdmission {
             phase: Some(self.clone()),
+            publication_claimed: std::sync::atomic::AtomicBool::new(false),
             quorum: self.original.clone(),
             local,
             fresh,
             cancellation,
         };
-        result.require_live()?;
-        self.release_read_pins()?;
         result.require_live()?;
         Ok(result)
     }

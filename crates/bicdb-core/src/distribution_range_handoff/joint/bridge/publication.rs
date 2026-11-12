@@ -4,6 +4,7 @@ use super::*;
 
 pub(crate) struct NativeJointServingPublicationRound {
     fresh_required: bool,
+    pending: std::collections::BTreeSet<ClusterNodeId>,
     phase: Option<Arc<NativeJointPreparationPhaseQuorum>>,
     prepared: Arc<NativeJointPreparedServingQuorum>,
     receipts: BTreeMap<ClusterNodeId, Arc<crate::db::NativeJointServingBridgeReceipt>>,
@@ -20,6 +21,7 @@ impl NativeJointPreparedServingQuorum {
         self.require_current()?;
         Ok(NativeJointServingPublicationRound {
             fresh_required: false,
+            pending: std::collections::BTreeSet::new(),
             phase: None,
             prepared: self.clone(),
             receipts: BTreeMap::new(),
@@ -35,6 +37,7 @@ impl NativeJointPreparedServingQuorum {
         self.require_original_caller()?;
         Ok(NativeJointServingPublicationRound {
             fresh_required: true,
+            pending: std::collections::BTreeSet::new(),
             phase: None,
             prepared: self.clone(),
             receipts: BTreeMap::new(),
@@ -57,9 +60,31 @@ impl NativeJointServingPublicationRound {
                 "resumed native publication requires new actual full phase authority",
             ));
         }
+        admission.claim_publication_attempt()?;
+        let local = admission.local.local_node_id().clone();
+        // Unknown local completion is retained across phase expiration. A new
+        // phase MUST check actual protected storage before another WAL attempt.
+        if self.pending.contains(&local) || self.receipts.contains_key(&local) {
+            if let Some(receipt) = admission.recover_local_native_bridge(parent)? {
+                self.record_actual_receipt(admission, receipt)?;
+                return Ok(());
+            }
+            if self.receipts.contains_key(&local) {
+                return Err(invalid("previously counted native publication disappeared"));
+            }
+        }
+        self.pending.insert(local);
         let receipt = admission.publish_local_native_bridge(parent)?;
+        self.record_actual_receipt(admission, receipt)
+    }
+    fn record_actual_receipt(
+        &mut self,
+        admission: &NativeJointActivationAdmission,
+        receipt: crate::db::NativeJointServingBridgeReceipt,
+    ) -> Result<()> {
         let node = receipt.local_node_id().clone();
         if receipt.data() != self.prepared.data()
+            || node != *admission.local.local_node_id()
             || self
                 .receipts
                 .get(&node)
@@ -70,38 +95,66 @@ impl NativeJointServingPublicationRound {
             ));
         }
         self.phase = admission.phase.clone();
+        self.pending.remove(&node);
         self.receipts.insert(node, Arc::new(receipt));
         Ok(())
     }
-    /// Revalidate ALREADY persisted native publications with a distinct live
-    /// complete phase. No receipt, vote audit or old deadline is rewritten.
-    pub(crate) fn reaffirm_published_members(
+    /// Actual native producer succeeds, then the test loses its reply before
+    /// aggregation. A subsequent distinct phase must recover the same audit.
+    #[cfg(test)]
+    pub(crate) fn test_lose_actual_publication_reply(
         &mut self,
+        admission: &NativeJointActivationAdmission,
+        parent: &crate::CancellationToken,
+    ) -> Result<String> {
+        if !Arc::ptr_eq(&self.prepared, &admission.quorum) || admission.phase.is_none() {
+            return Err(invalid("lost-reply control needs same actual fresh phase"));
+        }
+        admission.claim_publication_attempt()?;
+        self.pending.insert(admission.local.local_node_id().clone());
+        let actual = admission.publish_local_native_bridge(parent)?;
+        let checksum = actual.checksum_sha256().to_owned();
+        drop(actual);
+        Ok(checksum)
+    }
+    /// One complete aggregation boundary under distinct current authority.
+    /// Each SAME actual participant/preparation and protected native receipt is
+    /// revalidated here; returning it does not rewrite any receipt or old TTL.
+    pub(crate) fn finish_with_fresh_phase(
+        self,
         phase: Arc<NativeJointPreparationPhaseQuorum>,
-    ) -> Result<()> {
-        if !Arc::ptr_eq(&self.prepared, &phase.original_quorum())
+    ) -> Result<NativeJointPublishedServingQuorum> {
+        if !self.pending.is_empty()
+            || !Arc::ptr_eq(&self.prepared, &phase.original_quorum())
             || self
                 .receipts
                 .keys()
                 .ne(self.prepared.data.new_members().keys())
         {
-            return Err(invalid(
-                "fresh publication reaffirmation changed/omitted original NEW participants",
-            ));
+            return Err(invalid("fresh publication finish changed/omitted original NEW participants or unresolved local attempt"));
         }
-        phase.require_current()?;
+        phase.require_live()?;
         for (node, receipt) in &self.receipts {
             let service = self.prepared.observations[node]
                 .service
                 .try_lock()
-                .ok_or_else(|| invalid("publication reaffirmation service busy"))?;
+                .ok_or_else(|| invalid("publication finish service busy"))?;
+            phase.require_member_with_service(node, &service)?;
             service.require_actual_native_joint_bridge(receipt)?;
         }
-        phase.require_current()?;
-        self.phase = Some(phase);
-        Ok(())
+        phase.require_live()?;
+        Ok(NativeJointPublishedServingQuorum {
+            phase: Some(phase),
+            prepared: self.prepared,
+            receipts: self.receipts,
+        })
     }
     pub(crate) fn finish(self) -> Result<NativeJointPublishedServingQuorum> {
+        if !self.pending.is_empty() {
+            return Err(invalid(
+                "native publication retains unresolved actual local attempts",
+            ));
+        }
         if let Some(phase) = &self.phase {
             phase.require_current()?;
         } else {
@@ -131,6 +184,16 @@ impl NativeJointServingPublicationRound {
     }
 }
 impl NativeJointPublishedServingQuorum {
+    #[cfg(test)]
+    pub(crate) fn test_actual_receipt_checksums(&self) -> Result<BTreeMap<ClusterNodeId, String>> {
+        // Historical diagnostics only; these exact actual receipts are NOT
+        // current authority merely because their immutable hashes are readable.
+        Ok(self
+            .receipts
+            .iter()
+            .map(|(id, r)| (id.clone(), r.checksum_sha256().to_owned()))
+            .collect())
+    }
     #[cfg(test)]
     pub(crate) fn test_actual_published_members(&self) -> Result<Vec<ClusterNodeId>> {
         self.require_current()?;

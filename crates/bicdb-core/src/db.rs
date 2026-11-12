@@ -76,7 +76,9 @@ pub(crate) use native_initial_preparation::{
 mod native_metadata_store;
 pub(crate) use native_metadata_store::NativeMetadataStoreRecord;
 mod native_activation;
+mod native_joint_activation;
 pub(crate) use native_activation::NativeActivatedOpenGuard;
+pub(crate) use native_joint_activation::NativeJointActivatedOpenGuard;
 mod commit_admission_hook;
 mod native_recovery_ready;
 mod range_image_native;
@@ -86,7 +88,6 @@ pub(crate) use range_image_native::abort_history::NativeNoEffectIntentRecord;
 pub(crate) use range_image_native::rf3_fixture::{
     ActualNativeRf3Fixture, ActualNativeRf3RpcObservation,
 };
-pub(crate) use range_image_native::NativeActivationDecisionReceipt;
 pub(crate) use range_image_native::NativeReplicaMaterialization;
 pub(crate) use range_image_native::{
     FreshRangeGenesisAuthority, InstalledNativeWriterHostGuard, KnownNativeRecoveryPrefix,
@@ -97,6 +98,10 @@ pub(crate) use range_image_native::{
     NativeRecoveryAbortedReceipt, NativeRecoveryAdmission, NativeRecoveryAppliedReceipt,
     NativeWriterHostState, RangeImageBirthMember, RangeImageBirthSpec, SourceRangeImageLineage,
     StagedNativeHistoryProof,
+};
+pub(crate) use range_image_native::{
+    NativeActivationDecisionReceipt, NativeJointDecisionReceipt, NativeJointOldCloseReceipt,
+    NativeJointOldPhysicalProof, NativeJointServingBridgeReceipt, NativeJointServingPreparation,
 };
 pub(crate) use range_image_native::{NativeRangeReadPhysical, NativeReadLocalDbSequence};
 mod range_image_bindings;

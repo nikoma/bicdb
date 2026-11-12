@@ -282,6 +282,7 @@ pub(crate) struct AdoptedNativeRangeImageInstall {
 /// DB-open admission and exact intent fence retained. Only consuming an adopted
 /// image can construct it. It grants no serving configuration or user admission.
 pub(crate) struct NativeImageCatalogueFinalization {
+    source_seal: crate::distribution_range_image::LocalRangeImageSealV1,
     database: Arc<RwLock<BicDb>>,
     admission: NativeRecoveryAdmission,
     fence: TargetImageInstallFence,
@@ -289,6 +290,51 @@ pub(crate) struct NativeImageCatalogueFinalization {
     catalogue: NativeImageCatalogueAdoptionReceipt,
 }
 impl NativeImageCatalogueFinalization {
+    pub(crate) fn source_seal(&self) -> &crate::distribution_range_image::LocalRangeImageSealV1 {
+        &self.source_seal
+    }
+    pub(crate) fn base(&self) -> &NativeInstalledRangeImageBase {
+        &self.base
+    }
+    pub(crate) fn native_admission(&self) -> &NativeRecoveryAdmission {
+        &self.admission
+    }
+    pub(crate) fn require_current_with_database(
+        &self,
+        database: &BicDb,
+        store: &RangeWriteStore,
+        role: &NativeImageInstallRole<'_>,
+        frozen: &FrozenRangeMutationPermit,
+    ) -> Result<()> {
+        self.catalogue.require_materialized_current(
+            store,
+            database,
+            &self.admission,
+            &self.base,
+            &self.fence,
+            role,
+            frozen,
+        )
+    }
+    /// Historical actual image/materialization only. No role, readiness,
+    /// membership, mutation or serving capability is derived from this check.
+    pub(crate) fn require_materialized_fact_current(
+        &self,
+        database: &BicDb,
+        store: &RangeWriteStore,
+        frozen: &FrozenRangeMutationPermit,
+    ) -> Result<()> {
+        self.admission.require_current(database)?;
+        self.base.require_current(database, &self.admission)?;
+        database
+            .range_mutation_gate()
+            .validate_frozen(self.base.capture_range().id, frozen)?;
+        if frozen.owner() != self.fence.attempt_id() {
+            return Err(invalid("actual finalized image freeze changed"));
+        }
+        self.catalogue
+            .require_binding_current(store, &self.base, &self.fence)
+    }
     pub(crate) fn catalogue(&self) -> &NativeImageCatalogueAdoptionReceipt {
         &self.catalogue
     }
@@ -347,6 +393,7 @@ impl AdoptedNativeRangeImageInstall {
             base,
         } = self.verified;
         let proof = NativeImageCatalogueFinalization {
+            source_seal: source.seal().clone(),
             database,
             admission,
             fence,

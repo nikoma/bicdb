@@ -180,7 +180,7 @@ impl BicDb {
                         || a.pending_tls_certificate_sha256 != m.pending_certificate_sha256
                 })
             })
-            || (catalogue.is_recovered() != lineage.serving.is_some())
+            || (catalogue.is_recovered() != (lineage.serving.is_some() || lineage.joint.is_some()))
             || (!catalogue.is_recovered() && lineage.base.installed)
             || catalogue.range_index() != lineage.range_index()
         {
@@ -213,16 +213,20 @@ impl BicDb {
                 ));
             }
         }
-        let serving_commitment = lineage
-            .serving
-            .as_ref()
-            .map(|s| {
-                Ok::<_, BicDbError>(hex::encode(sha2::Sha256::digest(serde_json::to_vec(&(
-                    "bicdb-native-read-serving-v1",
-                    s,
-                ))?)))
-            })
-            .transpose()?;
+        let serving_commitment = if let Some(joint) = &lineage.joint {
+            Some(joint.native_bridge_sha256().to_owned())
+        } else {
+            lineage
+                .serving
+                .as_ref()
+                .map(|s| {
+                    Ok::<_, BicDbError>(hex::encode(sha2::Sha256::digest(serde_json::to_vec(&(
+                        "bicdb-native-read-serving-v1",
+                        s,
+                    ))?)))
+                })
+                .transpose()?
+        };
         Ok(PhysicalPoint {
             database_incarnation: self.incarnation.clone(),
             birth_id: lineage.birth.birth_id,

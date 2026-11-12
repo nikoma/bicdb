@@ -43,9 +43,17 @@ mod native_abort;
 mod native_activation;
 mod native_apply;
 mod native_durability;
+mod native_joint_handoff;
 mod native_writer;
 pub(crate) use native_durability::ClusterServiceOpenGuard;
 use native_durability::{checked_database_read, checked_database_write, ServiceStoragePolicy};
+pub(crate) use native_joint_handoff::{
+    ActualServiceNativeJointCaptureInputs, ActualServiceNativeJointCommittedEvidence,
+    ActualServiceNativeJointConstraints, ActualServiceNativeJointNewEvidence,
+    ActualServiceNativeJointOldEvidence, ActualServiceNativeJointPreparedEvidence,
+    NativeJointIrrevocableFacts, NativeJointServingLease,
+};
+mod current_image_replacement;
 mod current_image_resume;
 mod native_completion;
 mod native_image_install;
@@ -755,6 +763,9 @@ pub struct ClusterDataNodeService {
     initial_preparation_provider:
         Option<std::sync::Weak<crate::distribution_native_host::NativeProvisionalNode>>,
     initial_consensus_only: bool,
+    #[cfg(feature = "tls-replication")]
+    learner_birth_provider:
+        Option<std::sync::Weak<crate::distribution_native_host::NativeLearnerBirthProvider>>,
 }
 
 impl ClusterDataNodeService {
@@ -888,9 +899,11 @@ impl ClusterDataNodeService {
             initial_birth_provider: None,
             initial_preparation_provider: None,
             initial_consensus_only: false,
+            #[cfg(feature = "tls-replication")]
+            learner_birth_provider: None,
         };
         {
-            let database = try_database_read(&service.db)?;
+            let database = checked_database_read(&service.db, &service.storage_policy)?;
             service
                 .range_writes
                 .reconcile_actual_abort_control(&database)?;
@@ -943,6 +956,32 @@ impl ClusterDataNodeService {
     pub(crate) fn initial_consensus_only(&self) -> bool {
         self.initial_consensus_only
     }
+    #[cfg(feature = "tls-replication")]
+    pub(crate) fn attach_learner_birth_provider(
+        &mut self,
+        provider: &Arc<crate::distribution_native_host::NativeLearnerBirthProvider>,
+    ) -> Result<()> {
+        if self.learner_birth_provider.is_some()
+            || self.initial_birth_provider.is_some()
+            || self.initial_preparation_provider.is_some()
+            || self.initial_consensus_only
+            || self.native_writer_enforcement_version()? != 1
+        {
+            return Err(data_error(
+                "learner factory provider must attach once to an actual provisional service",
+            ));
+        }
+        provider.require_same_database(&self.db, &self.cluster_id, &self.node_id)?;
+        self.learner_birth_provider = Some(Arc::downgrade(provider));
+        Ok(())
+    }
+    #[cfg(feature = "tls-replication")]
+    pub(crate) fn learner_birth_provider(
+        &self,
+    ) -> Option<std::sync::Weak<crate::distribution_native_host::NativeLearnerBirthProvider>> {
+        self.learner_birth_provider.clone()
+    }
+    #[cfg(feature = "tls-replication")]
     pub(crate) fn transition_initial_preparation_listener(
         &mut self,
         actual: &Arc<Mutex<Self>>,

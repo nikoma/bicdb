@@ -22,10 +22,12 @@ mod writer_enrollment;
 pub(crate) use writer_enrollment::{InstalledNativeWriterHostGuard, NativeWriterHostState};
 mod serving_configuration;
 pub(crate) use native_read::{NativeRangeReadPhysical, NativeReadLocalDbSequence};
-use serving_configuration::NativeRecoveredServingConfiguration;
 pub(crate) use serving_configuration::{
-    NativeActivationDecisionReceipt, NativeRecoveredServingReceipt,
+    NativeActivationDecisionReceipt, NativeJointDecisionReceipt, NativeJointOldCloseReceipt,
+    NativeJointOldPhysicalProof, NativeJointServingBridgeReceipt, NativeJointServingPreparation,
+    NativeRecoveredServingReceipt,
 };
+use serving_configuration::{NativeJointServingDomain, NativeRecoveredServingConfiguration};
 #[cfg(test)]
 pub(crate) mod rf3_fixture;
 use certified_prefix::NativeCertifiedRangePrefix;
@@ -471,6 +473,7 @@ pub(crate) struct SourceRangeImageLineage {
     base: NativeRangeBaseBinding,
     prefix: Option<NativeCertifiedRangePrefix>,
     serving: Option<NativeRecoveredServingConfiguration>,
+    joint: Option<NativeJointServingDomain>,
     current_database_incarnation: String,
     current_schema_generation: u64,
 }
@@ -578,6 +581,9 @@ impl SourceRangeImageLineage {
     /// The physical capture anchor stays immutable. New ordinary writes use
     /// the independently native-WAL-persisted recovered serving configuration.
     pub(crate) fn native_write_range(&self) -> Result<&RangeDescriptor> {
+        if let Some(joint) = &self.joint {
+            return Ok(joint.range());
+        }
         match &self.serving {
             Some(serving) if serving.binds_current_base(&self.base) => Ok(serving.range()),
             Some(_) => Err(invalid(
@@ -625,6 +631,9 @@ impl SourceRangeImageLineage {
     pub(crate) fn native_write_members(
         &self,
     ) -> Result<BTreeMap<ClusterNodeId, RangeImageBirthMember>> {
+        if let Some(joint) = &self.joint {
+            return Ok(joint.members().clone());
+        }
         self.members_for_native_range(self.native_write_range()?)
     }
     pub(crate) fn base_range_index(&self) -> u64 {
@@ -685,6 +694,24 @@ fn genesis_key(range_id: RangeId) -> String {
 }
 
 impl BicDb {
+    /// Until a qualified NEW-voter AbortQQ is composed, refuse NoData BEFORE
+    /// its native WAL write whenever an actual protected joint domain exists.
+    /// A matching configuration/SHA must not bypass this support boundary.
+    pub(crate) fn require_native_no_data_without_joint_domain(&self, range: RangeId) -> Result<()> {
+        let birth = self
+            .read_native_birth()?
+            .ok_or_else(|| invalid("NoData support check has no actual native birth"))?;
+        let anchor = self.actual_native_range_anchor(&birth, range)?;
+        if self
+            .read_native_joint_serving_domain(&birth, &anchor.binding())?
+            .is_some()
+        {
+            return Err(invalid(
+                "NoData after native joint activation requires a qualified NEW-voter abort domain",
+            ));
+        }
+        Ok(())
+    }
     pub(super) fn try_native_image_journal(&self) -> Result<NativeImageJournalGuard<'_>> {
         Ok(NativeImageJournalGuard {
             database_incarnation: &self.incarnation,
@@ -1293,6 +1320,10 @@ impl BicDb {
         let receipt = actual_anchor.binding();
         self.validate_native_range_base_history(&birth, &receipt)?;
         let prefix = self.read_native_certified_range_prefix(&birth, &receipt)?;
+        let joint = self.read_native_joint_serving_domain(&birth, &receipt)?;
+        if let Some(joint) = &joint {
+            joint.require_materialized(&receipt, prefix.as_ref())?;
+        }
         let bindings = self.capture_range_image_bindings()?;
         let catalog = canonical_range_image_catalog(
             &birth.spec.cluster_id,
@@ -1313,6 +1344,7 @@ impl BicDb {
             || birth != lineage.birth
             || receipt != lineage.base
             || prefix != lineage.prefix
+            || joint != lineage.joint
             || lineage.range_index() != range_index
             || receipt.range.id != range_id
             || !self.config.fsync
@@ -1384,10 +1416,12 @@ impl BicDb {
                     let base = NativeRangeBaseBinding::genesis(&receipt);
                     let serving = database
                         .read_native_recovered_serving_configuration(&birth, &base, None)?;
+                    let joint = database.read_native_joint_serving_domain(&birth, &base)?;
                     let lineage = SourceRangeImageLineage {
                         birth,
                         base,
                         serving,
+                        joint,
                         _anchor: NativeRangeImageAnchor::Genesis(receipt),
                         prefix: None,
                         current_database_incarnation: database.incarnation.clone(),
@@ -1545,10 +1579,12 @@ impl BicDb {
         let base = NativeRangeBaseBinding::genesis(&receipt);
         let serving =
             database.read_native_recovered_serving_configuration(&authority.birth, &base, None)?;
+        let joint = database.read_native_joint_serving_domain(&authority.birth, &base)?;
         let lineage = SourceRangeImageLineage {
             birth: authority.birth.clone(),
             base,
             serving,
+            joint,
             _anchor: NativeRangeImageAnchor::Genesis(receipt),
             prefix: None,
             current_database_incarnation: database.incarnation.clone(),

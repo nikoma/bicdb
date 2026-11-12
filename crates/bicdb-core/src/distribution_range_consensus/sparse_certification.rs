@@ -94,6 +94,9 @@ impl SparseHistoricalDecision {
     pub(super) fn command_checksum_sha256(&self) -> &str {
         &self.command.checksum_sha256
     }
+    pub(super) fn command(&self) -> &RangeWriteCommand {
+        &self.command
+    }
     pub(super) fn record_checksum_sha256(&self) -> &str {
         &self.checksum_sha256
     }
@@ -119,6 +122,47 @@ impl SparseHistoricalDecision {
         record.validate()?;
         Ok(record)
     }
+    pub(super) fn from_actual_installing_decision(
+        decision: &crate::distribution_range_recovery::InstallingCommittedDecision,
+        role: &RecoveryRoleAdmission,
+        native: &crate::db::NativeRecoveryAdmission,
+    ) -> Result<Self> {
+        decision.require_recipient_role(role)?;
+        let a = decision.authority();
+        let audit = SparseDecisionAudit {
+            scope: a.scope().clone(),
+            members: role.member_credentials().clone(),
+            observations: decision
+                .votes()
+                .iter()
+                .map(|(id, v)| {
+                    (
+                        id.clone(),
+                        SparseDecisionVoteAudit {
+                            member_incarnation: v.member_incarnation,
+                            observed_raw_state: v.raw_state,
+                            prior_sparse_decision_sha256: v.prior_sparse_sha256.clone(),
+                        },
+                    )
+                })
+                .collect(),
+        };
+        let mut out = Self {
+            format_version: 1,
+            local_node_id: role.local_node_id().clone(),
+            local_member_incarnation: role.local_member_incarnation(),
+            native_database_incarnation: native.database_incarnation().to_owned(),
+            native_birth_id: native.birth_id(),
+            native_birth_sha256: native.birth_sha256().to_owned(),
+            restore_activation: native.restore_activation().cloned(),
+            command: decision.command().clone(),
+            audit,
+            checksum_sha256: String::new(),
+        };
+        out.checksum_sha256 = out.calculate_checksum()?;
+        out.validate()?;
+        Ok(out)
+    }
     fn calculate_checksum(&self) -> Result<String> {
         use sha2::{Digest, Sha256};
         validate_native_json_size(self, MAX_SPARSE_RECORD_BYTES)?;
@@ -135,7 +179,7 @@ impl SparseHistoricalDecision {
             &self.audit,
         ))?)))
     }
-    fn validate(&self) -> Result<()> {
+    pub(super) fn validate(&self) -> Result<()> {
         validate_native_recovery_command_size(&self.command)?;
         self.command.validate()?;
         self.audit.validate()?;

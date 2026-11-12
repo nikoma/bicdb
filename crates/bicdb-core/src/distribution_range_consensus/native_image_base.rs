@@ -135,7 +135,7 @@ impl NativeImageCatalogueAdoptionReceipt {
         physical.require_current(database, admission)?;
         self.require_binding_current(store, physical, fence)
     }
-    pub(super) fn require_binding_current(
+    pub(crate) fn require_binding_current(
         &self,
         store: &RangeWriteStore,
         physical: &crate::db::NativeInstalledRangeImageBase,

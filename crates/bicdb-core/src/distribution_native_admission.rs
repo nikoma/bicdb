@@ -79,7 +79,7 @@ impl ActualNativeStoreEnrollment {
             ));
         }
         let mut proposed = topology.clone();
-        proposed.format_version = 2;
+        proposed.format_version = proposed.format_version.max(2);
         proposed
             .nodes
             .get_mut(&self.node)

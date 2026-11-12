@@ -721,6 +721,27 @@ impl RangeWriteStore {
         {
             serde_json::to_writer(&mut hash, &("sparse-committed-history-v1", sparse))?;
         }
+        if let Some(current) = self
+            .catalog
+            .installing_committed_certifications
+            .as_ref()
+            .and_then(|m| m.get(&range_id))
+            .filter(|m| !m.is_empty())
+        {
+            serde_json::to_writer(
+                &mut hash,
+                &("Installing-existing-committed-provenance-v1", current),
+            )?;
+        }
+        if let Some(h) = self
+            .catalog
+            .installing_recovery_handovers
+            .as_ref()
+            .and_then(|m| m.get(&range_id))
+            .filter(|m| !m.is_empty())
+        {
+            serde_json::to_writer(&mut hash, &("Installing-refusal-handover-history-v1", h))?;
+        }
         if let Some(protocol) = self
             .catalog
             .native_abort_protocol
@@ -1035,6 +1056,9 @@ impl RangeWriteStore {
     pub(crate) fn require_no_active_recovery(&self, range_id: RangeId) -> Result<()> {
         self.require_durable_recovery_catalog()?;
         self.require_no_uncovered_sparse(range_id, self.progress(range_id).resolved_through)?;
+        if self.native_joint_covers_prior_recovery_context(range_id)? {
+            return Ok(());
+        }
         if self
             .catalog
             .recovery_fences
@@ -1062,6 +1086,7 @@ impl RangeWriteStore {
             .catalog
             .handoff_promises
             .contains_key(&command.range_id)
+            && !self.native_joint_command_allowed(command)?
         {
             return Err(range_write_error(
                 "ordinary native write conflicts with permanent handoff promise",
@@ -1096,6 +1121,7 @@ impl RangeWriteStore {
     ) -> Result<()> {
         role.require_live_request()?;
         self.require_sparse_native_binding(role.current_range().id, native)?;
+        self.require_installing_certification_native_binding(role.current_range().id, native)?;
         if !self.fsync
             || !crate::format::range_image_install_active(&self.root)?
             || &self.catalog.cluster_id != role.cluster_id()

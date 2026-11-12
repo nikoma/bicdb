@@ -272,6 +272,9 @@ impl BicDb {
     ) -> Result<NativeRecoveryAbortedReceipt> {
         parent.check()?;
         native.require_current(self)?;
+        // This precedes even the covered-index retry: an existing decision or
+        // matching configuration cannot authorize post-joint NoData.
+        self.require_native_no_data_without_joint_domain(fresh.current_range().id)?;
         quorum.require_recipient_role(fresh)?;
         self.require_installed_native_writer_database_for_range(fresh.current_range())?;
         store.preflight_native_abort_publication(self, native, fresh, quorum)?;
@@ -284,8 +287,8 @@ impl BicDb {
         let source = self.current_native_range_source_lineage(fresh.current_range().id)?;
         // NoData does not gain joint membership permission from a historical
         // floor/current metadata. Refuse a changed physical domain BEFORE WAL.
-        // Joint composition must additionally reject any actual protected joint
-        // domain (even a same-config joint) until its AbortQQ producer is qualified.
+        // The unconditional protected-joint check above also covers a
+        // same-configuration/no-op joint until its AbortQQ producer is qualified.
         quorum
             .candidate()
             .record()
@@ -410,6 +413,7 @@ impl BicDb {
                 metadata_context_id: fresh.context_id(),
             },
             recovery_attempt: None,
+            joint_decision_sha256: None,
             global_image_generation: base.global_image_generation,
             range_image_generation: base.range_image_generation,
             history_generation: base.history_generation,

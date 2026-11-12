@@ -938,6 +938,8 @@ fn native_strong_point_initial_four_metadata_members_rf3_keeps_exact_data_identi
 }
 
 mod four_member_activation_tests;
+#[path = "native_joint_old_closure_tests.rs"]
+mod joint_old_closure_tests;
 mod native_abort_cold;
 mod native_abort_tests;
 mod service_open_guard_tests;

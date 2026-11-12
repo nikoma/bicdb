@@ -406,11 +406,15 @@ impl RangeWriteStore {
                 recovery_fences: BTreeMap::new(),
                 native_image_bases: BTreeMap::new(),
                 sparse_committed_decisions: Some(BTreeMap::new()),
+                installing_committed_certifications: Some(BTreeMap::new()),
+                installing_recovery_handovers: Some(BTreeMap::new()),
+                native_joint_handoffs: None,
                 native_abort_protocol: None,
             },
             Err(e) => return Err(e.into()),
         };
         catalog.format_version = catalog.format_version.max(NATIVE_ABORT_CATALOG_FORMAT);
+        super::image_install_certification::ensure_installing_certification_maps(&mut catalog);
         catalog.native_abort_protocol = Some(NativeAbortProtocol {
             store_id,
             ranges: BTreeMap::new(),

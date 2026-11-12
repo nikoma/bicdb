@@ -1342,7 +1342,7 @@ pub(crate) fn test_recovery_metadata_cluster(
     {
         let mut leader = stores[metadata_leader].lock();
         let request = leader.start_election()?;
-        let mut granted = BTreeSet::from([metadata_leader.clone()]);
+        let mut granted = std::collections::BTreeSet::from([metadata_leader.clone()]);
         for node in topology
             .metadata_voters()
             .iter()

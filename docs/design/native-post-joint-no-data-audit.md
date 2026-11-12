@@ -141,3 +141,35 @@ the actual fresh HostMQ configuration rather than trying to auto-enroll an
 already known native voter. No passing complete-joint result is established
 by those source changes. All six post-joint NoData seams above remain open.
 See [the revision-scoped status](../ha-milestone1-status-2026-11-12.md).
+
+
+## Same positive baseline on the original-writer-complete batch (test only)
+
+The baseline test child is ported without weakening its positive assertions onto
+`eb5b454a578f77309900e2a248fc0b779391333e`. The original immutable baseline is
+`b277260b0b114d1f892ecad8d2e5e7a03ba7da5a`; its independent diagnostic successor
+is `a3b786c2d` (test/docs only). The latter keeps actual `NormalRecovery` and
+captures exact real recipient/request/purpose/fresh MQ, authenticated response or
+refusal, partial persistent fences, slot ever-Commit/no-effect, native R/H/local
+B, old joint/promise fields and both old ACKs before the positive test fails.
+The original baseline actually failed at n3's normal-fence supersession, before
+NoData candidate or apply: run43228215328/job131216860500, compile pass,
+0 passed/1 failed/889 filtered/64.40s. Log SHA-256:
+`0a37647b42bdafaacc42b4a0e1c75a3dc93b398f4e0ca7ef43be1d987cb34865`.
+
+This port adds a separate typed `JointFullContinuation::PostJointNoDataRecovery`
+after the genuine all-three release/ACK2/Strong R2 prerequisite. Every original
+full-terminal/ABA/caller assertion and all nine existing tests stay in their
+original lane; no numeric mode is repurposed. The new test continues to require
+canonical Abort3 with actual predecessor local B, fresh NEW Ready/Complete and
+activation, real ACK at R4 (third business ACK), and Strong R4. The port currently
+uses ordinary actual NormalRecovery so the earlier refusal remains visible;
+a production distinct qualified joint-recovery producer is a separate change.
+Declared metadata leadership in this same-open fixture is a precondition, not
+automatic election, cross-process/operator, cold or physical qualification.
+
+The added diagnostics fsync original/new fence cuts before assertions. Successful
+partial fences are retained rather than rolled back or represented as a complete
+quorum. A refusal preserves full-positive failure semantics and makes no NoData
+apply claim. This port has only formatting/diff checks; no Cargo or runtime
+qualification is claimed.

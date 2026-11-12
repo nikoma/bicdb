@@ -69,7 +69,7 @@ impl ClusterDataNodeService {
 impl ClusterDataNodeService {
     pub(crate) fn observe_native_abort_candidate(
         &self,
-        role: &crate::distribution_range_recovery::RecoveryRoleAdmission,
+        role: &crate::distribution_range_recovery::RecoveryObservationRoleAdmission,
         request: &crate::distribution_range_recovery::NativeAbortRequest,
         parent: &CancellationToken,
     ) -> Result<crate::distribution_range_consensus::native_abort::LocalAbortCandidate> {
@@ -152,5 +152,12 @@ impl ClusterDataNodeService {
         parent.check()?;
         drop(controlled);
         Ok(receipt)
+    }
+}
+
+#[cfg(test)]
+impl ClusterDataNodeService {
+    pub(crate) fn test_refuse_native_prepare_after_start(&mut self, refuse: bool) {
+        self.test_refuse_native_prepare_after_start = refuse;
     }
 }

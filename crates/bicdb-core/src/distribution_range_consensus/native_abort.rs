@@ -45,6 +45,30 @@ impl NativeAbortDomain {
             restore_activation: source.restore_activation().cloned(),
         })
     }
+    pub(crate) fn require_observer(
+        &self,
+        role: &crate::distribution_range_recovery::RecoveryObservationRoleAdmission,
+    ) -> Result<()> {
+        if self.cluster_id != *role.cluster_id()
+            || self.bootstrap_id != role.bootstrap_id()
+            || self.range != stable_range(role.current_range())
+            || self.restore_activation.as_ref() != role.restore_activation()
+            || self.members.len() != role.member_credentials().len()
+            || self.members.iter().any(|(id, m)| {
+                role.member_credentials().get(id).is_none_or(|a| {
+                    m.incarnation != a.incarnation
+                        || m.tls_certificate_sha256 != a.active_certificate_sha256
+                        || m.pending_tls_certificate_sha256 != a.pending_certificate_sha256
+                })
+            })
+            || role.expected_schema_sha256() != Some(self.schema_sha256.as_str())
+        {
+            return Err(range_write_error(
+                "abort observation needs exact fresh same-voter schema/restore domain",
+            ));
+        }
+        Ok(())
+    }
     pub(crate) fn require_role(&self, role: &RecoveryRoleAdmission) -> Result<()> {
         role.require_live_request()?;
         if !matches!(
@@ -704,14 +728,14 @@ impl RangeWriteStore {
         &self,
         db: &crate::BicDb,
         native: &NativeRecoveryAdmission,
-        role: &RecoveryRoleAdmission,
+        role: &crate::distribution_range_recovery::RecoveryObservationRoleAdmission,
         request: &crate::distribution_range_recovery::NativeAbortRequest,
         parent: &CancellationToken,
     ) -> Result<LocalAbortCandidate> {
         let cancellation = request
             .cancellation(parent)?
             .child_with_deadline(role.deadline());
-        self.require_recovery_scope(role, native, &request.scope)?;
+        self.observe_fenced_recovery_history(role, native, &request.scope, None)?;
         self.require_actual_abort_catalogue(db)?;
         let record = db.observe_actual_native_no_effect(native, role, request)?;
         let slot = self
@@ -740,7 +764,7 @@ impl RangeWriteStore {
                 member_incarnation: native.local_member_incarnation(),
                 store_open_id: self.open_id,
                 native_database_incarnation: native.database_incarnation().into(),
-                observed_metadata_context_id: role.context_id(),
+                observed_metadata_context_id: role.metadata_context_id(),
                 observed_metadata_term: role.metadata_term(),
                 observed_metadata_read_index: role.metadata_read_index(),
             },

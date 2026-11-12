@@ -730,6 +730,8 @@ impl ClusterSchemaFinalizationReceipt {
 /// deployment modes.
 #[derive(Debug)]
 pub struct ClusterDataNodeService {
+    #[cfg(test)]
+    test_refuse_native_prepare_after_start: bool,
     cluster_id: ClusterId,
     node_id: ClusterNodeId,
     db: Arc<RwLock<BicDb>>,
@@ -858,6 +860,8 @@ impl ClusterDataNodeService {
                 .ok()
         };
         let mut service = Self {
+            #[cfg(test)]
+            test_refuse_native_prepare_after_start: false,
             cluster_id,
             node_id,
             db,
@@ -1944,6 +1948,14 @@ impl ClusterDataNodeService {
         self.range_mutations.validate(range.id, authority)?;
         self.validate_range_write(range, caller, &command)?;
         self.ensure_native_abort_prepare_start(range, &command, authority)?;
+        #[cfg(test)]
+        if self.test_refuse_native_prepare_after_start
+            && self.range_writes.requires_native_abort_tracking()?
+        {
+            return Err(data_error(
+                "injected actual Prepare refusal after durable native writer-start",
+            ));
+        }
         let state = self.range_writes.prepare(command.clone())?;
         self.range_write_ack(&command, state)
     }

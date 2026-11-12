@@ -98,7 +98,20 @@ impl NativeAbortCandidateObservation {
         peer: MetadataReadParticipant,
     ) -> Result<Self> {
         let (reply, cancellation) = actual.into_evidence();
+        Self::from_evidence(reply, peer, cancellation)
+    }
+    fn from_evidence(
+        reply: NativeAbortCandidateReply,
+        peer: MetadataReadParticipant,
+        cancellation: CancellationToken,
+    ) -> Result<Self> {
         cancellation.check()?;
+        reply.request.cancellation(&cancellation)?.check()?;
+        crate::distribution_range_consensus::validate_native_recovery_command_size(
+            &reply.record.command,
+        )?;
+        reply.record.command.validate()?;
+        reply.record.validate()?;
         if peer.node_id() != &reply.node_id
             || peer.member_incarnation() != reply.member_incarnation
             || reply.node_id != reply.request.origin_node_id
@@ -117,6 +130,19 @@ impl NativeAbortCandidateObservation {
             peer,
             cancellation,
         })
+    }
+    #[cfg(feature = "tls-replication")]
+    pub(crate) fn from_transport(
+        actual: crate::distribution_transport::AuthenticatedNativeAbortCandidateReply,
+    ) -> Result<Self> {
+        let (reply, original, peer, token) = actual.into_parts();
+        if reply.request != original {
+            return Err(invalid("native abort candidate response was relabeled"));
+        }
+        Self::from_evidence(reply, peer, token)
+    }
+    pub(crate) fn into_reply(self) -> NativeAbortCandidateReply {
+        self.reply
     }
     pub(crate) fn require_for_role(
         &self,
@@ -197,6 +223,13 @@ impl NativeAbortPromiseObservation {
         peer: MetadataReadParticipant,
     ) -> Result<Self> {
         let (reply, cancellation) = actual.into_evidence();
+        Self::from_evidence(reply, peer, cancellation)
+    }
+    fn from_evidence(
+        reply: NativeAbortPromiseReply,
+        peer: MetadataReadParticipant,
+        cancellation: CancellationToken,
+    ) -> Result<Self> {
         cancellation.check()?;
         if peer.node_id() != &reply.node_id
             || peer.member_incarnation() != reply.member_incarnation
@@ -232,6 +265,19 @@ impl NativeAbortPromiseObservation {
             peer,
             cancellation,
         })
+    }
+    #[cfg(feature = "tls-replication")]
+    pub(crate) fn from_transport(
+        actual: crate::distribution_transport::AuthenticatedNativeAbortPromiseReply,
+    ) -> Result<Self> {
+        let (reply, original, peer, token) = actual.into_parts();
+        if reply.request != original {
+            return Err(invalid("native abort promise response was relabeled"));
+        }
+        Self::from_evidence(reply, peer, token)
+    }
+    pub(crate) fn into_reply(self) -> NativeAbortPromiseReply {
+        self.reply
     }
 }
 #[derive(Debug)]

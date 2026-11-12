@@ -1716,6 +1716,27 @@ pub struct RangeWriteAck {
 }
 
 pub trait RangeWriteTransport: std::fmt::Debug + Send + Sync + 'static {
+    fn observe_native_abort_candidate(
+        &self,
+        _destination: &ClusterNodeId,
+        _request: &crate::distribution_range_recovery::NativeAbortRequest,
+        _parent: &CancellationToken,
+    ) -> Result<crate::distribution_range_recovery::NativeAbortCandidateObservation> {
+        Err(range_write_error(
+            "authenticated native abort candidate transport is not wired",
+        ))
+    }
+    fn promise_native_abort(
+        &self,
+        _destination: &ClusterNodeId,
+        _request: &crate::distribution_range_recovery::NativeAbortRequest,
+        _parent: &CancellationToken,
+    ) -> Result<crate::distribution_range_recovery::NativeAbortPromiseObservation> {
+        Err(range_write_error(
+            "authenticated native AbortPromise transport is not wired",
+        ))
+    }
+
     fn observe_current_native_range(
         &self,
         _destination: &ClusterNodeId,

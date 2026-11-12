@@ -45,7 +45,7 @@ impl NativeNoEffectIntentRecord {
             MAX_NO_EFFECT_BYTES,
         )?)))
     }
-    fn validate(&self) -> Result<()> {
+    pub(crate) fn validate(&self) -> Result<()> {
         crate::distribution_range_consensus::validate_native_recovery_command_size(&self.command)?;
         self.command.validate()?;
         if self.version != 1
@@ -176,11 +176,12 @@ impl BicDb {
     pub(crate) fn observe_actual_native_no_effect(
         &self,
         native: &NativeRecoveryAdmission,
-        role: &crate::distribution_range_recovery::RecoveryRoleAdmission,
+        role: &crate::distribution_range_recovery::RecoveryObservationRoleAdmission,
         request: &crate::distribution_range_recovery::NativeAbortRequest,
     ) -> Result<NativeNoEffectIntentRecord> {
         native.require_current(self)?;
-        request.scope.require_role(role)?;
+        role.require_scope(&request.scope)?;
+        role.require_native_identity(native)?;
         self.require_installed_native_writer_database_for_range(role.current_range())?;
         if native.abort_protocol_version() != 1
             || native.writer_enforcement_version() != 1
@@ -197,7 +198,7 @@ impl BicDb {
         let record: NativeNoEffectIntentRecord = self.read_native_range_image_record(&no_effect_key(request.scope.range_id, request.range_index))?
             .ok_or_else(|| invalid("actual Core no-effect candidate unavailable; never infer it from rows or raw Abort"))?;
         record.validate()?;
-        record.domain.require_role(role)?;
+        record.domain.require_observer(role)?;
         if record.birth_id != native.birth_id()
             || record.birth_sha256 != native.birth_sha256()
             || record.command.leader_node_id != request.origin_node_id

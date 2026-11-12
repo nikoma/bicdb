@@ -1,0 +1,14 @@
+
+running 4 tests
+test distribution_range_recovery::recovery_order_tests::interrupted_normal_repair::actual_protected_current_image_resumes_after_clear_with_fresh_installing_quorum ... ok
+test distribution_range_image_install::proposal_tests::actual_protected_proposal_orphan_preserves_native_point_and_reopens_without_intent ... FAILED
+test distribution_range_recovery::recovery_order_tests::interrupted_normal_repair::actual_protected_current_image_resumes_begin_before_history_staging ... ok
+test distribution_range_recovery::recovery_order_tests::interrupted_normal_repair::actual_protected_current_image_resumes_intent_before_native_marker ... ok
+
+failures:
+
+failures:
+    distribution_range_image_install::proposal_tests::actual_protected_proposal_orphan_preserves_native_point_and_reopens_without_intent
+
+test result: FAILED. 3 passed; 1 failed; 0 ignored; 0 measured; 716 filtered out; finished in 20.11s
+

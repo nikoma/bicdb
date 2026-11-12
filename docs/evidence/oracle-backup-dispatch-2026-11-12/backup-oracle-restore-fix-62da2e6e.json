@@ -1,0 +1,28 @@
+{
+  "source": "62da2e6e1fb3280011185ba1a35758d45e43d6e2",
+  "scope": "Production unchanged74c. Prior agent regression completed Oracle start/status/cancel/restore then its embedded reader omitted Oracle lowering. Restore read now uses exact public Oracle session frontend with same authenticated bicdb user; strict acknowledged value unchanged. Existing4 online backup positives retained but full5 rerun validates final fixture across bothprofiles.",
+  "started_unix": 1794462844.6674178,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-pgwire",
+        "--test",
+        "online_backups",
+        "--",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794462844.667643,
+      "exit": 0,
+      "finished_unix": 1794462858.5045662
+    }
+  ],
+  "status": "focused_passed",
+  "finished_unix": 1794462858.5048044
+}

@@ -2093,6 +2093,44 @@ impl MetadataConsensusStore {
         Ok(entry)
     }
 
+    /// Resume replication only after this leader accepted an actual reply for
+    /// this peer. Progress resets with leadership and committed configuration;
+    /// a transport result or a rejection hint alone cannot advance it.
+    pub(crate) fn append_request_for_peer(
+        &self,
+        peer: &ClusterNodeId,
+        max_entries: usize,
+    ) -> Result<MetadataAppendRequest> {
+        self.require_native_metadata_actor_current(true)?;
+        if self.state.role != MetadataConsensusRole::Leader {
+            return Err(metadata_error(
+                "only the leader can resume metadata replication",
+            ));
+        }
+        if peer == &self.state.node_id
+            || !self
+                .state
+                .committed_topology
+                .nodes
+                .get(peer)
+                .is_some_and(|member| member.lifecycle == ClusterNodeLifecycle::Active)
+        {
+            return Err(metadata_error(
+                "replication peer is not an active committed remote member",
+            ));
+        }
+        let accepted = self.match_index.get(peer).copied().unwrap_or(0);
+        if accepted > self.last_log_index() {
+            return Err(metadata_error(
+                "accepted peer prefix exceeds actual leader log",
+            ));
+        }
+        let next = accepted
+            .checked_add(1)
+            .ok_or_else(|| metadata_error("metadata replication index exhausted"))?;
+        self.append_request_from(next, max_entries)
+    }
+
     pub fn append_request_from(
         &self,
         next_index: u64,
@@ -2322,8 +2360,16 @@ impl MetadataConsensusStore {
         }
         if response.term != self.state.current_term
             || self.state.role != MetadataConsensusRole::Leader
-            || !response.success
         {
+            return Ok(false);
+        }
+        if !response.success {
+            // A negative reply supplies no positive prefix. Conservatively
+            // retry from the committed snapshot/log instead of treating its
+            // conflict hint as authority or retaining an unusable cursor.
+            if expected_node_id != &self.state.node_id {
+                self.match_index.remove(expected_node_id);
+            }
             return Ok(false);
         }
         let old_voters = topology_voters(&self.state.committed_topology);

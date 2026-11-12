@@ -43,6 +43,7 @@ mod native_activation;
 mod native_apply;
 mod native_durability;
 mod native_writer;
+pub(crate) use native_durability::ClusterServiceOpenGuard;
 use native_durability::ServiceStoragePolicy;
 mod current_image_resume;
 mod native_completion;

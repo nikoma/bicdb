@@ -418,3 +418,100 @@ fn native_catalog_explicit_legacy_async_prepare_commit_certify_stays_supported()
         RangeWriteState::QuorumCommitted
     );
 }
+
+#[test]
+fn native_service_actual_open_cannot_be_revived_by_outer_arc_or_retained_directory() {
+    let (_seed_root, _seed_db, topology, spec) = native_origin_fixture();
+    let root = tempfile::tempdir().unwrap();
+    let path = root.path().join("enforced");
+    let config = DbConfig::default()
+        .with_fsync(true)
+        .with_storage_mode(StorageMode::ServerPaged)
+        .with_paged_buffer_pool_bytes(8 * 1024 * 1024);
+    let (mut original, _) =
+        BicDb::create_new_enrolled_range_image_database(&path, config, spec.clone()).unwrap();
+    original.create_collection("items").unwrap();
+    let directory = original
+        .native_service_directory_lifetime()
+        .unwrap()
+        .upgrade()
+        .unwrap();
+    let db = Arc::new(RwLock::new(original));
+    let service = ClusterDataNodeService::open(
+        topology.cluster_id.clone(),
+        spec.node_id,
+        &path,
+        Arc::clone(&db),
+        true,
+    )
+    .unwrap();
+    let guard = service.listener_open_guard();
+    assert_eq!(service.native_writer_enforcement_version().unwrap(), 1);
+    guard.require_database(&db.read()).unwrap();
+
+    let replacement = BicDb::open_with_config(
+        root.path().join("foreign-legacy"),
+        DbConfig::default().with_fsync(true),
+    )
+    .unwrap();
+    // Even while A is still alive, its guard cannot authorize actual B.
+    assert!(guard.require_database(&replacement).is_err());
+    let old = std::mem::replace(&mut *db.write(), replacement);
+    guard.require_live().unwrap();
+    assert!(guard.require_database(&db.read()).is_err());
+    drop(old);
+
+    // Neither the same outer Arc nor a deliberately retained old directory
+    // lock owns the old BicDb lifetime token. All necessary refusal checks
+    // must now fail without reading or acquiring the replacement database.
+    assert!(Arc::strong_count(&directory) > 0);
+    for result in [
+        guard.require_live(),
+        guard.require_database(&db.read()),
+        service.require_catalog_storage_policy(),
+    ] {
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("actual database open ended"));
+    }
+    assert!(service.native_writer_enforcement_version().is_err());
+    assert!(service
+        .storage_policy
+        .validate_configuration(&path, true)
+        .is_err());
+    assert_eq!(
+        db.read()
+            .actual_native_writer_enforcement_version()
+            .unwrap(),
+        0
+    );
+}
+
+#[test]
+fn native_service_open_guard_does_not_wait_for_service_or_database_latches() {
+    let (_root, db, topology, spec) = native_origin_fixture();
+    let path = db.read().data_path().to_path_buf();
+    let service = Mutex::new(
+        ClusterDataNodeService::open(
+            topology.cluster_id,
+            spec.node_id,
+            &path,
+            Arc::clone(&db),
+            true,
+        )
+        .unwrap(),
+    );
+    let guard = service.lock().listener_open_guard();
+    let database_latch = db.write();
+    let service_latch = service.lock();
+    let (send, receive) = std::sync::mpsc::sync_channel(1);
+    let worker = std::thread::spawn(move || send.send(guard.require_live()).unwrap());
+    let result = receive.recv_timeout(std::time::Duration::from_secs(2));
+    drop(service_latch);
+    drop(database_latch);
+    worker.join().unwrap();
+    result
+        .expect("open fence must not reacquire either held latch")
+        .unwrap();
+}

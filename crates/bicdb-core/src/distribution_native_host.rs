@@ -33,6 +33,10 @@ mod learner_factory;
 #[cfg(feature = "tls-replication")]
 pub(crate) use learner_factory::NativeUnassignedLearnerFactory;
 #[cfg(feature = "tls-replication")]
+mod learner_cold;
+#[cfg(feature = "tls-replication")]
+pub(crate) use learner_cold::NativeColdLearnerMetadataHost;
+#[cfg(feature = "tls-replication")]
 mod learner_birth;
 #[cfg(feature = "tls-replication")]
 pub(crate) use learner_birth::{

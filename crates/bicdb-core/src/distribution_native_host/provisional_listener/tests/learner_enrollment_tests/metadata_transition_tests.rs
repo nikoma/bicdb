@@ -2,6 +2,8 @@
 use super::*;
 use crate::distribution_consensus::NativeMetadataInitializationCut;
 
+mod cold_tests;
+
 fn own_mq(
     f: &EnrollmentFixture,
     parent: &CancellationToken,

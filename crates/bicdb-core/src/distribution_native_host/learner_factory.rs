@@ -208,6 +208,31 @@ impl NativeUnassignedLearnerFactory {
         network: &ClusterNetworkTransportConfig,
         parent: &CancellationToken,
     ) -> Result<Self> {
+        Self::reopen_existing(root, config, observed, business, network, parent, true)
+    }
+
+    /// Strict cold loader only; protected initialization is inspected later by
+    /// the owned metadata constructor. This never asserts a fresh factory.
+    pub(crate) fn reopen_enrolled_metadata(
+        root: &Path,
+        config: DbConfig,
+        observed: &HostMetadataReadObservation,
+        business: Uuid,
+        network: &ClusterNetworkTransportConfig,
+        parent: &CancellationToken,
+    ) -> Result<Self> {
+        Self::reopen_existing(root, config, observed, business, network, parent, false)
+    }
+
+    fn reopen_existing(
+        root: &Path,
+        config: DbConfig,
+        observed: &HostMetadataReadObservation,
+        business: Uuid,
+        network: &ClusterNetworkTransportConfig,
+        parent: &CancellationToken,
+        uninitialized: bool,
+    ) -> Result<Self> {
         let token = parent.child_with_deadline(observed.deadline());
         token.check()?;
         let (topology, local, schema) = Self::context(observed, business, network)?;
@@ -229,7 +254,16 @@ impl NativeUnassignedLearnerFactory {
             ));
         }
         let (db, factory) = BicDb::open_range_image_database(root, config, &manifest.spec)?;
-        db.require_native_metadata_uninitialized()?;
+        if uninitialized {
+            db.require_native_metadata_uninitialized()?;
+        } else if db.current_commit_seq() != 0 {
+            // Necessary refusal only: no range/data authority is inferred from
+            // zero. A root with business-sequence history is not this bounded
+            // unassigned-metadata continuation contract.
+            return Err(invalid(
+                "cold unassigned learner has business-sequence history; quarantined",
+            ));
+        }
         let actual = factory.require_unwritten_enrollment_database(&db, &topology)?;
         if NativeStoreBirthV1::from_actual_native(&actual)? != manifest.birth
             || db.schema_compatibility_fingerprint()?.sha256 != manifest.schema_sha256
@@ -246,6 +280,23 @@ impl NativeUnassignedLearnerFactory {
             return Err(invalid(
                 "actual committed learner belongs to a different physical birth",
             ));
+        }
+        if !uninitialized
+            && topology.nodes[&local].native_store_birth_v1.as_ref() != Some(&manifest.birth)
+        {
+            return Err(invalid(
+                "cold metadata requires the current committed actual learner birth",
+            ));
+        }
+        if !uninitialized {
+            if let Some(record) = db.native_metadata_initialization_record(
+                &manifest.spec.cluster_id,
+                manifest.spec.bootstrap_id,
+                &local,
+                manifest.spec.member_incarnation,
+            )? {
+                record.require_namespaces_current(&db)?;
+            }
         }
         observed.require_live_request(business)?;
         token.check()?;

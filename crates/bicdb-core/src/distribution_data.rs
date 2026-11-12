@@ -1027,6 +1027,39 @@ impl ClusterDataNodeService {
         self.learner_birth_provider.clone()
     }
     /// Existing-cluster learner purpose, never an initial all-C permit.
+    /// NEW cold service, not a mutation of any captured listener. Actual root
+    /// ownership replaces the need for a prior live endpoint/drain fact.
+    #[cfg(feature = "tls-replication")]
+    pub(crate) fn open_cold_native_learner_metadata(
+        cluster: ClusterId,
+        node: ClusterNodeId,
+        root: &std::path::Path,
+        database: Arc<RwLock<BicDb>>,
+        metadata: &crate::MetadataConsensusStore,
+    ) -> Result<Self> {
+        metadata.registered_native_learner_store_id()?;
+        if metadata
+            .committed_topology()
+            .ranges
+            .values()
+            .any(|range| range.replicas.iter().any(|replica| replica.node_id == node))
+        {
+            return Err(data_error(
+                "cold learner metadata service cannot own data replicas",
+            ));
+        }
+        let mut service = Self::open(cluster, node, root, database, true)?;
+        metadata.require_listener_database(&service.listener_open_guard())?;
+        if service.native_writer_enforcement_version()? != 1 {
+            return Err(data_error(
+                "cold learner metadata requires actual enforced database",
+            ));
+        }
+        service.initial_consensus_only = true;
+        Ok(service)
+    }
+
+    /// Existing-cluster learner purpose, never an initial all-C permit.
     /// Caller holds only nonwaiting metadata/service guards after true drain;
     /// this method acquires NO DB latch and opens NO data surface.
     #[cfg(feature = "tls-replication")]

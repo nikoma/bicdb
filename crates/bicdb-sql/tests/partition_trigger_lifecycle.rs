@@ -170,7 +170,7 @@ fn multi_function_drop_preflights_missing_function_before_mutating_guard_depende
 }
 
 #[test]
-fn multiple_trigger_functions_and_their_lineages_publish_in_one_native_commit() {
+fn multiple_trigger_functions_and_their_lineages_publish_one_catalog_transaction() {
     for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
         let dir = tempfile::tempdir().unwrap();
         let cfg = DbConfig::default()
@@ -192,13 +192,25 @@ fn multiple_trigger_functions_and_their_lineages_publish_in_one_native_commit() 
             .unwrap();
         }
         let before = db.last_commit_seq();
+        let routine_generation = db.collection_generation("__bicdb_pg_routines");
+        let trigger_generation = db.collection_generation("__bicdb_pg_triggers");
         SqlSession::new(&mut db)
             .execute("DROP FUNCTION f(),g() CASCADE")
             .unwrap();
         assert_eq!(
             db.last_commit_seq() - before,
+            2,
+            "one catalog publication plus the existing empty SQL wrapper commit"
+        );
+        assert_eq!(
+            db.collection_generation("__bicdb_pg_routines") - routine_generation,
             1,
-            "one DROP cannot separately publish function and trigger subsets"
+            "all function catalog changes must publish together"
+        );
+        assert_eq!(
+            db.collection_generation("__bicdb_pg_triggers") - trigger_generation,
+            1,
+            "all trigger catalog changes must publish together"
         );
         {
             let mut sql = SqlSession::new(&mut db);

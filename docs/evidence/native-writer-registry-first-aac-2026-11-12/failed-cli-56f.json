@@ -1,0 +1,1995 @@
+{
+  "archive_digests": [
+    {
+      "bytes": 98275634,
+      "id": 13983331445,
+      "sha256": "d25a2769dafb64023c0b5f32434b439483013bcf551510934b71c7c3e9c134f1"
+    },
+    {
+      "bytes": 359212,
+      "id": 13983441342,
+      "sha256": "77ada1f4f7a6b1b8c41bfe1850ebd6c55ac170a8d1ef75cafaff52a0e9e937e6"
+    }
+  ],
+  "counts": {
+    "failed": 3,
+    "passed": 3,
+    "seconds": 108.68
+  },
+  "custody": {
+    "engine_open_or_replay": false,
+    "job": 131472177797,
+    "manifests": [
+      {
+        "kind": "diagnostics",
+        "logical_bytes": 74108,
+        "path": "failure-diagnostics/native-operator-cli-01a1d186-fc86-7c22-ad4d-77df5d921cf8/manifest.json",
+        "sha256": "30d4bd5d3ce064a8f7c5c905cfbdf30c18e24ef26283f0e4703b5eac4d5f507e",
+        "test": "initial_data_tests::native_initial_data_actual_cli_four_process_first_ack_and_strong_full_value",
+        "verified_files": 26
+      },
+      {
+        "kind": "diagnostics",
+        "logical_bytes": 64215,
+        "path": "failure-diagnostics/native-operator-cli-01a1d187-2237-74c0-bb4d-0c05605e07ef/manifest.json",
+        "sha256": "f7156d479d7d90101a727d1a3d32ab057031a24fded3978502cdc89f4852dc9d",
+        "test": "native_metadata_operator_actual_cli_single_join_fresh_becomes_local_metadata_voter",
+        "verified_files": 32
+      },
+      {
+        "kind": "diagnostics",
+        "logical_bytes": 75885,
+        "path": "failure-diagnostics/native-operator-cli-01a1d187-3a21-7fd0-b067-d16077d7b981/manifest.json",
+        "sha256": "2e2cbbd7de9669f2d9ad5ad1ba8deb0a9afadd611b11645131a0c1ea504bb250",
+        "test": "promoted_cold_tests::native_metadata_operator_actual_cli_automatic_promoted_voter_kill_reopen_same_root",
+        "verified_files": 36
+      },
+      {
+        "children_waits": [
+          {
+            "before_kill": {
+              "exited": false
+            },
+            "exit": {
+              "code": null,
+              "display": "signal: 9 (SIGKILL)",
+              "signal": 9,
+              "success": false
+            },
+            "kill_attempted": true,
+            "kill_error": null,
+            "pid": 17978,
+            "slot": 0,
+            "wait_error": null,
+            "wait_ok": true
+          },
+          {
+            "before_kill": {
+              "exited": false
+            },
+            "exit": {
+              "code": null,
+              "display": "signal: 9 (SIGKILL)",
+              "signal": 9,
+              "success": false
+            },
+            "kill_attempted": true,
+            "kill_error": null,
+            "pid": 17979,
+            "slot": 1,
+            "wait_error": null,
+            "wait_ok": true
+          },
+          {
+            "before_kill": {
+              "exited": false
+            },
+            "exit": {
+              "code": null,
+              "display": "signal: 9 (SIGKILL)",
+              "signal": 9,
+              "success": false
+            },
+            "kill_attempted": true,
+            "kill_error": null,
+            "pid": 17980,
+            "slot": 2,
+            "wait_error": null,
+            "wait_ok": true
+          },
+          {
+            "before_kill": {
+              "exited": false
+            },
+            "exit": {
+              "code": null,
+              "display": "signal: 9 (SIGKILL)",
+              "signal": 9,
+              "success": false
+            },
+            "kill_attempted": true,
+            "kill_error": null,
+            "pid": 17981,
+            "slot": 3,
+            "wait_error": null,
+            "wait_ok": true
+          },
+          {
+            "before_kill": {
+              "exited": false
+            },
+            "exit": {
+              "code": null,
+              "display": "signal: 9 (SIGKILL)",
+              "signal": 9,
+              "success": false
+            },
+            "kill_attempted": true,
+            "kill_error": null,
+            "pid": 18343,
+            "slot": 4,
+            "wait_error": null,
+            "wait_ok": true
+          }
+        ],
+        "complete": true,
+        "directories": 40,
+        "kind": "database",
+        "logical_bytes": 1464285,
+        "path": "database-failure-21b0f2fe-f586-4a38-8545-9a9a73ffde3f/manifest.json",
+        "sha256": "2eebb8e235848a3866376d07db6a9f9b1b3e0934bae3d1c7089d145ed7d1db26",
+        "status": "COPIED_STOPPED_OWNED_ROOTS",
+        "test": "promoted_cold_tests::native_metadata_operator_actual_cli_automatic_promoted_voter_kill_reopen_same_root",
+        "verified_files": 96
+      },
+      {
+        "children_waits": [
+          {
+            "before_kill": {
+              "exited": false
+            },
+            "exit": {
+              "code": null,
+              "display": "signal: 9 (SIGKILL)",
+              "signal": 9,
+              "success": false
+            },
+            "kill_attempted": true,
+            "kill_error": null,
+            "pid": 16534,
+            "slot": 0,
+            "wait_error": null,
+            "wait_ok": true
+          },
+          {
+            "before_kill": {
+              "exited": false
+            },
+            "exit": {
+              "code": null,
+              "display": "signal: 9 (SIGKILL)",
+              "signal": 9,
+              "success": false
+            },
+            "kill_attempted": true,
+            "kill_error": null,
+            "pid": 16535,
+            "slot": 1,
+            "wait_error": null,
+            "wait_ok": true
+          },
+          {
+            "before_kill": {
+              "exited": false
+            },
+            "exit": {
+              "code": null,
+              "display": "signal: 9 (SIGKILL)",
+              "signal": 9,
+              "success": false
+            },
+            "kill_attempted": true,
+            "kill_error": null,
+            "pid": 16536,
+            "slot": 2,
+            "wait_error": null,
+            "wait_ok": true
+          },
+          {
+            "before_kill": {
+              "exited": false
+            },
+            "exit": {
+              "code": null,
+              "display": "signal: 9 (SIGKILL)",
+              "signal": 9,
+              "success": false
+            },
+            "kill_attempted": true,
+            "kill_error": null,
+            "pid": 16537,
+            "slot": 3,
+            "wait_error": null,
+            "wait_ok": true
+          }
+        ],
+        "complete": true,
+        "directories": 32,
+        "kind": "database",
+        "logical_bytes": 3239725,
+        "path": "database-failure-7cc45508-b300-4f22-accc-6ee120a20439/manifest.json",
+        "sha256": "0e0d660b11a1fff896d532a9fdf8db173a9559b8f3f96cf25d121e762610376b",
+        "status": "COPIED_STOPPED_OWNED_ROOTS",
+        "test": "initial_data_tests::native_initial_data_actual_cli_four_process_first_ack_and_strong_full_value",
+        "verified_files": 76
+      },
+      {
+        "children_waits": [
+          {
+            "before_kill": {
+              "exited": false
+            },
+            "exit": {
+              "code": null,
+              "display": "signal: 9 (SIGKILL)",
+              "signal": 9,
+              "success": false
+            },
+            "kill_attempted": true,
+            "kill_error": null,
+            "pid": 17637,
+            "slot": 0,
+            "wait_error": null,
+            "wait_ok": true
+          },
+          {
+            "before_kill": {
+              "exited": false
+            },
+            "exit": {
+              "code": null,
+              "display": "signal: 9 (SIGKILL)",
+              "signal": 9,
+              "success": false
+            },
+            "kill_attempted": true,
+            "kill_error": null,
+            "pid": 17638,
+            "slot": 1,
+            "wait_error": null,
+            "wait_ok": true
+          },
+          {
+            "before_kill": {
+              "exited": false
+            },
+            "exit": {
+              "code": null,
+              "display": "signal: 9 (SIGKILL)",
+              "signal": 9,
+              "success": false
+            },
+            "kill_attempted": true,
+            "kill_error": null,
+            "pid": 17639,
+            "slot": 2,
+            "wait_error": null,
+            "wait_ok": true
+          },
+          {
+            "before_kill": {
+              "exited": false
+            },
+            "exit": {
+              "code": null,
+              "display": "signal: 9 (SIGKILL)",
+              "signal": 9,
+              "success": false
+            },
+            "kill_attempted": true,
+            "kill_error": null,
+            "pid": 17640,
+            "slot": 3,
+            "wait_error": null,
+            "wait_ok": true
+          },
+          {
+            "before_kill": {
+              "exited": false
+            },
+            "exit": {
+              "code": null,
+              "display": "signal: 9 (SIGKILL)",
+              "signal": 9,
+              "success": false
+            },
+            "kill_attempted": true,
+            "kill_error": null,
+            "pid": 17723,
+            "slot": 4,
+            "wait_error": null,
+            "wait_ok": true
+          }
+        ],
+        "complete": true,
+        "directories": 40,
+        "kind": "database",
+        "logical_bytes": 1505406,
+        "path": "database-failure-c27e431c-1d4e-48ad-b052-b6b63966071a/manifest.json",
+        "sha256": "24cc73a3040432f7b8965aac78f6afbefb4a2855a87ccd28512ad64dd4fc2ee9",
+        "status": "COPIED_STOPPED_OWNED_ROOTS",
+        "test": "native_metadata_operator_actual_cli_single_join_fresh_becomes_local_metadata_voter",
+        "verified_files": 96
+      }
+    ],
+    "no_reconciliation_or_rollback_claim": true,
+    "run": 43301082751,
+    "source": "56f9a3c999fba329c349d3e6dda664dcfb64e4c6",
+    "verified_utc": "2026-11-12T20:54:54.704437+00:00"
+  },
+  "external_primary_ledger_allowlist": [
+    {
+      "data_stage": "four_initial_only",
+      "execution_identity": {
+        "binary_bytes": 751407688,
+        "binary_scope": "actual CARGO_BIN_EXE_bicdb bytes read before process/startup/ACK phase; not a published release",
+        "binary_sha256": "466349b36e1d81e3cb64da77303070b11bf51cb85350d82f29c442dcb59e4d56",
+        "source": "56f9a3c999fba329c349d3e6dda664dcfb64e4c6",
+        "source_authority": "BICDB_TEST_SOURCE_SHA runtime environment; not option_env or runtime git lookup",
+        "source_available": true,
+        "test_package_version": "1.0.489-beta"
+      },
+      "fifth_data_stage": "not_entered",
+      "process_ids": [
+        16534,
+        16535,
+        16536,
+        16537
+      ],
+      "source": "56f9a3c999fba329c349d3e6dda664dcfb64e4c6",
+      "stage": "four_initial_owners"
+    },
+    {
+      "acknowledged": false,
+      "error": "cluster error: cluster node n0 rejected RPC cluster_data_operation_failed: cluster error: initial DATA receiver is pending local leader readiness; retry within the original request budget",
+      "key": "before-initial-data-quorum",
+      "logical_operation_id": "01a1d186-d82d-7da0-8def-c50c171c4778",
+      "stage": "reply"
+    },
+    {
+      "acknowledged": true,
+      "error": null,
+      "inserted": true,
+      "key": "external-first-ack",
+      "logical_operation_id": "01a1d186-ed69-71a1-be8f-a80dfec22d45",
+      "payload_sha256": "1dc23dddaa3457b67163545bc41e9b29188ebdd7f8b803aada54be7707bc6c0b",
+      "stage": "reply",
+      "value": {
+        "count": 17,
+        "full": {
+          "array": [
+            1,
+            true,
+            null,
+            {
+              "nested": "retained"
+            }
+          ]
+        },
+        "text": "entire acknowledged payload"
+      }
+    },
+    {
+      "key": "external-first-ack",
+      "logical_operation_id": "01a1d186-efb5-7010-95db-13410928530f",
+      "present": true,
+      "stage": "strong_reply",
+      "value": {
+        "count": 17,
+        "full": {
+          "array": [
+            1,
+            true,
+            null,
+            {
+              "nested": "retained"
+            }
+          ]
+        },
+        "text": "entire acknowledged payload"
+      }
+    },
+    {
+      "acknowledged": true,
+      "error": null,
+      "inserted": true,
+      "key": "external-json-null",
+      "logical_operation_id": "01a1d186-f10b-7c53-9a0c-ba9342c1ede8",
+      "payload_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "stage": "reply",
+      "value": null
+    },
+    {
+      "key": "external-json-null",
+      "logical_operation_id": "01a1d186-f34f-7fb0-b1e2-c754e73c774b",
+      "present": true,
+      "stage": "strong_reply",
+      "value": null
+    },
+    {
+      "acknowledged": false,
+      "error": "cluster error: no event cluster member is reachable",
+      "inserted": null,
+      "key": "external-empty-object",
+      "logical_operation_id": "01a1d186-f4a2-7902-b9d8-92844a0477e6",
+      "payload_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+      "stage": "reply",
+      "value": {}
+    },
+    {
+      "data_move": "not_attempted",
+      "fifth_data_serving": false,
+      "fresh_ack": true,
+      "fresh_ack_read": true,
+      "health_gate_scope": "original API receipt monotonic budget; no hard OS or diagnostic-fsync wall bound",
+      "health_limit_ns": 10000000000,
+      "healthy_triple_receipt_ns": 1583451549,
+      "observed_false_absence": false,
+      "observed_wrong_value": false,
+      "old_ack_read": true,
+      "rounds": 1,
+      "scope": "unchanged assignments require actual bounded healthy existing read AND fresh ACK",
+      "stage": "strict_registry_addition_terminal"
+    }
+  ],
+  "initial_journal": {
+    "bytes": 2517034,
+    "final_record_kind": "logical_public_reply",
+    "fixture_finished_marker": false,
+    "path": "rpc-journals/client-01a1d186-d6fe-76e0-b7c8-4a00751d6655/journal.jsonl",
+    "record_count": 529,
+    "sha256": "8ecdf11dc8ef8344e5628edb4444a973a593a1b59d12c7b9bc22f7711aa82fa9"
+  },
+  "initial_journal_selected_records": [
+    {
+      "any_actual_rpc_may_have_dispatched": true,
+      "diagnostic_operation_id": "01a1d186-d82d-7da0-8def-c50c171c4778",
+      "durable_outcome_inferred_from_error": false,
+      "kind": "logical_public_reply",
+      "outcome": {
+        "classification": "NO_USER_ACK_DURABLE_OUTCOME_UNKNOWN",
+        "error_chain": [
+          "cluster error: cluster node n0 rejected RPC cluster_data_operation_failed: cluster error: initial DATA receiver is pending local leader readiness; retry within the original request budget"
+        ]
+      },
+      "sink_sequence": 89,
+      "sink_unix_ns": 1794516639474640033
+    },
+    {
+      "any_actual_rpc_may_have_dispatched": true,
+      "diagnostic_operation_id": "01a1d186-def2-7290-ba14-d7e258872716",
+      "durable_outcome_inferred_from_error": false,
+      "kind": "logical_public_reply",
+      "outcome": {
+        "classification": "NO_SUCCESSFUL_READ_NO_ABSENCE",
+        "error_chain": [
+          "canceling statement due to query timeout"
+        ]
+      },
+      "sink_sequence": 475,
+      "sink_unix_ns": 1794516641475324859
+    },
+    {
+      "any_actual_rpc_may_have_dispatched": true,
+      "diagnostic_operation_id": "01a1d186-ed69-71a1-be8f-a80dfec22d45",
+      "durable_outcome_inferred_from_error": false,
+      "kind": "logical_public_reply",
+      "outcome": {
+        "classification": "USER_ACK",
+        "inserted": true
+      },
+      "sink_sequence": 481,
+      "sink_unix_ns": 1794516643765323800
+    },
+    {
+      "any_actual_rpc_may_have_dispatched": true,
+      "diagnostic_operation_id": "01a1d186-efb5-7010-95db-13410928530f",
+      "durable_outcome_inferred_from_error": false,
+      "kind": "logical_public_reply",
+      "outcome": {
+        "classification": "STRONG_SUCCESS",
+        "presence": "present",
+        "value": {
+          "count": 17,
+          "full": {
+            "array": [
+              1,
+              true,
+              null,
+              {
+                "nested": "retained"
+              }
+            ]
+          },
+          "text": "entire acknowledged payload"
+        }
+      },
+      "sink_sequence": 487,
+      "sink_unix_ns": 1794516644106537522
+    },
+    {
+      "any_actual_rpc_may_have_dispatched": true,
+      "diagnostic_operation_id": "01a1d186-f10b-7c53-9a0c-ba9342c1ede8",
+      "durable_outcome_inferred_from_error": false,
+      "kind": "logical_public_reply",
+      "outcome": {
+        "classification": "USER_ACK",
+        "inserted": true
+      },
+      "sink_sequence": 493,
+      "sink_unix_ns": 1794516644686736181
+    },
+    {
+      "any_actual_rpc_may_have_dispatched": true,
+      "diagnostic_operation_id": "01a1d186-f34f-7fb0-b1e2-c754e73c774b",
+      "durable_outcome_inferred_from_error": false,
+      "kind": "logical_public_reply",
+      "outcome": {
+        "classification": "STRONG_SUCCESS",
+        "presence": "present",
+        "value": null
+      },
+      "sink_sequence": 499,
+      "sink_unix_ns": 1794516645025643599
+    },
+    {
+      "context_is_protocol_business_id": false,
+      "diagnostic_operation_id": "01a1d186-f4a2-7902-b9d8-92844a0477e6",
+      "kind": "logical_request_intent",
+      "request": {
+        "key": "external-empty-object",
+        "namespace": "items",
+        "payload_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+        "public_operation": "append",
+        "request_timeout_ms": 2000,
+        "value": {}
+      },
+      "sink_sequence": 500,
+      "sink_unix_ns": 1794516645026296147
+    },
+    {
+      "actual": {
+        "address": null,
+        "attempt_id": "01a1d186-f4a3-70f2-baef-99a3f30e02c4",
+        "bytes_written": 0,
+        "caller": "n0",
+        "destination": "n2",
+        "elapsed_ns": 872,
+        "error_chain": [],
+        "journal_sequence": 485,
+        "may_have_dispatched": false,
+        "operation": "event_append",
+        "phase": "invoked",
+        "phase_unix_ns": 1794516645027080169,
+        "request_id": null,
+        "topology_generation": null
+      },
+      "kind": "actual_rpc_phase",
+      "logical_context": {
+        "diagnostic_operation_id": "01a1d186-f4a2-7902-b9d8-92844a0477e6",
+        "request": {
+          "key": "external-empty-object",
+          "namespace": "items",
+          "payload_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+          "public_operation": "append",
+          "request_timeout_ms": 2000,
+          "value": {}
+        }
+      },
+      "observer_instance_id": "01a1d186-d72c-7562-a217-487bad4f54f5",
+      "sink_sequence": 501
+    },
+    {
+      "actual": {
+        "address": "127.0.0.1:38637",
+        "attempt_id": "01a1d186-f4a3-70f2-baef-99a3f30e02c4",
+        "bytes_written": 0,
+        "caller": "n0",
+        "decoded_frame": {
+          "caller_node_id": "n0",
+          "cluster_id": "native-operator-cli",
+          "destination_node_id": "n2",
+          "protocol_version": 28,
+          "request": {
+            "ApplicationEvent": {
+              "operation": {
+                "key": "external-empty-object",
+                "namespace": "items",
+                "operation": "append",
+                "value": {}
+              },
+              "range_epoch": 1,
+              "range_id": 2
+            }
+          },
+          "request_id": 122
+        },
+        "destination": "n2",
+        "elapsed_ns": 521403,
+        "error_chain": [],
+        "framed_bytes": 286,
+        "framed_sha256": "d483286b39e9d53773a48db35b841e90b2c69f9e014f05b1cde7786514ef1943",
+        "journal_sequence": 486,
+        "may_have_dispatched": false,
+        "operation": "event_append",
+        "phase": "request_frame_before_dispatch",
+        "phase_unix_ns": 1794516645027600750,
+        "request_id": 122,
+        "topology_generation": 1
+      },
+      "kind": "actual_rpc_phase",
+      "logical_context": {
+        "diagnostic_operation_id": "01a1d186-f4a2-7902-b9d8-92844a0477e6",
+        "request": {
+          "key": "external-empty-object",
+          "namespace": "items",
+          "payload_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+          "public_operation": "append",
+          "request_timeout_ms": 2000,
+          "value": {}
+        }
+      },
+      "observer_instance_id": "01a1d186-d72c-7562-a217-487bad4f54f5",
+      "sink_sequence": 502
+    },
+    {
+      "actual": {
+        "address": "127.0.0.1:38637",
+        "attempt_id": "01a1d186-f4a3-70f2-baef-99a3f30e02c4",
+        "bytes_written": 286,
+        "caller": "n0",
+        "destination": "n2",
+        "elapsed_ns": 1001138461,
+        "error_chain": [
+          "io error: cluster RPC interrupted: canceling statement due to query timeout",
+          "cluster RPC interrupted: canceling statement due to query timeout"
+        ],
+        "journal_sequence": 487,
+        "may_have_dispatched": true,
+        "operation": "event_append",
+        "phase": "partial_or_rejected_response_frame",
+        "phase_unix_ns": 1794516646028217348,
+        "request_id": 122,
+        "topology_generation": 1
+      },
+      "kind": "actual_rpc_phase",
+      "logical_context": {
+        "diagnostic_operation_id": "01a1d186-f4a2-7902-b9d8-92844a0477e6",
+        "request": {
+          "key": "external-empty-object",
+          "namespace": "items",
+          "payload_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+          "public_operation": "append",
+          "request_timeout_ms": 2000,
+          "value": {}
+        }
+      },
+      "observer_instance_id": "01a1d186-d72c-7562-a217-487bad4f54f5",
+      "sink_sequence": 503
+    },
+    {
+      "actual": {
+        "address": "127.0.0.1:38637",
+        "attempt_id": "01a1d186-f4a3-70f2-baef-99a3f30e02c4",
+        "bytes_written": 286,
+        "caller": "n0",
+        "destination": "n2",
+        "elapsed_ns": 1114166641,
+        "error_chain": [
+          "io error: cluster RPC interrupted: canceling statement due to query timeout",
+          "cluster RPC interrupted: canceling statement due to query timeout"
+        ],
+        "journal_sequence": 488,
+        "may_have_dispatched": true,
+        "operation": "event_append",
+        "phase": "exchange_error_before_cancellation_override",
+        "phase_unix_ns": 1794516646141244756,
+        "request_id": 122,
+        "topology_generation": 1
+      },
+      "kind": "actual_rpc_phase",
+      "logical_context": {
+        "diagnostic_operation_id": "01a1d186-f4a2-7902-b9d8-92844a0477e6",
+        "request": {
+          "key": "external-empty-object",
+          "namespace": "items",
+          "payload_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+          "public_operation": "append",
+          "request_timeout_ms": 2000,
+          "value": {}
+        }
+      },
+      "observer_instance_id": "01a1d186-d72c-7562-a217-487bad4f54f5",
+      "sink_sequence": 504
+    },
+    {
+      "actual": {
+        "address": "127.0.0.1:38637",
+        "attempt_id": "01a1d186-f4a3-70f2-baef-99a3f30e02c4",
+        "bytes_written": 286,
+        "caller": "n0",
+        "destination": "n2",
+        "elapsed_ns": 1225151433,
+        "error_chain": [
+          "canceling statement due to query timeout"
+        ],
+        "journal_sequence": 489,
+        "may_have_dispatched": true,
+        "operation": "event_append",
+        "phase": "validated_transport_result_error",
+        "phase_unix_ns": 1794516646252230230,
+        "request_id": 122,
+        "topology_generation": 1
+      },
+      "kind": "actual_rpc_phase",
+      "logical_context": {
+        "diagnostic_operation_id": "01a1d186-f4a2-7902-b9d8-92844a0477e6",
+        "request": {
+          "key": "external-empty-object",
+          "namespace": "items",
+          "payload_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+          "public_operation": "append",
+          "request_timeout_ms": 2000,
+          "value": {}
+        }
+      },
+      "observer_instance_id": "01a1d186-d72c-7562-a217-487bad4f54f5",
+      "sink_sequence": 505
+    },
+    {
+      "actual": {
+        "address": "127.0.0.1:38637",
+        "attempt_id": "01a1d186-f4a3-70f2-baef-99a3f30e02c4",
+        "bytes_written": 286,
+        "caller": "n0",
+        "destination": "n2",
+        "elapsed_ns": 1226469616,
+        "error_chain": [
+          "canceling statement due to query timeout"
+        ],
+        "journal_sequence": 490,
+        "may_have_dispatched": true,
+        "operation": "event_append",
+        "phase": "return_boundary_error_after_evidence",
+        "phase_unix_ns": 1794516646253548864,
+        "request_id": 122,
+        "topology_generation": 1
+      },
+      "kind": "actual_rpc_phase",
+      "logical_context": {
+        "diagnostic_operation_id": "01a1d186-f4a2-7902-b9d8-92844a0477e6",
+        "request": {
+          "key": "external-empty-object",
+          "namespace": "items",
+          "payload_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+          "public_operation": "append",
+          "request_timeout_ms": 2000,
+          "value": {}
+        }
+      },
+      "observer_instance_id": "01a1d186-d72c-7562-a217-487bad4f54f5",
+      "sink_sequence": 506
+    },
+    {
+      "actual": {
+        "address": null,
+        "attempt_id": "01a1d186-fa2e-7ed3-874c-f38e9a56c96c",
+        "bytes_written": 0,
+        "caller": "n0",
+        "destination": "n0",
+        "elapsed_ns": 1293,
+        "error_chain": [],
+        "journal_sequence": 491,
+        "may_have_dispatched": false,
+        "operation": "metadata_snapshot_discovery",
+        "phase": "invoked",
+        "phase_unix_ns": 1794516646446545132,
+        "request_id": null,
+        "topology_generation": null
+      },
+      "kind": "actual_rpc_phase",
+      "logical_context": {
+        "diagnostic_operation_id": "01a1d186-f4a2-7902-b9d8-92844a0477e6",
+        "request": {
+          "key": "external-empty-object",
+          "namespace": "items",
+          "payload_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+          "public_operation": "append",
+          "request_timeout_ms": 2000,
+          "value": {}
+        }
+      },
+      "observer_instance_id": "01a1d186-d72c-7562-a217-487bad4f54f5",
+      "sink_sequence": 507
+    },
+    {
+      "actual": {
+        "address": "127.0.0.1:39723",
+        "attempt_id": "01a1d186-fa2e-7ed3-874c-f38e9a56c96c",
+        "bytes_written": 0,
+        "caller": "n0",
+        "decoded_frame": {
+          "caller_node_id": "n0",
+          "cluster_id": "native-operator-cli",
+          "destination_node_id": "n0",
+          "protocol_version": 28,
+          "request": "FetchBootstrapSnapshot",
+          "request_id": 123
+        },
+        "destination": "n0",
+        "elapsed_ns": 105771094,
+        "error_chain": [],
+        "framed_bytes": 163,
+        "framed_sha256": "163078b431a6c133ad07d17ea15697b01d4e2c6a75295a12eb6febd9cd4e917a",
+        "journal_sequence": 492,
+        "may_have_dispatched": false,
+        "operation": "metadata_snapshot_discovery",
+        "phase": "request_frame_before_dispatch",
+        "phase_unix_ns": 1794516646552315073,
+        "request_id": 123,
+        "topology_generation": 1
+      },
+      "kind": "actual_rpc_phase",
+      "logical_context": {
+        "diagnostic_operation_id": "01a1d186-f4a2-7902-b9d8-92844a0477e6",
+        "request": {
+          "key": "external-empty-object",
+          "namespace": "items",
+          "payload_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+          "public_operation": "append",
+          "request_timeout_ms": 2000,
+          "value": {}
+        }
+      },
+      "observer_instance_id": "01a1d186-d72c-7562-a217-487bad4f54f5",
+      "sink_sequence": 508
+    },
+    {
+      "actual": {
+        "address": "127.0.0.1:39723",
+        "attempt_id": "01a1d186-fa2e-7ed3-874c-f38e9a56c96c",
+        "bytes_written": 163,
+        "caller": "n0",
+        "decoded_bootstrap_summary": {
+          "actual_native_source": {
+            "abort_protocol_version": 1,
+            "birth_id": "01a1d186-cd51-7b62-bf63-b59690714a54",
+            "birth_sha256": "7abf24a7e5d37a67acdf1ce1a27f08f7e164ab2c1850e6a82c67f9d7f229799f",
+            "bootstrap_id": "01a1d186-ccf3-7a82-8a27-b64cf7a0020d",
+            "node_incarnation": 1,
+            "version": 1,
+            "writer_enforcement_version": 1
+          },
+          "cluster_id": "native-operator-cli",
+          "generation": 1,
+          "range_image_bootstrap_id": "01a1d186-ccf3-7a82-8a27-b64cf7a0020d",
+          "request_id": 123,
+          "source_node_id": "n0"
+        },
+        "destination": "n0",
+        "elapsed_ns": 201864981,
+        "error_chain": [],
+        "framed_bytes": 5849,
+        "framed_sha256": "4d8c763cfb2133887aa17e46cccbf491d559bedb0353634a0a8603e48088a205",
+        "journal_sequence": 493,
+        "may_have_dispatched": true,
+        "operation": "metadata_snapshot_discovery",
+        "phase": "response_frame_before_decode",
+        "phase_unix_ns": 1794516646648409162,
+        "request_id": 123,
+        "topology_generation": 1
+      },
+      "kind": "actual_rpc_phase",
+      "logical_context": {
+        "diagnostic_operation_id": "01a1d186-f4a2-7902-b9d8-92844a0477e6",
+        "request": {
+          "key": "external-empty-object",
+          "namespace": "items",
+          "payload_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+          "public_operation": "append",
+          "request_timeout_ms": 2000,
+          "value": {}
+        }
+      },
+      "observer_instance_id": "01a1d186-d72c-7562-a217-487bad4f54f5",
+      "sink_sequence": 509
+    },
+    {
+      "actual": {
+        "address": "127.0.0.1:39723",
+        "attempt_id": "01a1d186-fa2e-7ed3-874c-f38e9a56c96c",
+        "bytes_written": 163,
+        "caller": "n0",
+        "destination": "n0",
+        "elapsed_ns": 296035461,
+        "error_chain": [],
+        "journal_sequence": 494,
+        "may_have_dispatched": true,
+        "operation": "metadata_snapshot_discovery",
+        "phase": "validated_transport_result_ok",
+        "phase_unix_ns": 1794516646742579431,
+        "request_id": 123,
+        "topology_generation": 1
+      },
+      "kind": "actual_rpc_phase",
+      "logical_context": {
+        "diagnostic_operation_id": "01a1d186-f4a2-7902-b9d8-92844a0477e6",
+        "request": {
+          "key": "external-empty-object",
+          "namespace": "items",
+          "payload_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+          "public_operation": "append",
+          "request_timeout_ms": 2000,
+          "value": {}
+        }
+      },
+      "observer_instance_id": "01a1d186-d72c-7562-a217-487bad4f54f5",
+      "sink_sequence": 510
+    },
+    {
+      "actual": {
+        "address": null,
+        "attempt_id": "01a1d186-fb57-7cb1-b83b-70a13d58e28f",
+        "bytes_written": 0,
+        "caller": "n0",
+        "destination": "n1",
+        "elapsed_ns": 661,
+        "error_chain": [],
+        "journal_sequence": 495,
+        "may_have_dispatched": false,
+        "operation": "metadata_snapshot_discovery",
+        "phase": "invoked",
+        "phase_unix_ns": 1794516646743524024,
+        "request_id": null,
+        "topology_generation": null
+      },
+      "kind": "actual_rpc_phase",
+      "logical_context": {
+        "diagnostic_operation_id": "01a1d186-f4a2-7902-b9d8-92844a0477e6",
+        "request": {
+          "key": "external-empty-object",
+          "namespace": "items",
+          "payload_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+          "public_operation": "append",
+          "request_timeout_ms": 2000,
+          "value": {}
+        }
+      },
+      "observer_instance_id": "01a1d186-d72c-7562-a217-487bad4f54f5",
+      "sink_sequence": 511
+    },
+    {
+      "actual": {
+        "address": "127.0.0.1:32881",
+        "attempt_id": "01a1d186-fb57-7cb1-b83b-70a13d58e28f",
+        "bytes_written": 0,
+        "caller": "n0",
+        "decoded_frame": {
+          "caller_node_id": "n0",
+          "cluster_id": "native-operator-cli",
+          "destination_node_id": "n1",
+          "protocol_version": 28,
+          "request": "FetchBootstrapSnapshot",
+          "request_id": 124
+        },
+        "destination": "n1",
+        "elapsed_ns": 453817,
+        "error_chain": [],
+        "framed_bytes": 163,
+        "framed_sha256": "881e3b2d16489f1695bdf194c1100f43c0eae24284795c3ec8887f7523c55f57",
+        "journal_sequence": 496,
+        "may_have_dispatched": false,
+        "operation": "metadata_snapshot_discovery",
+        "phase": "request_frame_before_dispatch",
+        "phase_unix_ns": 1794516646743977110,
+        "request_id": 124,
+        "topology_generation": 1
+      },
+      "kind": "actual_rpc_phase",
+      "logical_context": {
+        "diagnostic_operation_id": "01a1d186-f4a2-7902-b9d8-92844a0477e6",
+        "request": {
+          "key": "external-empty-object",
+          "namespace": "items",
+          "payload_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+          "public_operation": "append",
+          "request_timeout_ms": 2000,
+          "value": {}
+        }
+      },
+      "observer_instance_id": "01a1d186-d72c-7562-a217-487bad4f54f5",
+      "sink_sequence": 512
+    },
+    {
+      "actual": {
+        "address": "127.0.0.1:32881",
+        "attempt_id": "01a1d186-fb57-7cb1-b83b-70a13d58e28f",
+        "bytes_written": 163,
+        "caller": "n0",
+        "decoded_bootstrap_summary": {
+          "actual_native_source": {
+            "abort_protocol_version": 1,
+            "birth_id": "01a1d186-cd4e-70d1-9677-17928697f35a",
+            "birth_sha256": "fbbcb64993917f5d7b3e41916f6b5c8b7e26852e19e4725d75441e894d4214db",
+            "bootstrap_id": "01a1d186-ccf3-7a82-8a27-b64cf7a0020d",
+            "node_incarnation": 1,
+            "version": 1,
+            "writer_enforcement_version": 1
+          },
+          "cluster_id": "native-operator-cli",
+          "generation": 1,
+          "range_image_bootstrap_id": "01a1d186-ccf3-7a82-8a27-b64cf7a0020d",
+          "request_id": 124,
+          "source_node_id": "n1"
+        },
+        "destination": "n1",
+        "elapsed_ns": 10940632,
+        "error_chain": [],
+        "framed_bytes": 5849,
+        "framed_sha256": "176ddd70e2cee4fa42ca4e50615eccba14e70e06e31997edc1d9ac261171edb1",
+        "journal_sequence": 497,
+        "may_have_dispatched": true,
+        "operation": "metadata_snapshot_discovery",
+        "phase": "response_frame_before_decode",
+        "phase_unix_ns": 1794516646754463964,
+        "request_id": 124,
+        "topology_generation": 1
+      },
+      "kind": "actual_rpc_phase",
+      "logical_context": {
+        "diagnostic_operation_id": "01a1d186-f4a2-7902-b9d8-92844a0477e6",
+        "request": {
+          "key": "external-empty-object",
+          "namespace": "items",
+          "payload_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+          "public_operation": "append",
+          "request_timeout_ms": 2000,
+          "value": {}
+        }
+      },
+      "observer_instance_id": "01a1d186-d72c-7562-a217-487bad4f54f5",
+      "sink_sequence": 513
+    },
+    {
+      "actual": {
+        "address": "127.0.0.1:32881",
+        "attempt_id": "01a1d186-fb57-7cb1-b83b-70a13d58e28f",
+        "bytes_written": 163,
+        "caller": "n0",
+        "destination": "n1",
+        "elapsed_ns": 14525736,
+        "error_chain": [],
+        "journal_sequence": 498,
+        "may_have_dispatched": true,
+        "operation": "metadata_snapshot_discovery",
+        "phase": "validated_transport_result_ok",
+        "phase_unix_ns": 1794516646758048858,
+        "request_id": 124,
+        "topology_generation": 1
+      },
+      "kind": "actual_rpc_phase",
+      "logical_context": {
+        "diagnostic_operation_id": "01a1d186-f4a2-7902-b9d8-92844a0477e6",
+        "request": {
+          "key": "external-empty-object",
+          "namespace": "items",
+          "payload_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+          "public_operation": "append",
+          "request_timeout_ms": 2000,
+          "value": {}
+        }
+      },
+      "observer_instance_id": "01a1d186-d72c-7562-a217-487bad4f54f5",
+      "sink_sequence": 514
+    },
+    {
+      "actual": {
+        "address": null,
+        "attempt_id": "01a1d186-fb66-7133-8a05-75a6255d89bb",
+        "bytes_written": 0,
+        "caller": "n0",
+        "destination": "n2",
+        "elapsed_ns": 731,
+        "error_chain": [],
+        "journal_sequence": 499,
+        "may_have_dispatched": false,
+        "operation": "metadata_snapshot_discovery",
+        "phase": "invoked",
+        "phase_unix_ns": 1794516646758765927,
+        "request_id": null,
+        "topology_generation": null
+      },
+      "kind": "actual_rpc_phase",
+      "logical_context": {
+        "diagnostic_operation_id": "01a1d186-f4a2-7902-b9d8-92844a0477e6",
+        "request": {
+          "key": "external-empty-object",
+          "namespace": "items",
+          "payload_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+          "public_operation": "append",
+          "request_timeout_ms": 2000,
+          "value": {}
+        }
+      },
+      "observer_instance_id": "01a1d186-d72c-7562-a217-487bad4f54f5",
+      "sink_sequence": 515
+    },
+    {
+      "actual": {
+        "address": "127.0.0.1:38637",
+        "attempt_id": "01a1d186-fb66-7133-8a05-75a6255d89bb",
+        "bytes_written": 0,
+        "caller": "n0",
+        "decoded_frame": {
+          "caller_node_id": "n0",
+          "cluster_id": "native-operator-cli",
+          "destination_node_id": "n2",
+          "protocol_version": 28,
+          "request": "FetchBootstrapSnapshot",
+          "request_id": 125
+        },
+        "destination": "n2",
+        "elapsed_ns": 363509,
+        "error_chain": [],
+        "framed_bytes": 163,
+        "framed_sha256": "d1cad3d2626748440511342bda90fa5854cd7fc5a991b60325a34aafb4df10d1",
+        "journal_sequence": 500,
+        "may_have_dispatched": false,
+        "operation": "metadata_snapshot_discovery",
+        "phase": "request_frame_before_dispatch",
+        "phase_unix_ns": 1794516646759128794,
+        "request_id": 125,
+        "topology_generation": 1
+      },
+      "kind": "actual_rpc_phase",
+      "logical_context": {
+        "diagnostic_operation_id": "01a1d186-f4a2-7902-b9d8-92844a0477e6",
+        "request": {
+          "key": "external-empty-object",
+          "namespace": "items",
+          "payload_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+          "public_operation": "append",
+          "request_timeout_ms": 2000,
+          "value": {}
+        }
+      },
+      "observer_instance_id": "01a1d186-d72c-7562-a217-487bad4f54f5",
+      "sink_sequence": 516
+    },
+    {
+      "actual": {
+        "address": "127.0.0.1:38637",
+        "attempt_id": "01a1d186-fb66-7133-8a05-75a6255d89bb",
+        "bytes_written": 163,
+        "caller": "n0",
+        "decoded_bootstrap_summary": {
+          "actual_native_source": {
+            "abort_protocol_version": 1,
+            "birth_id": "01a1d186-cd57-76e2-8eba-c02054445fbd",
+            "birth_sha256": "1bafb4a46a5fcde71c058f8b946c3aee9d00ffb78c74eb6d98250eb35a4e8add",
+            "bootstrap_id": "01a1d186-ccf3-7a82-8a27-b64cf7a0020d",
+            "node_incarnation": 1,
+            "version": 1,
+            "writer_enforcement_version": 1
+          },
+          "cluster_id": "native-operator-cli",
+          "generation": 1,
+          "range_image_bootstrap_id": "01a1d186-ccf3-7a82-8a27-b64cf7a0020d",
+          "request_id": 125,
+          "source_node_id": "n2"
+        },
+        "destination": "n2",
+        "elapsed_ns": 5653813,
+        "error_chain": [],
+        "framed_bytes": 5849,
+        "framed_sha256": "8b68b26b2d1e7ce489370b5c1fbd12da6546bfe41cd2a271064c87dc9fc6c37a",
+        "journal_sequence": 501,
+        "may_have_dispatched": true,
+        "operation": "metadata_snapshot_discovery",
+        "phase": "response_frame_before_decode",
+        "phase_unix_ns": 1794516646764419039,
+        "request_id": 125,
+        "topology_generation": 1
+      },
+      "kind": "actual_rpc_phase",
+      "logical_context": {
+        "diagnostic_operation_id": "01a1d186-f4a2-7902-b9d8-92844a0477e6",
+        "request": {
+          "key": "external-empty-object",
+          "namespace": "items",
+          "payload_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+          "public_operation": "append",
+          "request_timeout_ms": 2000,
+          "value": {}
+        }
+      },
+      "observer_instance_id": "01a1d186-d72c-7562-a217-487bad4f54f5",
+      "sink_sequence": 517
+    },
+    {
+      "actual": {
+        "address": "127.0.0.1:38637",
+        "attempt_id": "01a1d186-fb66-7133-8a05-75a6255d89bb",
+        "bytes_written": 163,
+        "caller": "n0",
+        "destination": "n2",
+        "elapsed_ns": 11101292,
+        "error_chain": [],
+        "journal_sequence": 502,
+        "may_have_dispatched": true,
+        "operation": "metadata_snapshot_discovery",
+        "phase": "validated_transport_result_ok",
+        "phase_unix_ns": 1794516646769866457,
+        "request_id": 125,
+        "topology_generation": 1
+      },
+      "kind": "actual_rpc_phase",
+      "logical_context": {
+        "diagnostic_operation_id": "01a1d186-f4a2-7902-b9d8-92844a0477e6",
+        "request": {
+          "key": "external-empty-object",
+          "namespace": "items",
+          "payload_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+          "public_operation": "append",
+          "request_timeout_ms": 2000,
+          "value": {}
+        }
+      },
+      "observer_instance_id": "01a1d186-d72c-7562-a217-487bad4f54f5",
+      "sink_sequence": 518
+    },
+    {
+      "actual": {
+        "address": null,
+        "attempt_id": "01a1d186-fb72-7ef1-89e3-89a0714da5d7",
+        "bytes_written": 0,
+        "caller": "n0",
+        "destination": "n3",
+        "elapsed_ns": 621,
+        "error_chain": [],
+        "journal_sequence": 503,
+        "may_have_dispatched": false,
+        "operation": "metadata_snapshot_discovery",
+        "phase": "invoked",
+        "phase_unix_ns": 1794516646770536928,
+        "request_id": null,
+        "topology_generation": null
+      },
+      "kind": "actual_rpc_phase",
+      "logical_context": {
+        "diagnostic_operation_id": "01a1d186-f4a2-7902-b9d8-92844a0477e6",
+        "request": {
+          "key": "external-empty-object",
+          "namespace": "items",
+          "payload_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+          "public_operation": "append",
+          "request_timeout_ms": 2000,
+          "value": {}
+        }
+      },
+      "observer_instance_id": "01a1d186-d72c-7562-a217-487bad4f54f5",
+      "sink_sequence": 519
+    },
+    {
+      "actual": {
+        "address": "127.0.0.1:38573",
+        "attempt_id": "01a1d186-fb72-7ef1-89e3-89a0714da5d7",
+        "bytes_written": 0,
+        "caller": "n0",
+        "decoded_frame": {
+          "caller_node_id": "n0",
+          "cluster_id": "native-operator-cli",
+          "destination_node_id": "n3",
+          "protocol_version": 28,
+          "request": "FetchBootstrapSnapshot",
+          "request_id": 126
+        },
+        "destination": "n3",
+        "elapsed_ns": 515963,
+        "error_chain": [],
+        "framed_bytes": 163,
+        "framed_sha256": "d9adbfa4f3b6bb6e4a5946b24c255b2ca3a42c7c0d2aa8105216fdecce29471f",
+        "journal_sequence": 504,
+        "may_have_dispatched": false,
+        "operation": "metadata_snapshot_discovery",
+        "phase": "request_frame_before_dispatch",
+        "phase_unix_ns": 1794516646771052200,
+        "request_id": 126,
+        "topology_generation": 1
+      },
+      "kind": "actual_rpc_phase",
+      "logical_context": {
+        "diagnostic_operation_id": "01a1d186-f4a2-7902-b9d8-92844a0477e6",
+        "request": {
+          "key": "external-empty-object",
+          "namespace": "items",
+          "payload_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+          "public_operation": "append",
+          "request_timeout_ms": 2000,
+          "value": {}
+        }
+      },
+      "observer_instance_id": "01a1d186-d72c-7562-a217-487bad4f54f5",
+      "sink_sequence": 520
+    },
+    {
+      "actual": {
+        "address": "127.0.0.1:38573",
+        "attempt_id": "01a1d186-fb72-7ef1-89e3-89a0714da5d7",
+        "bytes_written": 163,
+        "caller": "n0",
+        "decoded_bootstrap_summary": {
+          "actual_native_source": {
+            "abort_protocol_version": 1,
+            "birth_id": "01a1d186-cd56-7990-ab8b-0434300eaf2a",
+            "birth_sha256": "204471b62cf57ec6a85bd3d3941c7ae4e072b35ceea4ee6cd45fe8b65b8a2874",
+            "bootstrap_id": "01a1d186-ccf3-7a82-8a27-b64cf7a0020d",
+            "node_incarnation": 1,
+            "version": 1,
+            "writer_enforcement_version": 1
+          },
+          "cluster_id": "native-operator-cli",
+          "generation": 1,
+          "range_image_bootstrap_id": "01a1d186-ccf3-7a82-8a27-b64cf7a0020d",
+          "request_id": 126,
+          "source_node_id": "n3"
+        },
+        "destination": "n3",
+        "elapsed_ns": 13039177,
+        "error_chain": [],
+        "framed_bytes": 5849,
+        "framed_sha256": "6406d0c227abdd6daf64752004a589d2aa59f762e6f59732dcf89aa61f6876e1",
+        "journal_sequence": 505,
+        "may_have_dispatched": true,
+        "operation": "metadata_snapshot_discovery",
+        "phase": "response_frame_before_decode",
+        "phase_unix_ns": 1794516646783575464,
+        "request_id": 126,
+        "topology_generation": 1
+      },
+      "kind": "actual_rpc_phase",
+      "logical_context": {
+        "diagnostic_operation_id": "01a1d186-f4a2-7902-b9d8-92844a0477e6",
+        "request": {
+          "key": "external-empty-object",
+          "namespace": "items",
+          "payload_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+          "public_operation": "append",
+          "request_timeout_ms": 2000,
+          "value": {}
+        }
+      },
+      "observer_instance_id": "01a1d186-d72c-7562-a217-487bad4f54f5",
+      "sink_sequence": 521
+    },
+    {
+      "actual": {
+        "address": "127.0.0.1:38573",
+        "attempt_id": "01a1d186-fb72-7ef1-89e3-89a0714da5d7",
+        "bytes_written": 163,
+        "caller": "n0",
+        "destination": "n3",
+        "elapsed_ns": 18564300,
+        "error_chain": [],
+        "journal_sequence": 506,
+        "may_have_dispatched": true,
+        "operation": "metadata_snapshot_discovery",
+        "phase": "validated_transport_result_ok",
+        "phase_unix_ns": 1794516646789100547,
+        "request_id": 126,
+        "topology_generation": 1
+      },
+      "kind": "actual_rpc_phase",
+      "logical_context": {
+        "diagnostic_operation_id": "01a1d186-f4a2-7902-b9d8-92844a0477e6",
+        "request": {
+          "key": "external-empty-object",
+          "namespace": "items",
+          "payload_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+          "public_operation": "append",
+          "request_timeout_ms": 2000,
+          "value": {}
+        }
+      },
+      "observer_instance_id": "01a1d186-d72c-7562-a217-487bad4f54f5",
+      "sink_sequence": 522
+    },
+    {
+      "actual": {
+        "address": null,
+        "attempt_id": "01a1d186-fb86-7e83-a260-431b92a485d1",
+        "bytes_written": 0,
+        "caller": "n0",
+        "destination": "n2",
+        "elapsed_ns": 521,
+        "error_chain": [],
+        "journal_sequence": 507,
+        "may_have_dispatched": false,
+        "operation": "event_append",
+        "phase": "invoked",
+        "phase_unix_ns": 1794516646790479631,
+        "request_id": null,
+        "topology_generation": null
+      },
+      "kind": "actual_rpc_phase",
+      "logical_context": {
+        "diagnostic_operation_id": "01a1d186-f4a2-7902-b9d8-92844a0477e6",
+        "request": {
+          "key": "external-empty-object",
+          "namespace": "items",
+          "payload_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+          "public_operation": "append",
+          "request_timeout_ms": 2000,
+          "value": {}
+        }
+      },
+      "observer_instance_id": "01a1d186-d72c-7562-a217-487bad4f54f5",
+      "sink_sequence": 523
+    },
+    {
+      "actual": {
+        "address": "127.0.0.1:38637",
+        "attempt_id": "01a1d186-fb86-7e83-a260-431b92a485d1",
+        "bytes_written": 0,
+        "caller": "n0",
+        "decoded_frame": {
+          "caller_node_id": "n0",
+          "cluster_id": "native-operator-cli",
+          "destination_node_id": "n2",
+          "protocol_version": 28,
+          "request": {
+            "ApplicationEvent": {
+              "operation": {
+                "key": "external-empty-object",
+                "namespace": "items",
+                "operation": "append",
+                "value": {}
+              },
+              "range_epoch": 1,
+              "range_id": 2
+            }
+          },
+          "request_id": 127
+        },
+        "destination": "n2",
+        "elapsed_ns": 632500,
+        "error_chain": [],
+        "framed_bytes": 286,
+        "framed_sha256": "b8f89e53f993bec549552f28a7fca1707d43d0ed8090e891b60fd482bcc186b3",
+        "journal_sequence": 508,
+        "may_have_dispatched": false,
+        "operation": "event_append",
+        "phase": "request_frame_before_dispatch",
+        "phase_unix_ns": 1794516646791111541,
+        "request_id": 127,
+        "topology_generation": 1
+      },
+      "kind": "actual_rpc_phase",
+      "logical_context": {
+        "diagnostic_operation_id": "01a1d186-f4a2-7902-b9d8-92844a0477e6",
+        "request": {
+          "key": "external-empty-object",
+          "namespace": "items",
+          "payload_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+          "public_operation": "append",
+          "request_timeout_ms": 2000,
+          "value": {}
+        }
+      },
+      "observer_instance_id": "01a1d186-d72c-7562-a217-487bad4f54f5",
+      "sink_sequence": 524
+    },
+    {
+      "actual": {
+        "address": "127.0.0.1:38637",
+        "attempt_id": "01a1d186-fb86-7e83-a260-431b92a485d1",
+        "bytes_written": 286,
+        "caller": "n0",
+        "destination": "n2",
+        "elapsed_ns": 119731371,
+        "error_chain": [
+          "io error: cluster RPC interrupted: canceling statement due to query timeout",
+          "cluster RPC interrupted: canceling statement due to query timeout"
+        ],
+        "journal_sequence": 509,
+        "may_have_dispatched": true,
+        "operation": "event_append",
+        "phase": "partial_or_rejected_response_frame",
+        "phase_unix_ns": 1794516646910209941,
+        "request_id": 127,
+        "topology_generation": 1
+      },
+      "kind": "actual_rpc_phase",
+      "logical_context": {
+        "diagnostic_operation_id": "01a1d186-f4a2-7902-b9d8-92844a0477e6",
+        "request": {
+          "key": "external-empty-object",
+          "namespace": "items",
+          "payload_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+          "public_operation": "append",
+          "request_timeout_ms": 2000,
+          "value": {}
+        }
+      },
+      "observer_instance_id": "01a1d186-d72c-7562-a217-487bad4f54f5",
+      "sink_sequence": 525
+    },
+    {
+      "actual": {
+        "address": "127.0.0.1:38637",
+        "attempt_id": "01a1d186-fb86-7e83-a260-431b92a485d1",
+        "bytes_written": 286,
+        "caller": "n0",
+        "destination": "n2",
+        "elapsed_ns": 120398908,
+        "error_chain": [
+          "io error: cluster RPC interrupted: canceling statement due to query timeout",
+          "cluster RPC interrupted: canceling statement due to query timeout"
+        ],
+        "journal_sequence": 510,
+        "may_have_dispatched": true,
+        "operation": "event_append",
+        "phase": "exchange_error_before_cancellation_override",
+        "phase_unix_ns": 1794516646910877848,
+        "request_id": 127,
+        "topology_generation": 1
+      },
+      "kind": "actual_rpc_phase",
+      "logical_context": {
+        "diagnostic_operation_id": "01a1d186-f4a2-7902-b9d8-92844a0477e6",
+        "request": {
+          "key": "external-empty-object",
+          "namespace": "items",
+          "payload_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+          "public_operation": "append",
+          "request_timeout_ms": 2000,
+          "value": {}
+        }
+      },
+      "observer_instance_id": "01a1d186-d72c-7562-a217-487bad4f54f5",
+      "sink_sequence": 526
+    },
+    {
+      "actual": {
+        "address": "127.0.0.1:38637",
+        "attempt_id": "01a1d186-fb86-7e83-a260-431b92a485d1",
+        "bytes_written": 286,
+        "caller": "n0",
+        "destination": "n2",
+        "elapsed_ns": 120867192,
+        "error_chain": [
+          "canceling statement due to query timeout"
+        ],
+        "journal_sequence": 511,
+        "may_have_dispatched": true,
+        "operation": "event_append",
+        "phase": "validated_transport_result_error",
+        "phase_unix_ns": 1794516646911346313,
+        "request_id": 127,
+        "topology_generation": 1
+      },
+      "kind": "actual_rpc_phase",
+      "logical_context": {
+        "diagnostic_operation_id": "01a1d186-f4a2-7902-b9d8-92844a0477e6",
+        "request": {
+          "key": "external-empty-object",
+          "namespace": "items",
+          "payload_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+          "public_operation": "append",
+          "request_timeout_ms": 2000,
+          "value": {}
+        }
+      },
+      "observer_instance_id": "01a1d186-d72c-7562-a217-487bad4f54f5",
+      "sink_sequence": 527
+    },
+    {
+      "actual": {
+        "address": "127.0.0.1:38637",
+        "attempt_id": "01a1d186-fb86-7e83-a260-431b92a485d1",
+        "bytes_written": 286,
+        "caller": "n0",
+        "destination": "n2",
+        "elapsed_ns": 121418022,
+        "error_chain": [
+          "canceling statement due to query timeout"
+        ],
+        "journal_sequence": 512,
+        "may_have_dispatched": true,
+        "operation": "event_append",
+        "phase": "return_boundary_error_after_evidence",
+        "phase_unix_ns": 1794516646911897103,
+        "request_id": 127,
+        "topology_generation": 1
+      },
+      "kind": "actual_rpc_phase",
+      "logical_context": {
+        "diagnostic_operation_id": "01a1d186-f4a2-7902-b9d8-92844a0477e6",
+        "request": {
+          "key": "external-empty-object",
+          "namespace": "items",
+          "payload_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+          "public_operation": "append",
+          "request_timeout_ms": 2000,
+          "value": {}
+        }
+      },
+      "observer_instance_id": "01a1d186-d72c-7562-a217-487bad4f54f5",
+      "sink_sequence": 528
+    },
+    {
+      "any_actual_rpc_may_have_dispatched": true,
+      "diagnostic_operation_id": "01a1d186-f4a2-7902-b9d8-92844a0477e6",
+      "durable_outcome_inferred_from_error": false,
+      "kind": "logical_public_reply",
+      "outcome": {
+        "classification": "NO_USER_ACK_DURABLE_OUTCOME_UNKNOWN",
+        "error_chain": [
+          "cluster error: no event cluster member is reachable"
+        ]
+      },
+      "sink_sequence": 529,
+      "sink_unix_ns": 1794516647027804464
+    }
+  ],
+  "initial_stopped_raw_catalogues": [
+    {
+      "classification": "offline raw JSON only; no native-page replay or user ACK inference",
+      "file_sha256": "0a0e2656e2a36e10c124eacf539a60c0b5cdff012e9247c2b18397ad48648413",
+      "path": "database-failure-7cc45508-b300-4f22-accc-6ee120a20439/database-snapshot/db0/cluster-range-write-log.json",
+      "raw_range2": {
+        "compacted_through": 0,
+        "current_epoch": 1,
+        "entries": {
+          "1": {
+            "command": {
+              "checksum_sha256": "951258d8fbde6ce3b563605e26dbc6478b96c47b933030832a8d12c7f4fdceb1",
+              "cluster_id": "native-operator-cli",
+              "command_id": "01a1d186-f4ba-7af1-82d0-d4d6e63d67d1",
+              "index": 1,
+              "leader_node_id": "n2",
+              "mutations": [
+                {
+                  "collection": "__bic_cluster_events",
+                  "record": {
+                    "id": "items/external-empty-object",
+                    "metadata": {},
+                    "payload": null,
+                    "timestamp": null,
+                    "vector": null
+                  },
+                  "record_id": "items/external-empty-object"
+                }
+              ],
+              "protocol_version": 2,
+              "range_epoch": 1,
+              "range_id": 2,
+              "transaction_id": 9
+            },
+            "state": "applied"
+          }
+        },
+        "last_index": 1,
+        "resolved_through": 1
+      }
+    },
+    {
+      "classification": "offline raw JSON only; no native-page replay or user ACK inference",
+      "file_sha256": "90e946bd59623102e0c8bec3de902f052308f5c58db1d79072ef264b21e9a10f",
+      "path": "database-failure-7cc45508-b300-4f22-accc-6ee120a20439/database-snapshot/db1/cluster-range-write-log.json",
+      "raw_range2": null
+    },
+    {
+      "classification": "offline raw JSON only; no native-page replay or user ACK inference",
+      "file_sha256": "f9533358a1c326826a1335ce5438637b2e25a5a1608c74adfbb1bf3ccfdc9e34",
+      "path": "database-failure-7cc45508-b300-4f22-accc-6ee120a20439/database-snapshot/db2/cluster-range-write-log.json",
+      "raw_range2": {
+        "compacted_through": 0,
+        "current_epoch": 1,
+        "entries": {
+          "1": {
+            "command": {
+              "checksum_sha256": "951258d8fbde6ce3b563605e26dbc6478b96c47b933030832a8d12c7f4fdceb1",
+              "cluster_id": "native-operator-cli",
+              "command_id": "01a1d186-f4ba-7af1-82d0-d4d6e63d67d1",
+              "index": 1,
+              "leader_node_id": "n2",
+              "mutations": [
+                {
+                  "collection": "__bic_cluster_events",
+                  "record": {
+                    "id": "items/external-empty-object",
+                    "metadata": {},
+                    "payload": null,
+                    "timestamp": null,
+                    "vector": null
+                  },
+                  "record_id": "items/external-empty-object"
+                }
+              ],
+              "protocol_version": 2,
+              "range_epoch": 1,
+              "range_id": 2,
+              "transaction_id": 9
+            },
+            "state": "quorum_committed"
+          }
+        },
+        "last_index": 1,
+        "resolved_through": 0
+      }
+    },
+    {
+      "classification": "offline raw JSON only; no native-page replay or user ACK inference",
+      "file_sha256": "829b609c921a64dcfa480b6869ad22332bf5fb08fcde249b12178aa040881a87",
+      "path": "database-failure-7cc45508-b300-4f22-accc-6ee120a20439/database-snapshot/db3/cluster-range-write-log.json",
+      "raw_range2": {
+        "compacted_through": 0,
+        "current_epoch": 1,
+        "entries": {
+          "1": {
+            "command": {
+              "checksum_sha256": "951258d8fbde6ce3b563605e26dbc6478b96c47b933030832a8d12c7f4fdceb1",
+              "cluster_id": "native-operator-cli",
+              "command_id": "01a1d186-f4ba-7af1-82d0-d4d6e63d67d1",
+              "index": 1,
+              "leader_node_id": "n2",
+              "mutations": [
+                {
+                  "collection": "__bic_cluster_events",
+                  "record": {
+                    "id": "items/external-empty-object",
+                    "metadata": {},
+                    "payload": null,
+                    "timestamp": null,
+                    "vector": null
+                  },
+                  "record_id": "items/external-empty-object"
+                }
+              ],
+              "protocol_version": 2,
+              "range_epoch": 1,
+              "range_id": 2,
+              "transaction_id": 9
+            },
+            "state": "applied"
+          }
+        },
+        "last_index": 1,
+        "resolved_through": 1
+      }
+    }
+  ],
+  "job_id": 131472177797,
+  "limits": [
+    "Unknown write stays unknown; no rollback or native replay inference.",
+    "No fresh query issued to failed originals; no engine open, repair or original fsync.",
+    "Three different fixtures/cuts; no cross-fixture ACK reconciliation.",
+    "Earlier1d,3ee,aac receipts remain unchanged.",
+    "No source publication, data relocation, physical or Azure cause claim."
+  ],
+  "metadata_statuses": [
+    {
+      "path": "failure-diagnostics/native-operator-cli-01a1d187-2237-74c0-bb4d-0c05605e07ef/files/node4.status",
+      "record": {
+        "data_serving": false,
+        "error": "cluster error: native host bootstrap: Registered catch-up owner changed/busy",
+        "host": {
+          "birth_bound": true,
+          "birth_id": "01a1d187-1bcf-7a61-99b8-db20ca3a1388",
+          "birth_sha256": "bf4861ca247150d5bb435be8c79fc8716047e90fa96f90979ae99608b94d5367",
+          "data_serving": false,
+          "last_metadata_maintenance": null,
+          "last_metadata_promotion": null,
+          "metadata": {
+            "cluster_id": "native-operator-cli",
+            "commit_index": 4,
+            "current_term": 1,
+            "last_log_index": 4,
+            "last_log_term": 1,
+            "leader_id": "n0",
+            "learners": [],
+            "node_id": "n4",
+            "role": "follower",
+            "topology_generation": 4,
+            "voted_for": null,
+            "voters": [
+              "n0",
+              "n1",
+              "n2",
+              "n3",
+              "n4"
+            ]
+          },
+          "metadata_control_owned": true,
+          "metadata_listener_owned": true,
+          "metadata_role": "voter",
+          "metadata_store_id": "01a1d187-1e6b-7131-b6bb-e7a7d98e8dba",
+          "namespace_ids": [
+            [
+              "__bic_cluster_events",
+              "376fe354-1c0e-44ea-b2b3-df881c98d122"
+            ],
+            [
+              "items",
+              "7de4ca68-ee7c-4801-b44c-815e4e036274"
+            ]
+          ],
+          "node_id": "n4",
+          "phase": "owned_metadata_voter",
+          "replica_receiver": null,
+          "schema_sha256": "dbf787e4836cc8c39299bce6b74940e28a847b560c54f9038385090cfd65756b",
+          "version": 1
+        },
+        "process_id": 17723,
+        "sequence": 1,
+        "version": 1
+      }
+    },
+    {
+      "path": "failure-diagnostics/native-operator-cli-01a1d187-3a21-7fd0-b067-d16077d7b981/files/node4.status",
+      "record": {
+        "data_serving": false,
+        "error": null,
+        "host": {
+          "birth_bound": true,
+          "birth_id": "01a1d187-2e70-7622-b14f-6a9b0248aa86",
+          "birth_sha256": "cf0f2038e1392eed1ef4bd98d5e5fc24563436151065b5d6a3de6dea59969800",
+          "data_serving": false,
+          "last_metadata_maintenance": null,
+          "last_metadata_promotion": null,
+          "metadata": {
+            "cluster_id": "native-operator-cli",
+            "commit_index": 4,
+            "current_term": 1,
+            "last_log_index": 4,
+            "last_log_term": 1,
+            "leader_id": null,
+            "learners": [],
+            "node_id": "n4",
+            "role": "follower",
+            "topology_generation": 4,
+            "voted_for": null,
+            "voters": [
+              "n0",
+              "n1",
+              "n2",
+              "n3",
+              "n4"
+            ]
+          },
+          "metadata_control_owned": true,
+          "metadata_listener_owned": true,
+          "metadata_role": "voter",
+          "metadata_store_id": "01a1d187-3101-7c13-940f-b2890d2dceb6",
+          "namespace_ids": [
+            [
+              "__bic_cluster_events",
+              "cb6f265b-7e4e-4b17-9576-5cb364269122"
+            ],
+            [
+              "items",
+              "c8e88cc0-88ed-4894-a8c2-c54416c17ae9"
+            ]
+          ],
+          "node_id": "n4",
+          "phase": "owned_metadata_voter",
+          "replica_receiver": null,
+          "schema_sha256": "dbf787e4836cc8c39299bce6b74940e28a847b560c54f9038385090cfd65756b",
+          "version": 1
+        },
+        "process_id": 18343,
+        "sequence": 0,
+        "version": 1
+      }
+    }
+  ],
+  "private_root": "/root/.local/state/bicdb/ha-scaling-2026-11-11/private/native-registry-refresh-56f9a3c9",
+  "private_verification_sha256": "0f2155d893c9d93af47d28afa448e1592b22dc1be3463f80f2220fe6592722fe",
+  "raw_bytes": 2194016,
+  "raw_sha256": "c1534616ebf735894878a21f8e10fdf5ef432cbea72b2602cadec0cec39bc2f4",
+  "run_id": 43301082751,
+  "source": "56f9a3c999fba329c349d3e6dda664dcfb64e4c6",
+  "stopped_metadata_json_states": [
+    {
+      "commit_index": 4,
+      "current_term": 1,
+      "leader_id": "n0",
+      "native_store_id": "01a1d187-25b0-7260-91b4-43aed7bbbb6b",
+      "path": "database-failure-21b0f2fe-f586-4a38-8545-9a9a73ffde3f/database-snapshot/db0/native-initial-metadata/cluster-metadata-consensus.json",
+      "role": "leader",
+      "voted_for": "n0"
+    },
+    {
+      "commit_index": 4,
+      "current_term": 1,
+      "leader_id": "n0",
+      "native_store_id": "01a1d187-263f-7e31-8828-a066c6f4a9d0",
+      "path": "database-failure-21b0f2fe-f586-4a38-8545-9a9a73ffde3f/database-snapshot/db1/native-initial-metadata/cluster-metadata-consensus.json",
+      "role": "follower",
+      "voted_for": "n0"
+    },
+    {
+      "commit_index": 4,
+      "current_term": 1,
+      "leader_id": "n0",
+      "native_store_id": "01a1d187-26d1-73d2-861d-967f346903fc",
+      "path": "database-failure-21b0f2fe-f586-4a38-8545-9a9a73ffde3f/database-snapshot/db2/native-initial-metadata/cluster-metadata-consensus.json",
+      "role": "follower",
+      "voted_for": "n0"
+    },
+    {
+      "commit_index": 4,
+      "current_term": 1,
+      "leader_id": "n0",
+      "native_store_id": "01a1d187-2762-7921-aa4b-6a2a05a7978a",
+      "path": "database-failure-21b0f2fe-f586-4a38-8545-9a9a73ffde3f/database-snapshot/db3/native-initial-metadata/cluster-metadata-consensus.json",
+      "role": "follower",
+      "voted_for": "n0"
+    },
+    {
+      "commit_index": 4,
+      "current_term": 1,
+      "leader_id": "n0",
+      "native_store_id": "01a1d187-3101-7c13-940f-b2890d2dceb6",
+      "path": "database-failure-21b0f2fe-f586-4a38-8545-9a9a73ffde3f/database-snapshot/db4/native-learner-metadata/cluster-metadata-consensus.json",
+      "role": "follower",
+      "voted_for": null
+    },
+    {
+      "commit_index": 5,
+      "current_term": 2,
+      "leader_id": "n4",
+      "native_store_id": "01a1d187-12fe-74f3-ab69-7e00a485ae70",
+      "path": "database-failure-c27e431c-1d4e-48ad-b052-b6b63966071a/database-snapshot/db0/native-initial-metadata/cluster-metadata-consensus.json",
+      "role": "follower",
+      "voted_for": "n4"
+    },
+    {
+      "commit_index": 5,
+      "current_term": 2,
+      "leader_id": "n4",
+      "native_store_id": "01a1d187-138d-7792-a953-996426500cd0",
+      "path": "database-failure-c27e431c-1d4e-48ad-b052-b6b63966071a/database-snapshot/db1/native-initial-metadata/cluster-metadata-consensus.json",
+      "role": "follower",
+      "voted_for": "n4"
+    },
+    {
+      "commit_index": 5,
+      "current_term": 2,
+      "leader_id": "n4",
+      "native_store_id": "01a1d187-141b-7de1-9aa8-83e61c2aec75",
+      "path": "database-failure-c27e431c-1d4e-48ad-b052-b6b63966071a/database-snapshot/db2/native-initial-metadata/cluster-metadata-consensus.json",
+      "role": "follower",
+      "voted_for": "n4"
+    },
+    {
+      "commit_index": 5,
+      "current_term": 2,
+      "leader_id": "n4",
+      "native_store_id": "01a1d187-14b0-7070-a45b-9171657b1a6f",
+      "path": "database-failure-c27e431c-1d4e-48ad-b052-b6b63966071a/database-snapshot/db3/native-initial-metadata/cluster-metadata-consensus.json",
+      "role": "follower",
+      "voted_for": "n4"
+    },
+    {
+      "commit_index": 5,
+      "current_term": 2,
+      "leader_id": "n4",
+      "native_store_id": "01a1d187-1e6b-7131-b6bb-e7a7d98e8dba",
+      "path": "database-failure-c27e431c-1d4e-48ad-b052-b6b63966071a/database-snapshot/db4/native-learner-metadata/cluster-metadata-consensus.json",
+      "role": "leader",
+      "voted_for": "n4"
+    }
+  ]
+}

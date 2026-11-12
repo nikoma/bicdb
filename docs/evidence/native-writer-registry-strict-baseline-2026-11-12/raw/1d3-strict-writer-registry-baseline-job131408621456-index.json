@@ -1,0 +1,145 @@
+{
+  "source_revision": "1d3976f9f8011f3ac7411494aa0dfb432763ce78",
+  "requested_source": "1d3976f9f8011f3ac7411494aa0dfb432763ce78",
+  "authoritative_source_verified": true,
+  "run_id": 43282887768,
+  "job_id": 131408621456,
+  "job_name": "Focused CLI integration (native_metadata_operator_cli)",
+  "job_status": "completed",
+  "job_conclusion": "failure",
+  "captured_at_utc": "2026-11-12T19:01:24.689474+00:00",
+  "raw_bytes": 2187648,
+  "raw_sha256": "44fe0b35fa2f320ed6a59ec4378b6a0595fe45fdbdfb55218a44aec3129558c7",
+  "compressed_file": "1d3-strict-writer-registry-baseline-job131408621456.log.gz",
+  "compressed_sha256": "4ffd33054c10d02249b415babde855acf5005caef2841761abca8db43051867f",
+  "capture_exit_code": 0,
+  "test_summaries": [
+    "2026-11-12T19:01:09.9657885Z test result: FAILED. 5 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 84.04s"
+  ],
+  "failure_context": [
+    {
+      "line": 22371,
+      "remaining": 0,
+      "lines": [
+        "2026-11-12T19:01:09.8301333Z NATIVE_CLI_RPC_JOURNAL_COMPLETE path=/home/runner/work/_temp/native-cli-evidence/rpc-journals/client-01a1d122-7245-7191-b5f6-3ea3d14d5e01/journal.jsonl records=587 bytes=3208763 scope=strict_registry_health_probes_complete_no_success_implied",
+        "2026-11-12T19:01:09.8302145Z",
+        "2026-11-12T19:01:09.8302771Z thread 'writer_registry_refresh_baseline::native_metadata_registry_addition_actual_cli_requires_healthy_existing_read_and_fresh_ack' (19594) panicked at crates/bicdb-cli/tests/native_metadata_operator_cli/writer_registry_refresh_baseline.rs:438:5:",
+        "2026-11-12T19:01:09.8303825Z metadata-only registry addition left unchanged DATA unavailable: old_ack_read=false, fresh_ack=false, fresh_ack_read=false; all attempted outcomes retained",
+        "2026-11-12T19:01:09.8304458Z note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace",
+        "2026-11-12T19:01:09.8637045Z NATIVE_CLI_FAILURE_CUSTODY path=/home/runner/work/_temp/native-cli-evidence/failure-diagnostics/native-operator-cli-01a1d122-a054-7f52-9208-12f0a46f2a22 manifest_sha256=f8389604a04da3492972e55dbc4876c2bf09298f7e870b3c094983c67310d273 status=\"captured_allowlist_after_actual_wait\"",
+        "2026-11-12T19:01:09.9536053Z NATIVE_CLI_DATABASE_FAILURE_CUSTODY {\"path\": \"/home/runner/work/_temp/native-cli-db-custody/database-failure-95003364-6507-4d03-93dc-43d2cdf03d79\", \"status\": \"COPIED_STOPPED_OWNED_ROOTS\", \"manifest_sha256\": \"919990aa4020154427e271788478811e79a6e7fa0ac581bf69dfd75c14840234\", \"complete\": true, \"no_ack_reconciliation_claim\": true}",
+        "2026-11-12T19:01:09.9653794Z RETAINED_NATIVE_METADATA_OPERATOR_PRIVATE /tmp/.tmpAbo7k0",
+        "2026-11-12T19:01:09.9656309Z FAILED",
+        "2026-11-12T19:01:09.9656452Z",
+        "2026-11-12T19:01:09.9656543Z failures:",
+        "2026-11-12T19:01:09.9656625Z",
+        "2026-11-12T19:01:09.9656692Z failures:",
+        "2026-11-12T19:01:09.9657061Z     writer_registry_refresh_baseline::native_metadata_registry_addition_actual_cli_requires_healthy_existing_read_and_fresh_ack",
+        "2026-11-12T19:01:09.9657697Z",
+        "2026-11-12T19:01:09.9657885Z test result: FAILED. 5 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 84.04s"
+      ]
+    }
+  ],
+  "test_observations": [
+    {
+      "line": 22320,
+      "test": "native_metadata_operator_actual_cli_four_process_startup_registration_and_data_refusal",
+      "result": "ok"
+    },
+    {
+      "line": 22323,
+      "test": "promoted_cold_tests::native_metadata_operator_actual_cli_automatic_promoted_voter_kill_reopen_same_root",
+      "result": "ok"
+    }
+  ],
+  "steps": [
+    {
+      "name": "Set up job",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 1,
+      "started_at": "2026-11-12T18:44:10Z",
+      "completed_at": "2026-11-12T18:44:11Z"
+    },
+    {
+      "name": "Run actions/checkout@v4",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 2,
+      "started_at": "2026-11-12T18:44:11Z",
+      "completed_at": "2026-11-12T18:44:17Z"
+    },
+    {
+      "name": "Run dtolnay/rust-toolchain@stable",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 3,
+      "started_at": "2026-11-12T18:44:17Z",
+      "completed_at": "2026-11-12T18:44:26Z"
+    },
+    {
+      "name": "Run Swatinem/rust-cache@v2",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 4,
+      "started_at": "2026-11-12T18:44:26Z",
+      "completed_at": "2026-11-12T18:44:34Z"
+    },
+    {
+      "name": "Record exact source and list CLI integration tests",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 5,
+      "started_at": "2026-11-12T18:44:34Z",
+      "completed_at": "2026-11-12T18:59:45Z"
+    },
+    {
+      "name": "Execute CLI integration target serially",
+      "status": "completed",
+      "conclusion": "failure",
+      "number": 6,
+      "started_at": "2026-11-12T18:59:45Z",
+      "completed_at": "2026-11-12T19:01:09Z"
+    },
+    {
+      "name": "Retain exact tracked source and full CLI logs only",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 7,
+      "started_at": "2026-11-12T19:01:09Z",
+      "completed_at": "2026-11-12T19:01:13Z"
+    },
+    {
+      "name": "Retain explicitly opted-in stopped native databases only",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 8,
+      "started_at": "2026-11-12T19:01:13Z",
+      "completed_at": "2026-11-12T19:01:15Z"
+    },
+    {
+      "name": "Post Run Swatinem/rust-cache@v2",
+      "status": "completed",
+      "conclusion": "skipped",
+      "number": 15,
+      "started_at": "2026-11-12T19:01:15Z",
+      "completed_at": "2026-11-12T19:01:15Z"
+    },
+    {
+      "name": "Post Run actions/checkout@v4",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 16,
+      "started_at": "2026-11-12T19:01:15Z",
+      "completed_at": "2026-11-12T19:01:15Z"
+    },
+    {
+      "name": "Complete job",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 17,
+      "started_at": "2026-11-12T19:01:15Z",
+      "completed_at": "2026-11-12T19:01:15Z"
+    }
+  ]
+}

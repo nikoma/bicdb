@@ -1,0 +1,58 @@
+{
+  "actual_store_id": "01a1d076-bddf-7532-bd5a-44b407af63dd",
+  "after": {
+    "cluster_id": "native-bootstrap-actual-tls",
+    "commit_index": 5,
+    "current_term": 2,
+    "last_log_index": 5,
+    "last_log_term": 2,
+    "leader_id": "n4",
+    "learners": [],
+    "node_id": "n4",
+    "role": "leader",
+    "topology_generation": 4,
+    "voted_for": "n4",
+    "voters": [
+      "n0",
+      "n1",
+      "n2",
+      "n3",
+      "n4"
+    ]
+  },
+  "before": {
+    "cluster_id": "native-bootstrap-actual-tls",
+    "commit_index": 5,
+    "current_term": 2,
+    "last_log_index": 5,
+    "last_log_term": 2,
+    "leader_id": "n4",
+    "learners": [],
+    "node_id": "n4",
+    "role": "leader",
+    "topology_generation": 4,
+    "voted_for": "n4",
+    "voters": [
+      "n0",
+      "n1",
+      "n2",
+      "n3",
+      "n4"
+    ]
+  },
+  "fresh_after": {
+    "context": "01a1d076-bfbb-7503-8749-227a2f25bf13",
+    "leader": "n4",
+    "read_index": 5,
+    "term": 2
+  },
+  "maintenance": {
+    "error": null,
+    "installed_through_index": null,
+    "node": null,
+    "receiver_store_id": null,
+    "stage": "idle_or_backoff"
+  },
+  "scope": "single finite actual owned metadata maintenance; no DATA or VM claim",
+  "source_revision": "cd8e6e87ba48daebb15fe3cb875b63e1a6051d0b"
+}

@@ -1,0 +1,1182 @@
+{
+  "source": "05979463ef312fc1128a42903f908de0189c2a63",
+  "run_id": 43278532377,
+  "job_id": 131393398627,
+  "raw_log_sha256": "752e11ffbf51c5e332d520029211750eec35769ed13c1f5e43ae597c6563d6e8",
+  "artifact_id": 13971398486,
+  "artifact_sha256": "92835f330a6f30206ed723bf913ce892fac8d658c1b0bafb2bca4d45b65b7b91",
+  "artifact_bytes": 48117,
+  "file_inventory": [
+    {
+      "path": "fault-state/initial-data-held-discovery-01a1d101-90be-7351-ac4c-96ab6c746b99/audit.jsonl",
+      "bytes": 9059,
+      "sha256": "eff7218cf3960ba7047b76b2f0aa6a545b996a1983078e7930cfb7f3009d6723"
+    },
+    {
+      "path": "fault-state/initial-data-held-discovery-01a1d101-90be-7351-ac4c-96ab6c746b99/rpc.jsonl",
+      "bytes": 57090,
+      "sha256": "0479d64b12bbe6a400a135759780ccb9a09ad0a91860b057cf4bdf9b4ce9790c"
+    },
+    {
+      "path": "rustc.txt",
+      "bytes": 196,
+      "sha256": "f64c55ed9f210d80a9b248206104a47175faf5ec94a093e4ad132549209089fc"
+    },
+    {
+      "path": "selected-tests.log",
+      "bytes": 244916,
+      "sha256": "cd4713152d3d89009d24d1be1ca7bb2ace959865ced83c81b3c3383dbb9d6209"
+    },
+    {
+      "path": "source-revision.txt",
+      "bytes": 41,
+      "sha256": "a0ae56cec49c792d9496c0a2870f468ba8dfde6c329f7f6a7c1b26c7c43edd5f"
+    },
+    {
+      "path": "tests.log",
+      "bytes": 246323,
+      "sha256": "d1f3deee9be9246f7e70fab291ead8b380949867c753eaf0f181aa2184324656"
+    }
+  ],
+  "audit": [
+    {
+      "declared_fixture_precondition": "actual initial metadata election n0",
+      "members": 3,
+      "phase": "begin",
+      "real_tls": true,
+      "rf": 3,
+      "scope": "same-process actual INITIAL owners; no CLI/failure-cause/HA qualification",
+      "source_sha": "05979463ef312fc1128a42903f908de0189c2a63"
+    },
+    {
+      "key": "initial-discovery-n0-0",
+      "leader": "n0",
+      "phase": "business_ack1",
+      "value": {
+        "first": "actual acknowledged value",
+        "nested": [
+          null,
+          17
+        ]
+      }
+    },
+    {
+      "business": "01a1d101-9927-7401-b3d1-65041dccf53e",
+      "error_chain": null,
+      "ok": true,
+      "phase": "held_metadata_acquisition_result"
+    },
+    {
+      "all_actual_service_latches_held": 3,
+      "business": "01a1d101-9927-7401-b3d1-65041dccf53e",
+      "committed_topology": {
+        "applied_rebalance_plans": [],
+        "cluster_id": "native-bootstrap-actual-tls",
+        "format_version": 2,
+        "generation": 1,
+        "hash_version": 1,
+        "history": [
+          {
+            "actor": "n0",
+            "at_ms": 10,
+            "generation": 1,
+            "summary": "cluster initialized"
+          }
+        ],
+        "next_range_id": 5,
+        "next_relocation_id": 1,
+        "next_replica_id": 13,
+        "nodes": {
+          "n0": {
+            "address": "127.0.0.1:41131",
+            "capacity_bytes": 1073741824,
+            "id": "n0",
+            "incarnation": 1,
+            "joined_at_ms": 10,
+            "labels": {
+              "bicdb.schema.sha256": "dbf787e4836cc8c39299bce6b74940e28a847b560c54f9038385090cfd65756b"
+            },
+            "last_heartbeat_ms": 10,
+            "lifecycle": "active",
+            "native_store_birth_v1": {
+              "abort_protocol_version": 1,
+              "birth_id": "01a1d101-8ae3-7a13-9f24-5bc25b87cce4",
+              "birth_sha256": "c38bc1115ed414960716526c6866eb665af0f055db2ef67f2e9b1500250cd767",
+              "bootstrap_id": "01a1d101-8ac5-7e30-8166-d5bc3d53712b",
+              "node_incarnation": 1,
+              "version": 1,
+              "writer_enforcement_version": 1
+            },
+            "tls_certificate_sha256": "a28ebecdde9958f8aac2fec1a3200e721ffa42ee5b14212db91f871cf787bcb5",
+            "used_bytes": 0
+          },
+          "n1": {
+            "address": "127.0.0.1:42143",
+            "capacity_bytes": 1073741824,
+            "id": "n1",
+            "incarnation": 1,
+            "joined_at_ms": 10,
+            "labels": {
+              "bicdb.schema.sha256": "dbf787e4836cc8c39299bce6b74940e28a847b560c54f9038385090cfd65756b"
+            },
+            "last_heartbeat_ms": 10,
+            "lifecycle": "active",
+            "native_store_birth_v1": {
+              "abort_protocol_version": 1,
+              "birth_id": "01a1d101-8b39-74b1-825d-8c704be15aba",
+              "birth_sha256": "0f058672c5d20123482f74ddc2481c949c7a2b7973195e06f5a2aa47055eea84",
+              "bootstrap_id": "01a1d101-8ac5-7e30-8166-d5bc3d53712b",
+              "node_incarnation": 1,
+              "version": 1,
+              "writer_enforcement_version": 1
+            },
+            "tls_certificate_sha256": "6d7f6a4360273bad3b068bf5d0a90e9c933655fd5f49c053a07e17873a98a044",
+            "used_bytes": 0
+          },
+          "n2": {
+            "address": "127.0.0.1:41689",
+            "capacity_bytes": 1073741824,
+            "id": "n2",
+            "incarnation": 1,
+            "joined_at_ms": 10,
+            "labels": {
+              "bicdb.schema.sha256": "dbf787e4836cc8c39299bce6b74940e28a847b560c54f9038385090cfd65756b"
+            },
+            "last_heartbeat_ms": 10,
+            "lifecycle": "active",
+            "native_store_birth_v1": {
+              "abort_protocol_version": 1,
+              "birth_id": "01a1d101-8b98-7343-a4c8-5ebc6a7bbb81",
+              "birth_sha256": "ad7610bc6bd933287f6daa40bbb32327b4918ca6f03832ca854db39d73ae0b09",
+              "bootstrap_id": "01a1d101-8ac5-7e30-8166-d5bc3d53712b",
+              "node_incarnation": 1,
+              "version": 1,
+              "writer_enforcement_version": 1
+            },
+            "tls_certificate_sha256": "e811e868896407f6b76a5580ec28fb2169fe746da9f6e3191753cbbb8d533687",
+            "used_bytes": 0
+          }
+        },
+        "range_image_bootstrap_id": "01a1d101-8ac5-7e30-8166-d5bc3d53712b",
+        "ranges": {
+          "0": {
+            "approximate_bytes": 0,
+            "approximate_qps": 0,
+            "end_token": 4611686018427387904,
+            "epoch": 1,
+            "id": 1,
+            "leader": "n1",
+            "placement": {
+              "distinct_failure_domains": [],
+              "required_node_labels": {}
+            },
+            "replicas": [
+              {
+                "id": 1,
+                "node_id": "n0",
+                "role": "voter"
+              },
+              {
+                "id": 5,
+                "node_id": "n1",
+                "role": "voter"
+              },
+              {
+                "id": 9,
+                "node_id": "n2",
+                "role": "voter"
+              }
+            ],
+            "start_token": 0
+          },
+          "13835058055282163712": {
+            "approximate_bytes": 0,
+            "approximate_qps": 0,
+            "end_token": null,
+            "epoch": 1,
+            "id": 4,
+            "leader": "n0",
+            "placement": {
+              "distinct_failure_domains": [],
+              "required_node_labels": {}
+            },
+            "replicas": [
+              {
+                "id": 4,
+                "node_id": "n0",
+                "role": "voter"
+              },
+              {
+                "id": 8,
+                "node_id": "n2",
+                "role": "voter"
+              },
+              {
+                "id": 12,
+                "node_id": "n1",
+                "role": "voter"
+              }
+            ],
+            "start_token": 13835058055282163712
+          },
+          "4611686018427387904": {
+            "approximate_bytes": 0,
+            "approximate_qps": 0,
+            "end_token": 9223372036854775808,
+            "epoch": 1,
+            "id": 2,
+            "leader": "n2",
+            "placement": {
+              "distinct_failure_domains": [],
+              "required_node_labels": {}
+            },
+            "replicas": [
+              {
+                "id": 2,
+                "node_id": "n0",
+                "role": "voter"
+              },
+              {
+                "id": 6,
+                "node_id": "n2",
+                "role": "voter"
+              },
+              {
+                "id": 10,
+                "node_id": "n1",
+                "role": "voter"
+              }
+            ],
+            "start_token": 4611686018427387904
+          },
+          "9223372036854775808": {
+            "approximate_bytes": 0,
+            "approximate_qps": 0,
+            "end_token": 13835058055282163712,
+            "epoch": 1,
+            "id": 3,
+            "leader": "n0",
+            "placement": {
+              "distinct_failure_domains": [],
+              "required_node_labels": {}
+            },
+            "replicas": [
+              {
+                "id": 3,
+                "node_id": "n0",
+                "role": "voter"
+              },
+              {
+                "id": 7,
+                "node_id": "n1",
+                "role": "voter"
+              },
+              {
+                "id": 11,
+                "node_id": "n2",
+                "role": "voter"
+              }
+            ],
+            "start_token": 9223372036854775808
+          }
+        },
+        "relocations": {},
+        "replication_factor": 3
+      },
+      "context": "01a1d101-992f-7503-a4a4-fe66e59bfef0",
+      "metadata_leader": "n0",
+      "phase": "held_metadata_qq",
+      "read_index": 1,
+      "term": 1
+    },
+    {
+      "error_chain": [
+        "cluster error: no event cluster member is reachable"
+      ],
+      "ok": false,
+      "phase": "held_public_refresh",
+      "rpc_record_end": 32,
+      "rpc_record_start": 8
+    },
+    {
+      "business": "01a1d101-9989-73f3-802d-82f1aa7b5ac5",
+      "error_chain": null,
+      "ok": true,
+      "phase": "held_post_metadata_acquisition_result"
+    },
+    {
+      "business": "01a1d101-9989-73f3-802d-82f1aa7b5ac5",
+      "context": "01a1d101-9994-7560-8427-2ec152fa2c67",
+      "metadata_leader": "n0",
+      "phase": "held_metadata_qq_after_refresh",
+      "read_index": 1,
+      "term": 1
+    },
+    {
+      "key": "initial-discovery-n1-5",
+      "leader": "n1",
+      "phase": "business_ack2_after_release",
+      "value": null
+    },
+    {
+      "after": [
+        {
+          "cleanup_quarantined_owners": 0,
+          "dispatcher_published": true,
+          "ranges": [
+            {
+              "epoch": 1,
+              "leader_admission_observed": false,
+              "local_leader": false,
+              "range_id": 1
+            },
+            {
+              "epoch": 1,
+              "leader_admission_observed": false,
+              "local_leader": false,
+              "range_id": 2
+            },
+            {
+              "epoch": 1,
+              "leader_admission_observed": true,
+              "local_leader": true,
+              "range_id": 3
+            },
+            {
+              "epoch": 1,
+              "leader_admission_observed": true,
+              "local_leader": true,
+              "range_id": 4
+            }
+          ],
+          "receiver_listening": true,
+          "replica_readiness": "actual policy/native/refusal checks at every replica RPC",
+          "strong_readiness": "request-scoped fresh MQ/data QQ/MVCC/final MQ; publication is not readiness",
+          "writer_policy_current": true
+        },
+        {
+          "cleanup_quarantined_owners": 0,
+          "dispatcher_published": true,
+          "ranges": [
+            {
+              "epoch": 1,
+              "leader_admission_observed": true,
+              "local_leader": true,
+              "range_id": 1
+            },
+            {
+              "epoch": 1,
+              "leader_admission_observed": false,
+              "local_leader": false,
+              "range_id": 2
+            },
+            {
+              "epoch": 1,
+              "leader_admission_observed": false,
+              "local_leader": false,
+              "range_id": 3
+            },
+            {
+              "epoch": 1,
+              "leader_admission_observed": false,
+              "local_leader": false,
+              "range_id": 4
+            }
+          ],
+          "receiver_listening": true,
+          "replica_readiness": "actual policy/native/refusal checks at every replica RPC",
+          "strong_readiness": "request-scoped fresh MQ/data QQ/MVCC/final MQ; publication is not readiness",
+          "writer_policy_current": true
+        },
+        {
+          "cleanup_quarantined_owners": 0,
+          "dispatcher_published": true,
+          "ranges": [
+            {
+              "epoch": 1,
+              "leader_admission_observed": false,
+              "local_leader": false,
+              "range_id": 1
+            },
+            {
+              "epoch": 1,
+              "leader_admission_observed": true,
+              "local_leader": true,
+              "range_id": 2
+            },
+            {
+              "epoch": 1,
+              "leader_admission_observed": false,
+              "local_leader": false,
+              "range_id": 3
+            },
+            {
+              "epoch": 1,
+              "leader_admission_observed": false,
+              "local_leader": false,
+              "range_id": 4
+            }
+          ],
+          "receiver_listening": true,
+          "replica_readiness": "actual policy/native/refusal checks at every replica RPC",
+          "strong_readiness": "request-scoped fresh MQ/data QQ/MVCC/final MQ; publication is not readiness",
+          "writer_policy_current": true
+        }
+      ],
+      "before": [
+        {
+          "cleanup_quarantined_owners": 0,
+          "dispatcher_published": true,
+          "ranges": [
+            {
+              "epoch": 1,
+              "leader_admission_observed": false,
+              "local_leader": false,
+              "range_id": 1
+            },
+            {
+              "epoch": 1,
+              "leader_admission_observed": false,
+              "local_leader": false,
+              "range_id": 2
+            },
+            {
+              "epoch": 1,
+              "leader_admission_observed": true,
+              "local_leader": true,
+              "range_id": 3
+            },
+            {
+              "epoch": 1,
+              "leader_admission_observed": true,
+              "local_leader": true,
+              "range_id": 4
+            }
+          ],
+          "receiver_listening": true,
+          "replica_readiness": "actual policy/native/refusal checks at every replica RPC",
+          "strong_readiness": "request-scoped fresh MQ/data QQ/MVCC/final MQ; publication is not readiness",
+          "writer_policy_current": true
+        },
+        {
+          "cleanup_quarantined_owners": 0,
+          "dispatcher_published": true,
+          "ranges": [
+            {
+              "epoch": 1,
+              "leader_admission_observed": true,
+              "local_leader": true,
+              "range_id": 1
+            },
+            {
+              "epoch": 1,
+              "leader_admission_observed": false,
+              "local_leader": false,
+              "range_id": 2
+            },
+            {
+              "epoch": 1,
+              "leader_admission_observed": false,
+              "local_leader": false,
+              "range_id": 3
+            },
+            {
+              "epoch": 1,
+              "leader_admission_observed": false,
+              "local_leader": false,
+              "range_id": 4
+            }
+          ],
+          "receiver_listening": true,
+          "replica_readiness": "actual policy/native/refusal checks at every replica RPC",
+          "strong_readiness": "request-scoped fresh MQ/data QQ/MVCC/final MQ; publication is not readiness",
+          "writer_policy_current": true
+        },
+        {
+          "cleanup_quarantined_owners": 0,
+          "dispatcher_published": true,
+          "ranges": [
+            {
+              "epoch": 1,
+              "leader_admission_observed": false,
+              "local_leader": false,
+              "range_id": 1
+            },
+            {
+              "epoch": 1,
+              "leader_admission_observed": true,
+              "local_leader": true,
+              "range_id": 2
+            },
+            {
+              "epoch": 1,
+              "leader_admission_observed": false,
+              "local_leader": false,
+              "range_id": 3
+            },
+            {
+              "epoch": 1,
+              "leader_admission_observed": false,
+              "local_leader": false,
+              "range_id": 4
+            }
+          ],
+          "receiver_listening": true,
+          "replica_readiness": "actual policy/native/refusal checks at every replica RPC",
+          "strong_readiness": "request-scoped fresh MQ/data QQ/MVCC/final MQ; publication is not readiness",
+          "writer_policy_current": true
+        }
+      ],
+      "both_exact_strong_values_verified": true,
+      "business_acks": 2,
+      "phase": "healthy_after_release",
+      "topology_unchanged": true
+    },
+    {
+      "held_discovery_should_succeed": false,
+      "owners_stopped": true,
+      "phase": "acceptance"
+    }
+  ],
+  "held_public_discovery": [
+    {
+      "attempt_id": "01a1d101-9942-7e40-ab9d-8411d5f561d1",
+      "request_id": 3,
+      "destination": "n0",
+      "address": "127.0.0.1:41131",
+      "topology_generation": 1,
+      "request_envelope": {
+        "protocol_version": 28,
+        "cluster_id": "native-bootstrap-actual-tls",
+        "caller_node_id": "n0",
+        "destination_node_id": "n0",
+        "request_id": 3,
+        "request": "FetchBootstrapSnapshot"
+      },
+      "response_envelope": {
+        "protocol_version": 28,
+        "cluster_id": "native-bootstrap-actual-tls",
+        "source_node_id": "n0",
+        "actual_native_source": {
+          "version": 1,
+          "bootstrap_id": "01a1d101-8ac5-7e30-8166-d5bc3d53712b",
+          "birth_id": "01a1d101-8ae3-7a13-9f24-5bc25b87cce4",
+          "birth_sha256": "c38bc1115ed414960716526c6866eb665af0f055db2ef67f2e9b1500250cd767",
+          "node_incarnation": 1,
+          "writer_enforcement_version": 1,
+          "abort_protocol_version": 1
+        },
+        "request_id": 3,
+        "response": {
+          "Err": {
+            "code": "cluster_data_operation_failed",
+            "message": "cluster error: native host bootstrap: native bootstrap service busy"
+          }
+        }
+      },
+      "results": [
+        {
+          "phase": "validated_transport_result_error",
+          "errors": [
+            "cluster error: cluster node n0 rejected RPC cluster_data_operation_failed: cluster error: native host bootstrap: native bootstrap service busy"
+          ],
+          "may_have_dispatched": true
+        }
+      ]
+    },
+    {
+      "attempt_id": "01a1d101-9950-7fb2-be6e-8e9371107169",
+      "request_id": 4,
+      "destination": "n0",
+      "address": "127.0.0.1:41131",
+      "topology_generation": 1,
+      "request_envelope": {
+        "protocol_version": 28,
+        "cluster_id": "native-bootstrap-actual-tls",
+        "caller_node_id": "n0",
+        "destination_node_id": "n0",
+        "request_id": 4,
+        "request": "FetchTopology"
+      },
+      "response_envelope": {
+        "protocol_version": 28,
+        "cluster_id": "native-bootstrap-actual-tls",
+        "source_node_id": "n0",
+        "actual_native_source": {
+          "version": 1,
+          "bootstrap_id": "01a1d101-8ac5-7e30-8166-d5bc3d53712b",
+          "birth_id": "01a1d101-8ae3-7a13-9f24-5bc25b87cce4",
+          "birth_sha256": "c38bc1115ed414960716526c6866eb665af0f055db2ef67f2e9b1500250cd767",
+          "node_incarnation": 1,
+          "writer_enforcement_version": 1,
+          "abort_protocol_version": 1
+        },
+        "request_id": 4,
+        "response": {
+          "Err": {
+            "code": "cluster_data_operation_failed",
+            "message": "cluster error: initial native DATA refuses generic snapshot/import/repair/cleanup and unsupported operations"
+          }
+        }
+      },
+      "results": [
+        {
+          "phase": "validated_transport_result_error",
+          "errors": [
+            "cluster error: cluster node n0 rejected RPC cluster_data_operation_failed: cluster error: initial native DATA refuses generic snapshot/import/repair/cleanup and unsupported operations"
+          ],
+          "may_have_dispatched": true
+        }
+      ]
+    },
+    {
+      "attempt_id": "01a1d101-995b-73f1-8cd0-71863768bb5c",
+      "request_id": 5,
+      "destination": "n1",
+      "address": "127.0.0.1:42143",
+      "topology_generation": 1,
+      "request_envelope": {
+        "protocol_version": 28,
+        "cluster_id": "native-bootstrap-actual-tls",
+        "caller_node_id": "n0",
+        "destination_node_id": "n1",
+        "request_id": 5,
+        "request": "FetchBootstrapSnapshot"
+      },
+      "response_envelope": {
+        "protocol_version": 28,
+        "cluster_id": "native-bootstrap-actual-tls",
+        "source_node_id": "n1",
+        "actual_native_source": {
+          "version": 1,
+          "bootstrap_id": "01a1d101-8ac5-7e30-8166-d5bc3d53712b",
+          "birth_id": "01a1d101-8b39-74b1-825d-8c704be15aba",
+          "birth_sha256": "0f058672c5d20123482f74ddc2481c949c7a2b7973195e06f5a2aa47055eea84",
+          "node_incarnation": 1,
+          "writer_enforcement_version": 1,
+          "abort_protocol_version": 1
+        },
+        "request_id": 5,
+        "response": {
+          "Err": {
+            "code": "cluster_data_operation_failed",
+            "message": "cluster error: native host bootstrap: native bootstrap service busy"
+          }
+        }
+      },
+      "results": [
+        {
+          "phase": "validated_transport_result_error",
+          "errors": [
+            "cluster error: cluster node n1 rejected RPC cluster_data_operation_failed: cluster error: native host bootstrap: native bootstrap service busy"
+          ],
+          "may_have_dispatched": true
+        }
+      ]
+    },
+    {
+      "attempt_id": "01a1d101-9966-73d3-a7e7-92a1d44c1af7",
+      "request_id": 6,
+      "destination": "n1",
+      "address": "127.0.0.1:42143",
+      "topology_generation": 1,
+      "request_envelope": {
+        "protocol_version": 28,
+        "cluster_id": "native-bootstrap-actual-tls",
+        "caller_node_id": "n0",
+        "destination_node_id": "n1",
+        "request_id": 6,
+        "request": "FetchTopology"
+      },
+      "response_envelope": {
+        "protocol_version": 28,
+        "cluster_id": "native-bootstrap-actual-tls",
+        "source_node_id": "n1",
+        "actual_native_source": {
+          "version": 1,
+          "bootstrap_id": "01a1d101-8ac5-7e30-8166-d5bc3d53712b",
+          "birth_id": "01a1d101-8b39-74b1-825d-8c704be15aba",
+          "birth_sha256": "0f058672c5d20123482f74ddc2481c949c7a2b7973195e06f5a2aa47055eea84",
+          "node_incarnation": 1,
+          "writer_enforcement_version": 1,
+          "abort_protocol_version": 1
+        },
+        "request_id": 6,
+        "response": {
+          "Err": {
+            "code": "cluster_data_operation_failed",
+            "message": "cluster error: initial native DATA refuses generic snapshot/import/repair/cleanup and unsupported operations"
+          }
+        }
+      },
+      "results": [
+        {
+          "phase": "validated_transport_result_error",
+          "errors": [
+            "cluster error: cluster node n1 rejected RPC cluster_data_operation_failed: cluster error: initial native DATA refuses generic snapshot/import/repair/cleanup and unsupported operations"
+          ],
+          "may_have_dispatched": true
+        }
+      ]
+    },
+    {
+      "attempt_id": "01a1d101-9970-7cf3-8d80-a51fc0417bd4",
+      "request_id": 7,
+      "destination": "n2",
+      "address": "127.0.0.1:41689",
+      "topology_generation": 1,
+      "request_envelope": {
+        "protocol_version": 28,
+        "cluster_id": "native-bootstrap-actual-tls",
+        "caller_node_id": "n0",
+        "destination_node_id": "n2",
+        "request_id": 7,
+        "request": "FetchBootstrapSnapshot"
+      },
+      "response_envelope": {
+        "protocol_version": 28,
+        "cluster_id": "native-bootstrap-actual-tls",
+        "source_node_id": "n2",
+        "actual_native_source": {
+          "version": 1,
+          "bootstrap_id": "01a1d101-8ac5-7e30-8166-d5bc3d53712b",
+          "birth_id": "01a1d101-8b98-7343-a4c8-5ebc6a7bbb81",
+          "birth_sha256": "ad7610bc6bd933287f6daa40bbb32327b4918ca6f03832ca854db39d73ae0b09",
+          "node_incarnation": 1,
+          "writer_enforcement_version": 1,
+          "abort_protocol_version": 1
+        },
+        "request_id": 7,
+        "response": {
+          "Err": {
+            "code": "cluster_data_operation_failed",
+            "message": "cluster error: native host bootstrap: native bootstrap service busy"
+          }
+        }
+      },
+      "results": [
+        {
+          "phase": "validated_transport_result_error",
+          "errors": [
+            "cluster error: cluster node n2 rejected RPC cluster_data_operation_failed: cluster error: native host bootstrap: native bootstrap service busy"
+          ],
+          "may_have_dispatched": true
+        }
+      ]
+    },
+    {
+      "attempt_id": "01a1d101-997b-7dc1-8c65-767182a15c07",
+      "request_id": 8,
+      "destination": "n2",
+      "address": "127.0.0.1:41689",
+      "topology_generation": 1,
+      "request_envelope": {
+        "protocol_version": 28,
+        "cluster_id": "native-bootstrap-actual-tls",
+        "caller_node_id": "n0",
+        "destination_node_id": "n2",
+        "request_id": 8,
+        "request": "FetchTopology"
+      },
+      "response_envelope": {
+        "protocol_version": 28,
+        "cluster_id": "native-bootstrap-actual-tls",
+        "source_node_id": "n2",
+        "actual_native_source": {
+          "version": 1,
+          "bootstrap_id": "01a1d101-8ac5-7e30-8166-d5bc3d53712b",
+          "birth_id": "01a1d101-8b98-7343-a4c8-5ebc6a7bbb81",
+          "birth_sha256": "ad7610bc6bd933287f6daa40bbb32327b4918ca6f03832ca854db39d73ae0b09",
+          "node_incarnation": 1,
+          "writer_enforcement_version": 1,
+          "abort_protocol_version": 1
+        },
+        "request_id": 8,
+        "response": {
+          "Err": {
+            "code": "cluster_data_operation_failed",
+            "message": "cluster error: initial native DATA refuses generic snapshot/import/repair/cleanup and unsupported operations"
+          }
+        }
+      },
+      "results": [
+        {
+          "phase": "validated_transport_result_error",
+          "errors": [
+            "cluster error: cluster node n2 rejected RPC cluster_data_operation_failed: cluster error: initial native DATA refuses generic snapshot/import/repair/cleanup and unsupported operations"
+          ],
+          "may_have_dispatched": true
+        }
+      ]
+    }
+  ],
+  "actual_result": {
+    "passed": 0,
+    "failed": 1,
+    "ignored": 0,
+    "filtered": 931,
+    "seconds": 5.07,
+    "failure_line": 326,
+    "failure": "final positive healthy-discovery acceptance; all listed prerequisites/assertions passed"
+  },
+  "all_target_consumer_job": 131393334360,
+  "all_target_consumer": "success",
+  "native_database_or_tls_roots_archived": false,
+  "original_3ee_causality": "not_established",
+  "server_eof_diagnostics": [
+    "2026-11-12T18:25:06.7090609Z bicdb cluster data RPC error: io error: unexpected end of file"
+  ],
+  "actual_business_wire": [
+    {
+      "attempt_id": "01a1d101-95af-71a0-9689-9e64577413fa",
+      "request_id": 1,
+      "destination": "n0",
+      "operation": "event_append",
+      "request_envelope": {
+        "protocol_version": 28,
+        "cluster_id": "native-bootstrap-actual-tls",
+        "caller_node_id": "n0",
+        "destination_node_id": "n0",
+        "request_id": 1,
+        "request": {
+          "ApplicationEvent": {
+            "range_id": 3,
+            "range_epoch": 1,
+            "operation": {
+              "operation": "append",
+              "namespace": "items",
+              "key": "initial-discovery-n0-0",
+              "value": {
+                "first": "actual acknowledged value",
+                "nested": [
+                  null,
+                  17
+                ]
+              }
+            }
+          }
+        }
+      },
+      "response_envelope": {
+        "protocol_version": 28,
+        "cluster_id": "native-bootstrap-actual-tls",
+        "source_node_id": "n0",
+        "actual_native_source": {
+          "version": 1,
+          "bootstrap_id": "01a1d101-8ac5-7e30-8166-d5bc3d53712b",
+          "birth_id": "01a1d101-8ae3-7a13-9f24-5bc25b87cce4",
+          "birth_sha256": "c38bc1115ed414960716526c6866eb665af0f055db2ef67f2e9b1500250cd767",
+          "node_incarnation": 1,
+          "writer_enforcement_version": 1,
+          "abort_protocol_version": 1
+        },
+        "request_id": 1,
+        "response": {
+          "Ok": {
+            "ApplicationEvent": {
+              "result": "appended",
+              "inserted": true
+            }
+          }
+        }
+      }
+    },
+    {
+      "attempt_id": "01a1d101-97e5-7fc1-b6ce-a38c2550ed9c",
+      "request_id": 2,
+      "destination": "n0",
+      "operation": "native_event_get",
+      "request_envelope": {
+        "protocol_version": 28,
+        "cluster_id": "native-bootstrap-actual-tls",
+        "caller_node_id": "n0",
+        "destination_node_id": "n0",
+        "request_id": 2,
+        "request": {
+          "NativeEventGet": {
+            "version": 1,
+            "mode": "strong",
+            "business_request_id": "01a1d101-97e5-7fc1-b6ce-a366c9abd443",
+            "challenge": "01a1d101-97e5-7fc1-b6ce-a3703af0c320",
+            "range_id": 3,
+            "range_epoch": 1,
+            "namespace": "items",
+            "key": "initial-discovery-n0-0",
+            "budget_ms": 999
+          }
+        }
+      },
+      "response_envelope": {
+        "protocol_version": 28,
+        "cluster_id": "native-bootstrap-actual-tls",
+        "source_node_id": "n0",
+        "actual_native_source": {
+          "version": 1,
+          "bootstrap_id": "01a1d101-8ac5-7e30-8166-d5bc3d53712b",
+          "birth_id": "01a1d101-8ae3-7a13-9f24-5bc25b87cce4",
+          "birth_sha256": "c38bc1115ed414960716526c6866eb665af0f055db2ef67f2e9b1500250cd767",
+          "node_incarnation": 1,
+          "writer_enforcement_version": 1,
+          "abort_protocol_version": 1
+        },
+        "request_id": 2,
+        "response": {
+          "Ok": {
+            "NativeEventGet": {
+              "version": 1,
+              "business_request_id": "01a1d101-97e5-7fc1-b6ce-a366c9abd443",
+              "challenge": "01a1d101-97e5-7fc1-b6ce-a3703af0c320",
+              "result": {
+                "kind": "value",
+                "value": {
+                  "presence": "present",
+                  "value": {
+                    "first": "actual acknowledged value",
+                    "nested": [
+                      null,
+                      17
+                    ]
+                  }
+                },
+                "route": {
+                  "generation": 1,
+                  "range_id": 3,
+                  "range_epoch": 1,
+                  "leader": "n0"
+                },
+                "audit": {
+                  "business_request_id": "01a1d101-97e5-7fc1-b6ce-a366c9abd443",
+                  "challenge": "01a1d101-97e5-7fc1-b6ce-a3703af0c320",
+                  "range_id": 3,
+                  "range_epoch": 1,
+                  "range_index": 1,
+                  "logical_genesis_sha256": "91a407d074528695e52185cc610f8ea229104cb0b8c18e7f3791f33ae648c132",
+                  "logical_history_sha256": "f6c6e36db41d060cce326afa05a015262c98754c710324c4e52d6e2b95d1a033",
+                  "target_local_visibility_db_sequence": 1,
+                  "snapshot_sequence": 1,
+                  "first_metadata_context_id": "01a1d101-980a-7d51-a3aa-94cd0043d1e0",
+                  "final_metadata_context_id": "01a1d101-98d4-77a3-b652-27d1ab7b3b76",
+                  "final_metadata_generation": 1,
+                  "final_metadata_term": 1,
+                  "final_metadata_read_index": 1
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "attempt_id": "01a1d101-99a5-70a3-ba4e-f37682a4183e",
+      "request_id": 9,
+      "destination": "n1",
+      "operation": "event_append",
+      "request_envelope": {
+        "protocol_version": 28,
+        "cluster_id": "native-bootstrap-actual-tls",
+        "caller_node_id": "n0",
+        "destination_node_id": "n1",
+        "request_id": 9,
+        "request": {
+          "ApplicationEvent": {
+            "range_id": 1,
+            "range_epoch": 1,
+            "operation": {
+              "operation": "append",
+              "namespace": "items",
+              "key": "initial-discovery-n1-5",
+              "value": null
+            }
+          }
+        }
+      },
+      "response_envelope": {
+        "protocol_version": 28,
+        "cluster_id": "native-bootstrap-actual-tls",
+        "source_node_id": "n1",
+        "actual_native_source": {
+          "version": 1,
+          "bootstrap_id": "01a1d101-8ac5-7e30-8166-d5bc3d53712b",
+          "birth_id": "01a1d101-8b39-74b1-825d-8c704be15aba",
+          "birth_sha256": "0f058672c5d20123482f74ddc2481c949c7a2b7973195e06f5a2aa47055eea84",
+          "node_incarnation": 1,
+          "writer_enforcement_version": 1,
+          "abort_protocol_version": 1
+        },
+        "request_id": 9,
+        "response": {
+          "Ok": {
+            "ApplicationEvent": {
+              "result": "appended",
+              "inserted": true
+            }
+          }
+        }
+      }
+    },
+    {
+      "attempt_id": "01a1d101-9bd9-7720-8889-5f2c8a6c6d0d",
+      "request_id": 10,
+      "destination": "n1",
+      "operation": "native_event_get",
+      "request_envelope": {
+        "protocol_version": 28,
+        "cluster_id": "native-bootstrap-actual-tls",
+        "caller_node_id": "n0",
+        "destination_node_id": "n1",
+        "request_id": 10,
+        "request": {
+          "NativeEventGet": {
+            "version": 1,
+            "mode": "strong",
+            "business_request_id": "01a1d101-9bd9-7720-8889-5f0c8ab4efe9",
+            "challenge": "01a1d101-9bd9-7720-8889-5f1d50b311ca",
+            "range_id": 1,
+            "range_epoch": 1,
+            "namespace": "items",
+            "key": "initial-discovery-n1-5",
+            "budget_ms": 999
+          }
+        }
+      },
+      "response_envelope": {
+        "protocol_version": 28,
+        "cluster_id": "native-bootstrap-actual-tls",
+        "source_node_id": "n1",
+        "actual_native_source": {
+          "version": 1,
+          "bootstrap_id": "01a1d101-8ac5-7e30-8166-d5bc3d53712b",
+          "birth_id": "01a1d101-8b39-74b1-825d-8c704be15aba",
+          "birth_sha256": "0f058672c5d20123482f74ddc2481c949c7a2b7973195e06f5a2aa47055eea84",
+          "node_incarnation": 1,
+          "writer_enforcement_version": 1,
+          "abort_protocol_version": 1
+        },
+        "request_id": 10,
+        "response": {
+          "Ok": {
+            "NativeEventGet": {
+              "version": 1,
+              "business_request_id": "01a1d101-9bd9-7720-8889-5f0c8ab4efe9",
+              "challenge": "01a1d101-9bd9-7720-8889-5f1d50b311ca",
+              "result": {
+                "kind": "value",
+                "value": {
+                  "presence": "present",
+                  "value": null
+                },
+                "route": {
+                  "generation": 1,
+                  "range_id": 1,
+                  "range_epoch": 1,
+                  "leader": "n1"
+                },
+                "audit": {
+                  "business_request_id": "01a1d101-9bd9-7720-8889-5f0c8ab4efe9",
+                  "challenge": "01a1d101-9bd9-7720-8889-5f1d50b311ca",
+                  "range_id": 1,
+                  "range_epoch": 1,
+                  "range_index": 1,
+                  "logical_genesis_sha256": "bbdbc3569ba380253b10d7b312ef0026eeada482a78af49ca9740be4f3b02ae0",
+                  "logical_history_sha256": "cb33bbd8e54f36f7b51f87ca23fa63684af6cf84d2bda4f300b87953c2615f3f",
+                  "target_local_visibility_db_sequence": 2,
+                  "snapshot_sequence": 2,
+                  "first_metadata_context_id": "01a1d101-9bfb-7f31-8616-cc8591ea7092",
+                  "final_metadata_context_id": "01a1d101-9cd0-7572-a891-299c6b4c703a",
+                  "final_metadata_generation": 1,
+                  "final_metadata_term": 1,
+                  "final_metadata_read_index": 1
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "attempt_id": "01a1d101-9d27-7c33-9fa9-72bfda89397e",
+      "request_id": 11,
+      "destination": "n0",
+      "operation": "native_event_get",
+      "request_envelope": {
+        "protocol_version": 28,
+        "cluster_id": "native-bootstrap-actual-tls",
+        "caller_node_id": "n0",
+        "destination_node_id": "n0",
+        "request_id": 11,
+        "request": {
+          "NativeEventGet": {
+            "version": 1,
+            "mode": "strong",
+            "business_request_id": "01a1d101-9d27-7c33-9fa9-729b6e35ce75",
+            "challenge": "01a1d101-9d27-7c33-9fa9-72acdf7da1c2",
+            "range_id": 3,
+            "range_epoch": 1,
+            "namespace": "items",
+            "key": "initial-discovery-n0-0",
+            "budget_ms": 999
+          }
+        }
+      },
+      "response_envelope": {
+        "protocol_version": 28,
+        "cluster_id": "native-bootstrap-actual-tls",
+        "source_node_id": "n0",
+        "actual_native_source": {
+          "version": 1,
+          "bootstrap_id": "01a1d101-8ac5-7e30-8166-d5bc3d53712b",
+          "birth_id": "01a1d101-8ae3-7a13-9f24-5bc25b87cce4",
+          "birth_sha256": "c38bc1115ed414960716526c6866eb665af0f055db2ef67f2e9b1500250cd767",
+          "node_incarnation": 1,
+          "writer_enforcement_version": 1,
+          "abort_protocol_version": 1
+        },
+        "request_id": 11,
+        "response": {
+          "Ok": {
+            "NativeEventGet": {
+              "version": 1,
+              "business_request_id": "01a1d101-9d27-7c33-9fa9-729b6e35ce75",
+              "challenge": "01a1d101-9d27-7c33-9fa9-72acdf7da1c2",
+              "result": {
+                "kind": "value",
+                "value": {
+                  "presence": "present",
+                  "value": {
+                    "first": "actual acknowledged value",
+                    "nested": [
+                      null,
+                      17
+                    ]
+                  }
+                },
+                "route": {
+                  "generation": 1,
+                  "range_id": 3,
+                  "range_epoch": 1,
+                  "leader": "n0"
+                },
+                "audit": {
+                  "business_request_id": "01a1d101-9d27-7c33-9fa9-729b6e35ce75",
+                  "challenge": "01a1d101-9d27-7c33-9fa9-72acdf7da1c2",
+                  "range_id": 3,
+                  "range_epoch": 1,
+                  "range_index": 1,
+                  "logical_genesis_sha256": "91a407d074528695e52185cc610f8ea229104cb0b8c18e7f3791f33ae648c132",
+                  "logical_history_sha256": "f6c6e36db41d060cce326afa05a015262c98754c710324c4e52d6e2b95d1a033",
+                  "target_local_visibility_db_sequence": 1,
+                  "snapshot_sequence": 2,
+                  "first_metadata_context_id": "01a1d101-9d53-77e2-8827-32dc732e6608",
+                  "final_metadata_context_id": "01a1d101-9e27-7f21-a53b-54bda428b238",
+                  "final_metadata_generation": 1,
+                  "final_metadata_term": 1,
+                  "final_metadata_read_index": 1
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

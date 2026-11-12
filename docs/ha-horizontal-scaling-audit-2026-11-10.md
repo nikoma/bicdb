@@ -36,6 +36,15 @@ and zero resources in an independent subscription inventory filtered to their
 exact group identities. This is a current cleanup check, not a new VM campaign
 or a claim about unrelated Azure resources. No resources were created.
 
+## Original metadata correlation — 2026-11-12 UTC
+
+A [read-only examination of the five original 461 archives](evidence/azure-original-metadata-correlation-2026-11-12/README.md)
+verifies their retained metadata checksums. The only equal committed-index pair
+agrees; the differing stopped-state indices are not one coherent snapshot.
+These files establish neither a causal link to the separately found bounded
+Append defect nor its absence during the earlier failure. Request-time visibility
+and the first restoring event for the two ACK records remain unresolved.
+
 ## P0 source follow-up — 2026-11-11
 
 The [revision-scoped recovery evidence matrix](recovery-component-evidence-2026-11-11.md)

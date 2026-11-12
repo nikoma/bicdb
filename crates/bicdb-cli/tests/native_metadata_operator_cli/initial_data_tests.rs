@@ -5,7 +5,7 @@ use super::*;
 use sha2::{Digest, Sha256};
 use std::io::{Read, Write};
 
-fn actual_cli_identity_before_phase() -> Value {
+pub(super) fn actual_cli_identity_before_phase() -> Value {
     let runtime_source = std::env::var("BICDB_TEST_SOURCE_SHA").ok();
     if let Some(source) = &runtime_source {
         assert!(
@@ -49,7 +49,7 @@ fn payload_sha256(value: &Value) -> String {
     hex::encode(Sha256::digest(serde_json::to_vec(value).unwrap()))
 }
 
-fn journal(file: &mut std::fs::File, value: Value) {
+pub(super) fn journal(file: &mut std::fs::File, value: Value) {
     serde_json::to_writer(&mut *file, &value).unwrap();
     file.write_all(b"\n").unwrap();
     file.sync_all().unwrap();
@@ -61,7 +61,7 @@ fn journal(file: &mut std::fs::File, value: Value) {
     );
 }
 
-fn open_data(root: &Path, i: usize, sequence: &mut u64, budget_ms: u64) -> Value {
+pub(super) fn open_data(root: &Path, i: usize, sequence: &mut u64, budget_ms: u64) -> Value {
     *sequence += 1;
     let (command, status) = paths(root, i);
     let output = binary()

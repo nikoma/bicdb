@@ -367,3 +367,5 @@ mod stale_seed_tests;
 mod bootstrap_budget_tests;
 
 mod self_maintenance_tests;
+
+mod replica_receiver_tests;

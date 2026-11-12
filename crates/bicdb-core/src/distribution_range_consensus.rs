@@ -821,6 +821,7 @@ pub struct RangeWriteStore {
     fsync: bool,
     catalog: RangeWriteCatalog,
     open_id: Uuid,
+    open_lifetime: Arc<()>,
     recovery_persistence_uncertain: bool,
     catalogue_loaded_at_open: bool,
     #[cfg(test)]
@@ -834,7 +835,30 @@ pub struct RangeWriteStore {
     _native_abort_owner: Option<bicdb_page::DirectoryLock>,
 }
 
+/// Actual Store-open lifetime only. Never a role, floor or mutation proof.
+#[derive(Clone, Debug)]
+pub(crate) struct RangeWriteStoreOpenGuard {
+    open: std::sync::Weak<()>,
+    id: Uuid,
+}
+impl RangeWriteStoreOpenGuard {
+    pub(crate) fn require_live(&self) -> Result<()> {
+        if self.open.upgrade().is_none() {
+            return Err(range_write_error("actual range Store open ended"));
+        }
+        Ok(())
+    }
+    pub(crate) fn id(&self) -> Uuid {
+        self.id
+    }
+}
 impl RangeWriteStore {
+    pub(crate) fn listener_open_guard(&self) -> RangeWriteStoreOpenGuard {
+        RangeWriteStoreOpenGuard {
+            open: Arc::downgrade(&self.open_lifetime),
+            id: self.open_id,
+        }
+    }
     /// Read and verify a durable range-write catalog without migrating or
     /// rewriting it. Restore admission uses this before the restored database
     /// is allowed to start cluster services.
@@ -1031,6 +1055,7 @@ impl RangeWriteStore {
             fsync,
             catalog,
             open_id: Uuid::now_v7(),
+            open_lifetime: Arc::new(()),
             native_activated_opens: BTreeMap::new(),
             native_joint_activated_opens: BTreeMap::new(),
             native_writer_host: None,

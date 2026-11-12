@@ -592,3 +592,8 @@ mod tests;
 pub(crate) use provisional_listener::NativeInitialDataAdmission;
 #[cfg(feature = "tls-replication")]
 pub use provisional_listener::{NativeInitialDataRangeStatus, NativeInitialDataStatus};
+
+#[cfg(feature = "tls-replication")]
+pub(crate) use provisional_listener::NativeRegisteredReplicaAdmission;
+#[cfg(feature = "tls-replication")]
+pub use provisional_listener::NativeRegisteredReplicaReceiverStatus;

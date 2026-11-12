@@ -78,6 +78,10 @@ pub enum Command {
     /// Register and start ONE fresh metadata learner; automatic leader maintenance promotes it.
     JoinFresh {
         root: PathBuf,
+        /// After real metadata enrollment/control, expose a NEW replica-only
+        /// receiver. This never activates DATA, genesis, APP or Strong reads.
+        #[arg(long)]
+        replica_receiver: bool,
         #[arg(long)]
         cluster_id: String,
         #[arg(long)]
@@ -190,6 +194,7 @@ pub enum Action {
     EnableControl,
     /// INITIAL owners only: retained native policy/runtime, new DATA listener, real initial readiness.
     OpenInitialData,
+    OpenReplicaReceiver,
     Heartbeat,
     EnrollLearner,
     CatchUpLearner,
@@ -211,6 +216,7 @@ impl Action {
             Self::Elect => C::Elect,
             Self::EnableControl => C::EnableControl,
             Self::OpenInitialData => C::OpenInitialData,
+            Self::OpenReplicaReceiver => C::OpenReplicaReceiver,
             Self::Heartbeat => C::Heartbeat,
             Self::EnrollLearner => C::EnrollLearner {
                 node: ClusterNodeId::new(target.unwrap())?,
@@ -314,6 +320,13 @@ fn own_network(cert: PathBuf, key: PathBuf, ca: PathBuf) -> ClusterNetworkTransp
 pub fn run(command: Command) -> Result<()> {
     let command_started = Instant::now();
     let automatic_join = matches!(&command, Command::JoinFresh { .. });
+    let automatic_replica_receiver = matches!(
+        &command,
+        Command::JoinFresh {
+            replica_receiver: true,
+            ..
+        }
+    );
     let automatic_metadata = automatic_join
         || matches!(
             &command,
@@ -327,6 +340,7 @@ pub fn run(command: Command) -> Result<()> {
     let command = match command {
         Command::JoinFresh {
             root,
+            replica_receiver: _,
             cluster_id,
             seed_node_id,
             seed_address,
@@ -715,6 +729,7 @@ pub fn run(command: Command) -> Result<()> {
                             NativeMetadataHostAction::StartLearnerMetadata => {
                                 host.start_metadata(&token)
                             }
+                            NativeMetadataHostAction::OpenReplicaReceiver => host.open_replica_receiver(&token),
                             NativeMetadataHostAction::Elect => host.elect_metadata(&token),
                             NativeMetadataHostAction::Status => host.refresh(&token),
                             NativeMetadataHostAction::Stop => host.stop(&token).map(|_| {
@@ -772,10 +787,20 @@ pub fn run(command: Command) -> Result<()> {
                     }
                     if automatic_metadata
                         && status.metadata_role == bicdb_core::MetadataMemberRole::Voter
+                        && status.replica_receiver.is_none()
                     {
                         match host.enable_metadata_control(&token) {
                             Ok(next) => status = next,
                             Err(e) => error = Some(e.to_string()),
+                        }
+                    }
+                    if automatic_replica_receiver
+                        && status.metadata_role == bicdb_core::MetadataMemberRole::Voter
+                        && (status.metadata_control_owned || status.replica_receiver.is_some())
+                    {
+                        match host.open_replica_receiver(&token) {
+                            Ok(next) => status = next,
+                            Err(failure) => error = Some(failure.to_string()),
                         }
                     }
                     if automatic_metadata

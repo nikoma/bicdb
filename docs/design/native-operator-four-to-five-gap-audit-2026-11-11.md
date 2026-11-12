@@ -351,3 +351,36 @@ image/joint request-response consumers; generic snapshots are not substitutes.
 Registered replica receiver, authenticated native image/joint collectors and
 a native placement controller are separate unfinished executable seams. A
 receiver-ready/data-serving-false status is not data relocation or scale-out.
+
+### Source-only registered replica receiver prerequisite (2026-11-12)
+
+A separate source successor adds public `open_replica_receiver`, the diagnostic
+`open-replica-receiver` action and opt-in `join-fresh --replica-receiver`. This
+first variant requires the successful JoinFresh owner's actual Registered,
+locally current metadata-voter/control backend. Fresh and strict Cold owners
+retain the SAME factory, DB open/birth, service, range-Store open, metadata
+StoreUUID/namespaces and supervisor. An actual owned-member observation plus own
+fresh HostMQ checks the transition; draining/binding failures retain that owner.
+It closes/drains the old socket and starts a NEW immutable replica-only receiver.
+A Weak actual Store-open sentinel also refuses an ended/replaced Store lifetime.
+
+Opening the receiver installs NO writer hook/coordinator, native genesis,
+recovered epoch or Strong dispatcher. The typed image path already obtains its
+controlled row grant from actual source/full-history/role/freeze proofs rather
+than ordinary writer admission. Those proofs remain mandatory and are NOT
+created here. Typed Strong returns unavailable before DB latches; APP/Scan and
+generic snapshot/import/repair remain refused. Metadata backend/scheduling
+continue, and every allowed native operation retains its existing fresh-role,
+physical-history and policy checks. `receiver_ready` means ingress ownership,
+not materialization, voting promotion, source readiness or DATA serving.
+
+Unexecuted source tests cover actual TLS same-owner rotation, UNKNOWN blank
+native prefix (not zero), no installed writer and APP/Strong refusals; a public
+process test first obtains four-owner full-value ACK/Strong with an external
+fsynced ledger, then one fifth JoinFresh command reaches receiver-ready while
+DATA remains false. This stage neither assigns a range nor moves one. The next
+executable gates remain native placement/controller consensus, authenticated
+native image/joint wire consumers, initial DATA writer-policy refresh after
+metadata membership changes, and actual image/joint/open/writer readiness.
+No generic relocation driver, manual topology proposal or DTO quorum substitutes
+for those consumers. No result of the unexecuted successor is claimed here.

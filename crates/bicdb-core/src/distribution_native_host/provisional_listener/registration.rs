@@ -10,6 +10,10 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Instant;
 
 mod initial_data;
+mod registered_replica;
+pub(crate) use registered_replica::NativeRegisteredReplicaAdmission;
+use registered_replica::NativeRegisteredReplicaReceiver;
+pub use registered_replica::NativeRegisteredReplicaReceiverStatus;
 mod maintenance;
 pub(crate) use initial_data::NativeInitialDataAdmission;
 use initial_data::NativeInitialDataHost;
@@ -334,6 +338,7 @@ impl NativeMetadataRegistrationController {
 pub(crate) struct NativeMetadataControlHost {
     backend: Arc<NativeMetadataControlBackend>,
     data: Option<NativeInitialDataHost>,
+    replica: Option<NativeRegisteredReplicaReceiver>,
     old_listener: Option<ClusterDataServerHandle>,
     drained: Option<DrainedClusterDataListener>,
     controller: Option<Arc<NativeMetadataRegistrationController>>,
@@ -353,6 +358,7 @@ impl NativeMetadataControlHost {
                 initial,
             ))),
             data: None,
+            replica: None,
             old_listener: Some(listener),
             drained: None,
             controller: None,
@@ -370,6 +376,7 @@ impl NativeMetadataControlHost {
         Self {
             backend: Arc::new(backend),
             data: None,
+            replica: None,
             old_listener: Some(listener),
             drained: None,
             controller: None,
@@ -379,12 +386,17 @@ impl NativeMetadataControlHost {
         }
     }
     pub(in crate::distribution_native_host) fn is_running(&self) -> bool {
-        self.listener.is_some() || self.data.as_ref().is_some_and(|data| data.is_running())
+        self.listener.is_some()
+            || self.data.as_ref().is_some_and(|data| data.is_running())
+            || self
+                .replica
+                .as_ref()
+                .is_some_and(|receiver| receiver.is_running())
     }
     pub(crate) fn advance(&mut self, parent: &CancellationToken) -> Result<()> {
         let token = parent.child_with_deadline(Instant::now() + Duration::from_secs(5));
         token.check()?;
-        if self.data.is_some() {
+        if self.data.is_some() || self.replica.is_some() {
             return Err(invalid(
                 "INITIAL DATA transition cannot revert to old control listener",
             ));
@@ -636,6 +648,9 @@ impl NativeMetadataControlHost {
         self.backend.heartbeat(parent)
     }
     pub(crate) fn stop(&mut self, parent: &CancellationToken) -> Result<()> {
+        if let Some(replica) = self.replica.as_mut() {
+            replica.stop(parent)?;
+        }
         if let Some(data) = self.data.as_mut() {
             data.stop(parent)?;
         }

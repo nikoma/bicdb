@@ -54,6 +54,25 @@ mod host_metadata;
 mod initial_birth;
 mod initial_data_listener;
 pub(crate) use initial_data_listener::start_cluster_initial_native_data_server;
+mod registered_replica_listener;
+pub(crate) use registered_replica_listener::start_cluster_registered_replica_server;
+#[derive(Clone)]
+enum NativeDataListenerMode {
+    Initial(Arc<crate::distribution_native_host::NativeInitialDataAdmission>),
+    RegisteredReplica(Arc<crate::distribution_native_host::NativeRegisteredReplicaAdmission>),
+}
+impl NativeDataListenerMode {
+    fn require_listener(
+        &self,
+        service: &Arc<Mutex<ClusterDataNodeService>>,
+        runtime: &Arc<crate::distribution_range_recovery::RangeRecoveryRuntime>,
+    ) -> Result<()> {
+        match self {
+            Self::Initial(admission) => admission.require_listener(service, runtime),
+            Self::RegisteredReplica(admission) => admission.require_listener(service, runtime),
+        }
+    }
+}
 mod initial_preparation;
 mod learner_birth;
 pub(crate) mod metadata_append;
@@ -870,14 +889,14 @@ fn start_cluster_data_server_with_native_mode(
     metadata_distribution_store: Option<Arc<Mutex<DistributionStore>>>,
     metadata_read_provider: Option<Arc<MetadataReadProvider>>,
     recovery_runtime: Option<Arc<crate::distribution_range_recovery::RangeRecoveryRuntime>>,
-    initial_data: Option<Arc<crate::distribution_native_host::NativeInitialDataAdmission>>,
+    native_mode: Option<NativeDataListenerMode>,
 ) -> Result<ClusterDataServerHandle> {
-    if let Some(initial_data) = &initial_data {
-        initial_data.require_listener(
+    if let Some(native_mode) = &native_mode {
+        native_mode.require_listener(
             &service,
             recovery_runtime
                 .as_ref()
-                .ok_or_else(|| transport_error("initial DATA listener has no actual runtime"))?,
+                .ok_or_else(|| transport_error("native listener has no actual runtime"))?,
         )?;
     }
     config.validate()?;
@@ -916,7 +935,13 @@ fn start_cluster_data_server_with_native_mode(
         native_metadata_control,
         service_store_open_id,
     ) = {
-        let service = service.lock();
+        let service = if native_mode.is_some() {
+            service.try_lock().ok_or_else(|| {
+                transport_error("native receiver service busy during finite listener startup")
+            })?
+        } else {
+            service.lock()
+        };
         (
             (
                 service.cluster_id().clone(),
@@ -978,7 +1003,7 @@ fn start_cluster_data_server_with_native_mode(
                         metadata_distribution_store.as_ref().map(Arc::clone);
                     let metadata_read_provider = metadata_read_provider.as_ref().map(Arc::clone);
                     let recovery_runtime = recovery_runtime.as_ref().map(Arc::clone);
-                    let initial_data = initial_data.clone();
+                    let native_mode = native_mode.clone();
                     let request_deadline =
                         Instant::now() + Duration::from_millis(config.io_timeout_ms);
                     let tls = server_tls.as_ref().map(|tls| Arc::clone(&tls.config));
@@ -1025,7 +1050,7 @@ fn start_cluster_data_server_with_native_mode(
                                     initial_preparation_provider.as_ref(),
                                     learner_birth_provider.as_ref(),
                                     initial_consensus_only,
-                                    initial_data.as_ref(),
+                                    native_mode.as_ref(),
                                     native_metadata_control.as_ref(),
                                     request_deadline,
                                 )
@@ -1048,7 +1073,7 @@ fn start_cluster_data_server_with_native_mode(
                                 initial_preparation_provider.as_ref(),
                                 learner_birth_provider.as_ref(),
                                 initial_consensus_only,
-                                initial_data.as_ref(),
+                                native_mode.as_ref(),
                                 native_metadata_control.as_ref(),
                                 request_deadline,
                             )
@@ -1146,7 +1171,7 @@ fn handle_cluster_data_connection(
         &std::sync::Weak<crate::distribution_native_host::NativeLearnerBirthProvider>,
     >,
     initial_consensus_only: bool,
-    initial_data: Option<&Arc<crate::distribution_native_host::NativeInitialDataAdmission>>,
+    native_mode: Option<&NativeDataListenerMode>,
     native_metadata_control: Option<
         &std::sync::Weak<crate::distribution_native_host::NativeMetadataRegistrationController>,
     >,
@@ -1157,6 +1182,14 @@ fn handle_cluster_data_connection(
     let caller_node_id = request.caller_node_id.clone();
     let (local_cluster_id, local_node_id, local_writer_enforcement_version, local_open) =
         local_identity.clone();
+    let initial_data = match native_mode {
+        Some(NativeDataListenerMode::Initial(admission)) => Some(admission),
+        _ => None,
+    };
+    let registered_replica = match native_mode {
+        Some(NativeDataListenerMode::RegisteredReplica(admission)) => Some(admission),
+        _ => None,
+    };
     let response = (|| {
         if request.protocol_version != CLUSTER_DATA_PROTOCOL_VERSION {
             return Err(transport_error(format!(
@@ -1265,8 +1298,12 @@ fn handle_cluster_data_connection(
             initial_data.require_live()?;
             initial_data_listener::require_request(initial_data, &request.request)?;
         }
+        if let Some(replica) = registered_replica {
+            replica.require_live()?;
+            registered_replica_listener::require_request(&request.request)?;
+        }
         if initial_consensus_only
-            && initial_data.is_none()
+            && native_mode.is_none()
             && native_metadata_control.is_none()
             && !matches!(
                 &request.request,
@@ -1285,7 +1322,7 @@ fn handle_cluster_data_connection(
         }
         if let Some(provider) = native_metadata_control {
             // Captured immutable mode: expiration NEVER falls through to data.
-            if initial_data.is_none()
+            if native_mode.is_none()
                 && !matches!(
                     &request.request,
                     ClusterDataRequest::Ping
@@ -1456,6 +1493,11 @@ fn handle_cluster_data_connection(
                 NativeEventGetReply, NativeEventGetResult, NativeEventGetUnavailableCode,
             };
             get.validate()?;
+            if registered_replica.is_some() {
+                return Ok(ClusterDataResponse::NativeEventGet(NativeEventGetReply::unavailable(
+                    &get, NativeEventGetUnavailableCode::MissingDispatcher, None,
+                    "registered replica-only receiver has no materialized DATA/Strong serving admission")));
+            }
             if initial_data.is_some_and(|data| !data.application_published().unwrap_or(false)) {
                 return Ok(ClusterDataResponse::NativeEventGet(
                     NativeEventGetReply::unavailable(

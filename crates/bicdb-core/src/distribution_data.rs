@@ -962,6 +962,11 @@ impl ClusterDataNodeService {
     pub(crate) fn native_initial_listener_store_open_id(&self) -> Uuid {
         self.range_writes.recovery_store_open_id()
     }
+    pub(crate) fn native_replica_listener_store_open_guard(
+        &self,
+    ) -> crate::distribution_range_consensus::RangeWriteStoreOpenGuard {
+        self.range_writes.listener_open_guard()
+    }
     pub(crate) fn initial_consensus_only(&self) -> bool {
         self.initial_consensus_only
     }

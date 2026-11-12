@@ -181,3 +181,115 @@ fn independent_child_primary_key_survives_attach_parent_ddl_and_parent_insert() 
         db.close().unwrap();
     }
 }
+
+#[test]
+fn parent_updates_and_deletes_keep_the_independent_leaf_key_and_lock_identity() {
+    for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
+        let root = tempfile::tempdir().unwrap();
+        let cfg = config(mode);
+        let mut db = BicDb::open_with_config(root.path(), cfg.clone()).unwrap();
+        let mut sql = SqlSession::new(&mut db);
+        for text in [
+            "CREATE TABLE p(k INT,payload TEXT) PARTITION BY RANGE(k)",
+            "CREATE TABLE low(k INT,payload TEXT PRIMARY KEY)",
+            "ALTER TABLE p ATTACH PARTITION low FOR VALUES FROM(0) TO(10)",
+            "INSERT INTO low VALUES(1,'one')",
+            "INSERT INTO p VALUES(2,'two')",
+            "BEGIN",
+            "SELECT k,payload FROM p ORDER BY k FOR UPDATE",
+        ] {
+            sql.execute(text).unwrap();
+        }
+        assert_eq!(
+            sql.execute("UPDATE p SET payload='renamed' WHERE k=1 RETURNING k,payload")
+                .unwrap()
+                .rows,
+            vec![vec![SqlValue::Int(1), SqlValue::String("renamed".into())]]
+        );
+        assert_eq!(
+            sql.execute("DELETE FROM p WHERE payload='two' RETURNING k")
+                .unwrap()
+                .rows,
+            vec![vec![SqlValue::Int(2)]]
+        );
+        sql.execute("COMMIT").unwrap();
+        drop(sql);
+        assert!(db.get("low", "one").unwrap().is_none());
+        assert!(db.get("low", "two").unwrap().is_none());
+        assert!(db.get("low", "renamed").unwrap().is_some());
+        for _ in 0..2 {
+            let mut sql = SqlSession::new(&mut db);
+            assert_eq!(
+                sql.execute("SELECT k,payload FROM p WHERE payload='renamed'")
+                    .unwrap()
+                    .rows,
+                vec![vec![SqlValue::Int(1), SqlValue::String("renamed".into())]]
+            );
+            assert_eq!(
+                sql.execute("INSERT INTO p VALUES(3,'renamed')")
+                    .unwrap_err()
+                    .sqlstate(),
+                "23505"
+            );
+            drop(sql);
+            db.close().unwrap();
+            db = BicDb::open_with_config(root.path(), cfg.clone()).unwrap();
+        }
+        db.close().unwrap();
+    }
+}
+
+#[test]
+fn moving_between_different_child_keys_preserves_acknowledged_values_and_rollback() {
+    for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
+        let root = tempfile::tempdir().unwrap();
+        let cfg = config(mode);
+        let mut db = BicDb::open_with_config(root.path(), cfg.clone()).unwrap();
+        let mut sql = SqlSession::new(&mut db);
+        for text in [
+            "CREATE TABLE p(k INT,payload TEXT) PARTITION BY RANGE(k)",
+            "CREATE TABLE low(k INT,payload TEXT PRIMARY KEY)",
+            "CREATE TABLE high(k INT,payload TEXT,PRIMARY KEY(k,payload))",
+            "ALTER TABLE p ATTACH PARTITION low FOR VALUES FROM(0) TO(10)",
+            "ALTER TABLE p ATTACH PARTITION high FOR VALUES FROM(10) TO(20)",
+            "INSERT INTO low VALUES(1,'ack')",
+            "INSERT INTO high VALUES(13,'other')",
+        ] {
+            sql.execute(text).unwrap();
+        }
+        assert_eq!(
+            sql.execute("UPDATE p SET k=12 WHERE k=1 RETURNING k,payload")
+                .unwrap()
+                .rows,
+            vec![vec![SqlValue::Int(12), SqlValue::String("ack".into())]]
+        );
+        sql.execute("BEGIN").unwrap();
+        sql.execute("SAVEPOINT s").unwrap();
+        sql.execute("UPDATE p SET k=2 WHERE k=12").unwrap();
+        assert_eq!(
+            sql.execute("SELECT k,payload FROM low").unwrap().rows,
+            vec![vec![SqlValue::Int(2), SqlValue::String("ack".into())]]
+        );
+        sql.execute("ROLLBACK TO s").unwrap();
+        sql.execute("COMMIT").unwrap();
+        drop(sql);
+        for _ in 0..2 {
+            let mut sql = SqlSession::new(&mut db);
+            assert_eq!(
+                sql.execute("SELECT k,payload FROM p ORDER BY k")
+                    .unwrap()
+                    .rows,
+                vec![
+                    vec![SqlValue::Int(12), SqlValue::String("ack".into())],
+                    vec![SqlValue::Int(13), SqlValue::String("other".into())]
+                ]
+            );
+            drop(sql);
+            assert_eq!(db.scan_collection("low").unwrap().len(), 0);
+            assert_eq!(db.scan_collection("high").unwrap().len(), 2);
+            db.close().unwrap();
+            db = BicDb::open_with_config(root.path(), cfg.clone()).unwrap();
+        }
+        db.close().unwrap();
+    }
+}

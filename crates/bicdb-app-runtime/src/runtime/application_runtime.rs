@@ -1988,7 +1988,8 @@ impl ApplicationRuntime {
         )?;
         let mut program_host =
             CapabilityApplicationProgramHost::from_plan(&mut capability_host, plan);
-        program_host.begin_transaction("read_committed")?;
+        let isolation = http_transaction::idempotent_callable_isolation(program, callable)?;
+        program_host.begin_transaction(isolation)?;
         let transaction = program_host
             .current_transaction()
             .expect("idempotency transaction was opened");

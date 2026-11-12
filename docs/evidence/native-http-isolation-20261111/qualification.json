@@ -1,0 +1,45 @@
+{
+  "passed": true,
+  "target": "ordinary native BicDB ABI v2, single host",
+  "source_code_commit": "8c06cd6ef98904458638ff083e7d85c9d2ecc222",
+  "binary": "tools/bicdb-1.0.479-beta-8c06cd6e",
+  "binary_sha256": "ab2125da0eea42249df32d5818b3dd7202e5673163f826b0a7914bc614d9a000",
+  "version": "bicdb 1.0.479-beta",
+  "compiler": "Carrier2.3.88",
+  "driver": "Node v22.23.1",
+  "local_rust_tests": false,
+  "synthetic_issuer": true,
+  "real_human_hub": false,
+  "evidence": [
+    {
+      "file": "http-isolation-479.json",
+      "sha256": "70b40fb1f9ed710f57b447a61a5622654e2131b8a29709ec10f3dd85a199deee"
+    },
+    {
+      "file": "http-isolation-477-reproduction.json",
+      "sha256": "b974d6d9d5e266e72f65cb2a5b53b40687e7c8c9ad582422f86f24f2bb364882"
+    },
+    {
+      "file": "comparative-report-results.json",
+      "sha256": "5faebd89991bf76c7de49a7739af1305047a3ca8ee893149c2eb02895d180a92"
+    },
+    {
+      "file": "native-scenario-results.json",
+      "sha256": "7d424c0776d59a5e9b30675d205f8294861bd5d515d0ac94f83f78d55e545c5b"
+    }
+  ],
+  "workflows": [
+    "Authenticated HTTP RC/RR/Serializable local action writes and branch-call inference",
+    "Stable-key replay and changed-request409; missing-key400; wrong-role403",
+    "Explicit RC outer to stronger federated transaction still rejected without partial writes",
+    "Data and idempotent receipts retained across SIGKILL and closed cold restore",
+    "Published comparative report exact9007199254740992.03, formulas, posting proof and CSV",
+    "Frozen snapshots after backdated posts; three concurrent statement/posting races with one coherent cutoff",
+    "All33 existing native module scenarios"
+  ],
+  "limits": [
+    "Full product19 combined financial/dimension/supplier/report and populated upgrade qualification still separate",
+    "No production deployment, public binary release, Cell SQL policy relaxation, or human Hub acceptance claimed",
+    "Standard repository CI status is reported separately from Node application qualification"
+  ]
+}

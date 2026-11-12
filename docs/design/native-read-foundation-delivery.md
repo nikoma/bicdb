@@ -138,6 +138,33 @@ traces; generated test TLS keys and native files remain in a separate private
 fixture root. These are one-host component controls, not scheduler, writer,
 Strong-serving, physical failover or Azure qualification.
 
+## Mid-round retirement: independent source adaptation
+
+Root's separate full-prototype `2c73af354` native cohort passed both bounded
+heartbeat tests, but its enrollment retirement path reached a strict request
+builder refusal after earlier peer ACKs committed C. That run does not validate
+this read-only delivery composition or the following correction.
+
+The narrow adaptation adds test `0295210ab` as
+`f3b2d8bee7d05f01b0368dba82d043877d3adfc5` and fix `d07e817ee` as
+`b0d181a0f05b30f79f146711f4e11e3c029fab55`. Before each request, heartbeat checks
+current leadership and current Active membership under the same metadata guard
+used for construction. A retired/missing peer from the captured earlier list
+is skipped. The builder remains strict, all other construction errors still
+propagate, and cancellation checks remain in the original bounded lock path.
+No network call retains that guard.
+
+`native_initial_metadata_actual_tls_midround_retirement_skips_stale_peer` uses
+four actual owned native metadata stores/TLS listeners and a real planned fifth
+identity registered only as an unbound nonvoting learner. Real early ACKs from
+peers1/2 commit retirement before captured peer4 is reached. It requires the
+heartbeat and all four real replicas to finish at the committed metadata index,
+while directly building for retired peer4 still refuses. Actual application WAL
+must remain unchanged and no writer hook is installed. It uses no learner-birth
+RPC, learner-enrollment transition, Abort or joint-data producer. Its metadata
+retirement is not data-replica movement or physical scale-out qualification.
+This new regression and the correction remain unexecuted on this branch.
+
 ## Required next checks and delivery
 
 1. Compile and run the newly composed metadata reply provenance correction:

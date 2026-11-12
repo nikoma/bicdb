@@ -4,12 +4,13 @@ use super::*;
 
 impl<'db> SqlSession<'db> {
     pub(crate) fn save_session_privilege(&mut self, grant: &PrivilegeGrant) -> Result<()> {
-        let existed = self.tx.is_some() && privilege_exists(self.db_ref(), grant)?;
-        {
+        let existed = {
             let _access =
                 self.catalog_record_mutation_access(PRIVILEGE_COLLECTION, &privilege_key(grant))?;
+            let existed = self.tx.is_some() && privilege_exists(self.db_ref(), grant)?;
             save_privilege(self.db_mut()?, grant)?;
-        }
+            existed
+        };
         if self.tx.is_some() && !existed {
             self.ddl_undo.push(DdlUndo::DeletePrivilege {
                 grant: grant.clone(),
@@ -19,12 +20,13 @@ impl<'db> SqlSession<'db> {
     }
 
     pub(crate) fn delete_session_privilege(&mut self, grant: &PrivilegeGrant) -> Result<()> {
-        let existed = self.tx.is_some() && privilege_exists(self.db_ref(), grant)?;
-        {
+        let existed = {
             let _access =
                 self.catalog_record_mutation_access(PRIVILEGE_COLLECTION, &privilege_key(grant))?;
+            let existed = self.tx.is_some() && privilege_exists(self.db_ref(), grant)?;
             delete_privilege(self.db_mut()?, grant)?;
-        }
+            existed
+        };
         if self.tx.is_some() && existed {
             self.ddl_undo.push(DdlUndo::RestorePrivilege {
                 grant: grant.clone(),

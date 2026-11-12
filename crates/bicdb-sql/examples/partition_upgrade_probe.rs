@@ -15,12 +15,49 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_paged_buffer_pool_bytes(8 * 1024 * 1024);
     for reopen in 0..3 {
         let mut db = BicDb::open_with_config(&path, config.clone())?;
+        if reopen == 0 && case.starts_with("apply_") {
+            let inspection = bicdb_sql::inspect_partition_upgrade(&db)?;
+            let mut plan = bicdb_sql::PartitionUpgradePlan {
+                snapshot: inspection.snapshot.clone(),
+                ..Default::default()
+            };
+            if case.contains("policy_") {
+                let decision = if case.ends_with("keep_stored") {
+                    bicdb_sql::PartitionPolicyDecision::KeepStored
+                } else {
+                    bicdb_sql::PartitionPolicyDecision::PreserveHistoricalEffective
+                };
+                for conflict in &inspection.policy_decisions_required {
+                    plan.policies
+                        .insert(conflict.relation.clone(), decision.clone());
+                }
+            }
+            if case == "apply_bad_child_bound" {
+                for row in &inspection.invalid_rows {
+                    plan.row_relocations
+                        .push(bicdb_sql::PartitionRowRelocation {
+                            source: row.source.clone(),
+                            record_id: row.record_id.clone(),
+                            destination: row
+                                .suggested_destination
+                                .clone()
+                                .expect("routable controlled old row"),
+                        });
+                }
+            }
+            let applied = bicdb_sql::apply_partition_upgrade(&mut db, Some(&plan))?;
+            println!("{}", json!({"applied":applied}));
+            assert!(db.sql_partition_execution_feature_active());
+            assert!(bicdb_sql::inspect_partition_upgrade(&db)?
+                .legacy_relations
+                .is_empty());
+        }
         match case.as_str() {
             "inspect" => {
                 let report = bicdb_sql::inspect_partition_upgrade(&db)?;
                 println!("{}", serde_json::to_string(&report)?);
             }
-            "parent_heap" => {
+            "parent_heap" | "apply_parent_heap" => {
                 let mut sql = SqlSession::new(&mut db);
                 if reopen == 0 {
                     let before = sql.execute("SELECT k,payload FROM p ORDER BY k")?;
@@ -79,6 +116,50 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         .unwrap()
                         .iter()
                         .any(|policy| policy["name"] == "authored_child"));
+                }
+            }
+            "apply_bad_child_bound" => {
+                assert!(db.scan_collection("low")?.is_empty());
+                let raw = db.scan_collection("high")?;
+                assert_eq!(raw.len(), 1);
+                assert_eq!(raw[0].metadata["payload"], json!("out-of-bound-child-ack"));
+                assert_eq!(
+                    SqlSession::new(&mut db)
+                        .execute("SELECT k,payload FROM p")?
+                        .rows,
+                    vec![vec![
+                        SqlValue::Int(11),
+                        SqlValue::String("out-of-bound-child-ack".into())
+                    ]]
+                );
+            }
+            "apply_policy_keep_stored" | "apply_policy_preserve_historical" => {
+                assert_eq!(
+                    db.scan_collection("low")?.len() + db.scan_collection("high")?.len(),
+                    2
+                );
+                let archive = db.scan_collection("__bicdb_pg_partition_policy_archive")?;
+                assert_eq!(archive.len(), 2);
+                assert!(archive
+                    .iter()
+                    .any(
+                        |record| record.metadata["original_record"]["metadata"]["policies"]
+                            .as_array()
+                            .unwrap()
+                            .iter()
+                            .any(|policy| policy["name"] == "authored_child")
+                    ));
+                let mut sql = SqlSession::new(&mut db);
+                let low = sql
+                    .execute("SET ROLE legacy_reader;SELECT k FROM low ORDER BY k")?
+                    .rows;
+                let high = sql.execute("SELECT k FROM high ORDER BY k")?.rows;
+                if case.ends_with("keep_stored") {
+                    assert!(low.is_empty());
+                    assert_eq!(high, vec![vec![SqlValue::Int(11)]]);
+                } else {
+                    assert_eq!(low, vec![vec![SqlValue::Int(2)]]);
+                    assert!(high.is_empty());
                 }
             }
             "reader_fence" => {

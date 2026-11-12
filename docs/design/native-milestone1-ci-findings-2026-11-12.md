@@ -236,3 +236,29 @@ require their own executed CI results; the seven `dc6` passes are not attributed
 to changed tests. Higher accepted-cut, complete handoff/new-leader ACK/Strong,
 all-owner cold host, post-joint NoData, public Init/Join/Serve, protected cleanup,
 long-run slot/history capacity and physical convergence remain open.
+
+## Additional actual read and recovery controls
+
+| Exact source / run | Classification | Executed result and limit |
+| --- | --- | --- |
+| Isolated read `b8b6e9bdc`, [43193116509](https://github.com/nikoma/bicdb/actions/runs/43193116509), job 131097166317 | Passed, focused | 226 passed / zero failed / two ignored / 618 filtered, 235.57 s. Includes the SAME successful gateway retained across genuine fsynced same-voter metadata transfer, actual authenticated Redirect and unready Unavailable replies, then exact full >16 KiB ACKed value after real recovery and local activation. This is not replica/placement movement or a physical/election qualification. All-target and isolated-consumer compilation pass. |
+| `c29227e0e`, [43193107973](https://github.com/nikoma/bicdb/actions/runs/43193107973), job 131097138776 | Failed | Seven passed / one failed / 863 filtered, 11.17 s. New acknowledged R1-target case correctly retains original command1 AND uncertain command2, while the reused test expected only command2. No runtime invariant was weakened: the corrected test reads original ACK1's actual source command hash and requires exact obligations `{1,2}` only for that mode; existing R0 modes still require exact `{2}`. |
+| Corrected `d42de9fc126d860e4c00d876a31831bb3f007213`, [43194375563](https://github.com/nikoma/bicdb/actions/runs/43194375563), job 131101422512 | Passed, focused | Eight passed / zero failed / zero ignored / 863 filtered, 11.96 s. New nonzero target ACK R1/source R2 cold-substitution case passes with original H1/row/digest, full retained CQ2 obligations, local B and UID. Source cut accepted by P1 and P2 is still R2; this does NOT prove a higher accepted P1R1 to P2R2 transition. All-target and isolated-consumer compilation pass. |
+| `c29227e0e`, [43193385516](https://github.com/nikoma/bicdb/actions/runs/43193385516), job 131098078389 | Failed | Zero passed / one failed / 870 filtered, 9.40 s. Complete actual joint fixture passes the planning-cache seam and prepares all NEW members, then `acquire_local_activation` returns QueryTimedOut. ACK2/Strong/actual owner release were not reached. |
+| Diagnostic `39d1208f606a237281fda019b82330efd3492560`, [43195089670](https://github.com/nikoma/bicdb/actions/runs/43195089670), job 131103877371 | Failed | Zero passed / one failed / 870 filtered, 7.68 s. All three NEW preparations complete by 673 ms; activation preflights pass at 920, 1994 and 4260 ms. First two fresh acquisitions take 384 and 1024 ms; third fails immediately (0 ms). All four actual metadata locks are available at failure, term1/commit5/last5/generation5. This run points to retained authority/readiness budget exhaustion rather than a five-second blocking RPC, but does not identify the exact expired ancestor. Original budgets remain unchanged. |
+
+Read raw-log SHA-256: `269295ab0bc4d071f29d591183c3ac067f6eb60f55d9457c57ade9db275fa647`.
+Eight-case recovery raw-log SHA-256:
+`6977646463524d213f25a2211671bf6811358630edcda5e7ea0d41f29e0b5b3a`.
+Full compressed logs and indexes remain in restricted custody. Temporary DB/TLS
+directories printed by these fixtures are not claimed as archived images.
+
+The installed `NativeWriterHostState` is historical registry policy/lifetime
+binding, not a lease: its record/state contains no deadline or cancellation.
+Its fresh sealed enrollment observation expires during installation, but an
+installed-policy TTL is not an explanation of this activation failure. The next
+control reports the ACTUAL prepared-round cancellation deadline and each
+retained committed-MQ deadline separately. It adds no deadline extension, proof
+refresh, cancellation replacement or authority constructor. A bounded retry with
+fresh actual phase authority would need its own durable-history/recovery proof;
+it cannot revive an expired old quorum object.

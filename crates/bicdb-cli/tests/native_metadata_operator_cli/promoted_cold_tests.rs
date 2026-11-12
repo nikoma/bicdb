@@ -121,9 +121,13 @@ fn native_metadata_operator_actual_cli_automatic_promoted_voter_kill_reopen_same
     let original_c = std::fs::read(&original).unwrap();
     let before: Value = serde_json::from_slice(&at_kill).unwrap();
     assert_eq!(before["state"]["native_store_id"], id);
+    // Voter is the schema default and is deliberately omitted from serialized
+    // ClusterNode values. Decode the actual persisted topology before checking.
+    let at_kill_topology: bicdb_core::ClusterTopology =
+        serde_json::from_value(before["state"]["committed_topology"].clone()).unwrap();
     assert_eq!(
-        before["state"]["committed_topology"]["nodes"]["n4"]["metadata_role"],
-        serde_json::to_value(bicdb_core::MetadataMemberRole::Voter).unwrap()
+        at_kill_topology.nodes[&node(4)].metadata_role,
+        bicdb_core::MetadataMemberRole::Voter
     );
     std::fs::write(root.join("node4-promoted-kill-state.json"), &at_kill).unwrap();
     std::fs::write(

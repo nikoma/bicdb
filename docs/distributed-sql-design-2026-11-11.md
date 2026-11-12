@@ -14,6 +14,47 @@ Logical locality can reduce network work, but moving a related record to another
 range cannot weaken correctness. Neither clients nor generated application code
 must carry range IDs, choose leaders, or retry partially completed business work.
 
+## Subsequent integration constraints
+
+Source inspection through public **1.0.478-beta**,
+`f3a063902d2fe316c29264fe20549c2fdd270242`, leaves this document's distributed SQL
+contract **design only**. Later local SSI, physical namespace identity and private
+range-recovery work add useful components but do not implement its executor or
+transaction registry. Keep the following boundaries explicit when composing them:
+
+- Local PostgreSQL SSI dependencies and predicate tracking protect one database
+  transaction domain. They do not collect conflicts, retain predicates or decide
+  serialization across independent range participants.
+- A physical target-local namespace UUID identifies an actual backing store.
+  Replicas keep their own UUIDs. Distributed SQL additionally needs an
+  authenticated mapping from stable logical/source object identity to that
+  actual target backing, including rename, drop/recreate and restore. A table
+  name, source OID or matching schema fingerprint cannot create that mapping.
+- Native image `Prepared`, `Ready` and recovery `Complete` describe materialized
+  range history and recovery refusal/activation boundaries. They are **not SQL
+  two-phase-commit participant votes or global transaction decisions**. A
+  recovered range cannot unilaterally resolve an in-doubt SQL prepare.
+- Range positions and logical history digests remain range-scoped. The actual
+  local database sequence used for an MVCC read is also local; copying a range
+  can map range position 2 to target visibility sequence 1. Neither number is
+  the global read-view prefix `S` proposed below.
+- An authenticated host metadata quorum observes control-plane state. Even a
+  future individually linearizable point-read API would not create a shared SQL
+  snapshot across several ranges. The read-view service must still prove the
+  appropriate common cut and retain its history.
+- Native no-data abort recovery and a distributed SQL ABORT decision are
+  distinct protocols. A timeout, raw `Aborted` slot or coordinator disappearance
+  cannot replace the durable terminal decision and participant resolution in
+  section 4.
+
+The [component evidence matrix](recovery-component-evidence-2026-11-11.md)
+separates exact tested revisions from uncompiled compositions. The
+[operator integration audit](design/native-operator-four-to-five-gap-audit-2026-11-11.md)
+keeps runtime startup, strong-read routing, image transfer and data-quorum handoff
+open independently of this SQL design. None of those receipts qualifies the
+single global decision domain's capacity, general joins, distributed isolation
+or multi-range atomic SQL writes.
+
 ## 1. Existing code and missing boundaries
 
 | Existing boundary at the baseline | What can be reused | What must be added |

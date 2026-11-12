@@ -299,7 +299,12 @@ fn run_replacement(handover_cut: Option<bool>) {
     let acknowledged_sha = expected["record_sha256"].as_str().unwrap().to_owned();
     let mut new = old.clone();
     new.generation += 1;
-    let range = new.ranges.get_mut(&old_range.id.get()).unwrap();
+    // Topology keys are token-span starts, not numeric range identifiers.
+    let range = new
+        .ranges
+        .values_mut()
+        .find(|range| range.id == old_range.id)
+        .expect("the original range remains in the new topology");
     range.epoch += 1;
     range.leader = source.clone();
     let range = range.clone();
@@ -481,7 +486,7 @@ fn run_replacement(handover_cut: Option<bool>) {
             cold.root.path().display()
         );
         assert_eq!(
-            cold.topology.read().ranges[&range.id.get()].epoch,
+            cold.topology.read().range_by_id(range.id).unwrap().epoch,
             range.epoch
         );
         let p = test_recovery_metadata_cluster(

@@ -356,3 +356,97 @@ fn native_metadata_owner_flag_only_prepublication_cut_can_retry_actual_unwritten
     let current = reopen(&f).unwrap();
     assert_eq!(current.status().current_term, 0);
 }
+
+#[test]
+fn native_metadata_owner_refuses_genuine_pre_capability_born2_factory_without_retrofit() {
+    let f = fixture();
+    let mut topology = f.topology.read().clone();
+    let local = node("n3");
+    // Declared unassigned learner BEFORE its genuine old-profile factory.
+    // No serialized binding or range counter stands in for an actual birth.
+    topology.nodes.insert(
+        local.clone(),
+        crate::distribution::ClusterNode::new(local.clone(), "127.0.0.1:19003", 1, 1_000_000, 1)
+            .unwrap()
+            .as_metadata_learner(),
+    );
+    topology.validate().unwrap();
+    let mut spec = f.specs[&node("n0")].clone();
+    spec.node_id = local.clone();
+    spec.initial_ranges.clear();
+    spec.initial_members.insert(
+        local.clone(),
+        crate::db::RangeImageBirthMember {
+            incarnation: 1,
+            tls_certificate_sha256: None,
+            pending_tls_certificate_sha256: None,
+        },
+    );
+    let config = DbConfig::default()
+        .with_fsync(true)
+        .with_storage_mode(StorageMode::ServerPaged)
+        .with_paged_buffer_pool_bytes(8 * 1024 * 1024);
+    let old_path = f.root.path().join("actual-pre-capability-born2");
+    let (old, factory) = BicDb::test_create_pre_metadata_capability_enrolled_database(
+        &old_path,
+        config.clone(),
+        spec.clone(),
+    )
+    .unwrap();
+    crate::distribution_native_admission::ActualNativeStoreEnrollment::from_actual_factory(
+        &factory, &old, &topology,
+    )
+    .unwrap()
+    .bind_initial_or_unassigned_learner(&mut topology)
+    .unwrap();
+    let native = old
+        .native_recovery_admission(
+            &topology.cluster_id,
+            topology.range_image_bootstrap_id.unwrap(),
+            &local,
+            1,
+        )
+        .unwrap();
+    assert_eq!(native.writer_enforcement_version(), 1);
+    assert_eq!(native.metadata_initialization_version(), 0);
+    drop(old);
+    let (old, factory) = BicDb::open_range_image_database(&old_path, config, &spec).unwrap();
+    let old = Arc::new(RwLock::new(old));
+    let metadata_root = f.root.path().join("old-profile-metadata");
+    assert!(MetadataConsensusStore::initialize_native_owned(
+        &metadata_root,
+        Arc::clone(&old),
+        &factory,
+        topology.clone(),
+        &CancellationToken::uncancelable()
+    )
+    .is_err());
+    assert!(!metadata_root
+        .join(DEFAULT_CLUSTER_METADATA_CONSENSUS_STATE)
+        .exists());
+    assert!(!crate::format::native_metadata_store_active(old.read().data_path()).unwrap());
+    // Old contract remains readable. A sticky flag alone cannot add a missing
+    // immutable birth capability or retroactively assert never-voted history.
+    assert_eq!(
+        old.read()
+            .native_recovery_admission(
+                &topology.cluster_id,
+                topology.range_image_bootstrap_id.unwrap(),
+                &local,
+                1
+            )
+            .unwrap()
+            .metadata_initialization_version(),
+        0
+    );
+    crate::format::enable_native_metadata_store(old.read().data_path()).unwrap();
+    assert!(old
+        .read()
+        .native_recovery_admission(
+            &topology.cluster_id,
+            topology.range_image_bootstrap_id.unwrap(),
+            &local,
+            1
+        )
+        .is_err());
+}

@@ -171,6 +171,8 @@ impl RangeImageBirthSpec {
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 struct NativeDatabaseBirth {
     format_version: u32,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    metadata_initialization_version: Option<u32>,
     birth_id: Uuid,
     spec: RangeImageBirthSpec,
     image_generation: Uuid,
@@ -178,12 +180,17 @@ struct NativeDatabaseBirth {
 }
 impl NativeDatabaseBirth {
     fn new(spec: RangeImageBirthSpec) -> Result<Self> {
-        Self::new_with_writer_enforcement(spec, false)
+        Self::new_with_writer_enforcement(spec, false, false)
     }
-    fn new_with_writer_enforcement(spec: RangeImageBirthSpec, enforce: bool) -> Result<Self> {
+    fn new_with_writer_enforcement(
+        spec: RangeImageBirthSpec,
+        enforce: bool,
+        metadata_initialization: bool,
+    ) -> Result<Self> {
         spec.validate()?;
         let mut birth = Self {
             format_version: if enforce { 2 } else { 1 },
+            metadata_initialization_version: metadata_initialization.then_some(1),
             birth_id: Uuid::now_v7(),
             spec,
             image_generation: Uuid::now_v7(),
@@ -193,6 +200,20 @@ impl NativeDatabaseBirth {
         Ok(birth)
     }
     fn checksum(&self) -> Result<String> {
+        if let Some(version) = self.metadata_initialization_version {
+            return Ok(hex::encode(sha2::Sha256::digest(bounded_json(
+                &(
+                    "NativeMetadataInitializationFromBirth-v1",
+                    self.format_version,
+                    self.birth_id,
+                    &self.spec,
+                    self.image_generation,
+                    version,
+                ),
+                MAX_NATIVE_RECEIPT_BYTES,
+            )?)));
+        }
+        // Exact legacy birth-v1 and pre-capability birth-v2 checksum domain.
         Ok(hex::encode(sha2::Sha256::digest(bounded_json(
             &(
                 self.format_version,
@@ -206,6 +227,9 @@ impl NativeDatabaseBirth {
     fn validate(&self) -> Result<()> {
         self.spec.validate()?;
         if !matches!(self.format_version, 1 | 2)
+            || self
+                .metadata_initialization_version
+                .is_some_and(|v| v != 1 || self.format_version != 2)
             || self.birth_id.is_nil()
             || self.image_generation.is_nil()
             || self.checksum()? != self.checksum_sha256
@@ -253,6 +277,7 @@ pub(crate) struct FreshRangeGenesisAuthority {
 pub(crate) struct NativeRecoveryAdmission {
     database_incarnation: String,
     writer_enforcement_version: u32,
+    metadata_initialization_version: u32,
     birth_id: Uuid,
     birth_sha256: String,
     cluster_id: ClusterId,
@@ -273,12 +298,16 @@ impl NativeRecoveryAdmission {
             || self.birth_id != current.birth_id
             || self.birth_sha256 != current.birth_sha256
             || self.writer_enforcement_version != current.writer_enforcement_version
+            || self.metadata_initialization_version != current.metadata_initialization_version
         {
             return Err(invalid(
                 "recovery admission belongs to another DB/open or native birth",
             ));
         }
         Ok(())
+    }
+    pub(crate) fn metadata_initialization_version(&self) -> u32 {
+        self.metadata_initialization_version
     }
     pub(crate) fn writer_enforcement_version(&self) -> u32 {
         self.writer_enforcement_version
@@ -671,6 +700,7 @@ impl BicDb {
         Ok(NativeRecoveryAdmission {
             database_incarnation: self.incarnation.clone(),
             writer_enforcement_version: u32::from(birth.format_version == 2),
+            metadata_initialization_version: birth.metadata_initialization_version.unwrap_or(0),
             birth_id: birth.birth_id,
             birth_sha256: birth.checksum_sha256,
             cluster_id: cluster_id.clone(),
@@ -694,7 +724,17 @@ impl BicDb {
         config: DbConfig,
         spec: RangeImageBirthSpec,
     ) -> Result<(Self, FreshRangeGenesisAuthority)> {
-        Self::create_new_range_image_database_with_mode(root, config, spec, true, |_| Ok(()))
+        Self::create_new_range_image_database_with_mode(root, config, spec, true, true, |_| Ok(()))
+    }
+    /// Reproduces the ACTUAL pre-capability enforced factory ordering for
+    /// compatibility negatives. It never creates fresh metadata authority.
+    #[cfg(test)]
+    pub(crate) fn test_create_pre_metadata_capability_enrolled_database(
+        root: &Path,
+        config: DbConfig,
+        spec: RangeImageBirthSpec,
+    ) -> Result<(Self, FreshRangeGenesisAuthority)> {
+        Self::create_new_range_image_database_with_mode(root, config, spec, true, false, |_| Ok(()))
     }
     fn create_new_range_image_database_with(
         root: &Path,
@@ -702,13 +742,21 @@ impl BicDb {
         spec: RangeImageBirthSpec,
         after_flags: impl FnOnce(&mut Self) -> Result<()>,
     ) -> Result<(Self, FreshRangeGenesisAuthority)> {
-        Self::create_new_range_image_database_with_mode(root, config, spec, false, after_flags)
+        Self::create_new_range_image_database_with_mode(
+            root,
+            config,
+            spec,
+            false,
+            false,
+            after_flags,
+        )
     }
     fn create_new_range_image_database_with_mode(
         root: &Path,
         config: DbConfig,
         spec: RangeImageBirthSpec,
         enforce: bool,
+        metadata_initialization: bool,
         after_flags: impl FnOnce(&mut Self) -> Result<()>,
     ) -> Result<(Self, FreshRangeGenesisAuthority)> {
         spec.validate()?;
@@ -745,9 +793,16 @@ impl BicDb {
         if enforce {
             format::enable_current_image_proposal(root)?;
             format::enable_native_writer_enrollment(root)?;
+            if metadata_initialization {
+                format::enable_native_metadata_store(root)?;
+            }
         }
         after_flags(&mut db)?;
-        let birth = NativeDatabaseBirth::new_with_writer_enforcement(spec, enforce)?;
+        let birth = NativeDatabaseBirth::new_with_writer_enforcement(
+            spec,
+            enforce,
+            metadata_initialization,
+        )?;
         db.write_native_range_image_record(BIRTH_KEY, &birth)?;
         crate::storage::write_atomic(
             &root.join(FACTORY_PREFLIGHT),
@@ -880,6 +935,16 @@ impl BicDb {
             != enforced
         {
             return Err(invalid("native writer enrollment must be fenced from birth; partial factory or legacy upgrade refused"));
+        }
+        let metadata_fenced = format::native_metadata_store_active(&self.path)?;
+        if birth
+            .as_ref()
+            .is_some_and(|b| b.metadata_initialization_version == Some(1))
+            != metadata_fenced
+        {
+            return Err(invalid(
+                "metadata initialization capability must be fenced from birth; retrofit refused",
+            ));
         }
         Ok(birth)
     }

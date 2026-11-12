@@ -76,7 +76,8 @@ fn native_replicated_partition_rows_are_readable_live_and_survive_local_promotio
             "INSERT INTO partitioned VALUES(1,'left-ack'),(11,'right-ack')",
             "UPDATE partitioned SET id=12 WHERE id=1",
         ] {
-            sql.execute(statement).unwrap();
+            sql.execute(statement)
+                .unwrap_or_else(|error| panic!("{mode}: {statement}: {error:?}"));
         }
         drop(sql);
         assert_partition_reads(&source);

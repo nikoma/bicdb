@@ -4876,7 +4876,11 @@ impl<'db> SqlSession<'db> {
         let record = prepare_schema_record(self.db_mut()?, schema)?;
         {
             let _access = self.catalog_record_mutation_access(SCHEMA_COLLECTION, &schema.name)?;
-            self.db_mut()?.insert(SCHEMA_COLLECTION, record)?;
+            super::session::partition_admission::publish_schema_change(
+                self.db_mut()?,
+                schema.name.clone(),
+                Some(record),
+            )?;
         }
         cache_saved_schema(self.db_ref(), schema);
         if self.tx.is_some() {

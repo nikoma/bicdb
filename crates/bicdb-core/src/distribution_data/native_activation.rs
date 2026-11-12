@@ -17,6 +17,7 @@ impl ClusterDataNodeService {
         parent.check()?;
         let db = checked_database_read(&self.db, &self.storage_policy)?;
         self.range_writes
+            .current_mut()
             .activate_native_recovery(&db, prepared, quorum, fresh)
     }
     pub(crate) fn arm_local_native_activation(
@@ -30,6 +31,7 @@ impl ClusterDataNodeService {
         parent.check()?;
         let db = checked_database_read(&self.db, &self.storage_policy)?;
         self.range_writes
+            .current_mut()
             .arm_native_activation_open(&db, prepared, receipt, fresh, frozen)
     }
     pub(crate) fn require_current_native_activation(

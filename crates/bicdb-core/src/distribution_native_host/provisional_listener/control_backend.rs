@@ -15,11 +15,20 @@ pub(in crate::distribution_native_host) struct NativeMetadataControlBackend {
     pub(super) service: Arc<Mutex<ClusterDataNodeService>>,
     pub(super) topology: Arc<RwLock<ClusterTopology>>,
     pub(super) transport: Arc<TcpClusterRelocationTransport>,
-    provider: Arc<MetadataReadProvider>,
+    pub(super) provider: Arc<MetadataReadProvider>,
     registered_store: Option<Uuid>,
     _initial: Option<Arc<NativeInitialConsensusLaunch>>,
 }
 impl NativeMetadataControlBackend {
+    pub(super) fn registered_replica_store_id(&self) -> Result<Uuid> {
+        if self._initial.is_some() {
+            return Err(invalid(
+                "registered replica receiver cannot fabricate an INITIAL owner",
+            ));
+        }
+        self.registered_store
+            .ok_or_else(|| invalid("actual Registered metadata owner required"))
+    }
     pub(super) fn initial_data_launch(&self) -> Result<Arc<NativeInitialConsensusLaunch>> {
         self._initial.clone().ok_or_else(|| invalid(
             "DATA bootstrap requires actual INITIAL owner; assigned-image/joint learner activation is separate"))

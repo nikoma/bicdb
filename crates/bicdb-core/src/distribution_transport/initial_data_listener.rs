@@ -28,7 +28,7 @@ pub(crate) fn start_cluster_initial_native_data_server(
         None,
         Some(provider),
         Some(runtime),
-        Some(admission),
+        Some(NativeDataListenerMode::Initial(admission)),
     )
 }
 

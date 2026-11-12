@@ -91,6 +91,7 @@ impl ClusterDataNodeService {
         // feature flag is only a durable refusal for older native binaries.
         crate::format::enable_native_joint_data_handoff(database.data_path())?;
         self.range_writes
+            .current_mut()
             .refsync_native_joint_session(&database, &plan, &role)?;
         self.require_native_catalog_database(&database)?;
         let lineage = database.current_native_range_source_lineage(plan.old_range().id)?;
@@ -107,13 +108,10 @@ impl ClusterDataNodeService {
         )?;
         let gate = database.range_mutation_gate();
         let controlled = gate.try_controlled_mutation(&frozen)?;
-        let promise = self.range_writes.persist_native_joint_old_promise(
-            &database,
-            &plan,
-            &role,
-            &physical,
-            &controlled,
-        )?;
+        let promise = self
+            .range_writes
+            .current_mut()
+            .persist_native_joint_old_promise(&database, &plan, &role, &physical, &controlled)?;
         let native = database.persist_native_joint_old_close(
             &plan,
             &role,
@@ -123,6 +121,7 @@ impl ClusterDataNodeService {
             &controlled,
         )?;
         self.range_writes
+            .current_mut()
             .confirm_native_joint_old_close(&database, &plan, &role, &promise, &native)?;
         drop(controlled);
         let pin = Arc::new(gate.try_source_capture_read_pin(plan.old_range().id, &frozen)?);
@@ -635,6 +634,7 @@ impl ClusterDataNodeService {
             &controlled,
         )?;
         self.range_writes
+            .current_mut()
             .confirm_native_joint_decision(&database, admission, &receipt)?;
         drop(controlled);
         parent.check()?;
@@ -677,6 +677,7 @@ impl ActualServiceNativeJointNewEvidence {
         )?;
         service
             .range_writes
+            .current_mut()
             .confirm_native_joint_decision(&database, admission, &receipt)?;
         drop(controlled);
         parent.check()?;

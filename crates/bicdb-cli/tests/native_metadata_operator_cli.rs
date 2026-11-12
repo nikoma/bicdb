@@ -989,3 +989,6 @@ mod promoted_cold_tests;
 
 #[path = "native_metadata_operator_cli/initial_data_tests.rs"]
 mod initial_data_tests;
+
+#[path = "native_metadata_operator_cli/replica_receiver_tests.rs"]
+mod replica_receiver_tests;

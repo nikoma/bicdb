@@ -53,6 +53,7 @@ pub enum NativeMetadataHostAction {
     Elect,
     EnableControl,
     OpenInitialData,
+    OpenReplicaReceiver,
     Heartbeat,
     StartLearnerMetadata,
     EnrollLearner { node: ClusterNodeId },
@@ -382,6 +383,9 @@ impl NativeMetadataHost {
                     .ok_or_else(|| invalid("owned INITIAL control required before DATA open"))?
                     .open_initial_data(&token)?;
                 self.phase = NativeMetadataHostPhase::InitialData;
+            }
+            NativeMetadataHostAction::OpenReplicaReceiver => {
+                return Err(invalid("replica-only receiver requires the actual Registered JoinFresh owner, never an INITIAL factory"));
             }
             NativeMetadataHostAction::Heartbeat => {
                 if let Some(control) = &self.control {

@@ -24,7 +24,9 @@ impl ClusterDataNodeService {
     ) -> Result<crate::distribution_range_consensus::PreparedNativeRecoveryReady> {
         let local = self.attest_native_recovery_ready(role, frozen, parent)?;
         let db = checked_database_read(&self.db, &self.storage_policy)?;
-        self.range_writes.prepare_native_recovery_ready(&db, local)
+        self.range_writes
+            .current_mut()
+            .prepare_native_recovery_ready(&db, local)
     }
 
     #[cfg(test)]
@@ -64,6 +66,7 @@ impl ClusterDataNodeService {
     ) -> Result<()> {
         // Negative durable-corruption injection, NOT a legal authority path.
         self.range_writes
+            .current_mut()
             .test_corrupt_compacted_marker(scope, index, checksum)
     }
 
@@ -93,6 +96,7 @@ impl ClusterDataNodeService {
             parent,
         )?;
         self.range_writes
+            .current_mut()
             .prepare_native_recovery_ready(&db, physical)
     }
 
@@ -211,7 +215,7 @@ impl ClusterDataNodeService {
         };
         let installer = NativeRangeImageInstaller::begin(
             Arc::clone(&self.db),
-            &mut self.range_writes,
+            self.range_writes.current_mut(),
             native,
             source,
             role,
@@ -247,7 +251,7 @@ impl ClusterDataNodeService {
         };
         NativeRangeImageInstaller::recover_completed(
             Arc::clone(&self.db),
-            &mut self.range_writes,
+            self.range_writes.current_mut(),
             native,
             source,
             role,
@@ -361,7 +365,7 @@ impl ClusterDataNodeService {
         cancellation: &CancellationToken,
     ) -> Result<AdoptedNativeRangeImageInstall> {
         self.require_native_image_local_role(role)?;
-        verified.adopt_catalogue(&mut self.range_writes, role, cancellation)
+        verified.adopt_catalogue(self.range_writes.current_mut(), role, cancellation)
     }
 
     pub(crate) fn finalize_native_range_image_catalogue(

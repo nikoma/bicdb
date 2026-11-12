@@ -21,7 +21,7 @@ impl NativeUnassignedLearnerHost {
             .metadata_transition
             .control
             .as_ref()
-            .is_some_and(|control| control.is_running())
+            .is_some_and(|control| control.is_running() || control.has_replica_receiver())
         {
             return Ok(());
         }
@@ -109,5 +109,34 @@ impl NativeUnassignedLearnerHost {
             .as_ref()
             .ok_or_else(|| invalid("actual owned control absent"))?
             .elect(parent)
+    }
+}
+
+impl NativeUnassignedLearnerHost {
+    pub(in crate::distribution_native_host) fn open_registered_replica_receiver(
+        &mut self,
+        observed: &HostMetadataReadObservation,
+        business: Uuid,
+        parent: &CancellationToken,
+    ) -> Result<()> {
+        self.validate_owned_metadata_member(observed, business, parent)?;
+        self.metadata_transition
+            .control
+            .as_mut()
+            .ok_or_else(|| {
+                invalid("actual Registered metadata control required before replica receiver")
+            })?
+            .open_registered_replica_receiver(&self.provider.factory, observed, business, parent)
+    }
+    pub(in crate::distribution_native_host) fn replica_receiver_status(
+        &self,
+        parent: &CancellationToken,
+    ) -> Result<Option<NativeRegisteredReplicaReceiverStatus>> {
+        self.metadata_transition
+            .control
+            .as_ref()
+            .map(|control| control.replica_receiver_status(parent))
+            .transpose()
+            .map(Option::flatten)
     }
 }

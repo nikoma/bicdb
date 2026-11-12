@@ -22,6 +22,7 @@ pub struct NativeMetadataLearnerStatus {
     pub metadata: Option<MetadataConsensusStatus>,
     pub metadata_listener_owned: bool,
     pub metadata_control_owned: bool,
+    pub replica_receiver: Option<NativeRegisteredReplicaReceiverStatus>,
     pub last_metadata_maintenance: Option<serde_json::Value>,
     pub last_metadata_promotion: Option<serde_json::Value>,
     pub phase: &'static str,
@@ -398,6 +399,10 @@ impl NativeMetadataLearnerHost {
             NativeLearnerLifecycle::Fresh(host) => host.metadata_control_owned(),
             NativeLearnerLifecycle::Cold(host) => host.metadata_control_owned(),
         };
+        let replica_receiver = match &self.host {
+            NativeLearnerLifecycle::Fresh(host) => host.replica_receiver_status(&token)?,
+            NativeLearnerLifecycle::Cold(host) => host.replica_receiver_status(&token)?,
+        };
         Ok(NativeMetadataLearnerStatus {
             version: 1,
             node_id: self.factory.spec.node_id.clone(),
@@ -411,6 +416,7 @@ impl NativeMetadataLearnerHost {
             metadata,
             metadata_listener_owned: listener,
             metadata_control_owned,
+            replica_receiver,
             last_metadata_maintenance: self.last_metadata_maintenance.clone(),
             last_metadata_promotion: self.last_metadata_promotion.clone(),
             phase: if self.metadata_started
@@ -509,6 +515,31 @@ impl NativeMetadataLearnerHost {
             }
             NativeLearnerLifecycle::Cold(host) => {
                 host.enable_metadata_control(&observed, business, config, &token)?
+            }
+        }
+        self.refresh(&token)
+    }
+    /// Hook-free replica ingress only. The SAME successful JoinFresh/cold
+    /// Registered owner must already have strict current owned control. No
+    /// blank native range, recovered epoch or ordinary/Strong permission.
+    pub fn open_replica_receiver(
+        &mut self,
+        parent: &CancellationToken,
+    ) -> Result<NativeMetadataLearnerStatus> {
+        let token = parent.child_with_deadline(Instant::now() + Duration::from_secs(5));
+        token.check()?;
+        if self.stopped || !self.metadata_started {
+            return Err(invalid(
+                "actual started Registered metadata owner required for replica receiver",
+            ));
+        }
+        let (observed, business) = self.own_metadata(&token)?;
+        match &mut self.host {
+            NativeLearnerLifecycle::Fresh(host) => {
+                host.open_registered_replica_receiver(&observed, business, &token)?
+            }
+            NativeLearnerLifecycle::Cold(host) => {
+                host.open_registered_replica_receiver(&observed, business, &token)?
             }
         }
         self.refresh(&token)

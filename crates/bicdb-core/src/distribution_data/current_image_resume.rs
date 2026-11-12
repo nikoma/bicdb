@@ -27,11 +27,12 @@ impl ClusterDataNodeService {
         let safety = db.native_range_install_safety(&native, source.cut().range().id, frozen)?;
         if orphan_only {
             self.range_writes
+                .current_mut()
                 .test_current_proposal_without_intent_publication(
                     &db, &native, &safety, source, role, frozen, attempt,
                 )
         } else {
-            self.range_writes.begin_native_image_install(
+            self.range_writes.current_mut().begin_native_image_install(
                 &db,
                 &native,
                 &safety,
@@ -60,6 +61,7 @@ impl ClusterDataNodeService {
             role.local_member_incarnation(),
         )?;
         self.range_writes
+            .current_mut()
             .admit_current_image_installing_observation(&db, &native, role, scope, pointer)
     }
     pub(crate) fn observe_current_image_installing(

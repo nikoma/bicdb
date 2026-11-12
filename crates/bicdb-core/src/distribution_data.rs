@@ -39,6 +39,10 @@ use crate::{
     SchemaCompatibilityAuthority, SchemaCompatibilityFingerprint, SignedClusterSchemaBundle,
 };
 
+mod range_write_slot;
+use range_write_slot::RangeWriteServiceSlot;
+pub(crate) use range_write_slot::RangeWriteServiceSlotGuard;
+
 mod native_abort;
 mod native_activation;
 mod native_apply;
@@ -753,7 +757,7 @@ pub struct ClusterDataNodeService {
     schema_compatibility: SchemaCompatibilityAuthority,
     schema_compatibility_window: Option<ClusterSchemaCompatibilityWindow>,
     learner: RangeLearnerStore,
-    range_writes: RangeWriteStore,
+    range_writes: RangeWriteServiceSlot,
     range_mutations: RangeMutationGate,
     range_digest_root: PathBuf,
     range_digest_repair_root: PathBuf,
@@ -895,7 +899,7 @@ impl ClusterDataNodeService {
             schema_compatibility,
             schema_compatibility_window,
             learner,
-            range_writes,
+            range_writes: RangeWriteServiceSlot::new(range_writes),
             range_mutations,
             range_digest_root,
             range_digest_repair_root,
@@ -915,6 +919,7 @@ impl ClusterDataNodeService {
             let database = checked_database_read(&service.db, &service.storage_policy)?;
             service
                 .range_writes
+                .current_mut()
                 .reconcile_actual_abort_control(&database)?;
         }
         service.recover_committed_range_writes()?;
@@ -961,6 +966,16 @@ impl ClusterDataNodeService {
     }
     pub(crate) fn native_initial_listener_store_open_id(&self) -> Uuid {
         self.range_writes.recovery_store_open_id()
+    }
+    pub(crate) fn native_replica_listener_store_open_guard(&self) -> RangeWriteServiceSlotGuard {
+        self.range_writes.guard()
+    }
+    #[cfg(test)]
+    pub(crate) fn test_replace_native_range_write_store(
+        &mut self,
+        replacement: RangeWriteStore,
+    ) -> RangeWriteStore {
+        self.range_writes.replace(replacement)
     }
     pub(crate) fn initial_consensus_only(&self) -> bool {
         self.initial_consensus_only
@@ -1241,16 +1256,18 @@ impl ClusterDataNodeService {
             actual.local_node_id(),
             actual.local_member_incarnation(),
         )?;
-        self.range_writes.preflight_recovery_image_install(
-            &db,
-            &native,
-            source,
-            role,
-            frozen,
-            purpose,
-            attempt_id,
-            cancellation,
-        )
+        self.range_writes
+            .current_mut()
+            .preflight_recovery_image_install(
+                &db,
+                &native,
+                source,
+                role,
+                frozen,
+                purpose,
+                attempt_id,
+                cancellation,
+            )
     }
 
     /// Final transfer validation and owner rotation are one local critical
@@ -1314,6 +1331,7 @@ impl ClusterDataNodeService {
             .require_image_install_recovery_scope(actual, &native)?;
         let proof = self
             .range_writes
+            .current_mut()
             .prove_untouched_image_transfer_return(original, &db, &native, role, frozen, parent)?;
         if proof.range_id() != original.range_id()
             || proof.attempt_id() != original.attempt_id()
@@ -1399,9 +1417,11 @@ impl ClusterDataNodeService {
                 cancellation,
             )?;
             self.range_writes
+                .current_mut()
                 .fence_current_joint_recovery(&db, role, &native, scope, &fact, frozen)?;
         } else {
             self.range_writes
+                .current_mut()
                 .fence_recovery_epoch(role, &native, scope)?;
         }
         cancellation.check()?;
@@ -1589,7 +1609,7 @@ impl ClusterDataNodeService {
         native.require_current(&db)?;
         self.range_mutations
             .validate_controlled(role.current_range().id, &controlled)?;
-        let marker = certify(&mut self.range_writes, &native)?;
+        let marker = certify(self.range_writes.current_mut(), &native)?;
         native.require_current(&db)?;
         role.require_live_request()?;
         cancellation.check()?;
@@ -1632,6 +1652,7 @@ impl ClusterDataNodeService {
             cancellation,
         )?;
         self.range_writes
+            .current_mut()
             .mark_historical_applied(&db, &native, role, admission, &receipt)?;
         receipt.require_current(&db, &native, role, admission)?;
         cancellation.check()?;
@@ -1900,7 +1921,7 @@ impl ClusterDataNodeService {
     ) -> Result<RangeWriteProgress> {
         self.range_mutations.validate(range.id, authority)?;
         self.validate_range_write_peer(range, caller)?;
-        self.range_writes.install_backup_fence(
+        self.range_writes.current_mut().install_backup_fence(
             plan_id,
             range.id,
             range.epoch,
@@ -1935,6 +1956,7 @@ impl ClusterDataNodeService {
         self.range_mutations.validate(range.id, authority)?;
         self.validate_range_write_peer(range, caller)?;
         self.range_writes
+            .current_mut()
             .release_backup_fence(plan_id, range.id, range.epoch)
     }
 
@@ -2112,11 +2134,11 @@ impl ClusterDataNodeService {
             )));
         }
         self.validate_range_write_repair_entry(range, command)?;
-        self.range_writes.prepare(command.clone())?;
+        self.range_writes.current_mut().prepare(command.clone())?;
         match outcome {
             RangeWriteState::Applied => {
-                self.range_writes.commit(command)?;
-                let state = self.range_writes.certify(command)?;
+                self.range_writes.current_mut().commit(command)?;
+                let state = self.range_writes.current_mut().certify(command)?;
                 if state != RangeWriteState::Applied {
                     checked_database_read(&self.db, &self.storage_policy)?
                         .apply_admitted_mutations_with_mutation(
@@ -2124,11 +2146,11 @@ impl ClusterDataNodeService {
                             &command.mutations,
                             authority,
                         )?;
-                    self.range_writes.mark_applied(command)?;
+                    self.range_writes.current_mut().mark_applied(command)?;
                 }
             }
             RangeWriteState::Aborted => {
-                self.range_writes.abort(command)?;
+                self.range_writes.current_mut().abort(command)?;
             }
             RangeWriteState::Prepared
             | RangeWriteState::Committed
@@ -2172,11 +2194,13 @@ impl ClusterDataNodeService {
                 )));
             }
             self.validate_range_write_repair_entry(range, &entry.command)?;
-            self.range_writes.prepare(entry.command.clone())?;
+            self.range_writes
+                .current_mut()
+                .prepare(entry.command.clone())?;
             match entry.state {
                 RangeWriteState::Applied => {
-                    self.range_writes.commit(&entry.command)?;
-                    let state = self.range_writes.certify(&entry.command)?;
+                    self.range_writes.current_mut().commit(&entry.command)?;
+                    let state = self.range_writes.current_mut().certify(&entry.command)?;
                     if state != RangeWriteState::Applied {
                         checked_database_read(&self.db, &self.storage_policy)?
                             .apply_admitted_mutations_with_mutation(
@@ -2184,11 +2208,13 @@ impl ClusterDataNodeService {
                                 &entry.command.mutations,
                                 authority,
                             )?;
-                        self.range_writes.mark_applied(&entry.command)?;
+                        self.range_writes
+                            .current_mut()
+                            .mark_applied(&entry.command)?;
                     }
                 }
                 RangeWriteState::Aborted => {
-                    self.range_writes.abort(&entry.command)?;
+                    self.range_writes.current_mut().abort(&entry.command)?;
                 }
                 RangeWriteState::Prepared
                 | RangeWriteState::Committed
@@ -2241,7 +2267,7 @@ impl ClusterDataNodeService {
                 "injected actual Prepare refusal after durable native writer-start",
             ));
         }
-        let state = self.range_writes.prepare(command.clone())?;
+        let state = self.range_writes.current_mut().prepare(command.clone())?;
         self.range_write_ack(&command, state)
     }
 
@@ -2280,13 +2306,14 @@ impl ClusterDataNodeService {
                 &database, range, caller, command, authority,
             );
         }
-        let state = self.range_writes.commit(command)?;
+        let state = self.range_writes.current_mut().commit(command)?;
         self.range_write_ack(command, state)
     }
 
     #[cfg(test)]
     pub(crate) fn test_fail_native_commit_after_publication(&mut self) {
         self.range_writes
+            .current_mut()
             .test_fail_native_commit_after_publication();
     }
 
@@ -2315,7 +2342,7 @@ impl ClusterDataNodeService {
     ) -> Result<RangeWriteAck> {
         self.range_mutations.validate(range.id, authority)?;
         self.validate_range_write(range, caller, command)?;
-        let state = self.range_writes.certify(command)?;
+        let state = self.range_writes.current_mut().certify(command)?;
         self.range_write_ack(command, state)
     }
 
@@ -2381,7 +2408,7 @@ impl ClusterDataNodeService {
         {
             return Err(data_error("native Apply requires an authenticated current-leader instruction; raw caller/CQ replay is insufficient"));
         }
-        let state = self.range_writes.state(command)?;
+        let state = self.range_writes.current_mut().state(command)?;
         if !matches!(
             state,
             RangeWriteState::QuorumCommitted | RangeWriteState::Applied
@@ -2398,7 +2425,7 @@ impl ClusterDataNodeService {
                     &command.mutations,
                     authority,
                 )?;
-            self.range_writes.mark_applied(command)?;
+            self.range_writes.current_mut().mark_applied(command)?;
         }
         self.range_write_ack(command, RangeWriteState::Applied)
     }
@@ -2428,7 +2455,7 @@ impl ClusterDataNodeService {
     ) -> Result<RangeWriteAck> {
         self.range_mutations.validate(range.id, authority)?;
         self.validate_range_write(range, caller, command)?;
-        let state = self.range_writes.abort(command)?;
+        let state = self.range_writes.current_mut().abort(command)?;
         self.range_write_ack(command, state)
     }
 
@@ -2457,7 +2484,7 @@ impl ClusterDataNodeService {
             .ok_or_else(|| data_error(format!("unknown range-write command {command_id}")))?;
         self.range_mutations.validate(command.range_id, authority)?;
         self.require_catalog_storage_policy()?;
-        self.range_writes.mark_applied(&command)
+        self.range_writes.current_mut().mark_applied(&command)
     }
 
     fn recover_committed_range_writes(&mut self) -> Result<()> {
@@ -2478,7 +2505,7 @@ impl ClusterDataNodeService {
                     &command.mutations,
                     authority,
                 )?;
-            self.range_writes.mark_applied(&command)?;
+            self.range_writes.current_mut().mark_applied(&command)?;
         }
         Ok(())
     }

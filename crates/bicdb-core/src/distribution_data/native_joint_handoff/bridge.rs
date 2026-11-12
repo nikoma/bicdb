@@ -386,14 +386,16 @@ impl ClusterDataNodeService {
         host.require_live_request(business)?;
         let database = checked_database_read(&self.db, &self.storage_policy)?;
         actual.require_original_writer(&database, &self.range_writes)?;
-        self.range_writes.refsync_joint_activation_from_actual_host(
-            &database,
-            host,
-            business,
-            native,
-            actual.lease.try_frozen()?,
-            parent,
-        )
+        self.range_writes
+            .current_mut()
+            .refsync_joint_activation_from_actual_host(
+                &database,
+                host,
+                business,
+                native,
+                actual.lease.try_frozen()?,
+                parent,
+            )
     }
     pub(crate) fn persist_local_native_joint_activation(
         &mut self,
@@ -416,6 +418,7 @@ impl ClusterDataNodeService {
         actual.require_original_writer(&database, &self.range_writes)?;
         self.storage_policy.require_database(&database)?;
         self.range_writes
+            .current_mut()
             .refsync_native_joint_catalogue_activation(&database, admission)?;
         self.require_native_catalog_database(&database)?;
         self.require_native_writer_host_for_range(&database, admission.data().activation_range())?;
@@ -428,11 +431,13 @@ impl ClusterDataNodeService {
             .range_writes
             .recover_native_joint_catalogue_activation(&database, admission)?
         {
-            self.range_writes.install_native_joint_activated_open(
-                &database,
-                &recovered,
-                actual.lease.try_frozen()?,
-            )?;
+            self.range_writes
+                .current_mut()
+                .install_native_joint_activated_open(
+                    &database,
+                    &recovered,
+                    actual.lease.try_frozen()?,
+                )?;
             parent.check()?;
             admission.require_live()?;
             #[cfg(test)]
@@ -444,6 +449,7 @@ impl ClusterDataNodeService {
         }
         let receipt = self
             .range_writes
+            .current_mut()
             .persist_native_joint_catalogue_activation(
                 &database,
                 admission,
@@ -453,11 +459,9 @@ impl ClusterDataNodeService {
                 actual.lease.try_frozen()?,
                 parent,
             )?;
-        self.range_writes.install_native_joint_activated_open(
-            &database,
-            &receipt,
-            actual.lease.try_frozen()?,
-        )?;
+        self.range_writes
+            .current_mut()
+            .install_native_joint_activated_open(&database, &receipt, actual.lease.try_frozen()?)?;
         #[cfg(test)]
         trace.complete();
         Ok(receipt)

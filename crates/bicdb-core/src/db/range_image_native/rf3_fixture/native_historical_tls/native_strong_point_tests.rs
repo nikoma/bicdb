@@ -42,6 +42,14 @@ impl EnforcedNetwork {
         publish: bool,
         count: usize,
     ) -> Self {
+        Self::new_endpoint_mode_with_election(event_schema, publish, count, false)
+    }
+    fn new_endpoint_mode_with_election(
+        event_schema: bool,
+        publish: bool,
+        count: usize,
+        actual_election: bool,
+    ) -> Self {
         assert!(matches!(count, 3 | 4));
         let names = &["n0", "n1", "n2", "n3"][..count];
         let keys = tempfile::tempdir().unwrap();
@@ -122,20 +130,25 @@ impl EnforcedNetwork {
             )
             .unwrap()
         };
-        // Declared fixture election, actual persisted read-index probes; the
-        // metadata leader n1 is distinct from the data leader n0.
+        // Existing callers retain their declared election precondition. The
+        // missing-catalogue baseline uses actual TLS votes below instead. In
+        // both cases metadata leader n1 differs from data leader n0.
         let mut leader = open(&node("n1"));
-        leader.start_election().unwrap();
-        leader
-            .become_leader(&topology.nodes.keys().cloned().collect())
-            .unwrap();
+        let election = leader.start_election().unwrap();
+        if !actual_election {
+            leader
+                .become_leader(&topology.nodes.keys().cloned().collect())
+                .unwrap();
+        }
         let mut metadata = BTreeMap::new();
         for id in topology.nodes.keys().filter(|id| **id != node("n1")) {
             let mut follower = open(id);
-            let response = follower
-                .handle_append_request(leader.append_request_from(1, 16).unwrap())
-                .unwrap();
-            leader.record_append_response(id, &response).unwrap();
+            if !actual_election {
+                let response = follower
+                    .handle_append_request(leader.append_request_from(1, 16).unwrap())
+                    .unwrap();
+                leader.record_append_response(id, &response).unwrap();
+            }
             metadata.insert(id.clone(), Arc::new(Mutex::new(follower)));
         }
         metadata.insert(node("n1"), Arc::new(Mutex::new(leader)));
@@ -208,6 +221,35 @@ impl EnforcedNetwork {
                 .unwrap()
             })
             .collect();
+        if actual_election {
+            let actor = node("n1");
+            let mut votes = BTreeSet::from([actor.clone()]);
+            for peer in topology.nodes.keys().filter(|id| **id != actor) {
+                let reply = clients[&actor]
+                    .request_metadata_vote(peer, election.clone())
+                    .unwrap();
+                assert_eq!(reply.voter_id, *peer);
+                assert_eq!(reply.term, election.term);
+                if reply.vote_granted {
+                    votes.insert(reply.voter_id);
+                }
+            }
+            metadata[&actor].lock().become_leader(&votes).unwrap();
+            for _ in 0..2 {
+                for peer in topology.nodes.keys().filter(|id| **id != actor) {
+                    let request = metadata[&actor]
+                        .lock()
+                        .append_request_for_peer(peer, 16)
+                        .unwrap();
+                    let reply = clients[&actor].append_metadata(peer, request).unwrap();
+                    metadata[&actor]
+                        .lock()
+                        .record_append_response(peer, &reply)
+                        .unwrap();
+                }
+            }
+            assert!(metadata[&actor].lock().status().commit_index > 0);
+        }
         let coordinators = topology
             .nodes
             .keys()

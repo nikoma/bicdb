@@ -1,0 +1,48 @@
+{
+  "source": "2403deefde68869c15f02b73d40406ffdfb50148",
+  "status": "recovery_and_independent_verification_passed",
+  "steps": [
+    {
+      "command": [
+        "/usr/bin/python3",
+        "/root/bicdb-durability-s3/host-control/run-native-identity-finance492-recovery.py",
+        "--source",
+        "2403deefde68869c15f02b73d40406ffdfb50148",
+        "--build",
+        "native-identity-finance492-validation",
+        "--tag",
+        "native-identity-finance492-recovery-2403deef",
+        "--custody",
+        "native-identity-finance492-probe-custody.json",
+        "--runtime",
+        "2403deefde68869c15f02b73d40406ffdfb50148"
+      ],
+      "started_unix": 1794525324.9626808,
+      "exit": 0,
+      "finished_unix": 1794525338.6968553
+    },
+    {
+      "command": [
+        "/usr/bin/python3",
+        "/root/bicdb-durability-s3/host-control/run-native-identity-finance492-vm.py"
+      ],
+      "started_unix": 1794525338.6971116,
+      "exit": 0,
+      "finished_unix": 1794525374.1032658
+    },
+    {
+      "command": [
+        "/usr/bin/python3",
+        "/root/bicdb-durability-s3/host-control/verify-native-identity-finance492-recovery.py",
+        "--finance492",
+        "--vm"
+      ],
+      "started_unix": 1794525374.1046808,
+      "exit": 0,
+      "finished_unix": 1794525377.1948063
+    }
+  ],
+  "started_unix": 1794524924.483978,
+  "scope": "Exact492candidate process38/EIO8 then disposableKVM10 then independentverifier. Sameoriginalchecks; waitapplicationterminal/currentprobe. No sourcepush/productionpromotion/cloudspend.",
+  "finished_unix": 1794525377.1950493
+}

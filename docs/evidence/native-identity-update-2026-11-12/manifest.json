@@ -1,7 +1,1123 @@
 {
   "README.md": {
-    "bytes": 3495,
-    "sha256": "b3c59f9c696e8d178fa03f1c74101d010f5fc039a796387d76b76da9b6f96027"
+    "bytes": 4979,
+    "sha256": "40bf9774455386372596092af88ba73b917446de6d571b533d7db6e83c07e02b"
+  },
+  "finance492/README.md": {
+    "bytes": 2026,
+    "sha256": "1f84a25584a0c66f734f79ea8e0bb40e68c30b58a6601c1f15f6259b4d20f33c"
+  },
+  "finance492/focused/raw-manifest.json": {
+    "bytes": 1394,
+    "sha256": "122a74c1fd36d56e22be09c288c4b220e743e877e87098bd33f1e8b85dc821d1"
+  },
+  "finance492/focused/report-native-identity-finance492-focused.json": {
+    "bytes": 2245,
+    "sha256": "81f0a25e421834f8e9b99d9b712f074d89072a1837f23d5a1f93c2fe0dc2a2a5"
+  },
+  "finance492/focused/report-native492-reader-contract-baseline.json": {
+    "bytes": 1464,
+    "sha256": "fa6664db2773cf5283143043973f317a1da3e53c84da995f0f57ce67a835e44d"
+  },
+  "finance492/focused/report-native492-reader-contract-focused.json": {
+    "bytes": 2384,
+    "sha256": "7690ee9d60d9c63dd6c16e3984f68a2e3bd8794d2adb048e5f4602f26b2ec859"
+  },
+  "finance492/focused/source-scoped-results.json": {
+    "bytes": 6698,
+    "sha256": "19b8b513931668149fc8a0f368a7117ce93690cca03c850a579ca58137e1e4e2"
+  },
+  "finance492/focused/tc-step-native-identity-finance492-focused.log.gz": {
+    "bytes": 84803,
+    "sha256": "01c49cc07709ebd53520d72826ca02419ff0e179be36c8fbe808415d91f80e5f"
+  },
+  "finance492/focused/tc-step-native492-reader-contract-baseline.log.gz": {
+    "bytes": 31373,
+    "sha256": "0596fa12000ecac859119f10592aafbef7913100ab82e45025e981e8f9ad0230"
+  },
+  "finance492/focused/tc-step-native492-reader-contract-focused.log.gz": {
+    "bytes": 61222,
+    "sha256": "f7bcd2abf82b413ff3c2df1a88521396c9edef684482c4bc642973ea05e75720"
+  },
+  "finance492/historical-old52f8-terminal-CI.json": {
+    "bytes": 17987,
+    "sha256": "fbbbff0e44294f3c520883706607de9cb7e86e5316a404fe7835b5345faeac30"
+  },
+  "finance492/recovery/controller/native-identity-finance492-recovery-controller-manifest.json": {
+    "bytes": 736,
+    "sha256": "037bf2d35e6566550e821d72ab595eb02c79b491d5ceecd5f6a56436b1c523c2"
+  },
+  "finance492/recovery/controller/native-identity-finance492-recovery-pipeline-launch.json": {
+    "bytes": 1479,
+    "sha256": "31602ac78fdf07380f7c26f860ca1defed9f3aee11945c82c7610189fd4adb71"
+  },
+  "finance492/recovery/controller/run-native-identity-finance492-recovery-pipeline.py": {
+    "bytes": 2717,
+    "sha256": "57fda03907f0c490612adc5d87b26366505e02486335bf7ebcb6d046ff89c9c9"
+  },
+  "finance492/recovery/controller/run-native-identity-finance492-recovery.py": {
+    "bytes": 9673,
+    "sha256": "d417f8eeaad003452dab633b17d824aa62795338f4c0961dafc398f912709b57"
+  },
+  "finance492/recovery/controller/run-native-identity-finance492-vm.py": {
+    "bytes": 12597,
+    "sha256": "01184cd78d0b44a7768396d73b6b16713967285dbc9b1d9f21af650a6e20342a"
+  },
+  "finance492/recovery/controller/verify-native-identity-finance492-recovery.py": {
+    "bytes": 11128,
+    "sha256": "b7adc78d016164ed63d04cf5b9c473594fec9b8d1aab6986be62ee8bdd359d2f"
+  },
+  "finance492/recovery/native-identity-finance492-probe-custody.json": {
+    "bytes": 571,
+    "sha256": "5119d83b77b69bcd08d11241da163b0141ad49c8aa24363a1eccca33cd398aa0"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/embedded_memory-control-ACK.json": {
+    "bytes": 183,
+    "sha256": "c0c5cf29e9d549b1e46cfd4238a289f3c192fb635913d893534a649bfe160004"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/embedded_memory-control-apply.stderr.gz": {
+    "bytes": 20,
+    "sha256": "f61f27bd17de546264aa58f40f3aafaac7021e0ef69c17f6b1b4cd7664a037ec"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/embedded_memory-control-apply.stdout.gz": {
+    "bytes": 77,
+    "sha256": "df71c19ccf4521ceac23eb794955441ba1d5005c6ee819009740baf9d535eab8"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/embedded_memory-control-verify.stderr.gz": {
+    "bytes": 20,
+    "sha256": "f61f27bd17de546264aa58f40f3aafaac7021e0ef69c17f6b1b4cd7664a037ec"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/embedded_memory-control-verify.stdout.gz": {
+    "bytes": 705,
+    "sha256": "29fff80d6dd8850081b3d673c4648004be219d3f5584adf4440147e0e912a553"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/embedded_memory-one-shot-transaction_log_sync-failure.json": {
+    "bytes": 1262,
+    "sha256": "2fadd5e9c9e7e009bd40c025b7addcff566aa5339a5e96dd9e007d0c4bbccbba"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/embedded_memory-one-shot-transaction_log_sync-failure.stderr.gz": {
+    "bytes": 266,
+    "sha256": "b851f014176de0d1a8ee3edcd3d753cdaadd3693e2db631a0997c04dd1c0007b"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/embedded_memory-one-shot-transaction_log_sync-failure.stdout.gz": {
+    "bytes": 77,
+    "sha256": "df71c19ccf4521ceac23eb794955441ba1d5005c6ee819009740baf9d535eab8"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/embedded_memory-one-shot-transaction_log_sync-verify.stderr.gz": {
+    "bytes": 228,
+    "sha256": "dbb0b35288f6e4ddc26576cd2e898ee52e3a52c9d1934397198b222246a16625"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/embedded_memory-one-shot-transaction_log_sync-verify.stdout.gz": {
+    "bytes": 310,
+    "sha256": "c466eaa8f7c42a48f9e198b91051f0af0501f573c720b6e92bab9e9b5e48fb2d"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/embedded_memory-one-shot-transaction_log_write-failure.json": {
+    "bytes": 1265,
+    "sha256": "d7c9685a3fe27b21d425606ff4e872762eb3e5031f863e5420a267b7b0cff978"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/embedded_memory-one-shot-transaction_log_write-failure.stderr.gz": {
+    "bytes": 266,
+    "sha256": "978279f851a3ea961c51a03fe4e0995daf543c0dad97622104f9f6638814d484"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/embedded_memory-one-shot-transaction_log_write-failure.stdout.gz": {
+    "bytes": 77,
+    "sha256": "df71c19ccf4521ceac23eb794955441ba1d5005c6ee819009740baf9d535eab8"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/embedded_memory-one-shot-transaction_log_write-verify.stderr.gz": {
+    "bytes": 227,
+    "sha256": "cbf3290d28b0ca6eb02604d1aa6186ff52124cbd45dfc549abac02547ef25dbb"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/embedded_memory-one-shot-transaction_log_write-verify.stdout.gz": {
+    "bytes": 310,
+    "sha256": "c466eaa8f7c42a48f9e198b91051f0af0501f573c720b6e92bab9e9b5e48fb2d"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/embedded_memory-persistent-transaction_log_sync-failure.json": {
+    "bytes": 1268,
+    "sha256": "1801b988fb20f045016510a89894bb24bed67cfcd938fd61d4e4774e9067b740"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/embedded_memory-persistent-transaction_log_sync-failure.stderr.gz": {
+    "bytes": 268,
+    "sha256": "9d1464dda32c3b8882b92d991e44422bd10f9b3f9396c204b06989a84e6b2902"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/embedded_memory-persistent-transaction_log_sync-failure.stdout.gz": {
+    "bytes": 77,
+    "sha256": "df71c19ccf4521ceac23eb794955441ba1d5005c6ee819009740baf9d535eab8"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/embedded_memory-persistent-transaction_log_sync-verify.stderr.gz": {
+    "bytes": 228,
+    "sha256": "7f2b1abcef02671068a773088378c357683ba975feb5722a208fa774ffab8d07"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/embedded_memory-persistent-transaction_log_sync-verify.stdout.gz": {
+    "bytes": 310,
+    "sha256": "c466eaa8f7c42a48f9e198b91051f0af0501f573c720b6e92bab9e9b5e48fb2d"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/embedded_memory-persistent-transaction_log_write-failure.json": {
+    "bytes": 1271,
+    "sha256": "da139aa1fde8df2b8d565adb163e4b2852cf7690b71838a6a070cd04249b9459"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/embedded_memory-persistent-transaction_log_write-failure.stderr.gz": {
+    "bytes": 266,
+    "sha256": "6feab48a6cdad187db6e84f15cad507ec615be09c87b722cbed199aac1bf79e8"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/embedded_memory-persistent-transaction_log_write-failure.stdout.gz": {
+    "bytes": 77,
+    "sha256": "df71c19ccf4521ceac23eb794955441ba1d5005c6ee819009740baf9d535eab8"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/embedded_memory-persistent-transaction_log_write-verify.stderr.gz": {
+    "bytes": 228,
+    "sha256": "1dbdf84b6f5a49072a95a136c9a47cd809ca0e65e50dfdaa5a8a6a2652b05cd1"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/embedded_memory-persistent-transaction_log_write-verify.stdout.gz": {
+    "bytes": 310,
+    "sha256": "c466eaa8f7c42a48f9e198b91051f0af0501f573c720b6e92bab9e9b5e48fb2d"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/embedded_memory-process-commit_after_broker_publish-1-cut.stderr.gz": {
+    "bytes": 51,
+    "sha256": "e2713d7699179c7ffaba364b1c72c38084ec771f9e1d82a95a0c147faf43d2ab"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/embedded_memory-process-commit_after_broker_publish-1-cut.stdout.gz": {
+    "bytes": 77,
+    "sha256": "df71c19ccf4521ceac23eb794955441ba1d5005c6ee819009740baf9d535eab8"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/embedded_memory-process-commit_after_broker_publish-1-verify.stderr.gz": {
+    "bytes": 20,
+    "sha256": "f61f27bd17de546264aa58f40f3aafaac7021e0ef69c17f6b1b4cd7664a037ec"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/embedded_memory-process-commit_after_broker_publish-1-verify.stdout.gz": {
+    "bytes": 704,
+    "sha256": "4ef0f9ded5cf8181d3a46dc4c447b1bea2d190df1b5b60f5857c281542b03488"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/embedded_memory-process-commit_before_broker_publish-1-cut.stderr.gz": {
+    "bytes": 51,
+    "sha256": "e2713d7699179c7ffaba364b1c72c38084ec771f9e1d82a95a0c147faf43d2ab"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/embedded_memory-process-commit_before_broker_publish-1-cut.stdout.gz": {
+    "bytes": 77,
+    "sha256": "df71c19ccf4521ceac23eb794955441ba1d5005c6ee819009740baf9d535eab8"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/embedded_memory-process-commit_before_broker_publish-1-verify.stderr.gz": {
+    "bytes": 20,
+    "sha256": "f61f27bd17de546264aa58f40f3aafaac7021e0ef69c17f6b1b4cd7664a037ec"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/embedded_memory-process-commit_before_broker_publish-1-verify.stdout.gz": {
+    "bytes": 706,
+    "sha256": "01b239d5ed4bcb54cbdf4fce5b7abfbf14503cff62cc603932602655580a319a"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/embedded_memory-process-identity_after_ack-1-ACK.json": {
+    "bytes": 183,
+    "sha256": "b7fb2d09ce267b3c0cff725c71091879a4af746218a10423dd7e173371c1692d"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/embedded_memory-process-identity_after_ack-1-cut.stderr.gz": {
+    "bytes": 51,
+    "sha256": "e2713d7699179c7ffaba364b1c72c38084ec771f9e1d82a95a0c147faf43d2ab"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/embedded_memory-process-identity_after_ack-1-cut.stdout.gz": {
+    "bytes": 77,
+    "sha256": "df71c19ccf4521ceac23eb794955441ba1d5005c6ee819009740baf9d535eab8"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/embedded_memory-process-identity_after_ack-1-verify.stderr.gz": {
+    "bytes": 20,
+    "sha256": "f61f27bd17de546264aa58f40f3aafaac7021e0ef69c17f6b1b4cd7664a037ec"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/embedded_memory-process-identity_after_ack-1-verify.stdout.gz": {
+    "bytes": 705,
+    "sha256": "49d11f52ec4bba460d43df71a1e571670de157e634fb603dd392f3b40a921a14"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/embedded_memory-process-identity_after_commit-1-cut.stderr.gz": {
+    "bytes": 51,
+    "sha256": "e2713d7699179c7ffaba364b1c72c38084ec771f9e1d82a95a0c147faf43d2ab"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/embedded_memory-process-identity_after_commit-1-cut.stdout.gz": {
+    "bytes": 77,
+    "sha256": "df71c19ccf4521ceac23eb794955441ba1d5005c6ee819009740baf9d535eab8"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/embedded_memory-process-identity_after_commit-1-verify.stderr.gz": {
+    "bytes": 20,
+    "sha256": "f61f27bd17de546264aa58f40f3aafaac7021e0ef69c17f6b1b4cd7664a037ec"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/embedded_memory-process-identity_after_commit-1-verify.stdout.gz": {
+    "bytes": 705,
+    "sha256": "c243fa9a49380ba0e3bc54b5067ed279294b4e4405dff68d5a00b85f33c23d7d"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/embedded_memory-process-identity_after_staging-1-cut.stderr.gz": {
+    "bytes": 51,
+    "sha256": "e2713d7699179c7ffaba364b1c72c38084ec771f9e1d82a95a0c147faf43d2ab"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/embedded_memory-process-identity_after_staging-1-cut.stdout.gz": {
+    "bytes": 77,
+    "sha256": "df71c19ccf4521ceac23eb794955441ba1d5005c6ee819009740baf9d535eab8"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/embedded_memory-process-identity_after_staging-1-verify.stderr.gz": {
+    "bytes": 20,
+    "sha256": "f61f27bd17de546264aa58f40f3aafaac7021e0ef69c17f6b1b4cd7664a037ec"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/embedded_memory-process-identity_after_staging-1-verify.stdout.gz": {
+    "bytes": 310,
+    "sha256": "c466eaa8f7c42a48f9e198b91051f0af0501f573c720b6e92bab9e9b5e48fb2d"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/embedded_memory-process-transaction_log_sync-1-cut.stderr.gz": {
+    "bytes": 92,
+    "sha256": "1cfaa58294cbcb2ac914f73f22661ced545636a52285b39340aaf041d4976ec2"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/embedded_memory-process-transaction_log_sync-1-cut.stdout.gz": {
+    "bytes": 77,
+    "sha256": "df71c19ccf4521ceac23eb794955441ba1d5005c6ee819009740baf9d535eab8"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/embedded_memory-process-transaction_log_sync-1-verify.stderr.gz": {
+    "bytes": 20,
+    "sha256": "f61f27bd17de546264aa58f40f3aafaac7021e0ef69c17f6b1b4cd7664a037ec"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/embedded_memory-process-transaction_log_sync-1-verify.stdout.gz": {
+    "bytes": 706,
+    "sha256": "b44963dddb7ee5203e7583bbd25c28cddb26396bb710c9368a692e9cff05b45d"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/embedded_memory-process-transaction_log_write-1-cut.stderr.gz": {
+    "bytes": 93,
+    "sha256": "d608c382144a8414191c4af0078a82acdb0f69c05760730263e3d9bc70145536"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/embedded_memory-process-transaction_log_write-1-cut.stdout.gz": {
+    "bytes": 77,
+    "sha256": "df71c19ccf4521ceac23eb794955441ba1d5005c6ee819009740baf9d535eab8"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/embedded_memory-process-transaction_log_write-1-verify.stderr.gz": {
+    "bytes": 20,
+    "sha256": "f61f27bd17de546264aa58f40f3aafaac7021e0ef69c17f6b1b4cd7664a037ec"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/embedded_memory-process-transaction_log_write-1-verify.stdout.gz": {
+    "bytes": 310,
+    "sha256": "c466eaa8f7c42a48f9e198b91051f0af0501f573c720b6e92bab9e9b5e48fb2d"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/embedded_memory-seed/original-ACK.json": {
+    "bytes": 588,
+    "sha256": "c358f50132f950cc22265a59a10bd3fe8b2c0ae1768050a943d6809b1017de52"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/embedded_memory-seed.stderr.gz": {
+    "bytes": 20,
+    "sha256": "f61f27bd17de546264aa58f40f3aafaac7021e0ef69c17f6b1b4cd7664a037ec"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/embedded_memory-seed.stdout.gz": {
+    "bytes": 190,
+    "sha256": "5600ff7f7f450eafa8fee2e927d251a52d277a67f1691b02b1230d1a94d8e61f"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/embedded_memory-volatile-commit_after_broker_publish-1-cut.stderr.gz": {
+    "bytes": 51,
+    "sha256": "e2713d7699179c7ffaba364b1c72c38084ec771f9e1d82a95a0c147faf43d2ab"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/embedded_memory-volatile-commit_after_broker_publish-1-cut.stdout.gz": {
+    "bytes": 77,
+    "sha256": "df71c19ccf4521ceac23eb794955441ba1d5005c6ee819009740baf9d535eab8"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/embedded_memory-volatile-commit_after_broker_publish-1-verify.stderr.gz": {
+    "bytes": 20,
+    "sha256": "f61f27bd17de546264aa58f40f3aafaac7021e0ef69c17f6b1b4cd7664a037ec"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/embedded_memory-volatile-commit_after_broker_publish-1-verify.stdout.gz": {
+    "bytes": 706,
+    "sha256": "5f4dcda23d87b663bc1dbf9acebf6d7dac7ec19bd0a4d2dd513fc025d2fb3948"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/embedded_memory-volatile-commit_before_broker_publish-1-cut.stderr.gz": {
+    "bytes": 51,
+    "sha256": "e2713d7699179c7ffaba364b1c72c38084ec771f9e1d82a95a0c147faf43d2ab"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/embedded_memory-volatile-commit_before_broker_publish-1-cut.stdout.gz": {
+    "bytes": 77,
+    "sha256": "df71c19ccf4521ceac23eb794955441ba1d5005c6ee819009740baf9d535eab8"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/embedded_memory-volatile-commit_before_broker_publish-1-verify.stderr.gz": {
+    "bytes": 20,
+    "sha256": "f61f27bd17de546264aa58f40f3aafaac7021e0ef69c17f6b1b4cd7664a037ec"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/embedded_memory-volatile-commit_before_broker_publish-1-verify.stdout.gz": {
+    "bytes": 706,
+    "sha256": "54a99cd5aabcc8f50df2a5fc7eef215e26cec28c766a705e300cc55e6e0fc670"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/embedded_memory-volatile-identity_after_ack-1-ACK.json": {
+    "bytes": 183,
+    "sha256": "607990883ca0b58c5edbaafaee47be5fad8806fb86d6e2ddc46f59f7ec72bb4a"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/embedded_memory-volatile-identity_after_ack-1-cut.stderr.gz": {
+    "bytes": 51,
+    "sha256": "e2713d7699179c7ffaba364b1c72c38084ec771f9e1d82a95a0c147faf43d2ab"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/embedded_memory-volatile-identity_after_ack-1-cut.stdout.gz": {
+    "bytes": 77,
+    "sha256": "df71c19ccf4521ceac23eb794955441ba1d5005c6ee819009740baf9d535eab8"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/embedded_memory-volatile-identity_after_ack-1-verify.stderr.gz": {
+    "bytes": 20,
+    "sha256": "f61f27bd17de546264aa58f40f3aafaac7021e0ef69c17f6b1b4cd7664a037ec"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/embedded_memory-volatile-identity_after_ack-1-verify.stdout.gz": {
+    "bytes": 705,
+    "sha256": "5d8d4101c7e2d979eb5fdf977bff71ef3b6eceaff5d5b1dc56a9e5340e8213b3"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/embedded_memory-volatile-identity_after_commit-1-cut.stderr.gz": {
+    "bytes": 51,
+    "sha256": "e2713d7699179c7ffaba364b1c72c38084ec771f9e1d82a95a0c147faf43d2ab"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/embedded_memory-volatile-identity_after_commit-1-cut.stdout.gz": {
+    "bytes": 77,
+    "sha256": "df71c19ccf4521ceac23eb794955441ba1d5005c6ee819009740baf9d535eab8"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/embedded_memory-volatile-identity_after_commit-1-verify.stderr.gz": {
+    "bytes": 20,
+    "sha256": "f61f27bd17de546264aa58f40f3aafaac7021e0ef69c17f6b1b4cd7664a037ec"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/embedded_memory-volatile-identity_after_commit-1-verify.stdout.gz": {
+    "bytes": 707,
+    "sha256": "4b46513128c726109edcebc32edbcbf51ff4c65c603bb6d5e7794ba69ce810f1"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/embedded_memory-volatile-identity_after_staging-1-cut.stderr.gz": {
+    "bytes": 51,
+    "sha256": "e2713d7699179c7ffaba364b1c72c38084ec771f9e1d82a95a0c147faf43d2ab"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/embedded_memory-volatile-identity_after_staging-1-cut.stdout.gz": {
+    "bytes": 77,
+    "sha256": "df71c19ccf4521ceac23eb794955441ba1d5005c6ee819009740baf9d535eab8"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/embedded_memory-volatile-identity_after_staging-1-verify.stderr.gz": {
+    "bytes": 20,
+    "sha256": "f61f27bd17de546264aa58f40f3aafaac7021e0ef69c17f6b1b4cd7664a037ec"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/embedded_memory-volatile-identity_after_staging-1-verify.stdout.gz": {
+    "bytes": 310,
+    "sha256": "c466eaa8f7c42a48f9e198b91051f0af0501f573c720b6e92bab9e9b5e48fb2d"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/embedded_memory-volatile-transaction_log_sync-1-cut.stderr.gz": {
+    "bytes": 92,
+    "sha256": "1cfaa58294cbcb2ac914f73f22661ced545636a52285b39340aaf041d4976ec2"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/embedded_memory-volatile-transaction_log_sync-1-cut.stdout.gz": {
+    "bytes": 77,
+    "sha256": "df71c19ccf4521ceac23eb794955441ba1d5005c6ee819009740baf9d535eab8"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/embedded_memory-volatile-transaction_log_sync-1-verify.stderr.gz": {
+    "bytes": 20,
+    "sha256": "f61f27bd17de546264aa58f40f3aafaac7021e0ef69c17f6b1b4cd7664a037ec"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/embedded_memory-volatile-transaction_log_sync-1-verify.stdout.gz": {
+    "bytes": 706,
+    "sha256": "ade4a8d466f09a7d4285ea87a115ffe08a751ab680cb1bbbf9864029b7a6e553"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/embedded_memory-volatile-transaction_log_write-1-cut.stderr.gz": {
+    "bytes": 93,
+    "sha256": "d608c382144a8414191c4af0078a82acdb0f69c05760730263e3d9bc70145536"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/embedded_memory-volatile-transaction_log_write-1-cut.stdout.gz": {
+    "bytes": 77,
+    "sha256": "df71c19ccf4521ceac23eb794955441ba1d5005c6ee819009740baf9d535eab8"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/embedded_memory-volatile-transaction_log_write-1-verify.stderr.gz": {
+    "bytes": 20,
+    "sha256": "f61f27bd17de546264aa58f40f3aafaac7021e0ef69c17f6b1b4cd7664a037ec"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/embedded_memory-volatile-transaction_log_write-1-verify.stdout.gz": {
+    "bytes": 310,
+    "sha256": "c466eaa8f7c42a48f9e198b91051f0af0501f573c720b6e92bab9e9b5e48fb2d"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/result.json": {
+    "bytes": 288322,
+    "sha256": "d3b2bed858c77af2f1648f8a0032ba765104e4d458b6f085b2c143787040305b"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/server_paged-control-ACK.json": {
+    "bytes": 183,
+    "sha256": "a87fc60a813994f615eb724fef71bde958e634c64ef5084ea86a4edc5726a27a"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/server_paged-control-apply.stderr.gz": {
+    "bytes": 20,
+    "sha256": "f61f27bd17de546264aa58f40f3aafaac7021e0ef69c17f6b1b4cd7664a037ec"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/server_paged-control-apply.stdout.gz": {
+    "bytes": 77,
+    "sha256": "df71c19ccf4521ceac23eb794955441ba1d5005c6ee819009740baf9d535eab8"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/server_paged-control-verify.stderr.gz": {
+    "bytes": 20,
+    "sha256": "f61f27bd17de546264aa58f40f3aafaac7021e0ef69c17f6b1b4cd7664a037ec"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/server_paged-control-verify.stdout.gz": {
+    "bytes": 706,
+    "sha256": "35866595bf380affb2c4f4c88a320d749ee0ad225916aa04993d36d95da8cce6"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/server_paged-one-shot-transaction_log_sync-failure.json": {
+    "bytes": 1253,
+    "sha256": "0f3b76c7819edabf7e00b7ac62dab0bf20dd2652f744319efcf04932e3c52aef"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/server_paged-one-shot-transaction_log_sync-failure.stderr.gz": {
+    "bytes": 265,
+    "sha256": "7f6e64a5f83df8f6dd06abe5cab86a7f6c1431296ccf9d57f9fa580cb842ab53"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/server_paged-one-shot-transaction_log_sync-failure.stdout.gz": {
+    "bytes": 77,
+    "sha256": "df71c19ccf4521ceac23eb794955441ba1d5005c6ee819009740baf9d535eab8"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/server_paged-one-shot-transaction_log_sync-verify.stderr.gz": {
+    "bytes": 225,
+    "sha256": "49592444417f272ca435d8f915a0c9a175bdc220b8cd668b2a19f8f05801e69e"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/server_paged-one-shot-transaction_log_sync-verify.stdout.gz": {
+    "bytes": 310,
+    "sha256": "c466eaa8f7c42a48f9e198b91051f0af0501f573c720b6e92bab9e9b5e48fb2d"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/server_paged-one-shot-transaction_log_write-failure.json": {
+    "bytes": 1256,
+    "sha256": "361b526a643e7a5f4f035613ccb2b23813879d7642681593a427f884d0d2fb06"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/server_paged-one-shot-transaction_log_write-failure.stderr.gz": {
+    "bytes": 264,
+    "sha256": "ff695f30b808d781561225c345e315544f9bca637c40013a6890be794b2e2e07"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/server_paged-one-shot-transaction_log_write-failure.stdout.gz": {
+    "bytes": 77,
+    "sha256": "df71c19ccf4521ceac23eb794955441ba1d5005c6ee819009740baf9d535eab8"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/server_paged-one-shot-transaction_log_write-verify.stderr.gz": {
+    "bytes": 225,
+    "sha256": "eddfcda9b0094b4a792d9ce72bfe67ae40d05b954fefae180e98b0e2caa8933e"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/server_paged-one-shot-transaction_log_write-verify.stdout.gz": {
+    "bytes": 310,
+    "sha256": "c466eaa8f7c42a48f9e198b91051f0af0501f573c720b6e92bab9e9b5e48fb2d"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/server_paged-persistent-transaction_log_sync-failure.json": {
+    "bytes": 1259,
+    "sha256": "7bca955003fb6cb858cefee276d1ff09bb07ae0567270753547ea775c090c70e"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/server_paged-persistent-transaction_log_sync-failure.stderr.gz": {
+    "bytes": 265,
+    "sha256": "8c750c347c43b4f6013a128576f6149394da8907271e709c87d69ad09d9cf9ca"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/server_paged-persistent-transaction_log_sync-failure.stdout.gz": {
+    "bytes": 77,
+    "sha256": "df71c19ccf4521ceac23eb794955441ba1d5005c6ee819009740baf9d535eab8"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/server_paged-persistent-transaction_log_sync-verify.stderr.gz": {
+    "bytes": 226,
+    "sha256": "aab55c8b95dafb2d72649157a59a74904dc84e2dd1e2530a6c745dd0b0fc7cab"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/server_paged-persistent-transaction_log_sync-verify.stdout.gz": {
+    "bytes": 310,
+    "sha256": "c466eaa8f7c42a48f9e198b91051f0af0501f573c720b6e92bab9e9b5e48fb2d"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/server_paged-persistent-transaction_log_write-failure.json": {
+    "bytes": 1262,
+    "sha256": "998a5e24c9265ab2f15b6fc6d7e6b7a383af3dd3e87e4fa985304205de863b1c"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/server_paged-persistent-transaction_log_write-failure.stderr.gz": {
+    "bytes": 264,
+    "sha256": "25d83195e5f2a4eb0e442dc3d2e31182c0cd936523238ded0e76b1d308ffb740"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/server_paged-persistent-transaction_log_write-failure.stdout.gz": {
+    "bytes": 77,
+    "sha256": "df71c19ccf4521ceac23eb794955441ba1d5005c6ee819009740baf9d535eab8"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/server_paged-persistent-transaction_log_write-verify.stderr.gz": {
+    "bytes": 225,
+    "sha256": "23d443daf3d1e977a382c098e341d1848235d8551cf06935f7171315247cbed1"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/server_paged-persistent-transaction_log_write-verify.stdout.gz": {
+    "bytes": 310,
+    "sha256": "c466eaa8f7c42a48f9e198b91051f0af0501f573c720b6e92bab9e9b5e48fb2d"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/server_paged-process-commit_after_broker_publish-1-cut.stderr.gz": {
+    "bytes": 51,
+    "sha256": "e2713d7699179c7ffaba364b1c72c38084ec771f9e1d82a95a0c147faf43d2ab"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/server_paged-process-commit_after_broker_publish-1-cut.stdout.gz": {
+    "bytes": 77,
+    "sha256": "df71c19ccf4521ceac23eb794955441ba1d5005c6ee819009740baf9d535eab8"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/server_paged-process-commit_after_broker_publish-1-verify.stderr.gz": {
+    "bytes": 20,
+    "sha256": "f61f27bd17de546264aa58f40f3aafaac7021e0ef69c17f6b1b4cd7664a037ec"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/server_paged-process-commit_after_broker_publish-1-verify.stdout.gz": {
+    "bytes": 704,
+    "sha256": "c9c1b9bd340ab2796801a875fd870458fd55027ce0202a22f46693926be29241"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/server_paged-process-commit_after_marker-1-cut.stderr.gz": {
+    "bytes": 51,
+    "sha256": "e2713d7699179c7ffaba364b1c72c38084ec771f9e1d82a95a0c147faf43d2ab"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/server_paged-process-commit_after_marker-1-cut.stdout.gz": {
+    "bytes": 77,
+    "sha256": "df71c19ccf4521ceac23eb794955441ba1d5005c6ee819009740baf9d535eab8"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/server_paged-process-commit_after_marker-1-verify.stderr.gz": {
+    "bytes": 20,
+    "sha256": "f61f27bd17de546264aa58f40f3aafaac7021e0ef69c17f6b1b4cd7664a037ec"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/server_paged-process-commit_after_marker-1-verify.stdout.gz": {
+    "bytes": 706,
+    "sha256": "02cd168a2a07e8956c6968fe1aeb854d5aad7c0ade04908cf0417118524814f2"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/server_paged-process-commit_after_page_apply-1-cut.stderr.gz": {
+    "bytes": 51,
+    "sha256": "e2713d7699179c7ffaba364b1c72c38084ec771f9e1d82a95a0c147faf43d2ab"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/server_paged-process-commit_after_page_apply-1-cut.stdout.gz": {
+    "bytes": 77,
+    "sha256": "df71c19ccf4521ceac23eb794955441ba1d5005c6ee819009740baf9d535eab8"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/server_paged-process-commit_after_page_apply-1-verify.stderr.gz": {
+    "bytes": 20,
+    "sha256": "f61f27bd17de546264aa58f40f3aafaac7021e0ef69c17f6b1b4cd7664a037ec"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/server_paged-process-commit_after_page_apply-1-verify.stdout.gz": {
+    "bytes": 705,
+    "sha256": "5718c19e336376c2355ddf576a825b9d9070996050abd8145c5876f6cde4a690"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/server_paged-process-commit_after_sync_publish-1-cut.stderr.gz": {
+    "bytes": 51,
+    "sha256": "e2713d7699179c7ffaba364b1c72c38084ec771f9e1d82a95a0c147faf43d2ab"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/server_paged-process-commit_after_sync_publish-1-cut.stdout.gz": {
+    "bytes": 77,
+    "sha256": "df71c19ccf4521ceac23eb794955441ba1d5005c6ee819009740baf9d535eab8"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/server_paged-process-commit_after_sync_publish-1-verify.stderr.gz": {
+    "bytes": 20,
+    "sha256": "f61f27bd17de546264aa58f40f3aafaac7021e0ef69c17f6b1b4cd7664a037ec"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/server_paged-process-commit_after_sync_publish-1-verify.stdout.gz": {
+    "bytes": 705,
+    "sha256": "08c3067f42059d500d37bab597d39d0b0cf215a7a72058587c92767fdf8d7772"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/server_paged-process-commit_after_txlog_durable-1-cut.stderr.gz": {
+    "bytes": 51,
+    "sha256": "e2713d7699179c7ffaba364b1c72c38084ec771f9e1d82a95a0c147faf43d2ab"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/server_paged-process-commit_after_txlog_durable-1-cut.stdout.gz": {
+    "bytes": 77,
+    "sha256": "df71c19ccf4521ceac23eb794955441ba1d5005c6ee819009740baf9d535eab8"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/server_paged-process-commit_after_txlog_durable-1-verify.stderr.gz": {
+    "bytes": 20,
+    "sha256": "f61f27bd17de546264aa58f40f3aafaac7021e0ef69c17f6b1b4cd7664a037ec"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/server_paged-process-commit_after_txlog_durable-1-verify.stdout.gz": {
+    "bytes": 705,
+    "sha256": "ca55a5f97ab0935c659b1e24a1e7327554fec46d8418ab8d5a779c3ae7f336d8"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/server_paged-process-commit_before_broker_publish-1-cut.stderr.gz": {
+    "bytes": 51,
+    "sha256": "e2713d7699179c7ffaba364b1c72c38084ec771f9e1d82a95a0c147faf43d2ab"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/server_paged-process-commit_before_broker_publish-1-cut.stdout.gz": {
+    "bytes": 77,
+    "sha256": "df71c19ccf4521ceac23eb794955441ba1d5005c6ee819009740baf9d535eab8"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/server_paged-process-commit_before_broker_publish-1-verify.stderr.gz": {
+    "bytes": 20,
+    "sha256": "f61f27bd17de546264aa58f40f3aafaac7021e0ef69c17f6b1b4cd7664a037ec"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/server_paged-process-commit_before_broker_publish-1-verify.stdout.gz": {
+    "bytes": 706,
+    "sha256": "d01b94c54de07dcf224aaaf4233e457ab887af47c3472a0622c5eb67a82e52f9"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/server_paged-process-commit_before_decision-1-cut.stderr.gz": {
+    "bytes": 51,
+    "sha256": "e2713d7699179c7ffaba364b1c72c38084ec771f9e1d82a95a0c147faf43d2ab"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/server_paged-process-commit_before_decision-1-cut.stdout.gz": {
+    "bytes": 77,
+    "sha256": "df71c19ccf4521ceac23eb794955441ba1d5005c6ee819009740baf9d535eab8"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/server_paged-process-commit_before_decision-1-verify.stderr.gz": {
+    "bytes": 20,
+    "sha256": "f61f27bd17de546264aa58f40f3aafaac7021e0ef69c17f6b1b4cd7664a037ec"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/server_paged-process-commit_before_decision-1-verify.stdout.gz": {
+    "bytes": 310,
+    "sha256": "c466eaa8f7c42a48f9e198b91051f0af0501f573c720b6e92bab9e9b5e48fb2d"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/server_paged-process-identity_after_ack-1-ACK.json": {
+    "bytes": 183,
+    "sha256": "bbd786b272a78ce93a23ae591123068210e3c2dbcf85fadf6c084aa0ef73bb03"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/server_paged-process-identity_after_ack-1-cut.stderr.gz": {
+    "bytes": 51,
+    "sha256": "e2713d7699179c7ffaba364b1c72c38084ec771f9e1d82a95a0c147faf43d2ab"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/server_paged-process-identity_after_ack-1-cut.stdout.gz": {
+    "bytes": 77,
+    "sha256": "df71c19ccf4521ceac23eb794955441ba1d5005c6ee819009740baf9d535eab8"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/server_paged-process-identity_after_ack-1-verify.stderr.gz": {
+    "bytes": 20,
+    "sha256": "f61f27bd17de546264aa58f40f3aafaac7021e0ef69c17f6b1b4cd7664a037ec"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/server_paged-process-identity_after_ack-1-verify.stdout.gz": {
+    "bytes": 705,
+    "sha256": "10b00674ffe5a989a08efadbb3936d7c97c92647e4d562bc654a1fc54a1199bd"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/server_paged-process-identity_after_commit-1-cut.stderr.gz": {
+    "bytes": 51,
+    "sha256": "e2713d7699179c7ffaba364b1c72c38084ec771f9e1d82a95a0c147faf43d2ab"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/server_paged-process-identity_after_commit-1-cut.stdout.gz": {
+    "bytes": 77,
+    "sha256": "df71c19ccf4521ceac23eb794955441ba1d5005c6ee819009740baf9d535eab8"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/server_paged-process-identity_after_commit-1-verify.stderr.gz": {
+    "bytes": 20,
+    "sha256": "f61f27bd17de546264aa58f40f3aafaac7021e0ef69c17f6b1b4cd7664a037ec"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/server_paged-process-identity_after_commit-1-verify.stdout.gz": {
+    "bytes": 706,
+    "sha256": "3eea82328f3307ae1103f05a93c867a7e035ae893425715ca2babbb8156cb078"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/server_paged-process-identity_after_staging-1-cut.stderr.gz": {
+    "bytes": 51,
+    "sha256": "e2713d7699179c7ffaba364b1c72c38084ec771f9e1d82a95a0c147faf43d2ab"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/server_paged-process-identity_after_staging-1-cut.stdout.gz": {
+    "bytes": 77,
+    "sha256": "df71c19ccf4521ceac23eb794955441ba1d5005c6ee819009740baf9d535eab8"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/server_paged-process-identity_after_staging-1-verify.stderr.gz": {
+    "bytes": 20,
+    "sha256": "f61f27bd17de546264aa58f40f3aafaac7021e0ef69c17f6b1b4cd7664a037ec"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/server_paged-process-identity_after_staging-1-verify.stdout.gz": {
+    "bytes": 310,
+    "sha256": "c466eaa8f7c42a48f9e198b91051f0af0501f573c720b6e92bab9e9b5e48fb2d"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/server_paged-process-transaction_log_sync-1-cut.stderr.gz": {
+    "bytes": 92,
+    "sha256": "1cfaa58294cbcb2ac914f73f22661ced545636a52285b39340aaf041d4976ec2"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/server_paged-process-transaction_log_sync-1-cut.stdout.gz": {
+    "bytes": 77,
+    "sha256": "df71c19ccf4521ceac23eb794955441ba1d5005c6ee819009740baf9d535eab8"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/server_paged-process-transaction_log_sync-1-verify.stderr.gz": {
+    "bytes": 20,
+    "sha256": "f61f27bd17de546264aa58f40f3aafaac7021e0ef69c17f6b1b4cd7664a037ec"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/server_paged-process-transaction_log_sync-1-verify.stdout.gz": {
+    "bytes": 704,
+    "sha256": "f58a822d50980754cbb4fbf4ec5e1f806eec4d3c1a7fcc7c1c4f65de70198be5"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/server_paged-process-transaction_log_write-1-cut.stderr.gz": {
+    "bytes": 93,
+    "sha256": "d608c382144a8414191c4af0078a82acdb0f69c05760730263e3d9bc70145536"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/server_paged-process-transaction_log_write-1-cut.stdout.gz": {
+    "bytes": 77,
+    "sha256": "df71c19ccf4521ceac23eb794955441ba1d5005c6ee819009740baf9d535eab8"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/server_paged-process-transaction_log_write-1-verify.stderr.gz": {
+    "bytes": 20,
+    "sha256": "f61f27bd17de546264aa58f40f3aafaac7021e0ef69c17f6b1b4cd7664a037ec"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/server_paged-process-transaction_log_write-1-verify.stdout.gz": {
+    "bytes": 310,
+    "sha256": "c466eaa8f7c42a48f9e198b91051f0af0501f573c720b6e92bab9e9b5e48fb2d"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/server_paged-seed/original-ACK.json": {
+    "bytes": 588,
+    "sha256": "c358f50132f950cc22265a59a10bd3fe8b2c0ae1768050a943d6809b1017de52"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/server_paged-seed.stderr.gz": {
+    "bytes": 20,
+    "sha256": "f61f27bd17de546264aa58f40f3aafaac7021e0ef69c17f6b1b4cd7664a037ec"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/server_paged-seed.stdout.gz": {
+    "bytes": 190,
+    "sha256": "5600ff7f7f450eafa8fee2e927d251a52d277a67f1691b02b1230d1a94d8e61f"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/server_paged-volatile-commit_after_broker_publish-1-cut.stderr.gz": {
+    "bytes": 51,
+    "sha256": "e2713d7699179c7ffaba364b1c72c38084ec771f9e1d82a95a0c147faf43d2ab"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/server_paged-volatile-commit_after_broker_publish-1-cut.stdout.gz": {
+    "bytes": 77,
+    "sha256": "df71c19ccf4521ceac23eb794955441ba1d5005c6ee819009740baf9d535eab8"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/server_paged-volatile-commit_after_broker_publish-1-verify.stderr.gz": {
+    "bytes": 20,
+    "sha256": "f61f27bd17de546264aa58f40f3aafaac7021e0ef69c17f6b1b4cd7664a037ec"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/server_paged-volatile-commit_after_broker_publish-1-verify.stdout.gz": {
+    "bytes": 706,
+    "sha256": "ff3985031bb89e365674f762a711170030dc8633d8fc7c4438306515c9113b46"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/server_paged-volatile-commit_after_marker-1-cut.stderr.gz": {
+    "bytes": 51,
+    "sha256": "e2713d7699179c7ffaba364b1c72c38084ec771f9e1d82a95a0c147faf43d2ab"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/server_paged-volatile-commit_after_marker-1-cut.stdout.gz": {
+    "bytes": 77,
+    "sha256": "df71c19ccf4521ceac23eb794955441ba1d5005c6ee819009740baf9d535eab8"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/server_paged-volatile-commit_after_marker-1-verify.stderr.gz": {
+    "bytes": 20,
+    "sha256": "f61f27bd17de546264aa58f40f3aafaac7021e0ef69c17f6b1b4cd7664a037ec"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/server_paged-volatile-commit_after_marker-1-verify.stdout.gz": {
+    "bytes": 704,
+    "sha256": "e630d0705d60fe8b4155ba8b6d854b96713fd12a4445268ea54d5ad46ae0a840"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/server_paged-volatile-commit_after_page_apply-1-cut.stderr.gz": {
+    "bytes": 51,
+    "sha256": "e2713d7699179c7ffaba364b1c72c38084ec771f9e1d82a95a0c147faf43d2ab"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/server_paged-volatile-commit_after_page_apply-1-cut.stdout.gz": {
+    "bytes": 77,
+    "sha256": "df71c19ccf4521ceac23eb794955441ba1d5005c6ee819009740baf9d535eab8"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/server_paged-volatile-commit_after_page_apply-1-verify.stderr.gz": {
+    "bytes": 20,
+    "sha256": "f61f27bd17de546264aa58f40f3aafaac7021e0ef69c17f6b1b4cd7664a037ec"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/server_paged-volatile-commit_after_page_apply-1-verify.stdout.gz": {
+    "bytes": 706,
+    "sha256": "264c57465bb3f6c83397aae8e0dbef716fc6af8f46916640120f76dc5f187e30"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/server_paged-volatile-commit_after_sync_publish-1-cut.stderr.gz": {
+    "bytes": 51,
+    "sha256": "e2713d7699179c7ffaba364b1c72c38084ec771f9e1d82a95a0c147faf43d2ab"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/server_paged-volatile-commit_after_sync_publish-1-cut.stdout.gz": {
+    "bytes": 77,
+    "sha256": "df71c19ccf4521ceac23eb794955441ba1d5005c6ee819009740baf9d535eab8"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/server_paged-volatile-commit_after_sync_publish-1-verify.stderr.gz": {
+    "bytes": 20,
+    "sha256": "f61f27bd17de546264aa58f40f3aafaac7021e0ef69c17f6b1b4cd7664a037ec"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/server_paged-volatile-commit_after_sync_publish-1-verify.stdout.gz": {
+    "bytes": 705,
+    "sha256": "1d0f9baaf2d6a8e8f4fad756c3c3e0b40df8b1f2c623b40a2cfc70c6a14bcf41"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/server_paged-volatile-commit_after_txlog_durable-1-cut.stderr.gz": {
+    "bytes": 51,
+    "sha256": "e2713d7699179c7ffaba364b1c72c38084ec771f9e1d82a95a0c147faf43d2ab"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/server_paged-volatile-commit_after_txlog_durable-1-cut.stdout.gz": {
+    "bytes": 77,
+    "sha256": "df71c19ccf4521ceac23eb794955441ba1d5005c6ee819009740baf9d535eab8"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/server_paged-volatile-commit_after_txlog_durable-1-verify.stderr.gz": {
+    "bytes": 20,
+    "sha256": "f61f27bd17de546264aa58f40f3aafaac7021e0ef69c17f6b1b4cd7664a037ec"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/server_paged-volatile-commit_after_txlog_durable-1-verify.stdout.gz": {
+    "bytes": 705,
+    "sha256": "adeea957b79d077acd069ac88aad4c331373c240a7b14fb5b4de90b2e8a79048"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/server_paged-volatile-commit_before_broker_publish-1-cut.stderr.gz": {
+    "bytes": 51,
+    "sha256": "e2713d7699179c7ffaba364b1c72c38084ec771f9e1d82a95a0c147faf43d2ab"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/server_paged-volatile-commit_before_broker_publish-1-cut.stdout.gz": {
+    "bytes": 77,
+    "sha256": "df71c19ccf4521ceac23eb794955441ba1d5005c6ee819009740baf9d535eab8"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/server_paged-volatile-commit_before_broker_publish-1-verify.stderr.gz": {
+    "bytes": 20,
+    "sha256": "f61f27bd17de546264aa58f40f3aafaac7021e0ef69c17f6b1b4cd7664a037ec"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/server_paged-volatile-commit_before_broker_publish-1-verify.stdout.gz": {
+    "bytes": 705,
+    "sha256": "b3dd750aa4a0b10c4967f377ed1a3bf0ed505985c2804377891cf56bed1b9fcb"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/server_paged-volatile-commit_before_decision-1-cut.stderr.gz": {
+    "bytes": 51,
+    "sha256": "e2713d7699179c7ffaba364b1c72c38084ec771f9e1d82a95a0c147faf43d2ab"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/server_paged-volatile-commit_before_decision-1-cut.stdout.gz": {
+    "bytes": 77,
+    "sha256": "df71c19ccf4521ceac23eb794955441ba1d5005c6ee819009740baf9d535eab8"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/server_paged-volatile-commit_before_decision-1-verify.stderr.gz": {
+    "bytes": 20,
+    "sha256": "f61f27bd17de546264aa58f40f3aafaac7021e0ef69c17f6b1b4cd7664a037ec"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/server_paged-volatile-commit_before_decision-1-verify.stdout.gz": {
+    "bytes": 310,
+    "sha256": "c466eaa8f7c42a48f9e198b91051f0af0501f573c720b6e92bab9e9b5e48fb2d"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/server_paged-volatile-identity_after_ack-1-ACK.json": {
+    "bytes": 183,
+    "sha256": "cc9037f97f77f294a54ea94e481c914190e0edf79bc22e56be0588b13c72e482"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/server_paged-volatile-identity_after_ack-1-cut.stderr.gz": {
+    "bytes": 51,
+    "sha256": "e2713d7699179c7ffaba364b1c72c38084ec771f9e1d82a95a0c147faf43d2ab"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/server_paged-volatile-identity_after_ack-1-cut.stdout.gz": {
+    "bytes": 77,
+    "sha256": "df71c19ccf4521ceac23eb794955441ba1d5005c6ee819009740baf9d535eab8"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/server_paged-volatile-identity_after_ack-1-verify.stderr.gz": {
+    "bytes": 20,
+    "sha256": "f61f27bd17de546264aa58f40f3aafaac7021e0ef69c17f6b1b4cd7664a037ec"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/server_paged-volatile-identity_after_ack-1-verify.stdout.gz": {
+    "bytes": 705,
+    "sha256": "592d148373907dfcefaac671c69e856ea1d3f94cb22e8970015bfded52b3fd26"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/server_paged-volatile-identity_after_commit-1-cut.stderr.gz": {
+    "bytes": 51,
+    "sha256": "e2713d7699179c7ffaba364b1c72c38084ec771f9e1d82a95a0c147faf43d2ab"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/server_paged-volatile-identity_after_commit-1-cut.stdout.gz": {
+    "bytes": 77,
+    "sha256": "df71c19ccf4521ceac23eb794955441ba1d5005c6ee819009740baf9d535eab8"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/server_paged-volatile-identity_after_commit-1-verify.stderr.gz": {
+    "bytes": 20,
+    "sha256": "f61f27bd17de546264aa58f40f3aafaac7021e0ef69c17f6b1b4cd7664a037ec"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/server_paged-volatile-identity_after_commit-1-verify.stdout.gz": {
+    "bytes": 705,
+    "sha256": "ddf7865df3a46aa884e33bbc7da92233a1814a5a91670aaa62eb4a43e8e5e522"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/server_paged-volatile-identity_after_staging-1-cut.stderr.gz": {
+    "bytes": 51,
+    "sha256": "e2713d7699179c7ffaba364b1c72c38084ec771f9e1d82a95a0c147faf43d2ab"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/server_paged-volatile-identity_after_staging-1-cut.stdout.gz": {
+    "bytes": 77,
+    "sha256": "df71c19ccf4521ceac23eb794955441ba1d5005c6ee819009740baf9d535eab8"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/server_paged-volatile-identity_after_staging-1-verify.stderr.gz": {
+    "bytes": 20,
+    "sha256": "f61f27bd17de546264aa58f40f3aafaac7021e0ef69c17f6b1b4cd7664a037ec"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/server_paged-volatile-identity_after_staging-1-verify.stdout.gz": {
+    "bytes": 310,
+    "sha256": "c466eaa8f7c42a48f9e198b91051f0af0501f573c720b6e92bab9e9b5e48fb2d"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/server_paged-volatile-transaction_log_sync-1-cut.stderr.gz": {
+    "bytes": 92,
+    "sha256": "1cfaa58294cbcb2ac914f73f22661ced545636a52285b39340aaf041d4976ec2"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/server_paged-volatile-transaction_log_sync-1-cut.stdout.gz": {
+    "bytes": 77,
+    "sha256": "df71c19ccf4521ceac23eb794955441ba1d5005c6ee819009740baf9d535eab8"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/server_paged-volatile-transaction_log_sync-1-verify.stderr.gz": {
+    "bytes": 20,
+    "sha256": "f61f27bd17de546264aa58f40f3aafaac7021e0ef69c17f6b1b4cd7664a037ec"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/server_paged-volatile-transaction_log_sync-1-verify.stdout.gz": {
+    "bytes": 704,
+    "sha256": "a35b96b23904db73b40afcbd732ca03ccd73953b20272d93f60aa9fc67c12f23"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/server_paged-volatile-transaction_log_write-1-cut.stderr.gz": {
+    "bytes": 93,
+    "sha256": "d608c382144a8414191c4af0078a82acdb0f69c05760730263e3d9bc70145536"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/server_paged-volatile-transaction_log_write-1-cut.stdout.gz": {
+    "bytes": 77,
+    "sha256": "df71c19ccf4521ceac23eb794955441ba1d5005c6ee819009740baf9d535eab8"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/server_paged-volatile-transaction_log_write-1-verify.stderr.gz": {
+    "bytes": 20,
+    "sha256": "f61f27bd17de546264aa58f40f3aafaac7021e0ef69c17f6b1b4cd7664a037ec"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-2403deef/server_paged-volatile-transaction_log_write-1-verify.stdout.gz": {
+    "bytes": 310,
+    "sha256": "c466eaa8f7c42a48f9e198b91051f0af0501f573c720b6e92bab9e9b5e48fb2d"
+  },
+  "finance492/recovery/native-identity-finance492-recovery-pipeline.log.gz": {
+    "bytes": 3088,
+    "sha256": "c5e0b716b8584dc0ede825518e6ca468a8ccfd185723e27176ad5cdd488e8faa"
+  },
+  "finance492/recovery/native-identity-finance492-vm-2403deef/embedded_memory-identity_after_ack/cut.console.gz": {
+    "bytes": 329,
+    "sha256": "d3d9836fed04691229ca636d1c36fdfcaaa224ac52bc3a99389159f7d476324d"
+  },
+  "finance492/recovery/native-identity-finance492-vm-2403deef/embedded_memory-identity_after_ack/external-witness.json": {
+    "bytes": 461,
+    "sha256": "b1fe5ccbdbef941fa312ed375e2a55c086670570541e24f4a9f326e5369ab61e"
+  },
+  "finance492/recovery/native-identity-finance492-vm-2403deef/embedded_memory-identity_after_ack/verify.console.gz": {
+    "bytes": 838,
+    "sha256": "56514f3fc76d6c878ad55cb17d768f353c3986ea9e24f4dbf11218460cafe085"
+  },
+  "finance492/recovery/native-identity-finance492-vm-2403deef/embedded_memory-identity_after_commit/cut.console.gz": {
+    "bytes": 239,
+    "sha256": "0bce0c600ed9b1a815b23dd5bafbe4f78f1816989677b48a3893af215feb695b"
+  },
+  "finance492/recovery/native-identity-finance492-vm-2403deef/embedded_memory-identity_after_commit/external-witness.json": {
+    "bytes": 278,
+    "sha256": "561ae6263edb82ab86d824e4ca20a3c2c8c5f4df77de05430fa6b299b020c183"
+  },
+  "finance492/recovery/native-identity-finance492-vm-2403deef/embedded_memory-identity_after_commit/verify.console.gz": {
+    "bytes": 837,
+    "sha256": "3a43a45630f425247a9691df2f1f7a80e48387415fd514dee6ae6b28918cb2f3"
+  },
+  "finance492/recovery/native-identity-finance492-vm-2403deef/embedded_memory-transaction_log_sync/cut.console.gz": {
+    "bytes": 242,
+    "sha256": "476a36a822205025082bd2decdfd5b3ac64c5d6514fd768a5d96351c1b71529d"
+  },
+  "finance492/recovery/native-identity-finance492-vm-2403deef/embedded_memory-transaction_log_sync/external-witness.json": {
+    "bytes": 276,
+    "sha256": "ca438125b7f261bb04175dcaa6102c20ec8553148a5b166ee1e9152c321d77b0"
+  },
+  "finance492/recovery/native-identity-finance492-vm-2403deef/embedded_memory-transaction_log_sync/verify.console.gz": {
+    "bytes": 838,
+    "sha256": "31d42f7178683eca2c8dc5f3b2b22e0e8b0c2242af3c72ef23946f4013a493a8"
+  },
+  "finance492/recovery/native-identity-finance492-vm-2403deef/embedded_memory-transaction_log_write/cut.console.gz": {
+    "bytes": 242,
+    "sha256": "d7344797a8f856cf1252cba69808caeb4f2a8e5ad99164a94d18ad3cf5dbad35"
+  },
+  "finance492/recovery/native-identity-finance492-vm-2403deef/embedded_memory-transaction_log_write/external-witness.json": {
+    "bytes": 277,
+    "sha256": "15167f4b14f688c44009a0919717c5bee258d64abdc6f1c03688d91e6c831039"
+  },
+  "finance492/recovery/native-identity-finance492-vm-2403deef/embedded_memory-transaction_log_write/verify.console.gz": {
+    "bytes": 447,
+    "sha256": "ec4da6fc041d637d76e62cac7bf96d68a218836c746ebe8a3abf2feb111e4253"
+  },
+  "finance492/recovery/native-identity-finance492-vm-2403deef/qemu.stderr.gz": {
+    "bytes": 20,
+    "sha256": "f61f27bd17de546264aa58f40f3aafaac7021e0ef69c17f6b1b4cd7664a037ec"
+  },
+  "finance492/recovery/native-identity-finance492-vm-2403deef/qemu.stdout.gz": {
+    "bytes": 20,
+    "sha256": "f61f27bd17de546264aa58f40f3aafaac7021e0ef69c17f6b1b4cd7664a037ec"
+  },
+  "finance492/recovery/native-identity-finance492-vm-2403deef/result.json": {
+    "bytes": 70714,
+    "sha256": "faaf28143d3318119a578d7d5e52cce9c6a2063efa67f0301ee91ead187fad2f"
+  },
+  "finance492/recovery/native-identity-finance492-vm-2403deef/server_paged-identity_after_ack/cut.console.gz": {
+    "bytes": 328,
+    "sha256": "2d06fab4e7e47d086f9b84f1c2627c2a7be4830df12bb7292b010192bf7e737b"
+  },
+  "finance492/recovery/native-identity-finance492-vm-2403deef/server_paged-identity_after_ack/external-witness.json": {
+    "bytes": 459,
+    "sha256": "06c105563d7803109e1d02358e6de3536687efb5b670b44a27fb8b71b204f3d0"
+  },
+  "finance492/recovery/native-identity-finance492-vm-2403deef/server_paged-identity_after_ack/verify.console.gz": {
+    "bytes": 837,
+    "sha256": "8498cab928e1f0de566980c7f9eaac11472a6f0a7a9cb6bdc18d0f7b0d97a80d"
+  },
+  "finance492/recovery/native-identity-finance492-vm-2403deef/server_paged-identity_after_commit/cut.console.gz": {
+    "bytes": 239,
+    "sha256": "5e426715a27792ef5eaa1f9f17c8f2dd7ab880bf6580b70f0d7f6758d8122136"
+  },
+  "finance492/recovery/native-identity-finance492-vm-2403deef/server_paged-identity_after_commit/external-witness.json": {
+    "bytes": 275,
+    "sha256": "bd2d40603a96007099c4903446a2be326e6f74b32ac3bd872bdb08711cc11e97"
+  },
+  "finance492/recovery/native-identity-finance492-vm-2403deef/server_paged-identity_after_commit/verify.console.gz": {
+    "bytes": 838,
+    "sha256": "3d6ecd924ee6c88127dcadd17570ac1731a3e2b8a6e9ba4b19eaa41f1f99d690"
+  },
+  "finance492/recovery/native-identity-finance492-vm-2403deef/server_paged-page_log_sync/cut.console.gz": {
+    "bytes": 238,
+    "sha256": "cf557184b3aa3bacecce9c9c979aeb99b6989c85aa0c1a2dbf828f16ccf15f31"
+  },
+  "finance492/recovery/native-identity-finance492-vm-2403deef/server_paged-page_log_sync/external-witness.json": {
+    "bytes": 259,
+    "sha256": "c1285c8cdfd08cceafc542146a2c6a4c6e1de6bccc7d5f858ffb7a8deb96c991"
+  },
+  "finance492/recovery/native-identity-finance492-vm-2403deef/server_paged-page_log_sync/verify.console.gz": {
+    "bytes": 836,
+    "sha256": "15c21f439c0da31a536725ed4d11c3eb053f25fa18047dc62216285e0df4b778"
+  },
+  "finance492/recovery/native-identity-finance492-vm-2403deef/server_paged-page_log_write/cut.console.gz": {
+    "bytes": 238,
+    "sha256": "90f8baafdd8699fef8144033a39461c063250e1f2bbdd0d2230678708052fc99"
+  },
+  "finance492/recovery/native-identity-finance492-vm-2403deef/server_paged-page_log_write/external-witness.json": {
+    "bytes": 261,
+    "sha256": "72cf53dff94319fe451e2bafd148cf6b191f36a1bcefec9a2419b5542e81f548"
+  },
+  "finance492/recovery/native-identity-finance492-vm-2403deef/server_paged-page_log_write/verify.console.gz": {
+    "bytes": 838,
+    "sha256": "92f31bbdc0225a19f6c007efc263d292a86504ff9e6a8832f1e59801b40e178a"
+  },
+  "finance492/recovery/native-identity-finance492-vm-2403deef/server_paged-transaction_log_sync/cut.console.gz": {
+    "bytes": 242,
+    "sha256": "9b5b910885456eb855022a8a6345bc77ad815029228dd7234b3982bd5bf6f4d3"
+  },
+  "finance492/recovery/native-identity-finance492-vm-2403deef/server_paged-transaction_log_sync/external-witness.json": {
+    "bytes": 272,
+    "sha256": "da20e474ae3e9b0392bdd661ccc50198dd61834dd26d37b4808f801c2569b763"
+  },
+  "finance492/recovery/native-identity-finance492-vm-2403deef/server_paged-transaction_log_sync/verify.console.gz": {
+    "bytes": 836,
+    "sha256": "27b98f4d2ceda8cc22063ecab9c10b2015f8d89f281403cbbced62315b167d26"
+  },
+  "finance492/recovery/native-identity-finance492-vm-2403deef/server_paged-transaction_log_write/cut.console.gz": {
+    "bytes": 242,
+    "sha256": "788c7b67f49e558c81ec0ad8593f5439b98c4fc0c0d9c57f50bb33de6f41cbc9"
+  },
+  "finance492/recovery/native-identity-finance492-vm-2403deef/server_paged-transaction_log_write/external-witness.json": {
+    "bytes": 275,
+    "sha256": "68987afa99d6f1726a0e443f43305f0ceba4938e7418ff2907859f91b60f8504"
+  },
+  "finance492/recovery/native-identity-finance492-vm-2403deef/server_paged-transaction_log_write/verify.console.gz": {
+    "bytes": 447,
+    "sha256": "e80dda28205d5487c2a6f4f47adfa16ae1b3a10d3a432b620e67375951298a4c"
+  },
+  "finance492/recovery/raw-manifest.json": {
+    "bytes": 86912,
+    "sha256": "e6a09de18a430717c5efeb6c2ecb397127af7addbbac56b38ee9ee18b3e1684b"
+  },
+  "finance492/recovery/report-native-identity-finance492-process-IO-VM-independent.json": {
+    "bytes": 1144,
+    "sha256": "c3d0b3971ae51eea8599230f93b1fac49810e0ece791f9d333248769c1c9bfae"
+  },
+  "finance492/recovery/report-native-identity-finance492-recovery-pipeline.json": {
+    "bytes": 1597,
+    "sha256": "90bc4b3c168789fd11769b2e22561d11a916a9877b24bccd048664874d403bc4"
+  },
+  "finance492/validation/controller/canonical-native-finance492-core-results.py": {
+    "bytes": 2680,
+    "sha256": "33ef7706122e3043a2ba7e6c22ae00c453f0837f310f09a2745927d2cc5d3a72"
+  },
+  "finance492/validation/controller/native-identity-finance492-authority-version-final.json": {
+    "bytes": 1625,
+    "sha256": "bc62fcf97541a29b229b849fedb04957c187d3578b23bc9d2f4d4d18b3313c3a"
+  },
+  "finance492/validation/controller/native-identity-finance492-focused.json": {
+    "bytes": 2182,
+    "sha256": "e5e6497b3f8d287c1e84cb3b88136b20e19016efabb50c47810f7a6aa7756f37"
+  },
+  "finance492/validation/controller/native-identity-finance492-validation.json": {
+    "bytes": 3280,
+    "sha256": "a5331f859bafef5ca323fb4e0099ddbaa515d475aa40efb5b5be0960adb53c8a"
+  },
+  "finance492/validation/controller/native492-reader-contract-baseline.json": {
+    "bytes": 1696,
+    "sha256": "f486cf87d669ddc85947ecb45876ef3343d8b57a375feb73a5ac62366d7930b4"
+  },
+  "finance492/validation/controller/native492-reader-contract-focused.json": {
+    "bytes": 2289,
+    "sha256": "f3d30f0f70636f83cfd0ee78a73abfeccda08a5e507b774eeb66258123ba0e2d"
+  },
+  "finance492/validation/raw-manifest.json": {
+    "bytes": 2771,
+    "sha256": "329fa5a0946342865c8c8a4d3fa68b20e045432b2578c96a3fd5a8686ce43be1"
+  },
+  "finance492/validation/report-native-identity-finance492-authority-version-final.json": {
+    "bytes": 1103,
+    "sha256": "98248623df9e8d2762f57e91f2be5a4fd16ffae5c8d29b59378a3145b39cec1c"
+  },
+  "finance492/validation/report-native-identity-finance492-canonical-Core.json": {
+    "bytes": 56129,
+    "sha256": "b0e05d97e143434f188f90f2b7ccb38422dd48794fe899fe54df01046a6c199d"
+  },
+  "finance492/validation/report-native-identity-finance492-validation.json": {
+    "bytes": 3031,
+    "sha256": "fc175c5eb7fa6f0fc645df802958fc0df959d4c3d9ed9012eafed8723f035c38"
+  },
+  "finance492/validation/tc-step-native-identity-finance492-authority-version-final.log.gz": {
+    "bytes": 37727,
+    "sha256": "9cb98215d196b094ae8e8b3e025f1b4924eaa7fa055c25e2c48b4216d819fbdd"
+  },
+  "finance492/validation/tc-step-native-identity-finance492-validation.log.gz": {
+    "bytes": 153647,
+    "sha256": "f348e859370d1f95e94d94ecee1dfab0cf6b2d294ffc86366881bee64fdc5491"
   },
   "recovery/README.md": {
     "bytes": 3311,
@@ -24,8 +1140,8 @@
     "sha256": "de147ac0e6df333e514ca3775ef6726b0e0cd5d1030593f5357e96ab8922b11b"
   },
   "summary.json": {
-    "bytes": 1338,
-    "sha256": "1242cc393ffbb42172bd4c3258b4d468df530d745ccc2078566fe191ca09b9aa"
+    "bytes": 3172,
+    "sha256": "cb8802b3e434211b63ba561eaeb733a247b4d172fae6e33316b0f227f4bb3313"
   },
   "validation/controller/canonical-native490-core-results.py": {
     "bytes": 2630,

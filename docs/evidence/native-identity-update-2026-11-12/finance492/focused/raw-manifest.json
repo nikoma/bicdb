@@ -1,0 +1,32 @@
+{
+  "report-native-identity-finance492-focused.json": {
+    "raw_sha256": "81f0a25e421834f8e9b99d9b712f074d89072a1837f23d5a1f93c2fe0dc2a2a5",
+    "bytes": 2245,
+    "stored_as": "report-native-identity-finance492-focused.json"
+  },
+  "tc-step-native-identity-finance492-focused.log": {
+    "raw_sha256": "b97f6e0b683b740be82ff575c2c4d6fc915661cde0a59f6542c7817084b67af1",
+    "bytes": 724441,
+    "stored_as": "tc-step-native-identity-finance492-focused.log.gz"
+  },
+  "report-native492-reader-contract-baseline.json": {
+    "raw_sha256": "fa6664db2773cf5283143043973f317a1da3e53c84da995f0f57ce67a835e44d",
+    "bytes": 1464,
+    "stored_as": "report-native492-reader-contract-baseline.json"
+  },
+  "tc-step-native492-reader-contract-baseline.log": {
+    "raw_sha256": "1eb0e13637a11716e5cacda0a008800ea5daf6696e6b369775b09f600805f79f",
+    "bytes": 295573,
+    "stored_as": "tc-step-native492-reader-contract-baseline.log.gz"
+  },
+  "report-native492-reader-contract-focused.json": {
+    "raw_sha256": "7690ee9d60d9c63dd6c16e3984f68a2e3bd8794d2adb048e5f4602f26b2ec859",
+    "bytes": 2384,
+    "stored_as": "report-native492-reader-contract-focused.json"
+  },
+  "tc-step-native492-reader-contract-focused.log": {
+    "raw_sha256": "e1ad759980f4692dca1824ae2567b224217ca8ff16ec433dc09d7b08bd5e3e58",
+    "bytes": 593038,
+    "stored_as": "tc-step-native492-reader-contract-focused.log.gz"
+  }
+}

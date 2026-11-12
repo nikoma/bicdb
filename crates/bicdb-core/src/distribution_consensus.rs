@@ -1537,6 +1537,7 @@ impl MetadataConsensusStore {
     }
 
     fn validate_read_context(&self, context: &MetadataReadContext) -> Result<()> {
+        self.require_native_metadata_owner_current()?;
         if context.failed || Instant::now() >= context.deadline {
             return Err(metadata_error("read authority context failed or expired"));
         }
@@ -1565,6 +1566,7 @@ impl MetadataConsensusStore {
         budget: Duration,
         local: &MetadataReadParticipant,
     ) -> Result<MetadataReadContext> {
+        self.require_native_metadata_owner_current()?;
         let started = Instant::now();
         if read_request_id.is_nil() || budget.is_zero() || budget > Duration::from_secs(300) {
             return Err(metadata_error("read authority request/budget is invalid"));
@@ -1870,6 +1872,7 @@ impl MetadataConsensusStore {
     }
 
     pub fn start_election(&mut self) -> Result<MetadataVoteRequest> {
+        self.require_native_metadata_owner_current()?;
         let voters = topology_voters(&self.state.committed_topology);
         if !voters.contains(&self.state.node_id) {
             return Err(metadata_error("non-voter cannot start an election"));
@@ -1893,6 +1896,7 @@ impl MetadataConsensusStore {
         &mut self,
         request: MetadataVoteRequest,
     ) -> Result<MetadataVoteResponse> {
+        self.require_native_metadata_owner_current()?;
         self.ensure_cluster(&request.cluster_id)?;
         if request.term < self.state.current_term {
             return Ok(self.vote_response(false));
@@ -2107,6 +2111,7 @@ impl MetadataConsensusStore {
         &mut self,
         request: MetadataAppendRequest,
     ) -> Result<MetadataAppendResponse> {
+        self.require_native_metadata_owner_current()?;
         self.ensure_cluster(&request.cluster_id)?;
         if request.term < self.state.current_term {
             return Ok(self.append_response(false, self.last_log_index().saturating_add(1)));

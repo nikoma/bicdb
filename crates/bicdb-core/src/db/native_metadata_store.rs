@@ -211,6 +211,9 @@ impl BicDb {
         }
         Ok(())
     }
+    pub(crate) fn native_metadata_owner_open_lifetime(&self) -> std::sync::Weak<()> {
+        Arc::downgrade(&self.native_metadata_open_lifetime)
+    }
     pub(crate) fn native_metadata_owner_health(&self) -> Result<Arc<bicdb_page::DurabilityHealth>> {
         self.check_recovery_state()?;
         Ok(Arc::clone(&self.durability))

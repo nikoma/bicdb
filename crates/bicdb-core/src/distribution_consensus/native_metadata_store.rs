@@ -25,6 +25,8 @@ pub(super) struct NativeMetadataStoreOwner {
     _database: Arc<RwLock<BicDb>>,
     _directory: bicdb_page::DirectoryLock,
     health: Arc<bicdb_page::DurabilityHealth>,
+    actual_open: std::sync::Weak<()>,
+    actual_directory: std::sync::Weak<bicdb_page::DirectoryLock>,
     key: usize,
 }
 impl NativeMetadataStoreOwner {
@@ -48,6 +50,10 @@ impl NativeMetadataStoreOwner {
                 ));
             }
             let health = guard.native_metadata_owner_health()?;
+            let actual_open = guard.native_metadata_owner_open_lifetime();
+            let actual_directory = guard
+                .native_service_directory_lifetime()
+                .ok_or_else(|| metadata_error("actual native directory lifetime absent"))?;
             drop(guard);
             let directory = bicdb_page::DirectoryLock::acquire(root).map_err(|e| {
                 metadata_error(format!("metadata directory already owned/unavailable: {e}"))
@@ -56,6 +62,8 @@ impl NativeMetadataStoreOwner {
                 _database: database,
                 _directory: directory,
                 health,
+                actual_open,
+                actual_directory,
                 key,
             })
         })();
@@ -66,6 +74,9 @@ impl NativeMetadataStoreOwner {
     }
     pub(super) fn require_current(&self) -> Result<()> {
         // No BicDb.{read,write}, file/network wait, or reverse lock acquisition.
+        if self.actual_open.upgrade().is_none() || self.actual_directory.upgrade().is_none() {
+            return Err(metadata_error("original native DB open lifetime ended"));
+        }
         self.health.check().map_err(crate::error::durability_error)
     }
 }
@@ -81,6 +92,17 @@ pub(crate) enum NativeMetadataInitializationCut {
 }
 
 impl MetadataConsensusStore {
+    pub(super) fn require_native_metadata_owner_current(&self) -> Result<()> {
+        if let Some(owner) = &self.native_owner {
+            owner.require_current()?;
+        }
+        if self.state.native_store_id.is_some() && self.native_owner.is_none() {
+            return Err(metadata_error(
+                "protected metadata lacks actual native owner",
+            ));
+        }
+        Ok(())
+    }
     pub(crate) fn initialize_native_owned(
         root: impl AsRef<Path>,
         database: Arc<RwLock<BicDb>>,

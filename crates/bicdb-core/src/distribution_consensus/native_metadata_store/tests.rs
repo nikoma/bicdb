@@ -237,3 +237,119 @@ fn native_metadata_owner_rejects_other_store_id_birth_and_legacy_codec_bypass() 
             .contains(&crate::format::NATIVE_METADATA_STORE_FEATURE_FLAG.to_owned())
     );
 }
+
+#[test]
+fn native_metadata_owner_leaves_legacy_unbound_codec_and_open_behavior_unchanged() {
+    let f = ActualNativeRf3Fixture::new();
+    let topology = f.topology.read().clone();
+    let root = f.root.path().join("legacy-metadata");
+    let mut store = MetadataConsensusStore::open(
+        &root,
+        topology.cluster_id.clone(),
+        node("n0"),
+        topology.clone(),
+        true,
+    )
+    .unwrap();
+    store.start_election().unwrap();
+    assert_eq!(store.status().current_term, 1);
+    let encoded: serde_json::Value = serde_json::from_slice(
+        &fs::read(root.join(DEFAULT_CLUSTER_METADATA_CONSENSUS_STATE)).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(encoded["format_version"], 1);
+    assert!(encoded["state"].get("native_store_id").is_none());
+    drop(store);
+    let reopened = MetadataConsensusStore::open(
+        &root,
+        topology.cluster_id.clone(),
+        node("n0"),
+        topology,
+        true,
+    )
+    .unwrap();
+    assert_eq!(reopened.status().current_term, 1);
+    assert!(!crate::format::native_metadata_store_active(
+        f.databases[&node("n0")].read().data_path()
+    )
+    .unwrap());
+}
+
+#[test]
+fn native_metadata_owner_refuses_replaced_inner_db_even_while_outer_arc_survives() {
+    let f = fixture();
+    let mut store = initialize(&f);
+    let topology = f.topology.read().clone();
+    let path = f
+        .root
+        .path()
+        .join("native-meta-n0")
+        .join(DEFAULT_CLUSTER_METADATA_CONSENSUS_STATE);
+    let original = fs::read(&path).unwrap();
+    let spec = f.specs[&node("n0")].clone();
+    let config = DbConfig::default()
+        .with_fsync(true)
+        .with_storage_mode(StorageMode::ServerPaged)
+        .with_paged_buffer_pool_bytes(8 * 1024 * 1024);
+    let (replacement, _) = BicDb::create_new_enrolled_range_image_database(
+        &f.root.path().join("genuine-new-birth"),
+        config,
+        spec,
+    )
+    .unwrap();
+    // Hold the OLD actual directory lock deliberately. A Weak DirectoryLock
+    // alone would still upgrade after the original BicDb has ended.
+    let old_directory = f.databases[&node("n0")]
+        .read()
+        .native_service_directory_lifetime()
+        .unwrap()
+        .upgrade()
+        .unwrap();
+    let ended = std::mem::replace(&mut *f.databases[&node("n0")].write(), replacement);
+    drop(ended);
+    assert!(Arc::strong_count(&f.databases[&node("n0")]) > 1);
+    assert!(store
+        .start_election()
+        .unwrap_err()
+        .to_string()
+        .contains("open lifetime ended"));
+    assert!(store
+        .handle_vote_request(MetadataVoteRequest {
+            cluster_id: topology.cluster_id,
+            term: 9,
+            candidate_id: node("n1"),
+            last_log_index: 0,
+            last_log_term: 0
+        })
+        .is_err());
+    let local = MetadataReadParticipant::from_transport(node("n0"), 1, None, true);
+    assert!(store
+        .begin_read_authority(Uuid::now_v7(), Duration::from_secs(1), &local)
+        .unwrap_err()
+        .to_string()
+        .contains("open lifetime ended"));
+    assert_eq!(fs::read(path).unwrap(), original);
+    drop(old_directory);
+}
+
+#[test]
+fn native_metadata_owner_flag_only_prepublication_cut_can_retry_actual_unwritten_factory() {
+    let f = fixture();
+    let db = f.databases[&node("n0")].read();
+    // Models failure AFTER sticky reader fence but BEFORE any protected
+    // initialization record. No Store/vote has ever been exposed at this cut.
+    crate::format::enable_native_metadata_store(db.data_path()).unwrap();
+    assert!(db.require_native_metadata_uninitialized().is_ok());
+    drop(db);
+    assert!(!f
+        .root
+        .path()
+        .join("native-meta-n0")
+        .join(DEFAULT_CLUSTER_METADATA_CONSENSUS_STATE)
+        .exists());
+    let store = initialize(&f);
+    assert_eq!(store.status().current_term, 0);
+    drop(store);
+    let current = reopen(&f).unwrap();
+    assert_eq!(current.status().current_term, 0);
+}

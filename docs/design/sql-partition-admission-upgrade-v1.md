@@ -31,7 +31,9 @@ Old policy storage is genuinely ambiguous. In the controlled policy fixture:
   activated.
 
 The migration must not guess authorship from identical names, expressions or
-flags. An explicit local operator decision is required where stored and old
+flags. Historical effective state follows the actual old loader: the immediate
+parent's raw policy state, not invented recursive inheritance. An explicit local
+operator decision is required where stored and old
 effective child-policy states differ.
 
 ## Native capability component

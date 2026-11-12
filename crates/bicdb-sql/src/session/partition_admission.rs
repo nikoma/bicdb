@@ -151,10 +151,12 @@ fn gather(db: &BicDb) -> Result<Snapshot> {
         let mut legacy = false;
         for field in ["partitioning", "partition_of"] {
             if let Some(value) = raw.metadata.get(field).filter(|v| !v.is_null()) {
-                match value.get("execution_version").and_then(JsonValue::as_u64) {
-                    None => legacy = true,
-                    Some(1) => {}
-                    Some(_) => return Err(required("unknown partition execution version")),
+                match value.get("execution_version") {
+                    None | Some(JsonValue::Null) => legacy = true,
+                    Some(value) if value.as_u64() == Some(1) => {}
+                    Some(_) => {
+                        return Err(required("unknown or malformed partition execution version"))
+                    }
                 }
             }
         }
@@ -184,11 +186,13 @@ fn gather(db: &BicDb) -> Result<Snapshot> {
         root_node(&node.schema.name, &nodes)?;
         hash_item(&mut hasher, (&node.schema.name, &node.raw))?;
     }
-    for meta in db
+    let mut metas = db
         .collections()
         .into_iter()
         .filter(|meta| nodes.contains_key(&meta.name))
-    {
+        .collect::<Vec<_>>();
+    metas.sort_by(|a, b| a.name.cmp(&b.name));
+    for meta in metas {
         hash_item(&mut hasher, meta)?;
     }
     let mut definitions = db
@@ -214,7 +218,15 @@ fn gather(db: &BicDb) -> Result<Snapshot> {
     for node in nodes.values() {
         if node.legacy && node.schema.partition_of.is_some() {
             let stored = policy_state(&node.schema);
-            let historical = policy_state(&root_node(&node.schema.name, &nodes)?.schema);
+            // The actual old loader substitutes the immediate parent's raw
+            // policy state, not an invented recursive inheritance rule.
+            let link = node.schema.partition_of.as_ref().unwrap();
+            let historical = policy_state(
+                &nodes
+                    .get(&link.parent_table)
+                    .ok_or_else(|| required("missing policy parent"))?
+                    .schema,
+            );
             if stored != historical {
                 conflicts.push(PartitionPolicyConflict {
                     relation: node.schema.name.clone(),

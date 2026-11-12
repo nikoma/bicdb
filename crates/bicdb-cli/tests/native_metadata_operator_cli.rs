@@ -247,6 +247,7 @@ fn four_processes(
 #[test]
 fn native_metadata_operator_actual_cli_four_process_startup_registration_and_data_refusal() {
     let (mut processes, root, config, addresses, mut sequences) = four_processes(true);
+    let plan_path = root.join("common-plan.json");
     let mut register = binary();
     register
         .args(["cluster", "native-metadata", "register", "--cluster-id"])
@@ -724,17 +725,24 @@ fn native_metadata_operator_actual_cli_single_join_fresh_becomes_local_metadata_
         let ready: Option<Value> = std::fs::read(&status)
             .ok()
             .map(|b| serde_json::from_slice(&b).unwrap());
-        let source: Value =
-            serde_json::from_slice(&std::fs::read(paths(&root, 0).1).unwrap()).unwrap();
+        let sources = (0..4)
+            .map(|i| {
+                serde_json::from_slice::<Value>(&std::fs::read(paths(&root, i).1).unwrap()).unwrap()
+            })
+            .collect::<Vec<_>>();
         if let Some(ready) = ready {
             let host = &ready["host"];
             if host["phase"] == "owned_metadata_voter"
                 && host["metadata"]["voters"]
                     .as_array()
                     .is_some_and(|v| v.contains(&serde_json::json!("n4")))
-                && source["host"]["last_metadata_promotion"]["node"] == "n4"
             {
-                break (ready, source);
+                if let Some(source) = sources
+                    .into_iter()
+                    .find(|s| s["host"]["last_metadata_promotion"]["node"] == "n4")
+                {
+                    break (ready, source);
+                }
             }
         }
         assert!(
@@ -772,6 +780,7 @@ fn native_metadata_operator_actual_cli_single_join_fresh_becomes_local_metadata_
             dev_localhost_plaintext: false,
         }),
         dev_localhost_plaintext: false,
+        max_frame_bytes: 4 * 1024 * 1024,
         ..Default::default()
     };
     let bootstrap = bicdb_core::TcpClusterBootstrapClient::new(

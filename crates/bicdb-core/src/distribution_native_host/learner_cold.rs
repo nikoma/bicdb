@@ -19,8 +19,42 @@ pub(crate) struct NativeColdLearnerMetadataHost {
     provider: Option<Arc<MetadataReadProvider>>,
     listener: Option<ClusterDataServerHandle>,
     stopping: bool,
+    supervisor: Option<NativeMetadataSupervisor>,
 }
 impl NativeColdLearnerMetadataHost {
+    pub(in crate::distribution_native_host) fn start_automatic_metadata(
+        &mut self,
+        parent: &CancellationToken,
+    ) -> Result<()> {
+        parent.check()?;
+        if self.listener.is_none() || self.stopping {
+            return Err(invalid(
+                "automatic cold metadata requires running Registered listener",
+            ));
+        }
+        if self.supervisor.is_some() {
+            return Ok(());
+        }
+        self.supervisor = Some(NativeMetadataSupervisor::start(
+            Arc::clone(
+                self.metadata
+                    .as_ref()
+                    .ok_or_else(|| invalid("cold owned metadata absent"))?,
+            ),
+            self.service
+                .as_ref()
+                .ok_or_else(|| invalid("cold service absent"))?,
+            Arc::clone(
+                self.topology
+                    .as_ref()
+                    .ok_or_else(|| invalid("cold routing absent"))?,
+            ),
+            self.network.clone(),
+            NativeMetadataSupervisorConfig::default(),
+            parent,
+        )?);
+        Ok(())
+    }
     pub(in crate::distribution_native_host) fn validate_owned_metadata_member(
         &self,
         observed: &HostMetadataReadObservation,
@@ -122,6 +156,7 @@ impl NativeColdLearnerMetadataHost {
             provider: None,
             listener: None,
             stopping: false,
+            supervisor: None,
         })
     }
 
@@ -272,6 +307,10 @@ impl NativeColdLearnerMetadataHost {
     }
     pub(crate) fn stop(&mut self, parent: &CancellationToken) -> Result<()> {
         parent.check()?;
+        if let Some(supervisor) = self.supervisor.as_mut() {
+            supervisor.stop(parent)?;
+            self.supervisor.take();
+        }
         if let Some(listener) = self.listener.as_mut() {
             self.stopping = true;
             listener.stop_and_drain(parent)?;

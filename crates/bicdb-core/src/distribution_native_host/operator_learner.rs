@@ -1,4 +1,4 @@
-//! Explicit fresh or strict persisted learner owner. No raw handles, promotion,
+//! Explicit fresh or strict persisted metadata owner. No raw handles, data
 //! data Serving, schema retrofit or metadata identity reset is exposed.
 use super::*;
 use crate::{
@@ -27,6 +27,7 @@ pub struct NativeMetadataLearnerHost {
     factory: Arc<NativeUnassignedLearnerFactory>,
     host: NativeLearnerLifecycle,
     transport: Arc<TcpClusterRelocationTransport>,
+    routing: Arc<RwLock<ClusterTopology>>,
     leader: ClusterNodeId,
     address: String,
     network: ClusterNetworkTransportConfig,
@@ -88,10 +89,11 @@ impl NativeMetadataLearnerHost {
         let leader = snapshot
             .metadata_leader_id
             .ok_or_else(|| invalid("fresh learner metadata leader unknown"))?;
+        let routing = Arc::new(RwLock::new(snapshot.topology));
         let transport = Arc::new(TcpClusterRelocationTransport::new(
             cluster,
             local.clone(),
-            Arc::new(RwLock::new(snapshot.topology)),
+            Arc::clone(&routing),
             network.clone(),
         )?);
         let business = Uuid::now_v7();
@@ -164,6 +166,7 @@ impl NativeMetadataLearnerHost {
             factory,
             host: NativeLearnerLifecycle::Fresh(host),
             transport,
+            routing,
             leader,
             address: address.to_owned(),
             network,
@@ -212,10 +215,11 @@ impl NativeMetadataLearnerHost {
         let leader = snapshot
             .metadata_leader_id
             .ok_or_else(|| invalid("cold learner metadata leader unknown"))?;
+        let routing = Arc::new(RwLock::new(snapshot.topology));
         let transport = Arc::new(TcpClusterRelocationTransport::new(
             cluster,
             local.clone(),
-            Arc::new(RwLock::new(snapshot.topology)),
+            Arc::clone(&routing),
             network.clone(),
         )?);
         let business = Uuid::now_v7();
@@ -254,6 +258,7 @@ impl NativeMetadataLearnerHost {
             factory,
             host: NativeLearnerLifecycle::Cold(host),
             transport,
+            routing,
             leader,
             address: address.to_owned(),
             network,
@@ -269,13 +274,60 @@ impl NativeMetadataLearnerHost {
         crate::distribution_consensus::HostMetadataReadObservation,
         Uuid,
     )> {
-        let business = Uuid::now_v7();
-        let observed = self.transport.acquire_host_metadata_observation(
-            &self.leader,
-            business,
-            Duration::from_secs(5),
-            parent,
-        )?;
+        parent.check()?;
+        // These are routing hints only. No cached leader/C becomes authority.
+        // Each successful attempt below obtains a NEW actual OWN MQ under the
+        // original caller budget, outside DB/service/metadata latches.
+        let mut peers = vec![self.leader.clone()];
+        peers.extend(
+            self.routing
+                .read()
+                .nodes
+                .values()
+                .filter(|m| {
+                    m.lifecycle == ClusterNodeLifecycle::Active
+                        && m.metadata_role == MetadataMemberRole::Voter
+                })
+                .map(|m| m.id.clone())
+                .filter(|id| id != &self.leader)
+                .take(7),
+        );
+        let mut accepted = None;
+        let mut last = String::from("no live known metadata route");
+        for peer in peers {
+            parent.check()?;
+            let attempt = parent.child_with_deadline(Instant::now() + Duration::from_millis(500));
+            let route = match self
+                .transport
+                .fetch_metadata_snapshot_cancellable(&attempt, &peer)
+            {
+                Ok(snapshot) => snapshot,
+                Err(error) => {
+                    last = error.to_string();
+                    continue;
+                }
+            };
+            route.validate()?;
+            let Some(leader) = route.metadata_leader_id else {
+                continue;
+            };
+            self.transport.install_topology(route.topology)?;
+            let business = Uuid::now_v7();
+            match self.transport.acquire_host_metadata_observation(
+                &leader,
+                business,
+                Duration::from_secs(5),
+                parent,
+            ) {
+                Ok(observed) => {
+                    accepted = Some((observed, business));
+                    break;
+                }
+                Err(error) => last = error.to_string(),
+            }
+        }
+        let (observed, business) = accepted
+            .ok_or_else(|| invalid(&format!("owned learner metadata unavailable: {last}")))?;
         let member = observed
             .committed_topology(business)?
             .nodes
@@ -408,6 +460,19 @@ impl NativeMetadataLearnerHost {
         self.metadata_started = true;
         self.transitioning = false;
         self.refresh(&token)
+    }
+    /// Starts scheduling only after the actual same-service Registered
+    /// backend/listener is owned. The process parent outlives action budgets.
+    pub fn start_automatic_metadata(&mut self, parent: &CancellationToken) -> Result<()> {
+        if !self.metadata_started || self.stopped {
+            return Err(invalid(
+                "automatic metadata requires actual started learner owner",
+            ));
+        }
+        match &mut self.host {
+            NativeLearnerLifecycle::Fresh(host) => host.start_automatic_metadata(parent),
+            NativeLearnerLifecycle::Cold(host) => host.start_automatic_metadata(parent),
+        }
     }
     pub fn stop(&mut self, parent: &CancellationToken) -> Result<()> {
         match &mut self.host {

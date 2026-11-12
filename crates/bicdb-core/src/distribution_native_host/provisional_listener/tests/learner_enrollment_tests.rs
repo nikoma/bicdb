@@ -526,3 +526,5 @@ fn native_registered_learner_enrollment_retries_only_exact_persisted_pending_ent
 }
 
 mod metadata_transition_tests;
+
+mod promotion_tests;

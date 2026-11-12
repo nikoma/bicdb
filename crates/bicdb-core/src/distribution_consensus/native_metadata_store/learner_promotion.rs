@@ -9,6 +9,7 @@ pub(crate) struct NativeLearnerPromotionReadiness {
     term: u64,
     index: u64,
     source_store: Uuid,
+    metadata_context: Uuid,
     cancellation: crate::CancellationToken,
 }
 impl NativeLearnerPromotionReadiness {
@@ -72,6 +73,7 @@ impl MetadataConsensusStore {
             term: self.state.current_term,
             index: self.state.commit_index,
             source_store: self.registered_native_metadata_member_store_id()?,
+            metadata_context: current.context_id(),
             cancellation: parent.child_with_deadline(current.deadline()),
         })
     }
@@ -87,6 +89,11 @@ impl MetadataConsensusStore {
         proof.cancellation.check()?;
         parent.check()?;
         self.require_native_learner_enrollment_leader(current, business)?;
+        if current.context_id() == proof.metadata_context {
+            return Err(metadata_error(
+                "promotion needs independently fresh post-ACK metadata context",
+            ));
+        }
         if self.registered_native_metadata_member_store_id()? != proof.source_store
             || self.state.current_term != proof.term
         {

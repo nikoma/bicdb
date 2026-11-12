@@ -16,9 +16,44 @@ pub(super) struct NativeLearnerMetadataTransition {
     provider: Option<Arc<MetadataReadProvider>>,
     pub(super) listener: Option<ClusterDataServerHandle>,
     stopping: bool,
+    supervisor: Option<NativeMetadataSupervisor>,
     namespace_ids: Option<Vec<(String, Uuid)>>,
 }
 impl NativeUnassignedLearnerHost {
+    pub(in crate::distribution_native_host) fn start_automatic_metadata(
+        &mut self,
+        parent: &CancellationToken,
+    ) -> Result<()> {
+        parent.check()?;
+        let transition = &mut self.metadata_transition;
+        if transition.listener.is_none() || transition.stopping {
+            return Err(invalid(
+                "automatic learner metadata requires running Registered listener",
+            ));
+        }
+        if transition.supervisor.is_some() {
+            return Ok(());
+        }
+        transition.supervisor = Some(NativeMetadataSupervisor::start(
+            Arc::clone(
+                transition
+                    .metadata
+                    .as_ref()
+                    .ok_or_else(|| invalid("owned metadata absent"))?,
+            ),
+            &self._service,
+            Arc::clone(
+                transition
+                    .topology
+                    .as_ref()
+                    .ok_or_else(|| invalid("owned routing absent"))?,
+            ),
+            self.provider.network.clone(),
+            NativeMetadataSupervisorConfig::default(),
+            parent,
+        )?);
+        Ok(())
+    }
     pub(in crate::distribution_native_host) fn validate_owned_metadata_member(
         &self,
         observed: &HostMetadataReadObservation,
@@ -330,6 +365,10 @@ impl NativeUnassignedLearnerHost {
     /// The SAME service/range-store remains owned and permanently metadata-only.
     pub(crate) fn stop_owned_metadata(&mut self, parent: &CancellationToken) -> Result<()> {
         parent.check()?;
+        if let Some(supervisor) = self.metadata_transition.supervisor.as_mut() {
+            supervisor.stop(parent)?;
+            self.metadata_transition.supervisor.take();
+        }
         if let Some(listener) = self.metadata_transition.listener.as_mut() {
             self.metadata_transition.stopping = true;
             listener.stop_and_drain(parent)?;

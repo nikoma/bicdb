@@ -20,7 +20,7 @@ pub enum Command {
     /// FRESH roots only. Starts metadata listeners; never SQL/data Serving.
     ServeFresh {
         root: PathBuf,
-        /// Manual diagnostic scheduling; all proof and admission guards remain mandatory.
+        /// Manual election/heartbeat/enrollment scheduling; proof/admission guards stay mandatory.
         #[arg(long)]
         manual_enrollment: bool,
         #[arg(long)]
@@ -335,6 +335,28 @@ pub fn run(command: Command) -> Result<()> {
             let endpoint: std::net::SocketAddr =
                 address.parse().context("join needs own numeric endpoint")?;
             ensure!(endpoint.port() != 0, "join needs own fixed endpoint");
+            ensure!(
+                (8 * 1024 * 1024..=1024 * 1024 * 1024).contains(&buffer_pool_bytes),
+                "join buffer pool outside supported bound"
+            );
+            ensure!(
+                command_file != status_file && !command_file.exists() && !status_file.exists(),
+                "join control/status paths must differ and be absent"
+            );
+            let actual_root = root
+                .parent()
+                .filter(|p| !p.as_os_str().is_empty())
+                .unwrap_or(Path::new("."))
+                .canonicalize()?
+                .join(root.file_name().context("join root basename absent")?);
+            for path in [&command_file, &status_file] {
+                ensure!(
+                    !private_parent(path)?
+                        .join(path.file_name().context("join operator filename absent")?)
+                        .starts_with(&actual_root),
+                    "join operator files must stay outside native root"
+                );
+            }
             run(Command::Register {
                 cluster_id: cluster_id.clone(),
                 seed_node_id: seed_node_id.clone(),
@@ -504,7 +526,9 @@ pub fn run(command: Command) -> Result<()> {
                     // The one general supervisor owns election/heartbeats. This
                     // separately bounded controller owns CONFIG enrollment only.
                     if status.phase == NativeMetadataHostPhase::MetadataControl {
-                        let _ = host.start_automatic_metadata(&lifetime);
+                        if !manual_enrollment {
+                            let _ = host.start_automatic_metadata(&lifetime);
+                        }
                         if !manual_enrollment
                             && status.metadata.as_ref().is_some_and(|m| {
                                 m.role == bicdb_core::MetadataConsensusRole::Leader

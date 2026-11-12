@@ -187,6 +187,9 @@ impl BicDb {
         role.require_live_request()?;
         let fingerprint = self.schema_compatibility_fingerprint()?;
         let actual = self.current_native_range_source_lineage(role.current_range().id)?;
+        // Birth ancestry also retains metadata-only members. Ordinary status
+        // must match every voter of the actual native write configuration.
+        let actual_members = actual.native_write_members()?;
         let mut predecessor = role.current_range().clone();
         if let Some(plan) = role.committed_relocation() {
             if plan.learner_epoch == predecessor.epoch {
@@ -221,9 +224,9 @@ impl BicDb {
             || fingerprint.sha256 != actual.schema_sha256()
             || (!same_native_range(actual.native_write_range()?, role.current_range())
                 && !same_native_range(actual.native_write_range()?, &predecessor))
-            || actual.base_members().len() != role.member_credentials().len()
+            || actual_members.len() != role.member_credentials().len()
             || role.member_credentials().iter().any(|(id, m)| {
-                actual.base_members().get(id).is_none_or(|a| {
+                actual_members.get(id).is_none_or(|a| {
                     a.incarnation != m.incarnation
                         || a.tls_certificate_sha256 != m.active_certificate_sha256
                         || a.pending_tls_certificate_sha256 != m.pending_certificate_sha256

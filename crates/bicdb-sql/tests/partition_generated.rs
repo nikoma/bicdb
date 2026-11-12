@@ -16,10 +16,10 @@ fn setup(db: &mut BicDb, expression: &str) {
         "ALTER TABLE p ATTACH PARTITION high FOR VALUES FROM(10) TO(20)".into(),
     ] {sql.execute(&text).unwrap();}
 }
-fn expect_reopens(db: &mut BicDb, root: &std::path::Path, cfg: &DbConfig, expected: &[[i64; 3]]) {
-    for _ in 0..3 {
+fn expect_reopens(mut db: BicDb, root: &std::path::Path, cfg: &DbConfig, expected: &[[i64; 3]]) {
+    for reopen in 0..3 {
         assert_eq!(
-            SqlSession::new(db)
+            SqlSession::new(&mut db)
                 .execute("SELECT k,b,g FROM p ORDER BY k,g")
                 .unwrap()
                 .rows,
@@ -34,7 +34,11 @@ fn expect_reopens(db: &mut BicDb, root: &std::path::Path, cfg: &DbConfig, expect
             .iter()
             .all(|report| report.valid));
         db.close().unwrap();
-        *db = BicDb::open_with_config(root, cfg.clone()).unwrap();
+        if reopen < 2 {
+            db = BicDb::open_with_config(root, cfg.clone()).unwrap();
+        } else {
+            return;
+        }
     }
 }
 
@@ -70,7 +74,6 @@ fn insert_copy_upsert_and_parent_add_keep_the_physical_generated_expression() {
             &cfg,
             &[[1, 10, 20], [11, 20, 60], [12, 14, 42], [13, 15, 45]],
         );
-        db.close().unwrap();
     }
 }
 
@@ -95,8 +98,7 @@ fn parent_update_and_returning_use_the_actual_source_leaf_expression() {
         );
         sql.execute("UPDATE high SET b=12 WHERE k=11").unwrap();
         drop(sql);
-        expect_reopens(&mut db, root.path(), &cfg, &[[11, 12, 36]]);
-        db.close().unwrap();
+        expect_reopens(db, root.path(), &cfg, &[[11, 12, 36]]);
     }
 }
 
@@ -116,8 +118,7 @@ fn unused_logical_parent_expression_cannot_raise_on_a_physical_child_update() {
             vec![vec![SqlValue::Int(9)]]
         );
         drop(sql);
-        expect_reopens(&mut db, root.path(), &cfg, &[[10, 3, 9]]);
-        db.close().unwrap();
+        expect_reopens(db, root.path(), &cfg, &[[10, 3, 9]]);
     }
 }
 
@@ -152,8 +153,7 @@ fn movement_recomputes_destination_generation_and_savepoint_undo_restores_it() {
         );
         sql.execute("UPDATE p SET b=12 WHERE k=12").unwrap();
         drop(sql);
-        expect_reopens(&mut db, root.path(), &cfg, &[[11, 10, 30], [12, 12, 36]]);
-        db.close().unwrap();
+        expect_reopens(db, root.path(), &cfg, &[[11, 10, 30], [12, 12, 36]]);
     }
 }
 
@@ -195,8 +195,7 @@ fn source_generated_error_precedes_movement_and_preserves_every_raw_ack() {
             })
             .collect::<Vec<_>>();
         assert_eq!(after, before);
-        expect_reopens(&mut db, root.path(), &cfg, &[[9, 1, -100], [10, 3, 9]]);
-        db.close().unwrap();
+        expect_reopens(db, root.path(), &cfg, &[[9, 1, -100], [10, 3, 9]]);
     }
 }
 
@@ -212,7 +211,6 @@ fn generated_composite_primary_keys_use_final_leaf_values_and_canonical_native_i
         assert!(db.get("high", r#"["11","30"]"#).unwrap().is_none());
         assert!(db.get("high", r#"["11","33"]"#).unwrap().is_some());
         assert!(db.get("high", r#"["11","36"]"#).unwrap().is_some());
-        expect_reopens(&mut db, root.path(), &cfg, &[[11, 11, 33], [11, 12, 36]]);
-        db.close().unwrap();
+        expect_reopens(db, root.path(), &cfg, &[[11, 11, 33], [11, 12, 36]]);
     }
 }

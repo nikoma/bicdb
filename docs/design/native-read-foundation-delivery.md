@@ -14,11 +14,16 @@ No version is reserved by this document.
 | One test compile correction | `be1345d3cfeed7b416a9e60af6547633b9b30114`, cherry `dc24ae4321e9ccc3c8067b250df2a80d11d7d291` | Remove `drop(tx)` after consuming `Transaction::commit(self)` in the new factory control; no runtime guard changes |
 | Optional focused CI workflow | `de5c48acda2e9486182589758df133f889c51b3a`, cherry `bb30eef214b81fa20615848dfe859de5d065a009` | Manual nonempty Core substring selection with source/list/run artifacts and explicit zero-selection refusal; normal PR/push and empty-filter dispatch keep the broad suites |
 | Isolated consumer compile | `94c0add89cd7e66743556988671ebdbd4bb7df84`, cherry `2e30d0175a1cc4619a65c28ad7e31bcc0f3e6550` | Check `bicdb-workflow` separately so workspace TLS feature unification cannot hide a no-default consumer defect |
+| Delayed pre-binding regression | `91ca9fc6dbef0ed5f72fd66b721099c1a59760bc`, cherry `e2e79bbe12562ff7ba0efc75462e04ccca9677bc` | Preserve the genuine delayed learner ACK/promotion refusal control before applying its correction |
+| Owned metadata ACK correction | `f0015998def081449f8fdde4776dc58f6e7ee713`, cherry `34f0ad55be22dd8a09997692e9ac5d78f6f64d8b` | Bind a countable reply to protected actual receiver birth/StoreID or the original authenticated exchange and current committed identity |
+| Persistence-producer correction | `64cb9f8e8eafcb69a19331401f6c0c4440d21e92`, cherry `6be6008baad63f85b97e6362448be9416fcbfc3e` | Actual fsynced persistence belongs inside the sealed response producer; preserve learned-retirement refusal |
+| Retired-member refusal | `a778b09926a8b853008114c20ce4048306dbe1cd`, cherry `4c31585fc715965e0bdf2115e25b373ccc8093c9` | Reject retained real ACKs after committed retirement without changing replication progress |
 
-The working source retains version1.0.481-beta and data protocol24 from the
-base. No later Abort, joint-data handoff, learner-birth RPC25 or their ancestry
-is imported. Earlier component and CI evidence remains tied to its original
-exact revisions; it is not a passing result for this new branch.
+The working source retains version1.0.481-beta. It jumps from base protocol24
+to protocol27 solely for native metadata ACK provenance; protocols25/26 feature
+code is not imported. No later Abort, joint-data handoff, learner-birth RPC25
+or their ancestry is imported. Earlier component and CI evidence remains tied
+to its original exact revisions; it is not a passing result for this branch.
 
 ## Scope and dependency gate
 
@@ -30,16 +35,22 @@ mode, lineage and actual-local-visibility checks remain intact. A source API or
 local component test is not operator integration. Existing legacy contracts and
 historical evidence are preserved.
 
-**The delayed pre-binding metadata Append ACK provenance correction is still a
-required dependency, not included or validated here.** A reply produced before
-native metadata binding must not later become a countable current vote because
-its recipient now has another bound identity. The coherent correction must tie
-countable replies to the actual receiver birth/incarnation/protected metadata
-StoreID and the applicable committed domain. Preserve authenticated destination,
-original request/deadline and actual-open checks. Infra owns that correction;
-Root must integrate its narrow dependency closure and coordinate any wire fence
-before freezing the final candidate. Do not pull unrelated Abort/joint/learner
-RPC features merely to acquire that fix.
+**The delayed pre-binding metadata Append ACK provenance dependency is now
+composed, but remains uncompiled and dynamically unvalidated on this branch.**
+A reply produced before binding cannot be retagged with a later native identity.
+The producer owns actual persistence and protected receiver birth/StoreID;
+remote provenance is sealed by the original authenticated exchange. Counting
+checks current committed birth/incarnation, pins, Active lifecycle and response
+body before changing `match_index`. Decoded DTOs cannot construct that skipped
+local provenance. Legacy absent fields remain omitted; earlier native birth
+records without abort1 are accepted without retrofitting that capability.
+
+Only protocol-number and transport-module context conflicts were resolved:
+protocol27 names this ACK fence, and only the new `metadata_append` module was
+added. No newer `native_abort` or `learner_birth` transport modules were pulled
+in. See [the scoped ACK design](native-metadata-owned-append-ack.md) for the
+producer boundary. Actual test results on another branch do not validate this
+independent dependency composition.
 
 Automatic native writer/prepare-only-abort recovery, full broker/audit/sync
 effects, cross-process native image handoff, old/new DATA-quorum membership
@@ -51,9 +62,11 @@ convergence or stable capacity claim follows.
 
 ## Required next checks and delivery
 
-1. Integrate the coherent metadata reply provenance correction. Run the genuine
-   held-prebinding-reply negative and healthy native metadata append/election
-   controls on that exact combined source; keep the original defect evidence.
+1. Compile and run the newly composed metadata reply provenance correction:
+   genuine held-prebinding-reply and decoded-DTO negatives, healthy owned/TLS
+   append, current retirement, and native append/election controls on the exact
+   final source. Keep the original defect evidence; source composition alone
+   does not close this validation gate.
 2. Freeze the implementation batch and first compile all workspace test targets.
    Check the isolated workflow consumer and no-default-feature Core build too.
    Then run focused native read/Strong, born2 enrollment/ordinary Apply,

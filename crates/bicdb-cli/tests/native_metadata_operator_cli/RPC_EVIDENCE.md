@@ -8,7 +8,12 @@ client deadlines and retry policy are unchanged. This is diagnostic fixture
 wiring, not a workload/recovery fix or a new success claim.
 
 The sink serializes complete JSONL records under its own mutex, fsyncs before
-returning, and holds no engine guard. Core releases its quota lock before sink
+returning, and holds no engine guard. At open, file/leaf-directory fsync is
+followed by fsync of the journal directory ancestry, including the parents that
+name every new directory and any workflow-created unsynced ancestors. The
+validated journal path cannot enter a fixture `dbN` root; no original database
+file/tree is fsynced. This happens before the first workload call, without
+changing its request deadline. Core releases its quota lock before sink
 callbacks. Both layers cap at 4,096 records / 64 MiB; no payload/error truncation
 is allowed. Sink failure/cap fences subsequent observed dispatch. Filesystem I/O
 can itself be uncancellable; it consumes the original Core budget and never
@@ -28,6 +33,13 @@ has a separate ID, while the sink adds one persisted completion sequence.
 A public append ACK is recorded as USER_ACK only from the actual returned result.
 Errors are NO_USER_ACK_DURABLE_OUTCOME_UNKNOWN; even a pre-dispatch failure is not
 a global rollback proof. Internal dispatch evidence is retained separately.
+The primary external ACK ledger is already fsynced **before** supplemental
+logical diagnostic `finish` is attempted. If that later diagnostic fails, the
+previously recorded ACK remains an ACK; an incomplete supplemental trace cannot
+erase or reclassify it. Conversely, native database success without a client ACK
+receipt remains a distinct uncertain/no-user-ACK outcome. An interrupted trace
+record describes only the missing supplemental record, not a fictitious rollback
+or a declaration that an already saved public reply never occurred.
 Strong success uses tagged present/absent records so present JSON null remains
 distinct from absence. Failed reads cannot become successful absence. A context
 abandoned by panic records an interrupted/partial logical call where possible.

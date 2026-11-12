@@ -90,13 +90,64 @@ fn append(state: &mut State, mut value: Value) -> io::Result<()> {
     state.bytes += bytes.len() as u64;
     Ok(())
 }
+// Persist the pathname as well as the record bytes. Workflow-created parent
+// directories may also be new: syncing only the leaf loses the whole journal
+// after a controller crash. Walk ONLY journal ancestors, never a DB tree/file.
+fn prepare_journal_directory(directory: &Path, fixture: &Path) -> io::Result<()> {
+    if !directory.is_absolute()
+        || directory
+            .components()
+            .any(|part| matches!(part, std::path::Component::ParentDir))
+    {
+        return Err(invalid(
+            "journal destination must be absolute without parent traversal",
+        ));
+    }
+    let fixture = fixture.canonicalize()?;
+    if directory
+        .strip_prefix(&fixture)
+        .ok()
+        .and_then(|relative| relative.components().next())
+        .and_then(|part| part.as_os_str().to_str())
+        .is_some_and(|part| {
+            part.strip_prefix("db").is_some_and(|number| {
+                !number.is_empty() && number.bytes().all(|byte| byte.is_ascii_digit())
+            })
+        })
+    {
+        return Err(invalid(
+            "journal must not create or fsync inside an original database root",
+        ));
+    }
+    for ancestor in directory.ancestors() {
+        match fs::symlink_metadata(ancestor) {
+            Ok(metadata) if metadata.file_type().is_symlink() || !metadata.is_dir() => {
+                return Err(invalid(
+                    "journal ancestor must be an actual directory, not a symlink",
+                ))
+            }
+            Ok(_) => {}
+            Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+            Err(error) => return Err(error),
+        }
+    }
+    fs::create_dir_all(directory)
+}
+fn sync_journal_directory_chain(directory: &Path) -> io::Result<()> {
+    // Leaf contains journal.jsonl; each following parent contains the previous
+    // directory entry. This also covers unsynced workflow-created ancestors.
+    for ancestor in directory.ancestors() {
+        fs::File::open(ancestor)?.sync_all()?;
+    }
+    Ok(())
+}
 impl DurableRpcJournal {
     pub(super) fn open(root: &Path) -> io::Result<Arc<Self>> {
         let directory = match std::env::var_os("BICDB_TEST_CLI_RPC_EVIDENCE_ROOT") {
             Some(parent) => PathBuf::from(parent).join(format!("client-{}", Uuid::now_v7())),
             None => root.join("client-rpc-evidence"),
         };
-        fs::create_dir_all(&directory)?;
+        prepare_journal_directory(&directory, root)?;
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
@@ -133,7 +184,7 @@ impl DurableRpcJournal {
                 serde_json::json!({"kind":"journal_started","source":std::env::var("BICDB_TEST_SOURCE_SHA").ok(),"test":std::thread::current().name(),"fixture_root":root,"max_records":MAX_RECORDS,"max_bytes":MAX_BYTES,"scope":"actual public EventClient and explicit replica transport only; no global host/peer-wire coverage","bootstrap_raw_frame_covered":false,"no_protocol_or_serving_authority":true}),
             )?;
         }
-        fs::File::open(&directory)?.sync_all()?;
+        sync_journal_directory_chain(&directory)?;
         eprintln!(
             "NATIVE_CLI_RPC_JOURNAL path={} source={:?} scope=actual_client_only",
             journal.path.display(),
@@ -273,7 +324,7 @@ impl Drop for LogicalCall {
             {
                 let result = append(
                     &mut state,
-                    serde_json::json!({"kind":"logical_call_interrupted","diagnostic_operation_id":self.id,"classification":"NO_COMPLETE_PUBLIC_REPLY_RECORD","unknown_not_rollback":true}),
+                    serde_json::json!({"kind":"logical_call_interrupted","diagnostic_operation_id":self.id,"classification":"NO_COMPLETE_SUPPLEMENTAL_REPLY_RECORD","unknown_not_rollback":true,"primary_external_ack_ledger_not_reclassified":true}),
                 );
                 state.active = None;
                 if let Err(error) = result {

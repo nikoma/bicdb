@@ -252,6 +252,30 @@ impl HostWriterPolicyFacts {
         }
         Ok(())
     }
+    /// Exact snapshot binding for NEW registry refresh and stored audit only.
+    /// Ordinary APP/Strong retain their existing identity/schema checks below.
+    pub(crate) fn require_refresh_topology(&self, topology: &ClusterTopology) -> Result<()> {
+        self.require_topology(topology)?;
+        let continuity = self
+            .member_continuity
+            .as_ref()
+            .ok_or_else(|| invalid("registry audit lacks an actual member continuity baseline"))?;
+        for (id, expected) in continuity {
+            let actual = topology
+                .nodes
+                .get(id)
+                .ok_or_else(|| invalid("recorded writer member disappeared"))?;
+            if actual.address != expected.address
+                || actual.lifecycle != expected.lifecycle
+                || actual.labels != expected.labels
+            {
+                return Err(invalid(
+                    "recorded refresh member address/lifecycle/labels changed",
+                ));
+            }
+        }
+        Ok(())
+    }
     /// Cached topology is only an extra refusal check, never a policy publisher.
     pub(crate) fn require_topology(&self, topology: &ClusterTopology) -> Result<()> {
         if topology.cluster_id != self.cluster_id
@@ -273,22 +297,6 @@ impl HostWriterPolicyFacts {
                 || node.labels.get(SCHEMA_COMPATIBILITY_NODE_LABEL) != Some(&self.schema_sha256)
             {
                 return Err(invalid("registered birth/member/schema identity changed"));
-            }
-        }
-        if let Some(continuity) = &self.member_continuity {
-            for (id, expected) in continuity {
-                let actual = topology
-                    .nodes
-                    .get(id)
-                    .ok_or_else(|| invalid("recorded writer member disappeared"))?;
-                if actual.address != expected.address
-                    || actual.lifecycle != expected.lifecycle
-                    || actual.labels != expected.labels
-                {
-                    return Err(invalid(
-                        "recorded writer member address/lifecycle/labels changed",
-                    ));
-                }
             }
         }
         for range in topology.ranges.values() {

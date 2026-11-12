@@ -176,3 +176,12 @@ registry extension followed by a real five-voter committed label mutation.
 The latter must fail against the previously added member's saved continuity
 while retaining the exact accepted native audit. These are metadata-only
 component controls, not a new operator/relocation qualification.
+
+Exact member-continuity comparison applies ONLY when validating a new registry
+extension against the last accepted map and binding the historical native
+record to its actual MQ snapshot. Ordinary APP/Strong `require_topology`
+retains the previous birth/incarnation/pin/schema/voter-domain checks; advisory
+labels, health/lifecycle or routing data do not acquire a new blanket fence.
+A genuine fifth-label-mutation control checks that the necessary ordinary
+writer guard remains valid while a new registry refresh refuses that changed
+baseline. It still does not manufacture DATA readiness.

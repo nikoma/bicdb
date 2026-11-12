@@ -167,6 +167,21 @@ fn native_initial_data_registry_actual_added_voter_remains_bound_on_later_member
         .labels
         .insert("registry.continuity.test".into(), "changed".into());
     f.commit(changed);
+    let current_range = f.launches[0]
+        .topology
+        .read()
+        .ranges
+        .values()
+        .next()
+        .unwrap()
+        .clone();
+    guard
+        .require_for_coordinator(&f.seeds[0].database.read(), &current_range, &coordinator)
+        .unwrap();
+    assert!(
+        !coordinator.initial_data_leader_admission_observed(&current_range),
+        "necessary normal writer continuity is not DATA Ready"
+    );
     let error = refresh(&f, &coordinator, &guard).unwrap_err();
     assert!(
         error

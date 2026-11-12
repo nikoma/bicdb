@@ -80,9 +80,9 @@ impl RegistryExtensionRecord {
             ));
         }
         self.facts
-            .require_topology(&audit.evidence.committed_topology)?;
+            .require_refresh_topology(&audit.evidence.committed_topology)?;
         if let Some(candidate) = &audit.evidence.joint_configuration_candidate {
-            self.facts.require_topology(candidate)?;
+            self.facts.require_refresh_topology(candidate)?;
             for range in candidate.ranges.values() {
                 self.facts.require_range(range)?;
                 if range

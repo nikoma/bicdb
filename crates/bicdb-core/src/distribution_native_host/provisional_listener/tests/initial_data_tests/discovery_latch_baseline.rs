@@ -86,7 +86,23 @@ fn native_initial_data_healthy_metadata_discovery_while_all_data_services_held()
     let audit = ExactJournal::create(&output.join("audit.jsonl"));
     let rpc_path = output.join("rpc.jsonl");
     let sink = Arc::new(ExactJournal::create(&rpc_path));
-    File::open(&output).unwrap().sync_all().unwrap();
+    // Persist the new journal directory's entry AND workflow-created parent
+    // entries before the first observation. Resolve aliases and exclude every
+    // actual source DB directory: this is diagnostic ancestry, never a DB fsync.
+    let actual_output = std::fs::canonicalize(&output).unwrap();
+    let actual_databases = (0..f.hosts.len())
+        .map(|i| std::fs::canonicalize(f._root.path().join(format!("db{i}"))).unwrap())
+        .collect::<Vec<_>>();
+    assert!(
+        actual_databases
+            .iter()
+            .all(|db| !actual_output.starts_with(db)),
+        "diagnostic journal must be outside every original dbN"
+    );
+    for ancestor in actual_output.ancestors() {
+        assert!(actual_databases.iter().all(|db| !ancestor.starts_with(db)));
+        File::open(ancestor).unwrap().sync_all().unwrap();
+    }
     eprintln!(
         "ACTUAL_INITIAL_DATA_DISCOVERY_EVIDENCE={}",
         output.display()

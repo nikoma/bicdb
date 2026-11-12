@@ -43,7 +43,10 @@ The opt-in evidence observer journals every actual public-client frame/error
 with its real attempt/request IDs, destination, route generation and timing.
 `rpc.jsonl` contains complete framed request/response bytes, not a search
 projection; `audit.jsonl` records actual MQ context/term/index and business ACKs.
-Both files fsync each record. The assertion projection must contain the actual
+Both files fsync each record. Before the first observation, the journal
+directory and all ancestor directory entries are fsynced; canonical-path
+checks exclude every original `dbN` directory from that diagnostic fsync.
+The assertion projection must contain the actual
 BootstrapSnapshot busy response and actual FetchTopology policy refusal.
 `BICDB_TEST_EVIDENCE_ROOT` retains these small files for workflow collection;
 without it they are temporary. No TLS private keys or DB copies are exported.

@@ -461,6 +461,21 @@ async fn backup_control_survives_oracle_identifier_rewriting_and_postgres_quotin
             serde_json::json!([]),
             "{profile}"
         );
+        if profile == bicdb_sql::oracle::POSTGRES_PROFILE {
+            assert!(admin
+                .simple_query("SELECT \"BICDB_BACKUP_STATUS\"()")
+                .await
+                .is_err());
+        } else {
+            assert_eq!(
+                json(&admin, "SELECT \"BICDB_BACKUP_STATUS\"()").await,
+                serde_json::json!([])
+            );
+        }
+        assert!(admin
+            .simple_query("SELECT public.bicdb_backup_status()")
+            .await
+            .is_err());
         // Both dialects must keep ordinary roles and explicit transactions
         // outside this administrative dispatcher, including quoted calls.
         admin
@@ -509,7 +524,10 @@ async fn backup_control_survives_oracle_identifier_rewriting_and_postgres_quotin
             },
         )
         .unwrap();
-        let mut restored = BicDb::open_with_config(restored_path, db_config()).unwrap();
+        // PgWireServer::open uses the default embedded storage here. Restore
+        // must preserve that mode; existing paged backup controls use db_config.
+        let mut restored =
+            BicDb::open_with_config(restored_path, DbConfig::default().with_fsync(true)).unwrap();
         assert_eq!(
             bicdb_sql::SqlSession::new(&mut restored)
                 .execute("SELECT payload FROM dispatch_items WHERE item_key=1")

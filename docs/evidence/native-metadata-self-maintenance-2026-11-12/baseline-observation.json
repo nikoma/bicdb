@@ -1,0 +1,51 @@
+{
+  "actual_store_id": "01a1d075-f5d2-7233-81aa-776ce7bd4a43",
+  "after": {
+    "cluster_id": "native-bootstrap-actual-tls",
+    "commit_index": 5,
+    "current_term": 2,
+    "last_log_index": 5,
+    "last_log_term": 2,
+    "leader_id": "n4",
+    "learners": [],
+    "node_id": "n4",
+    "role": "follower",
+    "topology_generation": 4,
+    "voted_for": "n4",
+    "voters": [
+      "n0",
+      "n1",
+      "n2",
+      "n3",
+      "n4"
+    ]
+  },
+  "before": {
+    "cluster_id": "native-bootstrap-actual-tls",
+    "commit_index": 5,
+    "current_term": 2,
+    "last_log_index": 5,
+    "last_log_term": 2,
+    "leader_id": "n4",
+    "learners": [],
+    "node_id": "n4",
+    "role": "leader",
+    "topology_generation": 4,
+    "voted_for": "n4",
+    "voters": [
+      "n0",
+      "n1",
+      "n2",
+      "n3",
+      "n4"
+    ]
+  },
+  "fresh_after": {
+    "error": "cluster error: cluster node n4 rejected RPC cluster_data_operation_failed: cluster error: metadata consensus: read authority requires a committed current-term leadership anchor"
+  },
+  "maintenance": {
+    "error": "cluster error: native host bootstrap: metadata learner n4: cluster error: cluster node n4 rejected RPC cluster_data_operation_failed: cluster error: metadata consensus: read authority requires a committed current-term leadership anchor"
+  },
+  "scope": "single finite actual owned metadata maintenance; no DATA or VM claim",
+  "source_revision": "ec20e46ba3ee6334d00ccf0f77893538a7bb741a"
+}

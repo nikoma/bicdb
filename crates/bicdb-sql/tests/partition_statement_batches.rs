@@ -72,7 +72,7 @@ fn direct_ast_partition_creation_uses_the_same_physical_routing_and_constraints(
         ] {
             let statements = Parser::parse_sql(&PostgreSqlDialect {}, text).unwrap();
             assert_eq!(statements.len(), 1);
-            sql.execute_statement(&statements[0]).unwrap();
+            sql.execute_statement_ast(&statements[0]).unwrap();
         }
         assert_eq!(
             sql.execute("SELECT k,payload FROM p ORDER BY k")

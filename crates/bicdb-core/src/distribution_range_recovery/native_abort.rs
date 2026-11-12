@@ -12,6 +12,7 @@ pub(crate) struct NativeAbortRequest {
     pub scope: RecoveryFenceScope,
     pub range_index: u64,
     pub origin_node_id: ClusterNodeId,
+    #[serde(deserialize_with = "super::deserialize_present_option")]
     pub candidate_sha256: Option<String>,
     pub challenge: Uuid,
     pub budget_ms: u64,
@@ -264,12 +265,6 @@ impl NativeAbortPromiseRound {
             self.cancellation.check()?;
             observation.cancellation.check()?;
             let reply = observation.reply;
-            if matches!(
-                &reply.disposition,
-                NativeAbortPromiseDisposition::Irreversible { .. }
-            ) {
-                return Err(invalid("actual abort round observed irreversible/ever-Commit evidence; resolve decision instead"));
-            }
             require_member(
                 &self.role,
                 &observation.peer,
@@ -283,6 +278,12 @@ impl NativeAbortPromiseRound {
                 || self.votes.contains_key(&reply.node_id)
             {
                 return Err(invalid("foreign/duplicate native abort promise"));
+            }
+            if matches!(
+                &reply.disposition,
+                NativeAbortPromiseDisposition::Irreversible { .. }
+            ) {
+                return Err(invalid("actual abort round observed irreversible/ever-Commit evidence; resolve decision instead"));
             }
             self.votes.insert(reply.node_id.clone(), reply);
             Ok(())

@@ -36,6 +36,8 @@ pub const CURRENT_IMAGE_PROPOSAL_FEATURE_FLAG: &str = "current_range_image_propo
 /// Local recovered serving epochs; older native writers must refuse this DB.
 pub const NATIVE_RECOVERY_SERVING_FEATURE_FLAG: &str = "native_recovery_serving_v1";
 /// From-birth writer enrollment; local and deliberately not a portable schema capability.
+/// Local decision-catalogue custody contract; old writers must refuse.
+pub const NATIVE_CATALOGUE_CUSTODY_FEATURE_FLAG: &str = "native_catalogue_custody_v1";
 pub const NATIVE_WRITER_ENROLLMENT_FEATURE_FLAG: &str = "native_writer_enrollment_v1";
 /// Local metadata-store initialization/ownership; excluded from portable schema.
 pub const NATIVE_METADATA_STORE_FEATURE_FLAG: &str = "native_metadata_store_v1";
@@ -51,6 +53,7 @@ const KNOWN_FEATURE_FLAGS: &[&str] = &[
     CURRENT_IMAGE_PROPOSAL_FEATURE_FLAG,
     NATIVE_RECOVERY_SERVING_FEATURE_FLAG,
     NATIVE_WRITER_ENROLLMENT_FEATURE_FLAG,
+    NATIVE_CATALOGUE_CUSTODY_FEATURE_FLAG,
     NATIVE_METADATA_STORE_FEATURE_FLAG,
     NATIVE_INITIAL_PREPARATION_FEATURE_FLAG,
     "format_metadata_v2",
@@ -535,6 +538,9 @@ fn migrate_to_current(
 }
 
 fn validate_supported(metadata: &FormatMetadata) -> Result<()> {
+    validate_supported_with_flags(metadata, KNOWN_FEATURE_FLAGS)
+}
+fn validate_supported_with_flags(metadata: &FormatMetadata, known: &[&str]) -> Result<()> {
     // Checked first, and before any migration writes: the whole point of the
     // storage-mode fence is that a binary which cannot run the selected engine
     // refuses the database without mutating a byte of it.
@@ -552,7 +558,7 @@ fn validate_supported(metadata: &FormatMetadata) -> Result<()> {
         )));
     }
     for flag in &metadata.feature_flags {
-        if !KNOWN_FEATURE_FLAGS.contains(&flag.as_str()) {
+        if !known.contains(&flag.as_str()) {
             return Err(BicDbError::FormatCompatibility(format!(
                 "database requires unknown format feature flag `{flag}`"
             )));
@@ -585,7 +591,10 @@ fn persist_metadata_with(
             .contains(CURRENT_IMAGE_PROPOSAL_FEATURE_FLAG)
         || metadata
             .feature_flags
-            .contains(NATIVE_METADATA_STORE_FEATURE_FLAG);
+            .contains(NATIVE_METADATA_STORE_FEATURE_FLAG)
+        || metadata
+            .feature_flags
+            .contains(NATIVE_CATALOGUE_CUSTODY_FEATURE_FLAG);
     write(
         &metadata_path(root),
         &serde_json::to_vec_pretty(metadata)?,
@@ -709,6 +718,44 @@ pub(crate) fn enable_native_writer_enrollment(root: &Path) -> Result<()> {
         .feature_flags
         .insert(NATIVE_WRITER_ENROLLMENT_FEATURE_FLAG.into());
     persist_metadata(root, &metadata, true)
+}
+
+/// Fresh factory only; existing roots cannot obtain bootstrap authority from it.
+pub(crate) fn enable_native_catalogue_custody(root: &Path) -> Result<()> {
+    let lock = feature_flags_lock(root);
+    let _guard = lock.lock();
+    let mut metadata = read_or_legacy_metadata(root)?;
+    validate_supported(&metadata)?;
+    if !metadata
+        .feature_flags
+        .contains(NATIVE_WRITER_ENROLLMENT_FEATURE_FLAG)
+    {
+        return Err(BicDbError::InvalidConfig(
+            "catalogue custody requires enforced native writer".into(),
+        ));
+    }
+    metadata
+        .feature_flags
+        .insert(NATIVE_CATALOGUE_CUSTODY_FEATURE_FLAG.into());
+    persist_metadata(root, &metadata, true)
+}
+#[cfg(test)]
+pub(crate) fn test_old_reader_without_catalogue_custody(root: &Path) -> Result<()> {
+    let metadata = read_or_legacy_metadata(root)?;
+    let old: Vec<_> = KNOWN_FEATURE_FLAGS
+        .iter()
+        .copied()
+        .filter(|flag| *flag != NATIVE_CATALOGUE_CUSTODY_FEATURE_FLAG)
+        .collect();
+    validate_supported_with_flags(&metadata, &old)
+}
+
+pub(crate) fn native_catalogue_custody_active(root: &Path) -> Result<bool> {
+    let metadata = read_or_legacy_metadata(root)?;
+    validate_supported(&metadata)?;
+    Ok(metadata
+        .feature_flags
+        .contains(NATIVE_CATALOGUE_CUSTODY_FEATURE_FLAG))
 }
 
 pub(crate) fn native_writer_enrollment_active(root: &Path) -> Result<bool> {

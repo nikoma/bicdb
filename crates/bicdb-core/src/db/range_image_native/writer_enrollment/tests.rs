@@ -254,6 +254,7 @@ fn native_writer_broker_effect_refusal_preserves_legacy_transactional_outbox() {
 fn native_writer_birth_v2_uninstalled_actual_store_and_service_refuse_before_prepare() {
     let (_root, db, spec, topology) = fresh();
     let path = db.read().data_path().to_path_buf();
+    let before_catalogue = std::fs::read(path.join(DEFAULT_RANGE_WRITE_LOG)).unwrap();
     let range = spec.initial_ranges[0].clone();
     let key = (0..1000)
         .map(|i| format!("writer-uninstalled-{i}"))
@@ -277,7 +278,10 @@ fn native_writer_birth_v2_uninstalled_actual_store_and_service_refuse_before_pre
         .contains("policy"));
     assert_eq!(store.progress(range.id).last_index, 0);
     assert_eq!(store.progress(range.id).resolved_through, 0);
-    assert!(!path.join(DEFAULT_RANGE_WRITE_LOG).exists());
+    assert_eq!(
+        std::fs::read(path.join(DEFAULT_RANGE_WRITE_LOG)).unwrap(),
+        before_catalogue
+    );
     drop(store);
     let mut service = crate::ClusterDataNodeService::open(
         spec.cluster_id.clone(),
@@ -291,7 +295,10 @@ fn native_writer_birth_v2_uninstalled_actual_store_and_service_refuse_before_pre
     assert!(service
         .prepare_range_write(&range, &range.leader, command)
         .is_err());
-    assert!(!path.join(DEFAULT_RANGE_WRITE_LOG).exists());
+    assert_eq!(
+        std::fs::read(path.join(DEFAULT_RANGE_WRITE_LOG)).unwrap(),
+        before_catalogue
+    );
     assert_eq!(
         db.read()
             .native_range_prefix_observation(range.id)
@@ -362,6 +369,7 @@ impl CommitAdmission for CountAdmissionCalls {
 fn native_writer_generic_open_config_false_and_dummy_refuse_before_admission_or_rows() {
     let (_root, db, spec, topology) = fresh();
     let path = db.read().data_path().to_path_buf();
+    let before_catalogue = std::fs::read(path.join(DEFAULT_RANGE_WRITE_LOG)).unwrap();
     let range = &spec.initial_ranges[0];
     let key = (0..1000)
         .map(|i| format!("writer-generic-{i}"))
@@ -401,7 +409,10 @@ fn native_writer_generic_open_config_false_and_dummy_refuse_before_admission_or_
     );
     assert!(database.get("items", &key).unwrap().is_none());
     assert_eq!(database.current_commit_seq(), before);
-    assert!(!path.join(DEFAULT_RANGE_WRITE_LOG).exists());
+    assert_eq!(
+        std::fs::read(path.join(DEFAULT_RANGE_WRITE_LOG)).unwrap(),
+        before_catalogue
+    );
 }
 
 #[test]
@@ -456,3 +467,6 @@ fn native_writer_born_v2_raw_imports_refuse_without_invalidating_genesis() {
     assert_eq!(after.range_index(), 0);
     assert_eq!(after.native_receipt_sha256(), initial_sha);
 }
+
+#[path = "tests/custody_tests.rs"]
+mod custody_tests;

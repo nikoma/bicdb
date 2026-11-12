@@ -225,6 +225,34 @@ impl InstalledNativeWriterHostGuard {
 }
 
 impl BicDb {
+    /// Existing native WAL policy is an irreversible ever-enrolled refusal fact,
+    /// not permission to replace missing decisions with an empty catalogue.
+    /// Uses only native record reads: safe under the caller's existing journal.
+    pub(crate) fn require_native_writer_catalogue_custody(
+        &self,
+        store: &crate::distribution_range_consensus::RangeWriteStore,
+    ) -> Result<()> {
+        if self.actual_native_writer_enforcement_version()? != 1 {
+            return Err(invalid("catalogue custody requires actual enforced birth"));
+        }
+        if !format::native_catalogue_custody_active(self.data_path())? {
+            return Err(BicDbError::FormatCompatibility("native writer requires catalogue-custody reader fence; older prototype roots require authorized recovery".into()));
+        }
+        let birth = self
+            .read_native_birth()?
+            .ok_or_else(|| invalid("catalogue custody lost actual birth"))?;
+        if let Some(previous) =
+            self.read_native_range_image_record::<NativeWriterPolicyRecord>(POLICY_POINTER)?
+        {
+            previous.validate()?;
+            if previous.facts.local_birth_id != birth.birth_id
+                || previous.facts.local_birth_sha256 != birth.checksum_sha256
+            {
+                return Err(invalid("prior host policy has another actual native birth"));
+            }
+        }
+        store.require_verified_native_catalogue_custody(self.data_path())
+    }
     pub(crate) fn actual_native_writer_enforcement_version(&self) -> Result<u32> {
         self.check_recovery_state()?;
         Ok(self

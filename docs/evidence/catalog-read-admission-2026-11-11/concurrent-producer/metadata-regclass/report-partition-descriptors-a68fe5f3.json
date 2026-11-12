@@ -1,0 +1,77 @@
+{
+  "source": "a68fe5f37d697555d7c337005aac4785e5887f70",
+  "scope": "Batch six missing PostgreSQL partition/index catalog descriptors. NativePG16 actual all37 column descriptors captured; original5421 application94PASS1FAIL at prepared pg_indexes statementDescribe40001; actual rawwire reproducer b3e4 fails at samephase. Add static sixcatalog wildcard/typecontrol under foreign reservation, raw Parse/Bind/statement+portal Describe/Execute owner identity/foreign40001/ACK2reopens. Original application assertions unchanged. Focused first, broad wire follows stable batch.",
+  "started_unix": 1794461447.8639245,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "partition_catalog_descriptors",
+        "--test",
+        "regclass_search_path",
+        "--test",
+        "catalog_read_owner",
+        "--",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794461447.864184,
+      "exit": 0,
+      "finished_unix": 1794461589.3247607
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "--no-fail-fast",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-pgwire",
+        "--test",
+        "catalog_read_admission",
+        "--test",
+        "catalog_acl_types",
+        "--test",
+        "read_only_transactions",
+        "--test",
+        "protocol",
+        "--",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794461589.324955,
+      "exit": 0,
+      "finished_unix": 1794461893.2999969
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "build",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-pgwire",
+        "--example",
+        "oracle_server"
+      ],
+      "started_unix": 1794461893.3003206,
+      "exit": 0,
+      "finished_unix": 1794461900.2800786
+    }
+  ],
+  "status": "focused_passed",
+  "binary": "/root/bicdb-durability-s3/qualification-artifacts-debug/a68fe5f37d697555d7c337005aac4785e5887f70/oracle_server",
+  "binary_sha256": "8c2aeb480d1434127817c61e63eeb065b4f6ce8ecf0d4ad3e4b6e29ee34ec50b",
+  "finished_unix": 1794461900.6633775
+}

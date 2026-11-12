@@ -1,0 +1,35 @@
+{
+  "recorded_unix": 1794458397.2006626,
+  "server_version": "16.13 (Debian 16.13-1.pgdg13+1)",
+  "exit": 0,
+  "semantic_checks": [
+    "first_table|t",
+    "first_sequence|t",
+    "first_view|t",
+    "first_index|t",
+    "quoted_dot|t",
+    "no_public_fallback|t",
+    "qualified_public|t",
+    "missing_schema_path|t",
+    "missing_schema_current|t",
+    "empty_path|t",
+    "empty_current|t",
+    "missing|t",
+    "implicit_catalog|t",
+    "path_switch|t",
+    "rolled_back_schemas|t"
+  ],
+  "prepared_primary_key_counts": [
+    1,
+    0,
+    1,
+    0
+  ],
+  "original_iDempiere_query_unchanged": true,
+  "reason_for_agent_test_filter": "Regclassidentitytest ignorescatalog-versionNOTNULLrowdifference; noapplicationassertionschanged.",
+  "inputs": {
+    "native-pg-regclass-search-path-pk.sql": "f8392ab42fa67a5bf2aede9751223d374ff7559053d970662c2e7043b8555a13",
+    "native-pg-regclass-search-path-pk.stdout": "94faef5cc5eb2ca04aef0eec46887b458ec531835ac665d719c44bbc0a22219f",
+    "native-pg-regclass-search-path-pk.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  }
+}

@@ -1,0 +1,37 @@
+{
+  "source": "e637801fd1306e70f15f9e9421b275e6f3449e81",
+  "scope": "Regclass batch followup. Source2765actual47PASS2FAIL: all9catalogowner+8OIDalias+2OIDsemantics+27dump tests andnewaffectedfence pass; newindexnamespace failed (realstorednamespace losttoencodedname), newcountfixture assumedPG16allconstraintcount butrepoPG18catalogincludesNOTNULLrows. Keeporiginalappquery/assertionsunchanged; agentidentitytestsnowstrictcontype=p (Native16PKcontrol15checks+1,0,1,0pass), addprimaryindex identity. Helperpasseslogicalnamespace/namealongsidephysicalstorage; retainedretryableerrors/emptyGUCpath. NewSQL3+wire1 plusrelevantregressions/fullprotocol. Standard481buildsource/target untouched.",
+  "started_unix": 1794458465.4744782,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "--no-fail-fast",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "regclass_search_path",
+        "--test",
+        "oid_aliases",
+        "--test",
+        "oid_semantics",
+        "--test",
+        "pg_dump_schema_qualified_restore",
+        "--test",
+        "catalog_read_owner",
+        "--",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794458465.4746702,
+      "exit": 101,
+      "finished_unix": 1794458623.4634576
+    }
+  ],
+  "status": "failed",
+  "finished_unix": 1794458623.4639776
+}

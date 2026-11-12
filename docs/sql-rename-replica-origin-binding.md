@@ -118,7 +118,35 @@ prepared query. A fresh-server protocol probe pinned this to statement Describe,
 with Parse alone permitting the rename. Private `663cb2e80cb1` now derives column
 origin OIDs directly from the admitted table schema and adds cold-cache foreign
 transaction regressions with independent ACKs and two reopens. This second
-correction and the application rerun remain under qualification.
+correction passed 21 wire regressions and 151 protocol library tests. Its
+unchanged application batch still passed 94 of 95 tests, advancing to an
+unqualified `regclass` lookup that ignored the session search path.
+
+Private `5421dbbb2835` fixes live-path relation identity and exact catalog
+admission. Three SQL and 217 wire/protocol tests passed on that source;
+46 earlier SQL positives have identical production code at `e637801f`.
+The original 95-test run advanced to a missing `pg_indexes` descriptor:
+statement Describe fell back to executing the query outside its owning
+transaction. A raw-wire negative control at `b3e4b2110b04` reproduces that
+same `40001`. The six partition/index catalog descriptors at `a68fe5f37d69`
+match 37 actual native PostgreSQL columns and passed 13 SQL plus 218
+wire/protocol checks, including both storage modes, the live owner, foreign
+fences, acknowledged data and two reopens.
+
+The unchanged application batch at `a68fe5f37d69` is still not passing:
+93 passed and two failed. Partition migration reaches unsupported `ATTACH
+PARTITION ... DEFAULT`; rollback then attempts an index rebuild while foreign
+transactions are pending and retains its catalog reservation after refusal.
+The later original partition-name assertion fails too. The successful drop
+of a constraint-backed index also needs a dependency-enforcement audit: a
+native PostgreSQL18 run of the unchanged MTable class instead failed with
+`2BP01` at that drop (37 passed, one failed). That native18 fixture required
+removing one invalid optional operator commutator from its copied restore;
+all other SQL/COPY bytes, the frozen export, test bytecode and assertions
+were preserved. It is a qualified fixture-migration control, not an untouched
+Native16 baseline. It does not excuse BicDB's different parser or rollback
+failures. Raw source-scoped receipts and failures are under
+`docs/evidence/catalog-read-admission-2026-11-11/concurrent-producer/metadata-regclass`.
 
 The authenticated portable binding producer/resolver described above remains
 unimplemented. Successful local cleanup does not close the original replica

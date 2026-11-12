@@ -1,0 +1,73 @@
+{
+  "source": "5421dbbb28351aa187b8d330c1cca8ed5d4b8b42",
+  "scope": "Sameproductionase637, onlyagenttestfixtureschanged (equivalenceproof). Source1f2PASS1FAIL: newparentCOUNTp1becauseexistingimplicitidprimarykeyconvention; documentedoracleconstraintdiagnosticsREADME confirms. Useapplication-styleitem_key (originalupstreamtablealsohasnameduserkey), keepstrict1/0/1/0assertionsandoriginalappqueriesunchanged. NativePG16control15semanticchecks+PKcounts retained. Reuse46unchangedSQLpositives; runnew3SQL thenfullwirecatalog/readonly/ACL/protocol anddebugbuild. OwnmetadataS3source/target/lock;standard481source/targetuntouched; P2off/fsyncintact.",
+  "started_unix": 1794459563.802966,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "regclass_search_path",
+        "--",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794459563.80317,
+      "exit": 0,
+      "finished_unix": 1794459572.6961312
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "--no-fail-fast",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-pgwire",
+        "--test",
+        "catalog_read_admission",
+        "--test",
+        "catalog_acl_types",
+        "--test",
+        "read_only_transactions",
+        "--test",
+        "protocol",
+        "--",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794459572.6963463,
+      "exit": 0,
+      "finished_unix": 1794459873.8822064
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "build",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-pgwire",
+        "--example",
+        "oracle_server"
+      ],
+      "started_unix": 1794459873.882446,
+      "exit": 0,
+      "finished_unix": 1794459879.9711483
+    }
+  ],
+  "status": "focused_passed",
+  "binary": "/root/bicdb-durability-s3/qualification-artifacts-debug/5421dbbb28351aa187b8d330c1cca8ed5d4b8b42/oracle_server",
+  "binary_sha256": "cde0d3a4f66aa0f79190d5a428440635b0711a9fd7e56645d8e54b61d51b58e1",
+  "finished_unix": 1794459880.3730304
+}

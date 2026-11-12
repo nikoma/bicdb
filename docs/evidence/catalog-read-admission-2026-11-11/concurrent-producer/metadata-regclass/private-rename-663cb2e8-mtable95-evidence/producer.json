@@ -1,0 +1,84 @@
+{
+  "source": "663cb2e80cb1823f047f513f997a7e290ae2ff62",
+  "development_version": "1.0.481-beta",
+  "status": "finished",
+  "diagnostic_unmerged": true,
+  "application_qualified": false,
+  "release_published": false,
+  "deployed": false,
+  "assertions_bytecode_waits_unchanged": true,
+  "started_unix": 1794456068.5578775,
+  "binary": "/root/bicdb-durability-s3/qualification-artifacts-debug/663cb2e80cb1823f047f513f997a7e290ae2ff62/oracle_server",
+  "binary_sha256": "e35c996c964a5dfbb9ff55dca5999365bc80e538f0d0627abf13e72b7f4fb213",
+  "debug_build_receipt": "/root/bicdb-durability-s3/report-wire-origin-isolated-663cb2e8.json",
+  "baseline": "/root/.local/state/bicdb/idempiere-reference/pg-provider/baselines/main475-e098c26e/baseline-record.json",
+  "baseline_sha256": "720e3112161352036dd1fbfd7bb02e4a9d2ec486f9017143fd591bd0a2331d70",
+  "protected_baseline_closed": true,
+  "original_classes": [
+    {
+      "name": "org.idempiere.test.base.MProcessTest",
+      "direct_test_methods": 22,
+      "expected_invocations": 22,
+      "class_sha256": "de25e92d00ef5bacfa2d68b963f0e5047dcc9b472256bd9018203b61804e7837",
+      "source_sha256": "591f16a01ce93489dd7ee2865d09d909a374d0c32480344357506ffe0e8ccccb"
+    },
+    {
+      "name": "org.idempiere.test.base.MQueryTest",
+      "direct_test_methods": 18,
+      "expected_invocations": 18,
+      "class_sha256": "ffeb1d88ed7b8e201b8ae54a3d4882dfc337f77a266e810eb27490ea11c7f3b3",
+      "source_sha256": "7ef211bd26dfdaf07481fc8b956472607fd6cfdba687148c70d0efc3a44cf63f"
+    },
+    {
+      "name": "org.idempiere.test.base.MRelationTypeTest",
+      "direct_test_methods": 2,
+      "expected_invocations": 2,
+      "class_sha256": "7512b56af95ca86804dab6ad3d6c6386cfc352851ecace8f08ad19af639541e5",
+      "source_sha256": "f9b519c5a24b5a84903b1d80f0a396cd7b8be69bf496ed494356c5294097a8ce"
+    },
+    {
+      "name": "org.idempiere.test.base.MStorageTest",
+      "direct_test_methods": 1,
+      "expected_invocations": 1,
+      "class_sha256": "31806485835c1a5a2396900cf55dac1e834fc61514b733565b5649c9aef1e39f",
+      "source_sha256": "a898cbf3e63f44e33a095be9b3ab34af1b6f53e6e99cc9abac8638b65567e524"
+    },
+    {
+      "name": "org.idempiere.test.base.MTabTest",
+      "direct_test_methods": 14,
+      "expected_invocations": 14,
+      "class_sha256": "4831b03ca3b203068139b1edc553f8a1858266cc96d66a95f4c192b1a7456136",
+      "source_sha256": "4155fefab14fadf77501911408d6a225b55b68201a0255f6513ffa70b19f0bda"
+    },
+    {
+      "name": "org.idempiere.test.base.MTableTest",
+      "direct_test_methods": 38,
+      "expected_invocations": 38,
+      "class_sha256": "b38bdfcfe44f1af690ae9feb31368d9b6c982415de60b251269c136048f78ad9",
+      "source_sha256": "1583d30bc03c573703e782e22c4aca697a3593027cfa80eca2dea81665200ba3"
+    }
+  ],
+  "expected_invocations": 95,
+  "inputs_sha256": {
+    "/root/.local/state/bicdb/idempiere-reference/pg-provider/run_pg_batch.py": "563e74b2501b16e01a5ca223ab55c6a20555a14b03ab89bb32e1d5ea22ff46d7",
+    "/root/.local/state/bicdb/idempiere-reference/original-pristine-remaining-06-release-class-plan.json": "edc1909d5de26042e58c45f27d57d7f167d44d961c2dea7740fdc68029f7ba83",
+    "/root/.local/state/bicdb/idempiere-reference/pg-provider/baselines/main475-e098c26e/baseline-record.json": "720e3112161352036dd1fbfd7bb02e4a9d2ec486f9017143fd591bd0a2331d70",
+    "/root/bicdb-durability-s3/report-wire-origin-isolated-663cb2e8.json": "4161585149b40e1dedd070eea7557da87fac1599599b133e693a7404d5f04205",
+    "/root/bicdb-durability-s3/qualification-artifacts-debug/663cb2e80cb1823f047f513f997a7e290ae2ff62/oracle_server": "e35c996c964a5dfbb9ff55dca5999365bc80e538f0d0627abf13e72b7f4fb213"
+  },
+  "sql_profile": "postgres",
+  "commit_durability": "all-logs",
+  "sync_outbox": "off",
+  "experimental_page_flags_enabled": false,
+  "exit": 0,
+  "tests": 95,
+  "failures": 1,
+  "errors": 0,
+  "skipped": 0,
+  "original_tests_all_passed": false,
+  "result": "/root/.local/state/bicdb/idempiere-reference/pg-provider/runs/private-rename-663cb2e8-mtable95-test-run.json",
+  "result_sha256": "b01565dd68e4a87f1873bf25007f6587f5e723ed5b87860c3123f6c9dbfe4413",
+  "baseline_unchanged": true,
+  "processes_stopped": true,
+  "finished_unix": 1794457001.853238
+}

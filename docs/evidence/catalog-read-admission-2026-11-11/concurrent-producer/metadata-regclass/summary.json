@@ -1,0 +1,30 @@
+{
+  "source": "a68fe5f37d697555d7c337005aac4785e5887f70",
+  "focused_SQL_passed": 13,
+  "focused_wire_and_protocol_passed": 218,
+  "original_application": {
+    "tests": 95,
+    "passed": 93,
+    "failed": 2,
+    "errors": 0,
+    "skipped": 0,
+    "baseline_unchanged": true,
+    "processes_stopped": true
+  },
+  "remaining_product_failures": [
+    "ATTACH PARTITION DEFAULT parser path unsupported",
+    "ROLLBACK restores dropped index via full create_index while foreign transactions remain pending; leaves catalog reservations and a second original test fails"
+  ],
+  "native18_control": {
+    "tests": 38,
+    "passed": 37,
+    "failed": 1,
+    "fixture_migration": "One invalid optional operator COMMUTATOR removed only in a copied Native18 fixture; frozen dump and original tests unchanged",
+    "failure": "2BP01 when upstream partition migration attempts to drop a constraint-owned index",
+    "not_same_as_BicDB_failure": true
+  },
+  "portable_import_binding_implemented": false,
+  "merged": false,
+  "application_qualified": false,
+  "collected_unix": 1794463061.1187673
+}

@@ -368,6 +368,21 @@ pub(super) fn certificate_for_changes(
         .clone()
         .ok_or_else(|| required("partition publication has no activated certificate"))?;
     certificate.catalog_digest = proposed;
+    // A certificate describes the complete proposed tree. Never attest a
+    // parent/child column mismatch merely because each descriptor parses.
+    validate(
+        db,
+        &View {
+            stamps: view.stamps.clone(),
+            capability: view.capability,
+            nodes,
+            triggers,
+            certificate: Some(certificate.clone()),
+            bytes,
+            digest: certificate.catalog_digest.clone(),
+            needs_repair: false,
+        },
+    )?;
     Ok(Some(
         Record::new("current").with_metadata(serde_json::to_value(certificate)?),
     ))

@@ -1828,6 +1828,12 @@ impl<'db> SqlSession<'db> {
         }
         self.validate_planned_alter_foreign_keys(&planned)?;
 
+        if schema.partitioning.is_some() {
+            self.publish_partition_type_change(&planned)?;
+            *schema = updated_parent;
+            return Ok(());
+        }
+
         for (previous, _, _) in &planned {
             if unchanged_source_tables.contains(&previous.name) {
                 // Provenance attachment does not change records. Keeping a full

@@ -207,8 +207,10 @@ pub(crate) fn sync_partition_children_from_parent(
         if !partition_of.parent_table.eq_ignore_ascii_case(&parent.name) {
             continue;
         }
-        let synced = schema_with_parent_inheritance(child, parent);
-        save_schema(db, &synced)?;
+        let synced = schema_with_parent_inheritance(child.clone(), parent);
+        if serde_json::to_value(&synced)? != serde_json::to_value(&child)? {
+            save_schema(db, &synced)?;
+        }
     }
     Ok(())
 }

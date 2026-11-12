@@ -32,6 +32,7 @@ mod join_lookup_tests;
 mod operator_ddl;
 pub(crate) mod partition_admission;
 mod partition_exec;
+mod partition_schema;
 pub use partition_admission::{
     apply_partition_upgrade, check_sql_partition_admission, ensure_sql_partition_admission,
     inspect_partition_upgrade, PartitionInvalidRow, PartitionPolicyConflict,
@@ -2095,6 +2096,9 @@ pub(crate) enum DdlUndo {
     },
     RestorePartitionCatalog {
         entries: Vec<partition_triggers::CatalogUndo>,
+    },
+    RestorePartitionTableStates {
+        states: Vec<partition_schema::TableState>,
     },
     DeleteUserType {
         schema_name: String,
@@ -4860,6 +4864,13 @@ impl<'db> SqlSession<'db> {
 
     pub(crate) fn rollback_ddl_to_len(&mut self, len: usize) -> Result<()> {
         while self.ddl_undo.len() > len {
+            if let Some(DdlUndo::RestorePartitionTableStates { states }) =
+                self.ddl_undo.last().cloned()
+            {
+                self.restore_partition_table_states(states)?;
+                self.ddl_undo.pop();
+                continue;
+            }
             if let Some(DdlUndo::RestorePartitionCatalog { entries }) =
                 self.ddl_undo.last().cloned()
             {
@@ -4983,6 +4994,9 @@ impl<'db> SqlSession<'db> {
             }
             DdlUndo::RestorePartitionCatalog { entries } => {
                 self.restore_partition_catalog(entries)?
+            }
+            DdlUndo::RestorePartitionTableStates { states } => {
+                self.restore_partition_table_states(states)?
             }
             DdlUndo::DeleteUserType { schema_name, name } => {
                 let _ = delete_user_type(self.db_mut()?, &schema_name, &name)?;

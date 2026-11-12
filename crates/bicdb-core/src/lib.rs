@@ -442,8 +442,9 @@ pub use distribution_supervisor::{
 };
 #[cfg(feature = "tls-replication")]
 pub use distribution_transport::{
-    start_cluster_data_server, start_cluster_data_server_with_metadata_read_provider,
-    ClusterDataServerHandle, TcpClusterBootstrapClient, TcpClusterRelocationTransport,
+    start_cluster_data_server, start_cluster_data_server_on_listener_with_metadata_read_provider,
+    start_cluster_data_server_with_metadata_read_provider, ClusterDataServerHandle,
+    TcpClusterBootstrapClient, TcpClusterRelocationTransport,
 };
 pub use encryption::{
     DatabaseObjectCipher, EncryptionBinding, EncryptionConfig, EncryptionKdfMetadata,

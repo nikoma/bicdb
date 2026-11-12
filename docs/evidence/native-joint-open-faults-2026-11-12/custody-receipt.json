@@ -1,0 +1,46 @@
+{
+  "source_sha": "61eb4d92b5938349cf18a283e936eee45fa97e9d",
+  "run": 43225435854,
+  "job": 131207285182,
+  "artifact_id": 13948123238,
+  "artifact_sha256": "62c56fe36a526691a8d7c8015b9a267b80656fd9dd4bdc49c79263837621e051",
+  "scope": "Archive custody only. Observed stable copies with live engine owners; no engine replay or powerloss snapshot.",
+  "cuts": [
+    {
+      "manifest": "fault-state/native-joint-cut-01a1cfeb-a31a-7451-bccf-d3664b7b97f1/manifest.json",
+      "manifest_sha256": "4caa61b06ee8485d13f1928623736b48ab3a1d4b6919fae13ba4b51389a58130",
+      "listed_files": 75,
+      "listed_bytes": 4257680,
+      "missing": [],
+      "extra": [],
+      "bad_hash_or_length": [],
+      "engine_owners_remain_alive": true,
+      "engine_reopened": false,
+      "atomic_powerloss_snapshot_or_replay_verified": false
+    },
+    {
+      "manifest": "fault-state/native-joint-cut-01a1cfeb-a364-7ce1-a269-f12cd3094a4c/manifest.json",
+      "manifest_sha256": "59365a4122384354fdd14bc6fdcaa7f591afb9a7f34fc62e6a02184b88669daf",
+      "listed_files": 75,
+      "listed_bytes": 4257680,
+      "missing": [],
+      "extra": [],
+      "bad_hash_or_length": [],
+      "engine_owners_remain_alive": true,
+      "engine_reopened": false,
+      "atomic_powerloss_snapshot_or_replay_verified": false
+    },
+    {
+      "manifest": "fault-state/native-joint-cut-01a1cfeb-a529-7302-b9d4-da2d8fb5952d/manifest.json",
+      "manifest_sha256": "eb7a7c1951396feb2002c780da0ce9169cd3efadca3b57668fa89bf9e35610f2",
+      "listed_files": 75,
+      "listed_bytes": 4257680,
+      "missing": [],
+      "extra": [],
+      "bad_hash_or_length": [],
+      "engine_owners_remain_alive": true,
+      "engine_reopened": false,
+      "atomic_powerloss_snapshot_or_replay_verified": false
+    }
+  ]
+}

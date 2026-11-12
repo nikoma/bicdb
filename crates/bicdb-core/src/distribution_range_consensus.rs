@@ -823,6 +823,7 @@ pub struct RangeWriteStore {
     open_id: Uuid,
     open_lifetime: Arc<()>,
     recovery_persistence_uncertain: bool,
+    // Immutable provenance of the ORIGINAL verified read, never pathname existence.
     catalogue_loaded_at_open: bool,
     #[cfg(test)]
     test_native_commit_write_error_once: bool,

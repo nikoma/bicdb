@@ -6,6 +6,63 @@ operator binary, deployment, physical qualification or completion of that goal.
 Root owns the final PR rewrite, version selection, full CI, main merge and push.
 No version is reserved by this document.
 
+## Versioned delivery composition
+
+The working delivery is **1.0.489-beta**. Its first composition used
+prospective 488 source `34ba460941ddd011534b74d6054d59839bc9c84d` at
+`3cd044d94fafcd37dd91cd0a93db1d88cd631091`; that base was superseded after
+its workspace export regression failed. The current composition
+`7d742557bad4433d743d80616cd5604a03c061c4`
+merges corrected prospective 488 source
+`d8fc122db55300fd019fffe95321403c30ef45be`. Its primary-only recovery exports
+avoid unrelated secondary-index decoding and reject foreground mutations.
+The merge was clean, including `db.rs` and `spatial_paged.rs`; it retains the
+read/native mutation fences and newer decimal/index/invariant changes.
+Verified main remains 487 at this checkpoint. Actual 488 main and the next
+unused source patch must be verified before merging this delivery. This new
+composition requires its own final affected checks; results for the older
+base are not transferred to it.
+
+All twenty-nine packages, internal requirements, tracked lockfiles and the
+current-source compatibility document are synchronized. Full final-source
+regression and stock Rails checks are required; older native231 or broad480
+passes do not qualify this newly composed versioned source. Full Abort/joint
+and public operator data serving are excluded as before.
+
+## Current validation checkpoint (November 12)
+
+Versioned source `2f09872918406347f4dcdbfed1215b8d3c3be6bd` passed Core,
+SQL, PostgreSQL-wire, all-target/isolated-consumer compilation and formatting
+in [PR CI 43232044386](https://github.com/nikoma/bicdb/actions/runs/43232044386),
+and [stock Rails 43232044327](https://github.com/nikoma/bicdb/actions/runs/43232044327).
+The remaining-workspace job subsequently **failed** its
+`export_does_not_load_unrelated_secondary_indexes` assertion: corrupted unrelated
+index JSON was decoded during primary-only export. This exact failure was
+retained; it is the already identified prospective488 base defect, not a passing
+release check.
+Core library coverage is 846 passed, zero failed, nine ignored; integration
+invocations are not added to this count. These results belong to the superseded
+488-base composition, not `7d742557b` or an eventual main merge. In particular,
+a passing Core/SQL result cannot waive the earlier base's failed workspace
+export test. The corrected-base final delivery must pass the relevant suites.
+
+
+The preparation notes below retain their original source-specific history.
+Later read candidate `b08556c3f8ef5422833164d7efef90954846d93c` includes
+verified main487 and the fail-closed missing-catalog custody correction.
+Its `native_` batch passed 231 tests, zero failed, two ignored in
+[run 43222639169](https://github.com/nikoma/bicdb/actions/runs/43222639169).
+The paired acknowledged-value/missing-catalog acceptance and thirteen enrollment
+controls also passed on implementation-equivalent source `25710b785`.
+See [the custody correction and exact evidence](native-read-catalogue-custody-source-status.md).
+
+Earlier source `480db3b52820919b0c18a48e15cccda38fe7c1c1` passed the broad
+Core, SQL, PostgreSQL-wire, remaining workspace and stock Rails suites. These
+older results do not validate later code or the final versioned delivery.
+Final current-main integration, next unused version, broad release checks,
+PR157 replacement and verified main merge remain required. No released binary,
+physical experiment or completed Milestone 1 follows from these CI results.
+
 ## Exact source selection
 
 | Input | Revision | Role |
@@ -199,3 +256,34 @@ for mergec48c804d6 of preserved809 with PR162 candidatece023036, exact conflict
 resolution, read/routing invariants, local configuration override review and
 remote validation filters. That candidate inherits version1.0.485-beta; no new
 version, PR157 update, executed test or public delivery is claimed here.
+
+## Corrected-base final validation in progress
+
+At `a7ecd9450b9b78c438cd365aed005a95f756a001` (corrected488 base),
+[run 43243818809](https://github.com/nikoma/bicdb/actions/runs/43243818809)
+passed the Core job: library846 passed, zero failed, nine ignored in174.23s,
+plus integration invocations; all-target and isolated-consumer checks passed.
+There are128 invocation summaries, not128 unique tests. SQL, PostgreSQL-wire,
+remaining workspace and stock Rails43243823778 are still running. These results
+cover this exact source, not an unobserved main merge. Final requirements remain.
+The earlier2f failed workspace raw-log digest is recorded in retained CI custody;
+its failed assertion has not been waived.
+
+## Actual main488 and listener correction
+
+Actual main488 `d1d816afe0446b2a614c38004738d3d1c8bbc547` is verified and
+merged into this candidate at `d9b8f3472b0e00c86ff1272f77b9777a46540c70`.
+That composition has exactly the same tree as eec; main488 contains the already
+pinned d8fc runtime, so no additional runtime change is hidden by this merge.
+The source version remains489, the next unused patch at this checkpoint.
+
+The final0a75 PGwire library failed150/1 on an observed listener bind collision.
+The failure and exact original budgets/assertions are retained in
+[the listener investigation](metadata-failover-listener-identity-investigation.md).
+Sourceeec closes the test's allocation-to-bind race with actual retained sockets;
+it does not weaken any response identity or metadata rule. Its real wrong-route
+control passed1/0 at run43253321399; the exact PGwire metadata-failover control
+passed1/0/150filtered in8.24s at run43253328865. Full tests43256578903 and
+Rails43256585108 on eec are still running. Original0a75 SQL/workspace results
+remain source-scoped and are not waived or canceled. Any final main merge still
+requires successful relevant final-source validation and next-version checks.

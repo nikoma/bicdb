@@ -850,6 +850,43 @@ pub fn start_cluster_data_server_with_metadata_read_provider(
     )
 }
 
+/// Start the same metadata/data RPC receiver on an already bound socket.
+/// Ownership of the real listener moves into the common startup path, so a
+/// reserved endpoint need not be closed and raced before the receiver binds.
+/// The socket supplies no caller, role, native or metadata authority.
+#[allow(clippy::too_many_arguments)]
+pub fn start_cluster_data_server_on_listener_with_metadata_read_provider(
+    listener: TcpListener,
+    config: ClusterNetworkTransportConfig,
+    topology: Arc<RwLock<ClusterTopology>>,
+    service: Arc<Mutex<ClusterDataNodeService>>,
+    control_store: Option<Arc<Mutex<DistributionStore>>>,
+    metadata_consensus: Option<Arc<Mutex<MetadataConsensusStore>>>,
+    metadata_distribution_store: Option<Arc<Mutex<DistributionStore>>>,
+    metadata_read_provider: Option<Arc<MetadataReadProvider>>,
+) -> Result<ClusterDataServerHandle> {
+    let recovery = metadata_read_provider.as_ref().map(|provider| {
+        Arc::new(
+            crate::distribution_range_recovery::RangeRecoveryRuntime::new(
+                Arc::clone(&service),
+                Arc::clone(provider),
+            ),
+        )
+    });
+    start_cluster_data_server_on_bound_listener(
+        listener,
+        config,
+        topology,
+        service,
+        control_store,
+        metadata_consensus,
+        metadata_distribution_store,
+        metadata_read_provider,
+        recovery,
+        None,
+    )
+}
+
 /// The host shares the same receiver session owner with its local coordinator.
 /// Legacy callers retain the preceding public signatures and refusal behavior.
 #[allow(clippy::too_many_arguments)]
@@ -901,6 +938,36 @@ fn start_cluster_data_server_with_native_mode(
     }
     config.validate()?;
     let listener = TcpListener::bind(address)?;
+    start_cluster_data_server_on_bound_listener(
+        listener,
+        config,
+        topology,
+        service,
+        control_store,
+        metadata_consensus,
+        metadata_distribution_store,
+        metadata_read_provider,
+        recovery_runtime,
+        native_mode,
+    )
+}
+
+// Address binding and socket handoff share ALL initialization, identity,
+// attachment, TLS, ingress, worker accounting and shutdown behavior below.
+#[allow(clippy::too_many_arguments)]
+fn start_cluster_data_server_on_bound_listener(
+    listener: TcpListener,
+    config: ClusterNetworkTransportConfig,
+    topology: Arc<RwLock<ClusterTopology>>,
+    service: Arc<Mutex<ClusterDataNodeService>>,
+    control_store: Option<Arc<Mutex<DistributionStore>>>,
+    metadata_consensus: Option<Arc<Mutex<MetadataConsensusStore>>>,
+    metadata_distribution_store: Option<Arc<Mutex<DistributionStore>>>,
+    metadata_read_provider: Option<Arc<MetadataReadProvider>>,
+    recovery_runtime: Option<Arc<crate::distribution_range_recovery::RangeRecoveryRuntime>>,
+    native_mode: Option<NativeDataListenerMode>,
+) -> Result<ClusterDataServerHandle> {
+    config.validate()?;
     let local_addr = listener.local_addr()?;
     if config.dev_localhost_plaintext && !local_addr.ip().is_loopback() {
         return Err(transport_error(
@@ -5097,17 +5164,29 @@ impl TcpClusterRelocationTransport {
             .into());
         }
         let (response, presented_certificate_sha256) = exchange?;
-        if response.protocol_version != CLUSTER_DATA_PROTOCOL_VERSION
-            || response.cluster_id != self.cluster_id
-            || response.source_node_id != *destination_node_id
-            || response.request_id != request_id
-            || expected_native_destination
-                .as_ref()
-                .is_some_and(|expected| response.actual_native_source.as_ref() != Some(expected))
+        let protocol_matches = response.protocol_version == CLUSTER_DATA_PROTOCOL_VERSION;
+        let cluster_matches = response.cluster_id == self.cluster_id;
+        let source_matches = response.source_node_id == *destination_node_id;
+        let request_matches = response.request_id == request_id;
+        let native_matches = expected_native_destination
+            .as_ref()
+            .is_none_or(|expected| response.actual_native_source.as_ref() == Some(expected));
+        if !(protocol_matches
+            && cluster_matches
+            && source_matches
+            && request_matches
+            && native_matches)
         {
-            return Err(transport_error(
-                "cluster data RPC response identity or protocol mismatch",
-            ));
+            // Bounded escaped identities explain which refusal fired without
+            // logging a response body, native credentials or complete birth.
+            let label = |value: &str| format!("{:?}", value.chars().take(96).collect::<String>());
+            return Err(transport_error(format!(
+                "cluster data RPC response identity or protocol mismatch: address={} resolved_address={} caller={} matches(protocol={},cluster={},source={},request_id={},native_source={}) expected(protocol={},cluster={},source={},request_id={},native_present={}) actual(protocol={},cluster={},source={},request_id={},native_present={})",
+                label(&address), address_resolved, label(self.caller_node_id.as_str()),
+                protocol_matches, cluster_matches, source_matches, request_matches, native_matches,
+                CLUSTER_DATA_PROTOCOL_VERSION, label(self.cluster_id.as_str()), label(destination_node_id.as_str()), request_id, expected_native_destination.is_some(),
+                response.protocol_version, label(response.cluster_id.as_str()), label(response.source_node_id.as_str()), response.request_id, response.actual_native_source.is_some(),
+            )));
         }
         response
             .response
@@ -6055,6 +6134,114 @@ mod tests {
             .contains("max_frame_bytes >= 4MiB"));
         assert_eq!(small.next_request_id.load(Ordering::SeqCst), 1);
         // No listener exists: both validation paths complete without network I/O.
+    }
+
+    #[test]
+    fn actual_wrong_listener_route_reports_exact_identity_predicates_and_endpoint() {
+        let root = tempfile::tempdir().unwrap();
+        let config = crate::DistributionConfig {
+            enabled: true,
+            cluster_id: ClusterId::new("actual-identity-route-control").unwrap(),
+            node_id: ClusterNodeId::new("n1").unwrap(),
+            replication_factor: 1,
+            initial_ranges: 1,
+            transport: ClusterNetworkTransportConfig {
+                dev_localhost_plaintext: true,
+                io_timeout_ms: 500,
+                connect_timeout_ms: 100,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let mut store = DistributionStore::initialize_at(
+            root.path().join("topology"),
+            config.clone(),
+            false,
+            1,
+        )
+        .unwrap();
+        let n2 = ClusterNodeId::new("n2").unwrap();
+        store
+            .join_node(
+                ClusterNode::new(n2.clone(), "127.0.0.1:1", 1, 1_000_000, 1).unwrap(),
+                &config.node_id,
+                1,
+            )
+            .unwrap();
+        let topology = Arc::new(RwLock::new(store.topology().clone()));
+        let database = Arc::new(RwLock::new(
+            crate::BicDb::open_with_config(
+                root.path().join("data"),
+                crate::DbConfig::default().with_fsync(false),
+            )
+            .unwrap(),
+        ));
+        let service = Arc::new(Mutex::new(
+            ClusterDataNodeService::open(
+                config.cluster_id.clone(),
+                config.node_id.clone(),
+                root.path().join("service"),
+                database,
+                false,
+            )
+            .unwrap(),
+        ));
+        let reservation = TcpListener::bind("127.0.0.1:0").unwrap();
+        let reserved_address = reservation.local_addr().unwrap();
+        assert_eq!(
+            TcpListener::bind(reserved_address).unwrap_err().kind(),
+            std::io::ErrorKind::AddrInUse
+        );
+        let listener = start_cluster_data_server_on_listener_with_metadata_read_provider(
+            reservation.try_clone().unwrap(),
+            config.transport.clone(),
+            topology.clone(),
+            service,
+            None,
+            None,
+            None,
+            None,
+        )
+        .unwrap();
+        assert_eq!(listener.local_addr(), reserved_address);
+        let address = listener.local_addr().to_string();
+        // Both expected destinations route to ONE actual n1 listener. This is
+        // request/topology DATA, not a forged response or authorization token.
+        for id in [&config.node_id, &n2] {
+            topology.write().nodes.get_mut(id).unwrap().address = address.clone();
+        }
+        let transport = TcpClusterRelocationTransport::new(
+            config.cluster_id.clone(),
+            config.node_id.clone(),
+            topology.clone(),
+            config.transport.clone(),
+        )
+        .unwrap();
+        transport.ping(&config.node_id).unwrap();
+        let wrong_source = transport.ping(&n2).unwrap_err().to_string();
+        assert!(
+            wrong_source.contains(&format!("resolved_address={address}")),
+            "{wrong_source}"
+        );
+        assert!(wrong_source.contains("matches(protocol=true,cluster=true,source=false,request_id=true,native_source=true)"),"{wrong_source}");
+        assert!(wrong_source.contains("source=\"n2\""), "{wrong_source}");
+        assert!(wrong_source.contains("source=\"n1\""), "{wrong_source}");
+        let mut foreign = topology.read().clone();
+        foreign.cluster_id = ClusterId::new("expected-foreign-cluster").unwrap();
+        let transport = TcpClusterRelocationTransport::new(
+            foreign.cluster_id.clone(),
+            config.node_id.clone(),
+            Arc::new(RwLock::new(foreign)),
+            config.transport,
+        )
+        .unwrap();
+        let wrong_cluster = transport.ping(&config.node_id).unwrap_err().to_string();
+        assert!(
+            wrong_cluster.contains(&format!("resolved_address={address}")),
+            "{wrong_cluster}"
+        );
+        assert!(wrong_cluster.contains("matches(protocol=true,cluster=false,source=true,request_id=true,native_source=true)"),"{wrong_cluster}");
+        listener.join().unwrap();
     }
 
     #[test]

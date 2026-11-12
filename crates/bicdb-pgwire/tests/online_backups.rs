@@ -528,9 +528,15 @@ async fn backup_control_survives_oracle_identifier_rewriting_and_postgres_quotin
         // must preserve that mode; existing paged backup controls use db_config.
         let mut restored =
             BicDb::open_with_config(restored_path, DbConfig::default().with_fsync(true)).unwrap();
+        let source = "SELECT payload FROM dispatch_items WHERE item_key=1";
+        let restored_query = if profile == bicdb_sql::oracle::POSTGRES_PROFILE {
+            source.to_string()
+        } else {
+            bicdb_sql::oracle::lower_session_sql(&restored, source, profile, None, "bicdb").unwrap()
+        };
         assert_eq!(
             bicdb_sql::SqlSession::new(&mut restored)
-                .execute("SELECT payload FROM dispatch_items WHERE item_key=1")
+                .execute(&restored_query)
                 .unwrap()
                 .rows,
             vec![vec![bicdb_sql::SqlValue::String("acknowledged".into())]]

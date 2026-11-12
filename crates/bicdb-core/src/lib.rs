@@ -7,6 +7,14 @@
 mod backup;
 mod broker;
 mod cancellation;
+mod decimal_input;
+mod exact_decimal_list_sum;
+pub use exact_decimal_list_sum::{exact_decimal_list_sum_value, MAX_EXACT_DECIMAL_LIST_SUM_ITEMS};
+mod exact_proportional_interval;
+pub use decimal_input::{json_decimal_exact, parse_decimal_exact};
+pub use exact_proportional_interval::{
+    exact_proportional_interval, exact_proportional_interval_value,
+};
 pub mod consensus;
 mod db;
 pub mod distribution;
@@ -509,9 +517,9 @@ pub use memory_index::{
 };
 pub use mutation::{
     MutationActor, MutationGrantId, MutationGrantSpec, MutationOperation, MutationPolicy,
-    NativeCommitValidator, NativeInvariantAggregateFunction, NativeInvariantBinaryOperator,
-    NativeInvariantDefinition, NativeInvariantExpression, NativeInvariantKind,
-    NativeInvariantUnaryOperator, NativeInvariantValueType,
+    NativeCommitValidator, NativeFactPublicationPolicy, NativeInvariantAggregateFunction,
+    NativeInvariantBinaryOperator, NativeInvariantDefinition, NativeInvariantExpression,
+    NativeInvariantKind, NativeInvariantUnaryOperator, NativeInvariantValueType,
 };
 pub use numeric_key::{canonical_numeric_parts, numeric_index_key_from_canonical_text};
 pub use observability::{

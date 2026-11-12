@@ -8,6 +8,7 @@
 
 mod auth;
 mod bounded_sql;
+mod decimal_input;
 mod host;
 mod http;
 mod management;

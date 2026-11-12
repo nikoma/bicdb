@@ -48,6 +48,246 @@ pub(super) fn validate_application_module_catalog(catalog: &RuntimeCatalog) -> R
         }
     }
 
+    // Resolve projections against actual active signed owners, never a consumer mirror.
+    for (consumer_name, snapshot) in &catalog.packages {
+        let application = snapshot
+            .package
+            .manifest
+            .application
+            .as_deref()
+            .expect("active application");
+        let module = application_module_contract(&snapshot.package)?;
+        if !application.native_fact_publications.is_empty()
+            || !application.native_fact_imports.is_empty()
+            || !application.native_fact_projection_imports.is_empty()
+        {
+            let module = module.as_ref().ok_or_else(|| {
+                AppRuntimeError::InvalidPackage(
+                    "native facts require signed module identity".into(),
+                )
+            })?;
+            if module.namespace != *consumer_name
+                || module.native_fact_publications != application.native_fact_publications
+                || module.native_fact_imports != application.native_fact_imports
+                || module.fact_requires != application.native_fact_projection_imports
+            {
+                return Err(AppRuntimeError::InvalidPackage(
+                    "native fact module and ABI contracts differ".into(),
+                ));
+            }
+        }
+        for publication in &application.native_fact_publications {
+            let shape = publication.structural_json()?;
+            let fingerprint = carrier_hex(&Sha256::digest(serde_json::to_vec(&shape)?));
+            if fingerprint != publication.fingerprint {
+                return Err(AppRuntimeError::InvalidPackage(
+                    "native fact structural fingerprint mismatch".into(),
+                ));
+            }
+            let module = module.as_ref().expect("native fact module checked");
+            if !module.record_types.iter().any(|record| {
+                record.model == publication.resource
+                    && record.stable_key == publication.stable_key
+                    && record.owner == module.namespace
+            }) {
+                return Err(AppRuntimeError::InvalidPackage(
+                    "native fact stable owner identity mismatch".into(),
+                ));
+            }
+            for (other_name, other) in &catalog.packages {
+                if other_name == consumer_name {
+                    continue;
+                }
+                if other
+                    .package
+                    .manifest
+                    .application
+                    .as_deref()
+                    .is_some_and(|app| {
+                        app.resources
+                            .iter()
+                            .any(|resource| resource.relation == publication.relation)
+                    })
+                {
+                    return Err(AppRuntimeError::InvalidPackage(
+                        "foreign resource shadows immutable publication".into(),
+                    ));
+                }
+            }
+        }
+        for import in &application.native_fact_imports {
+            for subject in &import.subject_resources {
+                let relation = &application
+                    .resources
+                    .iter()
+                    .find(|resource| resource.name == *subject)
+                    .expect("ABI validated subject")
+                    .relation;
+                for (other_name, other) in &catalog.packages {
+                    if other_name == consumer_name {
+                        continue;
+                    }
+                    if other
+                        .package
+                        .manifest
+                        .application
+                        .as_deref()
+                        .is_some_and(|app| {
+                            app.resources
+                                .iter()
+                                .any(|resource| resource.relation == *relation)
+                        })
+                    {
+                        return Err(AppRuntimeError::InvalidPackage(
+                            "foreign resource shadows immutable native reference".into(),
+                        ));
+                    }
+                }
+            }
+
+            let owner = &import.publication.owner_application;
+            let (_, _, provider_module) = modules.get(owner).ok_or_else(|| {
+                AppRuntimeError::InvalidPackage("native fact owner module unavailable".into())
+            })?;
+            if !module.as_ref().is_some_and(|module| {
+                module
+                    .requires
+                    .iter()
+                    .any(|requirement| requirement.namespace == *owner)
+            }) {
+                return Err(AppRuntimeError::InvalidPackage(
+                    "native fact owner is not an exact declared module dependency".into(),
+                ));
+            }
+            let provider = catalog.packages.get(owner).ok_or_else(|| {
+                AppRuntimeError::InvalidPackage("native fact owner application unavailable".into())
+            })?;
+            let actual = provider
+                .package
+                .manifest
+                .application
+                .as_deref()
+                .unwrap()
+                .native_fact_publications
+                .iter()
+                .find(|publication| publication.name == import.publication.name)
+                .ok_or_else(|| {
+                    AppRuntimeError::InvalidPackage("native fact publication absent".into())
+                })?;
+            if actual.structural_json()? != import.publication.structural_json()?
+                || actual.fingerprint != import.publication.fingerprint
+                || !actual.consumers.contains(consumer_name)
+                || provider_module.namespace != *owner
+            {
+                return Err(AppRuntimeError::InvalidPackage(
+                    "native fact actual owner publication mismatch".into(),
+                ));
+            }
+        }
+    }
+
+    // Projection-only edges resolve against the complete PLANNED catalog. They
+    // do not enter full-module install_order, service authority or SQL grants.
+    for (consumer_name, snapshot) in &catalog.packages {
+        let app = snapshot
+            .package
+            .manifest
+            .application
+            .as_deref()
+            .expect("active application");
+        for import in &app.native_fact_projection_imports {
+            let contract = &import.contract;
+            if carrier_hex(&Sha256::digest(serde_json::to_vec(contract)?))
+                != import.descriptor_sha256
+            {
+                return Err(AppRuntimeError::InvalidPackage(
+                    "fact projection descriptor hash mismatch".into(),
+                ));
+            }
+            let (_, _, provider_module) =
+                modules.get(&contract.owner_application).ok_or_else(|| {
+                    AppRuntimeError::InvalidPackage(
+                        "fact-only actual owner module unavailable".into(),
+                    )
+                })?;
+            let provider = catalog
+                .packages
+                .get(&contract.owner_application)
+                .ok_or_else(|| {
+                    AppRuntimeError::InvalidPackage(
+                        "fact-only actual owner application unavailable".into(),
+                    )
+                })?;
+            let actual_app = provider
+                .package
+                .manifest
+                .application
+                .as_deref()
+                .expect("active owner");
+            let actual = actual_app
+                .native_fact_publications
+                .iter()
+                .find(|publication| publication.name == contract.publication_name)
+                .ok_or_else(|| {
+                    AppRuntimeError::InvalidPackage(
+                        "fact-only actual owner publication absent".into(),
+                    )
+                })?;
+            let resource = actual_app
+                .resources
+                .iter()
+                .find(|resource| resource.name == actual.resource)
+                .ok_or_else(|| {
+                    AppRuntimeError::InvalidPackage(
+                        "fact-only actual owning resource absent".into(),
+                    )
+                })?;
+            if provider_module.namespace != contract.owner_application
+                || provider_module.semantic_version != contract.owner_version
+                || provider.package.manifest.identity.version != contract.owner_version
+                || !contract.matches_publication(actual)
+                || resource.relation != actual.relation
+                || !actual.consumers.contains(consumer_name)
+            {
+                return Err(AppRuntimeError::InvalidPackage(
+                    "fact-only actual owner version/projection mismatch".into(),
+                ));
+            }
+            for subject in &import.subject_resources {
+                let relation = &app
+                    .resources
+                    .iter()
+                    .find(|resource| resource.name == *subject)
+                    .expect("ABI validated projection subject")
+                    .relation;
+                if app
+                    .resources
+                    .iter()
+                    .filter(|resource| resource.relation == *relation)
+                    .count()
+                    != 1
+                    || catalog.packages.iter().any(|(name, other)| {
+                        name != consumer_name
+                            && other
+                                .package
+                                .manifest
+                                .application
+                                .as_deref()
+                                .is_some_and(|app| {
+                                    app.resources
+                                        .iter()
+                                        .any(|resource| resource.relation == *relation)
+                                })
+                    })
+                {
+                    return Err(AppRuntimeError::InvalidPackage(
+                        "foreign resource shadows immutable native reference".into(),
+                    ));
+                }
+            }
+        }
+    }
+
     for (_, _, contract) in modules.values() {
         let self_position = contract
             .install_order
@@ -137,6 +377,94 @@ pub(super) fn validate_application_module_upgrade(
                 "application record type `{}` changes stable ownership, scope, or regresses its schema",
                 previous_record_type.stable_key
             )));
+        }
+    }
+    let old = previous.package.manifest.application.as_deref().unwrap();
+    let next = candidate.package.manifest.application.as_deref().unwrap();
+    for publication in &old.native_fact_publications {
+        let newer = next
+            .native_fact_publications
+            .iter()
+            .find(|newer| newer.name == publication.name)
+            .ok_or_else(|| {
+                AppRuntimeError::InvalidPackage("native publication removal is unsupported".into())
+            })?;
+        if publication.structural_json()? != newer.structural_json()?
+            || publication.fingerprint != newer.fingerprint
+            || (!publication.accept_new_references && newer.accept_new_references)
+        {
+            return Err(AppRuntimeError::InvalidPackage(
+                "native publication identity is immutable and admission closure is monotonic"
+                    .into(),
+            ));
+        }
+    }
+    for import in &old.native_fact_projection_imports {
+        let newer = next
+            .native_fact_projection_imports
+            .iter()
+            .find(|newer| newer.resource == import.resource)
+            .ok_or_else(|| {
+                AppRuntimeError::InvalidPackage("fact-only reference removal is unsupported".into())
+            })?;
+        let mut before = import.contract.clone();
+        let mut after = newer.contract.clone();
+        before.owner_version.clear();
+        after.owner_version.clear();
+        if before != after || import.subject_resources != newer.subject_resources {
+            return Err(AppRuntimeError::InvalidPackage(
+                "fact-only reference structural identity is immutable".into(),
+            ));
+        }
+        for subject in &import.subject_resources {
+            let old_guards = old
+                .invariants
+                .iter()
+                .filter(|guard| guard.subject_resource == *subject)
+                .collect::<Vec<_>>();
+            let new_guards = next
+                .invariants
+                .iter()
+                .filter(|guard| guard.subject_resource == *subject)
+                .collect::<Vec<_>>();
+            if old_guards != new_guards {
+                return Err(AppRuntimeError::InvalidPackage(
+                    "immutable reference guard cannot be rewritten".into(),
+                ));
+            }
+        }
+    }
+    for import in &old.native_fact_imports {
+        let newer = next
+            .native_fact_imports
+            .iter()
+            .find(|newer| newer.resource == import.resource)
+            .ok_or_else(|| {
+                AppRuntimeError::InvalidPackage("native reference removal is unsupported".into())
+            })?;
+        if import.publication.structural_json()? != newer.publication.structural_json()?
+            || import.subject_resources != newer.subject_resources
+        {
+            return Err(AppRuntimeError::InvalidPackage(
+                "native reference structural identity is immutable".into(),
+            ));
+        }
+        for subject in &import.subject_resources {
+            let before = old
+                .invariants
+                .iter()
+                .filter(|invariant| invariant.subject_resource == *subject)
+                .collect::<Vec<_>>();
+            let after = next
+                .invariants
+                .iter()
+                .filter(|invariant| invariant.subject_resource == *subject)
+                .collect::<Vec<_>>();
+            if before != after {
+                return Err(AppRuntimeError::InvalidPackage(
+                    "immutable reference guard cannot be rewritten".into(),
+                ));
+            }
         }
     }
     Ok(())
@@ -1696,9 +2024,9 @@ impl ApplicationRuntime {
             Some(index) if index < contract.cases => (index, index.saturating_add(1)),
             Some(index) => {
                 return Err(AppRuntimeError::InvalidRequest(format!(
-                "BicDB application test `{test}` case index {index} is outside its signed {} cases",
-                contract.cases
-            )))
+                    "BicDB application test `{test}` case index {index} is outside its signed {} cases",
+                    contract.cases
+                )));
             }
             None => (0, contract.cases),
         };
@@ -2446,6 +2774,40 @@ impl ApplicationRuntime {
         self.restore_active_snapshot_with_supervisors(true)
     }
 
+    /// Validate a restored signed catalog before exposing routes or workers.
+    /// Older binaries may have admitted invalid local history when unrelated
+    /// backfills hid an invariant's dependencies. Ordinary reads can omit full
+    /// rescans only after this explicit, zero-write admission has succeeded.
+    fn validate_restored_application_invariants(&self, catalog: &RuntimeCatalog) -> Result<()> {
+        let db = self.db.read();
+        for (name, snapshot) in &catalog.packages {
+            let application = snapshot
+                .package
+                .manifest
+                .application
+                .as_deref()
+                .ok_or_else(|| {
+                    AppRuntimeError::InvalidPackage(
+                        "restored snapshot lacks its signed application manifest".into(),
+                    )
+                })?;
+            let validators = lower_carrier_invariants(application)?;
+            if validators.is_empty() {
+                continue;
+            }
+            let mut transaction = db.begin_application_transaction(migration_actor(application))?;
+            for validator in validators {
+                transaction.register_commit_validator(validator)?;
+            }
+            transaction.commit().map_err(|error| {
+                AppRuntimeError::NotReady(format!(
+                    "restored application `{name}` failed existing-data invariant admission: {error}"
+                ))
+            })?;
+        }
+        Ok(())
+    }
+
     pub(super) fn restore_active_snapshot_with_supervisors(
         &self,
         start_supervisors: bool,
@@ -2517,6 +2879,7 @@ impl ApplicationRuntime {
                 }),
             );
         }
+        self.validate_restored_application_invariants(&catalog)?;
         *self.active.write() = Arc::new(catalog);
         *self.staged.write() = staged;
         *self.history.lock().expect("package history poisoned") = history;
@@ -2741,6 +3104,18 @@ impl ApplicationRuntime {
         let mut db = self.db.write();
         let mut receipt = SchemaApplicationReceipt::default();
         let result = (|| -> Result<()> {
+            if application
+                .required_features
+                .contains(&bicdb_extension::abi_v2::ApplicationFeature::ExactDecimalListSum)
+            {
+                db.enable_exact_decimal_list_sum()?;
+            }
+            if application
+                .required_features
+                .contains(&bicdb_extension::abi_v2::ApplicationFeature::ExactProportionalIntervals)
+            {
+                db.enable_exact_proportional_intervals()?;
+            }
             for contract in &application.resources {
                 validate_timeseries_intervals(contract)?;
                 let existed = db
@@ -2797,6 +3172,49 @@ impl ApplicationRuntime {
                 }
                 if contract.audit.required {
                     mutation = mutation.with_audit();
+                }
+                let publication = application
+                    .native_fact_publications
+                    .iter()
+                    .find(|publication| publication.resource == contract.name);
+                let reference = application
+                    .native_fact_imports
+                    .iter()
+                    .any(|import| import.subject_resources.contains(&contract.name))
+                    || application
+                        .native_fact_projection_imports
+                        .iter()
+                        .any(|import| import.subject_resources.contains(&contract.name));
+                if publication.is_some() || reference {
+                    let previous = db.mutation_policy(&contract.relation)?.unwrap_or_default();
+                    if previous.native_fact_publication.is_none()
+                        && !previous.native_fact_reference_owner.is_some()
+                        && db.collection_record_count(&contract.relation)? != 0
+                    {
+                        return Err(AppRuntimeError::InvalidPackage(
+                            "cannot adopt populated unfenced native facts".into(),
+                        ));
+                    }
+                    mutation.append_only = true;
+                    mutation.native_fact_reference_owner =
+                        reference.then(|| application.package.application.clone());
+                    mutation.native_fact_publication =
+                        publication.map(|publication| bicdb_core::NativeFactPublicationPolicy {
+                            owner_application: publication.owner_application.clone(),
+                            owner_resource: Some(contract.name.clone()),
+                            owner_version: Some(application.package.version.clone()),
+                            publication_name: publication.name.clone(),
+                            fingerprint: publication.fingerprint.clone(),
+                            tenant_field: publication.tenant_field.clone(),
+                            fields: publication
+                                .fields
+                                .iter()
+                                .map(|field| field.name.clone())
+                                .collect(),
+                            consumers: publication.consumers.clone(),
+                            read_roles: publication.read_roles.clone(),
+                            accept_new_references: publication.accept_new_references,
+                        });
                 }
                 db.set_mutation_policy(&contract.relation, mutation)?;
                 if !contract.search_fields.is_empty() {

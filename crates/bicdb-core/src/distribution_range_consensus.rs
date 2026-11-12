@@ -103,6 +103,9 @@ pub(crate) use native_limits::{
     validate_native_recovery_entry_size, MAX_NATIVE_RECOVERY_ENTRY_BYTES,
     MIN_NATIVE_RECOVERY_FRAME_BYTES,
 };
+mod catalogue_custody;
+#[cfg(test)]
+pub(crate) use catalogue_custody::FreshCatalogueTestCut;
 mod native_durability;
 mod native_normal;
 mod native_prefix;
@@ -746,6 +749,8 @@ pub struct RangeWriteStore {
     catalog: RangeWriteCatalog,
     open_id: Uuid,
     recovery_persistence_uncertain: bool,
+    // Immutable provenance of the ORIGINAL verified read, never pathname existence.
+    catalogue_loaded_at_open: bool,
     #[cfg(test)]
     test_native_commit_write_error_once: bool,
     native_activated_opens: BTreeMap<RangeId, crate::db::NativeActivatedOpenGuard>,
@@ -822,22 +827,31 @@ impl RangeWriteStore {
     ) -> Result<Self> {
         let root = root.as_ref().to_path_buf();
         let path = root.join(DEFAULT_RANGE_WRITE_LOG);
-        let existing_catalog = path.exists();
-        let mut catalog = match fs::read(&path) {
-            Ok(bytes) => serde_json::from_slice::<RangeWriteEnvelope>(&bytes)?.verify()?,
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => RangeWriteCatalog {
-                format_version: RANGE_WRITE_LOG_FORMAT_VERSION,
-                native_writer_enforcement_version: None,
-                cluster_id: cluster_id.clone(),
-                node_id: node_id.clone(),
-                ranges: BTreeMap::new(),
-                backup_fences: BTreeMap::new(),
-                handoff_promises: BTreeMap::new(),
-                image_install_intents: BTreeMap::new(),
-                recovery_fences: BTreeMap::new(),
-                native_image_bases: BTreeMap::new(),
-                sparse_committed_decisions: None,
-            },
+        let enforced = crate::format::native_writer_enrollment_active(&root)?;
+        let (mut catalog, existing_catalog) = match fs::read(&path) {
+            Ok(bytes) => (
+                serde_json::from_slice::<RangeWriteEnvelope>(&bytes)?.verify()?,
+                true,
+            ),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound && enforced => {
+                return Err(BicDbError::NativeRangeCatalogueCustodyMissing);
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => (
+                RangeWriteCatalog {
+                    format_version: RANGE_WRITE_LOG_FORMAT_VERSION,
+                    native_writer_enforcement_version: None,
+                    cluster_id: cluster_id.clone(),
+                    node_id: node_id.clone(),
+                    ranges: BTreeMap::new(),
+                    backup_fences: BTreeMap::new(),
+                    handoff_promises: BTreeMap::new(),
+                    image_install_intents: BTreeMap::new(),
+                    recovery_fences: BTreeMap::new(),
+                    native_image_bases: BTreeMap::new(),
+                    sparse_committed_decisions: None,
+                },
+                false,
+            ),
             Err(error) => return Err(error.into()),
         };
         if catalog.cluster_id != cluster_id || catalog.node_id != node_id {
@@ -859,7 +873,6 @@ impl RangeWriteStore {
                 "protected proposal catalog lacks its mandatory native reader fence",
             ));
         }
-        let enforced = crate::format::native_writer_enrollment_active(&root)?;
         if enforced {
             if !crate::format::current_image_proposal_active(&root)?
                 || !fsync
@@ -904,6 +917,7 @@ impl RangeWriteStore {
             native_activated_opens: BTreeMap::new(),
             native_writer_host: None,
             recovery_persistence_uncertain: false,
+            catalogue_loaded_at_open: existing_catalog,
             #[cfg(test)]
             test_native_commit_write_error_once: false,
         };

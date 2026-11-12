@@ -231,6 +231,8 @@ impl SealedHostWriterEnrollment {
             local.incarnation,
         )?;
         store.require_native_catalog_durability(database.data_path())?;
+        database.require_native_writer_catalogue_custody(store)?;
+        store.sync_verified_native_catalogue_before_policy(database.data_path())?;
         let schema = database.schema_compatibility_fingerprint()?.sha256;
         let facts = HostWriterPolicyFacts::from_actual(
             topology,

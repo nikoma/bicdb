@@ -199,22 +199,6 @@ impl NativeProvisionalNode {
         // Materialize the persisted schema through the actual strict opener.
         // A freshly created in-memory namespace is not a paged-image proof.
         let (database, factory) = BicDb::open_range_image_database(root, config, &spec)?;
-        // Check the refusal record BEFORE reattesting/writing any genesis.
-        let native = database.native_recovery_admission(
-            &spec.cluster_id,
-            spec.bootstrap_id,
-            &spec.node_id,
-            spec.member_incarnation,
-        )?;
-        if native.writer_enforcement_version() != 1
-            || native.birth_id() != original.birth_id
-            || native.birth_sha256() != original.birth_sha256
-            || database.schema_compatibility_fingerprint()?.sha256 != original.schema_sha256
-        {
-            return Err(invalid(
-                "saved seed does not match the actual reopened birth/schema",
-            ));
-        }
         let database = Arc::new(RwLock::new(database));
         let manifest = Self::reattest(&database, &factory, &plan, &spec, cancellation)?;
         crate::storage::write_atomic(
@@ -262,6 +246,22 @@ impl NativeProvisionalNode {
             return Err(invalid("saved seed belongs to another initial plan/member"));
         }
         let (database, factory) = BicDb::open_range_image_database(root, config, &spec)?;
+        // Check the refusal record BEFORE reattesting/writing any genesis.
+        let native = database.native_recovery_admission(
+            &spec.cluster_id,
+            spec.bootstrap_id,
+            &spec.node_id,
+            spec.member_incarnation,
+        )?;
+        if native.writer_enforcement_version() != 1
+            || native.birth_id() != original.birth_id
+            || native.birth_sha256() != original.birth_sha256
+            || database.schema_compatibility_fingerprint()?.sha256 != original.schema_sha256
+        {
+            return Err(invalid(
+                "saved seed does not match the actual reopened birth/schema",
+            ));
+        }
         let database = Arc::new(RwLock::new(database));
         let actual = Self::reattest(&database, &factory, &plan, &spec, cancellation)?;
         if original != actual {

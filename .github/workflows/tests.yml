@@ -11,6 +11,12 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      core_filter:
+        description: 'Optional Core library substring for focused manual validation; empty runs every suite'
+        type: string
+        required: false
+        default: ''
 
 permissions:
   contents: read
@@ -81,6 +87,7 @@ jobs:
         run: ./scripts/validate-licensing.sh
 
   test:
+    if: github.event_name != 'workflow_dispatch' || inputs.core_filter == ''
     name: ${{ matrix.suite.name }}
     runs-on: ubuntu-latest
     timeout-minutes: 120
@@ -159,3 +166,51 @@ jobs:
           python3 -m unittest discover -s examples/oracle/reference -p 'test_*.py'
           python3 examples/oracle/hr/prepare.py --check
           node --test examples/platform/notebook/*.test.mjs
+
+  focused-core:
+    name: Focused Core library (${{ inputs.core_filter }})
+    if: github.event_name == 'workflow_dispatch' && inputs.core_filter != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      BICDB_CORE_TEST_FILTER: ${{ inputs.core_filter }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Build projection chaos helper
+        run: cargo build -p bicdb-core --example chaos_child --locked
+      - name: Record source and list selected Core library tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "$BICDB_CORE_TEST_FILTER" in
+            -*) echo 'A test substring cannot begin with an option prefix' >&2; exit 2 ;;
+          esac
+          mkdir -p "$RUNNER_TEMP/native-core-evidence"
+          git rev-parse HEAD > "$RUNNER_TEMP/native-core-evidence/source-revision.txt"
+          rustc --version --verbose > "$RUNNER_TEMP/native-core-evidence/rustc.txt"
+          cargo test -p bicdb-core --lib --locked "$BICDB_CORE_TEST_FILTER" -- --list \
+            2>&1 | tee "$RUNNER_TEMP/native-core-evidence/selected-tests.log"
+          python3 - <<'PY'
+          import os, pathlib
+          path = pathlib.Path(os.environ['RUNNER_TEMP']) / 'native-core-evidence' / 'selected-tests.log'
+          count = sum(line.endswith(': test') for line in path.read_text().splitlines())
+          if count == 0:
+              raise SystemExit('The requested Core filter selected no tests')
+          print(f'Selected {count} Core library tests; ignored tests remain identified by the execution result')
+          PY
+      - name: Execute selected Core library tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo test -p bicdb-core --lib --locked "$BICDB_CORE_TEST_FILTER" -- --test-threads=4 \
+            2>&1 | tee "$RUNNER_TEMP/native-core-evidence/tests.log"
+      - name: Retain focused source and log evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: focused-core-${{ github.sha }}-${{ github.run_attempt }}
+          retention-days: 3
+          if-no-files-found: warn
+          path: ${{ runner.temp }}/native-core-evidence/

@@ -1,0 +1,49 @@
+{
+  "source": "86ce94a48ff352272c764535fb669e98058ff811",
+  "scope": "Stable productionCorefrom9c; testonlyextendsactuallegacycontrols: every observed indexcatalog publication(plan/shadow/replacement/checkpoint/certificate) x write/sync/rename/directorysyncEIO mustreturnnohandle+durabilitymarker, recoverACK+Nativeuniqueness+2cleanreopens. Also8SIGABRTseams,4corruptplancontrols,two-generationsequentialcuts,actualEmbedded/multiple/duplicateoldstores; independentNativeinspectionpreserves2conflictingACKs. No originalassertion/timeoutweakening. Finalcomposedbroad/oldreaderqualificationstillrequired.",
+  "started_unix": 1794475221.7862248,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--lib",
+        "db::decimal_predicate::tests",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794475221.786933,
+      "exit": 0,
+      "finished_unix": 1794475228.4303706
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--test",
+        "decimal_predicate_generations",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794475228.430594,
+      "exit": 101,
+      "finished_unix": 1794475235.4955635
+    }
+  ],
+  "status": "failed",
+  "finished_unix": 1794475235.495828
+}

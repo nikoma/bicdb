@@ -48,6 +48,14 @@ use native_image_base::{NativeImageCatalogueBase, NATIVE_IMAGE_CATALOG_FORMAT};
 pub(crate) use native_image_ready::FinalizedNativeImageCatalogueObservation;
 mod image_install_obligations;
 pub(crate) use image_install_obligations::TargetImageCatalogHistoryObligations;
+mod image_replacement_handover;
+pub(crate) use image_replacement_handover::InstallingRefusalHandoverReceipt;
+use image_replacement_handover::{InstallingHandovers, ReplacedInstallingIdentity};
+mod image_install_certification;
+pub(crate) use image_install_certification::{
+    require_installing_same_voter_transition, InstallingCommittedAdmission,
+};
+use image_install_certification::{InstallingCertifications, INSTALLING_CERTIFICATION_FORMAT};
 mod image_install_resume;
 mod image_install_state;
 mod image_proposal_state;
@@ -550,6 +558,10 @@ struct RangeWriteCatalog {
     // a missing/null field can never silently erase sparse committed history.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     sparse_committed_decisions: Option<SparseDecisions>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    installing_committed_certifications: Option<InstallingCertifications>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    installing_recovery_handovers: Option<InstallingHandovers>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -585,6 +597,7 @@ impl RangeWriteEnvelope {
                 | NATIVE_ACTIVATED_FORMAT
                 | SPARSE_HISTORY_CATALOG_FORMAT
                 | IMAGE_PROPOSAL_CATALOG_FORMAT
+                | INSTALLING_CERTIFICATION_FORMAT
         ) {
             return Err(range_write_error(format!(
                 "unsupported range-write log format {}; supported formats are 1, 2, {}, {}, {}, {}, {}, {}, {}, {}, and {}",
@@ -601,6 +614,8 @@ impl RangeWriteEnvelope {
             )));
         }
         sparse_certification::validate_sparse_catalog(&self.catalog)?;
+        image_install_certification::validate_installing_certifications(&self.catalog)?;
+        image_replacement_handover::validate_installing_handovers(&self.catalog)?;
         if self.catalog.recovery_fences.len() > recovery_state::MAX_RECOVERY_FENCES {
             return Err(range_write_error("recovery refusal catalog exceeds bound"));
         }
@@ -809,6 +824,8 @@ impl RangeWriteStore {
                 recovery_fences: BTreeMap::new(),
                 native_image_bases: BTreeMap::new(),
                 sparse_committed_decisions: None,
+                installing_committed_certifications: None,
+                installing_recovery_handovers: None,
             },
             Err(error) => return Err(error.into()),
         };
@@ -4659,6 +4676,8 @@ mod tests {
             recovery_fences: BTreeMap::new(),
             native_image_bases: BTreeMap::new(),
             sparse_committed_decisions: None,
+            installing_committed_certifications: None,
+            installing_recovery_handovers: None,
         };
         let envelope = RangeWriteEnvelope::new(catalog).unwrap();
         fs::write(
@@ -4697,6 +4716,8 @@ mod tests {
             recovery_fences: BTreeMap::new(),
             native_image_bases: BTreeMap::new(),
             sparse_committed_decisions: None,
+            installing_committed_certifications: None,
+            installing_recovery_handovers: None,
         })
         .unwrap();
         let legacy_bytes = serde_json::to_vec_pretty(&envelope).unwrap();

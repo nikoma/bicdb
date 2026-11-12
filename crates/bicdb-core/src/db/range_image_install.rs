@@ -1276,7 +1276,13 @@ impl BicDb {
             self.read_native_range_image_record::<NativeInstalling>(&active_key(fence.range().id))?
         {
             if previous.format_version != INSTALL_FORMAT
-                || previous.session_id != fence.session_id()
+                || (previous.session_id != fence.session_id()
+                    && !fence.matches_replaced_installing_marker(
+                        previous.session_id,
+                        previous.attempt_id,
+                        &previous.intent_sha256,
+                        previous.source_range_index,
+                    ))
                 || previous.birth_id != admission.birth_id()
                 || previous.birth_sha256 != admission.birth_sha256()
                 || previous.source_range_index != fence.source_range_index()

@@ -44,6 +44,7 @@ mod native_apply;
 mod native_durability;
 use native_durability::ServiceStoragePolicy;
 mod current_image_resume;
+mod current_image_replacement;
 mod native_completion;
 mod native_image_install;
 mod native_range_read;

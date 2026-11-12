@@ -1,6 +1,8 @@
 # Native no-data abort-history recovery
 
-Status: proposal only. No implementation, build, runtime test or production qualification is attached to this document. The design is based on private source `1cd28523c2f8a3970635dcae4ca43977727b1afe` and the separate failed-prepare fixture `eafa6949`. It is independent of the retained experiment receipts.
+Status: the full abort-history protocol is a proposal only. No full-protocol implementation, build, runtime test or production qualification is attached to this document. The design is based on private source `1cd28523c2f8a3970635dcae4ca43977727b1afe` and the separate failed-prepare fixture `eafa6949`. It is independent of the retained experiment receipts.
+
+The separate Commit-uncertainty prerequisite now has a source implementation: native local Commit publication errors and insufficient counted Commit replies preserve decisions, invalidate recovered readiness and return `CommitOutcomeUnknown` before application WAL. Native Commit persistence retains uncertain in-memory decisions; the transaction observer exposes `RecoveryRequiredBeforeLocalCommit` without a fabricated local sequence. This source change has not been compiled or exercised at this checkpoint. Its actual-service regression sources include lost durable Commit replies, a returned error after real local Commit publication, prepare-only rejection and a separate legacy control. It does **not** implement the no-data abort protocol below: durable ever-Commit stages, slot promises, no-effect receipts and canonical abort publication remain open.
 
 ## The missing transition
 

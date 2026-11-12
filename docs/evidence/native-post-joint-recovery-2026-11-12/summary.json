@@ -1,0 +1,154 @@
+{
+  "classification": "FAILED_POST_JOINT_RECOVERY_AT_TARGET_FENCE",
+  "source_sha": "b277260b0b114d1f892ecad8d2e5e7a03ba7da5a",
+  "run": 43228215328,
+  "job": 131216860500,
+  "raw_job_log_sha256": "0a37647b42bdafaacc42b4a0e1c75a3dc93b398f4e0ca7ef43be1d987cb34865",
+  "passed": 0,
+  "failed": 1,
+  "filtered": 889,
+  "test_seconds": 64.4,
+  "failed_rpc_destination": "n3",
+  "exact_response": "cluster node n3 rejected RPC cluster_data_operation_failed: cluster error: normal recovery cannot supersede a handoff recovery",
+  "failed_key": "post-joint-new-domain-prepare-only-no-ACK3-8",
+  "failed_command_sha256": "875b6a70f37c1a7b6ff9dbe06e2a871dee56a3d2131913e815877e70fbc4dfb7",
+  "business_ack_count": 2,
+  "prepare_failure": "cluster error: range r1 command 01a1cffb-ead5-7ef2-bd49-ae504b057593 failed prepare quorum 1/2; actual local cleanup/no-effect intent required before abort recovery",
+  "application_transaction_outcome": "Aborted",
+  "current_role": {
+    "context_id": "01a1cffb-f92e-7b92-ab52-2fc15262f0f9",
+    "members": {
+      "n1": {
+        "active_certificate_sha256": "1eec15dd5ceb1ca3c5755ec5813b55a94ddc33980a20e2921a50452171b830d6",
+        "incarnation": 1,
+        "pending_certificate_sha256": null
+      },
+      "n2": {
+        "active_certificate_sha256": "40b965b174258b4f295008c2c94eed04d65906143f4842f8706a57994dfa01f4",
+        "incarnation": 1,
+        "pending_certificate_sha256": null
+      },
+      "n3": {
+        "active_certificate_sha256": "d060597f3620c43417aaf01c69898d0fed1ec0d0417ca27fb423716c51e14bac",
+        "incarnation": 1,
+        "pending_certificate_sha256": null
+      }
+    },
+    "nonce": "01a1cffb-f92b-7402-bd0e-658e12a95ece",
+    "purpose": "NormalRecovery",
+    "range": {
+      "approximate_bytes": 0,
+      "approximate_qps": 0,
+      "end_token": 9223372036854775808,
+      "epoch": 4,
+      "id": 1,
+      "leader": "n3",
+      "placement": {
+        "distinct_failure_domains": [],
+        "required_node_labels": {}
+      },
+      "replicas": [
+        {
+          "id": 3,
+          "node_id": "n1",
+          "role": "voter"
+        },
+        {
+          "id": 5,
+          "node_id": "n2",
+          "role": "voter"
+        },
+        {
+          "id": 7,
+          "node_id": "n3",
+          "role": "voter"
+        }
+      ],
+      "start_token": 0
+    },
+    "read_index": 5,
+    "term": 1
+  },
+  "observed_before_recovery_slot_state": {
+    "n0": {
+      "range_index": 1,
+      "local_data_visibility": 3,
+      "history_sha256": "9924ccfe4981a3c039eda973cccd3068bea80628de62aba251a89d9868257e1d",
+      "slot3": []
+    },
+    "n1": {
+      "range_index": 2,
+      "local_data_visibility": 4,
+      "history_sha256": "1490fd4fa6192c30ee544699cfe32700da6cb46857849201541f2f7b44c12653",
+      "slot3": [
+        {
+          "ever_commit": false,
+          "no_effect_sha256": null,
+          "command_sha256": "875b6a70f37c1a7b6ff9dbe06e2a871dee56a3d2131913e815877e70fbc4dfb7"
+        }
+      ]
+    },
+    "n2": {
+      "range_index": 2,
+      "local_data_visibility": 4,
+      "history_sha256": "1490fd4fa6192c30ee544699cfe32700da6cb46857849201541f2f7b44c12653",
+      "slot3": [
+        {
+          "ever_commit": false,
+          "no_effect_sha256": null,
+          "command_sha256": "875b6a70f37c1a7b6ff9dbe06e2a871dee56a3d2131913e815877e70fbc4dfb7"
+        }
+      ]
+    },
+    "n3": {
+      "range_index": 2,
+      "local_data_visibility": 2,
+      "history_sha256": "1490fd4fa6192c30ee544699cfe32700da6cb46857849201541f2f7b44c12653",
+      "slot3": [
+        {
+          "ever_commit": false,
+          "no_effect_sha256": "bc0f7a93eecd63c4574990937fc0fc1ff23eb96d5b563f7ec4be05f5a09b914c",
+          "command_sha256": "875b6a70f37c1a7b6ff9dbe06e2a871dee56a3d2131913e815877e70fbc4dfb7"
+        }
+      ]
+    }
+  },
+  "observed_copied_raw_fences": {
+    "n1": {
+      "phase": "Active",
+      "purpose": "NormalRecovery",
+      "epoch": 4,
+      "metadata_read_index": 5,
+      "initiator": "n3"
+    },
+    "n2": {
+      "phase": "Active",
+      "purpose": "NormalRecovery",
+      "epoch": 4,
+      "metadata_read_index": 5,
+      "initiator": "n3"
+    },
+    "n3": {
+      "phase": "Active",
+      "purpose": {
+        "CommittedHandoff": {
+          "relocation_id": 1,
+          "plan_id": "actual-born2-old-closure-only",
+          "session_id": "01a1cffb-088a-7091-89ea-2316e20fbbb0",
+          "nonce": "01a1cffb-088a-7091-89ea-232fcaa668d6"
+        }
+      },
+      "epoch": 2,
+      "metadata_read_index": 2,
+      "initiator": "n0"
+    }
+  },
+  "not_reached": [
+    "NoData candidate/promise resolution",
+    "canonical Abort3 publication",
+    "Ready/Complete/Activate",
+    "ACK at range index4",
+    "Strong read at range index4"
+  ],
+  "scope": "Read-only derivative of recorded reports and copied raw catalogs; no native engine replay or signature/physical qualification."
+}

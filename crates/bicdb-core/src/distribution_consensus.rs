@@ -16,7 +16,9 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
-use crate::distribution::{ClusterId, ClusterNodeId, ClusterNodeLifecycle, ClusterTopology};
+use crate::distribution::{
+    ClusterId, ClusterNodeId, ClusterNodeLifecycle, ClusterTopology, MetadataMemberRole, RangeId,
+};
 use crate::error::{BicDbError, Result};
 
 pub const CLUSTER_METADATA_CONSENSUS_FORMAT_VERSION: u32 = 1;
@@ -24,9 +26,786 @@ pub const METADATA_RESTORE_ACTIVATION_FORMAT_VERSION: u32 = 1;
 pub const DEFAULT_CLUSTER_METADATA_CONSENSUS_STATE: &str = "cluster-metadata-consensus.json";
 const MAX_RESTORE_ACTIVATION_ACKNOWLEDGEMENTS: u64 = 100_000;
 pub const METADATA_READ_AUTHORITY_PROTOCOL_VERSION: u32 = 1;
+pub const METADATA_READ_ACQUISITION_PROTOCOL_VERSION: u32 = 1;
+mod host_read;
+mod native_metadata_store;
+pub(crate) use host_read::{
+    HostMetadataReadAcquireRequest, HostMetadataReadAcquireResponse, HostMetadataReadObservation,
+};
+pub(crate) use native_metadata_store::NativeMetadataAppendProvenance;
+pub use native_metadata_store::NativeMetadataAppendReceiver;
+#[cfg(test)]
+pub(crate) use native_metadata_store::NativeMetadataInitializationCut;
+pub(crate) use native_metadata_store::NativeMetadataPreVoteFact;
+
+/// Wire request only. This is not a read authority or a row-read permit.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct MetadataReadAcquireRequest {
+    pub protocol_version: u32,
+    pub acquisition_id: Uuid,
+    pub read_request_id: Uuid,
+    pub requester_node_id: ClusterNodeId,
+    pub requester_incarnation: u64,
+    pub range_id: RangeId,
+    pub range_epoch: u64,
+    pub budget_ms: u64,
+}
+
+impl MetadataReadAcquireRequest {
+    pub(crate) fn validate(&self) -> Result<()> {
+        if self.protocol_version != METADATA_READ_ACQUISITION_PROTOCOL_VERSION
+            || self.acquisition_id.is_nil()
+            || self.read_request_id.is_nil()
+            || self.requester_incarnation == 0
+            || self.range_epoch == 0
+            || self.budget_ms == 0
+            || self.budget_ms > 5_000
+        {
+            return Err(metadata_error("invalid metadata read acquisition request"));
+        }
+        Ok(())
+    }
+}
+
+/// A current-term committed anchor observed at begin, before any fresh probes.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct MetadataReadAnchor {
+    pub index: u64,
+    pub term: u64,
+    pub topology_generation: u64,
+    pub topology_sha256: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct MetadataReadVoterProof {
+    pub node_id: ClusterNodeId,
+    pub incarnation: u64,
+    pub active_certificate_sha256: Option<String>,
+    pub pending_certificate_sha256: Option<String>,
+}
+
+/// Transfer DTO, deliberately separate from the non-deserializable authority.
+/// The source leader attests its fresh transport-correlated joint quorum;
+/// these fields are not transferable voter signatures.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct MetadataReadAcquireResponse {
+    pub protocol_version: u32,
+    pub request: MetadataReadAcquireRequest,
+    pub context_id: Uuid,
+    pub metadata_leader_id: ClusterNodeId,
+    pub metadata_leader_incarnation: u64,
+    pub term: u64,
+    pub anchor: MetadataReadAnchor,
+    pub read_index: u64,
+    pub applied_index: u64,
+    pub context_budget_ms: u64,
+    pub committed_topology: ClusterTopology,
+    pub joint_configuration_candidate: Option<ClusterTopology>,
+    pub old_voters: Vec<MetadataReadVoterProof>,
+    pub new_voters: Vec<MetadataReadVoterProof>,
+    pub fresh_old_voters: BTreeSet<ClusterNodeId>,
+    pub fresh_new_voters: BTreeSet<ClusterNodeId>,
+    pub restore_activation: Option<MetadataRestoreActivation>,
+}
+
+/// Narrow operation purpose. Neither variant grants SQL or native readiness.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub(crate) enum MetadataRecoveryRolePurpose {
+    NormalRecovery,
+    CommittedHandoff {
+        relocation_id: crate::distribution::RelocationId,
+        plan_id: String,
+        session_id: Uuid,
+        nonce: Uuid,
+    },
+    /// Read-only observation of an already persisted coordinator fence. The
+    /// actual initiating peer is an old/current data voter, not the claimed
+    /// coordinator, and this purpose cannot construct mutation admission.
+    ObserveFencedRecovery {
+        coordinator_node_id: ClusterNodeId,
+        coordinator_incarnation: u64,
+        committed_handoff: Option<MetadataRecoveryHandoffBinding>,
+    },
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct MetadataRecoveryHandoffBinding {
+    pub relocation_id: crate::distribution::RelocationId,
+    pub plan_id: String,
+    pub session_id: Uuid,
+    pub nonce: Uuid,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct MetadataRecoveryRoleRequest {
+    pub protocol_version: u32,
+    pub acquisition_id: Uuid,
+    pub read_request_id: Uuid,
+    pub initiator_node_id: ClusterNodeId,
+    pub initiator_incarnation: u64,
+    pub initiator_certificate_sha256: Option<String>,
+    pub initiator_plaintext_loopback: bool,
+    pub recipient_node_id: ClusterNodeId,
+    pub recipient_incarnation: u64,
+    pub range_id: RangeId,
+    pub range_epoch: u64,
+    pub recovery_nonce: Uuid,
+    pub recipient_challenge: Uuid,
+    pub purpose: MetadataRecoveryRolePurpose,
+    pub budget_ms: u64,
+}
+
+impl MetadataRecoveryRoleRequest {
+    pub(crate) fn validate(&self) -> Result<()> {
+        self.subject_request().validate()?;
+        if self.recipient_incarnation == 0
+            || self.recovery_nonce.is_nil()
+            || self.recipient_challenge.is_nil()
+            || self
+                .initiator_certificate_sha256
+                .as_ref()
+                .is_some_and(|pin| pin.len() != 64 || !pin.bytes().all(|b| b.is_ascii_hexdigit()))
+        {
+            return Err(metadata_error("invalid metadata recovery-role request"));
+        }
+        if let MetadataRecoveryRolePurpose::CommittedHandoff {
+            plan_id,
+            session_id,
+            nonce,
+            ..
+        } = &self.purpose
+        {
+            if plan_id.is_empty()
+                || plan_id.len() > 1024
+                || session_id.is_nil()
+                || nonce.is_nil()
+                || *nonce != self.recovery_nonce
+            {
+                return Err(metadata_error("invalid recovery-role handoff purpose"));
+            }
+        }
+        if let MetadataRecoveryRolePurpose::ObserveFencedRecovery {
+            coordinator_incarnation,
+            committed_handoff,
+            ..
+        } = &self.purpose
+        {
+            if *coordinator_incarnation == 0
+                || committed_handoff.as_ref().is_some_and(|binding| {
+                    binding.plan_id.is_empty()
+                        || binding.plan_id.len() > 1024
+                        || binding.session_id.is_nil()
+                        || binding.nonce.is_nil()
+                        || binding.nonce != self.recovery_nonce
+                })
+            {
+                return Err(metadata_error(
+                    "invalid read-only recovery observation purpose",
+                ));
+            }
+        }
+        Ok(())
+    }
+    pub(crate) fn subject_request(&self) -> MetadataReadAcquireRequest {
+        MetadataReadAcquireRequest {
+            protocol_version: self.protocol_version,
+            acquisition_id: self.acquisition_id,
+            read_request_id: self.read_request_id,
+            requester_node_id: self.initiator_node_id.clone(),
+            requester_incarnation: self.initiator_incarnation,
+            range_id: self.range_id,
+            range_epoch: self.range_epoch,
+            budget_ms: self.budget_ms,
+        }
+    }
+    pub(crate) fn matches_initiator(&self, participant: &MetadataReadParticipant) -> bool {
+        self.initiator_node_id == participant.node_id
+            && self.initiator_incarnation == participant.member_incarnation
+            && self.initiator_certificate_sha256 == participant.certificate_sha256
+            && self.initiator_plaintext_loopback == participant.plaintext_loopback
+    }
+    fn validate_configuration(
+        &self,
+        topology: &ClusterTopology,
+        metadata_leader: &ClusterNodeId,
+    ) -> Result<crate::distribution::RangeDescriptor> {
+        use crate::distribution::{RangeReplicaRole, RelocationPhase};
+        self.validate()?;
+        let invalid = || {
+            metadata_error(
+                "metadata recovery-role identity, purpose or committed configuration changed",
+            )
+        };
+        let range = topology.range_by_id(self.range_id).ok_or_else(invalid)?;
+        let initiator = topology
+            .nodes
+            .get(&self.initiator_node_id)
+            .ok_or_else(invalid)?;
+        let recipient = topology
+            .nodes
+            .get(&self.recipient_node_id)
+            .ok_or_else(invalid)?;
+        let pin_ok = match initiator.tls_certificate_sha256.as_deref() {
+            Some(pin) => {
+                self.initiator_certificate_sha256.as_deref() == Some(pin)
+                    || initiator
+                        .pending_tls_certificate_sha256
+                        .as_deref()
+                        .is_some_and(|pending| {
+                            self.initiator_certificate_sha256.as_deref() == Some(pending)
+                        })
+            }
+            None => {
+                self.initiator_certificate_sha256.is_some() || self.initiator_plaintext_loopback
+            }
+        };
+        if range.epoch != self.range_epoch
+            || initiator.incarnation != self.initiator_incarnation
+            || recipient.incarnation != self.recipient_incarnation
+            || initiator.lifecycle == ClusterNodeLifecycle::Decommissioned
+            || recipient.lifecycle == ClusterNodeLifecycle::Decommissioned
+            || !pin_ok
+        {
+            return Err(invalid());
+        }
+        let recipient_voter = range
+            .replicas
+            .iter()
+            .any(|r| r.node_id == recipient.id && r.role == RangeReplicaRole::Voter);
+        match &self.purpose {
+            MetadataRecoveryRolePurpose::NormalRecovery => {
+                if range.leader != initiator.id || !recipient_voter {
+                    return Err(invalid());
+                }
+            }
+            MetadataRecoveryRolePurpose::CommittedHandoff {
+                relocation_id,
+                plan_id,
+                session_id,
+                nonce,
+            } => {
+                let plan = topology
+                    .relocations
+                    .get(relocation_id)
+                    .ok_or_else(invalid)?;
+                let session = plan.handoff_session.as_ref().ok_or_else(invalid)?;
+                let exact_target = range.replicas.iter().any(|r| {
+                    r.id == plan.target_replica_id
+                        && r.node_id == recipient.id
+                        && r.node_id == plan.target
+                        && r.role == RangeReplicaRole::Learner
+                });
+                if (range.leader != initiator.id && metadata_leader != &initiator.id)
+                    || plan.plan_id != *plan_id
+                    || plan.range_id != range.id
+                    || plan.learner_epoch != range.epoch
+                    || !matches!(
+                        plan.phase,
+                        RelocationPhase::LearnerAllocated
+                            | RelocationPhase::SnapshotCopying
+                            | RelocationPhase::CatchingUp
+                            | RelocationPhase::ReadyToPromote
+                    )
+                    || session.session_id != *session_id
+                    || session.nonce != *nonce
+                    || (!recipient_voter && !exact_target)
+                {
+                    return Err(invalid());
+                }
+            }
+            MetadataRecoveryRolePurpose::ObserveFencedRecovery {
+                coordinator_node_id,
+                coordinator_incarnation,
+                committed_handoff,
+            } => {
+                let observer_voter = range
+                    .replicas
+                    .iter()
+                    .any(|r| r.node_id == initiator.id && r.role == RangeReplicaRole::Voter);
+                let coordinator = topology
+                    .nodes
+                    .get(coordinator_node_id)
+                    .ok_or_else(invalid)?;
+                if !observer_voter
+                    || !recipient_voter
+                    || coordinator.incarnation != *coordinator_incarnation
+                    || coordinator.lifecycle == ClusterNodeLifecycle::Decommissioned
+                {
+                    return Err(invalid());
+                }
+                match committed_handoff {
+                    None if range.leader == coordinator.id => {}
+                    Some(binding) => {
+                        let plan = topology
+                            .relocations
+                            .get(&binding.relocation_id)
+                            .ok_or_else(invalid)?;
+                        let session = plan.handoff_session.as_ref().ok_or_else(invalid)?;
+                        if (range.leader != coordinator.id && metadata_leader != &coordinator.id)
+                            || plan.plan_id != binding.plan_id
+                            || plan.range_id != range.id
+                            || plan.learner_epoch != range.epoch
+                            || !matches!(
+                                plan.phase,
+                                RelocationPhase::LearnerAllocated
+                                    | RelocationPhase::SnapshotCopying
+                                    | RelocationPhase::CatchingUp
+                                    | RelocationPhase::ReadyToPromote
+                            )
+                            || session.session_id != binding.session_id
+                            || session.nonce != binding.nonce
+                        {
+                            return Err(invalid());
+                        }
+                    }
+                    None => return Err(invalid()),
+                }
+            }
+        }
+        Ok(range.clone())
+    }
+}
+
+/// Transfer evidence only. No decoded field constructs local Authority.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct MetadataRecoveryRoleResponse {
+    pub request: MetadataRecoveryRoleRequest,
+    pub evidence: MetadataReadAcquireResponse,
+}
+impl MetadataRecoveryRoleResponse {
+    fn validate(&self, request: &MetadataRecoveryRoleRequest) -> Result<()> {
+        if &self.request != request {
+            return Err(metadata_error("recovery-role response request mismatch"));
+        }
+        self.evidence
+            .validate_quorum_evidence(&request.subject_request())?;
+        request.validate_configuration(
+            &self.evidence.committed_topology,
+            &self.evidence.metadata_leader_id,
+        )?;
+        Ok(())
+    }
+}
+
+/// One independently fresh metadata witness, never a local Authority, lease,
+/// native admission, row-read barrier or transferable data-quorum certificate.
+#[derive(Debug)]
+pub(crate) struct MetadataRecoveryRoleObservation {
+    response: MetadataRecoveryRoleResponse,
+    deadline: Instant,
+}
+impl MetadataRecoveryRoleObservation {
+    pub(crate) fn request(&self) -> &MetadataRecoveryRoleRequest {
+        &self.response.request
+    }
+    pub(crate) fn context_id(&self) -> Uuid {
+        self.response.evidence.context_id
+    }
+    pub(crate) fn term(&self) -> u64 {
+        self.response.evidence.term
+    }
+    pub(crate) fn read_index(&self) -> u64 {
+        self.response.evidence.read_index
+    }
+    pub(crate) fn deadline(&self) -> Instant {
+        self.deadline
+    }
+    pub(crate) fn remaining_budget(&self) -> Option<Duration> {
+        self.deadline
+            .checked_duration_since(Instant::now())
+            .filter(|d| !d.is_zero())
+    }
+    pub(crate) fn require_live_request(&self, read_request: Uuid, challenge: Uuid) -> Result<()> {
+        if self.request().read_request_id != read_request
+            || self.request().recipient_challenge != challenge
+            || self.remaining_budget().is_none()
+        {
+            return Err(metadata_error(
+                "recovery-role witness scope changed or expired",
+            ));
+        }
+        Ok(())
+    }
+    pub(crate) fn committed_topology(
+        &self,
+        read_request: Uuid,
+        challenge: Uuid,
+    ) -> Result<&ClusterTopology> {
+        self.require_live_request(read_request, challenge)?;
+        Ok(&self.response.evidence.committed_topology)
+    }
+    pub(crate) fn restore_activation(
+        &self,
+        read_request: Uuid,
+        challenge: Uuid,
+    ) -> Result<Option<&MetadataRestoreActivation>> {
+        self.require_live_request(read_request, challenge)?;
+        Ok(self.response.evidence.restore_activation.as_ref())
+    }
+    pub(crate) fn require_initiator(&self, actual: &MetadataReadParticipant) -> Result<()> {
+        self.require_live_request(
+            self.request().read_request_id,
+            self.request().recipient_challenge,
+        )?;
+        if !self.request().matches_initiator(actual) {
+            return Err(metadata_error(
+                "recovery-role witness does not bind the actual initiating TLS peer",
+            ));
+        }
+        Ok(())
+    }
+    pub(crate) fn from_transport(
+        request: &MetadataRecoveryRoleRequest,
+        cluster: &ClusterId,
+        destination: &ClusterNodeId,
+        participant: MetadataReadParticipant,
+        response: MetadataRecoveryRoleResponse,
+        deadline: Instant,
+        started: Instant,
+    ) -> Result<Self> {
+        response.validate(request)?;
+        let evidence = &response.evidence;
+        let deadline = deadline.min(started + Duration::from_millis(evidence.context_budget_ms));
+        if Instant::now() >= deadline
+            || evidence.committed_topology.cluster_id != *cluster
+            || evidence.metadata_leader_id != *destination
+            || participant.node_id != *destination
+            || participant.member_incarnation != evidence.metadata_leader_incarnation
+        {
+            return Err(metadata_error(
+                "recovery-role metadata source or deadline mismatch",
+            ));
+        }
+        let node = evidence
+            .committed_topology
+            .nodes
+            .get(destination)
+            .ok_or_else(|| metadata_error("recovery-role metadata source missing"))?;
+        let identity = MetadataReadVoterIdentity {
+            incarnation: node.incarnation,
+            active_certificate: node.tls_certificate_sha256.clone(),
+            pending_certificate: node.pending_tls_certificate_sha256.clone(),
+        };
+        if !identity.accepts(&participant) {
+            return Err(metadata_error("recovery-role metadata source pin mismatch"));
+        }
+        Ok(Self { response, deadline })
+    }
+    pub(crate) fn from_local_authority(
+        authority: MetadataReadAuthority,
+        request: MetadataRecoveryRoleRequest,
+        recipient: &MetadataReadParticipant,
+    ) -> Result<Self> {
+        let deadline = authority.deadline();
+        let response = authority.into_recovery_role_response(request.clone())?;
+        if recipient.node_id != request.recipient_node_id
+            || recipient.member_incarnation != request.recipient_incarnation
+        {
+            return Err(metadata_error("local recovery-role recipient mismatch"));
+        }
+        response.validate(&request)?;
+        let node = &response.evidence.committed_topology.nodes[&request.recipient_node_id];
+        let identity = MetadataReadVoterIdentity {
+            incarnation: node.incarnation,
+            active_certificate: node.tls_certificate_sha256.clone(),
+            pending_certificate: node.pending_tls_certificate_sha256.clone(),
+        };
+        if response.evidence.metadata_leader_id != recipient.node_id || !identity.accepts(recipient)
+        {
+            return Err(metadata_error(
+                "local recovery-role is not its actual metadata leader participant",
+            ));
+        }
+        if Instant::now() >= deadline {
+            return Err(metadata_error("local recovery-role witness expired"));
+        }
+        Ok(Self { response, deadline })
+    }
+}
+
+/// A request-bound metadata observation minted only after transport checks.
+/// It cannot be deserialized or converted into MetadataReadAuthority. It is
+/// neither a range-image permit nor an implementation of strong row reads.
+#[derive(Debug)]
+pub struct MetadataReadObservation {
+    response: MetadataReadAcquireResponse,
+    deadline: Instant,
+}
+
+impl MetadataReadObservation {
+    pub fn deadline(&self) -> Instant {
+        self.deadline
+    }
+    pub fn remaining_budget(&self) -> Option<Duration> {
+        self.deadline
+            .checked_duration_since(Instant::now())
+            .filter(|d| !d.is_zero())
+    }
+    pub fn context_id(&self) -> Uuid {
+        self.response.context_id
+    }
+    pub fn anchor(&self) -> &MetadataReadAnchor {
+        &self.response.anchor
+    }
+    pub fn metadata_leader_incarnation(&self) -> u64 {
+        self.response.metadata_leader_incarnation
+    }
+    pub fn request(&self) -> &MetadataReadAcquireRequest {
+        &self.response.request
+    }
+    pub fn metadata_leader_id(&self) -> &ClusterNodeId {
+        &self.response.metadata_leader_id
+    }
+    pub fn term(&self) -> u64 {
+        self.response.term
+    }
+    pub fn read_index(&self) -> u64 {
+        self.response.read_index
+    }
+    pub fn applied_index(&self) -> u64 {
+        self.response.applied_index
+    }
+    pub fn require_live_request(&self, request_id: Uuid) -> Result<()> {
+        if request_id != self.response.request.read_request_id || Instant::now() >= self.deadline {
+            return Err(metadata_error(
+                "metadata observation request changed or expired",
+            ));
+        }
+        Ok(())
+    }
+    pub fn committed_topology(&self, request_id: Uuid) -> Result<&ClusterTopology> {
+        self.require_live_request(request_id)?;
+        Ok(&self.response.committed_topology)
+    }
+    pub fn restore_activation(
+        &self,
+        request_id: Uuid,
+    ) -> Result<Option<&MetadataRestoreActivation>> {
+        self.require_live_request(request_id)?;
+        Ok(self.response.restore_activation.as_ref())
+    }
+    pub(crate) fn from_transport(
+        request: &MetadataReadAcquireRequest,
+        cluster_id: &ClusterId,
+        destination: &ClusterNodeId,
+        participant: MetadataReadParticipant,
+        response: MetadataReadAcquireResponse,
+        deadline: Instant,
+        request_started: Instant,
+    ) -> Result<Self> {
+        request.validate()?;
+        response.validate(request)?;
+        // Anchor the remote round's ORIGINAL duration before our request,
+        // never at response receipt. Transit cannot renew the server budget.
+        let deadline =
+            deadline.min(request_started + Duration::from_millis(response.context_budget_ms));
+        if Instant::now() >= deadline
+            || response.committed_topology.cluster_id != *cluster_id
+            || response.metadata_leader_id != *destination
+            || participant.node_id != *destination
+            || participant.member_incarnation != response.metadata_leader_incarnation
+        {
+            return Err(metadata_error(
+                "metadata acquisition source/incarnation/deadline mismatch",
+            ));
+        }
+        let node = response
+            .committed_topology
+            .nodes
+            .get(destination)
+            .ok_or_else(|| metadata_error("metadata observation leader is absent"))?;
+        let identity = MetadataReadVoterIdentity {
+            incarnation: node.incarnation,
+            active_certificate: node.tls_certificate_sha256.clone(),
+            pending_certificate: node.pending_tls_certificate_sha256.clone(),
+        };
+        if !identity.accepts(&participant) {
+            return Err(metadata_error(
+                "metadata observation transport pin is not its leader",
+            ));
+        }
+        Ok(Self { response, deadline })
+    }
+}
+
+impl MetadataReadAcquireResponse {
+    fn validate(&self, request: &MetadataReadAcquireRequest) -> Result<()> {
+        self.validate_quorum_evidence(request)?;
+        validate_acquire_requester(request, &self.committed_topology)?;
+        if self.committed_topology.nodes[&self.metadata_leader_id].lifecycle
+            != ClusterNodeLifecycle::Active
+        {
+            return Err(metadata_error("metadata acquisition leader is not active"));
+        }
+        Ok(())
+    }
+
+    fn validate_quorum_evidence(&self, request: &MetadataReadAcquireRequest) -> Result<()> {
+        self.committed_topology.validate()?;
+        if self.protocol_version != METADATA_READ_ACQUISITION_PROTOCOL_VERSION
+            || &self.request != request
+            || self.context_id.is_nil()
+            || self.term == 0
+            || self.read_index == 0
+            || self.anchor.index != self.read_index
+            || self.anchor.term != self.term
+            || self.anchor.topology_generation == 0
+            || self.anchor.topology_generation > self.committed_topology.generation
+            || self.anchor.topology_sha256.len() != 64
+            || !self
+                .anchor
+                .topology_sha256
+                .bytes()
+                .all(|byte| byte.is_ascii_hexdigit())
+            || self.applied_index < self.read_index
+            || self.context_budget_ms == 0
+            || self.context_budget_ms > request.budget_ms
+        {
+            return Err(metadata_error(
+                "metadata acquisition proof/correlation is invalid",
+            ));
+        }
+        if self.anchor.topology_generation == self.committed_topology.generation
+            && self.anchor.topology_sha256 != topology_checksum(&self.committed_topology)?
+        {
+            return Err(metadata_error(
+                "metadata acquisition current anchor digest differs",
+            ));
+        }
+        let leader = self
+            .committed_topology
+            .nodes
+            .get(&self.metadata_leader_id)
+            .ok_or_else(|| metadata_error("metadata acquisition leader missing"))?;
+        if leader.incarnation != self.metadata_leader_incarnation
+            || leader.lifecycle == ClusterNodeLifecycle::Decommissioned
+            || leader.metadata_role != MetadataMemberRole::Voter
+        {
+            return Err(metadata_error(
+                "metadata acquisition leader identity is not active",
+            ));
+        }
+        fn validate_side(
+            topology: &ClusterTopology,
+            voters: &[MetadataReadVoterProof],
+            fresh: &BTreeSet<ClusterNodeId>,
+        ) -> Result<()> {
+            let expected = topology_voters(topology);
+            let identities = voters
+                .iter()
+                .map(|v| v.node_id.clone())
+                .collect::<BTreeSet<_>>();
+            if expected.is_empty()
+                || expected.len() > 64
+                || identities != expected
+                || identities.len() != voters.len()
+                || !fresh.is_subset(&identities)
+                || fresh.len() < identities.len() / 2 + 1
+            {
+                return Err(metadata_error(
+                    "metadata acquisition lacks a fresh joint quorum",
+                ));
+            }
+            for proof in voters {
+                let node = &topology.nodes[&proof.node_id];
+                if node.incarnation != proof.incarnation
+                    || node.tls_certificate_sha256 != proof.active_certificate_sha256
+                    || node.pending_tls_certificate_sha256 != proof.pending_certificate_sha256
+                {
+                    return Err(metadata_error(
+                        "metadata acquisition voter identity changed",
+                    ));
+                }
+            }
+            Ok(())
+        }
+        validate_side(
+            &self.committed_topology,
+            &self.old_voters,
+            &self.fresh_old_voters,
+        )?;
+        let new = self
+            .joint_configuration_candidate
+            .as_ref()
+            .unwrap_or(&self.committed_topology);
+        new.validate()?;
+        if new.cluster_id != self.committed_topology.cluster_id {
+            return Err(metadata_error("metadata acquisition joint cluster changed"));
+        }
+        crate::distribution::ensure_range_image_domain(
+            self.committed_topology.range_image_bootstrap_id,
+            new.range_image_bootstrap_id,
+        )?;
+        crate::distribution::validate_native_store_birth_transition(&self.committed_topology, new)?;
+        validate_side(new, &self.new_voters, &self.fresh_new_voters)?;
+        if let Some(activation) = &self.restore_activation {
+            validate_historical_activation_against_topology(
+                activation,
+                &self.committed_topology,
+                &self.committed_topology.cluster_id,
+            )?;
+        }
+        Ok(())
+    }
+}
+
+pub(crate) fn validate_acquire_requester(
+    request: &MetadataReadAcquireRequest,
+    topology: &ClusterTopology,
+) -> Result<()> {
+    request.validate()?;
+    let node = topology
+        .nodes
+        .get(&request.requester_node_id)
+        .ok_or_else(|| metadata_error("metadata acquisition requester is absent"))?;
+    let range = topology
+        .range_by_id(request.range_id)
+        .ok_or_else(|| metadata_error("metadata acquisition range is absent"))?;
+    if node.incarnation != request.requester_incarnation
+        || node.lifecycle != ClusterNodeLifecycle::Active
+        || node.metadata_role != MetadataMemberRole::Voter
+        || range.epoch != request.range_epoch
+        || range.leader != request.requester_node_id
+    {
+        return Err(metadata_error(
+            "metadata acquisition requester/range authority changed",
+        ));
+    }
+    Ok(())
+}
 
 fn metadata_error(message: impl Into<String>) -> BicDbError {
     BicDbError::Cluster(format!("metadata consensus: {}", message.into()))
+}
+
+struct MetadataReadSizeLimit(usize);
+
+impl std::io::Write for MetadataReadSizeLimit {
+    fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+        if bytes.len() > self.0 {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "metadata read byte bound",
+            ));
+        }
+        self.0 -= bytes.len();
+        Ok(bytes.len())
+    }
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+
+fn topology_checksum(topology: &ClusterTopology) -> Result<String> {
+    Ok(hex::encode(Sha256::digest(serde_json::to_vec(topology)?)))
 }
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -139,7 +918,7 @@ pub struct MetadataAppendRequest {
     pub snapshot: Option<MetadataSnapshot>,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct MetadataAppendResponse {
     pub cluster_id: ClusterId,
     pub term: u64,
@@ -147,6 +926,11 @@ pub struct MetadataAppendResponse {
     pub success: bool,
     pub match_index: u64,
     pub conflict_index: u64,
+    /// Actual persisted receiver identity data; decoding it does not attest an ACK.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub native_receiver: Option<NativeMetadataAppendReceiver>,
+    #[serde(skip)]
+    pub(crate) native_provenance: Option<NativeMetadataAppendProvenance>,
 }
 
 /// A new, request-correlated authority round. This is not a cached heartbeat.
@@ -184,6 +968,18 @@ pub struct MetadataReadParticipant {
 }
 
 impl MetadataReadParticipant {
+    pub(crate) fn node_id(&self) -> &ClusterNodeId {
+        &self.node_id
+    }
+    pub(crate) fn member_incarnation(&self) -> u64 {
+        self.member_incarnation
+    }
+    pub(crate) fn certificate_sha256(&self) -> Option<&str> {
+        self.certificate_sha256.as_deref()
+    }
+    pub(crate) fn plaintext_loopback(&self) -> bool {
+        self.plaintext_loopback
+    }
     pub(crate) fn from_transport(
         node_id: ClusterNodeId,
         member_incarnation: u64,
@@ -280,6 +1076,8 @@ pub struct MetadataReadContext {
     term: u64,
     read_index: u64,
     deadline: Instant,
+    started: Instant,
+    anchor: MetadataReadAnchor,
     quorums: MetadataReadQuorums,
     fresh_old: BTreeSet<ClusterNodeId>,
     fresh_new: BTreeSet<ClusterNodeId>,
@@ -287,6 +1085,12 @@ pub struct MetadataReadContext {
 }
 
 impl MetadataReadContext {
+    pub(crate) fn restrict_deadline(&mut self, deadline: Instant) {
+        self.deadline = self.deadline.min(deadline);
+    }
+    pub(crate) fn deadline(&self) -> Instant {
+        self.deadline
+    }
     pub fn context_id(&self) -> Uuid {
         self.context_id
     }
@@ -322,9 +1126,84 @@ pub struct MetadataReadAuthority {
     applied_index: u64,
     topology: ClusterTopology,
     restore_activation: Option<MetadataRestoreActivation>,
+    leader_id: ClusterNodeId,
+    leader_incarnation: u64,
+    anchor: MetadataReadAnchor,
+    joint_configuration_candidate: Option<ClusterTopology>,
+    old_voters: Vec<MetadataReadVoterProof>,
+    new_voters: Vec<MetadataReadVoterProof>,
+    fresh_old_voters: BTreeSet<ClusterNodeId>,
+    fresh_new_voters: BTreeSet<ClusterNodeId>,
+    deadline: Instant,
+    started: Instant,
 }
 
 impl MetadataReadAuthority {
+    /// Original begin-round deadline, never a renewed completion-time lease.
+    pub fn deadline(&self) -> Instant {
+        self.deadline
+    }
+    pub fn remaining_budget(&self) -> Option<Duration> {
+        self.deadline
+            .checked_duration_since(Instant::now())
+            .filter(|d| !d.is_zero())
+    }
+    pub fn is_current_budget(&self) -> bool {
+        self.remaining_budget().is_some()
+    }
+    pub(crate) fn into_acquisition_response(
+        self,
+        request: MetadataReadAcquireRequest,
+    ) -> Result<MetadataReadAcquireResponse> {
+        let response = self.into_quorum_evidence(request)?;
+        response.validate(&response.request)?;
+        Ok(response)
+    }
+    pub(crate) fn into_recovery_role_response(
+        self,
+        request: MetadataRecoveryRoleRequest,
+    ) -> Result<MetadataRecoveryRoleResponse> {
+        let evidence = self.into_quorum_evidence(request.subject_request())?;
+        let response = MetadataRecoveryRoleResponse { request, evidence };
+        response.validate(&response.request)?;
+        Ok(response)
+    }
+    fn into_quorum_evidence(
+        self,
+        request: MetadataReadAcquireRequest,
+    ) -> Result<MetadataReadAcquireResponse> {
+        if !self.is_current_budget() {
+            return Err(metadata_error(
+                "completed metadata authority budget expired",
+            ));
+        }
+        let response = MetadataReadAcquireResponse {
+            protocol_version: METADATA_READ_ACQUISITION_PROTOCOL_VERSION,
+            request,
+            context_id: self.context_id,
+            metadata_leader_id: self.leader_id,
+            metadata_leader_incarnation: self.leader_incarnation,
+            term: self.term,
+            anchor: self.anchor,
+            read_index: self.read_index,
+            applied_index: self.applied_index,
+            context_budget_ms: self
+                .deadline
+                .saturating_duration_since(self.started)
+                .as_millis()
+                .try_into()
+                .map_err(|_| metadata_error("metadata context duration overflow"))?,
+            committed_topology: self.topology,
+            joint_configuration_candidate: self.joint_configuration_candidate,
+            old_voters: self.old_voters,
+            new_voters: self.new_voters,
+            fresh_old_voters: self.fresh_old_voters,
+            fresh_new_voters: self.fresh_new_voters,
+            restore_activation: self.restore_activation,
+        };
+        response.validate_quorum_evidence(&response.request)?;
+        Ok(response)
+    }
     pub fn context_id(&self) -> Uuid {
         self.context_id
     }
@@ -367,6 +1246,8 @@ pub struct MetadataConsensusStatus {
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 struct MetadataConsensusState {
     format_version: u32,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    native_store_id: Option<Uuid>,
     cluster_id: ClusterId,
     node_id: ClusterNodeId,
     current_term: u64,
@@ -396,9 +1277,109 @@ pub struct MetadataConsensusStore {
     state: MetadataConsensusState,
     match_index: BTreeMap<ClusterNodeId, u64>,
     last_leader_contact_ms: u64,
+    native_owner: Option<native_metadata_store::NativeMetadataStoreOwner>,
 }
 
 impl MetadataConsensusStore {
+    pub(crate) fn validate_read_acquisition_caller(
+        &self,
+        request: &MetadataReadAcquireRequest,
+        participant: &MetadataReadParticipant,
+    ) -> Result<crate::RangeDescriptor> {
+        validate_acquire_requester(request, &self.state.committed_topology)?;
+        let node = &self.state.committed_topology.nodes[&request.requester_node_id];
+        let identity = MetadataReadVoterIdentity {
+            incarnation: node.incarnation,
+            active_certificate: node.tls_certificate_sha256.clone(),
+            pending_certificate: node.pending_tls_certificate_sha256.clone(),
+        };
+        if participant.node_id != request.requester_node_id || !identity.accepts(participant) {
+            return Err(metadata_error(
+                "metadata acquisition caller is not transport-authenticated",
+            ));
+        }
+        Ok(self
+            .state
+            .committed_topology
+            .range_by_id(request.range_id)
+            .unwrap()
+            .clone())
+    }
+
+    pub(crate) fn validate_recovery_role_caller(
+        &self,
+        request: &MetadataRecoveryRoleRequest,
+        caller: &MetadataReadParticipant,
+    ) -> Result<crate::RangeDescriptor> {
+        let range =
+            request.validate_configuration(&self.state.committed_topology, &self.state.node_id)?;
+        let member = self
+            .state
+            .committed_topology
+            .nodes
+            .get(&request.recipient_node_id)
+            .ok_or_else(|| metadata_error("recovery-role recipient absent"))?;
+        let identity = MetadataReadVoterIdentity {
+            incarnation: member.incarnation,
+            active_certificate: member.tls_certificate_sha256.clone(),
+            pending_certificate: member.pending_tls_certificate_sha256.clone(),
+        };
+        if caller.node_id != request.recipient_node_id
+            || caller.member_incarnation != request.recipient_incarnation
+            || !identity.accepts(caller)
+        {
+            return Err(metadata_error(
+                "recovery-role recipient is not its authenticated member",
+            ));
+        }
+        Ok(range)
+    }
+
+    pub(crate) fn read_authority_ready(&self, context: &MetadataReadContext) -> Result<bool> {
+        self.validate_read_context(context)?;
+        Ok(context.fresh_old.len() > context.quorums.old.len() / 2
+            && context.fresh_new.len() > context.quorums.new.len() / 2)
+    }
+
+    /// Bound serialization before cloning topology-bearing metadata messages.
+    pub(crate) fn read_authority_payload_fits(&self, max_bytes: usize) -> Result<()> {
+        let mut writer = MetadataReadSizeLimit(max_bytes);
+        serde_json::to_writer(&mut writer, &self.state.committed_topology).map_err(|_| {
+            metadata_error("metadata read committed topology exceeds payload bound")
+        })?;
+        if let Some(pending) = self.state.log.last() {
+            serde_json::to_writer(&mut writer, &pending.topology).map_err(|_| {
+                metadata_error("metadata read joint topology exceeds payload bound")
+            })?;
+        }
+        Ok(())
+    }
+
+    pub(crate) fn bounded_read_authority_probe(
+        &self,
+        context: &MetadataReadContext,
+        destination: &ClusterNodeId,
+        next_index: u64,
+        max_bytes: usize,
+    ) -> Result<MetadataReadProbeRequest> {
+        let mut writer = MetadataReadSizeLimit(max_bytes);
+        if next_index <= self.state.base_index {
+            serde_json::to_writer(&mut writer, &self.state.committed_topology).map_err(|_| {
+                metadata_error("metadata read catch-up snapshot exceeds payload bound")
+            })?;
+        }
+        if let Some(entry) = self
+            .state
+            .log
+            .iter()
+            .find(|entry| entry.index >= next_index)
+        {
+            serde_json::to_writer(&mut writer, entry).map_err(|_| {
+                metadata_error("metadata read catch-up entry exceeds payload bound")
+            })?;
+        }
+        self.read_authority_probe(context, destination, next_index, 1)
+    }
     /// Read and verify the durable metadata state without changing role or
     /// rewriting the file. This is safe for status tooling and health probes
     /// while a server owns the live consensus instance.
@@ -428,6 +1409,16 @@ impl MetadataConsensusStore {
         fsync: bool,
     ) -> Result<Self> {
         bootstrap_topology.validate()?;
+        if native_metadata_store::known_born_v2(&bootstrap_topology, &node_id) {
+            return Err(metadata_error(
+                "born-v2 metadata requires actual native owned initialization/reopen",
+            ));
+        }
+        let expected_image_domain = bootstrap_topology.range_image_bootstrap_id;
+        let expected_birth_topology = bootstrap_topology.clone();
+        if expected_image_domain.is_some() && !fsync {
+            return Err(metadata_error("native range image metadata requires fsync"));
+        }
         if bootstrap_topology.cluster_id != cluster_id {
             return Err(metadata_error(
                 "bootstrap topology belongs to another cluster",
@@ -444,6 +1435,7 @@ impl MetadataConsensusStore {
             Ok(bytes) => decode_state(&bytes)?,
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => MetadataConsensusState {
                 format_version: CLUSTER_METADATA_CONSENSUS_FORMAT_VERSION,
+                native_store_id: None,
                 cluster_id: cluster_id.clone(),
                 node_id: node_id.clone(),
                 current_term: 0,
@@ -460,6 +1452,21 @@ impl MetadataConsensusStore {
             Err(error) => return Err(error.into()),
         };
         validate_state(&state)?;
+        if state.native_store_id.is_some()
+            || native_metadata_store::known_born_v2(&state.committed_topology, &node_id)
+        {
+            return Err(metadata_error(
+                "protected metadata state requires actual native owned reopen",
+            ));
+        }
+        crate::distribution::validate_native_store_birth_snapshot(
+            &expected_birth_topology,
+            &state.committed_topology,
+        )?;
+        crate::distribution::ensure_range_image_domain(
+            expected_image_domain,
+            state.committed_topology.range_image_bootstrap_id,
+        )?;
         if state.cluster_id != cluster_id {
             return Err(metadata_error(format!(
                 "cluster mismatch: state={} config={cluster_id}",
@@ -481,6 +1488,7 @@ impl MetadataConsensusStore {
             state,
             match_index: BTreeMap::new(),
             last_leader_contact_ms: unix_time_ms(),
+            native_owner: None,
         };
         store.reset_match_indexes();
         store.persist()?;
@@ -542,6 +1550,7 @@ impl MetadataConsensusStore {
     }
 
     fn validate_read_context(&self, context: &MetadataReadContext) -> Result<()> {
+        self.require_native_metadata_actor_current(true)?;
         if context.failed || Instant::now() >= context.deadline {
             return Err(metadata_error("read authority context failed or expired"));
         }
@@ -570,6 +1579,8 @@ impl MetadataConsensusStore {
         budget: Duration,
         local: &MetadataReadParticipant,
     ) -> Result<MetadataReadContext> {
+        self.require_native_metadata_actor_current(true)?;
+        let started = Instant::now();
         if read_request_id.is_nil() || budget.is_zero() || budget > Duration::from_secs(300) {
             return Err(metadata_error("read authority request/budget is invalid"));
         }
@@ -615,7 +1626,14 @@ impl MetadataConsensusStore {
             leader_id: self.state.node_id.clone(),
             term: self.state.current_term,
             read_index: self.state.commit_index,
-            deadline: Instant::now() + budget,
+            deadline: started + budget,
+            started,
+            anchor: MetadataReadAnchor {
+                index: self.state.commit_index,
+                term: self.state.current_term,
+                topology_generation: self.state.committed_topology.generation,
+                topology_sha256: topology_checksum(&self.state.committed_topology)?,
+            },
             quorums,
             fresh_old,
             fresh_new,
@@ -665,7 +1683,14 @@ impl MetadataConsensusStore {
                 "read authority probe identity/index/version is invalid",
             ));
         }
-        let append = self.handle_append_request(request.append)?;
+        let mut append = self.handle_append_request(request.append)?;
+        if self.require_native_metadata_actor_current(true).is_err() {
+            // A retired/nonvoting actor may persist restrictive state, but its
+            // probe can never count as a fresh voter acknowledgement.
+            append.success = false;
+            append.match_index = 0;
+            append.native_provenance = None;
+        }
         Ok(MetadataReadProbeResponse {
             protocol_version: METADATA_READ_AUTHORITY_PROTOCOL_VERSION,
             context_id: request.context_id,
@@ -771,6 +1796,28 @@ impl MetadataConsensusStore {
                 "read authority has no fresh old-and-new voter quorum",
             ));
         }
+        fn proofs(
+            voters: &BTreeMap<ClusterNodeId, MetadataReadVoterIdentity>,
+        ) -> Vec<MetadataReadVoterProof> {
+            voters
+                .iter()
+                .map(|(node_id, identity)| MetadataReadVoterProof {
+                    node_id: node_id.clone(),
+                    incarnation: identity.incarnation,
+                    active_certificate_sha256: identity.active_certificate.clone(),
+                    pending_certificate_sha256: identity.pending_certificate.clone(),
+                })
+                .collect()
+        }
+        let leader_incarnation = context
+            .quorums
+            .old
+            .get(&context.leader_id)
+            .or_else(|| context.quorums.new.get(&context.leader_id))
+            .ok_or_else(|| metadata_error("metadata read leader missing from its quorum"))?
+            .incarnation;
+        let old_voters = proofs(&context.quorums.old);
+        let new_voters = proofs(&context.quorums.new);
         Ok(MetadataReadAuthority {
             context_id: context.context_id,
             read_request_id: context.read_request_id,
@@ -779,6 +1826,21 @@ impl MetadataConsensusStore {
             applied_index: self.state.commit_index,
             topology: self.state.committed_topology.clone(),
             restore_activation: self.state.committed_restore_activation.clone(),
+            leader_id: context.leader_id,
+            leader_incarnation,
+            anchor: context.anchor,
+            joint_configuration_candidate: self
+                .state
+                .log
+                .last()
+                .filter(|entry| entry.topology != self.state.committed_topology)
+                .map(|entry| entry.topology.clone()),
+            old_voters,
+            new_voters,
+            fresh_old_voters: context.fresh_old,
+            fresh_new_voters: context.fresh_new,
+            deadline: context.deadline,
+            started: context.started,
         })
     }
 
@@ -830,6 +1892,7 @@ impl MetadataConsensusStore {
     }
 
     pub fn start_election(&mut self) -> Result<MetadataVoteRequest> {
+        self.require_native_metadata_actor_current(true)?;
         let voters = topology_voters(&self.state.committed_topology);
         if !voters.contains(&self.state.node_id) {
             return Err(metadata_error("non-voter cannot start an election"));
@@ -853,6 +1916,7 @@ impl MetadataConsensusStore {
         &mut self,
         request: MetadataVoteRequest,
     ) -> Result<MetadataVoteResponse> {
+        self.require_native_metadata_owner_current()?;
         self.ensure_cluster(&request.cluster_id)?;
         if request.term < self.state.current_term {
             return Ok(self.vote_response(false));
@@ -867,7 +1931,11 @@ impl MetadataConsensusStore {
                 && request.last_log_index >= self.last_log_index());
         let may_vote = self.state.voted_for.is_none()
             || self.state.voted_for.as_ref() == Some(&request.candidate_id);
-        let granted = candidate_is_voter && log_is_current && may_vote;
+        let granted = voters.contains(&self.state.node_id)
+            && candidate_is_voter
+            && log_is_current
+            && may_vote
+            && self.require_native_metadata_actor_current(true).is_ok();
         if granted {
             self.state.voted_for = Some(request.candidate_id);
             self.mark_election_activity();
@@ -877,6 +1945,7 @@ impl MetadataConsensusStore {
     }
 
     pub fn become_leader(&mut self, votes: &BTreeSet<ClusterNodeId>) -> Result<()> {
+        self.require_native_metadata_actor_current(true)?;
         if self.state.role != MetadataConsensusRole::Candidate {
             return Err(metadata_error("only a candidate can become leader"));
         }
@@ -910,11 +1979,25 @@ impl MetadataConsensusStore {
     }
 
     pub fn propose_topology(&mut self, topology: ClusterTopology) -> Result<MetadataLogEntry> {
+        self.require_native_metadata_actor_current(true)?;
         if self.state.role != MetadataConsensusRole::Leader {
             return Err(metadata_error("only the leader can propose topology"));
         }
         topology.validate()?;
         self.ensure_cluster(&topology.cluster_id)?;
+        crate::distribution::validate_native_store_birth_transition(
+            self.state
+                .log
+                .last()
+                .map(|entry| &entry.topology)
+                .unwrap_or(&self.state.committed_topology),
+            &topology,
+        )?;
+        crate::distribution::ensure_range_image_domain(
+            self.state.committed_topology.range_image_bootstrap_id,
+            topology.range_image_bootstrap_id,
+        )?;
+        self.require_native_learner_promotions_ready(&topology)?;
         let latest_generation = self
             .state
             .log
@@ -954,6 +2037,7 @@ impl MetadataConsensusStore {
         &mut self,
         activation: MetadataRestoreActivation,
     ) -> Result<MetadataLogEntry> {
+        self.require_native_metadata_actor_current(true)?;
         if self.state.role != MetadataConsensusRole::Leader {
             return Err(metadata_error(
                 "only the leader can propose restore activation",
@@ -1009,11 +2093,50 @@ impl MetadataConsensusStore {
         Ok(entry)
     }
 
+    /// Resume replication only after this leader accepted an actual reply for
+    /// this peer. Progress resets with leadership and committed configuration;
+    /// a transport result or a rejection hint alone cannot advance it.
+    pub(crate) fn append_request_for_peer(
+        &self,
+        peer: &ClusterNodeId,
+        max_entries: usize,
+    ) -> Result<MetadataAppendRequest> {
+        self.require_native_metadata_actor_current(true)?;
+        if self.state.role != MetadataConsensusRole::Leader {
+            return Err(metadata_error(
+                "only the leader can resume metadata replication",
+            ));
+        }
+        if peer == &self.state.node_id
+            || !self
+                .state
+                .committed_topology
+                .nodes
+                .get(peer)
+                .is_some_and(|member| member.lifecycle == ClusterNodeLifecycle::Active)
+        {
+            return Err(metadata_error(
+                "replication peer is not an active committed remote member",
+            ));
+        }
+        let accepted = self.match_index.get(peer).copied().unwrap_or(0);
+        if accepted > self.last_log_index() {
+            return Err(metadata_error(
+                "accepted peer prefix exceeds actual leader log",
+            ));
+        }
+        let next = accepted
+            .checked_add(1)
+            .ok_or_else(|| metadata_error("metadata replication index exhausted"))?;
+        self.append_request_from(next, max_entries)
+    }
+
     pub fn append_request_from(
         &self,
         next_index: u64,
         max_entries: usize,
     ) -> Result<MetadataAppendRequest> {
+        self.require_native_metadata_actor_current(true)?;
         if self.state.role != MetadataConsensusRole::Leader {
             return Err(metadata_error("only the leader can append metadata"));
         }
@@ -1055,6 +2178,7 @@ impl MetadataConsensusStore {
         &mut self,
         request: MetadataAppendRequest,
     ) -> Result<MetadataAppendResponse> {
+        self.require_native_metadata_owner_current()?;
         self.ensure_cluster(&request.cluster_id)?;
         if request.term < self.state.current_term {
             return Ok(self.append_response(false, self.last_log_index().saturating_add(1)));
@@ -1066,6 +2190,19 @@ impl MetadataConsensusStore {
                 request.leader_id
             )));
         }
+        if let Some(snapshot) = &request.snapshot {
+            crate::distribution::ensure_range_image_domain(
+                self.state.committed_topology.range_image_bootstrap_id,
+                snapshot.topology.range_image_bootstrap_id,
+            )?;
+        }
+        for entry in &request.entries {
+            crate::distribution::ensure_range_image_domain(
+                self.state.committed_topology.range_image_bootstrap_id,
+                entry.topology.range_image_bootstrap_id,
+            )?;
+        }
+        self.validate_native_birth_append(&request)?;
         self.step_down(request.term, Some(request.leader_id));
         self.mark_election_activity();
         let snapshot_frontier = request
@@ -1089,6 +2226,10 @@ impl MetadataConsensusStore {
         let mut matched_frontier = request.prev_log_index.max(snapshot_frontier);
         for incoming in request.entries {
             validate_log_entry_shape(&incoming, &self.state.cluster_id)?;
+            crate::distribution::ensure_range_image_domain(
+                self.state.committed_topology.range_image_bootstrap_id,
+                incoming.topology.range_image_bootstrap_id,
+            )?;
             if matched_frontier.checked_add(1) != Some(incoming.index) {
                 self.persist()?;
                 return Ok(self.append_response(false, matched_frontier.saturating_add(1)));
@@ -1115,19 +2256,92 @@ impl MetadataConsensusStore {
             }
             matched_frontier = incoming_index;
         }
-        // Commit only entries actually covered by this leader's request, never
-        // a divergent suffix merely present in the follower's local storage.
+        // Commit only this request's validated prefix, never an untouched tail.
         self.advance_follower_commit(request.leader_commit.min(matched_frontier))?;
-        let match_index = matched_frontier;
-        self.persist()?;
-        Ok(MetadataAppendResponse {
-            cluster_id: self.state.cluster_id.clone(),
-            term: self.state.current_term,
-            node_id: self.state.node_id.clone(),
-            success: true,
-            match_index,
-            conflict_index: match_index.saturating_add(1),
-        })
+        self.persist_owned_append_response(matched_frontier)
+    }
+
+    fn validate_native_birth_append(&self, request: &MetadataAppendRequest) -> Result<()> {
+        let mut candidate = self.state.clone();
+        if let Some(snapshot) = &request.snapshot {
+            if snapshot.last_included_index >= candidate.commit_index {
+                snapshot.topology.validate()?;
+                crate::distribution::validate_native_store_birth_snapshot(
+                    &candidate.committed_topology,
+                    &snapshot.topology,
+                )?;
+                // A committed snapshot supersedes uncommitted proposals. Only
+                // a matching log anchor permits retaining its later suffix.
+                let matching_anchor = if snapshot.last_included_index == candidate.base_index {
+                    snapshot.last_included_term == candidate.base_term
+                } else {
+                    candidate.log.iter().any(|entry| {
+                        entry.index == snapshot.last_included_index
+                            && entry.term == snapshot.last_included_term
+                    })
+                };
+                candidate.base_index = snapshot.last_included_index;
+                candidate.base_term = snapshot.last_included_term;
+                candidate.commit_index = snapshot.last_included_index;
+                candidate.committed_topology = snapshot.topology.clone();
+                candidate.committed_restore_activation = snapshot.restore_activation.clone();
+                if matching_anchor {
+                    candidate
+                        .log
+                        .retain(|entry| entry.index > snapshot.last_included_index);
+                } else {
+                    candidate.log.clear();
+                }
+            }
+        }
+        let previous_term = if request.prev_log_index == candidate.base_index {
+            Some(candidate.base_term)
+        } else {
+            candidate
+                .log
+                .iter()
+                .find(|entry| entry.index == request.prev_log_index)
+                .map(|entry| entry.term)
+        };
+        if previous_term != Some(request.prev_log_term) {
+            return validate_state(&candidate);
+        }
+        for incoming in &request.entries {
+            if incoming.index <= candidate.base_index {
+                continue;
+            }
+            validate_log_entry_shape(incoming, &candidate.cluster_id)?;
+            if let Some(position) = candidate
+                .log
+                .iter()
+                .position(|entry| entry.index == incoming.index)
+            {
+                if candidate.log[position] != *incoming {
+                    if candidate.log[position].term == incoming.term {
+                        return Err(metadata_error(
+                            "conflicting metadata entry at the same term and index",
+                        ));
+                    }
+                    // Different-term uncommitted proposals are replaceable.
+                    // validate_state below still checks every incoming transition
+                    // against the committed identity anchor and prior entries.
+                    candidate.log.truncate(position);
+                    candidate.log.push(incoming.clone());
+                }
+            } else if incoming.index
+                == candidate
+                    .log
+                    .last()
+                    .map(|entry| entry.index)
+                    .unwrap_or(candidate.base_index)
+                    .saturating_add(1)
+            {
+                candidate.log.push(incoming.clone());
+            } else {
+                return validate_state(&candidate);
+            }
+        }
+        validate_state(&candidate)
     }
 
     pub fn record_append_response(
@@ -1146,8 +2360,16 @@ impl MetadataConsensusStore {
         }
         if response.term != self.state.current_term
             || self.state.role != MetadataConsensusRole::Leader
-            || !response.success
         {
+            return Ok(false);
+        }
+        if !response.success {
+            // A negative reply supplies no positive prefix. Conservatively
+            // retry from the committed snapshot/log instead of treating its
+            // conflict hint as authority or retaining an unusable cursor.
+            if expected_node_id != &self.state.node_id {
+                self.match_index.remove(expected_node_id);
+            }
             return Ok(false);
         }
         let old_voters = topology_voters(&self.state.committed_topology);
@@ -1169,6 +2391,8 @@ impl MetadataConsensusStore {
                 "append response from non-member {expected_node_id}"
             )));
         }
+        self.require_native_metadata_actor_current(true)?;
+        self.require_current_native_append_ack(expected_node_id, response)?;
         self.match_index
             .entry(expected_node_id.clone())
             .and_modify(|known| *known = (*known).max(response.match_index))
@@ -1219,7 +2443,12 @@ impl MetadataConsensusStore {
     }
 
     fn commit_entry(&mut self, entry: MetadataLogEntry) -> Result<()> {
+        validate_state(&self.state)?;
         validate_log_entry_shape(&entry, &self.state.cluster_id)?;
+        crate::distribution::ensure_range_image_domain(
+            self.state.committed_topology.range_image_bootstrap_id,
+            entry.topology.range_image_bootstrap_id,
+        )?;
         if let Some(activation) = &entry.restore_activation {
             validate_committed_activation_progress(
                 self.state.committed_restore_activation.as_ref(),
@@ -1236,6 +2465,7 @@ impl MetadataConsensusStore {
         self.state
             .log
             .retain(|candidate| candidate.index > entry.index);
+        self.demote_native_retired_metadata_actor();
         self.reset_match_indexes();
         Ok(())
     }
@@ -1243,6 +2473,10 @@ impl MetadataConsensusStore {
     fn install_snapshot(&mut self, snapshot: MetadataSnapshot) -> Result<()> {
         snapshot.topology.validate()?;
         self.ensure_cluster(&snapshot.topology.cluster_id)?;
+        crate::distribution::ensure_range_image_domain(
+            self.state.committed_topology.range_image_bootstrap_id,
+            snapshot.topology.range_image_bootstrap_id,
+        )?;
         if let Some(activation) = &snapshot.restore_activation {
             validate_historical_activation_against_topology(
                 activation,
@@ -1262,18 +2496,32 @@ impl MetadataConsensusStore {
                 "snapshot conflicts with the committed metadata index",
             ));
         }
+        crate::distribution::validate_native_store_birth_snapshot(
+            &self.state.committed_topology,
+            &snapshot.topology,
+        )?;
+        let matching_anchor =
+            self.term_at(snapshot.last_included_index) == Some(snapshot.last_included_term);
         validate_committed_activation_progress(
             self.state.committed_restore_activation.as_ref(),
             snapshot.restore_activation.as_ref(),
         )?;
-        self.state.base_index = snapshot.last_included_index;
-        self.state.base_term = snapshot.last_included_term;
-        self.state.commit_index = snapshot.last_included_index;
-        self.state.committed_topology = snapshot.topology;
-        self.state.committed_restore_activation = snapshot.restore_activation;
-        self.state
-            .log
-            .retain(|entry| entry.index > snapshot.last_included_index);
+        let mut candidate = self.state.clone();
+        candidate.base_index = snapshot.last_included_index;
+        candidate.base_term = snapshot.last_included_term;
+        candidate.commit_index = snapshot.last_included_index;
+        candidate.committed_topology = snapshot.topology;
+        candidate.committed_restore_activation = snapshot.restore_activation;
+        if matching_anchor {
+            candidate
+                .log
+                .retain(|entry| entry.index > snapshot.last_included_index);
+        } else {
+            candidate.log.clear();
+        }
+        validate_state(&candidate)?;
+        self.state = candidate;
+        self.demote_native_retired_metadata_actor();
         Ok(())
     }
 
@@ -1355,13 +2603,20 @@ impl MetadataConsensusStore {
             success,
             match_index: if success { self.last_log_index() } else { 0 },
             conflict_index,
+            native_receiver: None,
+            native_provenance: None,
         }
     }
 
     fn persist(&self) -> Result<()> {
+        validate_state(&self.state)?;
+        // A legacy learner may have learned its own enforced birth since
+        // open. Its cached ownerless mode cannot persist/ack that transition
+        // as an actual native metadata store.
+        self.require_native_metadata_owner_current()?;
         fs::create_dir_all(&self.root)?;
         let mut envelope = MetadataConsensusEnvelope {
-            format_version: CLUSTER_METADATA_CONSENSUS_FORMAT_VERSION,
+            format_version: self.state.format_version,
             checksum_sha256: String::new(),
             state: self.state.clone(),
         };
@@ -1370,7 +2625,10 @@ impl MetadataConsensusStore {
             &self.root.join(DEFAULT_CLUSTER_METADATA_CONSENSUS_STATE),
             &serde_json::to_vec_pretty(&envelope)?,
             self.fsync,
-        )
+        )?;
+        // A DB replacement during durable I/O cannot turn into a positive
+        // vote/Append response from the ended actual-open owner.
+        self.require_native_metadata_owner_current()
     }
 }
 
@@ -1438,7 +2696,12 @@ fn unix_time_ms() -> u64 {
 
 fn decode_state(bytes: &[u8]) -> Result<MetadataConsensusState> {
     let envelope = serde_json::from_slice::<MetadataConsensusEnvelope>(bytes)?;
-    if envelope.format_version != CLUSTER_METADATA_CONSENSUS_FORMAT_VERSION {
+    if !matches!(
+        envelope.format_version,
+        CLUSTER_METADATA_CONSENSUS_FORMAT_VERSION
+            | native_metadata_store::NATIVE_METADATA_CONSENSUS_FORMAT
+    ) || envelope.format_version != envelope.state.format_version
+    {
         return Err(metadata_error(format!(
             "unsupported state format {}; expected {}",
             envelope.format_version, CLUSTER_METADATA_CONSENSUS_FORMAT_VERSION
@@ -1452,7 +2715,15 @@ fn decode_state(bytes: &[u8]) -> Result<MetadataConsensusState> {
 }
 
 fn validate_state(state: &MetadataConsensusState) -> Result<()> {
-    if state.format_version != CLUSTER_METADATA_CONSENSUS_FORMAT_VERSION {
+    if !matches!(
+        (state.format_version, state.native_store_id),
+        (CLUSTER_METADATA_CONSENSUS_FORMAT_VERSION, None)
+            | (
+                native_metadata_store::NATIVE_METADATA_CONSENSUS_FORMAT,
+                Some(_)
+            )
+    ) || state.native_store_id.is_some_and(|id| id.is_nil())
+    {
         return Err(metadata_error("state payload format mismatch"));
     }
     state.committed_topology.validate()?;
@@ -1482,9 +2753,17 @@ fn validate_state(state: &MetadataConsensusState) -> Result<()> {
         .unwrap_or(0);
     for entry in &state.log {
         validate_log_entry_shape(entry, &state.cluster_id)?;
+        crate::distribution::ensure_range_image_domain(
+            state.committed_topology.range_image_bootstrap_id,
+            entry.topology.range_image_bootstrap_id,
+        )?;
         if entry.index != expected {
             return Err(metadata_error("metadata log indexes are not contiguous"));
         }
+        crate::distribution::validate_native_store_birth_transition(
+            &latest_topology,
+            &entry.topology,
+        )?;
         if entry.leadership_barrier {
             if entry.topology.generation < latest_generation {
                 return Err(metadata_error(
@@ -2030,6 +3309,8 @@ mod tests {
             success: true,
             match_index: entry.index,
             conflict_index: entry.index.saturating_add(1),
+            native_receiver: None,
+            native_provenance: None,
         };
         assert!(!leader
             .record_append_response(&ClusterNodeId::new("n2").unwrap(), &n2)
@@ -2070,6 +3351,8 @@ mod tests {
             success: true,
             match_index: entry.index,
             conflict_index: entry.index + 1,
+            native_receiver: None,
+            native_provenance: None,
         };
         assert!(!leader
             .record_append_response(&response.node_id, &response)
@@ -2113,6 +3396,8 @@ mod tests {
             success: true,
             match_index: entry.index,
             conflict_index: entry.index.saturating_add(1),
+            native_receiver: None,
+            native_provenance: None,
         };
         assert!(!leader
             .record_append_response(&ClusterNodeId::new("n2").unwrap(), &n2)
@@ -2553,6 +3838,59 @@ mod tests {
         assert_eq!(leader.committed_restore_activation(), Some(&activation));
         assert_eq!(follower.committed_restore_activation(), Some(&activation));
 
+        // Obtain a real fresh quorum response from the historical state.
+        // The DTO boundary must accept retained lineage, but refuse future or
+        // same-generation mismatched decisions even before row-read wiring.
+        let read_request_id = Uuid::new_v4();
+        let context_local = read_participant(&changed, "n1");
+        let mut context = leader
+            .begin_read_authority(read_request_id, Duration::from_secs(1), &context_local)
+            .unwrap();
+        let probe = leader
+            .read_authority_probe(&context, &ClusterNodeId::new("n2").unwrap(), 1, 8)
+            .unwrap();
+        let response = follower.handle_read_authority_probe(probe.clone()).unwrap();
+        let ack = MetadataReadAck::from_transport(
+            &probe,
+            &ClusterNodeId::new("n2").unwrap(),
+            read_participant(&changed, "n2"),
+            response,
+        )
+        .unwrap();
+        assert!(leader
+            .record_read_authority_ack(&mut context, &ack)
+            .unwrap());
+        let range = changed.range_by_id(range_id).unwrap();
+        let request = MetadataReadAcquireRequest {
+            protocol_version: METADATA_READ_ACQUISITION_PROTOCOL_VERSION,
+            acquisition_id: Uuid::new_v4(),
+            read_request_id,
+            requester_node_id: range.leader.clone(),
+            requester_incarnation: changed.nodes[&range.leader].incarnation,
+            range_id,
+            range_epoch: range.epoch,
+            budget_ms: 1000,
+        };
+        let dto = leader
+            .finish_read_authority(context)
+            .unwrap()
+            .into_acquisition_response(request.clone())
+            .unwrap();
+        assert_eq!(dto.restore_activation, Some(activation.clone()));
+        dto.validate(&request).unwrap();
+        let mut future_dto = dto.clone();
+        future_dto
+            .restore_activation
+            .as_mut()
+            .unwrap()
+            .topology_generation = changed.generation + 1;
+        assert!(future_dto.validate(&request).is_err());
+        let mut mismatched_dto = dto.clone();
+        let mismatched = mismatched_dto.restore_activation.as_mut().unwrap();
+        mismatched.topology_generation = changed.generation;
+        mismatched.topology_sha256 = "d".repeat(64);
+        assert!(mismatched_dto.validate(&request).is_err());
+
         // This is a trusted-caller store/protocol test, not an mTLS test. The
         // actual leader creates the compacted snapshot; no state is forged.
         let snapshot = leader.append_request_from(1, 8).unwrap();
@@ -2731,6 +4069,8 @@ mod tests {
             success: true,
             match_index: minority_entry.index,
             conflict_index: minority_entry.index.saturating_add(1),
+            native_receiver: None,
+            native_provenance: None,
         };
         assert!(!n1
             .record_append_response(&ClusterNodeId::new("n2").unwrap(), &delayed_minority_ack,)
@@ -2807,3 +4147,6 @@ mod tests {
         assert!(reopened.committed_restore_activation().is_none());
     }
 }
+
+#[cfg(test)]
+mod native_store_birth_tests;

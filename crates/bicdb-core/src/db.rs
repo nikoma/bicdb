@@ -8,7 +8,10 @@ mod exact_decimal_sum;
 mod native_calendar;
 use exact_decimal_sum::ExactDecimalSum;
 mod local_namespace_identity;
+mod native_wal_apply;
 pub use deferred_materialize::DeferredMaterializeStats;
+pub(crate) use native_wal_apply::admission_mutations_sha256;
+pub use native_wal_apply::NativeWalApplyReceipt;
 mod ha_bootstrap;
 mod ha_node;
 mod online_backup;
@@ -58,6 +61,47 @@ mod index_build;
 use index_binding::load_btree_bindings;
 mod integrity_reservations;
 mod pitr_maintenance;
+mod range_image_install;
+mod range_image_proposal;
+pub(crate) use range_image_install::{
+    NativeInstalledRangeImageBase, NativeInstalledRangeImageIntegrity,
+    NativeTargetImageVerificationProgress, NativeTargetImageVerifier,
+    TargetNativeImageSnapshotBound,
+};
+pub(crate) use range_image_proposal::{
+    NativeCurrentImageProposalReceipt, ProtectedCurrentImagePreimageV1,
+};
+mod native_initial_preparation;
+pub(crate) use native_initial_preparation::{
+    NativeInitialConfigurationProposalRecord, NativeInitialPreparationRecord,
+};
+mod native_metadata_store;
+pub(crate) use native_metadata_store::NativeMetadataStoreRecord;
+mod native_activation;
+pub(crate) use native_activation::NativeActivatedOpenGuard;
+mod commit_admission_hook;
+mod native_recovery_ready;
+mod range_image_native;
+pub(crate) use native_recovery_ready::{LocalNativeRecoveryReady, NativeLocalVisibilitySequence};
+#[cfg(test)]
+pub(crate) use range_image_native::rf3_fixture::{
+    ActualNativeRf3Fixture, ActualNativeRf3RpcObservation,
+};
+pub(crate) use range_image_native::NativeActivationDecisionReceipt;
+pub(crate) use range_image_native::NativeReplicaMaterialization;
+pub(crate) use range_image_native::{
+    FreshNativeCatalogueBootstrap, FreshRangeGenesisAuthority, InstalledNativeWriterHostGuard,
+    KnownNativeRecoveryPrefix, NativeHistoryPublicationBinding, NativeHistoryStage,
+    NativeHistoryStageProgress, NativeHistoryTargetContext, NativeLogicalHistoryEntryV1,
+    NativeLogicalHistoryOutcomeV1, NativeLogicalHistoryPoint, NativeLogicalHistoryStepV1,
+    NativeRangeInstallSafety, NativeRangePendingApply, NativeRangePrefixObservation,
+    NativeRecoveredServingReceipt, NativeRecoveryAdmission, NativeRecoveryAppliedReceipt,
+    NativeWriterHostState, RangeImageBirthMember, RangeImageBirthSpec, SourceRangeImageLineage,
+    StagedNativeHistoryProof,
+};
+pub(crate) use range_image_native::{NativeRangeReadPhysical, NativeReadLocalDbSequence};
+mod range_image_bindings;
+pub(crate) use range_image_bindings::RangeImageDbBindings;
 mod read_committed_reservation;
 mod record_read_snapshot;
 pub use record_read_snapshot::RecordReadSnapshot;
@@ -996,7 +1040,7 @@ impl ClusterSchemaBundle {
         }
         let mut collection_names = BTreeSet::new();
         for collection in &self.collections {
-            validate_collection_name(&collection.name)?;
+            validate_collection_meta_namespaces(collection)?;
             if collection.vector_dim == Some(0) {
                 return Err(BicDbError::Cluster(format!(
                     "cluster schema bundle collection `{}` has a zero vector dimension",
@@ -2630,6 +2674,10 @@ pub struct TxLogHandle {
     durable_notifier: Arc<replication_live::DurableNotifier>,
     path: PathBuf,
     fsync: bool,
+    native_sync_nonce: Uuid,
+    native_synced_through: Arc<AtomicU64>,
+    native_log_generation: Arc<AtomicU64>,
+    native_retention: Arc<native_wal_apply::NativeWalRetentionState>,
     /// The database's fail-closed durability state. A failed write or sync
     /// of this log fences it: no later batch is written, no waiter retries,
     /// and `written_seq` (what replication ships and what commits wait on)
@@ -2654,6 +2702,10 @@ impl TxLogHandle {
             durable_notifier: Arc::new(replication_live::DurableNotifier::default()),
             path,
             fsync,
+            native_sync_nonce: Uuid::now_v7(),
+            native_synced_through: Arc::new(AtomicU64::new(0)),
+            native_log_generation: Arc::new(AtomicU64::new(1)),
+            native_retention: Arc::new(Default::default()),
             health: bicdb_page::DurabilityHealth::new(),
         }
     }
@@ -2932,6 +2984,13 @@ impl TxLogHandle {
             // Only reopening the database through recovery may clear a
             // failed repair. Dropping the descriptor must not clear it.
             return;
+        }
+        // A cut was deferred while a native receipt owns its pin; in that
+        // case descriptor invalidation alone changes no bytes/generation.
+        if self.native_retention.active.load(AtomicOrdering::Acquire) == 0 {
+            self.native_synced_through.store(0, AtomicOrdering::Release);
+            self.native_log_generation
+                .fetch_add(1, AtomicOrdering::AcqRel);
         }
         state.file = None;
         self.lock_pending().clear();
@@ -3897,6 +3956,8 @@ pub struct BicDb {
     /// one covers the database root, so every storage mode is excluded rather
     /// than only the paged one.
     _directory_lock: Option<Arc<bicdb_page::DirectoryLock>>,
+    // ONLY this BicDb owns a strong token; metadata leases receive Weak.
+    native_metadata_open_lifetime: Arc<()>,
     config: DbConfig,
     // Opt-in, sticky local format capability; never a portable reader flag.
     local_namespace_identity_active: bool,
@@ -3906,7 +3967,12 @@ pub struct BicDb {
     /// Host-installed distributed durability boundary. The database owns the
     /// call site so direct API, SQL, pgwire and extension writes cannot bypass
     /// range quorum once the database is opened in distributed mode.
-    commit_admission: RwLock<Option<Arc<dyn CommitAdmission>>>,
+    commit_admission: RwLock<commit_admission_hook::CommitAdmissionSlot>,
+    range_mutations: crate::distribution_range_mutation::RangeMutationGate,
+    range_image_initializing: AtomicBool,
+    range_image_native_birth_active: AtomicBool,
+    native_range_image_journal: Mutex<()>,
+    native_range_command_scopes: Arc<Mutex<range_image_native::NativeRangeScopeRegistry>>,
     schema_compatibility: SchemaCompatibilityAuthority,
     encryption: EncryptionRuntime,
     // Per-collection interior mutability: each collection's mutable state lives
@@ -9031,7 +9097,9 @@ fn replication_writes_to_tx_writes(frame: &CommitFrame) -> Result<Vec<TxWrite>> 
 }
 
 fn validate_replication_collection_meta(write: &ReplicationWrite) -> Result<()> {
+    validate_collection_name(&write.collection)?;
     if let Some(meta) = write.collection_meta.as_ref() {
+        validate_collection_meta_namespaces(meta)?;
         if meta.name != write.collection {
             return Err(replication_error(format!(
                 "replication collection metadata mismatch: write targets {}, metadata names {}",
@@ -9075,17 +9143,83 @@ pub struct CommitAdmissionTicket {
     pub command_id: String,
 }
 
+/// Owns only volatile admission cleanup. Drop occurs after Transaction's
+/// row-lock cleanup; the callback may not mutate/abort a durable command.
+#[derive(Debug)]
+struct NativeAdmissionRecoveryRelease {
+    admission: Arc<dyn CommitAdmission>,
+    ticket: Option<CommitAdmissionTicket>,
+}
+impl Drop for NativeAdmissionRecoveryRelease {
+    fn drop(&mut self) {
+        if let Some(ticket) = self.ticket.take() {
+            if let Err(error) = self
+                .admission
+                .release_native_application_for_recovery(&ticket)
+            {
+                bicdb_page::health::log_event(
+                    &json!({"event":"range_image.native_admission_release_failed","severity":"warn","command_id":ticket.command_id,"error":error.to_string()}),
+                );
+            }
+        }
+    }
+}
+
 /// Capability installed by the trusted cluster host. `admit` must not return
 /// success until the intent has a durable quorum decision. Implementations
 /// must be idempotent because transport ambiguity and process recovery can
 /// repeat both calls.
 pub trait CommitAdmission: std::fmt::Debug + Send + Sync {
     fn admit(&self, intent: &CommitAdmissionIntent) -> Result<CommitAdmissionTicket>;
+    /// Actual borrowed native DB context avoids reacquiring its outer guard
+    /// during admission. This is additive; legacy authorities keep their
+    /// existing callback behavior.
+    fn admit_with_native_context(
+        &self,
+        intent: &CommitAdmissionIntent,
+        _database: &BicDb,
+    ) -> Result<CommitAdmissionTicket> {
+        self.admit(intent)
+    }
     /// Record the exact durable local sequence for an admitted decision.
     /// This callback runs only after the transaction WAL is durable. Keeping
     /// the sequence in this trusted callback lets Cell writer fencing advance
     /// its external anti-rollback watermark without trusting SQL or a caller.
     fn local_applied(&self, ticket: &CommitAdmissionTicket, commit_seq: u64) -> Result<()>;
+
+    /// Additive native-proof callback. The receipt establishes actual local
+    /// WAL sync/intent only; implementations still require independent range
+    /// certificates and native image/prefix lineage. Legacy authorities retain
+    /// their existing callback semantics through this default.
+    fn local_applied_with_receipt(
+        &self,
+        ticket: &CommitAdmissionTicket,
+        receipt: &NativeWalApplyReceipt,
+    ) -> Result<()> {
+        self.local_applied(ticket, receipt.sequence())
+    }
+
+    /// Invoked with the actual transaction's borrowed database after WAL
+    /// durability. Implementations must validate the private receipt binding;
+    /// they must not recursively acquire the originating database guard.
+    fn local_applied_with_native_context(
+        &self,
+        ticket: &CommitAdmissionTicket,
+        receipt: &NativeWalApplyReceipt,
+        _database: &BicDb,
+    ) -> Result<()> {
+        self.local_applied_with_receipt(ticket, receipt)
+    }
+
+    /// Release volatile ownership after a failed native local attempt has
+    /// fully stopped mutating. Durable decisions/pending records stay intact;
+    /// this must never be implemented as an abort or physical row operation.
+    fn release_native_application_for_recovery(
+        &self,
+        _ticket: &CommitAdmissionTicket,
+    ) -> Result<()> {
+        Ok(())
+    }
 
     /// Irreversibly reject future admissions for this installed authority.
     /// Implementations which cannot be fenced locally must refuse explicitly.
@@ -9242,7 +9376,12 @@ pub struct Transaction {
     /// Used only by authenticated range-log replay. It is private to the core
     /// crate and therefore cannot be selected by SQL, pgwire, or extensions.
     bypass_commit_admission: bool,
+    native_image_row_grant: Option<range_image_native::NativeImageTransactionGrant>,
+    range_mutation_claim: Option<crate::distribution_range_mutation::RangeMutationClaim>,
+    database_mutation_permit: Option<crate::distribution_range_mutation::DatabaseMutationPermit>,
+    native_wal_retention: Option<native_wal_apply::NativeWalRetentionPin>,
     commit_admission_ticket: Option<(Arc<dyn CommitAdmission>, CommitAdmissionTicket)>,
+    native_admission_recovery_release: Option<NativeAdmissionRecoveryRelease>,
     committed_seq: Option<u64>,
     // Paged mode: the page-store snapshot captured when this transaction began,
     // used to read rows a lazy collection has never touched this session (they
@@ -9926,7 +10065,7 @@ impl BicDb {
     /// Install or replace the trusted distributed commit authority. A
     /// distributed database remains read-only until this is called.
     pub fn install_commit_admission(&self, admission: Arc<dyn CommitAdmission>) {
-        *self.commit_admission.write() = Some(admission);
+        self.commit_admission.write().install(Some(admission));
     }
 
     /// Fence the installed writer while holding the same exclusive gate that
@@ -9961,7 +10100,19 @@ impl BicDb {
     }
 
     pub fn clear_commit_admission(&self) {
-        *self.commit_admission.write() = None;
+        self.commit_admission.write().install(None);
+    }
+
+    pub(crate) fn range_mutation_gate(
+        &self,
+    ) -> crate::distribution_range_mutation::RangeMutationGate {
+        self.range_mutations.clone()
+    }
+
+    pub(crate) fn native_service_directory_lifetime(
+        &self,
+    ) -> Option<std::sync::Weak<bicdb_page::DirectoryLock>> {
+        self._directory_lock.as_ref().map(Arc::downgrade)
     }
 
     pub fn commit_admission_ready(&self) -> bool {
@@ -9972,15 +10123,24 @@ impl BicDb {
     /// boundary. This is deliberately narrower than exposing a general bypass:
     /// callers provide only concrete row mutations and still pass through the
     /// ordinary transaction/WAL/index/constraint machinery.
-    pub(crate) fn apply_admitted_mutations(
+    pub(crate) fn apply_admitted_mutations_with_mutation(
         &self,
+        range_id: crate::RangeId,
         mutations: &[CommitAdmissionMutation],
+        authority: &crate::distribution_range_mutation::RangeMutationAuthority<'_>,
     ) -> Result<()> {
+        self.require_native_generic_import_allowed()?;
+        self.range_mutations.validate(range_id, authority)?;
         if mutations.is_empty() {
             return Ok(());
         }
+        self.invalidate_native_range_images_before_mutation(
+            Some(range_id),
+            "apply_admitted_mutations_with_mutation",
+        )?;
         let mut tx = self.begin_transaction()?;
         tx.bypass_commit_admission = true;
+        tx.range_mutation_claim = Some(authority.claim());
         for mutation in mutations {
             match &mutation.record {
                 Some(record) => tx.insert(&mutation.collection, record.clone())?,
@@ -10000,6 +10160,23 @@ impl BicDb {
         range: &RangeDescriptor,
         mutations: &[CommitAdmissionMutation],
     ) -> Result<usize> {
+        let gate = self.range_mutation_gate();
+        let permit = gate.try_enter(range.id)?;
+        self.apply_range_anti_entropy_mutations_as_local_with_mutation(
+            range,
+            mutations,
+            &crate::distribution_range_mutation::RangeMutationAuthority::Mutation(&permit),
+        )
+    }
+
+    pub(crate) fn apply_range_anti_entropy_mutations_as_local_with_mutation(
+        &self,
+        range: &RangeDescriptor,
+        mutations: &[CommitAdmissionMutation],
+        authority: &crate::distribution_range_mutation::RangeMutationAuthority<'_>,
+    ) -> Result<usize> {
+        self.require_native_generic_import_allowed()?;
+        self.range_mutations.validate(range.id, authority)?;
         for mutation in mutations {
             if !range.contains_token(distribution_key_token(
                 &mutation.collection,
@@ -10019,8 +10196,13 @@ impl BicDb {
         if mutations.is_empty() {
             return Ok(0);
         }
+        self.invalidate_native_range_images_before_mutation(
+            Some(range.id),
+            "apply_range_anti_entropy_mutations_as_local_with_mutation",
+        )?;
         let mut tx = self.begin_transaction()?;
         tx.bypass_commit_admission = true;
+        tx.range_mutation_claim = Some(authority.claim());
         for mutation in mutations {
             match &mutation.record {
                 Some(record) => {
@@ -10489,7 +10671,7 @@ impl BicDb {
         open_trace!("snapshot_load");
 
         for mut meta in metas {
-            validate_collection_name(&meta.name)?;
+            validate_collection_meta_namespaces(&meta)?;
             let segment_path = segment_path_for(&path, meta.storage());
 
             // PAGED OPEN: in `server_paged` the page store is the durable home
@@ -11089,12 +11271,18 @@ impl BicDb {
             durability: durability.clone(),
             incarnation: incarnation.clone(),
             _directory_lock: Some(Arc::new(directory_lock)),
+            native_metadata_open_lifetime: Arc::new(()),
             config,
             local_namespace_identity_active,
             ha_state,
             replication_state,
             consensus_state,
-            commit_admission: RwLock::new(None),
+            commit_admission: RwLock::new(commit_admission_hook::CommitAdmissionSlot::empty()),
+            range_mutations: crate::distribution_range_mutation::RangeMutationGate::default(),
+            range_image_initializing: AtomicBool::new(false),
+            range_image_native_birth_active: AtomicBool::new(false),
+            native_range_image_journal: Mutex::new(()),
+            native_range_command_scopes: Arc::new(Mutex::new(Default::default())),
             schema_compatibility: SchemaCompatibilityAuthority::new(),
             encryption,
             collections,
@@ -11173,6 +11361,7 @@ impl BicDb {
                 db.persist_record_audit_publication(*tx_id, events)?;
             }
         }
+        db.load_native_range_image_admission()?;
         db.recover_pending_replication_catalog()?;
         db.prepare_replication_journal_origin()?;
         db.flashback_after_open()?;
@@ -12205,11 +12394,50 @@ impl BicDb {
         range: &RangeDescriptor,
         frames: &[CommitFrame],
     ) -> Result<ReplicationApplyReport> {
+        let gate = self.range_mutation_gate();
+        let permit = gate.try_enter(range.id)?;
+        self.apply_range_replication_batch_with_mutation(
+            range,
+            frames,
+            &crate::distribution_range_mutation::RangeMutationAuthority::Mutation(&permit),
+        )
+    }
+
+    pub(crate) fn apply_range_replication_batch_with_mutation(
+        &mut self,
+        range: &RangeDescriptor,
+        frames: &[CommitFrame],
+        authority: &crate::distribution_range_mutation::RangeMutationAuthority<'_>,
+    ) -> Result<ReplicationApplyReport> {
+        self.range_mutations.validate(range.id, authority)?;
         let filtered = frames
             .iter()
             .map(|frame| filter_commit_frame_for_range(frame, range))
             .collect::<Result<Vec<_>>>()?;
-        self.apply_replication_batch(&filtered)
+        let expected_cluster = self.config.replication.cluster_id.clone();
+        let mut applied = 0usize;
+        let mut duplicates = 0usize;
+        for frame in &filtered {
+            let report = match self.apply_replication_frame_inner_with_mutation(
+                frame,
+                true,
+                &expected_cluster,
+                Some(authority),
+            ) {
+                Ok(report) => report,
+                Err(error) => {
+                    let _ = self.record_replication_apply_error(error.to_string());
+                    return Err(error);
+                }
+            };
+            applied += report.applied;
+            duplicates += report.duplicates;
+        }
+        Ok(ReplicationApplyReport {
+            applied,
+            duplicates,
+            last_applied_commit_seq: self.last_applied_commit_seq(),
+        })
     }
 
     /// Install one bounded learner snapshot batch as an idempotent local
@@ -12222,6 +12450,25 @@ impl BicDb {
         collection_meta: &CollectionMeta,
         batch: &RangeSnapshotBatch,
     ) -> Result<usize> {
+        let gate = self.range_mutation_gate();
+        let permit = gate.try_enter(range.id)?;
+        self.apply_range_snapshot_batch_with_mutation(
+            range,
+            collection_meta,
+            batch,
+            &crate::distribution_range_mutation::RangeMutationAuthority::Mutation(&permit),
+        )
+    }
+
+    pub(crate) fn apply_range_snapshot_batch_with_mutation(
+        &mut self,
+        range: &RangeDescriptor,
+        collection_meta: &CollectionMeta,
+        batch: &RangeSnapshotBatch,
+        authority: &crate::distribution_range_mutation::RangeMutationAuthority<'_>,
+    ) -> Result<usize> {
+        self.require_native_generic_import_allowed()?;
+        self.range_mutations.validate(range.id, authority)?;
         Self::validate_range_snapshot_fields(range, collection_meta, batch)?;
         if !self.collections.contains_key(&batch.collection) {
             validate_collection_name(&batch.collection)?;
@@ -12233,7 +12480,12 @@ impl BicDb {
             self.persist_catalog()?;
             self.schema_compatibility.invalidate();
         }
-        self.apply_range_snapshot_batch_preinstalled(range, collection_meta, batch)
+        self.apply_range_snapshot_batch_preinstalled_with_mutation(
+            range,
+            collection_meta,
+            batch,
+            authority,
+        )
     }
 
     fn validate_range_snapshot_fields(
@@ -12241,6 +12493,7 @@ impl BicDb {
         collection_meta: &CollectionMeta,
         batch: &RangeSnapshotBatch,
     ) -> Result<()> {
+        validate_collection_meta_namespaces(collection_meta)?;
         if batch.range_id != range.id || batch.range_epoch != range.epoch {
             return Err(BicDbError::Cluster(format!(
                 "snapshot batch range/epoch {}/{} does not match {}/{}",
@@ -12273,6 +12526,52 @@ impl BicDb {
         collection_meta: &CollectionMeta,
         batch: &RangeSnapshotBatch,
     ) -> Result<usize> {
+        let gate = self.range_mutation_gate();
+        let permit = gate.try_enter(range.id)?;
+        self.apply_range_snapshot_batch_preinstalled_with_mutation(
+            range,
+            collection_meta,
+            batch,
+            &crate::distribution_range_mutation::RangeMutationAuthority::Mutation(&permit),
+        )
+    }
+
+    pub(crate) fn apply_range_snapshot_batch_preinstalled_with_mutation(
+        &self,
+        range: &RangeDescriptor,
+        collection_meta: &CollectionMeta,
+        batch: &RangeSnapshotBatch,
+        authority: &crate::distribution_range_mutation::RangeMutationAuthority<'_>,
+    ) -> Result<usize> {
+        self.require_native_generic_import_allowed()?;
+        self.apply_range_snapshot_batch_preinstalled_with_mutation_native_scope(
+            range,
+            collection_meta,
+            batch,
+            authority,
+            None,
+        )
+    }
+
+    pub(crate) fn apply_range_snapshot_batch_preinstalled_with_mutation_native_scope(
+        &self,
+        range: &RangeDescriptor,
+        collection_meta: &CollectionMeta,
+        batch: &RangeSnapshotBatch,
+        authority: &crate::distribution_range_mutation::RangeMutationAuthority<'_>,
+        scope: Option<&range_image_native::NativeImageRowScope<'_>>,
+    ) -> Result<usize> {
+        if let Some(scope) = scope {
+            if scope.range() != range {
+                return Err(BicDbError::Cluster(
+                    "native image row scope range differs".into(),
+                ));
+            }
+        }
+        if scope.is_none() {
+            self.require_native_generic_import_allowed()?;
+        }
+        self.range_mutations.validate(range.id, authority)?;
         Self::validate_range_snapshot_fields(range, collection_meta, batch)?;
         if self
             .collection_state(&batch.collection)?
@@ -12289,13 +12588,23 @@ impl BicDb {
             return Ok(0);
         }
         let count = batch.records.len();
+        self.invalidate_native_range_images_before_mutation(
+            Some(range.id),
+            "apply_range_snapshot_batch_preinstalled_with_mutation",
+        )?;
         let mut tx = self.begin_transaction()?;
         // The authenticated relocation service has already fenced this batch
         // to an exact range and learner epoch.  Sending it back through the
         // ordinary client-write admission path would make the learner try to
         // lead a second quorum decision while it is still a non-leader.
         tx.bypass_commit_admission = true;
+        tx.imported_projection =
+            scope.is_some() && self.actual_native_writer_enforcement_version()? == 1;
+        tx.range_mutation_claim = Some(authority.claim());
         tx.write_upserts_unchecked(&batch.collection, batch.records.clone())?;
+        if let Some(scope) = scope {
+            scope.authorize_transaction(self, &mut tx, authority)?;
+        }
         tx.commit()?;
         Ok(count)
     }
@@ -12309,9 +12618,26 @@ impl BicDb {
         range: &RangeDescriptor,
         frame: &CommitFrame,
     ) -> Result<usize> {
+        let gate = self.range_mutation_gate();
+        let permit = gate.try_enter(range.id)?;
+        self.apply_range_commit_frame_as_local_with_mutation(
+            range,
+            frame,
+            &crate::distribution_range_mutation::RangeMutationAuthority::Mutation(&permit),
+        )
+    }
+
+    pub(crate) fn apply_range_commit_frame_as_local_with_mutation(
+        &mut self,
+        range: &RangeDescriptor,
+        frame: &CommitFrame,
+        authority: &crate::distribution_range_mutation::RangeMutationAuthority<'_>,
+    ) -> Result<usize> {
+        self.require_native_generic_import_allowed()?;
+        self.range_mutations.validate(range.id, authority)?;
         let filtered = filter_commit_frame_for_range(frame, range)?;
         self.ensure_replication_frame_collections(&filtered)?;
-        self.apply_range_commit_frame_as_local_preinstalled(range, frame)
+        self.apply_range_commit_frame_as_local_preinstalled_with_mutation(range, frame, authority)
     }
 
     pub(crate) fn apply_range_commit_frame_as_local_preinstalled(
@@ -12319,6 +12645,23 @@ impl BicDb {
         range: &RangeDescriptor,
         frame: &CommitFrame,
     ) -> Result<usize> {
+        let gate = self.range_mutation_gate();
+        let permit = gate.try_enter(range.id)?;
+        self.apply_range_commit_frame_as_local_preinstalled_with_mutation(
+            range,
+            frame,
+            &crate::distribution_range_mutation::RangeMutationAuthority::Mutation(&permit),
+        )
+    }
+
+    pub(crate) fn apply_range_commit_frame_as_local_preinstalled_with_mutation(
+        &self,
+        range: &RangeDescriptor,
+        frame: &CommitFrame,
+        authority: &crate::distribution_range_mutation::RangeMutationAuthority<'_>,
+    ) -> Result<usize> {
+        self.require_native_generic_import_allowed()?;
+        self.range_mutations.validate(range.id, authority)?;
         let filtered = filter_commit_frame_for_range(frame, range)?;
         for write in &filtered.writes {
             validate_replication_collection_meta(write)?;
@@ -12337,11 +12680,16 @@ impl BicDb {
             return Ok(0);
         }
         let count = writes.len();
+        self.invalidate_native_range_images_before_mutation(
+            Some(range.id),
+            "apply_range_commit_frame_as_local_preinstalled_with_mutation",
+        )?;
         let mut tx = self.begin_transaction()?;
         // Catch-up frames are authenticated physical replication, not new
         // logical client writes.  Their source commit is already authoritative
         // and the relocation watermark provides continuity/idempotence.
         tx.bypass_commit_admission = true;
+        tx.range_mutation_claim = Some(authority.claim());
         for write in writes {
             match write.op {
                 TxWriteOp::Upsert => {
@@ -12369,6 +12717,48 @@ impl BicDb {
         collection: &str,
         record_ids: &[String],
     ) -> Result<usize> {
+        let gate = self.range_mutation_gate();
+        let permit = gate.try_enter(range.id)?;
+        self.delete_range_records_as_local_with_mutation(
+            range,
+            collection,
+            record_ids,
+            &crate::distribution_range_mutation::RangeMutationAuthority::Mutation(&permit),
+        )
+    }
+
+    pub(crate) fn delete_range_records_as_local_with_mutation(
+        &self,
+        range: &RangeDescriptor,
+        collection: &str,
+        record_ids: &[String],
+        authority: &crate::distribution_range_mutation::RangeMutationAuthority<'_>,
+    ) -> Result<usize> {
+        self.require_native_generic_import_allowed()?;
+        self.delete_range_records_as_local_with_mutation_native_scope(
+            range, collection, record_ids, authority, None,
+        )
+    }
+
+    pub(crate) fn delete_range_records_as_local_with_mutation_native_scope(
+        &self,
+        range: &RangeDescriptor,
+        collection: &str,
+        record_ids: &[String],
+        authority: &crate::distribution_range_mutation::RangeMutationAuthority<'_>,
+        scope: Option<&range_image_native::NativeImageRowScope<'_>>,
+    ) -> Result<usize> {
+        if let Some(scope) = scope {
+            if scope.range() != range {
+                return Err(BicDbError::Cluster(
+                    "native image row scope range differs".into(),
+                ));
+            }
+        }
+        if scope.is_none() {
+            self.require_native_generic_import_allowed()?;
+        }
+        self.range_mutations.validate(range.id, authority)?;
         for record_id in record_ids {
             if !range.contains_token(distribution_key_token(collection, record_id)) {
                 return Err(BicDbError::Cluster(format!(
@@ -12381,12 +12771,22 @@ impl BicDb {
             return Ok(0);
         }
         self.ensure_collection(collection)?;
+        self.invalidate_native_range_images_before_mutation(
+            Some(range.id),
+            "delete_range_records_as_local_with_mutation",
+        )?;
         let mut tx = self.begin_transaction()?;
         // Source cleanup runs only after range ownership has moved.  It is a
         // fenced relocation operation and must not attempt a fresh quorum write
         // as the old (now non-leader) source.
         tx.bypass_commit_admission = true;
+        tx.imported_projection =
+            scope.is_some() && self.actual_native_writer_enforcement_version()? == 1;
+        tx.range_mutation_claim = Some(authority.claim());
         tx.delete_many(collection, record_ids)?;
+        if let Some(scope) = scope {
+            scope.authorize_transaction(self, &mut tx, authority)?;
+        }
         tx.commit()?;
         Ok(record_ids.len())
     }
@@ -12412,6 +12812,28 @@ impl BicDb {
         require_standby: bool,
         expected_cluster_id: &str,
     ) -> Result<ReplicationApplyReport> {
+        self.apply_replication_frame_inner_with_mutation(
+            frame,
+            require_standby,
+            expected_cluster_id,
+            None,
+        )
+    }
+
+    fn apply_replication_frame_inner_with_mutation(
+        &mut self,
+        frame: &CommitFrame,
+        require_standby: bool,
+        expected_cluster_id: &str,
+        authority: Option<&crate::distribution_range_mutation::RangeMutationAuthority<'_>>,
+    ) -> Result<ReplicationApplyReport> {
+        self.require_native_generic_import_allowed()?;
+        let _database_mutation = if let Some(authority) = authority {
+            self.range_mutations.validate_claim(&authority.claim())?;
+            None
+        } else {
+            Some(self.range_mutations.try_enter_database()?)
+        };
         if !self.replication_verification_healthy() {
             return Err(replication_error(
                 "replica verification failed; snapshot bootstrap required before importing more commits",
@@ -12458,12 +12880,13 @@ impl BicDb {
         self.ensure_replication_frame_collections(frame)?;
         let writes = replication_writes_to_tx_writes(frame)?;
         self.stage_pending_replication_catalog(frame)?;
-        self.apply_imported_replication_commit(
+        self.apply_imported_replication_commit_with_mutation(
             frame.tx_id,
             frame.commit_seq,
             frame.timestamp,
             &writes,
             &frame.journal,
+            authority,
         )?;
         self.apply_replicated_catalog_ops(frame)?;
         self.finish_pending_replication_catalog()?;
@@ -12678,6 +13101,8 @@ impl BicDb {
             return Ok(());
         }
 
+        let _database_mutation = self.range_mutations.try_enter_database()?;
+        self.invalidate_native_range_images_before_mutation(None, "create collection")?;
         let storage_name = self.storage_name_for_new(name);
         let logged_mode = mode.clone();
         let meta = CollectionMeta {
@@ -13278,6 +13703,8 @@ impl BicDb {
         if !self.collections.contains_key(name) {
             return Ok(false);
         }
+        let _database_mutation = self.range_mutations.try_enter_database()?;
+        self.invalidate_native_range_images_before_mutation(None, "drop collection")?;
         // In server-paged mode the catalog is not the row store. Purge both
         // the record keyspace and its intern dictionary before publishing the
         // DROP; otherwise a same-name CREATE exposes the prior relation's
@@ -18153,9 +18580,28 @@ impl Transaction {
                     "admitted commit has no durable local sequence".to_string(),
                 )
             })?;
-            admission.local_applied(ticket, commit_seq)?;
+            let db = unsafe { self.db.as_ref() };
+            if db
+                .range_image_native_birth_active
+                .load(AtomicOrdering::Acquire)
+            {
+                let receipt = self.mint_native_wal_apply_receipt().map_err(|error| BicDbError::CommitOutcomeUnknown {
+                    sequence: Some(commit_seq), transaction_id: Some(self.id.0), incarnation: db.incarnation.clone(),
+                    detail: format!("native WAL apply receipt was not established after local commit: {error}"),
+                })?;
+                admission.local_applied_with_native_context(ticket, &receipt, db)?;
+            } else {
+                admission.local_applied(ticket, commit_seq)?;
+            }
             self.commit_admission_ticket = None;
+            if let Some(release) = self.native_admission_recovery_release.as_mut() {
+                release.ticket = None;
+            }
+            self.native_admission_recovery_release = None;
         }
+        // Successful callback completed the native prefix boundary; a replay
+        // helper may retain a shared private receipt beyond this transaction.
+        self.native_wal_retention = None;
         Ok(())
     }
 
@@ -19343,7 +19789,11 @@ fn release_owned_write_locks(
 impl Drop for Transaction {
     fn drop(&mut self) {
         if self.state == TxState::Pending {
-            self.receipt_aborted();
+            // An admitted native command is irrevocable even if local WAL
+            // never started. Do not publish a false aborted receipt on drop.
+            if self.native_admission_recovery_release.is_none() {
+                self.receipt_aborted();
+            }
             // Release this transaction's record locks for abandoned (never
             // committed/rolled-back) transactions. We go through our own handle
             // to the shared lock map rather than dereferencing `db`, so drop is
@@ -21938,7 +22388,7 @@ fn verify_integrity_for(
     };
 
     for meta in metas {
-        validate_collection_name(&meta.name)?;
+        validate_collection_meta_namespaces(&meta)?;
         let verification = storage::verify_frames(
             &segment_path_for(path, meta.storage()),
             FrameKind::Record,
@@ -22002,7 +22452,7 @@ fn load_catalog(path: &Path, encryption: &EncryptionRuntime) -> Result<Vec<Colle
 
     let catalog: CollectionCatalog = serde_json::from_slice(&bytes)?;
     for collection in &catalog.collections {
-        validate_collection_name(&collection.name)?;
+        validate_collection_meta_namespaces(collection)?;
     }
     Ok(catalog.collections)
 }
@@ -28076,6 +28526,13 @@ fn serialized_size_bounded(value: &impl Serialize, limit: usize) -> Result<usize
     }
     result?;
     Ok(writer.written)
+}
+
+fn validate_collection_meta_namespaces(meta: &CollectionMeta) -> Result<()> {
+    validate_collection_name(&meta.name)?;
+    // Physical backing names are input too: a permitted logical alias must
+    // never smuggle a reserved/invalid native namespace into ordinary storage.
+    validate_collection_name(meta.storage())
 }
 
 fn validate_collection_name(name: &str) -> Result<()> {

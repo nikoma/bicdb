@@ -209,6 +209,25 @@ impl BicDb {
         writes: &[TxWrite],
         journal: &[Event],
     ) -> Result<()> {
+        let _database_mutation = self.range_mutations.try_enter_database()?;
+        self.apply_imported_replication_commit_with_mutation(
+            tx_id, commit_seq, timestamp, writes, journal, None,
+        )
+    }
+
+    pub(crate) fn apply_imported_replication_commit_with_mutation(
+        &mut self,
+        tx_id: u64,
+        commit_seq: u64,
+        timestamp: i64,
+        writes: &[TxWrite],
+        journal: &[Event],
+        authority: Option<&crate::distribution_range_mutation::RangeMutationAuthority<'_>>,
+    ) -> Result<()> {
+        self.require_native_generic_import_allowed()?;
+        if let Some(authority) = authority {
+            self.range_mutations.validate_claim(&authority.claim())?;
+        }
         let _commit_guard = self.commit_lock.lock();
         // A fenced standby imports nothing: its acknowledgement position
         // (the durable commit sequence) must stop at the failure.
@@ -224,6 +243,10 @@ impl BicDb {
             )));
         }
 
+        self.invalidate_native_range_images_before_mutation(
+            None,
+            "whole-database replication apply",
+        )?;
         for write in writes {
             if !self.collections.contains_key(&write.collection) {
                 validate_collection_name(&write.collection)?;

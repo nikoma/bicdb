@@ -1454,6 +1454,8 @@ mod tests {
             success: true,
             match_index: entry.index,
             conflict_index: entry.index + 1,
+            native_receiver: None,
+            native_provenance: None,
         };
         assert!(leader
             .record_append_response(&ClusterNodeId::new("n2").unwrap(), &response)
@@ -1543,6 +1545,8 @@ mod tests {
             success: true,
             match_index: promotion_entry.index,
             conflict_index: promotion_entry.index + 1,
+            native_receiver: None,
+            native_provenance: None,
         };
         assert!(leader
             .record_append_response(&ClusterNodeId::new("n2").unwrap(), &promotion_response,)

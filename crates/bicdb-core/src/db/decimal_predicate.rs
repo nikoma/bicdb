@@ -83,19 +83,12 @@ pub(super) fn check_open_admission(
                         "legacy Decimal predicate transition requires secondary indexes and fsync enabled".into(),
                     ));
                 }
-                // The bounded publisher currently covers paged B-trees without
-                // exclusion constraints. Other durable kinds stay quarantined
-                // until their owned generation transition is implemented.
-                if *mode == StorageMode::ServerPaged
-                    && catalog
-                        .indexes
-                        .iter()
-                        .filter(|d| affected(d))
-                        .any(|d| d.kind != IndexKind::BTree || d.exclusion.is_some())
-                {
-                    return Err(BicDbError::FormatCompatibility(
-                        "legacy Decimal predicate durable index kind requires an owned semantic transition".into(),
-                    ));
+                // The existing Native contract only permits predicates on
+                // B-trees, and excludes predicates from exclusion indexes.
+                // Check that contract before recovery as well: invalid catalog
+                // definitions must never become new supported index kinds.
+                for definition in catalog.indexes.iter().filter(|d| affected(d)) {
+                    validate_index_definition(definition)?;
                 }
                 if catalog.decimal_predicate_upgrade.is_some()
                     && !format::read_or_legacy_metadata(root)?

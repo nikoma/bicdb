@@ -263,3 +263,39 @@ fn semantic_version_cannot_claim_authority_without_its_reader_fence_or_binding()
         );
     }
 }
+
+#[test]
+fn decimal_predicates_keep_the_existing_native_index_kind_contract() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open_with_config(root.path(), config(StorageMode::ServerPaged)).unwrap();
+    db.create_collection("probe").unwrap();
+    for kind in [
+        IndexKind::FullText,
+        IndexKind::Jsonb,
+        IndexKind::Array,
+        IndexKind::Spatial,
+    ] {
+        let mut definition = definition();
+        definition.name = format!("invalid_{kind:?}");
+        definition.kind = kind;
+        definition.unique = false;
+        let error = db.create_index(definition).unwrap_err();
+        assert!(
+            error.to_string().contains("must use B-tree kind"),
+            "{error}"
+        );
+    }
+    let mut definition = definition();
+    definition.unique = false;
+    definition.exclusion = Some(bicdb_core::IndexExclusion {
+        elements: vec![bicdb_core::IndexExclusionElement::Equal {
+            field: definition.fields[0].clone(),
+        }],
+    });
+    let error = db.create_index(definition).unwrap_err();
+    assert!(
+        error.to_string().contains("non-unique, non-partial B-tree"),
+        "{error}"
+    );
+    assert!(db.index_definitions().is_empty());
+}

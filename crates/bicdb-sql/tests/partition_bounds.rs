@@ -249,3 +249,94 @@ fn child_rls_is_independent_when_parent_policy_changes_and_after_reopen() {
         sql.execute("RESET ROLE").unwrap();
     });
 }
+
+#[test]
+fn parent_insert_select_and_values_route_all_rows_before_any_mutation() {
+    with_stores(|db| {
+        let mut sql = SqlSession::new(db);
+        sql.execute("CREATE TABLE p(k INT,payload TEXT) PARTITION BY RANGE(k)")
+            .unwrap();
+        sql.execute("CREATE TABLE ack_leaf PARTITION OF p FOR VALUES FROM(0) TO(10)")
+            .unwrap();
+        sql.execute("CREATE TABLE high PARTITION OF p FOR VALUES FROM(10) TO(20)")
+            .unwrap();
+        sql.execute("INSERT INTO p VALUES(1,'original-ack')")
+            .unwrap();
+        // One unroutable row refuses the entire statement, including an
+        // earlier row that could have been staged into another leaf.
+        assert_eq!(
+            sql.execute("INSERT INTO p VALUES(2,'must-rollback'),(30,'no-partition')")
+                .unwrap_err()
+                .sqlstate(),
+            "23514"
+        );
+        assert_eq!(
+            sql.execute("SELECT count(*) FROM p").unwrap().rows,
+            vec![vec![SqlValue::Int(1)]]
+        );
+        sql.execute("BEGIN").unwrap();
+        let inserted = sql
+            .execute("INSERT INTO p VALUES(2,'low'),(12,'high') RETURNING k")
+            .unwrap();
+        assert_eq!(
+            inserted.rows,
+            vec![vec![SqlValue::Int(2)], vec![SqlValue::Int(12)]]
+        );
+        assert_eq!(
+            sql.execute("SELECT k FROM high").unwrap().rows,
+            vec![vec![SqlValue::Int(12)]]
+        );
+        sql.execute("ROLLBACK").unwrap();
+        sql.execute("CREATE TABLE source(k INT,payload TEXT)")
+            .unwrap();
+        sql.execute("INSERT INTO source VALUES(3,'select-low'),(13,'select-high')")
+            .unwrap();
+        sql.execute("BEGIN").unwrap();
+        sql.execute("INSERT INTO p SELECT * FROM source").unwrap();
+        assert_eq!(
+            sql.execute("SELECT k FROM high").unwrap().rows,
+            vec![vec![SqlValue::Int(13)]]
+        );
+        sql.execute("ROLLBACK").unwrap();
+        assert_eq!(
+            sql.execute("SELECT count(*) FROM high").unwrap().rows,
+            vec![vec![SqlValue::Int(0)]]
+        );
+    });
+}
+
+#[test]
+fn parent_routes_through_attached_partitioned_subtree_and_preserves_leaf_ack() {
+    with_stores(|db| {
+        let mut sql = SqlSession::new(db);
+        sql.execute("CREATE TABLE p(k INT,payload TEXT) PARTITION BY RANGE(k)")
+            .unwrap();
+        sql.execute("CREATE TABLE branch(k INT,payload TEXT) PARTITION BY LIST(k)")
+            .unwrap();
+        sql.execute("CREATE TABLE ack_leaf PARTITION OF branch FOR VALUES IN(1)")
+            .unwrap();
+        sql.execute("ALTER TABLE p ATTACH PARTITION branch FOR VALUES FROM(0) TO(10)")
+            .unwrap();
+        sql.execute("INSERT INTO p VALUES(1,'original-ack')")
+            .unwrap();
+        assert_eq!(
+            sql.execute("SELECT payload FROM p").unwrap().rows,
+            vec![vec![SqlValue::String("original-ack".into())]]
+        );
+        assert_eq!(
+            sql.execute("INSERT INTO p VALUES(2,'no-nested-match')")
+                .unwrap_err()
+                .sqlstate(),
+            "23514"
+        );
+        assert_eq!(
+            sql.execute("INSERT INTO ack_leaf VALUES(11,'outside-ancestor')")
+                .unwrap_err()
+                .sqlstate(),
+            "23514"
+        );
+        assert!(sql
+            .execute("ALTER TABLE branch ATTACH PARTITION p DEFAULT")
+            .is_err());
+    });
+}

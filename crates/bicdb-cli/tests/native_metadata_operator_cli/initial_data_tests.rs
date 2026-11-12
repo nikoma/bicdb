@@ -3,7 +3,47 @@
 //! automatic relocation, SQL and host/VM qualification are separate gates.
 use super::*;
 use sha2::{Digest, Sha256};
-use std::io::Write;
+use std::io::{Read, Write};
+
+fn actual_cli_identity_before_phase() -> Value {
+    let runtime_source = std::env::var("BICDB_TEST_SOURCE_SHA").ok();
+    if let Some(source) = &runtime_source {
+        assert!(
+            source.len() == 40 && source.bytes().all(|byte| byte.is_ascii_hexdigit()),
+            "runtime source evidence must be the exact workflow-provided source SHA"
+        );
+    }
+    // This is the SAME actual executable path used by binary(). Stream the
+    // whole regular file with bounded memory before spawning the four hosts;
+    // no release identity or unprovided source revision is inferred from it.
+    let mut file = std::fs::File::open(env!("CARGO_BIN_EXE_bicdb")).unwrap();
+    let metadata = file.metadata().unwrap();
+    assert!(metadata.is_file());
+    let mut digest = Sha256::new();
+    let mut bytes = 0u64;
+    let mut buffer = [0u8; 64 * 1024];
+    loop {
+        let count = file.read(&mut buffer).unwrap();
+        if count == 0 {
+            break;
+        }
+        digest.update(&buffer[..count]);
+        bytes = bytes.checked_add(count as u64).unwrap();
+    }
+    assert_eq!(
+        bytes,
+        metadata.len(),
+        "CLI executable changed while recording identity"
+    );
+    serde_json::json!({
+        "source":runtime_source.as_deref().unwrap_or("UNAVAILABLE_RUNTIME_SOURCE"),
+        "source_available":runtime_source.is_some(),
+        "source_authority":"BICDB_TEST_SOURCE_SHA runtime environment; not option_env or runtime git lookup",
+        "test_package_version":env!("CARGO_PKG_VERSION"),
+        "binary_sha256":hex::encode(digest.finalize()),"binary_bytes":bytes,
+        "binary_scope":"actual CARGO_BIN_EXE_bicdb bytes read before process/startup/ACK phase; not a published release"
+    })
+}
 
 fn payload_sha256(value: &Value) -> String {
     hex::encode(Sha256::digest(serde_json::to_vec(value).unwrap()))
@@ -66,6 +106,7 @@ fn open_data(root: &Path, i: usize, sequence: &mut u64, budget_ms: u64) -> Value
 
 #[test]
 fn native_initial_data_actual_cli_four_process_first_ack_and_strong_full_value() {
+    let identity = actual_cli_identity_before_phase();
     let (mut processes, root, mut config, addresses, mut sequences) = four_processes(false);
     assert_eq!(processes.children.len(), 4);
     let ids = processes
@@ -83,7 +124,7 @@ fn native_initial_data_actual_cli_four_process_first_ack_and_strong_full_value()
     journal(
         &mut ledger,
         serde_json::json!({
-            "stage": "four_initial_owners", "source": option_env!("BICDB_SOURCE_GIT_SHA"),
+            "stage": "four_initial_owners", "source": identity["source"], "execution_identity":identity,
             "process_ids": processes.children.iter().map(Child::id).collect::<Vec<_>>(),
             "data_stage": "four_initial_only", "fifth_data_stage": "not_entered"
         }),

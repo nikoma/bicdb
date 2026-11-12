@@ -52,13 +52,37 @@ impl Transaction {
             for id in ids {
                 self.lock_row_for_write(self.id, collection, id, false)?;
             }
-            let before = self
-                .get_visible_unchecked(collection, previous_id)?
-                .ok_or_else(|| {
-                    BicDbError::TransactionConflict(format!(
-                        "identity UPDATE source `{collection}`/`{previous_id}` is absent"
-                    ))
-                })?;
+            let has_pending_source = self.last_pending_write(collection, previous_id).is_some();
+            let native_boundary = self
+                .observed_record_versions
+                .lock()
+                .get(collection)
+                .and_then(|rows| rows.get(previous_id))
+                .copied()
+                .unwrap_or(self.applied_snapshot);
+            let source_boundary = if statement_snapshot == 0 {
+                native_boundary
+            } else {
+                statement_snapshot.min(native_boundary)
+            };
+            if !has_pending_source
+                && Self::latest_committed_record_sequence(self.db_ref(), collection, previous_id)?
+                    .is_some_and(|sequence| sequence > source_boundary)
+            {
+                return Err(BicDbError::TransactionConflict(
+                    "identity UPDATE source changed beyond its Native observation".into(),
+                ));
+            }
+            let before = if has_pending_source {
+                self.get_visible_unchecked(collection, previous_id)?
+            } else {
+                self.db_ref().get_unchecked(collection, previous_id)?
+            }
+            .ok_or_else(|| {
+                BicDbError::TransactionConflict(format!(
+                    "identity UPDATE source `{collection}`/`{previous_id}` is absent"
+                ))
+            })?;
             // Check both this transaction's overlay and current committed
             // state. A stale snapshot is never proof of destination absence.
             if self
@@ -120,13 +144,15 @@ impl Transaction {
             )?;
             self.delete_many_with_statement_snapshots_inner(
                 collection,
-                std::iter::once((previous_id, statement_snapshot)),
+                std::iter::once((previous_id, source_boundary)),
                 false,
             )?;
             let next_id = record.id.clone();
             self.write_upserts_with_statement_snapshots_inner(
                 collection,
-                std::iter::once((record, statement_snapshot)),
+                // A source observation cannot authorize a different address's
+                // version. The target retains its own Native observation.
+                std::iter::once((record, 0)),
                 false,
             )?;
             if let Some(event) = audit.as_mut() {

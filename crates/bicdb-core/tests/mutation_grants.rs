@@ -824,3 +824,72 @@ fn failed_identity_update_restores_source_locks_audit_and_capability_budget() {
         db.close().unwrap();
     }
 }
+
+#[test]
+fn identity_update_cannot_use_a_caller_snapshot_to_override_native_preimage_versions() {
+    for mode in [
+        bicdb_core::StorageMode::EmbeddedMemory,
+        bicdb_core::StorageMode::ServerPaged,
+    ] {
+        let dir = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open_with_config(
+            dir.path(),
+            bicdb_core::DbConfig::default().with_storage_mode(mode),
+        )
+        .unwrap();
+        db.create_collection("documents").unwrap();
+        db.insert(
+            "documents",
+            record("doc-1", "tenant-a", "workspace-a", 1, "original"),
+        )
+        .unwrap();
+        db.set_mutation_policy("documents", MutationPolicy::grants_required().with_audit())
+            .unwrap();
+        let mut stale = db
+            .begin_application_transaction(actor("tenant-a", "workspace-a"))
+            .unwrap();
+        stale.set_snapshot_isolation(true, 0).unwrap();
+        assert_eq!(
+            stale
+                .get_for_integrity_check("documents", "doc-1")
+                .unwrap()
+                .unwrap()
+                .metadata["version"],
+            1
+        );
+        let mut spec = grant(MutationOperation::Update, "doc-1", Some(1));
+        spec.record_id = None;
+        let authority = stale.issue_mutation_grant(spec).unwrap();
+        let mut peer = db
+            .begin_application_transaction(actor("tenant-a", "workspace-a"))
+            .unwrap();
+        let peer_grant = peer
+            .issue_mutation_grant(grant(MutationOperation::Update, "doc-1", Some(1)))
+            .unwrap();
+        peer.update_with_grant(
+            peer_grant,
+            "documents",
+            record("doc-1", "tenant-a", "workspace-a", 2, "peer"),
+        )
+        .unwrap();
+        peer.commit().unwrap();
+        assert!(stale
+            .update_identity_with_grant(
+                authority,
+                "documents",
+                "doc-1",
+                record("doc-2", "tenant-a", "workspace-a", 3, "forbidden"),
+                u64::MAX
+            )
+            .is_err());
+        assert_eq!(stale.write_len(), 0);
+        assert_eq!(stale.broker_publish_len(), 0);
+        stale.rollback().unwrap();
+        assert_eq!(
+            db.get("documents", "doc-1").unwrap().unwrap().metadata["name"],
+            "peer"
+        );
+        assert!(db.get("documents", "doc-2").unwrap().is_none());
+        db.close().unwrap();
+    }
+}

@@ -170,7 +170,20 @@ impl NativeCurrentJointRecoveryDomain {
                 "current joint recovery belongs to another actual DB/Store open",
             ));
         }
+        #[cfg(test)]
+        let lineage_trace =
+            crate::distribution_range_handoff::NativeJointPhaseTrace::refresh_detail(
+                "refresh-joint-fact-native-bridge-point-and-archive",
+            );
         let actual = self.native.require_current_lineage(db)?;
+        #[cfg(test)]
+        crate::distribution_range_handoff::NativeJointPhaseTrace::finish_detail(lineage_trace);
+        #[cfg(test)]
+        let closure_trace =
+            crate::distribution_range_handoff::NativeJointPhaseTrace::refresh_detail(
+                "refresh-joint-fact-local-original-closure",
+            );
+
         let local_promise = store.current_joint_local_handoff_promise(self.data())?;
         let local_close = db.require_current_joint_local_promise(
             &self.native.native,
@@ -186,6 +199,12 @@ impl NativeCurrentJointRecoveryDomain {
                 "current joint recovery changed exact original LOCAL promise/closure evidence",
             ));
         }
+        #[cfg(test)]
+        crate::distribution_range_handoff::NativeJointPhaseTrace::finish_detail(closure_trace);
+        #[cfg(test)]
+        let writer_trace = crate::distribution_range_handoff::NativeJointPhaseTrace::refresh_detail(
+            "refresh-joint-fact-original-writer-database-binding",
+        );
         let actual = store.native_writer_host_state()?;
         if !Arc::ptr_eq(&actual, &self.writer) {
             return Err(invalid(
@@ -193,6 +212,8 @@ impl NativeCurrentJointRecoveryDomain {
             ));
         }
         self.writer.require_database(db, &self.binding.range)?;
+        #[cfg(test)]
+        crate::distribution_range_handoff::NativeJointPhaseTrace::finish_detail(writer_trace);
         Ok(())
     }
 }
@@ -350,10 +371,21 @@ impl BicDb {
         let writer = store.native_writer_host_state()?;
         writer.require_database(self, record.decision.activation_range())?;
         let receipt = Arc::new(NativeJointServingBridgeReceipt { native, record });
+        #[cfg(test)]
+        let scope_trace = crate::distribution_range_handoff::NativeJointPhaseTrace::refresh_detail(
+            "refresh-joint-factory-native-journal-scope-and-catalogue",
+        );
         let scope = receipt.current_read_scope(self)?;
         let activated = store
             .observe_native_joint_activation_fact_with_scope(&scope, receipt.clone())?
             .ok_or_else(|| invalid("current joint recovery lacks actual catalogue activation"))?;
+        #[cfg(test)]
+        crate::distribution_range_handoff::NativeJointPhaseTrace::finish_detail(scope_trace);
+        #[cfg(test)]
+        let binding_trace =
+            crate::distribution_range_handoff::NativeJointPhaseTrace::refresh_detail(
+                "refresh-joint-factory-local-closure-and-binding",
+            );
         let actual = &scope.lineage;
         let local_handoff_promise = store.current_joint_local_handoff_promise(receipt.data())?;
         let local_old_close_sha256 = self.require_current_joint_local_promise(
@@ -393,6 +425,9 @@ impl BicDb {
             writer_registration: writer.registration_generation(),
         };
         drop(scope);
+        #[cfg(test)]
+        crate::distribution_range_handoff::NativeJointPhaseTrace::finish_detail(binding_trace);
+
         let fact = NativeCurrentJointRecoveryDomain {
             native: receipt,
             binding,
@@ -400,7 +435,15 @@ impl BicDb {
             store_open_id: store.recovery_store_open_id(),
             writer,
         };
+        #[cfg(test)]
+        let recheck_trace =
+            crate::distribution_range_handoff::NativeJointPhaseTrace::refresh_detail(
+                "refresh-joint-factory-final-fact-current",
+            );
         fact.require_current(self, store)?;
+        #[cfg(test)]
+        crate::distribution_range_handoff::NativeJointPhaseTrace::finish_detail(recheck_trace);
+
         parent.check()?;
         Ok(fact)
     }

@@ -300,7 +300,18 @@ impl RangeWriteStore {
         parent: &CancellationToken,
     ) -> Result<NativeCurrentJointRecoveryDomain> {
         self.current_joint_scope_constraint(scope)?;
+        #[cfg(test)]
+        let fact_trace = crate::distribution_range_handoff::NativeJointPhaseTrace::refresh_detail(
+            "refresh-joint-fact-constructor",
+        );
         let fact = db.observe_current_joint_recovery_domain(self, scope.range_id, parent)?;
+        #[cfg(test)]
+        crate::distribution_range_handoff::NativeJointPhaseTrace::finish_detail(fact_trace);
+        #[cfg(test)]
+        let archive_trace =
+            crate::distribution_range_handoff::NativeJointPhaseTrace::refresh_detail(
+                "refresh-joint-original-writer-and-all-archived-floors",
+            );
         if scope.purpose != fact.purpose() {
             return Err(range_write_error(
                 "saved current joint scope changed actual protected decision",
@@ -325,6 +336,8 @@ impl RangeWriteStore {
         for old in saved.archived.values() {
             fact.require_saved_binding(db, &old.binding)?;
         }
+        #[cfg(test)]
+        crate::distribution_range_handoff::NativeJointPhaseTrace::finish_detail(archive_trace);
         parent.check()?;
         Ok(fact)
     }

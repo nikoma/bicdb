@@ -1665,7 +1665,19 @@ impl LocalNativeRecoveryReady {
     /// preparation may outlive the request which created it; its consumer must
     /// independently validate a fresh role and the exact saved preparation.
     pub(crate) fn require_owned_materialization_current(&self, db: &BicDb) -> Result<()> {
+        #[cfg(test)]
+        let pin_trace = crate::distribution_range_handoff::NativeJointPhaseTrace::refresh_detail(
+            "refresh-owned-pin-admission-and-gate",
+        );
         self.require_owned_pin_live(db)?;
+        #[cfg(test)]
+        crate::distribution_range_handoff::NativeJointPhaseTrace::finish_detail(pin_trace);
+        #[cfg(test)]
+        let lineage_trace =
+            crate::distribution_range_handoff::NativeJointPhaseTrace::refresh_detail(
+                "refresh-owned-full-physical-lineage",
+            );
+
         let range_id = self.role.current_range().id;
         db.validate_source_range_image_lineage(&self.lineage, range_id, self.range_index())?;
         if self.visibility.0 != self.lineage.actual_local_visibility_sequence()
@@ -1675,6 +1687,8 @@ impl LocalNativeRecoveryReady {
                 "native materialization and resolved catalogue differ",
             ));
         }
+        #[cfg(test)]
+        crate::distribution_range_handoff::NativeJointPhaseTrace::finish_detail(lineage_trace);
         Ok(())
     }
     /// Necessary refusal only: actual DB open/health, owned Frozen and pin.

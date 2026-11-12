@@ -806,6 +806,14 @@ impl BicDb {
         local_node_id: &ClusterNodeId,
         local_member_incarnation: u64,
     ) -> Result<NativeRecoveryAdmission> {
+        #[cfg(test)]
+        let total_trace = crate::distribution_range_handoff::NativeJointPhaseTrace::refresh_detail(
+            "refresh-admission-total",
+        );
+        #[cfg(test)]
+        let flags_trace = crate::distribution_range_handoff::NativeJointPhaseTrace::refresh_detail(
+            "refresh-admission-health-storage-reader-flags",
+        );
         self.check_recovery_state()?;
         if !self.config.fsync
             || self.config.storage_mode != StorageMode::ServerPaged
@@ -816,6 +824,12 @@ impl BicDb {
                 "native recovery requires completed fsync image-aware factory",
             ));
         }
+        #[cfg(test)]
+        crate::distribution_range_handoff::NativeJointPhaseTrace::finish_detail(flags_trace);
+        #[cfg(test)]
+        let birth_trace = crate::distribution_range_handoff::NativeJointPhaseTrace::refresh_detail(
+            "refresh-admission-actual-birth",
+        );
         let birth = self
             .read_native_birth()?
             .ok_or_else(|| invalid("native recovery has no actual database birth"))?;
@@ -829,8 +843,14 @@ impl BicDb {
                 "native recovery birth/bootstrap/local member binding mismatch",
             ));
         }
+        #[cfg(test)]
+        crate::distribution_range_handoff::NativeJointPhaseTrace::finish_detail(birth_trace);
         // An in-memory boolean is insufficient. Revalidate the actual ordered
         // completion marker and its immutable genesis inventory on every mint.
+        #[cfg(test)]
+        let ready_trace = crate::distribution_range_handoff::NativeJointPhaseTrace::refresh_detail(
+            "refresh-admission-ready-marker-and-all-initial-ranges",
+        );
         let ready: NativeInitializationComplete =
             self.read_native_range_image_record(READY_KEY)?
                 .ok_or_else(|| invalid("native recovery factory completion is missing"))?;
@@ -842,6 +862,10 @@ impl BicDb {
                 "native recovery factory completion does not match birth",
             ));
         }
+        #[cfg(test)]
+        crate::distribution_range_handoff::NativeJointPhaseTrace::finish_detail(ready_trace);
+        #[cfg(test)]
+        crate::distribution_range_handoff::NativeJointPhaseTrace::finish_detail(total_trace);
         Ok(NativeRecoveryAdmission {
             database_incarnation: self.incarnation.clone(),
             writer_enforcement_version: u32::from(birth.format_version == 2),
@@ -1232,8 +1256,26 @@ impl BicDb {
         &self,
         birth: &NativeDatabaseBirth,
     ) -> Result<BTreeMap<RangeId, String>> {
+        #[cfg(test)]
+        let inventory_trace =
+            crate::distribution_range_handoff::NativeJointPhaseTrace::refresh_detail(
+                "refresh-admission-all-genesis-inventory",
+            );
         let mut receipts = BTreeMap::new();
         for range in &birth.spec.initial_ranges {
+            #[cfg(test)]
+            let range_trace =
+                crate::distribution_range_handoff::NativeJointPhaseTrace::refresh_detail(
+                    "refresh-admission-one-genesis-validation",
+                );
+            #[cfg(test)]
+            if range_trace.is_some() {
+                eprintln!(
+                    "ACTUAL_REFRESH_GENESIS_RANGE range={} initial_ranges={}",
+                    range.id,
+                    birth.spec.initial_ranges.len()
+                );
+            }
             let receipt: Option<NativeGenesisReceipt> =
                 self.read_native_range_image_record(&genesis_key(range.id))?;
             if let Some(receipt) = receipt {
@@ -1252,7 +1294,11 @@ impl BicDb {
                 }
                 receipts.insert(range.id, receipt.checksum_sha256);
             }
+            #[cfg(test)]
+            crate::distribution_range_handoff::NativeJointPhaseTrace::finish_detail(range_trace);
         }
+        #[cfg(test)]
+        crate::distribution_range_handoff::NativeJointPhaseTrace::finish_detail(inventory_trace);
         Ok(receipts)
     }
     pub(super) fn load_native_range_image_admission(&self) -> Result<()> {
@@ -1367,6 +1413,10 @@ impl BicDb {
         range_id: RangeId,
         range_index: u64,
     ) -> Result<()> {
+        #[cfg(test)]
+        let native_trace = crate::distribution_range_handoff::NativeJointPhaseTrace::refresh_detail(
+            "refresh-lineage-native-birth-anchor-prefix-joint",
+        );
         self.check_recovery_state()?;
         if self.native_range_image_installing(range_id)? {
             return Err(invalid(
@@ -1384,6 +1434,13 @@ impl BicDb {
         if let Some(joint) = &joint {
             joint.require_materialized(&receipt, prefix.as_ref())?;
         }
+        #[cfg(test)]
+        crate::distribution_range_handoff::NativeJointPhaseTrace::finish_detail(native_trace);
+        #[cfg(test)]
+        let catalog_trace =
+            crate::distribution_range_handoff::NativeJointPhaseTrace::refresh_detail(
+                "refresh-lineage-all-namespace-catalog-and-generations",
+            );
         let bindings = self.capture_range_image_bindings()?;
         let catalog = canonical_range_image_catalog(
             &birth.spec.cluster_id,
@@ -1413,6 +1470,13 @@ impl BicDb {
                 "source lineage/base/floor changed; re-establish actual native proof",
             ));
         }
+        #[cfg(test)]
+        crate::distribution_range_handoff::NativeJointPhaseTrace::finish_detail(catalog_trace);
+        #[cfg(test)]
+        let namespace_trace =
+            crate::distribution_range_handoff::NativeJointPhaseTrace::refresh_detail(
+                "refresh-lineage-namespace-UID-schema-readers",
+            );
         for (name, id) in &receipt.local_namespace_ids {
             if self.local_namespace_identity(name)? != Some(*id) {
                 return Err(invalid("source native base namespace lineage changed"));
@@ -1427,6 +1491,8 @@ impl BicDb {
                 "source native base schema/reader contract changed; re-attestation required",
             ));
         }
+        #[cfg(test)]
+        crate::distribution_range_handoff::NativeJointPhaseTrace::finish_detail(namespace_trace);
         Ok(())
     }
 

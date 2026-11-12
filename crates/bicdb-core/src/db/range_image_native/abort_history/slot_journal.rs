@@ -84,6 +84,10 @@ impl BicDb {
         Ok((birth, store))
     }
     pub(crate) fn native_abort_slot_inventory(&self) -> Result<Vec<NativeAbortSlotRecord>> {
+        #[cfg(test)]
+        let slots_trace = crate::distribution_range_handoff::NativeJointPhaseTrace::refresh_detail(
+            "refresh-all-abort-slot-inventory",
+        );
         let (birth, store_id) = self.abort_slot_identity()?;
         let index: Inventory = self
             .read_native_range_image_record(INVENTORY_KEY)?
@@ -95,6 +99,18 @@ impl BicDb {
                 return Err(invalid("native slot inventory bound exceeded"));
             }
             for (slot, (sha, bytes)) in slots {
+                #[cfg(test)]
+                let entry_trace =
+                    crate::distribution_range_handoff::NativeJointPhaseTrace::refresh_detail(
+                        "refresh-one-abort-slot-record-validation",
+                    );
+                #[cfg(test)]
+                if entry_trace.is_some() {
+                    eprintln!(
+                        "ACTUAL_REFRESH_ABORT_SLOT range={range} index={slot} inventory_ranges={}",
+                        index.slots.len()
+                    );
+                }
                 total = total
                     .checked_add(*bytes)
                     .ok_or_else(|| invalid("native slot byte counter exhausted"))?;
@@ -109,6 +125,10 @@ impl BicDb {
                     return Err(invalid("protected slot inventory commitment differs"));
                 }
                 out.push(record);
+                #[cfg(test)]
+                crate::distribution_range_handoff::NativeJointPhaseTrace::finish_detail(
+                    entry_trace,
+                );
             }
         }
         if total > MAX_TOTAL_SLOT_BYTES {
@@ -116,6 +136,8 @@ impl BicDb {
                 "native abort permanent history byte bound exceeded",
             ));
         }
+        #[cfg(test)]
+        crate::distribution_range_handoff::NativeJointPhaseTrace::finish_detail(slots_trace);
         Ok(out)
     }
     fn write_native_abort_slot(&self, next: NativeAbortSlotRecord) -> Result<()> {

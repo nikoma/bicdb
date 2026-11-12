@@ -337,3 +337,62 @@ on NativePrepared with the original request still live and exact native/raw/row
 state unchanged; all existing recovery/ACK/Strong assertions remain. These new
 controls and the positive have not run at this source checkpoint. No measured
 savings or successful recovery is claimed for the successor.
+
+## Executed fb33 and refresh-only detail profile successor
+
+Exact fb33e1e050f329de6366baab21da5cf020e4dbc8 (not the newer CLI/cleanup
+successor) has terminal all-target and isolated-consumer success in all three
+runs:
+
+| Run / Core job | Scope | Actual result |
+|---|---|---|
+| 43273397099 / 131375392691 | Produced observations/direct native guards | 7 passed, 0 failed, 926 filtered, 0.62s |
+| 43273397131 / 131375396459 | CurrentJoint authority | 4 passed, 0 failed, 929 filtered, 64.00s |
+| 43273397544 / 131375407386 | Full recovery positive | 0 passed, 1 failed, 932 filtered, 92.43s |
+
+The actual born-enforced readonly TLS NativePrepared denial passed with its
+original request live and native/raw/row snapshots unchanged. First Complete
+selection returned in 85.6ms. Its original receiver budget then covered closed
+Ready QQ 982.3ms, post-QQ role 13.6ms, outer necessary checks 4.6ms, native
+preflight 943.2ms, WAL publication 214.9ms, native readback 760.1ms and full
+pre-catalogue validation 548.4ms. Catalogue fsync returned in 3.9ms with 435ms
+remaining. Full refresh began at 435ms and failed after 477.6ms; updated binding,
+receipt return, Complete observation, activation and ACK4 were not reached.
+NativeCompleted persistence returned before the deadline, so the response is
+uncertain. Custody observes n1 NativeCompleted and n2/n3 NativePrepared.
+
+Private evidence checksums:
+
+- Positive raw `fb33-current-joint-positive-job131375407386.log.gz`:
+  `ef386347373bdda4f31b31c43e7a71104d95b9d11eb03330e93e92d215f402ef`.
+- Controls raw: `b2c05393b5e7ddf5e55c288055c566cefc2bef938ec379184020a78985ab7f0c`.
+- Authority raw: `83e459a75bb2f8fc2cec22db785014196a936be181f73e4652d3ae478f46287a`.
+- Artifact 13969887365 ZIP:
+  `38a6d864a65382ec1d0cbe89883f7ee1473260497fa0db930a48e03464a2ae1b`.
+- Manifest: `b28dc2862281a433e5226ea8a39dc8379c2c20502f6d6bf93a54f9da7c9ccf2b`.
+
+All 82 manifest files / 6058854 bytes verified without engine open, with the
+usual observed-stable live-owner limitation. None of the passing focused
+controls converts the failed full positive into a recovery success.
+
+The successor based on ca7d481467c40cf6ac324ceb8c0c7e943d4d1cfc is cfg(test)
+instrumentation ONLY. Fine-grained spans split the full refresh into actual
+CurrentJoint fact construction and archived-floor checks, actual admission
+health/flags/birth/READY/genesis inventory (including every initial range),
+owned pin versus full physical lineage, catalogue/generation hashing, every
+namespace UID/schema/reader check, native source-lineage construction and both
+existing contract validations, full abort inventory/entry validation, exact
+serving readback and its currentness work, and the final scope/binding boundary.
+All original validations remain in the same order.
+
+A test-only thread-local context carries ONLY the original role deadline/node
+for attribution. It creates no CancellationToken, role, native admission or
+proof; it cannot move across threads and RAII restores its predecessor on every
+return/error/panic. Nested detail spans are silent outside the actual refresh,
+so unrelated phases do not acquire a new trace/budget. Loop identifiers/counts
+come from the actual existing inventory and namespace data, not injected proof.
+No network, lock, native read, storage write, scan, token renewal or deadline
+extension is added by the instrumentation. Trace formatting itself has test
+cost; the profile is not a capacity benchmark. No before/after physical check
+is removed, and no private checked-admission composite is implemented or claimed
+safe until the actual detailed profile identifies its binding requirements.

@@ -11,8 +11,6 @@ use crate::distribution::{ClusterId, ClusterNodeId, RangeDescriptor, RangeId, Re
 use crate::error::{BicDbError, Result};
 
 mod joint;
-#[cfg(test)]
-pub(crate) use joint::NativeJointPhaseTrace;
 pub(crate) use joint::{
     CommittedNativeJointDecisionObservation, NativeJointActivationAdmission,
     NativeJointDecisionData, NativeJointDecisionPublicationAdmission,
@@ -28,6 +26,8 @@ pub(crate) use joint::{
     NativeJointReleasePhaseQuorum, NativeJointReleasePhaseRound,
     NativeJointServingPublicationRound,
 };
+#[cfg(test)]
+pub(crate) use joint::{NativeJointPhaseTrace, NativeRefreshTraceContext};
 
 pub(crate) const HANDOFF_RANGE_LOG_FORMAT: u32 = 4;
 pub(crate) const MAX_HANDOFF_PROMISES: usize = 65_536;

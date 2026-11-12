@@ -167,6 +167,10 @@ pub(crate) fn package(version: &str, source: &str, key: &SigningKey) -> Applicat
         application_program: None,
         required_features: BTreeSet::new(),
         max_call_depth: 16,
+
+        native_fact_publications: Vec::new(),
+        native_fact_imports: Vec::new(),
+        native_fact_projection_imports: Vec::new(),
     };
     let mut package = ApplicationPackage {
         manifest: ExtensionManifest {

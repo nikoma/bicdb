@@ -88,13 +88,18 @@ impl BicDb {
             return Err(error);
         }
         self.check_recovery_state()?;
-        self.sql_partition_execution_v1_active = true;
+        if !self.sql_partition_execution_feature_active() {
+            self.schema_compatibility.invalidate();
+        }
+        self.sql_partition_execution_v1_active
+            .store(true, AtomicOrdering::Release);
         Ok(())
     }
 
     /// Local format capability, not a completed SQL migration certificate.
     pub fn sql_partition_execution_feature_active(&self) -> bool {
         self.sql_partition_execution_v1_active
+            .load(AtomicOrdering::Acquire)
     }
 
     /// Legacy migration changes rows and their live indexes together. A host

@@ -3997,7 +3997,7 @@ pub struct BicDb {
     config: DbConfig,
     // Opt-in, sticky local format capability; never a portable reader flag.
     local_namespace_identity_active: bool,
-    sql_partition_execution_v1_active: bool,
+    sql_partition_execution_v1_active: AtomicBool,
     ha_state: HaState,
     replication_state: ReplicationApplyState,
     consensus_state: ConsensusState,
@@ -10166,7 +10166,9 @@ impl BicDb {
     /// Persist a reader compatibility fence before writing transition intent.
     pub fn enable_application_unique_scope(&mut self) -> Result<()> {
         self.ensure_writable("enable application unique scope transition")?;
-        format::enable_application_unique_scope(&self.path)
+        self.install_replicated_reader_features(&[
+            format::APPLICATION_UNIQUE_SCOPE_FEATURE_FLAG.into()
+        ])
     }
 
     fn open_inner(
@@ -11161,7 +11163,7 @@ impl BicDb {
             native_metadata_open_lifetime: Arc::new(()),
             config,
             local_namespace_identity_active,
-            sql_partition_execution_v1_active,
+            sql_partition_execution_v1_active: AtomicBool::new(sql_partition_execution_v1_active),
             ha_state,
             replication_state,
             consensus_state,
@@ -11304,6 +11306,17 @@ impl BicDb {
             // Capabilities affect interpretation even when no SQL structural
             // record changes. Recompute placement/readiness identity.
             self.schema_compatibility.invalidate();
+        }
+        // Shared snapshot/import paths install the durable capability without
+        // exclusive access to BicDb. Publish its live state only after that
+        // installation and schema invalidation have completed. This bit is
+        // still neither a SQL migration certificate nor replica authority.
+        if features
+            .iter()
+            .any(|feature| feature == format::SQL_PARTITION_EXECUTION_V1_FEATURE_FLAG)
+        {
+            self.sql_partition_execution_v1_active
+                .store(true, AtomicOrdering::Release);
         }
         Ok(())
     }

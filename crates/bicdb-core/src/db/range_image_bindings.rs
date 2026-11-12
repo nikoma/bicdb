@@ -348,6 +348,7 @@ mod tests {
                 _ => unreachable!(),
             }
             assert!(db.validate_range_image_bindings(&old).is_err(), "{flag}");
+            db.schema_compatibility_fingerprint().unwrap();
             let current = db.capture_range_image_bindings().unwrap();
             assert!(current.reader_features().iter().any(|f| f == flag));
             for local in [

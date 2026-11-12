@@ -60,3 +60,13 @@ result, version reservation, merge, binary, release, deployment or physical/HA
 qualification is claimed. Required next checks: actual Core wrong-route control,
 the exact PGwire failover test with default test concurrency, then the unchanged
 full PGwire suite and final versioned candidate's required checks.
+
+The manual workflow additionally accepts `pgwire_filter` for actual PGwire
+library list-and-run validation at four test threads, with exact tracked source,
+compiler version, selected-test list and execution logs retained. Empty selectors,
+PRs and pushes keep the broad matrix; simultaneous Core/PGwire selectors fail an
+explicit validation job. The read branch has no CLI selector; that separate
+prototype workflow must union its selector validation when these changes merge.
+YAML parsing, all shell-block syntax, eight selector rejection/acceptance cases
+and twelve event/selector routing cases were checked locally. These checks do
+not execute Cargo or establish a passing PGwire regression.

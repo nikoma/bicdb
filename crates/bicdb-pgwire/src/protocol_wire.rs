@@ -1330,6 +1330,9 @@ pub(crate) fn postgres_array_text_element(value: &str, delimiter: char) -> Strin
 }
 
 pub(crate) fn encode_binary_result_value(value: &SqlValue, oid: i32) -> Result<Vec<u8>> {
+    if oid == 1033 {
+        return Err(aclitem_binary_error("output"));
+    }
     if let Some(element_oid) = array_element_oid(oid) {
         return encode_binary_array_result(value, element_oid);
     }
@@ -1924,6 +1927,11 @@ pub(crate) fn encode_binary_array_result_inner(
     element_oid: i32,
     db: Option<&BicDb>,
 ) -> Result<Vec<u8>> {
+    // PostgreSQL registers aclitem/aclitem[] for catalog text output, but the
+    // element has no binary send function, including for an empty array.
+    if element_oid == 1033 {
+        return Err(aclitem_binary_error("output"));
+    }
     let normalized = match value {
         SqlValue::String(value) => {
             let spec = bicdb_sql::pg_type_spec_by_oid(element_oid).ok_or_else(|| {
@@ -2202,6 +2210,14 @@ pub(crate) fn unsupported_binary_result<T>(oid: i32, value: &SqlValue) -> Result
         "unsupported binary result oid {oid} for value {}",
         value.to_cell()
     )))
+}
+
+pub(crate) fn aclitem_binary_error(direction: &str) -> PgWireError {
+    PgWireError::Sql(bicdb_sql::SqlError::data_exception(
+        "42883",
+        format!("no binary {direction} function available for type aclitem"),
+        None,
+    ))
 }
 
 pub(crate) fn first_non_null(result: &SqlResult, column: usize) -> Option<&SqlValue> {

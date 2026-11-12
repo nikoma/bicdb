@@ -186,6 +186,7 @@ pub(crate) struct NativeJointActivationAdmission {
     cancellation: crate::CancellationToken,
 }
 impl NativeJointPreparedServingQuorum {
+    #[cfg(feature = "tls-replication")]
     pub(crate) fn acquire_local_activation(
         self: &Arc<Self>,
         client: &crate::distribution_transport::TcpClusterRelocationTransport,

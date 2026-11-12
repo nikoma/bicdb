@@ -81,6 +81,7 @@ impl NativeJointPublishedServingQuorum {
         }
         Ok(())
     }
+    #[cfg(feature = "tls-replication")]
     pub(crate) fn acquire_local_open(
         self: &Arc<Self>,
         client: &crate::distribution_transport::TcpClusterRelocationTransport,

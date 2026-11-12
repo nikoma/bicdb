@@ -1202,7 +1202,7 @@ pub(crate) fn eval_db_catalog_function_value(
                 return Ok(Some(SqlValue::Null));
             };
             Ok(Some(
-                resolve_regclass_oid(db, name)
+                resolve_regclass_oid(db, name)?
                     .map(SqlValue::Int)
                     .unwrap_or(SqlValue::Null),
             ))

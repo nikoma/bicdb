@@ -6509,7 +6509,7 @@ pub(crate) fn relation_oid_literal_value(db: &BicDb, expr: &Expr) -> Result<Opti
             let SqlValue::String(name) = value else {
                 return Ok(None);
             };
-            return Ok(resolve_regclass_oid(db, &name));
+            return resolve_regclass_oid(db, &name);
         }
         Expr::Nested(expr) => return relation_oid_literal_value(db, expr),
         _ => eval_constant_expr(expr)?,

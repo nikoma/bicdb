@@ -60,6 +60,57 @@ fn native_initial_data_genesis_refuses_changed_epoch_restore_and_actual_foreign_
 }
 
 #[test]
+fn native_initial_data_genesis_refuses_same_root_same_birth_new_actual_open() {
+    let planned = planned_network(3);
+    let path = planned.root.path().join("same-birth-open");
+    let seed = NativeProvisionalNode::create(
+        &path,
+        db_config(),
+        planned.plan.clone(),
+        &node(0),
+        &budget(5000),
+    )
+    .unwrap();
+    let range = seed.spec.initial_ranges.first().unwrap().clone();
+    let birth = seed.manifest.birth_id;
+    let old_open = seed.database.read().incarnation_id().to_string();
+    let ended = Arc::downgrade(&seed.database);
+    let proof = seed
+        .database
+        .read()
+        .observe_initial_data_genesis(&seed.factory, &range, &planned.plan.topology)
+        .unwrap();
+    drop(seed);
+    assert!(
+        ended.upgrade().is_none(),
+        "all actual old DB owners must end before reopen"
+    );
+    let reopened = NativeProvisionalNode::open_unregistered(
+        &path,
+        db_config(),
+        planned.plan.clone(),
+        &node(0),
+        &budget(5000),
+    )
+    .unwrap();
+    assert_eq!(reopened.manifest.birth_id, birth);
+    let database = reopened.database.read();
+    assert_ne!(database.incarnation_id(), old_open);
+    assert!(
+        proof
+            .require_current(&database, &planned.plan.topology)
+            .is_err(),
+        "same root/birth/R0 is not the original actual open"
+    );
+    database
+        .observe_initial_data_genesis(&reopened.factory, &range, &planned.plan.topology)
+        .unwrap()
+        .require_current(&database, &planned.plan.topology)
+        .unwrap();
+    assert!(!database.commit_admission_ready());
+}
+
+#[test]
 fn native_initial_data_actual_tls_cancel_partial_quorum_then_nonempty_is_not_new_genesis() {
     let mut f = Fixture::new();
     let configuration = f.hosts[0]
@@ -203,7 +254,37 @@ fn native_initial_data_actual_tls_cancel_partial_quorum_then_nonempty_is_not_new
             .unwrap();
     }
     drop(database);
-    for control in &mut controls {
+    // Deterministic replacement cut: the old owner's exact hook is genuinely
+    // checked first; then a separately fresh own MQ publishes a NEW actual
+    // enrolled writer before old-owner shutdown. Stop must not erase it.
+    let replacement = controls[0]
+        .test_replace_initial_data_writer_after_identity_check(&node(0), &budget(5000))
+        .unwrap();
+    controls[0].stop(&budget(5000)).unwrap();
+    let database = f.hosts[0].seed.database.read();
+    let first = f.hosts[0].seed.spec.initial_ranges.first().unwrap();
+    replacement
+        .guard
+        .require_for_coordinator(&database, first, &replacement.coordinator)
+        .unwrap();
+    drop(database);
+    for control in controls.iter_mut().skip(1) {
         control.stop(&budget(5000)).unwrap();
     }
+    let database = f.hosts[0].seed.database.read();
+    assert!(replacement
+        .guard
+        .retire_if_current(&database, &replacement.coordinator)
+        .unwrap());
+    assert!(!database.commit_admission_ready());
+    // Even SAME Arc reinstallation is a new actual registration. The stale
+    // proof cannot compare-clear it; generic installation supplies no native
+    // policy permission and is removed only as explicit test cleanup.
+    database.install_commit_admission(replacement.coordinator.clone());
+    assert!(!replacement
+        .guard
+        .retire_if_current(&database, &replacement.coordinator)
+        .unwrap());
+    assert!(database.commit_admission_ready());
+    database.clear_commit_admission();
 }

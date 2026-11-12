@@ -338,17 +338,13 @@ impl NativeInitialDataHost {
                 .database
                 .try_read()
                 .ok_or_else(|| invalid("initial DATA database busy during stop"))?;
-            // Never clear another installed writer. An already-ended own hook
-            // needs no new authority and no fresh replacement policy.
-            if let Some(proof) = self.genesis.values().next() {
-                if owner
-                    .guard
-                    .require_for_coordinator(&database, proof.range(), &owner.coordinator)
-                    .is_ok()
-                {
-                    database.clear_commit_admission();
-                }
-            }
+            // Dispatcher clear above fences NEW requests only. Existing
+            // workers retain their real proofs; keep the hook installed until
+            // actual listener/worker/context drain. Compare AND clear under the
+            // actual admission/hook locks: never erase a replacement writer.
+            owner
+                .guard
+                .retire_if_current(&database, &owner.coordinator)?;
         }
         self.listener.take();
         self.old_listener.take();
@@ -396,6 +392,38 @@ impl NativeMetadataControlHost {
             .as_mut()
             .unwrap()
             .advance(&leader, &self.network, parent)
+    }
+    #[cfg(test)]
+    pub(crate) fn test_replace_initial_data_writer_after_identity_check(
+        &self,
+        leader: &ClusterNodeId,
+        parent: &CancellationToken,
+    ) -> Result<NativeInitialWriterEnrollment> {
+        let data = self
+            .data
+            .as_ref()
+            .ok_or_else(|| invalid("test needs actual DATA owner"))?;
+        let old = data
+            .enrollment
+            .as_ref()
+            .ok_or_else(|| invalid("test needs actual old writer"))?;
+        {
+            let database = data
+                .initial
+                .seed
+                .database
+                .try_read()
+                .ok_or_else(|| invalid("test actual DB busy"))?;
+            let range = data
+                .genesis
+                .values()
+                .next()
+                .ok_or_else(|| invalid("test actual range missing"))?
+                .range();
+            old.guard
+                .require_for_coordinator(&database, range, &old.coordinator)?;
+        }
+        data.initial.enroll_initial_writer(leader, parent)
     }
     pub(crate) fn initial_data_status(
         &self,

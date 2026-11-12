@@ -5,6 +5,7 @@ use super::*;
 
 pub(crate) struct NativeInitialDataGenesis {
     birth: NativeDatabaseBirth,
+    database_incarnation: String,
     root: PathBuf,
     range: RangeDescriptor,
     receipt: String,
@@ -37,6 +38,7 @@ impl NativeInitialDataGenesis {
             .range_by_id(self.range.id)
             .ok_or_else(|| invalid("initial range missing"))?;
         if birth != self.birth
+            || database.incarnation_id() != self.database_incarnation
             || database.path.canonicalize()? != self.root
             || stable(current) != self.range
             || topology.cluster_id != birth.spec.cluster_id
@@ -114,6 +116,7 @@ impl BicDb {
         let source = self.current_native_range_source_lineage(range.id)?;
         let observed = NativeInitialDataGenesis {
             birth,
+            database_incarnation: self.incarnation_id().to_string(),
             root: factory.root.clone(),
             range: stable(range),
             receipt: source.native_receipt_sha256().into(),

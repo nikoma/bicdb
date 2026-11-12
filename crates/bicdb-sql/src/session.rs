@@ -4604,9 +4604,12 @@ impl<'db> SqlSession<'db> {
             internal_names.push(sql_index_storage_name(&namespace, name));
             for index in &view.indexes {
                 if index.name == name {
-                    internal_names.extend(index.internal_index_names.iter().map(|name| {
-                        sql_index_storage_name(&namespace, name)
-                    }));
+                    internal_names.extend(
+                        index
+                            .internal_index_names
+                            .iter()
+                            .map(|name| sql_index_storage_name(&namespace, name)),
+                    );
                 }
             }
         }
@@ -5096,10 +5099,10 @@ impl<'db> SqlSession<'db> {
 
     pub(crate) fn rollback_ddl_to_len(&mut self, len: usize) -> Result<()> {
         while self.ddl_undo.len() > len {
-            // Durable rename undo can be refused by a live foreign owner or
-            // interrupted partway through recovery. Its header/cursor remain
-            // retryable; retain the matching session entry until it succeeds.
-            // Clone only the small journal identity, not legacy row payloads.
+            // A live foreign owner can refuse journal recovery or an index
+            // rebuild. Keep the matching undo until it succeeds so a later
+            // full rollback can retry after that owner finishes. Clone only
+            // small identities/definitions, not legacy row payloads.
             let retryable = match self.ddl_undo.last() {
                 Some(DdlUndo::RestoreRenameJournal { id, old_table }) => {
                     Some(DdlUndo::RestoreRenameJournal {
@@ -5115,6 +5118,9 @@ impl<'db> SqlSession<'db> {
                     name: name.clone(),
                     creation_intent: Some(id.clone()),
                     creation_receipt: creation_receipt.clone(),
+                }),
+                Some(DdlUndo::RestoreIndex { definition }) => Some(DdlUndo::RestoreIndex {
+                    definition: definition.clone(),
                 }),
                 _ => None,
             };

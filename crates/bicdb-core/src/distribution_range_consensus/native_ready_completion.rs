@@ -66,8 +66,30 @@ impl NativeRecoveryCompletedFrozenReceipt {
         }
         Ok(())
     }
+    // Private to the actual producer: refreshed is the post-catalogue native
+    // readback from the SAME uninterrupted Store/DB/Prepared borrow. External
+    // receipt consumers must continue using full require_current above.
+    fn require_refreshed_binding(
+        &self,
+        store: &RangeWriteStore,
+        prepared: &PreparedNativeRecoveryReady,
+        fresh: &RecoveryRoleAdmission,
+        refreshed: &NativeRecoveredServingReceipt,
+    ) -> Result<()> {
+        self.scope.require_role(fresh)?;
+        if self.store_open_id != store.open_id
+            || !prepared.scope().same_session(&self.scope)
+            || self.native.checksum_sha256() != refreshed.checksum_sha256()
+            || refreshed.checksum_sha256() != self.completed.native_serving_sha256
+            || !matches!(&store.catalog.recovery_fences[&self.scope.range_id].phase,
+                RecoveryFencePhase::NativeCompleted(saved) if saved == &self.completed)
+        {
+            return Err(range_write_error("produced completion receipt differs from actual refreshed native/catalogue binding"));
+        }
+        Ok(())
+    }
 }
-enum NativeCompletionDecision {
+pub(super) enum NativeCompletionDecision {
     Closed(ClosedNativeReadyQuorum),
     Completed(crate::distribution_range_recovery::NativeCompletionQuorum),
     Activated(crate::distribution_range_recovery::ActivatedNativeCompletionDecision),
@@ -180,6 +202,32 @@ impl RangeWriteStore {
             crate::storage::write_atomic,
         )
     }
+    pub(super) fn persist_native_completion_decision(
+        &mut self,
+        db: &crate::BicDb,
+        prepared: &PreparedNativeRecoveryReady,
+        quorum: NativeCompletionDecision,
+        fresh: &RecoveryRoleAdmission,
+    ) -> Result<NativeRecoveryCompletedFrozenReceipt> {
+        self.persist_native_completion_decision_with(
+            db,
+            prepared,
+            quorum,
+            fresh,
+            crate::storage::write_atomic,
+        )
+    }
+    #[cfg(test)]
+    pub(super) fn test_persist_native_completion_decision_with(
+        &mut self,
+        db: &crate::BicDb,
+        prepared: &PreparedNativeRecoveryReady,
+        quorum: NativeCompletionDecision,
+        fresh: &RecoveryRoleAdmission,
+        write: impl FnOnce(&Path, &[u8], bool) -> Result<()>,
+    ) -> Result<NativeRecoveryCompletedFrozenReceipt> {
+        self.persist_native_completion_decision_with(db, prepared, quorum, fresh, write)
+    }
     fn persist_native_completion_decision_with(
         &mut self,
         db: &crate::BicDb,
@@ -276,7 +324,7 @@ impl RangeWriteStore {
                 fresh.local_node_id(),
                 fresh.deadline(),
             );
-        prepared.refresh_after_durable_native_completion(db, self, fresh)?;
+        let refreshed = prepared.refresh_completed_native_binding(db, self, fresh)?;
         #[cfg(test)]
         {
             refresh_trace.complete();
@@ -295,7 +343,8 @@ impl RangeWriteStore {
                 fresh.local_node_id(),
                 fresh.deadline(),
             );
-        receipt.require_current(db, self, prepared, fresh)?;
+        receipt.require_refreshed_binding(self, prepared, fresh, &refreshed)?;
+        prepared.require_produced_completion_boundary(db, self, fresh)?;
         quorum.require_recipient_role(fresh)?;
         #[cfg(test)]
         {

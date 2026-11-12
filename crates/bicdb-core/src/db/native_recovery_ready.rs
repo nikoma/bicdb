@@ -902,6 +902,234 @@ mod tests {
     }
 
     #[test]
+    fn native_produced_completion_projects_actual_binding_and_stays_frozen() {
+        let fixture = Fixture::new();
+        fixture.seed(fixture.range().id, 1);
+        let nonce = Uuid::now_v7();
+        let role = fixture.role(nonce);
+        let frozen = fixture.freeze(&role);
+        let mut store = fixture.store();
+        let physical = fixture
+            .attest(
+                role,
+                &mut store,
+                Arc::clone(&frozen),
+                &CancellationToken::uncancelable(),
+            )
+            .unwrap();
+        let prepared = store
+            .prepare_native_recovery_ready(&fixture.db.read(), physical)
+            .unwrap();
+        let parent =
+            CancellationToken::new(Arc::new(std::sync::atomic::AtomicBool::new(false)), None);
+        let closed = actual_local_closed_ready_quorum(&fixture, &store, &prepared, nonce, &parent);
+        let fresh = fixture.role(nonce);
+        let request = crate::distribution_range_recovery::NativeCompletionRequest {
+            scope: prepared.scope().clone(),
+            challenge: Uuid::now_v7(),
+            budget_ms: 4500,
+        };
+        let reply = store
+            .complete_and_observe_native_recovery_frozen(
+                &fixture.db.read(),
+                &prepared,
+                closed,
+                &fresh,
+                &request,
+                &parent,
+            )
+            .unwrap()
+            .into_reply();
+        assert_eq!(
+            reply.stage,
+            crate::distribution_range_recovery::NativeCompletionStage::CompletedFrozen
+        );
+        assert_eq!(reply.challenge, request.challenge);
+        assert!(reply.scope.same_session(&request.scope));
+        assert_eq!(reply.range_index, 1);
+        assert_eq!(
+            reply.logical_history_sha256,
+            prepared.logical_history_sha256()
+        );
+        assert_eq!(
+            reply.native_receipt_sha256,
+            prepared.native_receipt_sha256()
+        );
+        let actual = prepared
+            .require_completed_for_activation(&fixture.db.read(), &store, &fresh)
+            .unwrap();
+        assert_eq!(reply.native_serving_sha256, actual.checksum_sha256());
+        prepared
+            .require_current_under_role(&fixture.db.read(), &store, &fresh)
+            .unwrap();
+        assert!(store
+            .normal_native_write_allowed(&fixture.conflicting_command())
+            .is_err());
+        assert!(fixture
+            .db
+            .read()
+            .range_mutation_gate()
+            .try_enter(fixture.range().id)
+            .is_err());
+    }
+
+    #[test]
+    fn native_produced_completion_preserves_ambiguity_until_actual_refsync() {
+        for after_actual_write in [false, true] {
+            let fixture = Fixture::new();
+            fixture.seed(fixture.range().id, 1);
+            let nonce = Uuid::now_v7();
+            let role = fixture.role(nonce);
+            let frozen = fixture.freeze(&role);
+            let mut store = fixture.store();
+            let physical = fixture
+                .attest(
+                    role,
+                    &mut store,
+                    Arc::clone(&frozen),
+                    &CancellationToken::uncancelable(),
+                )
+                .unwrap();
+            let prepared = store
+                .prepare_native_recovery_ready(&fixture.db.read(), physical)
+                .unwrap();
+            let parent =
+                CancellationToken::new(Arc::new(std::sync::atomic::AtomicBool::new(false)), None);
+            let closed =
+                actual_local_closed_ready_quorum(&fixture, &store, &prepared, nonce, &parent);
+            let fresh = fixture.role(nonce);
+            let request = crate::distribution_range_recovery::NativeCompletionRequest {
+                scope: prepared.scope().clone(),
+                challenge: Uuid::now_v7(),
+                budget_ms: 4500,
+            };
+            let error = store
+                .test_complete_and_observe_native_recovery_frozen_with(
+                    &fixture.db.read(),
+                    &prepared,
+                    closed,
+                    &fresh,
+                    &request,
+                    &parent,
+                    |path, bytes, fsync| {
+                        if after_actual_write {
+                            crate::storage::write_atomic(path, bytes, fsync)?;
+                        }
+                        Err(invalid("actual produced completion persistence ambiguity"))
+                    },
+                )
+                .unwrap_err();
+            assert!(error
+                .to_string()
+                .contains("actual produced completion persistence ambiguity"));
+            parent.check().unwrap();
+            fresh.require_live_request().unwrap();
+            assert!(store
+                .observe_native_completion_for_role(&fixture.db.read(), &prepared, &fresh, &request)
+                .is_err());
+            assert!(prepared
+                .refresh_after_durable_native_completion(&fixture.db.read(), &store, &fresh)
+                .is_err());
+            assert!(store
+                .normal_native_write_allowed(&fixture.conflicting_command())
+                .is_err());
+            let renewed = fixture.role(nonce);
+            store
+                .refsync_native_prepared_refusal(
+                    &fixture.db.read(),
+                    &fixture.native(),
+                    &renewed,
+                    &frozen,
+                    &parent,
+                )
+                .unwrap();
+            prepared
+                .refresh_after_durable_native_completion(&fixture.db.read(), &store, &renewed)
+                .unwrap();
+            let closed =
+                actual_local_closed_ready_quorum(&fixture, &store, &prepared, nonce, &parent);
+            let reply = store
+                .complete_and_observe_native_recovery_frozen(
+                    &fixture.db.read(),
+                    &prepared,
+                    closed,
+                    &fixture.role(nonce),
+                    &request,
+                    &parent,
+                )
+                .unwrap()
+                .into_reply();
+            assert_eq!(reply.range_index, 1);
+            assert_eq!(
+                reply.logical_history_sha256,
+                prepared.logical_history_sha256()
+            );
+            assert!(fixture
+                .db
+                .read()
+                .range_mutation_gate()
+                .try_enter(fixture.range().id)
+                .is_err());
+        }
+    }
+
+    #[test]
+    fn native_produced_completion_caller_cancel_after_fsync_emits_no_observation() {
+        let fixture = Fixture::new();
+        fixture.seed(fixture.range().id, 1);
+        let nonce = Uuid::now_v7();
+        let role = fixture.role(nonce);
+        let frozen = fixture.freeze(&role);
+        let mut store = fixture.store();
+        let physical = fixture
+            .attest(
+                role,
+                &mut store,
+                Arc::clone(&frozen),
+                &CancellationToken::uncancelable(),
+            )
+            .unwrap();
+        let prepared = store
+            .prepare_native_recovery_ready(&fixture.db.read(), physical)
+            .unwrap();
+        let parent =
+            CancellationToken::new(Arc::new(std::sync::atomic::AtomicBool::new(false)), None);
+        let closed = actual_local_closed_ready_quorum(&fixture, &store, &prepared, nonce, &parent);
+        let fresh = fixture.role(nonce);
+        let request = crate::distribution_range_recovery::NativeCompletionRequest {
+            scope: prepared.scope().clone(),
+            challenge: Uuid::now_v7(),
+            budget_ms: 4500,
+        };
+        let error = store
+            .test_complete_and_observe_native_recovery_frozen_with(
+                &fixture.db.read(),
+                &prepared,
+                closed,
+                &fresh,
+                &request,
+                &parent,
+                |path, bytes, fsync| {
+                    crate::storage::write_atomic(path, bytes, fsync)?;
+                    parent.cancel();
+                    Ok(())
+                },
+            )
+            .unwrap_err();
+        assert_eq!(error.to_string(), BicDbError::QueryCanceled.to_string());
+        assert_eq!(store.recovery_observation_phase(prepared.scope()).unwrap(), crate::distribution_range_recovery::RecoveryFenceObservationPhase::NativeCompletedFrozen);
+        assert!(store
+            .normal_native_write_allowed(&fixture.conflicting_command())
+            .is_err());
+        assert!(fixture
+            .db
+            .read()
+            .range_mutation_gate()
+            .try_enter(fixture.range().id)
+            .is_err());
+    }
+
+    #[test]
     fn ambiguous_native_completion_requires_exact_refsync_before_refreshing_held_readiness() {
         use crate::distribution_range_recovery::FrozenNativeReadyStage;
         for after_actual_write in [false, true] {
@@ -1314,11 +1542,8 @@ impl LocalNativeRecoveryReady {
     /// preparation may outlive the request which created it; its consumer must
     /// independently validate a fresh role and the exact saved preparation.
     pub(crate) fn require_owned_materialization_current(&self, db: &BicDb) -> Result<()> {
-        self.native.require_current(db)?;
+        self.require_owned_pin_live(db)?;
         let range_id = self.role.current_range().id;
-        db.range_mutations.validate_frozen(range_id, &self.frozen)?;
-        db.range_mutations
-            .validate_source_capture_read_pin(range_id, &self.pin)?;
         db.validate_source_range_image_lineage(&self.lineage, range_id, self.range_index())?;
         if self.visibility.0 != self.lineage.actual_local_visibility_sequence()
             || self.catalogue.resolved_index() != self.range_index()
@@ -1327,6 +1552,17 @@ impl LocalNativeRecoveryReady {
                 "native materialization and resolved catalogue differ",
             ));
         }
+        Ok(())
+    }
+    /// Necessary refusal only: actual DB open/health, owned Frozen and pin.
+    /// This does not validate history/materialization or mint readiness. A
+    /// scoped producer may call it at return after its full physical check.
+    pub(crate) fn require_owned_pin_live(&self, db: &BicDb) -> Result<()> {
+        self.native.require_current(db)?;
+        let range_id = self.role.current_range().id;
+        db.range_mutations.validate_frozen(range_id, &self.frozen)?;
+        db.range_mutations
+            .validate_source_capture_read_pin(range_id, &self.pin)?;
         Ok(())
     }
     pub(crate) fn require_current(&self, db: &BicDb, store: &RangeWriteStore) -> Result<()> {

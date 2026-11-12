@@ -260,6 +260,24 @@ impl PreparedNativeRecoveryReady {
             .binding
             .try_lock()
             .ok_or_else(|| range_write_error("owned native readiness binding is busy"))?;
+        if let Some(sha) = self.require_binding_shape(store, &binding)? {
+            db.observe_native_recovered_serving_for_physical(&self.physical, &self.scope, &sha)?;
+        }
+        Ok(())
+    }
+    // Catalogue data only. Never a physical validation/current-proof producer.
+    fn require_binding_shape_current(&self, store: &RangeWriteStore) -> Result<Option<String>> {
+        let binding = self
+            .binding
+            .try_lock()
+            .ok_or_else(|| range_write_error("owned native readiness binding is busy"))?;
+        self.require_binding_shape(store, &binding)
+    }
+    fn require_binding_shape(
+        &self,
+        store: &RangeWriteStore,
+        binding: &NativeReadyCatalogueBinding,
+    ) -> Result<Option<String>> {
         let saved = store
             .catalog
             .recovery_fences
@@ -278,7 +296,7 @@ impl PreparedNativeRecoveryReady {
             (RecoveryFencePhase::NativeCompleted(completed), Some(sha))
                 if completed.point == self.point && &completed.native_serving_sha256 == sha =>
             {
-                db.observe_native_recovered_serving_for_physical(&self.physical, &self.scope, sha)?;
+                return Ok(Some(sha.clone()));
             }
             _ => {
                 return Err(range_write_error(
@@ -286,7 +304,7 @@ impl PreparedNativeRecoveryReady {
                 ))
             }
         }
-        Ok(())
+        Ok(None)
     }
     /// Refresh only after actual native-WAL and catalogue completion have BOTH
     /// persisted. It keeps the identical owned pin/freeze/R/H. On ambiguity the
@@ -297,6 +315,20 @@ impl PreparedNativeRecoveryReady {
         store: &RangeWriteStore,
         fresh: &RecoveryRoleAdmission,
     ) -> Result<()> {
+        self.refresh_completed_native_binding(db, store, fresh)?;
+        // A later standalone refresh has no exclusive producer continuation;
+        // preserve its full current validation rather than reuse a readback.
+        self.require_current_under_role(db, store, fresh)
+    }
+    /// Full post-catalogue native/physical check, plus exact updated binding.
+    /// The returned native receipt is a historical fact, not a cached current
+    /// grant; only the uninterrupted actual completion producer reuses it.
+    pub(super) fn refresh_completed_native_binding(
+        &self,
+        db: &crate::BicDb,
+        store: &RangeWriteStore,
+        fresh: &RecoveryRoleAdmission,
+    ) -> Result<crate::db::NativeRecoveredServingReceipt> {
         #[cfg(test)]
         let mut actual_trace =
             crate::distribution_range_handoff::NativeJointPhaseTrace::from_deadline(
@@ -331,7 +363,7 @@ impl PreparedNativeRecoveryReady {
                 "completion refresh changed the actual pinned point/session",
             ));
         }
-        db.observe_native_recovered_serving_for_physical(
+        let native = db.observe_native_recovered_serving_for_physical(
             &self.physical,
             &self.scope,
             &completed.native_serving_sha256,
@@ -356,12 +388,42 @@ impl PreparedNativeRecoveryReady {
                 fresh.local_node_id(),
                 fresh.deadline(),
             );
-        let result = self.require_current_under_role(db, store, fresh);
-        #[cfg(test)]
-        if result.is_ok() {
-            binding_trace.complete();
+        if self.require_binding_shape_current(store)?.as_deref() != Some(native.checksum_sha256()) {
+            return Err(range_write_error(
+                "refreshed completion binding differs from actual native readback",
+            ));
         }
-        result
+        self.require_produced_completion_boundary(db, store, fresh)?;
+        #[cfg(test)]
+        binding_trace.complete();
+        Ok(native)
+    }
+    /// Necessary live boundary after a full same-borrow producer check. This
+    /// never substitutes for physical/history validation or authorizes a stored
+    /// Prepared value on a later call.
+    pub(super) fn require_produced_completion_boundary(
+        &self,
+        db: &crate::BicDb,
+        store: &RangeWriteStore,
+        fresh: &RecoveryRoleAdmission,
+    ) -> Result<()> {
+        self.scope.require_role(fresh)?;
+        self.physical.require_owned_pin_live(db)?;
+        store.require_native_ready_scope(fresh, self.physical.native_admission(), &self.scope)?;
+        store.require_prepared_native_point_matches(&self.physical)?;
+        self.require_binding_shape_current(store)?;
+        if matches!(
+            fresh.purpose(),
+            MetadataRecoveryRolePurpose::CurrentJointRecovery { .. }
+        ) && store
+            .selected_current_joint_scope(self.scope.range_id)?
+            .is_none_or(|scope| !scope.same_session(&self.scope))
+        {
+            return Err(range_write_error(
+                "completed producer changed original writer/session",
+            ));
+        }
+        fresh.require_live_request()
     }
     pub(crate) fn role(&self) -> &RecoveryRoleAdmission {
         self.physical.role()

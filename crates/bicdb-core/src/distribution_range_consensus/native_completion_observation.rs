@@ -15,6 +15,97 @@ impl LocalNativeCompletionEvidence {
     }
 }
 impl RangeWriteStore {
+    pub(crate) fn complete_and_observe_native_recovery_frozen(
+        &mut self,
+        db: &crate::BicDb,
+        prepared: &PreparedNativeRecoveryReady,
+        quorum: crate::distribution_range_recovery::ClosedNativeReadyQuorum,
+        fresh: &RecoveryRoleAdmission,
+        request: &NativeCompletionRequest,
+        parent: &CancellationToken,
+    ) -> Result<LocalNativeCompletionEvidence> {
+        self.produce_and_observe_completion(
+            db,
+            prepared,
+            super::native_ready_completion::NativeCompletionDecision::Closed(quorum),
+            fresh,
+            request,
+            parent,
+        )
+    }
+    pub(crate) fn adopt_and_observe_native_completion_decision(
+        &mut self,
+        db: &crate::BicDb,
+        prepared: &PreparedNativeRecoveryReady,
+        quorum: crate::distribution_range_recovery::NativeCompletionQuorum,
+        fresh: &RecoveryRoleAdmission,
+        request: &NativeCompletionRequest,
+        parent: &CancellationToken,
+    ) -> Result<LocalNativeCompletionEvidence> {
+        self.produce_and_observe_completion(
+            db,
+            prepared,
+            super::native_ready_completion::NativeCompletionDecision::Completed(quorum),
+            fresh,
+            request,
+            parent,
+        )
+    }
+    fn produce_and_observe_completion(
+        &mut self,
+        db: &crate::BicDb,
+        prepared: &PreparedNativeRecoveryReady,
+        decision: super::native_ready_completion::NativeCompletionDecision,
+        fresh: &RecoveryRoleAdmission,
+        request: &NativeCompletionRequest,
+        parent: &CancellationToken,
+    ) -> Result<LocalNativeCompletionEvidence> {
+        self.produce_completion_and_project_ready(
+            db,
+            prepared,
+            decision,
+            fresh,
+            &request.ready_request(),
+            parent,
+            |store, ready, receipt| store.project_new_completion_evidence(ready, prepared, receipt),
+        )
+    }
+    #[cfg(test)]
+    pub(crate) fn test_complete_and_observe_native_recovery_frozen_with(
+        &mut self,
+        db: &crate::BicDb,
+        prepared: &PreparedNativeRecoveryReady,
+        quorum: crate::distribution_range_recovery::ClosedNativeReadyQuorum,
+        fresh: &RecoveryRoleAdmission,
+        request: &NativeCompletionRequest,
+        parent: &CancellationToken,
+        write: impl FnOnce(&Path, &[u8], bool) -> Result<()>,
+    ) -> Result<LocalNativeCompletionEvidence> {
+        self.test_produce_completion_and_project_ready_with(
+            db,
+            prepared,
+            super::native_ready_completion::NativeCompletionDecision::Closed(quorum),
+            fresh,
+            &request.ready_request(),
+            parent,
+            write,
+            |store, ready, receipt| store.project_new_completion_evidence(ready, prepared, receipt),
+        )
+    }
+    fn project_new_completion_evidence(
+        &self,
+        ready: super::native_ready_observation::LocalNativeReadyEvidence,
+        prepared: &PreparedNativeRecoveryReady,
+        receipt: &super::native_ready_completion::NativeRecoveryCompletedFrozenReceipt,
+    ) -> Result<LocalNativeCompletionEvidence> {
+        let evidence = self.project_native_completion(ready.into_reply(), prepared)?;
+        if evidence.reply.native_serving_sha256 != receipt.native_serving_sha256() {
+            return Err(range_write_error(
+                "completion projection differs from actual native producer receipt",
+            ));
+        }
+        Ok(evidence)
+    }
     pub(crate) fn observe_native_completion_for_role(
         &self,
         db: &crate::BicDb,

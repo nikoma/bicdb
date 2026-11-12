@@ -16,6 +16,94 @@ impl LocalNativeReadyEvidence {
     }
 }
 impl RangeWriteStore {
+    // Module-private producer continuation. It accepts only real opaque quorum
+    // decisions, performs their actual persistence/refresh, then immediately
+    // projects under the SAME exclusive Store/actual DB/Frozen/read-pin borrow.
+    // No callback or "already checked" capability is exposed outside consensus.
+    pub(super) fn produce_completion_and_project_ready<T>(
+        &mut self,
+        db: &crate::BicDb,
+        prepared: &PreparedNativeRecoveryReady,
+        decision: super::native_ready_completion::NativeCompletionDecision,
+        fresh: &RecoveryRoleAdmission,
+        request: &NativeReadyRequest,
+        parent: &CancellationToken,
+        project: impl FnOnce(
+            &Self,
+            LocalNativeReadyEvidence,
+            &super::native_ready_completion::NativeRecoveryCompletedFrozenReceipt,
+        ) -> Result<T>,
+    ) -> Result<T> {
+        parent.check()?;
+        request.scope.require_role(fresh)?;
+        let receipt = self.persist_native_completion_decision(db, prepared, decision, fresh)?;
+        self.project_just_produced_completion(
+            db, prepared, fresh, request, parent, receipt, project,
+        )
+    }
+    #[cfg(test)]
+    pub(super) fn test_produce_completion_and_project_ready_with<T>(
+        &mut self,
+        db: &crate::BicDb,
+        prepared: &PreparedNativeRecoveryReady,
+        decision: super::native_ready_completion::NativeCompletionDecision,
+        fresh: &RecoveryRoleAdmission,
+        request: &NativeReadyRequest,
+        parent: &CancellationToken,
+        write: impl FnOnce(&Path, &[u8], bool) -> Result<()>,
+        project: impl FnOnce(
+            &Self,
+            LocalNativeReadyEvidence,
+            &super::native_ready_completion::NativeRecoveryCompletedFrozenReceipt,
+        ) -> Result<T>,
+    ) -> Result<T> {
+        parent.check()?;
+        request.scope.require_role(fresh)?;
+        let receipt = self
+            .test_persist_native_completion_decision_with(db, prepared, decision, fresh, write)?;
+        self.project_just_produced_completion(
+            db, prepared, fresh, request, parent, receipt, project,
+        )
+    }
+    // Strictly private: both call sites above have just run the actual durable
+    // producer under this uninterrupted exclusive borrow. No stored receipt
+    // can select this path from another module or request.
+    fn project_just_produced_completion<T>(
+        &self,
+        db: &crate::BicDb,
+        prepared: &PreparedNativeRecoveryReady,
+        fresh: &RecoveryRoleAdmission,
+        request: &NativeReadyRequest,
+        parent: &CancellationToken,
+        receipt: super::native_ready_completion::NativeRecoveryCompletedFrozenReceipt,
+        project: impl FnOnce(
+            &Self,
+            LocalNativeReadyEvidence,
+            &super::native_ready_completion::NativeRecoveryCompletedFrozenReceipt,
+        ) -> Result<T>,
+    ) -> Result<T> {
+        parent.check()?;
+        #[cfg(test)]
+        let mut projection_trace = crate::distribution_range_handoff::NativeJointPhaseTrace::new(
+            "recovery-complete-produced-response-projection",
+            fresh.local_node_id(),
+            parent,
+        );
+        let ready = self.project_prepared_native(
+            prepared,
+            request,
+            fresh.context_id(),
+            fresh.metadata_term(),
+            fresh.metadata_read_index(),
+        )?;
+        let result = project(self, ready, &receipt)?;
+        prepared.require_produced_completion_boundary(db, self, fresh)?;
+        fresh.require_live_request()?;
+        parent.check()?;
+        #[cfg(test)]
+        projection_trace.complete();
+        Ok(result)
+    }
     /// Produce and project in one exclusive store/same-DB borrow. The producer
     /// owns the actual Frozen/read pin and performs its full physical checks
     /// before and after durable preparation. No caller-supplied Prepared proof

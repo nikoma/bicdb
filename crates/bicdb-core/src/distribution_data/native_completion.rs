@@ -31,26 +31,16 @@ impl ClusterDataNodeService {
             db_trace.complete();
             drop(db_trace);
         }
-        self.range_writes
+        let evidence = self
+            .range_writes
             .current_mut()
-            .complete_native_recovery_frozen(&db, prepared, quorum, fresh)?;
+            .complete_and_observe_native_recovery_frozen(
+                &db, prepared, quorum, fresh, request, parent,
+            )?;
         // A canceled/lost response after durability never erases the completed
         // refusal. A fresh readonly request can attest the retained proof.
         parent.check()?;
-        #[cfg(test)]
-        let mut response_trace = crate::distribution_range_handoff::NativeJointPhaseTrace::new(
-            "recovery-complete-response-observation",
-            fresh.local_node_id(),
-            parent,
-        );
-        let result = self
-            .range_writes
-            .observe_native_completion_for_role(&db, prepared, fresh, request);
-        #[cfg(test)]
-        if result.is_ok() {
-            response_trace.complete();
-        }
-        result
+        Ok(evidence)
     }
     pub(crate) fn adopt_local_native_completion(
         &mut self,
@@ -63,12 +53,14 @@ impl ClusterDataNodeService {
         parent.check()?;
         request.scope.require_role(fresh)?;
         let db = checked_database_read(&self.db, &self.storage_policy)?;
-        self.range_writes
+        let evidence = self
+            .range_writes
             .current_mut()
-            .adopt_native_completion_decision(&db, prepared, quorum, fresh)?;
+            .adopt_and_observe_native_completion_decision(
+                &db, prepared, quorum, fresh, request, parent,
+            )?;
         parent.check()?;
-        self.range_writes
-            .observe_native_completion_for_role(&db, prepared, fresh, request)
+        Ok(evidence)
     }
     pub(crate) fn adopt_local_native_activated_decision(
         &mut self,

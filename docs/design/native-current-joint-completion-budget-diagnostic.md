@@ -156,3 +156,92 @@ foreign-scope rejection with byte-identical catalogue state. They are not RF3,
 CurrentJoint ABA or full recovery qualification. The actual full positive and
 original-writer/caller controls must execute again before any passing claim;
 no headroom or runtime-success guarantee follows from the measured savings.
+
+## Executed 2a7: preparation returns; completion refresh exhausts budget
+
+Exact combined source 2a7a587fcfd392e851dc42eccc8762837b0c7fb6 (489) has three
+separate immutable runs, all with successful all-target and isolated-consumer
+checks:
+
+| Run / Core job | Scope | Actual result |
+|---|---|---|
+| 43265974939 / 131349595566 | RF1 produced Ready controls | 2 passed, 0 failed, 917 filtered, 0.15s |
+| 43265975524 / 131349582063 | CurrentJoint authority controls | 4 passed, 0 failed, 915 filtered, 47.80s |
+| 43265975417 / 131349588082 | Full post-joint recovery positive | 0 passed, 1 failed, 918 filtered, 58.52s |
+
+All three Ready responses returned successfully in the positive run: n1
+2053.4ms, n2 2072.9ms, n3 1646.2ms. Immediate produced projections took
+80/68/84 microseconds. These are observations of this run, not a comparative
+capacity guarantee; runner speed also differs from 6ce. Complete first ran on
+n1 and produced the following exact profile under its original 3999ms receiver
+budget (the request remains 4500ms / caller five seconds):
+
+| Actual n1 Complete phase | Duration | Original budget remaining |
+|---|---:|---:|
+| Protocol selection; worker drain | 893.4ms / 5.1ms | 3100ms |
+| Actual closed Ready quorum | 543.8ms | 2556ms |
+| Post-quorum fresh metadata role | 8.8ms | 2547ms |
+| Service and DB acquisition | 2µs / 34µs | 2547ms |
+| Final local quorum/physical check | 273.5ms | 2273ms |
+| Native producer preflight | 762.0ms | 1511ms |
+| Native WAL publication return | 111.4ms | 1400ms |
+| Native readback/final current | 404.7ms | 995ms |
+| Before-catalogue local quorum check | 292.6ms | 702ms |
+| Catalogue fsync return | 2.8ms | 699ms |
+| Post-catalogue full domain/physical/native refresh | 556.2ms | 143ms |
+| Updated-binding repeated full current validation | 257.5ms | expired |
+
+The full call took 4113.2ms and failed at source line 714. Native WAL and actual
+NativeCompleted R3/B4 catalogue publication returned BEFORE the original
+deadline; their serving checksum was
+`d7d01434a032c9a80f637ece52ac8079c8d2d3e86cd417a6106fbbceb58a25b7`.
+The completion response remains uncertain. No Activate, ACK4 or Strong R4 was
+reached. Receipt-final-current and response-observation repeats are visible in
+source but were not reached or timed in this failing run.
+
+All raw files and indexes are retained privately under the foundations CI
+capture directory. Their SHA-256 values are:
+
+- RF1 raw: `5d332b41d1fec4a77e1afc81cb819f7d8e3cb4fb215af902f8384b1518e527c8`.
+- Authority raw: `12688c1bf354216ec09b71286afe8a6a91a80fc8ed7a65391a4152a3a1e647cd`.
+- Positive raw: `9ae0d1d40cefe16208e888e0a2bdf854250a2d7f38ebb52568ffb1324ff09615`.
+- Positive artifact 13966228076 ZIP:
+  `e64b4aa6996040d1dda1590c831c7c2cf31f2e60a2c9626a8bbccef308a3572a`.
+- Positive manifest:
+  `0201a9a8c753004519ff94e616b996cb3a44ef399da969260ab521a000883a66`.
+
+The ZIP receipt verifies all 82 files / 6058854 bytes without engine open. It is
+observed-stable live-owner custody, not an independent power-loss replay.
+
+### Coherent immediate completion continuation
+
+The successor keeps the full actual native checks before/after native WAL,
+pre-catalogue quorum/physical check, catalogue fsync and full post-catalogue
+physical/domain/native-serving readback. It separates exact updated catalogue
+hash/phase/point validation from another identical full traversal. The actual
+native producer receipt must match that actual post-catalogue native readback.
+This comparison is private to the uninterrupted producer, not a caller-supplied
+checked flag or proof reconstructed from a checksum.
+
+Immediate Closed/Completed response projection runs through a module-private
+continuation accepting real opaque quorum decisions, under the SAME exclusive
+Store and borrowed actual DB, with the SAME owned Frozen/read pin. Both existing
+projection helpers remain private. Return boundaries check exact current
+scope/phase/binding, actual native-open/health/Frozen/pin, original CurrentJoint
+writer/local promise, role lifetime and original caller cancellation. The new
+pin-only check is a necessary refusal, not history/current-readiness authority.
+
+Later standalone refresh, ordinary observers, public receipt validation and
+Activated-decision response handling retain full validation. The common actual
+completion producer's post-catalogue refresh is shared mechanically across its
+sealed decision variants; no independent historical adoption rule is relaxed.
+Activated-decision reply projection has no new fast path. Storage, unknown-write
+refsync, original deadlines, nonce/membership floors and irreversible histories
+remain unchanged.
+
+New local controls cover actual RF1 completion/projection while still frozen,
+both catalogue persistence ambiguity cuts followed by exact real refsync, and
+actual caller cancellation after fsync with no returned observation. These are
+source-only until executed and do not replace genuine CurrentJoint original
+writer/caller/ABA controls, full positive acceptance or final broad regression.
+No runtime success or measured savings is claimed for this successor.

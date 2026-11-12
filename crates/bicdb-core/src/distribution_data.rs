@@ -928,6 +928,7 @@ impl ClusterDataNodeService {
     pub(crate) fn initial_consensus_only(&self) -> bool {
         self.initial_consensus_only
     }
+    #[cfg(feature = "tls-replication")]
     pub(crate) fn transition_initial_preparation_listener(
         &mut self,
         actual: &Arc<Mutex<Self>>,

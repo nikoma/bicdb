@@ -123,7 +123,29 @@ impl NativeJointScopeData {
                 .map(|r| r.node_id.clone())
                 .collect::<BTreeSet<_>>()
         };
+        let exact_replicas = |range: &RangeDescriptor| {
+            let ids = range.replicas.iter().map(|r| r.id).collect::<BTreeSet<_>>();
+            let nodes = range
+                .replicas
+                .iter()
+                .map(|r| r.node_id.clone())
+                .collect::<BTreeSet<_>>();
+            let voter_count = range
+                .replicas
+                .iter()
+                .filter(|r| r.role == RangeReplicaRole::Voter)
+                .count();
+            !range.replicas.is_empty()
+                && range.replicas.len() <= 65
+                && ids.len() == range.replicas.len()
+                && nodes.len() == range.replicas.len()
+                && range.replicas.iter().all(|r| r.id.get() > 0)
+                && voter_count == voters(range).len()
+                && canonical_range(range) == *range
+        };
         if self.version != 1
+            || !exact_replicas(&self.old_range)
+            || !exact_replicas(&self.activation_range)
             || self.bootstrap_id.is_nil()
             || self.old_range.id != self.promise.range_id
             || self.old_range.epoch != self.promise.old_epoch

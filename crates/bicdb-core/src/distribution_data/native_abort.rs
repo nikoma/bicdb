@@ -69,6 +69,24 @@ impl ClusterDataNodeService {
 }
 
 impl ClusterDataNodeService {
+    pub(crate) fn observe_existing_native_abort_promise(
+        &self,
+        role: &crate::distribution_range_recovery::RecoveryObservationRoleAdmission,
+        request: &crate::distribution_range_recovery::NativeAbortRequest,
+        parent: &CancellationToken,
+    ) -> Result<crate::distribution_range_consensus::native_abort::LocalAbortPromise> {
+        let db = try_database_read(&self.db)?;
+        self.require_native_catalog_database(&db)?;
+        self.require_native_writer_host_for_range(&db, role.current_range())?;
+        let native = db.native_recovery_admission(
+            role.cluster_id(),
+            role.bootstrap_id(),
+            &self.node_id,
+            role.local_member_incarnation(),
+        )?;
+        self.range_writes
+            .observe_existing_native_abort_promise(&db, &native, role, request, parent)
+    }
     pub(crate) fn observe_native_abort_candidate(
         &self,
         role: &crate::distribution_range_recovery::RecoveryObservationRoleAdmission,

@@ -567,9 +567,12 @@ impl RangeWriteStore {
                 || slot.ever_commit != record.ever_commit
                 || slot.no_effect_sha256 != record.no_effect_sha256
             {
-                return Err(range_write_error(
-                    "native read/ready has unresolved or mismatched protected slot control",
-                ));
+                return Err(range_write_error(format!(
+                    "native read/ready has unresolved or mismatched protected slot control: range={range_id} index={} actualR={actual_native_r} domain_match={} command_match={} ever_commit_mirror={} native={} no_effect_match={}",
+                    record.command.index, slot.domain == record.domain,
+                    slot.command_id == record.command.command_id && slot.command_sha256 == record.command.checksum_sha256,
+                    slot.ever_commit, record.ever_commit, slot.no_effect_sha256 == record.no_effect_sha256,
+                )));
             }
             if let Some(expected) = &slot.resolved_native_receipt_sha256 {
                 db.require_actual_native_abort_decision_digest(
@@ -1104,6 +1107,109 @@ impl RangeWriteStore {
 }
 
 impl RangeWriteStore {
+    pub(crate) fn observe_existing_native_abort_promise(
+        &self,
+        db: &crate::BicDb,
+        native: &NativeRecoveryAdmission,
+        role: &crate::distribution_range_recovery::RecoveryObservationRoleAdmission,
+        request: &crate::distribution_range_recovery::NativeAbortRequest,
+        parent: &CancellationToken,
+    ) -> Result<LocalAbortPromise> {
+        use crate::distribution_range_recovery::native_abort::{
+            NativeAbortPromiseDisposition, NativeAbortPromiseReply,
+        };
+        let cancellation = request
+            .cancellation(parent)?
+            .child_with_deadline(role.deadline());
+        self.observe_fenced_recovery_history(role, native, &request.scope, None)?;
+        self.require_actual_abort_catalogue(db)?;
+        if native.abort_protocol_version() != 1 || native.writer_enforcement_version() != 1 {
+            return Err(range_write_error(
+                "readonly abort observation needs actual from-birth eligibility",
+            ));
+        }
+        let candidate_sha256 = request.candidate_sha256.as_ref().ok_or_else(|| {
+            range_write_error(
+                "readonly abort observation needs the selected actual candidate digest",
+            )
+        })?;
+        let (promise, actual_slot) =
+            db.observe_native_abort_promise_for_observer(native, role, request)?;
+        let slot = self
+            .catalog
+            .native_abort_protocol
+            .as_ref()
+            .and_then(|p| p.ranges.get(&request.scope.range_id))
+            .and_then(|r| r.slots.get(&request.range_index))
+            .ok_or_else(|| {
+                range_write_error("readonly promise is absent from the SAME Store mirror")
+            })?;
+        let saved = slot
+            .promise
+            .as_ref()
+            .ok_or_else(|| range_write_error("readonly promise has no SAME Store audit"))?;
+        if slot.ever_commit
+            || slot.domain != promise.domain
+            || slot.domain != actual_slot.domain
+            || slot.command_id != actual_slot.command.command_id
+            || slot.command_sha256 != actual_slot.command.checksum_sha256
+            || slot.transaction_id != actual_slot.command.transaction_id
+            || slot.original_epoch != actual_slot.command.range_epoch
+            || slot.original_leader != actual_slot.command.leader_node_id
+            || slot.no_effect_sha256 != actual_slot.no_effect_sha256
+            || saved.candidate_sha256 != promise.candidate_sha256
+            || saved.command_sha256 != promise.command_sha256
+            || saved.promised_index != promise.range_index
+            || saved.first_recovery_nonce != promise.first_scope.recovery_nonce
+        {
+            return Err(range_write_error(
+                "readonly permanent promise/native mirror differs",
+            ));
+        }
+        if self
+            .catalog
+            .ranges
+            .get(&request.scope.range_id)
+            .and_then(|r| r.entries.get(&request.range_index))
+            .is_some_and(|e| {
+                matches!(
+                    e.state,
+                    RangeWriteState::Committed
+                        | RangeWriteState::QuorumCommitted
+                        | RangeWriteState::Applied
+                )
+            })
+        {
+            return Err(range_write_error(
+                "readonly abort vote contradicts a retained irreversible decision",
+            ));
+        }
+        cancellation.check()?;
+        Ok(LocalAbortPromise {
+            reply: NativeAbortPromiseReply {
+                request: request.clone(),
+                node_id: self.catalog.node_id.clone(),
+                member_incarnation: native.local_member_incarnation(),
+                store_open_id: self.open_id,
+                native_database_incarnation: native.database_incarnation().into(),
+                candidate_sha256: candidate_sha256.clone(),
+                native_birth_id: native.birth_id(),
+                native_birth_sha256: native.birth_sha256().into(),
+                abort_protocol_version: native.abort_protocol_version(),
+                predecessor_index: promise.predecessor_index,
+                predecessor_history_sha256: promise.predecessor_history_sha256,
+                disposition: NativeAbortPromiseDisposition::Permanent {
+                    promise_sha256: promise.checksum_sha256,
+                    original_candidate_sha256: promise.candidate_sha256,
+                    original_command_sha256: promise.command_sha256,
+                },
+                observed_metadata_context_id: role.metadata_context_id(),
+                observed_metadata_term: role.metadata_term(),
+                observed_metadata_read_index: role.metadata_read_index(),
+            },
+            cancellation,
+        })
+    }
     pub(crate) fn preflight_native_abort_publication(
         &self,
         db: &crate::BicDb,

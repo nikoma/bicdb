@@ -16,6 +16,19 @@ The new optional metadata birth field is `abort_protocol_version`. `None` is omi
 
 Catalogue15 and the existing private protocol23 are implementation fences, not authority. Actual joint14 markers must be preserved on composition; a fresh abort catalogue has no joint marker or joint reader flag. After-joint no-data publication remains unsupported until its actual joint-domain producer is composed and qualified.
 
+## First remote runtime result and pending corrections
+
+The earlier uncompiled checkpoint above is historical. Remote Core run `43162977062`, job `130998239851`, compiled source `be1345d3c` and executed 846 tests: **820 passed, 18 failed, 8 ignored**. Its original logs and assertions remain preserved. This result is not a successful abort lifecycle or native-host qualification.
+
+The corrective source batch, not yet tested, separates four boundaries:
+
+- Twelve existing Strong/read/activation failures reached the protected inventory guard after genuine ACKs. The peer `commit_range_write_with_mutation` path updated the JSON ever-Commit mirror without first updating protected native ever-Commit. Both peer and originating Commit now use the existing actual native preflight → protected ever-Commit → raw Commit → reply ordering. Inventory and SAME Store checks remain mandatory.
+- Three prepare-only/E2/cold abort cases failed quorum collection: the R0/cold cases reached leader publication before follower failure, while E2 began at a nonleader and failed earlier. Followers attempted to create promises through their own outgoing transport identities. Strict NormalRecovery correctly refused that impersonation. Unpublished wire26 adds **readonly observation of an existing permanent promise** under independently fresh readonly authority and the actual persisted Active session. The producer verifies the actual native promise, original no-effect/slot audit, current native history and SAME Store mirror; it changes no vote, scope or audit. Followers collect these sealed authenticated observations. The actual leader explicitly creates all three component-fixture promises before all three resolutions. This is manual protocol choreography, not automatic/origin-down recovery.
+- The lost-Commit negative reached its persisted-state verifier and indexed JSON using `RangeId`'s display string `range-N`; the actual serialized map key is the transparent numeric ID. The corrected verifier uses `range.id.get().to_string()` and retains the assertions for actual Committed state on all three nodes, protected ever-Commit, absent no-effect/promise, unknown Core outcome and no user ACK.
+- Two writer-enrollment negatives assumed no range catalogue file existed. From-birth StoreID registration now creates the required empty catalogue. Their fixture correction is separately owned and must retain no-Prepare/no-WAL/no-row assertions while verifying unchanged registered bytes.
+
+Promise collection now retains bounded per-participant error diagnostics instead of returning only an empty-quorum message. The original permanent records remain unchanged by readonly collection, and actual TLS negatives require that readonly missing-vote queries and nonleader Promise attempts create no vote. All original Strong/read assertions, all-three resolution checks, next-ACK checks and cold decision/hash reuse checks remain in place. No passing result is claimed for this correction.
+
 ## Regression sources, not passing results
 
 | Source filter | Intended actual boundary | Execution status |

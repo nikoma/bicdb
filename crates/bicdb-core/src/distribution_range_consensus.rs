@@ -1800,6 +1800,16 @@ pub trait RangeWriteTransport: std::fmt::Debug + Send + Sync + 'static {
             "authenticated native abort candidate transport is not wired",
         ))
     }
+    fn observe_native_abort_promise(
+        &self,
+        _destination: &ClusterNodeId,
+        _request: &crate::distribution_range_recovery::NativeAbortRequest,
+        _parent: &CancellationToken,
+    ) -> Result<crate::distribution_range_recovery::NativeAbortPromiseObservation> {
+        Err(range_write_error(
+            "authenticated readonly native AbortPromise transport is not wired",
+        ))
+    }
     fn promise_native_abort(
         &self,
         _destination: &ClusterNodeId,

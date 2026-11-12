@@ -190,13 +190,59 @@ fn actual_prepare_failure_lifecycle(transfer_before_abort: bool) {
         candidate_sha256: Some(actual_candidate.sha256().into()),
         ..request
     };
+    // A readonly query cannot create a missing vote, and a follower cannot
+    // create it by claiming the leader's scope. Both are genuine TLS calls.
+    let follower = [node("n0"), node("n1"), node("n2")]
+        .into_iter()
+        .find(|id| id != &leader)
+        .unwrap();
+    assert!(fixture.clients[&follower]
+        .observe_native_abort_promise(&node("n1"), &request, &token())
+        .is_err());
+    assert!(fixture.clients[&follower]
+        .promise_native_abort(&node("n1"), &request, &token())
+        .is_err());
     for id in [node("n0"), node("n1"), node("n2")] {
+        assert!(fixture.native.databases[&id]
+            .read()
+            .observe_actual_native_abort_promise(range.id, abort_index)
+            .unwrap()
+            .is_none());
+    }
+    // The actual leader first creates the permanent promises. Followers
+    // independently collect fresh readonly observations of those same votes;
+    // no follower may issue a new Promise under the leader's identity.
+    for id in [node("n0"), node("n1"), node("n2")] {
+        fixture.clients[&leader]
+            .promise_native_abort(&id, &request, &token())
+            .unwrap();
+        fixture.idle();
+    }
+    let mut original_promises = BTreeMap::new();
+    for id in std::iter::once(leader.clone()).chain(
+        [node("n0"), node("n1"), node("n2")]
+            .into_iter()
+            .filter(|id| id != &leader),
+    ) {
         let (r, decision, b) = fixture.clients[&leader]
             .resolve_native_abort_at(&id, &request, &token())
             .unwrap();
         assert_eq!(r, abort_index);
         assert_eq!(decision.len(), 64);
         assert_eq!(b, before_b[&id]);
+        if id == leader {
+            fixture.idle();
+            for member in [node("n0"), node("n1"), node("n2")] {
+                original_promises.insert(
+                    member.clone(),
+                    fixture.native.databases[&member]
+                        .read()
+                        .observe_actual_native_abort_promise(range.id, abort_index)
+                        .unwrap()
+                        .unwrap(),
+                );
+            }
+        }
         if transfer_before_abort {
             assert!(
                 b > r,
@@ -204,6 +250,17 @@ fn actual_prepare_failure_lifecycle(transfer_before_abort: bool) {
             );
         }
         fixture.idle();
+        for (member, original) in &original_promises {
+            assert_eq!(
+                fixture.native.databases[member]
+                    .read()
+                    .observe_actual_native_abort_promise(range.id, abort_index)
+                    .unwrap()
+                    .as_ref(),
+                Some(original),
+                "readonly collection must retain the original permanent scope/audit"
+            );
+        }
         let db = fixture.native.databases[&id].read();
         let source = db.current_native_range_source_lineage(range.id).unwrap();
         assert_eq!(source.range_index(), abort_index);
@@ -372,7 +429,7 @@ fn native_abort_actual_enforced_post_durable_commit_errors_cannot_become_no_effe
         )
         .unwrap();
         let value: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
-        let raw = &value["catalog"]["ranges"][range.id.to_string()]["entries"]["1"];
+        let raw = &value["catalog"]["ranges"][range.id.get().to_string()]["entries"]["1"];
         assert_eq!(raw["state"], serde_json::json!("committed"), "{id}: {raw}");
     }
     let original = fixture.native.services[&node("n0")]

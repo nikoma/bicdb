@@ -2165,10 +2165,9 @@ impl ClusterDataNodeService {
         command: &RangeWriteCommand,
         authority: &RangeMutationAuthority<'_>,
     ) -> Result<RangeWriteAck> {
-        self.range_mutations.validate(range.id, authority)?;
-        self.validate_range_write(range, caller, command)?;
-        let state = self.range_writes.commit(command)?;
-        self.range_write_ack(command, state)
+        // Peer Commit is the SAME vote boundary as the originating decision:
+        // protected everCommit must precede the raw decision and its reply.
+        self.commit_range_write_decision_with_mutation(range, caller, command, authority)
     }
 
     /// Apply only a quorum-certified decision. The applied checkpoint remains

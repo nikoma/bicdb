@@ -67,10 +67,13 @@ const KNOWN_FEATURE_FLAGS: &[&str] = &[
     ONLINE_BACKUP_EXTENT_FEATURE_FLAG,
 ];
 
-// Capture-only subset of the c3 portable-reader contract. Rename journals
-// are deliberately absent until their actual recovery implementation lands;
-// knowing a future flag before implementing its reader would be unsafe.
+// Required semantic readers travel with a captured image; node-local storage,
+// identity and authority flags do not. This list only includes implemented
+// readers. In particular, it grants no rename recovery or portable origin.
 const REPLICATED_READER_FEATURES: &[&str] = &[
+    SQL_PARTITION_EXECUTION_V1_FEATURE_FLAG,
+    DECIMAL_PREDICATE_COMPARISON_V1_FEATURE_FLAG,
+    APPLICATION_UNIQUE_SCOPE_FEATURE_FLAG,
     ORACLE_INVALID_ROUTINES_FEATURE_FLAG,
     ORACLE_SIMPLE_CASE_V1_FEATURE_FLAG,
     UNIQUE_NULLS_NOT_DISTINCT_FEATURE_FLAG,

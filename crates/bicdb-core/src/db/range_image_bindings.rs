@@ -276,6 +276,71 @@ mod tests {
     }
 
     #[test]
+    fn native_semantic_reader_requirements_invalidate_prior_image_bindings() {
+        for flag in [
+            format::SQL_PARTITION_EXECUTION_V1_FEATURE_FLAG,
+            format::DECIMAL_PREDICATE_COMPARISON_V1_FEATURE_FLAG,
+            format::APPLICATION_UNIQUE_SCOPE_FEATURE_FLAG,
+        ] {
+            let root = tempfile::tempdir().unwrap();
+            let mut db = populated(root.path());
+            let old = db.capture_range_image_bindings().unwrap();
+            let acknowledgement = db.get("items", "row-0000").unwrap().unwrap();
+            let sequence = db.last_commit_seq();
+            let namespace = db.local_namespace_identity("items").unwrap();
+            match flag {
+                format::SQL_PARTITION_EXECUTION_V1_FEATURE_FLAG => {
+                    db.enable_sql_partition_execution_v1().unwrap();
+                }
+                format::DECIMAL_PREDICATE_COMPARISON_V1_FEATURE_FLAG => {
+                    format::enable_decimal_predicate_comparison_v1(root.path()).unwrap();
+                }
+                format::APPLICATION_UNIQUE_SCOPE_FEATURE_FLAG => {
+                    db.enable_application_unique_scope().unwrap();
+                }
+                _ => unreachable!(),
+            }
+            assert!(db.validate_range_image_bindings(&old).is_err(), "{flag}");
+            let current = db.capture_range_image_bindings().unwrap();
+            assert!(current.reader_features().iter().any(|f| f == flag));
+            for local in [
+                format::LOCAL_NAMESPACE_IDENTITY_FEATURE_FLAG,
+                format::RANGE_IMAGE_INSTALL_FEATURE_FLAG,
+                format::SERVER_PAGED_FEATURE_FLAG,
+            ] {
+                assert!(!current.reader_features().iter().any(|f| f == local));
+            }
+            assert_eq!(db.last_commit_seq(), sequence);
+            assert_eq!(db.local_namespace_identity("items").unwrap(), namespace);
+            assert_eq!(
+                db.get("items", "row-0000")
+                    .unwrap()
+                    .unwrap()
+                    .content_hash()
+                    .unwrap(),
+                acknowledgement.content_hash().unwrap()
+            );
+            db.close().unwrap();
+            for _ in 0..2 {
+                let db = BicDb::open_with_config(root.path(), config()).unwrap();
+                db.schema_compatibility_fingerprint().unwrap();
+                let reopened = db.capture_range_image_bindings().unwrap();
+                assert!(reopened.reader_features().iter().any(|f| f == flag));
+                assert_eq!(db.local_namespace_identity("items").unwrap(), namespace);
+                assert_eq!(
+                    db.get("items", "row-0000")
+                        .unwrap()
+                        .unwrap()
+                        .content_hash()
+                        .unwrap(),
+                    acknowledgement.content_hash().unwrap()
+                );
+                db.close().unwrap();
+            }
+        }
+    }
+
+    #[test]
     fn range_image_bindings_reject_schema_roundtrip_and_new_backing() {
         let root = tempfile::tempdir().unwrap();
         let mut db = populated(root.path());

@@ -17,7 +17,7 @@ The ordinary exact-policy image route and Normal APP/Strong range predicate stay
 | BEGIN eligibility | Real source capture/OLD proof/current Pending role, actual original C1 writer DB/hook/coordinator/birth/schema/registry/health, actual service slot and protected native catalogue identity, empty target slot inventory, original caller/role |
 | Row scope before Controlled | Existing complete staged-history/context/fence/source/irreversible proofs, then retained C1 eligibility and actual Store/writer pointer equality |
 | Actual transaction authorization | Existing actual source/role/marker/attempt/range mutation validation, retained C1 identity and original cancellation; private transaction hash/ID/claim binding |
-| Actual transaction commit | Original role/caller and real source/OLD owners again; full original writer/current slot/DB/native catalogue/namespace/slot checks; exact actual audited StageHeader equality, original Installing-marker commitment, transaction mutation hash/ID, live Controlled claim and range |
+| Actual transaction commit | Original BEGIN role/caller, the exact authorization's retained sealed per-step role and its independent parent cancellation, and real source/OLD owners again; full original writer/current slot/DB/native catalogue/namespace/slot checks; exact actual audited StageHeader equality, original Installing-marker commitment, transaction mutation hash/ID, live Controlled claim and range |
 
 The private synchronous import call retains its exclusive Store borrow and DB context through commit. It does **not** ask for quiescence while its own Controlled writer is active. Own image generation invalidations remain covered by the existing irreversible-vs-generation split; the commit rereads the actual staged header/marker. The new witnesses retain no source Frozen/pin/OLD observation strongly. There is no unsafe Send/Sync implementation, thread-affine scope cast, native journal guard across foreign service checks, network call under journal, or deserializable grant. Trait/type qualification still requires compilation.
 
@@ -25,11 +25,12 @@ On failed/uncertain writes, existing intent/Installing/stage/cursor behavior rem
 
 ## Source regressions, not executed results
 
-Filter `native_joint_closed_c1_image_` selects four genuine actual-service tests, using real metadata, native OLD QQ/capture and committed Pending allocation while retaining all original C1 policy objects:
+Filter `native_joint_closed_c1_image_` selects five genuine actual-service tests, using real metadata, native OLD QQ/capture and committed Pending allocation while retaining all original C1 policy objects:
 
 - Complete actual clear/copy; require the full original ACK row and higher actual target data B, unchanged namespace IDs/original policies and a still-frozen target. Ordinary Pending writer checking still refuses. This proves row work only when run, not activation or serving.
 - Replace the actual target writer through real fresh HostMQ enrollment while old guards remain held; require live original request plus semantic writer refusal before clear, without row/data-B change.
 - Cancel the actual original BEGIN caller after private row-grant authorization but before commit; require the reached flag, QueryCanceled, no row/data-B change and unchanged namespaces. Its one-shot cfg(test) callback has a thread-local RAII !Send guard, including early errors/unwind.
+- Independently acquire a real per-step CommittedHandoff witness with its own original bounded parent, then cancel that parent after row authorization and before WAL. Require the exact canceled role error, the original BEGIN role/caller and supplied step caller still live, reached hook, no row/data-B change and unchanged namespaces. The grant retains that same sealed step role; it does not replace its deadline or reconstruct authority from fields.
 - Actually drop the retained OLD observation owner while capture remains; require a live target role/caller and weak-owner refusal before rows. No digest reconstructs an OLD quorum.
 
 The real source ACK also supplies a nonempty actual slot inventory; its target-empty-slot predicate must refuse that real database. Source committed-slot inclusion is independently required by the positive path. No synthetic slot or authority setter is used.

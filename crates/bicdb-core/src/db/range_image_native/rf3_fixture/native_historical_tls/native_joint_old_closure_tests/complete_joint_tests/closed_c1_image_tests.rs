@@ -9,6 +9,7 @@ pub(super) enum Control {
     Copy,
     WriterReplaced,
     CallerCanceledBeforeWal,
+    StepRoleCanceledBeforeWal,
     OldOwnersEnded,
 }
 fn case(control: Control) {
@@ -28,6 +29,54 @@ fn native_joint_closed_c1_image_live_original_writer_replacement_refused() {
 #[test]
 fn native_joint_closed_c1_image_original_caller_cancel_before_actual_row_wal_refused() {
     case(Control::CallerCanceledBeforeWal);
+}
+#[test]
+fn native_joint_closed_c1_image_step_role_cancel_before_actual_row_wal_refused() {
+    case(Control::StepRoleCanceledBeforeWal);
+}
+
+fn step_role_with_actual_parent(
+    fixture: &EnforcedNetwork,
+    plan: &crate::distribution_range_handoff::NativeJointHandoffPlan,
+    recipient: &ClusterNodeId,
+    parent: &CancellationToken,
+) -> crate::distribution_range_recovery::HandoffRoleAdmission {
+    let actor = fixture.clients[&node("n0")].local_metadata_read_participant();
+    let business = Uuid::now_v7();
+    let challenge = Uuid::now_v7();
+    let promise = plan.promise();
+    let purpose = crate::distribution_consensus::MetadataRecoveryRolePurpose::CommittedHandoff {
+        relocation_id: promise.relocation_id,
+        plan_id: promise.plan_id.clone(),
+        session_id: promise.session_id,
+        nonce: promise.nonce,
+    };
+    let witness = fixture.providers[recipient]
+        .witness_recovery_role(
+            &actor,
+            business,
+            plan.old_range().id,
+            plan.old_range().epoch,
+            promise.nonce,
+            challenge,
+            purpose.clone(),
+            parent,
+        )
+        .unwrap();
+    crate::distribution_range_recovery::RecoveryRoleAdmission::from_witness(
+        witness,
+        &actor,
+        recipient,
+        business,
+        plan.old_range().id,
+        plan.old_range().epoch,
+        promise.nonce,
+        challenge,
+        &purpose,
+    )
+    .unwrap()
+    .into_handoff()
+    .unwrap()
 }
 #[test]
 fn native_joint_closed_c1_image_actual_old_owners_ended_cannot_reissue_quorum() {
@@ -247,8 +296,17 @@ pub(super) fn exercise(
         }
     }
     let fired = Rc::new(Cell::new(false));
-    let _hook = if control == Control::CallerCanceledBeforeWal {
-        let canceled = parent.clone();
+    let step_parent = CancellationToken::uncancelable()
+        .child_with_deadline(Instant::now() + Duration::from_secs(5));
+    let _hook = if matches!(
+        control,
+        Control::CallerCanceledBeforeWal | Control::StepRoleCanceledBeforeWal
+    ) {
+        let canceled = if control == Control::CallerCanceledBeforeWal {
+            parent.clone()
+        } else {
+            step_parent.clone()
+        };
         let reached = fired.clone();
         Some(
             crate::db::range_image_native::history_stage::test_before_closed_image_transaction(
@@ -270,7 +328,16 @@ pub(super) fn exercise(
     loop {
         let cursor = capture.cursor().clone();
         let step = capture.export_step(&cursor, &options, &parent).unwrap();
-        let fresh = role(fixture, plan, &target).into_handoff().unwrap();
+        let fresh = if control == Control::StepRoleCanceledBeforeWal {
+            step_role_with_actual_parent(fixture, plan, &target, &step_parent)
+        } else {
+            role(fixture, plan, &target).into_handoff().unwrap()
+        };
+        if control == Control::StepRoleCanceledBeforeWal {
+            fresh.role().require_live_request().unwrap();
+            install.test_closed_original_request_live().unwrap();
+            parent.check().unwrap();
+        }
         let source = capture.authorize_target_install().unwrap();
         let result = fixture.native.services[&target]
             .lock()
@@ -282,9 +349,24 @@ pub(super) fn exercise(
                 &step,
                 &parent,
             );
-        if control == Control::CallerCanceledBeforeWal && fired.get() {
+        if matches!(
+            control,
+            Control::CallerCanceledBeforeWal | Control::StepRoleCanceledBeforeWal
+        ) && fired.get()
+        {
             let error = result.unwrap_err();
-            assert!(matches!(error, crate::BicDbError::QueryCanceled), "{error}");
+            if control == Control::CallerCanceledBeforeWal {
+                assert!(matches!(error, crate::BicDbError::QueryCanceled), "{error}");
+            } else {
+                parent.check().unwrap();
+                install.test_closed_original_request_live().unwrap();
+                assert!(matches!(
+                    step_parent.check(),
+                    Err(crate::BicDbError::QueryCanceled)
+                ));
+                let exact_role_error = fresh.role().require_live_request().unwrap_err();
+                assert_eq!(error.to_string(), exact_role_error.to_string());
+            }
             assert_eq!(db.read().current_commit_seq(), before_b);
             assert!(db.read().get("items", &acknowledged.id).unwrap().is_none());
             assert_eq!(

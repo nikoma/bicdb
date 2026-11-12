@@ -1743,6 +1743,9 @@ pub(crate) struct NativeImageRowScope<'a> {
 #[derive(Debug)]
 struct ClosedImageTransactionBinding {
     writer: Arc<ClosedImageOriginalWriter>,
+    // Preserve this authorization's sealed role as well as the original BEGIN
+    // role retained by writer. Its independent parent can cancel before WAL.
+    step_role: Arc<crate::distribution_range_recovery::RecoveryRoleAdmission>,
     header: StageHeader,
     caller: CancellationToken,
 }
@@ -1791,6 +1794,7 @@ impl NativeImageTransactionGrant {
         }
         if let Some(closed) = &self.closed {
             closed.caller.check()?;
+            closed.step_role.require_live_request()?;
             closed.writer.require_current(database)?;
             // Same private synchronous import call still owns the exclusive
             // Store borrow and Controlled claim. Recheck the actual protected
@@ -1803,6 +1807,7 @@ impl NativeImageTransactionGrant {
                     "closed image actual staged history changed before transaction",
                 ));
             }
+            closed.step_role.require_live_request()?;
             closed.caller.check()
         } else {
             database.require_installed_native_writer_database_for_range(&self.range)
@@ -1835,6 +1840,21 @@ impl NativeImageRowScope<'_> {
         {
             return Err(invalid("native image scope marker/attempt changed"));
         }
+        let closed = if let Some(writer) = &self.closed_writer {
+            let NativeImageInstallRole::CommittedHandoff(step) = self.context.role else {
+                return Err(invalid(
+                    "closed image transaction lost actual committed step role",
+                ));
+            };
+            Some(ClosedImageTransactionBinding {
+                writer: writer.clone(),
+                step_role: step.retain_original(),
+                header: self.proof.header.clone(),
+                caller: self.caller.clone(),
+            })
+        } else {
+            None
+        };
         transaction.native_image_row_grant = Some(NativeImageTransactionGrant {
             database_incarnation: database.incarnation_id().into(),
             transaction_id: transaction.id().0,
@@ -1846,14 +1866,7 @@ impl NativeImageRowScope<'_> {
             marker_sha256: self.marker_sha256.clone(),
             deadline: self.context.role.role().deadline(),
             claim: authority.claim(),
-            closed: self
-                .closed_writer
-                .as_ref()
-                .map(|writer| ClosedImageTransactionBinding {
-                    writer: writer.clone(),
-                    header: self.proof.header.clone(),
-                    caller: self.caller.clone(),
-                }),
+            closed,
         });
         #[cfg(test)]
         if self.closed_writer.is_some() {

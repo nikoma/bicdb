@@ -42,7 +42,9 @@ fn catalog_publication_resources_are_temporary_and_recovery_keeps_the_actual_par
             db.get("derived", "one").unwrap().unwrap().metadata["value"],
             2
         );
-        assert!(db.get("base", "one").is_err());
+        db.check_catalog_read_access("derived", Some("one"))
+            .unwrap();
+        assert!(db.check_catalog_read_access("base", Some("one")).is_err());
         assert_eq!(
             db.get("independent", "one")
                 .unwrap()

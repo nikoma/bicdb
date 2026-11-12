@@ -779,21 +779,23 @@ impl RangeWriteStore {
             .ranges
             .get(&request.scope.range_id)
             .and_then(|r| r.entries.get(&request.range_index));
-        let irreversible = old
-            .filter(|s| s.ever_commit || s.command != *command)
-            .map(|s| s.command.checksum_sha256.clone())
-            .or_else(|| {
-                raw.filter(|e| {
-                    e.command != *command
-                        || matches!(
+        let actual_committed =
+            db.actual_native_abort_committed_command(native, role, request.range_index)?;
+        let irreversible = actual_committed.or_else(|| {
+            old.filter(|s| s.ever_commit)
+                .map(|s| s.command.checksum_sha256.clone())
+                .or_else(|| {
+                    raw.filter(|e| {
+                        matches!(
                             e.state,
                             RangeWriteState::Committed
                                 | RangeWriteState::QuorumCommitted
                                 | RangeWriteState::Applied
                         )
+                    })
+                    .map(|e| e.command.checksum_sha256.clone())
                 })
-                .map(|e| e.command.checksum_sha256.clone())
-            });
+        });
         let disposition = if let Some(command_sha256) = irreversible {
             NativeAbortPromiseDisposition::Irreversible { command_sha256 }
         } else {
@@ -845,6 +847,8 @@ impl RangeWriteStore {
             self.persist_recovery_catalog()?;
             NativeAbortPromiseDisposition::Permanent {
                 promise_sha256: promise.checksum_sha256,
+                original_candidate_sha256: promise.candidate_sha256,
+                original_command_sha256: promise.command_sha256,
             }
         };
         cancellation.check()?;
@@ -856,6 +860,8 @@ impl RangeWriteStore {
                 store_open_id: self.open_id,
                 native_database_incarnation: native.database_incarnation().into(),
                 candidate_sha256: candidate.sha256().into(),
+                predecessor_index: candidate.record().predecessor_index(),
+                predecessor_history_sha256: candidate.record().predecessor_history_sha256().into(),
                 disposition,
                 observed_metadata_context_id: role.context_id(),
                 observed_metadata_term: role.metadata_term(),
@@ -950,12 +956,10 @@ impl RangeWriteStore {
                 entries: BTreeMap::new(),
             });
         if let Some(entry) = log.entries.get_mut(&command.index) {
-            if entry.command != *command
-                || !matches!(
-                    entry.state,
-                    RangeWriteState::Prepared | RangeWriteState::Aborted
-                )
-            {
+            if !matches!(
+                entry.state,
+                RangeWriteState::Prepared | RangeWriteState::Aborted
+            ) {
                 return Err(range_write_error(
                     "canonical abort conflicts with another local command; retain original audit",
                 ));

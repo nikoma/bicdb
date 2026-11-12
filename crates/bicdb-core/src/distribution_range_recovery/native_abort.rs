@@ -160,8 +160,14 @@ impl NativeAbortCandidateObservation {
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, PartialEq)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub(crate) enum NativeAbortPromiseDisposition {
-    Permanent { promise_sha256: String },
-    Irreversible { command_sha256: String },
+    Permanent {
+        promise_sha256: String,
+        original_candidate_sha256: String,
+        original_command_sha256: String,
+    },
+    Irreversible {
+        command_sha256: String,
+    },
 }
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
@@ -172,6 +178,8 @@ pub(crate) struct NativeAbortPromiseReply {
     pub store_open_id: Uuid,
     pub native_database_incarnation: String,
     pub candidate_sha256: String,
+    pub predecessor_index: u64,
+    pub predecessor_history_sha256: String,
     pub disposition: NativeAbortPromiseDisposition,
     pub observed_metadata_context_id: Uuid,
     pub observed_metadata_term: u64,
@@ -195,9 +203,17 @@ impl NativeAbortPromiseObservation {
             || reply.store_open_id.is_nil()
             || reply.native_database_incarnation.is_empty()
             || reply.candidate_sha256.len() != 64
+            || reply.predecessor_index.checked_add(1) != Some(reply.request.range_index)
+            || reply.predecessor_history_sha256.len() != 64
             || match &reply.disposition {
-                NativeAbortPromiseDisposition::Permanent { promise_sha256 } => {
+                NativeAbortPromiseDisposition::Permanent {
+                    promise_sha256,
+                    original_candidate_sha256,
+                    original_command_sha256,
+                } => {
                     promise_sha256.len() != 64
+                        || original_candidate_sha256.len() != 64
+                        || original_command_sha256.len() != 64
                 }
                 NativeAbortPromiseDisposition::Irreversible { command_sha256 } => {
                     command_sha256.len() != 64
@@ -275,6 +291,9 @@ impl NativeAbortPromiseRound {
                 || reply.request.range_index != self.request.range_index
                 || reply.request.origin_node_id != self.request.origin_node_id
                 || reply.candidate_sha256 != self.candidate.sha256()
+                || reply.predecessor_index != self.candidate.record().predecessor_index()
+                || reply.predecessor_history_sha256
+                    != self.candidate.record().predecessor_history_sha256()
                 || self.votes.contains_key(&reply.node_id)
             {
                 return Err(invalid("foreign/duplicate native abort promise"));

@@ -83,10 +83,11 @@ impl NativeAbortDecisionRecord {
             || self.actual_promises.iter().any(|(id, p)| {
                 !voters.contains(id) || id != &p.node_id || !p.request.scope.same_session(&self.scope)
                     || p.request.range_index != self.range_index || p.candidate_sha256 != self.candidate_sha256
+                    || p.predecessor_index != self.previous_index || p.predecessor_history_sha256 != self.previous_history_sha256
                     || p.observed_metadata_context_id == self.post_quorum_metadata_context_id
                     || p.observed_metadata_context_id.is_nil() || p.observed_metadata_term > self.post_quorum_metadata_term
                     || p.observed_metadata_read_index > self.post_quorum_metadata_read_index
-                    || !matches!(&p.disposition, NativeAbortPromiseDisposition::Permanent { promise_sha256 } if promise_sha256.len() == 64)
+                    || !matches!(&p.disposition, NativeAbortPromiseDisposition::Permanent { promise_sha256, original_candidate_sha256, original_command_sha256 } if promise_sha256.len() == 64 && original_candidate_sha256.len() == 64 && original_command_sha256.len() == 64)
             })
             || self.checksum()? != self.checksum_sha256 {
             return Err(invalid("damaged/missing actual permanent AbortPromise quorum audit"));
@@ -178,7 +179,20 @@ impl BicDb {
             .read_native_range_image_record(&decision_key(prefix.range_id, prefix.range_index))?
             .ok_or_else(|| invalid("protected actual AbortPromise quorum decision missing"))?;
         record.validate(birth)?;
-        if record.base_receipt_sha256 != base.checksum_sha256
+        if record.scope.range_id != prefix.range_id
+            || record.range_index != prefix.range_index
+            || record.previous_index != prefix.previous_index
+            || record.previous_receipt_sha256 != prefix.previous_receipt_sha256
+            || record.logical_genesis_sha256 != prefix.logical_genesis_sha256
+            || record.scope.configuration_sha256 != prefix.scope_sha256
+            || prefix.certificate_evidence
+                != (NativeRangeCertificateEvidence::AbortPromiseQuorum {
+                    recovery_nonce: record.scope.recovery_nonce,
+                    configuration_sha256: record.scope.configuration_sha256.clone(),
+                    current_range_epoch: record.scope.range_epoch,
+                    metadata_context_id: record.post_quorum_metadata_context_id,
+                })
+            || record.base_receipt_sha256 != base.checksum_sha256
             || record.checksum_sha256 != no_data.decision_sha256
             || record.native_page_xid != no_data.native_page_xid
             || record.local_data_visibility != no_data.local_data_visibility
@@ -272,8 +286,13 @@ impl BicDb {
             .ok_or_else(|| {
                 invalid("first abort publisher requires its actual permanent local promise")
             })?;
-        if local_promise.candidate_sha256 != quorum.candidate().sha256() {
-            return Err(invalid("local permanent promise binds another candidate"));
+        if local_promise.domain != quorum.candidate().record().domain
+            || local_promise.predecessor_index != source.range_index()
+            || local_promise.predecessor_history_sha256 != source.logical_history_sha256()
+        {
+            return Err(invalid(
+                "local permanent promise binds another domain/history",
+            ));
         }
         let command = &quorum.candidate().record().command;
         let entry = history::NativeLogicalHistoryEntryV1::canonical_aborted(

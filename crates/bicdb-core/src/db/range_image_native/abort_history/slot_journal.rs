@@ -362,6 +362,8 @@ pub(crate) struct NativeAbortPermanentPromise {
     pub(crate) candidate_sha256: String,
     pub(crate) range_id: RangeId,
     pub(crate) range_index: u64,
+    pub(crate) predecessor_index: u64,
+    pub(crate) predecessor_history_sha256: String,
     pub(crate) first_scope: crate::distribution_range_consensus::RecoveryFenceScope,
     birth_id: Uuid,
     store_id: Uuid,
@@ -391,6 +393,8 @@ impl NativeAbortPermanentPromise {
             || self.command_sha256 != slot.command.checksum_sha256
             || self.range_id != slot.command.range_id
             || self.range_index != slot.command.index
+            || self.predecessor_index != slot.predecessor_index
+            || self.predecessor_history_sha256 != slot.predecessor_history_sha256
             || self.candidate_sha256.len() != 64
             || self.observed_metadata_context_id.is_nil()
             || self.native_page_xid == 0
@@ -405,6 +409,35 @@ impl NativeAbortPermanentPromise {
     }
 }
 impl BicDb {
+    /// Immutable actual native history dominates an older retained no-commit
+    /// audit. This is an observation only; it creates no certificate or vote.
+    pub(crate) fn actual_native_abort_committed_command(
+        &self,
+        native: &NativeRecoveryAdmission,
+        role: &crate::distribution_range_recovery::RecoveryRoleAdmission,
+        index: u64,
+    ) -> Result<Option<String>> {
+        native.require_current(self)?;
+        self.require_installed_native_writer_database_for_range(role.current_range())?;
+        let source = self.current_native_range_source_lineage(role.current_range().id)?;
+        if source.range_index() < index {
+            return Ok(None);
+        }
+        let entry = self.read_native_history_entry(
+            role.current_range().id,
+            source.history_generation(),
+            index,
+        )?;
+        match entry.outcome {
+            super::super::history::NativeLogicalHistoryOutcomeV1::Applied {
+                command_checksum_sha256,
+            } => Ok(Some(command_checksum_sha256)),
+            super::super::history::NativeLogicalHistoryOutcomeV1::Aborted => Ok(None),
+            super::super::history::NativeLogicalHistoryOutcomeV1::Genesis => {
+                Err(invalid("abort request cannot target genesis"))
+            }
+        }
+    }
     pub(crate) fn observe_actual_native_abort_promise(
         &self,
         range: RangeId,
@@ -460,12 +493,23 @@ impl BicDb {
         if let Some(old) =
             self.observe_actual_native_abort_promise(request.scope.range_id, request.range_index)?
         {
-            if old.command_sha256 != record.command.checksum_sha256
-                || old.candidate_sha256 != candidate.sha256()
+            if old.domain != record.domain
+                || old.predecessor_index != record.predecessor_index()
+                || old.predecessor_history_sha256 != record.predecessor_history_sha256()
             {
                 return Err(invalid(
-                    "permanent slot promise already binds another candidate",
+                    "permanent slot promise belongs to another history/domain",
                 ));
+            }
+            if source.range_index() >= request.range_index {
+                let actual = self.read_native_history_entry(
+                    request.scope.range_id,
+                    source.history_generation(),
+                    request.range_index,
+                )?;
+                if actual.outcome != super::super::history::NativeLogicalHistoryOutcomeV1::Aborted {
+                    return Err(invalid("permanent no-commit audit cannot reissue as vote after actual committed materialization"));
+                }
             }
             old.domain.require_role(role)?;
             if role.metadata_term() < old.observed_metadata_term
@@ -490,13 +534,10 @@ impl BicDb {
                 invalid("abort promise requires protected writer-start; no absent-slot inference")
             })?;
         slot.validate(&birth, store_id)?;
-        if slot.command != record.command
-            || slot.domain != record.domain
+        if slot.domain != record.domain
+            || slot.predecessor_index != record.predecessor_index()
+            || slot.predecessor_history_sha256 != record.predecessor_history_sha256()
             || slot.ever_commit
-            || slot
-                .no_effect_sha256
-                .as_deref()
-                .is_some_and(|h| h != candidate.sha256())
         {
             return Err(invalid(
                 "actual slot contains Commit/conflicting command; AbortPromise forbidden",
@@ -508,6 +549,8 @@ impl BicDb {
             candidate_sha256: candidate.sha256().into(),
             range_id: request.scope.range_id,
             range_index: request.range_index,
+            predecessor_index: slot.predecessor_index,
+            predecessor_history_sha256: slot.predecessor_history_sha256.clone(),
             first_scope: request.scope.clone(),
             birth_id: birth.birth_id,
             store_id,

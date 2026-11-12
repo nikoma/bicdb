@@ -536,6 +536,40 @@ pub(crate) fn validate_record(db: &BicDb, schema: &TableSchema, record: &Record)
     Ok(())
 }
 
+pub(crate) fn route_record(
+    db: &BicDb,
+    accessed: &TableSchema,
+    record: &Record,
+) -> Result<TableSchema> {
+    validate_record(db, accessed, record)?;
+    let mut current = accessed.clone();
+    let mut seen = BTreeSet::new();
+    while current.partitioning.is_some() {
+        if !seen.insert(current.name.clone()) {
+            return Err(invalid("cyclic partition tree"));
+        }
+        let mut target = None;
+        for child in children(db, &current)? {
+            if matches_partition(db, &current, &child, record)? {
+                if target.is_some() {
+                    return Err(invalid("row matches multiple partition bounds"));
+                }
+                target = Some(child);
+            }
+        }
+        current = target.ok_or_else(|| {
+            violation(
+                &accessed.name,
+                format!(
+                    "no partition of relation \"{}\" found for row",
+                    catalog_display_name(&current.name)
+                ),
+            )
+        })?;
+    }
+    Ok(current)
+}
+
 fn scan(db: &BicDb, tx: Option<&Transaction>, table: &str) -> Result<Vec<Record>> {
     match tx {
         Some(tx) => tx.scan_collection(table).map_err(SqlError::from),

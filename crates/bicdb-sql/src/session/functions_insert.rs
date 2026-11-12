@@ -951,7 +951,14 @@ impl<'db> SqlSession<'db> {
         if let Some((_, error)) = rls_violation {
             return Err(error);
         }
-        self.insert_session_new_records(&table, schema.as_deref(), records.clone())?;
+        if let Some(parent) = schema
+            .as_deref()
+            .filter(|schema| schema.partitioning.is_some())
+        {
+            self.insert_partition_records(parent, &records)?;
+        } else {
+            self.insert_session_new_records(&table, schema.as_deref(), records.clone())?;
+        }
         self.fire_after_insert_triggers(&table, schema.as_deref(), &records)?;
         self.insert_result(
             &table,

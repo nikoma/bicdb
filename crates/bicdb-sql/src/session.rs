@@ -29,6 +29,7 @@ mod driver_metadata_tests;
 pub(crate) mod functions_insert;
 mod join_lookup_tests;
 mod operator_ddl;
+mod partition_exec;
 #[cfg(test)]
 mod primary_key_range_tests;
 mod primary_key_updates;

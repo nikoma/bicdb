@@ -1,9 +1,12 @@
 {
-  "README.md": "d9ac111e5e27345ae1cab1204e80a14fd0fc15461736236106f676a2d42b4f9a",
+  "README.md": "03d04364cf952afbbc062576e423dc4dfb01d2c9e8232953664db2d8a573810a",
   "create_actual_decimal_legacy_controls.py": "d842d0df6adc50883819d133371d1ca36d3c6dfba00a7117a070aa309c8dcad2",
   "decimal-legacy-fixture-creator-source.json": "e5b9e5daa49bbf54ba1f103bdffb4b9366a9498f5bde2eedf5f206e4b8756dc8",
   "decimal-supported-kind-contract-source-equivalence.json": "1889a1bed0049f92f576fdf83e9357a5008b916bb87d2b4f852c12addccad0a1",
   "decimal_legacy_fixture_creator.rs": "7bfc7a535551b050386bdc1a197de90b9d2fefa771e6713f2e211a371af9d582",
+  "final-f0-complete-core-broad/report-decimal-final-core-broad-f0c780f4.json": "f2d57d5d251fe8656f121ad8efd5fcd0b7674d0d3c781c5e8452b708bbaaf7cd",
+  "final-f0-complete-core-broad/summary.json": "15d9db66e11fcbca86671c94bd38d7a0566c71852390587dc246af83b3474622",
+  "final-f0-complete-core-broad/tc-step-decimal-final-core-broad-f0c780f4.log.gz": "68d25d4cacf9cf81e8868a64c098fca6cbf84e186eb415e6b304b13655d90a11",
   "old-reader/current-0.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
   "old-reader/current-0.stdout": "34913b1e15f9cacc5fbe9b6d3dce770a2fb5baf8088c9be37a05fa9b196add1f",
   "old-reader/current-1.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",

@@ -71,3 +71,13 @@ all 125 integration targets. Required helper setup failures and the exact
 source-identical resume are preserved under `previous-a7-complete-core-broad`.
 A full suite on actual f0 is active separately; earlier broad passes are not
 attributed to the ordering change or to the future ERP/SUM composition.
+
+## Completed Core regression on f0
+
+The full Core run on actual `f0c780f4ccdf3699d92506f8217f4446b4039d39`
+completed successfully. The required chaos, durability and HA-state helpers
+were built from that exact source before the run. All 125 integration targets,
+the full unit suite and the explicit doctest command completed; exact counts
+and per-target results are in `final-f0-complete-core-broad/summary.json`.
+This result supersedes the earlier pending observation above. It does not
+qualify a future ERP/SUM composition or a published binary/deployment.

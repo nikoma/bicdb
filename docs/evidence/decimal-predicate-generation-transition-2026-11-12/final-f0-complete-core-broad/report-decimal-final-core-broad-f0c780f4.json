@@ -1,0 +1,42 @@
+{
+  "source": "f0c780f4ccdf3699d92506f8217f4446b4039d39",
+  "scope": "FinalstablegenericDecimalreaderfencebeforeNativepagerecovery. Sourcef0passed13focusedcontrols (4unit+9integration),9realSIGABRTboundaries,2sequentialindexcuts,4corruptplans,16catalogEIOcases. Run fullCoreunit/doc/all125integrationtargets at actualf0afterbatchstabilized. Build all3requiredactualf0helpers first, verifiedtaskownedrg; no missinghelperfilter or assertion/timeout changes. Previousa7fullCore537unit+125targetsPASSpreservedbutnotattributedtof0. ERP/SUMcompositionnotincludedandmustqualifyseparately.",
+  "started_unix": 1794477631.4953327,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "build",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--example",
+        "chaos_child",
+        "--example",
+        "durability_child",
+        "--example",
+        "ha_state_child"
+      ],
+      "started_unix": 1794477631.4955497,
+      "exit": 0,
+      "finished_unix": 1794477634.5136032
+    },
+    {
+      "command": [
+        "env",
+        "PATH=/root/bicdb-durability-s3/cargo/bin:/root/bicdb-durability-s3/host-control/bin:/usr/bin:/bin",
+        "bash",
+        "scripts/run-cargo-test-targets-bounded.sh",
+        "bicdb-core"
+      ],
+      "started_unix": 1794477634.513821,
+      "exit": 0,
+      "finished_unix": 1794478259.0920203
+    }
+  ],
+  "status": "focused_passed",
+  "finished_unix": 1794478259.092215
+}

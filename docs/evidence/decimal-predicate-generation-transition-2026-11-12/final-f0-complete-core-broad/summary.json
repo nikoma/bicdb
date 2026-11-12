@@ -1,0 +1,528 @@
+{
+  "source": "f0c780f4ccdf3699d92506f8217f4446b4039d39",
+  "status": "complete_core_broad_passed",
+  "unit": {
+    "passed": 538,
+    "ignored": 5
+  },
+  "integration_targets": 125,
+  "integration_tests_passed": 845,
+  "integration_ignored": 8,
+  "targets": {
+    "unittests src/lib.rs": {
+      "passed": 538,
+      "ignored": 5
+    },
+    "tests/aggregate_projection.rs": {
+      "passed": 12,
+      "ignored": 0
+    },
+    "tests/aggregate_projection_durability.rs": {
+      "passed": 5,
+      "ignored": 0
+    },
+    "tests/aggregate_sketch.rs": {
+      "passed": 7,
+      "ignored": 0
+    },
+    "tests/application_invariants.rs": {
+      "passed": 5,
+      "ignored": 0
+    },
+    "tests/archive_fail_closed.rs": {
+      "passed": 13,
+      "ignored": 0
+    },
+    "tests/auto_checkpoint.rs": {
+      "passed": 3,
+      "ignored": 0
+    },
+    "tests/backup.rs": {
+      "passed": 10,
+      "ignored": 0
+    },
+    "tests/backup_online.rs": {
+      "passed": 3,
+      "ignored": 0
+    },
+    "tests/backup_online_wal_rotation.rs": {
+      "passed": 1,
+      "ignored": 0
+    },
+    "tests/backup_paged.rs": {
+      "passed": 4,
+      "ignored": 0
+    },
+    "tests/backup_repository.rs": {
+      "passed": 14,
+      "ignored": 0
+    },
+    "tests/branching.rs": {
+      "passed": 1,
+      "ignored": 0
+    },
+    "tests/broker.rs": {
+      "passed": 30,
+      "ignored": 0
+    },
+    "tests/broker_delivery_snapshot.rs": {
+      "passed": 1,
+      "ignored": 0
+    },
+    "tests/broker_fenced.rs": {
+      "passed": 1,
+      "ignored": 0
+    },
+    "tests/broker_outbox_retention.rs": {
+      "passed": 6,
+      "ignored": 1
+    },
+    "tests/bulk_load_insert.rs": {
+      "passed": 4,
+      "ignored": 0
+    },
+    "tests/collection_rename.rs": {
+      "passed": 3,
+      "ignored": 0
+    },
+    "tests/collection_rename_admission.rs": {
+      "passed": 4,
+      "ignored": 0
+    },
+    "tests/collection_rename_paged_stubs.rs": {
+      "passed": 3,
+      "ignored": 0
+    },
+    "tests/commit_apply_failure.rs": {
+      "passed": 1,
+      "ignored": 0
+    },
+    "tests/commit_durability_crash.rs": {
+      "passed": 28,
+      "ignored": 3
+    },
+    "tests/commit_durability_isolation.rs": {
+      "passed": 1,
+      "ignored": 0
+    },
+    "tests/commit_recovery_atomicity.rs": {
+      "passed": 3,
+      "ignored": 0
+    },
+    "tests/commit_visibility.rs": {
+      "passed": 1,
+      "ignored": 0
+    },
+    "tests/concurrency.rs": {
+      "passed": 8,
+      "ignored": 0
+    },
+    "tests/consensus_leader_writes.rs": {
+      "passed": 3,
+      "ignored": 0
+    },
+    "tests/constraint_key_waits.rs": {
+      "passed": 6,
+      "ignored": 0
+    },
+    "tests/core.rs": {
+      "passed": 106,
+      "ignored": 1
+    },
+    "tests/decimal_predicate_generations.rs": {
+      "passed": 9,
+      "ignored": 0
+    },
+    "tests/distribution_certificate_ack.rs": {
+      "passed": 5,
+      "ignored": 0
+    },
+    "tests/distribution_learner.rs": {
+      "passed": 9,
+      "ignored": 0
+    },
+    "tests/distribution_rpc_deadline.rs": {
+      "passed": 1,
+      "ignored": 0
+    },
+    "tests/distribution_rpc_mtls_deadline.rs": {
+      "passed": 4,
+      "ignored": 0
+    },
+    "tests/distribution_snapshot.rs": {
+      "passed": 1,
+      "ignored": 0
+    },
+    "tests/distribution_supervisor_fairness.rs": {
+      "passed": 2,
+      "ignored": 0
+    },
+    "tests/durability_fail_closed.rs": {
+      "passed": 16,
+      "ignored": 0
+    },
+    "tests/empty_index_initialization.rs": {
+      "passed": 1,
+      "ignored": 0
+    },
+    "tests/encryption.rs": {
+      "passed": 22,
+      "ignored": 0
+    },
+    "tests/event_read_fence.rs": {
+      "passed": 2,
+      "ignored": 0
+    },
+    "tests/events.rs": {
+      "passed": 11,
+      "ignored": 0
+    },
+    "tests/flashback.rs": {
+      "passed": 9,
+      "ignored": 0
+    },
+    "tests/frame_log_torn_tail.rs": {
+      "passed": 9,
+      "ignored": 0
+    },
+    "tests/fts_adaptive_partitions.rs": {
+      "passed": 10,
+      "ignored": 0
+    },
+    "tests/fts_build_resume.rs": {
+      "passed": 15,
+      "ignored": 0
+    },
+    "tests/fts_cancellation.rs": {
+      "passed": 1,
+      "ignored": 0
+    },
+    "tests/fts_segment_equivalence.rs": {
+      "passed": 12,
+      "ignored": 0
+    },
+    "tests/fts_storage_generation.rs": {
+      "passed": 4,
+      "ignored": 0
+    },
+    "tests/fts_unicode_tokenizer.rs": {
+      "passed": 5,
+      "ignored": 0
+    },
+    "tests/full_text_legacy_backfill.rs": {
+      "passed": 1,
+      "ignored": 0
+    },
+    "tests/gap1_page_only_batches.rs": {
+      "passed": 2,
+      "ignored": 0
+    },
+    "tests/geo_geofence_mesh.rs": {
+      "passed": 2,
+      "ignored": 0
+    },
+    "tests/ha_state_crash.rs": {
+      "passed": 7,
+      "ignored": 0
+    },
+    "tests/ha_state_durability.rs": {
+      "passed": 8,
+      "ignored": 0
+    },
+    "tests/index_concurrency_bench.rs": {
+      "passed": 0,
+      "ignored": 1
+    },
+    "tests/integrity_truncation.rs": {
+      "passed": 3,
+      "ignored": 0
+    },
+    "tests/intern_dictionary.rs": {
+      "passed": 3,
+      "ignored": 0
+    },
+    "tests/large_values.rs": {
+      "passed": 6,
+      "ignored": 0
+    },
+    "tests/lean_l5_audit_retention.rs": {
+      "passed": 2,
+      "ignored": 0
+    },
+    "tests/lean_l6_wal_prune.rs": {
+      "passed": 1,
+      "ignored": 0
+    },
+    "tests/live_replication.rs": {
+      "passed": 32,
+      "ignored": 0
+    },
+    "tests/log_archive_pitr.rs": {
+      "passed": 8,
+      "ignored": 0
+    },
+    "tests/logical_copy.rs": {
+      "passed": 2,
+      "ignored": 0
+    },
+    "tests/lua.rs": {
+      "passed": 1,
+      "ignored": 0
+    },
+    "tests/memory.rs": {
+      "passed": 6,
+      "ignored": 0
+    },
+    "tests/mutation_grants.rs": {
+      "passed": 8,
+      "ignored": 0
+    },
+    "tests/mvcc_chain_recovery.rs": {
+      "passed": 1,
+      "ignored": 0
+    },
+    "tests/native_unique_reservations.rs": {
+      "passed": 6,
+      "ignored": 0
+    },
+    "tests/oracle_simple_case_indexes.rs": {
+      "passed": 13,
+      "ignored": 1
+    },
+    "tests/outbox_exactly_once.rs": {
+      "passed": 7,
+      "ignored": 0
+    },
+    "tests/paged_checkpoint_maintenance.rs": {
+      "passed": 4,
+      "ignored": 0
+    },
+    "tests/paged_concurrency.rs": {
+      "passed": 13,
+      "ignored": 0
+    },
+    "tests/paged_fts_postings.rs": {
+      "passed": 16,
+      "ignored": 0
+    },
+    "tests/paged_index_entries.rs": {
+      "passed": 8,
+      "ignored": 0
+    },
+    "tests/paged_integrity_bounded.rs": {
+      "passed": 4,
+      "ignored": 0
+    },
+    "tests/paged_integrity_maintenance.rs": {
+      "passed": 3,
+      "ignored": 0
+    },
+    "tests/paged_maintenance.rs": {
+      "passed": 3,
+      "ignored": 0
+    },
+    "tests/paged_observability.rs": {
+      "passed": 4,
+      "ignored": 0
+    },
+    "tests/paged_orphaned_writer.rs": {
+      "passed": 1,
+      "ignored": 0
+    },
+    "tests/paged_row_reservations.rs": {
+      "passed": 5,
+      "ignored": 0
+    },
+    "tests/paged_system_metadata.rs": {
+      "passed": 1,
+      "ignored": 0
+    },
+    "tests/paged_vacuum_progress.rs": {
+      "passed": 8,
+      "ignored": 0
+    },
+    "tests/paged_visible_count.rs": {
+      "passed": 2,
+      "ignored": 0
+    },
+    "tests/paged_writeback_bounded.rs": {
+      "passed": 3,
+      "ignored": 0
+    },
+    "tests/planner_row_estimate.rs": {
+      "passed": 5,
+      "ignored": 0
+    },
+    "tests/projection_chaos.rs": {
+      "passed": 5,
+      "ignored": 0
+    },
+    "tests/projection_checkpoint_hygiene.rs": {
+      "passed": 4,
+      "ignored": 0
+    },
+    "tests/projection_distributed.rs": {
+      "passed": 6,
+      "ignored": 0
+    },
+    "tests/projection_incremental_persistence.rs": {
+      "passed": 2,
+      "ignored": 0
+    },
+    "tests/projection_rollup.rs": {
+      "passed": 5,
+      "ignored": 0
+    },
+    "tests/projection_sketch_measures.rs": {
+      "passed": 8,
+      "ignored": 0
+    },
+    "tests/read_committed_reservations.rs": {
+      "passed": 10,
+      "ignored": 0
+    },
+    "tests/read_committed_zero_boundary.rs": {
+      "passed": 4,
+      "ignored": 0
+    },
+    "tests/record_key_candidates.rs": {
+      "passed": 1,
+      "ignored": 0
+    },
+    "tests/relocation_snapshot_authorization.rs": {
+      "passed": 1,
+      "ignored": 0
+    },
+    "tests/replication_durable_frames.rs": {
+      "passed": 7,
+      "ignored": 0
+    },
+    "tests/replication_journal.rs": {
+      "passed": 2,
+      "ignored": 0
+    },
+    "tests/residency.rs": {
+      "passed": 9,
+      "ignored": 0
+    },
+    "tests/single_writer_directory_lock.rs": {
+      "passed": 2,
+      "ignored": 0
+    },
+    "tests/snapshot.rs": {
+      "passed": 10,
+      "ignored": 0
+    },
+    "tests/spatial_pack_resume.rs": {
+      "passed": 3,
+      "ignored": 0
+    },
+    "tests/spatial_packed.rs": {
+      "passed": 13,
+      "ignored": 0
+    },
+    "tests/spatial_streaming.rs": {
+      "passed": 4,
+      "ignored": 0
+    },
+    "tests/storage_conformance.rs": {
+      "passed": 20,
+      "ignored": 0
+    },
+    "tests/storage_mode.rs": {
+      "passed": 12,
+      "ignored": 0
+    },
+    "tests/storage_mode_migration.rs": {
+      "passed": 5,
+      "ignored": 0
+    },
+    "tests/storage_ops_handle.rs": {
+      "passed": 3,
+      "ignored": 0
+    },
+    "tests/structural_cut_concurrent_failure.rs": {
+      "passed": 1,
+      "ignored": 0
+    },
+    "tests/structural_cut_large_record.rs": {
+      "passed": 1,
+      "ignored": 0
+    },
+    "tests/sync_mesh.rs": {
+      "passed": 4,
+      "ignored": 0
+    },
+    "tests/sync_mesh_signing.rs": {
+      "passed": 9,
+      "ignored": 0
+    },
+    "tests/sync_mesh_torture.rs": {
+      "passed": 14,
+      "ignored": 0
+    },
+    "tests/sync_transaction_visibility.rs": {
+      "passed": 3,
+      "ignored": 0
+    },
+    "tests/tid_hint_read_through.rs": {
+      "passed": 2,
+      "ignored": 0
+    },
+    "tests/timestamp_day_indexes.rs": {
+      "passed": 3,
+      "ignored": 0
+    },
+    "tests/transaction_id_recovery.rs": {
+      "passed": 5,
+      "ignored": 1
+    },
+    "tests/transaction_isolation.rs": {
+      "passed": 7,
+      "ignored": 0
+    },
+    "tests/transaction_receipts.rs": {
+      "passed": 9,
+      "ignored": 0
+    },
+    "tests/transaction_rollback_mark.rs": {
+      "passed": 2,
+      "ignored": 0
+    },
+    "tests/unique_index_build_identity.rs": {
+      "passed": 1,
+      "ignored": 0
+    },
+    "tests/unique_nulls.rs": {
+      "passed": 4,
+      "ignored": 0
+    },
+    "tests/v3_end_to_end.rs": {
+      "passed": 5,
+      "ignored": 0
+    },
+    "tests/v3_index_entries.rs": {
+      "passed": 3,
+      "ignored": 0
+    },
+    "tests/v3_rekey.rs": {
+      "passed": 1,
+      "ignored": 0
+    },
+    "tests/wal_acknowledgement_race.rs": {
+      "passed": 1,
+      "ignored": 0
+    }
+  },
+  "doctests": "0 tests, command successful",
+  "all_required_helpers_built_actual_source": [
+    "chaos_child",
+    "durability_child",
+    "ha_state_child"
+  ],
+  "original_assertions_and_timeouts_unchanged": true,
+  "focused_controls": 13,
+  "independent_old_reader_control": "PASS at actual f0",
+  "remaining": "Final composition with ERP native constraints/signed scope transition and exact SUM must qualify its actual combined head; fresh version/main merge required. No release, full application or physical HA claim.",
+  "recorded_unix": 1794478589.2154078
+}

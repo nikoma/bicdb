@@ -351,6 +351,15 @@ pub(super) fn fresh_new_scope(
             old["recovery_fence"],
             "exact original refusal, phase, certification and retired-nonce archive"
         );
+        assert_eq!(after["current_joint_recovery"]["binding"]["local_handoff_promise"],old["handoff_promise"],
+            "the exact actual LOCAL promise/floor is archived; global plan cut is never substituted");
+        assert_eq!(after["current_joint_recovery"]["original_handoff_promise"],old["joint"]["serving_activation"]["promise"],
+            "protected global request promise remains immutable independently of local resolved cut");
+        assert_eq!(
+            after["current_joint_recovery"]["binding"]["local_old_close_sha256"],
+            old["joint"]["old_closed_native_sha256"],
+            "actual local protected closure pointer, including genuine None on image target"
+        );
         assert_eq!(
             after["recovery_fence"]["scope"]["purpose"],
             serde_json::to_value(&purpose).unwrap()

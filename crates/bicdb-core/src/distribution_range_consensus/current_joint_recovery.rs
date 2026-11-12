@@ -48,6 +48,24 @@ pub(super) fn validate_current_joint_catalog(catalog: &RangeWriteCatalog) -> Res
         for (range, state) in states {
             state.scope.validate()?;
             state.original_handoff_promise.validate()?;
+            if let Some(local) = &state.binding.local_handoff_promise {
+                local.validate()?;
+            }
+            if state.binding.local_handoff_promise.as_ref() != catalog.handoff_promises.get(range)
+                || state.binding.local_handoff_promise.is_some()
+                    != state.binding.local_old_close_sha256.is_some()
+                || state
+                    .binding
+                    .local_old_close_sha256
+                    .as_ref()
+                    .is_some_and(|sha| {
+                        sha.len() != 64 || !sha.bytes().all(|b| b.is_ascii_hexdigit())
+                    })
+            {
+                return Err(range_write_error(
+                    "current joint archive lost exact original LOCAL promise/closure constraint",
+                ));
+            }
             if state.original_handoff_promise.range_id != *range {
                 return Err(range_write_error(
                     "current joint archive changed original promised range",
@@ -95,24 +113,40 @@ pub(super) fn validate_current_joint_catalog(catalog: &RangeWriteCatalog) -> Res
     Ok(())
 }
 impl RangeWriteStore {
-    pub(crate) fn require_current_joint_handoff_constraints(
+    /// Constraint DATA only. Semantic request equality does NOT establish the
+    /// local floor: the DB producer separately verifies the protected old-close
+    /// record/current+archive and global OLD physical materialization facts.
+    pub(crate) fn current_joint_local_handoff_promise(
         &self,
         data: &crate::distribution_range_handoff::NativeJointDecisionData,
-    ) -> Result<()> {
+    ) -> Result<Option<RangeHandoffPromise>> {
         let range = data.activation_range().id;
         self.require_no_image_install(range)?;
+        let local = self.catalog.handoff_promises.get(&range);
         if self.catalog.backup_fences.contains_key(&range)
-            || self
-                .catalog
-                .handoff_promises
-                .get(&range)
-                .is_some_and(|promise| promise != data.promise())
+            || local.is_some_and(|promise| {
+                !promise.same_request(data.promise())
+                    || promise.resolved_through > data.range_index()
+            })
         {
-            return Err(range_write_error(
-                "current joint recovery cannot bypass a DIFFERENT permanent handoff/backup refusal",
-            ));
+            return Err(range_write_error("current joint recovery cannot bypass a DIFFERENT or uncovered permanent handoff/backup refusal"));
         }
-        Ok(())
+        Ok(local.cloned())
+    }
+    pub(crate) fn require_current_joint_local_closure_pointer(
+        &self,
+        data: &crate::distribution_range_handoff::NativeJointDecisionData,
+        old_close: Option<&str>,
+    ) -> Result<()> {
+        let state = self
+            .catalog
+            .native_joint_handoffs
+            .as_ref()
+            .and_then(|m| m.get(&data.activation_range().id))
+            .ok_or_else(|| {
+                range_write_error("current joint recovery lost actual local joint state")
+            })?;
+        state.require_current_joint_closure_pointer(data, old_close)
     }
     fn require_original_joint_recovery_writer(&self, range: RangeId) -> Result<()> {
         let original=self.current_joint_recovery_writers.get(&range).and_then(std::sync::Weak::upgrade)
@@ -140,13 +174,9 @@ impl RangeWriteStore {
         }
         self.current_joint_scope_constraint(&saved.scope)?;
         let original = &self.catalog.current_joint_recoveries.as_ref().unwrap()[&range]
-            .original_handoff_promise;
-        if self
-            .catalog
-            .handoff_promises
-            .get(&range)
-            .is_some_and(|promise| promise != original)
-        {
+            .binding
+            .local_handoff_promise;
+        if self.catalog.handoff_promises.get(&range) != original.as_ref() {
             return Err(range_write_error(
                 "current joint recovered open has a different permanent handoff refusal",
             ));
@@ -325,12 +355,12 @@ impl RangeWriteStore {
                 "new joint recovery cannot reuse original handoff identity or backup refusal",
             ));
         }
-        if let Some(promise) = self.catalog.handoff_promises.get(&scope.range_id) {
-            if promise != fact.data().promise() {
-                return Err(range_write_error(
-                    "new joint recovery changed an irreversible original handoff promise",
-                ));
-            }
+        if self.catalog.handoff_promises.get(&scope.range_id)
+            != fact.binding().local_handoff_promise.as_ref()
+        {
+            return Err(range_write_error(
+                "new joint recovery changed the exact actual LOCAL handoff promise",
+            ));
         }
         let state = self
             .catalog

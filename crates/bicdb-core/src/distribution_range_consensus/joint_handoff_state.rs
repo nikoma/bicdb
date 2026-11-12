@@ -145,6 +145,21 @@ pub(super) struct NativeJointLocalState {
     serving_activation: Option<NativeJointCatalogueActivation>,
 }
 impl NativeJointLocalState {
+    /// Read-only binding check; a hash/decoded state never mints recovery.
+    pub(super) fn require_current_joint_closure_pointer(
+        &self,
+        data: &crate::distribution_range_handoff::NativeJointDecisionData,
+        old_close: Option<&str>,
+    ) -> Result<()> {
+        self.validate()?;
+        if self.scope_sha256 != data.scope_sha256()?
+            || self.global_decision_sha256.as_deref() != Some(data.checksum_sha256())
+            || self.old_closed_native_sha256.as_deref() != old_close
+        {
+            return Err(range_write_error("current joint recovery local promise lost exact protected closure/decision pointer"));
+        }
+        Ok(())
+    }
     pub(super) fn validate(&self) -> Result<()> {
         if let Some(activation) = &self.serving_activation {
             activation.validate()?;

@@ -138,6 +138,16 @@ impl NativeJointDecisionData {
     pub(crate) fn logical_history_sha256(&self) -> &str {
         &self.h
     }
+    /// Historical protected scope/materialization DATA; no live role or QQ.
+    pub(crate) fn scope_sha256(&self) -> Result<String> {
+        self.scope.checksum()
+    }
+    pub(crate) fn old_materialized_fact(
+        &self,
+        node: &ClusterNodeId,
+    ) -> Option<&NativeJointMaterializedFacts> {
+        self.old_closed.get(node)
+    }
     pub(crate) fn promise(&self) -> &RangeHandoffPromise {
         &self.scope.promise
     }

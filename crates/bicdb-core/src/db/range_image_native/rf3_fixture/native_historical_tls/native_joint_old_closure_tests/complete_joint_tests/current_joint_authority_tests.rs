@@ -146,6 +146,73 @@ pub(super) fn exercise(
         assert_eq!(points[&id]["r"], 2);
     }
     require_inherited(fixture, range, &points, ack1, ack2);
+    // Read-only altered CLAIM negatives against ACTUAL protected local closure.
+    // This is not installation of a fabricated later promise or a new QQ.
+    let before_claims = diagnostic_cut(fixture, range, ack1, ack2, &key);
+    let global_cut = before_claims[&node("n1")]["joint"]["serving_activation"]["range_index"]
+        .as_u64()
+        .unwrap();
+    let mut exact_local = None;
+    fixture.native.services[&node("n1")]
+        .lock()
+        .test_current_joint_local_promise_claim(range.id, &token(), |local| {
+            exact_local = local.clone();
+            local
+        })
+        .expect("actual local resolved cut must be proved independently from request cut");
+    assert_eq!(exact_local.as_ref().unwrap().resolved_through, 1);
+    for (label, change) in [
+        ("foreign-request", 0),
+        ("lowered-local-floor", 1),
+        ("raised-uncovered-floor", 2),
+        ("missing-survivor-promise", 3),
+    ] {
+        let error = fixture.native.services[&node("n1")]
+            .lock()
+            .test_current_joint_local_promise_claim(range.id, &token(), |local| {
+                let mut claim = local.unwrap();
+                match change {
+                    0 => claim.plan_id.push_str("-foreign-CLAIM"),
+                    1 => claim.resolved_through = 0,
+                    2 => claim.resolved_through = global_cut.checked_add(1).unwrap(),
+                    3 => return None,
+                    _ => unreachable!(),
+                }
+                Some(claim)
+            })
+            .expect_err(
+                "a decoded/altered claim cannot replace actual protected local promise proof",
+            );
+        assert!(error.to_string().contains("promise"), "{label}: {error}");
+    }
+    fixture.native.services[&node("n3")]
+        .lock()
+        .test_current_joint_local_promise_claim(range.id, &token(), |local| {
+            assert!(local.is_none());
+            local
+        })
+        .expect("actual image target has genuine None, not a synthesized OLD voter promise");
+    let error = fixture.native.services[&node("n3")]
+        .lock()
+        .test_current_joint_local_promise_claim(range.id, &token(), |_| exact_local.clone())
+        .expect_err("actual target cannot acquire another member's original promise");
+    assert!(
+        error.to_string().contains("image target cannot synthesize"),
+        "{error}"
+    );
+    let after_claims = diagnostic_cut(fixture, range, ack1, ack2, &key);
+    report(
+        fixture,
+        "actual-current-joint-local-promise-proof-claims.json",
+        &serde_json::json!({
+            "boundary":"read-only CLAIM validation against actual opaque native closure fact; no persisted foreign promise controller",
+            "global_cut":global_cut,"exact_actual_local_promise":exact_local,"before":before_claims,"after":after_claims,
+        }),
+    );
+    assert_eq!(
+        after_claims, before_claims,
+        "read-only claim rejection cannot mutate either original promise or native/raw state"
+    );
     let discovered = fixture.native.services[&range.leader]
         .lock()
         .observe_current_joint_recovery_purpose(range.id, &token())

@@ -47,6 +47,40 @@ fn fresh() -> (
     (root, db, spec, topology)
 }
 
+#[derive(Debug, PartialEq, Eq)]
+struct RegisteredEmptyCatalogue {
+    protected_store_id: Uuid,
+    bytes: Vec<u8>,
+    state: crate::distribution_range_consensus::RangeWriteCatalogInspection,
+}
+fn registered_empty_catalogue(db: &BicDb, spec: &RangeImageBirthSpec) -> RegisteredEmptyCatalogue {
+    // Abort-v1 protects/registers an EMPTY catalogue before voter/service
+    // exposure. Presence is required; a refused Prepare must not change it.
+    let protected_store_id = db
+        .native_abort_catalogue_store_id()
+        .unwrap()
+        .expect("fresh abort-aware native birth must retain its registered catalogue");
+    let state = RangeWriteStore::inspect(
+        db.data_path(),
+        spec.cluster_id.clone(),
+        spec.node_id.clone(),
+        64 * 1024 * 1024,
+    )
+    .unwrap();
+    assert!(state.ranges.is_empty() && state.backup_fences.is_empty());
+    let bytes = std::fs::read(db.data_path().join(DEFAULT_RANGE_WRITE_LOG)).unwrap();
+    let encoded: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    assert!(encoded["catalog"]["native_abort_protocol"]["ranges"]
+        .as_object()
+        .unwrap()
+        .is_empty());
+    RegisteredEmptyCatalogue {
+        protected_store_id,
+        bytes,
+        state,
+    }
+}
+
 #[test]
 fn native_writer_birth_v2_is_actual_sticky_and_strict_reopen_preserves_enforcement() {
     let (_root, db, spec, _) = fresh();
@@ -271,6 +305,10 @@ fn native_writer_birth_v2_uninstalled_actual_store_and_service_refuse_before_pre
     let command = test_catalog_command(spec.cluster_id.clone(), &range, 1, &intent).unwrap();
     let mut store =
         RangeWriteStore::open(&path, spec.cluster_id.clone(), spec.node_id.clone(), true).unwrap();
+    let before_catalogue = registered_empty_catalogue(&db.read(), &spec);
+    let before_wal = db.read().tx_log_handle().stats();
+    let before_sequence = db.read().current_commit_seq();
+    assert!(db.read().commit_admission.read().native_writer().is_none());
     assert!(store
         .prepare(command.clone())
         .unwrap_err()
@@ -278,7 +316,19 @@ fn native_writer_birth_v2_uninstalled_actual_store_and_service_refuse_before_pre
         .contains("policy"));
     assert_eq!(store.progress(range.id).last_index, 0);
     assert_eq!(store.progress(range.id).resolved_through, 0);
-    assert!(!path.join(DEFAULT_RANGE_WRITE_LOG).exists());
+    assert_eq!(
+        registered_empty_catalogue(&db.read(), &spec),
+        before_catalogue
+    );
+    assert_eq!(
+        db.read().tx_log_handle().stats().written_seq,
+        before_wal.written_seq
+    );
+    assert_eq!(
+        db.read().tx_log_handle().stats().commits_written,
+        before_wal.commits_written
+    );
+    assert_eq!(db.read().current_commit_seq(), before_sequence);
     drop(store);
     let mut service = crate::ClusterDataNodeService::open(
         spec.cluster_id.clone(),
@@ -289,10 +339,28 @@ fn native_writer_birth_v2_uninstalled_actual_store_and_service_refuse_before_pre
     )
     .unwrap();
     assert_eq!(service.native_writer_enforcement_version().unwrap(), 1);
+    let before_service_catalogue = registered_empty_catalogue(&db.read(), &spec);
+    assert_eq!(
+        before_service_catalogue.protected_store_id,
+        before_catalogue.protected_store_id
+    );
     assert!(service
         .prepare_range_write(&range, &range.leader, command)
         .is_err());
-    assert!(!path.join(DEFAULT_RANGE_WRITE_LOG).exists());
+    assert_eq!(
+        registered_empty_catalogue(&db.read(), &spec),
+        before_service_catalogue
+    );
+    assert_eq!(
+        db.read().tx_log_handle().stats().written_seq,
+        before_wal.written_seq
+    );
+    assert_eq!(
+        db.read().tx_log_handle().stats().commits_written,
+        before_wal.commits_written
+    );
+    assert_eq!(db.read().current_commit_seq(), before_sequence);
+    assert!(db.read().commit_admission.read().native_writer().is_none());
     assert_eq!(
         db.read()
             .native_range_prefix_observation(range.id)
@@ -377,6 +445,8 @@ fn native_writer_generic_open_config_false_and_dummy_refuse_before_admission_or_
         1
     );
     let before = database.current_commit_seq();
+    let before_catalogue = registered_empty_catalogue(&database, &spec);
+    let before_wal = database.tx_log_handle().stats();
     let mut transaction = database.begin_transaction().unwrap();
     transaction.insert("items", Record::new(&key)).unwrap();
     assert!(transaction
@@ -386,6 +456,18 @@ fn native_writer_generic_open_config_false_and_dummy_refuse_before_admission_or_
         .contains("installed writer policy"));
     assert!(database.get("items", &key).unwrap().is_none());
     assert_eq!(database.current_commit_seq(), before);
+    assert_eq!(
+        registered_empty_catalogue(&database, &spec),
+        before_catalogue
+    );
+    assert_eq!(
+        database.tx_log_handle().stats().written_seq,
+        before_wal.written_seq
+    );
+    assert_eq!(
+        database.tx_log_handle().stats().commits_written,
+        before_wal.commits_written
+    );
     let calls = Arc::new(std::sync::atomic::AtomicUsize::new(0));
     database.install_commit_admission(Arc::new(CountAdmissionCalls(calls.clone())));
     let mut transaction = database.begin_transaction().unwrap();
@@ -402,7 +484,19 @@ fn native_writer_generic_open_config_false_and_dummy_refuse_before_admission_or_
     );
     assert!(database.get("items", &key).unwrap().is_none());
     assert_eq!(database.current_commit_seq(), before);
-    assert!(!path.join(DEFAULT_RANGE_WRITE_LOG).exists());
+    assert_eq!(
+        registered_empty_catalogue(&database, &spec),
+        before_catalogue
+    );
+    assert_eq!(
+        database.tx_log_handle().stats().written_seq,
+        before_wal.written_seq
+    );
+    assert_eq!(
+        database.tx_log_handle().stats().commits_written,
+        before_wal.commits_written
+    );
+    assert!(database.commit_admission.read().native_writer().is_none());
 }
 
 #[test]

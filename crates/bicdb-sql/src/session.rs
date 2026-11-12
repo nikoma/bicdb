@@ -3805,11 +3805,12 @@ impl<'db> SqlSession<'db> {
     ) -> Result<Option<bicdb_core::CatalogReadAccess>> {
         if needs_snapshot {
             self.acquire_postgres_statement_snapshot(|| true)?;
-            return self.enter_current_catalog_reads();
         }
-        self.db_ref()
-            .enter_catalog_read_access(None)
-            .map_err(Into::into)
+        // DDL does not need a data snapshot, but its metadata reads still
+        // belong to the pending transaction. An anonymous reader would be
+        // refused by that transaction's own retained rename reservation.
+        // Read identity grants no internal catalog write authority.
+        self.enter_current_catalog_reads()
     }
 
     fn enter_current_catalog_reads(&self) -> Result<Option<bicdb_core::CatalogReadAccess>> {

@@ -416,10 +416,6 @@ pub fn check_sql_partition_admission(db: &BicDb) -> Result<()> {
 }
 
 fn activate_empty(db: &mut BicDb) -> Result<()> {
-    // Validate the complete resulting set, including stationary ACKs, against
-    // the actual proposed v1 descriptors before even the sticky reader fence.
-    // Existing index contents are not proof that historical rows are valid.
-    preflight::validate(db, &snapshot, &cached_schemas, &relocations)?;
     db.enable_sql_partition_execution_v1()?;
     db.create_collection(CERTIFICATE_COLLECTION)?;
     let snapshot = "fresh_empty_partition_activation_v1".to_string();
@@ -778,6 +774,9 @@ pub fn apply_partition_upgrade(
             Ok(())
         })?;
     }
+    // Validate every resulting ACK against the proposed v1 descriptors before
+    // the sticky reader fence. Historical index contents are not proof.
+    preflight::validate(db, &snapshot, &cached_schemas, &relocations)?;
     db.enable_sql_partition_execution_v1()?;
     db.create_collection(CERTIFICATE_COLLECTION)?;
     if !archives.is_empty() {
@@ -1089,6 +1088,221 @@ mod tests {
             row.metadata["k"] = serde_json::json!(2);
             db.insert("low", row).unwrap();
             assert_upgrade_refuses_without_publication(&mut db);
+            db.close().unwrap();
+        }
+    }
+
+    #[test]
+    fn stationary_leaf_exclusion_is_validated_before_any_upgrade_publication() {
+        for mode in [
+            bicdb_core::StorageMode::EmbeddedMemory,
+            bicdb_core::StorageMode::ServerPaged,
+        ] {
+            let root = tempfile::tempdir().unwrap();
+            let mut db = legacy_fixture(root.path(), mode.clone());
+            let mut schema: TableSchema = serde_json::from_value(
+                db.get(SCHEMA_COLLECTION, "low")
+                    .unwrap()
+                    .unwrap()
+                    .metadata
+                    .clone(),
+            )
+            .unwrap();
+            schema.constraints.push(ConstraintSchema::Exclusion {
+                name: "low_payload_exclude".into(),
+                access_method: "btree".into(),
+                equal_columns: vec!["payload".into()],
+                range: None,
+                predicate: None,
+                validated: true,
+            });
+            store_legacy_schema(&mut db, schema);
+            db.insert(
+                "low",
+                Record::new("3").with_metadata(serde_json::json!({"k":3,"payload":"low-ack"})),
+            )
+            .unwrap();
+            assert_upgrade_refuses_without_publication(&mut db);
+            db.close().unwrap();
+        }
+    }
+
+    #[test]
+    fn stationary_not_valid_checks_and_foreign_keys_preserve_existing_ack_exemptions() {
+        for mode in [
+            bicdb_core::StorageMode::EmbeddedMemory,
+            bicdb_core::StorageMode::ServerPaged,
+        ] {
+            let root = tempfile::tempdir().unwrap();
+            let mut db = legacy_fixture(root.path(), mode.clone());
+            let mut schema: TableSchema = serde_json::from_value(
+                db.get(SCHEMA_COLLECTION, "low")
+                    .unwrap()
+                    .unwrap()
+                    .metadata
+                    .clone(),
+            )
+            .unwrap();
+            schema.constraints.push(ConstraintSchema::Check {
+                name: "low_payload_check".into(),
+                expression: "payload <> 'low-ack'".into(),
+                validated: false,
+            });
+            schema.constraints.push(ConstraintSchema::ForeignKey {
+                name: "low_k_fkey".into(),
+                constraint_id: "legacy-low-fk".into(),
+                columns: vec!["k".into()],
+                foreign_table: "high".into(),
+                referred_columns: vec!["k".into()],
+                on_delete: ForeignKeyAction::NoAction,
+                on_update: ForeignKeyAction::NoAction,
+                validated: false,
+                deferrable: true,
+                initially_deferred: true,
+            });
+            store_legacy_schema(&mut db, schema);
+            let before = db.scan_collection("low").unwrap();
+            apply_partition_upgrade(&mut db, None).unwrap();
+            for _ in 0..2 {
+                assert_eq!(
+                    serde_json::to_value(db.scan_collection("low").unwrap()).unwrap(),
+                    serde_json::to_value(&before).unwrap()
+                );
+                assert_eq!(
+                    SqlSession::new(&mut db)
+                        .execute("INSERT INTO low VALUES(3,'low-ack')")
+                        .unwrap_err()
+                        .sqlstate(),
+                    "23514"
+                );
+                assert_eq!(
+                    SqlSession::new(&mut db)
+                        .execute("INSERT INTO low VALUES(3,'new')")
+                        .unwrap_err()
+                        .sqlstate(),
+                    "23503"
+                );
+                db.close().unwrap();
+                db = BicDb::open_with_config(root.path(), config(mode.clone())).unwrap();
+            }
+            db.close().unwrap();
+        }
+    }
+
+    #[test]
+    fn upgrade_foreign_keys_observe_all_resulting_rows_of_a_virtual_parent() {
+        for mode in [
+            bicdb_core::StorageMode::EmbeddedMemory,
+            bicdb_core::StorageMode::ServerPaged,
+        ] {
+            let root = tempfile::tempdir().unwrap();
+            let mut db = legacy_fixture(root.path(), mode.clone());
+            let mut schema: TableSchema = serde_json::from_value(
+                db.get(SCHEMA_COLLECTION, "low")
+                    .unwrap()
+                    .unwrap()
+                    .metadata
+                    .clone(),
+            )
+            .unwrap();
+            schema.constraints.push(ConstraintSchema::ForeignKey {
+                name: "low_self_root_fkey".into(),
+                constraint_id: "legacy-root-fk".into(),
+                columns: vec!["k".into()],
+                foreign_table: "p".into(),
+                referred_columns: vec!["k".into()],
+                on_delete: ForeignKeyAction::NoAction,
+                on_update: ForeignKeyAction::NoAction,
+                validated: true,
+                deferrable: true,
+                initially_deferred: true,
+            });
+            store_legacy_schema(&mut db, schema);
+            db.insert(
+                "p",
+                Record::new("3").with_metadata(serde_json::json!({"k":3,"payload":"parent-ack"})),
+            )
+            .unwrap();
+            let applied = apply_partition_upgrade(&mut db, None).unwrap();
+            assert_eq!(applied.moved_rows, 1);
+            for _ in 0..2 {
+                assert!(db.scan_collection("p").unwrap().is_empty());
+                assert_eq!(
+                    SqlSession::new(&mut db)
+                        .execute("SELECT k,payload FROM p ORDER BY k")
+                        .unwrap()
+                        .rows,
+                    vec![
+                        vec![SqlValue::Int(2), SqlValue::String("low-ack".into())],
+                        vec![SqlValue::Int(3), SqlValue::String("parent-ack".into())],
+                        vec![SqlValue::Int(12), SqlValue::String("high-ack".into())]
+                    ]
+                );
+                db.close().unwrap();
+                db = BicDb::open_with_config(root.path(), config(mode.clone())).unwrap();
+            }
+            db.close().unwrap();
+        }
+    }
+
+    #[test]
+    fn upgrade_keeps_canonical_independent_child_keys_under_a_keyless_parent() {
+        for mode in [
+            bicdb_core::StorageMode::EmbeddedMemory,
+            bicdb_core::StorageMode::ServerPaged,
+        ] {
+            let root = tempfile::tempdir().unwrap();
+            let mut db = BicDb::open_with_config(root.path(), config(mode.clone())).unwrap();
+            let mut sql = SqlSession::new(&mut db);
+            for statement in [
+                "CREATE TABLE p(k INT,payload TEXT)",
+                "CREATE TABLE low(k INT,payload TEXT PRIMARY KEY)",
+                "CREATE TABLE high(k INT,payload TEXT PRIMARY KEY)",
+                "INSERT INTO low VALUES(2,'low-ack')",
+                "INSERT INTO high VALUES(12,'high-ack')",
+            ] {
+                sql.execute(statement).unwrap();
+            }
+            drop(sql);
+            for (name, field, value) in [
+                (
+                    "p",
+                    "partitioning",
+                    serde_json::json!({"strategy":"range","key_columns":["k"]}),
+                ),
+                (
+                    "low",
+                    "partition_of",
+                    serde_json::json!({"parent_table":"p","parent_schema":"public","bound":"FOR VALUES FROM(0) TO(10)"}),
+                ),
+                (
+                    "high",
+                    "partition_of",
+                    serde_json::json!({"parent_table":"p","parent_schema":"public","bound":"FOR VALUES FROM(10) TO(20)"}),
+                ),
+            ] {
+                let mut raw = (*db.get(SCHEMA_COLLECTION, name).unwrap().unwrap()).clone();
+                raw.metadata[field] = value;
+                store_legacy_schema(&mut db, serde_json::from_value(raw.metadata).unwrap());
+            }
+            apply_partition_upgrade(&mut db, None).unwrap();
+            for _ in 0..2 {
+                ensure_primary_key_indexes(&mut db).unwrap();
+                assert!(db.get("low", "low-ack").unwrap().is_some());
+                assert!(db.get("high", "high-ack").unwrap().is_some());
+                assert_eq!(
+                    SqlSession::new(&mut db)
+                        .execute("SELECT k,payload FROM p ORDER BY k")
+                        .unwrap()
+                        .rows,
+                    vec![
+                        vec![SqlValue::Int(2), SqlValue::String("low-ack".into())],
+                        vec![SqlValue::Int(12), SqlValue::String("high-ack".into())]
+                    ]
+                );
+                db.close().unwrap();
+                db = BicDb::open_with_config(root.path(), config(mode.clone())).unwrap();
+            }
             db.close().unwrap();
         }
     }

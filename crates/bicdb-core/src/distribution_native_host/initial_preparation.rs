@@ -755,6 +755,24 @@ impl NativeProvisionalNode {
             return Err(invalid("initial preparation manifest/plan mismatch"));
         }
         let (database, factory) = BicDb::open_range_image_database(root, config, &spec)?;
+        // A strict open restores persisted catalog/native records, but its
+        // per-open schema verification cache starts empty. Establish the
+        // ACTUAL digest before asking the unchanged unwritten-genesis proof
+        // to validate that catalog. This never writes/reseals genesis.
+        let native = database.native_recovery_admission(
+            &spec.cluster_id,
+            spec.bootstrap_id,
+            &spec.node_id,
+            spec.member_incarnation,
+        )?;
+        if native.birth_id() != manifest.birth_id
+            || native.birth_sha256() != manifest.birth_sha256
+            || database.schema_compatibility_fingerprint()?.sha256 != manifest.schema_sha256
+        {
+            return Err(invalid(
+                "strict reopened preparation birth/persisted schema differs from manifest",
+            ));
+        }
         let seed = Self {
             database: Arc::new(RwLock::new(database)),
             factory,

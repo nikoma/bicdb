@@ -179,8 +179,8 @@ fn reopen_stopped(
     keys: tempfile::TempDir,
     saved: ClusterTopology,
     specs: BTreeMap<ClusterNodeId, RangeImageBirthSpec>,
-) -> std::result::Result<EnforcedNetwork, (&'static str, String)> {
-    let error = |stage| move |e: BicDbError| (stage, e.to_string());
+) -> std::result::Result<EnforcedNetwork, (&'static str, BicDbError)> {
+    let error = |stage| move |e: BicDbError| (stage, e);
     let mut databases = BTreeMap::new();
     for (id, member) in &saved.nodes {
         let (db, _) = BicDb::open_range_image_database(
@@ -202,7 +202,7 @@ fn reopen_stopped(
         if member.native_store_birth_v1.as_ref() != Some(&birth) {
             return Err((
                 "strict_native_identity_refused",
-                "copied actual birth differs from saved registry".into(),
+                invalid("copied actual birth differs from saved registry"),
             ));
         }
         let schema = db
@@ -215,7 +215,7 @@ fn reopen_stopped(
         {
             return Err((
                 "strict_native_schema_refused",
-                "copied actual schema differs".into(),
+                invalid("copied actual schema differs"),
             ));
         }
         databases.insert(id.clone(), Arc::new(RwLock::new(db)));
@@ -657,6 +657,112 @@ fn require_all_owners_ended(owners: &[ActualStoppedOwner]) {
     }
 }
 
+/// Historical protected-record observation only. This runs OUTSIDE every host
+/// install callback/held native journal; it never produces a policy/grant.
+fn policy_commitment(db: &BicDb) -> String {
+    let _journal = db.try_native_image_journal().unwrap();
+    let current: Option<Value> = db
+        .read_native_range_image_record("writer-enrollment/current")
+        .unwrap();
+    let previous: Option<Value> = db
+        .read_native_range_image_record("writer-enrollment/previous")
+        .unwrap();
+    assert!(current
+        .as_ref()
+        .is_some_and(|record| record["checksum_sha256"]
+            .as_str()
+            .is_some_and(|sha| sha.len() == 64)));
+    hex::encode(Sha256::digest(
+        serde_json::to_vec(&(current, previous)).unwrap(),
+    ))
+}
+fn require_repeated_custody_refusal(
+    root: &Path,
+    cluster: &crate::ClusterId,
+    spec: &RangeImageBirthSpec,
+    catalogue: &Path,
+    original_bytes: &[u8],
+    original_policy: &str,
+    report: &mut Value,
+) {
+    for attempt in 1..=3 {
+        assert!(
+            !catalogue.exists(),
+            "a refused cold reopen must not manufacture an empty catalogue"
+        );
+        match BicDb::open_range_image_database(&root.join("n1"), native_config(), spec) {
+            Err(BicDbError::NativeRangeCatalogueCustodyMissing) => {}
+            Err(error) => panic!(
+                "repeat{attempt}: unrelated native-open error is not custody acceptance: {error}"
+            ),
+            Ok((db, _)) => {
+                assert!(
+                    !db.commit_admission_ready(),
+                    "cold open cannot publish a writer hook"
+                );
+                assert_eq!(policy_commitment(&db), original_policy);
+                let database = Arc::new(RwLock::new(db));
+                let owners = {
+                    let db = database.read();
+                    ActualStoppedOwner {
+                        database: db.native_metadata_owner_open_lifetime(),
+                        directory: Arc::downgrade(db._directory_lock.as_ref().unwrap()),
+                    }
+                };
+                match ClusterDataNodeService::open(cluster.clone(), node("n1"), &root.join("n1"), database.clone(), true) {
+                    Err(BicDbError::NativeRangeCatalogueCustodyMissing) => {},
+                    Err(error) => panic!("repeat{attempt}: unrelated service-open error is not custody acceptance: {error}"),
+                    Ok(_) => panic!("repeat{attempt}: missing catalogue exposed a new service/store instead of custody refusal"),
+                }
+                assert_eq!(
+                    policy_commitment(&database.read()),
+                    original_policy,
+                    "refusal cannot reseal a new protected native writer policy"
+                );
+                assert!(!database.read().commit_admission_ready());
+                drop(database);
+                require_all_owners_ended(&[owners]);
+            }
+        }
+        assert!(!catalogue.exists());
+        report["refused_reopen_attempts"] = json!(attempt);
+        save(root, report);
+    }
+    // Inspection ONLY, after the safety result and all3 missing retries. These
+    // are exact bytes of the original genuine CQ1 catalogue, not a constructed
+    // state/counter/decision. No Strong read or policy install follows restore.
+    assert!(!catalogue.exists());
+    {
+        use std::io::Write;
+        let mut restored = std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(catalogue)
+            .unwrap();
+        restored.write_all(original_bytes).unwrap();
+        restored.sync_all().unwrap();
+    }
+    std::fs::File::open(catalogue.parent().unwrap())
+        .unwrap()
+        .sync_all()
+        .unwrap();
+    assert_eq!(std::fs::read(catalogue).unwrap(), original_bytes);
+    let (db, _) =
+        BicDb::open_range_image_database(&root.join("n1"), native_config(), spec).unwrap();
+    assert_eq!(
+        policy_commitment(&db),
+        original_policy,
+        "all refused reopens preserve the exact original protected current/previous policies"
+    );
+    assert!(!db.commit_admission_ready());
+    report["policy_commitment_before_and_after"] = json!(original_policy);
+    report["inspection_restore_sha256"] = json!(hex::encode(Sha256::digest(original_bytes)));
+    report["inspection_only_restore_after_refusals"] = json!(true);
+    report["automatic_repair_or_read_success_claimed"] = json!(false);
+    report["classification"] = json!("DEDICATED_CUSTODY_REFUSAL_REPEATED_NO_NEW_POLICY");
+    save(root, report);
+}
+
 #[test]
 fn native_event_endpoint_missing_catalogue_same_birth_restart_must_never_return_acked_absence() {
     // This constructor variant gathers ACTUAL TLS votes/Append ACKs for the
@@ -760,6 +866,7 @@ fn native_event_endpoint_missing_catalogue_same_birth_restart_must_never_return_
         .committed_topology()
         .clone();
     let specs = original.native.specs.clone();
+    let original_policy = policy_commitment(&original.native.databases[&node("n1")].read());
     let original_weaks = stopped_owner_weaks(&original);
     let report = json!({"version":1,"stage":"original_actual_app_ack", "original_data":data_source, "original_private_metadata_tls":keys_source,
         "range_id":range.id.get(),"original_epoch":range.epoch,"key":key,"record_id":record_id,
@@ -812,7 +919,7 @@ fn native_event_endpoint_missing_catalogue_same_birth_restart_must_never_return_
     let mut intact = reopen_stopped(intact_data, intact_keys, saved.clone(), specs.clone())
         .unwrap_or_else(|(stage, e)| {
             intact_report["stage"] = json!(stage);
-            intact_report["error"] = json!(e);
+            intact_report["error"] = json!(e.to_string());
             save(&intact_path, &intact_report);
             panic!("intact control strict open failed at {stage}: {e}")
         });
@@ -843,14 +950,34 @@ fn native_event_endpoint_missing_catalogue_same_birth_restart_must_never_return_
     missing_report["deleted_file_sha256"] = json!(hex::encode(Sha256::digest(&before)));
     missing_report["stage"] = json!("strict_missing_copy_reopen");
     save(&missing_path, &missing_report);
+    let missing_spec = specs[&node("n1")].clone();
+    let missing_cluster = saved.cluster_id.clone();
     let mut missing = match reopen_stopped(missing_data, missing_keys, saved, specs) {
         Ok(f) => f,
+        Err((stage, BicDbError::NativeRangeCatalogueCustodyMissing)) => {
+            assert!(!catalog.exists());
+            missing_report["stage"] = json!(stage);
+            missing_report["classification"] = json!("DEDICATED_MISSING_CATALOGUE_CUSTODY_REFUSAL");
+            missing_report["error"] =
+                json!(BicDbError::NativeRangeCatalogueCustodyMissing.to_string());
+            save(&missing_path, &missing_report);
+            require_repeated_custody_refusal(
+                &missing_path,
+                &missing_cluster,
+                &missing_spec,
+                &catalog,
+                &before,
+                &original_policy,
+                &mut missing_report,
+            );
+            return;
+        }
         Err((stage, e)) => {
             // No unrelated generic-open/route error is allowed to make this
-            // safety regression green. A future dedicated custody refusal can
-            // be qualified explicitly after observing its actual boundary.
+            // safety regression green. Only the separate exact typed custody
+            // branch above can establish the required fail-closed outcome.
             missing_report["stage"] = json!(stage);
-            missing_report["error"] = json!(e);
+            missing_report["error"] = json!(e.to_string());
             missing_report["classification"] =
                 json!("EARLY_REFUSAL_NEEDS_EXACT_CUSTODY_CLASSIFICATION");
             save(&missing_path, &missing_report);
@@ -875,4 +1002,5 @@ fn native_event_endpoint_missing_catalogue_same_birth_restart_must_never_return_
     });
     save(&missing_path, &missing_report);
     assert_eq!(value, Some(expected), "real APP ACK must never become successful absence/stale value after same-birth catalogue loss; intact twin proved this exact cold/E2/Strong path usable");
+    panic!("missing native catalogue must require dedicated custody restore; a silent cold rebootstrap is not an accepted repair");
 }

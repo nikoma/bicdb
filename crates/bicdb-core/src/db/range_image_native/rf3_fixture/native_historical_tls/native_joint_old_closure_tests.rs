@@ -8,6 +8,7 @@ use crate::distribution::{
 };
 use crate::distribution_range_handoff::{NativeJointHandoffRuntime, NativeJointOldRound};
 
+#[path = "native_joint_old_closure_tests/complete_joint_tests.rs"]
 mod complete_joint_tests;
 
 fn commit_pending(fixture: &mut EnforcedNetwork, original: &RangeDescriptor) -> RelocationId {

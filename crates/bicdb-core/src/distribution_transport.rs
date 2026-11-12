@@ -946,6 +946,13 @@ fn handle_cluster_data_connection(
                 config.dev_localhost_plaintext,
             )
         });
+        // A committed birth declaration is a necessary refusal fence, never
+        // authority to upgrade the actual local store or admit an operation.
+        let expected_enforced_store = topology_guard
+            .nodes
+            .get(&local_node_id)
+            .and_then(|node| node.native_store_birth_v1.as_ref())
+            .is_some_and(|birth| birth.writer_enforcement_version() == 1);
         drop(topology_guard);
         // Attaching an initial factory makes this listener provisional for its
         // ENTIRE lifetime. A Weak expiry must not expose ordinary scans,
@@ -976,6 +983,23 @@ fn handle_cluster_data_connection(
                 .observe_initial_birth(caller, request, &cancellation)
                 .map(ClusterDataResponse::NativeInitialBirthOffer);
         }
+        let native_store_mismatch =
+            expected_enforced_store && local_writer_enforcement_version != 1;
+        if native_store_mismatch
+            && !matches!(
+                &request.request,
+                ClusterDataRequest::Ping
+                    | ClusterDataRequest::NativeEventGet(_)
+                    | ClusterDataRequest::ApplicationEvent(crate::ClusterEventRequest {
+                        operation: crate::ClusterEventOperation::Get { .. },
+                        ..
+                    })
+            )
+        {
+            return Err(transport_error(
+                "registered enforced native member has another actual local store",
+            ));
+        }
         if let ClusterDataRequest::HostMetadataReadAcquire { request } = request.request {
             let provider = metadata_read_provider
                 .ok_or_else(|| transport_error("fresh host metadata provider is not active"))?;
@@ -993,7 +1017,7 @@ fn handle_cluster_data_connection(
         let native_get = match &request.request {
             ClusterDataRequest::NativeEventGet(get) => Some(get.clone()),
             ClusterDataRequest::ApplicationEvent(event)
-                if local_writer_enforcement_version == 1 =>
+                if local_writer_enforcement_version == 1 || expected_enforced_store =>
             {
                 if let crate::ClusterEventOperation::Get { namespace, key } = &event.operation {
                     Some(crate::distribution_native_read::NativeEventGetRequest {
@@ -1025,6 +1049,16 @@ fn handle_cluster_data_connection(
                 NativeEventGetReply, NativeEventGetResult, NativeEventGetUnavailableCode,
             };
             get.validate()?;
+            if native_store_mismatch {
+                return Ok(ClusterDataResponse::NativeEventGet(
+                    NativeEventGetReply::unavailable(
+                        &get,
+                        NativeEventGetUnavailableCode::InvalidRequest,
+                        None,
+                        "registered enforced native member has another actual local store",
+                    ),
+                ));
+            }
             if local_writer_enforcement_version == 0 {
                 if get.mode == crate::distribution_native_read::NativeEventReadMode::Strong {
                     return Ok(ClusterDataResponse::NativeEventGet(
@@ -3265,10 +3299,21 @@ impl TcpClusterRelocationTransport {
     ) -> Result<crate::distribution_native_read::NativeEventGetReply> {
         request.validate()?;
         cancellation.check()?;
+        let expected_enforced_store = self
+            .topology
+            .read()
+            .nodes
+            .get(destination)
+            .and_then(|node| node.native_store_birth_v1.as_ref())
+            .is_some_and(|birth| birth.writer_enforcement_version() == 1);
+        let mut wire_request = request.clone();
+        if expected_enforced_store {
+            wire_request.mode = crate::distribution_native_read::NativeEventReadMode::Strong;
+        }
         let response = self.call_cancellable(
             cancellation,
             destination,
-            ClusterDataRequest::NativeEventGet(request.clone()),
+            ClusterDataRequest::NativeEventGet(wire_request.clone()),
         )?;
         let ClusterDataResponse::NativeEventGet(reply) = response else {
             return Err(unexpected_response(
@@ -3276,7 +3321,7 @@ impl TcpClusterRelocationTransport {
                 response,
             ));
         };
-        reply.validate_for(request)?;
+        reply.validate_for(&wire_request)?;
         if matches!(
             &reply.result,
             crate::distribution_native_read::NativeEventGetResult::LegacyValue { .. }
@@ -3294,6 +3339,23 @@ impl TcpClusterRelocationTransport {
         }
         cancellation.check()?;
         Ok(reply)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn test_original_event_get(
+        &self,
+        cancellation: &CancellationToken,
+        destination: &ClusterNodeId,
+        request: crate::ClusterEventRequest,
+    ) -> Result<crate::distribution_native_read::NativeEventGetReply> {
+        match self.call_cancellable(
+            cancellation,
+            destination,
+            ClusterDataRequest::ApplicationEvent(request),
+        )? {
+            ClusterDataResponse::NativeEventGet(reply) => Ok(reply),
+            other => Err(unexpected_response("original Get mismatch refusal", other)),
+        }
     }
 
     /// Transfer one signed schema stage over the member-bound cluster RPC.

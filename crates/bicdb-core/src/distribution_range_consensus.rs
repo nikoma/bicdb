@@ -2402,6 +2402,7 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
     /// leader. The cluster supervisor invokes this outside SQL/database locks;
     /// writes remain fail-closed until their exact range epoch is recovered.
     pub fn recover_local_leadership(&self, max_ranges: usize) -> Result<usize> {
+        self.require_expected_native_recovery_store()?;
         if max_ranges == 0 || max_ranges > 1_024 {
             return Err(range_write_error(
                 "range leadership recovery limit must be in 1..=1024",
@@ -3097,6 +3098,7 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
         intent: &CommitAdmissionIntent,
         database: Option<&crate::BicDb>,
     ) -> Result<CommitAdmissionTicket> {
+        self.require_expected_native_database(database)?;
         let native_database = match (self.native_image_mode, database) {
             (false, None) => None,
             (false, Some(database)) if !database.native_range_image_birth_present() => None,

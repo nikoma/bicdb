@@ -1,0 +1,49 @@
+{
+  "source": "1d126acb226cce0c89ead6b0cbeb4d229d07ccd2",
+  "scope": "Evolving partition execution batch:8bounds/routingatomicity/nestedACK controls +8executionpositives. NewplainINSERT physicalroutingpreflight allrows/destinationconstraints thenstageallsameouterstatementTX. Original7executionassertionsunchanged plusreadsystemidentitytest. ParentUPDATE/DELETE/ONCONFLICT/triggers/PGhash andfullbackwardupgradequalification stillincomplete. No broad/final/app/HA claim.",
+  "started_unix": 1794481725.1528137,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "partition_bounds",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794481725.152976,
+      "exit": 0,
+      "finished_unix": 1794481804.729696
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "partition_execution",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794481804.7299268,
+      "exit": 101,
+      "finished_unix": 1794481809.993836
+    }
+  ],
+  "status": "failed",
+  "finished_unix": 1794481809.994081
+}

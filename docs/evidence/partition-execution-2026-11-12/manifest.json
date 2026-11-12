@@ -1,0 +1,80 @@
+{
+  "status": "evolving_batch_not_qualified",
+  "files": [
+    {
+      "path": "README.md",
+      "bytes": 4883,
+      "sha256": "ab6686920c1e62631806dde2721361d5bc76267e9a77524e931a9bb6df549647"
+    },
+    {
+      "path": "native-pg16-reference/control.sql",
+      "bytes": 2751,
+      "sha256": "d65a8579fb9613c2a0e8e1cfb5908981e51279d7f83840537912f8475028cceb"
+    },
+    {
+      "path": "native-pg16-reference/result.json",
+      "bytes": 443,
+      "sha256": "f7ec356183203ac78607d3d96ab9a41768f84ed72b4932e517ae2daccf0d62d5"
+    },
+    {
+      "path": "native-pg16-reference/stderr",
+      "bytes": 95,
+      "sha256": "46b9c91bc86457171ca33bc691a3ef30b3398396eade0e8a9d596fdfd6de949d"
+    },
+    {
+      "path": "native-pg16-reference/stdout",
+      "bytes": 558,
+      "sha256": "648cefda1b67b7ce195200147dc8d95102c46609a4dfb38811eb360d6817905f"
+    },
+    {
+      "path": "partition-bounds-8bcd3c1f/report-partition-bounds-8bcd3c1f.json",
+      "bytes": 1390,
+      "sha256": "4020cc2a9b640254a15a08938161d460887fec797e74284a32e77b38e4db2610"
+    },
+    {
+      "path": "partition-bounds-8bcd3c1f/tc-step-partition-bounds-8bcd3c1f.log",
+      "bytes": 170233,
+      "sha256": "1fef6b869ff61b2325e1e3cab83a51f732d229f801540f754eb2039bb2296342"
+    },
+    {
+      "path": "partition-execution-negative-e86d6fc1/report-partition-execution-negative-e86d6fc1.json",
+      "bytes": 1136,
+      "sha256": "c56650d9315709d7b5ce3d7db1008dc15a275a52de60e365cce0fc9abd05164c"
+    },
+    {
+      "path": "partition-execution-negative-e86d6fc1/tc-step-partition-execution-negative-e86d6fc1.log",
+      "bytes": 87152,
+      "sha256": "b46a1ab7edb34080c871362b20ecfe21d469e59ecd85b3c0366925b986e73561"
+    },
+    {
+      "path": "partition-physical-3267c029/report-partition-physical-3267c029.json",
+      "bytes": 1310,
+      "sha256": "1cafb7b36a3a0ddc67b60bffa2da2b2bd20bd680552aeba2c9dcde02e58fcb56"
+    },
+    {
+      "path": "partition-physical-3267c029/tc-step-partition-physical-3267c029.log",
+      "bytes": 168051,
+      "sha256": "da6d75ef877aa76391e8d7d9d72afc478173109f24a512cc49c6c0733685377b"
+    },
+    {
+      "path": "partition-read-8a4bcfa8/report-partition-read-8a4bcfa8.json",
+      "bytes": 1382,
+      "sha256": "773e0deccccbaaf44c188a7a5b2e28bf085fe63605c6158f2ba9b1644fd767f6"
+    },
+    {
+      "path": "partition-read-8a4bcfa8/tc-step-partition-read-8a4bcfa8.log",
+      "bytes": 169519,
+      "sha256": "3854c6ee913e0eb233d62350aa9ac4f8fd02682c1fee79ad8e557960e46e02bd"
+    },
+    {
+      "path": "partition-route-1d126acb/report-partition-route-1d126acb.json",
+      "bytes": 1363,
+      "sha256": "ad009fe9470a4fd7d6cc65f4baadf5f4facf88f9588a0f6a878631c3be6d1053"
+    },
+    {
+      "path": "partition-route-1d126acb/tc-step-partition-route-1d126acb.log",
+      "bytes": 168433,
+      "sha256": "23da96938a0f7ab7f2d28f88f4d5b1fd65471a7c3bfd794c1c7fc258aeeebac9"
+    }
+  ]
+}

@@ -420,4 +420,61 @@ mod tests {
             db.close().unwrap();
         }
     }
+
+    #[test]
+    fn failed_durable_removal_keeps_the_witness_and_all_observations_and_preserves_other_acks() {
+        for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
+            for site in [
+                "catalog.write",
+                "catalog.sync",
+                "catalog.rename",
+                "catalog.dir_sync",
+            ] {
+                let root = tempfile::tempdir().unwrap();
+                let config = config(mode.clone());
+                {
+                    let mut db = BicDb::open_with_config(root.path(), config.clone()).unwrap();
+                    db.activate_local_namespace_identity_v1().unwrap();
+                    db.create_collection("acknowledged").unwrap();
+                    db.insert("acknowledged", Record::new("independent-ack"))
+                        .unwrap();
+                    let mut owner = db.begin_transaction().unwrap();
+                    let proof = db
+                        .create_collection_for_transaction_undo(&owner, "stage", "replacement")
+                        .unwrap();
+                    db.rename_collection("stage", "replacement").unwrap();
+                    owner.get("replacement", "read-observation").unwrap();
+                    let before = observations(&owner);
+                    let fault =
+                        bicdb_page::test_faults::arm_io_failure(site, root.path(), 1, false);
+                    let error = db.undo_created_collection(&mut owner, &proof).unwrap_err();
+                    assert_eq!(fault.fired(), 1, "{mode:?} {site}");
+                    assert!(
+                        matches!(error, BicDbError::WriteFailed { .. }),
+                        "{site}: {error}"
+                    );
+                    unchanged(&owner, &before);
+                    assert!(!proof.inner.consumed.load(AtomicOrdering::Acquire));
+                    assert!(db.check_recovery_state().is_err());
+                    assert!(db.undo_created_collection(&mut owner, &proof).is_err());
+                    unchanged(&owner, &before);
+                    // An interrupted removal is not a successful undo. Drop
+                    // the fenced owner/store and verify independent ACKs;
+                    // recovery may retain or remove the unacknowledged object.
+                    drop(owner);
+                    drop(db);
+                }
+                for _ in 0..2 {
+                    let mut reopened =
+                        BicDb::open_with_config(root.path(), config.clone()).unwrap();
+                    assert!(reopened.durability_state().is_healthy());
+                    assert!(reopened
+                        .get("acknowledged", "independent-ack")
+                        .unwrap()
+                        .is_some());
+                    reopened.close().unwrap();
+                }
+            }
+        }
+    }
 }

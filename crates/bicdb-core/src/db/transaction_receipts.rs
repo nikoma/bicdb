@@ -26,6 +26,10 @@ pub enum TransactionOutcome {
     RecoveryRequired {
         sequence: u64,
     },
+    /// The native distributed admission may have persisted a Commit decision
+    /// before this DB allocated any local application-WAL sequence. This is
+    /// neither an Aborted outcome nor a visibility floor.
+    RecoveryRequiredBeforeLocalCommit,
 }
 
 #[derive(Debug)]
@@ -318,6 +322,12 @@ impl Transaction {
         // after a buffered commit returned an error.
         *self.observe_outcome().0.outcome.lock() =
             TransactionOutcome::RecoveryRequired { sequence };
+    }
+
+    pub(super) fn receipt_native_admission_unknown(&self) {
+        self.clear_write_tags();
+        *self.observe_outcome().0.outcome.lock() =
+            TransactionOutcome::RecoveryRequiredBeforeLocalCommit;
     }
 
     /// The commit was withdrawn before any byte of it was written: it did

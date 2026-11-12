@@ -20,7 +20,23 @@ impl ClusterDataNodeService {
             source.local_member_incarnation(),
         )?;
         self.range_writes
-            .start_native_abort_attempt(database, &native, range, command)
+            .start_native_abort_attempt(database, &native, range, command, authority)
+    }
+    pub(crate) fn commit_native_range_write_with_context(
+        &mut self,
+        database: &BicDb,
+        range: &RangeDescriptor,
+        caller: &ClusterNodeId,
+        command: &RangeWriteCommand,
+        authority: &RangeMutationAuthority<'_>,
+    ) -> Result<RangeWriteAck> {
+        self.range_mutations.validate(range.id, authority)?;
+        self.require_native_catalog_database(database)?;
+        self.require_native_writer_host_for_range(database, range)?;
+        self.validate_range_write(range, caller, command)?;
+        database.native_abort_mark_ever_commit(command, authority)?;
+        let state = self.range_writes.commit(command)?;
+        self.range_write_ack(command, state)
     }
     pub(crate) fn finish_native_prepare_only_rejection(
         &mut self,

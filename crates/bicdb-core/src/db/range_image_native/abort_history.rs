@@ -1,10 +1,12 @@
 //! Actual protected no-effect intents and canonical no-data history publication.
 //! A JSON projection/checksum is never a quorum or cleanup authority.
 use super::*;
+mod slot_journal;
 use crate::db::NativeTransactionNoEffect;
 use crate::distribution_range_consensus::{
     NativePrepareOnlyRejection, RangeWriteLogEntry, RangeWriteState,
 };
+pub(crate) use slot_journal::NativeAbortSlotRecord;
 
 fn no_effect_key(range: RangeId, index: u64) -> String {
     format!("abort-no-effect:{range}:{index:020}")
@@ -111,6 +113,7 @@ impl BicDb {
             ));
         }
         let _journal = self.try_native_image_journal()?;
+        self.require_native_abort_prepare_only_slot(rejected.command())?;
         let key = no_effect_key(rejected.command().range_id, rejected.command().index);
         if self
             .read_native_range_image_record::<NativeNoEffectIntentRecord>(&key)?
@@ -155,6 +158,7 @@ impl BicDb {
         if actual != record {
             return Err(invalid("native no-effect intent readback changed"));
         }
+        self.reconcile_native_abort_no_effect_slots_under_journal()?;
         Ok(actual.checksum_sha256)
     }
 }

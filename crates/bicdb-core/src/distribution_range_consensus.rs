@@ -3366,15 +3366,37 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
         // Native uncertainty starts BEFORE attempting the local Commit write:
         // persistence can succeed even when its error/reply is lost. No native
         // abort may be inferred from any failure after this boundary.
-        let local_commit = self
-            .local_service
-            .lock()
-            .commit_range_write_decision_with_mutation(
-                &range,
-                &self.local_node_id,
-                &command,
-                authority,
-            );
+        let local_commit = if let Some(database) = native_database {
+            if database.native_abort_catalogue_store_id()?.is_some() {
+                self.local_service
+                    .lock()
+                    .commit_native_range_write_with_context(
+                        database,
+                        &range,
+                        &self.local_node_id,
+                        &command,
+                        authority,
+                    )
+            } else {
+                self.local_service
+                    .lock()
+                    .commit_range_write_decision_with_mutation(
+                        &range,
+                        &self.local_node_id,
+                        &command,
+                        authority,
+                    )
+            }
+        } else {
+            self.local_service
+                .lock()
+                .commit_range_write_decision_with_mutation(
+                    &range,
+                    &self.local_node_id,
+                    &command,
+                    authority,
+                )
+        };
         if let Err(error) = local_commit {
             if native_database.is_some() {
                 self.recovered_epochs.lock().remove(&range.id);

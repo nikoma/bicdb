@@ -36,6 +36,15 @@ impl NativeAbortCatalogueIdentity {
     }
 }
 impl BicDb {
+    pub(crate) fn current_native_abort_birth_identity(&self) -> Result<(Uuid, String)> {
+        let birth = self
+            .read_native_birth()?
+            .ok_or_else(|| invalid("native abort has no actual birth"))?;
+        if birth.abort_protocol_version != Some(1) {
+            return Err(invalid("birth lacks abort capability"));
+        }
+        Ok((birth.birth_id, birth.checksum_sha256))
+    }
     pub(super) fn initialize_native_abort_catalogue(
         &self,
         birth: &NativeDatabaseBirth,

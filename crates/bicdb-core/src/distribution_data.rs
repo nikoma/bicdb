@@ -875,6 +875,12 @@ impl ClusterDataNodeService {
             fsync,
             initial_birth_provider: None,
         };
+        {
+            let database = try_database_read(&service.db)?;
+            service
+                .range_writes
+                .reconcile_actual_abort_control(&database)?;
+        }
         service.recover_committed_range_writes()?;
         Ok(service)
     }
@@ -1970,6 +1976,13 @@ impl ClusterDataNodeService {
     ) -> Result<RangeWriteAck> {
         self.range_mutations.validate(range.id, authority)?;
         self.validate_range_write(range, caller, command)?;
+        if self.range_writes.requires_native_abort_tracking()? {
+            let db = Arc::clone(&self.db);
+            let database = try_database_read(&db)?;
+            return self.commit_native_range_write_with_context(
+                &database, range, caller, command, authority,
+            );
+        }
         let state = self.range_writes.commit(command)?;
         self.range_write_ack(command, state)
     }

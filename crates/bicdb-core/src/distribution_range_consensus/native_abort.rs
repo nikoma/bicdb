@@ -315,6 +315,65 @@ impl RangeWriteStore {
         crate::storage::write_atomic(&path, &serde_json::to_vec_pretty(&envelope)?, true)?;
         Self::require_abort_catalogue_identity(root, cluster, node, store_id)
     }
+    pub(crate) fn reconcile_actual_abort_control(&mut self, database: &crate::BicDb) -> Result<()> {
+        self.require_actual_abort_catalogue(database)?;
+        if database.native_abort_catalogue_store_id()?.is_none() {
+            return Ok(());
+        }
+        database.reconcile_native_abort_no_effect_slots()?;
+        let actual = database.native_abort_slot_inventory()?;
+        let native_birth = database.current_native_abort_birth_identity()?;
+        let before = self.catalog.native_abort_protocol.clone();
+        let protocol = self
+            .catalog
+            .native_abort_protocol
+            .as_mut()
+            .ok_or_else(|| range_write_error("abort control lacks registered catalogue"))?;
+        for record in actual {
+            let range = protocol
+                .ranges
+                .entry(record.command.range_id)
+                .or_insert_with(|| NativeAbortRange {
+                    domain: record.domain.clone(),
+                    native_birth_id: native_birth.0,
+                    native_birth_sha256: native_birth.1.clone(),
+                    start_native_index: record.predecessor_index,
+                    start_native_history_sha256: record.predecessor_history_sha256.clone(),
+                    slots: BTreeMap::new(),
+                });
+            let slot = range
+                .slots
+                .entry(record.command.index)
+                .or_insert_with(|| NativeAbortSlot {
+                    command_id: record.command.command_id.clone(),
+                    command_sha256: record.command.checksum_sha256.clone(),
+                    transaction_id: record.command.transaction_id,
+                    original_epoch: record.command.range_epoch,
+                    original_leader: record.command.leader_node_id.clone(),
+                    ever_commit: false,
+                    no_effect_sha256: None,
+                    promise: None,
+                    resolved_native_receipt_sha256: None,
+                });
+            if slot.command_sha256 != record.command.checksum_sha256
+                || slot.command_id != record.command.command_id
+                || (slot.ever_commit && !record.ever_commit)
+                || slot.no_effect_sha256.is_some()
+                    && slot.no_effect_sha256 != record.no_effect_sha256
+                || record.abort_promise_sha256.is_some()
+            {
+                return Err(range_write_error("range catalogue control contradicts actual protected native slot; promise reconciliation requires actual audit"));
+            }
+            slot.ever_commit = record.ever_commit;
+            slot.no_effect_sha256 = record.no_effect_sha256;
+        }
+        if before != self.catalog.native_abort_protocol {
+            // This constructor-only write imports restrictive facts from the
+            // actual protected native journal, before any host policy/ACK.
+            self.persist_verified_open_catalog()?;
+        }
+        Ok(())
+    }
     pub(crate) fn require_actual_abort_catalogue(&self, database: &crate::BicDb) -> Result<()> {
         let actual = database.native_abort_catalogue_store_id()?;
         if actual
@@ -357,6 +416,7 @@ impl RangeWriteStore {
         native: &NativeRecoveryAdmission,
         range: &RangeDescriptor,
         command: &RangeWriteCommand,
+        authority: &RangeMutationAuthority<'_>,
     ) -> Result<NativePrepareOnlyRejection> {
         native.require_current(database)?;
         if native.abort_protocol_version() != 1
@@ -429,6 +489,7 @@ impl RangeWriteStore {
                 "abort format upgrade cannot invalidate another legacy image intent",
             ));
         }
+        database.start_native_abort_slot(command, &domain, &source, authority)?;
         crate::format::enable_native_abort_history(&self.root)?;
         self.catalog.format_version = self.catalog.format_version.max(NATIVE_ABORT_CATALOG_FORMAT);
         self.catalog

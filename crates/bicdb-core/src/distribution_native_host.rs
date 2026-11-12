@@ -28,6 +28,8 @@ pub(crate) use initial_preparation::{
     ValidatedInitialConfigurationProposal,
 };
 mod initial_offer;
+mod learner_factory;
+pub(crate) use learner_factory::NativeUnassignedLearnerFactory;
 #[cfg(feature = "tls-replication")]
 mod provisional_listener;
 pub(crate) use initial_offer::{

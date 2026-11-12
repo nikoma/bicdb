@@ -2,6 +2,7 @@
 //!
 //! Hidden records use the page store's own WAL/root. They are not public
 //! collections and cannot be supplied as JSON files to manufacture lineage.
+mod learner_schema;
 mod listener_identity;
 use super::*;
 use crate::distribution::{ClusterId, ClusterNodeId, RangeId, RangeReplicaRole};

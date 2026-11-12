@@ -164,10 +164,54 @@ fn native_metadata_learner_cannot_vote_and_cached_legacy_store_cannot_adopt_enfo
             .collect(),
     };
     let data_path = f.root.path().join("actual-unassigned-native-n3");
-    let (mut db, _) =
+    let bundle = f.databases[&node(0)]
+        .read()
+        .cluster_schema_bundle()
+        .unwrap();
+    let source_uid = f.databases[&node(0)]
+        .read()
+        .collections()
+        .into_iter()
+        .find(|meta| meta.name == "items")
+        .unwrap()
+        .local_namespace_id;
+    let (mut db, fresh_factory) =
         BicDb::create_new_enrolled_range_image_database(&data_path, config(), spec.clone())
             .unwrap();
-    db.create_collection("items").unwrap();
+    db.initialize_unassigned_native_learner_schema(
+        &fresh_factory,
+        &with_learner,
+        &bundle,
+        &CancellationToken::uncancelable(),
+    )
+    .unwrap();
+    assert!(db.scan_collection("items").unwrap().is_empty());
+    let target_uid = db
+        .collections()
+        .into_iter()
+        .find(|meta| meta.name == "items")
+        .unwrap()
+        .local_namespace_id;
+    assert!(source_uid.is_some() && target_uid.is_some());
+    assert_ne!(
+        source_uid, target_uid,
+        "new physical backing must not adopt source namespace identity"
+    );
+    assert!(
+        db.install_cluster_schema_bundle(&bundle).is_err(),
+        "ordinary native generic import stays refused"
+    );
+    assert!(
+        db.initialize_unassigned_native_learner_schema(
+            &fresh_factory,
+            &with_learner,
+            &bundle,
+            &CancellationToken::uncancelable()
+        )
+        .is_err(),
+        "existing schema is never overwritten as a fresh factory"
+    );
+    drop(fresh_factory);
     drop(db);
     let (db, factory) = BicDb::open_range_image_database(&data_path, config(), &spec).unwrap();
     db.schema_compatibility_fingerprint().unwrap();

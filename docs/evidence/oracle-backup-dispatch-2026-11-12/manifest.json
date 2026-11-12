@@ -1,0 +1,65 @@
+{
+  "implementation": "74c024ccbaa39882d7616af8b5c27da3ece660fb",
+  "equivalent_production_final_focused_source": "62da2e6e1fb3280011185ba1a35758d45e43d6e2",
+  "existing_online_backup_tests_passed": 4,
+  "new_two_profile_control_passed": 1,
+  "new_control_profiles": [
+    "oracle-preview-v1",
+    "postgres"
+  ],
+  "negative_production_source": "4950d69df7cc5d78cf3b469f4d60902f743cabdf",
+  "earlier_agent_fixture_failures_preserved": [
+    "Missing required Oracle startup option (44683,74c)",
+    "Restore requested ServerPaged against Embedded fixture (74e)",
+    "Embedded restore reader omitted Oracle frontend (073)"
+  ],
+  "actual_merged481_full_ui_backup_failure": "Oracle rewrites function to quoted uppercase; rendered ObjectName includes quotes and did not match dispatcher. Both original parameterized and ClientCursor simple calls failed0A000 before starting a job.",
+  "full_UI_400_backup_or_restore_qualified": false,
+  "release_published": false,
+  "deployed": false,
+  "entries": [
+    {
+      "label": "backup-oracle-quoted-repro-44683c21",
+      "source": "44683c21fc2ce1022719760d6e41650ece86a3b8",
+      "status": "failed",
+      "receipt_sha256": "cda5ba0252eda6d6aead36eb18d6a325b9bd2d1e7ea433626e11c1de4e7ab6ff",
+      "raw_log_sha256": "6847a2d700c9d0e2975735871fbb6d39980642446a40672fc2e124b180a2c37f"
+    },
+    {
+      "label": "backup-oracle-quoted-fix-74c024cc",
+      "source": "74c024ccbaa39882d7616af8b5c27da3ece660fb",
+      "status": "failed",
+      "receipt_sha256": "848f98d7d9185dfaaacca0a47413c7fb0f08800de838169d06f247b1664f3c9f",
+      "raw_log_sha256": "8755fea8855de12b294f2b688855baf2060ffb470935d8b8fce50d10e1e031b8"
+    },
+    {
+      "label": "backup-oracle-startup-repro-4950d69d",
+      "source": "4950d69df7cc5d78cf3b469f4d60902f743cabdf",
+      "status": "failed",
+      "receipt_sha256": "e9384c44fc24595625394b9e52e232028fcc66c1f5a2429b24e81c67a857eed1",
+      "raw_log_sha256": "38e406ce7c432e7dc28dc5c96dafeabfa6cdf8774c5d90bce9efcda3c40aea63"
+    },
+    {
+      "label": "backup-oracle-startup-fix-74e630f9",
+      "source": "74e630f909d718f530d37b63aac8a4d3e78a8451",
+      "status": "failed",
+      "receipt_sha256": "10617b2d4a2a854d4f2e1385395bbebb38f626232d5bc884d76ed81858a6e881",
+      "raw_log_sha256": "69ed2da1ba826b20391840cf11970d227c1193c6550dc593f728e254db437a4e"
+    },
+    {
+      "label": "backup-oracle-mode-fix-073a84b9",
+      "source": "073a84b930637c566b0a9a16c9a8bcc4b243a0fd",
+      "status": "failed",
+      "receipt_sha256": "9c071d85e7536027de24ae4b70e22c93dae4d32ad68ae5792d9dfc25aa826c99",
+      "raw_log_sha256": "c035e4f86699789db0818083a15b931e1e481dd157e6624402b962cf9f07319e"
+    },
+    {
+      "label": "backup-oracle-restore-fix-62da2e6e",
+      "source": "62da2e6e1fb3280011185ba1a35758d45e43d6e2",
+      "status": "focused_passed",
+      "receipt_sha256": "45222242feaed8678ceb2ebd5b19b8bb524a74c800eea0f991a22ddb07b63348",
+      "raw_log_sha256": "b9948c1d0f61896afca7bc2b222d8dc4ec7636a5d37df8a249ddeaf9309493d9"
+    }
+  ],
+  "recorded_unix": 1794462902.9806294
+}

@@ -1,0 +1,28 @@
+{
+  "source": "073a84b930637c566b0a9a16c9a8bcc4b243a0fd",
+  "scope": "Production identical74e/74c; previous new regression reached successful Oracle start/status/cancel but restore fixture requested ServerPaged against default Embedded format. Correct actual fixture mode, retain exact restored value, add PG quoted-uppercase and qualified-name boundaries. Full5 online_backup tests across both SQL profiles.",
+  "started_unix": 1794462769.5206585,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-pgwire",
+        "--test",
+        "online_backups",
+        "--",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794462769.5208876,
+      "exit": 101,
+      "finished_unix": 1794462783.1920075
+    }
+  ],
+  "status": "failed",
+  "finished_unix": 1794462783.19228
+}

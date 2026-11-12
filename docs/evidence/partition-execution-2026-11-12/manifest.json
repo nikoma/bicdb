@@ -238,5 +238,82 @@
       "bytes": 167296,
       "sha256": "49f0b067c25e216dd123a648c2fd653f85e5ad34b571c8f88635c1eee5c6f8b8"
     }
-  ]
+  ],
+  "upsert_trigger_followup": {
+    "recorded_unix": 1794486153.2353873,
+    "stages": [
+      {
+        "label": "partition-upsert-negative-8d6faa0f",
+        "source": "8d6faa0f01530ec5ee1b9c3700b10308f0f7e0b2",
+        "status": "failed",
+        "passed": 0,
+        "failed": 5,
+        "ignored": 0,
+        "scope": "Actual22runtime with5mandatorynewUPSERTpositives only. Physicalexistingconflict,DO NOTHINGwith/withoutarbiter,parentRLS,RETURNING/cardinality/crosspartition0A000+withinleafkeymove,midstatementrollback; bothstoresACK+2reopens. Expectedmissingparentphysicalarbitration failuresretained. No productcodechange or originalassertionweakening."
+      },
+      {
+        "label": "partition-upsert-2f034a22",
+        "source": "2f034a22f935ee9551e4255453b09f0589d5be9b",
+        "status": "focused_passed",
+        "passed": 66,
+        "failed": 0,
+        "ignored": 0,
+        "scope": "Evolvingpartitionbatch:5originalmandatoryupsertpositives afteractualold22runtime0PASS5FAIL; physicalleafNativearbiter/locks/grants, parentSQLRLS/returning, DO NOTHINGexplicit/all, keychangeinsideleaf, crosspartition0A000, cardinality21000+statementrollback. Relevantoriginalreadcommittedupserts/grants/signedarbiter/RLS andpartitioncontrols retained. Rowtriggerpipeline/cloneDDL, upgrade/fault/concurrency/operators/broad gatesremainpending. Notfinalfeature/app/HAqualification."
+      },
+      {
+        "label": "partition-trigger-catalog-negative-eb7bcac0",
+        "source": "eb7bcac0201ab33f575f649c20977a79f94d58cc",
+        "status": "failed",
+        "passed": 0,
+        "failed": 4,
+        "ignored": 0,
+        "scope": "Actual2f upsertqualifiedruntime plus4mandatorypartitiontriggercatalogpositives; no productionchanges. CompareNativePG16clone-lineage/attach-detach/mode/dependency/rollback. Expectedoldmissingclonesfailuresretained. OriginalACK+2reopens bothstores."
+      },
+      {
+        "label": "partition-trigger-catalog-747a76ed",
+        "source": "747a76edfe7afd2794096b7a86eb2a9170058e69",
+        "status": "focused_passed",
+        "passed": 38,
+        "failed": 0,
+        "ignored": 0,
+        "scope": "Evolvingbatch partitiontriggercatalog: realpersistedlineage+tgparentid, Nativeatomicmulti-catalogschema/clonepublication, completepreflight/ORREPLACE, detachretainsowntriggers, modes/dropdependencyandretryablebatchundo. NativePG16actualcatalogreference. Executionpipeline/eventorder, process/fault, namespace/oldreader andotherfeaturegatesstillpending; no completedfeature/app/HAclaim."
+      },
+      {
+        "label": "partition-trigger-events-negative-005bc04f",
+        "source": "005bc04f48bcff4abe41b882db34a1ce0a0594cc",
+        "status": "failed",
+        "passed": 0,
+        "failed": 3,
+        "ignored": 0,
+        "scope": "Mandatory positive event order and physical partition trigger context; product runtime exactly747a76ed, test-only005bc04f; actual PostgreSQL16.13 ephemeral isolated control14events+4multirowevents. Expected negative baseline, no application/HA/completefeature claim."
+      },
+      {
+        "label": "partition-trigger-events-a15eb0af",
+        "source": "a15eb0af82cc158cef614939c44b04ec413b8d1a",
+        "status": "focused_passed",
+        "passed": 80,
+        "failed": 0,
+        "ignored": 0,
+        "scope": "Evolving partition physical row trigger execution: routed BEFORE INSERT, source BEFORE UPDATE and movement DELETE/INSERT sequence, physical DELETE, row order AFTER queue and upsert interleaving, scoped PK identity rebuild, retained root SQL RLS/physical Native authorization. Mandatory actual PG16.13 event positives plus existing trigger/auth/rollback/upsert controls. No broad/processfault/application/HA/completedfeature qualification."
+      },
+      {
+        "label": "partition-trigger-mixed-a7bb3593",
+        "source": "a7bb3593349534280a65ee7e0fbd8cf195532a47",
+        "status": "focused_passed",
+        "passed": 4,
+        "failed": 0,
+        "ignored": 0,
+        "scope": "Currenta7testonly overa15 runtime; mandatory4physicalpartitiontriggerpositivesincludingactualPostgreSQL16.13mixedupsert8events. Bothstores fsync ACK+2reopens for eventledgers. No broad/processfault/app/HA qualification; no featurecompletion/delivery."
+      }
+    ],
+    "source_scope_note": "a7 changes only tests/fixture over a15; a15all80focusedPASS retained, currenta7foureventtestsPASS. Foureventsuiteoverlaps3previouschecks; do notaddresultsas84distincttests. Productbatchremainsunmergedandnotfullyqualified.",
+    "actual_native_reference": "native-pg16-trigger-reference",
+    "remaining_trigger_gates": [
+      "suppression semantics and trigger-side query visibility during physical movement",
+      "constraint-trigger partition admissibility",
+      "function cascade and trigger dependency complete lifecycle",
+      "namespace/quoted identity and renamed partition integration",
+      "old-reader admission and rollback/crash/fault controls"
+    ]
+  }
 }

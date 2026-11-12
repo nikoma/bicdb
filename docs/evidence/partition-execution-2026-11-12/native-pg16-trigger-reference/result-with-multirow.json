@@ -1,0 +1,11 @@
+{
+  "status": "native_pg_control_passed",
+  "version": "PostgreSQL 16.13 (Debian 16.13-1.pgdg13+1) on x86_64-pc-linux-gnu, compiled by gcc (Debian 14.2.0-19) 14.2.0, 64-bit",
+  "image_id": "sha256:71e27bf60b70bded003791b5573f8b808365613f341df20ffcf0c1ed7bc13ddf",
+  "events": 14,
+  "multirow_events": 4,
+  "started_unix": 1794485682.803731,
+  "finished_unix": 1794485684.8414824,
+  "scope": "Actual PG16 event semantics, isolated ephemeral tmpfs cluster; fsync default unchanged; no durability qualification or existing database mutation",
+  "existing_reference_container": "preserved stopped after ENOSPC, not restarted"
+}

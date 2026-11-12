@@ -1,0 +1,29 @@
+{
+  "source": "005bc04f48bcff4abe41b882db34a1ce0a0594cc",
+  "scope": "Mandatory positive event order and physical partition trigger context; product runtime exactly747a76ed, test-only005bc04f; actual PostgreSQL16.13 ephemeral isolated control14events+4multirowevents. Expected negative baseline, no application/HA/completefeature claim.",
+  "started_unix": 1794485714.5255928,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "partition_trigger_events",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794485714.5257804,
+      "exit": 101,
+      "finished_unix": 1794485719.5774398
+    }
+  ],
+  "status": "failed",
+  "finished_unix": 1794485719.5776505
+}

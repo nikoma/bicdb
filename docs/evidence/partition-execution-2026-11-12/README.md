@@ -79,3 +79,40 @@ qualification. Local SQL partitioning does not establish distributed placement,
 automatic node rebalancing, or elastic capacity.
 
 The physical row-lock follow-up at `22a347869620d46519c0665926fa1a4cc644eee2` passed 42 focused tests (0 failed/ignored): 1 partition-lock contract, 1 hash contract covering 106 native PostgreSQL placements, 13 bounds/routing/update controls, 9 execution/query-shape controls, 6 existing row-lock tests, 3 existing transaction-system-type tests, 4 existing Oracle-partition tests and 5 existing raw-DDL authorization tests. It preserves physical heap identities and resolves source tableoids only inside the admitted partition tree. This is still not the full batch's broad/application/fault qualification.
+
+
+## Upsert and inherited trigger follow-up
+
+These are focused development results, before integration with a fresh main
+version. They do not qualify the whole partition feature or an application.
+
+| Source | Actual result | Scope |
+| --- | --- | --- |
+| `8d6faa0f01530ec5ee1b9c3700b10308f0f7e0b2` | 0 pass, 5 fail | Mandatory parent upsert positives against the preceding runtime; physical duplicates, policy enforcement and movement refusals. |
+| `2f034a22f935ee9551e4255453b09f0589d5be9b` | 66 pass, 0 fail/ignored | Physical leaf arbiters and Native reservations; accessed-parent SQL policy; same-leaf typed identity changes, cardinality refusal and independent Oracle regressions. |
+| `eb7bcac0201ab33f575f649c20977a79f94d58cc` | 0 pass, 4 fail | Mandatory inherited trigger catalog and rollback positives against unchanged upsert runtime. |
+| `747a76edfe7afd2794096b7a86eb2a9170058e69` | 38 pass, 0 fail/ignored | Persisted immediate-parent trigger lineage, pg_trigger.tgparentid, CREATE/ATTACH/DETACH propagation, dependency/mode controls and atomic Native catalog publication with retryable batch undo. |
+| `005bc04f48bcff4abe41b882db34a1ce0a0594cc` | 0 pass, 3 fail | Actual preceding runtime reports parent rather than physical trigger context, omits movement DELETE/INSERT events and accepts a forbidden leaf BEFORE INSERT reroute. |
+| `a15eb0af82cc158cef614939c44b04ec413b8d1a` | 80 pass, 0 fail/ignored | 17 focused targets: physical row trigger execution/event order, partition execution/upsert/bounds/locks/hash, existing trigger authorization/rename/deferred rollback and read-committed upsert/RLS controls; independent Oracle partition checks. |
+| `a7bb3593349534280a65ee7e0fbd8cf195532a47` | 4 pass, 0 fail/ignored | Test-only addition over identical a15 product source: actual PostgreSQL mixed-upsert BEFORE interleaving and queued AFTER events, both storage modes and two reopens. This repeats the preceding three event tests and adds one; it is not 84 distinct tests. |
+
+The native reference contains actual PostgreSQL 16.13 results: fourteen events
+for insert/direct-child insert/movement/delete/upsert, four multirow insert
+events, and eight mixed upsert events. The original reference container stopped
+after ENOSPC and was preserved. Follow-up controls ran in bounded, isolated
+temporary containers with an ephemeral tmpfs data directory and were removed
+after the checks. They prove event semantics, not physical durability. Every
+control creates its own scratch schema inside a rolled-back transaction.
+
+Execution routes before leaf BEFORE INSERT triggers; a trigger cannot redirect
+the admitted row to another leaf. Parent UPDATE invokes source UPDATE triggers
+and physical DELETE/INSERT triggers for movement, with parent SQL RLS retained.
+AFTER events preserve input row order. Scoped trigger identity reconstruction
+does not relax the unrelated ordinary UPDATE primary-key guard.
+
+Trigger suppression and trigger-side query visibility during movement still
+need complete native controls. Constraint-trigger admission, function cascade,
+quoted/namespace identity, rename integration, old-reader admission and
+independent crash/fault qualification remain required. Passing catalog tests
+alone never established correct event execution. Broader partition and campaign
+gates listed above remain open.

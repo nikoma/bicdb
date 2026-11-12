@@ -1,0 +1,9 @@
+{
+  "label": "partition-trigger-catalog-747a76ed",
+  "source": "747a76edfe7afd2794096b7a86eb2a9170058e69",
+  "status": "focused_passed",
+  "passed": 38,
+  "failed": 0,
+  "ignored": 0,
+  "scope": "Evolvingbatch partitiontriggercatalog: realpersistedlineage+tgparentid, Nativeatomicmulti-catalogschema/clonepublication, completepreflight/ORREPLACE, detachretainsowntriggers, modes/dropdependencyandretryablebatchundo. NativePG16actualcatalogreference. Executionpipeline/eventorder, process/fault, namespace/oldreader andotherfeaturegatesstillpending; no completedfeature/app/HAclaim."
+}

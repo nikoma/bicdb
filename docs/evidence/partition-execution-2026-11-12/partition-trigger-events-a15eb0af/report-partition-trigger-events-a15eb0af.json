@@ -1,0 +1,349 @@
+{
+  "source": "a15eb0af82cc158cef614939c44b04ec413b8d1a",
+  "scope": "Evolving partition physical row trigger execution: routed BEFORE INSERT, source BEFORE UPDATE and movement DELETE/INSERT sequence, physical DELETE, row order AFTER queue and upsert interleaving, scoped PK identity rebuild, retained root SQL RLS/physical Native authorization. Mandatory actual PG16.13 event positives plus existing trigger/auth/rollback/upsert controls. No broad/processfault/application/HA/completedfeature qualification.",
+  "started_unix": 1794485918.0366552,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "partition_trigger_events",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794485918.0367417,
+      "exit": 0,
+      "finished_unix": 1794485997.3677003
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "partition_trigger_catalog",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794485997.3679452,
+      "exit": 0,
+      "finished_unix": 1794486002.5004969
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "partition_upsert",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794486002.500724,
+      "exit": 0,
+      "finished_unix": 1794486007.7042513
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "partition_bounds",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794486007.7044828,
+      "exit": 0,
+      "finished_unix": 1794486013.9994485
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "partition_execution",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794486013.9996898,
+      "exit": 0,
+      "finished_unix": 1794486019.6292498
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "partition_row_locks",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794486019.6295066,
+      "exit": 0,
+      "finished_unix": 1794486025.6883135
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "partition_hash",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794486025.6886487,
+      "exit": 0,
+      "finished_unix": 1794486039.784247
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "trusted_identity_triggers",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794486039.7845452,
+      "exit": 0,
+      "finished_unix": 1794486047.0601935
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "renamed_table_triggers",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794486047.0605116,
+      "exit": 0,
+      "finished_unix": 1794486054.1957526
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "trigger_authorization",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794486054.1959937,
+      "exit": 0,
+      "finished_unix": 1794486058.5112333
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "deferred_trigger_rollback",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794486058.5115647,
+      "exit": 0,
+      "finished_unix": 1794486063.0493476
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "raw_ddl_authorization",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794486063.0496356,
+      "exit": 0,
+      "finished_unix": 1794486067.5728652
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "read_committed_upsert_primary",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794486067.5731833,
+      "exit": 0,
+      "finished_unix": 1794486072.1374307
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "read_committed_upsert_grants",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794486072.1377375,
+      "exit": 0,
+      "finished_unix": 1794486077.3873436
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "read_committed_upsert_signed_arbiters",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794486077.3876395,
+      "exit": 0,
+      "finished_unix": 1794486086.4162662
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "rls_write_path",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794486086.4165573,
+      "exit": 0,
+      "finished_unix": 1794486090.9693553
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "oracle_partitioning",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794486090.969683,
+      "exit": 0,
+      "finished_unix": 1794486095.4146898
+    }
+  ],
+  "status": "focused_passed",
+  "finished_unix": 1794486095.4150312
+}

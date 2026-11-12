@@ -1,0 +1,9 @@
+{
+  "label": "partition-trigger-catalog-negative-eb7bcac0",
+  "source": "eb7bcac0201ab33f575f649c20977a79f94d58cc",
+  "status": "failed",
+  "passed": 0,
+  "failed": 4,
+  "ignored": 0,
+  "scope": "Actual2f upsertqualifiedruntime plus4mandatorypartitiontriggercatalogpositives; no productionchanges. CompareNativePG16clone-lineage/attach-detach/mode/dependency/rollback. Expectedoldmissingclonesfailuresretained. OriginalACK+2reopens bothstores."
+}

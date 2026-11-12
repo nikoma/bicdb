@@ -1,0 +1,9 @@
+{
+  "label": "partition-trigger-mixed-a7bb3593",
+  "source": "a7bb3593349534280a65ee7e0fbd8cf195532a47",
+  "status": "focused_passed",
+  "passed": 4,
+  "failed": 0,
+  "ignored": 0,
+  "scope": "Currenta7testonly overa15 runtime; mandatory4physicalpartitiontriggerpositivesincludingactualPostgreSQL16.13mixedupsert8events. Bothstores fsync ACK+2reopens for eventledgers. No broad/processfault/app/HA qualification; no featurecompletion/delivery."
+}

@@ -37,6 +37,8 @@ pub const CURRENT_IMAGE_PROPOSAL_FEATURE_FLAG: &str = "current_range_image_propo
 pub const NATIVE_RECOVERY_SERVING_FEATURE_FLAG: &str = "native_recovery_serving_v1";
 /// From-birth writer enrollment; local and deliberately not a portable schema capability.
 pub const NATIVE_WRITER_ENROLLMENT_FEATURE_FLAG: &str = "native_writer_enrollment_v1";
+/// Local metadata-store initialization/ownership; excluded from portable schema.
+pub const NATIVE_METADATA_STORE_FEATURE_FLAG: &str = "native_metadata_store_v1";
 pub const ORACLE_SIMPLE_CASE_V1_FEATURE_FLAG: &str = "oracle_simple_case_v1";
 const KNOWN_FEATURE_FLAGS: &[&str] = &[
     ORACLE_INVALID_ROUTINES_FEATURE_FLAG,
@@ -48,6 +50,7 @@ const KNOWN_FEATURE_FLAGS: &[&str] = &[
     CURRENT_IMAGE_PROPOSAL_FEATURE_FLAG,
     NATIVE_RECOVERY_SERVING_FEATURE_FLAG,
     NATIVE_WRITER_ENROLLMENT_FEATURE_FLAG,
+    NATIVE_METADATA_STORE_FEATURE_FLAG,
     "format_metadata_v2",
     SERVER_PAGED_FEATURE_FLAG,
     ONLINE_BACKUP_EXTENT_FEATURE_FLAG,
@@ -577,7 +580,10 @@ fn persist_metadata_with(
             .contains(RANGE_IMAGE_INSTALL_FEATURE_FLAG)
         || metadata
             .feature_flags
-            .contains(CURRENT_IMAGE_PROPOSAL_FEATURE_FLAG);
+            .contains(CURRENT_IMAGE_PROPOSAL_FEATURE_FLAG)
+        || metadata
+            .feature_flags
+            .contains(NATIVE_METADATA_STORE_FEATURE_FLAG);
     write(
         &metadata_path(root),
         &serde_json::to_vec_pretty(metadata)?,
@@ -709,6 +715,33 @@ pub(crate) fn native_writer_enrollment_active(root: &Path) -> Result<bool> {
     Ok(metadata
         .feature_flags
         .contains(NATIVE_WRITER_ENROLLMENT_FEATURE_FLAG))
+}
+
+/// Fence older native hosts BEFORE publishing protected metadata identity.
+pub(crate) fn enable_native_metadata_store(root: &Path) -> Result<()> {
+    let lock = feature_flags_lock(root);
+    let _guard = lock.lock();
+    let mut metadata = read_or_legacy_metadata(root)?;
+    validate_supported(&metadata)?;
+    if !metadata
+        .feature_flags
+        .contains(NATIVE_WRITER_ENROLLMENT_FEATURE_FLAG)
+    {
+        return Err(BicDbError::InvalidConfig(
+            "native metadata requires born-v2 writer enrollment".into(),
+        ));
+    }
+    metadata
+        .feature_flags
+        .insert(NATIVE_METADATA_STORE_FEATURE_FLAG.into());
+    persist_metadata(root, &metadata, true)
+}
+pub(crate) fn native_metadata_store_active(root: &Path) -> Result<bool> {
+    let metadata = read_or_legacy_metadata(root)?;
+    validate_supported(&metadata)?;
+    Ok(metadata
+        .feature_flags
+        .contains(NATIVE_METADATA_STORE_FEATURE_FLAG))
 }
 
 pub(crate) fn enable_current_image_proposal(root: &Path) -> Result<()> {

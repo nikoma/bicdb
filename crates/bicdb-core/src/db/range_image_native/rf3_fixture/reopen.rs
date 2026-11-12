@@ -156,6 +156,7 @@ impl ActualNativeRf3Fixture {
             databases,
             services,
             specs,
+            fresh_factories: BTreeMap::new(),
             transport,
             coordinator,
         })

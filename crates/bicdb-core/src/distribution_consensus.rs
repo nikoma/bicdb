@@ -25,6 +25,7 @@ const MAX_RESTORE_ACTIVATION_ACKNOWLEDGEMENTS: u64 = 100_000;
 pub const METADATA_READ_AUTHORITY_PROTOCOL_VERSION: u32 = 1;
 pub const METADATA_READ_ACQUISITION_PROTOCOL_VERSION: u32 = 1;
 mod host_read;
+mod native_metadata_store;
 pub(crate) use host_read::{
     HostMetadataReadAcquireRequest, HostMetadataReadAcquireResponse, HostMetadataReadObservation,
 };
@@ -1232,6 +1233,8 @@ pub struct MetadataConsensusStatus {
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 struct MetadataConsensusState {
     format_version: u32,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    native_store_id: Option<Uuid>,
     cluster_id: ClusterId,
     node_id: ClusterNodeId,
     current_term: u64,
@@ -1261,6 +1264,7 @@ pub struct MetadataConsensusStore {
     state: MetadataConsensusState,
     match_index: BTreeMap<ClusterNodeId, u64>,
     last_leader_contact_ms: u64,
+    native_owner: Option<native_metadata_store::NativeMetadataStoreOwner>,
 }
 
 impl MetadataConsensusStore {
@@ -1392,6 +1396,11 @@ impl MetadataConsensusStore {
         fsync: bool,
     ) -> Result<Self> {
         bootstrap_topology.validate()?;
+        if native_metadata_store::known_born_v2(&bootstrap_topology, &node_id) {
+            return Err(metadata_error(
+                "born-v2 metadata requires actual native owned initialization/reopen",
+            ));
+        }
         let expected_image_domain = bootstrap_topology.range_image_bootstrap_id;
         let expected_birth_topology = bootstrap_topology.clone();
         if expected_image_domain.is_some() && !fsync {
@@ -1413,6 +1422,7 @@ impl MetadataConsensusStore {
             Ok(bytes) => decode_state(&bytes)?,
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => MetadataConsensusState {
                 format_version: CLUSTER_METADATA_CONSENSUS_FORMAT_VERSION,
+                native_store_id: None,
                 cluster_id: cluster_id.clone(),
                 node_id: node_id.clone(),
                 current_term: 0,
@@ -1429,6 +1439,13 @@ impl MetadataConsensusStore {
             Err(error) => return Err(error.into()),
         };
         validate_state(&state)?;
+        if state.native_store_id.is_some()
+            || native_metadata_store::known_born_v2(&state.committed_topology, &node_id)
+        {
+            return Err(metadata_error(
+                "protected metadata state requires actual native owned reopen",
+            ));
+        }
         crate::distribution::validate_native_store_birth_snapshot(
             &expected_birth_topology,
             &state.committed_topology,
@@ -1458,6 +1475,7 @@ impl MetadataConsensusStore {
             state,
             match_index: BTreeMap::new(),
             last_leader_contact_ms: unix_time_ms(),
+            native_owner: None,
         };
         store.reset_match_indexes();
         store.persist()?;
@@ -2500,9 +2518,17 @@ impl MetadataConsensusStore {
 
     fn persist(&self) -> Result<()> {
         validate_state(&self.state)?;
+        if let Some(owner) = &self.native_owner {
+            owner.require_current()?;
+        }
+        if self.state.native_store_id.is_some() && self.native_owner.is_none() {
+            return Err(metadata_error(
+                "protected metadata persistence lacks actual owner",
+            ));
+        }
         fs::create_dir_all(&self.root)?;
         let mut envelope = MetadataConsensusEnvelope {
-            format_version: CLUSTER_METADATA_CONSENSUS_FORMAT_VERSION,
+            format_version: self.state.format_version,
             checksum_sha256: String::new(),
             state: self.state.clone(),
         };
@@ -2579,7 +2605,12 @@ fn unix_time_ms() -> u64 {
 
 fn decode_state(bytes: &[u8]) -> Result<MetadataConsensusState> {
     let envelope = serde_json::from_slice::<MetadataConsensusEnvelope>(bytes)?;
-    if envelope.format_version != CLUSTER_METADATA_CONSENSUS_FORMAT_VERSION {
+    if !matches!(
+        envelope.format_version,
+        CLUSTER_METADATA_CONSENSUS_FORMAT_VERSION
+            | native_metadata_store::NATIVE_METADATA_CONSENSUS_FORMAT
+    ) || envelope.format_version != envelope.state.format_version
+    {
         return Err(metadata_error(format!(
             "unsupported state format {}; expected {}",
             envelope.format_version, CLUSTER_METADATA_CONSENSUS_FORMAT_VERSION
@@ -2593,7 +2624,15 @@ fn decode_state(bytes: &[u8]) -> Result<MetadataConsensusState> {
 }
 
 fn validate_state(state: &MetadataConsensusState) -> Result<()> {
-    if state.format_version != CLUSTER_METADATA_CONSENSUS_FORMAT_VERSION {
+    if !matches!(
+        (state.format_version, state.native_store_id),
+        (CLUSTER_METADATA_CONSENSUS_FORMAT_VERSION, None)
+            | (
+                native_metadata_store::NATIVE_METADATA_CONSENSUS_FORMAT,
+                Some(_)
+            )
+    ) || state.native_store_id.is_some_and(|id| id.is_nil())
+    {
         return Err(metadata_error("state payload format mismatch"));
     }
     state.committed_topology.validate()?;

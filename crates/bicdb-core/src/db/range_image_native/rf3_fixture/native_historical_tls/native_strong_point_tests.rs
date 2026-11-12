@@ -97,12 +97,12 @@ impl EnforcedNetwork {
             })
             .collect::<BTreeMap<_, _>>();
         let open = |id: &ClusterNodeId| {
-            MetadataConsensusStore::open(
+            MetadataConsensusStore::initialize_native_owned(
                 keys.path().join(format!("strong-meta-{id}")),
-                topology.cluster_id.clone(),
-                id.clone(),
+                Arc::clone(&native.databases[id]),
+                &native.fresh_factories[id],
                 topology.clone(),
-                true,
+                &CancellationToken::uncancelable(),
             )
             .unwrap()
         };

@@ -314,4 +314,47 @@ fn native_abort_actual_enforced_post_durable_commit_errors_cannot_become_no_effe
         observer.outcome(),
         crate::TransactionOutcome::RecoveryRequiredBeforeLocalCommit
     );
+    // Re-fsync actual Commit refusals through a real fresh epoch fence, then
+    // exercise the real incoming resolver. It cannot derive CoreNoEffect from
+    // missing rows or from an unknown user outcome.
+    let scope = fixture.actual_current_recovery_scope(&range);
+    let forbidden = fixture.clients[&node("n0")]
+        .resolve_native_abort_at(
+            &node("n0"),
+            &NativeAbortRequest {
+                scope,
+                range_index: 1,
+                origin_node_id: node("n0"),
+                candidate_sha256: None,
+                challenge: Uuid::now_v7(),
+                budget_ms: 4500,
+            },
+            &token(),
+        )
+        .unwrap_err();
+    assert!(
+        forbidden
+            .to_string()
+            .contains("actual Core no-effect candidate unavailable"),
+        "{forbidden}"
+    );
+    fixture.idle();
+    for id in [node("n0"), node("n1"), node("n2")] {
+        let db = fixture.native.databases[&id].read();
+        let slot = db
+            .native_abort_slot_inventory()
+            .unwrap()
+            .into_iter()
+            .find(|s| s.command.range_id == range.id && s.command.index == 1)
+            .unwrap();
+        assert!(slot.ever_commit);
+        assert!(slot.no_effect_sha256.is_none());
+        assert!(slot.abort_promise_sha256.is_none());
+        assert_eq!(
+            db.current_native_range_source_lineage(range.id)
+                .unwrap()
+                .range_index(),
+            0
+        );
+    }
 }

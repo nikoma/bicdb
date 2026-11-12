@@ -782,3 +782,5 @@ fn native_strong_point_policy_native_wal_publication_failure_fences_old_guard_an
 }
 
 mod after_transfer;
+#[path = "native_born_v2_image_tests.rs"]
+mod native_born_v2_image_tests;

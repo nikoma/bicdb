@@ -24,99 +24,119 @@ struct Fixture {
     networks: Vec<ClusterNetworkTransportConfig>,
     _root: tempfile::TempDir,
 }
+struct PlannedNetwork {
+    root: tempfile::TempDir,
+    plan: NativeClusterBootstrapPlan,
+    networks: Vec<ClusterNetworkTransportConfig>,
+    ports: Vec<TcpListener>,
+}
+fn planned_network(count: usize) -> PlannedNetwork {
+    assert!(matches!(count, 3 | 4));
+    let root = tempfile::tempdir().unwrap();
+    let ca_key = KeyPair::generate().unwrap();
+    let mut params = CertificateParams::default();
+    params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
+    params.key_usages = vec![
+        KeyUsagePurpose::KeyCertSign,
+        KeyUsagePurpose::DigitalSignature,
+    ];
+    let ca = params.self_signed(&ca_key).unwrap();
+    let ca_path = root.path().join("ca.pem");
+    std::fs::write(&ca_path, ca.pem()).unwrap();
+    let ports = (0..count)
+        .map(|_| TcpListener::bind("127.0.0.1:0").unwrap())
+        .collect::<Vec<_>>();
+    let mut networks = Vec::new();
+    let mut members = Vec::new();
+    for (i, listener) in ports.iter().enumerate() {
+        let key = KeyPair::generate().unwrap();
+        let mut params =
+            CertificateParams::new(vec!["localhost".into(), "127.0.0.1".into()]).unwrap();
+        params.is_ca = IsCa::ExplicitNoCa;
+        params.key_usages = vec![KeyUsagePurpose::DigitalSignature];
+        params.extended_key_usages = vec![
+            ExtendedKeyUsagePurpose::ServerAuth,
+            ExtendedKeyUsagePurpose::ClientAuth,
+        ];
+        let cert = params.signed_by(&key, &ca, &ca_key).unwrap();
+        let cert_path = root.path().join(format!("n{i}.pem"));
+        let key_path = root.path().join(format!("n{i}.key"));
+        std::fs::write(&cert_path, cert.pem()).unwrap();
+        std::fs::write(&key_path, key.serialize_pem()).unwrap();
+        let pin = crate::replication_transport::replication_certificate_sha256(&cert_path).unwrap();
+        members.push(
+            ClusterNode::new(
+                node(i),
+                listener.local_addr().unwrap().to_string(),
+                1,
+                1 << 30,
+                10,
+            )
+            .unwrap()
+            .with_tls_certificate_sha256(pin)
+            .unwrap(),
+        );
+        networks.push(ClusterNetworkTransportConfig {
+            connect_timeout_ms: 200,
+            io_timeout_ms: 1500,
+            max_frame_bytes: 4 * 1024 * 1024,
+            max_inbound_connections: 8,
+            dev_localhost_plaintext: false,
+            tls: Some(ReplicationTlsConfig {
+                cert_path,
+                key_path,
+                ca_path: ca_path.clone(),
+                require_client_cert: true,
+                dev_localhost_plaintext: false,
+            }),
+        });
+    }
+    let config = DistributionConfig {
+        enabled: true,
+        cluster_id: ClusterId::new("native-bootstrap-actual-tls").unwrap(),
+        range_image_bootstrap_id: Some(Uuid::now_v7()),
+        node_id: node(0),
+        node_address: members[0].address.clone(),
+        node_tls_certificate_sha256: members[0].tls_certificate_sha256.clone(),
+        node_incarnation: 1,
+        node_capacity_bytes: 1 << 30,
+        replication_factor: 3,
+        initial_ranges: 4,
+        ..Default::default()
+    };
+    let token = CancellationToken::uncancelable();
+    let plan = NativeClusterBootstrapPlan::new(
+        &config,
+        members,
+        vec![
+            NativeBootstrapCollection {
+                name: "items".into(),
+                mode: CollectionMode::Standard,
+            },
+            NativeBootstrapCollection {
+                name: crate::CLUSTER_EVENTS_COLLECTION.into(),
+                mode: CollectionMode::Standard,
+            },
+        ],
+        10,
+        &token,
+    )
+    .unwrap();
+    PlannedNetwork {
+        root,
+        plan,
+        networks,
+        ports,
+    }
+}
 impl Fixture {
     fn new() -> Self {
-        let root = tempfile::tempdir().unwrap();
-        let ca_key = KeyPair::generate().unwrap();
-        let mut params = CertificateParams::default();
-        params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
-        params.key_usages = vec![
-            KeyUsagePurpose::KeyCertSign,
-            KeyUsagePurpose::DigitalSignature,
-        ];
-        let ca = params.self_signed(&ca_key).unwrap();
-        let ca_path = root.path().join("ca.pem");
-        std::fs::write(&ca_path, ca.pem()).unwrap();
-        let ports = (0..3)
-            .map(|_| TcpListener::bind("127.0.0.1:0").unwrap())
-            .collect::<Vec<_>>();
-        let mut networks = Vec::new();
-        let mut members = Vec::new();
-        for (i, listener) in ports.iter().enumerate() {
-            let key = KeyPair::generate().unwrap();
-            let mut params =
-                CertificateParams::new(vec!["localhost".into(), "127.0.0.1".into()]).unwrap();
-            params.is_ca = IsCa::ExplicitNoCa;
-            params.key_usages = vec![KeyUsagePurpose::DigitalSignature];
-            params.extended_key_usages = vec![
-                ExtendedKeyUsagePurpose::ServerAuth,
-                ExtendedKeyUsagePurpose::ClientAuth,
-            ];
-            let cert = params.signed_by(&key, &ca, &ca_key).unwrap();
-            let cert_path = root.path().join(format!("n{i}.pem"));
-            let key_path = root.path().join(format!("n{i}.key"));
-            std::fs::write(&cert_path, cert.pem()).unwrap();
-            std::fs::write(&key_path, key.serialize_pem()).unwrap();
-            let pin =
-                crate::replication_transport::replication_certificate_sha256(&cert_path).unwrap();
-            members.push(
-                ClusterNode::new(
-                    node(i),
-                    listener.local_addr().unwrap().to_string(),
-                    1,
-                    1 << 30,
-                    10,
-                )
-                .unwrap()
-                .with_tls_certificate_sha256(pin)
-                .unwrap(),
-            );
-            networks.push(ClusterNetworkTransportConfig {
-                connect_timeout_ms: 200,
-                io_timeout_ms: 1500,
-                max_frame_bytes: 4 * 1024 * 1024,
-                max_inbound_connections: 8,
-                dev_localhost_plaintext: false,
-                tls: Some(ReplicationTlsConfig {
-                    cert_path,
-                    key_path,
-                    ca_path: ca_path.clone(),
-                    require_client_cert: true,
-                    dev_localhost_plaintext: false,
-                }),
-            });
-        }
-        let config = DistributionConfig {
-            enabled: true,
-            cluster_id: ClusterId::new("native-bootstrap-actual-tls").unwrap(),
-            range_image_bootstrap_id: Some(Uuid::now_v7()),
-            node_id: node(0),
-            node_address: members[0].address.clone(),
-            node_tls_certificate_sha256: members[0].tls_certificate_sha256.clone(),
-            node_incarnation: 1,
-            node_capacity_bytes: 1 << 30,
-            replication_factor: 3,
-            initial_ranges: 4,
-            ..Default::default()
-        };
-        let token = CancellationToken::uncancelable();
-        let plan = NativeClusterBootstrapPlan::new(
-            &config,
-            members,
-            vec![
-                NativeBootstrapCollection {
-                    name: "items".into(),
-                    mode: CollectionMode::Standard,
-                },
-                NativeBootstrapCollection {
-                    name: crate::CLUSTER_EVENTS_COLLECTION.into(),
-                    mode: CollectionMode::Standard,
-                },
-            ],
-            10,
-            &token,
-        )
-        .unwrap();
+        let PlannedNetwork {
+            root,
+            plan,
+            networks,
+            ports,
+        } = planned_network(3);
         let seeds = (0..3)
             .map(|i| {
                 Arc::new(
@@ -376,3 +396,5 @@ fn native_initial_birth_tls_provisional_surface_never_falls_through_even_after_f
     listener.join().unwrap();
     f.assert_no_metadata();
 }
+
+mod process_tests;

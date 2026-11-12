@@ -25,6 +25,115 @@ fn all_keys() -> RangeDescriptor {
 }
 
 #[test]
+fn replicated_semantic_requirements_activate_live_native_reader_state_and_keep_acks() {
+    for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
+        let root = tempfile::tempdir().unwrap();
+        let replica_config = |role| {
+            config(mode.clone()).with_replication(ReplicationConfig {
+                enabled: true,
+                mode: role,
+                cluster_id: "semantic-reader-state".into(),
+                listen_addr: Some("127.0.0.1:0".into()),
+                tls: Some(crate::ReplicationTlsConfig {
+                    cert_path: Default::default(),
+                    key_path: Default::default(),
+                    ca_path: Default::default(),
+                    require_client_cert: true,
+                    dev_localhost_plaintext: true,
+                }),
+                ..Default::default()
+            })
+        };
+        let mut source = BicDb::open_with_config(
+            root.path().join("source"),
+            replica_config(crate::ReplicationMode::Primary),
+        )
+        .unwrap();
+        let target_path = root.path().join("target");
+        let target_config = replica_config(crate::ReplicationMode::Standby);
+        let mut target = BicDb::open_with_config(&target_path, target_config.clone()).unwrap();
+        source.create_collection("business").unwrap();
+        source
+            .insert(
+                "business",
+                Record::new("independent-ack").with_metadata(json!({"payload":"keep-exactly"})),
+            )
+            .unwrap();
+        let ack = source
+            .get("business", "independent-ack")
+            .unwrap()
+            .unwrap()
+            .content_hash()
+            .unwrap();
+        target
+            .apply_replication_batch(&source.export_replication_frames_since(0, 1000).unwrap())
+            .unwrap();
+        assert!(!target.sql_partition_execution_feature_active());
+        let before = target.last_applied_commit_seq();
+        source.enable_sql_partition_execution_v1().unwrap();
+        format::enable_decimal_predicate_comparison_v1(source.data_path()).unwrap();
+        source.enable_application_unique_scope().unwrap();
+        source
+            .insert("business", Record::new("after-activation"))
+            .unwrap();
+        let required = format::required_reader_features(source.data_path()).unwrap();
+        for flag in [
+            format::SQL_PARTITION_EXECUTION_V1_FEATURE_FLAG,
+            format::DECIMAL_PREDICATE_COMPARISON_V1_FEATURE_FLAG,
+            format::APPLICATION_UNIQUE_SCOPE_FEATURE_FLAG,
+        ] {
+            assert!(required.iter().any(|feature| feature == flag));
+        }
+        let frames = source
+            .export_replication_frames_since(before, 1000)
+            .unwrap();
+        assert!(!frames.is_empty());
+        for frame in frames {
+            assert_eq!(frame.required_reader_features, required);
+            target.apply_replication_frame(&frame).unwrap();
+            assert_eq!(
+                format::required_reader_features(&target_path).unwrap(),
+                required
+            );
+            assert!(target.sql_partition_execution_feature_active(), "{mode}: persisted replica capability did not become active on its live Native handle");
+        }
+        assert_eq!(
+            target
+                .get("business", "independent-ack")
+                .unwrap()
+                .unwrap()
+                .content_hash()
+                .unwrap(),
+            ack
+        );
+        target.close().unwrap();
+        for _ in 0..2 {
+            let target = BicDb::open_with_config(&target_path, target_config.clone()).unwrap();
+            assert!(target.sql_partition_execution_feature_active());
+            assert_eq!(
+                format::required_reader_features(&target_path).unwrap(),
+                required
+            );
+            assert_eq!(
+                target
+                    .get("business", "independent-ack")
+                    .unwrap()
+                    .unwrap()
+                    .content_hash()
+                    .unwrap(),
+                ack
+            );
+            assert!(target
+                .get("business", "after-activation")
+                .unwrap()
+                .is_some());
+            target.close().unwrap();
+        }
+        source.close().unwrap();
+    }
+}
+
+#[test]
 fn shared_snapshot_apply_installs_capabilities_and_invalidates_readiness_once() {
     for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
         let root = tempfile::tempdir().unwrap();

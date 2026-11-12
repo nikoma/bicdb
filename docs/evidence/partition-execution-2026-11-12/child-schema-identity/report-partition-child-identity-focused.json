@@ -1,0 +1,36 @@
+{
+  "source": "71d3be9206bc9670576ff741bad9c8d0d9d54854",
+  "scope": "Currentchildschema/physicalkey/PG16identity batch: actualPG16freshchildidentityNO/defaultNULL, parentgenerates/directchildomission23502/explicitchildallowed, plusninechildcontrols andprior112SQLfocused unchangedassertions. Broadcc84 NativeCore1391PASS0FAIL13ignored sourceequivalentCore/Page/Cargo; itsSQL/wireareolder andcannotqualifythischangedbatch. SERIAL addatomicity, independentconstraint/generated/namespace/lifecycle/allACK/processVM/HA and fullgoalremainrequired. No standardbinary/release/deployment.",
+  "started_unix": 1794505099.456386,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--no-fail-fast",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "partition_child_schema",
+        "--test",
+        "partition_schema_changes",
+        "--test",
+        "primary_key_index_compatibility",
+        "--test",
+        "partition_statement_batches",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794505099.4567533,
+      "exit": 101,
+      "finished_unix": 1794505309.9728885
+    }
+  ],
+  "status": "failed",
+  "finished_unix": 1794505309.9751947
+}

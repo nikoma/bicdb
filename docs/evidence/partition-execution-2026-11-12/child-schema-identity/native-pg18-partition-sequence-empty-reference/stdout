@@ -1,0 +1,24 @@
+BEGIN
+CREATE SCHEMA
+SET
+CREATE TABLE
+CREATE TABLE
+CREATE TABLE
+INSERT 0 2
+DO
+high,ident,,YES,ALWAYS
+high,sid,nextval('p_sid_seq'::regclass),NO,
+low,ident,,YES,ALWAYS
+low,sid,nextval('p_sid_seq'::regclass),NO,
+p,ident,,YES,ALWAYS
+p,sid,nextval('p_sid_seq'::regclass),NO,
+CREATE TABLE
+ALTER TABLE
+CREATE TABLE
+INSERT 0 1
+DO
+empty_low,ident,,YES,ALWAYS
+empty_parent,ident,,YES,ALWAYS
+empty_identity,1,1
+empty_identity,2,2
+ROLLBACK

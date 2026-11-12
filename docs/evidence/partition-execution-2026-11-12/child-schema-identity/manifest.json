@@ -1,0 +1,342 @@
+{
+  "native-pg16-partition-child-dml-reference/container.stderr": {
+    "bytes": 1610,
+    "sha256": "f1d8c6004808e45899b80ff903f3361519f7662f9bff638a54d33028c6d76a3f"
+  },
+  "native-pg16-partition-child-dml-reference/container.stdout": {
+    "bytes": 2336,
+    "sha256": "9f7955d9227b5a88afbd0ba115e323614d8a2da3b852553004253d57aa9c381b"
+  },
+  "native-pg16-partition-child-dml-reference/control.sql": {
+    "bytes": 3841,
+    "sha256": "51a21e461371415321976c1d6c19b4d93539dfd7d6fc92b972be0b028285b8d3"
+  },
+  "native-pg16-partition-child-dml-reference/result.json": {
+    "bytes": 976,
+    "sha256": "588468555e5761ecbe653660aeb215ddaf9f03b6907aab3f73f9862f49956093"
+  },
+  "native-pg16-partition-child-dml-reference/stderr": {
+    "bytes": 83,
+    "sha256": "4ef7b2d8d1fe7975153c3dd5fc39767609ba60fe95036730224934c5b4d6f568"
+  },
+  "native-pg16-partition-child-dml-reference/stdout": {
+    "bytes": 1807,
+    "sha256": "4602a529eb33e05a18054e3c5165b0ab342e0f849e49f8dfb14c1149b81c59ae"
+  },
+  "native-pg16-partition-child-reference/container.stderr": {
+    "bytes": 1610,
+    "sha256": "a2140a2e8e7ba12af3c95d79bcad939266b54dee2927e496c53bdabfb46d7e9d"
+  },
+  "native-pg16-partition-child-reference/container.stdout": {
+    "bytes": 2336,
+    "sha256": "cec530b3be6669c2add0f8f1ba61c2837c1e1df91f6cf31b7411c886ccdda0d2"
+  },
+  "native-pg16-partition-child-reference/control.sql": {
+    "bytes": 1904,
+    "sha256": "9e48f0402662cee0fbb34d112241069f9c7ab2f25bb4838855751faa3840534e"
+  },
+  "native-pg16-partition-child-reference/result.json": {
+    "bytes": 848,
+    "sha256": "f18c4d486f59c44e50804143b83a4d3d050fa2e0e6db771d0e083e1e423cb6d8"
+  },
+  "native-pg16-partition-child-reference/stderr": {
+    "bytes": 44,
+    "sha256": "51b31555949391b45cb011a2dcd3f473f78542244fe031e89dc5781201e40f91"
+  },
+  "native-pg16-partition-child-reference/stdout": {
+    "bytes": 1463,
+    "sha256": "60a8e59c51b0d8f725f871ed5d6c6d6464f394bed12552ef3c1b7de35ceb5c24"
+  },
+  "native-pg16-partition-sequence-empty-reference/container.stderr": {
+    "bytes": 1610,
+    "sha256": "58a7b39c4853d9fdeadd31de3c70edf10d9ca30ddbe84eecfe7a5b7124b17a0a"
+  },
+  "native-pg16-partition-sequence-empty-reference/container.stdout": {
+    "bytes": 2336,
+    "sha256": "f200f2f1476ed6879767df2ed55b7867036276374128e2b1ee5fcd3468ce750e"
+  },
+  "native-pg16-partition-sequence-empty-reference/control.sql": {
+    "bytes": 2867,
+    "sha256": "44b12f3c154d7f9fa42020a6129257d14dee2911af81cac7dc5b8020eda0f406"
+  },
+  "native-pg16-partition-sequence-empty-reference/result.json": {
+    "bytes": 902,
+    "sha256": "f09970866dcfa6c437945f8a79a817786842a9e94eb214269ee8fb057c8e461f"
+  },
+  "native-pg16-partition-sequence-empty-reference/stderr": {
+    "bytes": 470,
+    "sha256": "5e30726e7d309aa9f2d4a6895957068d3ac05f2b5b22dd5da650d80ba7ffc5e6"
+  },
+  "native-pg16-partition-sequence-empty-reference/stdout": {
+    "bytes": 337,
+    "sha256": "0d1dd47d48dd46f7b1eeb1f8da57511a05fcf194dcbc95fdb11070eaf8750b2d"
+  },
+  "native-pg16-partition-sequence-reference/container.stderr": {
+    "bytes": 1610,
+    "sha256": "d9bb0611ba51234155dcc483a7a52a1870570ec45ebab0dd62636900412d5ea2"
+  },
+  "native-pg16-partition-sequence-reference/container.stdout": {
+    "bytes": 2336,
+    "sha256": "b53d2b00849c1bb9cceed907423c074cfce4db7c1d8591672f103bdaaadda3a1"
+  },
+  "native-pg16-partition-sequence-reference/control.sql": {
+    "bytes": 2068,
+    "sha256": "8d9ca54eed4d5d0a736485c890fe8544e83ac4bd26b45e1255100affadce29cd"
+  },
+  "native-pg16-partition-sequence-reference/result.json": {
+    "bytes": 821,
+    "sha256": "efdb9d75298eabaf4dfa514178a8a29154641cf27ea2e870f87538e33a750f31"
+  },
+  "native-pg16-partition-sequence-reference/stderr": {
+    "bytes": 330,
+    "sha256": "0e95a7471fe662ca7c096cc5faefef1aeefd529db29b8bbd2bd3003bba7f58b0"
+  },
+  "native-pg16-partition-sequence-reference/stdout": {
+    "bytes": 214,
+    "sha256": "a3b1672bbcb87116611fd876e84e09509d7e034c53cf7f34ca28be9a2e6e5233"
+  },
+  "native-pg18-partition-broad-reference/container.stderr": {
+    "bytes": 1609,
+    "sha256": "945308b3e122cfb25809be696876b41703d87b6141342bcddee31ae5ce65b70b"
+  },
+  "native-pg18-partition-broad-reference/container.stdout": {
+    "bytes": 2369,
+    "sha256": "8c4099e6bbf25e8334e9f8104adf2183dd0ea8a827146733e44a2b31908e2149"
+  },
+  "native-pg18-partition-broad-reference/control.sql": {
+    "bytes": 3538,
+    "sha256": "2e6322a1709c205943778c4bc5ba56a735ecf25260c77f893176ee483035c8c5"
+  },
+  "native-pg18-partition-broad-reference/result.json": {
+    "bytes": 864,
+    "sha256": "4c1cbf3417f9179fe7451997306da0ec748b960f8642953d73e5b1d57cd5e213"
+  },
+  "native-pg18-partition-broad-reference/stderr": {
+    "bytes": 178,
+    "sha256": "4ae3249d1eee2f5524af5216c90faa78cd2ff33458a7cda82dea763d414f52fb"
+  },
+  "native-pg18-partition-broad-reference/stdout": {
+    "bytes": 258,
+    "sha256": "14c69ad3855ffd77a0f4c40a367d4b53f0b99e385f9addaaa039e229209b35d9"
+  },
+  "native-pg18-partition-child-dml-reference/container.stderr": {
+    "bytes": 1609,
+    "sha256": "c9ace4f141dac7842b6cc9942cac56efb978c9162ef3fb65165736c6fb1de41b"
+  },
+  "native-pg18-partition-child-dml-reference/container.stdout": {
+    "bytes": 2369,
+    "sha256": "c361ba4ecc8b9a404e9f33fa5adb69015c60854936eb482441e5e684afe9948f"
+  },
+  "native-pg18-partition-child-dml-reference/control.sql": {
+    "bytes": 3841,
+    "sha256": "51a21e461371415321976c1d6c19b4d93539dfd7d6fc92b972be0b028285b8d3"
+  },
+  "native-pg18-partition-child-dml-reference/result.json": {
+    "bytes": 983,
+    "sha256": "d87907155ca8567887d283cc1adfa745add2e5d20d7e137882445cc4fc084902"
+  },
+  "native-pg18-partition-child-dml-reference/stderr": {
+    "bytes": 83,
+    "sha256": "4ef7b2d8d1fe7975153c3dd5fc39767609ba60fe95036730224934c5b4d6f568"
+  },
+  "native-pg18-partition-child-dml-reference/stdout": {
+    "bytes": 1840,
+    "sha256": "f9391e7aba405721a9343118d499e62791945d6b7a7701e6d79969738f22b8d5"
+  },
+  "native-pg18-partition-generated-add-rollback-reference/container.stderr": {
+    "bytes": 2665,
+    "sha256": "59c1936983a44d77bb3e267caa2c5b30efdcc39d4ffcd6d13f671faad347914a"
+  },
+  "native-pg18-partition-generated-add-rollback-reference/container.stdout": {
+    "bytes": 2369,
+    "sha256": "a8eb92243c2eab0f9907cadb8d9955a241d9a0f461baef214aa510e17a19612d"
+  },
+  "native-pg18-partition-generated-add-rollback-reference/control.sql": {
+    "bytes": 2869,
+    "sha256": "fef167062228a94eff28705038b8f31678449905e6275477d07f253750b61834"
+  },
+  "native-pg18-partition-generated-add-rollback-reference/result.json": {
+    "bytes": 926,
+    "sha256": "a34c9ccfad1c7a593acc1af9198bc4e0175d0c48df29ab3820713a1842cea1f8"
+  },
+  "native-pg18-partition-generated-add-rollback-reference/stderr": {
+    "bytes": 237,
+    "sha256": "270d48ee49f62f8b67d67c0fa702577deacd72b8832509f9423859b48a2e7839"
+  },
+  "native-pg18-partition-generated-add-rollback-reference/stdout": {
+    "bytes": 74,
+    "sha256": "deca641f6e93255da292e90c6f70b38a6ee66895851fd8919d74c19990ef9dfa"
+  },
+  "native-pg18-partition-generated-add-rollback-reference-v2/container.stderr": {
+    "bytes": 1608,
+    "sha256": "7f7badaf3a5afa070ec2a0c75e3a4a807f072fe9d94740b5fb8dfece63c88282"
+  },
+  "native-pg18-partition-generated-add-rollback-reference-v2/container.stdout": {
+    "bytes": 2369,
+    "sha256": "0e559eb4a72cfa33ce0de282103b2d1c91443a956776c14f6f31d652542da2ae"
+  },
+  "native-pg18-partition-generated-add-rollback-reference-v2/control.sql": {
+    "bytes": 2880,
+    "sha256": "6d46b58309d693d26010c348b2bd0eb73c30c477867476c1df578915584bb7f5"
+  },
+  "native-pg18-partition-generated-add-rollback-reference-v2/result.json": {
+    "bytes": 926,
+    "sha256": "337263d6175042845e42b21f12e589715c9dd7324a3a6ed1b9922b093158a811"
+  },
+  "native-pg18-partition-generated-add-rollback-reference-v2/stderr": {
+    "bytes": 35,
+    "sha256": "269e031baa0162f3b47f05e480173f3c60e0d66c998e77d11eeee56f17fa9f13"
+  },
+  "native-pg18-partition-generated-add-rollback-reference-v2/stdout": {
+    "bytes": 297,
+    "sha256": "18a43b9826416ea382618219d692c35efe9ceb01d10fd29eecb11f5b932ec572"
+  },
+  "native-pg18-partition-sequence-empty-reference/container.stderr": {
+    "bytes": 1609,
+    "sha256": "c1474654306247cc9fa14d93e63d3c1db980edd2b04980d941d7100cc73aaf8a"
+  },
+  "native-pg18-partition-sequence-empty-reference/container.stdout": {
+    "bytes": 2369,
+    "sha256": "1c898a00f42ea627e082c368d9e86bb4931d65c8b7e1d6e355bd38bd4090c294"
+  },
+  "native-pg18-partition-sequence-empty-reference/control.sql": {
+    "bytes": 2867,
+    "sha256": "44b12f3c154d7f9fa42020a6129257d14dee2911af81cac7dc5b8020eda0f406"
+  },
+  "native-pg18-partition-sequence-empty-reference/result.json": {
+    "bytes": 907,
+    "sha256": "5d89fe6c515d0e4c3cb9f294b0848e41adc96647c51ae7ed1254db1395d6389f"
+  },
+  "native-pg18-partition-sequence-empty-reference/stderr": {
+    "bytes": 712,
+    "sha256": "d958c48519c518986af06932b6955a590be8334f881a6595e401519fa5a04889"
+  },
+  "native-pg18-partition-sequence-empty-reference/stdout": {
+    "bytes": 428,
+    "sha256": "4e829e21791bd85d54ecf579ec52b212d9a420d80162f4085d30a1a71ba68adb"
+  },
+  "partition-child-identity-baseline-spec.json": {
+    "bytes": 1323,
+    "sha256": "75ab57c2eb99d10faf00f45581fe2a25c624d6a22be0eadc9611ce2dd14a2ce6"
+  },
+  "partition-child-identity-focused-spec.json": {
+    "bytes": 3666,
+    "sha256": "28a94c3d0baef1704ce4c1bcdaadf795d3ec968a1612e288f8748b42d061b41b"
+  },
+  "partition-child-schema-baseline-spec.json": {
+    "bytes": 1455,
+    "sha256": "68a36ed818dd07e56810cb170e21b5fe28ee8f43839924dbd843e9eadc6133e9"
+  },
+  "partition-child-schema-focused-spec.json": {
+    "bytes": 3822,
+    "sha256": "75e053b58bacf8003716fae2e58a09552e5bfa2cbf905db310035ba04981ef33"
+  },
+  "partition-child-schema-typed-focused-spec.json": {
+    "bytes": 4068,
+    "sha256": "552568d7e33fcfc4d17384ee4045fd7f526523f448488ad3b483f1c31ce4753c"
+  },
+  "partition-identity-default-baseline-spec.json": {
+    "bytes": 1710,
+    "sha256": "67d53853a4e86ce34a0dc8453f7a502d64ce4ff49a9c62f2d57093413bfa083b"
+  },
+  "partition-identity-default-focused-spec.json": {
+    "bytes": 3557,
+    "sha256": "29ba92f1376c859a52042cec9911d7d32192700d31993680cac2098d31ba42a6"
+  },
+  "partition-identity-options-cycle-focused-spec.json": {
+    "bytes": 2285,
+    "sha256": "c6a559db0c2f7393377693d13a14a815477627dbf09f897e977440ebd4bd50d1"
+  },
+  "partition-identity-options-focused-spec.json": {
+    "bytes": 1866,
+    "sha256": "a757a6294200fdc5c0b8c8a56afa35560e16e928aee68a71322489aa51e9b994"
+  },
+  "partition-schema-change-focused-spec.json": {
+    "bytes": 3761,
+    "sha256": "c117752dcbcabd210f91ddf75c6cfcce48290bc29023339caeeaf2fdbbe1d322"
+  },
+  "report-partition-child-identity-baseline.json": {
+    "bytes": 940,
+    "sha256": "8777c7b99f801294418c66e7c1150916d10c3e681e85dfb1f9a9becb066ab3a0"
+  },
+  "report-partition-child-identity-focused.json": {
+    "bytes": 1292,
+    "sha256": "7b6fec5437fcefae4e4c6e68148b5df88b8f3cd351f3ca93a98c297bb2b564d8"
+  },
+  "report-partition-child-schema-baseline.json": {
+    "bytes": 1122,
+    "sha256": "017d070f49f4ae2a057fb8ddb86665c80dce139ea799a7c22c54831e82debcd9"
+  },
+  "report-partition-child-schema-focused.json": {
+    "bytes": 4162,
+    "sha256": "75877ea937c697c1c70d7b81d294fccfbc199a9794f1091aff9ea111d9c328b9"
+  },
+  "report-partition-child-schema-typed-focused.json": {
+    "bytes": 4401,
+    "sha256": "5aabebda5fd53f67386d8e1cca4fa6f363fb33965a4817ee6a6bf01b41519be6"
+  },
+  "report-partition-identity-default-baseline.json": {
+    "bytes": 1482,
+    "sha256": "04fe0a965cbedd9441692db8737b390d5fd2e2e672a7fa9560431ff34a0fa6b5"
+  },
+  "report-partition-identity-default-focused.json": {
+    "bytes": 1180,
+    "sha256": "c15a25a1bfd42ce418f2a76c11d6d4189518aeea39c7559578ef8e9bb2fc486b"
+  },
+  "report-partition-identity-options-cycle-focused.json": {
+    "bytes": 2049,
+    "sha256": "455fffcd29512c7e76125502c4c120f7805bf138ac7899fac135a7eb01bb8ffa"
+  },
+  "report-partition-identity-options-focused.json": {
+    "bytes": 1642,
+    "sha256": "15416d65b0bd8095d0f2294feff6ab1cbf782315213e46a956477b9191b5e80d"
+  },
+  "report-partition-schema-change-focused.json": {
+    "bytes": 4424,
+    "sha256": "638e827043c908a6bb442557f61789ca9201d72250d57701bae34abd89bca828"
+  },
+  "summary.json": {
+    "bytes": 3610,
+    "sha256": "d7498641164bee7a72fee261b471013522807534aed56023bac00054bc75adf5"
+  },
+  "tc-step-partition-child-identity-baseline.log.gz": {
+    "bytes": 13037,
+    "sha256": "0d4f2733f3e6077dcc40bc99824ac280aaf4e3754fe5e4dadf54d5c7860bbc42"
+  },
+  "tc-step-partition-child-identity-focused.log.gz": {
+    "bytes": 15409,
+    "sha256": "046107425cc25c0379387228da1fefa743d338840179bc3a3cb96dcda9c1beaf"
+  },
+  "tc-step-partition-child-schema-baseline.log.gz": {
+    "bytes": 13385,
+    "sha256": "e6a0a74e1dc46eec7013a334adce528687440a6c2a67c2de18089d009d52dbe0"
+  },
+  "tc-step-partition-child-schema-focused.log.gz": {
+    "bytes": 46006,
+    "sha256": "642cebfed3e106ef70b3f7c9a725ced484ce29a119291e089eba7108d56a3d5d"
+  },
+  "tc-step-partition-child-schema-typed-focused.log.gz": {
+    "bytes": 64909,
+    "sha256": "3f8b265d76c9eb024a02eeed3e318e9235d7f00beb31051a5af8ff729203d004"
+  },
+  "tc-step-partition-identity-default-baseline.log.gz": {
+    "bytes": 24423,
+    "sha256": "7a1f535d8a89817c82a8da2571c75cb4dbe6701860593375b65172d382819276"
+  },
+  "tc-step-partition-identity-default-focused.log.gz": {
+    "bytes": 15077,
+    "sha256": "03960eb0d5a35c0f7abe4528c7e374b35790fba952ca2bcefe8b531a9b053f79"
+  },
+  "tc-step-partition-identity-options-cycle-focused.log.gz": {
+    "bytes": 25758,
+    "sha256": "acb39d3d6cdbf60529dc145e0a510720805743cbea92a83d47a3e022e4be247c"
+  },
+  "tc-step-partition-identity-options-focused.log.gz": {
+    "bytes": 25673,
+    "sha256": "8a960267c8cdadfb6e25767bf274938c748a060771272bb5925c20dcc9698125"
+  },
+  "tc-step-partition-schema-change-focused.log.gz": {
+    "bytes": 95245,
+    "sha256": "5685c4653843e1901d2fe830b76fdce8fd84409cb7f694642e4a0d1b180d9528"
+  }
+}

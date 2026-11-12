@@ -1,0 +1,65 @@
+BEGIN
+CREATE SCHEMA
+SET
+CREATE TABLE
+CREATE TABLE
+CREATE TABLE
+ALTER TABLE
+ALTER TABLE
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+initial,1,low,10
+initial,2,parent,10
+initial,11,high,20
+ALTER TABLE
+INSERT 0 1
+INSERT 0 1
+after_add,1,low,10,new
+after_add,2,parent,10,new
+after_add,3,low,10,new
+after_add,11,high,20,new
+after_add,12,high,20,new
+ALTER TABLE
+INSERT 0 1
+INSERT 0 1
+after_type,1,low!,10,new
+after_type,2,parent!,10,new
+after_type,3,low!,10,new
+after_type,4,low,10,new
+after_type,11,high!,20,new
+after_type,12,high!,20,new
+after_type,13,high,20,new
+ALTER TABLE
+INSERT 0 1
+INSERT 0 1
+after_parent_default,1,low!,10,new
+after_parent_default,2,parent!,10,new
+after_parent_default,3,low!,10,new
+after_parent_default,4,low,10,new
+after_parent_default,5,low,30,new
+after_parent_default,11,high!,20,new
+after_parent_default,12,high!,20,new
+after_parent_default,13,high,20,new
+after_parent_default,14,high,30,new
+ALTER TABLE
+INSERT 0 1
+INSERT 0 1
+after_parent_drop_default,1,low!,10,new
+after_parent_drop_default,2,parent!,10,new
+after_parent_drop_default,3,low!,10,new
+after_parent_drop_default,4,low,10,new
+after_parent_drop_default,5,low,30,new
+after_parent_drop_default,6,low,,new
+after_parent_drop_default,11,high!,20,new
+after_parent_drop_default,12,high!,20,new
+after_parent_drop_default,13,high,20,new
+after_parent_drop_default,14,high,30,new
+after_parent_drop_default,15,high,,new
+CREATE TABLE
+CREATE TABLE
+ALTER TABLE
+INSERT 0 1
+DO
+ownkey,p,ownkey_pkey
+ROLLBACK

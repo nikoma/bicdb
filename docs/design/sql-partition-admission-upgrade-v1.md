@@ -164,7 +164,11 @@ Source `cc84f24f` publishes all converted/default/generated rows, schemas and
 certificate in one Native decision and restores the complete tree together on
 undo. A proposed certificate validates the complete proposed forest. All six
 new transition checks and both original ALTERs pass at `cc84f24f`; the seven
-PK/batch tests pass there too. The remaining focused SQL/protocol batch is live.
+PK/batch tests pass there too. The complete focused batch finished: 112 SQL
+and 195 protocol tests passed. The later broad run passed all Core tests
+(1,391 passed, zero failed, thirteen ignored) and completed SQL successfully;
+protocol remains live at this checkpoint. These results cover `cc84f24f`,
+not later changed SQL or the independently advanced main489 Core.
 Serial/identity ADD and independent process/I/O/VM qualification remain open.
 Raw logs, exact sources, fixture corrections and reference controls are under
 `docs/evidence/partition-execution-2026-11-12/catalog-transitions`.
@@ -175,6 +179,43 @@ ONLY/snapshots/concurrency, protected Native authority, process/fault/VM and HA
 propagation remain required. The fixes above still require qualification on the
 final delivery source. No delivery version is reserved, and no new standard
 CLI/server binary, release or deployment was produced.
+
+The subsequent child-schema batch preserves current-version child-owned
+columns/defaults and independent physical primary keys. Parent ADD/TYPE changes
+preserve unrelated child defaults; parent SET/DROP DEFAULT changes only the
+specified column with whole-tree undo. Parent reads, locks, INSERT, UPDATE,
+DELETE and cross-leaf movement materialize visible leaf key fields while
+retaining the actual physical identity. At `e036228f`, all 118 focused SQL
+tests pass, including six new child/default/key controls in both storage modes
+with reopens. This is focused evidence, not full application acceptance.
+
+The declared PostgreSQL target is **18.4**, as recorded in `identity.rs` and
+`POSTGRES_COMPATIBILITY.md`. Initial identity experiments mistakenly used
+PostgreSQL16's different behavior: recursive identity ADD with children refuses,
+and newly created children do not inherit identity. Both attempted PG16-only
+runtime changes were reverted; the actual PG18.4 controls confirm successful
+recursive identity backfill and a shared root identity on every partition.
+Earlier nonidentity child/DML and invalid-fixture controls were independently
+rerun on PG18.4. All historical reference and failed product logs are retained.
+
+Valid multi-option identity SQL exposed sqlparser's fixed option order. A token
+and source-preserving adapter now orders recognized options for the parser
+without altering literals/comments or hiding duplicate/unknown options. A
+separate constructor correction honors sqlparser's `NO CYCLE` boolean polarity.
+Both parser units pass at `c4c98a55`; eight child tests pass and recursive
+identity publication still fails. Source `8739d3e6` adds a proposed atomic
+publication of all rows/schemas, the new owned sequence, default ACLs and the
+certificate, with complete retryable undo. Qualification is running; this is
+not a passing or delivered change yet. Its new exhaustion fixture needed an
+explicit MINVALUE0 so START1/MAXVALUE1 reaches exhaustion rather than rejecting
+invalid bounds. Both the failed reference fixture and corrected PG18.4 pass
+are preserved. See `child-schema-identity/summary.json` beside the earlier
+`catalog-transitions` evidence.
+
+Remote main independently advanced to `b9394418` / 1.0.489-beta (PR157 native
+read/recovery foundation). This private partition branch still inherits488 and
+must integrate and validate that new main. No new Root delivery version, CLI,
+release, deployment or physical HA/scale-out result follows from that merge.
 
 ## Implementation and qualification checklist
 

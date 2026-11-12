@@ -1,0 +1,31 @@
+{
+  "source": "3ae6dc9444cf85dd6d8d620c30fe8525ccff3d6c",
+  "scope": "ActualPG16 identity-before-child control: parent allocates identity, freshchild hasNOidentity/default, directchild omission23502, explicitchild value allowed and doesnotconsumeparentsequence, ACKs2reopens. Testonlyoverbccb, expectedinheritancecounterexample, assertionsunchangedlater.",
+  "started_unix": 1794505047.7143774,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--no-fail-fast",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "partition_child_schema",
+        "identity_created_before_partitions",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794505047.7147408,
+      "exit": 101,
+      "finished_unix": 1794505053.8928986
+    }
+  ],
+  "status": "failed",
+  "finished_unix": 1794505053.8932557
+}

@@ -568,7 +568,7 @@ fn identity_sequence_exhaustion_leaves_no_partial_column_or_sequence() {
         drop(sql);
         let before = physical_state(&db);
         let seq = db.current_commit_seq();
-        let error = SqlSession::new(&mut db).execute("ALTER TABLE p ADD COLUMN ident INT GENERATED ALWAYS AS IDENTITY (START WITH 1 MAXVALUE 1 NO CYCLE)").unwrap_err();
+        let error = SqlSession::new(&mut db).execute("ALTER TABLE p ADD COLUMN ident INT GENERATED ALWAYS AS IDENTITY (START WITH 1 MINVALUE 0 MAXVALUE 1 NO CYCLE)").unwrap_err();
         assert_eq!(error.sqlstate(), "2200H");
         assert_eq!(db.current_commit_seq(), seq);
         assert_eq!(physical_state(&db), before);

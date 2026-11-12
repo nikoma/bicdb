@@ -1,0 +1,9 @@
+NOTICE:  serial_add=accepted
+NOTICE:  serial_rows=[{"k":1,"sid":1}, 
+ {"k":11,"sid":2}]
+NOTICE:  serial_after_inserts=[{"k":1,"sid":1}, 
+ {"k":2,"sid":3}, 
+ {"k":3,"sid":4}, 
+ {"k":11,"sid":2}, 
+ {"k":12,"sid":5}]
+NOTICE:  identity_add_or_insert_refused=42P16 cannot recursively add identity column to table that has child tables

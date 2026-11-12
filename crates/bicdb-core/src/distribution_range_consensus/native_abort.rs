@@ -237,17 +237,29 @@ impl RangeWriteStore {
             ))
         })
     }
+    fn read_bounded_abort_catalogue(path: &Path) -> Result<Vec<u8>> {
+        let file = File::open(path)?;
+        let mut bytes = Vec::new();
+        file.take(64 * 1024 * 1024 + 1).read_to_end(&mut bytes)?;
+        if bytes.len() > 64 * 1024 * 1024 {
+            return Err(range_write_error(
+                "native range catalogue byte bound exceeded",
+            ));
+        }
+        Ok(bytes)
+    }
     pub(crate) fn require_abort_catalogue_identity(
         root: &Path,
         cluster: &ClusterId,
         node: &ClusterNodeId,
         store_id: Uuid,
     ) -> Result<()> {
-        let bytes = fs::read(root.join(DEFAULT_RANGE_WRITE_LOG)).map_err(|e| {
-            range_write_error(format!(
-                "registered native range catalogue missing; never reset: {e}"
-            ))
-        })?;
+        let bytes = Self::read_bounded_abort_catalogue(&root.join(DEFAULT_RANGE_WRITE_LOG))
+            .map_err(|e| {
+                range_write_error(format!(
+                    "registered native range catalogue missing; never reset: {e}"
+                ))
+            })?;
         if bytes.len() > 64 * 1024 * 1024 {
             return Err(range_write_error(
                 "native range catalogue byte bound exceeded",
@@ -276,6 +288,11 @@ impl RangeWriteStore {
         }
         let _owner = Self::abort_catalogue_owner(root)?;
         let path = root.join(DEFAULT_RANGE_WRITE_LOG);
+        if fs::metadata(&path).is_ok_and(|m| m.len() > 64 * 1024 * 1024) {
+            return Err(range_write_error(
+                "native factory catalogue byte bound exceeded",
+            ));
+        }
         let mut catalog = match fs::read(&path) {
             Ok(bytes) => {
                 let old = serde_json::from_slice::<RangeWriteEnvelope>(&bytes)?.verify()?;

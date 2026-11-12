@@ -73,16 +73,20 @@ impl NativeAbortDecisionRecord {
         )?)))
     }
     fn validate(&self, birth: &NativeDatabaseBirth) -> Result<()> {
+        self.scope.validate()?;
         let voters = self.domain.member_ids();
         if self.version != 1 || birth.abort_protocol_version != Some(1) || birth.format_version != 2
             || birth.metadata_initialization_version != Some(1) || self.birth_id != birth.birth_id
             || self.base_receipt_sha256.len() != 64 || self.previous_receipt_sha256.len() != 64
             || self.previous_index.checked_add(1) != Some(self.range_index) || self.candidate_sha256.len() != 64
             || self.native_page_xid == 0 || self.post_quorum_metadata_context_id.is_nil()
+            || self.history_generation.is_nil() || self.logical_genesis_sha256.len() != 64
+            || self.logical_history_sha256.len() != 64 || self.previous_history_sha256.len() != 64
             || self.actual_promises.len() < voters.len()/2+1 || self.actual_promises.len() > voters.len()
             || self.actual_promises.iter().any(|(id, p)| {
                 !voters.contains(id) || id != &p.node_id || !p.request.scope.same_session(&self.scope)
-                    || p.request.range_index != self.range_index || p.candidate_sha256 != self.candidate_sha256
+                    || p.request.scope.validate().is_err() || p.request.range_index != self.range_index
+                    || p.request.candidate_sha256.as_deref() != Some(self.candidate_sha256.as_str()) || p.candidate_sha256 != self.candidate_sha256
                     || p.predecessor_index != self.previous_index || p.predecessor_history_sha256 != self.previous_history_sha256
                     || p.observed_metadata_context_id == self.post_quorum_metadata_context_id
                     || p.observed_metadata_context_id.is_nil() || p.observed_metadata_term > self.post_quorum_metadata_term

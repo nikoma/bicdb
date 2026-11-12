@@ -309,9 +309,11 @@ host partial-serial-line parsing error; it is preserved, and the corrected
 second smoke and full matrix passed. See `generated-keys` and `vm-recovery`
 evidence beside the earlier recovery archive.
 
-The full earlier `6c16e66e` run is terminal green: Core 1,699 passed/17 ignored,
+The full earlier `6c16e66e` run is terminal green: Core 1,698 passed/17 ignored,
 SQL 2,573/4, protocol 491/2, zero failures. Core remains unchanged; the changed
-`5aa92dce` SQL/protocol broad run is still live. A new test-only Native-authority
+`5aa92dce` SQL/protocol broad run subsequently passed 2,586/491, zero failures.
+The canonical Cargo-target parser excludes one duplicated Core child summary
+and handles interleaved protocol telemetry; raw historical logs are retained. A new test-only Native-authority
 probe `3545a445` passes two cases and fails two: a generated-key logical UPDATE
 attempts Native DELETE using an UPDATE grant, and a missing-grant UPDATE reports
 XX000 instead of 42501. These are open delivery gates. No grant bypass or broader
@@ -323,7 +325,9 @@ A real Native UPDATE capability covers both addresses and its locked Native
 preimage, consuming one action/audit; Native observation bounds reject stale or
 forged-future versions. Late SQL constraint failure restores the old row and
 removes the audit. MutationDenied maps to42501. Full Core/SQL/protocol validation
-and independent recovery of this new authorized path remain open. Earlier
+remains live. Independent recovery now passes 38 process cuts, eight EIO cases
+and ten actual KVM resets at example-only `3a8484bf` (exact `0031d197` production),
+including full Native attributes and exactly one transaction-bound audit. Earlier
 partition-upgrade VM results cover their exact `5aa92dce` production runtime.
 
 ## Required evidence and remaining gates

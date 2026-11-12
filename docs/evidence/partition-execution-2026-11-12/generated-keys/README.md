@@ -40,10 +40,12 @@ These are overlapping case invocations over fourteen original ACKs, not hundreds
 of independent application ACKs. The crash probe SHA is
 `7aa88ec9b9de0181f529937d25d977e6a472cb2a0e457390cef9aa910fe035c4`.
 
-Full Core/SQL/protocol suites at earlier `6c16e66e` passed 1,699/2,573/491 tests
+Full Core/SQL/protocol suites at earlier `6c16e66e` passed 1,698/2,573/491 tests
 respectively, with 17/4/2 ignored and no failures. Only unchanged Core coverage
 carries forward to `5aa92dce`; the changed SQL and protocol must be requalified.
-The full `5aa92dce` SQL/protocol batch was live at this evidence checkpoint.
+The full `5aa92dce` SQL/protocol batch subsequently passed 2,586/491 tests,
+zero failed, four/two ignored. The canonical parent-target counts in the
+Native recovery archive correct one duplicated child in the prior Core sum.
 The separate [VM evidence](../vm-recovery/README.md) covers actual guest RAM loss.
 
 `original-source-scoped-results.tar.gz` preserves original reports, stdout/stderr,

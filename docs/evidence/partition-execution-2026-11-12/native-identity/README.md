@@ -47,7 +47,9 @@ batch and the useful older `5aa92dce` SQL/protocol run. It requires an actual
 passing focused receipt before starting, and builds/pins current external Core
 helpers first. Previous Core, protocol and VM results cover their recorded
 sources; they do not automatically qualify this new Native API. Independent
-fault/VM evidence for the authorized identity-change path remains required.
+fault/VM evidence for the authorized identity-change path now passes: 38 process
+cuts, eight EIO cases and ten actual KVM resets at example-only `3a8484bf`, exact
+production `0031d197`. See [recovery evidence](../native-identity-recovery/README.md).
 The source is private and unmerged; there is no new delivery version, standard
 binary, release or deployment. The full application/HA/portable-origin campaign
 remains active.

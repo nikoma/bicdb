@@ -1,0 +1,29 @@
+{
+  "source": "989b89f4f301c2763e00ee59a8f9f83cbac0fec7",
+  "scope": "Mandatorypositiveparent/childphysicalrowlockcontract againstunchangedactualc7runtime withnewtestonly. PK andhiddenheapidentities,bothstores,NOWAIT/SKIP/savepoint+2reopens. Expectoldparentlocking failure retained; no productcodechange or assertionweakening.",
+  "started_unix": 1794483383.6877441,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "partition_row_locks",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794483383.6879165,
+      "exit": 101,
+      "finished_unix": 1794483388.015857
+    }
+  ],
+  "status": "failed",
+  "finished_unix": 1794483388.016141
+}

@@ -35,6 +35,8 @@ timeout was changed.
 | `030ff8c91c01f2810abd2f90fdaa5a9f88a0ec35` | 25 pass | Adds scalar hash routing checked against 106 actual PostgreSQL physical placements plus existing text-hash regressions. |
 | `d9ff5aea602a0629e72a6b4248fa6c0dc6535767` | 0 pass, 1 mandatory fail | Actual 030 runtime plus new real-outer-heap EXISTS test: empty parent index incorrectly yields no rows. Temporary Git-index construction preserves production source exactly; see proof-source.json. |
 | `c7f6ee724866c72ec87d8e2ffbad81f5d7f9945a` | 26 pass | EXISTS falls back from parent-only candidate indexes; refreshed physical UPDATE/DELETE images recheck accessed-parent policies. |
+| `989b89f4f301c2763e00ee59a8f9f83cbac0fec7` | 0 pass, 1 mandatory fail | Actual c7 runtime with new parent/child locking contract: parent FOR UPDATE omits the acknowledged child row. |
+| `22a347869620d46519c0665926fa1a4cc644eee2` | 42 pass | Physical parent/child locks for PK and hidden heap identities, plus partition execution/hash/bounds and independent existing lock/system-type/Oracle-partition/authorization regressions. |
 
 The early `f9d2000d` submission lacked a remote Git prerequisite and ran no
 tests. Its rebundled attempt and `6992ffcb` did not compile because the new test
@@ -76,4 +78,4 @@ UI400/encrypted backup/restore, HA and approved disabled experimental-track
 qualification. Local SQL partitioning does not establish distributed placement,
 automatic node rebalancing, or elastic capacity.
 
-The physical row-lock follow-up is implemented at `22a347869620d46519c0665926fa1a4cc644eee2` and is under focused validation. Do not attribute c7 passing tests to that changed source. It preserves physical heap identities and resolves source tableoids only inside the admitted partition tree.
+The physical row-lock follow-up at `22a347869620d46519c0665926fa1a4cc644eee2` passed 42 focused tests (0 failed/ignored): 1 partition-lock contract, 1 hash contract covering 106 native PostgreSQL placements, 13 bounds/routing/update controls, 9 execution/query-shape controls, 6 existing row-lock tests, 3 existing transaction-system-type tests, 4 existing Oracle-partition tests and 5 existing raw-DDL authorization tests. It preserves physical heap identities and resolves source tableoids only inside the admitted partition tree. This is still not the full batch's broad/application/fault qualification.

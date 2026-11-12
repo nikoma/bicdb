@@ -1,17 +1,17 @@
 {
   "status": "evolving_batch_not_qualified",
-  "latest_tested_source": "c7f6ee724866c72ec87d8e2ffbad81f5d7f9945a",
+  "latest_tested_source": "22a347869620d46519c0665926fa1a4cc644eee2",
   "latest_tests": {
-    "passed": 26,
+    "passed": 42,
     "failed": 0,
-    "scope": "focused only; broader process/concurrency/upsert/trigger/upgrade/type gates remain"
+    "ignored": 0,
+    "scope": "Focusedonly; broad/process/concurrency/upsert/trigger/upgrade/typegatesremain"
   },
-  "pending_source": "22a347869620d46519c0665926fa1a4cc644eee2",
   "files": [
     {
       "path": "README.md",
-      "bytes": 6847,
-      "sha256": "e155b9639502bd4a660f5bb06a12d37e681302ea0ae6d88d1f6b502389e6498c"
+      "bytes": 7592,
+      "sha256": "f9241c1f07335c0dbdb3c18fc3a2821dfcfa880445318a39a2359be893f9c779"
     },
     {
       "path": "initial-harness-failures/tc-step-partition-execution-expanded-negative-6992ffcb.log",
@@ -27,6 +27,11 @@
       "path": "initial-harness-failures/tc-step-partition-execution-negative-f9d2000d.log",
       "bytes": 976,
       "sha256": "f81f03eaa2427a960df2bc3fa63919290cc71934358201bf180074adba0613eb"
+    },
+    {
+      "path": "local-source-checks.json",
+      "bytes": 357,
+      "sha256": "33f6ee5d0acc35423678746c34659fccc278fdff27fdb6062d191ffe7830aa42"
     },
     {
       "path": "native-pg16-hash-reference/control-with-float.sql",
@@ -47,6 +52,11 @@
       "path": "native-pg16-hash-reference/fixture.json",
       "bytes": 9343,
       "sha256": "807bd4fc3d5e37e8cc7479349509d8ef96fbea17e41c96c6565e9361c2b39552"
+    },
+    {
+      "path": "native-pg16-hash-reference/result-with-float.json",
+      "bytes": 473,
+      "sha256": "3ebf4f2bc26c3f5eb371b3524ff4a6967453269681ef6c820c07f00532a8f35a"
     },
     {
       "path": "native-pg16-hash-reference/result.json",
@@ -157,6 +167,26 @@
       "path": "partition-hash-030ff8c9/tc-step-partition-hash-030ff8c9.log",
       "bytes": 328847,
       "sha256": "f21ea64fd7fcbb8d8f6f0d00402707cc6f492fa1e2ff27296a524047706356e0"
+    },
+    {
+      "path": "partition-lock-22a34786/report-partition-lock-22a34786.json",
+      "bytes": 3695,
+      "sha256": "c8239a1922a8762ac50e00ab109b63b9a8d63c69a6b09f61c9f2d24ca77dea9c"
+    },
+    {
+      "path": "partition-lock-22a34786/tc-step-partition-lock-22a34786.log",
+      "bytes": 652538,
+      "sha256": "148e041f57da777da30b20941589915ea30affe5a4e8ef959aad0fa765638c89"
+    },
+    {
+      "path": "partition-lock-negative-989b89f4/report-partition-lock-negative-989b89f4.json",
+      "bytes": 835,
+      "sha256": "86c65b84cef77ea7cfef9a45482007e7fdbe66f8a1e3f76be4669f61213f79b3"
+    },
+    {
+      "path": "partition-lock-negative-989b89f4/tc-step-partition-lock-negative-989b89f4.log",
+      "bytes": 81936,
+      "sha256": "0814da22188797982de75db9b6d1e6c49ceac0da3cd930eaab33e02582f51c89"
     },
     {
       "path": "partition-physical-3267c029/report-partition-physical-3267c029.json",

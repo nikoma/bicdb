@@ -24,8 +24,8 @@ mod serving_configuration;
 pub(crate) use native_read::{NativeRangeReadPhysical, NativeReadLocalDbSequence};
 pub(crate) use serving_configuration::{
     NativeActivationDecisionReceipt, NativeJointBridgeReadScope, NativeJointDecisionReceipt,
-    NativeJointOldCloseReceipt, NativeJointOldPhysicalProof, NativeJointServingBridgeReceipt,
-    NativeJointServingPreparation, NativeRecoveredServingReceipt,
+    NativeJointHistoricalCutScope, NativeJointOldCloseReceipt, NativeJointOldPhysicalProof,
+    NativeJointServingBridgeReceipt, NativeJointServingPreparation, NativeRecoveredServingReceipt,
 };
 use serving_configuration::{NativeJointServingDomain, NativeRecoveredServingConfiguration};
 #[cfg(test)]

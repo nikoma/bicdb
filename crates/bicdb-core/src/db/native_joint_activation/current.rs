@@ -9,6 +9,24 @@ pub(crate) struct NativeJointOpenContinuity {
     armed: bool,
 }
 impl NativeJointActivatedOpenGuard {
+    pub(crate) fn observe_owned_frozen_generation(
+        self: &Arc<Self>,
+        store_open: Uuid,
+        activation_sha: &str,
+    ) -> Result<NativeJointOpenContinuity> {
+        self.require_binding(store_open, activation_sha)?;
+        if self.armed.load(Ordering::Acquire) {
+            return Err(BicDbError::Cluster(
+                "armed joint member cannot count a retained Frozen owner".into(),
+            ));
+        }
+        Ok(NativeJointOpenContinuity {
+            guard: Arc::downgrade(self),
+            store_open_id: store_open,
+            activation_sha256: activation_sha.into(),
+            armed: false,
+        })
+    }
     pub(crate) fn observe_actual_continuity(
         self: &Arc<Self>,
         store_open: Uuid,
@@ -50,7 +68,7 @@ impl NativeJointOpenContinuity {
         if !Arc::ptr_eq(actual, &original)
             || self.store_open_id != store_open
             || self.activation_sha256 != activation_sha
-            || self.armed != actual.armed.load(Ordering::Acquire)
+            || (self.armed && !actual.armed.load(Ordering::Acquire))
         {
             return Err(BicDbError::Cluster(
                 "joint actual open/armed state changed or was replaced".into(),

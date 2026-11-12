@@ -64,6 +64,13 @@ impl CommittedNativeJointDecisionObservation {
         }
         Ok(())
     }
+    pub(crate) fn require_current_with_historical_cut_scope(
+        &self,
+        scope: &crate::db::NativeJointHistoricalCutScope<'_>,
+    ) -> Result<()> {
+        self.require_metadata_current()?;
+        scope.require_committed_identity(self)
+    }
     pub(crate) fn require_current_with_native_read_scope(
         &self,
         scope: &crate::db::NativeJointBridgeReadScope<'_>,

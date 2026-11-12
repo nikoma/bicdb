@@ -12,7 +12,7 @@ use activation::NativeJointCatalogueActivation;
 pub(crate) use activation::{
     NativeJointCatalogueActivationFact, NativeJointCatalogueActivationReceipt,
 };
-pub(crate) use release::NativeJointReleaseCatalogue;
+pub(crate) use release::{NativeJointReleaseCatalogue, NativeJointReleaseObservedObligations};
 
 pub(super) const NATIVE_JOINT_HANDOFF_CATALOG_FORMAT: u32 = 14;
 #[derive(Debug)]

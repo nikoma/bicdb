@@ -777,6 +777,30 @@ impl BicDb {
         }
         Ok(prefix)
     }
+    /// Read-only protected pending identity, never a materialized floor.
+    /// Caller owns the actual native journal across this contract observation.
+    pub(super) fn joint_pending_obligation_under_journal(
+        &self,
+        lineage: &SourceRangeImageLineage,
+    ) -> Result<Option<(u64, String)>> {
+        let Some(pending) = self.read_native_range_image_record::<PendingNativeRangeCommand>(
+            &pending_key(lineage.base.range.id),
+        )?
+        else {
+            return Ok(None);
+        };
+        pending.validate()?;
+        if pending.birth_id != lineage.birth.birth_id
+            || pending.range_id != lineage.base.range.id
+            || pending.previous_index != lineage.range_index()
+            || pending.previous_receipt_sha256 != lineage.native_receipt_sha256()
+        {
+            return Err(invalid(
+                "joint continuity pending obligation differs from actual native predecessor",
+            ));
+        }
+        Ok(Some((pending.range_index, pending.command_checksum_sha256)))
+    }
     pub(super) fn native_range_pending_exists(&self, range: RangeId) -> Result<bool> {
         Ok(self
             .read_native_range_image_record::<PendingNativeRangeCommand>(&pending_key(range))?

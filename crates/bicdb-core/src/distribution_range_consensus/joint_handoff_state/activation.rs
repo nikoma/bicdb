@@ -101,6 +101,36 @@ impl NativeJointCatalogueActivationFact {
         let scope = self.native.current_read_scope(database)?;
         self.require_current_with_scope(&scope, store)
     }
+    pub(crate) fn require_current_with_historical_cut_scope(
+        &self,
+        scope: &crate::db::NativeJointHistoricalCutScope<'_>,
+        store: &RangeWriteStore,
+    ) -> Result<()> {
+        scope.require_native(&self.native)?;
+        let database = scope.database();
+        store.require_native_catalog_durability(database.data_path())?;
+        store.require_native_writer_host_base()?;
+        if self.store_open_id != store.open_id
+            || self.native.local_node_id() != &store.catalog.node_id
+            || self.activated != NativeJointCatalogueActivation::from_actual(&self.native)?
+            || store
+                .catalog
+                .image_install_intents
+                .contains_key(&self.activated.range.id)
+            || store
+                .catalog
+                .native_joint_handoffs
+                .as_ref()
+                .and_then(|m| m.get(&self.activated.range.id))
+                .and_then(|s| s.serving_activation.as_ref())
+                != Some(&self.activated)
+        {
+            return Err(range_write_error(
+                "historical joint activation actual catalogue/native/open changed",
+            ));
+        }
+        Ok(())
+    }
     pub(crate) fn require_current_with_scope(
         &self,
         scope: &crate::db::NativeJointBridgeReadScope<'_>,
@@ -259,6 +289,31 @@ impl RangeWriteStore {
     ) -> Result<Option<NativeJointCatalogueActivationFact>> {
         let scope = native.current_read_scope(database)?;
         self.observe_native_joint_activation_fact_with_scope(&scope, native.clone())
+    }
+    pub(crate) fn observe_native_joint_activation_fact_at_historical_cut(
+        &self,
+        scope: &crate::db::NativeJointHistoricalCutScope<'_>,
+        native: Arc<crate::db::NativeJointServingBridgeReceipt>,
+    ) -> Result<NativeJointCatalogueActivationFact> {
+        scope.require_native(&native)?;
+        let range = native.data().old_range().id;
+        let activated = self
+            .catalog
+            .native_joint_handoffs
+            .as_ref()
+            .and_then(|m| m.get(&range))
+            .and_then(|s| s.serving_activation.as_ref())
+            .cloned()
+            .ok_or_else(|| {
+                range_write_error("joint release requires actual existing protected activation")
+            })?;
+        let fact = NativeJointCatalogueActivationFact {
+            store_open_id: self.open_id,
+            activated,
+            native,
+        };
+        fact.require_current_with_historical_cut_scope(scope, self)?;
+        Ok(fact)
     }
     pub(crate) fn observe_native_joint_activation_fact_with_scope(
         &self,

@@ -2,9 +2,11 @@
 //! Native publication precedes catalogue/open activation. This historical
 //! record alone cannot release a freeze or admit an application operation.
 use super::*;
+mod continuity;
 use crate::distribution_range_handoff::{
     NativeJointActivationAdmission, NativeJointDecisionData, NativeJointPreparedServingVoteData,
 };
+pub(crate) use continuity::NativeJointHistoricalCutScope;
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]

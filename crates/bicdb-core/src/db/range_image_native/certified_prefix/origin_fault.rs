@@ -5,15 +5,18 @@ use std::cell::RefCell;
 use std::marker::PhantomData;
 use std::rc::Rc;
 use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
-use std::sync::Weak;
+use std::sync::{OnceLock, Weak};
 
-#[derive(Debug, Default)]
-struct Observation {
-    span_id: Option<Uuid>,
-    transaction_id: Option<u64>,
-    ticket_command_id: Option<String>,
-    ticket_authority: Option<String>,
-    core_error: Option<String>,
+#[derive(Debug)]
+struct AdmissionObservation {
+    transaction_id: u64,
+    ticket_command_id: String,
+    ticket_authority: String,
+}
+#[derive(Debug)]
+struct CoreObservation {
+    result: &'static str,
+    error: Option<String>,
     unknown_sequence: Option<u64>,
     unknown_transaction_id: Option<u64>,
 }
@@ -26,19 +29,28 @@ pub(crate) struct NativeOriginFaultProbe {
     armed: AtomicBool,
     claimed: AtomicBool,
     fired: AtomicBool,
-    core_result: AtomicU8,
+    span_id: OnceLock<Uuid>,
+    admission: OnceLock<AdmissionObservation>,
+    core: OnceLock<CoreObservation>,
     release_result: AtomicU8,
     span_ended: AtomicBool,
     normal_handler_exit: AtomicBool,
     panicked: AtomicBool,
-    diagnostic_contention: AtomicBool,
-    observation: Mutex<Observation>,
+    diagnostic_integrity_error: AtomicBool,
 }
 impl NativeOriginFaultProbe {
     /// Call only from the external test after dropping engine guards. This
     /// projection is diagnostic DATA; it cannot authorize any engine action.
     pub(crate) fn snapshot(&self) -> serde_json::Value {
-        let observed = self.observation.lock();
+        // Each fact has ONE receiver-thread writer; get() never waits for a
+        // publisher. JSON construction takes no observation lock, so even a
+        // concurrent poll cannot make the real receiver lose its evidence.
+        // Read the terminal publication FIRST. If true, its Release store
+        // follows all fact publication; do not mix an earlier absent fact with
+        // a later true terminal marker in one externally polled snapshot.
+        let span_ended = self.span_ended.load(Ordering::Acquire);
+        let admission = self.admission.get();
+        let core = self.core.get();
         serde_json::json!({
             "scope":"cfg(test) actual receiver observations only; no authority",
             "database_open_incarnation":self.database_incarnation,
@@ -48,19 +60,19 @@ impl NativeOriginFaultProbe {
             "armed":self.armed.load(Ordering::Acquire),
             "claimed":self.claimed.load(Ordering::Acquire),
             "fired":self.fired.load(Ordering::Acquire),
-            "actual_transaction_id":observed.transaction_id,
-            "actual_ticket_command_id":observed.ticket_command_id,
-            "actual_ticket_authority":observed.ticket_authority,
-            "core_result":match self.core_result.load(Ordering::Acquire) {0=>"not_returned",1=>"ok",2=>"commit_outcome_unknown",_=>"other_error"},
-            "actual_core_error":observed.core_error,
-            "unknown_sequence":observed.unknown_sequence,
-            "unknown_transaction_id":observed.unknown_transaction_id,
+            "actual_transaction_id":admission.map(|f|f.transaction_id),
+            "actual_ticket_command_id":admission.map(|f|f.ticket_command_id.as_str()),
+            "actual_ticket_authority":admission.map(|f|f.ticket_authority.as_str()),
+            "core_result":core.map_or("not_returned",|f|f.result),
+            "actual_core_error":core.and_then(|f|f.error.as_deref()),
+            "unknown_sequence":core.and_then(|f|f.unknown_sequence),
+            "unknown_transaction_id":core.and_then(|f|f.unknown_transaction_id),
             "release_callback_returned":self.release_result.load(Ordering::Acquire)!=0,
             "release_callback_ok":self.release_result.load(Ordering::Acquire)==1,
-            "app_span_ended":self.span_ended.load(Ordering::Acquire),
+            "app_span_ended":span_ended,
             "normal_app_handler_exit":self.normal_handler_exit.load(Ordering::Acquire),
             "panicked":self.panicked.load(Ordering::Acquire),
-            "diagnostic_contention":self.diagnostic_contention.load(Ordering::Acquire),
+            "diagnostic_integrity_error":self.diagnostic_integrity_error.load(Ordering::Acquire),
         })
     }
 }
@@ -116,36 +128,48 @@ pub(crate) struct NativeOriginAppSpan {
 impl NativeOriginAppSpan {
     pub(crate) fn note_result(&self, result: &crate::Result<crate::ClusterEventResponse>) {
         let probe = &self.active.probe;
-        let Some(mut observed) = probe.observation.try_lock() else {
-            probe.diagnostic_contention.store(true, Ordering::Release);
-            return;
-        };
-        if observed.span_id != Some(self.active.span_id) {
-            probe.diagnostic_contention.store(true, Ordering::Release);
+        if probe.span_id.get() != Some(&self.active.span_id) {
+            probe
+                .diagnostic_integrity_error
+                .store(true, Ordering::Release);
             return;
         }
-        match result {
-            Ok(_) => probe.core_result.store(1, Ordering::Release),
+        let (result_kind, error, sequence, transaction_id) = match result {
+            Ok(_) => ("ok", None, None, None),
             Err(error) => {
-                if let BicDbError::CommitOutcomeUnknown {
-                    sequence,
-                    transaction_id,
-                    ..
-                } = error
-                {
-                    observed.unknown_sequence = *sequence;
-                    observed.unknown_transaction_id = *transaction_id;
-                    probe.core_result.store(2, Ordering::Release);
-                } else {
-                    probe.core_result.store(3, Ordering::Release);
-                }
                 let detail = error.to_string();
-                if detail.len() <= 4096 {
-                    observed.core_error = Some(detail);
+                let detail = if detail.len() <= 4096 {
+                    Some(detail)
                 } else {
-                    probe.diagnostic_contention.store(true, Ordering::Release);
+                    probe
+                        .diagnostic_integrity_error
+                        .store(true, Ordering::Release);
+                    None
+                };
+                match error {
+                    BicDbError::CommitOutcomeUnknown {
+                        sequence,
+                        transaction_id,
+                        ..
+                    } => ("commit_outcome_unknown", detail, *sequence, *transaction_id),
+                    _ => ("other_error", detail, None, None),
                 }
             }
+        };
+        // The !Send APP span is the sole writer. No observer calls set/init.
+        if probe
+            .core
+            .set(CoreObservation {
+                result: result_kind,
+                error,
+                unknown_sequence: sequence,
+                unknown_transaction_id: transaction_id,
+            })
+            .is_err()
+        {
+            probe
+                .diagnostic_integrity_error
+                .store(true, Ordering::Release);
         }
     }
 }
@@ -157,10 +181,9 @@ impl Drop for NativeOriginAppSpan {
         // This span is declared BEFORE the actual APP DB guard. Rust drops
         // that guard first, after execute_cluster_event consumed/dropped its
         // transaction and release callback. No mutation follows this marker.
-        probe.normal_handler_exit.store(
-            !panicked && probe.core_result.load(Ordering::Acquire) != 0,
-            Ordering::Release,
-        );
+        probe
+            .normal_handler_exit
+            .store(!panicked && probe.core.get().is_some(), Ordering::Release);
         disarm(probe, &self.registry);
         ACTIVE.with(|slot| {
             slot.replace(self.previous.take());
@@ -196,13 +219,14 @@ impl BicDb {
             armed: AtomicBool::new(true),
             claimed: AtomicBool::new(false),
             fired: AtomicBool::new(false),
-            core_result: AtomicU8::new(0),
+            span_id: OnceLock::new(),
+            admission: OnceLock::new(),
+            core: OnceLock::new(),
             release_result: AtomicU8::new(0),
             span_ended: AtomicBool::new(false),
             normal_handler_exit: AtomicBool::new(false),
             panicked: AtomicBool::new(false),
-            diagnostic_contention: AtomicBool::new(false),
-            observation: Mutex::new(Observation::default()),
+            diagnostic_integrity_error: AtomicBool::new(false),
         });
         registry.origin_fault = Some(Arc::clone(&probe));
         Ok(NativeOriginFaultArm {
@@ -241,10 +265,10 @@ impl BicDb {
             return None;
         }
         let span_id = Uuid::now_v7();
-        if let Some(mut observed) = probe.observation.try_lock() {
-            observed.span_id = Some(span_id);
-        } else {
-            probe.diagnostic_contention.store(true, Ordering::Release);
+        if probe.span_id.set(span_id).is_err() {
+            probe
+                .diagnostic_integrity_error
+                .store(true, Ordering::Release);
             probe.armed.store(false, Ordering::Release);
             return None;
         }
@@ -283,12 +307,7 @@ impl BicDb {
         {
             return false;
         }
-        let Some(mut observed) = probe.observation.try_lock() else {
-            probe.diagnostic_contention.store(true, Ordering::Release);
-            probe.armed.store(false, Ordering::Release);
-            return false;
-        };
-        if observed.span_id != Some(active.span_id)
+        if probe.span_id.get() != Some(&active.span_id)
             || probe
                 .armed
                 .compare_exchange(true, false, Ordering::AcqRel, Ordering::Acquire)
@@ -296,9 +315,20 @@ impl BicDb {
         {
             return false;
         }
-        observed.transaction_id = Some(transaction.id().0);
-        observed.ticket_command_id = Some(ticket.command_id.clone());
-        observed.ticket_authority = Some(ticket.authority.clone());
+        if probe
+            .admission
+            .set(AdmissionObservation {
+                transaction_id: transaction.id().0,
+                ticket_command_id: ticket.command_id.clone(),
+                ticket_authority: ticket.authority.clone(),
+            })
+            .is_err()
+        {
+            probe
+                .diagnostic_integrity_error
+                .store(true, Ordering::Release);
+            return false;
+        }
         probe.fired.store(true, Ordering::Release);
         true
     }
@@ -315,15 +345,23 @@ pub(in crate::db) fn test_record_origin_release(
     if !probe.fired.load(Ordering::Acquire) {
         return;
     }
-    let Some(observed) = probe.observation.try_lock() else {
-        probe.diagnostic_contention.store(true, Ordering::Release);
-        return;
-    };
-    if observed.span_id == Some(active.span_id)
-        && observed.ticket_command_id.as_deref() == Some(ticket.command_id.as_str())
+    if probe.span_id.get() == Some(&active.span_id)
+        && probe
+            .admission
+            .get()
+            .is_some_and(|f| f.ticket_command_id == ticket.command_id)
+        && probe
+            .release_result
+            .compare_exchange(
+                0,
+                if result.is_ok() { 1 } else { 2 },
+                Ordering::AcqRel,
+                Ordering::Acquire,
+            )
+            .is_err()
     {
         probe
-            .release_result
-            .store(if result.is_ok() { 1 } else { 2 }, Ordering::Release);
+            .diagnostic_integrity_error
+            .store(true, Ordering::Release);
     }
 }

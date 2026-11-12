@@ -305,7 +305,7 @@ fn run(
             && fault["release_callback_ok"] == true
             && fault["normal_app_handler_exit"] == true
             && fault["panicked"] == false
-            && fault["diagnostic_contention"] == false
+            && fault["diagnostic_integrity_error"] == false
             && fault["unknown_sequence"].is_null()
             && fault["actual_transaction_id"] == fault["unknown_transaction_id"],
         "actual fault/Unknown/release/normal EXIT prerequisites failed",

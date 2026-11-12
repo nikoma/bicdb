@@ -598,6 +598,7 @@ pub(crate) fn parse_raw_create_trigger(sql: &str) -> Result<Option<(TriggerSchem
             name: normalize_object_name(&name),
             table_name: raw_trigger_relation_name(&table_name)?,
             function_name,
+            partition_parent: None,
             arguments,
             definition: trimmed.to_string(),
             event,

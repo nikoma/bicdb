@@ -5219,10 +5219,18 @@ impl TriggerEnabledMode {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
+struct PartitionTriggerParent {
+    table_name: String,
+    trigger_name: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
 struct TriggerSchema {
     name: String,
     table_name: String,
     function_name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    partition_parent: Option<PartitionTriggerParent>,
     /// Text arguments supplied to `EXECUTE FUNCTION`. PostgreSQL exposes
     /// these through zero-based `TG_ARGV` and `TG_NARGS`.
     #[serde(default)]

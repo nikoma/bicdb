@@ -30,6 +30,7 @@ pub(crate) mod functions_insert;
 mod join_lookup_tests;
 mod operator_ddl;
 mod partition_exec;
+mod partition_triggers;
 #[cfg(test)]
 mod primary_key_range_tests;
 mod primary_key_updates;
@@ -2083,6 +2084,9 @@ pub(crate) enum DdlUndo {
     },
     RestoreTrigger {
         trigger: TriggerSchema,
+    },
+    RestorePartitionCatalog {
+        entries: Vec<partition_triggers::CatalogUndo>,
     },
     DeleteUserType {
         schema_name: String,
@@ -4708,6 +4712,21 @@ impl<'db> SqlSession<'db> {
         trigger: TriggerSchema,
         or_replace: bool,
     ) -> Result<()> {
+        if let Some(previous) = load_trigger(self.db_ref(), &trigger.table_name, &trigger.name)? {
+            if previous.partition_parent.is_some() {
+                return Err(SqlError::data_exception(
+                    "42710",
+                    "cannot replace an inherited partition trigger directly",
+                    None,
+                ));
+            }
+        }
+        if load_schema(self.db_ref(), &trigger.table_name)?
+            .is_some_and(|schema| schema.partitioning.is_some())
+            && trigger.for_each == "row"
+        {
+            return self.create_partition_trigger_tree(trigger, or_replace);
+        }
         let previous = if self.tx.is_some() {
             find_trigger(self.db_ref(), &trigger.name, Some(&trigger.table_name))?
         } else {
@@ -4732,6 +4751,9 @@ impl<'db> SqlSession<'db> {
     }
 
     pub(crate) fn save_session_trigger(&mut self, trigger: &TriggerSchema) -> Result<()> {
+        if self.has_partition_trigger_descendants(trigger)? {
+            return self.save_partition_trigger_mode_tree(trigger);
+        }
         let previous = if self.tx.is_some() {
             Some(find_trigger(
                 self.db_ref(),
@@ -4759,6 +4781,18 @@ impl<'db> SqlSession<'db> {
         name: &str,
         table_name: Option<&str>,
     ) -> Result<bool> {
+        if let Some(trigger) = find_trigger(self.db_ref(), name, table_name)? {
+            if trigger.partition_parent.is_some() {
+                return Err(SqlError::data_exception(
+                    "2BP01",
+                    "cannot drop an inherited partition trigger directly",
+                    None,
+                ));
+            }
+            if self.has_partition_trigger_descendants(&trigger)? {
+                return self.drop_partition_trigger_tree(&trigger);
+            }
+        }
         let previous = if self.tx.is_some() {
             find_trigger(self.db_ref(), name, table_name)?
         } else {
@@ -4773,6 +4807,13 @@ impl<'db> SqlSession<'db> {
 
     pub(crate) fn rollback_ddl_to_len(&mut self, len: usize) -> Result<()> {
         while self.ddl_undo.len() > len {
+            if let Some(DdlUndo::RestorePartitionCatalog { entries }) =
+                self.ddl_undo.last().cloned()
+            {
+                self.restore_partition_catalog(entries)?;
+                self.ddl_undo.pop();
+                continue;
+            }
             let undo = self
                 .ddl_undo
                 .pop()
@@ -4876,6 +4917,9 @@ impl<'db> SqlSession<'db> {
             }
             DdlUndo::RestoreTrigger { trigger } => {
                 save_trigger(self.db_mut()?, &trigger)?;
+            }
+            DdlUndo::RestorePartitionCatalog { entries } => {
+                self.restore_partition_catalog(entries)?
             }
             DdlUndo::DeleteUserType { schema_name, name } => {
                 let _ = delete_user_type(self.db_mut()?, &schema_name, &name)?;

@@ -612,8 +612,9 @@ impl<'db> SqlSession<'db> {
             oracle_partitioning: None,
         };
         partition::validate_attachment(self.db_ref(), self.read_tx(), &parent, &child, true)?;
+        self.validate_partition_trigger_attachment(&child, &parent)?;
         self.create_session_collection(&child.name)?;
-        self.save_session_schema(&child)?;
+        self.save_partition_schema_and_triggers(&child, Some(&parent))?;
         Ok(())
     }
 
@@ -694,7 +695,7 @@ impl<'db> SqlSession<'db> {
                     &partition,
                     false,
                 )?;
-                self.save_session_schema(&partition)?;
+                self.save_partition_schema_and_triggers(&partition, Some(&parent))?;
             }
             RawAlterTablePartition::Detach {
                 parent_table,
@@ -713,7 +714,7 @@ impl<'db> SqlSession<'db> {
                     ));
                 }
                 partition.partition_of = None;
-                self.save_session_schema(&partition)?;
+                self.save_partition_schema_and_triggers(&partition, None)?;
             }
         }
         Ok(())

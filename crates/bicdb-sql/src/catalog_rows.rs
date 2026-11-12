@@ -3639,7 +3639,16 @@ pub(crate) fn pg_trigger_rows_filtered(
                     "tgrelid",
                     SqlValue::Int(*table_oids.get(&trigger.table_name).unwrap_or(&0)),
                 ),
-                ("tgparentid", SqlValue::Int(0)),
+                (
+                    "tgparentid",
+                    SqlValue::Int(
+                        trigger
+                            .partition_parent
+                            .as_ref()
+                            .map(|parent| trigger_oid(&parent.table_name, &parent.trigger_name))
+                            .unwrap_or(0),
+                    ),
+                ),
                 ("tgname", SqlValue::String(trigger.name.clone())),
                 (
                     "tgfoid",

@@ -557,6 +557,7 @@ impl<'db> SqlSession<'db> {
             name: relation_name(&create_trigger.name)?,
             table_name,
             function_name,
+            partition_parent: None,
             arguments,
             definition,
             event: trigger_event_name(create_trigger),

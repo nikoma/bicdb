@@ -29,7 +29,9 @@ pub const SQL_CATALOG_INTENTS_FEATURE_FLAG: &str = "sql_catalog_intents_v1";
 /// reader capability: each destination activates and owns its own identities.
 pub const LOCAL_NAMESPACE_IDENTITY_FEATURE_FLAG: &str = "local_namespace_identity_v1";
 pub const ORACLE_SIMPLE_CASE_V1_FEATURE_FLAG: &str = "oracle_simple_case_v1";
+pub const APPLICATION_UNIQUE_SCOPE_FEATURE_FLAG: &str = "application_unique_scope_transition_v1";
 const KNOWN_FEATURE_FLAGS: &[&str] = &[
+    APPLICATION_UNIQUE_SCOPE_FEATURE_FLAG,
     ORACLE_INVALID_ROUTINES_FEATURE_FLAG,
     ORACLE_SIMPLE_CASE_V1_FEATURE_FLAG,
     UNIQUE_NULLS_NOT_DISTINCT_FEATURE_FLAG,
@@ -788,4 +790,16 @@ mod local_identity_format_tests {
             });
         }
     }
+}
+
+/// Sticky fence: older native binaries must refuse an offline scope transition.
+pub(crate) fn enable_application_unique_scope(root: &Path) -> Result<()> {
+    let lock = feature_flags_lock(root);
+    let _guard = lock.lock();
+    let mut metadata = read_or_legacy_metadata(root)?;
+    validate_supported(&metadata)?;
+    metadata
+        .feature_flags
+        .insert(APPLICATION_UNIQUE_SCOPE_FEATURE_FLAG.into());
+    persist_metadata(root, &metadata, true)
 }

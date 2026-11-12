@@ -2,7 +2,7 @@
 //! unchanged — a separate `impl` block on the same type.
 use super::*;
 
-fn validate_application_module_catalog(catalog: &RuntimeCatalog) -> Result<()> {
+pub(super) fn validate_application_module_catalog(catalog: &RuntimeCatalog) -> Result<()> {
     let mut modules =
         BTreeMap::<String, (&str, semver::Version, ApplicationModuleContractV1)>::new();
     let mut stable_keys = BTreeMap::<String, String>::new();
@@ -88,7 +88,7 @@ fn validate_application_module_catalog(catalog: &RuntimeCatalog) -> Result<()> {
     Ok(())
 }
 
-fn validate_application_module_upgrade(
+pub(super) fn validate_application_module_upgrade(
     previous: &PackageSnapshot,
     candidate: &PackageSnapshot,
 ) -> Result<()> {
@@ -176,7 +176,9 @@ fn ensure_application_module_can_disable(
     Ok(())
 }
 
-fn validate_application_batch_order(candidates: &[(String, Arc<PackageSnapshot>)]) -> Result<()> {
+pub(super) fn validate_application_batch_order(
+    candidates: &[(String, Arc<PackageSnapshot>)],
+) -> Result<()> {
     let mut positions = BTreeMap::new();
     let mut contracts = Vec::new();
     for (position, (_, snapshot)) in candidates.iter().enumerate() {
@@ -2441,6 +2443,13 @@ impl ApplicationRuntime {
     }
 
     pub(crate) fn restore_active_snapshot(&self) -> Result<()> {
+        self.restore_active_snapshot_with_supervisors(true)
+    }
+
+    pub(super) fn restore_active_snapshot_with_supervisors(
+        &self,
+        start_supervisors: bool,
+    ) -> Result<()> {
         let path = self
             .config
             .package_root
@@ -2511,6 +2520,9 @@ impl ApplicationRuntime {
         *self.active.write() = Arc::new(catalog);
         *self.staged.write() = staged;
         *self.history.lock().expect("package history poisoned") = history;
+        if !start_supervisors {
+            return Ok(());
+        }
         let snapshots = self.active_snapshots();
         let mut supervisors = self
             .supervisors

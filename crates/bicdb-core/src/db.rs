@@ -9864,7 +9864,7 @@ impl BicDb {
     }
 
     pub fn open_with_config(path: impl AsRef<Path>, config: DbConfig) -> Result<Self> {
-        Self::open_inner(path, config, None, None)
+        Self::open_inner(path, config, None, None, false)
     }
 
     pub fn open_with_encryption(
@@ -9872,7 +9872,7 @@ impl BicDb {
         config: DbConfig,
         encryption: EncryptionConfig,
     ) -> Result<Self> {
-        Self::open_inner(path, config, None, Some(encryption))
+        Self::open_inner(path, config, None, Some(encryption), false)
     }
 
     pub fn open_with_node_id(
@@ -9880,7 +9880,7 @@ impl BicDb {
         config: DbConfig,
         node_id: NodeId,
     ) -> Result<Self> {
-        Self::open_inner(path, config, Some(node_id), None)
+        Self::open_inner(path, config, Some(node_id), None, false)
     }
 
     pub fn open_with_node_id_and_encryption(
@@ -9889,7 +9889,39 @@ impl BicDb {
         node_id: NodeId,
         encryption: EncryptionConfig,
     ) -> Result<Self> {
-        Self::open_inner(path, config, Some(node_id), Some(encryption))
+        Self::open_inner(path, config, Some(node_id), Some(encryption), false)
+    }
+
+    /// Operator-only closed-store recovery entry. Never expose this handle to SQL,
+    /// HTTP, services or workers before the signed transition is admitted.
+    pub fn open_for_application_unique_scope(path: impl AsRef<Path>) -> Result<Self> {
+        Self::open_inner(path, DbConfig::default(), None, None, true)
+    }
+
+    fn ensure_application_scope_standalone_history(path: &Path) -> Result<()> {
+        for entry in fs::read_dir(path)? {
+            let name = entry?.file_name().to_string_lossy().to_ascii_lowercase();
+            if matches!(
+                name.as_str(),
+                "ha-node.json"
+                    | "ha-state.json"
+                    | "replication-state.json"
+                    | "consensus-state.json"
+            ) || name.starts_with("cluster")
+                || name.starts_with("virtual")
+            {
+                return Err(replication_error(format!(
+                    "offline application unique-scope transition excludes durable HA/distributed history or ambiguous topology marker `{name}`"
+                )));
+            }
+        }
+        Ok(())
+    }
+
+    /// Persist a reader compatibility fence before writing transition intent.
+    pub fn enable_application_unique_scope(&mut self) -> Result<()> {
+        self.ensure_writable("enable application unique scope transition")?;
+        format::enable_application_unique_scope(&self.path)
     }
 
     fn open_inner(
@@ -9897,6 +9929,7 @@ impl BicDb {
         config: DbConfig,
         configured_node_id: Option<NodeId>,
         encryption_config: Option<EncryptionConfig>,
+        application_scope_recovery: bool,
     ) -> Result<Self> {
         config.replication.validate()?;
         if config.replication.enabled
@@ -9909,6 +9942,29 @@ impl BicDb {
         }
         config.consensus.validate()?;
         let path = path.as_ref().to_path_buf();
+        if application_scope_recovery {
+            Self::ensure_application_scope_standalone_history(&path)?;
+        }
+        // A core fence protects raw SQL and every other opener, not merely the
+        // application host. Unknown/malformed states quarantine the store.
+        if !application_scope_recovery {
+            match fs::read(path.join(".application-unique-scope.json")) {
+                Ok(bytes) => {
+                    let value: serde_json::Value =
+                        serde_json::from_slice(&bytes).map_err(|error| {
+                            replication_error(format!("invalid unique-scope receipt: {error}"))
+                        })?;
+                    if !matches!(
+                        value.get("phase").and_then(serde_json::Value::as_str),
+                        Some("admitted" | "reverted")
+                    ) {
+                        return Err(replication_error("offline application unique-scope transition requires signed recovery or admission"));
+                    }
+                }
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                Err(error) => return Err(error.into()),
+            }
+        }
         online_backup::ensure_no_pending_restore(&path)?;
         // A standby bootstrap staged by the previous run is installed first.
         ha_bootstrap::finish_standby_bootstrap(&path)?;
@@ -9948,6 +10004,29 @@ impl BicDb {
                 path.display()
             ))
         })?;
+        // A core fence protects raw SQL and every other opener, not merely the
+        // application host. Unknown/malformed states quarantine the store.
+        if !application_scope_recovery {
+            match fs::read(path.join(".application-unique-scope.json")) {
+                Ok(bytes) => {
+                    let value: serde_json::Value =
+                        serde_json::from_slice(&bytes).map_err(|error| {
+                            replication_error(format!("invalid unique-scope receipt: {error}"))
+                        })?;
+                    if !matches!(
+                        value.get("phase").and_then(serde_json::Value::as_str),
+                        Some("admitted" | "reverted")
+                    ) {
+                        return Err(replication_error("offline application unique-scope transition requires signed recovery or admission"));
+                    }
+                }
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                Err(error) => return Err(error.into()),
+            }
+        }
+        if application_scope_recovery {
+            Self::ensure_application_scope_standalone_history(&path)?;
+        }
         // Recheck after claiming ownership: a restore may have started after
         // the read-only preflight and then died before this lock was acquired.
         online_backup::ensure_no_pending_restore(&path)?;

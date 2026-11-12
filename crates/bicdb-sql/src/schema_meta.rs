@@ -6383,3 +6383,130 @@ mod referential_checks_tests {
         }
     }
 }
+
+/// Closed-store integrity audit for an explicitly signed application unique-scope
+/// migration. Ordinary SQL execution never calls this and gains no new authority.
+/// Natural/composite key FKs are deliberately unsupported, even when currently empty.
+pub fn audit_application_unique_scope_references(
+    db: &BicDb,
+    relation: &str,
+    primary: &str,
+    tenant: &str,
+    business: &[String],
+) -> Result<()> {
+    let targets = db.scan_collection_unchecked(relation)?;
+    for child in list_schemas_raw(db)? {
+        for constraint in &child.constraints {
+            let ConstraintSchema::ForeignKey {
+                columns,
+                foreign_table,
+                referred_columns,
+                validated,
+                ..
+            } = constraint
+            else {
+                continue;
+            };
+            if foreign_table.rsplit('.').next() != relation.rsplit('.').next() {
+                continue;
+            }
+            if !*validated
+                || referred_columns.iter().any(|f| business.contains(f))
+                || referred_columns != &vec![primary.to_string()]
+                || columns.len() != 1
+            {
+                return Err(SqlError::InvalidSql(
+                    "offline scope transition refuses unvalidated/natural/composite inbound SQL FK"
+                        .into(),
+                ));
+            }
+            if !child
+                .columns
+                .iter()
+                .any(|c| c.name == tenant && !c.nullable)
+                || child.referential_checks_disabled
+            {
+                return Err(SqlError::InvalidSql(
+                    "inbound SQL reference lacks enforced tenant/check boundary".into(),
+                ));
+            }
+            for row in db.scan_collection_unchecked(&child.name)? {
+                let value = row.metadata.get(&columns[0]);
+                if value.is_none_or(Value::is_null) {
+                    continue;
+                }
+                let id = value.and_then(Value::as_str).ok_or_else(|| {
+                    SqlError::InvalidSql("malformed inbound SQL ID reference".into())
+                })?;
+                let target = targets.iter().find(|r| r.id == id).ok_or_else(|| {
+                    SqlError::InvalidSql("dangling inbound SQL ID reference".into())
+                })?;
+                if row.metadata.get(tenant).is_none()
+                    || row.metadata.get(tenant) != target.metadata.get(tenant)
+                {
+                    return Err(SqlError::InvalidSql(
+                        "foreign tenant inbound SQL ID reference".into(),
+                    ));
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Read-only verification of the already-installed compiler restrictive RLS
+/// boundary. Scope migration may neither create a tenant partition nor repair
+/// a missing/weakened one under the guise of replacing an index.
+pub fn audit_application_unique_scope_row_policy(
+    db: &BicDb,
+    relation: &str,
+    expected: &EmbeddedTableRowPolicy,
+) -> Result<()> {
+    let schema = load_schema_raw(db, relation)?
+        .ok_or_else(|| SqlError::InvalidSql("scope target has no embedded SQL schema".into()))?;
+    if !schema.rls_enabled || !schema.rls_forced {
+        return Err(SqlError::InvalidSql(
+            "scope target does not already force SQL row security".into(),
+        ));
+    }
+    for (suffix, command, using_expr, check_expr) in [
+        (
+            "select",
+            PolicyCommand::Select,
+            Some(expected.select_using.clone()),
+            None,
+        ),
+        (
+            "insert",
+            PolicyCommand::Insert,
+            None,
+            Some(expected.insert_with_check.clone()),
+        ),
+        (
+            "update",
+            PolicyCommand::Update,
+            Some(expected.update_using.clone()),
+            Some(expected.update_with_check.clone()),
+        ),
+        (
+            "delete",
+            PolicyCommand::Delete,
+            Some(expected.delete_using.clone()),
+            None,
+        ),
+    ] {
+        let name = format!("{EMBEDDED_POLICY_PREFIX}{suffix}");
+        let guards = schema
+            .policies
+            .iter()
+            .filter(|p| p.name == name)
+            .collect::<Vec<_>>();
+        let guard = embedded_policy_schema(&name, command, using_expr, check_expr, false);
+        if guards.len() != 1 || serde_json::to_value(guards[0])? != serde_json::to_value(&guard)? {
+            return Err(SqlError::InvalidSql(
+                "scope target restrictive SQL tenant policy differs from signed contract".into(),
+            ));
+        }
+    }
+    Ok(())
+}

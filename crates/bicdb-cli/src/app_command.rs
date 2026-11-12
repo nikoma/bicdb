@@ -32,6 +32,18 @@ use serde::Deserialize;
 
 #[derive(Debug, Subcommand)]
 pub enum AppCommand {
+    /// Explicit signed CLOSED-STORE tenant/company unique-scope migration.
+    /// This never opens HTTP/PG, services or worker supervisors.
+    UniqueScope {
+        #[arg(long)]
+        envelope: PathBuf,
+        #[arg(long, required = true)]
+        operator_key: Vec<String>,
+        #[arg(long, value_parser = ["audit", "apply", "recover", "rollback", "admit"])]
+        action: String,
+        #[arg(long = "package")]
+        packages: Vec<PathBuf>,
+    },
     /// Verify, stage, migrate, and atomically activate a package.
     Install {
         package: PathBuf,
@@ -57,7 +69,7 @@ pub enum AppCommand {
     Upgrade {
         package: PathBuf,
     },
-    /// Restore the prior coherent signed application snapshot.
+    /// Restore a prior signed package that retains active persisted contracts.
     Rollback {
         application: String,
     },
@@ -365,6 +377,43 @@ pub fn run(
     command: AppCommand,
 ) -> Result<()> {
     let package_root = package_root.unwrap_or_else(|| database_path.join("applications"));
+    if let AppCommand::UniqueScope {
+        envelope,
+        operator_key,
+        action,
+        packages,
+    } = &command
+    {
+        let mut operators = TrustedSigningKeys::default();
+        for specification in operator_key {
+            let (id, path) = split_once(specification, "scope operator key", "KEY_ID=FILE")?;
+            operators.insert_ed25519(id, &decode_public_key(&fs::read(path)?)?)?;
+        }
+        let envelope: bicdb_app_runtime::UniqueScopeEnvelope =
+            serde_json::from_slice(&fs::read(envelope)?)?;
+        let (verifier, services) = open_runtime_services(
+            &package_root,
+            &trusted_key_specs,
+            &secret_specs,
+            blob_config.as_deref(),
+            integration_config.as_deref(),
+        )?;
+        let owner = bicdb_app_runtime::OfflineUniqueScopeTransition::open(
+            &database_path,
+            ApplicationHostConfig::new(&package_root, host_node_id()),
+            verifier,
+            services,
+            operators,
+        )?;
+        let outcome = match action.as_str() {
+            "audit" => owner.prepare(envelope, packages, false)?,
+            "apply" => owner.prepare(envelope, packages, true)?,
+            "recover" | "rollback" | "admit" => owner.finish(&envelope, action)?,
+            _ => bail!("unsupported unique-scope action"),
+        };
+        print_json(&outcome)?;
+        return Ok(());
+    }
     let bundle = open_runtime(
         &database_path,
         &package_root,
@@ -374,6 +423,9 @@ pub fn run(
         integration_config.as_deref(),
     )?;
     match command {
+        AppCommand::UniqueScope { .. } => {
+            unreachable!("offline command returned before runtime startup")
+        }
         AppCommand::Install { package } => {
             let package = read_package(&package, &bundle.runtime)?;
             let application = package.manifest.identity.name.clone();
@@ -578,6 +630,30 @@ fn open_runtime(
     blob_config: Option<&Path>,
     integration_config: Option<&Path>,
 ) -> Result<RuntimeBundle> {
+    let (verifier, services) = open_runtime_services(
+        package_root,
+        trusted_key_specs,
+        secret_specs,
+        blob_config,
+        integration_config,
+    )?;
+    let db = Arc::new(RwLock::new(BicDb::open(database_path)?));
+    let runtime = ApplicationRuntime::new_shared(
+        db.clone(),
+        ApplicationHostConfig::new(package_root, host_node_id()),
+        verifier,
+        services,
+    )?;
+    Ok(RuntimeBundle { runtime, db })
+}
+
+fn open_runtime_services(
+    package_root: &Path,
+    trusted_key_specs: &[String],
+    secret_specs: &[String],
+    blob_config: Option<&Path>,
+    integration_config: Option<&Path>,
+) -> Result<(PackageVerifier, InvocationServices)> {
     let mut trusted = TrustedSigningKeys::default();
     for specification in trusted_key_specs {
         let (id, path) = split_once(specification, "trusted key", "KEY_ID=FILE")?;
@@ -634,14 +710,7 @@ fn open_runtime(
     .with_embeddings_provider(Arc::new(providers.embeddings))
     .with_llm_provider(Arc::new(providers.llm))
     .with_evaluation_provider(Arc::new(providers.evaluations));
-    let db = Arc::new(RwLock::new(BicDb::open(database_path)?));
-    let runtime = ApplicationRuntime::new_shared(
-        db.clone(),
-        ApplicationHostConfig::new(package_root, host_node_id()),
-        verifier,
-        services,
-    )?;
-    Ok(RuntimeBundle { runtime, db })
+    Ok((verifier, services))
 }
 
 struct ServeOptions {

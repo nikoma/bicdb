@@ -14,8 +14,9 @@ const MAX_LOCAL_JOINT_SESSIONS: usize = 64;
 const MAX_LOCAL_JOINT_OPERATIONS: usize = 4;
 enum RetainedExclusion {
     Frozen(Arc<FrozenRangeMutationPermit>),
-    // The real owner has dropped; retain the ORIGINAL actual receipt and TTL.
-    // This is retry state, never a replacement freeze or an armed-open proof.
+    // The real owner has dropped; retain the ORIGINAL actual receipt. The
+    // original API still enforces its TTL; a distinct fresh continuation uses
+    // only its immutable identity. This is never Frozen or an armed-open proof.
     Released(Arc<crate::distribution_range_consensus::NativeJointCatalogueActivationReceipt>),
 }
 struct RetainedSession {
@@ -45,6 +46,63 @@ impl Drop for Operation {
     }
 }
 impl NativeJointHandoffRuntime {
+    pub(crate) fn require_same_service(
+        &self,
+        service: &Arc<Mutex<ClusterDataNodeService>>,
+    ) -> Result<()> {
+        if !Arc::ptr_eq(&self.service, service) {
+            return Err(invalid(
+                "joint continuation runtime belongs to another actual service",
+            ));
+        }
+        Ok(())
+    }
+    pub(crate) fn with_current_release_owner<T>(
+        &self,
+        native: &crate::db::NativeJointServingBridgeReceipt,
+        operation: impl for<'a> FnOnce(
+            &Arc<Mutex<ClusterDataNodeService>>,
+            crate::distribution_data::NativeJointReleaseOwnerView<'a>,
+        ) -> Result<T>,
+    ) -> Result<T> {
+        let data = native.data();
+        let range = data.old_range().id;
+        if native.local_node_id() != &self.node || !data.new_members().contains_key(&self.node) {
+            return Err(invalid(
+                "joint continuation actual survivor identity changed",
+            ));
+        }
+        let scope = data.plan_sha256()?;
+        let sessions = self
+            .sessions
+            .try_lock()
+            .ok_or_else(|| invalid("joint continuation sessions busy"))?;
+        let held = sessions
+            .retained
+            .get(&range)
+            .ok_or_else(|| invalid("joint continuation has no original retained owner"))?;
+        if held.scope_sha256 != scope
+            || held.session_id != data.promise().session_id
+            || held.nonce != data.promise().nonce
+        {
+            return Err(invalid(
+                "joint continuation changed retained exact session/nonce",
+            ));
+        }
+        match &held.exclusion {
+            RetainedExclusion::Frozen(frozen) => {
+                self.gate.validate_quiescent_frozen(range, frozen)?;
+                operation(
+                    &self.service,
+                    crate::distribution_data::NativeJointReleaseOwnerView::Frozen(frozen),
+                )
+            }
+            RetainedExclusion::Released(original) => operation(
+                &self.service,
+                crate::distribution_data::NativeJointReleaseOwnerView::Dropped(original),
+            ),
+        }
+    }
     /// Release only this actual NEW member's exact permanent-session owner,
     /// after native+catalogue activation. Old-source ownership is retained for
     /// proof-authorized cleanup. There is no timeout or caller reset path.
@@ -127,6 +185,76 @@ impl NativeJointHandoffRuntime {
             .ok_or_else(|| invalid("joint arm service busy after owner release; retry retained"))?;
         original.require_live()?;
         service.arm_local_native_joint_open(&original)
+    }
+    /// DISTINCT fresh all-member continuation. Original receipt is retained
+    /// as immutable retry custody, never as a renewed deadline permission.
+    pub(crate) fn release_with_fresh_phase(
+        &self,
+        admission: &crate::distribution_range_handoff::NativeJointReleaseAdmission,
+        original: Arc<crate::distribution_range_consensus::NativeJointCatalogueActivationReceipt>,
+    ) -> Result<()> {
+        admission.require_recipient(&self.service, original.native())?;
+        let data = admission.native().data();
+        let range = data.old_range().id;
+        let _operation = self.operation(range)?;
+        let mut sessions = self
+            .sessions
+            .try_lock()
+            .ok_or_else(|| invalid("fresh joint release sessions busy"))?;
+        let held = sessions
+            .retained
+            .get_mut(&range)
+            .ok_or_else(|| invalid("fresh joint release lost original owner"))?;
+        if held.scope_sha256 != data.plan_sha256()?
+            || held.session_id != data.promise().session_id
+            || held.nonce != data.promise().nonce
+        {
+            return Err(invalid(
+                "fresh joint release changed original session/nonce",
+            ));
+        }
+        let (retained, dropped) = match &held.exclusion {
+            RetainedExclusion::Frozen(frozen) => {
+                if Arc::strong_count(frozen) != 1 {
+                    return Err(invalid(
+                        "fresh joint release waits for actual old preparation/publication owners",
+                    ));
+                }
+                let service = self
+                    .service
+                    .try_lock()
+                    .ok_or_else(|| invalid("fresh joint release local service busy"))?;
+                service.require_fresh_native_joint_release(
+                    admission,
+                    crate::distribution_data::NativeJointReleaseOwnerView::Frozen(frozen),
+                )?;
+                admission.require_live()?;
+                let dropped = std::mem::replace(
+                    &mut held.exclusion,
+                    RetainedExclusion::Released(original.clone()),
+                );
+                (original, Some(dropped))
+            }
+            RetainedExclusion::Released(actual) => {
+                if actual.store_open_id() != original.store_open_id()
+                    || actual.activation_sha256()? != original.activation_sha256()?
+                    || actual.native_bridge_sha256() != original.native_bridge_sha256()
+                {
+                    return Err(invalid(
+                        "fresh joint retry changed original protected activation/open",
+                    ));
+                }
+                (actual.clone(), None)
+            }
+        };
+        drop(sessions);
+        // No fallible operation can discard retry custody after the real drop.
+        drop(dropped);
+        let service = self.service.try_lock().ok_or_else(|| {
+            invalid("fresh joint release dropped owner; same-open retry retained")
+        })?;
+        admission.require_live()?;
+        service.arm_fresh_native_joint_release(admission, &retained)
     }
     pub(crate) fn new(service: Arc<Mutex<ClusterDataNodeService>>) -> Result<Self> {
         let (gate, node) = {

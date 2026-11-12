@@ -7,10 +7,12 @@ use crate::distribution_range_recovery::RecoveryRoleAdmission;
 mod bridge;
 pub(crate) use bridge::NativeJointBridgeCatalogue;
 mod activation;
+mod release;
 use activation::NativeJointCatalogueActivation;
 pub(crate) use activation::{
     NativeJointCatalogueActivationFact, NativeJointCatalogueActivationReceipt,
 };
+pub(crate) use release::NativeJointReleaseObservedObligations;
 
 pub(super) const NATIVE_JOINT_HANDOFF_CATALOG_FORMAT: u32 = 14;
 #[derive(Debug)]

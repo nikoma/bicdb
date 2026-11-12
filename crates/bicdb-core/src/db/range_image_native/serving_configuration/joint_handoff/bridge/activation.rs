@@ -2,9 +2,11 @@
 //! Native publication precedes catalogue/open activation. This historical
 //! record alone cannot release a freeze or admit an application operation.
 use super::*;
+mod continuity;
 use crate::distribution_range_handoff::{
     NativeJointActivationAdmission, NativeJointDecisionData, NativeJointPreparedServingVoteData,
 };
+pub(crate) use continuity::NativeJointHistoricalCutScope;
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
@@ -326,6 +328,15 @@ pub(crate) struct NativeJointBridgeReadScope<'a> {
     lineage: SourceRangeImageLineage,
 }
 impl NativeJointBridgeReadScope<'_> {
+    pub(crate) fn current_range_index(&self) -> u64 {
+        self.lineage.range_index()
+    }
+    pub(crate) fn current_logical_history_sha256(&self) -> &str {
+        self.lineage.logical_history_sha256()
+    }
+    pub(crate) fn current_local_visibility_sequence(&self) -> u64 {
+        self.lineage.actual_local_visibility_sequence()
+    }
     pub(crate) fn require_prepared_catalogue_history(
         &self,
         catalogue: &crate::distribution_range_consensus::NativeJointBridgeCatalogue,

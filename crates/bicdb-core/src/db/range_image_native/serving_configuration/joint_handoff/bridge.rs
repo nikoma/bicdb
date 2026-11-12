@@ -7,7 +7,9 @@ use crate::distribution_range_image_install::NativeImageCatalogueFinalization;
 
 mod activation;
 pub(in crate::db::range_image_native) use activation::NativeJointServingDomain;
-pub(crate) use activation::{NativeJointBridgeReadScope, NativeJointServingBridgeReceipt};
+pub(crate) use activation::{
+    NativeJointBridgeReadScope, NativeJointHistoricalCutScope, NativeJointServingBridgeReceipt,
+};
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]

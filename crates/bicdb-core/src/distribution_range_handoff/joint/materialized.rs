@@ -59,7 +59,7 @@ impl NativeJointNewObservation {
             }
         }
     }
-    fn require_live_issuance(&self) -> Result<()> {
+    pub(super) fn require_live_issuance(&self) -> Result<()> {
         match self {
             Self::Survivor { old, role } => old.require_new_member_role(role),
             Self::Target { actual, .. } => actual.require_issuance_current(),
@@ -158,5 +158,52 @@ impl NativeJointMaterializedQuorums {
             .iter()
             .map(|(id, observation)| (id.clone(), observation.facts()))
             .collect()
+    }
+}
+
+impl NativeJointNewObservation {
+    pub(super) fn release_capture_pin_for_decision(&self) -> Result<()> {
+        match self {
+            Self::Survivor { old, .. } => old.release_capture_pin_for_decision(),
+            Self::Target { actual, service } => {
+                let service = service
+                    .try_lock()
+                    .ok_or_else(|| invalid("new target pin transition service busy"))?;
+                actual.release_capture_pin_for_decision(&service)
+            }
+        }
+    }
+}
+
+impl NativeJointNewObservation {
+    pub(super) fn publish_decision(
+        &self,
+        admission: &super::decision::NativeJointDecisionPublicationAdmission,
+        parent: &crate::CancellationToken,
+    ) -> Result<crate::db::NativeJointDecisionReceipt> {
+        match self {
+            Self::Survivor { old, .. } => old.publish_decision(admission, parent),
+            Self::Target { actual, service } => {
+                let mut service = service
+                    .try_lock()
+                    .ok_or_else(|| invalid("target decision publisher busy"))?;
+                actual.publish_decision(&mut service, admission, parent)
+            }
+        }
+    }
+}
+
+impl NativeJointNewObservation {
+    pub(super) fn require_decision_receipt(
+        &self,
+        receipt: &crate::db::NativeJointDecisionReceipt,
+    ) -> Result<()> {
+        match self {
+            Self::Survivor { old, .. } => old.require_decision_receipt(receipt),
+            Self::Target { service, .. } => service
+                .try_lock()
+                .ok_or_else(|| invalid("new decision receipt service busy"))?
+                .require_native_joint_decision_receipt(receipt),
+        }
     }
 }

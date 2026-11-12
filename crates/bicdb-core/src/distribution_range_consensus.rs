@@ -645,9 +645,11 @@ impl RangeWriteEnvelope {
                 "native writer catalog marker/format mismatch",
             ));
         }
-        if (self.catalog.format_version >= NATIVE_JOINT_HANDOFF_CATALOG_FORMAT)
-            != self.catalog.native_joint_handoffs.is_some()
-            || (self.catalog.format_version >= NATIVE_JOINT_HANDOFF_CATALOG_FORMAT
+        if (self.catalog.format_version == NATIVE_JOINT_HANDOFF_CATALOG_FORMAT
+            && self.catalog.native_joint_handoffs.is_none())
+            || (self.catalog.format_version < NATIVE_JOINT_HANDOFF_CATALOG_FORMAT
+                && self.catalog.native_joint_handoffs.is_some())
+            || (self.catalog.native_joint_handoffs.is_some()
                 && self.catalog.native_writer_enforcement_version != Some(1))
         {
             return Err(range_write_error(
@@ -903,7 +905,7 @@ impl RangeWriteStore {
                 "protected proposal catalog lacks its mandatory native reader fence",
             ));
         }
-        if catalog.format_version >= NATIVE_JOINT_HANDOFF_CATALOG_FORMAT
+        if catalog.native_joint_handoffs.is_some()
             && !crate::format::native_joint_data_handoff_active(&root)?
         {
             return Err(range_write_error(

@@ -438,3 +438,6 @@ impl BicDb {
         Ok(receipt)
     }
 }
+
+mod decision;
+pub(crate) use decision::NativeJointDecisionReceipt;

@@ -265,3 +265,39 @@ impl NativeJointOldClosedQuorum {
         )))
     }
 }
+
+impl NativeJointOldClosedQuorum {
+    pub(super) fn release_capture_pins_for_decision(&self) -> Result<()> {
+        self.require_current()?;
+        for observation in self.observations.values() {
+            observation.release_capture_pin_for_decision()?;
+        }
+        self.require_current()
+    }
+}
+
+impl NativeJointOldClosedQuorum {
+    pub(super) fn materialized_facts(
+        &self,
+    ) -> BTreeMap<ClusterNodeId, super::materialized::NativeJointMaterializedFacts> {
+        self.observations
+            .iter()
+            .map(|(node, obs)| (node.clone(), obs.materialized_facts()))
+            .collect()
+    }
+    pub(super) fn constraints(&self) -> &[NativeJointIrrevocableFacts] {
+        &self.constraints
+    }
+    pub(super) fn selected_source(&self) -> &ClusterNodeId {
+        &self.selected_source
+    }
+}
+
+impl NativeJointOldClosedQuorum {
+    pub(super) fn old_observation(
+        &self,
+        node: &ClusterNodeId,
+    ) -> Option<&Arc<NativeJointOldObservation>> {
+        self.observations.get(node)
+    }
+}

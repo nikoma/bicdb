@@ -13,7 +13,9 @@ use crate::distribution_range_recovery::{ClosedNativeReadyQuorum, RecoveryRoleAd
 mod activation_decision;
 mod joint_handoff;
 pub(crate) use activation_decision::NativeActivationDecisionReceipt;
-pub(crate) use joint_handoff::{NativeJointOldCloseReceipt, NativeJointOldPhysicalProof};
+pub(crate) use joint_handoff::{
+    NativeJointDecisionReceipt, NativeJointOldCloseReceipt, NativeJointOldPhysicalProof,
+};
 
 #[cfg(test)]
 mod floor_tests;

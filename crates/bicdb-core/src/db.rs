@@ -88,7 +88,8 @@ pub(crate) use range_image_native::{
     RangeImageBirthMember, RangeImageBirthSpec, SourceRangeImageLineage, StagedNativeHistoryProof,
 };
 pub(crate) use range_image_native::{
-    NativeActivationDecisionReceipt, NativeJointOldCloseReceipt, NativeJointOldPhysicalProof,
+    NativeActivationDecisionReceipt, NativeJointDecisionReceipt, NativeJointOldCloseReceipt,
+    NativeJointOldPhysicalProof,
 };
 pub(crate) use range_image_native::{NativeRangeReadPhysical, NativeReadLocalDbSequence};
 mod range_image_bindings;

@@ -139,7 +139,7 @@ impl ClusterDataNodeService {
         native: &NativeJointOldCloseReceipt,
         promise: &NativeJointOldPromiseReceipt,
         frozen: &FrozenRangeMutationPermit,
-        pin: &SourceCaptureReadPin,
+        pin: Option<&SourceCaptureReadPin>,
     ) -> Result<()> {
         let database = try_database_read(&self.db)?;
         self.require_native_catalog_database(&database)?;
@@ -149,9 +149,11 @@ impl ClusterDataNodeService {
             return Err(data_error("old closure service/session identity changed"));
         }
         native.require_closed_fact_current(&database, plan, promise, &self.range_writes)?;
-        database
-            .range_mutation_gate()
-            .validate_source_capture_read_pin(plan.old_range().id, pin)
+        let gate = database.range_mutation_gate();
+        match pin {
+            Some(pin) => gate.validate_source_capture_read_pin(plan.old_range().id, pin),
+            None => gate.validate_quiescent_frozen(plan.old_range().id, frozen),
+        }
     }
 }
 
@@ -313,7 +315,7 @@ impl ClusterDataNodeService {
         history: &str,
         command: Option<&str>,
     ) -> Result<()> {
-        self.require_native_joint_old_observation(plan, native, promise, frozen, pin)?;
+        self.require_native_joint_old_observation(plan, native, promise, frozen, Some(pin))?;
         let database = try_database_read(&self.db)?;
         let lineage = database.current_native_range_source_lineage(plan.old_range().id)?;
         if index > lineage.range_index() || h0 != lineage.logical_genesis_sha256() {
@@ -347,7 +349,7 @@ impl ClusterDataNodeService {
         pin: &SourceCaptureReadPin,
         index: u64,
     ) -> Result<(String, Option<String>)> {
-        self.require_native_joint_old_observation(plan, native, promise, frozen, pin)?;
+        self.require_native_joint_old_observation(plan, native, promise, frozen, Some(pin))?;
         let database = try_database_read(&self.db)?;
         let lineage = database.current_native_range_source_lineage(plan.old_range().id)?;
         let step = database.export_native_logical_history_step_with_source_pin(
@@ -382,7 +384,7 @@ impl ClusterDataNodeService {
         pin: Arc<SourceCaptureReadPin>,
         cut: crate::distribution_range_handoff::CertifiedRangeImageCut,
     ) -> Result<ActualServiceNativeJointCaptureInputs> {
-        self.require_native_joint_old_observation(plan, native, promise, &frozen, &pin)?;
+        self.require_native_joint_old_observation(plan, native, promise, &frozen, Some(&pin))?;
         let lineage = try_database_read(&self.db)?
             .current_native_range_source_lineage(plan.old_range().id)?;
         if cut.source_id() != &self.node_id
@@ -409,7 +411,7 @@ pub(crate) struct ActualServiceNativeJointNewEvidence {
     role: crate::distribution_range_recovery::HandoffRoleAdmission,
     image: crate::distribution_range_image_install::NativeImageCatalogueFinalization,
     frozen: crate::distribution_range_image_install::NativeImageInstallFreeze,
-    pin: SourceCaptureReadPin,
+    pin: parking_lot::Mutex<Option<SourceCaptureReadPin>>,
     facts: crate::distribution_range_handoff::NativeJointMaterializedFacts,
 }
 impl ActualServiceNativeJointNewEvidence {
@@ -429,9 +431,18 @@ impl ActualServiceNativeJointNewEvidence {
             &service.range_writes,
             self.frozen.as_frozen(),
         )?;
-        database
-            .range_mutation_gate()
-            .validate_source_capture_read_pin(self.plan.old_range().id, &self.pin)?;
+        let pin = self
+            .pin
+            .try_lock()
+            .ok_or_else(|| data_error("new image pin transition busy"))?;
+        match pin.as_ref() {
+            Some(pin) => database
+                .range_mutation_gate()
+                .validate_source_capture_read_pin(self.plan.old_range().id, pin)?,
+            None => database
+                .range_mutation_gate()
+                .validate_quiescent_frozen(self.plan.old_range().id, self.frozen.as_frozen())?,
+        }
         let base = self.image.base();
         if service.node_id != self.facts.node_id
             || self.facts.scope_sha256 != self.plan.checksum_sha256()?
@@ -520,10 +531,125 @@ impl ClusterDataNodeService {
             role,
             image,
             frozen,
-            pin,
+            pin: parking_lot::Mutex::new(Some(pin)),
             facts,
         };
         evidence.require_current(self)?;
         Ok(evidence)
+    }
+}
+
+impl ActualServiceNativeJointNewEvidence {
+    pub(crate) fn release_capture_pin_for_decision(
+        &self,
+        service: &ClusterDataNodeService,
+    ) -> Result<()> {
+        self.require_current(service)?;
+        self.pin
+            .try_lock()
+            .ok_or_else(|| data_error("new image capture pin busy"))?
+            .take();
+        self.require_current(service)
+    }
+}
+
+impl ClusterDataNodeService {
+    pub(crate) fn publish_native_joint_decision_old(
+        &mut self,
+        admission: &crate::distribution_range_handoff::NativeJointDecisionPublicationAdmission,
+        native: &NativeJointOldCloseReceipt,
+        promise: &NativeJointOldPromiseReceipt,
+        frozen: &FrozenRangeMutationPermit,
+        parent: &CancellationToken,
+    ) -> Result<crate::db::NativeJointDecisionReceipt> {
+        parent.check()?;
+        admission.require_live()?;
+        if admission.role().local_node_id() != &self.node_id
+            || frozen.owner() != admission.plan().promise().session_id
+        {
+            return Err(data_error(
+                "joint old publisher belongs to another actual service/session",
+            ));
+        }
+        let database = try_database_read(&self.db)?;
+        self.require_native_catalog_database(&database)?;
+        native.require_current(
+            &database,
+            admission.plan(),
+            admission.role(),
+            promise,
+            &self.range_writes,
+        )?;
+        let gate = database.range_mutation_gate();
+        gate.validate_quiescent_frozen(admission.data().old_range().id, frozen)?;
+        let controlled = gate.try_controlled_mutation(frozen)?;
+        let receipt = database.persist_native_joint_decision_from_old(
+            admission,
+            native,
+            promise,
+            &self.range_writes,
+            &controlled,
+        )?;
+        self.range_writes
+            .confirm_native_joint_decision(&database, admission, &receipt)?;
+        drop(controlled);
+        parent.check()?;
+        Ok(receipt)
+    }
+}
+impl ActualServiceNativeJointNewEvidence {
+    pub(crate) fn publish_decision(
+        &self,
+        service: &mut ClusterDataNodeService,
+        admission: &crate::distribution_range_handoff::NativeJointDecisionPublicationAdmission,
+        parent: &CancellationToken,
+    ) -> Result<crate::db::NativeJointDecisionReceipt> {
+        parent.check()?;
+        admission.require_live()?;
+        if self
+            .pin
+            .try_lock()
+            .ok_or_else(|| data_error("new image pin busy"))?
+            .is_some()
+            || self.plan.checksum_sha256()? != admission.plan().checksum_sha256()?
+            || admission.role().local_node_id() != &service.node_id
+        {
+            return Err(data_error(
+                "joint target publisher lost completed capture/pending plan scope",
+            ));
+        }
+        self.require_current(service)?;
+        let database = try_database_read(&service.db)?;
+        service.require_native_catalog_database(&database)?;
+        let gate = database.range_mutation_gate();
+        gate.validate_quiescent_frozen(admission.data().old_range().id, self.frozen.as_frozen())?;
+        let controlled = gate.try_controlled_mutation(self.frozen.as_frozen())?;
+        let receipt = database.persist_native_joint_decision_from_image(
+            admission,
+            &self.image,
+            &service.range_writes,
+            self.frozen.as_frozen(),
+            &controlled,
+        )?;
+        service
+            .range_writes
+            .confirm_native_joint_decision(&database, admission, &receipt)?;
+        drop(controlled);
+        parent.check()?;
+        Ok(receipt)
+    }
+}
+
+impl ClusterDataNodeService {
+    pub(crate) fn require_native_joint_decision_receipt(
+        &self,
+        receipt: &crate::db::NativeJointDecisionReceipt,
+    ) -> Result<()> {
+        let database = try_database_read(&self.db)?;
+        self.require_native_catalog_database(&database)?;
+        if receipt.local_node_id() != &self.node_id {
+            return Err(data_error("actual decision belongs to another service"));
+        }
+        receipt.require_current(&database)
     }
 }

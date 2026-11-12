@@ -13,7 +13,7 @@ pub(crate) struct NativeJointOldObservation {
     native: crate::db::NativeJointOldCloseReceipt,
     promise: crate::distribution_range_consensus::NativeJointOldPromiseReceipt,
     frozen: Arc<FrozenRangeMutationPermit>,
-    pin: Arc<SourceCaptureReadPin>,
+    pin: Mutex<Option<Arc<SourceCaptureReadPin>>>,
     service: Arc<Mutex<ClusterDataNodeService>>,
 }
 impl NativeJointOldObservation {
@@ -34,13 +34,17 @@ impl NativeJointOldObservation {
             native,
             promise,
             frozen,
-            pin,
+            pin: Mutex::new(Some(pin)),
             service,
         };
         result.require_current()?;
         Ok(result)
     }
     pub(crate) fn require_current(&self) -> Result<()> {
+        let pin = self
+            .pin
+            .try_lock()
+            .ok_or_else(|| invalid("old closure pin transition busy"))?;
         let service = self
             .service
             .try_lock()
@@ -50,7 +54,7 @@ impl NativeJointOldObservation {
             &self.native,
             &self.promise,
             &self.frozen,
-            &self.pin,
+            pin.as_ref().map(|pin| &**pin),
         )
     }
     pub(crate) fn node_id(&self) -> &ClusterNodeId {
@@ -79,6 +83,13 @@ impl NativeJointOldObservation {
         self.plan.checksum_sha256()
     }
     pub(super) fn require_ancestor(&self, index: u64, h0: &str, h: &str) -> Result<()> {
+        let pin = self
+            .pin
+            .try_lock()
+            .ok_or_else(|| invalid("old source pin busy"))?;
+        let pin = pin
+            .as_ref()
+            .ok_or_else(|| invalid("old source capture phase ended"))?;
         self.service
             .try_lock()
             .ok_or_else(|| invalid("old selected source busy"))?
@@ -87,7 +98,7 @@ impl NativeJointOldObservation {
                 &self.native,
                 &self.promise,
                 &self.frozen,
-                &self.pin,
+                pin,
                 index,
                 h0,
                 h,
@@ -95,6 +106,13 @@ impl NativeJointOldObservation {
             )
     }
     pub(super) fn command_at(&self, index: u64) -> Result<Option<String>> {
+        let pin = self
+            .pin
+            .try_lock()
+            .ok_or_else(|| invalid("old source pin busy"))?;
+        let pin = pin
+            .as_ref()
+            .ok_or_else(|| invalid("old source capture phase ended"))?;
         let (_, command) = self
             .service
             .try_lock()
@@ -104,7 +122,7 @@ impl NativeJointOldObservation {
                 &self.native,
                 &self.promise,
                 &self.frozen,
-                &self.pin,
+                pin,
                 index,
             )?;
         Ok(command)
@@ -113,6 +131,13 @@ impl NativeJointOldObservation {
         &self,
         cut: CertifiedRangeImageCut,
     ) -> Result<crate::distribution_data::ActualServiceNativeJointCaptureInputs> {
+        let pin = self
+            .pin
+            .try_lock()
+            .ok_or_else(|| invalid("old source pin busy"))?;
+        let pin = pin
+            .as_ref()
+            .ok_or_else(|| invalid("old source capture phase ended"))?;
         self.service
             .try_lock()
             .ok_or_else(|| invalid("old selected source busy before capture"))?
@@ -121,7 +146,7 @@ impl NativeJointOldObservation {
                 &self.native,
                 &self.promise,
                 self.frozen.clone(),
-                self.pin.clone(),
+                pin.clone(),
                 cut,
             )
     }
@@ -170,5 +195,58 @@ impl NativeJointOldObservation {
             ));
         }
         self.require_current()
+    }
+}
+
+impl NativeJointOldObservation {
+    pub(super) fn release_capture_pin_for_decision(&self) -> Result<()> {
+        self.require_current()?;
+        self.pin
+            .try_lock()
+            .ok_or_else(|| invalid("old source capture pin busy"))?
+            .take();
+        self.require_current()
+    }
+}
+
+impl NativeJointOldObservation {
+    pub(super) fn publish_decision(
+        &self,
+        admission: &super::decision::NativeJointDecisionPublicationAdmission,
+        parent: &crate::CancellationToken,
+    ) -> Result<crate::db::NativeJointDecisionReceipt> {
+        if self
+            .pin
+            .try_lock()
+            .ok_or_else(|| invalid("old capture pin busy"))?
+            .is_some()
+        {
+            return Err(invalid(
+                "old capture phase must close before decision WAL publication",
+            ));
+        }
+        let mut service = self
+            .service
+            .try_lock()
+            .ok_or_else(|| invalid("old decision publisher busy"))?;
+        service.publish_native_joint_decision_old(
+            admission,
+            &self.native,
+            &self.promise,
+            &self.frozen,
+            parent,
+        )
+    }
+}
+
+impl NativeJointOldObservation {
+    pub(super) fn require_decision_receipt(
+        &self,
+        receipt: &crate::db::NativeJointDecisionReceipt,
+    ) -> Result<()> {
+        self.service
+            .try_lock()
+            .ok_or_else(|| invalid("old decision receipt service busy"))?
+            .require_native_joint_decision_receipt(receipt)
     }
 }

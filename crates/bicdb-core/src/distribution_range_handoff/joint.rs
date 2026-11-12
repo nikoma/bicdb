@@ -21,3 +21,9 @@ pub(crate) use materialized::{
     NativeJointMaterializedFacts, NativeJointMaterializedQuorums, NativeJointNewObservation,
     NativeJointNewRound,
 };
+
+mod decision;
+pub(crate) use decision::{
+    NativeJointDecisionData, NativeJointDecisionPublicationAdmission,
+    NativeJointDecisionPublicationRound, NativeJointDurableDecision, NativeJointPreparedDecision,
+};

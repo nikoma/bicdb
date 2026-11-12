@@ -128,6 +128,8 @@ pub(super) struct NativeJointLocalState {
     session_id: Uuid,
     nonce: Uuid,
     old_closed_native_sha256: Option<String>,
+    global_decision_sha256: Option<String>,
+    global_decision_native_sha256: Option<String>,
 }
 impl NativeJointLocalState {
     pub(super) fn validate(&self) -> Result<()> {
@@ -139,10 +141,14 @@ impl NativeJointLocalState {
         if self.session_id.is_nil()
             || self.nonce.is_nil()
             || !digest(&self.scope_sha256)
-            || self
-                .old_closed_native_sha256
-                .as_ref()
-                .is_some_and(|v| !digest(v))
+            || [
+                &self.old_closed_native_sha256,
+                &self.global_decision_sha256,
+                &self.global_decision_native_sha256,
+            ]
+            .into_iter()
+            .any(|v| v.as_ref().is_some_and(|v| !digest(v)))
+            || self.global_decision_sha256.is_some() != self.global_decision_native_sha256.is_some()
         {
             return Err(range_write_error("damaged native joint catalogue state"));
         }
@@ -320,6 +326,8 @@ impl RangeWriteStore {
                 session_id: promise.session_id,
                 nonce: promise.nonce,
                 old_closed_native_sha256: None,
+                global_decision_sha256: None,
+                global_decision_native_sha256: None,
             });
         self.catalog.handoff_promises.insert(range, promise.clone());
         self.catalog.format_version = self
@@ -418,5 +426,83 @@ impl RangeWriteStore {
         self.persist()?;
         self.recovery_persistence_uncertain = false;
         native.require_current(database, plan, role, promise, self)
+    }
+}
+
+impl RangeWriteStore {
+    pub(crate) fn confirm_native_joint_decision(
+        &mut self,
+        database: &crate::BicDb,
+        admission: &crate::distribution_range_handoff::NativeJointDecisionPublicationAdmission,
+        receipt: &crate::db::NativeJointDecisionReceipt,
+    ) -> Result<()> {
+        admission.require_live()?;
+        receipt.require_current(database)?;
+        self.require_native_catalog_durability(database.data_path())?;
+        self.require_native_writer_host_base()?;
+        if receipt.local_node_id() != &self.catalog.node_id
+            || receipt.local_node_id() != admission.role().local_node_id()
+            || receipt.decision_sha256() != admission.data().checksum_sha256()
+            || database.actual_native_writer_enforcement_version()? != 1
+            || !crate::format::native_joint_data_handoff_active(&self.root)?
+        {
+            return Err(range_write_error(
+                "joint decision confirmation differs from actual local native/role",
+            ));
+        }
+        let range = admission.data().old_range().id;
+        let scope = admission.plan().checksum_sha256()?;
+        if let Some(current) = self
+            .catalog
+            .native_joint_handoffs
+            .as_ref()
+            .and_then(|m| m.get(&range))
+        {
+            if current.scope_sha256 != scope
+                || current.session_id != admission.data().promise().session_id
+                || current.nonce != admission.data().promise().nonce
+                || current
+                    .global_decision_sha256
+                    .as_ref()
+                    .is_some_and(|v| v != receipt.decision_sha256())
+                || current
+                    .global_decision_native_sha256
+                    .as_ref()
+                    .is_some_and(|v| v != receipt.checksum_sha256())
+            {
+                return Err(range_write_error(
+                    "different native joint decision cannot replace pending local session",
+                ));
+            }
+        }
+        super::image_install_certification::ensure_installing_certification_maps(&mut self.catalog);
+        self.catalog
+            .sparse_committed_decisions
+            .get_or_insert_with(BTreeMap::new);
+        let current = self
+            .catalog
+            .native_joint_handoffs
+            .get_or_insert_with(BTreeMap::new)
+            .entry(range)
+            .or_insert(NativeJointLocalState {
+                scope_sha256: scope,
+                session_id: admission.data().promise().session_id,
+                nonce: admission.data().promise().nonce,
+                old_closed_native_sha256: None,
+                global_decision_sha256: None,
+                global_decision_native_sha256: None,
+            });
+        current.global_decision_sha256 = Some(receipt.decision_sha256().into());
+        current.global_decision_native_sha256 = Some(receipt.checksum_sha256().into());
+        current.validate()?;
+        self.catalog.format_version = self
+            .catalog
+            .format_version
+            .max(NATIVE_JOINT_HANDOFF_CATALOG_FORMAT);
+        self.recovery_persistence_uncertain = true;
+        self.persist()?;
+        self.recovery_persistence_uncertain = false;
+        admission.require_live()?;
+        receipt.require_current(database)
     }
 }

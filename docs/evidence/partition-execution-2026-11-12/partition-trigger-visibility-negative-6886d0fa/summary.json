@@ -1,0 +1,16 @@
+{
+  "label": "partition-trigger-visibility-negative-6886d0fa",
+  "source": "6886d0faad3a5f73be50211b648685fdc0bbe438",
+  "reported_batch_status": "failed",
+  "passed": 2,
+  "failed_tests": 5,
+  "ignored": 0,
+  "compile_errors": false,
+  "scope": "Mandatory7nativePostgreSQL16.13positivecontrols; actuala15runtime plus tests/evidenceonly. Source/destination suppression and trigger-side reads of prior writes/deletions during INSERT,UPDATE movement,DELETE; actualACK/RETURNING/audit+2reopens,bothstores. Preserve baselinefailures; no app/HA/completionclaim.",
+  "raw_log": {
+    "archive": "tc-step-partition-trigger-visibility-negative-6886d0fa.log.gz",
+    "uncompressed_bytes": 87284,
+    "sha256": "de65e4bca00d4b5d4670b948019b5d4a2dad1aceac976285ba488ce725efb134",
+    "gzip_sha256": "a995e8d1d2b4e55b6d33c331b7fe5f8fe9f4a59d1e3b6b9d20b08341d28b504d"
+  }
+}

@@ -1,0 +1,64 @@
+BEGIN
+CREATE SCHEMA
+SET
+CREATE TABLE
+CREATE TABLE
+CREATE TABLE
+CREATE TABLE
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE TRIGGER
+CREATE TRIGGER
+SAVEPOINT
+DELETE 0
+insert_multi_returned|[{"k": 1, "payload": "first-ack"}, {"k": 11, "payload": "second-ack"}]
+insert_multi_rows|[{"k": 1, "payload": "first-ack"}, {"k": 11, "payload": "second-ack"}]
+insert_multi_events|[{"op": "INSERT", "new": 1, "old": null, "low_n": 0, "phase": "BEFORE", "high_n": 0, "parent_n": 0, "relation": "low"}, {"op": "INSERT", "new": 11, "old": null, "low_n": 1, "phase": "BEFORE", "high_n": 0, "parent_n": 1, "relation": "high"}, {"op": "INSERT", "new": 1, "old": null, "low_n": 1, "phase": "AFTER", "high_n": 1, "parent_n": 2, "relation": "low"}, {"op": "INSERT", "new": 11, "old": null, "low_n": 1, "phase": "AFTER", "high_n": 1, "parent_n": 2, "relation": "high"}]
+ROLLBACK
+SAVEPOINT
+INSERT 0 1
+DELETE 2
+move_returned|[{"k": 11, "payload": "original-ack"}]
+move_rows|[{"k": 11, "payload": "original-ack"}]
+move_events|[{"op": "UPDATE", "new": 11, "old": 1, "low_n": 1, "phase": "BEFORE", "high_n": 0, "parent_n": 1, "relation": "low"}, {"op": "DELETE", "new": null, "old": 1, "low_n": 1, "phase": "BEFORE", "high_n": 0, "parent_n": 1, "relation": "low"}, {"op": "INSERT", "new": 11, "old": null, "low_n": 0, "phase": "BEFORE", "high_n": 0, "parent_n": 0, "relation": "high"}, {"op": "DELETE", "new": null, "old": 1, "low_n": 0, "phase": "AFTER", "high_n": 1, "parent_n": 1, "relation": "low"}, {"op": "INSERT", "new": 11, "old": null, "low_n": 0, "phase": "AFTER", "high_n": 1, "parent_n": 1, "relation": "high"}]
+ROLLBACK
+SAVEPOINT
+INSERT 0 1
+DELETE 2
+CREATE TRIGGER
+veto_source_update_returned|[]
+veto_source_update_rows|[{"k": 1, "payload": "original-ack"}]
+veto_source_update_events|[{"op": "UPDATE", "new": 11, "old": 1, "low_n": 1, "phase": "BEFORE", "high_n": 0, "parent_n": 1, "relation": "low"}]
+ROLLBACK
+SAVEPOINT
+INSERT 0 1
+DELETE 2
+CREATE TRIGGER
+veto_source_delete_returned|[]
+veto_source_delete_rows|[{"k": 1, "payload": "original-ack"}]
+veto_source_delete_events|[{"op": "UPDATE", "new": 11, "old": 1, "low_n": 1, "phase": "BEFORE", "high_n": 0, "parent_n": 1, "relation": "low"}, {"op": "DELETE", "new": null, "old": 1, "low_n": 1, "phase": "BEFORE", "high_n": 0, "parent_n": 1, "relation": "low"}]
+ROLLBACK
+SAVEPOINT
+INSERT 0 1
+DELETE 2
+CREATE TRIGGER
+veto_destination_insert_returned|[]
+veto_destination_insert_rows|[]
+veto_destination_insert_events|[{"op": "UPDATE", "new": 11, "old": 1, "low_n": 1, "phase": "BEFORE", "high_n": 0, "parent_n": 1, "relation": "low"}, {"op": "DELETE", "new": null, "old": 1, "low_n": 1, "phase": "BEFORE", "high_n": 0, "parent_n": 1, "relation": "low"}, {"op": "INSERT", "new": 11, "old": null, "low_n": 0, "phase": "BEFORE", "high_n": 0, "parent_n": 0, "relation": "high"}, {"op": "DELETE", "new": null, "old": 1, "low_n": 0, "phase": "AFTER", "high_n": 0, "parent_n": 0, "relation": "low"}]
+ROLLBACK
+SAVEPOINT
+INSERT 0 2
+DELETE 4
+update_multi_returned|[{"k": 11, "payload": "first-ack"}, {"k": 12, "payload": "second-ack"}]
+update_multi_rows|[{"k": 11, "payload": "first-ack"}, {"k": 12, "payload": "second-ack"}]
+update_multi_events|[{"op": "UPDATE", "new": 11, "old": 1, "low_n": 2, "phase": "BEFORE", "high_n": 0, "parent_n": 2, "relation": "low"}, {"op": "DELETE", "new": null, "old": 1, "low_n": 2, "phase": "BEFORE", "high_n": 0, "parent_n": 2, "relation": "low"}, {"op": "INSERT", "new": 11, "old": null, "low_n": 1, "phase": "BEFORE", "high_n": 0, "parent_n": 1, "relation": "high"}, {"op": "UPDATE", "new": 12, "old": 2, "low_n": 1, "phase": "BEFORE", "high_n": 1, "parent_n": 2, "relation": "low"}, {"op": "DELETE", "new": null, "old": 2, "low_n": 1, "phase": "BEFORE", "high_n": 1, "parent_n": 2, "relation": "low"}, {"op": "INSERT", "new": 12, "old": null, "low_n": 0, "phase": "BEFORE", "high_n": 1, "parent_n": 1, "relation": "high"}, {"op": "DELETE", "new": null, "old": 1, "low_n": 0, "phase": "AFTER", "high_n": 2, "parent_n": 2, "relation": "low"}, {"op": "INSERT", "new": 11, "old": null, "low_n": 0, "phase": "AFTER", "high_n": 2, "parent_n": 2, "relation": "high"}, {"op": "DELETE", "new": null, "old": 2, "low_n": 0, "phase": "AFTER", "high_n": 2, "parent_n": 2, "relation": "low"}, {"op": "INSERT", "new": 12, "old": null, "low_n": 0, "phase": "AFTER", "high_n": 2, "parent_n": 2, "relation": "high"}]
+ROLLBACK
+SAVEPOINT
+INSERT 0 2
+DELETE 4
+delete_multi_returned|[{"k": 1, "payload": "first-ack"}, {"k": 2, "payload": "second-ack"}]
+delete_multi_rows|[]
+delete_multi_events|[{"op": "DELETE", "new": null, "old": 1, "low_n": 2, "phase": "BEFORE", "high_n": 0, "parent_n": 2, "relation": "low"}, {"op": "DELETE", "new": null, "old": 2, "low_n": 1, "phase": "BEFORE", "high_n": 0, "parent_n": 1, "relation": "low"}, {"op": "DELETE", "new": null, "old": 1, "low_n": 0, "phase": "AFTER", "high_n": 0, "parent_n": 0, "relation": "low"}, {"op": "DELETE", "new": null, "old": 2, "low_n": 0, "phase": "AFTER", "high_n": 0, "parent_n": 0, "relation": "low"}]
+ROLLBACK
+ROLLBACK
+scratch_schema_absent|t

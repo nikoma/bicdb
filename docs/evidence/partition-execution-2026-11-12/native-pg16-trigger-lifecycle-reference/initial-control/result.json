@@ -1,0 +1,8 @@
+{
+  "status": "native_pg_control_passed",
+  "version": "PostgreSQL 16.13 (Debian 16.13-1.pgdg13+1) on x86_64-pc-linux-gnu, compiled by gcc (Debian 14.2.0-19) 14.2.0, 64-bit",
+  "image_id": "sha256:71e27bf60b70bded003791b5573f8b808365613f341df20ffcf0c1ed7bc13ddf",
+  "started_unix": 1794486846.4766898,
+  "finished_unix": 1794486847.7273989,
+  "scope": "ActualPG16 constrainttriggerparentrefusal, leafacceptance, DROPfunctiontriggerdependency/cascade/rollback; temporaryisolatedtmpfs event/catalogsemantics only. Existingdatauntouched; no durabilityclaim."
+}

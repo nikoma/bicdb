@@ -315,5 +315,175 @@
       "namespace/quoted identity and renamed partition integration",
       "old-reader admission and rollback/crash/fault controls"
     ]
+  },
+  "visibility_and_function_lifecycle_followup": {
+    "recorded_unix": 1794488090.687666,
+    "stages": [
+      {
+        "label": "partition-trigger-visibility-negative-6886d0fa",
+        "source": "6886d0faad3a5f73be50211b648685fdc0bbe438",
+        "reported_batch_status": "failed",
+        "passed": 2,
+        "failed_tests": 5,
+        "ignored": 0,
+        "compile_errors": false,
+        "scope": "Mandatory7nativePostgreSQL16.13positivecontrols; actuala15runtime plus tests/evidenceonly. Source/destination suppression and trigger-side reads of prior writes/deletions during INSERT,UPDATE movement,DELETE; actualACK/RETURNING/audit+2reopens,bothstores. Preserve baselinefailures; no app/HA/completionclaim.",
+        "raw_log": {
+          "archive": "tc-step-partition-trigger-visibility-negative-6886d0fa.log.gz",
+          "uncompressed_bytes": 87284,
+          "sha256": "de65e4bca00d4b5d4670b948019b5d4a2dad1aceac976285ba488ce725efb134",
+          "gzip_sha256": "a995e8d1d2b4e55b6d33c331b7fe5f8fe9f4a59d1e3b6b9d20b08341d28b504d"
+        }
+      },
+      {
+        "label": "partition-trigger-visibility-314fc1ed",
+        "source": "314fc1edda99b02627e2baf8a2c727da6a3443a8",
+        "reported_batch_status": "failed",
+        "passed": 81,
+        "failed_tests": 0,
+        "ignored": 0,
+        "compile_errors": true,
+        "scope": "Evolvingpartitionbatch: actualPG16trigger-sidevisibility/sourceanddestinationveto7positivesafter2PASS5FAILbaseline; pluslatefailurethatprovespriorphysicalmutationandatomicrollback, savepointvetoedmovementrollback; existingphysicalevent/mixedupsert/catalog/bounds/locks/hash/auth/RLS/Oraclecontrols. ParentwritesnowperrowinsideouteratomicTX; aftereventsqueued. No broad/fault/application/HA/featurecompletion orversiondelivery.",
+        "raw_log": {
+          "archive": "tc-step-partition-trigger-visibility-314fc1ed.log.gz",
+          "uncompressed_bytes": 1462872,
+          "sha256": "0039cb861aa27e8d505635ce3968b9d07d82e9a40c83c0aaaf81da4863a6b62b",
+          "gzip_sha256": "b6dc970a6dcde3339d12d61a57efb5e3daa28ff65c6b90fbb5240408dcf20e6e"
+        }
+      },
+      {
+        "label": "partition-trigger-visibility-055-harness-fixed",
+        "source": "05ca6e31d02c0065d3e92a0e4d72d9812ece71e5",
+        "reported_batch_status": "focused_passed",
+        "passed": 9,
+        "failed_tests": 0,
+        "ignored": 0,
+        "compile_errors": false,
+        "scope": "Test-harness-only storageModeclone fixes E0382 in newnestedlatefailurecases; exact314productruntime unchanged. All9mandatoryvisibility/suppression/lateactualwrite-and-rollback/savepointpositives,bothstores+2reopens. Precedingfirsttargetdidnotcompile; its17independentexistingtargetresultsrecorded separately. No broad/app/HA/featurecompletion.",
+        "raw_log": {
+          "archive": "tc-step-partition-trigger-visibility-055-harness-fixed.log.gz",
+          "uncompressed_bytes": 84840,
+          "sha256": "46fdccaf368efb5701ce68bbf80212ac9dc61acb027b32911902d0b2eb632f65",
+          "gzip_sha256": "1e9bcc1ae1fb8b1b37797166016cc86e3d0b9c9f370c8005171c3a82901f6372"
+        }
+      },
+      {
+        "label": "partition-trigger-lifecycle-negative-0aa660fe",
+        "source": "0aa660fe35e2955815eacb335e5235e0949b1c5b",
+        "reported_batch_status": "failed",
+        "passed": 2,
+        "failed_tests": 3,
+        "ignored": 0,
+        "compile_errors": false,
+        "scope": "Actual314productruntime with5mandatorynativePG16lifecyclepositives,tests-only0aa. Parentconstrainttriggeracceptance/cloning/deferredcommitfailureatomicity; functionRESTRICTpreservesenforcement; CASCADEcompleteclones+localtriggers,rollback,coldreopen;multi-functionmissing preflight42883. Expecteddependency/cascadefailuresretained, no originalassertionchanges orapp/HA/featurecompletion.",
+        "raw_log": {
+          "archive": "tc-step-partition-trigger-lifecycle-negative-0aa660fe.log.gz",
+          "uncompressed_bytes": 83090,
+          "sha256": "4a06d1ff514711c108acdab65a38ff02f8277a52d819e8d5c4633033dc1b47af",
+          "gzip_sha256": "851be140bdcc6d7f894da9698961579f6830c36a82b15eaf222ed86edcf37347"
+        }
+      },
+      {
+        "label": "partition-trigger-function-cascade-final-batch",
+        "source": "21d821009a8a9e86597d6f1b3c477be2929271c2",
+        "reported_batch_status": "focused_passed",
+        "passed": 56,
+        "failed_tests": 0,
+        "ignored": 0,
+        "compile_errors": false,
+        "scope": "Currentcoherenttriggerfunctionlifecyclebatch: resolvesallfunctiontargetsandpreflightsdeps; restrictrefusesactualresolvedtriggerfunction; Nativeatomicfunction+completeownedtriggerrecordsandpromotioncatalog; exactrawbatchundo. ActualPG16parentconstraintacceptance/noinventedrefusal; 5mandatorylifecyclepositivesafter2PASS3FAIL. Relevanttrigger,owner,privilege,baseTypeandindependentOracleinvalidroutine regressions. Broad/multiobjectoperator-type/processfault/namespace/oldreader/app/HAgatesunqualified.",
+        "raw_log": {
+          "archive": "tc-step-partition-trigger-function-cascade-final-batch.log.gz",
+          "uncompressed_bytes": 974895,
+          "sha256": "0e5884482c941e80fc704b8ef8f8e6f4e7e27fe55ff06642d63b4ab7a5943496",
+          "gzip_sha256": "46dca58e37dc390fdf986df9740976867a7a0d0043fffa8e4cd94756ac1de07c"
+        }
+      },
+      {
+        "label": "partition-multi-function-atomic-negative",
+        "source": "6ea72af54ac1d1b20f6a72540fc75d6786ec0806",
+        "reported_batch_status": "failed",
+        "passed": 0,
+        "failed_tests": 1,
+        "ignored": 0,
+        "compile_errors": false,
+        "scope": "MandatoryoneSQLmultifunctiondropatomicpublicationcountercheck overexact21runtime; newtestonly. Expected2Nativecommitsinsteadof1 retained. Countercheckisnotfullprocessfault/physicaldurabilityproof.",
+        "raw_log": {
+          "archive": "tc-step-partition-multi-function-atomic-negative.log.gz",
+          "uncompressed_bytes": 82021,
+          "sha256": "f55abac3bfa786726512c1646b26337e50694771a5a52c5e37aa92bd90b01e2d",
+          "gzip_sha256": "5f73d42969b1742da6553af7b08cd9085a2d84ff22654edd70d4b86193844433"
+        }
+      },
+      {
+        "label": "partition-multi-function-catalog-negative",
+        "source": "1f9bfb159c54a62d54e5d331cca53b7f6bec8364",
+        "reported_batch_status": "failed",
+        "passed": 0,
+        "failed_tests": 1,
+        "ignored": 0,
+        "compile_errors": false,
+        "scope": "Correctedobservable,unchanged21runtime: requireONEroutinecataloggenerationandONEtriggercataloggeneration, oneNativecatalogTXplusknownexistingemptySQLwrappercommit=2. Previousnewcounterexpected1globalcommitbutobserved3(2catalog+emptywrapper); preserveoriginalfailureandexplicitcorrection. Mandatorynewpositiveexpectedold3vs2failure, notfullprocess/crashatomicproof.",
+        "raw_log": {
+          "archive": "tc-step-partition-multi-function-catalog-negative.log.gz",
+          "uncompressed_bytes": 82198,
+          "sha256": "ac06305e065a421f7faf17d3d05fd3e0739ea303166b8d4cb6d983d6ddd381fe",
+          "gzip_sha256": "9b16b71f509476a109b8152ed7557158e4968d34401e8f6087122cd9197c2054"
+        }
+      },
+      {
+        "label": "partition-trigger-multi-function-qualified-batch",
+        "source": "74ab97ba31bc5757194cc90ab227ed2f3931e4e5",
+        "reported_batch_status": "focused_passed",
+        "passed": 57,
+        "failed_tests": 0,
+        "ignored": 0,
+        "compile_errors": false,
+        "scope": "Coherentmulti-functiontriggercascadecatalogbatch: allselectedfunctionsandalltheirtriggerlineagespublishinoneNativecatalogTX; selectedoverloadsneverpromoted; rawbatchundo; allname/dependency/ownerpreflight. NativeglobalcounterincludesknownemptySQLwrapper; eachaffectedcataloggenerationexactlyonce. Reuse actual314unchangedDML90scope; rerun12DDL/trigger/auth/routine/baseType/independentOraclefocusedtargets. Originalbaselinefailuresretained. No broad/processfault/mixedoperator-typecascade/namespace/oldreader/app/HA orfeaturecompletion.",
+        "raw_log": {
+          "archive": "tc-step-partition-trigger-multi-function-qualified-batch.log.gz",
+          "uncompressed_bytes": 975442,
+          "sha256": "a9c2d953cafe823e1fb5eb364ccb5cc33e901ac6f0df98a1518c9480240c1da4",
+          "gzip_sha256": "914a391061548e991e33b708b9ca62749058f96871972cb5f0af97e540e1f18a"
+        }
+      },
+      {
+        "label": "partition-main487-integration-97aabad9",
+        "source": "97aabad9413a44f6caf99591224e3012d6feae6c",
+        "reported_batch_status": "focused_passed",
+        "passed": 58,
+        "failed_tests": 0,
+        "ignored": 0,
+        "compile_errors": false,
+        "scope": "Actualmain4876bedintegratedintoprivatepartitionbatch97aabad9 (NOT main delivery). ConflictresolvedretainingbothretryableRestoreIndexandRestorePartitionCatalog undo. Packageversion487inheriteddevelopmentonly,nodeliveryreservation. Focusedindex/rollbackandtriggercatalog/execution/visibility/lifecycle+auth/baseType/independentOraclecontrols; otherunchanged314DMLand74routinechecksretainedsource-scoped. No broad/fault/app/HA/oldreader/featurecompletion.",
+        "raw_log": {
+          "archive": "tc-step-partition-main487-integration-97aabad9.log.gz",
+          "uncompressed_bytes": 977817,
+          "sha256": "448b6222ccca9a57e95c202bb39f50f92fb3b2e4bc1a8318d3055662bed12168",
+          "gzip_sha256": "98cfe2028097d0280cd8e3d9a8b86144ec0e78d675616538f0edfd5af835f314"
+        }
+      }
+    ],
+    "corrections": [
+      "314 new visibility target: E0382 moved StorageMode in nested test loop, no tests ran for that target. Other17targets81PASS.05c fixes only3testmode.clonecalls;9newtestsPASS on identical314productruntime.",
+      "6ea new multi-function counter incorrectly expected1globalcommit; actual SQLDROP uses an existing empty wrapper transaction. Old21 observed3:two catalog commits plus wrapper.1f9corrects expectedtotal2 and requires one generation in each affectedcatalog; unchanged21stillfails3vs2.74batch57PASS after grouping catalogs.",
+      "ActualPG16 accepts parent constraint triggers; original initial-scope refusal prediction was wrong. No rejection implemented."
+    ],
+    "integration": {
+      "source": "97aabad9413a44f6caf99591224e3012d6feae6c",
+      "main_ancestor": "6bed1b33508c52bc122e8173947f9ea7b1039c7a",
+      "source_version": "1.0.487-beta inherited private development, not feature delivery",
+      "result": "58focusedPASS0FAIL0ignored,12targets",
+      "rollback_conflict": "Both retryableRestoreIndex and retryableRestorePartitionCatalog retained."
+    },
+    "source_scope_note": "Results overlap, cannot sum as distinct test total. 314/05cDML90 and74DDL57 retained separately; current97integration58 is a focused integration result only.",
+    "delivery": "Unmerged private featurebatch; no new delivery version, binary, release or deployment.",
+    "remaining": [
+      "generic mixed operator/base-type cascade publication and independent process/fault proof",
+      "quoted/namespace trigger identity and rename integration",
+      "real old-store ACK/RLS/index semantic migration and new reader fence",
+      "remaining partition constraints/FKs/hash/ONLY/snapshots/concurrency/fast paths",
+      "broad SQL/protocol and original Oracle/PG application inventories, UI400/encrypted backup/restore, HA and full recovered campaign gates"
+    ]
   }
 }

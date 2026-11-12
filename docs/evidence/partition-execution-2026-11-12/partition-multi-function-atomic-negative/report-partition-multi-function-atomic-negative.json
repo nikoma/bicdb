@@ -1,0 +1,30 @@
+{
+  "source": "6ea72af54ac1d1b20f6a72540fc75d6786ec0806",
+  "scope": "MandatoryoneSQLmultifunctiondropatomicpublicationcountercheck overexact21runtime; newtestonly. Expected2Nativecommitsinsteadof1 retained. Countercheckisnotfullprocessfault/physicaldurabilityproof.",
+  "started_unix": 1794487359.3232532,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "partition_trigger_lifecycle",
+        "multiple_trigger_functions_and_their_lineages_publish_in_one_native_commit",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794487359.3234036,
+      "exit": 101,
+      "finished_unix": 1794487363.7833354
+    }
+  ],
+  "status": "failed",
+  "finished_unix": 1794487363.783491
+}

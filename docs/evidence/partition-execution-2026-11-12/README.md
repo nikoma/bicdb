@@ -116,3 +116,46 @@ quoted/namespace identity, rename integration, old-reader admission and
 independent crash/fault qualification remain required. Passing catalog tests
 alone never established correct event execution. Broader partition and campaign
 gates listed above remain open.
+
+
+## Trigger-side visibility, vetoes and function lifecycle
+
+Actual PostgreSQL16.13 controls prove that BEFORE triggers see earlier row
+changes from the same statement. Movement deletes the source before invoking
+destination BEFORE INSERT. A destination NULL result keeps that deletion,
+fires source AFTER DELETE and returns no updated row; source BEFORE UPDATE
+or DELETE vetoes keep the row. Savepoint undo restores a veto-deleted source.
+The multirow UPDATE/DELETE checks compare visibility progression without
+imposing an incidental candidate-key order that SQL does not guarantee.
+
+All new controls use both storage modes, fsync, independent ACKs and two clean
+reopens. The late-error control proves an earlier physical write occurred,
+then raises and verifies all row/audit effects roll back.
+
+| Source | Actual result | Scope |
+| --- | --- | --- |
+| `6886d0fa` | 2 pass, 5 fail | Seven mandatory native visibility/veto positives against unchanged a15 runtime. |
+| `314fc1ed` | 81 existing focused tests pass; new target fails to compile | E0382 in the new nested rollback harness. Product changes compile and the other 17 targets complete. |
+| `05ca6e31` | 9 pass, 0 fail/ignored | Test-only StorageMode clone correction over identical 314 product source; new visibility/veto/late-error/savepoint checks pass. |
+| `0aa660fe` | 2 pass, 3 fail | Parent constraint/deferred enforcement and missing-function preflight pass; RESTRICT and complete CASCADE fail. |
+| `21d82100` | 56 pass, 0 fail/ignored | Actual resolved-function dependencies, RESTRICT and atomic single-function/tree publication with exact raw undo; routine/owner/base-type/Oracle regressions. |
+| `6ea72af5` | 0 pass, 1 fail | Initial global-commit counter observes three; its expected one overlooked the existing empty SQL wrapper commit. |
+| `1f9bfb15` | 0 pass, 1 fail | Corrected observable against identical 21 runtime: one catalog publication plus wrapper requires two, one generation per catalog. Old runtime still produces three. |
+| `74ab97ba` | 57 pass, 0 fail/ignored | Requested function/trigger catalogs publish together; six lifecycle positives plus 51 focused regressions. |
+| `97aabad9` | 58 pass, 0 fail/ignored | Integration with actual main4876bed: both index and partition-catalog restore retries retained; 12 relevant index/trigger/auth/base-type/Oracle targets pass. |
+
+These stages overlap and are not additive distinct-test counts. Full hashes,
+commands and timings are in each report. Long new Cargo logs are gzip archives
+with verified raw byte counts and SHA256 values in each summary.json.
+
+PostgreSQL accepts constraint triggers on partitioned parents and clones them.
+The original control receipt's contrary scope prediction is preserved with a
+correction note; actual stdout always showed acceptance. No refusal was added.
+Function RESTRICT refuses trigger dependencies with 2BP01; CASCADE removes
+owned clones and local triggers, and rollback restores the tree. A missing
+later function is resolved first and returns 42883 without disarming guards.
+
+Main487 is integrated privately, not a feature merge into main. No new binary,
+release or deployment was produced. Namespace identity, old-store admission
+and reader compatibility, remaining partition semantics, independent process/
+fault proofs, broad suites and the full campaign gates above remain open.

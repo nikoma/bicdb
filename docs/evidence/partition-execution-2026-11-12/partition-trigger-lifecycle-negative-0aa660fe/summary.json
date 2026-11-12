@@ -1,0 +1,16 @@
+{
+  "label": "partition-trigger-lifecycle-negative-0aa660fe",
+  "source": "0aa660fe35e2955815eacb335e5235e0949b1c5b",
+  "reported_batch_status": "failed",
+  "passed": 2,
+  "failed_tests": 3,
+  "ignored": 0,
+  "compile_errors": false,
+  "scope": "Actual314productruntime with5mandatorynativePG16lifecyclepositives,tests-only0aa. Parentconstrainttriggeracceptance/cloning/deferredcommitfailureatomicity; functionRESTRICTpreservesenforcement; CASCADEcompleteclones+localtriggers,rollback,coldreopen;multi-functionmissing preflight42883. Expecteddependency/cascadefailuresretained, no originalassertionchanges orapp/HA/featurecompletion.",
+  "raw_log": {
+    "archive": "tc-step-partition-trigger-lifecycle-negative-0aa660fe.log.gz",
+    "uncompressed_bytes": 83090,
+    "sha256": "4a06d1ff514711c108acdab65a38ff02f8277a52d819e8d5c4633033dc1b47af",
+    "gzip_sha256": "851be140bdcc6d7f894da9698961579f6830c36a82b15eaf222ed86edcf37347"
+  }
+}

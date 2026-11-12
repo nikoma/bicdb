@@ -363,3 +363,5 @@ fn native_metadata_promotion_pending_entry_and_held_ack_cannot_cross_actual_lead
 }
 
 mod stale_seed_tests;
+
+mod bootstrap_budget_tests;

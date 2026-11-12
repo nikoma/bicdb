@@ -6,6 +6,7 @@ use crate::{
     TcpClusterRelocationTransport,
 };
 use std::time::Instant;
+mod discovery;
 
 #[derive(Clone, Debug, Serialize)]
 pub struct NativeMetadataLearnerStatus {
@@ -74,61 +75,14 @@ impl NativeMetadataLearnerHost {
         if numeric.port() == 0 {
             return Err(invalid("fresh learner requires a fixed port"));
         }
-        let bootstrap =
-            TcpClusterBootstrapClient::new(cluster.clone(), local.clone(), network.clone())?;
-        let snapshot = bootstrap.fetch_snapshot(&seed, seed_address)?;
-        token.check()?;
-        let member = snapshot.topology.nodes.get(&local).ok_or_else(|| {
-            invalid("learner identity must be actually registered before factory creation")
-        })?;
-        if member.address != address
-            || member.incarnation != incarnation
-            || member.native_store_birth_v1.is_some()
-            || member.metadata_role != MetadataMemberRole::Learner
-            || member.lifecycle != ClusterNodeLifecycle::Active
-        {
-            return Err(invalid(
-                "fresh learner registration/address/incarnation/birth differs",
-            ));
-        }
-        let leader = snapshot
-            .metadata_leader_id
-            .ok_or_else(|| invalid("fresh learner metadata leader unknown"))?;
-        let routing = Arc::new(RwLock::new(snapshot.topology));
-        let transport = Arc::new(TcpClusterRelocationTransport::new(
-            cluster,
-            local.clone(),
-            Arc::clone(&routing),
-            network.clone(),
-        )?);
-        let business = Uuid::now_v7();
-        let first = transport.acquire_host_metadata_observation(
-            &leader,
-            business,
-            Duration::from_secs(5),
-            &token,
-        )?;
-        let first_member = first
-            .committed_topology(business)?
-            .nodes
-            .get(&local)
-            .ok_or_else(|| invalid("own learner absent from fresh metadata"))?;
-        if first_member.address != address || first_member.incarnation != incarnation {
-            return Err(invalid(
-                "fresh learner explicit endpoint/incarnation changed before schema transfer",
-            ));
-        }
-        let range = first
-            .committed_topology(business)?
-            .ranges
-            .values()
-            .next()
-            .ok_or_else(|| invalid("learner has no committed schema domain"))?
-            .clone();
-        transport.install_topology(first.committed_topology(business)?.clone())?;
-        let bundle = transport.export_native_learner_schema(&range.leader, &range, &token)?;
-        // Factory authority is a separately fresh OWN learner MQ after schema
-        // DATA transfer, never a source fingerprint or bootstrap snapshot.
+        let (transport, routing, first, business) =
+            discovery::discover(&cluster, &local, seed, seed_address, &network, &token)?;
+        // No cached/bootstrap member can admit or permanently reject the
+        // learner. Check exact own identity only against actual fresh MQ.
+        discovery::require_requester(&first, business, &local, address, incarnation)?;
+        let leader = first.metadata_leader_id().clone();
+        let bundle = discovery::schema(&transport, &first, business, &token)?;
+        // Factory authority is separately fresh after schema DATA export.
         let factory_business = Uuid::now_v7();
         let current = transport.acquire_host_metadata_observation(
             &leader,
@@ -137,16 +91,20 @@ impl NativeMetadataLearnerHost {
             &token,
         )?;
         transport.install_topology(current.committed_topology(factory_business)?.clone())?;
-        let current_member = current
-            .committed_topology(factory_business)?
-            .nodes
-            .get(&local)
-            .ok_or_else(|| invalid("own learner absent before factory"))?;
-        if current_member.address != address || current_member.incarnation != incarnation {
+        discovery::require_requester(&current, factory_business, &local, address, incarnation)?;
+        if current.context_id() == first.context_id()
+            || current.term() < first.term()
+            || current.read_index() < first.read_index()
+            || current.committed_topology(factory_business)?
+                != first.committed_topology(business)?
+            || current.restore_activation(factory_business)?
+                != first.restore_activation(business)?
+        {
             return Err(invalid(
-                "fresh learner explicit endpoint/incarnation changed before factory",
+                "fresh learner CONFIG/domain changed across schema transfer",
             ));
         }
+        token.check()?;
         let db = DbConfig::default()
             .with_fsync(true)
             .with_storage_mode(StorageMode::ServerPaged)

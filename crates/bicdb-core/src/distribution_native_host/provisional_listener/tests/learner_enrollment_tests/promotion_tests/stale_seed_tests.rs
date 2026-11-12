@@ -1,4 +1,4 @@
-//! Expected failing baseline: bootstrap is routing DATA, and a stale seed's
+//! Bootstrap is routing DATA, and a stale seed's
 //! missing member must not preclude discovering a live current Host MQ.
 //! No supervisor runs here; every election uses real stores/TLS votes and a
 //! durable current-term barrier. The old seed misses only actual replication.
@@ -176,6 +176,35 @@ fn native_metadata_fresh_sixth_stale_seed_discovers_current_quorum_before_root()
         .verify()
         .unwrap();
     assert_eq!(old_metadata.lock().committed_topology(), &c5);
+    // Fresh MQ, not cached bootstrap identity, must reject wrong own endpoint
+    // or incarnation BEFORE schema/factory effects. Keep0 stopped throughout.
+    for (name, address, incarnation) in [
+        ("wrong-endpoint", address0.as_str(), 1),
+        ("wrong-incarnation", address5.as_str(), 2),
+    ] {
+        let refused_root = f.root.path().join(name);
+        let error = crate::NativeMetadataLearnerHost::start_fresh_metadata_only(
+            &refused_root,
+            configuration.cluster_id.clone(),
+            node(5),
+            address,
+            incarnation,
+            node(4),
+            &address4,
+            f.networks[5].clone(),
+            8 * 1024 * 1024,
+            &token,
+        )
+        .err()
+        .expect("fresh actual identity mismatch must refuse");
+        assert!(
+            error
+                .to_string()
+                .contains("registration/address/incarnation/birth differs"),
+            "{error}"
+        );
+        assert!(!refused_root.exists());
+    }
     // Keep0 offline through BOTH independent positive controls: a successful
     // current-MQ probe can itself replicate missing CONFIG entries. Restart
     // the SAME backend only now, so constructor discovery sees actual stale C5.
@@ -242,6 +271,13 @@ fn native_metadata_fresh_sixth_stale_seed_discovers_current_quorum_before_root()
     eprintln!("NATIVE_STALE_SEED_CONSTRUCTOR {report}");
     let succeeded = result.is_ok();
     if let Ok(mut owner) = result {
+        let status = owner.refresh(&token).unwrap();
+        assert_eq!(status.node_id, node(5));
+        assert!(!status.data_serving);
+        assert!(!status.birth_bound);
+        assert!(status.metadata_store_id.is_none());
+        assert_eq!(status.metadata_role, MetadataMemberRole::Learner);
+        assert!(!status.namespace_ids.is_empty());
         owner.stop(&token).unwrap();
     } else {
         assert!(

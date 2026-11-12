@@ -3263,7 +3263,30 @@ impl TcpClusterBootstrapClient {
         destination_node_id: &ClusterNodeId,
         destination_address: &str,
     ) -> Result<ClusterBootstrapSnapshot> {
-        let (response, peer_certificate_sha256) = self.call(
+        self.fetch_snapshot_inner(None, destination_node_id, destination_address)
+    }
+
+    pub(crate) fn fetch_snapshot_cancellable(
+        &self,
+        parent: &CancellationToken,
+        destination_node_id: &ClusterNodeId,
+        destination_address: &str,
+    ) -> Result<ClusterBootstrapSnapshot> {
+        parent.check()?;
+        let snapshot =
+            self.fetch_snapshot_inner(Some(parent), destination_node_id, destination_address)?;
+        parent.check()?;
+        Ok(snapshot)
+    }
+
+    fn fetch_snapshot_inner(
+        &self,
+        parent: Option<&CancellationToken>,
+        destination_node_id: &ClusterNodeId,
+        destination_address: &str,
+    ) -> Result<ClusterBootstrapSnapshot> {
+        let (response, peer_certificate_sha256) = self.call_inner(
+            parent,
             destination_node_id,
             destination_address,
             ClusterDataRequest::FetchBootstrapSnapshot,
@@ -3352,6 +3375,25 @@ impl TcpClusterBootstrapClient {
         destination_address: &str,
         request: ClusterDataRequest,
     ) -> Result<(ClusterDataResponse, Option<String>)> {
+        self.call_inner(None, destination_node_id, destination_address, request)
+    }
+
+    fn call_inner(
+        &self,
+        parent: Option<&CancellationToken>,
+        destination_node_id: &ClusterNodeId,
+        destination_address: &str,
+        request: ClusterDataRequest,
+    ) -> Result<(ClusterDataResponse, Option<String>)> {
+        if let Some(parent) = parent {
+            parent.check()?;
+        }
+        let deadline = parent.map(|parent| {
+            let network = Instant::now() + Duration::from_millis(self.config.io_timeout_ms);
+            parent
+                .deadline()
+                .map_or(network, |original| original.min(network))
+        });
         let request_id = self.next_request_id.fetch_add(1, Ordering::Relaxed);
         let envelope = ClusterDataRequestEnvelope {
             expected_native_destination: None,
@@ -3362,21 +3404,45 @@ impl TcpClusterBootstrapClient {
             request_id,
             request,
         };
-        let mut addrs = destination_address.to_socket_addrs()?;
-        let address_resolved = addrs.next().ok_or_else(|| {
-            transport_error(format!(
-                "cluster address `{destination_address}` resolved empty"
-            ))
-        })?;
+        let address_resolved = if parent.is_some() {
+            // Native pre-root discovery cannot spend its budget in DNS.
+            destination_address.parse::<SocketAddr>().map_err(|_| {
+                transport_error("deadline-bound native bootstrap requires a numeric SocketAddr")
+            })?
+        } else {
+            let mut addrs = destination_address.to_socket_addrs()?;
+            addrs.next().ok_or_else(|| {
+                transport_error(format!(
+                    "cluster address `{destination_address}` resolved empty"
+                ))
+            })?
+        };
+        if parent.is_some() && self.client_tls.is_none() {
+            return Err(transport_error(
+                "deadline-bound native bootstrap requires mutual TLS",
+            ));
+        }
         if self.config.dev_localhost_plaintext && !address_resolved.ip().is_loopback() {
             return Err(transport_error(
                 "plaintext cluster bootstrap RPC may connect only to loopback",
             ));
         }
-        let stream = TcpStream::connect_timeout(
-            &address_resolved,
-            Duration::from_millis(self.config.connect_timeout_ms),
-        )?;
+        if let Some(parent) = parent {
+            parent.check()?;
+        }
+        let connect = Duration::from_millis(self.config.connect_timeout_ms);
+        let connect = match deadline {
+            Some(deadline) => connect.min(
+                deadline
+                    .checked_duration_since(Instant::now())
+                    .filter(|duration| !duration.is_zero())
+                    .ok_or_else(|| {
+                        transport_error("native bootstrap deadline expired before connect")
+                    })?,
+            ),
+            None => connect,
+        };
+        let stream = TcpStream::connect_timeout(&address_resolved, connect)?;
         configure_stream(&stream, &self.config)?;
         let expected_certificate_sha256 = self
             .trusted_destination_fingerprints
@@ -3385,26 +3451,54 @@ impl TcpClusterBootstrapClient {
             .cloned();
         let (response, peer_certificate_sha256) = if let Some(tls) = self.client_tls.as_ref() {
             let server_name = server_name_from_address(destination_address)?;
-            let mut stream = client_tls_stream(Arc::clone(&tls.config), &server_name, stream)?;
-            let peer_certificate_sha256 = complete_client_tls_handshake(&mut stream)?;
-            verify_destination_certificate(
-                destination_node_id,
-                expected_certificate_sha256
-                    .as_ref()
-                    .map(|(active, _)| active.as_str()),
-                expected_certificate_sha256
-                    .as_ref()
-                    .and_then(|(_, pending)| pending.as_deref()),
-                Some(&peer_certificate_sha256),
-            )?;
-            send_json_frame(&mut stream, &envelope, self.config.max_frame_bytes)?;
-            (
-                recv_json_frame::<ClusterDataResponseEnvelope>(
-                    &mut stream,
-                    self.config.max_frame_bytes,
-                )?,
-                Some(peer_certificate_sha256),
-            )
+            let stream = client_tls_stream(Arc::clone(&tls.config), &server_name, stream)?;
+            let (response, peer) = if let (Some(parent), Some(deadline)) = (parent, deadline) {
+                let mut stream = StreamOwned::new(
+                    stream.conn,
+                    DeadlineTcpStream::new(stream.sock, parent.clone(), deadline),
+                );
+                let peer = complete_client_tls_handshake(&mut stream)?;
+                verify_destination_certificate(
+                    destination_node_id,
+                    expected_certificate_sha256
+                        .as_ref()
+                        .map(|(active, _)| active.as_str()),
+                    expected_certificate_sha256
+                        .as_ref()
+                        .and_then(|(_, pending)| pending.as_deref()),
+                    Some(&peer),
+                )?;
+                send_json_frame(&mut stream, &envelope, self.config.max_frame_bytes)?;
+                (
+                    recv_json_frame::<ClusterDataResponseEnvelope>(
+                        &mut stream,
+                        self.config.max_frame_bytes,
+                    )?,
+                    peer,
+                )
+            } else {
+                let mut stream = stream;
+                let peer_certificate_sha256 = complete_client_tls_handshake(&mut stream)?;
+                verify_destination_certificate(
+                    destination_node_id,
+                    expected_certificate_sha256
+                        .as_ref()
+                        .map(|(active, _)| active.as_str()),
+                    expected_certificate_sha256
+                        .as_ref()
+                        .and_then(|(_, pending)| pending.as_deref()),
+                    Some(&peer_certificate_sha256),
+                )?;
+                send_json_frame(&mut stream, &envelope, self.config.max_frame_bytes)?;
+                (
+                    recv_json_frame::<ClusterDataResponseEnvelope>(
+                        &mut stream,
+                        self.config.max_frame_bytes,
+                    )?,
+                    peer_certificate_sha256,
+                )
+            };
+            (response, Some(peer))
         } else {
             let mut stream = stream;
             verify_destination_certificate(
@@ -3426,6 +3520,12 @@ impl TcpClusterBootstrapClient {
                 None,
             )
         };
+        if let Some(parent) = parent {
+            parent.check()?;
+            if deadline.is_some_and(|deadline| Instant::now() >= deadline) {
+                return Err(transport_error("native bootstrap deadline expired"));
+            }
+        }
         if response.protocol_version != CLUSTER_DATA_PROTOCOL_VERSION
             || response.cluster_id != self.cluster_id
             || response.source_node_id != *destination_node_id

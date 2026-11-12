@@ -59,6 +59,7 @@ pub(crate) use image_proposal_state::{
 mod native_completion_observation;
 mod native_read_catalog;
 mod native_ready_catalog;
+#[cfg(feature = "tls-replication")]
 mod strong_point_read;
 pub(crate) use native_completion_observation::LocalNativeCompletionEvidence;
 pub(crate) use native_read_catalog::{NativeRangeReadCatalogue, NativeReadCatalogueDecision};

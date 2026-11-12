@@ -19,6 +19,7 @@ mod native_ready;
 mod native_ready_quorum;
 mod normal_apply;
 mod participants;
+#[cfg(feature = "tls-replication")]
 mod strong_point_read;
 
 const MAX_CONTEXTS: usize = 4;
@@ -74,6 +75,8 @@ pub(crate) struct RangeRecoveryRuntime {
     test_completion_reply_barrier: Mutex<Option<Arc<NativeCompletionReplyBarrier>>>,
     #[cfg(test)]
     test_read_io_barrier: Mutex<Option<Arc<native_read::NativeReadIoBarrier>>>,
+    #[cfg(all(test, feature = "tls-replication"))]
+    test_point_snapshot_barrier: Mutex<Option<Arc<strong_point_read::NativePointSnapshotBarrier>>>,
 }
 struct Operation {
     sessions: Arc<Mutex<Sessions>>,
@@ -449,6 +452,8 @@ impl RangeRecoveryRuntime {
             test_completion_reply_barrier: Mutex::new(None),
             #[cfg(test)]
             test_read_io_barrier: Mutex::new(None),
+            #[cfg(all(test, feature = "tls-replication"))]
+            test_point_snapshot_barrier: Mutex::new(None),
         }
     }
     pub(crate) fn with_participant_transport(

@@ -11,7 +11,30 @@ use crate::distribution_range_consensus::{RangeWriteCoordinator, RangeWriteTrans
 use crate::TcpClusterRelocationTransport;
 use std::sync::mpsc;
 
+#[cfg(test)]
+#[derive(Debug, Default)]
+pub(crate) struct NativePointSnapshotBarrier {
+    entered: std::sync::atomic::AtomicBool,
+    released: std::sync::atomic::AtomicBool,
+}
+#[cfg(test)]
+impl NativePointSnapshotBarrier {
+    pub(crate) fn entered(&self) -> bool {
+        self.entered.load(std::sync::atomic::Ordering::SeqCst)
+    }
+    pub(crate) fn release(&self) {
+        self.released
+            .store(true, std::sync::atomic::Ordering::SeqCst);
+    }
+}
 impl RangeRecoveryRuntime {
+    #[cfg(test)]
+    pub(crate) fn test_hold_point_after_actual_snapshot(&self) -> Arc<NativePointSnapshotBarrier> {
+        let barrier = Arc::new(NativePointSnapshotBarrier::default());
+        *self.test_point_snapshot_barrier.lock() = Some(Arc::clone(&barrier));
+        barrier
+    }
+
     pub(crate) fn require_point_read_service(
         &self,
         service: &Arc<Mutex<ClusterDataNodeService>>,
@@ -137,6 +160,20 @@ impl RangeRecoveryRuntime {
                             )
                             .map_err(|e| check(NativeStrongReadStage::Snapshot, e))?
                     };
+                    #[cfg(test)]
+                    if let Some(barrier) = runtime.test_point_snapshot_barrier.lock().take() {
+                        barrier
+                            .entered
+                            .store(true, std::sync::atomic::Ordering::SeqCst);
+                        // Actual snapshot has been captured; no DB/service latch
+                        // crosses this one-shot, bounded test return barrier.
+                        while !barrier.released.load(std::sync::atomic::Ordering::SeqCst) {
+                            worker_token
+                                .check()
+                                .map_err(|e| check(NativeStrongReadStage::Canceled, e))?;
+                            std::thread::sleep(LATCH_POLL);
+                        }
+                    }
                     // This is genuinely new generic range-leader MQ acquired
                     // AFTER the owned value; no service/DB latch crosses the call.
                     worker_token

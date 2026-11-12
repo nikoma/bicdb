@@ -83,6 +83,22 @@ impl InstallingCommittedAdmission {
         role: &RecoveryRoleAdmission,
     ) -> Result<()> {
         store.require_durable_recovery_catalog()?;
+        self.require_refusal_identity_current(store, db, native, role)
+    }
+    fn require_refusal_identity_current(
+        &self,
+        store: &RangeWriteStore,
+        db: &crate::BicDb,
+        native: &NativeRecoveryAdmission,
+        role: &RecoveryRoleAdmission,
+    ) -> Result<()> {
+        // Complete immutable candidate validation, but no claim of fsync.
+        // Only the owned-freeze resync method may make an uncertain store
+        // observable again; this preflight cannot mint a quorum vote.
+        // Bound the complete serialized candidate before cloning/checksum
+        // buffers, including an uncertainty retry with unrelated ranges.
+        validate_native_json_size(&store.catalog, 64 * 1024 * 1024)?;
+        RangeWriteEnvelope::new(store.catalog.clone())?.verify()?;
         store.require_native_recovery_identity(role, native)?;
         self.current_scope.require_role(role)?;
         native.require_current(db)?;
@@ -141,6 +157,16 @@ impl RangeWriteStore {
     ) -> Result<InstallingCommittedAdmission> {
         // No mutation, reader-fence upgrade or ordinary NoImage bypass occurs.
         self.require_durable_recovery_catalog()?;
+        self.preflight_installing_committed_refusal(db, native, role, pointer)
+    }
+    pub(crate) fn preflight_installing_committed_refusal(
+        &self,
+        db: &crate::BicDb,
+        native: &NativeRecoveryAdmission,
+        role: &RecoveryRoleAdmission,
+        pointer: &NativeCurrentImageProposalPointer,
+    ) -> Result<InstallingCommittedAdmission> {
+        // No mutation, reader-fence upgrade or ordinary NoImage bypass occurs.
         self.require_native_recovery_identity(role, native)?;
         let intent = self
             .catalog
@@ -166,8 +192,33 @@ impl RangeWriteStore {
             proposal,
             current_scope: RecoveryFenceScope::from_role(role)?,
         };
-        result.require_current(self, db, native, role)?;
+        result.require_refusal_identity_current(self, db, native, role)?;
         Ok(result)
+    }
+    pub(crate) fn resync_installing_committed_refusal(
+        &mut self,
+        db: &crate::BicDb,
+        native: &NativeRecoveryAdmission,
+        role: &RecoveryRoleAdmission,
+        admission: &InstallingCommittedAdmission,
+        frozen: &FrozenRangeMutationPermit,
+    ) -> Result<()> {
+        admission.require_refusal_identity_current(self, db, native, role)?;
+        db.range_mutation_gate()
+            .validate_quiescent_frozen(admission.scope().range_id, frozen)?;
+        if frozen.owner() != admission.scope().freeze_owner()? {
+            return Err(range_write_error(
+                "Installing refusal resync changed actual owner",
+            ));
+        }
+        if self.recovery_persistence_uncertain {
+            let controlled = db.range_mutation_gate().try_controlled_mutation(frozen)?;
+            // Exact complete in-memory candidate is re-fsynced unchanged.
+            // No old/new nonce, intent, raw/native index or marker is reset.
+            self.persist_recovery_catalog()?;
+            drop(controlled);
+        }
+        admission.require_current(self, db, native, role)
     }
     pub(crate) fn observe_installing_committed_fence(
         &self,
@@ -518,6 +569,36 @@ impl RangeWriteStore {
         decision: &crate::distribution_range_recovery::InstallingCommittedDecision,
         frozen: &FrozenRangeMutationPermit,
     ) -> Result<crate::distribution_range_recovery::InstallingCommittedCertificationEvidence> {
+        self.certify_existing_installing_decision_with(
+            db,
+            native,
+            role,
+            decision,
+            frozen,
+            crate::storage::write_atomic,
+        )
+    }
+    #[cfg(test)]
+    pub(crate) fn test_certify_existing_installing_decision_with(
+        &mut self,
+        db: &crate::BicDb,
+        native: &NativeRecoveryAdmission,
+        role: &RecoveryRoleAdmission,
+        decision: &crate::distribution_range_recovery::InstallingCommittedDecision,
+        frozen: &FrozenRangeMutationPermit,
+        write: impl FnOnce(&Path, &[u8], bool) -> Result<()>,
+    ) -> Result<crate::distribution_range_recovery::InstallingCommittedCertificationEvidence> {
+        self.certify_existing_installing_decision_with(db, native, role, decision, frozen, write)
+    }
+    fn certify_existing_installing_decision_with(
+        &mut self,
+        db: &crate::BicDb,
+        native: &NativeRecoveryAdmission,
+        role: &RecoveryRoleAdmission,
+        decision: &crate::distribution_range_recovery::InstallingCommittedDecision,
+        frozen: &FrozenRangeMutationPermit,
+        write: impl FnOnce(&Path, &[u8], bool) -> Result<()>,
+    ) -> Result<crate::distribution_range_recovery::InstallingCommittedCertificationEvidence> {
         decision.require_recipient_role(role)?;
         let a = decision.authority();
         let scope = a.scope();
@@ -692,7 +773,7 @@ impl RangeWriteStore {
         // Candidate validation occurs before mutation; ambiguity keeps refusal.
         self.recovery_persistence_uncertain = true;
         self.catalog = candidate;
-        self.persist_recovery_catalog()?;
+        self.persist_recovery_catalog_with(write)?;
         decision.require_live()?;
         native.require_current(db)?;
         Ok(

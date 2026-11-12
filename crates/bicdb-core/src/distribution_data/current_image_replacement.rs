@@ -25,7 +25,7 @@ impl ClusterDataNodeService {
             role.local_member_incarnation(),
         )?;
         self.range_writes
-            .admit_installing_committed_decision(&db, &native, role, pointer)
+            .preflight_installing_committed_refusal(&db, &native, role, pointer)
     }
     pub(crate) fn observe_installing_committed(
         &self,
@@ -172,5 +172,62 @@ impl ClusterDataNodeService {
         )?;
         self.range_writes
             .test_replacement_proposal_before_handover(&db, &native, source, role, frozen, attempt)
+    }
+}
+
+impl ClusterDataNodeService {
+    pub(crate) fn resync_installing_committed_refusal(
+        &mut self,
+        role: &RecoveryRoleAdmission,
+        admission: &InstallingCommittedAdmission,
+        frozen: &FrozenRangeMutationPermit,
+        parent: &CancellationToken,
+    ) -> Result<()> {
+        parent.check()?;
+        let db = try_database_read(&self.db)?;
+        let native = db.native_recovery_admission(
+            role.cluster_id(),
+            role.bootstrap_id(),
+            role.local_node_id(),
+            role.local_member_incarnation(),
+        )?;
+        self.range_writes
+            .resync_installing_committed_refusal(&db, &native, role, admission, frozen)?;
+        parent.check()
+    }
+}
+
+#[cfg(test)]
+impl ClusterDataNodeService {
+    pub(crate) fn test_certify_installing_existing_committed_with(
+        &mut self,
+        decision: &InstallingCommittedDecision,
+        frozen: &FrozenRangeMutationPermit,
+        parent: &CancellationToken,
+        write: impl FnOnce(&std::path::Path, &[u8], bool) -> Result<()>,
+    ) -> Result<InstallingCommittedCertificationEvidence> {
+        parent.check()?;
+        decision.require_live()?;
+        let role = decision.authority().role();
+        let controlled = self.range_mutations.try_controlled_mutation(frozen)?;
+        let db = try_database_read(&self.db)?;
+        let native = db.native_recovery_admission(
+            role.cluster_id(),
+            role.bootstrap_id(),
+            role.local_node_id(),
+            role.local_member_incarnation(),
+        )?;
+        self.range_mutations
+            .validate_controlled(role.current_range().id, &controlled)?;
+        let out = self
+            .range_writes
+            .test_certify_existing_installing_decision_with(
+                &db, &native, role, decision, frozen, write,
+            )?;
+        parent.check()?;
+        decision.require_live()?;
+        drop(db);
+        drop(controlled);
+        Ok(out)
     }
 }

@@ -357,12 +357,9 @@ impl FreshInstallingCommittedAuthority {
     pub(crate) fn require_live(&self) -> Result<()> {
         self.cancellation.check()?;
         self.role.require_live_request()?;
-        for v in self.votes.values() {
-            match v {
-                InstallingCommittedVote::Ordinary(o) => o.require_live()?,
-                InstallingCommittedVote::Installing(o) => o.require_live()?,
-            }
-        }
+        // Votes were live/authenticated when consumed. Their fsynced
+        // refusal is retained to THIS original role/parent deadline; a shorter
+        // probe token cannot shorten or renew the enclosing round budget.
         Ok(())
     }
     pub(crate) fn role(&self) -> &RecoveryRoleAdmission {
@@ -415,6 +412,7 @@ pub(crate) struct InstallingDecisionVoteAudit {
 }
 #[derive(Debug)]
 pub(crate) struct InstallingCommittedDecisionRound {
+    invalid: bool,
     authority: Arc<FreshInstallingCommittedAuthority>,
     command: RangeWriteCommand,
     votes: BTreeMap<ClusterNodeId, InstallingDecisionVoteAudit>,
@@ -461,12 +459,24 @@ impl InstallingCommittedDecisionRound {
             },
         );
         Ok(Self {
+            invalid: false,
             authority,
             command,
             votes,
         })
     }
     pub(crate) fn record_history(&mut self, o: RecoveryHistoryObservation) -> Result<()> {
+        if self.invalid {
+            return Err(invalid("Installing historical round was invalidated"));
+        }
+        self.invalid = true;
+        let out = self.record_history_inner(o);
+        if out.is_ok() {
+            self.invalid = false;
+        }
+        out
+    }
+    fn record_history_inner(&mut self, o: RecoveryHistoryObservation) -> Result<()> {
         self.authority.require_live()?;
         let f = o.fence();
         f.require_live()?;
@@ -517,6 +527,9 @@ impl InstallingCommittedDecisionRound {
         Ok(())
     }
     pub(crate) fn finish(self) -> Result<InstallingCommittedDecision> {
+        if self.invalid {
+            return Err(invalid("Installing historical round was invalidated"));
+        }
         self.authority.require_live()?;
         if self.votes.len() < self.authority.role().member_credentials().len() / 2 + 1
             || !self.votes.values().any(|v| {
@@ -693,6 +706,7 @@ impl InstallingCommittedCertificationObservation {
 }
 #[derive(Debug)]
 pub(crate) struct InstallingCurrentCertificationRound {
+    invalid: bool,
     decision: Arc<InstallingCommittedDecision>,
     votes: BTreeMap<ClusterNodeId, InstallingCommittedCertificationObservation>,
 }
@@ -700,11 +714,23 @@ impl InstallingCurrentCertificationRound {
     pub(crate) fn begin(decision: Arc<InstallingCommittedDecision>) -> Result<Self> {
         decision.require_live()?;
         Ok(Self {
+            invalid: false,
             decision,
             votes: BTreeMap::new(),
         })
     }
     pub(crate) fn record(&mut self, o: InstallingCommittedCertificationObservation) -> Result<()> {
+        if self.invalid {
+            return Err(invalid("Installing certification round was invalidated"));
+        }
+        self.invalid = true;
+        let out = self.record_inner(o);
+        if out.is_ok() {
+            self.invalid = false;
+        }
+        out
+    }
+    fn record_inner(&mut self, o: InstallingCommittedCertificationObservation) -> Result<()> {
         o.require_for(&self.decision)?;
         if self.votes.contains_key(&o.evidence.node_id) {
             return Err(invalid("duplicate Installing current certifier"));
@@ -713,6 +739,9 @@ impl InstallingCurrentCertificationRound {
         Ok(())
     }
     pub(crate) fn finish(self) -> Result<InstallingCommittedApplyAdmission> {
+        if self.invalid {
+            return Err(invalid("Installing certification round was invalidated"));
+        }
         self.decision.require_live()?;
         let a = self.decision.authority();
         if self.votes.len() < a.role().member_credentials().len() / 2 + 1
@@ -746,9 +775,6 @@ impl InstallingCommittedApplyAdmission {
     }
     pub(crate) fn require_live(&self) -> Result<()> {
         self.decision.require_live()?;
-        for o in self.certifications.values() {
-            o.require_for(&self.decision)?;
-        }
         Ok(())
     }
     pub(crate) fn require_recipient_role(&self, role: &RecoveryRoleAdmission) -> Result<()> {

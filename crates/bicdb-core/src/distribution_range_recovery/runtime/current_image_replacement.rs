@@ -119,6 +119,20 @@ impl RangeRecoveryRuntime {
         };
         self.gate
             .validate_quiescent_frozen(scope.range_id, &frozen)?;
+        {
+            let mut service = loop {
+                token.check()?;
+                if let Some(s) = self.service.try_lock_for(LATCH_POLL) {
+                    break s;
+                }
+            };
+            let sessions = self.sessions.lock();
+            let s = sessions
+                .replacing
+                .get(&scope.range_id)
+                .ok_or_else(|| invalid("Installing resync lost refusal session"))?;
+            service.resync_installing_committed_refusal(&role, &s.admission, &frozen, &token)?;
+        }
         let evidence = {
             let service = loop {
                 token.check()?;
@@ -384,5 +398,76 @@ impl RangeRecoveryRuntime {
         } else {
             service.handover_current_image_replacement(source, role, &frozen, attempt, &token)
         }
+    }
+}
+
+#[cfg(test)]
+impl RangeRecoveryRuntime {
+    pub(crate) fn test_certify_installing_existing_committed_with(
+        &self,
+        decision: &InstallingCommittedDecision,
+        parent: &CancellationToken,
+        write: impl FnOnce(&std::path::Path, &[u8], bool) -> Result<()>,
+    ) -> Result<InstallingCommittedCertificationObservation> {
+        decision.require_live()?;
+        let a = decision.authority();
+        let role = a.role();
+        if role.local_node_id() != &self.local_node_id {
+            return Err(invalid("existing-decision recipient changed"));
+        }
+        let token = parent.child_with_deadline(a.deadline());
+        token.check()?;
+        let _operation = self.reserve(a.scope().range_id)?;
+        let frozen = {
+            let sessions = self.sessions.lock();
+            if role.local_node_id() == a.target() {
+                let s = sessions
+                    .replacing
+                    .get(&a.scope().range_id)
+                    .ok_or_else(|| invalid("no actual Installing replacement session"))?;
+                if !s.scope.same_session(a.scope()) || &s.pointer != a.pointer() {
+                    return Err(invalid(
+                        "Installing certification is another session/proposal",
+                    ));
+                }
+                Arc::clone(
+                    s.frozen
+                        .as_ref()
+                        .ok_or_else(|| invalid("Installing freeze leased"))?,
+                )
+            } else {
+                let s = sessions
+                    .current
+                    .get(&a.scope().range_id)
+                    .ok_or_else(|| invalid("no actual ordinary recovery session"))?;
+                if !s.scope.same_session(a.scope()) {
+                    return Err(invalid(
+                        "ordinary certifier is another current recovery session",
+                    ));
+                }
+                Arc::clone(
+                    s.frozen
+                        .as_ref()
+                        .ok_or_else(|| invalid("ordinary freeze leased"))?,
+                )
+            }
+        };
+        let evidence = {
+            let mut service = loop {
+                token.check()?;
+                if let Some(s) = self.service.try_lock_for(LATCH_POLL) {
+                    break s;
+                }
+            };
+            service
+                .test_certify_installing_existing_committed_with(decision, &frozen, &token, write)?
+        };
+        token.check()?;
+        InstallingCommittedCertificationObservation::from_local(
+            evidence,
+            self.provider.local_participant(),
+            decision,
+            &token,
+        )
     }
 }

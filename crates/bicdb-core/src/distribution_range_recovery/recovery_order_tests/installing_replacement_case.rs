@@ -148,6 +148,7 @@ fn selected_decision(
     };
     let mut q =
         InstallingCommittedQuorumRound::begin(role, node("n1"), pointer.clone(), parent).unwrap();
+    let probe_parent = parent.child();
     q.record_ordinary(
         r[&node("n2")]
             .fence_epoch(
@@ -156,7 +157,7 @@ fn selected_decision(
                     scope: scope.clone(),
                     budget_ms: 5000,
                 },
-                parent,
+                &probe_parent,
             )
             .unwrap(),
     )
@@ -171,12 +172,40 @@ fn selected_decision(
                     challenge: Uuid::now_v7(),
                     budget_ms: 5000,
                 },
-                parent,
+                &probe_parent,
             )
             .unwrap(),
     )
     .unwrap();
+    probe_parent.cancel(); // consumed fsynced refusals retain ORIGINAL round budget
     let authority = Arc::new(q.finish().unwrap());
+    let mut poisoned =
+        InstallingCommittedDecisionRound::begin(Arc::clone(&authority), command.clone()).unwrap();
+    let wrong = r[&node("n2")]
+        .observe_history(
+            actor,
+            &RecoveryFencedProbeRequest {
+                scope: scope.clone(),
+                index: Some(1),
+                budget_ms: 5000,
+            },
+            parent,
+        )
+        .unwrap();
+    assert!(poisoned.record_history(wrong).is_err());
+    let valid = r[&node("n2")]
+        .observe_history(
+            actor,
+            &RecoveryFencedProbeRequest {
+                scope: scope.clone(),
+                index: Some(command.index),
+                budget_ms: 5000,
+            },
+            parent,
+        )
+        .unwrap();
+    assert!(poisoned.record_history(valid).is_err());
+    assert!(poisoned.finish().is_err());
     let mut d = InstallingCommittedDecisionRound::begin(authority, command.clone()).unwrap();
     d.record_history(
         r[&node("n2")]
@@ -303,8 +332,54 @@ fn run_replacement(handover_cut: Option<bool>) {
     let d_target = selected_decision(
         &target, &p, &r, &actor, &range, &scope, &pointer, &command, &parent,
     );
+    let uncertain = r[&target]
+        .test_certify_installing_existing_committed_with(
+            &d_target,
+            &parent,
+            |path, bytes, fsync| {
+                assert!(fsync);
+                crate::storage::write_atomic(path, bytes, fsync)?;
+                Err(invalid(
+                    "injected after ACTUAL durable Installing certification publish",
+                ))
+            },
+        )
+        .unwrap_err();
+    assert!(uncertain
+        .to_string()
+        .contains("ACTUAL durable Installing certification"));
+    let uncertain_bytes =
+        std::fs::read(f.root.path().join("n1/cluster-range-write-log.json")).unwrap();
+    assert!(r[&target]
+        .prepare_native_ready(
+            &actor,
+            &NativeReadyRequest {
+                scope: scope.clone(),
+                challenge: Uuid::now_v7(),
+                budget_ms: 5000
+            },
+            &parent
+        )
+        .is_err());
+    r[&target]
+        .acquire_installing_committed_fence(
+            &actor,
+            &InstallingCommittedRequest {
+                scope: scope.clone(),
+                proposal: pointer.clone(),
+                challenge: Uuid::now_v7(),
+                budget_ms: 5000,
+            },
+            &parent,
+        )
+        .unwrap();
+    assert_eq!(
+        std::fs::read(f.root.path().join("n1/cluster-range-write-log.json")).unwrap(),
+        uncertain_bytes
+    );
+    let cert_parent = parent.child();
     let cert_target = r[&target]
-        .certify_installing_existing_committed(&d_target, &parent)
+        .certify_installing_existing_committed(&d_target, &cert_parent)
         .unwrap();
     let after_cert = catalogue(&f, &target);
     assert_eq!(after_cert["catalog"]["recovery_fences"][&k], old_fence);
@@ -329,11 +404,13 @@ fn run_replacement(handover_cut: Option<bool>) {
         &source, &p, &r, &actor, &range, &scope, &pointer, &command, &parent,
     );
     let cert_source = r[&source]
-        .certify_installing_existing_committed(&d_source, &parent)
+        .certify_installing_existing_committed(&d_source, &cert_parent)
         .unwrap();
     let mut current = InstallingCurrentCertificationRound::begin(d_source).unwrap();
     current.record(cert_target).unwrap();
     current.record(cert_source).unwrap();
+    cert_parent.cancel(); // accepted durable markers retain ORIGINAL round TTL
+
     let applied = r[&source]
         .apply_installing_existing_committed(current.finish().unwrap(), &parent)
         .unwrap();

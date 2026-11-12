@@ -67,6 +67,12 @@ impl From<crate::distribution_range_recovery::RecoveryImageInstallFreeze>
     }
 }
 impl NativeImageInstallFreeze {
+    pub(crate) fn try_as_frozen(&self) -> Result<&FrozenRangeMutationPermit> {
+        match self {
+            Self::Standalone(f) => Ok(f),
+            Self::Recovery(lease) => lease.try_as_frozen(),
+        }
+    }
     pub(crate) fn as_frozen(&self) -> &FrozenRangeMutationPermit {
         match self {
             Self::Standalone(frozen) => frozen,

@@ -26,6 +26,33 @@ impl NativeJointBridgeCatalogue {
     pub(crate) fn store_open_id(&self) -> Uuid {
         self.store_open_id
     }
+    pub(crate) fn require_after_exact_activation(
+        &self,
+        store: &RangeWriteStore,
+        scope: &crate::db::NativeJointBridgeReadScope<'_>,
+        committed: &CommittedNativeJointDecisionObservation,
+        fact: &NativeJointCatalogueActivationFact,
+        frozen: &FrozenRangeMutationPermit,
+    ) -> Result<()> {
+        committed.require_current_with_native_read_scope(scope)?;
+        fact.require_current_with_scope(scope, store)?;
+        store.require_joint_open_phase_not_released(fact)?;
+        if self.store_open_id != store.open_id
+            || self.decision_sha256 != committed.data().checksum_sha256()
+            || self.local_decision_sha256 != committed.native_receipt().checksum_sha256()
+            || fact.native().data() != committed.data()
+        {
+            return Err(range_write_error(
+                "joint open phase changed exact catalogue/decision/open",
+            ));
+        }
+        scope
+            .database()
+            .range_mutation_gate()
+            .validate_quiescent_frozen(committed.data().old_range().id, frozen)?;
+        self.obligations
+            .require_after_native_joint_activation(store, scope, fact)
+    }
     pub(crate) fn require_current(
         &self,
         store: &RangeWriteStore,

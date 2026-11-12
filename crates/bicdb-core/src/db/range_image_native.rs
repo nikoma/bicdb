@@ -23,9 +23,9 @@ pub(crate) use writer_enrollment::{InstalledNativeWriterHostGuard, NativeWriterH
 mod serving_configuration;
 pub(crate) use native_read::{NativeRangeReadPhysical, NativeReadLocalDbSequence};
 pub(crate) use serving_configuration::{
-    NativeActivationDecisionReceipt, NativeJointDecisionReceipt, NativeJointOldCloseReceipt,
-    NativeJointOldPhysicalProof, NativeJointServingBridgeReceipt, NativeJointServingPreparation,
-    NativeRecoveredServingReceipt,
+    NativeActivationDecisionReceipt, NativeJointBridgeReadScope, NativeJointDecisionReceipt,
+    NativeJointOldCloseReceipt, NativeJointOldPhysicalProof, NativeJointServingBridgeReceipt,
+    NativeJointServingPreparation, NativeRecoveredServingReceipt,
 };
 use serving_configuration::{NativeJointServingDomain, NativeRecoveredServingConfiguration};
 #[cfg(test)]

@@ -44,6 +44,15 @@ impl NativeJointActivatedOpenGuard {
             .map_err(crate::error::durability_error)?;
         self.generation.require_current()
     }
+    pub(crate) fn require_not_armed(&self, store_open: Uuid, activation_sha: &str) -> Result<()> {
+        self.require_binding(store_open, activation_sha)?;
+        if self.armed.load(Ordering::Acquire) {
+            return Err(BicDbError::Cluster(
+                "joint open phase cannot reuse a released/armed member's old Frozen".into(),
+            ));
+        }
+        Ok(())
+    }
     pub(crate) fn require_current(&self, store_open: Uuid, activation_sha: &str) -> Result<()> {
         self.require_binding(store_open, activation_sha)?;
         if !self.armed.load(Ordering::Acquire) {

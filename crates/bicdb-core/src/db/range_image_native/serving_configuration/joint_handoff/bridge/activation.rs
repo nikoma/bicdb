@@ -316,7 +316,90 @@ pub(crate) struct NativeJointServingBridgeReceipt {
     native: NativeRecoveryAdmission,
     record: NativeJointServingBridgeRecord,
 }
+/// One SAME-service validation borrow, never a request/serving permission.
+/// The actual native journal stays held and the caller supplies its real freeze.
+/// No scope survives a network call or supplies a new deadline.
+pub(crate) struct NativeJointBridgeReadScope<'a> {
+    database: &'a BicDb,
+    native: &'a NativeJointServingBridgeReceipt,
+    journal: crate::db::range_image_native::NativeImageJournalGuard<'a>,
+    lineage: SourceRangeImageLineage,
+}
+impl NativeJointBridgeReadScope<'_> {
+    pub(crate) fn database(&self) -> &BicDb {
+        self.database
+    }
+    pub(crate) fn native(&self) -> &NativeJointServingBridgeReceipt {
+        self.native
+    }
+    pub(crate) fn require_native(&self, native: &NativeJointServingBridgeReceipt) -> Result<()> {
+        self.journal.require_database(self.database)?;
+        if !std::ptr::eq(native, self.native) {
+            return Err(invalid(
+                "joint read scope substituted actual native receipt",
+            ));
+        }
+        Ok(())
+    }
+    pub(crate) fn require_committed_identity(
+        &self,
+        committed: &CommittedNativeJointDecisionObservation,
+    ) -> Result<()> {
+        self.journal.require_database(self.database)?;
+        if committed.data() != self.native.data()
+            || committed.native_receipt().checksum_sha256()
+                != self.native.record.prepared.local_decision_sha256
+            || committed.native_receipt().native_database_incarnation()
+                != self.native.native_database_incarnation()
+        {
+            return Err(invalid(
+                "joint read scope changed actual local protected decision/open",
+            ));
+        }
+        Ok(())
+    }
+    pub(crate) fn require_prepared_frozen(
+        &self,
+        prepared: &NativeJointServingPreparation,
+        frozen: &FrozenRangeMutationPermit,
+    ) -> Result<()> {
+        self.journal.require_database(self.database)?;
+        self.database
+            .range_mutation_gate()
+            .validate_quiescent_frozen(self.native.record.prepared.range_id, frozen)?;
+        if prepared.record != self.native.record.prepared
+            || prepared.native_database_incarnation() != self.native.native_database_incarnation()
+            || self.lineage.range_index() != self.native.record.prepared.range_index
+            || self.lineage.actual_local_visibility_sequence()
+                != self.native.record.prepared.actual_local_visibility_sequence
+            || self.lineage.logical_genesis_sha256()
+                != self.native.record.prepared.logical_genesis_sha256
+            || self.lineage.logical_history_sha256()
+                != self.native.record.prepared.logical_history_sha256
+        {
+            return Err(invalid(
+                "joint frozen read scope changed actual preparation/materialized point",
+            ));
+        }
+        Ok(())
+    }
+}
 impl NativeJointServingBridgeReceipt {
+    pub(crate) fn current_read_scope<'a>(
+        &'a self,
+        database: &'a BicDb,
+    ) -> Result<NativeJointBridgeReadScope<'a>> {
+        let journal = database.try_native_image_journal()?;
+        self.require_current(database)?;
+        let lineage =
+            database.current_native_range_source_lineage(self.record.prepared.range_id)?;
+        Ok(NativeJointBridgeReadScope {
+            database,
+            native: self,
+            journal,
+            lineage,
+        })
+    }
     pub(crate) fn checksum_sha256(&self) -> &str {
         &self.record.checksum_sha256
     }
@@ -328,6 +411,9 @@ impl NativeJointServingBridgeReceipt {
     }
     pub(crate) fn actual_local_visibility_sequence(&self) -> u64 {
         self.record.prepared.actual_local_visibility_sequence
+    }
+    pub(crate) fn preparation_catalogue_sha256(&self) -> &str {
+        &self.record.prepared.catalogue_sha256
     }
     pub(crate) fn native_preparation_sha256(&self) -> &str {
         &self.record.prepared.checksum_sha256

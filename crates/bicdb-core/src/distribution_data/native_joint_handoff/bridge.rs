@@ -27,6 +27,12 @@ impl NativeJointServingLease {
             Self::Image { frozen, .. } => frozen.as_frozen(),
         }
     }
+    pub(crate) fn try_frozen(&self) -> Result<&FrozenRangeMutationPermit> {
+        match self {
+            Self::Survivor(f) => Ok(f),
+            Self::Image { frozen, .. } => frozen.try_as_frozen(),
+        }
+    }
     fn image(&self) -> Option<&NativeImageCatalogueFinalization> {
         match self {
             Self::Survivor(_) => None,
@@ -146,6 +152,80 @@ impl ActualServiceNativeJointPreparedEvidence {
         writer.require_database(&database, fresh.data().activation_range())?;
         Ok(writer)
     }
+    pub(crate) fn require_current_under_open_phase(
+        &self,
+        service: &ClusterDataNodeService,
+        fresh: &CommittedNativeJointDecisionObservation,
+        bridge: Arc<crate::db::NativeJointServingBridgeReceipt>,
+    ) -> Result<Arc<crate::db::NativeWriterHostState>> {
+        let database = checked_database_read(&service.db, &service.storage_policy)?;
+        service.require_native_catalog_database(&database)?;
+        service.require_native_writer_host_for_range(&database, fresh.data().activation_range())?;
+        let scope = bridge.current_read_scope(&database)?;
+        self.committed
+            .require_historical_audit_with_native_read_scope(&scope)?;
+        fresh.require_current_with_native_read_scope(&scope)?;
+        let old = self.committed.metadata_anchor();
+        let current = fresh.metadata_anchor();
+        let preparation = self.prepared.metadata_anchor();
+        if fresh.data() != self.committed.data()
+            || bridge.data() != fresh.data()
+            || bridge.native_preparation_sha256() != self.prepared.checksum_sha256()
+            || bridge.native_database_incarnation() != self.prepared.native_database_incarnation()
+            || fresh.native_receipt().checksum_sha256()
+                != self.committed.native_receipt().checksum_sha256()
+            || self.prepared.local_node_id() != &service.node_id
+            || current.0 < old.0
+            || current.1 < old.1
+            || current.2 == old.2
+            || current.0 < preparation.0
+            || current.1 < preparation.1
+            || current.2 == preparation.2
+        {
+            return Err(data_error("fresh joint open phase changed original protected preparation/bridge/open/metadata"));
+        }
+        let activation = service
+            .range_writes
+            .observe_native_joint_activation_fact_with_scope(&scope, bridge.clone())?;
+        if let Some(fact) = &activation {
+            // Necessary rejection BEFORE touching a potentially consumed image lease.
+            service
+                .range_writes
+                .require_joint_open_phase_not_released(fact)?;
+            self.catalogue.require_after_exact_activation(
+                &service.range_writes,
+                &scope,
+                fresh,
+                fact,
+                self.lease.try_frozen()?,
+            )?;
+        } else {
+            self.catalogue.require_current(
+                &service.range_writes,
+                &database,
+                fresh,
+                self.lease.image(),
+                self.lease.try_frozen()?,
+            )?;
+        }
+        scope.require_prepared_frozen(&self.prepared, self.lease.try_frozen()?)?;
+        let pin = self
+            .pin
+            .try_lock()
+            .ok_or_else(|| data_error("joint open phase pin busy"))?;
+        if let Some(pin) = pin.as_ref() {
+            database
+                .range_mutation_gate()
+                .validate_source_capture_read_pin(fresh.data().old_range().id, pin)?;
+        } else {
+            database
+                .range_mutation_gate()
+                .validate_quiescent_frozen(fresh.data().old_range().id, self.lease.try_frozen()?)?;
+        }
+        let writer = service.range_writes.native_writer_host_state()?;
+        writer.require_database(&database, fresh.data().activation_range())?;
+        Ok(writer)
+    }
     pub(crate) fn require_phase_writer_lifetime(
         &self,
         writer: &crate::db::NativeWriterHostState,
@@ -190,6 +270,26 @@ impl ActualServiceNativeJointPreparedEvidence {
     }
 }
 impl ClusterDataNodeService {
+    pub(crate) fn reconcile_native_joint_open_phase(
+        &mut self,
+        host: &crate::distribution_consensus::HostMetadataReadObservation,
+        business: Uuid,
+        native: &crate::db::NativeJointServingBridgeReceipt,
+        actual: &ActualServiceNativeJointPreparedEvidence,
+        parent: &CancellationToken,
+    ) -> Result<()> {
+        parent.check()?;
+        host.require_live_request(business)?;
+        let database = checked_database_read(&self.db, &self.storage_policy)?;
+        self.range_writes.refsync_joint_activation_from_actual_host(
+            &database,
+            host,
+            business,
+            native,
+            actual.lease.try_frozen()?,
+            parent,
+        )
+    }
     pub(crate) fn persist_local_native_joint_activation(
         &mut self,
         admission: &crate::distribution_range_handoff::NativeJointOpenAdmission,
@@ -198,6 +298,7 @@ impl ClusterDataNodeService {
     ) -> Result<crate::distribution_range_consensus::NativeJointCatalogueActivationReceipt> {
         parent.check()?;
         admission.require_external_publications_current()?;
+        admission.require_local_open_preparation(self)?;
         let database = checked_database_read(&self.db, &self.storage_policy)?;
         self.storage_policy.require_database(&database)?;
         self.range_writes
@@ -209,21 +310,32 @@ impl ClusterDataNodeService {
                 "joint catalogue activation targets another actual service",
             ));
         }
+        if let Some(recovered) = self
+            .range_writes
+            .recover_native_joint_catalogue_activation(&database, admission)?
+        {
+            self.range_writes.install_native_joint_activated_open(
+                &database,
+                &recovered,
+                actual.lease.try_frozen()?,
+            )?;
+            return Ok(recovered);
+        }
         let receipt = self
             .range_writes
             .persist_native_joint_catalogue_activation(
                 &database,
                 admission,
-                &actual.committed,
+                admission.committed(),
                 &actual.catalogue,
                 actual.lease.image(),
-                actual.lease.frozen(),
+                actual.lease.try_frozen()?,
                 parent,
             )?;
         self.range_writes.install_native_joint_activated_open(
             &database,
             &receipt,
-            actual.lease.frozen(),
+            actual.lease.try_frozen()?,
         )?;
         Ok(receipt)
     }

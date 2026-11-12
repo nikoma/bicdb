@@ -76,6 +76,62 @@ pub(crate) struct NativeJointCatalogueActivationReceipt {
     native: Arc<crate::db::NativeJointServingBridgeReceipt>,
     cancellation: CancellationToken,
 }
+/// Actual protected catalogue/native fact, with NO request permission or TTL.
+/// Minted only by reading this store against an actual protected native bridge.
+pub(crate) struct NativeJointCatalogueActivationFact {
+    store_open_id: Uuid,
+    activated: NativeJointCatalogueActivation,
+    native: Arc<crate::db::NativeJointServingBridgeReceipt>,
+}
+impl NativeJointCatalogueActivationFact {
+    pub(crate) fn native(&self) -> &crate::db::NativeJointServingBridgeReceipt {
+        &self.native
+    }
+    pub(crate) fn store_open_id(&self) -> Uuid {
+        self.store_open_id
+    }
+    pub(crate) fn activation_sha256(&self) -> Result<String> {
+        self.activated.checksum()
+    }
+    pub(crate) fn require_current(
+        &self,
+        database: &crate::BicDb,
+        store: &RangeWriteStore,
+    ) -> Result<()> {
+        let scope = self.native.current_read_scope(database)?;
+        self.require_current_with_scope(&scope, store)
+    }
+    pub(crate) fn require_current_with_scope(
+        &self,
+        scope: &crate::db::NativeJointBridgeReadScope<'_>,
+        store: &RangeWriteStore,
+    ) -> Result<()> {
+        scope.require_native(&self.native)?;
+        let database = scope.database();
+        store.require_native_catalog_durability(database.data_path())?;
+        store.require_native_writer_host_base()?;
+        if self.store_open_id != store.open_id
+            || self.native.local_node_id() != &store.catalog.node_id
+            || self.activated != NativeJointCatalogueActivation::from_actual(&self.native)?
+            || store
+                .catalog
+                .image_install_intents
+                .contains_key(&self.activated.range.id)
+            || store
+                .catalog
+                .native_joint_handoffs
+                .as_ref()
+                .and_then(|m| m.get(&self.activated.range.id))
+                .and_then(|s| s.serving_activation.as_ref())
+                != Some(&self.activated)
+        {
+            return Err(range_write_error(
+                "protected joint activation actual store/open/native binding changed",
+            ));
+        }
+        Ok(())
+    }
+}
 impl NativeJointCatalogueActivationReceipt {
     pub(crate) fn range(&self) -> &RangeDescriptor {
         &self.activated.range
@@ -130,6 +186,142 @@ impl NativeJointCatalogueActivationReceipt {
     }
 }
 impl RangeWriteStore {
+    /// Reconcile ONLY an already installed exact activation after fsync
+    /// ambiguity. This cannot create a new activation or discard obligations.
+    pub(crate) fn refsync_joint_activation_from_actual_host(
+        &mut self,
+        database: &crate::BicDb,
+        host: &crate::distribution_consensus::HostMetadataReadObservation,
+        business: Uuid,
+        native: &crate::db::NativeJointServingBridgeReceipt,
+        frozen: &FrozenRangeMutationPermit,
+        parent: &CancellationToken,
+    ) -> Result<()> {
+        if !self.recovery_persistence_uncertain {
+            return Ok(());
+        }
+        parent.check()?;
+        host.require_live_request(business)?;
+        let data = native.data();
+        data.require_metadata_domain(
+            host.committed_topology(business)?,
+            host.restore_activation(business)?,
+        )?;
+        let (term, index, _) = native.metadata_anchor();
+        if host.requester_node_id() != &self.catalog.node_id
+            || data
+                .new_members()
+                .get(&self.catalog.node_id)
+                .is_none_or(|m| m.incarnation != host.requester_incarnation())
+            || host.term() < term
+            || host.read_index() < index
+            || !self.fsync
+            || self.root.canonicalize()? != database.data_path().canonicalize()?
+            || !crate::format::native_joint_data_handoff_active(database.data_path())?
+        {
+            return Err(range_write_error(
+                "joint activation refsync has no actual same-open local HostMQ/domain",
+            ));
+        }
+        native.require_current(database)?;
+        self.require_native_writer_host_base()?;
+        self.native_writer_host_state()?
+            .require_database(database, data.activation_range())?;
+        let range = data.old_range().id;
+        let expected = NativeJointCatalogueActivation::from_actual(native)?;
+        let state = self
+            .catalog
+            .native_joint_handoffs
+            .as_ref()
+            .and_then(|m| m.get(&range))
+            .ok_or_else(|| range_write_error("uncertain joint open lost protected decision"))?;
+        if state.serving_activation.as_ref() != Some(&expected)
+            || state.global_decision_sha256.as_deref() != Some(data.checksum_sha256())
+            || self.catalog.image_install_intents.contains_key(&range)
+        {
+            return Err(range_write_error(
+                "joint activation ambiguity is not the exact existing protected activation",
+            ));
+        }
+        let gate = database.range_mutation_gate();
+        gate.validate_quiescent_frozen(range, frozen)?;
+        let controlled = gate.try_controlled_mutation(frozen)?;
+        self.persist()?;
+        self.recovery_persistence_uncertain = false;
+        drop(controlled);
+        host.require_live_request(business)?;
+        parent.check()
+    }
+    pub(crate) fn observe_native_joint_activation_fact(
+        &self,
+        database: &crate::BicDb,
+        native: Arc<crate::db::NativeJointServingBridgeReceipt>,
+    ) -> Result<Option<NativeJointCatalogueActivationFact>> {
+        let scope = native.current_read_scope(database)?;
+        self.observe_native_joint_activation_fact_with_scope(&scope, native.clone())
+    }
+    pub(crate) fn observe_native_joint_activation_fact_with_scope(
+        &self,
+        scope: &crate::db::NativeJointBridgeReadScope<'_>,
+        native: Arc<crate::db::NativeJointServingBridgeReceipt>,
+    ) -> Result<Option<NativeJointCatalogueActivationFact>> {
+        scope.require_native(&native)?;
+        let database = scope.database();
+        self.require_native_catalog_durability(database.data_path())?;
+        let range = native.data().old_range().id;
+        let Some(activated) = self
+            .catalog
+            .native_joint_handoffs
+            .as_ref()
+            .and_then(|m| m.get(&range))
+            .and_then(|s| s.serving_activation.as_ref())
+            .cloned()
+        else {
+            return Ok(None);
+        };
+        let fact = NativeJointCatalogueActivationFact {
+            store_open_id: self.open_id,
+            activated,
+            native,
+        };
+        fact.require_current_with_scope(scope, self)?;
+        Ok(Some(fact))
+    }
+    pub(crate) fn require_joint_open_phase_not_released(
+        &self,
+        fact: &NativeJointCatalogueActivationFact,
+    ) -> Result<()> {
+        if let Some(guard) = self
+            .native_joint_activated_opens
+            .get(&fact.activated.range.id)
+        {
+            guard.require_not_armed(self.open_id, &fact.activation_sha256()?)?;
+        }
+        Ok(())
+    }
+    pub(crate) fn recover_native_joint_catalogue_activation(
+        &self,
+        database: &crate::BicDb,
+        admission: &NativeJointOpenAdmission,
+    ) -> Result<Option<NativeJointCatalogueActivationReceipt>> {
+        admission.require_live()?;
+        admission.committed().require_current(database)?;
+        let Some(fact) =
+            self.observe_native_joint_activation_fact(database, admission.native_receipt())?
+        else {
+            return Ok(None);
+        };
+        self.require_joint_open_phase_not_released(&fact)?;
+        let receipt = NativeJointCatalogueActivationReceipt {
+            store_open_id: fact.store_open_id,
+            activated: fact.activated,
+            native: fact.native,
+            cancellation: admission.cancellation().clone(),
+        };
+        receipt.require_current(database, self)?;
+        admission.require_live()?;
+        Ok(Some(receipt))
+    }
     /// Retry only the exact protected native/catalogue activation. This is
     /// real whole-catalogue fsync, never rollback or a caller durability flag.
     pub(crate) fn refsync_native_joint_catalogue_activation(
@@ -423,6 +615,12 @@ impl RangeWriteStore {
         frozen: &FrozenRangeMutationPermit,
     ) -> Result<()> {
         receipt.require_current(database, self)?;
+        database
+            .range_mutation_gate()
+            .validate_quiescent_frozen(receipt.range().id, frozen)?;
+        if let Some(guard) = self.native_joint_activated_opens.get(&receipt.range().id) {
+            return guard.require_not_armed(self.open_id, &receipt.activation_sha256()?);
+        }
         let guard = database.native_joint_activated_open_guard(self, receipt, frozen)?;
         self.native_joint_activated_opens
             .insert(receipt.range().id, guard);

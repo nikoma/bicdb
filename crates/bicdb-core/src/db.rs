@@ -100,8 +100,9 @@ pub(crate) use range_image_native::{
     StagedNativeHistoryProof,
 };
 pub(crate) use range_image_native::{
-    NativeActivationDecisionReceipt, NativeJointDecisionReceipt, NativeJointOldCloseReceipt,
-    NativeJointOldPhysicalProof, NativeJointServingBridgeReceipt, NativeJointServingPreparation,
+    NativeActivationDecisionReceipt, NativeJointBridgeReadScope, NativeJointDecisionReceipt,
+    NativeJointOldCloseReceipt, NativeJointOldPhysicalProof, NativeJointServingBridgeReceipt,
+    NativeJointServingPreparation,
 };
 pub(crate) use range_image_native::{NativeRangeReadPhysical, NativeReadLocalDbSequence};
 mod range_image_bindings;

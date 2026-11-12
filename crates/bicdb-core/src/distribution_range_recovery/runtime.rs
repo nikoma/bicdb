@@ -184,6 +184,11 @@ impl RecoveryImageInstallFreeze {
         drop(released);
         Ok(())
     }
+    pub(crate) fn try_as_frozen(&self) -> Result<&FrozenRangeMutationPermit> {
+        self.frozen.as_ref().ok_or_else(|| {
+            invalid("actual image freeze was already consumed; new phase cannot revive it")
+        })
+    }
     pub(crate) fn as_frozen(&self) -> &FrozenRangeMutationPermit {
         self.frozen
             .as_ref()

@@ -6,8 +6,8 @@ use crate::distribution_range_handoff::CommittedNativeJointDecisionObservation;
 use crate::distribution_range_image_install::NativeImageCatalogueFinalization;
 
 mod activation;
-pub(crate) use activation::NativeJointServingBridgeReceipt;
 pub(in crate::db::range_image_native) use activation::NativeJointServingDomain;
+pub(crate) use activation::{NativeJointBridgeReadScope, NativeJointServingBridgeReceipt};
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]

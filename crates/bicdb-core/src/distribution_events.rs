@@ -338,7 +338,7 @@ mod client {
             let mut last = invalid("typed event Get unavailable");
             // A finite bound plus the SAME absolute request deadline. Typed
             // route/unavailable results never become a successful empty row.
-            for attempt in 0..32 {
+            for attempt in 0..128 {
                 parent.check()?;
                 if attempt > 0 {
                     let until = (std::time::Instant::now() + retry_after).min(deadline);
@@ -417,8 +417,10 @@ mod client {
                                 if route.is_some() {
                                     hint = route;
                                 }
-                                retry_after =
-                                    std::time::Duration::from_millis(retry_after_ms.clamp(5, 250));
+                                let backoff = 25u64.saturating_mul(1u64 << attempt.min(4));
+                                retry_after = std::time::Duration::from_millis(
+                                    retry_after_ms.max(backoff).clamp(5, 250),
+                                );
                                 last = invalid(&format!(
                                     "typed event Get unavailable ({code:?}): {detail}"
                                 ));

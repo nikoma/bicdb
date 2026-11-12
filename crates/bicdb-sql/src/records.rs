@@ -346,6 +346,7 @@ pub(crate) fn validate_records_for_write(
     for record in records {
         validate_record_columns(table, schema, record)?;
         validate_prepared_checks(table, schema, record, &checks, check_engine)?;
+        partition::validate_record(db, schema, record)?;
         validate_foreign_keys(db, tx, table, schema, record)?;
     }
     validate_unique_constraints(db, tx, table, schema, records, allow_existing_same_id)?;
@@ -367,6 +368,7 @@ pub(crate) fn validate_records_for_write_prechecked(
         return Ok(());
     }
     for record in records {
+        partition::validate_record(db, schema, record)?;
         validate_foreign_keys(db, tx, table, schema, record)?;
     }
     validate_unique_constraints(db, tx, table, schema, records, allow_existing_same_id)?;
@@ -397,6 +399,7 @@ pub(crate) fn validate_updated_records(
         .collect::<BTreeMap<_, _>>();
     for record in after_records {
         validate_record_local_constraints(table, schema, record, check_engine)?;
+        partition::validate_record(db, schema, record)?;
         let before = before_by_id.get(record.id.as_str()).copied();
         for constraint in &schema.constraints {
             if let (Some(before), ConstraintSchema::ForeignKey { columns, .. }) =

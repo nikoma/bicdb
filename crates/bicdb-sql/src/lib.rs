@@ -224,6 +224,7 @@ mod const_fold;
 mod mvt;
 mod order_by_ordinal;
 mod partial_index;
+mod partition;
 pub(crate) use const_fold::fold_statement_constants;
 mod pg_scalar_extra;
 mod records;

@@ -971,6 +971,8 @@ impl<'db> SqlSession<'db> {
         schema: &Arc<TableSchema>,
     ) -> Result<bool> {
         if oracle::lob_storage::has_columns(schema)
+            || schema.partitioning.is_some()
+            || schema.partition_of.is_some()
             || !stored_update::enabled()
             || self.tx.is_none()
             || insert.on.is_some()

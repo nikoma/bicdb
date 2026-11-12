@@ -6531,6 +6531,9 @@ impl<'db> SqlSession<'db> {
         target_alias: &str,
         schema: &TableSchema,
     ) -> Result<Option<SqlResult>> {
+        if schema.partitioning.is_some() || schema.partition_of.is_some() {
+            return Ok(None);
+        }
         if oracle::lob_storage::has_columns(schema)
             || !stored_update::enabled()
             || !ir_update_plan::enabled()
@@ -6639,6 +6642,9 @@ impl<'db> SqlSession<'db> {
         from_rows: Option<&RowSet>,
         target_columns: &Arc<Vec<String>>,
     ) -> Result<Option<SqlResult>> {
+        if schema.partitioning.is_some() || schema.partition_of.is_some() {
+            return Ok(None);
+        }
         if oracle::lob_storage::has_columns(schema)
             || !stored_update::enabled()
             || self.tx.is_none()

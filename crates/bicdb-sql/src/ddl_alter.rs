@@ -2921,6 +2921,8 @@ pub(crate) enum RawAlterTablePartition {
         bound: String,
     },
     Detach {
+        parent_table: String,
+        parent_schema: String,
         partition_table: String,
     },
 }
@@ -3174,12 +3176,13 @@ pub(crate) fn raw_create_partition_table(sql: &str) -> Result<Option<RawCreatePa
     };
     let (parent, after_parent) = parse_leading_qualified_sql_identifier(rest)?;
     let bound = after_parent.trim();
-    if !bound
-        .get(.."FOR VALUES".len())
-        .is_some_and(|head| head.eq_ignore_ascii_case("FOR VALUES"))
+    if !bound.eq_ignore_ascii_case("DEFAULT")
+        && !bound
+            .get(.."FOR VALUES".len())
+            .is_some_and(|head| head.eq_ignore_ascii_case("FOR VALUES"))
     {
         return Err(SqlError::InvalidSql(
-            "CREATE TABLE PARTITION OF expects FOR VALUES".to_string(),
+            "CREATE TABLE PARTITION OF expects FOR VALUES or DEFAULT".to_string(),
         ));
     }
 
@@ -3228,12 +3231,13 @@ pub(crate) fn raw_alter_table_partition_action(
             normalize_object_name(&partition_table),
         ])?;
         let bound = after_partition.trim();
-        if !bound
-            .get(.."FOR VALUES".len())
-            .is_some_and(|head| head.eq_ignore_ascii_case("FOR VALUES"))
+        if !bound.eq_ignore_ascii_case("DEFAULT")
+            && !bound
+                .get(.."FOR VALUES".len())
+                .is_some_and(|head| head.eq_ignore_ascii_case("FOR VALUES"))
         {
             return Err(SqlError::InvalidSql(
-                "ALTER TABLE ATTACH PARTITION expects FOR VALUES".to_string(),
+                "ALTER TABLE ATTACH PARTITION expects FOR VALUES or DEFAULT".to_string(),
             ));
         }
         return Ok(Some(RawAlterTablePartition::Attach {
@@ -3257,7 +3261,11 @@ pub(crate) fn raw_alter_table_partition_action(
             normalize_object_name(&partition_schema),
             normalize_object_name(&partition_table),
         ])?;
-        return Ok(Some(RawAlterTablePartition::Detach { partition_table }));
+        return Ok(Some(RawAlterTablePartition::Detach {
+            parent_table,
+            parent_schema,
+            partition_table,
+        }));
     }
     Ok(None)
 }

@@ -1518,9 +1518,8 @@ pub(crate) fn schema_with_parent_inheritance(
         schema.columns = parent.columns.clone();
         schema.primary_key_name = parent.primary_key_name.clone();
         schema.constraints = merge_inherited_constraints(parent, &schema);
-        schema.rls_enabled = parent.rls_enabled;
-        schema.rls_forced = parent.rls_forced;
-        schema.policies = parent.policies.clone();
+        // PostgreSQL policies belong to the relation named by the statement.
+        // A direct child access retains that child's own policy state.
     }
     schema
 }

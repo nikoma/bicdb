@@ -470,3 +470,6 @@ mod copied_full_image_case;
 mod interrupted_normal_repair;
 
 mod protected_resume_positive;
+
+mod installing_replacement_case;
+mod replacement_source_positive;

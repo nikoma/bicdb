@@ -26,7 +26,7 @@ fn sha(bytes: &[u8]) -> String {
 }
 
 #[derive(Clone, Copy, Debug)]
-enum ImageStop {
+pub(super) enum ImageStop {
     CatalogueBeforeMarker,
     BeginBeforeStage,
     AfterClear,
@@ -47,7 +47,10 @@ fn actual_protected_current_image_resumes_begin_before_history_staging() {
 fn actual_protected_current_image_resumes_intent_before_native_marker() {
     exercise_interrupted_normal_image(ImageStop::CatalogueBeforeMarker, true);
 }
-fn exercise_interrupted_normal_image(stop: ImageStop, resume: bool) {
+pub(super) fn exercise_interrupted_normal_image(
+    stop: ImageStop,
+    resume: bool,
+) -> std::path::PathBuf {
     let mut fixture = ActualNativeRf3Fixture::new();
     fixture.root.disable_cleanup(true);
     fixture.transport.enable_native_delivery();
@@ -715,4 +718,5 @@ fn exercise_interrupted_normal_image(stop: ImageStop, resume: bool) {
         &report,
     );
     eprintln!("INTERRUPTED_NORMAL_COLD_RESULT {report}");
+    cold.root.path().to_path_buf()
 }

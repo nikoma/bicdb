@@ -81,14 +81,16 @@ match both the local directory and the digest of the original complete plan;
 it returns the prior receipt without another commit. This receipt reports a
 historical migration, not authority for imported data or certification of later
 catalog changes. Unknown/unfenced completion certificates refuse. The current
-focused and genuine-old-store rerun must finish before reporting these additions
-as qualified.
+focused run at `adfa24f3` passes four tests. Its eight genuine-old-store scenarios
+also pass, including exact-plan retries immediately after migration and after
+two reopens, with no new Native commit on any retry. Old482 refuses all eight
+upgraded copies without modifying their bytes. These remain explicit API tests.
 
 The initial `f5ee9eec` focused run has one pass and three setup failures: its
 helper bundled raw partition DDL in one call and did not create either child
 before INSERT. `d965e015` separates those DDL calls without changing the runtime
-or the required retry assertions. Retain the failed run; qualification of the
-corrected fixture remains pending. Raw multi-statement partition DDL handling
+or the required retry assertions. The corrected fixture passes at `adfa24f3`;
+retain the failed run. Raw multi-statement partition DDL handling
 is separately unqualified and must not be reported as fixed by this test change.
 
 Automatic startup, SQL text/AST/COPY/procedure entry and direct read-only engine

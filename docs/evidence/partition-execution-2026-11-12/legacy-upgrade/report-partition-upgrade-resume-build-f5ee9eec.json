@@ -1,0 +1,46 @@
+{
+  "source": "f5ee9eec13ac55e86b2ea986d0df95f7364fd0e3",
+  "scope": "Explicit local upgrade API: flag/empty-bookkeeping interruption resume, exact completed-plan receipt without second commit across two reopens, stale/wrong-directory/altered-action/unknown-unfenced-certificate refusal, typed version marker preservation through generic schema saves. Both storage modes. Then build genuine old482 fixture probe including idempotent repeats. Automatic SQL/startup admission and full fault/HA qualification remain open.",
+  "started_unix": 1794493412.494655,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--lib",
+        "partition_admission::tests",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794493412.4948308,
+      "exit": 101,
+      "finished_unix": 1794493497.6824412
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "build",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--example",
+        "partition_upgrade_probe"
+      ],
+      "started_unix": 1794493497.6826522,
+      "exit": 0,
+      "finished_unix": 1794493576.7647588
+    }
+  ],
+  "status": "failed",
+  "finished_unix": 1794493576.7650018
+}

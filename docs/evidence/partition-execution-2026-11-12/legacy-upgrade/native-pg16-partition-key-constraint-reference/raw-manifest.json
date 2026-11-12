@@ -1,0 +1,22 @@
+{
+  "stdout": {
+    "stored_as": "stdout.gz",
+    "raw_sha256": "60b290196c50b8ca52cbd79b2700e57ee6ca08cef56f41f0abeba68761c15229",
+    "raw_bytes": 318
+  },
+  "result.json": {
+    "stored_as": "result.json",
+    "raw_sha256": "f6891d93d07cf423d40698d64dce4af6d157db083f3ce5a35d866c8825f26ca6",
+    "raw_bytes": 570
+  },
+  "stderr": {
+    "stored_as": "stderr.gz",
+    "raw_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "raw_bytes": 0
+  },
+  "control.sql": {
+    "stored_as": "control.sql",
+    "raw_sha256": "f1cae156b7d29a32a623595e0ec63850207a3077e65ea4537729d0ce032596c4",
+    "raw_bytes": 793
+  }
+}

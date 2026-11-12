@@ -418,6 +418,18 @@ async fn standalone_server_honors_persisted_paged_mode_and_reuses_extents_over_s
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn backup_control_survives_oracle_identifier_rewriting_and_postgres_quoting() {
+    async fn profile_connect(address: std::net::SocketAddr, user: &str, profile: &str) -> Client {
+        let mut config = tokio_postgres::Config::new();
+        config
+            .host("127.0.0.1")
+            .port(address.port())
+            .user(user)
+            .dbname("bicdb");
+        config.options(&format!("-c bicdb.sql_profile={profile}"));
+        let (client, connection) = config.connect(tokio_postgres::NoTls).await.unwrap();
+        tokio::spawn(connection);
+        client
+    }
     for profile in [
         bicdb_sql::oracle::ORACLE_PREVIEW_PROFILE,
         bicdb_sql::oracle::POSTGRES_PROFILE,
@@ -438,7 +450,7 @@ async fn backup_control_survives_oracle_identifier_rewriting_and_postgres_quotin
         let serving = Arc::clone(&server);
         let handle =
             thread::spawn(move || bicdb_pgwire::serve_existing_listener(serving, listener));
-        let admin = connect(address, "bicdb").await;
+        let admin = profile_connect(address, "bicdb", profile).await;
         assert_eq!(
             json(&admin, "SELECT bicdb_backup_status()").await,
             serde_json::json!([]),
@@ -455,7 +467,7 @@ async fn backup_control_survives_oracle_identifier_rewriting_and_postgres_quotin
             .batch_execute("CREATE ROLE ordinary LOGIN")
             .await
             .unwrap();
-        let ordinary = connect(address, "ordinary").await;
+        let ordinary = profile_connect(address, "ordinary", profile).await;
         let denied = ordinary
             .simple_query("SELECT \"bicdb_backup_status\"()")
             .await

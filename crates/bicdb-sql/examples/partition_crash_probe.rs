@@ -66,6 +66,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "apply" => {
             assert_eq!(args.len(), 5, "MODE apply DATABASE CASE EXTERNAL_ACK_FILE");
             let mut db = BicDb::open_with_config(path, config)?;
+            let before_sequence = db.last_commit_seq();
             // Arm only after open, scoped to this disposable database. This
             // reaches existing Native I/O boundaries in either storage mode
             // without adding a product-only upgrade shortcut or crash hook.
@@ -119,7 +120,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             // apply returned. Recovery must preserve the complete new state.
             write_new(
                 Path::new(&args[4]),
-                &json!({"upgrade_acknowledged":true,"applied":applied}),
+                &json!({"upgrade_acknowledged":true,"applied":applied,
+                    "before_native_sequence":before_sequence,"after_native_sequence":db.last_commit_seq()}),
             )?;
             bicdb_page::test_faults::crash_point("partition_upgrade.after_ack");
             db.close()?;

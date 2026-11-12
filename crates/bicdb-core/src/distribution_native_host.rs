@@ -38,6 +38,26 @@ pub(crate) struct NativeClusterBootstrapPlan {
     pub collections: Vec<NativeBootstrapCollection>,
 }
 impl NativeClusterBootstrapPlan {
+    pub(crate) fn new(
+        config: &crate::DistributionConfig,
+        members: Vec<crate::ClusterNode>,
+        collections: Vec<NativeBootstrapCollection>,
+        now_ms: u64,
+        cancellation: &CancellationToken,
+    ) -> Result<Self> {
+        let plan = Self {
+            version: 1,
+            topology: crate::distribution::plan_initial_native_topology(
+                config,
+                members,
+                now_ms,
+                cancellation,
+            )?,
+            collections,
+        };
+        plan.validate()?;
+        Ok(plan)
+    }
     pub(crate) fn validate(&self) -> Result<()> {
         crate::distribution_range_consensus::validate_native_json_size(self, MAX_PLAN_BYTES)?;
         self.topology.validate()?;

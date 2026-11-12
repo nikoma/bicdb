@@ -1,0 +1,30 @@
+{
+  "source": "44683c21fc2ce1022719760d6e41650ece86a3b8",
+  "scope": "Reproduce the actual main481 CLI Oracle profile backup dispatcher failure from live UI before capture. Actual logged function quoted uppercase by Oracle normalizer; original existing backup suite default PostgreSQL did not exercise this. Full compatibility goal remains active.",
+  "started_unix": 1794462330.4172373,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-pgwire",
+        "--test",
+        "online_backups",
+        "backup_control_survives_oracle_identifier_rewriting_and_postgres_quoting",
+        "--",
+        "--exact",
+        "--nocapture"
+      ],
+      "started_unix": 1794462330.417534,
+      "exit": 101,
+      "finished_unix": 1794462493.4988744
+    }
+  ],
+  "status": "failed",
+  "finished_unix": 1794462493.4991422
+}

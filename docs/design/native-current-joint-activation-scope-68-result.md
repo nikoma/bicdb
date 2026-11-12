@@ -59,3 +59,24 @@ Private files are under `/tmp/bicdb-native-foundations-ci`. Raw hashes are SHA-2
 | `68-activation-scope-final-summary.json` | `fe971d432ac0db237418790d3526816b1b9d6ff58490608c1cbed335ee057cde` |
 
 Each ZIP's source revision and reported digest were verified, then every custody file was checked against its manifest without opening an engine. Cuts custody verifies 78/78 files, 5,048,305 bytes; n1/n2 are NativeCompleted and n3 NativePrepared. Positive verifies 82/82 files, 6,282,525 bytes; legacy verifies 82/82 files, 6,282,658 bytes; both have all3 NativeActivated. These are observed-stable copies with live engine owners, not atomic power-loss snapshots or independent native WAL replay. No timeout change, rerun, new production implementation, binary/release/deployment, automatic operator HA, data RPO, or Azure causality is claimed.
+
+## Missing-archive case: prerequisite peer budget profile
+
+Only the failed case is profiled here: pid7423, recovery session `01a1d1ca-cee4-7c20-9970-5e6c4967df73`. Its final closed-Ready collector obtains a real fresh role in 26.944 ms, then observes local n3 in 411.179 ms. The peer jobs are allocated 801 ms on attempt1 and 534 ms on attempt2, within the unchanged original parent. Exact challenges are in private `68-activation-scope-missing-archive-prerequisite-profile.json` (SHA-256 `8e16cdbcec989f544ec58cad26246de16f8e2b2befff3ecbf5cdcc697fb04c84`); source and raw log hashes are retained there.
+
+| Actual receiver/sender stage, ms | n1 attempt1 | n2 attempt1 | n1 attempt2 | n2 attempt2 |
+| --- | ---: | ---: | ---: | ---: |
+| Sender queue | 0.097 | 0.116 | 0.683 | 1.266 |
+| Receiver fresh readonly role | 26.478 | 42.923 | 27.051 | 44.706 |
+| Service mutex acquisition | 0.003 | 0.002 | 0.003 | 0.002 |
+| DB guard acquisition | 0.021 | 0.016 | 0.013 | 0.015 |
+| Observer scoped entry | 569.169, success | 572.344, success | 510.728, expires | 518.494, expires |
+| Observer scoped exit | 198.407, expires | 212.970, expires | Not reached | Not reached |
+| Full local validation | 774.303 | 794.720 | 510.767 | 518.534 |
+| Sender call, timeout | 802.251 | 802.224 | 534.227 | 534.578 |
+
+The first receiver validation extends into expiry and the receiver operations end after the sender timeout. Both late replies are refused; no observation counts after expiry. Attempt2 begins with only 487–505 ms left after its own real role, less than its observed scope-entry work. The collector reports failure after 1777.016 ms with 1068 ms of its parent remaining.
+
+The prior completion-status selector's last n2 handler exits at test clock 7,376,310 us; final Ready remote jobs are queued at 7,810,598–7,810,611 us, after local observation. Attempt1 handlers likewise exit before attempt2 acquires the service guards. These actual timings and 2–3 us service acquisition do not demonstrate a receiver service-mutex queue as the cause. The journal acquisition is a try-lock, and this run does not report journal-busy refusal.
+
+The new observer scope has only aggregate entry/exit spans. Its entry includes full writer/database validation, full physical/native admission, actual lineage, repeated `require_identity`, protected joint-domain construction and prepared/serving validation. **No measured breakdown separates these operations.** Repeated full writer/native admission inside identity is a source-grounded candidate, but its dominance over fact construction is unproven. The smallest discriminating next test is cfg(test)-only correlated spans around those existing calls, including `require_identity` writer and pin subcalls and actual current/archive readback, with all production logic and original child/parent deadlines unchanged. This receipt does not approve removing checks or modifying worker allocations.

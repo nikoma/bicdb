@@ -57,6 +57,8 @@ pub(crate) struct NativeWriterHostState {
     root: PathBuf,
     directory: Weak<bicdb_page::DirectoryLock>,
     health: Weak<bicdb_page::DurabilityHealth>,
+    schema: SchemaCompatibilityAuthority,
+    schema_generation: u64,
     registration: Weak<CommitAdmissionRegistration>,
     coordinator: Weak<dyn CommitAdmission>,
 }
@@ -81,6 +83,14 @@ impl NativeWriterHostState {
             .ok_or_else(|| invalid("native writer coordinator ended"))?;
         if !Arc::ptr_eq(&actual, &expected) {
             return Err(invalid("native writer coordinator registration changed"));
+        }
+        if self.schema.generation() != self.schema_generation
+            || self.schema.verified_sha256().as_deref()
+                != Some(self.record.facts.schema_sha256.as_str())
+        {
+            return Err(invalid(
+                "native writer schema changed; refresh actual host policy",
+            ));
         }
         self.health
             .upgrade()
@@ -367,6 +377,8 @@ impl BicDb {
                 .native_service_directory_lifetime()
                 .ok_or_else(|| invalid("native writer DB has no directory lifetime"))?,
             health: Arc::downgrade(&self.durability),
+            schema: self.schema_compatibility_authority(),
+            schema_generation: self.schema_compatibility.generation(),
             registration: Arc::downgrade(&registration),
             coordinator: Arc::downgrade(&authority),
         });

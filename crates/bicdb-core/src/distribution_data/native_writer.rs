@@ -42,6 +42,11 @@ impl ClusterDataNodeService {
             || policy.store_open_id() != self.range_writes.native_writer_store_open_id()
             || policy.facts().cluster_id != self.cluster_id
             || policy.facts().local_node_id != self.node_id
+            || database
+                .schema_compatibility_authority()
+                .verified_sha256()
+                .as_deref()
+                != Some(policy.facts().schema_sha256.as_str())
         {
             return Err(data_error(
                 "host enrollment is not for this actual service/store/database",

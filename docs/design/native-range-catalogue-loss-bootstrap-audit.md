@@ -6,6 +6,13 @@ note. Driver's genuine ACK / all-owner stopped copy / remove-ONLY-catalogue
 baseline is independent and must establish the first actual failure boundary.
 Source reachability alone is not a false-ready, lost-ACK or data-loss result.
 
+Execution update: the [retained paired witness](../evidence/native-read-catalogue-loss-2026-11-12/README.md)
+at source 3d0041e09 confirmed successful Strong absence after the selected
+catalog-only deletion, following an intact full-value control. This note remains
+the repair contract; a source implementation and acceptance controls now exist
+but their runtime validation is pending. The original Azure cause and ordinary
+main487 single-host/backup impact are not established by that witness.
+
 ## Existing source boundaries
 
 | Source symbol | Actual behavior at the audited source |

@@ -51,3 +51,25 @@ run. The core native-host prototype still lacks the complete operational loop.
 The original Azure campaign remains a **failed scale-out qualification**.
 No component result above changes its external-ledger findings, convergence
 failure, teardown record or lack of a stable five-node capacity measurement.
+
+## Subsequent candidate results
+
+These are separate source revisions; their results do not replace the failed
+`f30e5a4b1e4f` run or qualify newer source.
+
+| Exact source and check | Classification | Result and next smallest check |
+| --- | --- | --- |
+| `f30e5a4b1e4f1ab46b06cc4720f23275d61f64a4`, remaining jobs in run `43150979082` | Passed | SQL and the rest-of-workspace jobs subsequently completed successfully. The overall run remains failed because Core failed. |
+| `3c3b4c9f2ff49fa45db7216b497974da97d8156d`, [run `43152793728`](https://github.com/nikoma/bicdb/actions/runs/43152793728) | Failed | Core: 818 passed, three failed, eight ignored, 227.02 seconds. Compilation of all test targets, PostgreSQL-wire, SQL, formatting, licensing and repository-boundary checks passed. The rest-of-workspace job was still running at this observation. |
+| Same `3c3b4c9f2ff4` Core run, ordinary four-metadata-member/RF3 control and actual RF3 activation | Passed | Exact data-voter projection now passes both controls. This is component coverage, not automatic five-node expansion. |
+| Same `3c3b4c9f2ff4` Core run, two actor-retirement controls | Failed | Both stopped during fixture creation: data voter n3 remained a metadata learner. No retirement operation ran. Source `d6d30dca1` makes all four actual metadata participants voters; rerun both controls without weakening retirement assertions. |
+| Same `3c3b4c9f2ff4` Core run, sparse cold-reopen control | Failed | The expected semantic-error assertion failed without recording the actual error. Cause remains inconclusive. Source `ce71f764c` adds bounded callback drain and exact error diagnostics while preserving the original assertion; rerun the unchanged semantic condition. |
+| `26856d0432105d72c520004cdd3d0f9dfa78eebd`, [run `43156562484`](https://github.com/nikoma/bicdb/actions/runs/43156562484) | Failed | Production compilation stopped with E0425: missing `Mutex` import at `distribution_data.rs:933`. Core and all-target logs contain no test execution. Source `b9d7be8e0a78204f2e557257c47f0f1fc4beab8a` imports the required `parking_lot::Mutex`; a new compile/run is required. |
+| Same `26856d043210` source, [Rails run `43156562541`](https://github.com/nikoma/bicdb/actions/runs/43156562541) | Failed | Build BicDB failed; Rails application assertions were skipped. This is a compile failure, not a failing Rails behavior test. |
+| Actual startup, destination-birth fencing and unassigned-learner factory at integration source `9f7f0024eddc74694ba4bea066d30cacb1f64ca7` | Not tested | These newer sources have not compiled or executed together. Formatting and source-version consistency alone do not prove their behavior. |
+
+Complete compressed Core/all-target logs for `26856d043210`, including SHA-256
+indexes, are retained in restricted experiment custody. They show the same
+missing import; they do not establish that subsequent compilation is clean.
+The native-host operator loop, automatic recovery, joint data-membership
+handoff and independently reconciled physical expansion remain open gates.

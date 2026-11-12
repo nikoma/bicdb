@@ -192,6 +192,7 @@ pub(super) fn fresh_new_scope(
 ) -> RecoveryFenceScope {
     // The existing same-voter helper hardcodes old0/1/2. This scope instead
     // derives EVERY actual NEW voter from the committed descriptor.
+    let before_fences = diagnostic_cut(fixture, range, ack1, ack2, failed_key);
     let actor = fixture.clients[&range.leader].local_metadata_read_participant();
     let business = Uuid::now_v7();
     let challenge = Uuid::now_v7();
@@ -235,14 +236,9 @@ pub(super) fn fresh_new_scope(
             .collect::<BTreeSet<_>>(),
         members(range)
     );
-    report(
-        fixture,
-        "actual-post-joint-new-metadata-authority.json",
-        &serde_json::json!({"context_id":role.context_id(),"term":role.metadata_term(),"read_index":role.metadata_read_index(),"range":role.current_range(),"members":role.member_credentials(),"nonce":nonce,"purpose":purpose}),
-    );
+    let authority_report = serde_json::json!({"context_id":role.context_id(),"term":role.metadata_term(),"read_index":role.metadata_read_index(),"range":role.current_range(),"members":role.member_credentials(),"nonce":nonce,"purpose":purpose});
     let mut round = RecoveryFenceQuorumRound::begin(role, &parent).unwrap();
     let scope = round.scope().clone();
-    let before_fences = diagnostic_cut(fixture, range, ack1, ack2, failed_key);
     for survivor in [node("n1"), node("n2")] {
         assert!(
             before_fences[&survivor]["recovery_fence"].is_null(),
@@ -258,32 +254,29 @@ pub(super) fn fresh_new_scope(
         before_fences[&range.leader]["handoff_promise"].is_null(),
         "target never pretends to be an OLD promise voter"
     );
-    report(
-        fixture,
-        "actual-post-joint-before-new-fences.json",
-        &serde_json::json!({
-            "scope":scope,"business_ACK_count":2,"snapshots":before_fences,
-            "election_precondition":"declared actual committed metadata leadership in same-open fixture; not automatic election qualification",
-        }),
-    );
     let mut replies = Vec::new();
+    let mut observed_destinations = Vec::new();
     for destination in members(range) {
         let request = RecoveryEpochFenceRequest {
             scope: scope.clone(),
             budget_ms: 4000,
         };
+        let rpc_started = Instant::now();
         let actual = fixture.clients[&range.leader].recovery_epoch_fence_observation(
             &destination,
             &request,
             &parent,
         );
-        eprintln!(
-            "ACTUAL_POST_JOINT_FENCE recipient={destination} purpose={:?} context={} error={:?}",
-            scope.purpose,
-            scope.metadata_context_id,
-            actual.as_ref().err()
-        );
-        fixture.idle();
+        let actual = actual.map(Arc::new);
+        eprintln!("ACTUAL_POST_JOINT_FENCE recipient={destination} purpose={:?} context={} error={:?} rpc_ms={} original_remaining_ms={}", scope.purpose, scope.metadata_context_id, actual.as_ref().err(), rpc_started.elapsed().as_millis(), parent.deadline().unwrap().saturating_duration_since(Instant::now()).as_millis());
+        // Count the real challenged response immediately, before any fixture
+        // export, native/row verification, idle wait or fsynced report. The
+        // SAME original five-second token still bounds every record/finish.
+        let recorded = match &actual {
+            Ok(observation) => round.record(Arc::clone(observation)),
+            Err(_) => Ok(()),
+        };
+        eprintln!("ACTUAL_POST_JOINT_FENCE_RECORD recipient={destination} error={:?} original_remaining_ms={}", recorded.as_ref().err(), parent.deadline().unwrap().saturating_duration_since(Instant::now()).as_millis());
         let reply = match &actual {
             Ok(observed) => serde_json::json!({
                 "authenticated_peer":{"node":observed.authenticated_peer().node_id(),"incarnation":observed.authenticated_peer().member_incarnation(),"certificate_sha256":observed.authenticated_peer().certificate_sha256(),"plaintext_loopback":observed.authenticated_peer().plaintext_loopback()},"scope":observed.scope(),
@@ -293,53 +286,113 @@ pub(super) fn fresh_new_scope(
             Err(error) => serde_json::json!({"error":error.to_string()}),
         };
         replies.push(serde_json::json!({"recipient":destination,"actual_request":request,"actual_response":reply}));
-        let after_fences = diagnostic_cut(fixture, range, ack1, ack2, failed_key);
-        // Save exact partial-success state before assertions or the positive
-        // acceptance failure. Earlier recipients' legitimate fences are NOT
-        // rolled back or represented as a completed full NEW quorum.
-        report(
-            fixture,
-            "actual-post-joint-new-fence-progress.json",
-            &serde_json::json!({
-                "scope":scope,"replies_so_far":replies,"before":before_fences,"after":after_fences,
-                "business_ACK_count":2,"candidate_or_NoData_apply_reached":false,
-            }),
-        );
-        if let Err(error) = &actual {
+        if actual.is_err() || recorded.is_err() {
+            // Partial failure still captures ALL genuine replies and exact
+            // native/raw state before positive acceptance fails.
+            let after_fences = diagnostic_cut(fixture, range, ack1, ack2, failed_key);
             report(
                 fixture,
-                "actual-post-joint-new-fence-refusal.json",
+                "actual-post-joint-new-metadata-authority.json",
+                &authority_report,
+            );
+            report(
+                fixture,
+                "actual-post-joint-before-new-fences.json",
                 &serde_json::json!({
-                    "scenario":"FAILED_POST_JOINT_NEW_RECOVERY_FENCE",
-                    "failing_recipient":destination,"exact_error":error.to_string(),
-                    "actual_request":request,"fresh_scope":scope,"actual_responses":replies,
-                    "before_partial_fences":before_fences,"after_partial_fences":after_fences,
-                    "NoData_candidate_reached":false,"NoData_apply_reached":false,
-                    "business_ACK_count":2,"no_ACK_for_index3":true,
+                    "scope":scope,"business_ACK_count":2,"snapshots":before_fences,
+                    "election_precondition":"declared actual committed metadata leadership in same-open fixture; not automatic election qualification",
                 }),
             );
-            // Assertions precede the SAME positive acceptance failure; a safe
-            // refusal is never counted as successful recovery/Abort/Ready.
-            require_inherited(fixture, range, inherited, ack1, ack2);
-            for (id, before) in &before_fences {
-                let after = &after_fences[id];
-                for field in [
-                    "native",
-                    "uid",
-                    "slots",
-                    "handoff_promise",
-                    "joint",
-                    "raw_range_log",
-                    "ACK1",
-                    "ACK2",
-                    "no_ACK3_record",
-                ] {
-                    assert_eq!(after[field],before[field],"{id}: fence refusal must preserve protected data/Commit/no-effect/ACK field {field}");
+            // Save exact partial-success state before assertions or the positive
+            // acceptance failure. Earlier recipients' legitimate fences are NOT
+            // rolled back or represented as a completed full NEW quorum.
+            report(
+                fixture,
+                "actual-post-joint-new-fence-progress.json",
+                &serde_json::json!({
+                    "scope":scope,"replies_so_far":replies,"before":before_fences,"after":after_fences,
+                    "business_ACK_count":2,"candidate_or_NoData_apply_reached":false,
+                }),
+            );
+            if let Some(error) = actual.as_ref().err().or(recorded.as_ref().err()) {
+                report(
+                    fixture,
+                    "actual-post-joint-new-fence-refusal.json",
+                    &serde_json::json!({
+                        "scenario":"FAILED_POST_JOINT_NEW_RECOVERY_FENCE",
+                        "failing_recipient":destination,"exact_error":error.to_string(),
+                        "actual_request":request,"fresh_scope":scope,"actual_responses":replies,
+                        "before_partial_fences":before_fences,"after_partial_fences":after_fences,
+                        "NoData_candidate_reached":false,"NoData_apply_reached":false,
+                        "business_ACK_count":2,"no_ACK_for_index3":true,
+                    }),
+                );
+                // Assertions precede the SAME positive acceptance failure; a safe
+                // refusal is never counted as successful recovery/Abort/Ready.
+                require_inherited(fixture, range, inherited, ack1, ack2);
+                for (id, before) in &before_fences {
+                    let after = &after_fences[id];
+                    for field in [
+                        "native",
+                        "uid",
+                        "slots",
+                        "handoff_promise",
+                        "joint",
+                        "raw_range_log",
+                        "ACK1",
+                        "ACK2",
+                        "no_ACK3_record",
+                    ] {
+                        assert_eq!(after[field],before[field],"{id}: fence refusal must preserve protected data/Commit/no-effect/ACK field {field}");
+                    }
                 }
+                eprintln!("ACTUAL_POST_JOINT_FENCE_REFUSAL_AUDITED recipient={destination} exact_error={error} protected-prefix-and-ACKs-unchanged=true partial-fences-retained=true no-NoData-apply-claim=true");
             }
-            eprintln!("ACTUAL_POST_JOINT_FENCE_REFUSAL_AUDITED recipient={destination} exact_error={error} protected-prefix-and-ACKs-unchanged=true partial-fences-retained=true no-NoData-apply-claim=true");
+            actual.expect("post-joint NEW-domain actual recovery fence MUST succeed; audited refusal alone does not qualify recovery");
+            recorded.expect("actual fence quorum must count genuine replies within the ORIGINAL five-second collector budget");
         }
-        let actual = actual.expect("post-joint NEW-domain actual recovery fence MUST succeed; audited refusal alone does not qualify recovery");
+        observed_destinations.push(destination);
+    }
+    let finished = round.finish();
+    eprintln!(
+        "ACTUAL_POST_JOINT_FENCE_FINISH error={:?} original_remaining_ms={}",
+        finished.as_ref().err(),
+        parent
+            .deadline()
+            .unwrap()
+            .saturating_duration_since(Instant::now())
+            .as_millis()
+    );
+    // Never allow late deferred verification to revive this quorum. Finish and
+    // require_live are checked now, on the original token, before heavy work.
+    let complete = finished.and_then(|quorum| quorum.require_live());
+    let after_fences = diagnostic_cut(fixture, range, ack1, ack2, failed_key);
+    report(
+        fixture,
+        "actual-post-joint-new-metadata-authority.json",
+        &authority_report,
+    );
+    report(
+        fixture,
+        "actual-post-joint-before-new-fences.json",
+        &serde_json::json!({
+            "scope":scope,"business_ACK_count":2,"snapshots":before_fences,
+            "election_precondition":"declared actual committed metadata leadership in same-open fixture; not automatic election qualification",
+        }),
+    );
+    report(
+        fixture,
+        "actual-post-joint-new-fence-progress.json",
+        &serde_json::json!({
+            "scope":scope,"replies_so_far":replies,"before":before_fences,"after":after_fences,
+            "business_ACK_count":2,"candidate_or_NoData_apply_reached":false,
+            "original_budget_collector_finish_error":complete.as_ref().err().map(ToString::to_string),
+        }),
+    );
+    complete.expect("actual full fence collection and require_live MUST finish within the SAME original five-second budget");
+    // Actual Runtime Frozen owners remain held for EVERY receiver throughout
+    // deferred verification. Every original native/row/archive assertion stays.
+    for destination in observed_destinations {
         let old = &before_fences[&destination];
         let after = &after_fences[&destination];
         for field in [
@@ -409,9 +462,7 @@ pub(super) fn fresh_new_scope(
                 .contains("current joint recovery constraints"),
             "new current refusal custody cannot disappear: {lost_current}"
         );
-        round.record(Arc::new(actual)).unwrap();
     }
-    round.finish().unwrap().require_live().unwrap();
     fixture.idle();
     scope
 }

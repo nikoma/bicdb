@@ -3,6 +3,7 @@ use super::*;
 use crate::db::NativeWriterHostState;
 use crate::distribution_native_writer::SealedHostWriterEnrollment;
 use std::sync::Weak;
+pub(super) const NATIVE_WRITER_CATALOG_FORMAT: u32 = 12;
 
 impl RangeWriteStore {
     pub(crate) fn native_writer_store_open_id(&self) -> Uuid {
@@ -15,8 +16,20 @@ impl RangeWriteStore {
             .ok_or_else(|| range_write_error("native host writer policy is not installed"))
     }
     pub(crate) fn require_native_writer_host_base(&self) -> Result<()> {
-        if !crate::format::native_writer_enrollment_active(&self.root)? {
+        let enforced = crate::format::native_writer_enrollment_active(&self.root)?;
+        if !enforced
+            && self.catalog.native_writer_enforcement_version.is_none()
+            && self.catalog.format_version != NATIVE_WRITER_CATALOG_FORMAT
+        {
             return Ok(());
+        }
+        if !enforced
+            || self.catalog.native_writer_enforcement_version != Some(1)
+            || self.catalog.format_version < NATIVE_WRITER_CATALOG_FORMAT
+        {
+            return Err(range_write_error(
+                "native writer catalog lacks its from-birth reader fence",
+            ));
         }
         if !self.fsync {
             return Err(range_write_error(

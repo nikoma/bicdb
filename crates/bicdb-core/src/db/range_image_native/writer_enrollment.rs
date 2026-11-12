@@ -221,6 +221,64 @@ impl BicDb {
             .read_native_birth()?
             .map_or(0, |birth| u32::from(birth.format_version == 2)))
     }
+    pub(in crate::db) fn require_installed_native_writer_database_for_range(
+        &self,
+        range: &RangeDescriptor,
+    ) -> Result<()> {
+        if self.actual_native_writer_enforcement_version()? == 0 {
+            return Ok(());
+        }
+        let state = self
+            .commit_admission
+            .read()
+            .native_writer()
+            .cloned()
+            .ok_or_else(|| invalid("born-v2 database has no actual installed writer policy"))?;
+        state.require_database(self, range)
+    }
+    pub(in crate::db) fn require_enforced_transaction_preflight(
+        &self,
+        transaction: &Transaction,
+    ) -> Result<()> {
+        if transaction.writes.is_empty() || self.actual_native_writer_enforcement_version()? == 0 {
+            return Ok(());
+        }
+        if transaction.bypass_commit_admission {
+            return self.require_native_transaction_mutation_scope(transaction);
+        }
+        let state = self
+            .commit_admission
+            .read()
+            .native_writer()
+            .cloned()
+            .ok_or_else(|| {
+                invalid("born-v2 application commit has no actual installed writer policy")
+            })?;
+        for write in &transaction.writes {
+            let range = state
+                .record
+                .facts
+                .ranges
+                .values()
+                .find(|r| {
+                    r.contains_token(crate::distribution::distribution_key_token(
+                        &write.collection,
+                        &write.record_id,
+                    ))
+                })
+                .ok_or_else(|| invalid("application mutation has no registered native range"))?;
+            state.require_database(self, range)?;
+        }
+        Ok(())
+    }
+    pub(in crate::db) fn require_native_generic_import_allowed(&self) -> Result<()> {
+        if self.actual_native_writer_enforcement_version()? != 0 {
+            return Err(invalid(
+                "born-v2 generic import requires an actual native Apply/image capability",
+            ));
+        }
+        Ok(())
+    }
     /// Call outside service locks. All network/MQ work has already completed.
     pub(crate) fn install_enrolled_native_coordinator<T: RangeWriteTransport + 'static>(
         &self,
@@ -265,6 +323,9 @@ impl BicDb {
                 ));
             }
         }
+        // Native publication can become durable before later hook publication
+        // fails. Never leave the previous raw-store grant active in that gap.
+        self.commit_admission.write().deactivate_native_writer();
         self.in_paged_transaction(|paged, xid| {
             policy.require_live()?;
             record.native_page_xid = xid;
@@ -309,6 +370,12 @@ impl BicDb {
             registration: Arc::downgrade(&registration),
             coordinator: Arc::downgrade(&authority),
         });
+        #[cfg(test)]
+        if TEST_FAIL_HOST_POLICY_PUBLICATION.with(|flag| flag.replace(false)) {
+            return Err(invalid(
+                "injected host policy failure after actual native WAL publication",
+            ));
+        }
         coordinator.install_native_writer_host_state(self, &policy, Arc::downgrade(&state))?;
         policy.require_live()?;
         // The registration remains inactive until policy, authority and hook
@@ -319,3 +386,15 @@ impl BicDb {
         Ok(InstalledNativeWriterHostGuard { state })
     }
 }
+
+#[cfg(test)]
+thread_local! { static TEST_FAIL_HOST_POLICY_PUBLICATION:std::cell::Cell<bool>=const { std::cell::Cell::new(false) }; }
+#[cfg(test)]
+impl BicDb {
+    pub(crate) fn test_fail_next_native_host_policy_publication(&self) {
+        TEST_FAIL_HOST_POLICY_PUBLICATION.with(|flag| flag.set(true));
+    }
+}
+
+#[cfg(test)]
+mod tests;

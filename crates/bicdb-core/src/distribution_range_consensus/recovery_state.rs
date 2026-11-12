@@ -955,7 +955,7 @@ impl RangeWriteStore {
     pub(super) fn require_durable_recovery_catalog(&self) -> Result<()> {
         if !matches!(
             self.catalog.format_version,
-            1..=super::IMAGE_PROPOSAL_CATALOG_FORMAT
+            1..=super::NATIVE_WRITER_CATALOG_FORMAT
         ) {
             return Err(range_write_error("unknown range recovery catalogue format"));
         }

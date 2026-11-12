@@ -31,7 +31,8 @@ pub(crate) use history::{
 };
 pub(crate) use history_stage::{
     NativeHistoryPublicationBinding, NativeHistoryStage, NativeHistoryStageProgress,
-    NativeHistoryTargetContext, StagedNativeHistoryProof,
+    NativeHistoryTargetContext, NativeImageRowScope, NativeImageTransactionGrant,
+    StagedNativeHistoryProof,
 };
 use installed_anchor::{NativeRangeBaseBinding, NativeRangeImageAnchor};
 
@@ -742,6 +743,7 @@ impl BicDb {
         db.activate_local_namespace_identity_v1()?;
         format::enable_range_image_install(root)?;
         if enforce {
+            format::enable_current_image_proposal(root)?;
             format::enable_native_writer_enrollment(root)?;
         }
         after_flags(&mut db)?;

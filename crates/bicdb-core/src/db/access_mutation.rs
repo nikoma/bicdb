@@ -901,6 +901,7 @@ impl BicDb {
             serializable_generation_snapshot: HashMap::new(),
             serializable_reads: BTreeSet::new(),
             bypass_commit_admission: false,
+            native_image_row_grant: None,
             range_mutation_claim: None,
             database_mutation_permit: None,
             native_wal_retention: None,

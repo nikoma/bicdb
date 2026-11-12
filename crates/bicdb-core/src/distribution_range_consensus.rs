@@ -112,6 +112,7 @@ pub(crate) use native_prefix::tests::{
 pub(crate) use native_prefix::{
     NativeRangeCertificateEvidence, NativeRangeCommandIntent, NativeRangeCommitCertificate,
 };
+use native_writer::NATIVE_WRITER_CATALOG_FORMAT;
 
 pub const RANGE_WRITE_LOG_FORMAT_VERSION: u32 = 3;
 pub const RANGE_WRITE_PROTOCOL_VERSION: u32 = 2;
@@ -534,6 +535,8 @@ struct RangeWriteLog {
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 struct RangeWriteCatalog {
     format_version: u32,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    native_writer_enforcement_version: Option<u32>,
     cluster_id: ClusterId,
     node_id: ClusterNodeId,
     ranges: BTreeMap<RangeId, RangeWriteLog>,
@@ -586,20 +589,25 @@ impl RangeWriteEnvelope {
                 | NATIVE_ACTIVATED_FORMAT
                 | SPARSE_HISTORY_CATALOG_FORMAT
                 | IMAGE_PROPOSAL_CATALOG_FORMAT
+                | NATIVE_WRITER_CATALOG_FORMAT
         ) {
             return Err(range_write_error(format!(
-                "unsupported range-write log format {}; supported formats are 1, 2, {}, {}, {}, {}, {}, {}, {}, {}, and {}",
-                self.catalog.format_version,
-                RANGE_WRITE_LOG_FORMAT_VERSION,
-                HANDOFF_RANGE_LOG_FORMAT,
-                IMAGE_INSTALL_RANGE_LOG_FORMAT,
-                NATIVE_IMAGE_CATALOG_FORMAT,
-                NATIVE_READY_CATALOG_FORMAT,
-                NATIVE_COMPLETED_CATALOG_FORMAT,
-                NATIVE_ACTIVATED_FORMAT,
-                SPARSE_HISTORY_CATALOG_FORMAT,
-                IMAGE_PROPOSAL_CATALOG_FORMAT
+                "unsupported range-write log format {}; maximum supported {}",
+                self.catalog.format_version, NATIVE_WRITER_CATALOG_FORMAT
             )));
+        }
+        if self
+            .catalog
+            .native_writer_enforcement_version
+            .is_some_and(|version| version != 1)
+            || (self.catalog.format_version == NATIVE_WRITER_CATALOG_FORMAT
+                && self.catalog.native_writer_enforcement_version != Some(1))
+            || (self.catalog.native_writer_enforcement_version.is_some()
+                && self.catalog.format_version < NATIVE_WRITER_CATALOG_FORMAT)
+        {
+            return Err(range_write_error(
+                "native writer catalog marker/format mismatch",
+            ));
         }
         sparse_certification::validate_sparse_catalog(&self.catalog)?;
         if self.catalog.recovery_fences.len() > recovery_state::MAX_RECOVERY_FENCES {
@@ -798,10 +806,12 @@ impl RangeWriteStore {
     ) -> Result<Self> {
         let root = root.as_ref().to_path_buf();
         let path = root.join(DEFAULT_RANGE_WRITE_LOG);
+        let existing_catalog = path.exists();
         let mut catalog = match fs::read(&path) {
             Ok(bytes) => serde_json::from_slice::<RangeWriteEnvelope>(&bytes)?.verify()?,
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => RangeWriteCatalog {
                 format_version: RANGE_WRITE_LOG_FORMAT_VERSION,
+                native_writer_enforcement_version: None,
                 cluster_id: cluster_id.clone(),
                 node_id: node_id.clone(),
                 ranges: BTreeMap::new(),
@@ -833,11 +843,26 @@ impl RangeWriteStore {
                 "protected proposal catalog lacks its mandatory native reader fence",
             ));
         }
-        if crate::format::native_writer_enrollment_active(&root)?
-            && catalog.format_version < RANGE_WRITE_LOG_FORMAT_VERSION
+        let enforced = crate::format::native_writer_enrollment_active(&root)?;
+        if enforced {
+            if !crate::format::current_image_proposal_active(&root)?
+                || !fsync
+                || (existing_catalog
+                    && (catalog.format_version < NATIVE_WRITER_CATALOG_FORMAT
+                        || catalog.native_writer_enforcement_version != Some(1)))
+            {
+                return Err(range_write_error("enforced native store cannot adopt an older decision catalog or missing proposal reader fence"));
+            }
+            catalog.format_version = catalog.format_version.max(NATIVE_WRITER_CATALOG_FORMAT);
+            catalog.native_writer_enforcement_version = Some(1);
+            catalog
+                .sparse_committed_decisions
+                .get_or_insert_with(BTreeMap::new);
+        } else if catalog.native_writer_enforcement_version.is_some()
+            || catalog.format_version == NATIVE_WRITER_CATALOG_FORMAT
         {
             return Err(range_write_error(
-                "enforced native store cannot adopt a legacy decision catalog",
+                "enforced writer catalog requires its actual sticky reader fence",
             ));
         }
         let migrated_v1_decisions = catalog.format_version == 1;
@@ -4681,6 +4706,7 @@ mod tests {
         legacy.checksum_sha256 = legacy.calculate_checksum().unwrap();
         let catalog = RangeWriteCatalog {
             format_version: 1,
+            native_writer_enforcement_version: None,
             cluster_id: cluster.clone(),
             node_id: node.clone(),
             ranges: BTreeMap::from([(
@@ -4734,6 +4760,7 @@ mod tests {
         let node = ClusterNodeId::new("n1").unwrap();
         let envelope = RangeWriteEnvelope::new(RangeWriteCatalog {
             format_version: 2,
+            native_writer_enforcement_version: None,
             cluster_id: cluster.clone(),
             node_id: node.clone(),
             ranges: BTreeMap::new(),

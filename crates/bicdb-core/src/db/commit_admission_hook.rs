@@ -69,6 +69,11 @@ impl CommitAdmissionSlot {
             std::sync::atomic::Ordering::Release,
         );
     }
+    pub(in crate::db) fn deactivate_native_writer(&self) {
+        self.registration
+            .active
+            .store(false, std::sync::atomic::Ordering::Release);
+    }
     pub(in crate::db) fn native_writer(
         &self,
     ) -> Option<&Arc<super::range_image_native::NativeWriterHostState>> {

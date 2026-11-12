@@ -459,6 +459,13 @@ impl BicDb {
         quorum: NativeServingDecision<'_>,
         fresh: &RecoveryRoleAdmission,
     ) -> Result<NativeRecoveredServingReceipt> {
+        #[cfg(test)]
+        let mut preflight_trace =
+            crate::distribution_range_handoff::NativeJointPhaseTrace::from_deadline(
+                "recovery-complete-native-preflight",
+                fresh.local_node_id(),
+                fresh.deadline(),
+            );
         prepared.require_current_under_role(self, store, fresh)?;
         quorum.require_recipient_role(fresh)?;
         quorum.require_local_prepared(prepared, self, store, fresh)?;
@@ -471,6 +478,18 @@ impl BicDb {
                 "recovered serving requires ordinary or actual protected current-joint recovery",
             )),
         };
+        #[cfg(test)]
+        {
+            preflight_trace.complete();
+            drop(preflight_trace);
+        }
+        #[cfg(test)]
+        let mut journal_trace =
+            crate::distribution_range_handoff::NativeJointPhaseTrace::from_deadline(
+                "recovery-complete-native-journal-actual-publication",
+                fresh.local_node_id(),
+                fresh.deadline(),
+            );
         let journal = self.try_native_image_journal()?;
         let lineage = self.current_native_range_source_lineage(fresh.current_range().id)?;
         lineage.require_native_serving_role_floor(fresh)?;
@@ -565,6 +584,20 @@ impl BicDb {
             .ok_or_else(|| invalid("native serving publication has no page store"))?;
         }
         drop(journal);
+        #[cfg(test)]
+        eprintln!("ACTUAL_RECOVERY_COMPLETE_NATIVE_WAL_RETURNED node={} nonce={} R={} H={} B={} serving_sha={} rewritten={} remaining_ms={}", fresh.local_node_id(), prepared.scope().recovery_nonce, record.activation_index, record.activation_history_sha256, record.local_visibility_at_activation, record.checksum_sha256, lineage.serving.as_ref()!=Some(&record), fresh.deadline().saturating_duration_since(std::time::Instant::now()).as_millis());
+        #[cfg(test)]
+        {
+            journal_trace.complete();
+            drop(journal_trace);
+        }
+        #[cfg(test)]
+        let mut readback_trace =
+            crate::distribution_range_handoff::NativeJointPhaseTrace::from_deadline(
+                "recovery-complete-native-readback-final-current",
+                fresh.local_node_id(),
+                fresh.deadline(),
+            );
         let native = self.native_recovery_admission(
             fresh.cluster_id(),
             fresh.bootstrap_id(),
@@ -575,6 +608,11 @@ impl BicDb {
         receipt.require_current(self)?;
         quorum.require_recipient_role(fresh)?;
         prepared.require_current_under_role(self, store, fresh)?;
+        #[cfg(test)]
+        {
+            readback_trace.complete();
+            drop(readback_trace);
+        }
         Ok(receipt)
     }
 }

@@ -24,6 +24,14 @@ impl RangeRecoveryRuntime {
         parent: &CancellationToken,
     ) -> Result<NativeCompletionObservation> {
         let token = request.cancellation(parent)?;
+        #[cfg(test)]
+        let mut complete_trace = crate::distribution_range_handoff::NativeJointPhaseTrace::new(
+            "recovery-complete-total",
+            &self.local_node_id,
+            &token,
+        );
+        #[cfg(test)]
+        eprintln!("ACTUAL_RECOVERY_COMPLETE_REQUEST node={} challenge={} session={} scope={:?} parent_remaining_ms={:?}", self.local_node_id, request.challenge, request.scope.recovery_nonce, request.scope, parent.deadline().map(|d|d.saturating_duration_since(Instant::now()).as_millis()));
         let operation = self.reserve(request.scope.range_id)?;
         // This collection obtains actual fresh leader-only metadata authority
         // and authentic peer evidence without any service/DB latch held. The
@@ -34,6 +42,12 @@ impl RangeRecoveryRuntime {
             .and_then(|d| d.checked_duration_since(Instant::now()))
             .ok_or_else(|| invalid("completion request expired"))?;
         let selection_budget = token.child_with_deadline(Instant::now() + remaining / 2);
+        #[cfg(test)]
+        let mut selection_trace = crate::distribution_range_handoff::NativeJointPhaseTrace::new(
+            "recovery-complete-protocol-selection",
+            &self.local_node_id,
+            &selection_budget,
+        );
         let selection = self.select_native_completion_protocol(
             initiator,
             request,
@@ -41,6 +55,11 @@ impl RangeRecoveryRuntime {
             &token,
             Arc::clone(&operation),
         )?;
+        #[cfg(test)]
+        {
+            selection_trace.complete();
+            drop(selection_trace);
+        }
         let (prepared, quorum) = match selection {
             NativeCompletionSelection::Quorum(q) => {
                 let has = {
@@ -71,10 +90,27 @@ impl RangeRecoveryRuntime {
                 )
             }
             NativeCompletionSelection::Constraint(constraint) => {
+                #[cfg(test)]
+                let mut drain_trace = crate::distribution_range_handoff::NativeJointPhaseTrace::new(
+                    "recovery-complete-selection-worker-drain",
+                    &self.local_node_id,
+                    &token,
+                );
                 while Arc::strong_count(&operation) != 1 {
                     token.check()?;
                     std::thread::sleep(LATCH_POLL);
                 }
+                #[cfg(test)]
+                {
+                    drain_trace.complete();
+                    drop(drain_trace);
+                }
+                #[cfg(test)]
+                let mut ready_trace = crate::distribution_range_handoff::NativeJointPhaseTrace::new(
+                    "recovery-complete-closed-ready-QQ",
+                    &self.local_node_id,
+                    &token,
+                );
                 let (prepared, q) = self.acquire_closed_native_ready_with_operation(
                     initiator,
                     &request.ready_request(),
@@ -82,6 +118,11 @@ impl RangeRecoveryRuntime {
                     Arc::clone(&operation),
                 )?;
                 constraint.require_closed_quorum(&q)?;
+                #[cfg(test)]
+                {
+                    ready_trace.complete();
+                    drop(ready_trace);
+                }
                 (Some(prepared), IncomingCompletionDecision::Closed(q))
             }
         };
@@ -91,6 +132,12 @@ impl RangeRecoveryRuntime {
         let scope = &request.scope;
         let business = Uuid::now_v7();
         let challenge = Uuid::now_v7();
+        #[cfg(test)]
+        let mut post_qq_trace = crate::distribution_range_handoff::NativeJointPhaseTrace::new(
+            "recovery-complete-post-QQ-metadata-role",
+            &self.local_node_id,
+            &token,
+        );
         let witness = self.provider.witness_recovery_role(
             initiator,
             business,
@@ -114,6 +161,11 @@ impl RangeRecoveryRuntime {
         )?;
         scope.require_role(&fresh)?;
         quorum.require_recipient_role(&fresh)?;
+        #[cfg(test)]
+        {
+            post_qq_trace.complete();
+            drop(post_qq_trace);
+        }
         let token = token.child_with_deadline(fresh.deadline());
         let already_activated = {
             let service = loop {
@@ -132,12 +184,23 @@ impl RangeRecoveryRuntime {
         let prepared = prepared
             .ok_or_else(|| invalid("completion has no actual local prepared materialization"))?;
         let evidence = {
+            #[cfg(test)]
+            let mut service_trace = crate::distribution_range_handoff::NativeJointPhaseTrace::new(
+                "recovery-complete-service-lock-acquisition",
+                &self.local_node_id,
+                &token,
+            );
             let mut service = loop {
                 token.check()?;
                 if let Some(s) = self.service.try_lock_for(LATCH_POLL) {
                     break s;
                 }
             };
+            #[cfg(test)]
+            {
+                service_trace.complete();
+                drop(service_trace);
+            }
             match quorum {
                 IncomingCompletionDecision::Closed(q) => {
                     service.complete_local_native_recovery(&prepared, q, &fresh, request, &token)?
@@ -150,6 +213,8 @@ impl RangeRecoveryRuntime {
             }
         };
         token.check()?;
+        #[cfg(test)]
+        complete_trace.complete();
         NativeCompletionObservation::from_local(
             evidence,
             self.provider.local_participant(),

@@ -1,6 +1,7 @@
 //! Complete current LOCAL catalogue for a decided joint release continuation.
 //! Does not certify a new head or grant ordinary reads/writes.
 use super::*;
+use crate::distribution_range_mutation::FrozenRangeMutationPermit;
 
 impl RangeWriteStore {
     pub(crate) fn observe_owned_frozen_joint_generation(

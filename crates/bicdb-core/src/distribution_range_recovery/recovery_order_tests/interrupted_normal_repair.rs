@@ -79,6 +79,17 @@ pub(super) fn exercise_interrupted_normal_image(
         .unwrap()
         .unwrap();
     let acknowledged_sha = sha(&serde_json::to_vec(&acknowledged_record).unwrap());
+    let acknowledged_history = fixture.databases[&source_id]
+        .read()
+        .current_native_range_source_lineage(range.id)
+        .unwrap()
+        .logical_history_sha256()
+        .to_owned();
+    let future_source = node("n2");
+    let future_source_uid = fixture.databases[&future_source]
+        .read()
+        .local_namespace_identity("items")
+        .unwrap();
     let mut ledger =
         std::fs::File::create(fixture.root.path().join("controller-acknowledged.jsonl")).unwrap();
     writeln!(
@@ -100,6 +111,13 @@ pub(super) fn exercise_interrupted_normal_image(
             .last_index,
         0
     );
+    // Admission really catches n2 up through ACK1, then may deliver NativeApply2
+    // before the origin's post-admission fault returns Unknown. Keep the later
+    // replacement-source recovery test's CQ2/native1 precondition explicit:
+    // lose ONLY n2's Apply2 delivery, never its real Prepare/Commit/Certify2.
+    fixture
+        .transport
+        .drop_native_apply_once(future_source.clone(), 2);
     BicDb::test_reject_next_native_after_admission();
     let unknown_error = fixture.append(unknown).unwrap_err();
     assert!(
@@ -122,6 +140,48 @@ pub(super) fn exercise_interrupted_normal_image(
         .unwrap();
     assert_eq!(pending.native_applied_index, Some(1));
     assert_eq!(pending.pending_command_index, Some(2));
+    let peer_tail = fixture.services[&future_source]
+        .lock()
+        .probe_range_write_for_peer(&range, &source_id, 2)
+        .unwrap()
+        .entry
+        .unwrap();
+    assert_eq!(peer_tail.state, RangeWriteState::QuorumCommitted);
+    assert_eq!(peer_tail.command, tail.command);
+    let peer_progress = fixture.services[&future_source]
+        .lock()
+        .range_write_progress(range.id);
+    assert_eq!(peer_progress.last_index, 2);
+    assert_eq!(peer_progress.resolved_through, 1);
+    {
+        let peer = fixture.databases[&future_source].read();
+        let native = peer.native_range_prefix_observation(range.id).unwrap();
+        assert_eq!(native.native_applied_index, Some(1));
+        assert_eq!(native.pending_command_index, None);
+        assert_eq!(
+            peer.current_native_range_source_lineage(range.id)
+                .unwrap()
+                .logical_history_sha256(),
+            acknowledged_history
+        );
+        let actual = peer.get("items", acknowledged).unwrap().unwrap();
+        assert_eq!(sha(&serde_json::to_vec(&actual).unwrap()), acknowledged_sha);
+        assert!(peer.get("items", unknown).unwrap().is_none());
+        assert_eq!(
+            peer.local_namespace_identity("items").unwrap(),
+            future_source_uid
+        );
+    }
+    assert!(fixture.transport.observations().iter().any(|observation| {
+        observation.operation == "apply"
+            && observation.destination == future_source
+            && observation.command_sha256.as_deref() == Some(tail.command.checksum_sha256.as_str())
+            && observation.state.is_none()
+            && observation
+                .error
+                .as_deref()
+                .is_some_and(|error| error.contains("fixture native Apply delivery disabled"))
+    }));
     fixture.transport.set_unavailable(&target_id, false);
     fixture.transport.set_unavailable(&node("n2"), true);
     let topology = fixture.topology.read().clone();

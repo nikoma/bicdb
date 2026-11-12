@@ -11,6 +11,8 @@ use crate::distribution_range_image::{
 };
 use crate::distribution_range_mutation::FrozenRangeMutationPermit;
 
+mod abort_catalogue;
+pub(crate) mod abort_history;
 mod certified_prefix;
 mod history;
 mod history_stage;
@@ -29,6 +31,7 @@ use serving_configuration::{NativeJointServingDomain, NativeRecoveredServingConf
 #[cfg(test)]
 pub(crate) mod rf3_fixture;
 use certified_prefix::NativeCertifiedRangePrefix;
+pub(crate) use certified_prefix::NativeRecoveryAbortedReceipt;
 pub(crate) use history::{
     NativeLogicalHistoryEntryV1, NativeLogicalHistoryOutcomeV1, NativeLogicalHistoryPoint,
     NativeLogicalHistoryStepV1,
@@ -177,6 +180,8 @@ struct NativeDatabaseBirth {
     format_version: u32,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     metadata_initialization_version: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    abort_protocol_version: Option<u32>,
     birth_id: Uuid,
     spec: RangeImageBirthSpec,
     image_generation: Uuid,
@@ -195,6 +200,7 @@ impl NativeDatabaseBirth {
         let mut birth = Self {
             format_version: if enforce { 2 } else { 1 },
             metadata_initialization_version: metadata_initialization.then_some(1),
+            abort_protocol_version: None,
             birth_id: Uuid::now_v7(),
             spec,
             image_generation: Uuid::now_v7(),
@@ -204,6 +210,20 @@ impl NativeDatabaseBirth {
         Ok(birth)
     }
     fn checksum(&self) -> Result<String> {
+        if let Some(version) = self.abort_protocol_version {
+            return Ok(hex::encode(sha2::Sha256::digest(bounded_json(
+                &(
+                    "NativeAbortProtocolFromBirth-v1",
+                    self.format_version,
+                    self.birth_id,
+                    &self.spec,
+                    self.image_generation,
+                    self.metadata_initialization_version,
+                    version,
+                ),
+                MAX_NATIVE_RECEIPT_BYTES,
+            )?)));
+        }
         if let Some(version) = self.metadata_initialization_version {
             return Ok(hex::encode(sha2::Sha256::digest(bounded_json(
                 &(
@@ -231,6 +251,11 @@ impl NativeDatabaseBirth {
     fn validate(&self) -> Result<()> {
         self.spec.validate()?;
         if !matches!(self.format_version, 1 | 2)
+            || self.abort_protocol_version.is_some_and(|v| {
+                v != 1
+                    || self.format_version != 2
+                    || self.metadata_initialization_version != Some(1)
+            })
             || self
                 .metadata_initialization_version
                 .is_some_and(|v| v != 1 || self.format_version != 2)
@@ -282,6 +307,7 @@ pub(crate) struct NativeRecoveryAdmission {
     database_incarnation: String,
     writer_enforcement_version: u32,
     metadata_initialization_version: u32,
+    abort_protocol_version: u32,
     birth_id: Uuid,
     birth_sha256: String,
     cluster_id: ClusterId,
@@ -303,12 +329,16 @@ impl NativeRecoveryAdmission {
             || self.birth_sha256 != current.birth_sha256
             || self.writer_enforcement_version != current.writer_enforcement_version
             || self.metadata_initialization_version != current.metadata_initialization_version
+            || self.abort_protocol_version != current.abort_protocol_version
         {
             return Err(invalid(
                 "recovery admission belongs to another DB/open or native birth",
             ));
         }
         Ok(())
+    }
+    pub(crate) fn abort_protocol_version(&self) -> u32 {
+        self.abort_protocol_version
     }
     pub(crate) fn metadata_initialization_version(&self) -> u32 {
         self.metadata_initialization_version
@@ -771,6 +801,7 @@ impl BicDb {
             database_incarnation: self.incarnation.clone(),
             writer_enforcement_version: u32::from(birth.format_version == 2),
             metadata_initialization_version: birth.metadata_initialization_version.unwrap_or(0),
+            abort_protocol_version: birth.abort_protocol_version.unwrap_or(0),
             birth_id: birth.birth_id,
             birth_sha256: birth.checksum_sha256,
             cluster_id: cluster_id.clone(),
@@ -794,7 +825,15 @@ impl BicDb {
         config: DbConfig,
         spec: RangeImageBirthSpec,
     ) -> Result<(Self, FreshRangeGenesisAuthority)> {
-        Self::create_new_range_image_database_with_mode(root, config, spec, true, true, |_| Ok(()))
+        Self::create_new_range_image_database_with_mode(
+            root,
+            config,
+            spec,
+            true,
+            true,
+            true,
+            |_| Ok(()),
+        )
     }
     /// Reproduces the ACTUAL pre-capability enforced factory ordering for
     /// compatibility negatives. It never creates fresh metadata authority.
@@ -804,7 +843,15 @@ impl BicDb {
         config: DbConfig,
         spec: RangeImageBirthSpec,
     ) -> Result<(Self, FreshRangeGenesisAuthority)> {
-        Self::create_new_range_image_database_with_mode(root, config, spec, true, false, |_| Ok(()))
+        Self::create_new_range_image_database_with_mode(
+            root,
+            config,
+            spec,
+            true,
+            false,
+            false,
+            |_| Ok(()),
+        )
     }
     fn create_new_range_image_database_with(
         root: &Path,
@@ -818,6 +865,7 @@ impl BicDb {
             spec,
             false,
             false,
+            false,
             after_flags,
         )
     }
@@ -827,6 +875,7 @@ impl BicDb {
         spec: RangeImageBirthSpec,
         enforce: bool,
         metadata_initialization: bool,
+        abort_protocol: bool,
         after_flags: impl FnOnce(&mut Self) -> Result<()>,
     ) -> Result<(Self, FreshRangeGenesisAuthority)> {
         spec.validate()?;
@@ -867,12 +916,17 @@ impl BicDb {
                 format::enable_native_metadata_store(root)?;
             }
         }
+        if abort_protocol {
+            format::enable_native_abort_history(root)?;
+        }
         after_flags(&mut db)?;
-        let birth = NativeDatabaseBirth::new_with_writer_enforcement(
+        let mut birth = NativeDatabaseBirth::new_with_writer_enforcement(
             spec,
             enforce,
             metadata_initialization,
         )?;
+        birth.abort_protocol_version = abort_protocol.then_some(1);
+        birth.checksum_sha256 = birth.checksum()?;
         db.write_native_range_image_record(BIRTH_KEY, &birth)?;
         crate::storage::write_atomic(
             &root.join(FACTORY_PREFLIGHT),
@@ -1005,6 +1059,16 @@ impl BicDb {
             != enforced
         {
             return Err(invalid("native writer enrollment must be fenced from birth; partial factory or legacy upgrade refused"));
+        }
+        let abort_fenced = format::native_abort_history_active(&self.path)?;
+        if birth
+            .as_ref()
+            .is_some_and(|b| b.abort_protocol_version == Some(1))
+            != abort_fenced
+        {
+            return Err(invalid(
+                "abort protocol capability must be fenced from birth; retrofit refused",
+            ));
         }
         let metadata_fenced = format::native_metadata_store_active(&self.path)?;
         if birth
@@ -1141,6 +1205,9 @@ impl BicDb {
             .store(true, AtomicOrdering::Release);
         let ready: Option<NativeInitializationComplete> =
             self.read_native_range_image_record(READY_KEY)?;
+        if ready.is_some() && birth.abort_protocol_version == Some(1) {
+            self.native_abort_catalogue_store_id()?;
+        }
         if let Some(ready) = ready {
             if ready.birth_id != birth.birth_id
                 || ready.birth_sha256 != birth.checksum_sha256
@@ -1164,6 +1231,7 @@ impl BicDb {
     fn finish_native_genesis_initialization(&self, birth: &NativeDatabaseBirth) -> Result<()> {
         let receipts = self.native_genesis_receipts(birth)?;
         if receipts.len() == birth.spec.initial_ranges.len() {
+            self.initialize_native_abort_catalogue(birth)?;
             self.write_native_range_image_record(
                 READY_KEY,
                 &NativeInitializationComplete {

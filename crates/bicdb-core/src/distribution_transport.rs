@@ -51,6 +51,7 @@ use crate::distribution_metadata_read_provider::{
 mod host_metadata;
 mod initial_birth;
 mod initial_preparation;
+mod native_abort;
 use crate::distribution_native_host::{
     NativeInitialBirthOfferRequest, NativeInitialBirthOfferResponse,
     NativeInitialPreparationRequest, NativeInitialPreparationResponse,
@@ -76,6 +77,9 @@ pub(crate) use host_metadata::AuthenticatedHostMetadataReadReply;
 pub(crate) use initial_birth::AuthenticatedNativeInitialBirthReply;
 pub(crate) use initial_preparation::{
     AuthenticatedNativeInitialConfigurationDataReply, AuthenticatedNativeInitialPreparationReply,
+};
+pub(crate) use native_abort::{
+    AuthenticatedNativeAbortCandidateReply, AuthenticatedNativeAbortPromiseReply,
 };
 
 const FRAME_HEADER_BYTES: usize = 4;
@@ -354,6 +358,15 @@ enum ClusterDataRequest {
     ObserveNativeReady {
         request: crate::distribution_range_recovery::NativeReadyRequest,
     },
+    ObserveNativeAbortCandidate {
+        request: crate::distribution_range_recovery::NativeAbortRequest,
+    },
+    PromiseNativeAbort {
+        request: crate::distribution_range_recovery::NativeAbortRequest,
+    },
+    ResolveNativeAbort {
+        request: crate::distribution_range_recovery::NativeAbortRequest,
+    },
     CompleteNativeRecovery {
         request: crate::distribution_range_recovery::NativeCompletionRequest,
     },
@@ -487,6 +500,9 @@ impl ClusterDataRequest {
             Self::PrepareNativeReady { request } | Self::ObserveNativeReady { request } => {
                 Some(request.scope.range_id)
             }
+            Self::ObserveNativeAbortCandidate { request }
+            | Self::PromiseNativeAbort { request }
+            | Self::ResolveNativeAbort { request } => Some(request.scope.range_id),
             Self::CompleteNativeRecovery { request }
             | Self::ObserveNativeCompletion { request } => Some(request.scope.range_id),
             Self::RecoveryCertifyHistorical { request }
@@ -570,6 +586,16 @@ enum ClusterDataResponse {
     RecoveryFencedProbe(crate::distribution_range_recovery::RecoveryFencedProbeReply),
     NativeReady(crate::distribution_range_recovery::NativeReadyReply),
     NativeCompletion(crate::distribution_range_recovery::NativeCompletionReply),
+    NativeAbortCandidate(
+        crate::distribution_range_recovery::native_abort::NativeAbortCandidateReply,
+    ),
+    NativeAbortPromise(crate::distribution_range_recovery::native_abort::NativeAbortPromiseReply),
+    NativeAbortResolved {
+        request: crate::distribution_range_recovery::NativeAbortRequest,
+        range_index: u64,
+        decision_sha256: String,
+        local_data_visibility: u64,
+    },
     NativeRangeRead(crate::distribution_native_read::NativeRangeReadProbeReply),
     NativeReplica(crate::distribution_native_apply::NativeReplicaProgressReply),
     RangeWrite(RangeWriteAck),
@@ -1439,6 +1465,19 @@ fn handle_cluster_data_connection(
             return runtime
                 .observe_native_ready(caller, &request, &token)
                 .map(|o| ClusterDataResponse::NativeReady(o.into_reply()));
+        }
+        if matches!(
+            &request.request,
+            ClusterDataRequest::ObserveNativeAbortCandidate { .. }
+                | ClusterDataRequest::PromiseNativeAbort { .. }
+                | ClusterDataRequest::ResolveNativeAbort { .. }
+        ) {
+            return native_abort::dispatch(
+                request.request,
+                recovery_runtime,
+                authenticated_caller.as_ref(),
+                request_deadline,
+            );
         }
         if let ClusterDataRequest::CompleteNativeRecovery { request } = request.request {
             let runtime = recovery_runtime
@@ -2943,6 +2982,11 @@ fn dispatch_cluster_data_request(
         | ClusterDataRequest::RecoveryCertifySparseHistorical { .. }
         | ClusterDataRequest::RecoveryApplyHistorical { .. } => Err(transport_error(
             "authenticated native historical recovery runtime is not active",
+        )),
+        ClusterDataRequest::ObserveNativeAbortCandidate { .. }
+        | ClusterDataRequest::PromiseNativeAbort { .. }
+        | ClusterDataRequest::ResolveNativeAbort { .. } => Err(transport_error(
+            "authenticated native abort runtime is not active",
         )),
         ClusterDataRequest::PrepareNativeReady { .. }
         | ClusterDataRequest::ObserveNativeReady { .. }
@@ -4554,6 +4598,9 @@ impl TcpClusterRelocationTransport {
                 | ClusterDataRequest::RecoveryFencedProbe { .. }
                 | ClusterDataRequest::PrepareNativeReady { .. }
                 | ClusterDataRequest::ObserveNativeReady { .. }
+                | ClusterDataRequest::ObserveNativeAbortCandidate { .. }
+                | ClusterDataRequest::PromiseNativeAbort { .. }
+                | ClusterDataRequest::ResolveNativeAbort { .. }
                 | ClusterDataRequest::CompleteNativeRecovery { .. }
                 | ClusterDataRequest::ObserveNativeCompletion { .. }
                 | ClusterDataRequest::ObserveCurrentNativeRange { .. }
@@ -4759,6 +4806,23 @@ fn unexpected_response(expected: &str, response: ClusterDataResponse) -> BicDbEr
 }
 
 impl RangeWriteTransport for TcpClusterRelocationTransport {
+    fn observe_native_abort_candidate(
+        &self,
+        destination: &ClusterNodeId,
+        request: &crate::distribution_range_recovery::NativeAbortRequest,
+        parent: &CancellationToken,
+    ) -> Result<crate::distribution_range_recovery::NativeAbortCandidateObservation> {
+        self.native_abort_candidate_exchange(destination, request, parent)
+    }
+    fn promise_native_abort(
+        &self,
+        destination: &ClusterNodeId,
+        request: &crate::distribution_range_recovery::NativeAbortRequest,
+        parent: &CancellationToken,
+    ) -> Result<crate::distribution_range_recovery::NativeAbortPromiseObservation> {
+        self.native_abort_promise_exchange(destination, request, parent)
+    }
+
     fn validate_native_origin_pre_admission(
         &self,
         voters: &[ClusterNodeId],

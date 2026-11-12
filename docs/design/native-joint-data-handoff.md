@@ -200,3 +200,32 @@ ordinary recovery remains strict until that separate producer is composed.
 Only the complete vertical and these fault controls can establish a safe joint
 candidate. Automatic four-to-five convergence, public host/controller delivery,
 independent processes and physical qualification are later, distinct results.
+
+## Abort-history composition boundary
+
+The source composition with Root `1b191d613` retains abort catalogue15, the
+Installing13 maps, joint14 state and their independent reader fences. A fresh
+abort-aware catalogue initializes the required Installing maps but leaves joint
+state absent. Every optional absent joint/abort field remains omitted from
+legacy serialization; a format number alone grants neither domain.
+
+Joint OLD closure and NEW preparation check the actual protected abort-slot
+inventory against the same catalogue and immutable native history. Their
+commitments retain those controls. A protected writer-start beyond the actual
+native cut cannot disappear behind raw resolved counters or a joint promise.
+The existing ordinary Commit/Prepare permanent-abort guards and read/Ready
+inventory checks remain in force.
+
+Canonical NoData publication unconditionally rejects an actual protected joint
+domain before its covered-index retry and before native page WAL. Its prefix
+constructor sets the optional joint decision SHA to `None`. Post-cut joint
+prefix validation accepts actual Applied materialization only; a NoData record
+cannot borrow a joint SHA as membership permission. Pre-cut historical NoData
+remains a historical physical-prefix fact. Post-joint NoData, historical suffix
+adoption and lower-R repairs still need their separate qualified producers;
+this composition supplies none of them.
+
+This merge has syntax/format and diff checks only. It has not been compiled or
+executed; Root's independent CI results for its parent revision do not validate
+this combined joint source. No full activation, new-configuration ACK, Strong
+read, cleanup, automatic controller or physical result is claimed here.

@@ -354,10 +354,16 @@ fn actual_post_wal_unknown_checkpoint_reopen_uses_new_local_attempt_and_original
         .unwrap()
         .unwrap();
     assert_eq!(prefix.command_checksum_sha256, command.checksum_sha256);
-    assert_ne!(prefix.materialized.database_incarnation, old_open);
-    assert_eq!(prefix.materialized.database_incarnation, db.incarnation);
+    assert_ne!(
+        prefix.materialized.as_ref().unwrap().database_incarnation,
+        old_open
+    );
     assert_eq!(
-        prefix.materialized.local_wal_sequence,
+        prefix.materialized.as_ref().unwrap().database_incarnation,
+        db.incarnation
+    );
+    assert_eq!(
+        prefix.materialized.as_ref().unwrap().local_wal_sequence,
         receipt.local_visibility_db_sequence()
     );
     assert!(

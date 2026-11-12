@@ -118,6 +118,7 @@ impl RangeWriteStore {
             }
             None => self.require_no_image_install(range)?,
         }
+        self.require_actual_abort_controls_covered(database, range, data.range_index())?;
         let progress = self.progress(range);
         if progress.last_index != data.range_index()
             || progress.resolved_through != data.range_index()

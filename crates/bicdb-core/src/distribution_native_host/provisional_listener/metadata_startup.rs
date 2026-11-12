@@ -27,6 +27,27 @@ impl NativeInitialConsensusLaunch {
         }
     }
 
+    /// Publish only this actual owned store's committed configuration. The
+    /// initial plan cannot authenticate a subsequently registered learner.
+    /// Network work and topology publication happen after releasing metadata.
+    fn publish_initial_committed_metadata(&self, parent: &CancellationToken) -> Result<()> {
+        parent.check()?;
+        let actual_open = self
+            .service
+            .try_lock()
+            .ok_or_else(|| invalid("initial service busy before metadata publication"))?
+            .listener_open_guard();
+        let topology = {
+            let store = self.lock_initial_metadata(parent)?;
+            store.require_listener_database(&actual_open)?;
+            store.committed_topology().clone()
+        };
+        parent.check()?;
+        actual_open.require_live()?;
+        self.transport.install_topology(topology)?;
+        parent.check()
+    }
+
     /// An explicit initial candidate, using actual remote votes. Caller policy
     /// decides when to attempt an election; configured node IDs are not votes.
     pub(crate) fn elect_initial_metadata(&self, parent: &CancellationToken) -> Result<u64> {
@@ -94,6 +115,7 @@ impl NativeInitialConsensusLaunch {
     /// a successful transport response never substitutes for commit quorum.
     pub(crate) fn heartbeat_initial_metadata(&self, parent: &CancellationToken) -> Result<()> {
         let token = parent.child_with_deadline(Instant::now() + Duration::from_secs(5));
+        self.publish_initial_committed_metadata(&token)?;
         for _ in 0..3 {
             let peers = {
                 let store = self.lock_initial_metadata(&token)?;
@@ -127,11 +149,13 @@ impl NativeInitialConsensusLaunch {
                 };
                 self.lock_initial_metadata(&token)?
                     .record_append_response(&peer, &reply)?;
+                self.publish_initial_committed_metadata(&token)?;
             }
         }
         if self.lock_initial_metadata(&token)?.status().role != MetadataConsensusRole::Leader {
             return Err(invalid("initial metadata leader changed during heartbeat"));
         }
+        self.publish_initial_committed_metadata(&token)?;
         token.check()
     }
 

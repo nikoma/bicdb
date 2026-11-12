@@ -103,6 +103,11 @@ impl ClusterDataNodeService {
             &self.node_id,
             lineage.local_member_incarnation(),
         )?;
+        self.range_writes.require_actual_abort_controls_covered(
+            &database,
+            request.scope.range.id,
+            lineage.range_index(),
+        )?;
         let catalogue = self.range_writes.observe_native_read_catalogue(
             &request.scope,
             lineage.range_index(),
@@ -148,6 +153,11 @@ impl ClusterDataNodeService {
                 "native read observation belongs to another service",
             ));
         }
+        self.range_writes.require_actual_abort_controls_covered(
+            &database,
+            scope.range.id,
+            observation.facts().range_index,
+        )?;
         observation.catalogue().require_current(
             &self.range_writes,
             scope,

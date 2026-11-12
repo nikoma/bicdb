@@ -428,15 +428,37 @@ fn native_service_actual_open_cannot_be_revived_by_outer_arc_or_retained_directo
         .with_fsync(true)
         .with_storage_mode(StorageMode::ServerPaged)
         .with_paged_buffer_pool_bytes(8 * 1024 * 1024);
-    let (mut original, _) =
-        BicDb::create_new_enrolled_range_image_database(&path, config, spec.clone()).unwrap();
+    let (mut original, factory) =
+        BicDb::create_new_enrolled_range_image_database(&path, config.clone(), spec.clone())
+            .unwrap();
     original.create_collection("items").unwrap();
-    let directory = original
+    // A listener now captures actual completed birth identity. Construct that
+    // prerequisite through the real persisted-schema/genesis producer; an
+    // unfinished factory is not an alternative service-open fixture.
+    drop(factory);
+    drop(original);
+    let (original, factory) = BicDb::open_range_image_database(&path, config, &spec).unwrap();
+    original.schema_compatibility_fingerprint().unwrap();
+    let db = Arc::new(RwLock::new(original));
+    for range in &spec.initial_ranges {
+        let gate = db.read().range_mutation_gate();
+        let frozen = gate.try_freeze(range.id, Uuid::now_v7()).unwrap();
+        BicDb::initialize_range_image_genesis(
+            &db,
+            &factory,
+            range,
+            &frozen,
+            std::time::Duration::from_secs(5),
+            &crate::CancellationToken::uncancelable(),
+        )
+        .unwrap();
+    }
+    let directory = db
+        .read()
         .native_service_directory_lifetime()
         .unwrap()
         .upgrade()
         .unwrap();
-    let db = Arc::new(RwLock::new(original));
     let service = ClusterDataNodeService::open(
         topology.cluster_id.clone(),
         spec.node_id,

@@ -128,6 +128,7 @@ impl NativeProvisionalNode {
             .require_unwritten_enrollment_database(&database, &self.plan.topology)?;
         let schema = database.schema_compatibility_fingerprint()?.sha256;
         if native.writer_enforcement_version() != 1
+            || native.abort_protocol_version() != 1
             || native.birth_id() != self.manifest.birth_id
             || native.birth_sha256() != self.manifest.birth_sha256
             || schema != self.manifest.schema_sha256
@@ -190,7 +191,9 @@ impl NativeInitialBirthOfferObservation {
         response
             .birth
             .validate_for(plan.topology.range_image_bootstrap_id, member.incarnation)?;
-        if response.birth.writer_enforcement_version() != 1 {
+        if response.birth.writer_enforcement_version() != 1
+            || response.birth.abort_protocol_version() != 1
+        {
             return Err(invalid("initial peer is not an enforced-writer factory"));
         }
         Ok(Self {

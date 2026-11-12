@@ -109,6 +109,7 @@ impl RangeWriteStore {
             ));
         }
         let native_r = lineage.range_index();
+        self.require_actual_abort_controls_covered(database, plan.old_range().id, native_r)?;
         let decisions = self.collect_native_resolved_decisions(plan.old_range().id, native_r)?;
         let obligations = self.image_install_catalog_history_obligations(plan.old_range().id)?;
         if obligations.last_index() != native_r || obligations.resolved_through() != native_r {
@@ -274,6 +275,10 @@ impl RangeWriteStore {
                     .installing_recovery_handovers
                     .as_ref()
                     .and_then(|m| m.get(&range)),
+                self.catalog
+                    .native_abort_protocol
+                    .as_ref()
+                    .and_then(|p| p.range(range)),
             ),
         )?;
         Ok(hex::encode(writer.hash.finalize()))

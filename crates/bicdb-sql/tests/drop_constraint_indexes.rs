@@ -59,9 +59,10 @@ fn primary_and_unique_constraint_indexes_survive_direct_drop_and_cascade() {
             );
             assert_eq!(SqlSession::new(&mut db).execute("SELECT count(*) FROM pg_constraint WHERE conrelid='guarded'::regclass AND contype IN ('p','u')").unwrap().rows,vec![vec![SqlValue::Int(2)]]);
             db.close().unwrap();
-            if reopen < 2 {
-                db = BicDb::open_with_config(root.path(), config.clone()).unwrap();
+            if reopen == 2 {
+                break;
             }
+            db = BicDb::open_with_config(root.path(), config.clone()).unwrap();
         }
     }
 }
@@ -136,5 +137,56 @@ fn multi_index_drop_preflights_constraint_dependencies_before_removing_any_index
             before,
             "{mode}: missing later index removed the first"
         );
+    }
+}
+
+#[test]
+fn quoted_case_distinct_indexes_keep_exact_native_and_sql_identity_after_reopen() {
+    for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
+        let root = tempfile::tempdir().unwrap();
+        let config = DbConfig::default()
+            .with_fsync(true)
+            .with_storage_mode(mode.clone());
+        let mut db = BicDb::open_with_config(root.path(), config.clone()).unwrap();
+        SqlSession::new(&mut db).execute("CREATE TABLE case_target(item_key INT,payload INT); CREATE INDEX \"Index.Case\" ON case_target(payload); CREATE INDEX \"index.case\" ON case_target(payload)").unwrap();
+        let before = db.index_definitions().len();
+        SqlSession::new(&mut db)
+            .execute("DROP INDEX \"Index.Case\"")
+            .unwrap();
+        assert_eq!(
+            db.index_definitions().len(),
+            before - 1,
+            "{mode}: one quoted name removed another Native index"
+        );
+        db.close().unwrap();
+        let mut db = BicDb::open_with_config(root.path(), config.clone()).unwrap();
+        assert_eq!(SqlSession::new(&mut db).execute("SELECT indexname FROM pg_indexes WHERE tablename='case_target' AND indexname IN ('Index.Case','index.case')").unwrap().rows,vec![vec![SqlValue::String("index.case".into())]]);
+        SqlSession::new(&mut db)
+            .execute("DROP INDEX \"index.case\"")
+            .unwrap();
+        assert_eq!(
+            db.index_definitions().len(),
+            before - 2,
+            "{mode}: remaining logical index did not remove its own Native index"
+        );
+        db.close().unwrap();
+        let mut db = BicDb::open_with_config(root.path(), config).unwrap();
+        assert_eq!(SqlSession::new(&mut db).execute("SELECT count(*) FROM pg_indexes WHERE tablename='case_target' AND indexname IN ('Index.Case','index.case')").unwrap().rows,vec![vec![SqlValue::Int(0)]]);
+    }
+}
+
+#[test]
+fn dropping_a_materialized_view_index_removes_its_stored_descriptor() {
+    for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open_with_config(
+            root.path(),
+            DbConfig::default().with_fsync(true).with_storage_mode(mode),
+        )
+        .unwrap();
+        let mut sql = SqlSession::new(&mut db);
+        sql.execute("CREATE TABLE base_rows(item_key INT,payload INT); CREATE MATERIALIZED VIEW materialized_rows AS SELECT item_key,payload FROM base_rows; CREATE INDEX view_idx ON materialized_rows(payload)").unwrap();
+        sql.execute("DROP INDEX view_idx").unwrap();
+        assert_eq!(sql.execute("SELECT count(*) FROM pg_indexes WHERE tablename='materialized_rows' AND indexname='view_idx'").unwrap().rows,vec![vec![SqlValue::Int(0)]]);
     }
 }

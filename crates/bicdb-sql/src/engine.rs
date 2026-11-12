@@ -5697,6 +5697,7 @@ impl<'db> SqlEngine<'db> {
             memo_operand_types: false,
             ir_owned_statement: false,
             security_context: self.security_context.clone(),
+            app_exact_decimal_units: self.app_exact_decimal_units,
             runtime: self.runtime.clone(),
             session_gucs,
             oracle_output: self.oracle_output.clone(),

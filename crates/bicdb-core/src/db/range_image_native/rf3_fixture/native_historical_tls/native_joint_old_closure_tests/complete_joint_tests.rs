@@ -615,7 +615,7 @@ fn native_joint_actual_complete_image_target_becomes_leader_ack_and_strong_read(
             .root
             .path()
             .join("actual-joint-selected-range-ack-ledger.json"),
-        &serde_json::to_vec(&vec![acknowledged.clone(), next.clone()]).unwrap(),
+        &serde_json::to_vec(&vec![acknowledged.as_ref(), &next]).unwrap(),
         true,
     )
     .unwrap();
@@ -630,7 +630,7 @@ fn native_joint_actual_complete_image_target_becomes_leader_ack_and_strong_read(
             actual_h = Some(native.logical_history_sha256().to_owned());
         }
         assert_eq!(db.get("items", &key).unwrap(), Some(acknowledged.clone()));
-        assert_eq!(db.get("items", &next_key).unwrap(), Some(next.clone()));
+        assert_eq!(db.get("items", &next_key).unwrap().as_deref(), Some(&next));
     }
     {
         let db = fixture.native.databases[&node("n0")].write();
@@ -661,7 +661,7 @@ fn native_joint_actual_complete_image_target_becomes_leader_ack_and_strong_read(
         request,
         &parent,
     ));
-    assert_eq!(observed.record(), Some(&next));
+    assert_eq!(observed.record().map(|record| record.as_ref()), Some(&next));
     assert_eq!(observed.audit().range_index, 2);
     fixture.idle();
 }

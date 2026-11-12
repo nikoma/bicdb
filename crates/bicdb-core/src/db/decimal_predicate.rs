@@ -57,6 +57,16 @@ pub(super) fn check_open_admission(
     mode: &StorageMode,
     config: &DbConfig,
 ) -> Result<Admission> {
+    // Primary-record recovery/export does not consult secondary predicates.
+    // Its handle is mutation-fenced by ensure_writable and must remain usable
+    // even when unrelated index metadata cannot be decoded. Normal indexed
+    // admission still validates and repairs the complete persisted catalog.
+    if !config.load_secondary_indexes {
+        return Ok(Admission {
+            current: false,
+            plan: None,
+        });
+    }
     let Some(bytes) = read_optional_sidecar(
         &root.join(DEFAULT_INDEX_CATALOG),
         FrameKind::Index,
@@ -152,6 +162,9 @@ impl BicDb {
     // owner is bypassed, and shadow definitions never enter the replicated
     // logical catalog. The existing transaction fence remains in force.
     pub(super) fn finish_decimal_predicate_upgrade(&mut self) -> Result<()> {
+        if !self.config.load_secondary_indexes {
+            return Ok(());
+        }
         if self.decimal_predicates_current {
             return Ok(());
         }

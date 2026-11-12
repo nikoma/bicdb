@@ -84,23 +84,40 @@ fn actual_legacy_fixture_named(target: &Path, name: &str) {
 }
 
 #[test]
-fn legacy_admission_cannot_be_bypassed_by_disabling_secondary_index_loading() {
+fn index_disabled_primary_handle_preserves_legacy_predicates_and_refuses_mutations() {
     let root = tempfile::tempdir().unwrap();
     actual_legacy_fixture(root.path());
-    let before = bytes(root.path());
-    let error = BicDb::open_with_config(
+    let indexes = std::fs::read(root.path().join("indexes.json")).unwrap();
+    let format = std::fs::read(root.path().join("format.json")).unwrap();
+    let mut db = BicDb::open_with_config(
         root.path(),
         config(StorageMode::ServerPaged).with_secondary_indexes(false),
     )
-    .unwrap_err();
-    assert!(
-        error.to_string().contains("legacy Decimal predicate"),
-        "{error}"
+    .unwrap();
+    assert_eq!(
+        db.get("precision_probe", "acknowledged")
+            .unwrap()
+            .unwrap()
+            .metadata,
+        acknowledged().metadata
+    );
+    let error = db
+        .insert(
+            "precision_probe",
+            Record::new("duplicate").with_metadata(json!({"business_key":"same","amount":"0.75"})),
+        )
+        .unwrap_err();
+    assert!(error.to_string().contains("primary-record-only"), "{error}");
+    assert!(db.get("precision_probe", "duplicate").unwrap().is_none());
+    drop(db);
+    assert_eq!(
+        std::fs::read(root.path().join("indexes.json")).unwrap(),
+        indexes,
+        "primary-only export must not certify or rewrite the legacy index"
     );
     assert_eq!(
-        bytes(root.path()),
-        before,
-        "preflight must preserve the old bytes"
+        std::fs::read(root.path().join("format.json")).unwrap(),
+        format
     );
 }
 

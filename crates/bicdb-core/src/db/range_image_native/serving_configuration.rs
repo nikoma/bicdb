@@ -13,9 +13,10 @@ use crate::distribution_range_recovery::{ClosedNativeReadyQuorum, RecoveryRoleAd
 mod activation_decision;
 mod joint_handoff;
 pub(crate) use activation_decision::NativeActivationDecisionReceipt;
+pub(in crate::db::range_image_native) use joint_handoff::NativeJointServingDomain;
 pub(crate) use joint_handoff::{
     NativeJointDecisionReceipt, NativeJointOldCloseReceipt, NativeJointOldPhysicalProof,
-    NativeJointServingPreparation,
+    NativeJointServingBridgeReceipt, NativeJointServingPreparation,
 };
 
 #[cfg(test)]

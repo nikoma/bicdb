@@ -274,6 +274,8 @@ pub(super) struct NativeCertifiedRangePrefix {
     certificate_evidence: NativeRangeCertificateEvidence,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     recovery_attempt: Option<recovery_apply::RecoveryNativeAttemptBinding>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    joint_decision_sha256: Option<String>,
     global_image_generation: Uuid,
     range_image_generation: Uuid,
     history_generation: Uuid,
@@ -307,6 +309,20 @@ impl NativeCertifiedRangePrefix {
         birth: &NativeDatabaseBirth,
         base: &NativeRangeBaseBinding,
     ) -> Result<()> {
+        self.validate_with_native_joint_domain(birth, base, None)
+    }
+    fn validate_with_native_joint_domain(
+        &self,
+        birth: &NativeDatabaseBirth,
+        base: &NativeRangeBaseBinding,
+        joint: Option<&NativeJointServingDomain>,
+    ) -> Result<()> {
+        let joint = joint.filter(|domain| self.range_index > domain.range_index());
+        if self.joint_decision_sha256.as_deref() != joint.map(|domain| domain.decision_sha256()) {
+            return Err(invalid(
+                "native Applied prefix lacks its actual protected joint domain",
+            ));
+        }
         self.certificate_evidence.validate()?;
         if matches!(
             self.certificate_evidence,
@@ -336,7 +352,8 @@ impl NativeCertifiedRangePrefix {
                 scope_sha256,
                 ..
             } => {
-                let member = base.base_members.get(leader_node_id).ok_or_else(|| {
+                let members = joint.map_or(&base.base_members, |domain| domain.members());
+                let member = members.get(leader_node_id).ok_or_else(|| {
                     invalid("native materialization leader is not in actual base")
                 })?;
                 let pin = match (
@@ -356,6 +373,10 @@ impl NativeCertifiedRangePrefix {
                     || !pin
                     || restore_activation.as_ref() != base.restore_activation.as_ref()
                     || scope_sha256 != &self.scope_sha256
+                    || joint.is_some_and(|domain| {
+                        *range_epoch != domain.range().epoch
+                            || leader_node_id != &domain.range().leader
+                    })
                 {
                     return Err(invalid("native authenticated materialization cannot claim a local certificate quorum"));
                 }
@@ -366,6 +387,17 @@ impl NativeCertifiedRangePrefix {
                     || self.certified_voters.len() > 64
                 {
                     return Err(invalid("native prefix lacks its actual quorum evidence"));
+                }
+                if joint.is_some_and(|domain| {
+                    self.required_quorum != domain.members().len() / 2 + 1
+                        || !self
+                            .certified_voters
+                            .iter()
+                            .all(|node| domain.members().contains_key(node))
+                }) {
+                    return Err(invalid(
+                        "native Applied quorum differs from actual joint NEW voters",
+                    ));
                 }
             }
         }
@@ -674,8 +706,9 @@ impl BicDb {
         let prefix: Option<NativeCertifiedRangePrefix> =
             self.read_native_range_image_record(&prefix_key(base.range.id))?;
         self.validate_native_range_base_history(birth, base)?;
+        let joint = self.read_native_joint_serving_domain(birth, base)?;
         if let Some(prefix) = &prefix {
-            prefix.validate(birth, base)?;
+            prefix.validate_with_native_joint_domain(birth, base, joint.as_ref())?;
             let entry = self.read_native_history_entry(
                 prefix.range_id,
                 prefix.history_generation,
@@ -690,6 +723,9 @@ impl BicDb {
                     "native prefix logical-history head differs from actual immutable entry",
                 ));
             }
+        }
+        if let Some(joint) = &joint {
+            joint.require_materialized(base, prefix.as_ref())?;
         }
         Ok(prefix)
     }
@@ -728,12 +764,17 @@ impl BicDb {
         let prefix = self.read_native_certified_range_prefix(&birth, &base)?;
         let serving =
             self.read_native_recovered_serving_configuration(&birth, &base, prefix.as_ref())?;
+        let joint = self.read_native_joint_serving_domain(&birth, &base)?;
+        if let Some(joint) = &joint {
+            joint.require_materialized(&base, prefix.as_ref())?;
+        }
         let lineage = SourceRangeImageLineage {
             birth,
             _anchor: anchor,
             base,
             prefix,
             serving,
+            joint,
             current_database_incarnation: self.incarnation.clone(),
             current_schema_generation: self.schema_compatibility.generation(),
         };
@@ -971,6 +1012,7 @@ impl BicDb {
             .actual_native_range_integrity_binding(&birth, record.range_id)?
             .ok_or_else(|| invalid("native completion base disappeared"))?;
         let old = self.read_native_certified_range_prefix(&birth, &base)?;
+        let joint = self.read_native_joint_serving_domain(&birth, &base)?;
         let previous_index = old
             .as_ref()
             .map_or(base.range_index, |previous| previous.range_index);
@@ -1013,6 +1055,10 @@ impl BicDb {
             required_quorum: proof.required_quorum(),
             certificate_evidence: proof.evidence(),
             recovery_attempt: record.recovery_attempt,
+            joint_decision_sha256: joint
+                .as_ref()
+                .filter(|domain| record.range_index > domain.range_index())
+                .map(|domain| domain.decision_sha256().to_owned()),
             global_image_generation: record.global_image_generation,
             range_image_generation: record.range_image_generation,
             history_generation: base.history_generation,
@@ -1021,7 +1067,7 @@ impl BicDb {
             checksum_sha256: String::new(),
         };
         prefix.checksum_sha256 = prefix.checksum()?;
-        prefix.validate(&birth, &base)?;
+        prefix.validate_with_native_joint_domain(&birth, &base, joint.as_ref())?;
         let encoded = bounded_json(&prefix, MAX_NATIVE_RECEIPT_BYTES)?;
         self.in_paged_transaction(|paged, xid| {
             history::put_immutable_history_entry(

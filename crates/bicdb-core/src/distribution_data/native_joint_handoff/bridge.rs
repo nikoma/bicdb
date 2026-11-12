@@ -92,6 +92,34 @@ impl ActualServiceNativeJointPreparedEvidence {
     }
 }
 impl ClusterDataNodeService {
+    pub(crate) fn publish_local_native_joint_bridge(
+        &self,
+        admission: &crate::distribution_range_handoff::NativeJointActivationAdmission,
+        actual: &ActualServiceNativeJointPreparedEvidence,
+        parent: &CancellationToken,
+    ) -> Result<crate::db::NativeJointServingBridgeReceipt> {
+        parent.check()?;
+        admission.require_external_preparations_current()?;
+        actual.require_current(self)?;
+        let database = try_database_read(&self.db)?;
+        self.require_native_catalog_database(&database)?;
+        self.require_native_writer_host_for_range(&database, admission.data().activation_range())?;
+        if actual.prepared.local_node_id() != &self.node_id {
+            return Err(data_error(
+                "joint native bridge publishes on another actual service",
+            ));
+        }
+        database.publish_native_joint_serving_bridge(
+            admission,
+            &actual.committed,
+            &actual.prepared,
+            &self.range_writes,
+            &actual.catalogue,
+            actual.lease.image(),
+            actual.lease.frozen(),
+            parent,
+        )
+    }
     pub(crate) fn prepare_local_native_joint_serving(
         &self,
         committed: CommittedNativeJointDecisionObservation,

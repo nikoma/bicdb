@@ -317,6 +317,14 @@ attempts Native DELETE using an UPDATE grant, and a missing-grant UPDATE reports
 XX000 instead of 42501. These are open delivery gates. No grant bypass or broader
 permission is an acceptable substitute for a real Native authorized identity
 update. The original assertions and failed logs are retained.
+The subsequent Native-authorized identity update batch passes twelve Core grant
+and fifty-eight SQL integration tests at `0031d197`: seventy total, zero failures.
+A real Native UPDATE capability covers both addresses and its locked Native
+preimage, consuming one action/audit; Native observation bounds reject stale or
+forged-future versions. Late SQL constraint failure restores the old row and
+removes the audit. MutationDenied maps to42501. Full Core/SQL/protocol validation
+and independent recovery of this new authorized path remain open. Earlier
+partition-upgrade VM results cover their exact `5aa92dce` production runtime.
 
 ## Required evidence and remaining gates
 

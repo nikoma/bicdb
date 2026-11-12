@@ -1,0 +1,21 @@
+{
+  "source": "0031d1976ece1be2d6139ea9972fbf49069b1590",
+  "runtime": "e77cc2065",
+  "status": "focused_passed",
+  "Core_passed": 12,
+  "SQL_passed": 58,
+  "failed": 0,
+  "ignored": 0,
+  "baseline": {
+    "source": "3545a445ac4b2c8d4f937ca0eeff254a1d184999",
+    "passed": 2,
+    "failed": 2
+  },
+  "prior_candidate": {
+    "source": "a05c66fbc0d39441e1e1d21c2bd667ba9b96cd98",
+    "Core_passed": 11,
+    "SQL_passed": 57,
+    "failed": 0
+  },
+  "remaining": "FullCoreSQLwire/currenthelpers, actualnewAPI independentfault/VM, remainingprotectedreplication/namespace/lifecyclegates, finalversionCImergepush, fulloriginal1464OraclePG/UI400restore/portableorigin/HA/P1P2. No delivery orproductionreadinessclaim."
+}

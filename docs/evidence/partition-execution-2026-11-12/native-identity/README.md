@@ -38,8 +38,9 @@ reads its current locked preimage. A caller-supplied future statement snapshot
 cannot override those checks, and a source observation never authorizes the
 destination's version. Test-only `0031d197` adds late SQL CHECK failure rollback,
 including old record hash, old/new IDs, audit/write queues, indexes and reopens.
-At this checkpoint, all **12 Core grant tests passed** at exact `0031d197`;
-its SQL integration command was still live. No final SQL pass is inferred.
+At exact `0031d197`, all **12 Core grant tests and 58 SQL integration tests
+passed**: seventy total, zero failed or ignored. This includes both original
+regressions, the future-snapshot defense and late SQL constraint rollback.
 
 A complete Core/SQL/protocol run for exact `0031d197` is queued behind that focused
 batch and the useful older `5aa92dce` SQL/protocol run. It requires an actual
@@ -52,6 +53,6 @@ binary, release or deployment. The full application/HA/portable-origin campaign
 remains active.
 
 `raw-manifest.json` binds the original reports/logs and controller specifications.
-Only terminal reports are archived; the running final focused result is excluded
-until it finishes. Logs are losslessly gzip-compressed. `manifest.json` binds the
+All three focused/baseline reports are terminal and archived. Logs are losslessly
+gzip-compressed. `manifest.json` binds the
 stored files. All Core and SQL regression sources are tracked in this branch.

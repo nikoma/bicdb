@@ -19,6 +19,16 @@
     "raw_bytes": 584996,
     "raw_sha256": "02ab320ec55e9cd600b9aac618f5691c51d726c44cb03c7c3f8b25d36e50ac12"
   },
+  "report-partition-native-identity-observed-focused.json": {
+    "stored_as": "report-partition-native-identity-observed-focused.json",
+    "raw_bytes": 2631,
+    "raw_sha256": "11d083c20a75612ff8ff4412fdde1d8b79cdda9987237c2b2d33426ee5f3704b"
+  },
+  "tc-step-partition-native-identity-observed-focused.log": {
+    "stored_as": "tc-step-partition-native-identity-observed-focused.log.gz",
+    "raw_bytes": 588183,
+    "raw_sha256": "a0c0e9dd33c06927d6bd367402772452d0ae412d634c279e0b85374b7f560659"
+  },
   "controller/partition-native-authority-baseline.json": {
     "stored_as": "controller/partition-native-authority-baseline.json",
     "raw_bytes": 1568,

@@ -1920,7 +1920,8 @@ impl MetadataConsensusStore {
                 && request.last_log_index >= self.last_log_index());
         let may_vote = self.state.voted_for.is_none()
             || self.state.voted_for.as_ref() == Some(&request.candidate_id);
-        let granted = candidate_is_voter
+        let granted = voters.contains(&self.state.node_id)
+            && candidate_is_voter
             && log_is_current
             && may_vote
             && self.require_native_metadata_actor_current(true).is_ok();
@@ -2547,14 +2548,10 @@ impl MetadataConsensusStore {
 
     fn persist(&self) -> Result<()> {
         validate_state(&self.state)?;
-        if let Some(owner) = &self.native_owner {
-            owner.require_current()?;
-        }
-        if self.state.native_store_id.is_some() && self.native_owner.is_none() {
-            return Err(metadata_error(
-                "protected metadata persistence lacks actual owner",
-            ));
-        }
+        // A legacy learner may have learned its own enforced birth since
+        // open. Its cached ownerless mode cannot persist/ack that transition
+        // as an actual native metadata store.
+        self.require_native_metadata_owner_current()?;
         fs::create_dir_all(&self.root)?;
         let mut envelope = MetadataConsensusEnvelope {
             format_version: self.state.format_version,

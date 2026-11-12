@@ -362,6 +362,56 @@ impl BicDb {
             observer.local_member_incarnation(),
         )?;
         observer.require_native_identity(&native)?;
+        let anchor_members = match &scope.purpose {
+            MetadataRecoveryRolePurpose::CurrentJointRecovery {
+                joint_decision_sha256,
+            } => {
+                // An installed image retains its immutable OLD physical
+                // membership. This historical NEW-domain anchor is bound to
+                // the independently protected joint bridge, never a metadata
+                // member list or a reinterpretation of that physical base.
+                if actual.current_joint_decision_sha256() != Some(joint_decision_sha256.as_str())
+                    || record.joint_decision_sha256.as_deref()
+                        != Some(joint_decision_sha256.as_str())
+                {
+                    return Err(invalid(
+                        "activated joint completion anchor changed protected joint decision",
+                    ));
+                }
+                let archived: NativeRecoveredServingConfiguration = self
+                    .read_native_range_image_record(&history_key(
+                        scope.range_id,
+                        &record.checksum_sha256,
+                    ))?
+                    .ok_or_else(|| {
+                        invalid("immutable joint activated serving archive is missing")
+                    })?;
+                archived.validate_historical_floor(&actual.birth, &actual.base)?;
+                if &archived != record {
+                    return Err(invalid("joint activated serving current/archive differ"));
+                }
+                let members = actual.native_write_members()?;
+                #[cfg(test)]
+                eprintln!(
+                    "ACTUAL_JOINT_ACTIVATED_ANCHOR_MEMBERS node={} R={} H={} B={} physical_members={:?} protected_effective_members={:?} actual_observer_members={:?} joint_sha={}",
+                    observer.local_node_id(), r, h,
+                    record.local_visibility_at_activation,
+                    actual.base_members().keys().collect::<Vec<_>>(),
+                    members.keys().collect::<Vec<_>>(),
+                    observer.member_credentials().keys().collect::<Vec<_>>(),
+                    joint_decision_sha256,
+                );
+                if members.len() != observer.member_credentials().len() {
+                    return Err(invalid(
+                        "activated joint completion anchor changed protected voter count",
+                    ));
+                }
+                members
+            }
+            // Preserve the existing ordinary same-voter domain. A CurrentJoint
+            // observation does not widen NormalRecovery's physical contract.
+            _ => actual.base_members().clone(),
+        };
         if record.checksum_sha256 != serving_sha
             || !record.scope.same_session(scope)
             || !record.binds_current_base(&actual.base)
@@ -374,7 +424,7 @@ impl BicDb {
             || observer.expected_schema_sha256() != Some(actual.schema_sha256())
             || actual.restore_activation() != observer.restore_activation()
             || observer.member_credentials().iter().any(|(id, m)| {
-                actual.base_members().get(id).is_none_or(|a| {
+                anchor_members.get(id).is_none_or(|a| {
                     a.incarnation != m.incarnation
                         || a.tls_certificate_sha256 != m.active_certificate_sha256
                         || a.pending_tls_certificate_sha256 != m.pending_certificate_sha256

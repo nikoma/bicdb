@@ -585,13 +585,15 @@ impl<'db> SqlSession<'db> {
             namespace_oid(&partition.partition_schema),
             &partition.partition_table,
         );
+        let primary_key_name = (!parent.has_hidden_primary_key())
+            .then(|| default_primary_key_name(&partition.partition_table));
         let child = TableSchema {
             name: partition.partition_table,
             schema_name: partition.partition_schema,
             row_type_oid: Some(row_type_oid),
             row_array_type_oid: Some(row_array_type_oid),
             columns: parent.columns.clone(),
-            primary_key_name: parent.primary_key_name.clone(),
+            primary_key_name,
             indexes: Vec::new(),
             constraints: parent.constraints.clone(),
             rls_enabled: false,

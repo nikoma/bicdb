@@ -505,7 +505,10 @@ impl<'db> SqlSession<'db> {
             }
         }
 
-        if !has_like_clause && !columns.iter().any(|column| column.primary_key) {
+        if !has_like_clause
+            && create_table.partition_by.is_none()
+            && !columns.iter().any(|column| column.primary_key)
+        {
             if let Some(id_column) = columns.iter_mut().find(|column| column.name == "id") {
                 id_column.primary_key = true;
                 id_column.nullable = false;

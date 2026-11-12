@@ -3024,6 +3024,12 @@ impl<'db> SqlSession<'db> {
                 fields,
             )?);
         }
+        if let Some(parent) = schema
+            .as_ref()
+            .filter(|schema| schema.partitioning.is_some())
+        {
+            return Ok(self.insert_partition_rows(parent, records, false)?.len());
+        }
         // BEFORE triggers can replace or suppress rows. Validate the rows
         // actually being stored, just as INSERT does, rather than allowing
         // COPY to bypass NOT NULL, CHECK and foreign-key constraints.

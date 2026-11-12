@@ -15,6 +15,29 @@ impl SqlSession<'_> {
         records: Vec<Record>,
         insert: &Insert,
     ) -> Result<SqlResult> {
+        let inserted = self.insert_partition_rows(
+            parent,
+            records,
+            super::functions_insert::insert_reads_target(insert),
+        )?;
+        self.insert_result(
+            &parent.name,
+            Some(parent),
+            insert.returning.as_deref(),
+            &inserted,
+            inserted.len(),
+        )
+    }
+
+    /// Shared INSERT/COPY physical semantics: route first, run the destination
+    /// leaf's BEFORE triggers, check the named parent's policies, then stage
+    /// each actual leaf write before the next input row's triggers.
+    pub(super) fn insert_partition_rows(
+        &mut self,
+        parent: &TableSchema,
+        records: Vec<Record>,
+        reads_target: bool,
+    ) -> Result<Vec<Record>> {
         let mut inserted = Vec::with_capacity(records.len());
         for record in records {
             self.cancellation.check()?;
@@ -24,7 +47,7 @@ impl SqlSession<'_> {
                     &parent.name,
                     Some(parent),
                     PolicyAction::Insert,
-                    super::functions_insert::insert_reads_target(insert),
+                    reads_target,
                     std::slice::from_ref(&record),
                 )?;
                 validate_records_for_write(
@@ -49,13 +72,7 @@ impl SqlSession<'_> {
             inserted.iter().map(|record| (None, Some(record))),
         )?;
         self.after_partition_insert_triggers(parent, &inserted)?;
-        self.insert_result(
-            &parent.name,
-            Some(parent),
-            insert.returning.as_deref(),
-            &inserted,
-            inserted.len(),
-        )
+        Ok(inserted)
     }
 
     /// Routing precedes BEFORE INSERT. A leaf trigger may modify the row but

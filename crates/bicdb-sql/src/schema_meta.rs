@@ -1515,9 +1515,44 @@ pub(crate) fn schema_with_parent_inheritance(
     parent: &TableSchema,
 ) -> TableSchema {
     if schema.partition_of.is_some() {
+        let current = schema
+            .partition_of
+            .as_ref()
+            .is_some_and(|link| link.execution_version == Some(1));
+        let parent_key = parent.primary_key_constraint_name();
+        let parent_columns = primary_key_columns_for_schema(parent);
+        let same_key = !parent.has_hidden_primary_key()
+            && primary_key_columns_for_schema(&schema) == parent_columns;
+        // A partition's PK index belongs to that partition. Old metadata
+        // copied the parent's literal constraint name, causing startup to try
+        // to reuse the parent's physical index for every child. Normalize the
+        // v1 SQL view while preserving the exact legacy raw descriptor.
+        if current
+            && same_key
+            && (schema.primary_key_name.is_none()
+                || schema.primary_key_name.as_deref() == Some(parent_key.as_str()))
+        {
+            schema.primary_key_name = Some(default_primary_key_name(&schema.name));
+        }
         schema.columns = parent.columns.clone();
-        schema.primary_key_name = parent.primary_key_name.clone();
-        schema.constraints = merge_inherited_constraints(parent, &schema);
+        let mut inherited = parent.clone();
+        if current && same_key {
+            let child_key = schema.primary_key_constraint_name();
+            for constraint in schema
+                .constraints
+                .iter_mut()
+                .chain(inherited.constraints.iter_mut())
+            {
+                if let ConstraintSchema::Unique { name, columns, .. }
+                | ConstraintSchema::UniqueWithNullPolicy { name, columns, .. } = constraint
+                {
+                    if *name == parent_key && *columns == parent_columns {
+                        *name = child_key.clone();
+                    }
+                }
+            }
+        }
+        schema.constraints = merge_inherited_constraints(&inherited, &schema);
         // PostgreSQL policies belong to the relation named by the statement.
         // A direct child access retains that child's own policy state.
     }

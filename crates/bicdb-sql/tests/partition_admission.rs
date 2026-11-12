@@ -44,6 +44,8 @@ fn fresh_partition_publication_is_fenced_certified_and_readable_after_reopen() {
         assert!(!db.has_collection("invalid_pk"));
         assert!(!db.has_collection("invalid_unique"));
         setup(&mut db);
+        bicdb_sql::ensure_primary_key_indexes(&mut db)
+            .expect("each physical child receives its own PK index");
         assert!(db.sql_partition_execution_feature_active());
         for (relation, field) in [("p", "partitioning"), ("low", "partition_of")] {
             assert_eq!(
@@ -72,6 +74,34 @@ fn fresh_partition_publication_is_fenced_certified_and_readable_after_reopen() {
             );
             db.close().unwrap();
         }
+    }
+}
+
+#[test]
+fn visible_id_without_authored_pk_remains_nonunique_in_a_partitioned_table() {
+    for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open_with_config(root.path(), config(mode)).unwrap();
+        let mut sql = SqlSession::new(&mut db);
+        for statement in [
+            "CREATE TABLE p(id INT,part INT) PARTITION BY RANGE(part)",
+            "CREATE TABLE low PARTITION OF p FOR VALUES FROM(0) TO(10)",
+            "INSERT INTO p VALUES(1,2),(1,3)",
+        ] {
+            sql.execute(statement).unwrap();
+        }
+        assert_eq!(
+            sql.execute("SELECT id,part FROM p ORDER BY part")
+                .unwrap()
+                .rows,
+            vec![
+                vec![SqlValue::Int(1), SqlValue::Int(2)],
+                vec![SqlValue::Int(1), SqlValue::Int(3)]
+            ]
+        );
+        drop(sql);
+        bicdb_sql::ensure_primary_key_indexes(&mut db).unwrap();
+        db.close().unwrap();
     }
 }
 

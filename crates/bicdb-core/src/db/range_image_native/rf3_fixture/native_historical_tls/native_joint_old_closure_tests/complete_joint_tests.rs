@@ -549,9 +549,24 @@ fn native_joint_actual_complete_image_target_becomes_leader_ack_and_strong_read(
         .is_err());
     // Actual owner has drained, but the protected joint guard remains CLOSED
     // until this SAME retained receipt arms it. A retry cannot mint a new TTL.
-    assert!(fixture.coordinators[&node("n3")]
-        .recover_local_leadership(8)
-        .is_err());
+    let before_arm = fixture.native.services[&node("n3")]
+        .lock()
+        .range_write_progress(old.id);
+    let refused_key = fixture.key(old.id, "must-refuse-before-image-arm");
+    {
+        let db = fixture.native.databases[&node("n3")].write();
+        let mut tx = db.begin_transaction().unwrap();
+        tx.insert("items", crate::Record::new(&refused_key))
+            .unwrap();
+        assert!(tx.commit().is_err());
+        assert!(db.get("items", &refused_key).unwrap().is_none());
+    }
+    assert_eq!(
+        fixture.native.services[&node("n3")]
+            .lock()
+            .range_write_progress(old.id),
+        before_arm
+    );
     image_release.release(&parent).unwrap();
     image_release.release(&parent).unwrap();
     for local in [node("n1"), node("n2")] {

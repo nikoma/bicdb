@@ -904,8 +904,9 @@ fn prepared_regclass_metadata_tracks_the_live_path_and_created_partition_parent(
             .with_fsync(true)
             .with_storage_mode(mode.clone());
         let mut db = BicDb::open_with_config(root.path(), config.clone()).unwrap();
+        // Keep the user key distinct from the native implicit id convention.
         SqlSession::new(&mut db)
-            .execute("CREATE SCHEMA tenant_a; CREATE SCHEMA tenant_b; CREATE TABLE tenant_a.source(id INT PRIMARY KEY,payload INT); CREATE TABLE tenant_b.source(id INT PRIMARY KEY,payload INT); INSERT INTO tenant_a.source VALUES(1,10); INSERT INTO tenant_b.source VALUES(2,20)")
+            .execute("CREATE SCHEMA tenant_a; CREATE SCHEMA tenant_b; CREATE TABLE tenant_a.source(item_key INT PRIMARY KEY,payload INT); CREATE TABLE tenant_b.source(item_key INT PRIMARY KEY,payload INT); INSERT INTO tenant_a.source VALUES(1,10); INSERT INTO tenant_b.source VALUES(2,20)")
             .unwrap();
         bicdb_sql::initialize_rename_journal_identities(&mut db).unwrap();
         let shared = Arc::new(RwLock::new(db));
@@ -953,13 +954,13 @@ fn prepared_regclass_metadata_tracks_the_live_path_and_created_partition_parent(
             assert_eq!(count(&mut owner), "1");
             assert!(codes(&query(
                 &mut writer,
-                "BEGIN; UPDATE tenant_b.source SET payload=99 WHERE id=2"
+                "BEGIN; UPDATE tenant_b.source SET payload=99 WHERE item_key=2"
             ))
             .is_empty());
             for command in [
                 "BEGIN",
                 "ALTER TABLE source RENAME TO source_default_partition",
-                "CREATE TABLE source(id INT,tenant_id INT) PARTITION BY LIST(tenant_id)",
+                "CREATE TABLE source(item_key INT,tenant_id INT) PARTITION BY LIST(tenant_id)",
             ] {
                 let response = query(&mut owner, command);
                 assert!(
@@ -1009,13 +1010,13 @@ fn prepared_regclass_metadata_tracks_the_live_path_and_created_partition_parent(
             bicdb_sql::oracle::initialize_existing_database_profile(&mut reopened).unwrap();
             let mut sql = SqlSession::new(&mut reopened);
             assert_eq!(
-                sql.execute("SELECT payload FROM tenant_a.source WHERE id=1")
+                sql.execute("SELECT payload FROM tenant_a.source WHERE item_key=1")
                     .unwrap()
                     .rows[0][0],
                 bicdb_sql::SqlValue::Int(10)
             );
             assert_eq!(
-                sql.execute("SELECT payload FROM tenant_b.source WHERE id=2")
+                sql.execute("SELECT payload FROM tenant_b.source WHERE item_key=2")
                     .unwrap()
                     .rows[0][0],
                 bicdb_sql::SqlValue::Int(99)

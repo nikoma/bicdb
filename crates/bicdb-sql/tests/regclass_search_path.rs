@@ -70,8 +70,10 @@ fn regclass_metadata_predicates_see_new_parent_identity_and_local_path_changes()
             DbConfig::default().with_fsync(true).with_storage_mode(mode),
         )
         .unwrap();
+        // Use an application-style key, avoiding the existing special implicit
+        // primary-key behavior of a column named id.
         let mut sql = SqlSession::new(&mut db);
-        sql.execute("CREATE SCHEMA app_a; CREATE SCHEMA app_b; CREATE TABLE app_a.target(id INT PRIMARY KEY); CREATE TABLE app_b.target(id INT PRIMARY KEY)").unwrap();
+        sql.execute("CREATE SCHEMA app_a; CREATE SCHEMA app_b; CREATE TABLE app_a.target(item_key INT PRIMARY KEY); CREATE TABLE app_b.target(item_key INT PRIMARY KEY)").unwrap();
         drop(sql);
         // Embedded hosts perform this trusted startup step before admitting
         // transactions, as the PostgreSQL server/profile initialization does.
@@ -93,7 +95,7 @@ fn regclass_metadata_predicates_see_new_parent_identity_and_local_path_changes()
         sql.execute("BEGIN").unwrap();
         sql.execute("ALTER TABLE target RENAME TO target_default_partition")
             .unwrap();
-        sql.execute("CREATE TABLE target(id INT,tenant_id INT) PARTITION BY LIST(tenant_id)")
+        sql.execute("CREATE TABLE target(item_key INT,tenant_id INT) PARTITION BY LIST(tenant_id)")
             .unwrap();
         assert_eq!(count(&mut sql), SqlValue::Int(0));
         sql.execute("SET LOCAL search_path=app_b,app_a").unwrap();

@@ -122,6 +122,9 @@ fn native_initial_data_actual_cli_four_process_first_ack_and_strong_full_value()
         .create_new(true)
         .open(root.join("initial-data-external-ledger.jsonl"))
         .unwrap();
+    // Persist the primary ledger inode and pathname before the first intent.
+    ledger.sync_all().unwrap();
+    std::fs::File::open(&root).unwrap().sync_all().unwrap();
     journal(
         &mut ledger,
         serde_json::json!({

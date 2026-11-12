@@ -13,6 +13,9 @@ fn native_registered_replica_receiver_actual_cli_four_data_then_fifth_same_owner
         .create_new(true)
         .open(root.join("registered-replica-external-ledger.jsonl"))
         .unwrap();
+    // Persist the primary ledger inode and pathname before the first intent.
+    ledger.sync_all().unwrap();
+    std::fs::File::open(&root).unwrap().sync_all().unwrap();
     journal(
         &mut ledger,
         serde_json::json!({"stage":"initial_four", "execution_identity":identity,

@@ -82,3 +82,8 @@ Original failed source `3ee40c19b44affa0a481a66b278ded3af817e910` and its raw
 4-pass/1-fail evidence are unchanged. Receiver-ready remains DATA-serving-false;
 a post-join timeout is not healthy ACK/Strong continuity. Native image/joint
 wire/controller and eventual bounded healthy service remain open requirements.
+
+The primary ACK ledger also fsyncs its new inode and fixture-directory entry
+before the first logical intent; the RPC journal separately syncs its full
+directory ancestry. These are actual startup operations, not a host power-loss
+qualification result.

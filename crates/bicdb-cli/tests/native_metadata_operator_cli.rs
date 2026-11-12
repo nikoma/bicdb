@@ -1009,3 +1009,6 @@ mod initial_data_tests;
 
 #[path = "native_metadata_operator_cli/replica_receiver_tests.rs"]
 mod replica_receiver_tests;
+
+#[path = "native_metadata_operator_cli/writer_registry_refresh_baseline.rs"]
+mod writer_registry_refresh_baseline;

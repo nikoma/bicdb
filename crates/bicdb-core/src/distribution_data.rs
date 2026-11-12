@@ -59,6 +59,8 @@ mod native_completion;
 mod native_image_install;
 mod native_range_read;
 mod native_ready;
+#[cfg(feature = "tls-replication")]
+mod registered_metadata_catchup;
 pub(crate) use native_range_read::{
     ActualServiceNativeReadEvidence, ActualServiceNativeReadProbeEvidence,
 };

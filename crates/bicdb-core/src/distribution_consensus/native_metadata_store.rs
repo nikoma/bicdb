@@ -9,7 +9,9 @@ use std::sync::{Arc, OnceLock};
 
 mod append_ack;
 mod owned_member;
+mod registered_catchup;
 pub(crate) use owned_member::NativeOwnedMetadataMemberObservation;
+pub(crate) use registered_catchup::NativeRegisteredMetadataCatchupObservation;
 mod learner_cold;
 #[cfg(feature = "tls-replication")]
 mod learner_enrollment;

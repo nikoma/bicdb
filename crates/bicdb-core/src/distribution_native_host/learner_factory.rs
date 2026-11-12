@@ -9,6 +9,8 @@ use crate::ClusterSchemaBundle;
 use std::fs::File;
 use std::io::Read;
 
+mod registered_catchup;
+
 const MANIFEST: &str = "native-unassigned-learner.json";
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]

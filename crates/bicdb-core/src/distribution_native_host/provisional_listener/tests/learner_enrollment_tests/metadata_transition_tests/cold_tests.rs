@@ -508,3 +508,5 @@ fn native_learner_cold_actual_uid_receipt_old_decoder_refuses_and_none_voter_byt
     drop(host);
     f.shutdown();
 }
+
+mod registered_catchup_tests;

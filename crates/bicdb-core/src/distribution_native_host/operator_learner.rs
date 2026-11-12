@@ -360,17 +360,34 @@ impl NativeMetadataLearnerHost {
         }
         let (observed, business) = self.own_metadata(&token)?;
         let topology = observed.committed_topology(business)?;
+        let mut installed_current = true;
         if self.metadata_started
             && topology.nodes[&self.factory.spec.node_id].metadata_role == MetadataMemberRole::Voter
         {
-            match &self.host {
+            installed_current = match &self.host {
                 NativeLearnerLifecycle::Fresh(host) => {
-                    host.validate_owned_metadata_member(&observed, business, &token)?
+                    host.validate_registered_metadata_catchup(&observed, business, &token)?
                 }
                 NativeLearnerLifecycle::Cold(host) => {
-                    host.validate_owned_metadata_member(&observed, business, &token)?
+                    host.validate_registered_metadata_catchup(&observed, business, &token)?
+                }
+            };
+            if installed_current {
+                // Lower catch-up facts cannot replace this stronger producer.
+                match &self.host {
+                    NativeLearnerLifecycle::Fresh(host) => {
+                        host.validate_owned_metadata_member(&observed, business, &token)?
+                    }
+                    NativeLearnerLifecycle::Cold(host) => {
+                        host.validate_owned_metadata_member(&observed, business, &token)?
+                    }
                 }
             }
+        } else if self.transitioning
+            && topology.nodes[&self.factory.spec.node_id].metadata_role == MetadataMemberRole::Voter
+        {
+            self.factory
+                .registered_metadata_context(&observed, business, &self.network)?;
         } else if self.metadata_started || self.transitioning {
             self.factory
                 .enrolled_metadata_context(&observed, business, &self.network)?;
@@ -440,6 +457,11 @@ impl NativeMetadataLearnerHost {
             last_metadata_promotion: self.last_metadata_promotion.clone(),
             phase: if self.metadata_started
                 && metadata_role == MetadataMemberRole::Voter
+                && !installed_current
+            {
+                "metadata_catchup"
+            } else if self.metadata_started
+                && metadata_role == MetadataMemberRole::Voter
                 && metadata_control_owned
             {
                 "owned_metadata_voter"
@@ -467,8 +489,15 @@ impl NativeMetadataLearnerHost {
             return self.refresh(&token);
         }
         let (observed, business) = self.own_metadata(&token)?;
-        self.factory
-            .enrolled_metadata_context(&observed, business, &self.network)?;
+        if observed.committed_topology(business)?.nodes[&self.factory.spec.node_id].metadata_role
+            == MetadataMemberRole::Voter
+        {
+            self.factory
+                .registered_metadata_context(&observed, business, &self.network)?;
+        } else {
+            self.factory
+                .enrolled_metadata_context(&observed, business, &self.network)?;
+        }
         self.transitioning = true;
         match &mut self.host {
             NativeLearnerLifecycle::Fresh(host) => {

@@ -64,6 +64,37 @@ impl NativeColdLearnerMetadataHost {
         )?);
         Ok(())
     }
+    /// Listener/catch-up only. False means local installed C/term/index still
+    /// lags current OWN MQ; it can NEVER replace strict owned-member READY.
+    pub(in crate::distribution_native_host) fn validate_registered_metadata_catchup(
+        &self,
+        observed: &HostMetadataReadObservation,
+        business: Uuid,
+        parent: &CancellationToken,
+    ) -> Result<bool> {
+        let metadata = self
+            .metadata
+            .as_ref()
+            .ok_or_else(|| invalid("actual Registered metadata owner absent"))?;
+        let proof = {
+            let store = metadata
+                .try_lock()
+                .ok_or_else(|| invalid("Registered catch-up store busy"))?;
+            store.observe_registered_native_metadata_catchup(observed, business, parent)?
+        };
+        self.factory.require_registered_metadata_catchup(
+            &proof,
+            observed,
+            business,
+            &self.network,
+        )?;
+        let store = metadata
+            .try_lock()
+            .ok_or_else(|| invalid("Registered catch-up owner changed/busy"))?;
+        proof.require_current(&store)?;
+        proof.local_installed_current()
+    }
+
     pub(in crate::distribution_native_host) fn validate_owned_metadata_member(
         &self,
         observed: &HostMetadataReadObservation,
@@ -132,9 +163,20 @@ impl NativeColdLearnerMetadataHost {
         network: ClusterNetworkTransportConfig,
         parent: &CancellationToken,
     ) -> Result<Self> {
-        let factory = NativeUnassignedLearnerFactory::reopen_enrolled_metadata(
-            root, config, observed, business, &network, parent,
-        )?;
+        let voter = observed
+            .committed_topology(business)?
+            .nodes
+            .get(observed.requester_node_id())
+            .is_some_and(|member| member.metadata_role == MetadataMemberRole::Voter);
+        let factory = if voter {
+            NativeUnassignedLearnerFactory::reopen_registered_metadata(
+                root, config, observed, business, &network, parent,
+            )?
+        } else {
+            NativeUnassignedLearnerFactory::reopen_enrolled_metadata(
+                root, config, observed, business, &network, parent,
+            )?
+        };
         {
             let db = factory
                 .database
@@ -188,9 +230,18 @@ impl NativeColdLearnerMetadataHost {
     ) -> Result<Uuid> {
         let token = parent.child_with_deadline(observed.deadline());
         token.check()?;
-        let current = self
-            .factory
-            .enrolled_metadata_context(observed, business, &self.network)?;
+        let registered_catchup = observed
+            .committed_topology(business)?
+            .nodes
+            .get(&self.factory.spec.node_id)
+            .is_some_and(|member| member.metadata_role == MetadataMemberRole::Voter);
+        let current = if registered_catchup {
+            self.factory
+                .registered_metadata_context(observed, business, &self.network)?
+        } else {
+            self.factory
+                .enrolled_metadata_context(observed, business, &self.network)?
+        };
         let (root, metadata_root) = {
             let db = self
                 .factory
@@ -200,15 +251,26 @@ impl NativeColdLearnerMetadataHost {
             (db.data_path().to_path_buf(), db.data_path().join(DIRECTORY))
         };
         if self.metadata.is_none() {
-            MetadataConsensusStore::recover_native_learner_owned_retaining(
-                &metadata_root,
-                Arc::clone(&self.factory.database),
-                &self.factory.factory,
-                observed,
-                business,
-                &token,
-                &mut self.retained,
-            )?;
+            if registered_catchup {
+                MetadataConsensusStore::recover_registered_native_metadata_retaining(
+                    &metadata_root,
+                    Arc::clone(&self.factory.database),
+                    observed,
+                    business,
+                    &token,
+                    &mut self.retained,
+                )?;
+            } else {
+                MetadataConsensusStore::recover_native_learner_owned_retaining(
+                    &metadata_root,
+                    Arc::clone(&self.factory.database),
+                    &self.factory.factory,
+                    observed,
+                    business,
+                    &token,
+                    &mut self.retained,
+                )?;
+            }
             if self.service.is_none() {
                 // Plain exclusive store borrow BEFORE it is exposed behind a
                 // metadata mutex: no MetaMutex -> BicDb lock inversion.
@@ -216,15 +278,33 @@ impl NativeColdLearnerMetadataHost {
                     .retained
                     .as_ref()
                     .ok_or_else(|| invalid("cold actual metadata owner absent"))?;
-                self.service = Some(Arc::new(Mutex::new(
+                let service = if registered_catchup {
+                    let proof = store
+                        .observe_registered_native_metadata_catchup(observed, business, &token)?;
+                    self.factory.require_registered_metadata_catchup(
+                        &proof,
+                        observed,
+                        business,
+                        &self.network,
+                    )?;
+                    crate::ClusterDataNodeService::open_cold_registered_metadata_catchup(
+                        self.factory.spec.cluster_id.clone(),
+                        self.factory.spec.node_id.clone(),
+                        &root,
+                        Arc::clone(&self.factory.database),
+                        store,
+                        &proof,
+                    )?
+                } else {
                     crate::ClusterDataNodeService::open_cold_native_learner_metadata(
                         self.factory.spec.cluster_id.clone(),
                         self.factory.spec.node_id.clone(),
                         &root,
                         Arc::clone(&self.factory.database),
                         store,
-                    )?,
-                )));
+                    )?
+                };
+                self.service = Some(Arc::new(Mutex::new(service)));
             }
             self.metadata =
                 Some(Arc::new(Mutex::new(self.retained.take().ok_or_else(
@@ -242,8 +322,15 @@ impl NativeColdLearnerMetadataHost {
             {
                 return Err(invalid("cold current leader is absent from retained committed voters; exact fresh snapshot admission unsupported"));
             }
-            store.registered_native_learner_store_id()?
+            if registered_catchup {
+                store.registered_native_metadata_member_store_id()?
+            } else {
+                store.registered_native_learner_store_id()?
+            }
         };
+        if registered_catchup {
+            self.validate_registered_metadata_catchup(observed, business, &token)?;
+        }
         if self.service.is_none() {
             return Err(invalid("cold metadata lost its retained SAME service"));
         }
@@ -305,8 +392,12 @@ impl NativeColdLearnerMetadataHost {
             cut("after-bind")?;
             observed.require_live_request(business)?;
             token.check()?;
-            self.factory
-                .enrolled_metadata_context(observed, business, &self.network)?;
+            if registered_catchup {
+                self.validate_registered_metadata_catchup(observed, business, &token)?;
+            } else {
+                self.factory
+                    .enrolled_metadata_context(observed, business, &self.network)?;
+            }
             Ok(())
         })();
         if let Err(error) = finish {

@@ -43,6 +43,7 @@ pub(crate) use native_metadata_store::NativeMetadataInitializationCut;
 pub(crate) use native_metadata_store::NativeMetadataPreVoteFact;
 pub(crate) use native_metadata_store::{
     NativeMetadataAppendProvenance, NativeOwnedMetadataMemberObservation,
+    NativeRegisteredMetadataCatchupObservation,
 };
 pub(crate) use native_supervisor::NativeMetadataSupervisorSnapshot;
 

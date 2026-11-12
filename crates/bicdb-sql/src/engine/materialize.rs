@@ -2283,6 +2283,19 @@ impl<'db> SqlEngine<'db> {
                             .collect(),
                         false,
                     )
+                } else if is_virtual_table(&table) {
+                    // Virtual catalogs have declared labels but no physical
+                    // collection for the ordinary relation-name resolver.
+                    // Match relation_table_columns precedence so Describe
+                    // never executes a catalog query to discover its labels.
+                    (
+                        self.relation_table_columns(&table, &[])?
+                            .0
+                            .into_iter()
+                            .map(|(name, _)| name)
+                            .collect(),
+                        false,
+                    )
                 } else {
                     let resolved = resolve_session_relation_name(self.db_ref(), &table).ok()?;
                     if let Some(schema) =

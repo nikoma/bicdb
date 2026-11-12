@@ -25,14 +25,44 @@ fn pin() -> String {
 fn replicate(
     stores: &mut BTreeMap<ClusterNodeId, MetadataConsensusStore>,
     leader: &ClusterNodeId,
+    fixture: &ActualNativeRf3Fixture,
 ) -> Vec<String> {
     let mut refused = Vec::new();
     for _ in 0..3 {
         for i in [0, 2] {
             let id = node(i);
             let request = stores[leader].append_request_from(1, 32).unwrap();
-            match stores.get_mut(&id).unwrap().handle_append_request(request) {
+            #[cfg(feature = "tls-replication")]
+            let result = if i == 0 {
+                let actual = Arc::new(Mutex::new(stores.remove(&id).unwrap()));
+                let result =
+                    crate::distribution_transport::test_dispatch_metadata_append_with_actual_store(
+                        &fixture.services[&id],
+                        &actual,
+                        &fixture.topology,
+                        leader,
+                        request,
+                    );
+                stores.insert(
+                    id.clone(),
+                    Arc::try_unwrap(actual)
+                        .ok()
+                        .expect("actual receiver must not retain test metadata owner")
+                        .into_inner(),
+                );
+                result
+            } else {
+                stores.get_mut(&id).unwrap().handle_append_request(request)
+            };
+            #[cfg(not(feature = "tls-replication"))]
+            let result = stores.get_mut(&id).unwrap().handle_append_request(request);
+            match result {
                 Ok(reply) => {
+                    if !reply.success {
+                        refused.push(format!(
+                            "actual native metadata actor non-countable response: {reply:?}"
+                        ));
+                    }
                     stores
                         .get_mut(leader)
                         .unwrap()
@@ -85,7 +115,7 @@ fn native_metadata_actor_reused_pin_cannot_rebind_old_root_but_retirement_persis
         .unwrap()
         .become_leader(&votes)
         .unwrap();
-    assert!(replicate(&mut stores, &leader).is_empty());
+    assert!(replicate(&mut stores, &leader, &f).is_empty());
     let local = MetadataReadParticipant::from_transport(
         leader.clone(),
         1,
@@ -114,11 +144,17 @@ fn native_metadata_actor_reused_pin_cannot_rebind_old_root_but_retirement_persis
         .unwrap()
         .propose_topology(retired.clone())
         .unwrap();
-    let refusals = replicate(&mut stores, &leader);
+    let refusals = replicate(&mut stores, &leader, &f);
     assert!(refusals
         .iter()
         .any(|e| e.contains("actual native metadata actor")));
     assert_eq!(stores[&node(0)].committed_topology(), &retired);
+    #[cfg(feature = "tls-replication")]
+    assert_eq!(
+        *f.topology.read(),
+        retired,
+        "actual receiver must publish durable retirement despite non-countable ACK"
+    );
     assert_eq!(
         stores[&node(0)].status().role,
         MetadataConsensusRole::Follower
@@ -146,11 +182,13 @@ fn native_metadata_actor_reused_pin_cannot_rebind_old_root_but_retirement_persis
             .vote_granted
     );
     assert!(stores.get_mut(&node(0)).unwrap().start_election().is_err());
-    assert!(stores
+    let refused_probe = stores
         .get_mut(&node(0))
         .unwrap()
         .handle_read_authority_probe(stale_probe)
-        .is_err());
+        .unwrap();
+    assert!(!refused_probe.append.success);
+    assert_eq!(refused_probe.append.match_index, 0);
     assert_eq!(stores[&node(0)].committed_topology(), &retired);
     assert_eq!(
         fs::read(
@@ -221,7 +259,7 @@ fn native_metadata_actor_reused_pin_cannot_rebind_old_root_but_retirement_persis
         .unwrap()
         .propose_topology(replacement.clone())
         .unwrap();
-    assert!(!replicate(&mut stores, &leader).is_empty());
+    assert!(!replicate(&mut stores, &leader, &f).is_empty());
     assert_eq!(
         stores[&node(0)].committed_topology(),
         &replacement,
@@ -259,8 +297,14 @@ fn native_metadata_actor_reused_pin_cannot_rebind_old_root_but_retirement_persis
         .unwrap()
         .propose_topology(promoted.clone())
         .unwrap();
-    assert!(!replicate(&mut stores, &leader).is_empty());
+    assert!(!replicate(&mut stores, &leader, &f).is_empty());
     assert_eq!(stores[&node(0)].committed_topology(), &promoted);
+    #[cfg(feature = "tls-replication")]
+    assert_eq!(
+        *f.topology.read(),
+        promoted,
+        "shared cache must name committed replacement, never old identity"
+    );
     assert!(promoted.is_metadata_voter(&node(0)));
     assert_eq!(stores[&node(0)].status().voted_for, Some(leader.clone()));
     let current_last = stores[&leader].status().last_log_index;

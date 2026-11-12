@@ -7,6 +7,7 @@ mod deferred_materialize;
 mod exact_decimal_sum;
 use exact_decimal_sum::ExactDecimalSum;
 mod local_namespace_identity;
+mod mutation_identity;
 mod sql_partition_execution;
 pub use sql_partition_execution::CollectionCacheStamp;
 mod native_wal_apply;

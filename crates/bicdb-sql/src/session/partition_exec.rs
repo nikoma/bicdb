@@ -446,6 +446,32 @@ impl SqlSession<'_> {
                     source,
                     std::iter::once((after.clone(), *snapshot)),
                 )?;
+            } else if source == &target.name
+                && (self.db_ref().collection_policy(source)?.is_some()
+                    || self
+                        .db_ref()
+                        .mutation_policy(source)?
+                        .is_some_and(|p| p.grants_required))
+            {
+                // Native authorizes the logical UPDATE against its own locked
+                // preimage and both addresses. Never ask an UPDATE capability
+                // to authorize physical DELETE/INSERT operations.
+                let prepared = self.update_session_identity_with_grant(
+                    source,
+                    before,
+                    after.clone(),
+                    *snapshot,
+                )?;
+                validate_updated_records(
+                    self.db_ref(),
+                    self.read_tx(),
+                    source,
+                    &target,
+                    std::slice::from_ref(&prepared),
+                    std::slice::from_ref(&(before.clone(), prepared.clone())),
+                    Some(&self.sql_engine()),
+                    assigned_columns,
+                )?;
             } else {
                 self.delete_session_records_with_statement_snapshots(
                     source,

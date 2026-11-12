@@ -566,3 +566,261 @@ fn transactional_catalog_rename_does_not_widen_native_mutation_grants() {
         .unwrap()
         .is_some());
 }
+
+#[test]
+fn identity_update_uses_one_scoped_update_and_preserves_native_policy_checks() {
+    for mode in [
+        bicdb_core::StorageMode::EmbeddedMemory,
+        bicdb_core::StorageMode::ServerPaged,
+    ] {
+        for scenario in [
+            "success",
+            "missing_id_column",
+            "wrong_operation",
+            "fixed_address",
+            "prefix_escape",
+            "stale_version",
+            "immutable_value",
+            "immutable_id",
+            "wrong_old_tenant",
+            "occupied_destination",
+        ] {
+            let dir = tempfile::tempdir().unwrap();
+            let cfg = bicdb_core::DbConfig::default()
+                .with_storage_mode(mode.clone())
+                .with_fsync(true)
+                .with_paged_buffer_pool_bytes(8 * 1024 * 1024);
+            let mut db = BicDb::open_with_config(dir.path(), cfg.clone()).unwrap();
+            db.create_collection("documents").unwrap();
+            let old = record(
+                "doc-1",
+                if scenario == "wrong_old_tenant" {
+                    "tenant-b"
+                } else {
+                    "tenant-a"
+                },
+                "workspace-a",
+                1,
+                "old",
+            );
+            db.insert("documents", old.clone()).unwrap();
+            if scenario == "occupied_destination" {
+                db.insert(
+                    "documents",
+                    record("doc-2", "tenant-a", "workspace-a", 1, "occupied"),
+                )
+                .unwrap();
+            }
+            let policy = MutationPolicy::grants_required()
+                .with_tenant_field("tenant_id")
+                .with_workspace_field("workspace_id")
+                .with_version_field("version")
+                .with_immutable_fields(if scenario == "immutable_id" {
+                    vec!["id"]
+                } else {
+                    vec!["created_by"]
+                })
+                .with_audit();
+            db.set_mutation_policy("documents", policy).unwrap();
+            let mut tx = db
+                .begin_application_transaction(actor("tenant-a", "workspace-a"))
+                .unwrap();
+            let mut spec = grant(
+                MutationOperation::Update,
+                "doc-1",
+                Some(if scenario == "stale_version" { 9 } else { 1 }),
+            );
+            spec.record_id = None;
+            spec.record_id_prefix = Some(
+                if scenario == "prefix_escape" {
+                    "doc-1"
+                } else {
+                    "doc-"
+                }
+                .into(),
+            );
+            if scenario == "fixed_address" {
+                spec.record_id_prefix = None;
+                spec.record_id = Some("doc-1".into());
+            }
+            if scenario == "wrong_operation" {
+                spec.operation = MutationOperation::Delete;
+            }
+            if scenario == "missing_id_column" {
+                spec.allowed_columns.remove("id");
+            }
+            let authority = tx.issue_mutation_grant(spec).unwrap();
+            let mut next = record("doc-2", "tenant-a", "workspace-a", 2, "new");
+            if scenario == "immutable_value" {
+                next.metadata["created_by"] = json!("other");
+            }
+            let result =
+                tx.update_identity_with_grant(authority, "documents", "doc-1", next.clone(), 0);
+            if scenario == "success" {
+                result.unwrap();
+                assert_eq!(tx.broker_publish_len(), 1);
+                assert_eq!(tx.write_len(), 2);
+                assert!(
+                    tx.update_with_grant(authority, "documents", next).is_err(),
+                    "single-action capability reused"
+                );
+                tx.commit().unwrap();
+                assert!(db.get("documents", "doc-1").unwrap().is_none());
+                assert_eq!(
+                    db.get("documents", "doc-2").unwrap().unwrap().metadata["name"],
+                    "new"
+                );
+            } else {
+                assert!(result.is_err(), "{scenario} unexpectedly authorized");
+                assert_eq!(tx.write_len(), 0, "{scenario} staged a partial move");
+                assert_eq!(tx.broker_publish_len(), 0, "{scenario} published an audit");
+                assert_eq!(tx.lock_len(), 0, "{scenario} leaked row locks");
+                tx.rollback().unwrap();
+                assert_eq!(
+                    db.get("documents", "doc-1").unwrap().unwrap().as_ref(),
+                    &old
+                );
+                assert_eq!(
+                    db.get("documents", "doc-2").unwrap().is_some(),
+                    scenario == "occupied_destination"
+                );
+            }
+            db.close().unwrap();
+            for _ in 0..2 {
+                let db = BicDb::open_with_config(dir.path(), cfg.clone()).unwrap();
+                assert_eq!(
+                    db.get("documents", "doc-1").unwrap().is_none(),
+                    scenario == "success"
+                );
+                assert!(db
+                    .verify_indexes_consistently()
+                    .unwrap()
+                    .iter()
+                    .all(|r| r.valid));
+                db.close().unwrap();
+            }
+        }
+    }
+}
+
+#[test]
+fn identity_update_refuses_a_destination_committed_after_its_snapshot() {
+    for mode in [
+        bicdb_core::StorageMode::EmbeddedMemory,
+        bicdb_core::StorageMode::ServerPaged,
+    ] {
+        let dir = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open_with_config(
+            dir.path(),
+            bicdb_core::DbConfig::default().with_storage_mode(mode),
+        )
+        .unwrap();
+        db.create_collection("documents").unwrap();
+        db.insert(
+            "documents",
+            record("doc-1", "tenant-a", "workspace-a", 1, "old"),
+        )
+        .unwrap();
+        db.set_mutation_policy("documents", MutationPolicy::grants_required().with_audit())
+            .unwrap();
+        let mut stale = db
+            .begin_application_transaction(actor("tenant-a", "workspace-a"))
+            .unwrap();
+        stale.set_snapshot_isolation(true, 0).unwrap();
+        assert!(stale
+            .get_for_integrity_check("documents", "doc-2")
+            .unwrap()
+            .is_none());
+        let mut spec = grant(MutationOperation::Update, "doc-1", None);
+        spec.record_id = None;
+        let authority = stale.issue_mutation_grant(spec).unwrap();
+        let mut peer = db
+            .begin_application_transaction(actor("tenant-a", "workspace-a"))
+            .unwrap();
+        let insert = peer
+            .issue_mutation_grant(grant(MutationOperation::Insert, "doc-2", None))
+            .unwrap();
+        peer.insert_with_grant(
+            insert,
+            "documents",
+            record("doc-2", "tenant-a", "workspace-a", 1, "peer"),
+        )
+        .unwrap();
+        peer.commit().unwrap();
+        assert!(stale
+            .update_identity_with_grant(
+                authority,
+                "documents",
+                "doc-1",
+                record("doc-2", "tenant-a", "workspace-a", 2, "forbidden"),
+                0
+            )
+            .is_err());
+        assert_eq!(stale.write_len(), 0);
+        assert_eq!(stale.broker_publish_len(), 0);
+        stale.rollback().unwrap();
+        assert_eq!(
+            db.get("documents", "doc-1").unwrap().unwrap().metadata["name"],
+            "old"
+        );
+        assert_eq!(
+            db.get("documents", "doc-2").unwrap().unwrap().metadata["name"],
+            "peer"
+        );
+        db.close().unwrap();
+    }
+}
+
+#[test]
+fn failed_identity_update_restores_source_locks_audit_and_capability_budget() {
+    for mode in [
+        bicdb_core::StorageMode::EmbeddedMemory,
+        bicdb_core::StorageMode::ServerPaged,
+    ] {
+        let dir = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open_with_config(
+            dir.path(),
+            bicdb_core::DbConfig::default().with_storage_mode(mode),
+        )
+        .unwrap();
+        db.create_collection("documents").unwrap();
+        db.insert(
+            "documents",
+            record("doc-1", "tenant-a", "workspace-a", 1, "old"),
+        )
+        .unwrap();
+        db.set_mutation_policy("documents", MutationPolicy::grants_required().with_audit())
+            .unwrap();
+        let mut tx = db
+            .begin_application_transaction(actor("tenant-a", "workspace-a"))
+            .unwrap();
+        let mut spec = grant(MutationOperation::Update, "doc-1", None);
+        spec.record_id = None;
+        spec.allowed_columns.insert("vector".into());
+        let authority = tx.issue_mutation_grant(spec).unwrap();
+        let mut invalid = record("doc-2", "tenant-a", "workspace-a", 2, "new");
+        invalid.vector = Some(vec![f32::NAN]);
+        assert!(tx
+            .update_identity_with_grant(authority, "documents", "doc-1", invalid, 0)
+            .is_err());
+        assert_eq!(tx.write_len(), 0);
+        assert_eq!(tx.lock_len(), 0);
+        assert_eq!(tx.broker_publish_len(), 0);
+        tx.update_identity_with_grant(
+            authority,
+            "documents",
+            "doc-1",
+            record("doc-2", "tenant-a", "workspace-a", 2, "new"),
+            0,
+        )
+        .unwrap();
+        assert_eq!(tx.broker_publish_len(), 1);
+        tx.commit().unwrap();
+        assert!(db.get("documents", "doc-1").unwrap().is_none());
+        assert_eq!(
+            db.get("documents", "doc-2").unwrap().unwrap().metadata["name"],
+            "new"
+        );
+        db.close().unwrap();
+    }
+}

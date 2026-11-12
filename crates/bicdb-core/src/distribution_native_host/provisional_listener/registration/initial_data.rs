@@ -25,6 +25,8 @@ pub struct NativeInitialDataStatus {
     pub replica_readiness: &'static str,
     pub ranges: Vec<NativeInitialDataRangeStatus>,
     pub cleanup_quarantined_owners: usize,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub writer_binding_diagnostic: Option<serde_json::Value>,
 }
 
 /// Only this actual INITIAL owner constructs it after policy publication. It
@@ -360,6 +362,12 @@ impl NativeInitialDataHost {
                 "request-scoped fresh MQ/data QQ/MVCC/final MQ; publication is not readiness",
             ranges,
             cleanup_quarantined_owners: NativeInitialDataCleanupSender::quarantined_owners(),
+            writer_binding_diagnostic: self.enrollment.as_ref().map(|owner| {
+                let mut diagnostic = owner.guard.binding_diagnostic();
+                diagnostic["retained_owner_coordinator_id"] =
+                    serde_json::json!(owner.coordinator.native_writer_coordinator_id());
+                diagnostic
+            }),
         })
     }
     pub(super) fn stop(&mut self, parent: &CancellationToken) -> Result<()> {

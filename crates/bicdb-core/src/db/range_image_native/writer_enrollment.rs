@@ -197,6 +197,37 @@ pub(crate) struct InstalledNativeWriterHostGuard {
     state: Arc<NativeWriterHostState>,
 }
 impl InstalledNativeWriterHostGuard {
+    /// Read-only diagnostic DATA from the retained actual installation. No
+    /// DB/service/native-journal reacquisition or role/readiness authority.
+    /// The bound registration may have been revoked; its ID is not a grant.
+    pub(crate) fn binding_diagnostic(&self) -> serde_json::Value {
+        let observed = self.state.registration.upgrade();
+        let actual = observed
+            .as_ref()
+            .and_then(|registration| registration.authority());
+        let expected = self.state.coordinator.upgrade();
+        let matches = actual
+            .as_ref()
+            .zip(expected.as_ref())
+            .map(|(actual, expected)| Arc::ptr_eq(actual, expected));
+        let lifetime = self.state.require_lifetime();
+        serde_json::json!({
+            "scope":"diagnostic retained binding only; not linearizable Ready/role or a permission",
+            "persisted_policy_coordinator_id":self.state.record.coordinator_id,
+            "persisted_policy_registration_generation":self.state.record.generation,
+            "persisted_policy_database_open_incarnation":self.state.record.database_incarnation,
+            "persisted_policy_range_store_open_id":self.state.record.store_open_id,
+            "persisted_policy_checksum_sha256":self.state.record.checksum_sha256,
+            "observed_bound_registration_generation":observed.as_ref().map(|registration| registration.generation()),
+            "observed_bound_registration_active":observed.as_ref().map(|registration| registration.is_active()),
+            "observed_bound_authority_matches_retained_coordinator":matches,
+            "observed_weak_directory_alive":self.state.directory.upgrade().is_some(),
+            "observed_binding_lifetime_live":lifetime.is_ok(),
+            "observed_binding_liveness_error":lifetime.err().map(|error|error.to_string()),
+            "current_database_hook_slot_not_relocked":true,
+            "identity_from_status_dto_is_not_authority":true,
+        })
+    }
     pub(crate) fn writer_enforcement_version(&self) -> u32 {
         1
     }

@@ -507,6 +507,19 @@ fn native_strong_point_reservation_deadline_and_native_writer_do_not_invert_stam
     ));
     assert!(start.elapsed() < Duration::from_secs(2));
     fixture.idle();
+    let business = Uuid::now_v7();
+    let round = crate::distribution_native_read::NativeReadQuorumRound::begin(
+        fixture.first(business, &range, &parent),
+        business,
+        Uuid::now_v7(),
+        &node("n0"),
+        &parent,
+    )
+    .unwrap();
+    let local = fixture.native.services[&node("n0")]
+        .lock()
+        .observe_current_native_range(&round.request().observation, &parent)
+        .unwrap();
     // Outer DB.write may be owned by native origin. Its actual logical-range
     // admission MUST fail before a mutation permit, never wait on this reader.
     let next = fixture.key(range.id, "blocked-before-prepare");
@@ -523,6 +536,11 @@ fn native_strong_point_reservation_deadline_and_native_writer_do_not_invert_stam
             .range_index(),
         1
     );
+    // This EXISTING actual proof must remain current: checking only a new
+    // native R would miss a failed writer that rotated the reader stamp first.
+    local
+        .require_current(&fixture.native.services[&node("n0")].lock())
+        .unwrap();
     drop(held);
     assert!(
         observed(fixture.read(fixture.request(&key, &range), &parent))
@@ -651,4 +669,95 @@ fn native_strong_point_born2_legacy_event_get_never_falls_back_to_empty_database
     fixture.idle();
     // This tests the explicit refusal until the separate host dispatcher is
     // installed; it makes no typed routing or incoming Strong endpoint claim.
+}
+
+#[test]
+fn native_strong_point_policy_native_wal_publication_failure_fences_old_guard_and_prepare() {
+    let mut fixture = EnforcedNetwork::new();
+    let (key, range) = fixture.seed();
+    let command = fixture.native.services[&node("n0")]
+        .lock()
+        .probe_range_write_for_peer(&range, &node("n0"), 1)
+        .unwrap()
+        .entry
+        .unwrap()
+        .command;
+    let business = Uuid::now_v7();
+    let observation = fixture.clients[&node("n0")]
+        .acquire_host_metadata_observation(
+            &node("n1"),
+            business,
+            Duration::from_secs(5),
+            &CancellationToken::uncancelable(),
+        )
+        .unwrap();
+    let policy = {
+        let service = fixture.native.services[&node("n0")].lock();
+        let db = fixture.native.databases[&node("n0")].read();
+        service
+            .prepare_native_host_writer_enrollment(&db, observation, business)
+            .unwrap()
+    };
+    {
+        let db = fixture.native.databases[&node("n0")].read();
+        db.test_fail_next_native_host_policy_publication();
+        let error = db
+            .install_enrolled_native_coordinator(fixture.coordinators[&node("n0")].clone(), policy)
+            .unwrap_err();
+        assert!(
+            error
+                .to_string()
+                .contains("after actual native WAL publication"),
+            "{error}"
+        );
+        assert!(fixture.hosts[&node("n0")]
+            .require_current(&db, &range)
+            .is_err());
+    }
+    let error = fixture.native.services[&node("n0")]
+        .lock()
+        .prepare_range_write(&range, &node("n0"), command)
+        .unwrap_err();
+    assert!(
+        error.to_string().contains("writer") || error.to_string().contains("policy"),
+        "{error}"
+    );
+    assert_eq!(
+        unavailable(fixture.read(
+            fixture.request(&key, &range),
+            &CancellationToken::uncancelable()
+        ))
+        .stage,
+        NativeStrongReadStage::WriterAdmission
+    );
+    fixture.idle();
+    // Independently fresh HostMQ/install retry, never a flag/old receipt reset.
+    let business = Uuid::now_v7();
+    let observation = fixture.clients[&node("n0")]
+        .acquire_host_metadata_observation(
+            &node("n1"),
+            business,
+            Duration::from_secs(5),
+            &CancellationToken::uncancelable(),
+        )
+        .unwrap();
+    let policy = {
+        let service = fixture.native.services[&node("n0")].lock();
+        let db = fixture.native.databases[&node("n0")].read();
+        service
+            .prepare_native_host_writer_enrollment(&db, observation, business)
+            .unwrap()
+    };
+    let host = fixture.native.databases[&node("n0")]
+        .read()
+        .install_enrolled_native_coordinator(fixture.coordinators[&node("n0")].clone(), policy)
+        .unwrap();
+    fixture.hosts.insert(node("n0"), Arc::new(host));
+    assert!(observed(fixture.read(
+        fixture.request(&key, &range),
+        &CancellationToken::uncancelable()
+    ))
+    .record()
+    .is_some());
+    fixture.idle();
 }

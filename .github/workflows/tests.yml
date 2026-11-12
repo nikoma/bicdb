@@ -27,6 +27,11 @@ on:
         type: string
         required: false
         default: ''
+      cli_failure_db_custody:
+        description: 'Opt in to bounded stopped native metadata CLI DB roots on failure; never TLS or quarantine uploads'
+        type: boolean
+        required: false
+        default: false
 
 permissions:
   contents: read
@@ -57,6 +62,7 @@ jobs:
       CORE_FILTER: ${{ inputs.core_filter }}
       PGWIRE_FILTER: ${{ inputs.pgwire_filter }}
       CLI_TARGET: ${{ inputs.cli_target }}
+      CLI_DB_CUSTODY: ${{ inputs.cli_failure_db_custody }}
     steps:
       - name: Reject incompatible or malformed selectors
         shell: bash
@@ -73,6 +79,8 @@ jobs:
                   raise SystemExit(f'{name} must be a bounded single-line substring, not an option')
           if values['CLI_TARGET'] and not re.fullmatch(r'[A-Za-z0-9_][A-Za-z0-9_-]{0,127}', values['CLI_TARGET']):
               raise SystemExit('CLI_TARGET must be a bounded Cargo integration-target name')
+          if os.environ.get('CLI_DB_CUSTODY') == 'true' and values['CLI_TARGET'] != 'native_metadata_operator_cli':
+              raise SystemExit('DB custody requires explicit manual native_metadata_operator_cli target')
           print('Selected: ' + (selected[0] if selected else 'all broad suites'))
           PYCODE
 
@@ -270,6 +278,7 @@ jobs:
     timeout-minutes: 90
     env:
       BICDB_CLI_TEST_TARGET: ${{ inputs.cli_target }}
+      BICDB_CAPTURE_CLI_DB_FAILURE: ${{ inputs.cli_failure_db_custody }}
       RUST_TEST_THREADS: "1"
     steps:
       - uses: actions/checkout@v4
@@ -306,6 +315,11 @@ jobs:
           # No BICDB_TEST_EVIDENCE_ROOT: generated TLS/DB fixture directories
           # stay private and are deliberately outside this uploaded subtree.
           export BICDB_TEST_CLI_EVIDENCE_ROOT="$RUNNER_TEMP/native-cli-evidence/failure-diagnostics"
+          export BICDB_TEST_CLI_RPC_EVIDENCE_ROOT="$RUNNER_TEMP/native-cli-evidence/rpc-journals"
+          if [[ "$BICDB_CAPTURE_CLI_DB_FAILURE" == 'true' ]]; then
+            export BICDB_TEST_CLI_DB_EVIDENCE_ROOT="$RUNNER_TEMP/native-cli-db-custody"
+            mkdir -p "$BICDB_TEST_CLI_DB_EVIDENCE_ROOT"
+          fi
           export BICDB_TEST_SOURCE_SHA="$GITHUB_SHA"
           cargo test -p bicdb-cli --test "$BICDB_CLI_TEST_TARGET" --locked -- --nocapture --test-threads=1 \
             2>&1 | tee "$RUNNER_TEMP/native-cli-evidence/tests.log"
@@ -325,6 +339,18 @@ jobs:
           include-hidden-files: true
           if-no-files-found: warn
           path: ${{ runner.temp }}/native-cli-evidence/
+
+      - name: Retain explicitly opted-in stopped native databases only
+        if: always() && inputs.cli_failure_db_custody
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-cli-stopped-databases-${{ github.sha }}-${{ github.run_attempt }}
+          retention-days: 3
+          include-hidden-files: true
+          if-no-files-found: warn
+          # Exact subtree only. Private .native-cli-db-quarantine siblings and
+          # generated fixture TLS roots are deliberately OUTSIDE this path.
+          path: ${{ runner.temp }}/native-cli-db-custody/
 
   focused-pgwire:
     name: Focused PGwire library (${{ inputs.pgwire_filter }})

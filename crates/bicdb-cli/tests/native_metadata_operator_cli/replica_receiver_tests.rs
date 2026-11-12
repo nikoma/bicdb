@@ -7,6 +7,7 @@ use super::*;
 fn native_registered_replica_receiver_actual_cli_four_data_then_fifth_same_owner_no_data_grant() {
     let identity = actual_cli_identity_before_phase();
     let (mut processes, root, mut config, addresses, mut sequences) = four_processes(false);
+    let rpc = super::rpc_evidence::DurableRpcJournal::open(&root).unwrap();
     let mut ledger = std::fs::OpenOptions::new()
         .write(true)
         .create_new(true)
@@ -53,29 +54,43 @@ fn native_registered_replica_receiver_actual_cli_four_data_then_fifth_same_owner
         network.clone(),
     )
     .unwrap();
-    let initial = bootstrap.fetch_snapshot(&node(0), &addresses[0]).unwrap();
+    let setup = rpc.begin(serde_json::json!({"public_operation":"authenticated_bootstrap_setup","destination":"n0","address":addresses[0],"bootstrap_raw_frame_covered":false})).unwrap();
+    let initial = bootstrap.fetch_snapshot(&node(0), &addresses[0]);
+    setup.bootstrap(&initial).unwrap();
+    let initial = initial.unwrap();
     config.transport = network.clone();
     let gateway = bicdb_core::ClusterEventClient::new(&config, initial.topology)
         .unwrap()
         .with_request_timeout(Duration::from_secs(2))
+        .unwrap()
+        .with_rpc_evidence_observer(
+            rpc.observer("same_public_gateway"),
+            bicdb_core::ClusterRpcEvidenceLimits::default(),
+        )
         .unwrap();
     let key = "ack-before-fifth-replica-receiver";
     let expected = serde_json::json!({"entire":"external ACK precedes fifth stage","nested":[17,null,{"retained":true}]});
+    let append_call = rpc.begin(serde_json::json!({"public_operation":"append","namespace":"items","key":key,"value":expected,"payload_sha256":super::rpc_evidence::payload_sha256(&expected),"phase":"before_fifth","request_timeout_ms":2000})).unwrap();
     journal(
         &mut ledger,
-        serde_json::json!({"stage":"attempt_before_fifth","namespace":"items","key":key,"value":expected}),
+        serde_json::json!({"logical_operation_id":append_call.id,"stage":"attempt_before_fifth","namespace":"items","key":key,"value":expected}),
     );
     let ack = gateway.append("items", key, expected.clone());
     journal(
         &mut ledger,
-        serde_json::json!({"stage":"reply_before_fifth","key":key,"value":expected,
+        serde_json::json!({"logical_operation_id":append_call.id,"stage":"reply_before_fifth","key":key,"value":expected,
         "acknowledged":ack.is_ok(),"error":ack.as_ref().err().map(ToString::to_string)}),
     );
+    append_call.append(&ack).unwrap();
     assert_eq!(ack.unwrap(), true);
-    let value = gateway.get_strong("items", key).unwrap();
+    let read_call = rpc.begin(serde_json::json!({"public_operation":"get_strong","namespace":"items","key":key,"phase":"before_fifth","request_timeout_ms":2000})).unwrap();
+    let value = gateway.get_strong("items", key);
+    let read_id = read_call.id;
+    read_call.strong(&value).unwrap();
+    let value = value.unwrap();
     journal(
         &mut ledger,
-        serde_json::json!({"stage":"strong_before_fifth","key":key,"present":value.is_some(),"value":value}),
+        serde_json::json!({"logical_operation_id":read_id,"stage":"strong_before_fifth","key":key,"present":value.is_some(),"value":value}),
     );
     assert_eq!(value, Some(expected.clone()));
     let (command, status) = paths(&root, 4);
@@ -170,7 +185,10 @@ fn native_registered_replica_receiver_actual_cli_four_data_then_fifth_same_owner
         !command.exists(),
         "single join command has no hidden step orchestration"
     );
-    let current = bootstrap.fetch_snapshot(&node(0), &addresses[0]).unwrap();
+    let bootstrap_call = rpc.begin(serde_json::json!({"public_operation":"authenticated_bootstrap_after_fifth","destination":"n0","address":addresses[0],"bootstrap_raw_frame_covered":false})).unwrap();
+    let current = bootstrap.fetch_snapshot(&node(0), &addresses[0]);
+    bootstrap_call.bootstrap(&current).unwrap();
+    let current = current.unwrap();
     assert!(current
         .topology
         .ranges
@@ -181,6 +199,11 @@ fn native_registered_replica_receiver_actual_cli_four_data_then_fifth_same_owner
         node(0),
         std::sync::Arc::new(parking_lot::RwLock::new(current.topology.clone())),
         network,
+    )
+    .unwrap()
+    .with_rpc_evidence_observer(
+        rpc.observer("direct_unassigned_receiver_probe"),
+        bicdb_core::ClusterRpcEvidenceLimits::default(),
     )
     .unwrap();
     let range = current.topology.ranges.values().next().unwrap();
@@ -202,6 +225,7 @@ fn native_registered_replica_receiver_actual_cli_four_data_then_fifth_same_owner
     ] {
         // Actual public TLS requests using observed scope DATA, not a fake
         // assignment or a test-installed metadata/serving permission.
+        let receiver_call = rpc.begin(serde_json::json!({"public_operation":"replica_receiver_refusal_probe","destination":"n4","range_id":range.id,"range_epoch":range.epoch,"operation":operation})).unwrap();
         let result = transport.application_event(
             &node(4),
             bicdb_core::ClusterEventRequest {
@@ -210,6 +234,7 @@ fn native_registered_replica_receiver_actual_cli_four_data_then_fifth_same_owner
                 operation,
             },
         );
+        receiver_call.receiver(&result).unwrap();
         assert!(
             result.is_err(),
             "replica-only receiver cannot ACK APP or return blank absence"
@@ -218,7 +243,10 @@ fn native_registered_replica_receiver_actual_cli_four_data_then_fifth_same_owner
     // SAME stale gateway: after membership changes it may require separately
     // fresh writer enrollment. Neither a transient refusal nor receiver-ready
     // becomes successful absence for the previously ACKed key.
-    match gateway.get_strong("items", key) {
+    let postjoin_call = rpc.begin(serde_json::json!({"public_operation":"get_strong","namespace":"items","key":key,"phase":"same_gateway_after_fifth","request_timeout_ms":2000,"healthy_continuity_not_assumed":true})).unwrap();
+    let postjoin_result = gateway.get_strong("items", key);
+    postjoin_call.strong(&postjoin_result).unwrap();
+    match postjoin_result {
         Ok(value) => {
             assert_eq!(value, Some(expected));
             journal(
@@ -237,4 +265,6 @@ fn native_registered_replica_receiver_actual_cli_four_data_then_fifth_same_owner
         "fifth_data_serving":false,"next_missing_gates":["native_placement_controller","authenticated_native_image_joint_wire","actual_image_joint_open_and_writer_admission"],
         "relocation":"not_attempted_or_claimed"}),
     );
+    rpc.finish_case("receiver_prerequisite_only_postjoin_continuity_not_qualified")
+        .unwrap();
 }

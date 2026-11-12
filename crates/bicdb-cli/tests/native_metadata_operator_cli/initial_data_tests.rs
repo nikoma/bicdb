@@ -108,6 +108,7 @@ pub(super) fn open_data(root: &Path, i: usize, sequence: &mut u64, budget_ms: u6
 fn native_initial_data_actual_cli_four_process_first_ack_and_strong_full_value() {
     let identity = actual_cli_identity_before_phase();
     let (mut processes, root, mut config, addresses, mut sequences) = four_processes(false);
+    let rpc = super::rpc_evidence::DurableRpcJournal::open(&root).unwrap();
     assert_eq!(processes.children.len(), 4);
     let ids = processes
         .children
@@ -149,11 +150,19 @@ fn native_initial_data_actual_cli_four_process_first_ack_and_strong_full_value()
     .unwrap();
     // Routing/bootstrap is actual authenticated DATA. The event operations
     // themselves must acquire the existing real native writer/Strong proofs.
-    let snapshot = bootstrap.fetch_snapshot(&node(0), &addresses[0]).unwrap();
+    let setup = rpc.begin(serde_json::json!({"public_operation":"authenticated_bootstrap_setup","destination":"n0","address":addresses[0],"bootstrap_raw_frame_covered":false})).unwrap();
+    let snapshot = bootstrap.fetch_snapshot(&node(0), &addresses[0]);
+    setup.bootstrap(&snapshot).unwrap();
+    let snapshot = snapshot.unwrap();
     config.transport = network;
     let gateway = bicdb_core::ClusterEventClient::new(&config, snapshot.topology)
         .unwrap()
         .with_request_timeout(Duration::from_secs(2))
+        .unwrap()
+        .with_rpc_evidence_observer(
+            rpc.observer("public_event_gateway"),
+            bicdb_core::ClusterRpcEvidenceLimits::default(),
+        )
         .unwrap();
     let pending = open_data(&root, 0, &mut sequences[0], 2000);
     journal(
@@ -179,24 +188,27 @@ fn native_initial_data_actual_cli_four_process_first_ack_and_strong_full_value()
     // This is a no-user-ACK control; an error is not a global abort certificate.
     let blocked_key = "before-initial-data-quorum";
     let blocked_value = serde_json::json!({"phase":"must_not_ack_before_quorum"});
+    let blocked_call = rpc.begin(serde_json::json!({"public_operation":"append","namespace":"items","key":blocked_key,"value":blocked_value,"payload_sha256":super::rpc_evidence::payload_sha256(&blocked_value),"request_timeout_ms":2000})).unwrap();
     journal(
         &mut ledger,
-        serde_json::json!({"stage":"attempt", "namespace":"items", "key":blocked_key, "value":blocked_value, "payload_sha256":payload_sha256(&blocked_value)}),
+        serde_json::json!({"logical_operation_id":blocked_call.id,"stage":"attempt", "namespace":"items", "key":blocked_key, "value":blocked_value, "payload_sha256":payload_sha256(&blocked_value)}),
     );
     let blocked = gateway.append("items", blocked_key, blocked_value);
     journal(
         &mut ledger,
-        serde_json::json!({"stage":"reply", "key":blocked_key, "acknowledged":blocked.is_ok(), "error":blocked.as_ref().err().map(ToString::to_string)}),
+        serde_json::json!({"logical_operation_id":blocked_call.id,"stage":"reply", "key":blocked_key, "acknowledged":blocked.is_ok(), "error":blocked.as_ref().err().map(ToString::to_string)}),
     );
+    blocked_call.append(&blocked).unwrap();
     assert!(
         blocked.is_err(),
         "partial initial startup must not acknowledge an APP"
     );
     // A typed Strong absence must not escape the constructed-but-unpublished
     // dispatcher during that same partial startup.
-    assert!(gateway
-        .get_strong("items", "not-written-before-open")
-        .is_err());
+    let pending_read = rpc.begin(serde_json::json!({"public_operation":"get_strong","namespace":"items","key":"not-written-before-open","request_timeout_ms":2000})).unwrap();
+    let pending_result = gateway.get_strong("items", "not-written-before-open");
+    pending_read.strong(&pending_result).unwrap();
+    assert!(pending_result.is_err());
 
     let mut ready = [false; 4];
     let until = Instant::now() + Duration::from_secs(40);
@@ -241,24 +253,30 @@ fn native_initial_data_actual_cli_four_process_first_ack_and_strong_full_value()
         ("external-json-null", Value::Null),
         ("external-empty-object", serde_json::json!({})),
     ] {
+        let append_call = rpc.begin(serde_json::json!({"public_operation":"append","namespace":"items","key":key,"value":expected,"payload_sha256":super::rpc_evidence::payload_sha256(&expected),"request_timeout_ms":2000})).unwrap();
         journal(
             &mut ledger,
-            serde_json::json!({"stage":"attempt", "namespace":"items", "key":key, "value":expected, "payload_sha256":payload_sha256(&expected)}),
+            serde_json::json!({"logical_operation_id":append_call.id,"stage":"attempt", "namespace":"items", "key":key, "value":expected, "payload_sha256":payload_sha256(&expected)}),
         );
         let ack = gateway.append("items", key, expected.clone());
         journal(
             &mut ledger,
-            serde_json::json!({"stage":"reply", "key":key, "value":expected, "payload_sha256":payload_sha256(&expected), "acknowledged":ack.is_ok(), "inserted":ack.as_ref().ok(), "error":ack.as_ref().err().map(ToString::to_string)}),
+            serde_json::json!({"logical_operation_id":append_call.id,"stage":"reply", "key":key, "value":expected, "payload_sha256":payload_sha256(&expected), "acknowledged":ack.is_ok(), "inserted":ack.as_ref().ok(), "error":ack.as_ref().err().map(ToString::to_string)}),
         );
+        append_call.append(&ack).unwrap();
         assert_eq!(
             ack.unwrap(),
             true,
             "a fresh key must produce a real new ACK"
         );
-        let actual = gateway.get_strong("items", key).unwrap();
+        let read_call = rpc.begin(serde_json::json!({"public_operation":"get_strong","namespace":"items","key":key,"request_timeout_ms":2000})).unwrap();
+        let actual = gateway.get_strong("items", key);
+        let read_id = read_call.id;
+        read_call.strong(&actual).unwrap();
+        let actual = actual.unwrap();
         journal(
             &mut ledger,
-            serde_json::json!({"stage":"strong_reply", "key":key, "present":actual.is_some(), "value":actual}),
+            serde_json::json!({"logical_operation_id":read_id,"stage":"strong_reply", "key":key, "present":actual.is_some(), "value":actual}),
         );
         assert_eq!(
             actual,
@@ -266,12 +284,14 @@ fn native_initial_data_actual_cli_four_process_first_ack_and_strong_full_value()
             "Strong must return the ENTIRE externally ACKed value"
         );
     }
-    let absent = gateway
-        .get_strong("items", "genuine-unwritten-key")
-        .unwrap();
+    let absence_call = rpc.begin(serde_json::json!({"public_operation":"get_strong","namespace":"items","key":"genuine-unwritten-key","request_timeout_ms":2000})).unwrap();
+    let absent = gateway.get_strong("items", "genuine-unwritten-key");
+    let absence_id = absence_call.id;
+    absence_call.strong(&absent).unwrap();
+    let absent = absent.unwrap();
     journal(
         &mut ledger,
-        serde_json::json!({"stage":"strong_reply", "key":"genuine-unwritten-key", "present":absent.is_some(), "value":absent}),
+        serde_json::json!({"logical_operation_id":absence_id,"stage":"strong_reply", "key":"genuine-unwritten-key", "present":absent.is_some(), "value":absent}),
     );
     assert_eq!(
         absent, None,
@@ -286,8 +306,11 @@ fn native_initial_data_actual_cli_four_process_first_ack_and_strong_full_value()
         );
         assert_eq!(reply["host"]["data_serving"], true);
     }
+    let repeated_read = rpc.begin(serde_json::json!({"public_operation":"get_strong","namespace":"items","key":"external-first-ack","phase":"same_owner_retry","request_timeout_ms":2000})).unwrap();
+    let repeated_value = gateway.get_strong("items", "external-first-ack");
+    repeated_read.strong(&repeated_value).unwrap();
     assert_eq!(
-        gateway.get_strong("items", "external-first-ack").unwrap(),
+        repeated_value.unwrap(),
         Some(
             serde_json::json!({"full":{"array":[1,true,null,{"nested":"retained"}]},"count":17,"text":"entire acknowledged payload"})
         )
@@ -296,4 +319,6 @@ fn native_initial_data_actual_cli_four_process_first_ack_and_strong_full_value()
         &mut ledger,
         serde_json::json!({"stage":"four_initial_data_complete", "externally_acknowledged":3, "fifth_data_stage":"not_entered", "automatic_range_move":"not_implemented"}),
     );
+    rpc.finish_case("four_initial_only_original_assertions_passed")
+        .unwrap();
 }

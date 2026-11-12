@@ -24,6 +24,8 @@ fn binary() -> Command {
 mod custody;
 #[path = "native_metadata_operator_cli/database_custody.rs"]
 mod database_custody;
+#[path = "native_metadata_operator_cli/rpc_evidence.rs"]
+mod rpc_evidence;
 
 struct Processes {
     children: Vec<Child>,

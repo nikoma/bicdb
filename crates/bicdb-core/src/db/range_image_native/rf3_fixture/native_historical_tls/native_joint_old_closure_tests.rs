@@ -8,6 +8,8 @@ use crate::distribution::{
 };
 use crate::distribution_range_handoff::{NativeJointHandoffRuntime, NativeJointOldRound};
 
+mod complete_joint_tests;
+
 fn commit_pending(fixture: &mut EnforcedNetwork, original: &RangeDescriptor) -> RelocationId {
     let mut candidate = fixture.native.topology.read().clone();
     // Explicit operator plan DATA, proposed and committed by real fsynced

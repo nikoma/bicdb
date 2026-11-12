@@ -1,0 +1,652 @@
+//! Genuine same-open joint prerequisite. Initial four-member/ RF3 placement
+//! is declared before birth; every subsequent proof comes from actual native
+//! stores/services, TLS metadata, the completed image and distinct data sets.
+//! Local opaque-object orchestration is NOT an operator/wire handoff test.
+use super::*;
+use crate::distribution_range_consensus::{
+    ImageInstallPurpose, NativeImageInstallRole, RecoveryFenceScope,
+};
+use crate::distribution_range_handoff::{
+    NativeJointDurableDecision, NativeJointNewObservation, NativeJointNewRound,
+    NativeJointPreparedServingObservation, NativeJointPreparedServingRound,
+};
+use crate::distribution_range_image::RangeImageCapture;
+use crate::distribution_range_image_install::{
+    NativeImageCatalogueFinalization, NativeImageInstallFreeze, NativeRangeImageInstaller,
+};
+use crate::distribution_range_recovery::RecoveryEpochFenceRequest;
+use crate::RangeSnapshotOptions;
+
+fn refresh_hosts(fixture: &mut EnforcedNetwork) {
+    for local in [node("n0"), node("n1"), node("n2"), node("n3")] {
+        let business = Uuid::now_v7();
+        let mq = fixture.clients[&local]
+            .acquire_host_metadata_observation(
+                &node("n1"),
+                business,
+                Duration::from_secs(5),
+                &CancellationToken::uncancelable(),
+            )
+            .unwrap();
+        let policy = {
+            let service = fixture.native.services[&local].lock();
+            let db = fixture.native.databases[&local].read();
+            service
+                .prepare_native_host_writer_enrollment(&db, mq, business)
+                .unwrap()
+        };
+        let guard = fixture.native.databases[&local]
+            .read()
+            .install_enrolled_native_coordinator(fixture.coordinators[&local].clone(), policy)
+            .unwrap();
+        fixture.hosts.insert(local, Arc::new(guard));
+    }
+}
+
+fn commit_actual_topology(fixture: &mut EnforcedNetwork, candidate: crate::ClusterTopology) {
+    let mut leader = fixture.metadata[&node("n1")].lock();
+    let entry = leader.propose_topology(candidate).unwrap();
+    for local in [node("n0"), node("n2"), node("n3")] {
+        let reply = fixture.metadata[&local]
+            .lock()
+            .handle_append_request(leader.append_request_from(entry.index, 16).unwrap())
+            .unwrap();
+        leader.record_append_response(&local, &reply).unwrap();
+    }
+    assert!(leader.status().commit_index >= entry.index);
+    for local in [node("n0"), node("n2"), node("n3")] {
+        let reply = fixture.metadata[&local]
+            .lock()
+            .handle_append_request(leader.append_request_from(entry.index + 1, 16).unwrap())
+            .unwrap();
+        leader.record_append_response(&local, &reply).unwrap();
+    }
+    let committed = leader.committed_topology().clone();
+    drop(leader);
+    for store in fixture.metadata.values() {
+        assert_eq!(store.lock().committed_topology(), &committed);
+    }
+    *fixture.native.topology.write() = committed;
+}
+
+fn commit_joint_stage(
+    fixture: &mut EnforcedNetwork,
+    decision: &NativeJointDurableDecision,
+    stage: usize,
+) {
+    let business = Uuid::now_v7();
+    let fresh = fixture.clients[&node("n1")]
+        .acquire_host_metadata_observation(
+            &node("n1"),
+            business,
+            Duration::from_secs(5),
+            &CancellationToken::uncancelable(),
+        )
+        .unwrap();
+    let current = fresh.committed_topology(business).unwrap().clone();
+    let member = &current.nodes[&node("n1")];
+    // A planning view only. The actual opaque decision + independent HostMQ
+    // validate each builder; only real MStore majority ACKs commit its output.
+    let root = tempfile::tempdir().unwrap();
+    let mut view = crate::DistributionStore::initialize_at(
+        root.path(),
+        crate::DistributionConfig {
+            enabled: true,
+            cluster_id: current.cluster_id.clone(),
+            node_id: member.id.clone(),
+            node_address: member.address.clone(),
+            node_incarnation: member.incarnation,
+            node_tls_certificate_sha256: member.tls_certificate_sha256.clone(),
+            range_image_bootstrap_id: current.range_image_bootstrap_id,
+            initial_ranges: 2,
+            replication_factor: 3,
+            ..Default::default()
+        },
+        true,
+        1,
+    )
+    .unwrap();
+    view.install_authoritative_topology(current).unwrap();
+    let mut view = view.fork_ephemeral();
+    match stage {
+        0 => {
+            assert!(view
+                .certify_native_joint_handoff(decision, &fresh, business, &node("n1"), 10)
+                .unwrap());
+        }
+        1 => {
+            view.promote_native_joint_handoff_frozen(decision, &fresh, business, &node("n1"), 11)
+                .unwrap();
+        }
+        2 => {
+            view.finalize_native_joint_membership_frozen(
+                decision,
+                &fresh,
+                business,
+                &node("n1"),
+                12,
+            )
+            .unwrap();
+        }
+        _ => panic!("unknown actual joint stage"),
+    }
+    commit_actual_topology(fixture, view.topology().clone());
+}
+
+fn install_actual_target(
+    fixture: &EnforcedNetwork,
+    plan: &crate::distribution_range_handoff::NativeJointHandoffPlan,
+    mut capture: RangeImageCapture,
+) -> (NativeImageInstallFreeze, NativeImageCatalogueFinalization) {
+    let target = node("n3");
+    let parent = CancellationToken::uncancelable();
+    let actor = fixture.clients[&node("n0")].local_metadata_read_participant();
+    let initial = role(fixture, plan, &target);
+    let scope = RecoveryFenceScope::from_role(&initial).unwrap();
+    fixture.runtimes[&target]
+        .fence_epoch(
+            &actor,
+            &RecoveryEpochFenceRequest {
+                scope: scope.clone(),
+                budget_ms: 5000,
+            },
+            &parent,
+        )
+        .unwrap();
+    let handoff = role(fixture, plan, &target).into_handoff().unwrap();
+    let image_role = NativeImageInstallRole::CommittedHandoff(&handoff);
+    let attempt = Uuid::now_v7();
+    let source = capture.authorize_target_install().unwrap();
+    let lease = fixture.runtimes[&target]
+        .transfer_image_install(
+            &scope,
+            &source,
+            &image_role,
+            ImageInstallPurpose::RelocationLearner,
+            attempt,
+            &parent,
+        )
+        .unwrap();
+    let mut install: NativeRangeImageInstaller = fixture.native.services[&target]
+        .lock()
+        .begin_native_range_image_install(
+            &source,
+            &image_role,
+            lease,
+            ImageInstallPurpose::RelocationLearner,
+            attempt,
+            &parent,
+        )
+        .unwrap();
+    drop(source);
+    loop {
+        let cursor = capture.history_cursor().clone();
+        let step = capture.export_history_step(&cursor, 256, &parent).unwrap();
+        let handoff = role(fixture, plan, &target).into_handoff().unwrap();
+        let source = capture.authorize_target_install().unwrap();
+        let stage_id = install.history_stage_id();
+        let progress = fixture.native.services[&target]
+            .lock()
+            .stage_native_range_image_history(
+                &mut install,
+                &NativeImageInstallRole::CommittedHandoff(&handoff),
+                &source,
+                stage_id,
+                &step,
+                &parent,
+            )
+            .unwrap();
+        if progress.cursor.complete() {
+            break;
+        }
+    }
+    loop {
+        let handoff = role(fixture, plan, &target).into_handoff().unwrap();
+        let source = capture.authorize_target_install().unwrap();
+        if fixture.native.services[&target]
+            .lock()
+            .audit_native_range_image_history(
+                &mut install,
+                &NativeImageInstallRole::CommittedHandoff(&handoff),
+                &source,
+                256,
+                &parent,
+            )
+            .unwrap()
+            .audit_complete
+        {
+            break;
+        }
+    }
+    loop {
+        let handoff = role(fixture, plan, &target).into_handoff().unwrap();
+        let source = capture.authorize_target_install().unwrap();
+        if fixture.native.services[&target]
+            .lock()
+            .clear_native_range_image_step(
+                &mut install,
+                &NativeImageInstallRole::CommittedHandoff(&handoff),
+                &source,
+                &parent,
+            )
+            .unwrap()
+        {
+            break;
+        }
+    }
+    let options = RangeSnapshotOptions {
+        max_records_per_batch: 16,
+        max_bytes_per_batch: 1024 * 1024,
+        max_record_bytes: 1024 * 1024,
+    };
+    loop {
+        let cursor = capture.cursor().clone();
+        let step = capture.export_step(&cursor, &options, &parent).unwrap();
+        let handoff = role(fixture, plan, &target).into_handoff().unwrap();
+        let source = capture.authorize_target_install().unwrap();
+        fixture.native.services[&target]
+            .lock()
+            .copy_native_range_image_step(
+                &mut install,
+                &NativeImageInstallRole::CommittedHandoff(&handoff),
+                &source,
+                attempt,
+                &step,
+                &parent,
+            )
+            .unwrap();
+        if step.complete {
+            break;
+        }
+    }
+    let completed = capture.complete().unwrap();
+    let handoff = role(fixture, plan, &target).into_handoff().unwrap();
+    let mut verification = fixture.native.services[&target]
+        .lock()
+        .begin_native_range_image_verification(
+            install,
+            &NativeImageInstallRole::CommittedHandoff(&handoff),
+            completed,
+            &parent,
+        )
+        .unwrap();
+    let mut complete = false;
+    for _ in 0..128 {
+        let handoff = role(fixture, plan, &target).into_handoff().unwrap();
+        if fixture.native.services[&target]
+            .lock()
+            .advance_native_range_image_verification(
+                &mut verification,
+                &NativeImageInstallRole::CommittedHandoff(&handoff),
+                &parent,
+            )
+            .unwrap()
+            == crate::db::NativeTargetImageVerificationProgress::Complete
+        {
+            complete = true;
+            break;
+        }
+    }
+    assert!(complete, "actual bounded target verification must finish");
+    let handoff = role(fixture, plan, &target).into_handoff().unwrap();
+    let verified = fixture.native.services[&target]
+        .lock()
+        .finish_native_range_image_verification(
+            verification,
+            &NativeImageInstallRole::CommittedHandoff(&handoff),
+            &parent,
+        )
+        .unwrap();
+    assert_eq!(verified.base().range_index(), 1);
+    let handoff = role(fixture, plan, &target).into_handoff().unwrap();
+    let adopted = fixture.native.services[&target]
+        .lock()
+        .adopt_native_range_image_catalogue(
+            verified,
+            &NativeImageInstallRole::CommittedHandoff(&handoff),
+            &parent,
+        )
+        .unwrap();
+    let handoff = role(fixture, plan, &target).into_handoff().unwrap();
+    fixture.native.services[&target]
+        .lock()
+        .finalize_native_range_image_catalogue(
+            adopted,
+            &NativeImageInstallRole::CommittedHandoff(&handoff),
+            &parent,
+        )
+        .unwrap()
+}
+
+#[test]
+fn native_joint_actual_complete_image_target_becomes_leader_ack_and_strong_read() {
+    let parent = CancellationToken::uncancelable();
+    let mut fixture = EnforcedNetwork::new_with_metadata_members(4);
+    fixture.native.root.disable_cleanup(true);
+    fixture._keys.disable_cleanup(true);
+    eprintln!(
+        "RETAINED_NATIVE_JOINT_ROOT={}",
+        fixture.native.root.path().display()
+    );
+    eprintln!(
+        "RETAINED_NATIVE_JOINT_METADATA_ROOT={}",
+        fixture._keys.path().display()
+    );
+    let (key, old) = fixture.seed();
+    let acknowledged = fixture.native.databases[&node("n0")]
+        .read()
+        .get("items", &key)
+        .unwrap()
+        .unwrap();
+    crate::storage::write_atomic(
+        &fixture
+            .native
+            .root
+            .path()
+            .join("actual-joint-selected-range-ack-ledger.json"),
+        &serde_json::to_vec(&vec![acknowledged.clone()]).unwrap(),
+        true,
+    )
+    .unwrap();
+    let original_uid = fixture.native.databases[&node("n3")]
+        .read()
+        .local_namespace_identity("items")
+        .unwrap();
+    let relocation = commit_pending(&mut fixture, &old);
+    let current = fixture
+        .native
+        .topology
+        .read()
+        .range_by_id(old.id)
+        .unwrap()
+        .clone();
+    let business = Uuid::now_v7();
+    let mq = fixture.clients[&node("n0")]
+        .acquire_metadata_read_observation(
+            &node("n1"),
+            business,
+            current.id,
+            current.epoch,
+            Duration::from_secs(5),
+            &parent,
+        )
+        .unwrap();
+    let mut round = NativeJointOldRound::begin(mq, business, relocation).unwrap();
+    let plan = round.plan();
+    assert_eq!(plan.activation_range().leader, node("n3"));
+    let runtimes = [node("n0"), node("n1"), node("n2")]
+        .into_iter()
+        .map(|id| {
+            (
+                id.clone(),
+                NativeJointHandoffRuntime::new(fixture.native.services[&id].clone()).unwrap(),
+            )
+        })
+        .collect::<BTreeMap<_, _>>();
+    for local in runtimes.keys() {
+        let actual = runtimes[local]
+            .observe_constraints(plan.clone(), role(&fixture, &plan, local), &parent)
+            .unwrap();
+        round
+            .record_constraints(actual, &fixture.native.services[local])
+            .unwrap();
+    }
+    for local in runtimes.keys() {
+        round
+            .record_closed(
+                runtimes[local]
+                    .close_old(plan.clone(), role(&fixture, &plan, local), &parent)
+                    .unwrap(),
+            )
+            .unwrap();
+    }
+    let mut closed = round.finish().unwrap();
+    let capture = closed
+        .begin_capture(Duration::from_secs(2), &parent)
+        .unwrap();
+    let closed = Arc::new(closed);
+    let (frozen, image) = install_actual_target(&fixture, &plan, capture);
+    assert!(matches!(&frozen, NativeImageInstallFreeze::Recovery(_)));
+    assert_eq!(
+        image.base().logical_history_sha256(),
+        closed.logical_history_sha256()
+    );
+    let handoff = role(&fixture, &plan, &node("n3")).into_handoff().unwrap();
+    let target = fixture.native.services[&node("n3")]
+        .lock()
+        .observe_native_joint_new_target(&closed, handoff, image, frozen, &parent)
+        .unwrap();
+    let mut new = NativeJointNewRound::begin(closed.clone()).unwrap();
+    for local in [node("n1"), node("n2")] {
+        new.record_actual_survivor(&local, role(&fixture, &plan, &local))
+            .unwrap();
+    }
+    new.record(
+        NativeJointNewObservation::from_finalized_actual_target(
+            target,
+            fixture.native.services[&node("n3")].clone(),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    let mut publication = new
+        .finish()
+        .unwrap()
+        .prepare_decision()
+        .unwrap()
+        .publication_round();
+    for local in [node("n0"), node("n1"), node("n2"), node("n3")] {
+        publication
+            .publish_actual_member(role(&fixture, &plan, &local), &parent)
+            .unwrap();
+    }
+    let decision = publication.finish().unwrap();
+    let old_h = decision.data().logical_history_sha256().to_owned();
+    for stage in 0..3 {
+        commit_joint_stage(&mut fixture, &decision, stage);
+    }
+    refresh_hosts(&mut fixture);
+    let activation_range = fixture
+        .native
+        .topology
+        .read()
+        .range_by_id(old.id)
+        .unwrap()
+        .clone();
+    assert_eq!(&activation_range, plan.activation_range());
+    let mut prepared_round: Option<NativeJointPreparedServingRound> = None;
+    for (local, (service, lease)) in decision.into_new_serving_owners().unwrap() {
+        let business = Uuid::now_v7();
+        let mq = fixture.clients[&local]
+            .acquire_host_metadata_observation(
+                &node("n1"),
+                business,
+                Duration::from_secs(5),
+                &parent,
+            )
+            .unwrap();
+        let actual = {
+            let actual = service.lock();
+            let committed = actual
+                .observe_committed_native_joint_decision(mq, business, old.id)
+                .unwrap();
+            actual
+                .prepare_local_native_joint_serving(committed, lease, &parent)
+                .unwrap()
+        };
+        let observation =
+            NativeJointPreparedServingObservation::from_actual_service(actual, service).unwrap();
+        if let Some(round) = &mut prepared_round {
+            round.record(observation).unwrap();
+        } else {
+            prepared_round =
+                Some(NativeJointPreparedServingRound::begin(observation, &parent).unwrap());
+        }
+    }
+    let prepared = Arc::new(prepared_round.unwrap().finish().unwrap());
+    let mut publication = prepared.serving_publication_round().unwrap();
+    for local in [node("n1"), node("n2"), node("n3")] {
+        let admission = prepared
+            .acquire_local_activation(&fixture.clients[&local], &node("n1"), &parent)
+            .unwrap();
+        publication
+            .publish_actual_local_member(&admission, &parent)
+            .unwrap();
+    }
+    let published = Arc::new(publication.finish().unwrap());
+    let mut activations: BTreeMap<
+        ClusterNodeId,
+        Arc<crate::distribution_range_consensus::NativeJointCatalogueActivationReceipt>,
+    > = BTreeMap::new();
+    let mut image_release = None;
+    for local in [node("n1"), node("n2"), node("n3")] {
+        let admission = published
+            .acquire_local_open(&fixture.clients[&local], &node("n1"), &parent)
+            .unwrap();
+        let activation = Arc::new(
+            admission
+                .persist_local_catalogue_activation(&parent)
+                .unwrap(),
+        );
+        if local == node("n3") {
+            assert!(
+                admission
+                    .retain_image_release_owner(activations[&node("n1")].clone())
+                    .is_err(),
+                "another actual member receipt must not release this image"
+            );
+            image_release = Some(
+                admission
+                    .retain_image_release_owner(activation.clone())
+                    .unwrap(),
+            );
+        }
+        activations.insert(local, activation);
+    }
+    let mut image_release = image_release.unwrap();
+    assert!(
+        image_release.release(&parent).is_err(),
+        "actual quorum owners still hold the target freeze"
+    );
+    drop(published);
+    drop(prepared);
+    drop(closed);
+    let canceled = CancellationToken::uncancelable()
+        .child_with_deadline(Instant::now() - Duration::from_millis(1));
+    assert!(image_release.release(&canceled).is_err());
+    {
+        let held = fixture.native.services[&node("n3")].lock();
+        assert!(image_release.release(&parent).is_err());
+        drop(held);
+    }
+    assert!(fixture.native.databases[&node("n3")]
+        .read()
+        .range_mutation_gate()
+        .try_enter(old.id)
+        .is_err());
+    assert!(image_release
+        .test_release_after_actual_drop_error(&parent)
+        .is_err());
+    // Actual owner has drained, but the protected joint guard remains CLOSED
+    // until this SAME retained receipt arms it. A retry cannot mint a new TTL.
+    assert!(fixture.coordinators[&node("n3")]
+        .recover_local_leadership(8)
+        .is_err());
+    image_release.release(&parent).unwrap();
+    image_release.release(&parent).unwrap();
+    for local in [node("n1"), node("n2")] {
+        runtimes[&local]
+            .release_activated_new_member(activations[&local].clone())
+            .unwrap();
+    }
+    assert!(fixture.native.databases[&node("n0")]
+        .read()
+        .range_mutation_gate()
+        .try_enter(old.id)
+        .is_err());
+    assert_eq!(
+        fixture.native.databases[&node("n3")]
+            .read()
+            .local_namespace_identity("items")
+            .unwrap(),
+        original_uid
+    );
+    for local in [node("n1"), node("n2"), node("n3")] {
+        let db = fixture.native.databases[&local].read();
+        assert_eq!(db.actual_native_writer_enforcement_version().unwrap(), 1);
+        let native = db.current_native_range_source_lineage(old.id).unwrap();
+        assert_eq!(native.range_index(), 1);
+        assert_eq!(native.logical_history_sha256(), old_h);
+        assert_eq!(native.native_write_range().unwrap(), &activation_range);
+        assert_eq!(db.get("items", &key).unwrap(), Some(acknowledged.clone()));
+    }
+    assert!(
+        fixture.coordinators[&node("n3")]
+            .recover_local_leadership(8)
+            .unwrap()
+            >= 1
+    );
+    let next_key = fixture.key(old.id, "actual-new-target-next-ack");
+    let next = crate::Record::new(&next_key);
+    {
+        let db = fixture.native.databases[&node("n3")].write();
+        let mut tx = db.begin_transaction().unwrap();
+        tx.insert("items", next.clone()).unwrap();
+        tx.commit().unwrap();
+    }
+    crate::storage::write_atomic(
+        &fixture
+            .native
+            .root
+            .path()
+            .join("actual-joint-selected-range-ack-ledger.json"),
+        &serde_json::to_vec(&vec![acknowledged.clone(), next.clone()]).unwrap(),
+        true,
+    )
+    .unwrap();
+    let mut actual_h = None;
+    for local in [node("n1"), node("n2"), node("n3")] {
+        let db = fixture.native.databases[&local].read();
+        let native = db.current_native_range_source_lineage(old.id).unwrap();
+        assert_eq!(native.range_index(), 2);
+        if let Some(h) = &actual_h {
+            assert_eq!(native.logical_history_sha256(), h);
+        } else {
+            actual_h = Some(native.logical_history_sha256().to_owned());
+        }
+        assert_eq!(db.get("items", &key).unwrap(), Some(acknowledged.clone()));
+        assert_eq!(db.get("items", &next_key).unwrap(), Some(next.clone()));
+    }
+    {
+        let db = fixture.native.databases[&node("n0")].write();
+        let mut tx = db.begin_transaction().unwrap();
+        tx.insert(
+            "items",
+            crate::Record::new(fixture.key(old.id, "stale-old-must-refuse")),
+        )
+        .unwrap();
+        assert!(tx.commit().is_err());
+    }
+    let request = fixture.request(&next_key, &activation_range);
+    let first = fixture.clients[&node("n3")]
+        .acquire_metadata_read_observation(
+            &node("n1"),
+            request.business_request_id,
+            old.id,
+            activation_range.epoch,
+            Duration::from_secs(5),
+            &parent,
+        )
+        .unwrap();
+    let observed = observed(fixture.coordinators[&node("n3")].strong_point_read(
+        &fixture.runtimes[&node("n3")],
+        Some(fixture.hosts[&node("n3")].clone()),
+        fixture.clients[&node("n3")].clone(),
+        first,
+        request,
+        &parent,
+    ));
+    assert_eq!(observed.record(), Some(&next));
+    assert_eq!(observed.audit().range_index, 2);
+    fixture.idle();
+}

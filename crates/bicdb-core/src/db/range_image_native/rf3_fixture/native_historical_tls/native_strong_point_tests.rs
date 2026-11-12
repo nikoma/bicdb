@@ -348,6 +348,23 @@ impl EnforcedNetwork {
 }
 impl Drop for EnforcedNetwork {
     fn drop(&mut self) {
+        // Retain failed acknowledged-history fixtures before closing listeners.
+        // Copy/reconcile only after all process owners have exited; this neither
+        // opens nor changes the retained databases or metadata stores.
+        if std::thread::panicking() {
+            for (label, root) in [
+                ("DATABASES", &mut self.native.root),
+                ("METADATA_AND_PRIVATE_TLS", &mut self._keys),
+            ] {
+                match tempfile::tempdir() {
+                    Ok(empty) => {
+                        let retained = std::mem::replace(root, empty).keep();
+                        eprintln!("RETAINED_BORN2_STRONG_{label} {}", retained.display());
+                    }
+                    Err(error) => eprintln!("FAILED_TO_RETAIN_BORN2_STRONG_{label}: {error}"),
+                }
+            }
+        }
         while let Some(server) = self.servers.pop() {
             server.join().unwrap();
         }

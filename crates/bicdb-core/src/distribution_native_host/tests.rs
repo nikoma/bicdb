@@ -242,6 +242,18 @@ fn native_host_initial_metadata_binds_every_actual_factory_and_rejects_recreated
     for seed in &seeds {
         let topology = enrolled.topology_for_actual_seed(seed, &token).unwrap();
         assert_eq!(topology.format_version, 2);
+        let actual_schema = seed
+            .database
+            .read()
+            .schema_compatibility_fingerprint()
+            .unwrap()
+            .sha256;
+        assert!(topology.nodes.values().all(|member| {
+            member
+                .labels
+                .get(crate::distribution::SCHEMA_COMPATIBILITY_NODE_LABEL)
+                == Some(&actual_schema)
+        }));
         for expected in &seeds {
             let binding = topology.nodes[&expected.spec.node_id]
                 .native_store_birth_v1

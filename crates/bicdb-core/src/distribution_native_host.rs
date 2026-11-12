@@ -444,13 +444,22 @@ impl NativeInitialMetadataConfiguration {
         }) {
             return Err(invalid("initial metadata has an unenrolled planned voter"));
         }
+        // These commitments come from every actual matching schema scan above.
+        // The later host-writer producer requires them on each current voter.
+        let schema_sha256 =
+            schema_sha256.ok_or_else(|| invalid("initial metadata has no schema"))?;
+        for node in topology.nodes.values_mut() {
+            node.labels.insert(
+                crate::distribution::SCHEMA_COMPATIBILITY_NODE_LABEL.into(),
+                schema_sha256.clone(),
+            );
+        }
         topology.validate()?;
         cancellation.check()?;
         Ok(Self {
             topology,
             plan_sha256,
-            schema_sha256: schema_sha256
-                .ok_or_else(|| invalid("initial metadata has no schema"))?,
+            schema_sha256,
         })
     }
 

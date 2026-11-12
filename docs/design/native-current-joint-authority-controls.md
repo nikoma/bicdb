@@ -26,7 +26,9 @@ remain identical, and all NEW serving gates remain open.
 
 A separately produced original role/request is then allowed to expire at its
 original absolute deadline. The same original parent and scope must return the
-specific timeout and leave the same native/raw state unchanged. There is no
+specific timeout and leave the same native/raw state unchanged. This is an
+original-caller/client pre-I/O boundary, not an observed delayed receiver-role
+rejection. There is no
 fresh replacement witness or longer parent for this negative.
 
 Finally, a DIFFERENT actual operation obtains the real full current-member
@@ -35,7 +37,11 @@ host owner is retained too. Repeating that saved operation must reject the
 original writer-object mismatch while the original request/role remains live.
 The native policy update itself is expected metadata; the saved range catalogue,
 physical prefix/history/B/UID/rows and original irreversible controls must stay
-unchanged. The actual new Frozen owners remain restrictive on all three voters.
+unchanged. The actual new Frozen owners remain restrictive on all three voters. Retaining
+the old host keeps its writer state object alive; this does not claim the old
+weak registration remains operational. The old refusal nonce is compared with
+the original nonce from the actual completed durable joint decision. Every cut
+also reads the actual protected Abort3 record and requires its absence.
 
 This outcome is explicitly `FullHandoffThenCurrentJointAuthorityRefusals`, not
 FullHandoffThenPostJointNoDataAck4Strong. It claims neither canonical Abort3 nor

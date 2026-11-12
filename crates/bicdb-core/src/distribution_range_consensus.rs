@@ -1531,6 +1531,9 @@ impl RangeWriteStore {
     }
 
     pub fn abort(&mut self, command: &RangeWriteCommand) -> Result<RangeWriteState> {
+        if self.requires_native_abort_tracking()? {
+            return Err(range_write_error("native abort-aware slots require actual permanent AbortPromise quorum and canonical native history; raw Abort is not a decision"));
+        }
         let previous = self.catalog.clone();
         let range_id = command.range_id;
         let entry = self.match_entry_mut(command)?;

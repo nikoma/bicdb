@@ -279,6 +279,17 @@ fn native_abort_actual_enforced_post_durable_commit_errors_cannot_become_no_effe
         let raw = &value["catalog"]["ranges"][range.id.to_string()]["entries"]["1"];
         assert_eq!(raw["state"], serde_json::json!("committed"), "{id}: {raw}");
     }
+    let original = fixture.native.services[&node("n0")]
+        .lock()
+        .prepared_range_writes(range.id)
+        .into_iter()
+        .next()
+        .unwrap();
+    // A delayed old leader's bare Abort cannot turn a durable Commit into
+    // canonical absence, even before any new recovery fence is installed.
+    assert!(fixture.clients[&node("n0")]
+        .abort_range_write(&node("n0"), &original)
+        .is_err());
     let retry = fixture
         .native
         .append(&fixture.key(range.id, "unknown-must-recover-first"))

@@ -1401,10 +1401,7 @@ pub(crate) fn executable_primary_key_index_for_schema(
         .iter()
         .find(|index| {
             index.name.eq_ignore_ascii_case(&expected.name)
-                && index.collection.eq_ignore_ascii_case(&expected.collection)
-                && index.unique == expected.unique
-                && index.kind == expected.kind
-                && index_field_lists_match(&index.fields, &expected.fields)
+                && unique_constraint_index_definition_matches(index, &expected)
         })
         .cloned()
 }

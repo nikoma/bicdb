@@ -24,10 +24,10 @@ pub(crate) use writer_enrollment::{InstalledNativeWriterHostGuard, NativeWriterH
 mod serving_configuration;
 pub(crate) use native_read::{NativeRangeReadPhysical, NativeReadLocalDbSequence};
 pub(crate) use serving_configuration::{
-    NativeActivationDecisionReceipt, NativeJointBridgeReadScope, NativeJointDecisionReceipt,
-    NativeJointHistoricalCutScope, NativeJointOldCloseReceipt, NativeJointOldPhysicalProof,
-    NativeJointPreparedPublicationScope, NativeJointServingBridgeReceipt,
-    NativeJointServingPreparation, NativeRecoveredServingReceipt,
+    NativeActivationDecisionReceipt, NativeCurrentJointBinding, NativeCurrentJointRecoveryDomain,
+    NativeJointBridgeReadScope, NativeJointDecisionReceipt, NativeJointHistoricalCutScope,
+    NativeJointOldCloseReceipt, NativeJointOldPhysicalProof, NativeJointPreparedPublicationScope,
+    NativeJointServingBridgeReceipt, NativeJointServingPreparation, NativeRecoveredServingReceipt,
 };
 use serving_configuration::{NativeJointServingDomain, NativeRecoveredServingConfiguration};
 #[cfg(test)]
@@ -613,6 +613,10 @@ impl SourceRangeImageLineage {
             .map_or(self.base.actual_local_visibility_sequence, |prefix| {
                 prefix.actual_local_visibility_sequence()
             })
+    }
+    /// Identity from the actual protected native bridge, never metadata intent.
+    pub(crate) fn current_joint_decision_sha256(&self) -> Option<&str> {
+        self.joint.as_ref().map(|joint| joint.decision_sha256())
     }
     pub(crate) fn base_range(&self) -> &RangeDescriptor {
         &self.base.range

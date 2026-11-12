@@ -1145,6 +1145,20 @@ impl ClusterDataNodeService {
     ) -> Result<()> {
         self.range_writes.preflight_recovery_nonce(scope)
     }
+    /// Intent discovery only. A protected historical domain cannot mint a
+    /// metadata role or data quorum; each receiver independently checks both.
+    pub(crate) fn observe_current_joint_recovery_purpose(
+        &self,
+        range: crate::distribution::RangeId,
+        parent: &crate::CancellationToken,
+    ) -> Result<crate::distribution_consensus::MetadataRecoveryRolePurpose> {
+        parent.check()?;
+        let db = checked_database_read(&self.db, &self.storage_policy)?;
+        let fact = db.observe_current_joint_recovery_domain(&self.range_writes, range, parent)?;
+        parent.check()?;
+        Ok(fact.purpose())
+    }
+
     pub(crate) fn preflight_native_recovery(
         &self,
         role: &crate::distribution_range_recovery::RecoveryRoleAdmission,
@@ -1160,8 +1174,21 @@ impl ClusterDataNodeService {
             role.local_member_incarnation(),
         )?;
         native.require_current(&db)?;
-        self.range_writes
-            .preflight_recovery_fence(role, &native, scope)
+        if matches!(
+            role.purpose(),
+            crate::distribution_consensus::MetadataRecoveryRolePurpose::CurrentJointRecovery { .. }
+        ) {
+            let fact = db.observe_current_joint_recovery_domain(
+                &self.range_writes,
+                scope.range_id,
+                cancellation,
+            )?;
+            self.range_writes
+                .preflight_current_joint_recovery(&db, role, &native, scope, &fact)
+        } else {
+            self.range_writes
+                .preflight_recovery_fence(role, &native, scope)
+        }
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -1335,8 +1362,21 @@ impl ClusterDataNodeService {
         role.require_live_request()?;
         self.range_mutations
             .validate_quiescent_frozen(scope.range_id, frozen)?;
-        self.range_writes
-            .fence_recovery_epoch(role, &native, scope)?;
+        if matches!(
+            role.purpose(),
+            crate::distribution_consensus::MetadataRecoveryRolePurpose::CurrentJointRecovery { .. }
+        ) {
+            let fact = db.observe_current_joint_recovery_domain(
+                &self.range_writes,
+                scope.range_id,
+                cancellation,
+            )?;
+            self.range_writes
+                .fence_current_joint_recovery(&db, role, &native, scope, &fact, frozen)?;
+        } else {
+            self.range_writes
+                .fence_recovery_epoch(role, &native, scope)?;
+        }
         cancellation.check()?;
         native.require_current(&db)?;
         role.require_live_request()?;

@@ -147,6 +147,15 @@ impl RangeWriteStore {
         }
         let mut hash = HashWriter(Sha256::new());
         serde_json::to_writer(&mut hash, &commitment)?;
+        if let Some(joint) = self
+            .catalog
+            .current_joint_recoveries
+            .as_ref()
+            .and_then(|m| m.get(&range))
+        {
+            validate_native_json_size(joint, 8 * 1024 * 1024)?;
+            serde_json::to_writer(&mut hash, &("current-joint-refusal-archive-v1", joint))?;
+        }
         Ok(NativeRangeReadCatalogue {
             store_open_id: self.open_id,
             range_id: range,
@@ -211,6 +220,9 @@ impl RangeWriteStore {
                     NativeReadCatalogueDecision::Applied(marker.command_sha256.clone()),
                 )?;
             }
+        }
+        for (index, checksum) in self.archived_joint_certifications(range)? {
+            insert(index, NativeReadCatalogueDecision::Applied(checksum))?;
         }
         for (index, checksum) in self.sparse_irreversible_commands(range)? {
             insert(index, NativeReadCatalogueDecision::Applied(checksum))?;

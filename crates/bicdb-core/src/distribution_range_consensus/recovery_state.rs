@@ -30,7 +30,8 @@ impl RecoveryFenceScope {
     pub(crate) fn freeze_owner(&self) -> Result<Uuid> {
         self.validate()?;
         match self.purpose {
-            MetadataRecoveryRolePurpose::NormalRecovery => Ok(self.recovery_nonce),
+            MetadataRecoveryRolePurpose::NormalRecovery
+            | MetadataRecoveryRolePurpose::CurrentJointRecovery { .. } => Ok(self.recovery_nonce),
             MetadataRecoveryRolePurpose::CommittedHandoff { session_id, .. }
                 if !session_id.is_nil() =>
             {
@@ -63,6 +64,13 @@ impl RecoveryFenceScope {
     }
     /// Structural DTO validation only; never role, quorum or serving authority.
     pub(crate) fn validate(&self) -> Result<()> {
+        if matches!(&self.purpose,MetadataRecoveryRolePurpose::CurrentJointRecovery {joint_decision_sha256}
+            if joint_decision_sha256.len()!=64 || !joint_decision_sha256.bytes().all(|b|b.is_ascii_hexdigit()))
+        {
+            return Err(range_write_error(
+                "invalid current-joint scope intent digest",
+            ));
+        }
         if self.protocol_version != 1
             || self.bootstrap_id.is_nil()
             || self.range_epoch == 0
@@ -750,6 +758,14 @@ impl RangeWriteStore {
         {
             serde_json::to_writer(&mut hash, &("native-abort-control-v1", protocol))?;
         }
+        if let Some(joint) = self
+            .catalog
+            .current_joint_recoveries
+            .as_ref()
+            .and_then(|m| m.get(&range_id))
+        {
+            serde_json::to_writer(&mut hash, &("current-joint-refusal-archive-v1", joint))?;
+        }
         Ok(hex::encode(hash.0.finalize()))
     }
     /// No row/WAL Apply occurs here. Only an independently observed committed
@@ -1146,6 +1162,19 @@ impl RangeWriteStore {
         native: &NativeRecoveryAdmission,
         scope: &RecoveryFenceScope,
     ) -> Result<()> {
+        if matches!(
+            scope.purpose,
+            MetadataRecoveryRolePurpose::CurrentJointRecovery { .. }
+        ) || self
+            .catalog
+            .current_joint_recoveries
+            .as_ref()
+            .is_some_and(|m| m.contains_key(&scope.range_id))
+        {
+            return Err(range_write_error(
+                "current joint recovery requires its dedicated actual protected-domain producer",
+            ));
+        }
         self.require_no_image_install(scope.range_id)?;
         self.preflight_recovery_nonce(scope)?;
         self.require_native_recovery_identity(role, native)?;
@@ -1315,6 +1344,7 @@ impl RangeWriteStore {
         self.require_no_image_install(scope.range_id)?;
         self.require_native_recovery_identity(role, native)?;
         scope.require_role(role)?;
+        self.current_joint_scope_constraint(scope)?;
         let saved = self
             .catalog
             .recovery_fences

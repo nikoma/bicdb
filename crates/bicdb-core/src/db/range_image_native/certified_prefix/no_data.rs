@@ -164,6 +164,13 @@ impl NativeRecoveryAbortedReceipt {
         record.validate(&birth)?;
         record.domain.require_role(role)?;
         let lineage = db.current_native_range_source_lineage(self.scope.range_id)?;
+        db.require_actual_current_joint_abort_domain(
+            &lineage.birth,
+            &lineage.base,
+            &record.scope,
+            &record.domain,
+            record.range_index,
+        )?;
         let entry = db.read_native_history_entry(
             self.scope.range_id,
             lineage.history_generation(),
@@ -226,6 +233,22 @@ impl BicDb {
             .read_native_range_image_record(&decision_key(prefix.range_id, prefix.range_index))?
             .ok_or_else(|| invalid("protected actual AbortPromise quorum decision missing"))?;
         record.validate(birth)?;
+        self.require_actual_current_joint_abort_domain(
+            birth,
+            base,
+            &record.scope,
+            &record.domain,
+            record.range_index,
+        )?;
+        let expected_joint = match &record.scope.purpose {
+            crate::distribution_consensus::MetadataRecoveryRolePurpose::CurrentJointRecovery {
+                joint_decision_sha256,
+            } => Some(joint_decision_sha256.as_str()),
+            _ => None,
+        };
+        if prefix.joint_decision_sha256.as_deref() != expected_joint {
+            return Err(invalid("NoData prefix lost exact qualified joint purpose"));
+        }
         if record.scope.range_id != prefix.range_id
             || record.range_index != prefix.range_index
             || record.previous_index != prefix.previous_index
@@ -274,7 +297,21 @@ impl BicDb {
         native.require_current(self)?;
         // This precedes even the covered-index retry: an existing decision or
         // matching configuration cannot authorize post-joint NoData.
-        self.require_native_no_data_without_joint_domain(fresh.current_range().id)?;
+        let current_joint = if matches!(
+            fresh.purpose(),
+            crate::distribution_consensus::MetadataRecoveryRolePurpose::CurrentJointRecovery { .. }
+        ) {
+            let fact = store.require_current_joint_recovery_domain(self, fresh)?;
+            if quorum.request().range_index <= fact.data().range_index() {
+                return Err(invalid(
+                    "new joint NoData cannot reinterpret an original closed slot",
+                ));
+            }
+            Some(fact)
+        } else {
+            self.require_native_no_data_without_joint_domain(fresh.current_range().id)?;
+            None
+        };
         quorum.require_recipient_role(fresh)?;
         self.require_installed_native_writer_database_for_range(fresh.current_range())?;
         store.preflight_native_abort_publication(self, native, fresh, quorum)?;
@@ -299,6 +336,7 @@ impl BicDb {
             .read_native_birth()?
             .ok_or_else(|| invalid("abort publisher native birth absent"))?;
         let base = source.base.clone();
+        let joint = self.read_native_joint_serving_domain(&birth, &base)?;
         let _journal = self.try_native_image_journal()?;
         self.validate_source_range_image_lineage(
             &source,
@@ -413,7 +451,9 @@ impl BicDb {
                 metadata_context_id: fresh.context_id(),
             },
             recovery_attempt: None,
-            joint_decision_sha256: None,
+            joint_decision_sha256: current_joint
+                .as_ref()
+                .map(|fact| fact.binding().joint_decision_sha256.clone()),
             global_image_generation: base.global_image_generation,
             range_image_generation: base.range_image_generation,
             history_generation: base.history_generation,
@@ -433,7 +473,7 @@ impl BicDb {
                 data_voters: record.domain.member_ids(),
             });
             prefix.checksum_sha256 = prefix.checksum()?;
-            prefix.validate(&birth, &base)?;
+            prefix.validate_with_native_joint_domain(&birth, &base, joint.as_ref())?;
             history::put_immutable_history_entry(paged, xid, base.history_generation, &entry)?;
             paged
                 .store()

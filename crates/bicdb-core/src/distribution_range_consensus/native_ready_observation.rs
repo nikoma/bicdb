@@ -101,6 +101,7 @@ impl RangeWriteStore {
             || !matches!(
                 request.scope.purpose,
                 crate::distribution_consensus::MetadataRecoveryRolePurpose::NormalRecovery
+                    | crate::distribution_consensus::MetadataRecoveryRolePurpose::CurrentJointRecovery { .. }
             )
         {
             return Err(range_write_error(
@@ -173,7 +174,7 @@ impl RangeWriteStore {
             reply: NativeReadyReply {
                 stage: prepared.frozen_stage()?,
                 evidence_version: 1,
-                physical_domain: NativeReadyPhysicalDomain::SameVoterNativeAnchorV1,
+                physical_domain: NativeReadyPhysicalDomain::for_scope(&request.scope)?,
                 scope: request.scope.clone(),
                 challenge: request.challenge,
                 observed_metadata_context_id,

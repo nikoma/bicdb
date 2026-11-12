@@ -561,7 +561,8 @@ impl RecoveryRoleAdmission {
             .and_then(|node| node.labels.get(SCHEMA_COMPATIBILITY_NODE_LABEL))
             .cloned();
         let relocation = match purpose {
-            MetadataRecoveryRolePurpose::NormalRecovery => None,
+            MetadataRecoveryRolePurpose::NormalRecovery
+            | MetadataRecoveryRolePurpose::CurrentJointRecovery { .. } => None,
             MetadataRecoveryRolePurpose::CommittedHandoff { relocation_id, .. } => Some(
                 topology
                     .relocations
@@ -832,7 +833,8 @@ impl RecoveryObservationRoleAdmission {
     pub(crate) fn purpose(scope: &RecoveryFenceScope) -> Result<MetadataRecoveryRolePurpose> {
         use crate::distribution_consensus::MetadataRecoveryHandoffBinding;
         let committed_handoff = match &scope.purpose {
-            MetadataRecoveryRolePurpose::NormalRecovery => None,
+            MetadataRecoveryRolePurpose::NormalRecovery
+            | MetadataRecoveryRolePurpose::CurrentJointRecovery { .. } => None,
             MetadataRecoveryRolePurpose::CommittedHandoff {
                 relocation_id,
                 plan_id,
@@ -852,6 +854,12 @@ impl RecoveryObservationRoleAdmission {
             coordinator_node_id: scope.initiator_node_id.clone(),
             coordinator_incarnation: scope.initiator_incarnation,
             committed_handoff,
+            current_joint_decision_sha256: match &scope.purpose {
+                MetadataRecoveryRolePurpose::CurrentJointRecovery {
+                    joint_decision_sha256,
+                } => Some(joint_decision_sha256.clone()),
+                _ => None,
+            },
         })
     }
     #[allow(clippy::too_many_arguments)]

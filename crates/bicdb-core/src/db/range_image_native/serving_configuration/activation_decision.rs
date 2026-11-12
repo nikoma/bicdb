@@ -68,6 +68,7 @@ impl NativeActivationDecisionRecord {
             || !matches!(
                 self.scope.purpose,
                 MetadataRecoveryRolePurpose::NormalRecovery
+                    | MetadataRecoveryRolePurpose::CurrentJointRecovery { .. }
             )
             || self.scope.range_id != self.range.id
             || self.scope.range_epoch != self.range.epoch
@@ -145,7 +146,11 @@ impl NativeActivationDecisionRecord {
         // Ordinary activation binds data voters, not every metadata member
         // retained in birth ancestry. Historical reuse remains bound to the
         // physical same-voter domain validated by the archived serving floor.
-        let actual_members = if current_serving {
+        let actual_members = if current_serving
+            || matches!(
+                self.scope.purpose,
+                MetadataRecoveryRolePurpose::CurrentJointRecovery { .. }
+            ) {
             actual.native_write_members()?
         } else {
             actual.physical_range_members()?
@@ -199,6 +204,7 @@ impl NativeActivationDecisionRecord {
             })?
         };
         serving.validate_historical_floor(&actual.birth, &actual.base)?;
+        db.require_recovered_serving_joint_binding(&actual.birth, &actual.base, &serving)?;
         if serving.checksum_sha256 != self.native_serving_sha256
             || !serving.scope.same_session(&self.scope)
             || serving.activation_index != self.range_index

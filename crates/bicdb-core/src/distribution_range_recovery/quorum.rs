@@ -712,7 +712,8 @@ pub(super) fn validate_ordinary_fence_for_role(
     }
     let progress = observation.progress();
     let extra_handoff_epoch = match role.purpose() {
-        MetadataRecoveryRolePurpose::NormalRecovery => None,
+        MetadataRecoveryRolePurpose::NormalRecovery
+        | MetadataRecoveryRolePurpose::CurrentJointRecovery { .. } => None,
         MetadataRecoveryRolePurpose::CommittedHandoff { .. } => {
             role.current_range().epoch.checked_add(2)
         }

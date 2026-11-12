@@ -39,7 +39,9 @@ use crate::distribution_range_mutation::{
 use crate::distribution_supervisor::ClusterBackupMetadata;
 use crate::error::{BicDbError, Result};
 
+mod current_joint_recovery;
 mod native_image_base;
+use current_joint_recovery::{CurrentJointRecoveryState, CURRENT_JOINT_CATALOG_FORMAT};
 #[cfg(test)]
 pub(crate) use native_prefix::test_validate_ordinary_native_intent;
 mod native_image_ready;
@@ -157,6 +159,7 @@ const KNOWN_RANGE_WRITE_CATALOG_FORMATS: &[u32] = &[
     INSTALLING_CERTIFICATION_FORMAT,
     NATIVE_JOINT_HANDOFF_CATALOG_FORMAT,
     NATIVE_ABORT_CATALOG_FORMAT,
+    CURRENT_JOINT_CATALOG_FORMAT,
 ];
 
 // Recognizing a format is not a phase, writer or recovery grant. Each caller
@@ -609,6 +612,8 @@ struct RangeWriteCatalog {
     native_joint_handoffs: Option<BTreeMap<RangeId, NativeJointLocalState>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     native_abort_protocol: Option<NativeAbortProtocol>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    current_joint_recoveries: Option<BTreeMap<RangeId, CurrentJointRecoveryState>>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -689,6 +694,7 @@ impl RangeWriteEnvelope {
         if let Some(protocol) = &self.catalog.native_abort_protocol {
             protocol.validate()?;
         }
+        current_joint_recovery::validate_current_joint_catalog(&self.catalog)?;
         sparse_certification::validate_sparse_catalog(&self.catalog)?;
         image_install_certification::validate_installing_certifications(&self.catalog)?;
         image_replacement_handover::validate_installing_handovers(&self.catalog)?;
@@ -820,6 +826,9 @@ pub struct RangeWriteStore {
     native_activated_opens: BTreeMap<RangeId, crate::db::NativeActivatedOpenGuard>,
     native_joint_activated_opens: BTreeMap<RangeId, Arc<crate::db::NativeJointActivatedOpenGuard>>,
     native_writer_host: Option<std::sync::Weak<crate::db::NativeWriterHostState>>,
+    // Necessary lifetime refusal, EMPTY on reopen; never reconstructed from JSON.
+    current_joint_recovery_writers:
+        BTreeMap<RangeId, std::sync::Weak<crate::db::NativeWriterHostState>>,
     _native_abort_owner: Option<bicdb_page::DirectoryLock>,
 }
 
@@ -927,6 +936,7 @@ impl RangeWriteStore {
                     installing_committed_certifications: None,
                     installing_recovery_handovers: None,
                     native_abort_protocol: None,
+                    current_joint_recoveries: None,
                 },
                 false,
             ),
@@ -967,6 +977,14 @@ impl RangeWriteStore {
         {
             return Err(range_write_error(
                 "native abort catalogue lacks its mandatory reader fence",
+            ));
+        }
+
+        if catalog.current_joint_recoveries.is_some()
+            && !crate::format::native_current_joint_recovery_active(&root)?
+        {
+            return Err(range_write_error(
+                "current joint recovery catalogue lacks native reader fence",
             ));
         }
 
@@ -1014,6 +1032,7 @@ impl RangeWriteStore {
             native_activated_opens: BTreeMap::new(),
             native_joint_activated_opens: BTreeMap::new(),
             native_writer_host: None,
+            current_joint_recovery_writers: BTreeMap::new(),
             _native_abort_owner: abort_owner,
             recovery_persistence_uncertain: false,
             catalogue_loaded_at_open: existing_catalog,
@@ -5117,6 +5136,7 @@ mod tests {
             installing_committed_certifications: None,
             installing_recovery_handovers: None,
             native_abort_protocol: None,
+            current_joint_recoveries: None,
         };
         let envelope = RangeWriteEnvelope::new(catalog).unwrap();
         fs::write(
@@ -5160,6 +5180,7 @@ mod tests {
             installing_committed_certifications: None,
             installing_recovery_handovers: None,
             native_abort_protocol: None,
+            current_joint_recoveries: None,
         })
         .unwrap();
         let legacy_bytes = serde_json::to_vec_pretty(&envelope).unwrap();

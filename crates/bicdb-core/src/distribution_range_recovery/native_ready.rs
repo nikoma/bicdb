@@ -22,6 +22,7 @@ impl NativeReadyRequest {
             || !matches!(
                 self.scope.purpose,
                 MetadataRecoveryRolePurpose::NormalRecovery
+                    | MetadataRecoveryRolePurpose::CurrentJointRecovery { .. }
             )
         {
             return Err(invalid(
@@ -42,6 +43,18 @@ impl NativeReadyRequest {
 #[derive(Clone, Copy, Debug, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
 pub(crate) enum NativeReadyPhysicalDomain {
     SameVoterNativeAnchorV1,
+    ProtectedCurrentJointAnchorV1,
+}
+impl NativeReadyPhysicalDomain {
+    pub(crate) fn for_scope(scope: &RecoveryFenceScope) -> Result<Self> {
+        match scope.purpose {
+            MetadataRecoveryRolePurpose::NormalRecovery => Ok(Self::SameVoterNativeAnchorV1),
+            MetadataRecoveryRolePurpose::CurrentJointRecovery { .. } => {
+                Ok(Self::ProtectedCurrentJointAnchorV1)
+            }
+            _ => Err(invalid("unsupported actual native readiness purpose")),
+        }
+    }
 }
 /// Both stages retain physical exclusion. Activated completion decisions are
 /// deliberately a different protocol and cannot deserialize into this type.
@@ -142,7 +155,7 @@ impl NativeReadyReply {
         request.scope.validate()?;
         let sha = |s: &str| s.len() == 64 && s.bytes().all(|b| b.is_ascii_hexdigit());
         if self.evidence_version != NATIVE_READY_EVIDENCE_VERSION
-            || self.physical_domain != NativeReadyPhysicalDomain::SameVoterNativeAnchorV1
+            || self.physical_domain != NativeReadyPhysicalDomain::for_scope(&request.scope)?
             || self.challenge != request.challenge
             || self.challenge.is_nil()
             || self.observed_metadata_context_id.is_nil()
@@ -153,6 +166,7 @@ impl NativeReadyReply {
             || !matches!(
                 self.scope.purpose,
                 MetadataRecoveryRolePurpose::NormalRecovery
+                    | MetadataRecoveryRolePurpose::CurrentJointRecovery { .. }
             )
             || self.node_id != *peer.node_id()
             || self.member_incarnation != peer.member_incarnation()
@@ -254,8 +268,11 @@ impl ClosedNativeReadyQuorumRound {
     pub(crate) fn begin(role: RecoveryRoleAdmission, parent: &CancellationToken) -> Result<Self> {
         let cancellation = parent.child_with_deadline(role.deadline());
         cancellation.check()?;
-        if !matches!(role.purpose(), MetadataRecoveryRolePurpose::NormalRecovery)
-            || role.member_credentials().is_empty()
+        if !matches!(
+            role.purpose(),
+            MetadataRecoveryRolePurpose::NormalRecovery
+                | MetadataRecoveryRolePurpose::CurrentJointRecovery { .. }
+        ) || role.member_credentials().is_empty()
             || role.member_credentials().len() > 64
             || role.member_credentials().len()
                 != role

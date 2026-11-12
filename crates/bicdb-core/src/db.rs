@@ -102,10 +102,10 @@ pub(crate) use range_image_native::{
     RangeImageBirthMember, RangeImageBirthSpec, SourceRangeImageLineage, StagedNativeHistoryProof,
 };
 pub(crate) use range_image_native::{
-    NativeActivationDecisionReceipt, NativeJointBridgeReadScope, NativeJointDecisionReceipt,
-    NativeJointHistoricalCutScope, NativeJointOldCloseReceipt, NativeJointOldPhysicalProof,
-    NativeJointPreparedPublicationScope, NativeJointServingBridgeReceipt,
-    NativeJointServingPreparation,
+    NativeActivationDecisionReceipt, NativeCurrentJointBinding, NativeCurrentJointRecoveryDomain,
+    NativeJointBridgeReadScope, NativeJointDecisionReceipt, NativeJointHistoricalCutScope,
+    NativeJointOldCloseReceipt, NativeJointOldPhysicalProof, NativeJointPreparedPublicationScope,
+    NativeJointServingBridgeReceipt, NativeJointServingPreparation,
 };
 pub(crate) use range_image_native::{NativeRangeReadPhysical, NativeReadLocalDbSequence};
 mod range_image_bindings;

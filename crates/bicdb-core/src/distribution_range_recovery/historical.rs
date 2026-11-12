@@ -72,7 +72,8 @@ fn verify_history(
         MetadataRecoveryRolePurpose::CommittedHandoff { .. } => {
             authority.current_range().epoch.checked_add(2)
         }
-        MetadataRecoveryRolePurpose::ObserveFencedRecovery { .. } => {
+        MetadataRecoveryRolePurpose::CurrentJointRecovery { .. }
+        | MetadataRecoveryRolePurpose::ObserveFencedRecovery { .. } => {
             return Err(invalid("readonly role cannot mint historical authority"))
         }
     };

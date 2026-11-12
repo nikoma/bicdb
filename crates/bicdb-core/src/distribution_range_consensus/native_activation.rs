@@ -94,7 +94,8 @@ impl RangeWriteStore {
     fn require_native_activation_control(&self, range: RangeId) -> Result<()> {
         self.require_durable_recovery_catalog()?;
         self.require_no_image_install(range)?;
-        if self.catalog.handoff_promises.contains_key(&range)
+        let current_joint = self.selected_current_joint_scope(range)?.is_some();
+        if (self.catalog.handoff_promises.contains_key(&range) && !current_joint)
             || self.catalog.backup_fences.contains_key(&range)
         {
             return Err(range_write_error(
@@ -138,6 +139,12 @@ impl RangeWriteStore {
         write: impl FnOnce(&Path, &[u8], bool) -> Result<()>,
     ) -> Result<NativeActivationReceipt> {
         quorum.require_prepared_identity_point(prepared, fresh)?;
+        if matches!(
+            fresh.purpose(),
+            crate::distribution_consensus::MetadataRecoveryRolePurpose::CurrentJointRecovery { .. }
+        ) {
+            self.require_current_joint_recovery_domain(db, fresh)?;
+        }
         let range = prepared.scope().range_id;
         if self.recovery_persistence_uncertain
             && matches!(

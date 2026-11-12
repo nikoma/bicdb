@@ -333,11 +333,6 @@ impl NativeCertifiedRangePrefix {
         joint: Option<&NativeJointServingDomain>,
     ) -> Result<()> {
         let joint = joint.filter(|domain| self.range_index > domain.range_index());
-        if joint.is_some() && (self.materialized.is_none() || self.no_data.is_some()) {
-            return Err(invalid(
-                "post-joint prefix requires actual Applied materialization; NoData is unsupported",
-            ));
-        }
         if self.joint_decision_sha256.as_deref() != joint.map(|domain| domain.decision_sha256()) {
             return Err(invalid(
                 "native Applied prefix lacks its actual protected joint domain",

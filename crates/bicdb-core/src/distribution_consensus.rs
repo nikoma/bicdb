@@ -126,6 +126,11 @@ pub struct MetadataReadAcquireResponse {
 #[serde(deny_unknown_fields)]
 pub(crate) enum MetadataRecoveryRolePurpose {
     NormalRecovery,
+    /// Request-bound intent only. Every data receiver additionally consumes
+    /// its actual protected activated joint domain and a NEW drained freeze.
+    CurrentJointRecovery {
+        joint_decision_sha256: String,
+    },
     CommittedHandoff {
         relocation_id: crate::distribution::RelocationId,
         plan_id: String,
@@ -139,6 +144,8 @@ pub(crate) enum MetadataRecoveryRolePurpose {
         coordinator_node_id: ClusterNodeId,
         coordinator_incarnation: u64,
         committed_handoff: Option<MetadataRecoveryHandoffBinding>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        current_joint_decision_sha256: Option<String>,
     },
 }
 
@@ -200,13 +207,30 @@ impl MetadataRecoveryRoleRequest {
                 return Err(metadata_error("invalid recovery-role handoff purpose"));
             }
         }
+        if let MetadataRecoveryRolePurpose::CurrentJointRecovery {
+            joint_decision_sha256,
+        } = &self.purpose
+        {
+            if joint_decision_sha256.len() != 64
+                || !joint_decision_sha256.bytes().all(|b| b.is_ascii_hexdigit())
+            {
+                return Err(metadata_error(
+                    "invalid protected current-joint intent digest",
+                ));
+            }
+        }
         if let MetadataRecoveryRolePurpose::ObserveFencedRecovery {
             coordinator_incarnation,
             committed_handoff,
+            current_joint_decision_sha256,
             ..
         } = &self.purpose
         {
             if *coordinator_incarnation == 0
+                || (committed_handoff.is_some() && current_joint_decision_sha256.is_some())
+                || current_joint_decision_sha256.as_ref().is_some_and(|sha| {
+                    sha.len() != 64 || !sha.bytes().all(|b| b.is_ascii_hexdigit())
+                })
                 || committed_handoff.as_ref().is_some_and(|binding| {
                     binding.plan_id.is_empty()
                         || binding.plan_id.len() > 1024
@@ -289,7 +313,8 @@ impl MetadataRecoveryRoleRequest {
             .iter()
             .any(|r| r.node_id == recipient.id && r.role == RangeReplicaRole::Voter);
         match &self.purpose {
-            MetadataRecoveryRolePurpose::NormalRecovery => {
+            MetadataRecoveryRolePurpose::NormalRecovery
+            | MetadataRecoveryRolePurpose::CurrentJointRecovery { .. } => {
                 if range.leader != initiator.id || !recipient_voter {
                     return Err(invalid());
                 }
@@ -333,6 +358,7 @@ impl MetadataRecoveryRoleRequest {
                 coordinator_node_id,
                 coordinator_incarnation,
                 committed_handoff,
+                current_joint_decision_sha256: _,
             } => {
                 let observer_voter = range
                     .replicas

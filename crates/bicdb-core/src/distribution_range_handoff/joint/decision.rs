@@ -153,6 +153,58 @@ impl NativeJointDecisionData {
     pub(crate) fn new_members(&self) -> &BTreeMap<ClusterNodeId, crate::db::RangeImageBirthMember> {
         &self.scope.new_members
     }
+    /// Correlation of an existing raw refusal with the protected OLD domain.
+    /// This hash is not a metadata observation or authority constructor.
+    pub(crate) fn old_recovery_range_sha256(&self) -> Result<String> {
+        use sha2::{Digest, Sha256};
+        let range = self.old_range();
+        let mut replicas = range
+            .replicas
+            .iter()
+            .map(|r| (r.id, &r.node_id, &r.role))
+            .collect::<Vec<_>>();
+        replicas.sort_by_key(|r| r.0);
+        let members = self
+            .old_members()
+            .iter()
+            .map(|(id, m)| {
+                (
+                    id.clone(),
+                    crate::distribution_range_recovery::RecoveryMemberIdentity {
+                        incarnation: m.incarnation,
+                        active_certificate_sha256: m.tls_certificate_sha256.clone(),
+                        pending_certificate_sha256: m.pending_tls_certificate_sha256.clone(),
+                    },
+                )
+            })
+            .collect::<BTreeMap<_, _>>();
+        Ok(hex::encode(Sha256::digest(serde_json::to_vec(&(
+            "bicdb-recovery-semantic-range-v1",
+            self.cluster_id(),
+            self.bootstrap_id(),
+            range.id,
+            range.start_token,
+            range.end_token,
+            range.epoch,
+            &range.leader,
+            &range.placement,
+            replicas,
+            &members,
+            &Some(self.schema_sha256().to_owned()),
+            &self.restore_activation(),
+        ))?)))
+    }
+    /// Historical identity constraint, not an observation or new quorum grant.
+    pub(crate) fn new_member_birth(
+        &self,
+        node: &ClusterNodeId,
+    ) -> Option<&crate::distribution::NativeStoreBirthV1> {
+        self.scope
+            .new_members
+            .contains_key(node)
+            .then(|| self.scope.enrolled_births.get(node))
+            .flatten()
+    }
     pub(crate) fn schema_sha256(&self) -> &str {
         &self.scope.schema_sha256
     }

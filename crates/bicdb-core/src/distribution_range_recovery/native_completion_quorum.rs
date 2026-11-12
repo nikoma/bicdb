@@ -16,8 +16,11 @@ impl NativeCompletionQuorumRound {
     pub(crate) fn begin(role: RecoveryRoleAdmission, parent: &CancellationToken) -> Result<Self> {
         let cancellation = parent.child_with_deadline(role.deadline());
         cancellation.check()?;
-        if !matches!(role.purpose(), MetadataRecoveryRolePurpose::NormalRecovery)
-            || role.member_credentials().is_empty()
+        if !matches!(
+            role.purpose(),
+            MetadataRecoveryRolePurpose::NormalRecovery
+                | MetadataRecoveryRolePurpose::CurrentJointRecovery { .. }
+        ) || role.member_credentials().is_empty()
             || role.member_credentials().len() > 64
             || role.member_credentials().len()
                 != role

@@ -1,5 +1,6 @@
-//! EXPECTED-RED acceptance baseline: real completed handoff, then a NEW-domain
-//! Prepare-only slot. Refusal is audited but never counted as recovery success.
+//! Qualified-purpose successor of the preserved EXPECTED-RED b277 baseline.
+//! A real completed handoff and NEW Prepare-only slot must recover all the way
+//! through canonical Abort3, NEW completion/release, real ACK4 and StrongR4.
 use super::*;
 use crate::distribution_range_recovery::{
     NativeAbortRequest, NativeCompletionRequest, NativeReadyRequest, RecoveryFenceQuorumRound,
@@ -51,6 +52,7 @@ fn snapshot(
             "handoff_promise":raw["catalog"]["handoff_promises"][&key],
             "joint":raw["catalog"]["native_joint_handoffs"][&key],
             "recovery_fence":raw["catalog"]["recovery_fences"][&key],
+                "current_joint_recovery":raw["catalog"]["current_joint_recoveries"][&key],
             "raw_range_log":raw["catalog"]["ranges"][&key],
         })
     };
@@ -163,6 +165,7 @@ fn diagnostic_cut(
                 "native":native,"uid":database.local_namespace_identity("items").unwrap(),
                 "slots":database.native_abort_slot_inventory().unwrap(),
                 "recovery_fence":raw["catalog"]["recovery_fences"][&key],
+                "current_joint_recovery":raw["catalog"]["current_joint_recoveries"][&key],
                 "handoff_promise":raw["catalog"]["handoff_promises"][&key],
                 "joint":raw["catalog"]["native_joint_handoffs"][&key],
                 "raw_range_log":raw["catalog"]["ranges"][&key],
@@ -193,8 +196,14 @@ fn fresh_new_scope(
     let business = Uuid::now_v7();
     let challenge = Uuid::now_v7();
     let nonce = Uuid::now_v7();
-    let purpose = crate::distribution_consensus::MetadataRecoveryRolePurpose::NormalRecovery;
     let parent = token();
+    // Discovery yields request DATA from the ACTUAL protected native joint
+    // domain. Only the independently gathered metadata role and each real
+    // receiver's protected-domain producer can authorize the NEW refusal.
+    let purpose = fixture.native.services[&range.leader]
+        .lock()
+        .observe_current_joint_recovery_purpose(range.id, &parent)
+        .unwrap();
     let witness = fixture.providers[&range.leader]
         .witness_recovery_role(
             &actor,
@@ -286,7 +295,7 @@ fn fresh_new_scope(
                 fixture,
                 "actual-post-joint-new-fence-refusal.json",
                 &serde_json::json!({
-                    "scenario":"FAILED_UNSUPPORTED_POST_JOINT_NEW_RECOVERY_FENCE",
+                    "scenario":"FAILED_POST_JOINT_NEW_RECOVERY_FENCE",
                     "failing_recipient":destination,"exact_error":error.to_string(),
                     "actual_request":request,"fresh_scope":scope,"actual_responses":replies,
                     "before_partial_fences":before_fences,"after_partial_fences":after_fences,
@@ -316,6 +325,41 @@ fn fresh_new_scope(
             eprintln!("ACTUAL_POST_JOINT_FENCE_REFUSAL_AUDITED recipient={destination} exact_error={error} protected-prefix-and-ACKs-unchanged=true partial-fences-retained=true no-NoData-apply-claim=true");
         }
         let actual = actual.expect("post-joint NEW-domain actual recovery fence MUST succeed; audited refusal alone does not qualify recovery");
+        let old = &before_fences[&destination];
+        let after = &after_fences[&destination];
+        for field in [
+            "native",
+            "uid",
+            "slots",
+            "handoff_promise",
+            "joint",
+            "raw_range_log",
+            "ACK1",
+            "ACK2",
+            "no_ACK3_record",
+        ] {
+            assert_eq!(
+                after[field], old[field],
+                "{destination}: new fence preserves actual {field}"
+            );
+        }
+        let original_nonce = old["recovery_fence"]["scope"]["recovery_nonce"]
+            .as_str()
+            .unwrap();
+        assert_eq!(
+            after["current_joint_recovery"]["archived"][original_nonce]["fence"],
+            old["recovery_fence"],
+            "exact original refusal, phase, certification and retired-nonce archive"
+        );
+        assert_eq!(
+            after["recovery_fence"]["scope"]["purpose"],
+            serde_json::to_value(&purpose).unwrap()
+        );
+        assert!(after["recovery_fence"]["retired_nonces"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|nonce| nonce == original_nonce));
         round.record(Arc::new(actual)).unwrap();
     }
     round.finish().unwrap().require_live().unwrap();
@@ -347,7 +391,7 @@ pub(super) fn exercise_actual_new_domain_prepare_only_recovery(
     report(
         fixture,
         "actual-post-joint-no-data-before.json",
-        &serde_json::json!({"base_source":"61eb4d92b5938349cf18a283e936eee45fa97e9d","prerequisite":"actual all3 release + ACK1/ACK2 + StrongR2","snapshots":before}),
+        &serde_json::json!({"acceptance_baseline_source":"b277260b0b114d1f892ecad8d2e5e7a03ba7da5a","prerequisite_fixture_base":"eb5b454a578f77309900e2a248fc0b779391333e","prerequisite":"actual all3 release + ACK1/ACK2 + StrongR2","snapshots":before}),
     );
     for id in new_members.iter().filter(|id| *id != &range.leader) {
         fixture.native.services[id]

@@ -634,6 +634,10 @@ impl RangeWriteStore {
         &self,
         range: RangeId,
     ) -> Result<bool> {
+        if self.selected_current_joint_scope(range)?.is_some() {
+            self.native_activated_open_allowed(range)?;
+            return Ok(true);
+        }
         let Some(activation) = self
             .catalog
             .native_joint_handoffs
@@ -660,6 +664,9 @@ impl RangeWriteStore {
         &self,
         command: &RangeWriteCommand,
     ) -> Result<bool> {
+        if self.current_joint_recovered_command(command)? {
+            return Ok(true);
+        }
         if !self.native_joint_open_allowed(command.range_id)? {
             return Ok(false);
         }
@@ -683,6 +690,9 @@ impl RangeWriteStore {
         &self,
         scope: &crate::distribution_native_read::NativeRangeReadScope,
     ) -> Result<bool> {
+        if self.current_joint_recovered_read(scope)? {
+            return Ok(true);
+        }
         if !self.native_joint_open_allowed(scope.range.id)? {
             return Ok(false);
         }
@@ -701,6 +711,10 @@ impl RangeWriteStore {
         &self,
         range: RangeId,
     ) -> Result<bool> {
+        if self.selected_current_joint_scope(range)?.is_some() {
+            self.native_activated_open_allowed(range)?;
+            return Ok(true);
+        }
         if !self.native_joint_open_allowed(range)? {
             return Ok(false);
         }

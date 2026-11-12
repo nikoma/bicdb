@@ -15,8 +15,9 @@ mod joint_handoff;
 pub(crate) use activation_decision::NativeActivationDecisionReceipt;
 pub(in crate::db::range_image_native) use joint_handoff::NativeJointServingDomain;
 pub(crate) use joint_handoff::{
-    NativeJointBridgeReadScope, NativeJointDecisionReceipt, NativeJointHistoricalCutScope,
-    NativeJointOldCloseReceipt, NativeJointOldPhysicalProof, NativeJointPreparedPublicationScope,
+    NativeCurrentJointBinding, NativeCurrentJointRecoveryDomain, NativeJointBridgeReadScope,
+    NativeJointDecisionReceipt, NativeJointHistoricalCutScope, NativeJointOldCloseReceipt,
+    NativeJointOldPhysicalProof, NativeJointPreparedPublicationScope,
     NativeJointServingBridgeReceipt, NativeJointServingPreparation,
 };
 
@@ -30,6 +31,8 @@ pub(super) struct NativeRecoveredServingConfiguration {
     birth_id: Uuid,
     birth_sha256: String,
     physical_base_sha256: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    joint_decision_sha256: Option<String>,
     scope: RecoveryFenceScope,
     range: RangeDescriptor,
     local_node_id: ClusterNodeId,
@@ -81,10 +84,16 @@ impl NativeRecoveredServingConfiguration {
             || self.local_node_id != birth.spec.node_id
             || self.local_member_incarnation != base.local_member_incarnation
             || base.restore_activation != birth.spec.restore_activation
-            || !matches!(
-                self.scope.purpose,
-                MetadataRecoveryRolePurpose::NormalRecovery
-            )
+            || match (&self.scope.purpose, &self.joint_decision_sha256) {
+                (MetadataRecoveryRolePurpose::NormalRecovery, None) => false,
+                (
+                    MetadataRecoveryRolePurpose::CurrentJointRecovery {
+                        joint_decision_sha256,
+                    },
+                    Some(anchor),
+                ) => joint_decision_sha256 != anchor || !digest(anchor),
+                _ => true,
+            }
             || self.scope.range_id != self.range.id
             || self.scope.range_epoch != self.range.epoch
             || self.scope.initiator_node_id != self.range.leader
@@ -92,9 +101,11 @@ impl NativeRecoveredServingConfiguration {
             || self.range.start_token != base.range.start_token
             || self.range.end_token != base.range.end_token
             || self.range.placement != base.range.placement
-            || self.range.replicas.len() != base.range.replicas.len()
+            || (self.joint_decision_sha256.is_none()
+                && self.range.replicas.len() != base.range.replicas.len())
             || replicas(&self.range).len() != self.range.replicas.len()
-            || replicas(&self.range) != replicas(&base.range)
+            || (self.joint_decision_sha256.is_none()
+                && replicas(&self.range) != replicas(&base.range))
             || self.logical_genesis_sha256 != base.logical_genesis_sha256
             || !digest(&self.activation_history_sha256)
             || !digest(&self.native_receipt_at_activation_sha256)
@@ -222,6 +233,31 @@ impl NativeServingDecision<'_> {
     }
 }
 impl BicDb {
+    fn require_recovered_serving_joint_binding(
+        &self,
+        birth: &NativeDatabaseBirth,
+        base: &NativeRangeBaseBinding,
+        record: &NativeRecoveredServingConfiguration,
+    ) -> Result<()> {
+        if let Some(expected) = &record.joint_decision_sha256 {
+            if !format::native_current_joint_recovery_active(&self.path)? {
+                return Err(invalid("joint recovered serving lacks reader fence"));
+            }
+            let joint = self
+                .read_native_joint_serving_domain(birth, base)?
+                .ok_or_else(|| invalid("joint recovered serving lost protected native domain"))?;
+            if joint.decision_sha256() != expected
+                || crate::distribution_native_read::canonical_range(joint.range())
+                    != crate::distribution_native_read::canonical_range(&record.range)
+                || record.activation_index <= joint.range_index()
+            {
+                return Err(invalid(
+                    "joint recovered serving differs from actual protected NEW domain",
+                ));
+            }
+        }
+        Ok(())
+    }
     pub(super) fn read_native_recovered_serving_configuration(
         &self,
         birth: &NativeDatabaseBirth,
@@ -241,6 +277,7 @@ impl BicDb {
             ));
         }
         record.validate_historical_floor(birth, base)?;
+        self.require_recovered_serving_joint_binding(birth, base, &record)?;
         let actual_index = prefix.map_or(base.range_index, |p| p.range_index());
         let actual_visibility = prefix.map_or(base.actual_local_visibility_sequence, |p| {
             p.actual_local_visibility_sequence()
@@ -425,11 +462,15 @@ impl BicDb {
         prepared.require_current_under_role(self, store, fresh)?;
         quorum.require_recipient_role(fresh)?;
         quorum.require_local_prepared(prepared, self, store, fresh)?;
-        if !matches!(fresh.purpose(), MetadataRecoveryRolePurpose::NormalRecovery) {
-            return Err(invalid(
-                "same-voter recovery cannot activate a handoff configuration",
-            ));
-        }
+        let joint_fact = match fresh.purpose() {
+            MetadataRecoveryRolePurpose::NormalRecovery => None,
+            MetadataRecoveryRolePurpose::CurrentJointRecovery { .. } => {
+                Some(store.require_current_joint_recovery_domain(self, fresh)?)
+            }
+            _ => return Err(invalid(
+                "recovered serving requires ordinary or actual protected current-joint recovery",
+            )),
+        };
         let journal = self.try_native_image_journal()?;
         let lineage = self.current_native_range_source_lineage(fresh.current_range().id)?;
         lineage.require_native_serving_role_floor(fresh)?;
@@ -443,6 +484,9 @@ impl BicDb {
             birth_id: lineage.birth.birth_id,
             birth_sha256: lineage.birth.checksum_sha256.clone(),
             physical_base_sha256: base.checksum_sha256.clone(),
+            joint_decision_sha256: joint_fact
+                .as_ref()
+                .map(|fact| fact.binding().joint_decision_sha256.clone()),
             scope: prepared.scope().clone(),
             range: canonical_range,
             local_node_id: fresh.local_node_id().clone(),
@@ -456,6 +500,7 @@ impl BicDb {
         };
         record.checksum_sha256 = record.checksum()?;
         record.validate_current_grant(&lineage.birth, base)?;
+        self.require_recovered_serving_joint_binding(&lineage.birth, base, &record)?;
         if lineage.serving.as_ref().is_some_and(|old| {
             old.range.epoch > record.range.epoch
                 || old.activation_index > record.activation_index

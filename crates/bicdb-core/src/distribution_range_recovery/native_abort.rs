@@ -28,6 +28,7 @@ impl NativeAbortRequest {
             || !matches!(
                 self.scope.purpose,
                 MetadataRecoveryRolePurpose::NormalRecovery
+                    | MetadataRecoveryRolePurpose::CurrentJointRecovery { .. }
             )
             || self
                 .candidate_sha256

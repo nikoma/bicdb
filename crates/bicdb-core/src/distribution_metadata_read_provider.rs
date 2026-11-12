@@ -336,7 +336,7 @@ impl MetadataReadProvider {
                 &token,
             )?;
             return MetadataRecoveryRoleObservation::from_local_authority(
-                authority, request, &local,
+                authority, request, &local, &token,
             );
         }
         let leader = status.leader_id.ok_or_else(|| {
@@ -792,6 +792,83 @@ mod tests {
         }
     }
     #[test]
+    fn recovery_role_observations_retain_local_and_transport_acquisition_cancellation() {
+        for local_mint in [true, false] {
+            let mut topology = topology_with_count(3);
+            // Make the actual metadata leader also a current data voter, so
+            // local_mint exercises the real provider's sealed local path.
+            topology.replication_factor = 2;
+            topology.ranges.values_mut().next().unwrap().replicas.push(
+                crate::distribution::RangeReplica {
+                    id: crate::distribution::ReplicaId::new(topology.next_replica_id).unwrap(),
+                    node_id: node("n1"),
+                    role: crate::distribution::RangeReplicaRole::Voter,
+                },
+            );
+            topology.next_replica_id += 1;
+            topology.validate().unwrap();
+            let fixture = Fixture::with_topology(topology);
+            let parent = CancellationToken::uncancelable()
+                .child_with_deadline(Instant::now() + Duration::from_secs(5));
+            let request = role_request(
+                &fixture,
+                "n1",
+                "n2",
+                MetadataRecoveryRolePurpose::NormalRecovery,
+            );
+            let initiator = participant(&fixture.topology, "n2");
+            let observation = if local_mint {
+                fixture
+                    .provider
+                    .witness_recovery_role(
+                        &initiator,
+                        request.read_request_id,
+                        request.range_id,
+                        request.range_epoch,
+                        request.recovery_nonce,
+                        request.recipient_challenge,
+                        request.purpose.clone(),
+                        &parent,
+                    )
+                    .unwrap()
+            } else {
+                let started = Instant::now();
+                let response = fixture
+                    .provider
+                    .acquire_recovery_role(&initiator, request.clone(), &parent)
+                    .unwrap();
+                // This test transport wraps only evidence returned by the
+                // actual stores' begin/probe/record/finish. No DTO mints QQ.
+                MetadataRecoveryRoleObservation::from_transport(
+                    &request,
+                    &fixture.topology.cluster_id,
+                    &node("n1"),
+                    participant(&fixture.topology, "n1"),
+                    response,
+                    parent.deadline().unwrap(),
+                    started,
+                    &parent,
+                )
+                .unwrap()
+            };
+            observation
+                .require_live_request(request.read_request_id, request.recipient_challenge)
+                .unwrap();
+            let original_deadline = observation.deadline();
+            parent.cancel();
+            assert!(
+                Instant::now() < original_deadline,
+                "original scope must not expire first"
+            );
+            assert!(matches!(
+                observation
+                    .require_live_request(request.read_request_id, request.recipient_challenge,),
+                Err(BicDbError::QueryCanceled)
+            ));
+            assert_eq!(observation.deadline(), original_deadline);
+        }
+    }
+    #[test]
     fn fenced_observer_is_data_voter_scoped_and_never_mutation_admission() {
         use crate::distribution_range_consensus::RecoveryFenceScope;
         use crate::distribution_range_recovery::{
@@ -810,6 +887,7 @@ mod tests {
         topology.next_replica_id += 1;
         topology.validate().unwrap();
         let fixture = Fixture::with_topology(topology);
+        let parent = CancellationToken::uncancelable();
         let mut normal = role_request(
             &fixture,
             "n2",
@@ -822,7 +900,7 @@ mod tests {
             .acquire_recovery_role(
                 &participant(&fixture.topology, "n2"),
                 normal.clone(),
-                &CancellationToken::uncancelable(),
+                &parent,
             )
             .unwrap();
         let witness = MetadataRecoveryRoleObservation::from_transport(
@@ -833,6 +911,7 @@ mod tests {
             response,
             started + Duration::from_secs(1),
             started,
+            &parent,
         )
         .unwrap();
         let role = RecoveryRoleAdmission::from_witness(
@@ -857,7 +936,7 @@ mod tests {
             .acquire_recovery_role(
                 &participant(&fixture.topology, "n2"),
                 request.clone(),
-                &CancellationToken::uncancelable(),
+                &parent,
             )
             .unwrap();
         let witness = MetadataRecoveryRoleObservation::from_transport(
@@ -868,6 +947,7 @@ mod tests {
             response,
             started + Duration::from_secs(1),
             started,
+            &parent,
         )
         .unwrap();
         let readonly = RecoveryObservationRoleAdmission::from_witness(
@@ -889,7 +969,7 @@ mod tests {
             .acquire_recovery_role(
                 &participant(&fixture.topology, "n2"),
                 request.clone(),
-                &CancellationToken::uncancelable(),
+                &parent,
             )
             .unwrap();
         let witness = MetadataRecoveryRoleObservation::from_transport(
@@ -900,6 +980,7 @@ mod tests {
             response,
             started + Duration::from_secs(1),
             started,
+            &parent,
         )
         .unwrap();
         assert!(RecoveryRoleAdmission::from_witness(
@@ -1142,6 +1223,7 @@ mod tests {
     #[test]
     fn role_scope_rejects_wrong_peer_epoch_nonce_and_response_challenge() {
         let fixture = Fixture::new();
+        let parent = CancellationToken::uncancelable();
         let request = role_request(
             &fixture,
             "n2",
@@ -1154,7 +1236,7 @@ mod tests {
             .acquire_recovery_role(
                 &participant(&fixture.topology, "n2"),
                 request.clone(),
-                &CancellationToken::uncancelable(),
+                &parent,
             )
             .unwrap();
         let observation = MetadataRecoveryRoleObservation::from_transport(
@@ -1165,6 +1247,7 @@ mod tests {
             response,
             started + Duration::from_secs(1),
             started,
+            &parent,
         )
         .unwrap();
         observation

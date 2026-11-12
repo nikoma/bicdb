@@ -436,6 +436,9 @@ impl MetadataRecoveryRoleResponse {
 pub(crate) struct MetadataRecoveryRoleObservation {
     response: MetadataRecoveryRoleResponse,
     deadline: Instant,
+    // Retain the actual acquisition caller, never acquire_authority's internal
+    // CancelOnReturn child (which ends when its durable evidence is returned).
+    original_request: crate::CancellationToken,
 }
 impl MetadataRecoveryRoleObservation {
     pub(crate) fn request(&self) -> &MetadataRecoveryRoleRequest {
@@ -459,6 +462,7 @@ impl MetadataRecoveryRoleObservation {
             .filter(|d| !d.is_zero())
     }
     pub(crate) fn require_live_request(&self, read_request: Uuid, challenge: Uuid) -> Result<()> {
+        self.original_request.check()?;
         if self.request().read_request_id != read_request
             || self.request().recipient_challenge != challenge
             || self.remaining_budget().is_none()
@@ -467,7 +471,7 @@ impl MetadataRecoveryRoleObservation {
                 "recovery-role witness scope changed or expired",
             ));
         }
-        Ok(())
+        self.original_request.check()
     }
     pub(crate) fn committed_topology(
         &self,
@@ -497,6 +501,7 @@ impl MetadataRecoveryRoleObservation {
         }
         Ok(())
     }
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn from_transport(
         request: &MetadataRecoveryRoleRequest,
         cluster: &ClusterId,
@@ -505,7 +510,9 @@ impl MetadataRecoveryRoleObservation {
         response: MetadataRecoveryRoleResponse,
         deadline: Instant,
         started: Instant,
+        original_request: &crate::CancellationToken,
     ) -> Result<Self> {
+        original_request.check()?;
         response.validate(request)?;
         let evidence = &response.evidence;
         let deadline = deadline.min(started + Duration::from_millis(evidence.context_budget_ms));
@@ -532,13 +539,20 @@ impl MetadataRecoveryRoleObservation {
         if !identity.accepts(&participant) {
             return Err(metadata_error("recovery-role metadata source pin mismatch"));
         }
-        Ok(Self { response, deadline })
+        original_request.check()?;
+        Ok(Self {
+            response,
+            deadline,
+            original_request: original_request.clone(),
+        })
     }
     pub(crate) fn from_local_authority(
         authority: MetadataReadAuthority,
         request: MetadataRecoveryRoleRequest,
         recipient: &MetadataReadParticipant,
+        original_request: &crate::CancellationToken,
     ) -> Result<Self> {
+        original_request.check()?;
         let deadline = authority.deadline();
         let response = authority.into_recovery_role_response(request.clone())?;
         if recipient.node_id != request.recipient_node_id
@@ -562,7 +576,12 @@ impl MetadataRecoveryRoleObservation {
         if Instant::now() >= deadline {
             return Err(metadata_error("local recovery-role witness expired"));
         }
-        Ok(Self { response, deadline })
+        original_request.check()?;
+        Ok(Self {
+            response,
+            deadline,
+            original_request: original_request.clone(),
+        })
     }
 }
 

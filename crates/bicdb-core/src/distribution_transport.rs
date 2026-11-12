@@ -4556,6 +4556,7 @@ impl TcpClusterRelocationTransport {
                     response,
                     token.deadline().unwrap(),
                     started,
+                    &token,
                 )
             }
             response => Err(unexpected_response(

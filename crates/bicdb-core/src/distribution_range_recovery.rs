@@ -1215,6 +1215,7 @@ pub(crate) fn test_role_admission(
         response,
         parent.deadline().unwrap(),
         started,
+        &parent,
     )?;
     while provider.inflight_contexts() != 0 {
         parent.check()?;
@@ -1337,6 +1338,7 @@ pub(crate) fn test_recovery_metadata_cluster(
                 response,
                 deadline,
                 started,
+                parent,
             )
         }
     }

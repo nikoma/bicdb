@@ -366,47 +366,11 @@ fn native_event_endpoint_explicit_strong_actual_born1_refuses_without_legacy_dow
     fixture.wait_idle();
 }
 
-#[test]
-fn native_event_endpoint_stale_route_retries_until_actual_new_leader_ready_under_original_budget() {
-    let mut fixture = EnforcedNetwork::new_endpoint_mode(true, true);
-    let (old_range, key) = fixture.event_range_key("transfer");
-    fixture.append_event(&key, json!({"acked":1}));
-    let stale_topology = fixture.native.topology.read().clone();
-    fixture.change_committed_leader(old_range.id);
-    let range = fixture
-        .native
-        .topology
-        .read()
-        .range_by_id(old_range.id)
-        .unwrap()
-        .clone();
-    fixture.refresh_actual_writer_policies();
-    // Publish actual nonleader redirect slots but keep the new leader EMPTY
-    // until real recovery completes, avoiding read/phase reservation races.
-    for id in [node("n0"), node("n1")] {
-        fixture.dispatchers[&id]
-            .publish(&fixture.coordinators[&id], &fixture.hosts[&id])
-            .unwrap();
-    }
-    fixture.dispatchers[&node("n2")].clear();
-    let client = fixture.event_client(stale_topology, Duration::from_secs(20));
-    let read_key = key.clone();
-    let started = Instant::now();
-    let worker = std::thread::spawn(move || client.get_strong("tenant", &read_key));
-    let wait_until = Instant::now() + Duration::from_secs(3);
-    while fixture.dispatchers[&node("n2")]
-        .test_observed_requests()
-        .is_empty()
-    {
-        assert!(
-            Instant::now() < wait_until,
-            "gateway did not reach the actual unready new-leader endpoint"
-        );
-        std::thread::sleep(Duration::from_millis(2));
-    }
-    // The real new-leader endpoint has been contacted while its slot is EMPTY;
-    // successful completion therefore needs a later actual retry after readiness.
-    let scope = fixture.actual_current_recovery_scope(&range);
+// Existing finite component protocol, deliberately not an automatic operator
+// transfer. All physical/refusal proofs are actual producers; Activate is the
+// trusted LOCAL Runtime API, not an incoming authenticated activation endpoint.
+fn recover_and_publish_endpoint_leader(fixture: &EnforcedNetwork, range: &RangeDescriptor) {
+    let scope = fixture.actual_current_recovery_scope(range);
     for id in [node("n0"), node("n1"), node("n2")] {
         fixture.clients[&node("n2")]
             .prepare_native_ready_observation(
@@ -459,6 +423,49 @@ fn native_event_endpoint_stale_route_retries_until_actual_new_leader_ready_under
             &fixture.hosts[&node("n2")],
         )
         .unwrap();
+}
+
+#[test]
+fn native_event_endpoint_stale_route_retries_until_actual_new_leader_ready_under_original_budget() {
+    let mut fixture = EnforcedNetwork::new_endpoint_mode(true, true);
+    let (old_range, key) = fixture.event_range_key("transfer");
+    fixture.append_event(&key, json!({"acked":1}));
+    let stale_topology = fixture.native.topology.read().clone();
+    fixture.change_committed_leader(old_range.id);
+    let range = fixture
+        .native
+        .topology
+        .read()
+        .range_by_id(old_range.id)
+        .unwrap()
+        .clone();
+    fixture.refresh_actual_writer_policies();
+    // Publish actual nonleader redirect slots but keep the new leader EMPTY
+    // until real recovery completes, avoiding read/phase reservation races.
+    for id in [node("n0"), node("n1")] {
+        fixture.dispatchers[&id]
+            .publish(&fixture.coordinators[&id], &fixture.hosts[&id])
+            .unwrap();
+    }
+    fixture.dispatchers[&node("n2")].clear();
+    let client = fixture.event_client(stale_topology, Duration::from_secs(20));
+    let read_key = key.clone();
+    let started = Instant::now();
+    let worker = std::thread::spawn(move || client.get_strong("tenant", &read_key));
+    let wait_until = Instant::now() + Duration::from_secs(3);
+    while fixture.dispatchers[&node("n2")]
+        .test_observed_requests()
+        .is_empty()
+    {
+        assert!(
+            Instant::now() < wait_until,
+            "gateway did not reach the actual unready new-leader endpoint"
+        );
+        std::thread::sleep(Duration::from_millis(2));
+    }
+    // The real new-leader endpoint has been contacted while its slot is EMPTY;
+    // successful completion therefore needs a later actual retry after readiness.
+    recover_and_publish_endpoint_leader(&fixture, &range);
     assert_eq!(worker.join().unwrap().unwrap(), Some(json!({"acked":1})));
     assert!(started.elapsed() < Duration::from_secs(20));
     let trace = fixture
@@ -525,3 +532,5 @@ fn native_event_endpoint_routing_retries_do_not_renew_original_deadline_or_becom
     );
     fixture.idle();
 }
+
+mod stale_gateway_tests;

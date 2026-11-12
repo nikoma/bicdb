@@ -21,7 +21,10 @@ fn follows(child: &TriggerSchema, parent: &TriggerSchema) -> bool {
     })
 }
 
-fn clone_for_partition(parent: &TriggerSchema, child: &TableSchema) -> Result<TriggerSchema> {
+pub(super) fn clone_for_partition(
+    parent: &TriggerSchema,
+    child: &TableSchema,
+) -> Result<TriggerSchema> {
     let mut clone = parent.clone();
     clone.partition_parent = Some(PartitionTriggerParent {
         table_name: parent.table_name.clone(),

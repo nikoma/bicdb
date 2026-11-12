@@ -33,9 +33,9 @@ mod operator_ddl;
 pub(crate) mod partition_admission;
 mod partition_exec;
 pub use partition_admission::{
-    inspect_partition_upgrade, PartitionInvalidRow, PartitionPolicyConflict,
-    PartitionPolicyDecision, PartitionRowRelocation, PartitionUpgradeInspection,
-    PartitionUpgradePlan,
+    apply_partition_upgrade, inspect_partition_upgrade, PartitionInvalidRow,
+    PartitionPolicyConflict, PartitionPolicyDecision, PartitionRowRelocation,
+    PartitionUpgradeApplied, PartitionUpgradeInspection, PartitionUpgradePlan,
 };
 mod partition_triggers;
 #[cfg(test)]

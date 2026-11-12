@@ -701,3 +701,58 @@ pub(crate) fn validate_attachment(
     }
     Ok(())
 }
+
+/// Validate an already attached forest without treating each child as a new
+/// attachment. Exact identities and every sibling bound are preflighted.
+pub(crate) fn validate_existing_tree(db: &BicDb, schemas: &[TableSchema]) -> Result<()> {
+    for parent in schemas
+        .iter()
+        .filter(|schema| schema.partitioning.is_some())
+    {
+        let children = schemas
+            .iter()
+            .filter(|child| {
+                child
+                    .partition_of
+                    .as_ref()
+                    .is_some_and(|link| link.parent_table == parent.name)
+            })
+            .collect::<Vec<_>>();
+        for (index, child) in children.iter().enumerate() {
+            let link = child.partition_of.as_ref().unwrap();
+            if link.parent_schema != parent.schema_name {
+                return Err(invalid("partition namespace mismatch"));
+            }
+            let a = parent
+                .columns
+                .iter()
+                .filter(|column| !column.hidden)
+                .collect::<Vec<_>>();
+            let b = child
+                .columns
+                .iter()
+                .filter(|column| !column.hidden)
+                .collect::<Vec<_>>();
+            if a.len() != b.len()
+                || a.iter().zip(&b).any(|(a, b)| {
+                    a.name != b.name
+                        || a.pg_type != b.pg_type
+                        || a.type_modifier != b.type_modifier
+                        || a.collation != b.collation
+                        || (!a.nullable && b.nullable)
+                })
+            {
+                return Err(invalid("legacy partition columns do not match parent"));
+            }
+            let bound = parse_bound(parent, &link.bound)?;
+            for other in &children[..index] {
+                let other = parse_bound(parent, &other.partition_of.as_ref().unwrap().bound)?;
+                if bounds_overlap(parent, &bound, &other)? {
+                    return Err(invalid("overlapping legacy partition bounds"));
+                }
+            }
+        }
+    }
+    let _ = db;
+    Ok(())
+}

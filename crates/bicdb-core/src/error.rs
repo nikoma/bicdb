@@ -135,6 +135,10 @@ pub enum BicDbError {
     #[error("transaction is no longer pending")]
     TransactionNotPending,
 
+    /// Required decision custody was absent on the original enforced-store read.
+    #[error("native range catalogue custody is missing; authorized restore required")]
+    NativeRangeCatalogueCustodyMissing,
+
     #[error("canceling statement due to user request")]
     QueryCanceled,
 

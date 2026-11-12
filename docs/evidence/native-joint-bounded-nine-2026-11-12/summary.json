@@ -1,0 +1,104 @@
+{
+  "source_revision": "88082c179da81cb7f0a2af0c088a3d5c85227012",
+  "authoritative_source_verified": true,
+  "run_id": 43241594839,
+  "job_id": 131263181223,
+  "job_name": "Focused Core library (complete_joint_tests)",
+  "job_conclusion": "success",
+  "raw_bytes": 2235456,
+  "raw_sha256": "8b2a71c78172b6e66b76afe08ffb5f63c8622b12cc5b22e1b8e5f38279aef95a",
+  "test_summaries": [
+    "2026-11-12T14:58:36.0870010Z test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 890 filtered out; finished in 75.50s"
+  ],
+  "test_observations": [
+    {
+      "line": 16652,
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::native_joint_fresh_phase_refuses_expired_original_caller_with_later_long_budget",
+      "result": "ok"
+    },
+    {
+      "line": 16653,
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::native_joint_fresh_preparation_phase_publishes_all_final_members_after_original_expiry",
+      "result": "ok"
+    },
+    {
+      "line": 16654,
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::open_adversarial_tests::native_joint_open_final_sweep_foreign_actual_writer_reenrollment_refuses_old_phase",
+      "result": "ok"
+    },
+    {
+      "line": 16655,
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::native_joint_fresh_open_phase_reconciles_exact_target_epoch_and_lost_catalogue_reply_while_frozen",
+      "result": "ok"
+    },
+    {
+      "line": 16656,
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::open_adversarial_tests::native_joint_open_post_fsync_original_caller_cancel_cannot_start_fresh_phase",
+      "result": "ok"
+    },
+    {
+      "line": 16658,
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::native_joint_actual_complete_image_target_becomes_leader_ack_and_strong_read",
+      "result": "ok"
+    },
+    {
+      "line": 16659,
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::original_release_writer_tests::native_joint_original_image_release_refuses_hot_writer_reinstallation_before_owner_drop",
+      "result": "ok"
+    },
+    {
+      "line": 16660,
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::open_adversarial_tests::native_joint_open_post_fsync_step_cancel_recovers_exact_fact_with_original_caller_live",
+      "result": "ok"
+    },
+    {
+      "line": 16661,
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::original_release_writer_tests::native_joint_original_survivor_release_refuses_hot_writer_reinstallation_before_owner_drop",
+      "result": "ok"
+    }
+  ],
+  "classification": "passed_focused_component_cohort",
+  "artifact": {
+    "id": 13955621769,
+    "bytes": 75197,
+    "sha256": "9f4babc7f3e806b8872c68d94366d9a5daf9e93d3c237f80cc1310cd98ced384",
+    "files": [
+      {
+        "path": "rustc.txt",
+        "bytes": 196,
+        "sha256": "f64c55ed9f210d80a9b248206104a47175faf5ec94a093e4ad132549209089fc"
+      },
+      {
+        "path": "source-revision.txt",
+        "bytes": 41,
+        "sha256": "4be5e93439ef0ce8d8d9a00503ba2a0134e5c9519f8d8ff98026dd89e43ea99c"
+      },
+      {
+        "path": "selected-tests.log",
+        "bytes": 244997,
+        "sha256": "a96dec8f03f851a31a33c45268fbc3aed58dc1e7195ef83e7d799dfb393ade24"
+      },
+      {
+        "path": "tests.log",
+        "bytes": 750865,
+        "sha256": "fdcc1f92a20d626fb8e45814ad4ef11a7c2f847b276c8e55532a08c031315595"
+      }
+    ]
+  },
+  "previous_same_cohort": {
+    "source_revision": "eb5b454a578f77309900e2a248fc0b779391333e",
+    "run_id": 43233276416,
+    "job_id": 131233899683,
+    "classification": "failed",
+    "passed": 5,
+    "failed": 4,
+    "seconds": 77.72,
+    "raw_log_sha256": "f3779145fb319f664bed47f6d27bfc52ef5e5222db53b1bffde137d9f86ba1b0"
+  },
+  "qualification": {
+    "physical": false,
+    "public_operator": false,
+    "cold_restart": false,
+    "production": false
+  }
+}

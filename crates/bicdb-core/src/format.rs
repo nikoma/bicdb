@@ -29,6 +29,20 @@ pub const SQL_PARTITION_EXECUTION_V1_FEATURE_FLAG: &str = "sql_partition_executi
 /// Node-local namespace lineage. Never replicate this as a portable schema
 /// reader capability: each destination activates and owns its own identities.
 pub const LOCAL_NAMESPACE_IDENTITY_FEATURE_FLAG: &str = "local_namespace_identity_v1";
+/// Local native image receipts require writers that honor image invalidation.
+/// This capability is separate from namespace IDs and is never portable schema.
+pub const RANGE_IMAGE_INSTALL_FEATURE_FLAG: &str = "range_image_install_v1";
+/// Protected pre-BEGIN current-repair proposals; node-local, never portable.
+pub const CURRENT_IMAGE_PROPOSAL_FEATURE_FLAG: &str = "current_range_image_proposal_v1";
+/// Local recovered serving epochs; older native writers must refuse this DB.
+pub const NATIVE_RECOVERY_SERVING_FEATURE_FLAG: &str = "native_recovery_serving_v1";
+/// From-birth writer enrollment; local and deliberately not a portable schema capability.
+/// Local decision-catalogue custody contract; old writers must refuse.
+pub const NATIVE_CATALOGUE_CUSTODY_FEATURE_FLAG: &str = "native_catalogue_custody_v1";
+pub const NATIVE_WRITER_ENROLLMENT_FEATURE_FLAG: &str = "native_writer_enrollment_v1";
+/// Local metadata-store initialization/ownership; excluded from portable schema.
+pub const NATIVE_METADATA_STORE_FEATURE_FLAG: &str = "native_metadata_store_v1";
+pub const NATIVE_INITIAL_PREPARATION_FEATURE_FLAG: &str = "native_initial_preparation_v1";
 pub const ORACLE_SIMPLE_CASE_V1_FEATURE_FLAG: &str = "oracle_simple_case_v1";
 pub const APPLICATION_UNIQUE_SCOPE_FEATURE_FLAG: &str = "application_unique_scope_transition_v1";
 pub const DECIMAL_PREDICATE_COMPARISON_V1_FEATURE_FLAG: &str = "decimal_predicate_comparison_v1";
@@ -41,10 +55,39 @@ const KNOWN_FEATURE_FLAGS: &[&str] = &[
     UNIQUE_NULLS_NOT_DISTINCT_FEATURE_FLAG,
     SQL_CATALOG_INTENTS_FEATURE_FLAG,
     LOCAL_NAMESPACE_IDENTITY_FEATURE_FLAG,
+    RANGE_IMAGE_INSTALL_FEATURE_FLAG,
+    CURRENT_IMAGE_PROPOSAL_FEATURE_FLAG,
+    NATIVE_RECOVERY_SERVING_FEATURE_FLAG,
+    NATIVE_WRITER_ENROLLMENT_FEATURE_FLAG,
+    NATIVE_CATALOGUE_CUSTODY_FEATURE_FLAG,
+    NATIVE_METADATA_STORE_FEATURE_FLAG,
+    NATIVE_INITIAL_PREPARATION_FEATURE_FLAG,
     "format_metadata_v2",
     SERVER_PAGED_FEATURE_FLAG,
     ONLINE_BACKUP_EXTENT_FEATURE_FLAG,
 ];
+
+// Capture-only subset of the c3 portable-reader contract. Rename journals
+// are deliberately absent until their actual recovery implementation lands;
+// knowing a future flag before implementing its reader would be unsafe.
+const REPLICATED_READER_FEATURES: &[&str] = &[
+    ORACLE_INVALID_ROUTINES_FEATURE_FLAG,
+    ORACLE_SIMPLE_CASE_V1_FEATURE_FLAG,
+    UNIQUE_NULLS_NOT_DISTINCT_FEATURE_FLAG,
+    SQL_CATALOG_INTENTS_FEATURE_FLAG,
+];
+
+pub(crate) fn required_reader_features(root: &Path) -> Result<Vec<String>> {
+    let lock = feature_flags_lock(root);
+    let _guard = lock.lock();
+    let metadata = read_or_legacy_metadata(root)?;
+    validate_supported(&metadata)?;
+    Ok(metadata
+        .feature_flags
+        .into_iter()
+        .filter(|flag| REPLICATED_READER_FEATURES.contains(&flag.as_str()))
+        .collect())
+}
 
 fn feature_flags_lock(root: &Path) -> std::sync::Arc<parking_lot::Mutex<()>> {
     use std::sync::{Arc, OnceLock, Weak};
@@ -512,6 +555,9 @@ fn migrate_to_current(
 }
 
 fn validate_supported(metadata: &FormatMetadata) -> Result<()> {
+    validate_supported_with_flags(metadata, KNOWN_FEATURE_FLAGS)
+}
+fn validate_supported_with_flags(metadata: &FormatMetadata, known: &[&str]) -> Result<()> {
     // Checked first, and before any migration writes: the whole point of the
     // storage-mode fence is that a binary which cannot run the selected engine
     // refuses the database without mutating a byte of it.
@@ -529,7 +575,7 @@ fn validate_supported(metadata: &FormatMetadata) -> Result<()> {
         )));
     }
     for flag in &metadata.feature_flags {
-        if !KNOWN_FEATURE_FLAGS.contains(&flag.as_str()) {
+        if !known.contains(&flag.as_str()) {
             return Err(BicDbError::FormatCompatibility(format!(
                 "database requires unknown format feature flag `{flag}`"
             )));
@@ -556,7 +602,19 @@ fn persist_metadata_with(
             .contains(LOCAL_NAMESPACE_IDENTITY_FEATURE_FLAG)
         || metadata
             .feature_flags
-            .contains(SQL_PARTITION_EXECUTION_V1_FEATURE_FLAG);
+            .contains(SQL_PARTITION_EXECUTION_V1_FEATURE_FLAG)
+        || metadata
+            .feature_flags
+            .contains(RANGE_IMAGE_INSTALL_FEATURE_FLAG)
+        || metadata
+            .feature_flags
+            .contains(CURRENT_IMAGE_PROPOSAL_FEATURE_FLAG)
+        || metadata
+            .feature_flags
+            .contains(NATIVE_METADATA_STORE_FEATURE_FLAG)
+        || metadata
+            .feature_flags
+            .contains(NATIVE_CATALOGUE_CUSTODY_FEATURE_FLAG);
     write(
         &metadata_path(root),
         &serde_json::to_vec_pretty(metadata)?,
@@ -674,6 +732,201 @@ pub(crate) fn enable_local_namespace_identity(root: &Path) -> Result<()> {
     persist_metadata(root, &metadata, true)
 }
 
+/// Fence image-unaware readers/writers before trusting native image receipts.
+pub(crate) fn enable_range_image_install(root: &Path) -> Result<()> {
+    let lock = feature_flags_lock(root);
+    let _guard = lock.lock();
+    let mut metadata = read_or_legacy_metadata(root)?;
+    validate_supported(&metadata)?;
+    metadata
+        .feature_flags
+        .insert(RANGE_IMAGE_INSTALL_FEATURE_FLAG.into());
+    persist_metadata(root, &metadata, true)
+}
+
+/// Trusted fresh-factory use only. A flag on a birth-v1 root cannot upgrade its birth.
+pub(crate) fn enable_native_writer_enrollment(root: &Path) -> Result<()> {
+    let lock = feature_flags_lock(root);
+    let _guard = lock.lock();
+    let mut metadata = read_or_legacy_metadata(root)?;
+    validate_supported(&metadata)?;
+    if !metadata
+        .feature_flags
+        .contains(RANGE_IMAGE_INSTALL_FEATURE_FLAG)
+    {
+        return Err(BicDbError::InvalidConfig(
+            "writer enrollment requires image-aware storage".into(),
+        ));
+    }
+    metadata
+        .feature_flags
+        .insert(NATIVE_WRITER_ENROLLMENT_FEATURE_FLAG.into());
+    persist_metadata(root, &metadata, true)
+}
+
+/// Fresh factory only; existing roots cannot obtain bootstrap authority from it.
+pub(crate) fn enable_native_catalogue_custody(root: &Path) -> Result<()> {
+    let lock = feature_flags_lock(root);
+    let _guard = lock.lock();
+    let mut metadata = read_or_legacy_metadata(root)?;
+    validate_supported(&metadata)?;
+    if !metadata
+        .feature_flags
+        .contains(NATIVE_WRITER_ENROLLMENT_FEATURE_FLAG)
+    {
+        return Err(BicDbError::InvalidConfig(
+            "catalogue custody requires enforced native writer".into(),
+        ));
+    }
+    metadata
+        .feature_flags
+        .insert(NATIVE_CATALOGUE_CUSTODY_FEATURE_FLAG.into());
+    persist_metadata(root, &metadata, true)
+}
+#[cfg(test)]
+pub(crate) fn test_old_reader_without_catalogue_custody(root: &Path) -> Result<()> {
+    let metadata = read_or_legacy_metadata(root)?;
+    let old: Vec<_> = KNOWN_FEATURE_FLAGS
+        .iter()
+        .copied()
+        .filter(|flag| *flag != NATIVE_CATALOGUE_CUSTODY_FEATURE_FLAG)
+        .collect();
+    validate_supported_with_flags(&metadata, &old)
+}
+
+pub(crate) fn native_catalogue_custody_active(root: &Path) -> Result<bool> {
+    let metadata = read_or_legacy_metadata(root)?;
+    validate_supported(&metadata)?;
+    Ok(metadata
+        .feature_flags
+        .contains(NATIVE_CATALOGUE_CUSTODY_FEATURE_FLAG))
+}
+
+pub(crate) fn native_writer_enrollment_active(root: &Path) -> Result<bool> {
+    let metadata = read_or_legacy_metadata(root)?;
+    validate_supported(&metadata)?;
+    Ok(metadata
+        .feature_flags
+        .contains(NATIVE_WRITER_ENROLLMENT_FEATURE_FLAG))
+}
+
+/// Fence older native hosts BEFORE publishing protected metadata identity.
+pub(crate) fn enable_native_metadata_store(root: &Path) -> Result<()> {
+    let lock = feature_flags_lock(root);
+    let _guard = lock.lock();
+    let mut metadata = read_or_legacy_metadata(root)?;
+    validate_supported(&metadata)?;
+    if !metadata
+        .feature_flags
+        .contains(NATIVE_WRITER_ENROLLMENT_FEATURE_FLAG)
+    {
+        return Err(BicDbError::InvalidConfig(
+            "native metadata requires born-v2 writer enrollment".into(),
+        ));
+    }
+    metadata
+        .feature_flags
+        .insert(NATIVE_METADATA_STORE_FEATURE_FLAG.into());
+    persist_metadata(root, &metadata, true)
+}
+pub(crate) fn enable_native_initial_preparation(root: &Path) -> Result<()> {
+    let lock = feature_flags_lock(root);
+    let _guard = lock.lock();
+    let mut metadata = read_or_legacy_metadata(root)?;
+    validate_supported(&metadata)?;
+    if !metadata
+        .feature_flags
+        .contains(NATIVE_METADATA_STORE_FEATURE_FLAG)
+    {
+        return Err(BicDbError::InvalidConfig(
+            "initial preparation requires native metadata ownership".into(),
+        ));
+    }
+    metadata
+        .feature_flags
+        .insert(NATIVE_INITIAL_PREPARATION_FEATURE_FLAG.into());
+    persist_metadata(root, &metadata, true)
+}
+pub(crate) fn native_initial_preparation_active(root: &Path) -> Result<bool> {
+    let metadata = read_or_legacy_metadata(root)?;
+    validate_supported(&metadata)?;
+    Ok(metadata
+        .feature_flags
+        .contains(NATIVE_INITIAL_PREPARATION_FEATURE_FLAG))
+}
+pub(crate) fn native_metadata_store_active(root: &Path) -> Result<bool> {
+    let metadata = read_or_legacy_metadata(root)?;
+    validate_supported(&metadata)?;
+    Ok(metadata
+        .feature_flags
+        .contains(NATIVE_METADATA_STORE_FEATURE_FLAG))
+}
+
+pub(crate) fn enable_current_image_proposal(root: &Path) -> Result<()> {
+    let lock = feature_flags_lock(root);
+    let _guard = lock.lock();
+    let mut metadata = read_or_legacy_metadata(root)?;
+    validate_supported(&metadata)?;
+    if !metadata
+        .feature_flags
+        .contains(RANGE_IMAGE_INSTALL_FEATURE_FLAG)
+    {
+        return Err(BicDbError::InvalidConfig(
+            "current image proposal requires image-aware storage".into(),
+        ));
+    }
+    metadata
+        .feature_flags
+        .insert(CURRENT_IMAGE_PROPOSAL_FEATURE_FLAG.into());
+    persist_metadata(root, &metadata, true)
+}
+pub(crate) fn current_image_proposal_active(root: &Path) -> Result<bool> {
+    let metadata = read_or_legacy_metadata(root)?;
+    validate_supported(&metadata)?;
+    Ok(metadata
+        .feature_flags
+        .contains(CURRENT_IMAGE_PROPOSAL_FEATURE_FLAG))
+}
+
+/// Fence older image-aware writers BEFORE persisting a recovered serving
+/// configuration. This flag remains local, outside portable SQL schema flags.
+pub(crate) fn enable_native_recovery_serving(root: &Path) -> Result<()> {
+    let lock = feature_flags_lock(root);
+    let _guard = lock.lock();
+    let mut metadata = read_or_legacy_metadata(root)?;
+    validate_supported(&metadata)?;
+    if !metadata
+        .feature_flags
+        .contains(RANGE_IMAGE_INSTALL_FEATURE_FLAG)
+    {
+        return Err(BicDbError::InvalidConfig(
+            "native recovery serving requires image-aware storage".into(),
+        ));
+    }
+    metadata
+        .feature_flags
+        .insert(NATIVE_RECOVERY_SERVING_FEATURE_FLAG.into());
+    persist_metadata(root, &metadata, true)
+}
+
+pub(crate) fn native_recovery_serving_active(root: &Path) -> Result<bool> {
+    let metadata = read_or_legacy_metadata(root)?;
+    validate_supported(&metadata)?;
+    Ok(metadata
+        .feature_flags
+        .contains(NATIVE_RECOVERY_SERVING_FEATURE_FLAG))
+}
+
+/// Presence of a receipt alone is never activation. Validate format and mode
+/// before a native adapter may consider this local receipt capability active.
+pub(crate) fn range_image_install_active(root: &Path) -> Result<bool> {
+    let metadata = read_or_legacy_metadata(root)?;
+    validate_supported(&metadata)?;
+    Ok(metadata
+        .feature_flags
+        .contains(RANGE_IMAGE_INSTALL_FEATURE_FLAG))
+}
+
 /// Persist the reader/writer fence before any Oracle-v1 key definition or build
 /// checkpoint becomes durable. The capability is sticky even after index DROP.
 pub(crate) fn enable_oracle_simple_case_v1(root: &Path) -> Result<()> {
@@ -709,18 +962,21 @@ pub(crate) fn enable_oracle_invalid_routines(root: &Path) -> Result<()> {
 mod local_identity_format_tests {
     use super::*;
 
+    // The native image reader is supplied by this composition. Keep the
+    // current-main unknown-reader refusal invariant for a genuinely unknown
+    // future capability; historical source-476 evidence remains unchanged.
     #[test]
-    fn namespace_identity_does_not_advertise_unimplemented_range_image_readers() {
+    fn namespace_identity_does_not_advertise_unknown_native_readers() {
         let root = tempfile::tempdir().unwrap();
         let mut metadata = FormatMetadata::current();
         metadata
             .feature_flags
-            .insert("range_image_install_v1".into());
+            .insert("reserved_future_native_reader_v999".into());
         persist_metadata(root.path(), &metadata, true).unwrap();
         let error = ensure_open_compatible(root.path(), false).unwrap_err();
         assert!(error
             .to_string()
-            .contains("unknown format feature flag `range_image_install_v1`"));
+            .contains("unknown format feature flag `reserved_future_native_reader_v999`"));
     }
 
     #[test]
@@ -732,7 +988,10 @@ mod local_identity_format_tests {
             Ok(())
         })
         .unwrap();
-        for flag in [LOCAL_NAMESPACE_IDENTITY_FEATURE_FLAG] {
+        for flag in [
+            LOCAL_NAMESPACE_IDENTITY_FEATURE_FLAG,
+            RANGE_IMAGE_INSTALL_FEATURE_FLAG,
+        ] {
             let mut metadata = legacy.clone();
             metadata.feature_flags.insert(flag.into());
             persist_metadata_with(root.path(), &metadata, false, |path, bytes, sync| {
@@ -753,9 +1012,9 @@ mod local_identity_format_tests {
         use std::sync::{Arc, Barrier};
         let root = tempfile::tempdir().unwrap();
         persist_current(root.path(), false).unwrap();
-        let barrier = Arc::new(Barrier::new(5));
+        let barrier = Arc::new(Barrier::new(6));
         std::thread::scope(|scope| {
-            for action in 0..5 {
+            for action in 0..6 {
                 let barrier = barrier.clone();
                 let root = root.path();
                 scope.spawn(move || {
@@ -763,9 +1022,10 @@ mod local_identity_format_tests {
                     for _ in 0..24 {
                         match action {
                             0 => enable_local_namespace_identity(root).unwrap(),
-                            1 => enable_sql_catalog_intents(root).unwrap(),
+                            1 => enable_range_image_install(root).unwrap(),
                             2 => enable_unique_nulls_not_distinct(root).unwrap(),
-                            3 => persist_current(root, false).unwrap(),
+                            3 => enable_sql_catalog_intents(root).unwrap(),
+                            4 => persist_current(root, false).unwrap(),
                             _ => {
                                 persist_current_with_mode(root, StorageMode::EmbeddedMemory, false)
                                     .unwrap()
@@ -778,6 +1038,7 @@ mod local_identity_format_tests {
         let metadata = read_or_legacy_metadata(root.path()).unwrap();
         for flag in [
             LOCAL_NAMESPACE_IDENTITY_FEATURE_FLAG,
+            RANGE_IMAGE_INSTALL_FEATURE_FLAG,
             SQL_CATALOG_INTENTS_FEATURE_FLAG,
             UNIQUE_NULLS_NOT_DISTINCT_FEATURE_FLAG,
         ] {
@@ -794,7 +1055,7 @@ mod local_identity_format_tests {
         let canonical_lock = feature_flags_lock(root.path());
         let alias = root.path().join(".");
         assert!(Arc::ptr_eq(&canonical_lock, &feature_flags_lock(&alias)));
-        for action in 0..9 {
+        for action in 0..10 {
             let guard = canonical_lock.lock();
             let (entered_tx, entered_rx) = mpsc::channel();
             let (done_tx, done_rx) = mpsc::channel();
@@ -803,13 +1064,14 @@ mod local_identity_format_tests {
                     entered_tx.send(()).unwrap();
                     match action {
                         0 => enable_local_namespace_identity(&alias),
-                        1 => enable_unique_nulls_not_distinct(&alias),
-                        2 => enable_sql_catalog_intents(&alias),
-                        3 => enable_oracle_simple_case_v1(&alias),
-                        4 => enable_oracle_invalid_routines(&alias),
-                        5 => enable_online_backup_extent_tracking(&alias),
-                        6 => persist_current(&alias, false),
-                        7 => persist_current_with_mode(&alias, StorageMode::EmbeddedMemory, false),
+                        1 => enable_range_image_install(&alias),
+                        2 => enable_unique_nulls_not_distinct(&alias),
+                        3 => enable_sql_catalog_intents(&alias),
+                        4 => enable_oracle_simple_case_v1(&alias),
+                        5 => enable_oracle_invalid_routines(&alias),
+                        6 => enable_online_backup_extent_tracking(&alias),
+                        7 => persist_current(&alias, false),
+                        8 => persist_current_with_mode(&alias, StorageMode::EmbeddedMemory, false),
                         _ => ensure_open_compatible_in_mode(
                             &alias,
                             false,

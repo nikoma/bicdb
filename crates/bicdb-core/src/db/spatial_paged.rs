@@ -2208,6 +2208,12 @@ impl BicDb {
             // otherwise leave such frames exposed to an OS crash.
             let log = self.tx_log_path();
             if log.exists() {
+                let Some(_native_wal_cut) = self.tx_log.native_wal_cut_guard()? else {
+                    return Err(BicDbError::HighAvailability(
+                        "cannot rewrite recovery WAL while native apply receipts are retained"
+                            .into(),
+                    ));
+                };
                 self.tx_log.flush_pending()?;
                 let _backup_gate = storage::acquire_database_backup_write_guard(&self.path)?;
                 copy_transaction_log_tail(&log, 0, true)?;
@@ -2553,6 +2559,7 @@ impl BicDb {
         let _serializable_exclusive = (tx.isolation == TransactionIsolation::Serializable)
             .then(|| self.serializable_commit_admission.write());
         self.check_recovery_state()?;
+        self.require_enforced_transaction_preflight(tx)?;
         self.validate_transaction_collection_incarnations(tx)?;
         // CONCURRENT COMMIT (no global commit_lock). Correctness rests on four
         // independent mechanisms, each guarding exactly what it must:
@@ -2686,13 +2693,47 @@ impl BicDb {
                     })
                 })
                 .collect::<Result<Vec<_>>>()?;
-            Some(admission.admit(&CommitAdmissionIntent {
+            let intent = CommitAdmissionIntent {
                 transaction_id: tx.id.0,
                 mutations,
-            })?)
+            };
+            Some(
+                if self
+                    .range_image_native_birth_active
+                    .load(AtomicOrdering::Acquire)
+                {
+                    let ticket = match admission.admit_with_native_context(&intent, self) {
+                        Ok(ticket) => ticket,
+                        Err(error) => {
+                            if matches!(&error, BicDbError::CommitOutcomeUnknown { .. }) {
+                                // Admission precedes local WAL allocation. Keep
+                                // the real uncertainty without inventing B/0;
+                                // pending-transaction Drop must not say Aborted.
+                                tx.receipt_native_admission_unknown();
+                            }
+                            return Err(error);
+                        }
+                    };
+                    tx.commit_admission_ticket = Some((Arc::clone(admission), ticket.clone()));
+                    tx.native_admission_recovery_release = Some(NativeAdmissionRecoveryRelease {
+                        admission: Arc::clone(admission),
+                        ticket: Some(ticket.clone()),
+                    });
+                    ticket
+                } else {
+                    admission.admit(&intent)?
+                },
+            )
         } else {
             None
         };
+        self.require_native_transaction_mutation_scope(tx)?;
+        #[cfg(test)]
+        if tx.native_admission_recovery_release.is_some() && self.test_native_admission_rejected() {
+            return Err(BicDbError::Cluster(
+                "injected native post-admission/pre-WAL rejection".into(),
+            ));
+        }
         let sync_ops = if tx.imported_projection {
             Vec::new()
         } else {
@@ -2718,6 +2759,12 @@ impl BicDb {
             return Err(BicDbError::PagedStorage(
                 "injected pre-decision rejection".into(),
             ));
+        }
+        if tx.database_mutation_permit.is_some() && !tx.writes.is_empty() {
+            self.invalidate_native_range_images_before_mutation(
+                None,
+                "unscoped native/standalone commit",
+            )?;
         }
         bicdb_page::test_faults::crash_point("commit.before_decision");
         // Past validation: reserve and durably log the transaction decision.

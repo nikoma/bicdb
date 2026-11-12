@@ -26,8 +26,20 @@ mod distribution_events;
 mod distribution_gateway;
 #[cfg(feature = "tls-replication")]
 mod distribution_io;
+mod distribution_metadata_read_provider;
+mod distribution_native_admission;
+mod distribution_native_apply;
+mod distribution_native_host;
+mod distribution_native_read;
+mod distribution_native_writer;
 mod distribution_query;
 mod distribution_range_consensus;
+mod distribution_range_handoff;
+mod distribution_range_image;
+mod distribution_range_image_install;
+mod distribution_range_image_scope;
+mod distribution_range_mutation;
+mod distribution_range_recovery;
 mod distribution_restore;
 mod distribution_restore_activation;
 mod distribution_routing;
@@ -242,6 +254,7 @@ pub use db::{
 pub use db::{timestamp_day_index_inputs_supported, timestamp_day_index_value};
 pub use db::{
     CommitAdmission, CommitAdmissionIntent, CommitAdmissionMutation, CommitAdmissionTicket,
+    NativeWalApplyReceipt,
 };
 pub use db::{CommitResolution, INCARNATION_JOURNAL};
 pub use db::{WalArchiveReport, WalArchiveStatus};
@@ -252,13 +265,13 @@ pub use distribution::{
     ClusterNode, ClusterNodeId, ClusterNodeLifecycle, ClusterNodeLiveness, ClusterPlacementPlanner,
     ClusterTopology, DistributionConfig, DistributionStore, FailureRepairPlan, MetadataMemberRole,
     MetadataMutationToken, NodeRemovalSafety, PlacementPolicy, PlannedLeaderTransfer,
-    PlannedReplicaMove, RangeAvailability, RangeDescriptor, RangeId, RangeRelocation, RangeReplica,
-    RangeReplicaRole, RangeSnapshotBatch, RangeSnapshotExport, RangeSnapshotOptions,
-    RebalanceOptions, RebalancePlan, RelocationId, RelocationPhase, ReplicaId, ReplicaMoveReason,
-    StandardFailureDomain, TopologyChange, UnplacedRange, CLUSTER_DATA_PROTOCOL_VERSION,
-    DEFAULT_CLUSTER_TOPOLOGY, DEFAULT_DISTRIBUTION_CONFIG, DISTRIBUTION_FORMAT_VERSION,
-    DISTRIBUTION_HASH_VERSION, SCHEMA_BOOTSTRAP_NODE_LABEL, SCHEMA_COMPATIBILITY_NODE_LABEL,
-    SCHEMA_COMPATIBILITY_TARGET_NODE_LABEL,
+    PlannedReplicaMove, RangeAvailability, RangeDescriptor, RangeHandoffSession, RangeId,
+    RangeRelocation, RangeReplica, RangeReplicaRole, RangeSnapshotBatch, RangeSnapshotExport,
+    RangeSnapshotOptions, RebalanceOptions, RebalancePlan, RelocationId, RelocationPhase,
+    ReplicaId, ReplicaMoveReason, StandardFailureDomain, TopologyChange, UnplacedRange,
+    CLUSTER_DATA_PROTOCOL_VERSION, DEFAULT_CLUSTER_TOPOLOGY, DEFAULT_DISTRIBUTION_CONFIG,
+    DISTRIBUTION_FORMAT_VERSION, DISTRIBUTION_HASH_VERSION, SCHEMA_BOOTSTRAP_NODE_LABEL,
+    SCHEMA_COMPATIBILITY_NODE_LABEL, SCHEMA_COMPATIBILITY_TARGET_NODE_LABEL,
 };
 pub use distribution_anti_entropy::{
     append_range_digest_bucket_records, calculate_range_digest_root,
@@ -337,11 +350,13 @@ pub use distribution_certification::{
 };
 pub use distribution_consensus::{
     MetadataAppendRequest, MetadataAppendResponse, MetadataConsensusRole, MetadataConsensusStatus,
-    MetadataConsensusStore, MetadataLogEntry, MetadataReadAck, MetadataReadAuthority,
-    MetadataReadContext, MetadataReadParticipant, MetadataReadProbeRequest,
-    MetadataReadProbeResponse, MetadataRestoreActivation, MetadataSnapshot, MetadataVoteRequest,
-    MetadataVoteResponse, CLUSTER_METADATA_CONSENSUS_FORMAT_VERSION,
-    DEFAULT_CLUSTER_METADATA_CONSENSUS_STATE, METADATA_READ_AUTHORITY_PROTOCOL_VERSION,
+    MetadataConsensusStore, MetadataLogEntry, MetadataReadAck, MetadataReadAcquireRequest,
+    MetadataReadAcquireResponse, MetadataReadAnchor, MetadataReadAuthority, MetadataReadContext,
+    MetadataReadObservation, MetadataReadParticipant, MetadataReadProbeRequest,
+    MetadataReadProbeResponse, MetadataReadVoterProof, MetadataRestoreActivation, MetadataSnapshot,
+    MetadataVoteRequest, MetadataVoteResponse, NativeMetadataAppendReceiver,
+    CLUSTER_METADATA_CONSENSUS_FORMAT_VERSION, DEFAULT_CLUSTER_METADATA_CONSENSUS_STATE,
+    METADATA_READ_ACQUISITION_PROTOCOL_VERSION, METADATA_READ_AUTHORITY_PROTOCOL_VERSION,
     METADATA_RESTORE_ACTIVATION_FORMAT_VERSION,
 };
 pub use distribution_data::{
@@ -355,6 +370,9 @@ pub use distribution_data::{
 pub use distribution_gateway::{
     BoundedClusterConnectionPool, ClusterConnectionPoolStats, ClusterGatewayConfig,
     ClusterPointConnection, ClusterPointConnector, ClusterPointGateway, PointTransportReply,
+};
+pub use distribution_metadata_read_provider::{
+    MetadataReadProbeTransport, MetadataReadProvider, MetadataReadProviderLimits,
 };
 pub use distribution_query::{
     execute_distributed_transaction, execute_scatter_gather, execute_scatter_gather_governed,
@@ -417,8 +435,9 @@ pub use distribution_supervisor::{
 };
 #[cfg(feature = "tls-replication")]
 pub use distribution_transport::{
-    start_cluster_data_server, ClusterDataServerHandle, TcpClusterBootstrapClient,
-    TcpClusterRelocationTransport,
+    start_cluster_data_server, start_cluster_data_server_on_listener_with_metadata_read_provider,
+    start_cluster_data_server_with_metadata_read_provider, ClusterDataServerHandle,
+    TcpClusterBootstrapClient, TcpClusterRelocationTransport,
 };
 pub use encryption::{
     DatabaseObjectCipher, EncryptionBinding, EncryptionConfig, EncryptionKdfMetadata,
@@ -441,7 +460,7 @@ pub use format::{
     FormatMigrationReport, FormatMigrationStep, StorageMode, CURRENT_FORMAT_VERSION,
     FORMAT_METADATA_FILE, FORMAT_MIGRATION_STATE_FILE, LOCAL_NAMESPACE_IDENTITY_FEATURE_FLAG,
     MIN_READ_FORMAT_VERSION, MIN_WRITE_FORMAT_VERSION, ORACLE_INVALID_ROUTINES_FEATURE_FLAG,
-    SERVER_PAGED_FEATURE_FLAG,
+    RANGE_IMAGE_INSTALL_FEATURE_FLAG, SERVER_PAGED_FEATURE_FLAG,
 };
 pub use fts_build::FullTextBuildStatus;
 pub use fts_filters::FullTextDocumentFilter;

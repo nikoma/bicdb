@@ -1,0 +1,15 @@
+{
+  "artifact_id": 13953157621,
+  "source_revision": "31cdbb83d6972357a64f6078ccca7d3c981d9c55",
+  "zip_sha256": "80c9c77895729d1624e1b418ef0b515d9fb00b1b9788a50172fcecf256ff7235",
+  "zip_bytes": 350094,
+  "manifest_sha256": "faee24ce5c968f1966c449a9a5cdd6f2315e42b8a405c448af38ec390aeaf4c4",
+  "files_verified": 81,
+  "manifest_bytes": 5517882,
+  "exact_file_set": true,
+  "hashes_and_lengths_match": true,
+  "engine_owners_remain_alive": true,
+  "engine_reopened": false,
+  "atomic_powerloss_snapshot_or_replay_verified": false,
+  "claim": "archive custody only; no engine replay, physical qualification or successful recovery"
+}

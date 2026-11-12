@@ -1025,6 +1025,23 @@ pub(crate) fn start_distribution_supervisor(
     server: Arc<PgWireServer>,
     supervisor: ClusterSupervisor,
 ) {
+    start_distribution_supervisor_with_listener(server, supervisor, None)
+}
+
+#[cfg(test)]
+pub(crate) fn start_distribution_supervisor_on_listener(
+    server: Arc<PgWireServer>,
+    supervisor: ClusterSupervisor,
+    listener: TcpListener,
+) {
+    start_distribution_supervisor_with_listener(server, supervisor, Some(listener))
+}
+
+fn start_distribution_supervisor_with_listener(
+    server: Arc<PgWireServer>,
+    supervisor: ClusterSupervisor,
+    reserved_listener: Option<TcpListener>,
+) {
     thread::spawn(move || {
         let _worker = BackgroundWorker::register(server.clone());
         let mut distribution = match load_distribution_config(&server.path) {
@@ -1130,18 +1147,58 @@ pub(crate) fn start_distribution_supervisor(
                 return;
             }
         };
-        let data_server = match start_cluster_data_server(
-            &distribution.node_address,
-            distribution.transport.clone(),
+        let range_write_transport = match TcpClusterRelocationTransport::new(
+            distribution.cluster_id.clone(),
+            distribution.node_id.clone(),
             Arc::clone(&shared_topology),
-            Arc::clone(&service),
-            None,
-            Some(Arc::clone(&metadata_consensus)),
-            Some(Arc::clone(&store)),
+            distribution.transport.clone(),
         ) {
+            Ok(transport) => Arc::new(transport),
+            Err(error) => {
+                eprintln!("bicdb range-write transport error: {error}");
+                server.request_shutdown();
+                return;
+            }
+        };
+        let metadata_read_provider = match bicdb_core::MetadataReadProvider::new(
+            Arc::clone(&metadata_consensus),
+            range_write_transport.clone(),
+        ) {
+            Ok(provider) => Arc::new(provider),
+            Err(error) => {
+                eprintln!("bicdb fresh metadata authority provider error: {error}");
+                server.request_shutdown();
+                return;
+            }
+        };
+        let started = match reserved_listener {
+            Some(listener) => {
+                bicdb_core::start_cluster_data_server_on_listener_with_metadata_read_provider(
+                    listener,
+                    distribution.transport.clone(),
+                    Arc::clone(&shared_topology),
+                    Arc::clone(&service),
+                    None,
+                    Some(Arc::clone(&metadata_consensus)),
+                    Some(Arc::clone(&store)),
+                    Some(metadata_read_provider),
+                )
+            }
+            None => start_cluster_data_server_with_metadata_read_provider(
+                &distribution.node_address,
+                distribution.transport.clone(),
+                Arc::clone(&shared_topology),
+                Arc::clone(&service),
+                None,
+                Some(Arc::clone(&metadata_consensus)),
+                Some(Arc::clone(&store)),
+                Some(metadata_read_provider),
+            ),
+        };
+        let data_server = match started {
             Ok(handle) => handle,
             Err(error) => {
-                eprintln!("bicdb cluster data listener error: {error}");
+                eprintln!("bicdb cluster data listener error: node={} cluster={} address={} error={error}", distribution.node_id, distribution.cluster_id, distribution.node_address);
                 server.request_shutdown();
                 return;
             }
@@ -1160,19 +1217,6 @@ pub(crate) fn start_distribution_supervisor(
             Ok(transport) => transport,
             Err(error) => {
                 eprintln!("bicdb cluster transport error: {error}");
-                server.request_shutdown();
-                return;
-            }
-        };
-        let range_write_transport = match TcpClusterRelocationTransport::new(
-            distribution.cluster_id.clone(),
-            distribution.node_id.clone(),
-            Arc::clone(&shared_topology),
-            distribution.transport.clone(),
-        ) {
-            Ok(transport) => Arc::new(transport),
-            Err(error) => {
-                eprintln!("bicdb range-write transport error: {error}");
                 server.request_shutdown();
                 return;
             }

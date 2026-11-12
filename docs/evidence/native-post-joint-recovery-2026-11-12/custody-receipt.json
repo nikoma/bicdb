@@ -1,0 +1,37 @@
+{
+  "source_sha": "b277260b0b114d1f892ecad8d2e5e7a03ba7da5a",
+  "run": 43228215328,
+  "job": 131216860500,
+  "artifact_id": 13949222282,
+  "artifact_sha256": "b14a311810460048a09ae9195256bafdfbca2753019e8e87e670b7b7492d84b7",
+  "artifact_bytes": 315490,
+  "scope": "Observed stable copies with live owners; custody only, no engine replay or physical loss qualification.",
+  "cuts": [
+    {
+      "manifest": "fault-state/native-joint-cut-01a1cffb-fa81-77d1-9651-e4fe7b627d3b/manifest.json",
+      "sha256": "dc9faa3acca2a5c6a9271a978d1b70b6be29e307c72ede6f94733ffaf31e7676",
+      "files_verified": 78,
+      "bytes_verified": 5167564,
+      "engine_owners_remain_alive": true,
+      "engine_reopened": false,
+      "powerloss_or_replay_verified": false
+    }
+  ],
+  "reports": [
+    {
+      "path": "fault-state/native-joint-cut-01a1cffb-fa81-77d1-9651-e4fe7b627d3b/databases/actual-post-joint-new-metadata-authority.json",
+      "bytes": 1746,
+      "sha256": "45ec4ce7e0c5f0b4cd6dbe0b939673f6e9872de30cde4f6eb4016382f281016a"
+    },
+    {
+      "path": "fault-state/native-joint-cut-01a1cffb-fa81-77d1-9651-e4fe7b627d3b/databases/actual-post-joint-no-data-before.json",
+      "bytes": 63887,
+      "sha256": "515f7000bc541ef7c94e8bc727be4eebbc54e22dd306d83b5bd1211db6c0fbae"
+    },
+    {
+      "path": "fault-state/native-joint-cut-01a1cffb-fa81-77d1-9651-e4fe7b627d3b/databases/actual-post-joint-prepare-only.json",
+      "bytes": 75548,
+      "sha256": "19f8c75183f5d8162e2117334398a2b05e8734492baa35937a6a936af7fef545"
+    }
+  ]
+}

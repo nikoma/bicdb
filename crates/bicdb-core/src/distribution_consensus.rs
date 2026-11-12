@@ -2202,14 +2202,7 @@ impl MetadataConsensusStore {
             }
         }
         self.advance_follower_commit(request.leader_commit)?;
-        let match_index = self.last_log_index();
-        self.persist()?;
-        // Persist learned retirement/replacement FIRST, but never acknowledge
-        // catch-up/voting as the replacement physical incarnation.
-        if self.require_native_metadata_actor_current(false).is_err() {
-            return Ok(self.append_response(false, match_index.saturating_add(1)));
-        }
-        self.successful_owned_append_response()
+        self.persist_owned_append_response()
     }
 
     fn validate_native_birth_append(&self, request: &MetadataAppendRequest) -> Result<()> {

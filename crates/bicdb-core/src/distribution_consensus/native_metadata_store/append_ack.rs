@@ -105,11 +105,17 @@ impl MetadataAppendResponse {
 }
 
 impl MetadataConsensusStore {
-    /// Called only after this exact successful Append has completed persist().
+    /// Persistence is part of this producer, not a caller-order convention.
     /// No caller-provided index, birth, or StoreUUID enters the local producer.
-    pub(in crate::distribution_consensus) fn successful_owned_append_response(
+    pub(in crate::distribution_consensus) fn persist_owned_append_response(
         &self,
     ) -> Result<MetadataAppendResponse> {
+        self.persist()?;
+        // Persist learned retirement/replacement FIRST, but never acknowledge
+        // catch-up/voting as the replacement physical incarnation.
+        if self.require_native_metadata_actor_current(false).is_err() {
+            return Ok(self.append_response(false, self.last_log_index().saturating_add(1)));
+        }
         let mut response = self.append_response(true, self.last_log_index().saturating_add(1));
         if let Some(owner) = self.native_owner.as_ref() {
             self.require_native_metadata_actor_current(false)?;

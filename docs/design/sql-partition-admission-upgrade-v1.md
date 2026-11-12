@@ -49,9 +49,55 @@ The bit alone does not prove SQL admission. Native only supplies activation,
 its current local status, and a legacy-repair prerequisite check: fsync, loaded
 secondary indexes, no pending transactions/row-lock owners, and healthy recovery.
 SQL separately publishes a versioned completion certificate. Actual old-binary
-refusal and unchanged bytes must be proved after the SQL path is implemented.
+refusal and unchanged bytes have been observed for the explicit upgrade API;
+default startup and ordinary SQL admission still require integration.
 
-## SQL design to implement and qualify
+## Implemented components and observed checks
+
+The bounded inspector at `08f42204` passed six actual old482 stores across both
+storage modes, with stable inspection results over two reopens. `485f5317`
+additionally binds the canonical local directory and supporting schema, role,
+grant, routine/type, collection and index metadata to the operator fingerprint.
+
+The explicit API at `eccbe714` and again at `e45a5118` passed the same eight
+upgrade scenarios: parent-heap migration, reviewed invalid-child relocation,
+and both policy decisions, in each storage mode. These are repeat validations
+of eight scenarios, not sixteen distinct cases. All cases passed two reopens;
+the real old482 CLI refused each upgraded copy without changing any file bytes.
+Fourteen independently acknowledged source rows and the original fixture hashes
+remain preserved. An authorized upsert deliberately changes one migrated row's
+payload; preservation does not mean that later authorized updates are forbidden.
+
+Core tests at `b715e546` and test-only `3b0289b2` cover sticky activation, eight
+first-activation I/O boundaries, unsafe configuration/pending-owner prerequisites,
+and already-visible-flag synchronization retry (four focused tests total).
+Actual PostgreSQL 16 rejects primary/unique keys that omit a partition key with
+0A000. The legacy preflight at `e45a5118` matches that rule before activation.
+
+The current source adds typed optional execution markers and completed-plan
+receipts. Empty upgrade bookkeeping collections do not invalidate an otherwise
+unchanged reviewed plan after interruption. A completed explicit retry must
+match both the local directory and the digest of the original complete plan;
+it returns the prior receipt without another commit. This receipt reports a
+historical migration, not authority for imported data or certification of later
+catalog changes. Unknown/unfenced completion certificates refuse. The current
+focused and genuine-old-store rerun must finish before reporting these additions
+as qualified.
+
+The initial `f5ee9eec` focused run has one pass and three setup failures: its
+helper bundled raw partition DDL in one call and did not create either child
+before INSERT. `d965e015` separates those DDL calls without changing the runtime
+or the required retry assertions. Retain the failed run; qualification of the
+corrected fixture remains pending. Raw multi-statement partition DDL handling
+is separately unqualified and must not be reported as fixed by this test change.
+
+Automatic startup, SQL text/AST/COPY/procedure entry and direct read-only engine
+admission remain unimplemented. Fresh partition constructors still emit missing
+execution markers until activation/publication is connected. The original six
+default admission requirements and two default old-reader requirements remain
+open; explicit API successes do not turn those baseline failures into passes.
+
+## Implementation and qualification checklist
 
 1. Add optional execution-version fields to PostgreSQL `PartitioningSchema` and
    `PartitionOfSchema`; missing means legacy, unknown means refuse. Oracle

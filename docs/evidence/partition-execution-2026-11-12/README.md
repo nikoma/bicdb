@@ -2,7 +2,7 @@
 
 This is development evidence, not a release, completed partition implementation,
 application acceptance result, or distributed sharding qualification. The branch
-inherits source version 1.0.485-beta from its development base. Its eventual
+inherits source version 1.0.487-beta after integrating delivered main. Its eventual
 delivery must integrate current main and receive a fresh unused source version.
 
 The independent PostgreSQL 16.13 control uses only a new disposable schema and

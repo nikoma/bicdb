@@ -13,6 +13,8 @@ These are 23 distinct selected tests: 21 pass and 2 fail. They are focused compo
 
 The original-positive all-target/isolated no-default consumer job131502175291 passed. At this receipt snapshot, authority job131502122560's two compile steps passed (job cleanup still live); activation job131502201947's all-target step passed and its consumer was live; producer job131502151515's all-target step was live and its consumer pending. **Unfinished checks are not passed checks**. Exact later terminal receipts may supplement this snapshot without relabeling source or Core results.
 
+Final compile supplement: all four workflows are now terminal. **All four all-target checks and isolated no-default consumers passed.** Authority and producer workflows succeeded; original positive and activation workflows failed on the two actual Core failures above. Final receipt `f58-observer-final-summary.json` SHA-256 is `069a83f0c36e03d5ce17fd8bfd4c79f0cf85da87528da6048cce9d6718fe454d`; the earlier snapshot receipt remains preserved.
+
 ## Both heavy cases completed all three Complete calls
 
 The original 4500 ms request/role caps and fixture parent remain unchanged. Values below are the actual Complete total and effective-token time left at return, not renewed budgets.
@@ -58,6 +60,9 @@ All files are private under `/tmp/bicdb-native-foundations-ci`. Raw hashes below
 | Original positive raw `f58-observer-positive-job131502214629.log.gz` | `86a30df076d0761893cfcf3a048ed540a45f4454d83357e76bfe75267e3dbcaa` |
 | Activation raw `f58-observer-activation-job131502250718.log.gz` | `3fb9169cc0cc345c705282a8facb92f4483ada7294bffe4511b9e0a9ce81b1ea` |
 | Positive all-target/consumer raw job131502175291 | `3488bfba0c7068558139b54a7faf68b76eb7c3371662b34eed6f92cb8e32c629` |
+| Authority all-target/consumer raw job131502122560 | `843d230326d643465705438b732f0c214c263548484d6bf81bbae5c0f052904b` |
+| Producer all-target/consumer raw job131502151515 | `709b87666cca29faaad1454288730466d8ddd940671d47e293c066a2e9ed52f4` |
+| Activation all-target/consumer raw job131502201947 | `9b373c7bc2498a4eb60308bcd1107a825608231c32110192c42173f4a0c4cb42` |
 | Four-Core summary `f58-observer-four-core-summary.json` | `4afd6a1194e398886b8432999f10783f6425ce1e49a2f49c3c0473044a4d0a84` |
 | Authority artifact13985233246 ZIP | `0ed929fdb3df24db1217c24c5e573d14c738be5b4a6821fb038cc285d47a581c` |
 | Producer artifact13984584516 ZIP | `594ad013c8f1e23d679824b1d75a9722b32c96fce3104223ba86eca7fe7a5369` |

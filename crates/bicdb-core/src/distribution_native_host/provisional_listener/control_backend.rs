@@ -172,7 +172,7 @@ impl NativeMetadataControlBackend {
         parent: &CancellationToken,
     ) -> Result<ClusterDataServerHandle> {
         parent.check()?;
-        let address = {
+        let address: std::net::SocketAddr = {
             let store = self.lock_metadata(parent)?;
             store
                 .committed_topology()

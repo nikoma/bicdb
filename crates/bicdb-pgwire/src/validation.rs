@@ -4081,7 +4081,7 @@ $$
     fn catalog_acl_arrays_have_real_oids_text_values_and_no_binary_element_codec() {
         assert_eq!(oid_for_type_name("aclitem"), Some(1033));
         assert_eq!(oid_for_type_name("aclitem[]"), Some(1034));
-        let value = SqlValue::Json(serde_json::json!(["acl_reader=r/bicdb"]));
+        let value = SqlValue::Json(serde_json::json!(["acl_reader=r/bicdb"]).into());
         assert_eq!(
             postgres_array_text_result(&value, 1033).unwrap(),
             "{acl_reader=r/bicdb}"
@@ -4089,7 +4089,7 @@ $$
         let result = SqlResult::new(vec!["relacl".into()], vec![vec![value.clone()]])
             .with_column_types(vec![Some("aclitem[]".into())]);
         assert_eq!(result_column_types(&result, None).unwrap(), vec![1034]);
-        for value in [value, SqlValue::Json(serde_json::json!([]))] {
+        for value in [value, SqlValue::Json(serde_json::json!([]).into())] {
             let error = encode_binary_result_value(&value, 1034).unwrap_err();
             assert!(matches!(error, PgWireError::Sql(ref error) if error.sqlstate()=="42883"));
         }

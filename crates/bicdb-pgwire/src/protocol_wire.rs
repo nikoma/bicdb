@@ -2213,11 +2213,11 @@ pub(crate) fn unsupported_binary_result<T>(oid: i32, value: &SqlValue) -> Result
 }
 
 pub(crate) fn aclitem_binary_error(direction: &str) -> PgWireError {
-    PgWireError::Sql(bicdb_sql::SqlError::data_exception(
-        "42883",
-        format!("no binary {direction} function available for type aclitem"),
-        None,
-    ))
+    PgWireError::Sql(bicdb_sql::SqlError::DataException {
+        sqlstate: "42883",
+        message: format!("no binary {direction} function available for type aclitem"),
+        data_type: None,
+    })
 }
 
 pub(crate) fn first_non_null(result: &SqlResult, column: usize) -> Option<&SqlValue> {

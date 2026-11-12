@@ -62,7 +62,7 @@ async fn real_catalog_acl_describe_and_text_output_preserve_oid_and_permissions(
             let connection = tokio::spawn(connection);
             let outcome = AssertUnwindSafe(async {
                 tokio::time::timeout(Duration::from_secs(20), async {
-                    client.simple_query("CREATE ROLE acl_reader; CREATE TABLE acl_items(id INT PRIMARY KEY); GRANT SELECT ON acl_items TO acl_reader; GRANT SELECT(id) ON acl_items TO acl_reader").await.unwrap();
+                    client.simple_query("CREATE ROLE acl_reader; CREATE TABLE acl_items(id INT PRIMARY KEY,relacl TEXT); GRANT SELECT ON acl_items TO acl_reader; GRANT SELECT(id) ON acl_items TO acl_reader").await.unwrap();
                     for query in [
                         "SELECT relacl FROM pg_catalog.pg_class WHERE relname IN ('acl_items','ACL_ITEMS')",
                         "SELECT attacl FROM pg_catalog.pg_attribute WHERE attname IN ('id','ID') AND attrelid IN (SELECT oid FROM pg_catalog.pg_class WHERE relname IN ('acl_items','ACL_ITEMS'))",
@@ -75,6 +75,21 @@ async fn real_catalog_acl_describe_and_text_output_preserve_oid_and_permissions(
                         assert!(acl.starts_with('{') && acl.ends_with('}'), "{acl}");
                         assert!(acl.to_ascii_lowercase().contains("acl_reader=r/"), "{acl}");
                     }
+                    // Null and empty catalogs still need the declared array OID.
+                    for (catalog, column) in [
+                        ("pg_class", "relacl"), ("pg_attribute", "attacl"),
+                        ("pg_type", "typacl"), ("pg_namespace", "nspacl"),
+                        ("pg_proc", "proacl"), ("pg_database", "datacl"),
+                        ("pg_tablespace", "spcacl"), ("pg_language", "lanacl"),
+                        ("pg_foreign_data_wrapper", "fdwacl"), ("pg_foreign_server", "srvacl"),
+                        ("pg_default_acl", "defaclacl"), ("pg_largeobject_metadata", "lomacl"),
+                    ] {
+                        let query = format!("SELECT {column} AS permission_array FROM pg_catalog.{catalog} WHERE 1=0");
+                        let prepared = client.prepare(&query).await.unwrap();
+                        assert_eq!(prepared.columns()[0].type_().oid(), 1034, "{mode} {profile}: {query}");
+                    }
+                    let user_column = client.prepare("SELECT relacl FROM acl_items WHERE 1=0").await.unwrap();
+                    assert_eq!(user_column.columns()[0].type_().oid(), 25);
                     let metadata = rows(client.simple_query("SELECT typname,typlen,typalign,typreceive::oid,typsend::oid,typarray FROM pg_catalog.pg_type WHERE oid=1033").await.unwrap());
                     assert_eq!(metadata, vec![vec![Some("aclitem".into()),Some("16".into()),Some("d".into()),Some("0".into()),Some("0".into()),Some("1034".into())]]);
                     let error = client.query("SELECT relacl FROM pg_catalog.pg_class WHERE relname IN ('acl_items','ACL_ITEMS')", &[]).await.unwrap_err();

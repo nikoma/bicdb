@@ -82,28 +82,36 @@ applies. No fallback may match by name, SQL OID, alias or donor UUID alone.
 
 ## Local savepoint cleanup of a created namespace
 
-A separate local Native integration gate is now demonstrated on private source
-`4ff5a08582b13e263ff57c966db14e11594c69a3`. The exact original default ACL
-closure is reserved before rename capture, so creating and writing a replacement
-under the old name succeeds. `ROLLBACK TO` removes that replacement. Recreating
-it then fails because the live owner retains its binding to the removed
-incarnation (`collection original was replaced after this transaction observed
-it`). The regression keeps its commit, savepoint and full rollback assertions;
-refusal is not treated as successful SQL compatibility.
+The local creation-undo gate has a Native producer and consumer on private
+implementation source `e1563f54103217751d71416683a01db0f2371e02`.
+`CatalogCreatedCollectionUndo` is an opaque process-local receipt issued only
+while actually creating an absent staging namespace under the real owner scope.
+It retains the Native incarnation, actual local namespace UUID and physical
+backing. Names, SQL OIDs and SQL-supplied UUIDs cannot mint or replace it.
 
-The required Native contract must retire only a binding to a namespace that this
-host-owned creation undo actually removed. Before any removal, validate the
-actual pending owner, retained catalog scope, Native-issued current namespace
-birth/UUID and complete absence of surviving pending writes or row locks on the
-created namespace. The undo result must be tied to that exact native incarnation;
-a logical name or SQL-supplied UUID cannot authorize clearing an observation.
-A later same-name namespace must never satisfy the old removal proof. Missing,
-foreign, stale, reused and wrong-database proofs must leave all bindings intact.
-Unrelated bindings, write observations and acknowledged work must survive.
+Undo validates the pending owner, scope, current incarnation and absence of
+surviving writes, index writes and row locks before changing metadata. The
+actual durable drop must succeed before consuming the receipt and retiring
+only that creator's bindings to that exact incarnation. Failed catalog I/O
+leaves the receipt unconsumed and observations intact. Ordinary savepoint
+rollback still retains unrelated reads and writes. This process-local receipt
+supplies no portable image/import authority.
 
-This requires an actual Native producer/consumer boundary for the trusted
-creation undo. It is not permission for SQL to clear all collection bindings or
-for generic savepoint rollback to forget ordinary reads. Both local storage
-modes, repeated create/rollback/recreate cycles, foreign replacements, two clean
-reopens and independent unrelated ACKs remain required positive/negative gates.
-The public catalog-descriptor change is independent of this private gate.
+Across equivalent production code through private source
+`6ef75198f4f0fab22bd09f0abfef595e8eb15b75`, 31 distinct focused tests passed:
+four Native, ten SQL, sixteen wire and one original process-cut regression.
+They include both storage modes, repeated create/rollback/recreate, original
+commit/savepoint/full-rollback and ACL assertions, eight catalog-I/O failure
+scenarios, independent acknowledged work and two clean reopens. These results
+qualify the local component; they are neither broad regression nor final
+application acceptance. The earlier failing evidence remains historical.
+
+An unchanged original PostgreSQL application batch on the private debug binary
+at `6ef75198` passed 94 of 95 tests. The remaining partition test reached a
+prepared metadata query after its own rename, where protocol Describe entered
+a standalone transaction and received a catalog reservation conflict. The
+wire metadata ownership/descriptor follow-up remains under qualification.
+
+The authenticated portable binding producer/resolver described above remains
+unimplemented. Successful local cleanup does not close the original replica
+promotion gate or permit matching a target backing by donor identity or name.

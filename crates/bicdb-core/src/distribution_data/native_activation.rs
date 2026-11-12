@@ -15,7 +15,7 @@ impl ClusterDataNodeService {
         parent: &CancellationToken,
     ) -> Result<NativeActivationReceipt> {
         parent.check()?;
-        let db = try_database_read(&self.db)?;
+        let db = checked_database_read(&self.db, &self.storage_policy)?;
         self.range_writes
             .activate_native_recovery(&db, prepared, quorum, fresh)
     }
@@ -28,7 +28,7 @@ impl ClusterDataNodeService {
         parent: &CancellationToken,
     ) -> Result<()> {
         parent.check()?;
-        let db = try_database_read(&self.db)?;
+        let db = checked_database_read(&self.db, &self.storage_policy)?;
         self.range_writes
             .arm_native_activation_open(&db, prepared, receipt, fresh, frozen)
     }

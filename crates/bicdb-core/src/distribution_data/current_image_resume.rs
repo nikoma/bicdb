@@ -16,7 +16,7 @@ impl ClusterDataNodeService {
         attempt: uuid::Uuid,
         orphan_only: bool,
     ) -> Result<crate::distribution_range_consensus::TargetImageInstallFence> {
-        let db = try_database_read(&self.db)?;
+        let db = checked_database_read(&self.db, &self.storage_policy)?;
         let actual = role.role();
         let native = db.native_recovery_admission(
             actual.cluster_id(),
@@ -52,7 +52,7 @@ impl ClusterDataNodeService {
     ) -> Result<CurrentImageInstallingAdmission> {
         parent.check()?;
         role.require_live_request()?;
-        let db = try_database_read(&self.db)?;
+        let db = checked_database_read(&self.db, &self.storage_policy)?;
         let native = db.native_recovery_admission(
             role.cluster_id(),
             role.bootstrap_id(),
@@ -72,7 +72,7 @@ impl ClusterDataNodeService {
     ) -> Result<CurrentImageInstallingEvidence> {
         parent.check()?;
         role.require_live_request()?;
-        let db = try_database_read(&self.db)?;
+        let db = checked_database_read(&self.db, &self.storage_policy)?;
         let native = db.native_recovery_admission(
             role.cluster_id(),
             role.bootstrap_id(),
@@ -96,7 +96,7 @@ impl ClusterDataNodeService {
         parent: &CancellationToken,
     ) -> Result<()> {
         parent.check()?;
-        let db = try_database_read(&self.db)?;
+        let db = checked_database_read(&self.db, &self.storage_policy)?;
         let native = db.native_recovery_admission(
             role.cluster_id(),
             role.bootstrap_id(),
@@ -110,7 +110,7 @@ impl ClusterDataNodeService {
         authority: Arc<crate::distribution_range_recovery::FreshCurrentImageResumeAuthority>,
         source: &crate::db::LocalNativeRecoveryReady,
     ) -> Result<crate::distribution_range_recovery::CurrentImageResumeHistoryRound> {
-        let db = try_database_read(&self.db)?;
+        let db = checked_database_read(&self.db, &self.storage_policy)?;
         crate::distribution_range_recovery::CurrentImageResumeHistoryRound::begin(
             authority,
             source,
@@ -124,7 +124,7 @@ impl ClusterDataNodeService {
         source: &crate::db::LocalNativeRecoveryReady,
         parent: &CancellationToken,
     ) -> Result<bool> {
-        let db = try_database_read(&self.db)?;
+        let db = checked_database_read(&self.db, &self.storage_policy)?;
         round.advance(source, &db, &self.range_writes, parent)
     }
     pub(crate) fn finish_current_image_resume_history(
@@ -132,7 +132,7 @@ impl ClusterDataNodeService {
         round: crate::distribution_range_recovery::CurrentImageResumeHistoryRound,
         source: &crate::db::LocalNativeRecoveryReady,
     ) -> Result<crate::distribution_range_image::CertifiedRecoveryImageCut> {
-        let db = try_database_read(&self.db)?;
+        let db = checked_database_read(&self.db, &self.storage_policy)?;
         let verified = round.finish(source, &db, &self.range_writes)?;
         crate::distribution_range_image::CertifiedRecoveryImageCut::from_verified_resumed_source_history(verified,source,&db,&self.range_writes)
     }

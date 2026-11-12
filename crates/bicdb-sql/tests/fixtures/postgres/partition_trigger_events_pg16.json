@@ -236,5 +236,71 @@
       "trigger": "parent_a",
       "relation": "high"
     }
+  ],
+  "mixed_upsert_events": [
+    {
+      "op": "INSERT",
+      "new": 3,
+      "old": null,
+      "phase": "BEFORE",
+      "trigger": "parent_b",
+      "relation": "low"
+    },
+    {
+      "op": "UPDATE",
+      "new": 3,
+      "old": 3,
+      "phase": "BEFORE",
+      "trigger": "parent_b",
+      "relation": "low"
+    },
+    {
+      "op": "INSERT",
+      "new": 14,
+      "old": null,
+      "phase": "BEFORE",
+      "trigger": "parent_b",
+      "relation": "high"
+    },
+    {
+      "op": "INSERT",
+      "new": 12,
+      "old": null,
+      "phase": "BEFORE",
+      "trigger": "parent_b",
+      "relation": "high"
+    },
+    {
+      "op": "UPDATE",
+      "new": 12,
+      "old": 12,
+      "phase": "BEFORE",
+      "trigger": "parent_b",
+      "relation": "high"
+    },
+    {
+      "op": "UPDATE",
+      "new": 3,
+      "old": 3,
+      "phase": "AFTER",
+      "trigger": "parent_a",
+      "relation": "low"
+    },
+    {
+      "op": "INSERT",
+      "new": 14,
+      "old": null,
+      "phase": "AFTER",
+      "trigger": "parent_a",
+      "relation": "high"
+    },
+    {
+      "op": "UPDATE",
+      "new": 12,
+      "old": 12,
+      "phase": "AFTER",
+      "trigger": "parent_a",
+      "relation": "high"
+    }
   ]
 }

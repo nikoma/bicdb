@@ -114,6 +114,36 @@ fn multirow_partition_insert_fires_all_before_events_then_all_after_events() {
 }
 
 #[test]
+fn mixed_partition_upsert_interleaves_before_arbitration_and_queues_after_events_in_row_order() {
+    for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
+        let dir = tempfile::tempdir().unwrap();
+        let cfg = DbConfig::default()
+            .with_storage_mode(mode)
+            .with_fsync(true)
+            .with_paged_buffer_pool_bytes(8 * 1024 * 1024);
+        let mut db = BicDb::open_with_config(dir.path(), cfg.clone()).unwrap();
+        {
+            let mut sql = SqlSession::new(&mut db);
+            setup(&mut sql);
+            sql.execute("INSERT INTO p VALUES(3,'low-ack'),(12,'high-ack')")
+                .unwrap();
+            sql.execute("DELETE FROM audit").unwrap();
+            sql.execute("INSERT INTO p VALUES(3,'changed-low'),(14,'new-high'),(12,'changed-high') ON CONFLICT(k) DO UPDATE SET payload=excluded.payload").unwrap();
+            assert_eq!(events(&mut sql), expected("mixed_upsert_events"));
+        }
+        db.close().unwrap();
+        for _ in 0..2 {
+            let mut db = BicDb::open_with_config(dir.path(), cfg.clone()).unwrap();
+            assert_eq!(
+                events(&mut SqlSession::new(&mut db)),
+                expected("mixed_upsert_events")
+            );
+            db.close().unwrap();
+        }
+    }
+}
+
+#[test]
 fn before_insert_trigger_cannot_reroute_the_row_and_all_audit_effects_roll_back() {
     for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
         let dir = tempfile::tempdir().unwrap();

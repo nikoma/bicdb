@@ -1,6 +1,8 @@
 //! PRIVATE same-call observer scope. No mutation-role conversion or cached grant.
 use super::*;
 use crate::distribution_data::RangeWriteServiceSlotGuard;
+#[cfg(test)]
+use crate::distribution_range_recovery::NativeProbeTraceSpan;
 use crate::distribution_range_recovery::{NativeReadyRequest, RecoveryObservationRoleAdmission};
 
 pub(crate) struct NativeReadyObserverReadScope<'a> {
@@ -76,18 +78,32 @@ impl NativeReadyObserverReadScope<'_> {
         if !Arc::ptr_eq(&actual, &self.writer) {
             return Err(invalid("observer scope changed original writer object"));
         }
+        #[cfg(test)]
+        let writer_trace = NativeProbeTraceSpan::current("observer-identity-full-writer");
         self.writer
             .require_database(database, observer.current_range())?;
+        #[cfg(test)]
+        NativeProbeTraceSpan::finish(writer_trace);
+        #[cfg(test)]
+        let pin_trace = NativeProbeTraceSpan::current("observer-identity-owned-native-pin");
         prepared
             .physical_for_completion_scope()
             .require_owned_pin_live(database)?;
+        #[cfg(test)]
+        NativeProbeTraceSpan::finish(pin_trace);
+        #[cfg(test)]
+        let identity_trace = NativeProbeTraceSpan::current("observer-identity-native-fields");
         observer
             .require_native_identity(prepared.physical_for_completion_scope().native_admission())?;
+        #[cfg(test)]
+        NativeProbeTraceSpan::finish(identity_trace);
         self.parent.check()
     }
     pub(crate) fn require_serving(&self, expected_sha: &str) -> Result<()> {
         self.parent.check()?;
         let actual = &self.lineage;
+        #[cfg(test)]
+        let current_trace = NativeProbeTraceSpan::current("observer-serving-current-readback");
         let record = self
             .database
             .read_native_recovered_serving_configuration(
@@ -96,11 +112,17 @@ impl NativeReadyObserverReadScope<'_> {
                 actual.prefix.as_ref(),
             )?
             .ok_or_else(|| invalid("observer scope actual Completed serving pointer missing"))?;
+        #[cfg(test)]
+        NativeProbeTraceSpan::finish(current_trace);
+        #[cfg(test)]
+        let archive_trace = NativeProbeTraceSpan::current("observer-serving-archive-readback");
         let archive: NativeRecoveredServingConfiguration = self
             .database
             .read_native_range_image_record(&history_key(record.range.id, &record.checksum_sha256))?
             .ok_or_else(|| invalid("observer scope immutable serving archive missing"))?;
         archive.validate_historical_floor(&actual.birth, &actual.base)?;
+        #[cfg(test)]
+        NativeProbeTraceSpan::finish(archive_trace);
         let physical = self.prepared.physical_for_completion_scope();
         if archive != record
             || actual.serving.as_ref() != Some(&record)
@@ -121,6 +143,8 @@ impl NativeReadyObserverReadScope<'_> {
         self.parent.check()
     }
     fn require_exit(&self) -> Result<()> {
+        #[cfg(test)]
+        let identity_trace = NativeProbeTraceSpan::current("observer-exit-initial-identity");
         self.require_identity(
             self.database,
             self.prepared,
@@ -128,16 +152,30 @@ impl NativeReadyObserverReadScope<'_> {
             self.observer,
             self.request,
         )?;
+        #[cfg(test)]
+        NativeProbeTraceSpan::finish(identity_trace);
         // Actual current physical/generation/schema/native comparison, not a
         // borrowed prestate used as poststate. No second lineage construction.
+        #[cfg(test)]
+        let lineage_trace = NativeProbeTraceSpan::current("observer-exit-actual-lineage");
         self.database.validate_source_range_image_lineage(
             &self.lineage,
             self.request.scope.range_id,
             self.prepared.range_index(),
         )?;
+        #[cfg(test)]
+        NativeProbeTraceSpan::finish(lineage_trace);
         let joint = self.joint()?;
+        #[cfg(test)]
+        let joint_trace = NativeProbeTraceSpan::current("observer-exit-full-joint-saved-binding");
         joint.require_current_in_observer_scope(self)?;
+        #[cfg(test)]
+        NativeProbeTraceSpan::finish(joint_trace);
+        #[cfg(test)]
+        let prepared_trace = NativeProbeTraceSpan::current("observer-exit-prepared-binding");
         self.prepared.require_current_in_observer_scope(self)?;
+        #[cfg(test)]
+        NativeProbeTraceSpan::finish(prepared_trace);
         self.require_identity(
             self.database,
             self.prepared,
@@ -174,13 +212,30 @@ impl BicDb {
         }
         slot.require_live()?;
         let writer = store.native_writer_host_state()?;
+        #[cfg(test)]
+        let writer_trace = NativeProbeTraceSpan::current("observer-constructor-full-writer");
         writer.require_database(self, observer.current_range())?;
+        #[cfg(test)]
+        NativeProbeTraceSpan::finish(writer_trace);
+        #[cfg(test)]
+        let journal_trace =
+            NativeProbeTraceSpan::current("observer-constructor-journal-acquisition");
         let journal = self.try_native_image_journal()?;
+        #[cfg(test)]
+        NativeProbeTraceSpan::finish(journal_trace);
+        #[cfg(test)]
+        let physical_trace = NativeProbeTraceSpan::current("observer-constructor-full-physical");
         prepared
             .physical_for_completion_scope()
             .require_owned_materialization_current(self)?;
+        #[cfg(test)]
+        NativeProbeTraceSpan::finish(physical_trace);
+        #[cfg(test)]
+        let lineage_trace = NativeProbeTraceSpan::current("observer-constructor-actual-lineage");
         let lineage = self
             .current_native_range_source_lineage_under_journal(request.scope.range_id, &journal)?;
+        #[cfg(test)]
+        NativeProbeTraceSpan::finish(lineage_trace);
         if lineage.range_index() != prepared.range_index()
             || lineage.logical_genesis_sha256() != prepared.logical_genesis_sha256()
             || lineage.logical_history_sha256() != prepared.logical_history_sha256()
@@ -203,9 +258,21 @@ impl BicDb {
             joint: None,
             _local: std::marker::PhantomData,
         };
+        #[cfg(test)]
+        let identity_trace = NativeProbeTraceSpan::current("observer-constructor-initial-identity");
         scope.require_identity(self, prepared, store, observer, request)?;
+        #[cfg(test)]
+        NativeProbeTraceSpan::finish(identity_trace);
+        #[cfg(test)]
+        let joint_trace = NativeProbeTraceSpan::current("observer-constructor-joint-fact");
         scope.joint = Some(self.observe_current_joint_domain_in_observer_scope(&scope)?);
+        #[cfg(test)]
+        NativeProbeTraceSpan::finish(joint_trace);
+        #[cfg(test)]
+        let prepared_trace = NativeProbeTraceSpan::current("observer-constructor-prepared-binding");
         prepared.require_current_in_observer_scope(&scope)?;
+        #[cfg(test)]
+        NativeProbeTraceSpan::finish(prepared_trace);
         #[cfg(test)]
         crate::distribution_range_recovery::NativeProbeTraceSpan::finish(entry_trace);
         #[cfg(test)]

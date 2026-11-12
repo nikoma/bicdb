@@ -2291,14 +2291,24 @@ fn dispatch_cluster_data_request(
                         transport_error("event route is stale or this node is not its leader")
                     })?
             };
+            // Test span owns no DB/service guard and is declared BEFORE the
+            // actual DB borrow so its Drop observes normal APP cleanup exit.
+            #[cfg(test)]
+            let native_fault_span = db
+                .read()
+                .test_begin_native_origin_app_span(range.id, &request.operation);
             let database = db.read();
             actual_open.require_database(&database)?;
             let result = crate::distribution_events::execute_cluster_event(
                 &database,
                 &range,
                 request.operation,
-            )?;
-            Ok(ClusterDataResponse::ApplicationEvent(result))
+            );
+            #[cfg(test)]
+            if let Some(span) = &native_fault_span {
+                span.note_result(&result);
+            }
+            Ok(ClusterDataResponse::ApplicationEvent(result?))
         }
         ClusterDataRequest::ExportSchemaBundle {
             range_id,

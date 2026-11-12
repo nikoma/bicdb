@@ -15,6 +15,12 @@ mod abort_catalogue;
 pub(crate) use abort_catalogue::NativeAbortCatalogueBootstrap;
 pub(crate) mod abort_history;
 mod certified_prefix;
+#[cfg(test)]
+pub(super) use certified_prefix::test_record_origin_release;
+#[cfg(test)]
+pub(crate) use certified_prefix::{
+    NativeOriginAppSpan, NativeOriginFaultArm, NativeOriginFaultProbe,
+};
 mod history;
 mod initial_data;
 pub(crate) use initial_data::NativeInitialDataGenesis;
@@ -781,8 +787,9 @@ impl BicDb {
         TEST_REJECT_NATIVE_AFTER_LOCAL_WAL.with(|reject| reject.replace(false))
     }
     #[cfg(test)]
-    pub(super) fn test_native_admission_rejected(&self) -> bool {
+    pub(super) fn test_native_admission_rejected(&self, transaction: &Transaction) -> bool {
         TEST_REJECT_NATIVE_AFTER_ADMISSION.with(|reject| reject.replace(false))
+            || self.test_consume_receiver_origin_fault(transaction)
     }
     pub(super) fn finish_failed_native_local_attempt(&self, transaction: &mut Transaction) {
         if transaction.state == TxState::Pending {

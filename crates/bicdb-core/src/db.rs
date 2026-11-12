@@ -112,6 +112,10 @@ pub(crate) use range_image_native::{
     NativeJointOldPhysicalProof, NativeJointPreparedPublicationScope,
     NativeJointServingBridgeReceipt, NativeJointServingPreparation, NativeReadyObserverReadScope,
 };
+#[cfg(test)]
+pub(crate) use range_image_native::{
+    NativeOriginAppSpan, NativeOriginFaultArm, NativeOriginFaultProbe,
+};
 pub(crate) use range_image_native::{NativeRangeReadPhysical, NativeReadLocalDbSequence};
 mod range_image_bindings;
 pub(crate) use range_image_bindings::RangeImageDbBindings;
@@ -9023,10 +9027,12 @@ struct NativeAdmissionRecoveryRelease {
 impl Drop for NativeAdmissionRecoveryRelease {
     fn drop(&mut self) {
         if let Some(ticket) = self.ticket.take() {
-            if let Err(error) = self
+            let released = self
                 .admission
-                .release_native_application_for_recovery(&ticket)
-            {
+                .release_native_application_for_recovery(&ticket);
+            #[cfg(test)]
+            range_image_native::test_record_origin_release(&ticket, &released);
+            if let Err(error) = released {
                 bicdb_page::health::log_event(
                     &json!({"event":"range_image.native_admission_release_failed","severity":"warn","command_id":ticket.command_id,"error":error.to_string()}),
                 );

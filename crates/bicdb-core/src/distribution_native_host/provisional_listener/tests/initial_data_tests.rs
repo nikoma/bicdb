@@ -480,3 +480,5 @@ fn native_initial_data_actual_tls_drop_without_stop_ends_inner_owner_and_reopens
 mod routing_discovery_tests;
 
 mod registry_refresh_tests;
+
+mod origin_pre_wal_fault_tests;

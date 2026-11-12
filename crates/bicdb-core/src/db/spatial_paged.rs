@@ -2745,7 +2745,8 @@ impl BicDb {
         };
         self.require_native_transaction_mutation_scope(tx)?;
         #[cfg(test)]
-        if tx.native_admission_recovery_release.is_some() && self.test_native_admission_rejected() {
+        if tx.native_admission_recovery_release.is_some() && self.test_native_admission_rejected(tx)
+        {
             return Err(BicDbError::Cluster(
                 "injected native post-admission/pre-WAL rejection".into(),
             ));

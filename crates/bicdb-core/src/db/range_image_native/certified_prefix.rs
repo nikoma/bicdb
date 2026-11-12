@@ -10,8 +10,14 @@ mod no_data;
 use no_data::NativeNoDataPrefixEvidence;
 pub(crate) use no_data::NativeRecoveryAbortedReceipt;
 mod ordinary_apply;
+#[cfg(test)]
+mod origin_fault;
 mod recovery_apply;
 pub(crate) use ordinary_apply::NativeReplicaMaterialization;
+#[cfg(test)]
+pub(in crate::db) use origin_fault::test_record_origin_release;
+#[cfg(test)]
+pub(crate) use origin_fault::{NativeOriginAppSpan, NativeOriginFaultArm, NativeOriginFaultProbe};
 pub(crate) use recovery_apply::{KnownNativeRecoveryPrefix, NativeRecoveryAppliedReceipt};
 
 fn pending_key(range: RangeId) -> String {
@@ -32,6 +38,8 @@ struct NativeCommandScope {
 #[derive(Debug, Default)]
 pub(in crate::db) struct NativeRangeScopeRegistry {
     entries: BTreeMap<u64, NativeCommandScope>,
+    #[cfg(test)]
+    origin_fault: Option<Arc<NativeOriginFaultProbe>>,
 }
 #[derive(Debug)]
 struct NativeCommandScopeLease {

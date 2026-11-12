@@ -1,0 +1,65 @@
+{
+  "label": "semantic-reader-capture-focused",
+  "source": "e8c426a73a14c1d97851082b90b815da60d4ef82",
+  "base": "73f18e76faaf631bf3e2d48239814be1e788eb9a",
+  "repo": "/root/bicdb-partition-runtime",
+  "scope": "Retain actual active partition/Decimal/application-unique Native semantic requirements in protected image reader contracts. Reuse unchanged baseline regressions plus actual protected bindings stale-capture and ACK/namespace/reopen checks; actual Native target installer rejects mismatched semantic flags before writes. Capture/compatibility qualification only; no claim portable origin, legacy logical propagation, application acceptance, HA capacity or promotion. Original assertions/timeouts preserved. Broader goal active; P2 off/no new spend.",
+  "continue_on_failure": true,
+  "commands": [
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--no-fail-fast",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-core",
+      "--lib",
+      "semantic_reader",
+      "--",
+      "--nocapture",
+      "--test-threads=1"
+    ],
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--no-fail-fast",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-core",
+      "--lib",
+      "range_image_bindings::tests",
+      "--",
+      "--nocapture",
+      "--test-threads=1"
+    ]
+  ],
+  "wait_units": [
+    "bicdb-semantic-reader-capture-baseline"
+  ],
+  "required_receipts": [
+    {
+      "path": "report-semantic-reader-capture-baseline.json",
+      "equals": {
+        "source": "73f18e76faaf631bf3e2d48239814be1e788eb9a",
+        "status": "failed"
+      }
+    }
+  ],
+  "allow_isolated_builds": [
+    {
+      "pid": 1506585,
+      "start_ticks": 164894300,
+      "repo": "/root/bicdb-durability-s3/repo-tc",
+      "target": "/root/bicdb-durability-s3/target-tc"
+    }
+  ],
+  "remote_repo_name": "repo-metadata-describe",
+  "remote_target_name": "target-metadata-describe",
+  "remote_lock_name": "metadata-describe-source-build.lock"
+}

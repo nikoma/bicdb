@@ -1,0 +1,24 @@
+{
+  "baseline_source": "73f18e76faaf631bf3e2d48239814be1e788eb9a",
+  "baseline": {
+    "passed": 0,
+    "failed": 3,
+    "ignored": 0,
+    "scope": "Three real product failures: each test stopped at its first EmbeddedMemory capture; ServerPaged was not reached at baseline."
+  },
+  "implementation_source": "e8c426a73a14c1d97851082b90b815da60d4ef82",
+  "focused": {
+    "passed_invocations": 9,
+    "distinct_passed": 8,
+    "failed": 0,
+    "ignored": 0,
+    "scope": "3 format capture tests each Embedded+Paged and two reopens;1 actual protected binding test over all3 flags with ACK/namespace checks and two reopens;1 Native installer rejection test for Decimal and application-unique mismatches;3 prior binding/gate/snapshot tests. Binding semantic test repeated once."
+  },
+  "limits": [
+    "No full Core broad result for changed reader contract yet.",
+    "No new CLI, release, deployment or main merge.",
+    "No target auto-installation of reader requirements or legacy logical replication propagation.",
+    "No portable collection-origin producer, original rename promotion positive, old-reader acceptance, application or physical HA/scaleout qualification."
+  ],
+  "goal": "active; P2 production disabled; no new cloud spend/promotion"
+}

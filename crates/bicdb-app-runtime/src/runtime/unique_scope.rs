@@ -3,7 +3,7 @@
 //! listener, service dispatcher or supervisor entry points. A newly acquired core
 //! store lease excludes every live process and every captured old runtime snapshot.
 use super::application_runtime::{
-    validate_application_batch_order, validate_application_module_catalog,
+    compile_scripts, validate_application_batch_order, validate_application_module_catalog,
     validate_application_module_upgrade,
 };
 use super::*;

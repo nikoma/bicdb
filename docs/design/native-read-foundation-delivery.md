@@ -268,3 +268,22 @@ remaining workspace and stock Rails43243823778 are still running. These results
 cover this exact source, not an unobserved main merge. Final requirements remain.
 The earlier2f failed workspace raw-log digest is recorded in retained CI custody;
 its failed assertion has not been waived.
+
+## Actual main488 and listener correction
+
+Actual main488 `d1d816afe0446b2a614c38004738d3d1c8bbc547` is verified and
+merged into this candidate at `d9b8f3472b0e00c86ff1272f77b9777a46540c70`.
+That composition has exactly the same tree as eec; main488 contains the already
+pinned d8fc runtime, so no additional runtime change is hidden by this merge.
+The source version remains489, the next unused patch at this checkpoint.
+
+The final0a75 PGwire library failed150/1 on an observed listener bind collision.
+The failure and exact original budgets/assertions are retained in
+[the listener investigation](metadata-failover-listener-identity-investigation.md).
+Sourceeec closes the test's allocation-to-bind race with actual retained sockets;
+it does not weaken any response identity or metadata rule. Its real wrong-route
+control passed1/0 at run43253321399; the exact PGwire metadata-failover control
+passed1/0/150filtered in8.24s at run43253328865. Full tests43256578903 and
+Rails43256585108 on eec are still running. Original0a75 SQL/workspace results
+remain source-scoped and are not waived or canceled. Any final main merge still
+requires successful relevant final-source validation and next-version checks.

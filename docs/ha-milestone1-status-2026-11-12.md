@@ -10,10 +10,16 @@ larger read/recovery candidate remains unmerged; its source-scoped results follo
 
 ## Latest verified checkpoint
 
-Verified GitHub main remains **1.0.487-beta**, `6bed1b33508c52bc122e8173947f9ea7b1039c7a`.
-The HA metadata repair above entered main485; independent index work entered
-main487. Prospective main488 is another team's separately tested change, not
-an HA release or deployment. The larger native candidate remains unmerged.
+Verified GitHub main is now **1.0.488-beta**,
+`d1d816afe0446b2a614c38004738d3d1c8bbc547`, containing tested runtime
+`d8fc122db55300fd019fffe95321403c30ef45be`. Its complete standard CI
+[43238398103](https://github.com/nikoma/bicdb/actions/runs/43238398103) and
+[Rails43238398124](https://github.com/nikoma/bicdb/actions/runs/43238398124)
+passed. These general/application regressions do not qualify distributed HA.
+The metadata repair entered main485; the larger native candidate remains
+unmerged. Read489 integrates actual main488 at `d9b8f3472`; its tree exactly
+matches focused/final-regression source `eec5e3b206f029005826e1406fe366baab4c7441`.
+The later status-document update changes no runtime code.
 
 | Gate | Current classification and exact limit |
 | --- | --- |
@@ -22,9 +28,12 @@ an HA release or deployment. The larger native candidate remains unmerged.
 | Stale-seed discovery | Passed on exact `cf91eda30`: two actual-TLS/current-quorum tests. Enrollment remains metadata-only. |
 | Concurrent opening faults and original writer continuity | Passed on `ab2615524`, run 43230536293: three passed, zero failed, 20.28 seconds; compilation passed. All intended cuts were reached, including fresh collection refusal after actual foreign writer replacement. The broader nine-test pass above includes the original-image and survivor-release controls. Earlier two-pass/one-fail `e8d263bac` evidence remains failed. |
 | Full custody composition | `ab2615524` passed sixteen enrollment controls at run 43232582536 and the actual acknowledged-value/missing-catalog paired control at run 43232590513. The earlier `2c1b7d8be` workflows failed compilation before runtime; a test-only genuine-election helper corrected that composition. These targeted passes do not establish full release or physical qualification. |
-| Post-joint recovery after the next failed Prepare | **Failed**, at separately retained stages. Diagnostic31c at run43237027479 fails n3 NormalRecovery over old CommittedHandoff. Corrected implementation8b at run43243897329 compiles but fails the CurrentJoint collector whitelist before fencing (0/1,53.78s). Successor71af at run43245592794 compiles and reaches actual n1 fencing, then refuses a permanent handoff/backup comparison (0/1,60.04s); exact local-promise differences are under investigation. Prior ACKs/native prefix remain unchanged. No NoData/Ready/ACK4 success is established. [Original and later exact diagnostic custody](evidence/native-post-joint-recovery-2026-11-12/README.md). |
-| Read foundation release delivery | Candidate489 includes corrected prospective488 `d8fc122db`; unmerged. Older2f passed Core/SQL/pgwire/Rails but **failed remaining workspace** on primary-only export's unrelated-index decoding. Corrected sourcea7e at run43243818809 passes Core846/0/9ignored and compilation; SQL/pgwire/workspace/Rails remain running. Final versioned-head checks, actual488 main and verified489 main merge are still required. |
-| Public data-open and local cleanup | Initial-data composition8e at run43244356602 passed four Core controls (0failed/0ignored,7.37s), including actual TLS, same-open proof boundaries and drop/cancel/poisoned-health owner cleanup. Later nonwaiting dispatcher-clear/full-record+native-history assertion changes are under new validation. The separate actual four-process CLI target at run43244401559 remains running; no public DATA acceptance follows yet. |
+| Post-joint recovery after the next failed Prepare | **Positive acceptance still failed**, with useful executed substages. At unmerged `d6331d1d6`, run43253229007, all three actual CurrentJoint fences, no-commit promises, canonical Abort3/native R3 and native Ready preparations completed. The first completion RPC timed out (0/1,61.11s); afterward the retained snapshot shows n1 NativeCompleted R3 and n2/n3 NativePrepared R3. Snapshot timing alone does not prove whether n1 persistence preceded the client deadline. Activate/next ACK4/Strong R4 were not reached. Diagnostic sourcea0ed at run43255635176 expired earlier while recording the last fence; it collected no completion timing and remains inconclusive for that cost. |
+| CurrentJoint authority/custody controls | Unmergedd633, run43253237656: four passed/zero failed/zero ignored,48.83s. Includes real metadata-only empty-round refusal, codec controls and the actual complete-handoff prerequisite followed by wrong-purpose/domain/original-nonce, original client-expiry and actual writer-replacement refusals. This does not establish successful completion/recovery or a physical fault result. |
+| Read foundation release delivery | Candidate489 remains unmerged. Original2f failed primary-only export on its superseded488 base. Corrected0a75 passed Core/SQL/Rails but its PGwire library failed150/1 after an observed listener bind collision, with n2 identity refusals. Sourceeec retains real bound sockets, preserves receiver identity checks and adds exact diagnostics; focused actual wrong-route and unchanged metadata-failover controls both pass (one each). Full final-source validation is running; no failed check is waived. |
+| Public data-open and local cleanup | Unmerged4b passed the entire public CLI target at run43249496779: four passed/zero failed in45.81s. The DATA case uses four actual processes, one unchanged client and three ACK/full Strong values including null/empty/absence distinctions. Metadata joins and promoted-voter kill/reopen use separate fixtures. Final nonwaiting cleanup/full-record+R/H controls at run43249513728 passed four/zero in8.79s. These are single-CI-host results, not independent VM qualification. |
+| Metadata leader self-maintenance | Reproduced actual failure on ec20 (run43251524358): one automatic maintenance call made the same Store's leader become follower without a term/commit change. Fixedcd8 (run43251543496) passes the same intended control, preserving fresh authority. Source excludes actual self from selection/catch-up and leaves Raft receiver semantics intact. The earlier sixth-process CLI failure has consistent stopped-state/error evidence; it lacks an exact self-Append request trace. No original Azure causal claim follows. |
+
 | Operator-driven expansion, cold recovery and physical capacity | Open. Registered fifth-node replica receiver, authenticated native image/joint wire consumers and native placement-controller integration remain unfinished. Initial-only data-open does not supply general post-joint/cold recovery. No automatic four-to-five relocation/controller-restart result, new VM trial, physical RPO/RTO or stable-five throughput result exists. |
 
 

@@ -5,6 +5,8 @@
 use super::*;
 #[path = "complete_joint_tests/open_adversarial_tests.rs"]
 mod open_adversarial_tests;
+#[path = "complete_joint_tests/post_joint_no_data_tests.rs"]
+mod post_joint_no_data_tests;
 use crate::distribution_range_consensus::{
     ImageInstallPurpose, NativeImageInstallRole, RecoveryFenceScope,
 };
@@ -339,6 +341,13 @@ enum JointTestOutcome {
     OriginalCallerRejected,
     FrozenOpenOnly,
     AdversarialOnly,
+    FullHandoffThenPostJointNoDataAck4Strong,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum JointFullContinuation {
+    OriginalTerminalControls,
+    PostJointNoDataRecovery,
 }
 
 #[test]
@@ -367,6 +376,12 @@ fn native_joint_fresh_open_phase_reconciles_exact_target_epoch_and_lost_catalogu
 }
 
 fn run_complete_joint(mode: u8) -> JointTestOutcome {
+    run_complete_joint_with_continuation(mode, JointFullContinuation::OriginalTerminalControls)
+}
+fn run_complete_joint_with_continuation(
+    mode: u8,
+    continuation: JointFullContinuation,
+) -> JointTestOutcome {
     let parent = CancellationToken::uncancelable();
     let mut fixture = EnforcedNetwork::new_with_metadata_members(4);
     fixture.native.root.disable_cleanup(true);
@@ -840,6 +855,20 @@ fn run_complete_joint(mode: u8) -> JointTestOutcome {
     assert_eq!(observed.record().map(|record| record.as_ref()), Some(&next));
     assert_eq!(observed.audit().range_index, 2);
     fixture.idle();
+    if continuation == JointFullContinuation::PostJointNoDataRecovery {
+        assert!(
+            release_continuation.is_some(),
+            "post-joint baseline must first release all actual final members"
+        );
+        eprintln!("ACTUAL_POST_JOINT_PREREQUISITE all-three-release=true actual-target-ACK2=true StrongR2=true old-promises-retained=true");
+        post_joint_no_data_tests::exercise_actual_new_domain_prepare_only_recovery(
+            &fixture,
+            &activation_range,
+            acknowledged.as_ref(),
+            &next,
+        );
+        return JointTestOutcome::FullHandoffThenPostJointNoDataAck4Strong;
+    }
     if let Some(continuation) = &release_continuation {
         let stale = fresh_release_admission(&fixture, continuation, &node("n3")).unwrap();
         let gate = fixture.native.databases[&node("n3")]

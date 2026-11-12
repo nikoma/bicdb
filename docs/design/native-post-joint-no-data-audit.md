@@ -141,3 +141,62 @@ the actual fresh HostMQ configuration rather than trying to auto-enroll an
 already known native voter. No passing complete-joint result is established
 by those source changes. All six post-joint NoData seams above remain open.
 See [the revision-scoped status](../ha-milestone1-status-2026-11-12.md).
+
+## Actual complete-handoff prerequisite and separate baseline source
+
+Root reported the corrected full-terminal component at exact
+`b1ba88c57d99d3601946bd02ef4aee1a4cf070b4` passed one/zero failures, 888 filtered,
+59.33 seconds, run `43224600329`, Core job `131204452860`, with all-target compile
+passing. The explicit terminal marker and typed outcome require all three actual
+releases, target-leader ACK2, Strong R2, R2-preserving retry and generation/caller
+negatives. Raw log SHA-256:
+`002bc5275052a349f767337bc3a202354f736623ded5c4408a25f983a642bdd6`.
+This proves that exact same-open local opaque-object prerequisite, not an
+operator/cross-process/physical handoff or post-joint NoData. The earlier 9f
+mis-dispatched test exercised step-cancel recovery and does not establish that
+full terminal result.
+
+The separate test-only baseline starts from
+`61eb4d92b5938349cf18a283e936eee45fa97e9d`; its later scoped-publication changes
+had not yet been executed when this baseline was written. No local Cargo was
+run. No production guard, format, proof or permission changes are included.
+
+`complete_joint_tests/post_joint_no_data_tests.rs` adds
+`native_post_joint_actual_new_domain_prepare_only_recovers_then_ack4_and_strong`.
+An explicit `JointFullContinuation` selects it after the SAME actual handoff,
+all-member release, ACK2 and Strong R2. The original full-terminal test retains
+its own original ABA/caller checks and typed terminal assertion; no new numeric
+mode or manufactured receipt is used. The baseline has its own distinct final
+outcome, unreachable until the entire additional acceptance succeeds.
+
+The new leader's real transaction at logical index3 encounters actual peer
+Prepare refusals AFTER native starts are protected. It must yield definite Core
+Aborted/no-effect, no application WAL or row, never-Commit on every current NEW
+member and unchanged actual R2/H2/local B. All inherited native slots/Commit
+facts, old promises, joint audit fields, history generation, namespace identity
+and original two ACK payloads are checked. Fresh recovery authority derives the
+exact current voter IDs from the actual committed descriptor, rather than the
+existing same-voter helper's hardcoded old0/1/2 set. Real TLS candidate, promise
+and resolver calls retain recipient-local policy, fresh metadata and data quorum
+checks.
+
+All NEW members have actual protected starts on this schedule; therefore the
+absent-slot physical-base check need not be the earliest refusal. The expected
+current blocker is the unconditional joint veto at native Abort publication,
+followed by the independent promise/prefix/Ready/open-generation seams above.
+The test writes fsynced actual snapshots, original command, no-effect candidate,
+fresh metadata context/epoch/domain and permanent promises before resolving.
+If resolution refuses, it records the exact error and verifies unchanged native
+R/H/B, promises, inherited Commit audits and acknowledged rows, then FAILS the
+positive acceptance assertion. This is an expected-red baseline, not a passing
+characterization or a recovered availability claim. Actual execution may expose
+an earlier genuine blocker; that must be reported at its actual boundary.
+
+If a future sound producer closes those gates, the remaining test requires
+canonical native Aborted3 with unchanged local B, actual Prepare/Complete/
+Activate, Strong reads of both old ACKs and absence of the failed attempt, then
+real user ACK at index4 and Strong R4. There are THREE business ACKs (indices1,
+2 and4); canonical Abort3 is not a user ACK. Inherited old-domain Commit
+obligations and permanent handoff promises must survive. Failed fixtures use
+the existing opt-in stopped-listener/native-journal custody path; TempDir
+retention alone is not persistent archived evidence.

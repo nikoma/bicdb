@@ -1,0 +1,1 @@
+{"error":"format compatibility error: database requires unknown format feature flag `decimal_predicate_comparison_v1`","status":"open_refused","version":"1.0.482-beta"}

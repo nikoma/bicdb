@@ -1,0 +1,69 @@
+{
+  "source": "f43583da4c34209e810c5e6a8f5925831b2949a1",
+  "producer_source": "1e6ea47c58dd1f3783640ee8747037855c3ad5b4",
+  "producer_binary_sha256": "bccebdb42b158ea900589061d89994d4c0d38d9deacfe7db590500511eea821f",
+  "data": "One acknowledged fake record and actual old Native Decimal partial unique B-tree; no file or semantic marker fabricated.",
+  "omitted": "Only unrelated generated test mesh signing key; complete original fixture retained on S3 and used by the actual cross-version negative.",
+  "files": {
+    ".backup-write.lock": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "btree-index-builds/d979b32d3881d30540f1e17685cd6d35e240e52343c35dc2b60d72e90148ee92.json": {
+      "bytes": 928,
+      "sha256": "2272bddfad7df4f30a760d984da81311806571ccb9a20ec0d82659f2709270da"
+    },
+    "collections.json": {
+      "bytes": 156,
+      "sha256": "3027d9e601b04511db9ff2fdb22d6c0a9e9245a141e3aa9de0f122c9fb65e51a"
+    },
+    "commit-seq.floor": {
+      "bytes": 6,
+      "sha256": "a7c6882a45dbaefd37c17f1da98fee82c0ba4fa5d79908d624741725ff887328"
+    },
+    "events/events.seg": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "format.json": {
+      "bytes": 192,
+      "sha256": "54f5d977028abbac7ea27f18181076c5ca63c6f052bbea62c647aec3a9302123"
+    },
+    "fts-index-generations.json": {
+      "bytes": 122,
+      "sha256": "e9c2c1d98446999699d27a85d1e695bc29fab6b08df24e15835e6720e5c5abbe"
+    },
+    "incarnations.log": {
+      "bytes": 119,
+      "sha256": "d909ad595b5fea294ab9cd077d0742410272ab6a261f629d9db77e4ec882a960"
+    },
+    "indexes.json": {
+      "bytes": 625,
+      "sha256": "43d73f312ab8b7951718d12c5c453481f523c510e21a89269b9b097b09dd312b"
+    },
+    "paged/store.lock": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "paged/store.pages": {
+      "bytes": 40960,
+      "sha256": "8b35ab2d1c44aa6ac919ae8b8833184b6e507db49b4d4e1bb63f08270cbdc19b"
+    },
+    "paged/store.wal": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "store.lock": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "sync_state.json": {
+      "bytes": 340,
+      "sha256": "83b1ef4733d604c549ff381e9c2e645e5f07de2b67ade974f9f11607c307e175"
+    },
+    "transactions.log": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  }
+}

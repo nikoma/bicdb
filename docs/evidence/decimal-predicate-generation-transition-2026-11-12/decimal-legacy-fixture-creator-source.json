@@ -1,0 +1,7 @@
+{
+  "source": "5e0fa30b60ef8640e161b41ec2d882df61cc9d1d",
+  "ref": "refs/bicdb-proof/decimal-legacy-fixture-creator-v2",
+  "Coreproduction": "f43583da4c34209e810c5e6a8f5925831b2949a1",
+  "spec": "/root/.local/state/bicdb/typed-compare/decimal-legacy-fixture-creator-5e0fa30b.json",
+  "prior_helper_compile_failure": "d825bee1 missingUnaryvalue_type; no tests ran"
+}

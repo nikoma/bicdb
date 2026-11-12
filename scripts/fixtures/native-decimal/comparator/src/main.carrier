@@ -1,0 +1,30 @@
+// Isolated numeric regression fixture; no ledger, financial permission or foreign authority.
+service DecimalComparatorFixture {}
+auth jwt ComparatorAuth {issuer:"https://auth.parau.org" audience:"walknorth-ehr-api" algorithm:"RS256" roles_claim:"roles"}
+role decimal_probe {title:"Native Decimal comparison fixture"}
+enum DecimalProbeOperator {eq ne lt le gt ge}
+doctype DecimalProbeBatch {business_id:UUID @unique expected_case_count:Int}
+doctype DecimalProbeCase {batch_id:link DecimalProbeBatch op:DecimalProbeOperator lhs:Decimal rhs:Decimal expected:Bool unique DecimalProbeOperatorIdentity(batch_id,op)}
+type DecimalProbeCaseInput {op:DecimalProbeOperator lhs:Decimal rhs:Decimal expected:Bool}
+type DecimalProbeInput {business_id:UUID cases:DecimalProbeCaseInput[]}
+type DecimalProbeSummary {batch_count:Int case_count:Int}
+invariant DecimalProbeBatchComplete {subject:DecimalProbeBatch must_always:count(c DecimalProbeCase where c.batch_id==subject.id)==subject.expected_case_count}
+invariant DecimalProbeEqual {subject:DecimalProbeCase must_always:subject.op!=eq || ((subject.expected && subject.lhs==subject.rhs) || (!subject.expected && subject.lhs!=subject.rhs))}
+invariant DecimalProbeNotEqual {subject:DecimalProbeCase must_always:subject.op!=ne || ((subject.expected && subject.lhs!=subject.rhs) || (!subject.expected && subject.lhs==subject.rhs))}
+invariant DecimalProbeLess {subject:DecimalProbeCase must_always:subject.op!=lt || ((subject.expected && subject.lhs<subject.rhs) || (!subject.expected && subject.lhs>=subject.rhs))}
+invariant DecimalProbeLessOrEqual {subject:DecimalProbeCase must_always:subject.op!=le || ((subject.expected && subject.lhs<=subject.rhs) || (!subject.expected && subject.lhs>subject.rhs))}
+invariant DecimalProbeGreater {subject:DecimalProbeCase must_always:subject.op!=gt || ((subject.expected && subject.lhs>subject.rhs) || (!subject.expected && subject.lhs<=subject.rhs))}
+invariant DecimalProbeGreaterOrEqual {subject:DecimalProbeCase must_always:subject.op!=ge || ((subject.expected && subject.lhs>=subject.rhs) || (!subject.expected && subject.lhs<subject.rhs))}
+action decimal_probe_summary(business_id:UUID) -> DecimalProbeSummary {let batch=DecimalProbeBatch.Where(b=>b.business_id==business_id).FirstOrDefault() if batch==null {return DecimalProbeSummary {batch_count:0 case_count:0}} return DecimalProbeSummary {batch_count:1 case_count:DecimalProbeCase.Where(c=>c.batch_id==batch.id).Count()}}
+route POST "/decimal-comparator/batches" protect ComparatorAuth roles [decimal_probe] idempotent -> DecimalProbeSummary {
+ input:DecimalProbeInput handler {
+ if array.length(input.cases)==0 || array.length(input.cases)>6 {fail("invalid_cases","Use one to six independently expected Decimal operators.")}
+ transaction {
+  let id=uuid.new() let parent=DecimalProbeBatch.bulk_insert([{id:id business_id:input.business_id expected_case_count:array.length(input.cases)}])
+  let rows=[] for probe_case in input.cases {array.push(rows,{id:uuid.new() batch_id:id op:probe_case.op lhs:probe_case.lhs rhs:probe_case.rhs expected:probe_case.expected})}
+  let saved=DecimalProbeCase.bulk_insert(rows)
+  return decimal_probe_summary(input.business_id)
+ }
+ }
+}
+route GET "/decimal-comparator/batches/{business_id}" protect ComparatorAuth roles [decimal_probe] -> DecimalProbeSummary {params{business_id:UUID} handler{return decimal_probe_summary(params.business_id)}}

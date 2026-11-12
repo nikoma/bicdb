@@ -1,0 +1,29 @@
+{
+  "source": "cb3542bfead6655d583405bbfd2a6309d16b0130",
+  "scope": "Stage1 generic Native generation admission, format reader fence and actual fresh binding controls. Mandatory real-old-store automatic upgrade positive remains UNIMPLEMENTED and is expected to fail; preserve that failure. Four refusal/fresh-data controls should pass. Do not qualify this as a completed transition or promote ERP. Real old fixture files verified against actual creator manifest; unrelated signing key omitted. No SUM-area edits or original application assertion changes.",
+  "started_unix": 1794472155.405986,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--test",
+        "decimal_predicate_generations",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794472155.4063692,
+      "exit": 101,
+      "finished_unix": 1794472185.4774933
+    }
+  ],
+  "status": "failed",
+  "finished_unix": 1794472185.4776914
+}

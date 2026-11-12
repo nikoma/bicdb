@@ -1,0 +1,7 @@
+[package]
+name = "qualification/rollback-invariant-probe"
+version = "999.83.1"
+[module]
+namespace = "qualification.rollback_invariant_probe"
+version = "999.83.1"
+system = false

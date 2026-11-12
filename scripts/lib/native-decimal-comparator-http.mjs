@@ -1,0 +1,19 @@
+import assert from'node:assert/strict';import{randomUUID}from'node:crypto';
+export const decimalRelation=(left,right)=>{const parse=value=>{assert.match(value,/^-?\d+(\.\d+)?$/);const sign=value.startsWith('-')?-1n:1n,[whole,fraction='']=value.replace('-','').split('.');return{coefficient:sign*BigInt(whole+fraction),scale:BigInt(fraction.length)}};const a=parse(left),b=parse(right),l=a.coefficient*10n**b.scale,r=b.coefficient*10n**a.scale;return l<r?-1:l>r?1:0;};
+export const comparisonPairs=()=>{
+ const pairs=[['zero-equivalent','0','-0.0'],['zero28-equivalent','-0.0000000000000000000000000000','0.0'],['trailing28-equivalent','1.2300000000000000000000000000','1.23'],['negative-trailing28-equivalent','-1.2300000000000000000000000000','-1.23'],['sign-order','-0.0000000000000000000000000001','0.0000000000000000000000000001'],['large96-nearmax','79228162514264337593543950334','79228162514264337593543950335'],['large96-negative','-79228162514264337593543950335','-79228162514264337593543950334'],['large96-fraction','7922816251426433759354395033.4','7922816251426433759354395033.5'],['large96-negative-fraction','-7922816251426433759354395033.5','-7922816251426433759354395033.4'],['beyond-node-integer','9007199254740992.03','9007199254740992.02'],['whole-order','-2','1']];
+ for(let scale=19;scale<=28;scale++){const a='1.'+'0'.repeat(scale-1)+'1',b='1.'+'0'.repeat(scale-1)+'2',tiny='0.'+'0'.repeat(scale-1)+'1';pairs.push(['positive-'+scale,a,b],['negative-'+scale,'-'+a,'-'+b],['positive-zero-'+scale,tiny,'0'],['negative-zero-'+scale,'-'+tiny,'-0.0']);}return pairs;
+};
+export async function qualifyDecimalComparator({call,record}){
+ const operators={eq:r=>r===0,ne:r=>r!==0,lt:r=>r<0,le:r=>r<=0,gt:r=>r>0,ge:r=>r>=0},failures=[],completed=[];let positive=0,negative=0;
+ const check=async(name,response,status,expectedBody)=>{const ok=response.status===status&&(expectedBody===undefined||JSON.stringify(response.body)===JSON.stringify(expectedBody));await record(name,{...response,expected_status:status,expected_body:expectedBody,ok});if(!ok)failures.push({name,...response,expected_status:status,expected_body:expectedBody});return ok;};
+ const summary=async(id,name,expected)=>{const result=await call('/decimal-comparator/batches/'+id,'GET');await check(name,result,200,expected);};
+ for(const[label,lhs,rhs]of comparisonPairs()){
+  const relation=decimalRelation(lhs,rhs),business_id=randomUUID(),cases=Object.entries(operators).map(([op,predicate])=>({op,lhs,rhs,expected:predicate(relation)}));const response=await call('/decimal-comparator/batches','POST',{business_id,cases});const ok=await check(label+'-all6-correct',response,200,{batch_count:1,case_count:6});await summary(business_id,label+'-correct-atomic-counts',ok?{batch_count:1,case_count:6}:{batch_count:0,case_count:0});if(ok){positive++;completed.push(business_id);}
+  for(const test of cases){const wrong_id=randomUUID(),wrong={...test,expected:!test.expected};await check(label+'-'+test.op+'-wrong-refused',await call('/decimal-comparator/batches','POST',{business_id:wrong_id,cases:[wrong]}),409);await summary(wrong_id,label+'-'+test.op+'-wrong-no-partial',{batch_count:0,case_count:0});negative++;}
+ }
+ // Preserve the exact frozen arithmetic reproducer unchanged as an independent mandatory matrix.
+ for(const source_amount of['99','-99','99.00','-99.00','110','-110','110.0','-110.0'])for(const use_snapshot of[false,true])await check('frozen-product-'+source_amount+'-snapshot'+use_snapshot,await call('/rounding-reproducer/probe','POST',{source_amount,translation_rate:'1.111111111111111111',ownership_factor:'1',rounding_factor:'200',use_snapshot}),200);
+ const recovery=async label=>{for(const id of completed)await summary(id,label+'-retained-'+id,{batch_count:1,case_count:6});};
+ return{passed:failures.length===0,pair_count:comparisonPairs().length,correct_batches:positive,wrong_batches:negative,operators:Object.keys(operators),failures,recovery};
+}

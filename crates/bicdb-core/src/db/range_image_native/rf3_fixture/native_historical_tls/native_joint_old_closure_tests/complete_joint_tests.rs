@@ -3,6 +3,8 @@
 //! stores/services, TLS metadata, the completed image and distinct data sets.
 //! Local opaque-object orchestration is NOT an operator/wire handoff test.
 use super::*;
+#[path = "complete_joint_tests/activated_anchor_archive_tests.rs"]
+mod activated_anchor_archive_tests;
 #[path = "complete_joint_tests/activation_scope_cut_tests.rs"]
 mod activation_scope_cut_tests;
 #[path = "complete_joint_tests/closed_policy_baseline_tests.rs"]
@@ -357,6 +359,7 @@ enum JointTestOutcome {
     OriginalReleaseWriterRejected,
     FullHandoffThenPostJointNoDataAck4Strong,
     FullHandoffThenCurrentJointActivationIdempotence,
+    FullHandoffThenCurrentJointServingArchiveRefused,
     FullHandoffThenCurrentJointAuthorityRefusals,
     FullHandoffThenObserverScopeCuts,
     FullHandoffThenActivationScopeCut,
@@ -393,6 +396,7 @@ enum JointFullContinuation {
     OriginalTerminalControls,
     PostJointNoDataRecovery,
     PostJointNativeActivationIdempotence,
+    PostJointActivatedServingArchive,
     CurrentJointAuthorityRefusals,
     ObserverScopeCuts,
     ActivationScopeCut(activation_scope_cut_tests::ActivationScopeCut),
@@ -998,6 +1002,7 @@ fn run_complete_joint_with_controls(
         continuation,
         JointFullContinuation::PostJointNoDataRecovery
             | JointFullContinuation::PostJointNativeActivationIdempotence
+            | JointFullContinuation::PostJointActivatedServingArchive
     ) {
         assert!(
             release_continuation.is_some(),
@@ -1010,6 +1015,15 @@ fn run_complete_joint_with_controls(
             acknowledged.as_ref(),
             &next,
         );
+        if continuation == JointFullContinuation::PostJointActivatedServingArchive {
+            activated_anchor_archive_tests::after_actual_ack4_and_strong(
+                &fixture,
+                &activation_range,
+                acknowledged.as_ref(),
+                &next,
+            );
+            return JointTestOutcome::FullHandoffThenCurrentJointServingArchiveRefused;
+        }
         if continuation == JointFullContinuation::PostJointNativeActivationIdempotence {
             native_activation_idempotence_tests::after_actual_fresh_activation_and_ack4(
                 &fixture,

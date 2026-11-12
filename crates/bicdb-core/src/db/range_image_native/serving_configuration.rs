@@ -770,3 +770,6 @@ impl BicDb {
         Ok(receipt)
     }
 }
+
+#[cfg(test)]
+mod activated_anchor_tests;

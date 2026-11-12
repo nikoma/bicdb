@@ -273,8 +273,7 @@ impl ClusterDataNodeService {
             admission.test_phase_cancellation(),
         );
         parent.check()?;
-        admission.require_external_preparations_current()?;
-        admission.require_local_preparation_current(self)?;
+        admission.require_publication_service_entry(self)?;
         let database = checked_database_read(&self.db, &self.storage_policy)?;
         self.require_native_catalog_database(&database)?;
         self.require_native_writer_host_for_range(&database, admission.data().activation_range())?;
@@ -295,6 +294,33 @@ impl ClusterDataNodeService {
         )?;
         #[cfg(test)]
         trace.complete();
+        Ok(result)
+    }
+    pub(crate) fn recover_local_native_joint_bridge(
+        &self,
+        admission: &crate::distribution_range_handoff::NativeJointActivationAdmission,
+        actual: &ActualServiceNativeJointPreparedEvidence,
+        parent: &CancellationToken,
+    ) -> Result<Option<crate::db::NativeJointServingBridgeReceipt>> {
+        parent.check()?;
+        admission.require_external_preparations_current()?;
+        admission.require_local_preparation_current(self)?;
+        if actual.prepared.checksum_sha256() != admission.local_preparation().checksum_sha256()
+            || actual.prepared.native_database_incarnation()
+                != admission.local_preparation().native_database_incarnation()
+            || actual.prepared.local_node_id() != &self.node_id
+        {
+            return Err(data_error(
+                "joint publication recovery substituted its actual local preparation/open",
+            ));
+        }
+        let database = checked_database_read(&self.db, &self.storage_policy)?;
+        self.require_native_catalog_database(&database)?;
+        self.require_native_writer_host_for_range(&database, admission.data().activation_range())?;
+        let result = database
+            .read_existing_native_joint_serving_bridge(admission.committed(), &actual.prepared)?;
+        parent.check()?;
+        admission.require_live()?;
         Ok(result)
     }
     pub(crate) fn prepare_local_native_joint_serving(

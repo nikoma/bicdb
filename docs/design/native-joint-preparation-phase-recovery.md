@@ -81,14 +81,47 @@ not a cached authority check and does not by itself solve phase expiry.
 
 ## Source-only regression scope
 
-Two added genuine fixture cases have not been compiled or executed locally:
+The first remote validation at integrated source a8d36ca1 (CI 43203415424,
+job 131132398365) compiled and passed the original-caller-expiry negative, but
+failed the all-publication positive at node 2: 1 passed/1 failed, 21.42s. Node 2
+actually completed protected page WAL (4,371 microseconds), then exhausted the
+phase during post-write prepared revalidation. Repeating the entire call failed
+before recovering that durable receipt. The original failure remains evidence;
+it is not a successful publication cohort.
+
+The corrective source has not been compiled or executed locally. It records
+pending local attempts before entering the producer. A distinct new phase first
+reads and verifies the actual current record plus immutable archive before it
+can retry WAL; recovered receipts preserve the exact original audit/checksum.
+A disappeared already-counted receipt refuses. Pending attempts prevent finish.
+No decoded response or copied checksum reconstructs a receipt. Final aggregation
+is a single consuming boundary: one fresh complete phase, then every actual
+same-service preparation and protected native receipt, then the current
+metadata/writer/caller checks before return. It does not repeat the entire
+aggregation several more times merely to expose historical diagnostic hashes.
+Those diagnostic getters grant no current authority; operational methods keep
+their actual current checks.
+
+Each phase selects at most one local admission, and each fresh admission is
+single-use for one publication/recovery operation. The actual durable progress
+map survives phase expiry. The complete final native-boundary checks remain:
+external participants, local preparation/catalogue, actual materialization,
+writer/open/domain, and controlled WAL completion. Earlier wrapper sweeps of
+that same external set are removed only for the fresh path; the final native
+checks are not cached or skipped. The pin transition still checks every member
+before and after; its caller no longer adds a third identical sweep.
+
+The two genuine fixture cases are:
 
 - `native_joint_fresh_preparation_phase_publishes_all_final_members_after_original_expiry`:
   expires the old MQ window, refuses a wrong actor/poisoned round and a missing
   final member, obtains each per-node HostMQ plus post-quorum local HostMQ,
   publishes all final native records, reaffirms them, and checks that every
-  replica remains frozen. Retries are bounded to two NEW phases per native
-  publication, only on timeout, under the unchanged original caller. Explicit
+  replica remains frozen. A test-only lost-reply control drops a receipt AFTER the actual native producer
+  succeeds, then requires a distinct phase to recover the exact original checksum.
+  Retries are bounded to three NEW phases per local publication/recovery, only
+  on timeout, under the unchanged original caller; the first node deliberately
+  uses one phase for that real-WAL/lost-reply boundary. Explicit
   old-quorum cancellation and original parent cancellation then refuse more
   phases. Old quorum current checks remain errors throughout.
 - `native_joint_fresh_phase_refuses_expired_original_caller_with_later_long_budget`:
@@ -120,3 +153,8 @@ lifetime. Cold or expired reattestation is not solved by this same-open phase.
 Lower-R old-voter repair, missing new-voter post-finalization repair, learner
 source replacement, origin-down recovery, post-joint NoData, remote joint RPCs,
 and automatic operator/controller convergence all remain explicit open gates.
+
+A preparation quorum originally holding only two of three final observations
+cannot use this producer to append a third after expiry. `begin_fresh_preparation_phase`
+requires the SAME already complete original participant keyset. This is an
+explicit recovery availability limit, not a generic quorum recovery protocol.

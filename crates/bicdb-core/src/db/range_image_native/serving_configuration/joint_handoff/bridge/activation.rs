@@ -240,6 +240,45 @@ impl NativeJointServingDomain {
     }
 }
 impl BicDb {
+    /// Recover ONLY the actual previously protected current/archive receipt.
+    /// This reads no caller audit and performs no WAL write or deadline refresh.
+    pub(crate) fn read_existing_native_joint_serving_bridge(
+        &self,
+        fresh: &CommittedNativeJointDecisionObservation,
+        prepared: &NativeJointServingPreparation,
+    ) -> Result<Option<NativeJointServingBridgeReceipt>> {
+        fresh.require_current(self)?;
+        prepared.native.require_current(self)?;
+        let Some(record) =
+            self.read_native_range_image_record::<NativeJointServingBridgeRecord>(&key(prepared
+                .record
+                .range_id))?
+        else {
+            return Ok(None);
+        };
+        record.validate()?;
+        let (term, index, _) = fresh.metadata_anchor();
+        if record.prepared != prepared.record
+            || &record.decision != fresh.data()
+            || fresh.native_receipt().checksum_sha256() != record.prepared.local_decision_sha256
+            || fresh.native_receipt().native_database_incarnation()
+                != prepared.native_database_incarnation()
+            || term < record.post_quorum_metadata_term
+            || index < record.post_quorum_metadata_read_index
+        {
+            return Err(invalid("joint publication recovery changed actual preparation/open/decision or regressed metadata"));
+        }
+        let native = self.native_recovery_admission(
+            prepared.native.cluster_id(),
+            prepared.native.bootstrap_id(),
+            prepared.native.local_node_id(),
+            prepared.native.local_member_incarnation(),
+        )?;
+        let receipt = NativeJointServingBridgeReceipt { native, record };
+        receipt.require_current(self)?;
+        fresh.require_current(self)?;
+        Ok(Some(receipt))
+    }
     pub(in crate::db::range_image_native) fn read_native_joint_serving_domain(
         &self,
         birth: &NativeDatabaseBirth,

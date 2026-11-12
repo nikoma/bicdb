@@ -810,9 +810,14 @@ fn exercise_fresh_native_publication(
         ),
     }
     let mut publication = prepared.resume_native_publication().unwrap();
+    let mut lost_reply_sha = None;
     for local in [node("n1"), node("n2"), node("n3")] {
         let mut completed = false;
-        for attempt in 0..2 {
+        for attempt in 0..3 {
+            let attempt_started = std::time::Instant::now();
+            eprintln!(
+                "ACTUAL_JOINT_PHASE fresh-publication-attempt node={local} attempt={attempt}"
+            );
             let result = (|| -> crate::Result<()> {
                 let mut fresh = prepared.begin_fresh_preparation_phase(Duration::from_secs(4))?;
                 for id in [node("n1"), node("n2"), node("n3")] {
@@ -825,11 +830,31 @@ fn exercise_fresh_native_publication(
                 );
                 let admission =
                     fresh.acquire_local_activation(&fixture.clients[&local], &node("n1"))?;
-                publication.publish_actual_local_member(&admission, parent)
+                assert!(
+                    fresh
+                        .acquire_local_activation(&fixture.clients[&local], &node("n1"))
+                        .is_err(),
+                    "one phase cannot select a second local publication"
+                );
+                if local == node("n1") && attempt == 0 {
+                    lost_reply_sha =
+                        Some(publication.test_lose_actual_publication_reply(&admission, parent)?);
+                    eprintln!("ACTUAL_JOINT_PHASE test-lost-reply-after-real-native-producer node={local}");
+                    return Err(crate::BicDbError::QueryTimedOut);
+                }
+                publication.publish_actual_local_member(&admission, parent)?;
+                assert!(
+                    publication
+                        .publish_actual_local_member(&admission, parent)
+                        .is_err(),
+                    "one admission cannot republish/recover twice"
+                );
+                Ok(())
             })();
+            eprintln!("ACTUAL_JOINT_PHASE fresh-publication-result node={local} attempt={attempt} elapsed_ms={} error={:?}", attempt_started.elapsed().as_millis(), result.as_ref().err());
             match result {
                 Ok(())=>{completed=true;break;},
-                Err(crate::BicDbError::QueryTimedOut) if attempt==0=>eprintln!("ACTUAL_JOINT_PHASE bounded-fresh-publication-retry node={local} original-still-expired=true"),
+                Err(crate::BicDbError::QueryTimedOut) if attempt<2=>eprintln!("ACTUAL_JOINT_PHASE bounded-fresh-publication-retry node={local} original-still-expired=true"),
                 Err(error)=>panic!("fresh native publication failed for {local}: {error}"),
             }
         }
@@ -846,10 +871,19 @@ fn exercise_fresh_native_publication(
             .unwrap();
     }
     let current = Arc::new(current.finish().unwrap());
-    publication.reaffirm_published_members(current).unwrap();
-    let published = Arc::new(publication.finish().unwrap());
+    let published = Arc::new(publication.finish_with_fresh_phase(current).unwrap());
     assert_eq!(
-        published.test_actual_published_members().unwrap(),
+        published.test_actual_receipt_checksums().unwrap()[&node("n1")],
+        lost_reply_sha.expect("genuine lost reply must have reached protected WAL producer"),
+        "recover exact original immutable quorum audit, never rewrite under new MQ"
+    );
+    assert_eq!(
+        published
+            .test_actual_receipt_checksums()
+            .unwrap()
+            .keys()
+            .cloned()
+            .collect::<Vec<_>>(),
         vec![node("n1"), node("n2"), node("n3")]
     );
     assert!(

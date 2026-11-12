@@ -232,6 +232,7 @@ pub(crate) struct NativeJointPreparedServingVoteData {
 /// MQ AFTER collection and retains the actual quorum and original deadlines.
 pub(crate) struct NativeJointActivationAdmission {
     phase: Option<Arc<NativeJointPreparationPhaseQuorum>>,
+    publication_claimed: std::sync::atomic::AtomicBool,
     quorum: Arc<NativeJointPreparedServingQuorum>,
     local: Arc<NativeJointPreparedServingObservation>,
     fresh: CommittedNativeJointDecisionObservation,
@@ -314,6 +315,7 @@ impl NativeJointPreparedServingQuorum {
         let cancellation = cancellation.child_with_deadline(fresh.deadline());
         let result = NativeJointActivationAdmission {
             phase: None,
+            publication_claimed: std::sync::atomic::AtomicBool::new(false),
             quorum: self.clone(),
             local,
             fresh,
@@ -339,6 +341,44 @@ impl NativeJointPreparedServingQuorum {
     }
 }
 impl NativeJointActivationAdmission {
+    pub(super) fn claim_publication_attempt(&self) -> Result<()> {
+        self.require_live()?;
+        if self.phase.is_some()
+            && self
+                .publication_claimed
+                .swap(true, std::sync::atomic::Ordering::AcqRel)
+        {
+            return Err(invalid("fresh joint admission already attempted publication/recovery; collect a DISTINCT phase"));
+        }
+        Ok(())
+    }
+    pub(super) fn recover_local_native_bridge(
+        &self,
+        parent: &crate::CancellationToken,
+    ) -> Result<Option<crate::db::NativeJointServingBridgeReceipt>> {
+        parent.check()?;
+        self.require_live()?;
+        let service = self
+            .local
+            .service
+            .try_lock()
+            .ok_or_else(|| invalid("joint publication recovery local service busy"))?;
+        service.recover_local_native_joint_bridge(self, &self.local.actual, parent)
+    }
+    /// The fresh publisher's mandatory COMPLETE external+local physical
+    /// validation occurs in the native pre-WAL boundary under the real local
+    /// service/DB guard. Do not repeat that same sweep in each wrapper.
+    pub(crate) fn require_publication_service_entry(
+        &self,
+        service: &ClusterDataNodeService,
+    ) -> Result<()> {
+        self.require_live()?;
+        if self.phase.is_none() {
+            self.require_external_preparations_current()?;
+            self.require_local_preparation_current(service)?;
+        }
+        Ok(())
+    }
     pub(crate) fn require_local_preparation_current(
         &self,
         service: &ClusterDataNodeService,
@@ -432,7 +472,7 @@ impl NativeJointActivationAdmission {
             })
             .collect()
     }
-    pub(crate) fn publish_local_native_bridge(
+    fn publish_local_native_bridge(
         &self,
         parent: &crate::CancellationToken,
     ) -> Result<crate::db::NativeJointServingBridgeReceipt> {
@@ -443,7 +483,10 @@ impl NativeJointActivationAdmission {
             &self.cancellation,
         );
         parent.check()?;
-        self.require_external_preparations_current()?;
+        self.require_live()?;
+        if self.phase.is_none() {
+            self.require_external_preparations_current()?;
+        }
         let service = self
             .local
             .service

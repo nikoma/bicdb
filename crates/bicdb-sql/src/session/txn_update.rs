@@ -971,11 +971,16 @@ impl<'db> SqlSession<'db> {
             })
             .flatten();
         for (idx, mut candidate) in assignment_candidates.into_iter().enumerate() {
-            let physical_identity = (
-                candidate.physical_table.clone(),
-                candidate.record.id.clone(),
-            );
-            if merged_targets.contains(&physical_identity) {
+            let physical_identity = (match_policy != UpdateMatchPolicy::First).then(|| {
+                (
+                    candidate.physical_table.clone(),
+                    candidate.record.id.clone(),
+                )
+            });
+            if physical_identity
+                .as_ref()
+                .is_some_and(|identity| merged_targets.contains(identity))
+            {
                 return Err(match_policy.duplicate_error());
             }
             if idx % 1024 == 0 {
@@ -1005,6 +1010,26 @@ impl<'db> SqlSession<'db> {
                     let Some(latest) = latest else {
                         continue;
                     };
+                    if candidate.physical_table.is_some() {
+                        let engine = self.sql_engine_with_ctes(ctes.clone());
+                        if !rls_allows_record_with_schema(
+                            &engine,
+                            &table,
+                            PolicyAction::Update,
+                            &latest,
+                            schema.as_deref(),
+                        )? || (reads_existing
+                            && !rls_allows_record_with_schema(
+                                &engine,
+                                &table,
+                                PolicyAction::Select,
+                                &latest,
+                                schema.as_deref(),
+                            )?)
+                        {
+                            continue;
+                        }
+                    }
                     // Watermark-gap fast path: the recheck could not prove
                     // freshness cheaply (max_tx above the applied watermark),
                     // but the latest committed version equals the candidate we
@@ -1271,7 +1296,9 @@ impl<'db> SqlSession<'db> {
                     _ => true,
                 };
                 if match_policy == UpdateMatchPolicy::PostgresMerge || changed {
-                    merged_targets.insert(physical_identity);
+                    if let Some(identity) = physical_identity {
+                        merged_targets.insert(identity);
+                    }
                 }
             }
             let repair_plan = match repair_assignments.as_ref() {
@@ -2332,6 +2359,26 @@ impl<'db> SqlSession<'db> {
                     let Some(latest) = latest else {
                         continue;
                     };
+                    if candidate.physical_table.is_some() {
+                        let engine = self.sql_engine_with_ctes(ctes.clone());
+                        if !rls_allows_record_with_schema(
+                            &engine,
+                            &table,
+                            PolicyAction::Delete,
+                            &latest,
+                            schema.as_ref(),
+                        )? || (reads_existing
+                            && !rls_allows_record_with_schema(
+                                &engine,
+                                &table,
+                                PolicyAction::Select,
+                                &latest,
+                                schema.as_ref(),
+                            )?)
+                        {
+                            continue;
+                        }
+                    }
                     let target_row =
                         slot_row_from_record(&table, &target_alias, schema.as_ref(), &latest)?;
                     let mut refreshed_row = candidate.row.clone();

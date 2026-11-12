@@ -32,6 +32,8 @@ mod native_metadata_store;
 pub(crate) use host_read::{
     HostMetadataReadAcquireRequest, HostMetadataReadAcquireResponse, HostMetadataReadObservation,
 };
+#[cfg(feature = "tls-replication")]
+pub(crate) use native_metadata_store::same_registration as same_native_registration;
 pub(crate) use native_metadata_store::NativeMetadataAppendProvenance;
 pub use native_metadata_store::NativeMetadataAppendReceiver;
 #[cfg(test)]

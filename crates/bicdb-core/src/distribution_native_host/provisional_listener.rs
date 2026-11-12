@@ -8,8 +8,10 @@ use crate::{ClusterDataNodeService, ClusterNetworkTransportConfig};
 use parking_lot::Mutex;
 mod learner_enrollment;
 mod metadata_startup;
+mod registration;
 pub(crate) use learner_enrollment::NativeLearnerMetadataEnrollment;
 pub(crate) use metadata_startup::NativeInitialWriterEnrollment;
+pub(crate) use registration::{NativeMetadataControlHost, NativeMetadataRegistrationController};
 
 pub(crate) struct NativeProvisionalHost {
     listener: Option<ClusterDataServerHandle>,

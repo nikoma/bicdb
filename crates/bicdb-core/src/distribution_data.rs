@@ -764,6 +764,10 @@ pub struct ClusterDataNodeService {
         Option<std::sync::Weak<crate::distribution_native_host::NativeProvisionalNode>>,
     initial_consensus_only: bool,
     #[cfg(feature = "tls-replication")]
+    native_metadata_control: Option<
+        std::sync::Weak<crate::distribution_native_host::NativeMetadataRegistrationController>,
+    >,
+    #[cfg(feature = "tls-replication")]
     learner_birth_provider:
         Option<std::sync::Weak<crate::distribution_native_host::NativeLearnerBirthProvider>>,
 }
@@ -900,6 +904,8 @@ impl ClusterDataNodeService {
             initial_preparation_provider: None,
             initial_consensus_only: false,
             #[cfg(feature = "tls-replication")]
+            native_metadata_control: None,
+            #[cfg(feature = "tls-replication")]
             learner_birth_provider: None,
         };
         {
@@ -955,6 +961,45 @@ impl ClusterDataNodeService {
     }
     pub(crate) fn initial_consensus_only(&self) -> bool {
         self.initial_consensus_only
+    }
+    #[cfg(feature = "tls-replication")]
+    pub(crate) fn native_metadata_control(
+        &self,
+    ) -> Option<
+        std::sync::Weak<crate::distribution_native_host::NativeMetadataRegistrationController>,
+    > {
+        self.native_metadata_control.clone()
+    }
+    #[cfg(feature = "tls-replication")]
+    pub(crate) fn attach_native_metadata_control(
+        &mut self,
+        actual: &Arc<Mutex<Self>>,
+        drained: &crate::distribution_transport::DrainedClusterDataListener,
+        metadata: &crate::MetadataConsensusStore,
+        controller: &Arc<crate::distribution_native_host::NativeMetadataRegistrationController>,
+    ) -> Result<()> {
+        drained.require_service(actual)?;
+        drained.require_store(self.native_initial_listener_store_open_id())?;
+        if !self.initial_consensus_only
+            || self.initial_birth_provider.is_some()
+            || self.learner_birth_provider.is_some()
+            || self.native_writer_enforcement_version()? != 1
+        {
+            return Err(data_error(
+                "native metadata control needs the actual drained metadata-only service",
+            ));
+        }
+        metadata.require_listener_database(&self.listener_open_guard())?;
+        controller.require_service(actual, self.native_initial_listener_store_open_id())?;
+        if let Some(old) = self.native_metadata_control.as_ref() {
+            if !std::sync::Weak::ptr_eq(old, &Arc::downgrade(controller)) {
+                return Err(data_error(
+                    "another native metadata controller is already attached",
+                ));
+            }
+        }
+        self.native_metadata_control = Some(Arc::downgrade(controller));
+        Ok(())
     }
     #[cfg(feature = "tls-replication")]
     pub(crate) fn attach_learner_birth_provider(

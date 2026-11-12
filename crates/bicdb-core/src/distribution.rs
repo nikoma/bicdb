@@ -3032,6 +3032,29 @@ impl DistributionStore {
     /// validation and generation transition but do not publish topology files.
     /// The resulting topology can be proposed to metadata consensus and only
     /// installed in the durable store after quorum.
+    /// Planning data only; the native controller must separately validate its
+    /// actual owned metadata leader/MQ before proposing this topology.
+    pub(crate) fn native_registration_plan(
+        config: DistributionConfig,
+        topology: ClusterTopology,
+    ) -> Result<Self> {
+        config.validate()?;
+        topology.validate()?;
+        ensure_config_matches(&config, &topology)?;
+        Ok(Self {
+            root: PathBuf::new(),
+            fsync: true,
+            ephemeral: true,
+            ephemeral_previous_topology: Some(topology.clone()),
+            pending_heartbeats: BTreeMap::new(),
+            pending_metadata_learners: BTreeMap::new(),
+            pending_metadata_promotions: BTreeMap::new(),
+            pending_certificate_rotations: BTreeMap::new(),
+            config,
+            topology,
+        })
+    }
+
     pub fn fork_ephemeral(&self) -> Self {
         let mut staged = self.clone();
         staged.ephemeral = true;

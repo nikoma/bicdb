@@ -93,31 +93,7 @@ impl MetadataConsensusStore {
                     "native learner enrollment conflicts with another pending topology proposal",
                 ));
             }
-            // Retry only an ACTUAL persisted identical proposal. An in-memory
-            // entry left by a failed pre-publication write is not that proof.
-            let persisted = decode_state(&fs::read(
-                self.root.join(DEFAULT_CLUSTER_METADATA_CONSENSUS_STATE),
-            )?)?;
-            validate_state(&persisted)?;
-            if persisted.cluster_id != self.state.cluster_id
-                || persisted.node_id != self.state.node_id
-                || persisted.native_store_id != self.state.native_store_id
-                || persisted.current_term != self.state.current_term
-                || persisted.commit_index != self.state.commit_index
-                || persisted.committed_topology != self.state.committed_topology
-                || persisted.committed_restore_activation != self.state.committed_restore_activation
-                || persisted
-                    .log
-                    .iter()
-                    .find(|entry| entry.index == pending.index)
-                    != Some(&pending)
-            {
-                return Err(metadata_error(
-                    "native learner enrollment pending entry is not the actual persisted identity",
-                ));
-            }
-            // Re-fsync the exact owned entry without allocating a new index.
-            self.persist()?;
+            self.refsync_identical_native_pending(&pending)?;
             pending
         } else {
             self.propose_topology(proposed)?
@@ -131,7 +107,36 @@ impl MetadataConsensusStore {
         Ok(Some(entry))
     }
 
-    fn require_native_learner_enrollment_leader(
+    pub(super) fn refsync_identical_native_pending(
+        &self,
+        pending: &MetadataLogEntry,
+    ) -> Result<()> {
+        self.require_native_metadata_actor_current(true)?;
+        let persisted = decode_state(&fs::read(
+            self.root.join(DEFAULT_CLUSTER_METADATA_CONSENSUS_STATE),
+        )?)?;
+        validate_state(&persisted)?;
+        if persisted.cluster_id != self.state.cluster_id
+            || persisted.node_id != self.state.node_id
+            || persisted.native_store_id != self.state.native_store_id
+            || persisted.current_term != self.state.current_term
+            || persisted.commit_index != self.state.commit_index
+            || persisted.committed_topology != self.state.committed_topology
+            || persisted.committed_restore_activation != self.state.committed_restore_activation
+            || persisted
+                .log
+                .iter()
+                .find(|entry| entry.index == pending.index)
+                != Some(pending)
+        {
+            return Err(metadata_error(
+                "native pending entry is not the actual persisted identity",
+            ));
+        }
+        self.persist()
+    }
+
+    pub(super) fn require_native_learner_enrollment_leader(
         &self,
         current: &HostMetadataReadObservation,
         business: Uuid,

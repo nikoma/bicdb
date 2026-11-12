@@ -47,7 +47,8 @@ pub(crate) use initial_offer::{
 };
 #[cfg(feature = "tls-replication")]
 pub(crate) use provisional_listener::{
-    NativeInitialConsensusLaunch, NativeLearnerMetadataEnrollment, NativeProvisionalHost,
+    NativeInitialConsensusLaunch, NativeLearnerMetadataEnrollment, NativeMetadataControlHost,
+    NativeMetadataRegistrationController, NativeProvisionalHost,
 };
 fn invalid(detail: &str) -> BicDbError {
     BicDbError::Cluster(format!("native host bootstrap: {detail}"))

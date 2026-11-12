@@ -3,6 +3,8 @@
 #[cfg(test)]
 mod native_obligation_frame_tests;
 
+mod native_registration;
+pub(crate) use native_registration::NativeMetadataRegistrationIngress;
 use std::collections::{BTreeMap, BTreeSet};
 use std::io::{Read, Write};
 use std::net::{SocketAddr, TcpListener, TcpStream, ToSocketAddrs};
@@ -858,6 +860,7 @@ pub(crate) fn start_cluster_data_server_with_recovery_runtime(
         initial_preparation_provider,
         learner_birth_provider,
         initial_consensus_only,
+        native_metadata_control,
         service_store_open_id,
     ) = {
         let service = service.lock();
@@ -872,6 +875,7 @@ pub(crate) fn start_cluster_data_server_with_recovery_runtime(
             service.initial_preparation_provider(),
             service.learner_birth_provider(),
             service.initial_consensus_only(),
+            service.native_metadata_control(),
             service.native_initial_listener_store_open_id(),
         )
     };
@@ -929,6 +933,7 @@ pub(crate) fn start_cluster_data_server_with_recovery_runtime(
                     let initial_birth_provider = initial_birth_provider.clone();
                     let initial_preparation_provider = initial_preparation_provider.clone();
                     let learner_birth_provider = learner_birth_provider.clone();
+                    let native_metadata_control = native_metadata_control.clone();
                     // Own the slot BEFORE spawning: if OS thread creation
                     // fails, dropping the closure must not leak drain custody.
                     let active_connection = ActiveConnection(active);
@@ -966,6 +971,7 @@ pub(crate) fn start_cluster_data_server_with_recovery_runtime(
                                     initial_preparation_provider.as_ref(),
                                     learner_birth_provider.as_ref(),
                                     initial_consensus_only,
+                                    native_metadata_control.as_ref(),
                                     request_deadline,
                                 )
                             })
@@ -987,6 +993,7 @@ pub(crate) fn start_cluster_data_server_with_recovery_runtime(
                                 initial_preparation_provider.as_ref(),
                                 learner_birth_provider.as_ref(),
                                 initial_consensus_only,
+                                native_metadata_control.as_ref(),
                                 request_deadline,
                             )
                         };
@@ -1083,6 +1090,9 @@ fn handle_cluster_data_connection(
         &std::sync::Weak<crate::distribution_native_host::NativeLearnerBirthProvider>,
     >,
     initial_consensus_only: bool,
+    native_metadata_control: Option<
+        &std::sync::Weak<crate::distribution_native_host::NativeMetadataRegistrationController>,
+    >,
     request_deadline: Instant,
 ) -> Result<()> {
     let request = recv_json_frame::<ClusterDataRequestEnvelope>(stream, config.max_frame_bytes)?;
@@ -1195,6 +1205,7 @@ fn handle_cluster_data_connection(
             }
         }
         if initial_consensus_only
+            && native_metadata_control.is_none()
             && !matches!(
                 &request.request,
                 ClusterDataRequest::Ping
@@ -1209,6 +1220,64 @@ fn handle_cluster_data_connection(
             return Err(transport_error(
                 "initial consensus listener grants metadata endpoints only",
             ));
+        }
+        if let Some(provider) = native_metadata_control {
+            // Captured immutable mode: expiration NEVER falls through to data.
+            if !matches!(
+                &request.request,
+                ClusterDataRequest::Ping
+                    | ClusterDataRequest::RegisterMetadataLearner { .. }
+                    | ClusterDataRequest::FetchBootstrapSnapshot
+                    | ClusterDataRequest::MetadataVote { .. }
+                    | ClusterDataRequest::MetadataAppend { .. }
+                    | ClusterDataRequest::MetadataReadProbe { .. }
+                    | ClusterDataRequest::MetadataReadAcquire { .. }
+                    | ClusterDataRequest::HostMetadataReadAcquire { .. }
+            ) {
+                return Err(transport_error(
+                    "native metadata control listener grants CONFIG/metadata endpoints only",
+                ));
+            }
+            let provider = provider
+                .upgrade()
+                .ok_or_else(|| transport_error("actual native metadata controller owner ended"))?;
+            let token =
+                CancellationToken::new(Arc::new(AtomicBool::new(false)), Some(request_deadline))
+                    .child_with_deadline(Instant::now() + Duration::from_secs(5));
+            match &request.request {
+                ClusterDataRequest::RegisterMetadataLearner { node, now_ms } => {
+                    if config.dev_localhost_plaintext {
+                        return Err(transport_error(
+                            "native registration requires pinned mutual TLS",
+                        ));
+                    }
+                    crate::distribution_range_consensus::validate_native_json_size(
+                        node,
+                        32 * 1024,
+                    )?;
+                    let ingress = NativeMetadataRegistrationIngress::from_authenticated_envelope(
+                        caller_node_id.clone(),
+                        authenticated_caller
+                            .as_ref()
+                            .map(|p| p.member_incarnation()),
+                        peer_certificate_sha256.ok_or_else(|| {
+                            transport_error("native registration TLS leaf absent")
+                        })?,
+                        node.clone(),
+                        *now_ms,
+                        token,
+                    )?;
+                    return provider
+                        .register(ingress)
+                        .map(ClusterDataResponse::Topology);
+                }
+                ClusterDataRequest::FetchBootstrapSnapshot => {
+                    return provider
+                        .bootstrap(&token)
+                        .map(ClusterDataResponse::BootstrapSnapshot)
+                }
+                _ => {}
+            }
         }
         if let ClusterDataRequest::NativeInitialPreparation { request } = request.request {
             let provider = initial_preparation_provider

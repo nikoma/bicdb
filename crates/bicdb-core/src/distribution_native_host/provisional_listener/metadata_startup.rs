@@ -30,7 +30,10 @@ impl NativeInitialConsensusLaunch {
     /// Publish only this actual owned store's committed configuration. The
     /// initial plan cannot authenticate a subsequently registered learner.
     /// Network work and topology publication happen after releasing metadata.
-    fn publish_initial_committed_metadata(&self, parent: &CancellationToken) -> Result<()> {
+    pub(super) fn publish_initial_committed_metadata(
+        &self,
+        parent: &CancellationToken,
+    ) -> Result<()> {
         parent.check()?;
         let actual_open = self
             .service

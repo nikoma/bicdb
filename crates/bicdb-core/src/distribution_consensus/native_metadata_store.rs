@@ -10,8 +10,12 @@ use std::sync::{Arc, OnceLock};
 mod append_ack;
 #[cfg(feature = "tls-replication")]
 mod learner_enrollment;
+#[cfg(feature = "tls-replication")]
+mod registration;
 pub(crate) use append_ack::NativeMetadataAppendProvenance;
 pub use append_ack::NativeMetadataAppendReceiver;
+#[cfg(feature = "tls-replication")]
+pub(crate) use registration::same_registration;
 
 pub(super) const NATIVE_METADATA_CONSENSUS_FORMAT: u32 = 2;
 fn owners() -> &'static Mutex<BTreeSet<usize>> {

@@ -3,6 +3,9 @@
 //! or complete undo. Replica and final application qualification remain gates.
 use super::*;
 
+#[cfg(test)]
+mod partition_owner_tests;
+
 #[inline]
 pub(super) fn stage(_name: &str) {
     #[cfg(test)]

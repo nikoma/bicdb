@@ -94,7 +94,21 @@ impl ClusterDataNodeService {
         parent: &CancellationToken,
     ) -> Result<LocalNativeCompletionEvidence> {
         parent.check()?;
+        #[cfg(test)]
+        let _probe_context = crate::distribution_range_recovery::NativeProbeTraceContext::enter(
+            "completion-status",
+            observer.local_node_id(),
+            &request.scope,
+            request.challenge,
+            Some(observer.deadline()),
+        );
+        #[cfg(test)]
+        let db_trace = crate::distribution_range_recovery::NativeProbeTraceSpan::current(
+            "receiver-db-acquisition",
+        );
         let db = checked_database_read(&self.db, &self.storage_policy)?;
+        #[cfg(test)]
+        crate::distribution_range_recovery::NativeProbeTraceSpan::finish(db_trace);
         let evidence = if self.range_writes.recovery_observation_phase(&request.scope)?==crate::distribution_range_recovery::RecoveryFenceObservationPhase::NativeActivatedAnchor {
             self.range_writes.observe_activated_completion_for_observer(&db,observer,request)?
         } else {

@@ -22,6 +22,10 @@ fn invalid(message: &str) -> BicDbError {
     BicDbError::Cluster(format!("range recovery: {message}"))
 }
 
+#[cfg(test)]
+mod native_probe_trace;
+#[cfg(test)]
+pub(crate) use native_probe_trace::{NativeProbeTraceContext, NativeProbeTraceSpan};
 mod image_replacement_history;
 pub(crate) use image_replacement_history::{
     CurrentImageReplacementHistoryRound, VerifiedCurrentImageReplacementHistory,

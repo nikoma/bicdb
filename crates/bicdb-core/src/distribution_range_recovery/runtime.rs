@@ -98,6 +98,62 @@ impl Drop for Operation {
         }
     }
 }
+// Declared BEFORE the receiver's original Operation owner so this trace drops
+// AFTER that owner on return/unwind. A Weak count is diagnostic only: never
+// upgraded, never a currentness or capacity grant, and no lifetime extension.
+#[cfg(test)]
+struct NativeProbeOperationExit {
+    operation: Option<std::sync::Weak<Operation>>,
+    trace: NativeProbeTraceSpan,
+}
+#[cfg(test)]
+impl NativeProbeOperationExit {
+    fn new(
+        phase: &'static str,
+        node: &ClusterNodeId,
+        scope: &RecoveryFenceScope,
+        challenge: Uuid,
+        deadline: Option<Instant>,
+    ) -> Self {
+        Self {
+            operation: None,
+            trace: NativeProbeTraceSpan::new(
+                phase,
+                "receiver-operation",
+                node,
+                scope,
+                challenge,
+                deadline,
+            ),
+        }
+    }
+    fn bind(&mut self, operation: &Arc<Operation>) {
+        self.operation = Some(Arc::downgrade(operation));
+        self.trace.detail("reserved=true");
+    }
+    fn detail(&self, fields: impl AsRef<str>) {
+        self.trace.detail(fields);
+    }
+    fn outcome<T>(&mut self, result: &Result<T>) {
+        self.trace.detail(format!(
+            "result_ok={} error={:?}",
+            result.is_ok(),
+            result.as_ref().err().map(ToString::to_string)
+        ));
+        if result.is_ok() {
+            self.trace.complete();
+        }
+    }
+}
+#[cfg(test)]
+impl Drop for NativeProbeOperationExit {
+    fn drop(&mut self) {
+        self.trace.detail(format!(
+            "receiver_operation_strong_after_original_owner_drop={:?}",
+            self.operation.as_ref().map(std::sync::Weak::strong_count)
+        ));
+    }
+}
 /// Exclusive owned installer lease. Dropping it preserves an A-owned freeze;
 /// only actual catalogue adoption may later authorize returning to recovery N.
 /// There is deliberately no extraction or Clone operation.

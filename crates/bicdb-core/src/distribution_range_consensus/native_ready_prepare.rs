@@ -563,14 +563,30 @@ impl PreparedNativeRecoveryReady {
             requested_scope.purpose,
             MetadataRecoveryRolePurpose::CurrentJointRecovery { .. }
         ) {
+            #[cfg(test)]
+            let domain_trace = crate::distribution_range_recovery::NativeProbeTraceSpan::current(
+                "observer-current-joint-domain",
+            );
             store.require_current_joint_scope_domain(
                 db,
                 requested_scope,
                 &CancellationToken::uncancelable().child_with_deadline(observer.deadline()),
             )?;
+            #[cfg(test)]
+            crate::distribution_range_recovery::NativeProbeTraceSpan::finish(domain_trace);
         }
+        #[cfg(test)]
+        let physical_trace = crate::distribution_range_recovery::NativeProbeTraceSpan::current(
+            "observer-owned-physical",
+        );
         observer.require_native_identity(self.physical.native_admission())?;
         self.physical.require_owned_materialization_current(db)?;
+        #[cfg(test)]
+        crate::distribution_range_recovery::NativeProbeTraceSpan::finish(physical_trace);
+        #[cfg(test)]
+        let catalog_trace = crate::distribution_range_recovery::NativeProbeTraceSpan::current(
+            "observer-catalogue-identity",
+        );
         store.require_durable_recovery_catalog()?;
         store.require_native_phase_format(self.scope.range_id)?;
         store.require_no_image_install(self.scope.range_id)?;
@@ -593,7 +609,20 @@ impl PreparedNativeRecoveryReady {
                 "read-only prepared observation has stale native/store/session identity",
             ));
         }
-        self.require_binding_current(db, store)
+        #[cfg(test)]
+        crate::distribution_range_recovery::NativeProbeTraceSpan::finish(catalog_trace);
+        #[cfg(test)]
+        let mut binding_trace = crate::distribution_range_recovery::NativeProbeTraceSpan::current(
+            "observer-full-binding-current",
+        );
+        let result = self.require_binding_current(db, store);
+        #[cfg(test)]
+        if result.is_ok() {
+            if let Some(trace) = &mut binding_trace {
+                trace.complete();
+            }
+        }
+        result
     }
     pub(crate) fn require_current(&self, db: &crate::BicDb, store: &RangeWriteStore) -> Result<()> {
         self.physical.require_physical_current(db)?;

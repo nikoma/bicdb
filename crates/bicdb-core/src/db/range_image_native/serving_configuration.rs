@@ -408,7 +408,13 @@ impl BicDb {
             crate::distribution_range_handoff::NativeJointPhaseTrace::refresh_detail(
                 "refresh-serving-owned-materialization",
             );
+        #[cfg(test)]
+        let probe_physical = crate::distribution_range_recovery::NativeProbeTraceSpan::current(
+            "observer-serving-physical-repeat",
+        );
         physical.require_owned_materialization_current(self)?;
+        #[cfg(test)]
+        crate::distribution_range_recovery::NativeProbeTraceSpan::finish(probe_physical);
         #[cfg(test)]
         crate::distribution_range_handoff::NativeJointPhaseTrace::finish_detail(physical_trace);
         #[cfg(test)]
@@ -417,7 +423,13 @@ impl BicDb {
                 "refresh-serving-actual-current-lineage",
             );
 
+        #[cfg(test)]
+        let probe_lineage = crate::distribution_range_recovery::NativeProbeTraceSpan::current(
+            "observer-serving-current-lineage",
+        );
         let actual = self.current_native_range_source_lineage(scope.range_id)?;
+        #[cfg(test)]
+        crate::distribution_range_recovery::NativeProbeTraceSpan::finish(probe_lineage);
         let record = actual
             .serving
             .ok_or_else(|| invalid("completed refusal has no actual native serving record"))?;
@@ -441,6 +453,10 @@ impl BicDb {
             crate::distribution_range_handoff::NativeJointPhaseTrace::refresh_detail(
                 "refresh-serving-admission-mint",
             );
+        #[cfg(test)]
+        let probe_admission = crate::distribution_range_recovery::NativeProbeTraceSpan::current(
+            "observer-serving-admission",
+        );
         let native = self.native_recovery_admission(
             &record.scope.cluster_id,
             record.scope.bootstrap_id,
@@ -454,8 +470,16 @@ impl BicDb {
             crate::distribution_range_handoff::NativeJointPhaseTrace::refresh_detail(
                 "refresh-serving-receipt-full-current",
             );
+        #[cfg(test)]
+        crate::distribution_range_recovery::NativeProbeTraceSpan::finish(probe_admission);
+        #[cfg(test)]
+        let probe_receipt = crate::distribution_range_recovery::NativeProbeTraceSpan::current(
+            "observer-serving-receipt-current",
+        );
         let receipt = NativeRecoveredServingReceipt { native, record };
         receipt.require_current(self)?;
+        #[cfg(test)]
+        crate::distribution_range_recovery::NativeProbeTraceSpan::finish(probe_receipt);
         #[cfg(test)]
         crate::distribution_range_handoff::NativeJointPhaseTrace::finish_detail(receipt_trace);
         Ok(receipt)

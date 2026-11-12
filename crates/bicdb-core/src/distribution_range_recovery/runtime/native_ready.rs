@@ -188,9 +188,39 @@ impl RangeRecoveryRuntime {
         request: &NativeReadyRequest,
         parent: &CancellationToken,
     ) -> Result<NativeReadyObservation> {
+        #[cfg(test)]
+        NativeProbeTraceSpan::event(
+            "ready",
+            "receiver-request-entry",
+            &self.local_node_id,
+            &request.scope,
+            request.challenge,
+            parent.deadline(),
+            format!("request_budget_ms={}", request.budget_ms),
+        );
         let token = request.cancellation(parent)?;
-        let _operation = self.reserve_observer(request.scope.range_id)?;
-        self.observe_native_ready_inner(observer, request, &token)
+        #[cfg(test)]
+        let mut operation_trace = NativeProbeOperationExit::new(
+            "ready",
+            &self.local_node_id,
+            &request.scope,
+            request.challenge,
+            token.deadline(),
+        );
+        let reserved = self.reserve_observer(request.scope.range_id);
+        #[cfg(test)]
+        operation_trace.detail(format!(
+            "reservation_ok={} reservation_error={:?}",
+            reserved.is_ok(),
+            reserved.as_ref().err().map(ToString::to_string)
+        ));
+        let _operation = reserved?;
+        #[cfg(test)]
+        operation_trace.bind(&_operation);
+        let result = self.observe_native_ready_inner(observer, request, &token);
+        #[cfg(test)]
+        operation_trace.outcome(&result);
+        result
     }
     pub(super) fn observe_native_ready_inner(
         &self,
@@ -198,12 +228,30 @@ impl RangeRecoveryRuntime {
         request: &NativeReadyRequest,
         token: &CancellationToken,
     ) -> Result<NativeReadyObservation> {
+        #[cfg(test)]
+        let mut handler_trace = NativeProbeTraceSpan::new(
+            "ready",
+            "receiver-handler",
+            &self.local_node_id,
+            &request.scope,
+            request.challenge,
+            token.deadline(),
+        );
         let scope = &request.scope;
         let prepared = self.retained_native_prepared(scope)?.ok_or_else(|| {
             invalid("no actual retained native-prepared pin; leader must prepare this replica")
         })?;
         let business = Uuid::now_v7();
         let challenge = Uuid::now_v7();
+        #[cfg(test)]
+        let mut role_trace = NativeProbeTraceSpan::new(
+            "ready",
+            "receiver-readonly-role",
+            &self.local_node_id,
+            scope,
+            request.challenge,
+            token.deadline(),
+        );
         let witness = self.provider.witness_recovery_role(
             observer,
             business,
@@ -223,19 +271,75 @@ impl RangeRecoveryRuntime {
             scope,
         )?;
         let token = token.child_with_deadline(role.deadline());
+        #[cfg(test)]
+        {
+            role_trace.detail(format!("role_context={} witness_challenge={} actual_role_remaining_ms={} effective_request_remaining_ms={:?}", role.metadata_context_id(), challenge, role.deadline().saturating_duration_since(Instant::now()).as_millis(), token.deadline().map(|d|d.saturating_duration_since(Instant::now()).as_millis())));
+            role_trace.complete();
+            drop(role_trace);
+        }
+        #[cfg(test)]
+        let mut service_trace = NativeProbeTraceSpan::new(
+            "ready",
+            "receiver-service-acquisition",
+            &self.local_node_id,
+            scope,
+            request.challenge,
+            token.deadline(),
+        );
         let service = loop {
             token.check()?;
             if let Some(s) = self.service.try_lock_for(LATCH_POLL) {
                 break s;
             }
         };
+        #[cfg(test)]
+        {
+            service_trace.complete();
+            drop(service_trace);
+        }
+        #[cfg(test)]
+        let mut validation_trace = NativeProbeTraceSpan::new(
+            "ready",
+            "receiver-local-validation",
+            &self.local_node_id,
+            scope,
+            request.challenge,
+            token.deadline(),
+        );
         let evidence = service.observe_local_native_ready(&prepared, &role, request, &token)?;
+        #[cfg(test)]
+        {
+            validation_trace.complete();
+            drop(validation_trace);
+        }
         token.check()?;
-        NativeReadyObservation::from_local(
+        #[cfg(test)]
+        let mut projection_trace = NativeProbeTraceSpan::new(
+            "ready",
+            "receiver-final-observation",
+            &self.local_node_id,
+            scope,
+            request.challenge,
+            token.deadline(),
+        );
+        let result = NativeReadyObservation::from_local(
             evidence,
             self.provider.local_participant(),
             request,
             token.deadline().unwrap(),
-        )
+        );
+        #[cfg(test)]
+        {
+            projection_trace.detail(format!(
+                "result_ok={} error={:?}",
+                result.is_ok(),
+                result.as_ref().err().map(ToString::to_string)
+            ));
+            if result.is_ok() {
+                projection_trace.complete();
+                handler_trace.complete();
+            }
+        }
+        result
     }
 }

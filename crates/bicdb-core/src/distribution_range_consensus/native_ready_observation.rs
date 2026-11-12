@@ -215,7 +215,21 @@ impl RangeWriteStore {
         observer: &RecoveryObservationRoleAdmission,
         request: &NativeReadyRequest,
     ) -> Result<LocalNativeReadyEvidence> {
+        #[cfg(test)]
+        let _probe_context = crate::distribution_range_recovery::NativeProbeTraceContext::enter(
+            "ready",
+            observer.local_node_id(),
+            &request.scope,
+            request.challenge,
+            Some(observer.deadline()),
+        );
+        #[cfg(test)]
+        let validation_trace = crate::distribution_range_recovery::NativeProbeTraceSpan::current(
+            "observer-prepared-current-total",
+        );
         prepared.require_current_for_observer(db, self, observer, &request.scope)?;
+        #[cfg(test)]
+        crate::distribution_range_recovery::NativeProbeTraceSpan::finish(validation_trace);
         self.project_prepared_native(
             prepared,
             request,

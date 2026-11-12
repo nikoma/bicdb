@@ -182,6 +182,7 @@ fn native_initial_birth_tls_all_actual_factories_bind_initial_config_without_adm
         assert_eq!(birth.birth_id(), host.seed.manifest.birth_id);
         assert_eq!(birth.birth_sha256(), host.seed.manifest.birth_sha256);
         assert_eq!(birth.writer_enforcement_version(), 1);
+        assert_eq!(birth.abort_protocol_version(), 1);
         assert!(births.insert(birth.birth_id()));
         assert_eq!(
             member.labels[crate::distribution::SCHEMA_COMPATIBILITY_NODE_LABEL],

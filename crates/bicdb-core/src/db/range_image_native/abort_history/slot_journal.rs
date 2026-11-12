@@ -422,19 +422,6 @@ impl BicDb {
         role.require_native_identity(native)?;
         self.require_installed_native_writer_database_for_range(role.current_range())?;
         let source = self.current_native_range_source_lineage(request.scope.range_id)?;
-        record.domain.require_recovery_source(&source, role)?;
-        if matches!(
-            role.purpose(),
-            crate::distribution_consensus::MetadataRecoveryRolePurpose::CurrentJointRecovery { .. }
-        ) {
-            self.require_actual_current_joint_abort_domain(
-                &source.birth,
-                &source.base,
-                &request.scope,
-                &record.domain,
-                request.range_index,
-            )?;
-        }
         let _journal = self.try_native_image_journal()?;
         self.validate_source_range_image_lineage(
             &source,
@@ -445,6 +432,18 @@ impl BicDb {
             .observe_actual_native_abort_promise(request.scope.range_id, request.range_index)?
             .ok_or_else(|| invalid("readonly abort observation has no actual permanent promise"))?;
         promise.domain.require_observer(role)?;
+        if matches!(
+            request.scope.purpose,
+            crate::distribution_consensus::MetadataRecoveryRolePurpose::CurrentJointRecovery { .. }
+        ) {
+            self.require_actual_current_joint_abort_domain(
+                &source.birth,
+                &source.base,
+                &request.scope,
+                &promise.domain,
+                request.range_index,
+            )?;
+        }
         if promise.range_id != request.scope.range_id
             || promise.range_index != request.range_index
             || promise.predecessor_index > source.range_index()
@@ -601,6 +600,19 @@ impl BicDb {
         }
         // Source/history is actual local data. It never comes from candidate B.
         let source = self.current_native_range_source_lineage(request.scope.range_id)?;
+        record.domain.require_recovery_source(&source, role)?;
+        if matches!(
+            role.purpose(),
+            crate::distribution_consensus::MetadataRecoveryRolePurpose::CurrentJointRecovery { .. }
+        ) {
+            self.require_actual_current_joint_abort_domain(
+                &source.birth,
+                &source.base,
+                &request.scope,
+                &record.domain,
+                request.range_index,
+            )?;
+        }
         let _journal = self.try_native_image_journal()?;
         self.validate_source_range_image_lineage(
             &source,

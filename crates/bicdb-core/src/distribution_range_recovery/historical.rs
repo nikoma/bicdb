@@ -74,7 +74,7 @@ fn verify_history(
         }
         MetadataRecoveryRolePurpose::CurrentJointRecovery { .. }
         | MetadataRecoveryRolePurpose::ObserveFencedRecovery { .. } => {
-            return Err(invalid("readonly role cannot mint historical authority"))
+            return Err(invalid("readonly/current-joint scope cannot mint historical adoption authority in this producer"))
         }
     };
     if progress.node_id != *fence.node_id()

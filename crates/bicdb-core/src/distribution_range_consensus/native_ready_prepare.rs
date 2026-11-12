@@ -383,7 +383,7 @@ impl PreparedNativeRecoveryReady {
             store.require_current_joint_scope_domain(
                 db,
                 requested_scope,
-                &CancellationToken::new().child_with_deadline(observer.deadline()),
+                &CancellationToken::uncancelable().child_with_deadline(observer.deadline()),
             )?;
         }
         observer.require_native_identity(self.physical.native_admission())?;

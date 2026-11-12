@@ -208,6 +208,7 @@ impl RangeWriteStore {
             }
         };
         activated.validate()?;
+        quorum.require_prepared_identity_point(prepared, fresh)?;
         self.native_activated_opens.remove(&range);
         self.recovery_persistence_uncertain = true;
         self.catalog.recovery_fences.get_mut(&range).unwrap().phase =

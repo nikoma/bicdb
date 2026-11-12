@@ -547,7 +547,9 @@ impl BicDb {
             }
             let current_key = native_key(&key(record.range.id));
             let encoded = bounded_json(&record, MAX_NATIVE_RECEIPT_BYTES)?;
+            quorum.require_recipient_role(fresh)?;
             self.in_paged_transaction(|paged, xid| {
+                quorum.require_recipient_role(fresh)?;
                 for (history, bytes) in &append {
                     paged
                         .store()

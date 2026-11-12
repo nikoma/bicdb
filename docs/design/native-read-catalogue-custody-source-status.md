@@ -4,7 +4,7 @@ This isolated correction starts from read-foundation commit
 `8fce6e0f26c1164b39e448ea7b23104e84e7e5ed`. It imports no Abort, Joint, learner
 registration controller or unpublished full-prototype format. The original
 missing-only custody witness is preserved: corrected baseline `3d0041e09`, run
-43218099779/Core131182402124, compiled and failed its intact-value assertion in
+43218099779/Core131182402124, compiled and failed its missing-catalog safety assertion in
 6.30 seconds. The intact stopped/cold twin returned the full acknowledged R1
 value. Removing only n1's decision catalogue allowed a false clean-zero path
 whose Strong result was None. This is a scoped actual-service witness, not a
@@ -89,4 +89,30 @@ accept an arbitrary existing file, overwrite CQ history or disable either
 reader fence. This read-only branch deliberately does not implement or claim
 that composition. No local Cargo runs are performed under current disk
 constraints. Formatting, diff, source version checks and focused remote CI
-remain distinct; the source controls have no executed passing claim yet.
+remain distinct. Executed results are recorded below; final versioned-head validation and merge remain open.
+
+## Executed candidate checks
+
+The paired original-ACK acceptance at source
+`25710b785f6b468737015888d4db0c3b5d19259c` passed in
+[run 43221341175](https://github.com/nikoma/bicdb/actions/runs/43221341175),
+job 131193341560: one passed, zero failed. The intact twin returned the exact
+acknowledged value; the damaged twin refused three strict reopen attempts with
+the dedicated custody error and no recreated catalogue or policy installation.
+The thirteen enrollment controls passed at the same source in
+[run 43221345069](https://github.com/nikoma/bicdb/actions/runs/43221345069).
+
+Doc-only successor `b08556c3f8ef5422833164d7efef90954846d93c` passed the
+`native_` regression batch in
+[run 43222639169](https://github.com/nikoma/bicdb/actions/runs/43222639169),
+job 131197782760: 231 passed, zero failed, two ignored, 618 filtered, 240.87 seconds.
+All-target and isolated-consumer compilation also passed. The ignored cases
+are the internal process-child entry (requires its parent-owned configuration)
+and the explicit retained-1025-ACK fixture test (requires a supplied retained
+root). That large retained fixture was not newly executed by this batch.
+Raw Core job-log SHA-256:
+`76ef646b019ae907a6665ee638524142a6617588bf8a01bbda3fc7e4f29c7976`.
+
+These checks exercise unmerged candidate sources. They do not establish full
+prototype composition, physical recovery, automatic four-to-five convergence,
+measured RPO/RTO, production qualification or deployment.

@@ -6,6 +6,24 @@ operator binary, deployment, physical qualification or completion of that goal.
 Root owns the final PR rewrite, version selection, full CI, main merge and push.
 No version is reserved by this document.
 
+## Current validation checkpoint (November 12)
+
+The preparation notes below retain their original source-specific history.
+Later read candidate `b08556c3f8ef5422833164d7efef90954846d93c` includes
+verified main487 and the fail-closed missing-catalog custody correction.
+Its `native_` batch passed 231 tests, zero failed, two ignored in
+[run 43222639169](https://github.com/nikoma/bicdb/actions/runs/43222639169).
+The paired acknowledged-value/missing-catalog acceptance and thirteen enrollment
+controls also passed on implementation-equivalent source `25710b785`.
+See [the custody correction and exact evidence](native-read-catalogue-custody-source-status.md).
+
+Earlier source `480db3b52820919b0c18a48e15cccda38fe7c1c1` passed the broad
+Core, SQL, PostgreSQL-wire, remaining workspace and stock Rails suites. These
+older results do not validate later code or the final versioned delivery.
+Final current-main integration, next unused version, broad release checks,
+PR157 replacement and verified main merge remain required. No released binary,
+physical experiment or completed Milestone 1 follows from these CI results.
+
 ## Exact source selection
 
 | Input | Revision | Role |

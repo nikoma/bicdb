@@ -1,0 +1,65 @@
+{
+  "version": 1,
+  "files": {
+    "README.md": {
+      "bytes": 7542,
+      "sha256": "ce1ca889bdac1543a02e6c3ccafc96fe7e305272e6b7154b6b17eaffcfe25f79"
+    },
+    "artifact/fault-state/initial-data-held-discovery-01a1d122-8705-7332-a930-7b33e6323958/audit.jsonl": {
+      "bytes": 9257,
+      "sha256": "6ff2aa765c877723f49a4d550c3a2e130d8cd3c9bdcd1e3f269dfe1dce65c571"
+    },
+    "artifact/fault-state/initial-data-held-discovery-01a1d122-8705-7332-a930-7b33e6323958/rpc.jsonl": {
+      "bytes": 91735,
+      "sha256": "85cee8795027835ab3782c1d48549ca56e38353e55792be7a920b5ea639f7e51"
+    },
+    "artifact/rustc.txt": {
+      "bytes": 196,
+      "sha256": "f64c55ed9f210d80a9b248206104a47175faf5ec94a093e4ad132549209089fc"
+    },
+    "artifact/selected-tests.log": {
+      "bytes": 245285,
+      "sha256": "cb67fbb847876facba54ae3b1ff4eb1d6be438b181cd59c6f1d0d007a3fb5fb5"
+    },
+    "artifact/source-revision.txt": {
+      "bytes": 41,
+      "sha256": "5ccae98da9d652e6a22e2fd3f1b982a52ebc39b184d0deba429c40b339968085"
+    },
+    "artifact/tests.log.gz": {
+      "bytes": 19294,
+      "sha256": "f66cc82ef5d14d5483d22fa831a7ec8e2914bfde91f24846072d5def8a5a1e81"
+    },
+    "observations.json": {
+      "bytes": 68042,
+      "sha256": "8f8ec0308171bcd186aeabe9354f6141057033018f55eb0e3de007e1ddc9771c"
+    },
+    "raw/alltargets-job131414845527.log.gz": {
+      "bytes": 301939,
+      "sha256": "5aa1754ade46cda62183315a55b894737080c7be209f37a2cef203a90a132872"
+    },
+    "raw/artifact13973124819.zip": {
+      "bytes": 49085,
+      "sha256": "67dd7d3b211a3dd311a435e40c835add6a571516b8b0dd799479ded52320346c"
+    },
+    "raw/core-job131414888059.log.gz": {
+      "bytes": 185681,
+      "sha256": "37a8a953567a147c13aee86d46c6045c2d04605b4764a1e4dba342a2252bae2b"
+    },
+    "source-files.json": {
+      "bytes": 482478,
+      "sha256": "5b0bcf660ebad78d0c363c597f55a5068edc8bda908c605ccf7b365896f940e4"
+    },
+    "source.patch.gz": {
+      "bytes": 458168,
+      "sha256": "a1941e1ae6638a8e34278f7ad53870d75552da19844f926a97aa0a837ebe1961"
+    },
+    "test_verify.py": {
+      "bytes": 2556,
+      "sha256": "93121cbda3bc4db85e3c990488cce7834bbffe8df5abe8c81c65fffd3cfc0a3b"
+    },
+    "verify.py": {
+      "bytes": 13094,
+      "sha256": "c6d24c0fb66cdc23b31176911b0ecbee054286099ba3d9f51c4d582c111a930d"
+    }
+  }
+}

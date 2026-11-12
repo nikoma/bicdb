@@ -1,6 +1,6 @@
 [package]
 name = "bicdb-sql"
-version = "1.0.486-beta"
+version = "1.0.487-beta"
 edition.workspace = true
 license-file.workspace = true
 rust-version.workspace = true
@@ -16,8 +16,8 @@ extension-host = ["bicdb-extension/host"]
 [dependencies]
 smallvec = "1"
 base64.workspace = true
-bicdb-core = { path = "../bicdb-core", version = "1.0.486-beta", default-features = false }
-bicdb-extension = { path = "../bicdb-extension", version = "1.0.486-beta", default-features = false }
+bicdb-core = { path = "../bicdb-core", version = "1.0.487-beta", default-features = false }
+bicdb-extension = { path = "../bicdb-extension", version = "1.0.487-beta", default-features = false }
 chrono = "0.4"
 chrono-tz = "0.10"
 crc32fast.workspace = true
@@ -56,6 +56,6 @@ wasmtime = { version = "48.0.3", optional = true }
 
 [dev-dependencies]
 # Deterministic I/O fault injection for tests/commit_outcome_resolution.rs.
-bicdb-page = { path = "../bicdb-page", version = "1.0.486-beta" }
+bicdb-page = { path = "../bicdb-page", version = "1.0.487-beta" }
 tempfile.workspace = true
 wat = "1"

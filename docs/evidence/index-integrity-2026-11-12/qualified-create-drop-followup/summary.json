@@ -10,5 +10,5 @@
     "original_oracle_hr": "49PASS1FAIL qualifiedOracleCREATE/DROP lookup couldnotresolveencodedstoredidentity"
   },
   "correction": "Resolve both exact CREATE identities within selectednamespace and retainexactstoredidentityfordrop; refuseambiguousowners; keepconstraintpreflightandcaseexactness. Originalwireassertionsunchanged.",
-  "reuse_limit": "Focused results source64; final486 incorporatesmain485metadatafixandfreshversion, requiresnewexactheadCI. No finalapplication qualification inferred."
+  "reuse_limit": "Focusedresults source64. Indexdelivery fresh487 followsHA485source+reserved486docs; finalexactheadCIrequired. Root486wasunmergedsupersededcandidateonly,nobinary/release/deployment. No finalapplicationqualification."
 }

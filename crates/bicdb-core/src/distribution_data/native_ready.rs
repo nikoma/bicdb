@@ -55,7 +55,7 @@ impl ClusterDataNodeService {
                 // phase, native birth/open and fresh scope. Errors are never
                 // ignored or converted into an Active/counter fallback.
                 self.range_writes
-            .current_mut()
+                    .current_mut()
                     .refsync_native_prepared_refusal(&db, &native, &role, &frozen, parent)?;
             }
             _ => {

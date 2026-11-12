@@ -362,7 +362,12 @@ retain the SAME factory, DB open/birth, service, range-Store open, metadata
 StoreUUID/namespaces and supervisor. An actual owned-member observation plus own
 fresh HostMQ checks the transition; draining/binding failures retain that owner.
 It closes/drains the old socket and starts a NEW immutable replica-only receiver.
-A Weak actual Store-open sentinel also refuses an ended/replaced Store lifetime.
+The receiver checks both the actual Store-open lifetime and its service-slot
+binding without taking the service latch. The slot privately owns its Store;
+replacement revokes the previous binding before swapping objects, even when the
+old Store is retained alive. Restoring that same object creates a new binding
+and cannot revive the old receiver. Existing per-operation native guards remain
+mandatory; this token grants no role, floor, mutation or read permission.
 
 Opening the receiver installs NO writer hook/coordinator, native genesis,
 recovered epoch or Strong dispatcher. The typed image path already obtains its

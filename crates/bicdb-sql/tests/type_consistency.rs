@@ -44,27 +44,52 @@ fn registry_catalog_attribute_and_planner_types_agree_exhaustively() {
     let mut session = SqlSession::new(&mut db);
     let mut declarations = Vec::new();
     let mut projections = Vec::new();
+    let mut projected_names = Vec::new();
     let mut expected_catalog = Vec::new();
     let mut expected_planner = Vec::new();
 
     for spec in PG_TYPE_REGISTRY.all().iter().filter(|spec| !spec.pseudo) {
         let scalar_column = format!("scalar_{}", spec.oid);
-        declarations.push(format!("{scalar_column} {}", declaration_name(spec.name)));
-        projections.push(scalar_column.clone());
-        expected_catalog.push(vec![
-            SqlValue::String(scalar_column),
-            SqlValue::Int(i64::from(spec.oid)),
-        ]);
+        projected_names.push(scalar_column.clone());
+        if spec.canonical_storage_supported() {
+            declarations.push(format!("{scalar_column} {}", declaration_name(spec.name)));
+            projections.push(scalar_column.clone());
+            expected_catalog.push(vec![
+                SqlValue::String(scalar_column),
+                SqlValue::Int(i64::from(spec.oid)),
+            ]);
+        } else {
+            let error = session
+                .execute(&format!(
+                    "CREATE TABLE unsupported_scalar_{} (value {})",
+                    spec.oid,
+                    declaration_name(spec.name)
+                ))
+                .unwrap_err();
+            assert_eq!(error.sqlstate(), "0A000");
+            projections.push(format!(
+                "NULL::{} AS {scalar_column}",
+                declaration_name(spec.name)
+            ));
+        }
         expected_planner.push(Some(spec.name.to_string()));
 
         if let Some(array_oid) = spec.array_oid {
             let array_column = format!("array_{array_oid}");
-            declarations.push(format!("{array_column} {}[]", declaration_name(spec.name)));
-            projections.push(array_column.clone());
-            expected_catalog.push(vec![
-                SqlValue::String(array_column),
-                SqlValue::Int(i64::from(array_oid)),
-            ]);
+            projected_names.push(array_column.clone());
+            if spec.canonical_storage_supported() {
+                declarations.push(format!("{array_column} {}[]", declaration_name(spec.name)));
+                projections.push(array_column.clone());
+                expected_catalog.push(vec![
+                    SqlValue::String(array_column),
+                    SqlValue::Int(i64::from(array_oid)),
+                ]);
+            } else {
+                projections.push(format!(
+                    "NULL::{}[] AS {array_column}",
+                    declaration_name(spec.name)
+                ));
+            }
             expected_planner.push(Some(format!("{}[]", spec.name)));
         }
     }
@@ -96,7 +121,7 @@ fn registry_catalog_attribute_and_planner_types_agree_exhaustively() {
         ))
         .unwrap();
     assert!(planned.rows.is_empty());
-    assert_eq!(planned.columns, projections);
+    assert_eq!(planned.columns, projected_names);
     assert_eq!(planned.column_types, expected_planner);
 }
 

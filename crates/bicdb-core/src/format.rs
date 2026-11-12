@@ -25,11 +25,13 @@ pub const ONLINE_BACKUP_EXTENT_FEATURE_FLAG: &str = "online_backup_extent_tracki
 pub const UNIQUE_NULLS_NOT_DISTINCT_FEATURE_FLAG: &str = "unique_nulls_not_distinct_v1";
 pub const ORACLE_INVALID_ROUTINES_FEATURE_FLAG: &str = "oracle_invalid_routines_v1";
 pub const SQL_CATALOG_INTENTS_FEATURE_FLAG: &str = "sql_catalog_intents_v1";
+pub const SQL_PARTITION_EXECUTION_V1_FEATURE_FLAG: &str = "sql_partition_execution_v1";
 /// Node-local namespace lineage. Never replicate this as a portable schema
 /// reader capability: each destination activates and owns its own identities.
 pub const LOCAL_NAMESPACE_IDENTITY_FEATURE_FLAG: &str = "local_namespace_identity_v1";
 pub const ORACLE_SIMPLE_CASE_V1_FEATURE_FLAG: &str = "oracle_simple_case_v1";
 const KNOWN_FEATURE_FLAGS: &[&str] = &[
+    SQL_PARTITION_EXECUTION_V1_FEATURE_FLAG,
     ORACLE_INVALID_ROUTINES_FEATURE_FLAG,
     ORACLE_SIMPLE_CASE_V1_FEATURE_FLAG,
     UNIQUE_NULLS_NOT_DISTINCT_FEATURE_FLAG,
@@ -536,7 +538,10 @@ fn persist_metadata_with(
     let fsync = fsync
         || metadata
             .feature_flags
-            .contains(LOCAL_NAMESPACE_IDENTITY_FEATURE_FLAG);
+            .contains(LOCAL_NAMESPACE_IDENTITY_FEATURE_FLAG)
+        || metadata
+            .feature_flags
+            .contains(SQL_PARTITION_EXECUTION_V1_FEATURE_FLAG);
     write(
         &metadata_path(root),
         &serde_json::to_vec_pretty(metadata)?,
@@ -615,6 +620,30 @@ pub(crate) fn enable_sql_catalog_intents(root: &Path) -> Result<()> {
         persist_metadata(root, &metadata, true)?;
     }
     Ok(())
+}
+
+/// Always sync an activation retry too: a flag visible after a failed
+/// directory sync does not yet establish the required-reader fence.
+pub(crate) fn enable_sql_partition_execution_v1(
+    root: &Path,
+    health: &bicdb_page::DurabilityHealth,
+) -> Result<()> {
+    let lock = feature_flags_lock(root);
+    let _guard = lock.lock();
+    let mut metadata = read_or_legacy_metadata(root)?;
+    validate_supported(&metadata)?;
+    metadata
+        .feature_flags
+        .insert(SQL_PARTITION_EXECUTION_V1_FEATURE_FLAG.into());
+    persist_metadata_with(root, &metadata, true, |path, bytes, fsync| {
+        storage::replace_durably(
+            path,
+            storage::ReplaceContents::Plain(bytes),
+            fsync,
+            "sql_partition.format_fence",
+            storage::FailClosed::Always(health),
+        )
+    })
 }
 
 /// Always fsync the sticky fence, including an interrupted activation retry,

@@ -4,6 +4,7 @@ mod collection_rename;
 mod commit_snapshot;
 mod deferred_materialize;
 mod local_namespace_identity;
+mod sql_partition_execution;
 pub use deferred_materialize::DeferredMaterializeStats;
 mod ha_bootstrap;
 mod ha_node;
@@ -3895,6 +3896,7 @@ pub struct BicDb {
     config: DbConfig,
     // Opt-in, sticky local format capability; never a portable reader flag.
     local_namespace_identity_active: bool,
+    sql_partition_execution_v1_active: bool,
     ha_state: HaState,
     replication_state: ReplicationApplyState,
     consensus_state: ConsensusState,
@@ -10045,9 +10047,11 @@ impl BicDb {
             load_replication_state(&path, &config.replication, tx_recovery.last_commit_seq)?;
         open_trace!("tx_recovery");
         let metas = load_catalog(&path.join(DEFAULT_COLLECTION_CATALOG), &encryption)?;
-        let local_namespace_identity_active = format::read_or_legacy_metadata(&path)?
-            .feature_flags
-            .contains(format::LOCAL_NAMESPACE_IDENTITY_FEATURE_FLAG);
+        let format_capabilities = format::read_or_legacy_metadata(&path)?.feature_flags;
+        let local_namespace_identity_active =
+            format_capabilities.contains(format::LOCAL_NAMESPACE_IDENTITY_FEATURE_FLAG);
+        let sql_partition_execution_v1_active =
+            format_capabilities.contains(format::SQL_PARTITION_EXECUTION_V1_FEATURE_FLAG);
         local_namespace_identity::validate_catalog(&metas, local_namespace_identity_active)?;
         // Physical storage names must be known before any row is read, and an
         // interrupted rename (renamed_from still set) maps index definitions
@@ -10832,6 +10836,7 @@ impl BicDb {
             _directory_lock: Some(Arc::new(directory_lock)),
             config,
             local_namespace_identity_active,
+            sql_partition_execution_v1_active,
             ha_state,
             replication_state,
             consensus_state,

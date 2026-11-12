@@ -106,9 +106,11 @@ impl MetadataAppendResponse {
 
 impl MetadataConsensusStore {
     /// Persistence is part of this producer, not a caller-order convention.
-    /// No caller-provided index, birth, or StoreUUID enters the local producer.
+    /// The matched frontier comes only from the validated Append handler, not
+    /// the untouched local suffix. Birth and StoreUUID come from the real owner.
     pub(in crate::distribution_consensus) fn persist_owned_append_response(
         &self,
+        matched_frontier: u64,
     ) -> Result<MetadataAppendResponse> {
         self.persist()?;
         // Persist learned retirement/replacement FIRST, but never acknowledge
@@ -116,7 +118,10 @@ impl MetadataConsensusStore {
         if self.require_native_metadata_actor_current(false).is_err() {
             return Ok(self.append_response(false, self.last_log_index().saturating_add(1)));
         }
-        let mut response = self.append_response(true, self.last_log_index().saturating_add(1));
+        let mut response = self.append_response(true, matched_frontier.saturating_add(1));
+        // Bind the bounded ACK BEFORE either owned or authenticated provenance
+        // seals its body. No digest may attest the follower's unrelated suffix.
+        response.match_index = matched_frontier;
         if let Some(owner) = self.native_owner.as_ref() {
             self.require_native_metadata_actor_current(false)?;
             let actor = owner

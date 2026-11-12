@@ -2167,6 +2167,10 @@ impl MetadataConsensusStore {
         self.validate_native_birth_append(&request)?;
         self.step_down(request.term, Some(request.leader_id));
         self.mark_election_activity();
+        let snapshot_frontier = request
+            .snapshot
+            .as_ref()
+            .map_or(0, |snapshot| snapshot.last_included_index);
         if let Some(snapshot) = request.snapshot {
             self.install_snapshot(snapshot)?;
         }
@@ -2178,15 +2182,24 @@ impl MetadataConsensusStore {
             self.persist()?;
             return Ok(self.append_response(false, conflict_index));
         }
+        // A matching previous entry (and any installed snapshot) establishes
+        // only this prefix. An untouched local tail may belong to another
+        // leader and cannot become evidence for this bounded request.
+        let mut matched_frontier = request.prev_log_index.max(snapshot_frontier);
         for incoming in request.entries {
             validate_log_entry_shape(&incoming, &self.state.cluster_id)?;
             crate::distribution::ensure_range_image_domain(
                 self.state.committed_topology.range_image_bootstrap_id,
                 incoming.topology.range_image_bootstrap_id,
             )?;
+            if matched_frontier.checked_add(1) != Some(incoming.index) {
+                self.persist()?;
+                return Ok(self.append_response(false, matched_frontier.saturating_add(1)));
+            }
             if incoming.index <= self.state.base_index {
                 continue;
             }
+            let incoming_index = incoming.index;
             if let Some(position) = self
                 .state
                 .log
@@ -2203,9 +2216,11 @@ impl MetadataConsensusStore {
                 self.persist()?;
                 return Ok(self.append_response(false, self.last_log_index().saturating_add(1)));
             }
+            matched_frontier = incoming_index;
         }
-        self.advance_follower_commit(request.leader_commit)?;
-        self.persist_owned_append_response()
+        // Commit only this request's validated prefix, never an untouched tail.
+        self.advance_follower_commit(request.leader_commit.min(matched_frontier))?;
+        self.persist_owned_append_response(matched_frontier)
     }
 
     fn validate_native_birth_append(&self, request: &MetadataAppendRequest) -> Result<()> {

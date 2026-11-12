@@ -4,6 +4,9 @@
 //! ownership must be agreed before it is published, while row replication is
 //! driven by the resulting range catalog.
 
+#[cfg(test)]
+mod append_frontier_tests;
+
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -1065,6 +1068,10 @@ impl MetadataConsensusStore {
         }
         self.step_down(request.term, Some(request.leader_id));
         self.mark_election_activity();
+        let snapshot_frontier = request
+            .snapshot
+            .as_ref()
+            .map_or(0, |snapshot| snapshot.last_included_index);
         if let Some(snapshot) = request.snapshot {
             self.install_snapshot(snapshot)?;
         }
@@ -1076,11 +1083,20 @@ impl MetadataConsensusStore {
             self.persist()?;
             return Ok(self.append_response(false, conflict_index));
         }
+        // A matching previous entry (and any installed snapshot) establishes
+        // only this prefix. An untouched local tail may belong to another
+        // leader and cannot become evidence for this bounded request.
+        let mut matched_frontier = request.prev_log_index.max(snapshot_frontier);
         for incoming in request.entries {
             validate_log_entry_shape(&incoming, &self.state.cluster_id)?;
+            if matched_frontier.checked_add(1) != Some(incoming.index) {
+                self.persist()?;
+                return Ok(self.append_response(false, matched_frontier.saturating_add(1)));
+            }
             if incoming.index <= self.state.base_index {
                 continue;
             }
+            let incoming_index = incoming.index;
             if let Some(position) = self
                 .state
                 .log
@@ -1097,9 +1113,12 @@ impl MetadataConsensusStore {
                 self.persist()?;
                 return Ok(self.append_response(false, self.last_log_index().saturating_add(1)));
             }
+            matched_frontier = incoming_index;
         }
-        self.advance_follower_commit(request.leader_commit)?;
-        let match_index = self.last_log_index();
+        // Commit only entries actually covered by this leader's request, never
+        // a divergent suffix merely present in the follower's local storage.
+        self.advance_follower_commit(request.leader_commit.min(matched_frontier))?;
+        let match_index = matched_frontier;
         self.persist()?;
         Ok(MetadataAppendResponse {
             cluster_id: self.state.cluster_id.clone(),

@@ -11,6 +11,16 @@ transparent distributed SQL and recoverable multi-range SQL transactions to
 ordinary PostgreSQL applications. Independent-machine sustained throughput
 scaling and fault-safe rebalance of the current artifact remain unqualified.
 
+## Metadata-consensus safety follow-up — 2026-11-12 UTC
+
+A [deterministic metadata Append reproduction](design/metadata-append-frontier-safety-2026-11-12.md)
+confirms that an untouched divergent follower suffix can be counted as replicated
+by a bounded Append request. The leader can prematurely mark a metadata proposal
+committed. The separate repair and its validation are tracked in that report;
+this finding does not establish application-row loss or explain the original
+Azure failures. Physical HA, convergence and throughput qualification remain
+open. Earlier implementation descriptions below are not qualification claims.
+
 ## Instrumented current-runtime replay — 2026-11-11
 
 The [complete 1.0.463-beta replay evidence](evidence/azure-instrumented-replay-2026-11-11/README.md)

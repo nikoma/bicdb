@@ -164,6 +164,19 @@ impl Drop for DrainFixture {
     }
 }
 
+// Actual sender-worker drain is separate from the business result/deadline.
+// The fixture's wait_idle cannot see this independently owned local runtime.
+fn wait_collector_idle(collector: &RangeRecoveryRuntime) {
+    let until = Instant::now() + Duration::from_secs(2);
+    while collector.test_active_context_count() != 0 {
+        assert!(
+            Instant::now() < until,
+            "actual local collector operation failed to drain"
+        );
+        std::thread::sleep(Duration::from_millis(1));
+    }
+}
+
 fn snapshot(fixture: &NetworkFixture) -> BTreeMap<ClusterNodeId, serde_json::Value> {
     fixture.native.databases.iter().map(|(id, db)| {
         let db = db.read();
@@ -282,6 +295,7 @@ fn native_ready_actual_tls_both_matching_peer_attempts_expire_without_counting_o
             &CancellationToken::uncancelable(),
         )
         .unwrap();
+    wait_collector_idle(&collector);
     collector
         .apply_historical(
             &actor,
@@ -289,6 +303,7 @@ fn native_ready_actual_tls_both_matching_peer_attempts_expire_without_counting_o
             &CancellationToken::uncancelable(),
         )
         .unwrap();
+    wait_collector_idle(&collector);
     for name in ["n0", "n2"] {
         fixture.prepare_ready(name, &scope).unwrap();
         fixture.wait_idle();
@@ -300,6 +315,7 @@ fn native_ready_actual_tls_both_matching_peer_attempts_expire_without_counting_o
             &CancellationToken::uncancelable(),
         )
         .unwrap();
+    wait_collector_idle(&collector);
     assert_eq!(fixture.native_index("n0"), 1);
     assert_eq!(fixture.native_index("n1"), 1);
     assert_eq!(fixture.native_index("n2"), 0);
@@ -373,7 +389,7 @@ fn native_ready_actual_tls_both_matching_peer_attempts_expire_without_counting_o
         "real clean R0 minority must remain available"
     );
     fixture.wait_idle();
-    assert_eq!(collector.test_active_context_count(), 0);
+    wait_collector_idle(&collector);
     assert_eq!(
         snapshot(&fixture),
         before,

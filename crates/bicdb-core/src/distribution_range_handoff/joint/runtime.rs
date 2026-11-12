@@ -38,6 +38,58 @@ impl Drop for Operation {
     }
 }
 impl NativeJointHandoffRuntime {
+    /// Release only this actual NEW member's exact permanent-session owner,
+    /// after native+catalogue activation. Old-source ownership is retained for
+    /// proof-authorized cleanup. There is no timeout or caller reset path.
+    pub(crate) fn release_activated_new_member(
+        &self,
+        receipt: &crate::distribution_range_consensus::NativeJointCatalogueActivationReceipt,
+    ) -> Result<()> {
+        let range = receipt.range().id;
+        let _operation = self.operation(range)?;
+        receipt.require_live()?;
+        let data = receipt.native().data();
+        if receipt.native().local_node_id() != &self.node
+            || !data.new_members().contains_key(&self.node)
+        {
+            return Err(invalid(
+                "joint freeze release is not this actual NEW member",
+            ));
+        }
+        {
+            let service = self
+                .service
+                .try_lock()
+                .ok_or_else(|| invalid("joint release service busy"))?;
+            service.require_local_native_joint_activation(receipt)?;
+        }
+        let mut sessions = self
+            .sessions
+            .try_lock()
+            .ok_or_else(|| invalid("joint release sessions busy"))?;
+        let held = sessions
+            .frozen
+            .get(&range)
+            .ok_or_else(|| invalid("joint release has no retained actual frozen owner"))?;
+        if held.session_id != data.promise().session_id
+            || held.nonce != data.promise().nonce
+            || held.scope_sha256 != data.plan_sha256()?
+            || Arc::strong_count(&held.frozen) != 1
+        {
+            return Err(invalid(
+                "joint release waits for exact session/readers/old decision owners to drain",
+            ));
+        }
+        self.gate.validate_quiescent_frozen(range, &held.frozen)?;
+        let released = sessions.frozen.remove(&range).unwrap();
+        drop(sessions);
+        drop(released);
+        let service = self
+            .service
+            .try_lock()
+            .ok_or_else(|| invalid("joint arm service busy after owner release"))?;
+        service.arm_local_native_joint_open(receipt)
+    }
     pub(crate) fn new(service: Arc<Mutex<ClusterDataNodeService>>) -> Result<Self> {
         let (gate, node) = {
             let actual = service

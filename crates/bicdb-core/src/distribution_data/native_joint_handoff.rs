@@ -65,7 +65,7 @@ impl ClusterDataNodeService {
         parent.check()?;
         plan.require_role(&role)?;
         let database = try_database_read(&self.db)?;
-        self.require_native_catalog_database(&database)?;
+        self.storage_policy.require_database(&database)?;
         let admission = database.native_recovery_admission(
             role.cluster_id(),
             role.bootstrap_id(),
@@ -89,6 +89,7 @@ impl ClusterDataNodeService {
         crate::format::enable_native_joint_data_handoff(database.data_path())?;
         self.range_writes
             .refsync_native_joint_session(&database, &plan, &role)?;
+        self.require_native_catalog_database(&database)?;
         let lineage = database.current_native_range_source_lineage(plan.old_range().id)?;
         let catalogue = self
             .range_writes
@@ -418,6 +419,22 @@ pub(crate) struct ActualServiceNativeJointNewEvidence {
     facts: crate::distribution_range_handoff::NativeJointMaterializedFacts,
 }
 impl ActualServiceNativeJointNewEvidence {
+    pub(crate) fn into_joint_serving_lease(
+        self,
+        service: &ClusterDataNodeService,
+    ) -> Result<NativeJointServingLease> {
+        self.require_current(service)?;
+        let Self {
+            image, frozen, pin, ..
+        } = self;
+        // Only the owned reader is retired. Its actual installer lease is
+        // transferred intact, never converted to a generic Frozen authority.
+        drop(pin.into_inner());
+        Ok(NativeJointServingLease::Image {
+            image: Arc::new(image),
+            frozen: Arc::new(frozen),
+        })
+    }
     pub(crate) fn facts(&self) -> &crate::distribution_range_handoff::NativeJointMaterializedFacts {
         &self.facts
     }

@@ -17,6 +17,18 @@ pub(crate) struct NativeJointOldObservation {
     service: Arc<Mutex<ClusterDataNodeService>>,
 }
 impl NativeJointOldObservation {
+    pub(super) fn retained_serving_lease(
+        &self,
+    ) -> Result<(
+        Arc<Mutex<crate::distribution_data::ClusterDataNodeService>>,
+        crate::distribution_data::NativeJointServingLease,
+    )> {
+        self.require_current()?;
+        Ok((
+            self.service.clone(),
+            crate::distribution_data::NativeJointServingLease::Survivor(self.frozen.clone()),
+        ))
+    }
     pub(crate) fn from_actual_service(
         evidence: ActualServiceNativeJointOldEvidence,
         service: Arc<Mutex<ClusterDataNodeService>>,

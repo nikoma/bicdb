@@ -6,6 +6,9 @@ use crate::distribution_range_recovery::RecoveryRoleAdmission;
 
 mod bridge;
 pub(crate) use bridge::NativeJointBridgeCatalogue;
+mod activation;
+use activation::NativeJointCatalogueActivation;
+pub(crate) use activation::NativeJointCatalogueActivationReceipt;
 
 pub(super) const NATIVE_JOINT_HANDOFF_CATALOG_FORMAT: u32 = 14;
 #[derive(Debug)]
@@ -133,9 +136,19 @@ pub(super) struct NativeJointLocalState {
     old_closed_native_sha256: Option<String>,
     global_decision_sha256: Option<String>,
     global_decision_native_sha256: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    serving_activation: Option<NativeJointCatalogueActivation>,
 }
 impl NativeJointLocalState {
     pub(super) fn validate(&self) -> Result<()> {
+        if let Some(activation) = &self.serving_activation {
+            activation.validate()?;
+            if self.global_decision_sha256.as_deref() != Some(activation.decision_sha256()) {
+                return Err(range_write_error(
+                    "joint catalogue activation lost complete decision binding",
+                ));
+            }
+        }
         let digest = |s: &str| {
             s.len() == 64
                 && s.bytes()
@@ -331,6 +344,7 @@ impl RangeWriteStore {
                 old_closed_native_sha256: None,
                 global_decision_sha256: None,
                 global_decision_native_sha256: None,
+                serving_activation: None,
             });
         self.catalog.handoff_promises.insert(range, promise.clone());
         self.catalog.format_version = self
@@ -494,6 +508,7 @@ impl RangeWriteStore {
                 old_closed_native_sha256: None,
                 global_decision_sha256: None,
                 global_decision_native_sha256: None,
+                serving_activation: None,
             });
         current.global_decision_sha256 = Some(receipt.decision_sha256().into());
         current.global_decision_native_sha256 = Some(receipt.checksum_sha256().into());

@@ -662,6 +662,24 @@ fn genesis_key(range_id: RangeId) -> String {
 }
 
 impl BicDb {
+    /// Until a qualified NEW-voter AbortQQ is composed, refuse NoData BEFORE
+    /// its native WAL write whenever an actual protected joint domain exists.
+    /// A matching configuration/SHA must not bypass this support boundary.
+    pub(crate) fn require_native_no_data_without_joint_domain(&self, range: RangeId) -> Result<()> {
+        let birth = self
+            .read_native_birth()?
+            .ok_or_else(|| invalid("NoData support check has no actual native birth"))?;
+        let anchor = self.actual_native_range_anchor(&birth, range)?;
+        if self
+            .read_native_joint_serving_domain(&birth, &anchor.binding())?
+            .is_some()
+        {
+            return Err(invalid(
+                "NoData after native joint activation requires a qualified NEW-voter abort domain",
+            ));
+        }
+        Ok(())
+    }
     pub(super) fn try_native_image_journal(&self) -> Result<NativeImageJournalGuard<'_>> {
         Ok(NativeImageJournalGuard {
             database_incarnation: &self.incarnation,

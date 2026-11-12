@@ -36,7 +36,8 @@ pub(crate) use committed::CommittedNativeJointDecisionObservation;
 
 mod bridge;
 pub(crate) use bridge::{
-    NativeJointActivationAdmission, NativeJointPreparedServingObservation,
-    NativeJointPreparedServingQuorum, NativeJointPreparedServingRound,
-    NativeJointPreparedServingVoteData,
+    NativeJointActivationAdmission, NativeJointOpenAdmission,
+    NativeJointPreparedServingObservation, NativeJointPreparedServingQuorum,
+    NativeJointPreparedServingRound, NativeJointPreparedServingVoteData,
+    NativeJointPublishedServingQuorum, NativeJointServingPublicationRound,
 };

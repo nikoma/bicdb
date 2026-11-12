@@ -60,6 +60,7 @@ impl RangeWriteStore {
     }
     pub(super) fn require_native_writer_command(&self, command: &RangeWriteCommand) -> Result<()> {
         self.require_native_writer_host_base()?;
+        self.native_joint_command_allowed(command)?;
         if crate::format::native_writer_enrollment_active(&self.root)? {
             self.native_writer_host
                 .as_ref()

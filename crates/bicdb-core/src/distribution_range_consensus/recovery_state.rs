@@ -1047,6 +1047,9 @@ impl RangeWriteStore {
     pub(crate) fn require_no_active_recovery(&self, range_id: RangeId) -> Result<()> {
         self.require_durable_recovery_catalog()?;
         self.require_no_uncovered_sparse(range_id, self.progress(range_id).resolved_through)?;
+        if self.native_joint_covers_prior_recovery_context(range_id)? {
+            return Ok(());
+        }
         if self
             .catalog
             .recovery_fences
@@ -1074,6 +1077,7 @@ impl RangeWriteStore {
             .catalog
             .handoff_promises
             .contains_key(&command.range_id)
+            && !self.native_joint_command_allowed(command)?
         {
             return Err(range_write_error(
                 "ordinary native write conflicts with permanent handoff promise",

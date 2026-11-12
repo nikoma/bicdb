@@ -115,11 +115,60 @@ pin with actual source global B at least 3 versus selected R1. Its role-provider
 call uses the trusted local initiator seam and real mTLS peer probes, not a new
 incoming handoff RPC. It is not the full vertical acceptance test.
 
-Serving bridge integration, actual new activation, native effective-domain
-prefix/read validation, historical suffix recovery, proof-authorized cleanup,
-new fifth-member enrollment and the complete vertical tests remain unfinished.
+The later source batch adds the native serving bridge and a closed raw/open
+lifecycle, described below. Historical suffix recovery, proof-authorized
+cleanup, new fifth-member enrollment and the complete vertical tests remain
+unfinished. None of this joint batch has been compiled or executed.
 Legacy promotion/cleanup is deliberately refused for enforced native ranges;
 that refusal is not an availability success.
+
+## Current source-only serving lifecycle
+
+`NativeJointDurableDecision::into_new_serving_owners` transfers the actual NEW
+survivor/image owners after the typed metadata stages consume the durable
+decision. It transfers exclusion, not activation. Each service consumes a fresh
+`CommittedNativeJointDecisionObservation`, the actual retained owner, and the
+complete local catalogue/native history to produce a native-WAL preparation.
+Its recorded local B, namespace identities, physical anchor and history remain
+local; the quorum compares the common decided R/H0/H and exact NEW membership.
+
+The sealed NEW preparation quorum acquires post-quorum Host MQ internally,
+outside service/DB latches, before publishing a complete native serving bridge.
+A second actual publication round requires native bridge receipts on a NEW
+majority including its leader. A further internally acquired Host MQ precedes
+the local catalogue transition. No serialized audit projection constructs any
+of these quorums or admissions. Original cancellation/deadlines remain bounded.
+
+`persist_local_catalogue_activation` records a CLOSED activation and retires
+only its exact adopted image intent in one fsynced catalogue publication. It
+preserves old promises, all original history and the physical image descriptor.
+Its installed open guard is initially unarmed. Every ordinary writer/read
+path seeing this catalogue phase must obtain that guard; merely removing the
+image refusal creates no legacy/Genesis fallback. Native effective members
+come only from the actual protected bridge and immutable archive. Applied
+suffixes bind its decision SHA and exact activated leader/epoch/member set.
+The optional SHA is omitted from old prefix bytes; it grants no NoData right.
+
+After all native/raw publications, the caller drops historical quorum/capture
+owners. Survivor runtimes release only the exact S/N owner after validating
+the actual local activation receipt and unique remaining owner. A standalone
+target installer owner can then drain naturally. `arm_local_native_joint_open`
+checks the actual DB-open lifetime, durable native/catalogue binding, serving
+generation and a real gate observation proving no freeze/pin/callback remains.
+It never accepts a caller-supplied released flag. A new freeze invalidates the
+guard. The first intended live fixture uses a standalone target image freeze;
+the separate recovery-installer lease return/exchange still needs its own
+qualified joint completion producer and tests.
+
+This is implementation source, not an exercised activation result. Raw-phase
+re-fsync is conditional on the exact protected native activation and never
+restores an old grant after uncertainty. Recovery after all original authority
+budgets/owners are gone needs an independently fresh physical/quorum
+reattestation; stored audits cannot renew a request. Native read/ACK3, target
+lease drain, cleanup and crash-cut controls must run before claiming the
+healthy fifth-node vertical. Later same-voter historical recovery needs the
+effective protected joint ancestry rather than the old physical voter map;
+ordinary recovery remains strict until that separate producer is composed.
 
 ## Required adversarial controls still open
 

@@ -126,6 +126,9 @@ impl NativeJointDecisionData {
     pub(crate) fn checksum_sha256(&self) -> &str {
         &self.checksum_sha256
     }
+    pub(crate) fn plan_sha256(&self) -> Result<String> {
+        self.scope.checksum()
+    }
     pub(crate) fn range_index(&self) -> u64 {
         self.range_index
     }
@@ -406,6 +409,39 @@ impl NativeJointDecisionPublicationRound {
     }
 }
 impl NativeJointDurableDecision {
+    /// After the actual metadata stages have consumed this durable decision,
+    /// hand its REAL NEW materialization owners to the serving preparation.
+    /// This transfers exclusion only; fresh committed MQ is still mandatory.
+    pub(crate) fn into_new_serving_owners(
+        self,
+    ) -> Result<
+        BTreeMap<
+            ClusterNodeId,
+            (
+                Arc<parking_lot::Mutex<crate::distribution_data::ClusterDataNodeService>>,
+                crate::distribution_data::NativeJointServingLease,
+            ),
+        >,
+    > {
+        self.require_current()?;
+        let mut owners = BTreeMap::new();
+        for (node, observation) in self.prepared.quorums.new {
+            let value = match observation {
+                NativeJointNewObservation::Survivor { old, .. } => old.retained_serving_lease()?,
+                NativeJointNewObservation::Target { actual, service } => {
+                    let lease = {
+                        let local = service
+                            .try_lock()
+                            .ok_or_else(|| invalid("joint NEW owner service busy"))?;
+                        actual.into_joint_serving_lease(&local)?
+                    };
+                    (service, lease)
+                }
+            };
+            owners.insert(node, value);
+        }
+        Ok(owners)
+    }
     pub(crate) fn data(&self) -> &NativeJointDecisionData {
         &self.prepared.data
     }

@@ -92,6 +92,76 @@ impl ActualServiceNativeJointPreparedEvidence {
     }
 }
 impl ClusterDataNodeService {
+    pub(crate) fn persist_local_native_joint_activation(
+        &mut self,
+        admission: &crate::distribution_range_handoff::NativeJointOpenAdmission,
+        actual: &ActualServiceNativeJointPreparedEvidence,
+        parent: &CancellationToken,
+    ) -> Result<crate::distribution_range_consensus::NativeJointCatalogueActivationReceipt> {
+        parent.check()?;
+        admission.require_external_publications_current()?;
+        let database = try_database_read(&self.db)?;
+        self.storage_policy.require_database(&database)?;
+        self.range_writes
+            .refsync_native_joint_catalogue_activation(&database, admission)?;
+        self.require_native_catalog_database(&database)?;
+        self.require_native_writer_host_for_range(&database, admission.data().activation_range())?;
+        if actual.prepared.local_node_id() != &self.node_id {
+            return Err(data_error(
+                "joint catalogue activation targets another actual service",
+            ));
+        }
+        let receipt = self
+            .range_writes
+            .persist_native_joint_catalogue_activation(
+                &database,
+                admission,
+                &actual.committed,
+                &actual.catalogue,
+                actual.lease.image(),
+                actual.lease.frozen(),
+                parent,
+            )?;
+        self.range_writes.install_native_joint_activated_open(
+            &database,
+            &receipt,
+            actual.lease.frozen(),
+        )?;
+        Ok(receipt)
+    }
+    pub(crate) fn require_local_native_joint_activation(
+        &self,
+        receipt: &crate::distribution_range_consensus::NativeJointCatalogueActivationReceipt,
+    ) -> Result<()> {
+        let database = try_database_read(&self.db)?;
+        self.require_native_catalog_database(&database)?;
+        self.require_native_writer_host_for_range(&database, receipt.range())?;
+        receipt.require_current(&database, &self.range_writes)
+    }
+    pub(crate) fn arm_local_native_joint_open(
+        &self,
+        receipt: &crate::distribution_range_consensus::NativeJointCatalogueActivationReceipt,
+    ) -> Result<()> {
+        let database = try_database_read(&self.db)?;
+        self.require_native_catalog_database(&database)?;
+        self.require_native_writer_host_for_range(&database, receipt.range())?;
+        self.range_writes
+            .arm_native_joint_activated_open(&database, receipt)
+    }
+    pub(crate) fn require_actual_native_joint_bridge(
+        &self,
+        receipt: &crate::db::NativeJointServingBridgeReceipt,
+    ) -> Result<()> {
+        let database = try_database_read(&self.db)?;
+        self.require_native_catalog_database(&database)?;
+        self.require_native_writer_host_for_range(&database, receipt.data().activation_range())?;
+        if receipt.local_node_id() != &self.node_id {
+            return Err(data_error(
+                "protected joint bridge belongs to another actual service",
+            ));
+        }
+        receipt.require_current(&database)
+    }
     pub(crate) fn publish_local_native_joint_bridge(
         &self,
         admission: &crate::distribution_range_handoff::NativeJointActivationAdmission,
@@ -130,6 +200,14 @@ impl ClusterDataNodeService {
         let database = try_database_read(&self.db)?;
         self.require_native_catalog_database(&database)?;
         committed.require_current(&database)?;
+        if matches!(&lease, NativeJointServingLease::Survivor(_))
+            && lease.frozen().owner() != committed.data().promise().session_id
+        {
+            return Err(data_error(
+                "joint survivor preparation does not own the exact permanent session",
+            ));
+        }
+
         self.require_native_writer_host_for_range(&database, committed.data().activation_range())?;
         if committed.native_receipt().local_node_id() != &self.node_id {
             return Err(data_error(

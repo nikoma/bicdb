@@ -118,7 +118,8 @@ mod native_normal;
 mod native_prefix;
 mod native_writer;
 pub(crate) use joint_handoff_state::{
-    NativeJointBridgeCatalogue, NativeJointOldCatalogPreflight, NativeJointOldPromiseReceipt,
+    NativeJointBridgeCatalogue, NativeJointCatalogueActivationReceipt,
+    NativeJointOldCatalogPreflight, NativeJointOldPromiseReceipt,
 };
 use joint_handoff_state::{NativeJointLocalState, NATIVE_JOINT_HANDOFF_CATALOG_FORMAT};
 #[cfg(test)]
@@ -794,6 +795,7 @@ pub struct RangeWriteStore {
     #[cfg(test)]
     test_native_commit_write_error_once: bool,
     native_activated_opens: BTreeMap<RangeId, crate::db::NativeActivatedOpenGuard>,
+    native_joint_activated_opens: BTreeMap<RangeId, crate::db::NativeJointActivatedOpenGuard>,
     native_writer_host: Option<std::sync::Weak<crate::db::NativeWriterHostState>>,
 }
 
@@ -957,6 +959,7 @@ impl RangeWriteStore {
             catalog,
             open_id: Uuid::now_v7(),
             native_activated_opens: BTreeMap::new(),
+            native_joint_activated_opens: BTreeMap::new(),
             native_writer_host: None,
             recovery_persistence_uncertain: false,
             #[cfg(test)]
@@ -1359,6 +1362,7 @@ impl RangeWriteStore {
             .catalog
             .handoff_promises
             .contains_key(&command.range_id)
+            && !self.native_joint_command_allowed(&command)?
         {
             return Err(range_write_error(format!(
                 "range {} is unavailable while its durable handoff is incomplete",

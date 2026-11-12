@@ -76,9 +76,8 @@ impl NativeJointServingBridgeRecord {
                     vote.preparation_sha256 != self.prepared.checksum_sha256
                         || vote.actual_local_visibility_sequence
                             != self.prepared.actual_local_visibility_sequence
-                        || vote.metadata_context_id != self.prepared.metadata_context_id
-                        || vote.metadata_term != self.prepared.metadata_term
-                        || vote.metadata_read_index != self.prepared.metadata_read_index
+                        || vote.metadata_term < self.prepared.metadata_term
+                        || vote.metadata_read_index < self.prepared.metadata_read_index
                 })
             || self.checksum()? != self.checksum_sha256
         {
@@ -215,6 +214,9 @@ impl NativeJointServingDomain {
     pub(in crate::db::range_image_native) fn decision_sha256(&self) -> &str {
         self.record.decision.checksum_sha256()
     }
+    pub(in crate::db::range_image_native) fn native_bridge_sha256(&self) -> &str {
+        &self.record.checksum_sha256
+    }
     pub(in crate::db::range_image_native) fn range_index(&self) -> u64 {
         self.record.prepared.range_index
     }
@@ -293,6 +295,13 @@ impl NativeJointServingBridgeReceipt {
     }
     pub(crate) fn native_database_incarnation(&self) -> &str {
         self.native.database_incarnation()
+    }
+    pub(crate) fn metadata_anchor(&self) -> (u64, u64, Uuid) {
+        (
+            self.record.post_quorum_metadata_term,
+            self.record.post_quorum_metadata_read_index,
+            self.record.post_quorum_metadata_context_id,
+        )
     }
     pub(crate) fn require_current(&self, database: &BicDb) -> Result<()> {
         self.record.validate()?;

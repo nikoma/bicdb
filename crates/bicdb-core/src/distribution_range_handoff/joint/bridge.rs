@@ -7,6 +7,11 @@ use parking_lot::Mutex;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
+mod publication;
+pub(crate) use publication::{
+    NativeJointOpenAdmission, NativeJointPublishedServingQuorum, NativeJointServingPublicationRound,
+};
+
 pub(crate) struct NativeJointPreparedServingObservation {
     actual: ActualServiceNativeJointPreparedEvidence,
     service: Arc<Mutex<ClusterDataNodeService>>,
@@ -267,7 +272,7 @@ impl NativeJointActivationAdmission {
         let (term, index, context) = self.fresh.metadata_anchor();
         for observation in self.quorum.observations.values() {
             let (vote_term, vote_index, vote_context) =
-                observation.actual.prepared().metadata_anchor();
+                observation.actual.committed().metadata_anchor();
             if context == vote_context || term < vote_term || index < vote_index {
                 return Err(invalid(
                     "joint activation metadata is not independently post-NEW-quorum",
@@ -293,7 +298,7 @@ impl NativeJointActivationAdmission {
             .iter()
             .map(|(node, observation)| {
                 let actual = observation.actual.prepared();
-                let (term, index, context) = actual.metadata_anchor();
+                let (term, index, context) = observation.actual.committed().metadata_anchor();
                 (
                     node.clone(),
                     NativeJointPreparedServingVoteData {

@@ -237,3 +237,40 @@ fn native_metadata_owner_rejects_other_store_id_birth_and_legacy_codec_bypass() 
             .contains(&crate::format::NATIVE_METADATA_STORE_FEATURE_FLAG.to_owned())
     );
 }
+
+#[test]
+fn native_metadata_owner_leaves_legacy_unbound_codec_and_open_behavior_unchanged() {
+    let f = ActualNativeRf3Fixture::new();
+    let topology = f.topology.read().clone();
+    let root = f.root.path().join("legacy-metadata");
+    let mut store = MetadataConsensusStore::open(
+        &root,
+        topology.cluster_id.clone(),
+        node("n0"),
+        topology.clone(),
+        true,
+    )
+    .unwrap();
+    store.start_election().unwrap();
+    assert_eq!(store.status().current_term, 1);
+    let encoded: serde_json::Value = serde_json::from_slice(
+        &fs::read(root.join(DEFAULT_CLUSTER_METADATA_CONSENSUS_STATE)).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(encoded["format_version"], 1);
+    assert!(encoded["state"].get("native_store_id").is_none());
+    drop(store);
+    let reopened = MetadataConsensusStore::open(
+        &root,
+        topology.cluster_id.clone(),
+        node("n0"),
+        topology,
+        true,
+    )
+    .unwrap();
+    assert_eq!(reopened.status().current_term, 1);
+    assert!(!crate::format::native_metadata_store_active(
+        f.databases[&node("n0")].read().data_path()
+    )
+    .unwrap());
+}

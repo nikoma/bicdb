@@ -161,6 +161,96 @@ fn native_writer_birth_v2_partial_factory_keeps_fence_and_refuses_reopen() {
 }
 
 #[test]
+fn native_writer_broker_effects_refuse_before_wal_even_without_record_mutations() {
+    for include_record in [false, true] {
+        let (_root, database, spec, _) = fresh();
+        let db = database.read();
+        let path = db.data_path().join(DEFAULT_RANGE_WRITE_LOG);
+        let read_catalog = || match std::fs::read(&path) {
+            Ok(bytes) => Some(bytes),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
+            Err(e) => panic!("cannot observe actual catalogue: {e}"),
+        };
+        let before_catalog = read_catalog();
+        let before_wal = db.tx_log_handle().stats();
+        let before = db
+            .current_native_range_source_lineage(spec.initial_ranges[0].id)
+            .unwrap()
+            .actual_local_visibility_sequence();
+        let mut tx = db.begin_transaction().unwrap();
+        if include_record {
+            tx.insert("items", Record::new("no-local-only-broker-ack"))
+                .unwrap();
+        }
+        tx.buffer_broker_publish(
+            "native-effects",
+            serde_json::json!({"work":1}),
+            crate::broker::PublishOptions::default(),
+        )
+        .unwrap();
+        let outcome = tx.observe_outcome();
+        let error = tx.commit().unwrap_err();
+        assert!(
+            matches!(&error, BicDbError::Unsupported(detail) if detail.contains("broker effects")),
+            "{error}"
+        );
+        assert_eq!(outcome.outcome(), crate::TransactionOutcome::Aborted);
+        assert_eq!(
+            db.tx_log_handle().stats().written_seq,
+            before_wal.written_seq
+        );
+        assert_eq!(
+            db.tx_log_handle().stats().commits_written,
+            before_wal.commits_written
+        );
+        assert_eq!(read_catalog(), before_catalog);
+        let lineage = db
+            .current_native_range_source_lineage(spec.initial_ranges[0].id)
+            .unwrap();
+        assert_eq!(lineage.range_index(), 0);
+        assert_eq!(lineage.actual_local_visibility_sequence(), before);
+        assert!(db
+            .get("items", "no-local-only-broker-ack")
+            .unwrap()
+            .is_none());
+        assert!(db
+            .events
+            .lock()
+            .broker()
+            .peek("native-effects", 0, 10)
+            .unwrap()
+            .is_empty());
+    }
+}
+
+#[test]
+fn native_writer_broker_effect_refusal_preserves_legacy_transactional_outbox() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open_with_config(root.path(), config()).unwrap();
+    db.create_collection("items").unwrap();
+    let mut tx = db.begin_transaction().unwrap();
+    tx.insert("items", Record::new("legacy-row-and-broker"))
+        .unwrap();
+    let message = tx
+        .buffer_broker_publish(
+            "legacy-effects",
+            serde_json::json!({"work":1}),
+            crate::broker::PublishOptions::default(),
+        )
+        .unwrap();
+    tx.commit().unwrap();
+    assert!(db.get("items", "legacy-row-and-broker").unwrap().is_some());
+    let messages = db
+        .events
+        .lock()
+        .broker()
+        .peek("legacy-effects", 0, 10)
+        .unwrap();
+    assert_eq!(messages.len(), 1);
+    assert_eq!(messages[0].message_id, message);
+}
+
+#[test]
 fn native_writer_birth_v2_uninstalled_actual_store_and_service_refuse_before_prepare() {
     let (_root, db, spec, topology) = fresh();
     let path = db.read().data_path().to_path_buf();

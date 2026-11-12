@@ -4509,14 +4509,25 @@ mod tests {
         assert!(runtime.upgrade(incompatible).is_err());
         assert_eq!(runtime.inspect("carrier-app").unwrap().version, "19.7.2");
 
-        runtime.rollback("carrier-app").unwrap();
-        assert_eq!(runtime.inspect("carrier-app").unwrap().version, "19.7.0");
+        let rollback_error = runtime.rollback("carrier-app").unwrap_err();
+        assert!(rollback_error
+            .to_string()
+            .contains("removes field `required_alias`"));
+        assert_eq!(runtime.inspect("carrier-app").unwrap().version, "19.7.2");
         assert!(db
             .read()
             .index_definitions()
             .iter()
             .any(|index| index.name == "widgets_nickname_idx"));
-        runtime.rollback("carrier-app").unwrap();
+        assert_eq!(
+            db.read()
+                .get("widgets", "11111111-1111-4111-8111-111111111111")
+                .unwrap()
+                .unwrap()
+                .metadata["required_alias"],
+            json!("unknown")
+        );
+        assert!(runtime.rollback("carrier-app").is_err());
         assert_eq!(runtime.inspect("carrier-app").unwrap().version, "19.7.2");
     }
 

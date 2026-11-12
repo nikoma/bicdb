@@ -1,0 +1,14 @@
+{
+  "node_id": "b1ec25d0-b74e-41da-86c8-b5a94f56fea9",
+  "last_export_offset": 0,
+  "last_export_at": null,
+  "last_import_at": null,
+  "last_sync_at": null,
+  "exported_events": 0,
+  "imported_events": 0,
+  "conflicts_resolved": 0,
+  "last_reconciled_offset": 0,
+  "peer_vectors": {},
+  "origin_position_base": 0,
+  "known_node_keys": {}
+}

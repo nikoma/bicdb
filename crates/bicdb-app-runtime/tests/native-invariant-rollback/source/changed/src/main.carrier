@@ -1,0 +1,17 @@
+service RollbackInvariantProbe {}
+auth jwt ProbeAuth {
+ issuer: "https://issuer.invalid"
+ audience: "native-rollback-probe"
+ algorithm: "RS256"
+ roles_claim: "roles"
+}
+role probe_operator { title: "Synthetic guard probe operator" }
+model GuardedEntry { id: UUID organization_id: UUID amount: Int }
+policy GuardedEntry { tenant_field: organization_id }
+crud GuardedEntry at "/entries" {
+ create: protect ProbeAuth roles [probe_operator]
+ list: protect ProbeAuth roles [probe_operator]
+ get: protect ProbeAuth roles [probe_operator]
+}
+route GET "/health" protect ProbeAuth roles [probe_operator] -> Json { handler { return { generation: "changed" } } }
+invariant GuardedEntryMinimum { subject: GuardedEntry must_always: subject.amount >= 1 }

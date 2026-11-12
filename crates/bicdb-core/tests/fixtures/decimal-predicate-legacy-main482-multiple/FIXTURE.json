@@ -1,0 +1,186 @@
+{
+  "kind": "actual unmodified Native state created and closed by old Core",
+  "creator_source": "5e0fa30b60ef8640e161b41ec2d882df61cc9d1d",
+  "production_core": "f43583da4c34209e810c5e6a8f5925831b2949a1",
+  "binary_sha256": "bc25d0ca9a63e2fb6ed394d259f9bf591ef00aeee79ab00264cdffe4d680837f",
+  "case": "multiple",
+  "excluded_unrelated_secret": "mesh_signing_key.json; original retained only in private closed S3 fixture",
+  "observation": {
+    "case": "multiple",
+    "definitions": [
+      {
+        "collection": "precision_probe",
+        "fields": [
+          {
+            "MetadataPath": [
+              "business_key"
+            ]
+          }
+        ],
+        "kind": "b_tree",
+        "name": "native_decimal_partial",
+        "predicate": {
+          "left": {
+            "field": {
+              "MetadataPath": [
+                "amount"
+              ]
+            },
+            "op": "field"
+          },
+          "op": "binary",
+          "operator": "greater",
+          "right": {
+            "op": "literal",
+            "value": "0.5"
+          },
+          "value_type": "decimal"
+        },
+        "unique": true
+      },
+      {
+        "collection": "precision_probe",
+        "fields": [
+          {
+            "MetadataPath": [
+              "business_key"
+            ]
+          }
+        ],
+        "kind": "b_tree",
+        "name": "nested_decimal_partial",
+        "predicate": {
+          "op": "unary",
+          "operator": "not",
+          "value": {
+            "op": "unary",
+            "operator": "not",
+            "value": {
+              "left": {
+                "field": {
+                  "MetadataPath": [
+                    "amount"
+                  ]
+                },
+                "op": "field"
+              },
+              "op": "binary",
+              "operator": "greater",
+              "right": {
+                "op": "literal",
+                "value": "0.5"
+              },
+              "value_type": "decimal"
+            },
+            "value_type": "bool"
+          },
+          "value_type": "bool"
+        },
+        "unique": false
+      }
+    ],
+    "rows": 2,
+    "source_version": "1.0.482-beta",
+    "status": "actual_old_store_closed",
+    "verification": [
+      {
+        "collection": "precision_probe",
+        "duplicate_entries": 0,
+        "expected_records": 1,
+        "index_name": "native_decimal_partial",
+        "indexed_records": 1,
+        "kind": "b_tree",
+        "last_verified_unix_ms": null,
+        "missing_entries": 0,
+        "size_bytes": 82,
+        "stale_entries": 0,
+        "valid": true,
+        "wrong_entries": 0
+      },
+      {
+        "collection": "precision_probe",
+        "duplicate_entries": 0,
+        "expected_records": 1,
+        "index_name": "nested_decimal_partial",
+        "indexed_records": 1,
+        "kind": "b_tree",
+        "last_verified_unix_ms": null,
+        "missing_entries": 0,
+        "size_bytes": 82,
+        "stale_entries": 0,
+        "valid": true,
+        "wrong_entries": 0
+      }
+    ]
+  },
+  "files": {
+    ".backup-write.lock": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "btree-index-builds/d1ef0ff166175d7578556d3b19e19b76d862ecde9d5bde2a98bfc83bbba568f6.json": {
+      "bytes": 1261,
+      "sha256": "da7727d4451d2a17a77b6819c41425c5b5e525fb5c27ecda60db2de330c73c67"
+    },
+    "btree-index-builds/d979b32d3881d30540f1e17685cd6d35e240e52343c35dc2b60d72e90148ee92.json": {
+      "bytes": 1140,
+      "sha256": "ccb48153333dbcf466ed3f6407dcf9b318fa547d6b9aae5197cb24eacc9a3544"
+    },
+    "collections.json": {
+      "bytes": 156,
+      "sha256": "3027d9e601b04511db9ff2fdb22d6c0a9e9245a141e3aa9de0f122c9fb65e51a"
+    },
+    "commit-seq.floor": {
+      "bytes": 6,
+      "sha256": "96c671dff08033e909e8744500506f9033e60dfcef58d9aa7b9d49e7499f1b35"
+    },
+    "events/events.seg": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "format.json": {
+      "bytes": 192,
+      "sha256": "54f5d977028abbac7ea27f18181076c5ca63c6f052bbea62c647aec3a9302123"
+    },
+    "fts-index-generations.json": {
+      "bytes": 223,
+      "sha256": "369495eb14c13f8c54ca5d596e199c60ce441ac7c9591c0bc183e7686b219899"
+    },
+    "incarnations.log": {
+      "bytes": 119,
+      "sha256": "41b089ed82e318ae92edf55765a41e0009c9229f4990c722918261dde95a2430"
+    },
+    "indexes.json": {
+      "bytes": 1518,
+      "sha256": "91c12c89a6149e31c57c0b3db67d41d313e57a53886863a13290d321a2c1a5b4"
+    },
+    "paged/store.lock": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "paged/store.pages": {
+      "bytes": 40960,
+      "sha256": "50ed0730a55dee557fbfca54e24846760b99fcfb9f6622d493145c0df6d83229"
+    },
+    "paged/store.wal": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "store.lock": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "sync.log": {
+      "bytes": 524,
+      "sha256": "b9419e32939054d2f88be7973a6f12f647dd677830e91dadaaf27dd85c66709c"
+    },
+    "sync_state.json": {
+      "bytes": 340,
+      "sha256": "7109925506a552062bf16f3be68ca5b3033b4b0872794ca510dc7e235ecf8a3f"
+    },
+    "transactions.log": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  }
+}

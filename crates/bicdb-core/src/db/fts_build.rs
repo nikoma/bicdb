@@ -520,13 +520,37 @@ impl BicDb {
                         full_text_build_incomplete: false,
                     }),
                 );
+                // Commit the comparator version with its actual completed
+                // physical generation, not an independently loaded alias.
+                let old_binding = if decimal_predicate::affected(&state.definition) {
+                    self.btree_bindings
+                        .lock()
+                        .insert(state.definition.name.clone(), state.physical_name.clone())
+                } else {
+                    None
+                };
                 if let Err(error) = self.persist_index_catalog() {
                     self.index_generation
                         .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                     self.indexes.remove(&state.definition.name);
+                    if decimal_predicate::affected(&state.definition) {
+                        let mut bindings = self.btree_bindings.lock();
+                        match old_binding {
+                            Some(physical) => {
+                                bindings.insert(state.definition.name.clone(), physical);
+                            }
+                            None => {
+                                bindings.remove(&state.definition.name);
+                            }
+                        }
+                    }
                     return Err(error);
                 }
                 self.schema_compatibility.invalidate();
+                #[cfg(test)]
+                if self.decimal_predicate_upgrade.is_some() {
+                    decimal_predicate::test_process_cut("after_shadow_catalog");
+                }
                 state.phase = PagedBTreeBuildPhase::Complete;
             }
             PagedBTreeBuildPhase::Complete => unreachable!(),
@@ -538,7 +562,21 @@ impl BicDb {
         }
         state.updated_at_ms = now_ms;
         state.refresh_checksum()?;
+        #[cfg(test)]
+        if self.decimal_predicate_upgrade.is_some()
+            && state.phase == PagedBTreeBuildPhase::Building
+            && state.resume_after_id.is_some()
+        {
+            decimal_predicate::test_process_cut("before_build_checkpoint");
+        }
         self.save_paged_btree_build(&state)?;
+        #[cfg(test)]
+        if self.decimal_predicate_upgrade.is_some()
+            && state.phase == PagedBTreeBuildPhase::Building
+            && state.resume_after_id.is_some()
+        {
+            decimal_predicate::test_process_cut("during_build");
+        }
         if state.phase == PagedBTreeBuildPhase::Complete {
             Ok(PagedBTreeBuildAdvance::Complete(state))
         } else {

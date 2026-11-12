@@ -2251,6 +2251,11 @@ impl BicDb {
 
     pub(crate) fn ensure_writable(&self, operation: &str) -> Result<()> {
         self.check_recovery_state()?;
+        if !self.config.load_secondary_indexes {
+            return Err(BicDbError::ReadOnlyStandby(format!(
+                "{operation} is refused on a primary-record-only handle opened without secondary indexes"
+            )));
+        }
         if self.local_index_maintenance {
             return Ok(());
         }

@@ -66,7 +66,8 @@ pub use resource::{execute_resource_operation, ResourceRequest, ResourceResponse
 pub use runtime::{
     ApplicationEvaluationResult, ApplicationHostConfig, ApplicationPackageState,
     ApplicationPerformanceSnapshot, ApplicationReadiness, ApplicationRuntime,
-    ApplicationTestResult, PackageSnapshot, RuntimeDiagnostic,
+    ApplicationTestResult, OfflineUniqueScopeTransition, PackageSnapshot, RuntimeDiagnostic,
+    UniqueScopeEnvelope, UniqueScopeOutcome,
 };
 
 use thiserror::Error;

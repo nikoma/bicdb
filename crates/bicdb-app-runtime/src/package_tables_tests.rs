@@ -190,7 +190,8 @@ fn compact_tables_expand_to_tenant_and_owner_scoped_tables_that_evolve_additivel
     assert_eq!(move_to("user-1").unwrap()["updated"], 1);
     assert_eq!(deals(&runtime, "tenant-1")["deals"][0]["stage"], "won");
 
-    // Additive upgrade (new nullable column) and rollback keeping the data.
+    // An additive upgrade is accepted, but older code omitting its nullable
+    // column is not a forward-compatible rollback contract.
     assert!(
         runtime
             .upgrade(signed(&harness, "1.1.0", true))
@@ -198,10 +199,18 @@ fn compact_tables_expand_to_tenant_and_owner_scoped_tables_that_evolve_additivel
             .ready
     );
     assert_eq!(deals(&runtime, "tenant-1")["version"], 2);
-    assert!(runtime.rollback("crm").unwrap().ready);
-    let rolled_back = deals(&runtime, "tenant-1");
-    assert_eq!(rolled_back["version"], 1);
-    assert_eq!(rolled_back["deals"][0]["title"], "Renewal");
+    let error = runtime.rollback("crm").unwrap_err();
+    assert!(
+        error.to_string().contains("removes field `probability`"),
+        "{error}"
+    );
+    assert_eq!(runtime.inspect("crm").unwrap().version, "1.1.0");
+    let retained = deals(&runtime, "tenant-1");
+    assert_eq!(retained["version"], 2);
+    assert_eq!(retained["deals"][0]["title"], "Renewal");
+    assert_eq!(retained["deals"][0]["owner_id"], "user-1");
+    assert_eq!(retained["deals"][0]["stage"], "won");
+    assert_eq!(deals(&runtime, "tenant-2")["deals"], json!([]));
 
     // Dropping a column is refused.
     assert!(

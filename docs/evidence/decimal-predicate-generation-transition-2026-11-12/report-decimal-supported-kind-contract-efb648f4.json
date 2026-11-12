@@ -1,0 +1,49 @@
+{
+  "source": "efb648f46fa3f7b25df6410790e68e72361ac375",
+  "scope": "Source audit corrects earlier overbroad all-kind concern: actual main482 already permits predicates only on BTree and excludes predicates from exclusion indexes. Validate that same contract pre-recovery; new refusal control4otherkinds+exclusion, unchanged5integration+5processcuts+4plan-corruption controls. Otherdurablepredicatekinds were never valid supported indexes; no newcapability required. Oldreader/duplicate/multigeneration/faultchecks still pending. No promotion.",
+  "started_unix": 1794474659.9228,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--lib",
+        "db::decimal_predicate::tests",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794474659.9229772,
+      "exit": 0,
+      "finished_unix": 1794474688.1662989
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--test",
+        "decimal_predicate_generations",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794474688.1665423,
+      "exit": 0,
+      "finished_unix": 1794474713.4692004
+    }
+  ],
+  "status": "focused_passed",
+  "finished_unix": 1794474713.4694386
+}

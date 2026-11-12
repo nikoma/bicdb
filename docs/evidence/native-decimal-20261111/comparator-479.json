@@ -1,0 +1,892 @@
+{
+  "toolchain_lock": "/root/erp-modernization/artifacts/toolchain-lock-candidate-479.json",
+  "toolchain": {
+    "format": 1,
+    "execution_target": "ordinary native bicdb ABI v2",
+    "qualified": false,
+    "carrier": {
+      "version": "2.3.88",
+      "source": "843a2c1f7667be92552b2b7574ba9ac592e6b0cb",
+      "source_code_commit": "2b6d391c8fa93416a22630aeed8f06192cbbed26",
+      "artifact": "tools/carrier-2.3.88-843a2c1f",
+      "sha256": "013a164b03a3954a71beadff528b036bf2ca65a7cf8e3b0444483b37a5e5aff9"
+    },
+    "bicdb": {
+      "version": "1.0.479-beta",
+      "source": "70a52423b408e808e538ebeed129f659e1a345b6",
+      "artifact": "tools/bicdb-1.0.479-beta-8c06cd6e",
+      "sha256": "ab2125da0eea42249df32d5818b3dd7202e5673163f826b0a7914bc614d9a000",
+      "build": {
+        "host": "ny7.walknorth.com",
+        "rustc": "1.96.0 (ac68faa20 2026-05-25)",
+        "cargo": "1.96.0 (30a34c682 2026-05-25)",
+        "command": "cargo build --locked -p bicdb-cli --release",
+        "jobs": 2,
+        "incremental": false,
+        "debug": 0,
+        "tests_built": false,
+        "lto": false
+      },
+      "source_base": "f3a063902d2fe316c29264fe20549c2fdd270242",
+      "patches": [
+        "native-http-authored-outer-isolation"
+      ],
+      "source_code_commit": "8c06cd6ef98904458638ff083e7d85c9d2ecc222"
+    },
+    "testing": {
+      "driver": "Node v22.23.1",
+      "rust_tests": false
+    },
+    "qualification_scope": "Candidate479: outer signed local-call transaction isolation inferred before HTTP idempotency transaction; runtime qualification pending"
+  },
+  "synthetic_verifier": true,
+  "real_issuer": false,
+  "hub": false,
+  "node_bigint_oracle": true,
+  "source_sha256": "73b51c30055af1bcbe43161ea1a038cb88e48e65ffcbf21a92522e9273c37c09",
+  "package_sha256": "d7f70cb4d4a650c72ea85a59ed23f05bd48eca282b975a6f4a671f741925e379",
+  "unchanged_reproducer_sha256": "3524cbe5cc785a6c7089914bc28236f3176bc80bdd3a029a0ad43ee57e923608",
+  "passed": false,
+  "pair_count": 51,
+  "correct_batches": 3,
+  "wrong_batches": 306,
+  "operators": [
+    "eq",
+    "ne",
+    "lt",
+    "le",
+    "gt",
+    "ge"
+  ],
+  "failures": [
+    {
+      "name": "zero28-equivalent-all6-correct",
+      "status": 409,
+      "body": {
+        "code": "conflict",
+        "message": "operation conflict: commit_validation (CommitValidation, trace fedb2221e6444447b7197e860bb3e02f): commit validation failed: invariant `DecimalProbeEqual` violated on `decimal_probe_cases`/`6d2b3cf4-ed8d-4b97-9a86-a8029ac00307`: ((subject.op != eq) || ((subject.expected && (subject.lhs == subject.rhs)) || (!subject.expected && (subject.lhs != subject.rhs))))"
+      },
+      "expected_status": 200,
+      "expected_body": {
+        "batch_count": 1,
+        "case_count": 6
+      }
+    },
+    {
+      "name": "zero28-equivalent-eq-wrong-refused",
+      "status": 200,
+      "body": {
+        "batch_count": 1,
+        "case_count": 1
+      },
+      "expected_status": 409
+    },
+    {
+      "name": "zero28-equivalent-eq-wrong-no-partial",
+      "status": 200,
+      "body": {
+        "batch_count": 1,
+        "case_count": 1
+      },
+      "expected_status": 200,
+      "expected_body": {
+        "batch_count": 0,
+        "case_count": 0
+      }
+    },
+    {
+      "name": "zero28-equivalent-ne-wrong-refused",
+      "status": 200,
+      "body": {
+        "batch_count": 1,
+        "case_count": 1
+      },
+      "expected_status": 409
+    },
+    {
+      "name": "zero28-equivalent-ne-wrong-no-partial",
+      "status": 200,
+      "body": {
+        "batch_count": 1,
+        "case_count": 1
+      },
+      "expected_status": 200,
+      "expected_body": {
+        "batch_count": 0,
+        "case_count": 0
+      }
+    },
+    {
+      "name": "trailing28-equivalent-all6-correct",
+      "status": 409,
+      "body": {
+        "code": "conflict",
+        "message": "operation conflict: commit_validation (CommitValidation, trace b452bce778a846a8b14faf8dd1ea6b5f): commit validation failed: invariant `DecimalProbeEqual` violated on `decimal_probe_cases`/`02e95a9c-77af-477f-af2d-76f285174dbf`: ((subject.op != eq) || ((subject.expected && (subject.lhs == subject.rhs)) || (!subject.expected && (subject.lhs != subject.rhs))))"
+      },
+      "expected_status": 200,
+      "expected_body": {
+        "batch_count": 1,
+        "case_count": 6
+      }
+    },
+    {
+      "name": "trailing28-equivalent-eq-wrong-refused",
+      "status": 200,
+      "body": {
+        "batch_count": 1,
+        "case_count": 1
+      },
+      "expected_status": 409
+    },
+    {
+      "name": "trailing28-equivalent-eq-wrong-no-partial",
+      "status": 200,
+      "body": {
+        "batch_count": 1,
+        "case_count": 1
+      },
+      "expected_status": 200,
+      "expected_body": {
+        "batch_count": 0,
+        "case_count": 0
+      }
+    },
+    {
+      "name": "trailing28-equivalent-ne-wrong-refused",
+      "status": 200,
+      "body": {
+        "batch_count": 1,
+        "case_count": 1
+      },
+      "expected_status": 409
+    },
+    {
+      "name": "trailing28-equivalent-ne-wrong-no-partial",
+      "status": 200,
+      "body": {
+        "batch_count": 1,
+        "case_count": 1
+      },
+      "expected_status": 200,
+      "expected_body": {
+        "batch_count": 0,
+        "case_count": 0
+      }
+    },
+    {
+      "name": "negative-trailing28-equivalent-all6-correct",
+      "status": 409,
+      "body": {
+        "code": "conflict",
+        "message": "operation conflict: commit_validation (CommitValidation, trace 9743cc2da4bb49d8afa310d9214bb5bc): commit validation failed: invariant `DecimalProbeEqual` violated on `decimal_probe_cases`/`e6fdd6e2-4333-4976-a16c-e9b913e017f8`: ((subject.op != eq) || ((subject.expected && (subject.lhs == subject.rhs)) || (!subject.expected && (subject.lhs != subject.rhs))))"
+      },
+      "expected_status": 200,
+      "expected_body": {
+        "batch_count": 1,
+        "case_count": 6
+      }
+    },
+    {
+      "name": "negative-trailing28-equivalent-eq-wrong-refused",
+      "status": 200,
+      "body": {
+        "batch_count": 1,
+        "case_count": 1
+      },
+      "expected_status": 409
+    },
+    {
+      "name": "negative-trailing28-equivalent-eq-wrong-no-partial",
+      "status": 200,
+      "body": {
+        "batch_count": 1,
+        "case_count": 1
+      },
+      "expected_status": 200,
+      "expected_body": {
+        "batch_count": 0,
+        "case_count": 0
+      }
+    },
+    {
+      "name": "negative-trailing28-equivalent-ne-wrong-refused",
+      "status": 200,
+      "body": {
+        "batch_count": 1,
+        "case_count": 1
+      },
+      "expected_status": 409
+    },
+    {
+      "name": "negative-trailing28-equivalent-ne-wrong-no-partial",
+      "status": 200,
+      "body": {
+        "batch_count": 1,
+        "case_count": 1
+      },
+      "expected_status": 200,
+      "expected_body": {
+        "batch_count": 0,
+        "case_count": 0
+      }
+    },
+    {
+      "name": "sign-order-all6-correct",
+      "status": 409,
+      "body": {
+        "code": "conflict",
+        "message": "operation conflict: commit_validation (CommitValidation, trace ea93a1d43d6f4384a428b6219656662c): commit validation failed: invariant `DecimalProbeLess` violated on `decimal_probe_cases`/`1ea60051-f072-4593-baf0-59ce17b051e0`: ((subject.op != lt) || ((subject.expected && (subject.lhs < subject.rhs)) || (!subject.expected && (subject.lhs >= subject.rhs))))"
+      },
+      "expected_status": 200,
+      "expected_body": {
+        "batch_count": 1,
+        "case_count": 6
+      }
+    },
+    {
+      "name": "large96-nearmax-all6-correct",
+      "status": 409,
+      "body": {
+        "code": "conflict",
+        "message": "operation conflict: commit_validation (CommitValidation, trace 67c09bbc52d542058ec1e1b4e7ee8750): commit validation failed: invariant `DecimalProbeLess` violated on `decimal_probe_cases`/`e0e4b45f-4fc6-4613-b06c-71574968b7bd`: ((subject.op != lt) || ((subject.expected && (subject.lhs < subject.rhs)) || (!subject.expected && (subject.lhs >= subject.rhs))))"
+      },
+      "expected_status": 200,
+      "expected_body": {
+        "batch_count": 1,
+        "case_count": 6
+      }
+    },
+    {
+      "name": "large96-negative-all6-correct",
+      "status": 409,
+      "body": {
+        "code": "conflict",
+        "message": "operation conflict: commit_validation (CommitValidation, trace a45ef83d1d75487ab63b6f5fce9a9546): commit validation failed: invariant `DecimalProbeLess` violated on `decimal_probe_cases`/`4f46d1b9-bbaf-45d8-9a4c-8913e10dfef1`: ((subject.op != lt) || ((subject.expected && (subject.lhs < subject.rhs)) || (!subject.expected && (subject.lhs >= subject.rhs))))"
+      },
+      "expected_status": 200,
+      "expected_body": {
+        "batch_count": 1,
+        "case_count": 6
+      }
+    },
+    {
+      "name": "large96-fraction-all6-correct",
+      "status": 409,
+      "body": {
+        "code": "conflict",
+        "message": "operation conflict: commit_validation (CommitValidation, trace 4417a517eeee48f2a1361b729f67c8e1): commit validation failed: invariant `DecimalProbeLess` violated on `decimal_probe_cases`/`7ecdeb5a-5779-4d35-a938-8225f5700441`: ((subject.op != lt) || ((subject.expected && (subject.lhs < subject.rhs)) || (!subject.expected && (subject.lhs >= subject.rhs))))"
+      },
+      "expected_status": 200,
+      "expected_body": {
+        "batch_count": 1,
+        "case_count": 6
+      }
+    },
+    {
+      "name": "large96-negative-fraction-all6-correct",
+      "status": 409,
+      "body": {
+        "code": "conflict",
+        "message": "operation conflict: commit_validation (CommitValidation, trace 31c07c82ec554002b2ea7333ee801d39): commit validation failed: invariant `DecimalProbeLess` violated on `decimal_probe_cases`/`178a50a5-1b18-4835-b302-fb2525321d97`: ((subject.op != lt) || ((subject.expected && (subject.lhs < subject.rhs)) || (!subject.expected && (subject.lhs >= subject.rhs))))"
+      },
+      "expected_status": 200,
+      "expected_body": {
+        "batch_count": 1,
+        "case_count": 6
+      }
+    },
+    {
+      "name": "positive-19-all6-correct",
+      "status": 409,
+      "body": {
+        "code": "conflict",
+        "message": "operation conflict: commit_validation (CommitValidation, trace 506d604ff43d441d8e9a198dc44e3633): commit validation failed: invariant `DecimalProbeLess` violated on `decimal_probe_cases`/`90372174-0427-4b2d-8336-4424db97f112`: ((subject.op != lt) || ((subject.expected && (subject.lhs < subject.rhs)) || (!subject.expected && (subject.lhs >= subject.rhs))))"
+      },
+      "expected_status": 200,
+      "expected_body": {
+        "batch_count": 1,
+        "case_count": 6
+      }
+    },
+    {
+      "name": "negative-19-all6-correct",
+      "status": 409,
+      "body": {
+        "code": "conflict",
+        "message": "operation conflict: commit_validation (CommitValidation, trace 602b681a853c43efb619e5aa7b468a01): commit validation failed: invariant `DecimalProbeLess` violated on `decimal_probe_cases`/`785cc4dd-90d6-44c6-abf2-c64fcc4e4a9a`: ((subject.op != lt) || ((subject.expected && (subject.lhs < subject.rhs)) || (!subject.expected && (subject.lhs >= subject.rhs))))"
+      },
+      "expected_status": 200,
+      "expected_body": {
+        "batch_count": 1,
+        "case_count": 6
+      }
+    },
+    {
+      "name": "positive-zero-19-all6-correct",
+      "status": 409,
+      "body": {
+        "code": "conflict",
+        "message": "operation conflict: commit_validation (CommitValidation, trace 5aa7e6504afd4680b9b3d45e9b1b3597): commit validation failed: invariant `DecimalProbeLess` violated on `decimal_probe_cases`/`fb2ffb54-fc15-4509-ae56-1c0c67373d64`: ((subject.op != lt) || ((subject.expected && (subject.lhs < subject.rhs)) || (!subject.expected && (subject.lhs >= subject.rhs))))"
+      },
+      "expected_status": 200,
+      "expected_body": {
+        "batch_count": 1,
+        "case_count": 6
+      }
+    },
+    {
+      "name": "negative-zero-19-all6-correct",
+      "status": 409,
+      "body": {
+        "code": "conflict",
+        "message": "operation conflict: commit_validation (CommitValidation, trace 2df502cf8ec94d8995134f9a4deb81cd): commit validation failed: invariant `DecimalProbeLess` violated on `decimal_probe_cases`/`d8715aaa-6529-45bc-963f-4f58828f30a8`: ((subject.op != lt) || ((subject.expected && (subject.lhs < subject.rhs)) || (!subject.expected && (subject.lhs >= subject.rhs))))"
+      },
+      "expected_status": 200,
+      "expected_body": {
+        "batch_count": 1,
+        "case_count": 6
+      }
+    },
+    {
+      "name": "positive-20-all6-correct",
+      "status": 409,
+      "body": {
+        "code": "conflict",
+        "message": "operation conflict: commit_validation (CommitValidation, trace 74783c537751471c8d28c470745d52fb): commit validation failed: invariant `DecimalProbeLess` violated on `decimal_probe_cases`/`f690ddf0-b26a-476f-97b0-35e4a8366869`: ((subject.op != lt) || ((subject.expected && (subject.lhs < subject.rhs)) || (!subject.expected && (subject.lhs >= subject.rhs))))"
+      },
+      "expected_status": 200,
+      "expected_body": {
+        "batch_count": 1,
+        "case_count": 6
+      }
+    },
+    {
+      "name": "negative-20-all6-correct",
+      "status": 409,
+      "body": {
+        "code": "conflict",
+        "message": "operation conflict: commit_validation (CommitValidation, trace 436e4190c5ef4741bf4302a68efff7e0): commit validation failed: invariant `DecimalProbeLess` violated on `decimal_probe_cases`/`67d31c9f-175c-492e-bc0c-72fc32f98700`: ((subject.op != lt) || ((subject.expected && (subject.lhs < subject.rhs)) || (!subject.expected && (subject.lhs >= subject.rhs))))"
+      },
+      "expected_status": 200,
+      "expected_body": {
+        "batch_count": 1,
+        "case_count": 6
+      }
+    },
+    {
+      "name": "positive-zero-20-all6-correct",
+      "status": 409,
+      "body": {
+        "code": "conflict",
+        "message": "operation conflict: commit_validation (CommitValidation, trace 35d490a78c90469eb2053231edbc3991): commit validation failed: invariant `DecimalProbeLess` violated on `decimal_probe_cases`/`e53c1cf5-3515-4459-a361-1da5eec6e895`: ((subject.op != lt) || ((subject.expected && (subject.lhs < subject.rhs)) || (!subject.expected && (subject.lhs >= subject.rhs))))"
+      },
+      "expected_status": 200,
+      "expected_body": {
+        "batch_count": 1,
+        "case_count": 6
+      }
+    },
+    {
+      "name": "negative-zero-20-all6-correct",
+      "status": 409,
+      "body": {
+        "code": "conflict",
+        "message": "operation conflict: commit_validation (CommitValidation, trace 4f9c5eaa30d74000bdc50ec2db63d0bd): commit validation failed: invariant `DecimalProbeLess` violated on `decimal_probe_cases`/`d8861362-7a9a-44c9-be9e-6ac5591c1b24`: ((subject.op != lt) || ((subject.expected && (subject.lhs < subject.rhs)) || (!subject.expected && (subject.lhs >= subject.rhs))))"
+      },
+      "expected_status": 200,
+      "expected_body": {
+        "batch_count": 1,
+        "case_count": 6
+      }
+    },
+    {
+      "name": "positive-21-all6-correct",
+      "status": 409,
+      "body": {
+        "code": "conflict",
+        "message": "operation conflict: commit_validation (CommitValidation, trace 80a9f13dbbfd473c89f13fbb70aa866d): commit validation failed: invariant `DecimalProbeLess` violated on `decimal_probe_cases`/`45e590af-4e04-47ca-8031-1de9196489e5`: ((subject.op != lt) || ((subject.expected && (subject.lhs < subject.rhs)) || (!subject.expected && (subject.lhs >= subject.rhs))))"
+      },
+      "expected_status": 200,
+      "expected_body": {
+        "batch_count": 1,
+        "case_count": 6
+      }
+    },
+    {
+      "name": "negative-21-all6-correct",
+      "status": 409,
+      "body": {
+        "code": "conflict",
+        "message": "operation conflict: commit_validation (CommitValidation, trace 9aa1be0579184a158708e13e3b7a11f1): commit validation failed: invariant `DecimalProbeLess` violated on `decimal_probe_cases`/`01e88a33-8d55-4966-a7c5-2f4573fdda6e`: ((subject.op != lt) || ((subject.expected && (subject.lhs < subject.rhs)) || (!subject.expected && (subject.lhs >= subject.rhs))))"
+      },
+      "expected_status": 200,
+      "expected_body": {
+        "batch_count": 1,
+        "case_count": 6
+      }
+    },
+    {
+      "name": "positive-zero-21-all6-correct",
+      "status": 409,
+      "body": {
+        "code": "conflict",
+        "message": "operation conflict: commit_validation (CommitValidation, trace 28a2da4fe61b42189079626c1858272d): commit validation failed: invariant `DecimalProbeLess` violated on `decimal_probe_cases`/`2a833dee-53c8-4bf6-b901-9bff00cde103`: ((subject.op != lt) || ((subject.expected && (subject.lhs < subject.rhs)) || (!subject.expected && (subject.lhs >= subject.rhs))))"
+      },
+      "expected_status": 200,
+      "expected_body": {
+        "batch_count": 1,
+        "case_count": 6
+      }
+    },
+    {
+      "name": "negative-zero-21-all6-correct",
+      "status": 409,
+      "body": {
+        "code": "conflict",
+        "message": "operation conflict: commit_validation (CommitValidation, trace 9bca583b57da4dc3be7d3719dd24b8e0): commit validation failed: invariant `DecimalProbeLess` violated on `decimal_probe_cases`/`08116837-5785-4e56-ade9-f8b27777e81a`: ((subject.op != lt) || ((subject.expected && (subject.lhs < subject.rhs)) || (!subject.expected && (subject.lhs >= subject.rhs))))"
+      },
+      "expected_status": 200,
+      "expected_body": {
+        "batch_count": 1,
+        "case_count": 6
+      }
+    },
+    {
+      "name": "positive-22-all6-correct",
+      "status": 409,
+      "body": {
+        "code": "conflict",
+        "message": "operation conflict: commit_validation (CommitValidation, trace 4bdafa9e712b4510aff366c0e1aee6af): commit validation failed: invariant `DecimalProbeLess` violated on `decimal_probe_cases`/`09d10f6c-fec0-468a-9deb-6698afd2b623`: ((subject.op != lt) || ((subject.expected && (subject.lhs < subject.rhs)) || (!subject.expected && (subject.lhs >= subject.rhs))))"
+      },
+      "expected_status": 200,
+      "expected_body": {
+        "batch_count": 1,
+        "case_count": 6
+      }
+    },
+    {
+      "name": "negative-22-all6-correct",
+      "status": 409,
+      "body": {
+        "code": "conflict",
+        "message": "operation conflict: commit_validation (CommitValidation, trace 40362874cd31453299baad4b33f96c52): commit validation failed: invariant `DecimalProbeLess` violated on `decimal_probe_cases`/`a7757071-e433-4cbe-8710-7e2493f90307`: ((subject.op != lt) || ((subject.expected && (subject.lhs < subject.rhs)) || (!subject.expected && (subject.lhs >= subject.rhs))))"
+      },
+      "expected_status": 200,
+      "expected_body": {
+        "batch_count": 1,
+        "case_count": 6
+      }
+    },
+    {
+      "name": "positive-zero-22-all6-correct",
+      "status": 409,
+      "body": {
+        "code": "conflict",
+        "message": "operation conflict: commit_validation (CommitValidation, trace 0f242551bb2f40c3a1fb99887c7ff02e): commit validation failed: invariant `DecimalProbeLess` violated on `decimal_probe_cases`/`04a336a8-c512-49bf-a1f4-2dcf2427b994`: ((subject.op != lt) || ((subject.expected && (subject.lhs < subject.rhs)) || (!subject.expected && (subject.lhs >= subject.rhs))))"
+      },
+      "expected_status": 200,
+      "expected_body": {
+        "batch_count": 1,
+        "case_count": 6
+      }
+    },
+    {
+      "name": "negative-zero-22-all6-correct",
+      "status": 409,
+      "body": {
+        "code": "conflict",
+        "message": "operation conflict: commit_validation (CommitValidation, trace a88385feadc445628614749cfff0c064): commit validation failed: invariant `DecimalProbeLess` violated on `decimal_probe_cases`/`29aa8d81-afbb-40fd-99a4-a7eb909c13c4`: ((subject.op != lt) || ((subject.expected && (subject.lhs < subject.rhs)) || (!subject.expected && (subject.lhs >= subject.rhs))))"
+      },
+      "expected_status": 200,
+      "expected_body": {
+        "batch_count": 1,
+        "case_count": 6
+      }
+    },
+    {
+      "name": "positive-23-all6-correct",
+      "status": 409,
+      "body": {
+        "code": "conflict",
+        "message": "operation conflict: commit_validation (CommitValidation, trace c36454216fa94294bfd6f8ebd93fe71f): commit validation failed: invariant `DecimalProbeLess` violated on `decimal_probe_cases`/`462c791e-a1a2-4cd2-8b36-7367cada20bc`: ((subject.op != lt) || ((subject.expected && (subject.lhs < subject.rhs)) || (!subject.expected && (subject.lhs >= subject.rhs))))"
+      },
+      "expected_status": 200,
+      "expected_body": {
+        "batch_count": 1,
+        "case_count": 6
+      }
+    },
+    {
+      "name": "negative-23-all6-correct",
+      "status": 409,
+      "body": {
+        "code": "conflict",
+        "message": "operation conflict: commit_validation (CommitValidation, trace 5d911a470c6a43f2841563c87945062b): commit validation failed: invariant `DecimalProbeLess` violated on `decimal_probe_cases`/`514140b2-dd9e-4954-b12d-aeacc2229841`: ((subject.op != lt) || ((subject.expected && (subject.lhs < subject.rhs)) || (!subject.expected && (subject.lhs >= subject.rhs))))"
+      },
+      "expected_status": 200,
+      "expected_body": {
+        "batch_count": 1,
+        "case_count": 6
+      }
+    },
+    {
+      "name": "positive-zero-23-all6-correct",
+      "status": 409,
+      "body": {
+        "code": "conflict",
+        "message": "operation conflict: commit_validation (CommitValidation, trace 7d57470979e945be988b0253f1a00fe2): commit validation failed: invariant `DecimalProbeLess` violated on `decimal_probe_cases`/`b19a10d0-6ffa-4080-880f-5749eb693fd0`: ((subject.op != lt) || ((subject.expected && (subject.lhs < subject.rhs)) || (!subject.expected && (subject.lhs >= subject.rhs))))"
+      },
+      "expected_status": 200,
+      "expected_body": {
+        "batch_count": 1,
+        "case_count": 6
+      }
+    },
+    {
+      "name": "negative-zero-23-all6-correct",
+      "status": 409,
+      "body": {
+        "code": "conflict",
+        "message": "operation conflict: commit_validation (CommitValidation, trace fcc6b3c64f434de2a85c8b76389c55d2): commit validation failed: invariant `DecimalProbeLess` violated on `decimal_probe_cases`/`40ebc250-4345-4cdb-9fa2-7f2a1bed84bf`: ((subject.op != lt) || ((subject.expected && (subject.lhs < subject.rhs)) || (!subject.expected && (subject.lhs >= subject.rhs))))"
+      },
+      "expected_status": 200,
+      "expected_body": {
+        "batch_count": 1,
+        "case_count": 6
+      }
+    },
+    {
+      "name": "positive-24-all6-correct",
+      "status": 409,
+      "body": {
+        "code": "conflict",
+        "message": "operation conflict: commit_validation (CommitValidation, trace a59a0371027249379c82dde5e5d8f24b): commit validation failed: invariant `DecimalProbeLess` violated on `decimal_probe_cases`/`47f40f68-3fad-4491-a1e2-48c095471891`: ((subject.op != lt) || ((subject.expected && (subject.lhs < subject.rhs)) || (!subject.expected && (subject.lhs >= subject.rhs))))"
+      },
+      "expected_status": 200,
+      "expected_body": {
+        "batch_count": 1,
+        "case_count": 6
+      }
+    },
+    {
+      "name": "negative-24-all6-correct",
+      "status": 409,
+      "body": {
+        "code": "conflict",
+        "message": "operation conflict: commit_validation (CommitValidation, trace 88ccdad30813497ab2f3d8dbb789ee45): commit validation failed: invariant `DecimalProbeLess` violated on `decimal_probe_cases`/`c36cf39d-1198-43e4-a9d5-dbb4c6c82167`: ((subject.op != lt) || ((subject.expected && (subject.lhs < subject.rhs)) || (!subject.expected && (subject.lhs >= subject.rhs))))"
+      },
+      "expected_status": 200,
+      "expected_body": {
+        "batch_count": 1,
+        "case_count": 6
+      }
+    },
+    {
+      "name": "positive-zero-24-all6-correct",
+      "status": 409,
+      "body": {
+        "code": "conflict",
+        "message": "operation conflict: commit_validation (CommitValidation, trace 8d9ae702e78442e7ad59749b37c0d1c3): commit validation failed: invariant `DecimalProbeLess` violated on `decimal_probe_cases`/`53d953d0-c245-4aeb-af03-1718157fd16e`: ((subject.op != lt) || ((subject.expected && (subject.lhs < subject.rhs)) || (!subject.expected && (subject.lhs >= subject.rhs))))"
+      },
+      "expected_status": 200,
+      "expected_body": {
+        "batch_count": 1,
+        "case_count": 6
+      }
+    },
+    {
+      "name": "negative-zero-24-all6-correct",
+      "status": 409,
+      "body": {
+        "code": "conflict",
+        "message": "operation conflict: commit_validation (CommitValidation, trace 59acf8d140d34ad5bf5635eafca5b4af): commit validation failed: invariant `DecimalProbeLess` violated on `decimal_probe_cases`/`9445587b-c809-40ca-bbf0-aa8c46ce37fd`: ((subject.op != lt) || ((subject.expected && (subject.lhs < subject.rhs)) || (!subject.expected && (subject.lhs >= subject.rhs))))"
+      },
+      "expected_status": 200,
+      "expected_body": {
+        "batch_count": 1,
+        "case_count": 6
+      }
+    },
+    {
+      "name": "positive-25-all6-correct",
+      "status": 409,
+      "body": {
+        "code": "conflict",
+        "message": "operation conflict: commit_validation (CommitValidation, trace df28f9bd403c4f5da8599628fd55dc08): commit validation failed: invariant `DecimalProbeLess` violated on `decimal_probe_cases`/`74051b7d-e19b-4147-bfc1-c46bbf5d4e92`: ((subject.op != lt) || ((subject.expected && (subject.lhs < subject.rhs)) || (!subject.expected && (subject.lhs >= subject.rhs))))"
+      },
+      "expected_status": 200,
+      "expected_body": {
+        "batch_count": 1,
+        "case_count": 6
+      }
+    },
+    {
+      "name": "negative-25-all6-correct",
+      "status": 409,
+      "body": {
+        "code": "conflict",
+        "message": "operation conflict: commit_validation (CommitValidation, trace 1130b04a03ca46418633cb2a1e2064cc): commit validation failed: invariant `DecimalProbeLess` violated on `decimal_probe_cases`/`2d580931-f882-410a-bcb7-ef2751226876`: ((subject.op != lt) || ((subject.expected && (subject.lhs < subject.rhs)) || (!subject.expected && (subject.lhs >= subject.rhs))))"
+      },
+      "expected_status": 200,
+      "expected_body": {
+        "batch_count": 1,
+        "case_count": 6
+      }
+    },
+    {
+      "name": "positive-zero-25-all6-correct",
+      "status": 409,
+      "body": {
+        "code": "conflict",
+        "message": "operation conflict: commit_validation (CommitValidation, trace 17104f11d17f4e35afcf5c09d88b2a52): commit validation failed: invariant `DecimalProbeLess` violated on `decimal_probe_cases`/`86be227a-773c-4344-b628-75e1740fe624`: ((subject.op != lt) || ((subject.expected && (subject.lhs < subject.rhs)) || (!subject.expected && (subject.lhs >= subject.rhs))))"
+      },
+      "expected_status": 200,
+      "expected_body": {
+        "batch_count": 1,
+        "case_count": 6
+      }
+    },
+    {
+      "name": "negative-zero-25-all6-correct",
+      "status": 409,
+      "body": {
+        "code": "conflict",
+        "message": "operation conflict: commit_validation (CommitValidation, trace 433adae48caa48728781c6da098e61ed): commit validation failed: invariant `DecimalProbeLess` violated on `decimal_probe_cases`/`867ddd8f-935e-4198-a124-1610a993c3a0`: ((subject.op != lt) || ((subject.expected && (subject.lhs < subject.rhs)) || (!subject.expected && (subject.lhs >= subject.rhs))))"
+      },
+      "expected_status": 200,
+      "expected_body": {
+        "batch_count": 1,
+        "case_count": 6
+      }
+    },
+    {
+      "name": "positive-26-all6-correct",
+      "status": 409,
+      "body": {
+        "code": "conflict",
+        "message": "operation conflict: commit_validation (CommitValidation, trace f8b2a9d3b99f41eaac218ef2b499306f): commit validation failed: invariant `DecimalProbeLess` violated on `decimal_probe_cases`/`a8df190b-aa09-4822-bae9-2242ff63b260`: ((subject.op != lt) || ((subject.expected && (subject.lhs < subject.rhs)) || (!subject.expected && (subject.lhs >= subject.rhs))))"
+      },
+      "expected_status": 200,
+      "expected_body": {
+        "batch_count": 1,
+        "case_count": 6
+      }
+    },
+    {
+      "name": "negative-26-all6-correct",
+      "status": 409,
+      "body": {
+        "code": "conflict",
+        "message": "operation conflict: commit_validation (CommitValidation, trace 90bf73d0020041ea980cdefefa3bbe70): commit validation failed: invariant `DecimalProbeLess` violated on `decimal_probe_cases`/`764af971-a446-41a2-b235-3c7526015cc5`: ((subject.op != lt) || ((subject.expected && (subject.lhs < subject.rhs)) || (!subject.expected && (subject.lhs >= subject.rhs))))"
+      },
+      "expected_status": 200,
+      "expected_body": {
+        "batch_count": 1,
+        "case_count": 6
+      }
+    },
+    {
+      "name": "positive-zero-26-all6-correct",
+      "status": 409,
+      "body": {
+        "code": "conflict",
+        "message": "operation conflict: commit_validation (CommitValidation, trace a638003ba6d748baa8c5fff20a660a01): commit validation failed: invariant `DecimalProbeLess` violated on `decimal_probe_cases`/`29f49134-1c9a-42b7-ad20-87bf13b47476`: ((subject.op != lt) || ((subject.expected && (subject.lhs < subject.rhs)) || (!subject.expected && (subject.lhs >= subject.rhs))))"
+      },
+      "expected_status": 200,
+      "expected_body": {
+        "batch_count": 1,
+        "case_count": 6
+      }
+    },
+    {
+      "name": "negative-zero-26-all6-correct",
+      "status": 409,
+      "body": {
+        "code": "conflict",
+        "message": "operation conflict: commit_validation (CommitValidation, trace fe8f7b75e68a4b2786285f854ec2b516): commit validation failed: invariant `DecimalProbeLess` violated on `decimal_probe_cases`/`c164caa5-8db0-444e-9a79-f26572dec9cf`: ((subject.op != lt) || ((subject.expected && (subject.lhs < subject.rhs)) || (!subject.expected && (subject.lhs >= subject.rhs))))"
+      },
+      "expected_status": 200,
+      "expected_body": {
+        "batch_count": 1,
+        "case_count": 6
+      }
+    },
+    {
+      "name": "positive-27-all6-correct",
+      "status": 409,
+      "body": {
+        "code": "conflict",
+        "message": "operation conflict: commit_validation (CommitValidation, trace 18a3b63e67b04a9fb90fe1e73d3d7348): commit validation failed: invariant `DecimalProbeLess` violated on `decimal_probe_cases`/`0dccaa69-6e77-4c50-a5f6-350a8ab75199`: ((subject.op != lt) || ((subject.expected && (subject.lhs < subject.rhs)) || (!subject.expected && (subject.lhs >= subject.rhs))))"
+      },
+      "expected_status": 200,
+      "expected_body": {
+        "batch_count": 1,
+        "case_count": 6
+      }
+    },
+    {
+      "name": "negative-27-all6-correct",
+      "status": 409,
+      "body": {
+        "code": "conflict",
+        "message": "operation conflict: commit_validation (CommitValidation, trace 11980740795e4c219eed1937d61e63ea): commit validation failed: invariant `DecimalProbeLess` violated on `decimal_probe_cases`/`2add9f4b-7b04-4a8c-9102-e21e29719189`: ((subject.op != lt) || ((subject.expected && (subject.lhs < subject.rhs)) || (!subject.expected && (subject.lhs >= subject.rhs))))"
+      },
+      "expected_status": 200,
+      "expected_body": {
+        "batch_count": 1,
+        "case_count": 6
+      }
+    },
+    {
+      "name": "positive-zero-27-all6-correct",
+      "status": 409,
+      "body": {
+        "code": "conflict",
+        "message": "operation conflict: commit_validation (CommitValidation, trace 2fb793c2820a4e11b3da1ad96e505b25): commit validation failed: invariant `DecimalProbeLess` violated on `decimal_probe_cases`/`ba3b409d-971f-42c1-97f5-0ff6206db077`: ((subject.op != lt) || ((subject.expected && (subject.lhs < subject.rhs)) || (!subject.expected && (subject.lhs >= subject.rhs))))"
+      },
+      "expected_status": 200,
+      "expected_body": {
+        "batch_count": 1,
+        "case_count": 6
+      }
+    },
+    {
+      "name": "negative-zero-27-all6-correct",
+      "status": 409,
+      "body": {
+        "code": "conflict",
+        "message": "operation conflict: commit_validation (CommitValidation, trace f957db32945b402daf916720e6ae72dc): commit validation failed: invariant `DecimalProbeLess` violated on `decimal_probe_cases`/`fa84fca5-31a8-43a2-acc4-95cded93301b`: ((subject.op != lt) || ((subject.expected && (subject.lhs < subject.rhs)) || (!subject.expected && (subject.lhs >= subject.rhs))))"
+      },
+      "expected_status": 200,
+      "expected_body": {
+        "batch_count": 1,
+        "case_count": 6
+      }
+    },
+    {
+      "name": "positive-28-all6-correct",
+      "status": 409,
+      "body": {
+        "code": "conflict",
+        "message": "operation conflict: commit_validation (CommitValidation, trace 28d7a99e5c6945ca93e9b72db573d41a): commit validation failed: invariant `DecimalProbeLess` violated on `decimal_probe_cases`/`d44b21ff-041a-4abd-8206-1b4d3449cf66`: ((subject.op != lt) || ((subject.expected && (subject.lhs < subject.rhs)) || (!subject.expected && (subject.lhs >= subject.rhs))))"
+      },
+      "expected_status": 200,
+      "expected_body": {
+        "batch_count": 1,
+        "case_count": 6
+      }
+    },
+    {
+      "name": "negative-28-all6-correct",
+      "status": 409,
+      "body": {
+        "code": "conflict",
+        "message": "operation conflict: commit_validation (CommitValidation, trace 6efdd83e2f1f4e14a4cfdd9c9c0e3c60): commit validation failed: invariant `DecimalProbeLess` violated on `decimal_probe_cases`/`9ca0bf3b-562a-446a-ba41-2225a2a415e4`: ((subject.op != lt) || ((subject.expected && (subject.lhs < subject.rhs)) || (!subject.expected && (subject.lhs >= subject.rhs))))"
+      },
+      "expected_status": 200,
+      "expected_body": {
+        "batch_count": 1,
+        "case_count": 6
+      }
+    },
+    {
+      "name": "positive-zero-28-all6-correct",
+      "status": 409,
+      "body": {
+        "code": "conflict",
+        "message": "operation conflict: commit_validation (CommitValidation, trace 7538664b187f49f49874f9a4d123b281): commit validation failed: invariant `DecimalProbeLess` violated on `decimal_probe_cases`/`28f1c849-d15f-4912-93c7-15bad1531521`: ((subject.op != lt) || ((subject.expected && (subject.lhs < subject.rhs)) || (!subject.expected && (subject.lhs >= subject.rhs))))"
+      },
+      "expected_status": 200,
+      "expected_body": {
+        "batch_count": 1,
+        "case_count": 6
+      }
+    },
+    {
+      "name": "negative-zero-28-all6-correct",
+      "status": 409,
+      "body": {
+        "code": "conflict",
+        "message": "operation conflict: commit_validation (CommitValidation, trace 0b36d5ccaf444b7dab89615c6cb9c15b): commit validation failed: invariant `DecimalProbeLess` violated on `decimal_probe_cases`/`0378729a-97bd-4cd6-8548-0659f235bdaa`: ((subject.op != lt) || ((subject.expected && (subject.lhs < subject.rhs)) || (!subject.expected && (subject.lhs >= subject.rhs))))"
+      },
+      "expected_status": 200,
+      "expected_body": {
+        "batch_count": 1,
+        "case_count": 6
+      }
+    },
+    {
+      "name": "frozen-product-99.00-snapshotfalse",
+      "status": 409,
+      "body": {
+        "code": "conflict",
+        "message": "operation conflict: commit_validation (CommitValidation, trace 7325d31d73184baf99fd0edc502a892f): commit validation failed: invariant `ProbeJoinedRounding` violated on `probe_proofs`/`7496eb8f-6417-4430-808d-366141c57a1e`: (subject.use_snapshot || exists r ProbeRun where ((r.id == subject.run_id) && exists g ProbeGroup where (((g.id == r.group_id) && (((subject.amount - ((subject.source_amount * subject.translation_rate) * subject.ownership_factor)) * g.rounding_factor) <= 1)) && (((subject.amount - ((subject.source_amount * subject.translation_rate) * subject.ownership_factor)) * g.rounding_factor) >= -1))))"
+      },
+      "expected_status": 200
+    },
+    {
+      "name": "frozen-product-99.00-snapshottrue",
+      "status": 409,
+      "body": {
+        "code": "conflict",
+        "message": "operation conflict: commit_validation (CommitValidation, trace a7601dd6e7754d0c8981447dfe0f4e56): commit validation failed: invariant `ProbeSnapshotRounding` violated on `probe_proofs`/`882b0011-5c87-4fd5-b0ec-83e402662ff0`: (!subject.use_snapshot || (((((subject.amount - ((subject.source_amount * subject.translation_rate) * subject.ownership_factor)) * subject.rounding_factor) <= 1) && (((subject.amount - ((subject.source_amount * subject.translation_rate) * subject.ownership_factor)) * subject.rounding_factor) >= -1)) && exists r ProbeRun where ((r.id == subject.run_id) && exists g ProbeGroup where ((g.id == r.group_id) && (g.rounding_factor == subject.rounding_factor)))))"
+      },
+      "expected_status": 200
+    },
+    {
+      "name": "frozen-product--99.00-snapshotfalse",
+      "status": 409,
+      "body": {
+        "code": "conflict",
+        "message": "operation conflict: commit_validation (CommitValidation, trace 48e95d7a5ac349128d512f9bb3c23dcb): commit validation failed: invariant `ProbeJoinedRounding` violated on `probe_proofs`/`a5fc0c66-84e6-4529-aa23-1de6775c587c`: (subject.use_snapshot || exists r ProbeRun where ((r.id == subject.run_id) && exists g ProbeGroup where (((g.id == r.group_id) && (((subject.amount - ((subject.source_amount * subject.translation_rate) * subject.ownership_factor)) * g.rounding_factor) <= 1)) && (((subject.amount - ((subject.source_amount * subject.translation_rate) * subject.ownership_factor)) * g.rounding_factor) >= -1))))"
+      },
+      "expected_status": 200
+    },
+    {
+      "name": "frozen-product--99.00-snapshottrue",
+      "status": 409,
+      "body": {
+        "code": "conflict",
+        "message": "operation conflict: commit_validation (CommitValidation, trace 8702595318aa48158f9cd5924eecbf69): commit validation failed: invariant `ProbeSnapshotRounding` violated on `probe_proofs`/`a475505f-72b7-487f-9f0f-41a9c87357c3`: (!subject.use_snapshot || (((((subject.amount - ((subject.source_amount * subject.translation_rate) * subject.ownership_factor)) * subject.rounding_factor) <= 1) && (((subject.amount - ((subject.source_amount * subject.translation_rate) * subject.ownership_factor)) * subject.rounding_factor) >= -1)) && exists r ProbeRun where ((r.id == subject.run_id) && exists g ProbeGroup where ((g.id == r.group_id) && (g.rounding_factor == subject.rounding_factor)))))"
+      },
+      "expected_status": 200
+    },
+    {
+      "name": "frozen-product-110.0-snapshotfalse",
+      "status": 409,
+      "body": {
+        "code": "conflict",
+        "message": "operation conflict: commit_validation (CommitValidation, trace 5dae332235924a64af2cca8eb9a45eb1): commit validation failed: invariant `ProbeJoinedRounding` violated on `probe_proofs`/`1b4c1a3c-80a3-4a8f-8488-08737139fbc6`: (subject.use_snapshot || exists r ProbeRun where ((r.id == subject.run_id) && exists g ProbeGroup where (((g.id == r.group_id) && (((subject.amount - ((subject.source_amount * subject.translation_rate) * subject.ownership_factor)) * g.rounding_factor) <= 1)) && (((subject.amount - ((subject.source_amount * subject.translation_rate) * subject.ownership_factor)) * g.rounding_factor) >= -1))))"
+      },
+      "expected_status": 200
+    },
+    {
+      "name": "frozen-product-110.0-snapshottrue",
+      "status": 409,
+      "body": {
+        "code": "conflict",
+        "message": "operation conflict: commit_validation (CommitValidation, trace 197d023a7b2d4bb58e6b13b13361e03c): commit validation failed: invariant `ProbeSnapshotRounding` violated on `probe_proofs`/`dd264617-14b2-4a00-9d39-fdfc32afddaa`: (!subject.use_snapshot || (((((subject.amount - ((subject.source_amount * subject.translation_rate) * subject.ownership_factor)) * subject.rounding_factor) <= 1) && (((subject.amount - ((subject.source_amount * subject.translation_rate) * subject.ownership_factor)) * subject.rounding_factor) >= -1)) && exists r ProbeRun where ((r.id == subject.run_id) && exists g ProbeGroup where ((g.id == r.group_id) && (g.rounding_factor == subject.rounding_factor)))))"
+      },
+      "expected_status": 200
+    },
+    {
+      "name": "frozen-product--110.0-snapshotfalse",
+      "status": 409,
+      "body": {
+        "code": "conflict",
+        "message": "operation conflict: commit_validation (CommitValidation, trace 5f9aa06abf444ff6a6dcd53d808b7b85): commit validation failed: invariant `ProbeJoinedRounding` violated on `probe_proofs`/`a4bf048e-4141-46af-9400-3eb5480cf8b2`: (subject.use_snapshot || exists r ProbeRun where ((r.id == subject.run_id) && exists g ProbeGroup where (((g.id == r.group_id) && (((subject.amount - ((subject.source_amount * subject.translation_rate) * subject.ownership_factor)) * g.rounding_factor) <= 1)) && (((subject.amount - ((subject.source_amount * subject.translation_rate) * subject.ownership_factor)) * g.rounding_factor) >= -1))))"
+      },
+      "expected_status": 200
+    },
+    {
+      "name": "frozen-product--110.0-snapshottrue",
+      "status": 409,
+      "body": {
+        "code": "conflict",
+        "message": "operation conflict: commit_validation (CommitValidation, trace b2214211ae014f2db4a16dbcecbb20f3): commit validation failed: invariant `ProbeSnapshotRounding` violated on `probe_proofs`/`748f30d1-e5f8-4289-ad75-a0c4aac3f100`: (!subject.use_snapshot || (((((subject.amount - ((subject.source_amount * subject.translation_rate) * subject.ownership_factor)) * subject.rounding_factor) <= 1) && (((subject.amount - ((subject.source_amount * subject.translation_rate) * subject.ownership_factor)) * subject.rounding_factor) >= -1)) && exists r ProbeRun where ((r.id == subject.run_id) && exists g ProbeGroup where ((g.id == r.group_id) && (g.rounding_factor == subject.rounding_factor)))))"
+      },
+      "expected_status": 200
+    }
+  ],
+  "crash_and_cold_restore": false
+}

@@ -1,0 +1,6 @@
+[package]
+name="qualification/decimal-rounding"
+version="1.0.0"
+[module]
+namespace="qualification.decimal_rounding"
+version="1.0.0"

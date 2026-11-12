@@ -1,0 +1,16 @@
+{
+  "indexes": {
+    "native_decimal_partial": {
+      "collection": "precision_probe",
+      "kind": "b_tree",
+      "status": "complete",
+      "progress_percent": 100,
+      "size_bytes": 0,
+      "build_time_ms": 3,
+      "stale": false,
+      "corrupt": false,
+      "last_verified_unix_ms": 1794474988729,
+      "updated_unix_ms": 1794474988729
+    }
+  }
+}

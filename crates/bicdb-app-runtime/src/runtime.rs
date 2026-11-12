@@ -7,6 +7,8 @@ pub(crate) use scheduling::*;
 mod schema_defs;
 pub(crate) use schema_defs::*;
 mod application_runtime;
+mod unique_scope;
+pub use unique_scope::{OfflineUniqueScopeTransition, UniqueScopeEnvelope, UniqueScopeOutcome};
 mod http_transaction;
 mod program_host;
 use std::collections::{BTreeMap, BTreeSet, VecDeque};

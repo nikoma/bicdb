@@ -1,0 +1,26 @@
+{
+  "source": "d825bee1643d665c82b4d9a34960dd24c170be62",
+  "scope": "Build qualification-only creator on productionCoreexactf435main482. No testsclaimed. Actual legacy Embedded/duplicate/multiple Native stores will be created unchanged, no catalogfabrication.",
+  "started_unix": 1794474835.3178253,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "build",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--example",
+        "decimal_legacy_fixture_creator"
+      ],
+      "started_unix": 1794474835.3179846,
+      "exit": 101,
+      "finished_unix": 1794474859.2731616
+    }
+  ],
+  "status": "failed",
+  "finished_unix": 1794474859.2733479
+}

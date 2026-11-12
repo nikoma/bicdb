@@ -216,6 +216,26 @@ impl TrustedSigningKeys {
         Ok(())
     }
 
+    /// Strict detached signatures for domain-separated offline operator plans.
+    /// Uses the same pinned Ed25519 trust surface as package verification.
+    pub fn verify_detached(
+        &self,
+        key_id: &str,
+        message: &[u8],
+        encoded_signature: &str,
+    ) -> Result<()> {
+        let key = self.get(key_id).ok_or_else(|| {
+            AppRuntimeError::Signature(format!("signing key {key_id} is not trusted"))
+        })?;
+        let bytes = base64::engine::general_purpose::STANDARD
+            .decode(encoded_signature)
+            .map_err(|error| AppRuntimeError::Signature(error.to_string()))?;
+        let signature = Signature::from_slice(&bytes)
+            .map_err(|error| AppRuntimeError::Signature(error.to_string()))?;
+        key.verify_strict(message, &signature)
+            .map_err(|error| AppRuntimeError::Signature(error.to_string()))
+    }
+
     fn get(&self, key_id: &str) -> Option<&VerifyingKey> {
         self.keys.get(key_id)
     }

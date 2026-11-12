@@ -20,6 +20,33 @@ fn native_abort_actual_enforced_prior_leader_no_effect_fresh_e2_abort_then_new_l
 fn actual_prepare_failure_lifecycle(transfer_before_abort: bool) {
     let mut fixture = EnforcedNetwork::new();
     let mut range = fixture.ranges()[0].clone();
+    let prior_ack = if transfer_before_abort {
+        // Four genuine ACKs on the OTHER range make actual local dataB
+        // deliberately different from the selected logical range index.
+        let other = fixture
+            .ranges()
+            .into_iter()
+            .find(|r| r.id != range.id)
+            .unwrap();
+        for n in 0..4 {
+            fixture
+                .native
+                .append(&fixture.key(other.id, &format!("other-range-real-ack-{n}")))
+                .unwrap();
+        }
+        let key = fixture.key(range.id, "prior-real-ack-survives-no-data-e2");
+        let db = fixture.native.databases[&node("n0")].write();
+        let mut tx = db.begin_transaction().unwrap();
+        let mut row = Record::new(&key);
+        row.metadata = serde_json::json!({"ack_ledger":"before-no-data", "must_survive":17});
+        tx.insert("items", row).unwrap();
+        tx.commit().unwrap();
+        Some(key)
+    } else {
+        None
+    };
+    let predecessor_r = u64::from(prior_ack.is_some());
+    let abort_index = predecessor_r + 1;
     let failed_key = fixture.key(range.id, "definitely-unacked-prepare-only");
     let before_b = [node("n0"), node("n1"), node("n2")]
         .into_iter()
@@ -65,7 +92,7 @@ fn actual_prepare_failure_lifecycle(transfer_before_abort: bool) {
         .into_iter()
         .next()
         .unwrap();
-    assert_eq!(original.index, 1);
+    assert_eq!(original.index, abort_index);
     for id in [node("n0"), node("n1"), node("n2")] {
         let db = fixture.native.databases[&id].read();
         assert!(db.get("items", &failed_key).unwrap().is_none());
@@ -73,7 +100,7 @@ fn actual_prepare_failure_lifecycle(transfer_before_abort: bool) {
             db.current_native_range_source_lineage(range.id)
                 .unwrap()
                 .range_index(),
-            0
+            predecessor_r
         );
         if id != node("n0") {
             fixture.native.services[&id]
@@ -119,7 +146,7 @@ fn actual_prepare_failure_lifecycle(transfer_before_abort: bool) {
             .lock()
             .range_write_progress(range.id)
             .last_index,
-        0
+        predecessor_r
     );
     let protected = fixture.native.services[&node("n1")]
         .lock()
@@ -148,7 +175,7 @@ fn actual_prepare_failure_lifecycle(transfer_before_abort: bool) {
     let scope = fixture.actual_current_recovery_scope(&range);
     let request = NativeAbortRequest {
         scope: scope.clone(),
-        range_index: 1,
+        range_index: abort_index,
         origin_node_id: node("n0"),
         candidate_sha256: None,
         challenge: Uuid::now_v7(),
@@ -158,7 +185,7 @@ fn actual_prepare_failure_lifecycle(transfer_before_abort: bool) {
         .observe_native_abort_candidate(&node("n0"), &request, &token())
         .unwrap();
     assert_eq!(actual_candidate.record().command, original);
-    assert_eq!(actual_candidate.record().predecessor_index(), 0);
+    assert_eq!(actual_candidate.record().predecessor_index(), predecessor_r);
     let request = NativeAbortRequest {
         candidate_sha256: Some(actual_candidate.sha256().into()),
         ..request
@@ -167,16 +194,22 @@ fn actual_prepare_failure_lifecycle(transfer_before_abort: bool) {
         let (r, decision, b) = fixture.clients[&leader]
             .resolve_native_abort_at(&id, &request, &token())
             .unwrap();
-        assert_eq!(r, 1);
+        assert_eq!(r, abort_index);
         assert_eq!(decision.len(), 64);
         assert_eq!(b, before_b[&id]);
+        if transfer_before_abort {
+            assert!(
+                b > r,
+                "actual interleaved dataB must not be replaced with rangeR"
+            );
+        }
         fixture.idle();
         let db = fixture.native.databases[&id].read();
         let source = db.current_native_range_source_lineage(range.id).unwrap();
-        assert_eq!(source.range_index(), 1);
+        assert_eq!(source.range_index(), abort_index);
         assert_eq!(source.actual_local_visibility_sequence(), before_b[&id]);
         assert_eq!(
-            db.read_native_history_entry(range.id, source.history_generation(), 1)
+            db.read_native_history_entry(range.id, source.history_generation(), abort_index)
                 .unwrap()
                 .outcome,
             crate::db::range_image_native::history::NativeLogicalHistoryOutcomeV1::Aborted
@@ -187,7 +220,7 @@ fn actual_prepare_failure_lifecycle(transfer_before_abort: bool) {
                 .lock()
                 .range_write_progress(range.id)
                 .resolved_through,
-            1
+            abort_index
         );
     }
     for id in [node("n0"), node("n1"), node("n2")] {
@@ -246,10 +279,16 @@ fn actual_prepare_failure_lifecycle(transfer_before_abort: bool) {
         let db = fixture.native.databases[&id].read();
         assert!(db.get("items", &failed_key).unwrap().is_none());
         assert!(db.get("items", &acked_key).unwrap().is_some());
+        if let Some(prior) = &prior_ack {
+            assert_eq!(
+                db.get("items", prior).unwrap().unwrap().metadata,
+                serde_json::json!({"ack_ledger":"before-no-data", "must_survive":17})
+            );
+        }
         let source = db.current_native_range_source_lineage(range.id).unwrap();
-        assert_eq!(source.range_index(), 2);
+        assert_eq!(source.range_index(), abort_index + 1);
         assert_eq!(
-            db.read_native_history_entry(range.id, source.history_generation(), 1)
+            db.read_native_history_entry(range.id, source.history_generation(), abort_index)
                 .unwrap()
                 .outcome,
             crate::db::range_image_native::history::NativeLogicalHistoryOutcomeV1::Aborted

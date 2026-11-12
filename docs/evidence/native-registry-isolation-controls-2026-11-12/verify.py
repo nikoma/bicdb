@@ -23,10 +23,13 @@ def validate(r):
         require(v['source_revision']==source and v['job_conclusion']=='success', 'actual source and terminal outcome')
         require(v['passed']==count==len(v['test_names']) and not v['failed'] and not v['ignored'], 'actual focused counts')
         require(len(v['test_summaries'])==1 and f'{count} passed; 0 failed;' in v['test_summaries'][0], 'raw summary agreement')
-    require(len(r['compile_jobs'])==4, 'four successful compiler/consumer jobs')
+    require(len(r['compile_jobs'])==5, 'five successful compiler/consumer jobs')
     require(all(v['job_conclusion']==v['all_targets']==v['isolated_consumer_without_core_defaults']=='success' for v in r['compile_jobs']), 'compiler states')
     pending=r['corrected_owned_compile_at_freeze']
     require(pending['status']=='in_progress' and pending['conclusion'] is None and pending['job_id']==131504948931, 'corrected-head compiler pending checkpoint')
+    terminal=r['corrected_owned_compile_terminal_addendum']
+    require(terminal['job_id']==pending['job_id'] and terminal['conclusion']=='success' and terminal['source']==pending['source'], 'terminal addendum matches original pending job')
+    require(r['compile_jobs'][-1]['job_id']==terminal['job_id'] and r['compile_jobs'][-1]['raw_sha256']==terminal['raw_sha256'], 'terminal compiler evidence')
     c=r['cancellations']; require(len(c)==3 and all(v['job_conclusion']=='cancelled' and not v['test_summaries'] and v['not_a_suite_pass'] for v in c), 'cancellations remain cancellations')
     require(len(c[0]['selected_test_names'])==60 and len(c[0]['selected_without_completed_result'])==2 and c[0]['completed_individual_results'].get('ok')==57, 'partial broad progress')
     require(sum(c[0]['completed_individual_results'].values())==58, 'ignored helper separate')

@@ -353,6 +353,20 @@
       "run_id": 43303070364,
       "source_revision": "ded3c412cf25c12f3c6fe524d22aac02310a1c0b",
       "test_summaries": []
+    },
+    {
+      "all_targets": "success",
+      "compressed_file": "6e0-owned-corrected-alltargets-job131504948931.log.gz",
+      "index_file": "6e0-owned-corrected-alltargets-job131504948931-index.json",
+      "isolated_consumer_without_core_defaults": "success",
+      "job_conclusion": "success",
+      "job_id": 131504948931,
+      "job_name": "Community-only workspace compiles, tests included",
+      "raw_bytes": 2480960,
+      "raw_sha256": "af0051894f7482077f0a033bee62dcfc82c3a6f99118b715ab44e82a8a16b75b",
+      "run_id": 43310478213,
+      "source_revision": "6e00ba519715ee0ca392357394f2b0a9749a1358",
+      "test_summaries": []
     }
   ],
   "corrected_owned_compile_at_freeze": {
@@ -363,6 +377,14 @@
     "scope": "pending at this receipt checkpoint; no compiler or consumer pass claimed for this job",
     "source": "6e00ba519715ee0ca392357394f2b0a9749a1358",
     "status": "in_progress"
+  },
+  "corrected_owned_compile_terminal_addendum": {
+    "conclusion": "success",
+    "job_id": 131504948931,
+    "pending_checkpoint_commit": "528b1f03e",
+    "raw_sha256": "af0051894f7482077f0a033bee62dcfc82c3a6f99118b715ab44e82a8a16b75b",
+    "scope": "terminal all-target and isolated-consumer result appended after the preserved pending checkpoint",
+    "source": "6e00ba519715ee0ca392357394f2b0a9749a1358"
   },
   "limits": [
     "No whole CLI pass: source56f whole CLI3/3 remains unchanged; uncertain empty-object write is not rollback.",

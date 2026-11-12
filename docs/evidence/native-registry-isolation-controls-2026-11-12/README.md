@@ -13,9 +13,11 @@ packages are `1.0.489-beta`; this receipt makes no current-main or release claim
 
 Workspace/all-target checks and isolated consumer compilation without Core
 defaults passed for registry29b, routing29b and expiryDED3, plus the older DED3
-broad run's separate compiler job. **Corrected6e compiler job131504948931 remains
-pending at this checkpoint**; its Core runtime pass is not an all-target or
-consumer pass. Its terminal result will be appended separately. These are
+broad run's separate compiler job. Corrected6e job131504948931 also completed
+**SUCCESS** for both checks; its full run43310478213 is successful. The receipt
+retains the original pending checkpoint from commit528b1f03e and appends the
+terminal result separately (raw2,480,960 bytes, SHA-256
+`af0051894f7482077f0a033bee62dcfc82c3a6f99118b715ab44e82a8a16b75b`). These are
 compilation results, not extra runtime test passes. Counts from different heads
 must not be reported as a full suite at the newest head.
 

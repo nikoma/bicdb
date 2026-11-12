@@ -116,13 +116,7 @@ impl EnrollmentFixture {
             root,
         }
     }
-    fn factory(
-        &self,
-        name: &str,
-    ) -> (
-        Arc<NativeUnassignedLearnerFactory>,
-        NativeUnassignedLearnerHost,
-    ) {
+    fn factory_only(&self, name: &str) -> Arc<NativeUnassignedLearnerFactory> {
         let token = CancellationToken::uncancelable();
         let business = Uuid::now_v7();
         let observed = self
@@ -134,7 +128,7 @@ impl EnrollmentFixture {
             .read()
             .cluster_schema_bundle()
             .unwrap();
-        let factory = Arc::new(
+        Arc::new(
             NativeUnassignedLearnerFactory::create(
                 &self.root.path().join(name),
                 db_config(),
@@ -145,16 +139,46 @@ impl EnrollmentFixture {
                 &token,
             )
             .unwrap(),
-        );
-        let host = NativeUnassignedLearnerHost::start(
-            Arc::clone(&factory),
+        )
+    }
+    fn start_factory(
+        &self,
+        factory: Arc<NativeUnassignedLearnerFactory>,
+    ) -> NativeUnassignedLearnerHost {
+        let token = CancellationToken::uncancelable();
+        let business = Uuid::now_v7();
+        let observed = self
+            .learner_transport
+            .acquire_host_metadata_observation(&node(0), business, Duration::from_secs(5), &token)
+            .unwrap();
+        NativeUnassignedLearnerHost::start(
+            factory,
             observed,
             business,
             self.networks[4].clone(),
             &token,
         )
-        .unwrap();
+        .unwrap()
+    }
+    fn factory(
+        &self,
+        name: &str,
+    ) -> (
+        Arc<NativeUnassignedLearnerFactory>,
+        NativeUnassignedLearnerHost,
+    ) {
+        let factory = self.factory_only(name);
+        let host = self.start_factory(Arc::clone(&factory));
         (factory, host)
+    }
+    fn refresh_source_before_observation(&self, host: &NativeUnassignedLearnerHost) {
+        let business = Uuid::now_v7();
+        let token = CancellationToken::uncancelable();
+        let current = self
+            .learner_transport
+            .acquire_host_metadata_observation(&node(0), business, Duration::from_secs(5), &token)
+            .unwrap();
+        host.refresh_metadata(current, business, &token).unwrap();
     }
     fn observe(&self, token: &CancellationToken) -> NativeLearnerBirthObservation {
         let business = Uuid::now_v7();
@@ -201,7 +225,10 @@ impl EnrollmentFixture {
             .unwrap();
     }
     fn reject_without_proposal(&self, fact: &NativeLearnerBirthObservation, expected: &str) {
+        fact.require_live().unwrap_or_else(|error| panic!("semantic-negative precondition {expected}: original fact expired BEFORE current MQ: {error}"));
         let (current, business) = self.current();
+        fact.require_live().unwrap_or_else(|error| panic!("semantic-negative precondition {expected}: original fact expired during current MQ: {error}"));
+        eprintln!("NATIVE_LEARNER_SEMANTIC_NEGATIVE expected={expected} original_fact_live=true");
         let mut store = self.launches[0].metadata.lock();
         let before = store.status();
         let topology = store.committed_topology().clone();
@@ -229,13 +256,17 @@ impl EnrollmentFixture {
 fn native_registered_learner_enrollment_tls_commits_exact_birth_and_preserves_identity_fences() {
     let f = EnrollmentFixture::new();
     let token = CancellationToken::uncancelable();
+    // Complete BOTH genuine physical factories before capturing the held A
+    // fact. Factory fsync time is not part of the semantic-negative schedule.
+    let factory_b = f.factory_only("actual-factory-B");
     let (factory_a, host_a) = f.factory("actual-factory-A");
+    f.refresh_source_before_observation(&host_a);
     let fact_a = f.observe(&token);
     let birth_a = fact_a.birth().unwrap().clone();
     host_a.shutdown().unwrap();
     // Both declarations arise from real independent physical factories. The
     // first observed body is never edited or turned into a fresh authority.
-    let (factory_b, host_b) = f.factory("actual-factory-B");
+    let host_b = f.start_factory(Arc::clone(&factory_b));
     let uid_b = factory_b
         .database
         .read()
@@ -317,6 +348,7 @@ fn native_registered_learner_enrollment_tls_commits_exact_birth_and_preserves_id
         &committed
     );
 
+    f.refresh_source_before_observation(&host_b);
     let fact_pins = f.observe(&token);
     let mut changed_pins = committed.clone();
     let genuine_other_pin = changed_pins.nodes[&node(3)].tls_certificate_sha256.clone();
@@ -335,6 +367,7 @@ fn native_registered_learner_enrollment_tls_commits_exact_birth_and_preserves_id
         .tls_certificate_sha256 = committed.nodes[&node(4)].tls_certificate_sha256.clone();
     f.commit(restored);
 
+    f.refresh_source_before_observation(&host_b);
     let fact_incarnation = f.observe(&token);
     let mut retired = f.launches[0].metadata.lock().committed_topology().clone();
     retired.nodes.get_mut(&node(4)).unwrap().lifecycle = ClusterNodeLifecycle::Decommissioned;

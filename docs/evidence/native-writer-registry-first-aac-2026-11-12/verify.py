@@ -105,6 +105,18 @@ def private_parity(r, e, directory):
         raw = z.read(e['strict_journal_path'])
         require(len(raw) == e['strict_journal_bytes'] and digest(raw) == e['strict_journal_sha256'], 'original strict journal parity')
         originals = [json.loads(l) for l in raw.splitlines()]
+        projected_records = copy.deepcopy(originals)
+        for record in projected_records:
+            if record['kind'] == 'actual_rpc_phase':
+                frame = record['actual'].pop('raw_frame')
+                if frame is not None:
+                    b = bytes(frame)
+                    require(int.from_bytes(b[:4], 'big') == len(b)-4, 'original frame length header')
+                    record['actual'].update(raw_frame_sha256=digest(b), raw_frame_bytes=len(b), decoded_frame=json.loads(b[4:]))
+            if record['kind'] == 'logical_public_reply' and 'snapshot' in record['outcome']:
+                snapshot = record['outcome'].pop('snapshot')
+                record['outcome']['snapshot_topology'] = snapshot['topology']
+        require(projected_records == e['records'], 'all54 exact allowlisted original record projections')
         for original, projected in zip(originals, e['records']):
             if original['kind'] == 'actual_rpc_phase' and original['actual']['raw_frame'] is not None:
                 b = bytes(original['actual']['raw_frame']); a = projected['actual']

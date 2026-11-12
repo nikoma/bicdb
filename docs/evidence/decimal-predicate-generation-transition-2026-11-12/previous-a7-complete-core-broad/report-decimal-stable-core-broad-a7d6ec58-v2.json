@@ -1,0 +1,21 @@
+{
+  "source": "a7d6ec5899866e6b7872bbcb5cc78bc42c9dced0",
+  "scope": "Stable genericDecimalrepair1c runtime/tests exactunchanged, docs/evidencehead a7d6ec5899866e6b7872bbcb5cc78bc42c9dced0. Run complete Coreunit/doctest/integrationtargets with requiredactualchaoschild and bounded taskownedexecutablecleanup; preservefailedtests/no filters. NodeERPexactSUM/composedfinalheadnotincludedyet. No release/HA/applicationclaim. Initiala7attemptbuiltactualchaoschildbutrequiredrgmissing: no broadtest ran. Stagehashverifiedtaskownedstaticrg; originalscript unchanged. Reuse completedchaoschildbuildfromsamehead.",
+  "started_unix": 1794475874.4558074,
+  "steps": [
+    {
+      "command": [
+        "env",
+        "PATH=/root/bicdb-durability-s3/cargo/bin:/root/bicdb-durability-s3/host-control/bin:/usr/bin:/bin",
+        "bash",
+        "scripts/run-cargo-test-targets-bounded.sh",
+        "bicdb-core"
+      ],
+      "started_unix": 1794475874.4559238,
+      "exit": 101,
+      "finished_unix": 1794476023.5933042
+    }
+  ],
+  "status": "failed",
+  "finished_unix": 1794476023.5935009
+}

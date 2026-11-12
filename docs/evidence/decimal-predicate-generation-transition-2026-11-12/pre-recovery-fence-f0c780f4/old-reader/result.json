@@ -1,0 +1,209 @@
+{
+  "status": "old_reader_fence_and_cross_version_transition_passed",
+  "candidate_source": "f0c780f4ccdf3699d92506f8217f4446b4039d39",
+  "candidate_binary_sha256": "130847ea7667961b37d144f630d06e916329595306431226efcbdcfa6c8c3ef0",
+  "old_production_core": "f43583da4c34209e810c5e6a8f5925831b2949a1",
+  "old_reader_example_source": "1e6ea47c58dd1f3783640ee8747037855c3ad5b4",
+  "old_reader_binary_sha256": "bccebdb42b158ea900589061d89994d4c0d38d9deacfe7db590500511eea821f",
+  "new_reader_observations": [
+    {
+      "action": "verify",
+      "definitions": [
+        {
+          "collection": "precision_probe",
+          "fields": [
+            {
+              "MetadataPath": [
+                "business_key"
+              ]
+            }
+          ],
+          "kind": "b_tree",
+          "name": "native_decimal_partial",
+          "predicate": {
+            "left": {
+              "field": {
+                "MetadataPath": [
+                  "amount"
+                ]
+              },
+              "op": "field"
+            },
+            "op": "binary",
+            "operator": "greater",
+            "right": {
+              "op": "literal",
+              "value": "0.5"
+            },
+            "value_type": "decimal"
+          },
+          "unique": true
+        }
+      ],
+      "duplicate_attempt": {
+        "error": "unique index `native_decimal_partial` has duplicate keys",
+        "status": "rejected"
+      },
+      "index_ids": [
+        "acknowledged"
+      ],
+      "predicate_matches_acknowledged_row": true,
+      "rows_after": 1,
+      "rows_before": 1,
+      "status": "observed_and_closed",
+      "verification": [
+        {
+          "collection": "precision_probe",
+          "duplicate_entries": 0,
+          "expected_records": 1,
+          "index_name": "native_decimal_partial",
+          "indexed_records": 1,
+          "kind": "b_tree",
+          "last_verified_unix_ms": null,
+          "missing_entries": 0,
+          "size_bytes": 82,
+          "stale_entries": 0,
+          "valid": true,
+          "wrong_entries": 0
+        }
+      ],
+      "version": "1.0.483-beta"
+    },
+    {
+      "action": "verify",
+      "definitions": [
+        {
+          "collection": "precision_probe",
+          "fields": [
+            {
+              "MetadataPath": [
+                "business_key"
+              ]
+            }
+          ],
+          "kind": "b_tree",
+          "name": "native_decimal_partial",
+          "predicate": {
+            "left": {
+              "field": {
+                "MetadataPath": [
+                  "amount"
+                ]
+              },
+              "op": "field"
+            },
+            "op": "binary",
+            "operator": "greater",
+            "right": {
+              "op": "literal",
+              "value": "0.5"
+            },
+            "value_type": "decimal"
+          },
+          "unique": true
+        }
+      ],
+      "duplicate_attempt": {
+        "error": "unique index `native_decimal_partial` has duplicate keys",
+        "status": "rejected"
+      },
+      "index_ids": [
+        "acknowledged"
+      ],
+      "predicate_matches_acknowledged_row": true,
+      "rows_after": 1,
+      "rows_before": 1,
+      "status": "observed_and_closed",
+      "verification": [
+        {
+          "collection": "precision_probe",
+          "duplicate_entries": 0,
+          "expected_records": 1,
+          "index_name": "native_decimal_partial",
+          "indexed_records": 1,
+          "kind": "b_tree",
+          "last_verified_unix_ms": null,
+          "missing_entries": 0,
+          "size_bytes": 82,
+          "stale_entries": 0,
+          "valid": true,
+          "wrong_entries": 0
+        }
+      ],
+      "version": "1.0.483-beta"
+    },
+    {
+      "action": "verify",
+      "definitions": [
+        {
+          "collection": "precision_probe",
+          "fields": [
+            {
+              "MetadataPath": [
+                "business_key"
+              ]
+            }
+          ],
+          "kind": "b_tree",
+          "name": "native_decimal_partial",
+          "predicate": {
+            "left": {
+              "field": {
+                "MetadataPath": [
+                  "amount"
+                ]
+              },
+              "op": "field"
+            },
+            "op": "binary",
+            "operator": "greater",
+            "right": {
+              "op": "literal",
+              "value": "0.5"
+            },
+            "value_type": "decimal"
+          },
+          "unique": true
+        }
+      ],
+      "duplicate_attempt": {
+        "error": "unique index `native_decimal_partial` has duplicate keys",
+        "status": "rejected"
+      },
+      "index_ids": [
+        "acknowledged"
+      ],
+      "predicate_matches_acknowledged_row": true,
+      "rows_after": 1,
+      "rows_before": 1,
+      "status": "observed_and_closed",
+      "verification": [
+        {
+          "collection": "precision_probe",
+          "duplicate_entries": 0,
+          "expected_records": 1,
+          "index_name": "native_decimal_partial",
+          "indexed_records": 1,
+          "kind": "b_tree",
+          "last_verified_unix_ms": null,
+          "missing_entries": 0,
+          "size_bytes": 82,
+          "stale_entries": 0,
+          "valid": true,
+          "wrong_entries": 0
+        }
+      ],
+      "version": "1.0.483-beta"
+    }
+  ],
+  "old_reader": {
+    "error": "format compatibility error: database requires unknown format feature flag `decimal_predicate_comparison_v1`",
+    "status": "open_refused",
+    "version": "1.0.482-beta"
+  },
+  "old_reader_changed_no_upgraded_bytes": true,
+  "original_old_fixture_unchanged": true,
+  "physical_power_loss": false,
+  "mixed_version_cluster_qualified": false,
+  "recorded_unix": 1794477471.6014273
+}

@@ -1,0 +1,39 @@
+{
+  "source": "a7d6ec5899866e6b7872bbcb5cc78bc42c9dced0",
+  "scope": "Stable genericDecimalrepair1c runtime/tests exactunchanged, docs/evidencehead a7d6ec5899866e6b7872bbcb5cc78bc42c9dced0. Run complete Coreunit/doctest/integrationtargets with requiredactualchaoschild and bounded taskownedexecutablecleanup; preservefailedtests/no filters. NodeERPexactSUM/composedfinalheadnotincludedyet. No release/HA/applicationclaim. Initiala7attemptbuiltactualchaoschildbutrequiredrgmissing: no broadtest ran. Stagehashverifiedtaskownedstaticrg; originalscript unchanged. Reuse completedchaoschildbuildfromsamehead. v2completed537unitPASS+22integrationtargetsPASS, then28actualcrashharnesstestsfailedbeforecaseexecutionbecausemissingdurability_child. Preserve failures. Build bothotherrequiredhelpersdurability_child/ha_state_child; resumeeveryremainingunchangedtargetfromcommit_durability_crash, preflightall3helpers anddiscoveryexactprefix. Donotreruncompletedunchangedchecks. Newresumeper-targetreceipttransparent.",
+  "started_unix": 1794476320.7753778,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "build",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--example",
+        "durability_child",
+        "--example",
+        "ha_state_child"
+      ],
+      "started_unix": 1794476320.775785,
+      "exit": 0,
+      "finished_unix": 1794476322.8006089
+    },
+    {
+      "command": [
+        "env",
+        "PATH=/root/bicdb-durability-s3/cargo/bin:/root/bicdb-durability-s3/host-control/bin:/usr/bin:/bin",
+        "python3",
+        "/root/bicdb-durability-s3/host-control/resume_core_after_missing_durability_helper.py"
+      ],
+      "started_unix": 1794476322.8008528,
+      "exit": 0,
+      "finished_unix": 1794476809.6512375
+    }
+  ],
+  "status": "focused_passed",
+  "finished_unix": 1794476809.6514032
+}

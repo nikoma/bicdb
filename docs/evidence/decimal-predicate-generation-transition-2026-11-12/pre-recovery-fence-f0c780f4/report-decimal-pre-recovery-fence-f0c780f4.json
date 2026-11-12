@@ -1,0 +1,68 @@
+{
+  "source": "f0c780f4ccdf3699d92506f8217f4446b4039d39",
+  "scope": "Finalreviewfoundrequiredordering: legacyreaderflagmustbefsyncedbeforePagedRecords::open/Nativeindexredo, notjustlaterrebuild. Movefencetopreflightafterconfig/definitionvalidation; disabledindex/fsyncoffstillrefusewithoutmutations. NewSIGABRTboundaryassertspagedbytes/catalogunchangedwhilereaderfencealreadydurable;9cuts+allactuallegacyACK/duplicate/multiple/16IOcontrols preserved. Prior1cfocused/oldreaderresultsremainhistorical, notthisnewhead. Broadpriora7usefulrunallowedfinish; finalcomposedheadbroadstillrequired.",
+  "started_unix": 1794477177.3941078,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--lib",
+        "db::decimal_predicate::tests",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794477177.394264,
+      "exit": 0,
+      "finished_unix": 1794477206.288693
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--test",
+        "decimal_predicate_generations",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794477206.2888389,
+      "exit": 0,
+      "finished_unix": 1794477235.9770103
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "build",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--example",
+        "decimal_predicate_upgrade_probe"
+      ],
+      "started_unix": 1794477235.9771779,
+      "exit": 0,
+      "finished_unix": 1794477237.049244
+    }
+  ],
+  "status": "focused_passed",
+  "binary": "/root/bicdb-durability-s3/qualification-artifacts-debug/f0c780f4ccdf3699d92506f8217f4446b4039d39/decimal_predicate_upgrade_probe",
+  "binary_sha256": "130847ea7667961b37d144f630d06e916329595306431226efcbdcfa6c8c3ef0",
+  "finished_unix": 1794477237.0990193
+}

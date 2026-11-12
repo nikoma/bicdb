@@ -54,3 +54,20 @@ backup/application acceptance, merge and remote-main verification remain
 required. This evidence establishes neither physical power-loss durability nor
 mixed-version cluster qualification. Fixtures omit an unrelated generated mesh
 private key; original private fixtures remain preserved on the build host.
+
+## Pre-recovery reader fence follow-up
+
+Final review identified that a reader fence must precede Native page recovery,
+which can replay index mutations before the later private rebuild. Source
+`f0c780f4ccdf3699d92506f8217f4446b4039d39` moves that fence into preflight.
+Its new process cut verifies that the fence is durable while all old paged
+bytes and the definition catalog remain unchanged. All **13 focused controls**
+pass, including nine process boundaries and the existing 16 catalog I/O faults.
+The independent old-reader executable control also passes at f0. See
+`pre-recovery-fence-f0c780f4/summary.json`.
+
+The previous a7/1c revision completed the full Core unit suite (537 passes) and
+all 125 integration targets. Required helper setup failures and the exact
+source-identical resume are preserved under `previous-a7-complete-core-broad`.
+A full suite on actual f0 is active separately; earlier broad passes are not
+attributed to the ordering change or to the future ERP/SUM composition.

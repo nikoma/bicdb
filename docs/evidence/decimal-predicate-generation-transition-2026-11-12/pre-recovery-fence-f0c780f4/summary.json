@@ -1,0 +1,15 @@
+{
+  "source": "f0c780f4ccdf3699d92506f8217f4446b4039d39",
+  "focused_passed": 13,
+  "focused_failed": 0,
+  "unit_controls": 4,
+  "integration_controls": 9,
+  "actual_processcut_boundaries": 9,
+  "sequential_two_index_publication_cuts": 2,
+  "corruptplan_cases": 4,
+  "catalog_EIO_cases": 16,
+  "old_reader_control": "IndependentPASS at actualf0;3new-readeropens preserveACK/uniqueness, old482refusesflagwithoutchangingbytes,originaloldfixtureunchanged.",
+  "new_ordering": "RequiredflagnowfsyncedbeforePagedRecords::open/Nativeindexredo, notjustlaterrebuild. Cutafterflagcheckspaged/catalogbytesstilluntouched; disabledsecondary/fsyncofflegacyrefusalsremainbeforemutations.",
+  "earlier_broad": "Previousa7 runtime/tests=1c: full537Coreunit+all125integrationtargetspassacrosspreservedunchangedbatches. Missingrgand28missingdurability_childharnessfailuresretained, nohiddenfailures.",
+  "current_broad": "Actualf0fullCoreunit/doc/all125targets active; cannot attributepriora7passes to f0. All3helperbinariesbuilt actualf0."
+}

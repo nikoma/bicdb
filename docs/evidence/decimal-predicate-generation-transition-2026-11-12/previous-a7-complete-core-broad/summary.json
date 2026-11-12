@@ -1,0 +1,13 @@
+{
+  "source": "a7d6ec5899866e6b7872bbcb5cc78bc42c9dced0",
+  "runtime_tests_exact": "1c943d476516b3c4cb295ce873b881c9bc135fe6",
+  "status": "full_core_target_coverage_passed_across_preserved_batches",
+  "unit_tests_passed": 537,
+  "unit_ignored": 5,
+  "integration_targets_passed": 125,
+  "completed_before_missing_helper": 21,
+  "resumed_remaining_targets_passed": 104,
+  "doctests": "Successful,0tests",
+  "coverage": "Originaltests/assertions/timeoutsunchanged,allthreeactualrequiredhelpersbuilt. Code/sourceunchangedacrossresume; originalmissinghelper28harnessfailurespreserved,separatelyidentified. Childhelperresultnotdoublecounted.",
+  "does_not_qualify": "Newf0earlyfenceorfinalERP/SUMcomposition"
+}

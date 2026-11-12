@@ -34,6 +34,7 @@ impl RecoveryFenceQuorumRound {
             role.purpose(),
             MetadataRecoveryRolePurpose::NormalRecovery
                 | MetadataRecoveryRolePurpose::CommittedHandoff { .. }
+                | MetadataRecoveryRolePurpose::CurrentJointRecovery { .. }
         ) {
             return Err(invalid(
                 "read-only observation role cannot grant recovery mutation authority",
@@ -389,25 +390,30 @@ mod tests {
             }
         }
         fn role(&self, nonce: Uuid) -> RecoveryRoleAdmission {
+            self.role_for_purpose(nonce, MetadataRecoveryRolePurpose::NormalRecovery)
+                .unwrap()
+        }
+        fn role_for_purpose(
+            &self,
+            nonce: Uuid,
+            purpose: MetadataRecoveryRolePurpose,
+        ) -> Result<RecoveryRoleAdmission> {
             let id = &self.nodes[0];
             let provider = &self.providers[id];
             let actual = provider.local_participant();
             let business = Uuid::now_v7();
             let challenge = Uuid::now_v7();
             let range = self.topology.ranges.values().next().unwrap();
-            let purpose = MetadataRecoveryRolePurpose::NormalRecovery;
-            let witness = provider
-                .witness_recovery_role(
-                    &actual,
-                    business,
-                    range.id,
-                    range.epoch,
-                    nonce,
-                    challenge,
-                    purpose.clone(),
-                    &self.parent,
-                )
-                .unwrap();
+            let witness = provider.witness_recovery_role(
+                &actual,
+                business,
+                range.id,
+                range.epoch,
+                nonce,
+                challenge,
+                purpose.clone(),
+                &self.parent,
+            )?;
             RecoveryRoleAdmission::from_witness(
                 witness,
                 &actual,
@@ -419,7 +425,6 @@ mod tests {
                 challenge,
                 &purpose,
             )
-            .unwrap()
         }
         fn observe(
             &self,
@@ -438,6 +443,42 @@ mod tests {
                 )
                 .unwrap()
         }
+    }
+
+    #[test]
+    fn actual_current_joint_metadata_role_starts_only_an_unfinished_fence_round_and_observer_stays_readonly(
+    ) {
+        let fixture = Fixture::new(3);
+        // Request DATA only: the real metadata role is intentionally NOT a
+        // protected native-domain/fence observation or data-quorum grant.
+        let purpose = MetadataRecoveryRolePurpose::CurrentJointRecovery {
+            joint_decision_sha256: "a".repeat(64),
+        };
+        let role = fixture
+            .role_for_purpose(Uuid::now_v7(), purpose.clone())
+            .unwrap();
+        role.require_live_request().unwrap();
+        let round = RecoveryFenceQuorumRound::begin(role, &fixture.parent).unwrap();
+        assert_eq!(round.scope().purpose, purpose);
+        assert!(
+            round.finish().is_err(),
+            "a fresh metadata intent without actual member fences is NEVER recovery authority"
+        );
+        let observer = MetadataRecoveryRolePurpose::ObserveFencedRecovery {
+            coordinator_node_id: fixture.nodes[0].clone(),
+            coordinator_incarnation: fixture.topology.nodes[&fixture.nodes[0]].incarnation,
+            committed_handoff: None,
+            current_joint_decision_sha256: None,
+        };
+        let error = fixture
+            .role_for_purpose(Uuid::now_v7(), observer)
+            .unwrap_err();
+        assert!(
+            error
+                .to_string()
+                .contains("read-only observation cannot authorize recovery mutations"),
+            "{error}"
+        );
     }
 
     #[test]

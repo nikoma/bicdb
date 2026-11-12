@@ -1,0 +1,18 @@
+{
+  "source": "e8c426a73a14c1d97851082b90b815da60d4ef82",
+  "status": "Core_completed_passed",
+  "Core": {
+    "Cargo_targets": 127,
+    "passed": 1707,
+    "failed": 0,
+    "ignored": 17,
+    "child_summaries_excluded": 1
+  },
+  "diagnostic_server": {
+    "source": "e8c426a73a14c1d97851082b90b815da60d4ef82",
+    "binary": "/root/bicdb-durability-s3/qualification-artifacts-debug/e8c426a73a14c1d97851082b90b815da60d4ef82/oracle_server",
+    "binary_sha256": "f296acc1c432256047aca0e91ed85767af753c17441ff2cc14d6ed4b942ec4aa"
+  },
+  "scope": "Exacte8partition-onlyreaderfix. Predates c727 composedrename/catalog and1348livecache/d7bSQLcertificate changes; not their broadqualification. Debugoracle_serverbuild only, not currentRootCLI/release/deployment or original95/1464 appsuccess. No sourceversionmergeclaim. Originalassertions/waits intact.",
+  "CPU_change": "No adjustment was made: actualunitbecameterminalbeforetheguardedresourcechange."
+}

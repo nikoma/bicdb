@@ -1,0 +1,37 @@
+{
+  "source": "e8c426a73a14c1d97851082b90b815da60d4ef82",
+  "files": {
+    "durability_child": {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/examples/durability_child",
+      "sha256": "4e74396f199f1ff8f101f74e5717e05b48ba32e19cea399c2a21df7fd835fabd",
+      "bytes": 47595880,
+      "required_features": {
+        "sql_partition_execution_v1": true,
+        "decimal_predicate_comparison_v1": true,
+        "application_unique_scope_transition_v1": true
+      }
+    },
+    "chaos_child": {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/examples/chaos_child",
+      "sha256": "6095dc8adf498a3e2b1d74cba4f98c592d1ca6b1369826c5f62ffbb295c13a8c",
+      "bytes": 46125232,
+      "required_features": {
+        "sql_partition_execution_v1": true,
+        "decimal_predicate_comparison_v1": true,
+        "application_unique_scope_transition_v1": true
+      }
+    },
+    "ha_state_child": {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/examples/ha_state_child",
+      "sha256": "bad78a99a5612376feac50d70e636af273b67aaee9f4ce450243e1cf06ec29bf",
+      "bytes": 45622472,
+      "required_features": {
+        "sql_partition_execution_v1": true,
+        "decimal_predicate_comparison_v1": true,
+        "application_unique_scope_transition_v1": true
+      }
+    }
+  },
+  "recorded_unix": 1794520612.8653207,
+  "scope": "Explicit current-source Core helper build succeeded; helper custody only, not CLI/release/deployment."
+}

@@ -824,3 +824,5 @@ fn native_strong_point_policy_native_wal_publication_failure_fences_old_guard_an
 mod after_transfer;
 
 mod endpoint_tests;
+
+mod mismatch_tests;

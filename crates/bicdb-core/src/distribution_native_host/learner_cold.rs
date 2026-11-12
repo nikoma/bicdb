@@ -181,7 +181,7 @@ impl NativeColdLearnerMetadataHost {
             return Ok(id);
         }
         cut("before-bind")?;
-        let address = current.nodes[&self.factory.spec.node_id]
+        let address: std::net::SocketAddr = current.nodes[&self.factory.spec.node_id]
             .address
             .parse()
             .map_err(|_| invalid("cold learner needs numeric committed endpoint"))?;

@@ -577,7 +577,11 @@ fn actual_installing_replacement_covers_higher_accepted_cut_after_cold_majority_
     range.epoch += 1;
     range.leader = node("n2");
     let range = range.clone();
-    super::installing_replacement_case::commit_actual_higher_epoch(f.root.path(), &old, &new);
+    super::installing_replacement_case::commit_actual_higher_epoch(
+        &f.root.path().join("recovery-metadata"),
+        &old,
+        &new,
+    );
     *f.topology.write() = new.clone();
     let p =
         test_recovery_metadata_cluster(&f.root.path().join("recovery-metadata"), &new, &node("n2"))

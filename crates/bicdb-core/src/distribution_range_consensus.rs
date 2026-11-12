@@ -3339,11 +3339,28 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
         };
         let native_abort_attempt = if let Some(database) = native_database {
             if database.native_abort_catalogue_store_id()?.is_some() {
-                Some(
-                    self.local_service
-                        .lock()
-                        .begin_native_abort_attempt(database, &range, &command, authority)?,
-                )
+                let started = self
+                    .local_service
+                    .lock()
+                    .begin_native_abort_attempt(database, &range, &command, authority);
+                match started {
+                    Ok(attempt) => Some(attempt),
+                    Err(error) => {
+                        // The protected writer-start may already be durable.
+                        // Hold the actual lease through Core cleanup, without
+                        // inventing a prepare-only/no-effect receipt.
+                        self.recovered_epochs.lock().remove(&range.id);
+                        return Err(self.retain_native_uncertain_admission(
+                            &command, mutation, admission_rejection,
+                            BicDbError::CommitOutcomeUnknown {
+                                sequence: None,
+                                transaction_id: Some(command.transaction_id),
+                                incarnation: self.local_incarnation.clone(),
+                                detail: format!("range {} command {} writer-start publication is uncertain before Prepare: {error}; protected controls require recovery", range.id, command.command_id),
+                            },
+                        ));
+                    }
+                }
             } else {
                 None
             }
@@ -3422,17 +3439,28 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
         // Native uncertainty starts BEFORE attempting the local Commit write:
         // persistence can succeed even when its error/reply is lost. No native
         // abort may be inferred from any failure after this boundary.
-        let local_commit = if let Some(database) = native_database {
-            if database.native_abort_catalogue_store_id()?.is_some() {
-                self.local_service
-                    .lock()
-                    .commit_native_range_write_with_context(
-                        database,
-                        &range,
-                        &self.local_node_id,
-                        &command,
-                        authority,
-                    )
+        let local_commit = (|| {
+            if let Some(database) = native_database {
+                if database.native_abort_catalogue_store_id()?.is_some() {
+                    self.local_service
+                        .lock()
+                        .commit_native_range_write_with_context(
+                            database,
+                            &range,
+                            &self.local_node_id,
+                            &command,
+                            authority,
+                        )
+                } else {
+                    self.local_service
+                        .lock()
+                        .commit_range_write_decision_with_mutation(
+                            &range,
+                            &self.local_node_id,
+                            &command,
+                            authority,
+                        )
+                }
             } else {
                 self.local_service
                     .lock()
@@ -3443,16 +3471,7 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
                         authority,
                     )
             }
-        } else {
-            self.local_service
-                .lock()
-                .commit_range_write_decision_with_mutation(
-                    &range,
-                    &self.local_node_id,
-                    &command,
-                    authority,
-                )
-        };
+        })();
         if let Err(error) = local_commit {
             if native_database.is_some() {
                 self.recovered_epochs.lock().remove(&range.id);

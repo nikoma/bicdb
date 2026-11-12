@@ -45,6 +45,27 @@ impl NativeAbortDomain {
             restore_activation: source.restore_activation().cloned(),
         })
     }
+    fn require_recovery_source(
+        &self,
+        source: &SourceRangeImageLineage,
+        role: &RecoveryRoleAdmission,
+    ) -> Result<()> {
+        self.require_role(role)?;
+        // This is a NO-DATA recovery check, not an ordinary write grant. A
+        // historical-only serving floor may coexist with the actual physical
+        // same-voter prefix which the fresh promises are about to resolve.
+        if self.cluster_id != *source.cluster_id()
+            || self.bootstrap_id != source.bootstrap_id()
+            || self.range != stable_range(source.base_range())
+            || source.base_range().epoch > role.current_range().epoch
+            || self.members != source.physical_range_members()?
+            || self.schema_sha256 != source.schema_sha256()
+            || self.restore_activation.as_ref() != source.restore_activation()
+        {
+            return Err(range_write_error("abort recovery needs actual same-voter physical history; joint-domain bridge is required otherwise"));
+        }
+        Ok(())
+    }
     pub(crate) fn require_observer(
         &self,
         role: &crate::distribution_range_recovery::RecoveryObservationRoleAdmission,
@@ -915,7 +936,8 @@ impl RangeWriteStore {
                 // The absence is meaningful ONLY inside this actual cap1,
                 // from-birth registered StoreID and drained complete prefix.
                 let source = db.current_native_range_source_lineage(request.scope.range_id)?;
-                let domain = NativeAbortDomain::from_source(&source, role.current_range())?;
+                let domain = candidate.record().domain.clone();
+                domain.require_recovery_source(&source, role)?;
                 let progress = self.progress(request.scope.range_id);
                 if domain != candidate.record().domain
                     || source.range_index().checked_add(1) != Some(request.range_index)

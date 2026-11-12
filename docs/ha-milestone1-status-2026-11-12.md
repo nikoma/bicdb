@@ -8,7 +8,36 @@ the same tree. A source version is not a published binary or verified deployment
 Evidence updates do not establish a new release binary or deployment. The
 larger read/recovery candidate remains unmerged; its source-scoped results follow.
 
-## Latest verified checkpoint
+## Read-safety foundation delivered: 1.0.489-beta
+
+[PR #157](https://github.com/nikoma/bicdb/pull/157) merged on November 12 at
+18:05 UTC as GitHub main commit
+[`b9394418bdf9d87864c2c12d6fe81bb7d4039d53`](https://github.com/nikoma/bicdb/commit/b9394418bdf9d87864c2c12d6fe81bb7d4039d53),
+source **1.0.489-beta**. The merge tree exactly matches tested candidate
+`2ae800454d57b5f5660a36d27a8f309d0ebb4e9a`; all 29 source-version identities
+were checked. The temporary delivery branches were removed after verification.
+This records the HA foundation's delivery revision, not an assertion that489
+will remain the newest main version.
+
+The complete [required test run 43260701749](https://github.com/nikoma/bicdb/actions/runs/43260701749)
+and [stock-adapter Rails 43260701703](https://github.com/nikoma/bicdb/actions/runs/43260701703)
+passed on exact 2ae. Library counts: Core 847 passed/zero failed/nine ignored;
+SQL 866/zero failed/four ignored; PostgreSQL-wire 151/zero failed. The remaining
+workspace job passes, with 126 test-invocation summaries, not 126 unique tests.
+All-target and isolated no-default-feature consumer compilation, formatting,
+licensing, selector and repository-boundary checks pass. Earlier failed
+compositions remain preserved with their diagnoses; none was waived.
+
+Delivered scope is fail-closed missing-catalogue custody and scoped native
+point-read/recovery identity, writer and visibility fences. The larger native
+Abort/joint/DATA/relocation candidate remains **unmerged and unqualified**.
+No 1.0.489-beta release binary, published download, deployment, physical RPO/RTO,
+automatic five-node convergence or sustained capacity increase was produced.
+The original Azure qualification remains **FAILED**, and production admission
+remains unchanged. The following checkpoints retain their original revisions
+and pre-merge status; they are not newer claims that read489 is still unmerged.
+
+## Earlier verified checkpoint (before the read489 merge)
 
 Verified GitHub main is now **1.0.488-beta**,
 `d1d816afe0446b2a614c38004738d3d1c8bbc547`, containing tested runtime

@@ -1313,7 +1313,7 @@ impl ApplicationSecurityContractV1 {
                 _ => {
                     return invalid(
                         "BicDB application package names an unknown host security route",
-                    )
+                    );
                 }
             };
         let expected_scheme = (!public).then(|| self.auth_scheme.clone()).flatten();
@@ -2637,6 +2637,12 @@ pub struct ApplicationManifestV2 {
     pub resources: Vec<ResourceContractV1>,
     #[serde(default)]
     pub invariants: Vec<ApplicationInvariantV1>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub native_fact_publications: Vec<NativeFactPublicationV1>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub native_fact_imports: Vec<NativeFactImportV1>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub native_fact_projection_imports: Vec<NativeFactProjectionImportV1>,
     #[serde(default)]
     pub migrations: Vec<MigrationPlanV1>,
     #[serde(default)]
@@ -2697,6 +2703,7 @@ impl ApplicationManifestV2 {
         }
         self.package.validate(&extension.identity.name)?;
         reject_unsupported_features(&self.required_features)?;
+        self.validate_native_facts(extension)?;
         unique_by(
             "relation permission",
             self.relation_permissions.iter().map(|item| &item.relation),
@@ -3246,6 +3253,20 @@ impl ApplicationManifestV2 {
         }
         if let Some(program) = &self.application_program {
             program.validate()?;
+            if application_program_uses_builtin(program, &["query.decimal_sum"])
+                && !self
+                    .required_features
+                    .contains(&ApplicationFeature::ExactDecimalListSum)
+            {
+                return invalid("query.decimal_sum requires signed exact_decimal_list_sum feature");
+            }
+            if application_program_uses_builtin(program, &["finance.proportional_interval"])
+                && !self
+                    .required_features
+                    .contains(&ApplicationFeature::ExactProportionalIntervals)
+            {
+                return invalid("finance.proportional_interval requires signed exact_proportional_intervals feature");
+            }
             let uses_typed_declared_sql_projections =
                 application_program_uses_typed_declared_sql_projections(program);
             if uses_typed_declared_sql_projections
@@ -5179,6 +5200,13 @@ fn validate_carrier_expression(expression: &ApplicationExpressionV1) -> Result<(
             arguments,
             ..
         } => {
+            if *kind == ApplicationCallKindV1::Builtin && target == "finance.proportional_interval"
+            {
+                validate_proportional_interval_call(expression)?;
+            }
+            if *kind == ApplicationCallKindV1::Builtin && target == "query.decimal_sum" {
+                validate_decimal_list_sum_call(expression)?;
+            }
             for argument in arguments {
                 validate_carrier_expression(&argument.value)?;
             }
@@ -5295,7 +5323,9 @@ fn validate_resource_policy_expression(
         ApplicationExpressionV1::Variable { name } => invalid(format!(
             "resource policy references undeclared field or variable `{name}`"
         )),
-        ApplicationExpressionV1::Literal { value } if valid_resource_policy_literal(value) => Ok(()),
+        ApplicationExpressionV1::Literal { value } if valid_resource_policy_literal(value) => {
+            Ok(())
+        }
         ApplicationExpressionV1::Literal { .. } => {
             invalid("resource policy literals must be scalar or arrays of scalars")
         }
@@ -5310,9 +5340,7 @@ fn validate_resource_policy_expression(
         }
         ApplicationExpressionV1::Field { target, field } => {
             let ApplicationExpressionV1::Variable { name } = target.as_ref() else {
-                return invalid(
-                    "resource policy field access requires auth or a relation binding",
-                );
+                return invalid("resource policy field access requires auth or a relation binding");
             };
             let resource_name = bindings.get(name).ok_or_else(|| {
                 ExtensionError::InvalidManifest(format!(
@@ -5324,7 +5352,11 @@ fn validate_resource_policy_expression(
                 .iter()
                 .find(|resource| resource.name == *resource_name)
                 .expect("resource policy binding resources are validated");
-            if resource.fields.iter().any(|candidate| candidate.name == *field) {
+            if resource
+                .fields
+                .iter()
+                .any(|candidate| candidate.name == *field)
+            {
                 Ok(())
             } else {
                 invalid(format!(
@@ -5332,11 +5364,9 @@ fn validate_resource_policy_expression(
                 ))
             }
         }
-        ApplicationExpressionV1::Unary { operator, value, .. }
-            if matches!(operator.as_str(), "not" | "negate") =>
-        {
-            recurse(value, bindings)
-        }
+        ApplicationExpressionV1::Unary {
+            operator, value, ..
+        } if matches!(operator.as_str(), "not" | "negate") => recurse(value, bindings),
         ApplicationExpressionV1::Binary {
             operator,
             left,
@@ -5354,7 +5384,8 @@ fn validate_resource_policy_expression(
                 | "greater_equal"
                 | "less"
                 | "less_equal"
-        ) => {
+        ) =>
+        {
             recurse(left, bindings)?;
             recurse(right, bindings)
         }
@@ -5384,12 +5415,7 @@ fn validate_resource_policy_expression(
             condition,
         } => {
             validate_identifier("resource policy binding", binding)?;
-            if binding == "auth"
-                || subject
-                    .fields
-                    .iter()
-                    .any(|field| field.name == *binding)
-            {
+            if binding == "auth" || subject.fields.iter().any(|field| field.name == *binding) {
                 return invalid(format!(
                     "resource policy binding `{binding}` shadows a trusted or subject value"
                 ));
@@ -5459,7 +5485,8 @@ fn validate_resource_index_predicate(
                 | "greater_equal"
                 | "less"
                 | "less_equal"
-        ) => {
+        ) =>
+        {
             validate_resource_index_predicate(left, fields)?;
             validate_resource_index_predicate(right, fields)
         }
@@ -5643,22 +5670,23 @@ fn collect_carrier_blob_signed_methods_expression(
                 let method = arguments
                     .iter()
                     .find(|argument| argument.name.as_deref() == Some("method"));
-                let method =
-                    match method {
-                        None => "GET".to_string(),
-                        Some(ApplicationArgumentV1 {
-                            value:
-                                ApplicationExpressionV1::Literal {
-                                    value: JsonValue::String(value),
-                                },
-                            ..
-                        }) if matches!(value.to_ascii_uppercase().as_str(), "GET" | "PUT") => {
-                            value.to_ascii_uppercase()
-                        }
-                        _ => return invalid(
+                let method = match method {
+                    None => "GET".to_string(),
+                    Some(ApplicationArgumentV1 {
+                        value:
+                            ApplicationExpressionV1::Literal {
+                                value: JsonValue::String(value),
+                            },
+                        ..
+                    }) if matches!(value.to_ascii_uppercase().as_str(), "GET" | "PUT") => {
+                        value.to_ascii_uppercase()
+                    }
+                    _ => {
+                        return invalid(
                             "BicDB application blob signed URL method must be a literal GET or PUT",
-                        ),
-                    };
+                        );
+                    }
+                };
                 methods.insert(method);
             }
             for argument in arguments {
@@ -6068,6 +6096,10 @@ impl EgressDeclaration {
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 #[serde(rename_all = "snake_case")]
 pub enum ApplicationFeature {
+    ExactDecimalListSum,
+    ExactProportionalIntervals,
+    NativeImmutableFacts,
+    NativeFactProjectionContracts,
     TrustedConnectionIdentity,
     ExactColumnAuthority,
     OidcRs256,
@@ -6427,6 +6459,167 @@ pub struct ApplicationInvariantTransitionV1 {
     pub value: ApplicationExpressionV1,
 }
 
+/// Signed immutable fact projection. This is predicate authority, never a local resource.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct NativeFactFieldV1 {
+    pub name: String,
+    pub field_type: FieldType,
+    pub nullable: bool,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct NativeFactPublicationV1 {
+    pub version: u32,
+    pub name: String,
+    pub owner_application: String,
+    pub resource: String,
+    pub relation: String,
+    pub stable_key: String,
+    pub tenant_field: String,
+    pub fields: Vec<NativeFactFieldV1>,
+    pub consumers: BTreeSet<String>,
+    pub read_roles: BTreeSet<String>,
+    pub fingerprint: String,
+    pub accept_new_references: bool,
+}
+
+impl NativeFactPublicationV1 {
+    /// Admission is monotonic durable policy, separate from structural identity.
+    pub fn structural_json(&self) -> Result<JsonValue> {
+        let mut value = serde_json::to_value(self)
+            .map_err(|error| ExtensionError::InvalidManifest(error.to_string()))?;
+        let object = value
+            .as_object_mut()
+            .expect("publication serializes as object");
+        object.remove("fingerprint");
+        object.remove("accept_new_references");
+        Ok(value)
+    }
+
+    fn validate(&self) -> Result<()> {
+        if self.version != 1 {
+            return invalid("native fact publication requires version 1");
+        }
+        validate_identifier("native fact publication", &self.name)?;
+        validate_nonempty("native fact owner", &self.owner_application, 256)?;
+        validate_identifier("native fact resource", &self.resource)?;
+        validate_nonempty("native fact relation", &self.relation, 256)?;
+        validate_nonempty("native fact stable key", &self.stable_key, 256)?;
+        validate_identifier("native fact tenant field", &self.tenant_field)?;
+        validate_sha256("native fact publication fingerprint", &self.fingerprint)?;
+        if self.fields.is_empty() || self.consumers.is_empty() || self.read_roles.is_empty() {
+            return invalid(
+                "native fact projection, consumers and roles must be explicit nonempty sets",
+            );
+        }
+        let mut names = BTreeSet::new();
+        for field in &self.fields {
+            validate_identifier("native fact field", &field.name)?;
+            if !names.insert(&field.name)
+                || !matches!(
+                    field.field_type,
+                    FieldType::String
+                        | FieldType::Bool
+                        | FieldType::Int64
+                        | FieldType::Float64
+                        | FieldType::Decimal
+                        | FieldType::Uuid
+                        | FieldType::Date
+                )
+            {
+                return invalid("native fact fields must be unique supported scalar fields");
+            }
+        }
+        if !self.fields.iter().any(|field| {
+            field.name == self.tenant_field
+                && field.field_type == FieldType::Uuid
+                && !field.nullable
+        }) {
+            return invalid("native fact tenant must be a published nonnullable UUID");
+        }
+        validate_string_set("native fact consumers", &self.consumers)?;
+        validate_string_set("native fact roles", &self.read_roles)
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct NativeFactImportV1 {
+    pub resource: String,
+    pub subject_resources: BTreeSet<String>,
+    pub publication: NativeFactPublicationV1,
+}
+
+/// Nonauthoritative build projection: actual signed owner catalog is mandatory.
+/// No physical relation, admission state or recursive package digest is imported.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct NativeFactProjectionContractV1 {
+    pub version: u32,
+    pub owner_application: String,
+    pub owner_version: String,
+    pub publication_name: String,
+    pub resource: String,
+    pub stable_key: String,
+    pub tenant_field: String,
+    pub fields: Vec<NativeFactFieldV1>,
+    pub consumers: BTreeSet<String>,
+    pub read_roles: BTreeSet<String>,
+    pub publication_fingerprint: String,
+}
+
+impl NativeFactProjectionContractV1 {
+    pub fn validate(&self) -> Result<()> {
+        let version = semver::Version::parse(&self.owner_version).map_err(|_| {
+            ExtensionError::InvalidManifest(
+                "fact projection requires exact canonical owner SemVer".into(),
+            )
+        })?;
+        if version.to_string() != self.owner_version {
+            return invalid("fact projection requires exact canonical owner SemVer");
+        }
+        // Reuse scalar/identity checks only. This local sentinel is NEVER a target relation.
+        NativeFactPublicationV1 {
+            version: self.version,
+            name: self.publication_name.clone(),
+            owner_application: self.owner_application.clone(),
+            resource: self.resource.clone(),
+            relation: "__descriptor_validation_only__".into(),
+            stable_key: self.stable_key.clone(),
+            tenant_field: self.tenant_field.clone(),
+            fields: self.fields.clone(),
+            consumers: self.consumers.clone(),
+            read_roles: self.read_roles.clone(),
+            fingerprint: self.publication_fingerprint.clone(),
+            accept_new_references: true,
+        }
+        .validate()
+    }
+    pub fn matches_publication(&self, actual: &NativeFactPublicationV1) -> bool {
+        self.version == actual.version
+            && self.owner_application == actual.owner_application
+            && self.publication_name == actual.name
+            && self.resource == actual.resource
+            && self.stable_key == actual.stable_key
+            && self.tenant_field == actual.tenant_field
+            && self.fields == actual.fields
+            && self.consumers == actual.consumers
+            && self.read_roles == actual.read_roles
+            && self.publication_fingerprint == actual.fingerprint
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct NativeFactProjectionImportV1 {
+    pub resource: String,
+    pub subject_resources: BTreeSet<String>,
+    pub descriptor_sha256: String,
+    pub contract: NativeFactProjectionContractV1,
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct ApplicationInvariantV1 {
@@ -6459,6 +6652,18 @@ impl ApplicationInvariantV1 {
                     self.name, self.subject_resource
                 ))
             })?;
+        if invariant_has_foreign_fact(application, &self.expression) {
+            if self.kind != ApplicationInvariantKindV1::MustAlways || self.transition.is_some() {
+                return invalid(
+                    "foreign native fact references require immutable positive must_always",
+                );
+            }
+            validate_positive_native_fact_expression(
+                application,
+                &self.subject_resource,
+                &self.expression,
+            )?;
+        }
         let mut dependencies = BTreeSet::from([self.subject_resource.clone()]);
         let bindings = BTreeMap::new();
         validate_invariant_expression(
@@ -6496,6 +6701,186 @@ impl ApplicationInvariantV1 {
             )?;
         }
         Ok(())
+    }
+}
+
+fn validate_decimal_list_sum_call(expression: &ApplicationExpressionV1) -> Result<()> {
+    let ApplicationExpressionV1::Call {
+        kind: ApplicationCallKindV1::Builtin,
+        target,
+        method,
+        result_type,
+        argument_types,
+        argument_item_types,
+        result_projection,
+        arguments,
+    } = expression
+    else {
+        return invalid("exact Decimal list sum requires its typed builtin call");
+    };
+    if target != "query.decimal_sum"
+        || method.is_some()
+        || result_projection.is_some()
+        || *result_type != Some(ApplicationExpressionTypeV1::Decimal)
+        || argument_types != &[ApplicationExpressionTypeV1::Other]
+        || argument_item_types != &[Some(ApplicationExpressionTypeV1::Decimal)]
+        || arguments.len() != 1
+        || arguments[0].name.is_some()
+    {
+        return invalid(
+            "query.decimal_sum requires one positional typed Decimal list and returns Decimal",
+        );
+    }
+    Ok(())
+}
+
+fn validate_proportional_interval_call(expression: &ApplicationExpressionV1) -> Result<()> {
+    let ApplicationExpressionV1::Call {
+        kind: ApplicationCallKindV1::Builtin,
+        target,
+        method,
+        result_type,
+        argument_types,
+        argument_item_types,
+        result_projection,
+        arguments,
+    } = expression
+    else {
+        return invalid("exact proportional interval requires a scalar builtin call");
+    };
+    use ApplicationExpressionTypeV1::{Decimal, Int, String as Text};
+    if target != "finance.proportional_interval"
+        || method.is_some()
+        || result_projection.is_some()
+        || *result_type != Some(Decimal)
+        || argument_types != &[Decimal, Decimal, Int, Text, Text, Int]
+        || argument_item_types.len() != 6
+        || argument_item_types.iter().any(Option::is_some)
+        || arguments.len() != 6
+        || arguments.iter().any(|argument| argument.name.is_some())
+    {
+        return invalid("finance.proportional_interval requires six positional Decimal, Decimal, Int, String, String, Int scalars and returns Decimal");
+    }
+    Ok(())
+}
+
+// Check scalar signatures against actual local or published field types as
+// well as call metadata; a String field cannot masquerade as Date or Decimal.
+fn invariant_scalar_operand_type(
+    application: &ApplicationManifestV2,
+    subject: &ResourceContractV1,
+    bindings: &BTreeMap<String, String>,
+    expression: &ApplicationExpressionV1,
+) -> Option<ApplicationExpressionTypeV1> {
+    let kind = |field_type: &FieldType| match field_type {
+        FieldType::Date => Some(ApplicationExpressionTypeV1::Date),
+        FieldType::Int64 => Some(ApplicationExpressionTypeV1::Int),
+        FieldType::Decimal => Some(ApplicationExpressionTypeV1::Decimal),
+        FieldType::String => Some(ApplicationExpressionTypeV1::String),
+        _ => None,
+    };
+    let field_type = |resource: &ResourceContractV1, name: &str| {
+        kind(
+            &resource
+                .fields
+                .iter()
+                .find(|field| field.name == name)?
+                .field_type,
+        )
+    };
+    let nested =
+        |expression| invariant_scalar_operand_type(application, subject, bindings, expression);
+    match expression {
+        ApplicationExpressionV1::Variable { name } => field_type(subject, name),
+        ApplicationExpressionV1::Field { target, field } => {
+            let ApplicationExpressionV1::Variable { name } = target.as_ref() else {
+                return None;
+            };
+            if name == "subject" {
+                return field_type(subject, field);
+            }
+            let resource = bindings.get(name)?;
+            if let Some(local) = application.resources.iter().find(|r| r.name == *resource) {
+                return field_type(local, field);
+            }
+            let fields = application
+                .native_fact_imports
+                .iter()
+                .find(|import| import.resource == *resource)
+                .map(|import| &import.publication.fields)
+                .or_else(|| {
+                    application
+                        .native_fact_projection_imports
+                        .iter()
+                        .find(|import| import.resource == *resource)
+                        .map(|import| &import.contract.fields)
+                })?;
+            kind(
+                &fields
+                    .iter()
+                    .find(|candidate| candidate.name == *field)?
+                    .field_type,
+            )
+        }
+        ApplicationExpressionV1::Literal { value } if value.as_i64().is_some() => {
+            Some(ApplicationExpressionTypeV1::Int)
+        }
+        ApplicationExpressionV1::Literal { value } if value.is_string() => {
+            Some(ApplicationExpressionTypeV1::String)
+        }
+        ApplicationExpressionV1::Unary {
+            operator, value, ..
+        } if operator == "negate" && nested(value) == Some(ApplicationExpressionTypeV1::Int) => {
+            Some(ApplicationExpressionTypeV1::Int)
+        }
+        ApplicationExpressionV1::Binary {
+            operator,
+            left,
+            right,
+            ..
+        } if matches!(
+            operator.as_str(),
+            "add" | "subtract" | "multiply" | "divide"
+        ) && nested(left) == Some(ApplicationExpressionTypeV1::Int)
+            && nested(right) == Some(ApplicationExpressionTypeV1::Int) =>
+        {
+            Some(ApplicationExpressionTypeV1::Int)
+        }
+        // Recursive ABI validation establishes the exact calendar signature first.
+        ApplicationExpressionV1::Call {
+            kind: ApplicationCallKindV1::Builtin,
+            target,
+            ..
+        } if target == "time.add" => Some(ApplicationExpressionTypeV1::Date),
+        ApplicationExpressionV1::Call {
+            kind: ApplicationCallKindV1::Builtin,
+            target,
+            ..
+        } if target == "time.diff" => Some(ApplicationExpressionTypeV1::Int),
+        ApplicationExpressionV1::Call {
+            kind: ApplicationCallKindV1::Builtin,
+            target,
+            ..
+        } if target == "finance.proportional_interval" => {
+            Some(ApplicationExpressionTypeV1::Decimal)
+        }
+        ApplicationExpressionV1::Aggregate {
+            function: ApplicationAggregateFunctionV1::Count,
+            ..
+        } => Some(ApplicationExpressionTypeV1::Int),
+        ApplicationExpressionV1::Aggregate {
+            function: ApplicationAggregateFunctionV1::Sum,
+            resource,
+            field: Some(field),
+            ..
+        } => {
+            let resource = application
+                .resources
+                .iter()
+                .find(|candidate| candidate.name == *resource)?;
+            field_type(resource, field).filter(|kind| *kind == ApplicationExpressionTypeV1::Int)
+        }
+        _ => None,
     }
 }
 
@@ -6545,29 +6930,54 @@ fn validate_invariant_expression(
             let ApplicationExpressionV1::Variable { name } = target.as_ref() else {
                 return invalid("invariant field access requires a subject or binding variable");
             };
-            let resource = if name == "subject" {
-                subject
+            let resource_name = if name == "subject" {
+                &subject.name
             } else {
-                let resource_name = bindings.get(name).ok_or_else(|| {
-                    ExtensionError::InvalidManifest(format!(
-                        "invariant field access uses unknown binding `{name}`"
-                    ))
-                })?;
-                application
-                    .resources
-                    .iter()
-                    .find(|resource| resource.name == *resource_name)
-                    .expect("binding resources are validated")
+                bindings.get(name).ok_or_else(|| {
+                    ExtensionError::InvalidManifest(format!("unknown invariant binding `{name}`"))
+                })?
             };
-            if resource
-                .fields
+            let exists = application
+                .resources
                 .iter()
-                .any(|candidate| candidate.name == *field)
-            {
+                .find(|resource| resource.name == *resource_name)
+                .map(|resource| {
+                    resource
+                        .fields
+                        .iter()
+                        .any(|candidate| candidate.name == *field)
+                })
+                .or_else(|| {
+                    application
+                        .native_fact_imports
+                        .iter()
+                        .find(|import| import.resource == *resource_name)
+                        .map(|import| {
+                            import
+                                .publication
+                                .fields
+                                .iter()
+                                .any(|candidate| candidate.name == *field)
+                        })
+                });
+            let exists = exists.or_else(|| {
+                application
+                    .native_fact_projection_imports
+                    .iter()
+                    .find(|import| import.resource == *resource_name)
+                    .map(|import| {
+                        import
+                            .contract
+                            .fields
+                            .iter()
+                            .any(|candidate| candidate.name == *field)
+                    })
+            });
+            if exists == Some(true) {
                 Ok(())
             } else {
                 invalid(format!(
-                    "invariant binding `{name}` references undeclared field `{field}`"
+                    "invariant binding `{name}` references undeclared or private field `{field}`"
                 ))
             }
         }
@@ -6612,6 +7022,88 @@ fn validate_invariant_expression(
             recurse(right, bindings, dependencies)
         }
         ApplicationExpressionV1::Call {
+            kind: ApplicationCallKindV1::Builtin,
+            target,
+            arguments,
+            ..
+        } if target == "finance.proportional_interval" => {
+            validate_proportional_interval_call(expression)?;
+            if !application
+                .required_features
+                .contains(&ApplicationFeature::ExactProportionalIntervals)
+            {
+                return invalid("native proportional interval requires signed exact_proportional_intervals feature");
+            }
+            use ApplicationExpressionTypeV1::{Decimal, Int, String as Text};
+            for (argument, expected) in arguments
+                .iter()
+                .zip([Decimal, Decimal, Int, Text, Text, Int])
+            {
+                recurse(&argument.value, bindings, dependencies)?;
+                if invariant_scalar_operand_type(application, subject, bindings, &argument.value)
+                    != Some(expected)
+                {
+                    return invalid("native proportional interval operand does not match its actual signed scalar field type");
+                }
+            }
+            Ok(())
+        }
+        ApplicationExpressionV1::Call {
+            kind: ApplicationCallKindV1::Builtin,
+            target,
+            method,
+            result_type,
+            argument_types,
+            argument_item_types,
+            result_projection,
+            arguments,
+        } if matches!(target.as_str(), "time.add" | "time.diff") => {
+            if method.is_some()
+                || result_projection.is_some()
+                || argument_item_types.len() != arguments.len()
+                || argument_item_types.iter().any(Option::is_some)
+            {
+                return invalid("native invariant calendar calls require scalar arguments without projections or methods");
+            }
+            for argument in arguments {
+                recurse(&argument.value, bindings, dependencies)?;
+            }
+            let actual = |index: usize| {
+                invariant_scalar_operand_type(
+                    application,
+                    subject,
+                    bindings,
+                    &arguments[index].value,
+                )
+            };
+            let date = ApplicationExpressionTypeV1::Date;
+            let int = ApplicationExpressionTypeV1::Int;
+            if target == "time.add" {
+                if arguments.len() != 2
+                    || arguments[0].name.is_some()
+                    || arguments[1].name.as_deref() != Some("days")
+                    || *result_type != Some(date)
+                    || argument_types != &[date, int]
+                    || actual(0) != Some(date)
+                    || actual(1) != Some(int)
+                {
+                    return invalid("native invariant time.add requires exactly Date plus named days:Int and Date result");
+                }
+            } else if arguments.len() != 3
+                || arguments[0].name.is_some()
+                || arguments[1].name.is_some()
+                || arguments[2].name.as_deref() != Some("unit")
+                || !matches!(&arguments[2].value, ApplicationExpressionV1::Literal { value } if value.as_str() == Some("days"))
+                || *result_type != Some(int)
+                || argument_types != &[date, date, ApplicationExpressionTypeV1::String]
+                || actual(0) != Some(date)
+                || actual(1) != Some(date)
+            {
+                return invalid("native invariant time.diff requires exactly two Dates, literal unit:days and Int result");
+            }
+            Ok(())
+        }
+        ApplicationExpressionV1::Call {
             kind,
             target,
             arguments,
@@ -6640,14 +7132,27 @@ fn validate_invariant_expression(
             if binding == "subject" || bindings.contains_key(binding) {
                 return invalid(format!("duplicate invariant binding `{binding}`"));
             }
-            if !application
+            let local = application
                 .resources
                 .iter()
-                .any(|candidate| candidate.name == *resource)
-            {
+                .any(|candidate| candidate.name == *resource);
+            let imported = application
+                .native_fact_imports
+                .iter()
+                .find(|import| import.resource == *resource);
+            let projected = application
+                .native_fact_projection_imports
+                .iter()
+                .any(|import| import.resource == *resource);
+            if !local && imported.is_none() && !projected {
                 return invalid(format!(
-                    "invariant binding `{binding}` references unknown resource `{resource}`"
+                    "invariant references unknown resource `{resource}`"
                 ));
+            }
+            if (imported.is_some() || projected)
+                && matches!(expression, ApplicationExpressionV1::Aggregate { .. })
+            {
+                return invalid("foreign native fact aggregates are unsupported");
             }
             dependencies.insert(resource.clone());
             let mut nested = bindings.clone();
@@ -6682,6 +7187,247 @@ fn validate_invariant_expression(
             Ok(())
         }
         _ => invalid("invariant contains an expression outside the enforced runtime corpus"),
+    }
+}
+
+impl ApplicationManifestV2 {
+    fn validate_native_facts(&self, extension: &ExtensionManifest) -> Result<()> {
+        if self.native_fact_publications.is_empty()
+            && self.native_fact_imports.is_empty()
+            && self.native_fact_projection_imports.is_empty()
+        {
+            return Ok(());
+        }
+        if !self
+            .required_features
+            .contains(&ApplicationFeature::NativeImmutableFacts)
+        {
+            return invalid("native facts require explicit supported feature");
+        }
+        let mut publications = BTreeSet::new();
+        let mut relations = BTreeSet::new();
+        for publication in &self.native_fact_publications {
+            publication.validate()?;
+            if publication.owner_application != extension.identity.name
+                || !publications.insert(&publication.name)
+                || !relations.insert(&publication.relation)
+            {
+                return invalid("native fact publication owner, name or relation is invalid");
+            }
+            let resource = self
+                .resources
+                .iter()
+                .find(|resource| resource.name == publication.resource)
+                .ok_or_else(|| {
+                    ExtensionError::InvalidManifest("native fact owner resource is absent".into())
+                })?;
+            if self
+                .resources
+                .iter()
+                .filter(|candidate| candidate.relation == publication.relation)
+                .count()
+                != 1
+            {
+                return invalid("native fact relation may not be shadowed");
+            }
+            if resource.schema_only
+                || resource.relation != publication.relation
+                || resource.tenant_field.as_deref() != Some(&publication.tenant_field)
+                || !resource
+                    .immutable_fields
+                    .contains(&publication.tenant_field)
+                || !resource
+                    .server_managed_fields
+                    .contains(&publication.tenant_field)
+            {
+                return invalid(
+                    "native fact owner requires actual immutable server-owned tenant policy",
+                );
+            }
+            for field in &publication.fields {
+                if !resource.fields.iter().any(|actual| {
+                    actual.name == field.name
+                        && actual.field_type == field.field_type
+                        && actual.nullable == field.nullable
+                }) || resource.redacted_fields.contains(&field.name)
+                    || resource
+                        .privacy
+                        .as_ref()
+                        .is_some_and(|privacy| privacy.fields.contains_key(&field.name))
+                {
+                    return invalid(
+                        "native fact projection references absent, mismatched or private owner field",
+                    );
+                }
+            }
+        }
+        if !self.native_fact_projection_imports.is_empty()
+            && !self
+                .required_features
+                .contains(&ApplicationFeature::NativeFactProjectionContracts)
+        {
+            return invalid(
+                "fact-only contracts require strict native_fact_projection_contracts feature",
+            );
+        }
+        let mut imports = BTreeSet::new();
+        for import in &self.native_fact_projection_imports {
+            import.contract.validate()?;
+            validate_sha256("fact projection descriptor", &import.descriptor_sha256)?;
+            if !imports.insert(&import.resource)
+                || !import.resource.contains('.')
+                || self.resources.iter().any(|r| r.name == import.resource)
+                || !import.contract.consumers.contains(&extension.identity.name)
+                || import.contract.owner_application == extension.identity.name
+                || import.subject_resources.is_empty()
+                || import.subject_resources.iter().any(|name| {
+                    !self
+                        .resources
+                        .iter()
+                        .any(|r| r.name == *name && !r.schema_only)
+                })
+            {
+                return invalid("fact-only import is not an explicit immutable owner projection");
+            }
+        }
+
+        for import in &self.native_fact_imports {
+            import.publication.validate()?;
+            if !imports.insert(&import.resource)
+                || !import.resource.contains('.')
+                || self.resources.iter().any(|resource| {
+                    resource.name == import.resource
+                        || resource.relation == import.publication.relation
+                })
+                || !import
+                    .publication
+                    .consumers
+                    .contains(&extension.identity.name)
+                || import.subject_resources.is_empty()
+            {
+                return invalid("native fact import is not an admitted dependency projection");
+            }
+            for subject in &import.subject_resources {
+                if let Some(resource) = self
+                    .resources
+                    .iter()
+                    .find(|resource| resource.name == *subject)
+                {
+                    if self
+                        .resources
+                        .iter()
+                        .filter(|candidate| candidate.relation == resource.relation)
+                        .count()
+                        != 1
+                    {
+                        return invalid("native reference relation may not be shadowed");
+                    }
+                }
+
+                if !self
+                    .resources
+                    .iter()
+                    .any(|resource| resource.name == *subject && !resource.schema_only)
+                {
+                    return invalid("native fact reference subject is absent");
+                }
+            }
+        }
+        Ok(())
+    }
+}
+
+fn invariant_has_foreign_fact(
+    application: &ApplicationManifestV2,
+    expression: &ApplicationExpressionV1,
+) -> bool {
+    match expression {
+        ApplicationExpressionV1::Exists {
+            resource,
+            condition,
+            ..
+        } => {
+            application
+                .native_fact_imports
+                .iter()
+                .any(|import| import.resource == *resource)
+                || application
+                    .native_fact_projection_imports
+                    .iter()
+                    .any(|import| import.resource == *resource)
+                || invariant_has_foreign_fact(application, condition)
+        }
+        ApplicationExpressionV1::Aggregate { condition, .. }
+        | ApplicationExpressionV1::Unary {
+            value: condition, ..
+        } => invariant_has_foreign_fact(application, condition),
+        ApplicationExpressionV1::Binary { left, right, .. } => {
+            invariant_has_foreign_fact(application, left)
+                || invariant_has_foreign_fact(application, right)
+        }
+        ApplicationExpressionV1::Call { arguments, .. } => arguments
+            .iter()
+            .any(|argument| invariant_has_foreign_fact(application, &argument.value)),
+        _ => false,
+    }
+}
+
+fn native_fact_expression_has_scan(value: &ApplicationExpressionV1) -> bool {
+    match value {
+        ApplicationExpressionV1::Exists { .. } | ApplicationExpressionV1::Aggregate { .. } => true,
+        ApplicationExpressionV1::Unary { value, .. } => native_fact_expression_has_scan(value),
+        ApplicationExpressionV1::Binary { left, right, .. } => {
+            native_fact_expression_has_scan(left) || native_fact_expression_has_scan(right)
+        }
+        ApplicationExpressionV1::Call { arguments, .. } => arguments
+            .iter()
+            .any(|argument| native_fact_expression_has_scan(&argument.value)),
+        _ => false,
+    }
+}
+
+fn validate_positive_native_fact_expression(
+    application: &ApplicationManifestV2,
+    subject: &str,
+    expression: &ApplicationExpressionV1,
+) -> Result<()> {
+    match expression {
+        ApplicationExpressionV1::Exists {
+            resource,
+            condition,
+            ..
+        } if application.native_fact_imports.iter().any(|import| {
+            import.resource == *resource && import.subject_resources.contains(subject)
+        }) || application
+            .native_fact_projection_imports
+            .iter()
+            .any(|import| {
+                import.resource == *resource && import.subject_resources.contains(subject)
+            }) =>
+        {
+            if native_fact_expression_has_scan(condition) {
+                invalid("foreign native fact predicate cannot nest scans")
+            } else {
+                Ok(())
+            }
+        }
+        ApplicationExpressionV1::Binary {
+            operator,
+            left,
+            right,
+            ..
+        } if operator == "and" => {
+            validate_positive_native_fact_expression(application, subject, left)?;
+            validate_positive_native_fact_expression(application, subject, right)
+        }
+        value if !invariant_has_foreign_fact(application, value) => {
+            if native_fact_expression_has_scan(value) {
+                invalid("foreign fact invariant cannot mix mutable local scan dependencies")
+            } else {
+                Ok(())
+            }
+        }
+        _ => invalid("foreign fact reference must be a positive immutable EXISTS conjunct"),
     }
 }
 
@@ -10591,6 +11337,10 @@ mod tests {
             application_program: None,
             required_features,
             max_call_depth: 16,
+
+            native_fact_publications: Vec::new(),
+            native_fact_imports: Vec::new(),
+            native_fact_projection_imports: Vec::new(),
         }
     }
 

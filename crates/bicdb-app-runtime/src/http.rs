@@ -25,7 +25,6 @@ use bicdb_extension::{HttpMethod, InvocationKind};
 use bytes::Bytes;
 use http_body::Frame;
 use http_body_util::StreamBody;
-use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
@@ -1437,7 +1436,7 @@ pub(crate) fn coerce_carrier_parameter_value(
                 Value::Number(value) => value.to_string(),
                 _ => return Err(invalid()),
             };
-            let value = value.parse::<Decimal>().map_err(|_| invalid())?;
+            let value = crate::decimal_input::parse_decimal_exact(&value).map_err(|_| invalid())?;
             if value.scale() > 28 {
                 return Err(invalid());
             }
@@ -1621,7 +1620,7 @@ pub(crate) fn normalize_carrier_json_value(
                 Value::Number(value) => value.to_string(),
                 _ => return Err(invalid()),
             };
-            let value = value.parse::<Decimal>().map_err(|_| invalid())?;
+            let value = crate::decimal_input::parse_decimal_exact(&value).map_err(|_| invalid())?;
             Ok(Value::String(value.to_string()))
         }
         ApplicationRouteParameterTypeV1::Bool => {
@@ -2939,9 +2938,26 @@ fn lower_resource_request(
                             .to_string(),
                     ));
                 }
-                filters.push(bicdb_extension::abi_v2::FilterExpression::Eq {
-                    field: name[7..name.len() - 1].to_string(),
-                    value: parse_scalar(raw),
+                let field = &name[7..name.len() - 1];
+                // Legacy ABI resources can omit typed filter contracts, but
+                // their signed Decimal field still defines exact admission.
+                let decimal_field = resource_filter_is_decimal(contract, field);
+                let value = if decimal_field {
+                    parse_resource_filter_value(contract, field, raw)?
+                } else {
+                    parse_scalar(raw)
+                };
+                filters.push(if decimal_field {
+                    bicdb_extension::abi_v2::FilterExpression::TypedEq {
+                        field: field.to_string(),
+                        value,
+                        value_type: ApplicationRouteParameterTypeV1::Decimal,
+                    }
+                } else {
+                    bicdb_extension::abi_v2::FilterExpression::Eq {
+                        field: field.to_string(),
+                        value,
+                    }
                 });
             }
             _ => {}
@@ -2973,9 +2989,18 @@ fn lower_resource_request(
         match &filter.filter {
             ResourceFilterKind::Exact { field } => {
                 if let Some(raw) = direct_filter_values.get(&filter.query_name) {
-                    filters.push(bicdb_extension::abi_v2::FilterExpression::Eq {
-                        field: field.clone(),
-                        value: parse_resource_filter_value(contract, field, raw)?,
+                    let value = parse_resource_filter_value(contract, field, raw)?;
+                    filters.push(if resource_filter_is_decimal(contract, field) {
+                        bicdb_extension::abi_v2::FilterExpression::TypedEq {
+                            field: field.clone(),
+                            value,
+                            value_type: ApplicationRouteParameterTypeV1::Decimal,
+                        }
+                    } else {
+                        bicdb_extension::abi_v2::FilterExpression::Eq {
+                            field: field.clone(),
+                            value,
+                        }
                     });
                 }
             }
@@ -2989,9 +3014,18 @@ fn lower_resource_request(
             }
             ResourceFilterKind::Minimum { field } => {
                 if let Some(raw) = direct_filter_values.get(&filter.query_name) {
-                    filters.push(bicdb_extension::abi_v2::FilterExpression::Ge {
-                        field: field.clone(),
-                        value: parse_resource_filter_value(contract, field, raw)?,
+                    let value = parse_resource_filter_value(contract, field, raw)?;
+                    filters.push(if resource_filter_is_decimal(contract, field) {
+                        bicdb_extension::abi_v2::FilterExpression::TypedGe {
+                            field: field.clone(),
+                            value,
+                            value_type: ApplicationRouteParameterTypeV1::Decimal,
+                        }
+                    } else {
+                        bicdb_extension::abi_v2::FilterExpression::Ge {
+                            field: field.clone(),
+                            value,
+                        }
                     });
                 }
             }
@@ -3915,6 +3949,16 @@ fn parse_scalar(value: &str) -> Value {
     serde_json::from_str(value).unwrap_or_else(|_| Value::String(value.to_string()))
 }
 
+fn resource_filter_is_decimal(
+    contract: &bicdb_extension::abi_v2::ResourceContractV1,
+    field: &str,
+) -> bool {
+    contract
+        .fields
+        .iter()
+        .any(|candidate| candidate.name == field && candidate.field_type == FieldType::Decimal)
+}
+
 fn parse_resource_filter_value(
     contract: &bicdb_extension::abi_v2::ResourceContractV1,
     field: &str,
@@ -3945,13 +3989,16 @@ fn parse_resource_filter_value(
             .parse::<i64>()
             .map(|value| Value::Number(value.into()))
             .map_err(|_| invalid()),
-        FieldType::Float64 | FieldType::Decimal => raw
+        FieldType::Float64 => raw
             .parse::<f64>()
             .ok()
             .filter(|value| value.is_finite())
             .and_then(serde_json::Number::from_f64)
             .map(Value::Number)
             .ok_or_else(invalid),
+        FieldType::Decimal => crate::decimal_input::parse_decimal_exact(raw)
+            .map(|value| Value::String(value.to_string()))
+            .map_err(|_| invalid()),
         FieldType::Uuid => Uuid::parse_str(raw)
             .map(|value| Value::String(value.to_string()))
             .map_err(|_| invalid()),

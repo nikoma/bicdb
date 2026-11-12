@@ -1,0 +1,158 @@
+{
+  "source_revision": "ca7d481467c40cf6ac324ceb8c0c7e943d4d1cfc",
+  "package_version": "1.0.489-beta",
+  "scope": "coherent full prototype CI, not proof from a shared version label alone",
+  "cli": {
+    "run": 43275067911,
+    "job": 131381248091,
+    "passed": 5,
+    "failed": 0,
+    "seconds": 57.38,
+    "raw_sha256": "e4ff1e1a48a483f1dd09682451a96abcd79203e79ff366dea8e4ce9538544ea6"
+  },
+  "observer_controls": {
+    "run": 43275067351,
+    "job": 131381261215,
+    "passed": 9,
+    "failed": 0,
+    "filtered": 924,
+    "seconds": 0.1,
+    "raw_sha256": "05681185b092a96686c726bdcd85557dbc1d12fdfd9c45d8675a12c323522334"
+  },
+  "executable": {
+    "source": "ca7d481467c40cf6ac324ceb8c0c7e943d4d1cfc",
+    "source_available": true,
+    "source_authority": "BICDB_TEST_SOURCE_SHA runtime environment; not option_env or runtime git lookup",
+    "test_package_version": "1.0.489-beta",
+    "binary_sha256": "ab178716c609a07d60b501151d3c2773553e78564335b53fae716fcd7f41c544",
+    "binary_bytes": 750240064,
+    "binary_scope": "actual CARGO_BIN_EXE_bicdb bytes read before process/startup/ACK phase; not a published release"
+  },
+  "postjoin": {
+    "classification": "OBSERVED_WRITER_ADMISSION_UNAVAILABLE_NOT_HEALTHY_CONTINUITY",
+    "typed_unavailable_responses": 8,
+    "successful_bootstrap_snapshots": 34,
+    "snapshot_sources": {
+      "n0": 7,
+      "n1": 7,
+      "n2": 7,
+      "n3": 7,
+      "n4": 6
+    },
+    "generation": 4,
+    "range_id": 2,
+    "range_epoch": 1,
+    "data_leader": "n2",
+    "detail": "cluster error: native host writer enrollment: current voter registry changed",
+    "one_original_business_id": true,
+    "distinct_challenges": 8,
+    "transport_error_records": 0,
+    "data_assignments_unchanged": true,
+    "prior_births_unchanged": true,
+    "postjoin_write_attempted": false
+  },
+  "external_ledger": {
+    "stdout_records": 34,
+    "initial_case_records": 21,
+    "receiver_case_records": 13,
+    "initial_user_acks": 3,
+    "initial_strong_successes_including_final_reread": 5,
+    "receiver_before_join_ack_and_strong": true
+  },
+  "artifact": {
+    "id": 13971542223,
+    "zip_bytes": 92897800,
+    "zip_sha256": "f3ead0b957e8c0405810bc7520ec7577aa54b9226af8776e78ef5c12dac59566",
+    "original_zip_retained_private": true,
+    "database_failure_artifact_produced": false,
+    "full_database_or_wal_or_range_catalogue_retained": false
+  },
+  "journals": [
+    {
+      "path": "rpc-journals/client-01a1d0f7-8148-7f90-aec6-b471f49ad5dc/journal.jsonl",
+      "bytes": 1030316,
+      "sha256": "6bc04d45676adf19de3ec36966d237915ed9d72b12555e0eb3677dca330105b4",
+      "test": "replica_receiver_tests::native_registered_replica_receiver_actual_cli_four_data_then_fifth_same_owner_no_data_grant",
+      "records": 206,
+      "logical_calls": 8,
+      "physical_phase_records": 188,
+      "physical_attempts": 47,
+      "exact_json_frames": 94,
+      "phases": {
+        "invoked": 47,
+        "request_frame_before_dispatch": 47,
+        "response_frame_before_decode": 47,
+        "validated_transport_result_ok": 45,
+        "validated_transport_result_error": 2
+      },
+      "classifications": {
+        "ACTUAL_AUTHENTICATED_BOOTSTRAP_DATA_ONLY": 2,
+        "USER_ACK": 1,
+        "STRONG_SUCCESS": 1,
+        "ACTUAL_RECEIVER_REFUSAL": 3,
+        "NO_SUCCESSFUL_READ_NO_ABSENCE": 1
+      },
+      "source_verified": true,
+      "complete_marker": true,
+      "sink_and_core_sequences_contiguous": true,
+      "bundle_path": "journals/receiver.jsonl.gz",
+      "compressed_sha256": "a7c07eea7cafdab2d0a2aff204f883f3cf07790b9034143e3acc9f181daec50c"
+    },
+    {
+      "path": "rpc-journals/client-01a1d0f6-ec10-7fa2-9bf2-94c30b2ef5f3/journal.jsonl",
+      "bytes": 2475197,
+      "sha256": "898235b865efb65f764372b246b367df4d732d87f00bf0e99b072fbe4998aa9c",
+      "test": "initial_data_tests::native_initial_data_actual_cli_four_process_first_ack_and_strong_full_value",
+      "records": 533,
+      "logical_calls": 11,
+      "physical_phase_records": 509,
+      "physical_attempts": 127,
+      "exact_json_frames": 253,
+      "phases": {
+        "invoked": 127,
+        "request_frame_before_dispatch": 127,
+        "response_frame_before_decode": 126,
+        "validated_transport_result_error": 26,
+        "validated_transport_result_ok": 101,
+        "exchange_error_before_cancellation_override": 1,
+        "return_boundary_error_after_evidence": 1
+      },
+      "classifications": {
+        "ACTUAL_AUTHENTICATED_BOOTSTRAP_DATA_ONLY": 1,
+        "NO_USER_ACK_DURABLE_OUTCOME_UNKNOWN": 1,
+        "NO_SUCCESSFUL_READ_NO_ABSENCE": 1,
+        "USER_ACK": 3,
+        "STRONG_SUCCESS": 5
+      },
+      "source_verified": true,
+      "complete_marker": true,
+      "sink_and_core_sequences_contiguous": true,
+      "bundle_path": "journals/initial-data.jsonl.gz",
+      "compressed_sha256": "c4db69bf51f63952c498e6fc4aa33e5a36f904c20d5df90b4c54dac6e503c0b6"
+    }
+  ],
+  "source_files": [
+    {
+      "repository_path": "crates/bicdb-cli/tests/native_metadata_operator_cli/rpc_evidence.rs",
+      "bundle_path": "source/crates/bicdb-cli/tests/native_metadata_operator_cli/rpc_evidence.rs",
+      "sha256": "cad7672b6477692bd8938898ed80f9b08eeb8581e7e5bef421ac754f88bdb87d"
+    },
+    {
+      "repository_path": "crates/bicdb-cli/tests/native_metadata_operator_cli/replica_receiver_tests.rs",
+      "bundle_path": "source/crates/bicdb-cli/tests/native_metadata_operator_cli/replica_receiver_tests.rs",
+      "sha256": "ad40f656fe41d16f8c83cee9d8f241437fe37045bb6099849bd3e68785f9226b"
+    },
+    {
+      "repository_path": "crates/bicdb-core/src/distribution_native_writer.rs",
+      "bundle_path": "source/crates/bicdb-core/src/distribution_native_writer.rs",
+      "sha256": "d423ac9f614024e3ef7ec249ae5bd67908623b8e0e19c6c29344fc4b53299cd9"
+    }
+  ],
+  "limits": [
+    "3ee null failure remains unknown; new successful run does not explain or reclassify it.",
+    "Postjoin typed refusal is fail-closed; no stale/empty successful read observed.",
+    "Healthy ACK/Strong continuity after registry addition remains unproved; no postjoin write attempted.",
+    "No global host-wire coverage; initial Bootstrap raw-frame gap explicitly retained.",
+    "No image/joint wire/controller, assigned fifth data range, physical/VM/Azure-cause qualification."
+  ]
+}

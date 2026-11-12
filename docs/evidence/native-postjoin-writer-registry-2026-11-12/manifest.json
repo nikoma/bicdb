@@ -1,0 +1,85 @@
+{
+  "source_revision": "ca7d481467c40cf6ac324ceb8c0c7e943d4d1cfc",
+  "files": [
+    {
+      "path": "README.md",
+      "bytes": 7361,
+      "sha256": "72b436a6ba4ae651a0b9a37ac62fb0f9d3fbad28f17209146f574ae77316c90d"
+    },
+    {
+      "path": "journals/initial-data.jsonl.gz",
+      "bytes": 62348,
+      "sha256": "c4db69bf51f63952c498e6fc4aa33e5a36f904c20d5df90b4c54dac6e503c0b6"
+    },
+    {
+      "path": "journals/receiver.jsonl.gz",
+      "bytes": 35573,
+      "sha256": "a7c07eea7cafdab2d0a2aff204f883f3cf07790b9034143e3acc9f181daec50c"
+    },
+    {
+      "path": "observations/actual-topology-before-after.json",
+      "bytes": 15051,
+      "sha256": "b7c7d47159aee232dd48a7ea14c79dbbe91a2f165fdb9e17b22999e5c42131d2"
+    },
+    {
+      "path": "observations/external-ledger-from-stdout.jsonl",
+      "bytes": 26833,
+      "sha256": "7773fd358b87c82be72c103dd87c07f20279007db7f6a0cfa38d1961ec21e3b3"
+    },
+    {
+      "path": "observations/postjoin-typed-responses.json",
+      "bytes": 16379,
+      "sha256": "8a3bd87887b0619a03fa947d6bfcc4d42dea6e2e4c4c978ba2d5630db9122434"
+    },
+    {
+      "path": "raw/ca7-drained-rpc-evidence-controls-job131381261215-index.json",
+      "bytes": 5175,
+      "sha256": "22a0a152a7349aa53a516ff189556bd6d5417fb3828904a8f9c5f52766bedc5c"
+    },
+    {
+      "path": "raw/ca7-drained-rpc-evidence-controls-job131381261215.log.gz",
+      "bytes": 194631,
+      "sha256": "985830701da860f261e1e9f0eefaabf71e6fac187d91ec9cdca246f406cbb77d"
+    },
+    {
+      "path": "raw/ca7-public-cli-rpc-custody-job131381248091-index.json",
+      "bytes": 3827,
+      "sha256": "f6d23ecf95eb0e380b63da31b426f1a1b6d64948ae038f6e0521c6671518c240"
+    },
+    {
+      "path": "raw/ca7-public-cli-rpc-custody-job131381248091.log.gz",
+      "bytes": 270330,
+      "sha256": "bf5246247a20481f4d692bc13985e07213d69cc810f44e8fbbfc642e40bd076a"
+    },
+    {
+      "path": "receipt.json",
+      "bytes": 6312,
+      "sha256": "dfb081e8e846a381277508b5acef05b1feb1c18babe330d84278d6fa8789b114"
+    },
+    {
+      "path": "source/crates/bicdb-cli/tests/native_metadata_operator_cli/replica_receiver_tests.rs",
+      "bytes": 11869,
+      "sha256": "ad40f656fe41d16f8c83cee9d8f241437fe37045bb6099849bd3e68785f9226b"
+    },
+    {
+      "path": "source/crates/bicdb-cli/tests/native_metadata_operator_cli/rpc_evidence.rs",
+      "bytes": 12925,
+      "sha256": "cad7672b6477692bd8938898ed80f9b08eeb8581e7e5bef421ac754f88bdb87d"
+    },
+    {
+      "path": "source/crates/bicdb-core/src/distribution_native_writer.rs",
+      "bytes": 10985,
+      "sha256": "d423ac9f614024e3ef7ec249ae5bd67908623b8e0e19c6c29344fc4b53299cd9"
+    },
+    {
+      "path": "test_verify.py",
+      "bytes": 1878,
+      "sha256": "89c922082b800025259907e4e1a3791fa7a69ac19d46b2177a7ee2f11c89f2c1"
+    },
+    {
+      "path": "verify.py",
+      "bytes": 8961,
+      "sha256": "0c055e86bc68959a09e84820d1399b9e8ebe49552f67c1496d116cdad554ed76"
+    }
+  ]
+}

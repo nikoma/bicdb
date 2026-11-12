@@ -1,0 +1,557 @@
+{
+  "logical_request": {
+    "kind": "logical_request_intent",
+    "diagnostic_operation_id": "01a1d0f7-8f85-71e3-be0c-b7a980de44d4",
+    "request": {
+      "public_operation": "get_strong",
+      "namespace": "items",
+      "key": "ack-before-fifth-replica-receiver",
+      "phase": "same_gateway_after_fifth",
+      "request_timeout_ms": 2000,
+      "healthy_continuity_not_assumed": true
+    },
+    "context_is_protocol_business_id": false,
+    "sink_sequence": 36,
+    "sink_unix_ns": 1794507247493080808
+  },
+  "logical_public_reply": {
+    "kind": "logical_public_reply",
+    "diagnostic_operation_id": "01a1d0f7-8f85-71e3-be0c-b7a980de44d4",
+    "any_actual_rpc_may_have_dispatched": true,
+    "outcome": {
+      "classification": "NO_SUCCESSFUL_READ_NO_ABSENCE",
+      "error_chain": [
+        "canceling statement due to query timeout"
+      ]
+    },
+    "durable_outcome_inferred_from_error": false,
+    "sink_sequence": 205,
+    "sink_unix_ns": 1794507249493443748
+  },
+  "typed_responses": [
+    {
+      "sink_sequence": 39,
+      "actual_phase": "response_frame_before_decode",
+      "physical_attempt_id": "01a1d0f7-8f85-71e3-be0c-b7d0e1844c99",
+      "actual_envelope": {
+        "protocol_version": 28,
+        "cluster_id": "native-operator-cli",
+        "source_node_id": "n2",
+        "actual_native_source": {
+          "version": 1,
+          "bootstrap_id": "01a1d0f7-7a49-7a53-9c53-30e148934eb0",
+          "birth_id": "01a1d0f7-7a92-71d3-9247-1f782ffbf461",
+          "birth_sha256": "a3e28f342d464ac651783c6ca384b1b7d084588933250aed66c61b53814cba0d",
+          "node_incarnation": 1,
+          "writer_enforcement_version": 1,
+          "abort_protocol_version": 1
+        },
+        "request_id": 3,
+        "response": {
+          "Ok": {
+            "NativeEventGet": {
+              "version": 1,
+              "business_request_id": "01a1d0f7-8f85-71e3-be0c-b7b7e4f130f7",
+              "challenge": "01a1d0f7-8f85-71e3-be0c-b7cf38796bb1",
+              "result": {
+                "kind": "unavailable",
+                "code": {
+                  "code": "native_read",
+                  "stage": "WriterAdmission"
+                },
+                "route": {
+                  "generation": 4,
+                  "range_id": 2,
+                  "range_epoch": 1,
+                  "leader": "n2"
+                },
+                "retry_after_ms": 50,
+                "detail": "cluster error: native host writer enrollment: current voter registry changed"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "sink_sequence": 59,
+      "actual_phase": "response_frame_before_decode",
+      "physical_attempt_id": "01a1d0f7-9019-7ce0-974a-5a8eb0d6c03e",
+      "actual_envelope": {
+        "protocol_version": 28,
+        "cluster_id": "native-operator-cli",
+        "source_node_id": "n2",
+        "actual_native_source": {
+          "version": 1,
+          "bootstrap_id": "01a1d0f7-7a49-7a53-9c53-30e148934eb0",
+          "birth_id": "01a1d0f7-7a92-71d3-9247-1f782ffbf461",
+          "birth_sha256": "a3e28f342d464ac651783c6ca384b1b7d084588933250aed66c61b53814cba0d",
+          "node_incarnation": 1,
+          "writer_enforcement_version": 1,
+          "abort_protocol_version": 1
+        },
+        "request_id": 8,
+        "response": {
+          "Ok": {
+            "NativeEventGet": {
+              "version": 1,
+              "business_request_id": "01a1d0f7-8f85-71e3-be0c-b7b7e4f130f7",
+              "challenge": "01a1d0f7-9019-7ce0-974a-5a7ccc4050fe",
+              "result": {
+                "kind": "unavailable",
+                "code": {
+                  "code": "native_read",
+                  "stage": "WriterAdmission"
+                },
+                "route": {
+                  "generation": 4,
+                  "range_id": 2,
+                  "range_epoch": 1,
+                  "leader": "n2"
+                },
+                "retry_after_ms": 50,
+                "detail": "cluster error: native host writer enrollment: current voter registry changed"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "sink_sequence": 83,
+      "actual_phase": "response_frame_before_decode",
+      "physical_attempt_id": "01a1d0f7-90c0-7ca1-9a50-2dc06d65f7a0",
+      "actual_envelope": {
+        "protocol_version": 28,
+        "cluster_id": "native-operator-cli",
+        "source_node_id": "n2",
+        "actual_native_source": {
+          "version": 1,
+          "bootstrap_id": "01a1d0f7-7a49-7a53-9c53-30e148934eb0",
+          "birth_id": "01a1d0f7-7a92-71d3-9247-1f782ffbf461",
+          "birth_sha256": "a3e28f342d464ac651783c6ca384b1b7d084588933250aed66c61b53814cba0d",
+          "node_incarnation": 1,
+          "writer_enforcement_version": 1,
+          "abort_protocol_version": 1
+        },
+        "request_id": 14,
+        "response": {
+          "Ok": {
+            "NativeEventGet": {
+              "version": 1,
+              "business_request_id": "01a1d0f7-8f85-71e3-be0c-b7b7e4f130f7",
+              "challenge": "01a1d0f7-90c0-7ca1-9a50-2db7424dfe50",
+              "result": {
+                "kind": "unavailable",
+                "code": {
+                  "code": "native_read",
+                  "stage": "WriterAdmission"
+                },
+                "route": {
+                  "generation": 4,
+                  "range_id": 2,
+                  "range_epoch": 1,
+                  "leader": "n2"
+                },
+                "retry_after_ms": 50,
+                "detail": "cluster error: native host writer enrollment: current voter registry changed"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "sink_sequence": 107,
+      "actual_phase": "response_frame_before_decode",
+      "physical_attempt_id": "01a1d0f7-91a0-79d1-a4d6-0b117668c519",
+      "actual_envelope": {
+        "protocol_version": 28,
+        "cluster_id": "native-operator-cli",
+        "source_node_id": "n2",
+        "actual_native_source": {
+          "version": 1,
+          "bootstrap_id": "01a1d0f7-7a49-7a53-9c53-30e148934eb0",
+          "birth_id": "01a1d0f7-7a92-71d3-9247-1f782ffbf461",
+          "birth_sha256": "a3e28f342d464ac651783c6ca384b1b7d084588933250aed66c61b53814cba0d",
+          "node_incarnation": 1,
+          "writer_enforcement_version": 1,
+          "abort_protocol_version": 1
+        },
+        "request_id": 20,
+        "response": {
+          "Ok": {
+            "NativeEventGet": {
+              "version": 1,
+              "business_request_id": "01a1d0f7-8f85-71e3-be0c-b7b7e4f130f7",
+              "challenge": "01a1d0f7-91a0-79d1-a4d6-0b0916b153ac",
+              "result": {
+                "kind": "unavailable",
+                "code": {
+                  "code": "native_read",
+                  "stage": "WriterAdmission"
+                },
+                "route": {
+                  "generation": 4,
+                  "range_id": 2,
+                  "range_epoch": 1,
+                  "leader": "n2"
+                },
+                "retry_after_ms": 50,
+                "detail": "cluster error: native host writer enrollment: current voter registry changed"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "sink_sequence": 131,
+      "actual_phase": "response_frame_before_decode",
+      "physical_attempt_id": "01a1d0f7-92d7-7211-9b5a-adfec274eb4a",
+      "actual_envelope": {
+        "protocol_version": 28,
+        "cluster_id": "native-operator-cli",
+        "source_node_id": "n2",
+        "actual_native_source": {
+          "version": 1,
+          "bootstrap_id": "01a1d0f7-7a49-7a53-9c53-30e148934eb0",
+          "birth_id": "01a1d0f7-7a92-71d3-9247-1f782ffbf461",
+          "birth_sha256": "a3e28f342d464ac651783c6ca384b1b7d084588933250aed66c61b53814cba0d",
+          "node_incarnation": 1,
+          "writer_enforcement_version": 1,
+          "abort_protocol_version": 1
+        },
+        "request_id": 26,
+        "response": {
+          "Ok": {
+            "NativeEventGet": {
+              "version": 1,
+              "business_request_id": "01a1d0f7-8f85-71e3-be0c-b7b7e4f130f7",
+              "challenge": "01a1d0f7-92d7-7211-9b5a-adebb4a27334",
+              "result": {
+                "kind": "unavailable",
+                "code": {
+                  "code": "native_read",
+                  "stage": "WriterAdmission"
+                },
+                "route": {
+                  "generation": 4,
+                  "range_id": 2,
+                  "range_epoch": 1,
+                  "leader": "n2"
+                },
+                "retry_after_ms": 50,
+                "detail": "cluster error: native host writer enrollment: current voter registry changed"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "sink_sequence": 155,
+      "actual_phase": "response_frame_before_decode",
+      "physical_attempt_id": "01a1d0f7-9437-72b0-adbd-4866660cc721",
+      "actual_envelope": {
+        "protocol_version": 28,
+        "cluster_id": "native-operator-cli",
+        "source_node_id": "n2",
+        "actual_native_source": {
+          "version": 1,
+          "bootstrap_id": "01a1d0f7-7a49-7a53-9c53-30e148934eb0",
+          "birth_id": "01a1d0f7-7a92-71d3-9247-1f782ffbf461",
+          "birth_sha256": "a3e28f342d464ac651783c6ca384b1b7d084588933250aed66c61b53814cba0d",
+          "node_incarnation": 1,
+          "writer_enforcement_version": 1,
+          "abort_protocol_version": 1
+        },
+        "request_id": 32,
+        "response": {
+          "Ok": {
+            "NativeEventGet": {
+              "version": 1,
+              "business_request_id": "01a1d0f7-8f85-71e3-be0c-b7b7e4f130f7",
+              "challenge": "01a1d0f7-9437-72b0-adbd-48564ef583fc",
+              "result": {
+                "kind": "unavailable",
+                "code": {
+                  "code": "native_read",
+                  "stage": "WriterAdmission"
+                },
+                "route": {
+                  "generation": 4,
+                  "range_id": 2,
+                  "range_epoch": 1,
+                  "leader": "n2"
+                },
+                "retry_after_ms": 50,
+                "detail": "cluster error: native host writer enrollment: current voter registry changed"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "sink_sequence": 179,
+      "actual_phase": "response_frame_before_decode",
+      "physical_attempt_id": "01a1d0f7-9598-7d13-b536-1ef105594f04",
+      "actual_envelope": {
+        "protocol_version": 28,
+        "cluster_id": "native-operator-cli",
+        "source_node_id": "n2",
+        "actual_native_source": {
+          "version": 1,
+          "bootstrap_id": "01a1d0f7-7a49-7a53-9c53-30e148934eb0",
+          "birth_id": "01a1d0f7-7a92-71d3-9247-1f782ffbf461",
+          "birth_sha256": "a3e28f342d464ac651783c6ca384b1b7d084588933250aed66c61b53814cba0d",
+          "node_incarnation": 1,
+          "writer_enforcement_version": 1,
+          "abort_protocol_version": 1
+        },
+        "request_id": 38,
+        "response": {
+          "Ok": {
+            "NativeEventGet": {
+              "version": 1,
+              "business_request_id": "01a1d0f7-8f85-71e3-be0c-b7b7e4f130f7",
+              "challenge": "01a1d0f7-9598-7d13-b536-1ee52fe792a5",
+              "result": {
+                "kind": "unavailable",
+                "code": {
+                  "code": "native_read",
+                  "stage": "WriterAdmission"
+                },
+                "route": {
+                  "generation": 4,
+                  "range_id": 2,
+                  "range_epoch": 1,
+                  "leader": "n2"
+                },
+                "retry_after_ms": 50,
+                "detail": "cluster error: native host writer enrollment: current voter registry changed"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "sink_sequence": 203,
+      "actual_phase": "response_frame_before_decode",
+      "physical_attempt_id": "01a1d0f7-96ef-7523-bfff-88fc995556ac",
+      "actual_envelope": {
+        "protocol_version": 28,
+        "cluster_id": "native-operator-cli",
+        "source_node_id": "n2",
+        "actual_native_source": {
+          "version": 1,
+          "bootstrap_id": "01a1d0f7-7a49-7a53-9c53-30e148934eb0",
+          "birth_id": "01a1d0f7-7a92-71d3-9247-1f782ffbf461",
+          "birth_sha256": "a3e28f342d464ac651783c6ca384b1b7d084588933250aed66c61b53814cba0d",
+          "node_incarnation": 1,
+          "writer_enforcement_version": 1,
+          "abort_protocol_version": 1
+        },
+        "request_id": 44,
+        "response": {
+          "Ok": {
+            "NativeEventGet": {
+              "version": 1,
+              "business_request_id": "01a1d0f7-8f85-71e3-be0c-b7b7e4f130f7",
+              "challenge": "01a1d0f7-96ef-7523-bfff-88e415f49134",
+              "result": {
+                "kind": "unavailable",
+                "code": {
+                  "code": "native_read",
+                  "stage": "WriterAdmission"
+                },
+                "route": {
+                  "generation": 4,
+                  "range_id": 2,
+                  "range_epoch": 1,
+                  "leader": "n2"
+                },
+                "retry_after_ms": 50,
+                "detail": "cluster error: native host writer enrollment: current voter registry changed"
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "successful_bootstrap_snapshots": [
+    {
+      "sink_sequence": 43,
+      "source": "n0",
+      "generation": 4
+    },
+    {
+      "sink_sequence": 47,
+      "source": "n1",
+      "generation": 4
+    },
+    {
+      "sink_sequence": 51,
+      "source": "n2",
+      "generation": 4
+    },
+    {
+      "sink_sequence": 55,
+      "source": "n3",
+      "generation": 4
+    },
+    {
+      "sink_sequence": 63,
+      "source": "n0",
+      "generation": 4
+    },
+    {
+      "sink_sequence": 67,
+      "source": "n1",
+      "generation": 4
+    },
+    {
+      "sink_sequence": 71,
+      "source": "n2",
+      "generation": 4
+    },
+    {
+      "sink_sequence": 75,
+      "source": "n3",
+      "generation": 4
+    },
+    {
+      "sink_sequence": 79,
+      "source": "n4",
+      "generation": 4
+    },
+    {
+      "sink_sequence": 87,
+      "source": "n0",
+      "generation": 4
+    },
+    {
+      "sink_sequence": 91,
+      "source": "n1",
+      "generation": 4
+    },
+    {
+      "sink_sequence": 95,
+      "source": "n2",
+      "generation": 4
+    },
+    {
+      "sink_sequence": 99,
+      "source": "n3",
+      "generation": 4
+    },
+    {
+      "sink_sequence": 103,
+      "source": "n4",
+      "generation": 4
+    },
+    {
+      "sink_sequence": 111,
+      "source": "n0",
+      "generation": 4
+    },
+    {
+      "sink_sequence": 115,
+      "source": "n1",
+      "generation": 4
+    },
+    {
+      "sink_sequence": 119,
+      "source": "n2",
+      "generation": 4
+    },
+    {
+      "sink_sequence": 123,
+      "source": "n3",
+      "generation": 4
+    },
+    {
+      "sink_sequence": 127,
+      "source": "n4",
+      "generation": 4
+    },
+    {
+      "sink_sequence": 135,
+      "source": "n0",
+      "generation": 4
+    },
+    {
+      "sink_sequence": 139,
+      "source": "n1",
+      "generation": 4
+    },
+    {
+      "sink_sequence": 143,
+      "source": "n2",
+      "generation": 4
+    },
+    {
+      "sink_sequence": 147,
+      "source": "n3",
+      "generation": 4
+    },
+    {
+      "sink_sequence": 151,
+      "source": "n4",
+      "generation": 4
+    },
+    {
+      "sink_sequence": 159,
+      "source": "n0",
+      "generation": 4
+    },
+    {
+      "sink_sequence": 163,
+      "source": "n1",
+      "generation": 4
+    },
+    {
+      "sink_sequence": 167,
+      "source": "n2",
+      "generation": 4
+    },
+    {
+      "sink_sequence": 171,
+      "source": "n3",
+      "generation": 4
+    },
+    {
+      "sink_sequence": 175,
+      "source": "n4",
+      "generation": 4
+    },
+    {
+      "sink_sequence": 183,
+      "source": "n0",
+      "generation": 4
+    },
+    {
+      "sink_sequence": 187,
+      "source": "n1",
+      "generation": 4
+    },
+    {
+      "sink_sequence": 191,
+      "source": "n2",
+      "generation": 4
+    },
+    {
+      "sink_sequence": 195,
+      "source": "n3",
+      "generation": 4
+    },
+    {
+      "sink_sequence": 199,
+      "source": "n4",
+      "generation": 4
+    }
+  ]
+}

@@ -761,7 +761,7 @@ pub(crate) fn parse_schedule_plan(schedule: &str, timezone: &str) -> Result<Sche
         _ => {
             return Err(AppRuntimeError::InvalidPackage(format!(
                 "schedule `{schedule}` must be a five-field BicDB application cron expression or `@every <N>ms|s|m|h`"
-            )))
+            )));
         }
     };
     expression
@@ -1770,7 +1770,16 @@ where
     for (index, snapshot) in snapshots.iter().enumerate() {
         if let Err(error) = db
             .clear_collection_policy(&snapshot.relation)
-            .and_then(|_| db.clear_mutation_policy(&snapshot.relation))
+            .and_then(|_| {
+                if snapshot.mutation.as_ref().is_some_and(|policy| {
+                    policy.native_fact_publication.is_some()
+                        || policy.native_fact_reference_owner.is_some()
+                }) {
+                    Ok(())
+                } else {
+                    db.clear_mutation_policy(&snapshot.relation)
+                }
+            })
         {
             return match restore_relation_policies(db, &snapshots[..=index]) {
                 Ok(()) => Err(error.into()),

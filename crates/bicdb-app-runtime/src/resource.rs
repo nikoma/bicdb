@@ -16,7 +16,6 @@ use bicdb_extension::abi_v2::{
     TransactionRequest, ValidationRuleKind,
 };
 use bicdb_extension::host::ApplicationHost;
-use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Map, Value};
 use sha2::{Digest, Sha256};
@@ -2655,12 +2654,7 @@ pub(crate) fn validate_object(
                 FieldType::Float64 => value.is_number(),
                 // Declared SQL binds and stores numeric values as exact
                 // decimal text; both forms are the same decimal value.
-                FieldType::Decimal => {
-                    value.is_number()
-                        || value
-                            .as_str()
-                            .is_some_and(|value| value.parse::<rust_decimal::Decimal>().is_ok())
-                }
+                FieldType::Decimal => crate::decimal_input::json_decimal_exact(value).is_some(),
                 FieldType::String | FieldType::Timestamp | FieldType::Date => value.is_string(),
                 FieldType::Bytes => value.is_string() || value.is_array(),
                 FieldType::Uuid => value
@@ -2688,6 +2682,9 @@ pub(crate) fn validate_object(
         if value.is_null() {
             continue;
         }
+        let decimal = contract.fields.iter().any(|field| {
+            field.name == validation.field && matches!(field.field_type, FieldType::Decimal)
+        });
         let valid = match &validation.rule {
             ValidationRuleKind::MinLength { value: minimum } => {
                 value.as_str().is_some_and(|value| value.len() >= *minimum)
@@ -2696,17 +2693,17 @@ pub(crate) fn validate_object(
                 value.as_str().is_some_and(|value| value.len() <= *maximum)
             }
             ValidationRuleKind::Minimum { value: minimum } => {
-                numeric_validation_order(value, minimum)
+                numeric_validation_order(value, minimum, decimal)
                     .is_some_and(|order| order != std::cmp::Ordering::Less)
             }
             ValidationRuleKind::Maximum { value: maximum } => {
-                numeric_validation_order(value, maximum)
+                numeric_validation_order(value, maximum, decimal)
                     .is_some_and(|order| order != std::cmp::Ordering::Greater)
             }
             ValidationRuleKind::Range { minimum, maximum } => {
-                numeric_validation_order(value, minimum)
+                numeric_validation_order(value, minimum, decimal)
                     .is_some_and(|order| order != std::cmp::Ordering::Less)
-                    && numeric_validation_order(value, maximum)
+                    && numeric_validation_order(value, maximum, decimal)
                         .is_some_and(|order| order != std::cmp::Ordering::Greater)
             }
             ValidationRuleKind::Email => value
@@ -2727,12 +2724,21 @@ pub(crate) fn validate_object(
     Ok(())
 }
 
-fn numeric_validation_order(value: &Value, boundary: &str) -> Option<std::cmp::Ordering> {
+fn numeric_validation_order(
+    value: &Value,
+    boundary: &str,
+    decimal: bool,
+) -> Option<std::cmp::Ordering> {
+    if decimal {
+        return Some(
+            crate::decimal_input::json_decimal_exact(value)?
+                .cmp(&crate::decimal_input::parse_decimal_exact(boundary).ok()?),
+        );
+    }
     if let Some(value) = value.as_str() {
-        return value
-            .parse::<Decimal>()
+        return crate::decimal_input::parse_decimal_exact(value)
             .ok()?
-            .partial_cmp(&boundary.parse::<Decimal>().ok()?);
+            .partial_cmp(&crate::decimal_input::parse_decimal_exact(boundary).ok()?);
     }
     value
         .as_f64()
@@ -3251,11 +3257,7 @@ fn typed_json_compare(
 }
 
 fn json_decimal(value: &Value) -> Option<rust_decimal::Decimal> {
-    match value {
-        Value::String(value) => value.parse().ok(),
-        Value::Number(value) => value.to_string().parse().ok(),
-        _ => None,
-    }
+    crate::decimal_input::json_decimal_exact(value)
 }
 
 fn compare(left: Option<&Value>, right: Option<&Value>) -> std::cmp::Ordering {
@@ -3783,6 +3785,10 @@ mod tests {
                 application_program,
                 required_features,
                 max_call_depth: 16,
+
+                native_fact_publications: Vec::new(),
+                native_fact_imports: Vec::new(),
+                native_fact_projection_imports: Vec::new(),
             })),
         })
     }

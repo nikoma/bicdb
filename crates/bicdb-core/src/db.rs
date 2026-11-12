@@ -5,6 +5,7 @@ mod commit_snapshot;
 mod decimal_predicate;
 mod deferred_materialize;
 mod exact_decimal_sum;
+mod native_calendar;
 use exact_decimal_sum::ExactDecimalSum;
 mod local_namespace_identity;
 mod native_wal_apply;
@@ -125,7 +126,6 @@ use std::marker::PhantomData;
 use std::ops::Bound;
 use std::path::{Path, PathBuf};
 use std::ptr::NonNull;
-use std::str::FromStr;
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicU8, AtomicUsize, Ordering as AtomicOrdering};
 use std::sync::{Arc, OnceLock};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
@@ -8538,16 +8538,9 @@ fn invariant_numeric_binary(
         }
         NativeInvariantValueType::Decimal => {
             let parse = |value: &Value| {
-                value
-                    .as_str()
-                    .map(str::to_string)
-                    .or_else(|| value.as_number().map(ToString::to_string))
-                    .and_then(|value| Decimal::from_str(&value).ok())
-                    .ok_or_else(|| {
-                        BicDbError::CommitValidation(
-                            "invariant decimal operand is invalid".to_string(),
-                        )
-                    })
+                crate::json_decimal_exact(value).ok_or_else(|| {
+                    BicDbError::CommitValidation("invariant decimal operand is invalid".to_string())
+                })
             };
             let left = parse(left)?;
             let right = parse(right)?;
@@ -8571,6 +8564,25 @@ fn invariant_numeric_binary(
     }
 }
 
+// Persisted index predicates retain their existing admission/generation contract.
+// Native commit predicates scan complete relations and compare Date chronologically,
+// including BCE/extended years; no lexical Date index may prune their candidates.
+fn compare_native_invariant_values(
+    left: &Value,
+    right: &Value,
+    value_type: NativeInvariantValueType,
+) -> Result<Option<Ordering>> {
+    if value_type == NativeInvariantValueType::Date && !left.is_null() && !right.is_null() {
+        native_calendar::compare(left, right).map(Some)
+    } else {
+        Ok(compare_predicate_values(
+            left,
+            right,
+            invariant_index_type(value_type),
+        ))
+    }
+}
+
 fn evaluate_native_invariant_expression(
     db: &BicDb,
     tx: &Transaction,
@@ -8590,6 +8602,60 @@ fn evaluate_native_invariant_expression(
                 ))
             })?,
         NativeInvariantExpression::Literal { value } => value.clone(),
+        NativeInvariantExpression::ProportionalInterval { arguments } => {
+            let values = arguments
+                .iter()
+                .map(|argument| {
+                    evaluate_native_invariant_expression(
+                        db,
+                        tx,
+                        subject_relation,
+                        subject,
+                        bindings,
+                        argument,
+                    )
+                })
+                .collect::<Result<Vec<_>>>()?;
+            crate::exact_proportional_interval_value(&values)?
+        }
+        NativeInvariantExpression::DateAddDays { date, days } => {
+            let date = evaluate_native_invariant_expression(
+                db,
+                tx,
+                subject_relation,
+                subject,
+                bindings,
+                date,
+            )?;
+            let days = evaluate_native_invariant_expression(
+                db,
+                tx,
+                subject_relation,
+                subject,
+                bindings,
+                days,
+            )?;
+            native_calendar::add_days(&date, &days)?
+        }
+        NativeInvariantExpression::DateDifferenceDays { end, start } => {
+            let end = evaluate_native_invariant_expression(
+                db,
+                tx,
+                subject_relation,
+                subject,
+                bindings,
+                end,
+            )?;
+            let start = evaluate_native_invariant_expression(
+                db,
+                tx,
+                subject_relation,
+                subject,
+                bindings,
+                start,
+            )?;
+            native_calendar::difference_days(&end, &start)?
+        }
         NativeInvariantExpression::Unary {
             operator,
             value,
@@ -8679,36 +8745,28 @@ fn evaluate_native_invariant_expression(
                     (Value::Array(left), right) => left.contains(right),
                     _ => false,
                 }),
-                NativeInvariantBinaryOperator::Equal => Value::Bool(
-                    left == right
-                        || compare_predicate_values(
-                            &left,
-                            &right,
-                            invariant_index_type(*value_type),
-                        ) == Some(Ordering::Equal),
-                ),
-                NativeInvariantBinaryOperator::NotEqual => Value::Bool(
-                    left != right
-                        && compare_predicate_values(
-                            &left,
-                            &right,
-                            invariant_index_type(*value_type),
-                        ) != Some(Ordering::Equal),
-                ),
+                NativeInvariantBinaryOperator::Equal => {
+                    let ordering = compare_native_invariant_values(&left, &right, *value_type)?;
+                    Value::Bool(left == right || ordering == Some(Ordering::Equal))
+                }
+                NativeInvariantBinaryOperator::NotEqual => {
+                    let ordering = compare_native_invariant_values(&left, &right, *value_type)?;
+                    Value::Bool(left != right && ordering != Some(Ordering::Equal))
+                }
                 NativeInvariantBinaryOperator::Greater => Value::Bool(
-                    compare_predicate_values(&left, &right, invariant_index_type(*value_type))
+                    compare_native_invariant_values(&left, &right, *value_type)?
                         .is_some_and(Ordering::is_gt),
                 ),
                 NativeInvariantBinaryOperator::GreaterEqual => Value::Bool(
-                    compare_predicate_values(&left, &right, invariant_index_type(*value_type))
+                    compare_native_invariant_values(&left, &right, *value_type)?
                         .is_some_and(|ordering| !ordering.is_lt()),
                 ),
                 NativeInvariantBinaryOperator::Less => Value::Bool(
-                    compare_predicate_values(&left, &right, invariant_index_type(*value_type))
+                    compare_native_invariant_values(&left, &right, *value_type)?
                         .is_some_and(Ordering::is_lt),
                 ),
                 NativeInvariantBinaryOperator::LessEqual => Value::Bool(
-                    compare_predicate_values(&left, &right, invariant_index_type(*value_type))
+                    compare_native_invariant_values(&left, &right, *value_type)?
                         .is_some_and(|ordering| !ordering.is_gt()),
                 ),
             }
@@ -8732,13 +8790,135 @@ fn evaluate_native_invariant_expression(
                     )
                 })
                 .collect::<Result<Vec<_>>>()?;
-            let value_type = invariant_index_type(*value_type);
+            let value_type = *value_type;
             Value::Bool(
-                compare_predicate_values(&values[0], &values[3], value_type)
+                compare_native_invariant_values(&values[0], &values[3], value_type)?
                     .is_some_and(Ordering::is_lt)
-                    && compare_predicate_values(&values[2], &values[1], value_type)
+                    && compare_native_invariant_values(&values[2], &values[1], value_type)?
                         .is_some_and(Ordering::is_lt),
             )
+        }
+        NativeInvariantExpression::PublishedProjectionExists {
+            binding,
+            owner_application,
+            owner_resource,
+            owner_version,
+            publication_name,
+            publication_fingerprint,
+            consumer_application,
+            condition,
+        } => {
+            // Resolve only ACTUAL durable policy written from the signed owning resource.
+            // The consumer descriptor/expression carries no physical table name.
+            let mut resolved = None;
+            for (relation, state) in &db.collections {
+                let state = state.read();
+                let Some(publication) = state
+                    .meta
+                    .mutation_policy
+                    .as_ref()
+                    .and_then(|policy| policy.native_fact_publication.as_ref())
+                else {
+                    continue;
+                };
+                if publication.owner_application == *owner_application
+                    && publication.publication_name == *publication_name
+                    && publication.owner_resource.as_deref() == Some(owner_resource.as_str())
+                {
+                    if resolved.is_some()
+                        || publication.owner_version.as_deref() != Some(owner_version.as_str())
+                        || publication.fingerprint != *publication_fingerprint
+                    {
+                        return Err(BicDbError::CommitValidation(
+                            "native fact integrity failed".into(),
+                        ));
+                    }
+                    resolved = Some(relation.clone());
+                }
+            }
+            let relation = resolved.ok_or_else(|| {
+                BicDbError::CommitValidation("native fact integrity failed".into())
+            })?;
+            evaluate_native_invariant_expression(
+                db,
+                tx,
+                subject_relation,
+                subject,
+                bindings,
+                &NativeInvariantExpression::PublishedExists {
+                    binding: binding.clone(),
+                    relation,
+                    owner_application: owner_application.clone(),
+                    publication_name: publication_name.clone(),
+                    publication_fingerprint: publication_fingerprint.clone(),
+                    consumer_application: consumer_application.clone(),
+                    condition: condition.clone(),
+                },
+            )?
+        }
+        NativeInvariantExpression::PublishedExists {
+            binding,
+            relation,
+            owner_application,
+            publication_name,
+            publication_fingerprint,
+            consumer_application,
+            condition,
+        } => {
+            let publication = db
+                .mutation_policy(relation)?
+                .and_then(|policy| policy.native_fact_publication)
+                .ok_or_else(|| {
+                    BicDbError::CommitValidation("native fact integrity failed".into())
+                })?;
+            let actor = tx.mutation_actor.as_ref().ok_or_else(|| {
+                BicDbError::CommitValidation("native fact integrity failed".into())
+            })?;
+            if publication.owner_application != *owner_application
+                || publication.publication_name != *publication_name
+                || publication.fingerprint != *publication_fingerprint
+                || !publication.accept_new_references
+                || !publication.consumers.contains(consumer_application)
+                || actor.roles.is_disjoint(&publication.read_roles)
+            {
+                return Err(BicDbError::CommitValidation(
+                    "native fact integrity failed".into(),
+                ));
+            }
+            let tenant = actor
+                .tenant_id
+                .as_deref()
+                .and_then(|tenant| Uuid::parse_str(tenant).ok())
+                .ok_or_else(|| {
+                    BicDbError::CommitValidation("native fact integrity failed".into())
+                })?;
+            let mut found = false;
+            for record in resulting_records_for_relation(db, tx, relation)? {
+                let eligible = record_invariant_field(&record, &publication.tenant_field)
+                    .as_str()
+                    .and_then(|tenant| Uuid::parse_str(tenant).ok())
+                    == Some(tenant);
+                if !eligible {
+                    continue;
+                }
+                let mut nested = bindings.clone();
+                nested.insert(binding.clone(), record);
+                if evaluate_native_invariant_expression(
+                    db,
+                    tx,
+                    subject_relation,
+                    subject,
+                    &nested,
+                    condition,
+                )?
+                .as_bool()
+                    == Some(true)
+                {
+                    found = true;
+                    break;
+                }
+            }
+            Value::Bool(found)
         }
         NativeInvariantExpression::Exists {
             binding,
@@ -8844,7 +9024,8 @@ fn validate_carrier_invariant(
     tx: &Transaction,
     definition: &NativeInvariantDefinition,
 ) -> Result<()> {
-    if !tx.writes.is_empty()
+    if !tx.validate_existing_application_invariants
+        && !tx.writes.is_empty()
         && !tx
             .writes
             .iter()
@@ -8852,8 +9033,39 @@ fn validate_carrier_invariant(
     {
         return Ok(());
     }
+    fn has_published(value: &NativeInvariantExpression) -> bool {
+        match value {
+            NativeInvariantExpression::PublishedExists { .. }
+            | NativeInvariantExpression::PublishedProjectionExists { .. } => true,
+            NativeInvariantExpression::Unary { value, .. } => has_published(value),
+            NativeInvariantExpression::Binary { left, right, .. } => {
+                has_published(left) || has_published(right)
+            }
+            NativeInvariantExpression::Exists { condition, .. }
+            | NativeInvariantExpression::Aggregate { condition, .. } => has_published(condition),
+            NativeInvariantExpression::Overlaps { values, .. } => values.iter().any(has_published),
+            _ => false,
+        }
+    }
+    let published = has_published(&definition.expression);
+    if published
+        && !tx
+            .writes
+            .iter()
+            .any(|write| write.collection == definition.subject_relation)
+    {
+        return Ok(());
+    }
     let subjects = resulting_records_for_relation(db, tx, &definition.subject_relation)?;
     for subject in subjects {
+        if published
+            && !tx.writes.iter().any(|write| {
+                write.collection == definition.subject_relation && write.record_id == subject.id
+            })
+        {
+            continue;
+        }
+
         let value = evaluate_native_invariant_expression(
             db,
             tx,
@@ -9105,6 +9317,13 @@ impl TransactionRollbackMark {
     }
 }
 
+struct AuthorizedMutation {
+    audit: Option<crate::broker::PendingBrokerPublish>,
+    issuer_application: Option<String>,
+    relation: String,
+    record_ids: Vec<String>,
+}
+
 #[derive(Debug)]
 pub struct Transaction {
     db: NonNull<BicDb>,
@@ -9215,8 +9434,13 @@ pub struct Transaction {
     // so rollback marks restore the timing as well as the queued checks.
     constraint_modes: Mutex<Vec<(String, bool)>>,
     mutation_grants: BTreeMap<MutationGrantId, MutationGrant>,
+    native_write_issuers: Mutex<BTreeMap<usize, Option<String>>>,
     next_mutation_grant: u64,
     commit_validators: Vec<NativeCommitValidator>,
+    // Explicit existing-data admission retains full validation on a zero-write
+    // transaction. Automatically attached mutation guards do not turn ordinary
+    // reads into full-database invariant scans. Monotonic for this transaction.
+    validate_existing_application_invariants: bool,
     isolation: TransactionIsolation,
     serializable_generation_snapshot: HashMap<String, u64>,
     serializable_reads: BTreeSet<String>,
@@ -10128,6 +10352,17 @@ impl BicDb {
         format::enable_application_unique_scope(&self.path)
     }
 
+    /// Fence old readers before activating the versioned scalar/native guard contract.
+    pub fn enable_exact_proportional_intervals(&mut self) -> Result<()> {
+        self.ensure_writable("enable exact proportional interval contract")?;
+        format::enable_exact_proportional_intervals(&self.path)
+    }
+
+    pub fn enable_exact_decimal_list_sum(&mut self) -> Result<()> {
+        self.ensure_writable("enable exact memory Decimal sum contract")?;
+        format::enable_exact_decimal_list_sum(&self.path)
+    }
+
     fn open_inner(
         path: impl AsRef<Path>,
         config: DbConfig,
@@ -10162,7 +10397,9 @@ impl BicDb {
                         value.get("phase").and_then(serde_json::Value::as_str),
                         Some("admitted" | "reverted")
                     ) {
-                        return Err(replication_error("offline application unique-scope transition requires signed recovery or admission"));
+                        return Err(replication_error(
+                            "offline application unique-scope transition requires signed recovery or admission",
+                        ));
                     }
                 }
                 Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
@@ -10221,7 +10458,9 @@ impl BicDb {
                         value.get("phase").and_then(serde_json::Value::as_str),
                         Some("admitted" | "reverted")
                     ) {
-                        return Err(replication_error("offline application unique-scope transition requires signed recovery or admission"));
+                        return Err(replication_error(
+                            "offline application unique-scope transition requires signed recovery or admission",
+                        ));
                     }
                 }
                 Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
@@ -12679,7 +12918,9 @@ impl BicDb {
             Some(self.range_mutations.try_enter_database()?)
         };
         if !self.replication_verification_healthy() {
-            return Err(replication_error("replica verification failed; snapshot bootstrap required before importing more commits"));
+            return Err(replication_error(
+                "replica verification failed; snapshot bootstrap required before importing more commits",
+            ));
         }
         if require_standby && !self.is_replication_standby() {
             return Err(replication_error(
@@ -13065,6 +13306,19 @@ impl BicDb {
                     "collection `{collection}` mutation field names must contain 1..=256 bytes"
                 )));
             }
+        }
+        if policy.native_fact_publication.is_some() || policy.native_fact_reference_owner.is_some()
+        {
+            format::enable_native_immutable_facts(&self.path)?;
+        }
+        if policy
+            .native_fact_publication
+            .as_ref()
+            .is_some_and(|publication| {
+                publication.owner_resource.is_some() || publication.owner_version.is_some()
+            })
+        {
+            format::enable_native_fact_projection_contracts(&self.path)?;
         }
         self.collection_state_mut(collection)?.meta.mutation_policy = Some(policy);
         self.persist_catalog()?;
@@ -15669,6 +15923,28 @@ impl Transaction {
     /// [`BicDb::begin_application_transaction`]; ordinary transactions fail
     /// closed.
     pub fn issue_mutation_grant(&mut self, spec: MutationGrantSpec) -> Result<MutationGrantId> {
+        self.issue_mutation_grant_inner(spec, None)
+    }
+
+    /// Trusted native host only: the issuer is the validated executing package,
+    /// never an actor attribute, SQL parameter or application ABI request field.
+    pub fn issue_application_mutation_grant(
+        &mut self,
+        spec: MutationGrantSpec,
+        issuer_application: String,
+    ) -> Result<MutationGrantId> {
+        if issuer_application.is_empty() {
+            return Err(BicDbError::MutationDenied(
+                "empty application issuer".into(),
+            ));
+        }
+        self.issue_mutation_grant_inner(spec, Some(issuer_application))
+    }
+    fn issue_mutation_grant_inner(
+        &mut self,
+        spec: MutationGrantSpec,
+        issuer_application: Option<String>,
+    ) -> Result<MutationGrantId> {
         if self.state != TxState::Pending {
             return Err(BicDbError::TransactionNotPending);
         }
@@ -15720,6 +15996,7 @@ impl Transaction {
         self.mutation_grants.insert(
             id,
             MutationGrant {
+                issuer_application,
                 id,
                 actor,
                 remaining_rows: spec.maximum_affected_rows,
@@ -15731,6 +16008,24 @@ impl Transaction {
     }
 
     pub fn register_commit_validator(&mut self, validator: NativeCommitValidator) -> Result<()> {
+        self.register_commit_validator_inner(validator, true)
+    }
+
+    /// Attach an automatic application mutation guard. Mutating commits retain
+    /// the complete existing validation/lock path; zero-write reads do not need
+    /// to prove unrelated historical rows. Admission uses register_commit_validator.
+    pub fn register_mutation_commit_validator(
+        &mut self,
+        validator: NativeCommitValidator,
+    ) -> Result<()> {
+        self.register_commit_validator_inner(validator, false)
+    }
+
+    fn register_commit_validator_inner(
+        &mut self,
+        validator: NativeCommitValidator,
+        validate_existing: bool,
+    ) -> Result<()> {
         if self.state != TxState::Pending {
             return Err(BicDbError::TransactionNotPending);
         }
@@ -15739,6 +16034,11 @@ impl Transaction {
                 "ordinary transactions cannot register commit validators".to_string(),
             ));
         }
+        self.validate_existing_application_invariants |= validate_existing
+            && matches!(
+                &validator,
+                NativeCommitValidator::ApplicationInvariant { .. }
+            );
         self.commit_validators.push(validator);
         Ok(())
     }
@@ -15936,7 +16236,7 @@ impl Transaction {
         collection: &str,
         operation: MutationOperation,
         records: &[Record],
-    ) -> Result<Option<crate::broker::PendingBrokerPublish>> {
+    ) -> Result<AuthorizedMutation> {
         self.authorize_mutation_with_preimage(grant_id, collection, operation, records, None)
     }
 
@@ -15947,7 +16247,7 @@ impl Transaction {
         operation: MutationOperation,
         records: &[Record],
         checked_preimage: Option<(&str, Option<Arc<Record>>)>,
-    ) -> Result<Option<crate::broker::PendingBrokerPublish>> {
+    ) -> Result<AuthorizedMutation> {
         if self.state != TxState::Pending {
             return Err(BicDbError::TransactionNotPending);
         }
@@ -16009,6 +16309,20 @@ impl Transaction {
                 .clone()
                 .unwrap_or_default()
         };
+        let native_owner = mutation_policy
+            .native_fact_publication
+            .as_ref()
+            .map(|publication| &publication.owner_application)
+            .or(mutation_policy.native_fact_reference_owner.as_ref());
+        if let Some(owner) = native_owner {
+            if grant.issuer_application.as_deref() != Some(owner.as_str())
+                || operation != MutationOperation::Insert
+            {
+                return Err(BicDbError::MutationDenied(
+                    "immutable native fact owner mutation denied".into(),
+                ));
+            }
+        }
         if mutation_policy.audit_required && grant.spec.audit_metadata.is_empty() {
             return Err(BicDbError::MutationDenied(format!(
                 "collection `{collection}` requires non-empty MutationGrant audit metadata"
@@ -16041,7 +16355,7 @@ impl Transaction {
                 Some(_) => {
                     return Err(BicDbError::TransactionConflict(
                         "checked mutation preimage does not match its row".into(),
-                    ))
+                    ));
                 }
                 None => self.get_visible_unchecked(collection, &record.id)?,
             };
@@ -16171,6 +16485,7 @@ impl Transaction {
                 message_id: Uuid::new_v4(),
             }
         });
+        let authorized_issuer = grant.issuer_application.clone();
         let grant = self
             .mutation_grants
             .get_mut(&grant_id)
@@ -16180,11 +16495,32 @@ impl Transaction {
         if grant.remaining_rows == 0 || grant.remaining_statements == 0 {
             self.mutation_grants.remove(&grant_id);
         }
-        Ok(audit)
+        Ok(AuthorizedMutation {
+            audit,
+            issuer_application: authorized_issuer,
+            relation: collection.into(),
+            record_ids: records.iter().map(|record| record.id.clone()).collect(),
+        })
     }
 
-    fn enqueue_mutation_audit(&self, audit: Option<crate::broker::PendingBrokerPublish>) {
-        if let Some(audit) = audit {
+    fn enqueue_mutation_audit(&self, authorization: AuthorizedMutation) {
+        let mut issuers = self.native_write_issuers.lock();
+        for id in &authorization.record_ids {
+            if let Some(index) = self
+                .writes
+                .iter()
+                .enumerate()
+                .rev()
+                .find_map(|(index, write)| {
+                    (write.collection == authorization.relation && write.record_id == *id)
+                        .then_some(index)
+                })
+            {
+                issuers.insert(index, authorization.issuer_application.clone());
+            }
+        }
+        drop(issuers);
+        if let Some(audit) = authorization.audit {
             self.pending_broker_publishes.lock().push(audit);
         }
     }
@@ -18662,6 +18998,7 @@ impl Transaction {
         }
         if len < self.writes.len() {
             self.writes.truncate(len);
+            self.native_write_issuers.lock().split_off(&len);
             self.rebuild_write_index();
         }
         self.rollback_write_receipts(self.writes.len());
@@ -18688,6 +19025,7 @@ impl Transaction {
         }
         if write_len < self.writes.len() {
             self.writes.truncate(write_len);
+            self.native_write_issuers.lock().split_off(&write_len);
             self.rebuild_write_index();
         }
         self.rollback_write_receipts(self.writes.len());
@@ -28436,12 +28774,10 @@ fn validate_record_parts(
         return Err(BicDbError::EmptyRecordId);
     }
     if id.len() > MAX_RECORD_ID_BYTES {
-        return Err(BicDbError::InvalidRecordId(
-            format!(
-                "record id for collection `{collection}` is {} UTF-8 bytes; ids must be at most {MAX_RECORD_ID_BYTES} bytes",
-                id.len()
-            ),
-        ));
+        return Err(BicDbError::InvalidRecordId(format!(
+            "record id for collection `{collection}` is {} UTF-8 bytes; ids must be at most {MAX_RECORD_ID_BYTES} bytes",
+            id.len()
+        )));
     }
 
     if let Some(vector) = vector {
@@ -33970,8 +34306,11 @@ mod index_maintenance_tests {
                             .get("ledger", "changed")
                             .unwrap()
                             .and_then(|record| record.metadata.get("v").and_then(|v| v.as_i64()));
-                        assert_eq!(value, reinsert.then_some(30),
-                            "before={delete_before_begin} reinsert={reinsert} abort={abort_first} truncate={truncate}");
+                        assert_eq!(
+                            value,
+                            reinsert.then_some(30),
+                            "before={delete_before_begin} reinsert={reinsert} abort={abort_first} truncate={truncate}"
+                        );
                         assert!(recovered.get("ledger", "untouched").unwrap().is_some());
                     }
                 }

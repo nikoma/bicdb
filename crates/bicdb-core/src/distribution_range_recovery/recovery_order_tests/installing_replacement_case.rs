@@ -262,6 +262,13 @@ fn actual_installing_replacement_preserves_received_prefix_across_cold_p2_resume
         super::interrupted_normal_repair::ImageStop::HistoryPrefixBeforeAudit,
     );
 }
+#[test]
+fn actual_installing_replacement_preserves_acknowledged_target_r1_under_source_r2_cold_resume() {
+    run_replacement_at(
+        Some(false),
+        super::interrupted_normal_repair::ImageStop::AckedTargetBeforeStage,
+    );
+}
 fn run_replacement(handover_cut: Option<bool>) {
     run_replacement_at(
         handover_cut,
@@ -284,6 +291,8 @@ fn run_replacement_at(
     let target = node("n1");
     let source = node("n2");
     let initial = catalogue(&f, &target);
+    let (expected_target_native, expected_target_raw) =
+        super::interrupted_normal_repair::expected_target_seed(&f);
     let k = old_range.id.get().to_string();
     let pointer: NativeCurrentImageProposalPointer = serde_json::from_value(
         initial["catalog"]["image_install_intents"][&k]["protected_proposal"].clone(),
@@ -425,11 +434,35 @@ fn run_replacement_at(
         after_cert["catalog"]["image_install_intents"][&k],
         old_intent
     );
-    assert_eq!(after_cert["catalog"]["ranges"][&k]["last_index"], 0);
     assert_eq!(
-        after_cert["catalog"]["sparse_committed_decisions"][&k]["2"]["checksum_sha256"],
-        sparse_sha
+        after_cert["catalog"]["ranges"][&k]["last_index"],
+        expected_target_raw
     );
+    for field in ["entries", "resolved_through", "compacted_through"] {
+        assert_eq!(after_cert["catalog"]["ranges"][&k][field], initial["catalog"]["ranges"][&k][field],
+            "Installing current certification must preserve original command history/watermarks ({field})");
+    }
+    if expected_target_native == 1 {
+        assert!(
+            sparse_sha.is_null(),
+            "the original adjacent CQ2 was ordered, not a fabricated sparse record"
+        );
+        assert_eq!(after_cert["catalog"]["sparse_committed_decisions"][&k]["2"]["command"]["checksum_sha256"], command.checksum_sha256,
+            "ONLY the genuine existing-committed current certificate may add its permanent full-body projection");
+        assert_eq!(
+            initial["catalog"]["ranges"][&k]["entries"]["2"]["command"]["checksum_sha256"],
+            command.checksum_sha256
+        );
+        assert_eq!(
+            initial["catalog"]["ranges"][&k]["entries"]["2"]["state"],
+            serde_json::to_value(RangeWriteState::QuorumCommitted).unwrap()
+        );
+    } else {
+        assert_eq!(
+            after_cert["catalog"]["sparse_committed_decisions"][&k]["2"]["checksum_sha256"],
+            sparse_sha
+        );
+    }
     assert_eq!(
         f.databases[&target]
             .read()
@@ -643,7 +676,7 @@ fn run_replacement_at(
     assert_eq!(handover["old_fence"], old_fence);
     assert_eq!(handover["old_intent"], old_intent);
     assert_eq!(handover["new_scope"]["range_epoch"], range.epoch);
-    let result = serde_json::json!({"classification":"ACTUAL_REPLACEMENT_SOURCE_EXISTING_COMMITTED_TO_NATIVE_PREPARED_READY","seed":stopped,"root":f.root.path(),"old_epoch":old_range.epoch,"new_epoch":range.epoch,"new_leader":source,"original_command_epoch":command.range_epoch,"original_command_sha256":command.checksum_sha256,"unknown2_is_new_ack":false,"target_certificate_did_not_advance_raw_or_native":true,"old_fence_and_intent_archived":true,"old_sparse_sha_preserved":sparse_sha,"final":final_result,"physical_qualification":false,"born2_writer_policy_exercised":false,"strong_get_tested":false});
+    let result = serde_json::json!({"classification":"ACTUAL_REPLACEMENT_SOURCE_EXISTING_COMMITTED_TO_NATIVE_PREPARED_READY","seed":stopped,"root":f.root.path(),"old_epoch":old_range.epoch,"new_epoch":range.epoch,"new_leader":source,"original_command_epoch":command.range_epoch,"original_command_sha256":command.checksum_sha256,"unknown2_is_new_ack":false,"target_certificate_did_not_advance_raw_or_native":true,"old_fence_and_intent_archived":true,"old_sparse_sha_preserved":sparse_sha,"expected_target_native_preimage":expected_target_native,"expected_target_raw_last":expected_target_raw,"target_original_irrevocable_body_kind":if expected_target_native==1 {"ORDERED_CQ2"}else{"SPARSE_CQ2"},"target_original_command2_sha256":command.checksum_sha256,"final":final_result,"physical_qualification":false,"born2_writer_policy_exercised":false,"strong_get_tested":false});
     persist_json(f.root.path(), "replacement-source-result.json", &result);
     eprintln!("REPLACEMENT_SOURCE_RESULT {result}");
 }

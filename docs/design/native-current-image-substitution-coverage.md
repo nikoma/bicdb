@@ -148,3 +148,53 @@ its catch-up source died. Learner SourceDiesDuringCatchup needs its own valid
 never-exposed-learner abort/restart or fresh-current-voter source-coverage
 protocol. That lane, post-joint NoData, cross-process transport/operator
 control, and fault-safe physical 4→5 qualification remain OPEN.
+
+## Nonzero target-prefix regression source
+
+A further SOURCE-ONLY fixture based on full candidate
+`a96d406596991057e6f4167b7185783f06f3c8fd` adds
+`actual_installing_replacement_preserves_acknowledged_target_r1_under_source_r2_cold_resume`.
+It has not run Cargo locally. Its schedule uses the existing real fsynced RF3
+services and actual recovery/quorum producers, with simulated data delivery:
+
+1. Deliver genuine ACK1 to the target while native delivery is enabled. Verify
+   its actual native R1, common logical H1 and exact acknowledged record SHA.
+   The client ledger still contains only ACK1. Then make the target unavailable
+   for command2; source0 and source2 genuinely commit/certify command2, while
+   source2's Apply2 reply is deliberately not delivered. The originating local
+   post-admission fault leaves command2 Unknown, never a new application ACK.
+2. Bring the target back and make source2 unavailable. Target raw1 is adjacent
+   to command2, so use the EXISTING ordinary historical Certify2 path, not sparse
+   certification. Verify its raw CQ2/full original command and native R1 remain
+   separate. Source0 then uses genuine current-certification QQ to materialize
+   command2 and establish native R2.
+3. Produce protected P1 through full actual source0 history and target
+   obligations. Stop before receiving any history. The target's actual stored
+   native H1 commitment is therefore UNMATCHED. Installing hides native serving
+   visibility but must preserve ACK1's physical record, UID, original CQ2 and
+   protected preimage. Drop all owners and strictly reopen a copied tree.
+4. Make source0 DATA delivery unavailable; commit the existing metadata E2/
+   leader2 transition through actual metadata store election/replication. Real
+   source2 + Installing-target observations select the existing command2 and
+   certify it under the fresh scope. The actual Installing certification
+   producer may now add its permanent full-body projection; tests do not inject
+   or fabricate a sparse marker. The complete original ordered log is unchanged.
+5. Source2 really replays/materializes command2, verifies its entire immutable
+   history with a mixed current quorum and issues protected P2. Retain ACK1's
+   target record across that handover; close all owners again and resume P2
+   with a fresh actual quorum. Require the archived H1 point to equal the ACTUAL
+   acknowledged H1 captured before P1, with matched=false and received count0.
+   The new full stage/audit, image import, catalogue adoption and Prepared/Ready
+   path must reconcile the exact ACK1 and preserve the original command2 hash,
+   schema/UID/lower bounds and actual target MVCC B (greater than R2).
+
+This needs no new write while source0 is frozen: ACK1 and uncertain command2
+precede P1. RF3 is therefore sufficient for this nonzero TARGET-prefix test.
+It does not establish P1 accepted-R1 to P2 accepted-R2 availability; that separate
+schedule may need RF5 to retain an ordinary majority while the old source and
+Installing target remain frozen. It also does not simulate an entire host0
+failure: metadata stores remain reachable in the existing local test harness.
+The default R0/sparse schedules retain their exact expected preimage0/raw0;
+only this explicitly selected seed mode expects preimage1/rawCQ2. Birth-v1
+component fixtures are not retroactively enrolled or qualified for Strong,
+born-v2 writer policy, independent processes, operator scale-out or physical HA.

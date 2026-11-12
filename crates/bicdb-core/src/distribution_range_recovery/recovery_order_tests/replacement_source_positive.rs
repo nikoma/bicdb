@@ -30,6 +30,12 @@ pub(super) fn finish_actual_current_image_replacement(
 ) -> serde_json::Value {
     let source_id = node("n2");
     let target_id = node("n1");
+    let (expected_target_native, expected_target_raw) =
+        super::interrupted_normal_repair::expected_target_seed(fixture);
+    let seed: serde_json::Value = serde_json::from_slice(
+        &std::fs::read(fixture.root.path().join("interrupted-before-close.json")).unwrap(),
+    )
+    .unwrap();
     let mut quorum = InstallingCommittedQuorumRound::begin(
         fresh_role(providers, initiator, range, scope.recovery_nonce),
         target_id.clone(),
@@ -60,7 +66,10 @@ pub(super) fn finish_actual_current_image_replacement(
     let installing = runtimes[&target_id]
         .acquire_installing_committed_fence(initiator, &installing_request, parent)
         .unwrap();
-    assert_eq!(installing.evidence().progress.last_index, 0);
+    assert_eq!(
+        installing.evidence().progress.last_index,
+        expected_target_raw
+    );
     assert_eq!(
         installing
             .evidence()
@@ -69,7 +78,7 @@ pub(super) fn finish_actual_current_image_replacement(
             .as_ref()
             .unwrap()
             .range_index,
-        0
+        expected_target_native
     );
     assert_eq!(
         installing.evidence().irreversible_commands.get(&2),
@@ -213,6 +222,14 @@ pub(super) fn finish_actual_current_image_replacement(
                 .native_applied_index,
             None
         );
+        if expected_target_native == 1 {
+            let actual = db.get("items", acknowledged).unwrap().unwrap();
+            assert_eq!(
+                hex::encode(Sha256::digest(serde_json::to_vec(&actual).unwrap())),
+                acknowledged_sha,
+                "protected P2 handover must not remove or change the actual target ACK1 row"
+            );
+        }
         assert!(db.range_mutation_gate().try_enter(range.id).is_err());
         return serde_json::json!({"handover_cut":if before_catalogue{"NATIVE_P2_ORPHAN_BEFORE_CATALOGUE"}else{"DURABLE_N2_INTENT_P2_BEFORE_TRANSFER"},"attempt":attempt,"p1":proposal,"p2":p2.pointer(),"ordinary_mutation_refused":true,"native_unknown":true});
     }
@@ -251,11 +268,25 @@ pub(super) fn finish_actual_current_image_replacement(
             "substitution must retain EXACT previous received/audited stage"
         );
         if archive["previous_verified_entries"] == 0 {
-            assert_eq!(archive["previous_target_point"][0], 0,
-                "the actual fresh target's native Genesis commitment must survive InstallingUnknown");
+            assert_eq!(
+                archive["previous_target_point"][0], expected_target_native,
+                "the actual old target-native commitment must survive InstallingUnknown"
+            );
             assert_eq!(
                 archive["previous_target_point_matched"], false,
                 "no history entry was received to match the old native point before source death"
+            );
+        }
+        if expected_target_native == 1 {
+            assert_eq!(archive["previous_target_point"][0], 1);
+            assert_eq!(
+                archive["previous_target_point"][1],
+                seed["acknowledged_logical_history_sha256"]
+            );
+            assert_eq!(archive["previous_target_point_matched"], false);
+            assert_eq!(
+                archive["previous_verified_entries"], 0,
+                "the genuine acknowledged target prefix was UNMATCHED when source0 died"
             );
         }
         assert_eq!(archive["previous_history_sha256"], expected_h);
@@ -287,6 +318,12 @@ pub(super) fn finish_actual_current_image_replacement(
     assert_eq!(verified.base().range_index(), 2);
     assert_eq!(verified.base().logical_history_sha256(), expected_h);
     let target_b = verified.base().target_snapshot_bound().get();
+    if expected_target_native == 1 {
+        assert!(
+            target_b > 2,
+            "actual target delete/import sequences must remain distinct from source/rangeR2"
+        );
+    }
     assert_ne!(
         target_b, 2,
         "actual local MVCC bound must not be replaced with rangeR2"

@@ -62,6 +62,12 @@ pub(super) fn finish_actual_current_image_resume_at_source(
     parent: &CancellationToken,
 ) -> serde_json::Value {
     let target_id = node("n1");
+    let (expected_target_native, expected_target_raw) =
+        super::interrupted_normal_repair::expected_target_seed(fixture);
+    let seed: serde_json::Value = serde_json::from_slice(
+        &std::fs::read(fixture.root.path().join("interrupted-before-close.json")).unwrap(),
+    )
+    .unwrap();
     let mut quorum = CurrentImageResumeQuorumRound::begin(
         fresh_role(providers, initiator, range, scope.recovery_nonce),
         target_id.clone(),
@@ -92,7 +98,10 @@ pub(super) fn finish_actual_current_image_resume_at_source(
     let installing = runtimes[&target_id]
         .acquire_current_image_installing_fence(initiator, &installing_request, parent)
         .unwrap();
-    assert_eq!(installing.evidence().progress.last_index, 0);
+    assert_eq!(
+        installing.evidence().progress.last_index,
+        expected_target_raw
+    );
     assert_eq!(
         installing
             .evidence()
@@ -101,7 +110,7 @@ pub(super) fn finish_actual_current_image_resume_at_source(
             .as_ref()
             .unwrap()
             .range_index,
-        0
+        expected_target_native
     );
     assert_eq!(
         installing.evidence().current_sparse_commands.get(&2),
@@ -215,6 +224,18 @@ pub(super) fn finish_actual_current_image_resume_at_source(
                 archive["previous_header_sha256"], previous_sha,
                 "substitution must retain EXACT previous received/audited stage"
             );
+            if expected_target_native == 1 {
+                assert_eq!(archive["previous_target_point"][0], 1);
+                assert_eq!(
+                    archive["previous_target_point"][1],
+                    seed["acknowledged_logical_history_sha256"]
+                );
+                assert_eq!(archive["previous_target_point_matched"], false);
+                assert_eq!(
+                    archive["previous_verified_entries"], 0,
+                    "old nonempty native ACK commitment was unmatched before cold P2 resume"
+                );
+            }
             assert_eq!(archive["previous_history_sha256"], expected_h);
             assert_eq!(archive["current_history_sha256"], expected_h);
             assert!(
@@ -245,6 +266,12 @@ pub(super) fn finish_actual_current_image_resume_at_source(
     assert_eq!(verified.base().range_index(), 2);
     assert_eq!(verified.base().logical_history_sha256(), expected_h);
     let target_b = verified.base().target_snapshot_bound().get();
+    if expected_target_native == 1 {
+        assert!(
+            target_b > 2,
+            "actual target delete/import sequences must remain distinct from source/rangeR2"
+        );
+    }
     assert_ne!(
         target_b, 2,
         "actual local MVCC bound must not be replaced with rangeR2"

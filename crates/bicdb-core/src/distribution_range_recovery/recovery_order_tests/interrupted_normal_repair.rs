@@ -29,6 +29,7 @@ fn sha(bytes: &[u8]) -> String {
 pub(super) enum ImageStop {
     CatalogueBeforeMarker,
     BeginBeforeStage,
+    AckedTargetBeforeStage,
     HistoryStagedPartialAudit,
     HistoryPrefixBeforeAudit,
     AfterClear,
@@ -49,15 +50,38 @@ fn actual_protected_current_image_resumes_begin_before_history_staging() {
 fn actual_protected_current_image_resumes_intent_before_native_marker() {
     exercise_interrupted_normal_image(ImageStop::CatalogueBeforeMarker, true);
 }
+pub(super) fn expected_target_seed(fixture: &ActualNativeRf3Fixture) -> (u64, u64) {
+    let report: serde_json::Value = serde_json::from_slice(
+        &std::fs::read(fixture.root.path().join("interrupted-before-close.json")).unwrap(),
+    )
+    .unwrap();
+    if report["acknowledged_target"].as_bool().unwrap_or(false) {
+        assert_eq!(report["target_acknowledged_prefix"], 1);
+        assert_eq!(report["target_raw_last"], 2);
+        (1, 2)
+    } else {
+        if !report["target_raw_last"].is_null() {
+            assert_eq!(report["target_raw_last"], 0);
+        }
+        (0, 0)
+    }
+}
 pub(super) fn exercise_interrupted_normal_image(
     stop: ImageStop,
     resume: bool,
 ) -> std::path::PathBuf {
+    let acknowledged_target = matches!(stop, ImageStop::AckedTargetBeforeStage);
+    // Existing R0/sparse controls remain unchanged. The new mode first
+    // delivers genuine ACK1/native1 to the target, then loses delivery2.
+    let expected_target_native = u64::from(acknowledged_target);
+    let expected_target_raw = if acknowledged_target { 2 } else { 0 };
     let mut fixture = ActualNativeRf3Fixture::new();
     fixture.root.disable_cleanup(true);
     fixture.transport.enable_native_delivery();
     fixture.transport.drop_native_apply_once(node("n2"), 1);
-    fixture.transport.set_unavailable(&node("n1"), true);
+    fixture
+        .transport
+        .set_unavailable(&node("n1"), !acknowledged_target);
     eprintln!(
         "INTERRUPTED_NORMAL_ORIGINAL_ROOT {}",
         fixture.root.path().display()
@@ -111,8 +135,31 @@ pub(super) fn exercise_interrupted_normal_image(
             .lock()
             .range_write_progress(range.id)
             .last_index,
-        0
+        expected_target_native
     );
+    if acknowledged_target {
+        let target = fixture.databases[&target_id].read();
+        assert_eq!(
+            target
+                .native_range_prefix_observation(range.id)
+                .unwrap()
+                .native_applied_index,
+            Some(1)
+        );
+        assert_eq!(
+            target
+                .current_native_range_source_lineage(range.id)
+                .unwrap()
+                .logical_history_sha256(),
+            acknowledged_history
+        );
+        assert_eq!(
+            sha(&serde_json::to_vec(&target.get("items", acknowledged).unwrap().unwrap()).unwrap()),
+            acknowledged_sha
+        );
+        drop(target);
+        fixture.transport.set_unavailable(&target_id, true);
+    }
     // Admission really catches n2 up through ACK1, then may deliver NativeApply2
     // before the origin's post-admission fault returns Unknown. Keep the later
     // replacement-source recovery test's CQ2/native1 precondition explicit:
@@ -209,19 +256,39 @@ pub(super) fn exercise_interrupted_normal_image(
     runtimes[&source_id]
         .certify_historical(&initiator, &request, &parent)
         .unwrap();
-    let sparse_observation = runtimes[&target_id]
-        .certify_sparse_historical(&initiator, &request, &parent)
-        .unwrap();
-    assert_eq!(sparse_observation.fence().progress().last_index, 0);
-    assert_eq!(
-        sparse_observation.fence().native().native_applied_index,
-        Some(0)
-    );
-    let sparse_sha = sparse_observation
-        .sparse_decision()
-        .unwrap()
-        .checksum_sha256()
-        .to_owned();
+    if acknowledged_target {
+        let certified = runtimes[&target_id]
+            .certify_historical(&initiator, &request, &parent)
+            .unwrap();
+        assert_eq!(certified.fence().progress().last_index, 2);
+        assert_eq!(certified.fence().progress().resolved_through, 1);
+        assert_eq!(certified.fence().native().native_applied_index, Some(1));
+        let observed = fixture.services[&target_id]
+            .lock()
+            .probe_range_write_for_peer(&range, &source_id, 2)
+            .unwrap()
+            .entry
+            .unwrap();
+        assert_eq!(observed.state, RangeWriteState::QuorumCommitted);
+        assert_eq!(observed.command, tail.command);
+    }
+    let sparse_observation = if acknowledged_target {
+        None
+    } else {
+        let observation = runtimes[&target_id]
+            .certify_sparse_historical(&initiator, &request, &parent)
+            .unwrap();
+        assert_eq!(observation.fence().progress().last_index, 0);
+        assert_eq!(observation.fence().native().native_applied_index, Some(0));
+        Some(observation)
+    };
+    let sparse_sha = sparse_observation.as_ref().map(|observation| {
+        observation
+            .sparse_decision()
+            .unwrap()
+            .checksum_sha256()
+            .to_owned()
+    });
     let applied = runtimes[&source_id]
         .apply_historical(&initiator, &request, &parent)
         .unwrap();
@@ -469,11 +536,26 @@ pub(super) fn exercise_interrupted_normal_image(
         if marker_expected { None } else { Some(0) }
     );
     assert_eq!(partial.invalidated, marker_expected);
-    assert!(target_db
-        .read()
-        .get("items", acknowledged)
-        .unwrap()
-        .is_none());
+    if acknowledged_target {
+        assert_eq!(
+            sha(&serde_json::to_vec(
+                &target_db
+                    .read()
+                    .get("items", acknowledged)
+                    .unwrap()
+                    .unwrap()
+            )
+            .unwrap()),
+            acknowledged_sha,
+            "old ACK1 row must survive before any clear/copy"
+        );
+    } else {
+        assert!(target_db
+            .read()
+            .get("items", acknowledged)
+            .unwrap()
+            .is_none());
+    }
     assert_eq!(
         target_db.read().local_namespace_identity("items").unwrap(),
         Some(target_uid)
@@ -534,9 +616,26 @@ pub(super) fn exercise_interrupted_normal_image(
     );
     assert_eq!(
         phase["catalog"]["sparse_committed_decisions"][&key]["2"]["checksum_sha256"],
-        sparse_sha
+        serde_json::to_value(&sparse_sha).unwrap()
     );
-    assert_eq!(phase["catalog"]["ranges"][&key]["last_index"], 0);
+    assert_eq!(
+        phase["catalog"]["ranges"][&key]["last_index"],
+        expected_target_raw
+    );
+    if acknowledged_target {
+        assert!(
+            phase["catalog"]["sparse_committed_decisions"][&key]["2"].is_null(),
+            "normal adjacent certification is not a fabricated sparse decision"
+        );
+        assert_eq!(
+            phase["catalog"]["ranges"][&key]["entries"]["2"]["state"],
+            serde_json::to_value(RangeWriteState::QuorumCommitted).unwrap()
+        );
+        assert_eq!(
+            phase["catalog"]["ranges"][&key]["entries"]["2"]["command"]["checksum_sha256"],
+            tail.command.checksum_sha256
+        );
+    }
     save(
         fixture.root.path(),
         "interrupted-before-close.json",
@@ -544,8 +643,10 @@ pub(super) fn exercise_interrupted_normal_image(
             "stage":format!("{stop:?}"),"resume_requested":resume,"protected_proposal":protected_pointer, "source_native":2,"target_native":partial,
             "target_birth":birth,"target_birth_sha256":birth_sha,"target_open":old_open,
             "target_uid":target_uid,"target_local_db_sequence":local_b,"image_attempt":attempt,
+            "acknowledged_target":acknowledged_target,"target_acknowledged_prefix":expected_target_native,"target_raw_last":expected_target_raw,
             "history_stage_id":stage_id,"history_stage_sha256":stage_sha,"sparse_sha256":sparse_sha,
             "source_logical_history_sha256":source_h,"source_identity":source_identity,"ack_record_sha256":acknowledged_sha,
+            "acknowledged_logical_history_sha256":acknowledged_history,
             "scope":scope,"catalogue":phase,"uncertain_call":unknown_error.to_string()
         }),
     );
@@ -644,7 +745,7 @@ pub(super) fn exercise_interrupted_normal_image(
     );
     assert_eq!(
         cold_phase["catalog"]["sparse_committed_decisions"][&key]["2"]["checksum_sha256"],
-        sparse_sha
+        serde_json::to_value(&sparse_sha).unwrap()
     );
     cold.transport.set_unavailable(&node("n2"), true);
     let providers = test_recovery_metadata_cluster(
@@ -838,7 +939,8 @@ pub(super) fn exercise_interrupted_normal_image(
         "original_root":original_root,"copied_root":cold.root.path(),"source_actual_native":2,
         "source_logical_history_sha256":source_h,"source_identity_before_close":source_identity,
         "source_identity_after_close":cold_source_identity,"target_actual_native":cold_native,
-        "target_raw_last":0,"target_sparse_index":2,"sparse_sha256":sparse_sha,
+        "acknowledged_target":acknowledged_target,"target_acknowledged_prefix":expected_target_native,
+        "target_raw_last":expected_target_raw,"target_sparse_index":if acknowledged_target {None}else{Some(2)},"sparse_sha256":sparse_sha,
         "target_uid":target_uid,"target_birth":birth,"target_birth_sha256":birth_sha,
         "original_target_open":old_open,"current_target_open":new_open,"target_local_db_sequence":local_b,
         "image_attempt":attempt,"stage_id":stage_id,"stage_sha256":stage_sha,"published_image_base_present":false,

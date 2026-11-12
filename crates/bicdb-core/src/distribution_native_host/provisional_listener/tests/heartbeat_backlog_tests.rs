@@ -187,3 +187,288 @@ fn native_initial_metadata_actual_tls_barrier_backlog_advances_beyond_first_batc
         "successful recovery still has no actual current-term read anchor"
     );
 }
+
+#[test]
+fn native_initial_metadata_actual_tls_65_barriers_resume_across_finite_heartbeat_calls() {
+    let summary_root = if let Some(root) = std::env::var_os("BICDB_TEST_EVIDENCE_ROOT") {
+        fs::create_dir_all(&root).unwrap();
+        tempfile::Builder::new()
+            .prefix("native-metadata-heartbeat-65-")
+            .tempdir_in(root)
+            .unwrap()
+    } else {
+        tempfile::tempdir().unwrap()
+    }
+    .keep();
+    let mut fixture = Fixture::new();
+    fixture._root.disable_cleanup(true);
+    eprintln!(
+        "NATIVE_HEARTBEAT_65_PRIVATE_ROOT {}",
+        fixture._root.path().display()
+    );
+    eprintln!("NATIVE_HEARTBEAT_65_SUMMARY {}", summary_root.display());
+    let configuration = fixture.hosts[0]
+        .observe_initial_configuration(&budget())
+        .unwrap();
+    let permits = fixture
+        .hosts
+        .iter()
+        .map(|host| {
+            host.prepare_common_initial_configuration(&configuration, &budget())
+                .unwrap()
+        })
+        .collect::<Vec<_>>();
+    let launches = fixture
+        .hosts
+        .iter_mut()
+        .zip(&permits)
+        .map(|(host, permit)| host.finish_initial_consensus(permit, &budget()).unwrap())
+        .collect::<Vec<_>>();
+    let _listeners = launches
+        .iter()
+        .enumerate()
+        .map(|(i, launch)| {
+            launch
+                .start_metadata_listener(fixture.networks[i].clone(), &budget())
+                .unwrap()
+        })
+        .collect::<Vec<_>>();
+    let app_wal_before = launches
+        .iter()
+        .map(|launch| {
+            let db = launch.seed.database.read();
+            let stats = db.tx_log_handle().stats();
+            (stats.written_seq, stats.commits_written)
+        })
+        .collect::<Vec<_>>();
+    let mut trace = Vec::new();
+    for term in 1..=65 {
+        let request = launches[0].metadata.lock().start_election().unwrap();
+        assert_eq!(request.term, term);
+        let reply = launches[0]
+            .transport
+            .request_metadata_vote_cancellable(&node(1), request.clone(), &budget())
+            .unwrap();
+        assert!(reply.vote_granted);
+        assert_eq!(reply.term, term);
+        assert_eq!(reply.voter_id, node(1));
+        let votes = BTreeSet::from([request.candidate_id.clone(), reply.voter_id.clone()]);
+        launches[0].metadata.lock().become_leader(&votes).unwrap();
+        trace.push(serde_json::json!({"event":"actual_TLS_election_append_withheld","request":request,"reply":reply}));
+    }
+    // Exactly three rounds of sixteen may reach only48 per peer. Current-term
+    // quorum/read authority must still refuse; no loop-bound increase is used.
+    launches[0].heartbeat_initial_metadata(&budget()).unwrap();
+    let first_status = launches
+        .iter()
+        .map(|launch| launch.metadata.lock().status())
+        .collect::<Vec<_>>();
+    trace.push(serde_json::json!({"event":"first_finite_heartbeat","status":first_status}));
+    crate::storage::write_atomic(
+        &summary_root.join("first-call-result.json"),
+        &serde_json::to_vec_pretty(&trace).unwrap(),
+        true,
+    )
+    .unwrap();
+    assert_eq!(first_status[0].last_log_index, 65);
+    assert_eq!(first_status[0].commit_index, 0);
+    for status in &first_status[1..] {
+        assert_eq!(status.last_log_index, 48);
+        assert_eq!(status.commit_index, 0);
+    }
+    assert!(launches[0]
+        .transport
+        .acquire_host_metadata_observation(
+            &node(0),
+            Uuid::now_v7(),
+            Duration::from_secs(5),
+            &budget(),
+        )
+        .is_err());
+    let pending = launches[0]
+        .metadata
+        .lock()
+        .append_request_for_peer(&node(1), 16)
+        .unwrap();
+    assert_eq!(pending.prev_log_index, 48);
+    assert_eq!(pending.entries.last().unwrap().index, 64);
+    let actual_reply = launches[0]
+        .transport
+        .append_metadata_cancellable(&node(1), pending.clone(), &budget())
+        .unwrap();
+    assert!(actual_reply.success);
+    assert_eq!(actual_reply.match_index, 64);
+    // Transport completion and a reply relabeled to another physical voter
+    // supply no accepted cursor. The real matching acceptance may advance it.
+    assert!(launches[0]
+        .metadata
+        .lock()
+        .record_append_response(&node(2), &actual_reply)
+        .is_err());
+    assert_eq!(
+        launches[0]
+            .metadata
+            .lock()
+            .append_request_for_peer(&node(1), 16)
+            .unwrap()
+            .prev_log_index,
+        48
+    );
+    assert_eq!(
+        launches[0]
+            .metadata
+            .lock()
+            .append_request_for_peer(&node(2), 16)
+            .unwrap()
+            .prev_log_index,
+        48
+    );
+    assert!(!launches[0]
+        .metadata
+        .lock()
+        .record_append_response(&node(1), &actual_reply)
+        .unwrap());
+    let ahead = launches[0]
+        .metadata
+        .lock()
+        .append_request_for_peer(&node(1), 16)
+        .unwrap();
+    assert_eq!(ahead.prev_log_index, 64);
+    // Send this genuine sender-produced ahead probe to the still-behind peer2.
+    // Its real NACK resets only its cursor; the conflict hint is never a vote.
+    let negative = launches[0]
+        .transport
+        .append_metadata_cancellable(&node(2), ahead.clone(), &budget())
+        .unwrap();
+    assert!(!negative.success);
+    assert!(!launches[0]
+        .metadata
+        .lock()
+        .record_append_response(&node(2), &negative)
+        .unwrap());
+    assert_eq!(
+        launches[0]
+            .metadata
+            .lock()
+            .append_request_for_peer(&node(2), 16)
+            .unwrap()
+            .prev_log_index,
+        0
+    );
+    assert_eq!(
+        launches[0]
+            .metadata
+            .lock()
+            .append_request_for_peer(&node(1), 16)
+            .unwrap()
+            .prev_log_index,
+        64
+    );
+    assert_eq!(launches[0].metadata.lock().status().commit_index, 0);
+    trace.push(serde_json::json!({"event":"actual_unaccepted_wrongpeer_and_negative_replies","request":pending,
+        "actual_reply":actual_reply,"ahead_probe":ahead,"actual_negative":negative}));
+    launches[0].heartbeat_initial_metadata(&budget()).unwrap();
+    let second_status = launches
+        .iter()
+        .map(|launch| launch.metadata.lock().status())
+        .collect::<Vec<_>>();
+    for status in &second_status {
+        assert_eq!(status.commit_index, 65);
+    }
+    let fresh = launches[0].transport.acquire_host_metadata_observation(
+        &node(0),
+        Uuid::now_v7(),
+        Duration::from_secs(5),
+        &budget(),
+    );
+    assert!(
+        fresh.is_ok(),
+        "current-term barrier65 was not actually committed"
+    );
+    trace.push(serde_json::json!({"event":"second_finite_heartbeat","status":second_status}));
+    // A genuine new term resets accepted peer progress. Snapshot65+barrier66
+    // is required, rather than retaining an old-term cursor as authority.
+    let request = launches[0].metadata.lock().start_election().unwrap();
+    let vote = launches[0]
+        .transport
+        .request_metadata_vote_cancellable(&node(1), request.clone(), &budget())
+        .unwrap();
+    assert!(vote.vote_granted);
+    assert_eq!(vote.voter_id, node(1));
+    assert_eq!(vote.term, request.term);
+    assert_eq!(request.term, 66);
+    launches[0]
+        .metadata
+        .lock()
+        .become_leader(&BTreeSet::from([
+            request.candidate_id.clone(),
+            vote.voter_id.clone(),
+        ]))
+        .unwrap();
+    let term_reset = launches[0]
+        .metadata
+        .lock()
+        .append_request_for_peer(&node(1), 16)
+        .unwrap();
+    assert_eq!(
+        term_reset.snapshot.as_ref().unwrap().last_included_index,
+        65
+    );
+    assert_eq!(term_reset.entries[0].index, 66);
+    launches[0].heartbeat_initial_metadata(&budget()).unwrap();
+    // A real committed configuration change also resets the cursor, including
+    // the existing physical-birth/pin binding. Only actual ACKs can refill it.
+    let mut changed = launches[0].metadata.lock().committed_topology().clone();
+    changed.generation += 1;
+    changed.nodes.get_mut(&node(2)).unwrap().used_bytes += 1;
+    let proposal = launches[0]
+        .metadata
+        .lock()
+        .propose_topology(changed)
+        .unwrap();
+    let request = launches[0]
+        .metadata
+        .lock()
+        .append_request_for_peer(&node(1), 16)
+        .unwrap();
+    let reply = launches[0]
+        .transport
+        .append_metadata_cancellable(&node(1), request, &budget())
+        .unwrap();
+    assert!(launches[0]
+        .metadata
+        .lock()
+        .record_append_response(&node(1), &reply)
+        .unwrap());
+    let configuration_reset = launches[0]
+        .metadata
+        .lock()
+        .append_request_for_peer(&node(1), 16)
+        .unwrap();
+    assert_eq!(
+        configuration_reset
+            .snapshot
+            .as_ref()
+            .unwrap()
+            .last_included_index,
+        proposal.index
+    );
+    launches[0].heartbeat_initial_metadata(&budget()).unwrap();
+    for launch in &launches {
+        assert_eq!(launch.metadata.lock().status().commit_index, proposal.index);
+    }
+    let app_wal_after = launches
+        .iter()
+        .map(|launch| {
+            let db = launch.seed.database.read();
+            assert!(!db.commit_admission_ready());
+            let stats = db.tx_log_handle().stats();
+            (stats.written_seq, stats.commits_written)
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(app_wal_before, app_wal_after);
+    crate::storage::write_atomic(&summary_root.join("completed-result.json"),
+        &serde_json::to_vec_pretty(&serde_json::json!({"trace":trace,"term_reset_request":term_reset,"configuration_reset_request":configuration_reset,
+            "final_status":launches.iter().map(|launch| launch.metadata.lock().status()).collect::<Vec<_>>(),
+            "application_wal_unchanged":true,"scope":"actual local native/TLS metadata replication only; no data ACK/Strong/VM/Azure claim"})).unwrap(), true).unwrap();
+}

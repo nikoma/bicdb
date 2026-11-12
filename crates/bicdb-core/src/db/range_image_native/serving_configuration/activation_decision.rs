@@ -283,6 +283,13 @@ impl BicDb {
         quorum: &NativeCompletionQuorum,
         fresh: &RecoveryRoleAdmission,
     ) -> Result<NativeActivationDecisionReceipt> {
+        #[cfg(test)]
+        let mut preflight_trace =
+            crate::distribution_range_handoff::NativeJointPhaseTrace::from_deadline(
+                "recovery-activate-native-preflight",
+                fresh.local_node_id(),
+                fresh.deadline(),
+            );
         quorum.require_local_prepared(prepared, self, store, fresh)?;
         let serving = prepared.require_completed_for_activation(self, store, fresh)?;
         serving.require_current(self)?;
@@ -294,7 +301,12 @@ impl BicDb {
             fresh.local_node_id(),
             fresh.local_member_incarnation(),
         )?;
-        let _journal = self.try_native_image_journal()?;
+        #[cfg(test)]
+        {
+            preflight_trace.complete();
+            drop(preflight_trace);
+        }
+        let journal = self.try_native_image_journal()?;
         let pointer = decision_key(prepared.scope().range_id);
         let old =
             self.read_native_range_image_record::<NativeActivationDecisionRecord>(&pointer)?;
@@ -323,9 +335,38 @@ impl BicDb {
                     native,
                     record: old.clone(),
                 };
+                #[cfg(test)]
+                let mut readback_trace =
+                    crate::distribution_range_handoff::NativeJointPhaseTrace::from_deadline(
+                        "recovery-activate-native-under-journal-readback-idempotent",
+                        fresh.local_node_id(),
+                        fresh.deadline(),
+                    );
                 receipt.require_current_under_journal(self)?;
-                quorum.require_recipient_role(fresh)?;
+                #[cfg(test)]
+                {
+                    readback_trace.complete();
+                    drop(readback_trace);
+                }
+                // CurrentJoint's full Prepared validator opens its own native
+                // read scope. Do not recursively try-lock this journal.
+                drop(journal);
+                #[cfg(test)]
+                let mut prepared_trace =
+                    crate::distribution_range_handoff::NativeJointPhaseTrace::from_deadline(
+                        "recovery-activate-post-journal-prepared-current-idempotent",
+                        fresh.local_node_id(),
+                        fresh.deadline(),
+                    );
                 prepared.require_current_under_role(self, store, fresh)?;
+                #[cfg(test)]
+                {
+                    prepared_trace.complete();
+                    drop(prepared_trace);
+                }
+                receipt.require_current(self)?;
+                prepared.require_produced_completion_boundary(self, store, fresh)?;
+                quorum.require_recipient_role(fresh)?;
                 return Ok(receipt);
             }
             if old.range.epoch > fresh.current_range().epoch
@@ -380,6 +421,12 @@ impl BicDb {
         // bounded metadata validation and page operations, then readback
         // revalidates the full actual binding before returning any receipt.
         record.require_native_binding(self, &native, true)?;
+        #[cfg(test)]
+        let mut wal_trace = crate::distribution_range_handoff::NativeJointPhaseTrace::from_deadline(
+            "recovery-activate-native-WAL",
+            fresh.local_node_id(),
+            fresh.deadline(),
+        );
         self.in_paged_transaction(|paged, xid| {
             record.native_page_xid = xid;
             record.checksum_sha256 = record.checksum()?;
@@ -414,10 +461,54 @@ impl BicDb {
             Ok(())
         })?
         .ok_or_else(|| invalid("activation decision has no native page store"))?;
+        #[cfg(test)]
+        {
+            wal_trace.complete();
+            drop(wal_trace);
+            eprintln!("ACTUAL_RECOVERY_ACTIVATE_NATIVE_WAL_RETURNED node={} nonce={} R={} activation_sha={} xid={} remaining_ms={}", fresh.local_node_id(), prepared.scope().recovery_nonce, prepared.range_index(), record.checksum_sha256, record.native_page_xid, fresh.deadline().saturating_duration_since(std::time::Instant::now()).as_millis());
+        }
         let receipt = NativeActivationDecisionReceipt { native, record };
+        #[cfg(test)]
+        let mut readback_trace =
+            crate::distribution_range_handoff::NativeJointPhaseTrace::from_deadline(
+                "recovery-activate-native-under-journal-readback-fresh",
+                fresh.local_node_id(),
+                fresh.deadline(),
+            );
         receipt.require_current_under_journal(self)?;
-        quorum.require_recipient_role(fresh)?;
+        #[cfg(test)]
+        {
+            readback_trace.complete();
+            drop(readback_trace);
+        }
+        // Preserve actual WAL + current/archive readback under this guard,
+        // then run the unchanged full physical/domain validator outside it.
+        drop(journal);
+        #[cfg(test)]
+        let mut prepared_trace =
+            crate::distribution_range_handoff::NativeJointPhaseTrace::from_deadline(
+                "recovery-activate-post-journal-prepared-current-fresh",
+                fresh.local_node_id(),
+                fresh.deadline(),
+            );
         prepared.require_current_under_role(self, store, fresh)?;
+        #[cfg(test)]
+        {
+            prepared_trace.complete();
+            drop(prepared_trace);
+        }
+        #[cfg(test)]
+        let mut final_trace =
+            crate::distribution_range_handoff::NativeJointPhaseTrace::from_deadline(
+                "recovery-activate-return-decision-recheck-fresh",
+                fresh.local_node_id(),
+                fresh.deadline(),
+            );
+        receipt.require_current(self)?;
+        prepared.require_produced_completion_boundary(self, store, fresh)?;
+        quorum.require_recipient_role(fresh)?;
+        #[cfg(test)]
+        final_trace.complete();
         Ok(receipt)
     }
 }

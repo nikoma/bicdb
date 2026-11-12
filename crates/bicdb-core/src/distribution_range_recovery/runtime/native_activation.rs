@@ -9,13 +9,36 @@ impl RangeRecoveryRuntime {
         parent: &CancellationToken,
     ) -> Result<NativeCompletionObservation> {
         let token = request.cancellation(parent)?;
+        #[cfg(test)]
+        let mut total_trace = crate::distribution_range_handoff::NativeJointPhaseTrace::new(
+            "recovery-activate-total",
+            &self.local_node_id,
+            &token,
+        );
         let operation = self.reserve(request.scope.range_id)?;
+        #[cfg(test)]
+        let mut quorum_trace = crate::distribution_range_handoff::NativeJointPhaseTrace::new(
+            "recovery-activate-completion-quorum",
+            &self.local_node_id,
+            &token,
+        );
         let quorum = self.acquire_native_completion_quorum_with_operation(
             initiator,
             request,
             &token,
             Arc::clone(&operation),
         )?;
+        #[cfg(test)]
+        {
+            quorum_trace.complete();
+            drop(quorum_trace);
+        }
+        #[cfg(test)]
+        let mut role_trace = crate::distribution_range_handoff::NativeJointPhaseTrace::new(
+            "recovery-activate-post-quorum-metadata-role",
+            &self.local_node_id,
+            &token,
+        );
         let scope = &request.scope;
         let business = Uuid::now_v7();
         let challenge = Uuid::now_v7();
@@ -43,6 +66,11 @@ impl RangeRecoveryRuntime {
         scope.require_role(&fresh)?;
         quorum.require_recipient_role(&fresh)?;
         let token = token.child_with_deadline(fresh.deadline());
+        #[cfg(test)]
+        {
+            role_trace.complete();
+            drop(role_trace);
+        }
         let has_session = {
             let sessions = self.sessions.lock();
             sessions.current.contains_key(&scope.range_id)
@@ -59,7 +87,12 @@ impl RangeRecoveryRuntime {
                 };
                 service.require_current_native_activation(request, &fresh, &quorum)?;
             }
-            return self.observe_native_completion_inner(initiator, request, &token);
+            let result = self.observe_native_completion_inner(initiator, request, &token);
+            #[cfg(test)]
+            if result.is_ok() {
+                total_trace.complete();
+            }
+            return result;
         }
         let prepared = self
             .retained_native_prepared(scope)?
@@ -70,7 +103,24 @@ impl RangeRecoveryRuntime {
                 break s;
             }
         };
+        #[cfg(test)]
+        let mut local_trace = crate::distribution_range_handoff::NativeJointPhaseTrace::new(
+            "recovery-activate-local-producer",
+            &self.local_node_id,
+            &token,
+        );
         let receipt = service.activate_local_native_recovery(&prepared, quorum, &fresh, &token)?;
+        #[cfg(test)]
+        {
+            local_trace.complete();
+            drop(local_trace);
+        }
+        #[cfg(test)]
+        let mut release_trace = crate::distribution_range_handoff::NativeJointPhaseTrace::new(
+            "recovery-activate-arm-and-release",
+            &self.local_node_id,
+            &token,
+        );
         // Stop admission of new readonly owners while checking uniqueness and
         // removing this exact session. Existing owners cause a bounded retry.
         let mut sessions = self.sessions.lock();
@@ -133,6 +183,23 @@ impl RangeRecoveryRuntime {
         drop(owned.frozen.take());
         drop(sessions);
         drop(service);
-        self.observe_native_completion_inner(initiator, request, &token)
+        #[cfg(test)]
+        {
+            release_trace.complete();
+            drop(release_trace);
+        }
+        #[cfg(test)]
+        let mut response_trace = crate::distribution_range_handoff::NativeJointPhaseTrace::new(
+            "recovery-activate-result-observation",
+            &self.local_node_id,
+            &token,
+        );
+        let result = self.observe_native_completion_inner(initiator, request, &token);
+        #[cfg(test)]
+        if result.is_ok() {
+            response_trace.complete();
+            total_trace.complete();
+        }
+        result
     }
 }

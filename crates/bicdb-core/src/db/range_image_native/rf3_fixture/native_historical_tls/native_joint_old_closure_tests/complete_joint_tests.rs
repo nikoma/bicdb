@@ -5,6 +5,8 @@
 use super::*;
 #[path = "complete_joint_tests/current_joint_authority_tests.rs"]
 mod current_joint_authority_tests;
+#[path = "complete_joint_tests/native_activation_idempotence_tests.rs"]
+mod native_activation_idempotence_tests;
 #[path = "complete_joint_tests/open_adversarial_tests.rs"]
 mod open_adversarial_tests;
 #[path = "complete_joint_tests/original_release_writer_tests.rs"]
@@ -347,6 +349,7 @@ enum JointTestOutcome {
     AdversarialOnly,
     OriginalReleaseWriterRejected,
     FullHandoffThenPostJointNoDataAck4Strong,
+    FullHandoffThenCurrentJointActivationIdempotence,
     FullHandoffThenCurrentJointAuthorityRefusals,
 }
 
@@ -379,6 +382,7 @@ fn native_joint_fresh_open_phase_reconciles_exact_target_epoch_and_lost_catalogu
 enum JointFullContinuation {
     OriginalTerminalControls,
     PostJointNoDataRecovery,
+    PostJointNativeActivationIdempotence,
     CurrentJointAuthorityRefusals,
 }
 
@@ -924,7 +928,11 @@ fn run_complete_joint_with_controls(
         );
         return JointTestOutcome::FullHandoffThenCurrentJointAuthorityRefusals;
     }
-    if continuation == JointFullContinuation::PostJointNoDataRecovery {
+    if matches!(
+        continuation,
+        JointFullContinuation::PostJointNoDataRecovery
+            | JointFullContinuation::PostJointNativeActivationIdempotence
+    ) {
         assert!(
             release_continuation.is_some(),
             "post-joint prerequisite must use real all-member release continuation"
@@ -936,6 +944,15 @@ fn run_complete_joint_with_controls(
             acknowledged.as_ref(),
             &next,
         );
+        if continuation == JointFullContinuation::PostJointNativeActivationIdempotence {
+            native_activation_idempotence_tests::after_actual_fresh_activation_and_ack4(
+                &fixture,
+                &activation_range,
+                acknowledged.as_ref(),
+                &next,
+            );
+            return JointTestOutcome::FullHandoffThenCurrentJointActivationIdempotence;
+        }
         return JointTestOutcome::FullHandoffThenPostJointNoDataAck4Strong;
     }
     if let Some(continuation) = &release_continuation {

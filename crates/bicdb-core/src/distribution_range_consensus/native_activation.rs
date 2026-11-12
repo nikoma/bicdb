@@ -138,6 +138,20 @@ impl RangeWriteStore {
         fresh: &RecoveryRoleAdmission,
         write: impl FnOnce(&Path, &[u8], bool) -> Result<()>,
     ) -> Result<NativeActivationReceipt> {
+        #[cfg(test)]
+        let mut total_trace =
+            crate::distribution_range_handoff::NativeJointPhaseTrace::from_deadline(
+                "recovery-activate-store-total",
+                fresh.local_node_id(),
+                fresh.deadline(),
+            );
+        #[cfg(test)]
+        let mut preflight_trace =
+            crate::distribution_range_handoff::NativeJointPhaseTrace::from_deadline(
+                "recovery-activate-store-preflight",
+                fresh.local_node_id(),
+                fresh.deadline(),
+            );
         quorum.require_prepared_identity_point(prepared, fresh)?;
         if matches!(
             fresh.purpose(),
@@ -156,6 +170,11 @@ impl RangeWriteStore {
             self.persist_recovery_catalog()?;
         }
         self.require_native_activation_control(range)?;
+        #[cfg(test)]
+        {
+            preflight_trace.complete();
+            drop(preflight_trace);
+        }
         let (activated, native, native_decision) = match &self
             .catalog
             .recovery_fences
@@ -164,9 +183,33 @@ impl RangeWriteStore {
             .phase
         {
             RecoveryFencePhase::NativeCompleted(completed) => {
+                #[cfg(test)]
+                let mut materialization_trace =
+                    crate::distribution_range_handoff::NativeJointPhaseTrace::from_deadline(
+                        "recovery-activate-owned-completed-materialization",
+                        fresh.local_node_id(),
+                        fresh.deadline(),
+                    );
                 let native = prepared.require_completed_for_activation(db, self, fresh)?;
+                #[cfg(test)]
+                {
+                    materialization_trace.complete();
+                    drop(materialization_trace);
+                }
+                #[cfg(test)]
+                let mut decision_trace =
+                    crate::distribution_range_handoff::NativeJointPhaseTrace::from_deadline(
+                        "recovery-activate-native-decision-producer",
+                        fresh.local_node_id(),
+                        fresh.deadline(),
+                    );
                 let native_decision =
                     db.persist_native_activation_decision(prepared, self, &quorum, fresh)?;
+                #[cfg(test)]
+                {
+                    decision_trace.complete();
+                    drop(decision_trace);
+                }
                 let activated = NativeActivatedPoint {
                     completed: completed.clone(),
                     completed_catalog_sha256: self.recovery_range_catalog_sha256(range)?,
@@ -215,7 +258,20 @@ impl RangeWriteStore {
             RecoveryFencePhase::NativeActivated(activated.clone());
         self.catalog.format_version = self.catalog.format_version.max(NATIVE_ACTIVATED_FORMAT);
         native_ready_prepare::validate_native_prepared_catalog(&self.catalog)?;
+        #[cfg(test)]
+        let mut catalog_trace =
+            crate::distribution_range_handoff::NativeJointPhaseTrace::from_deadline(
+                "recovery-activate-catalogue-fsync",
+                fresh.local_node_id(),
+                fresh.deadline(),
+            );
         self.persist_recovery_catalog_with(write)?;
+        #[cfg(test)]
+        {
+            catalog_trace.complete();
+            drop(catalog_trace);
+            eprintln!("ACTUAL_RECOVERY_ACTIVATE_CATALOGUE_PERSISTED node={} nonce={} R={} activation_sha={} remaining_ms={}", fresh.local_node_id(), prepared.scope().recovery_nonce, prepared.range_index(), activated.native_activation_sha256, fresh.deadline().saturating_duration_since(std::time::Instant::now()).as_millis());
+        }
         let receipt = NativeActivationReceipt {
             store_open_id: self.open_id,
             scope: prepared.scope().clone(),
@@ -224,7 +280,19 @@ impl RangeWriteStore {
             native_decision,
             quorum,
         };
+        #[cfg(test)]
+        let mut readback_trace =
+            crate::distribution_range_handoff::NativeJointPhaseTrace::from_deadline(
+                "recovery-activate-catalogue-receipt-current",
+                fresh.local_node_id(),
+                fresh.deadline(),
+            );
         receipt.require_current(db, self, prepared, fresh)?;
+        #[cfg(test)]
+        {
+            readback_trace.complete();
+            total_trace.complete();
+        }
         Ok(receipt)
     }
     pub(crate) fn arm_native_activation_open(

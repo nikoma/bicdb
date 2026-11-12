@@ -41,7 +41,7 @@ The fact factory first spent 191.218ms in its native-journal scope, then 193.939
 | `db/range_image_native/serving_configuration/joint_handoff/bridge/activation/recovery.rs` | Factory reads actual bridge/current/archive under journal, drops it, then fact currentness reads again | Purpose discovery lacks Prepared pin; do not weaken the general factory |
 | `db/range_image_native/serving_configuration.rs::persist_native_serving_from_decision` | Separate full preflight, actual native WAL, full readback, later full pre-CAT and refresh | Distinct before/after-WAL/CAT checks remain; only unchanged subfacts may be shared |
 
-N2 had 39ms after catalogue fsync. Post-CAT-only deduplication cannot make its nontrivial full check fit. The next implementation must examine a **single journal-held actual execution** across the existing native publication/readback and catalogue publication/readback boundaries. It must not assume that pre-WAL serving pointer equals post-WAL state.
+N2 had 39ms after catalogue fsync. Post-CAT-only deduplication cannot make its nontrivial full check fit. The next implementation must share unchanged evidence within the existing native producer as well as the later refresh. It must not assume that the pre-WAL serving pointer equals post-WAL state. The two-scope refinement below deliberately leaves catalogue fsync outside the global journal.
 
 ## Mutation and invalidation table
 
@@ -62,12 +62,38 @@ Writer ordering matters. `install_enrolled_native_coordinator` takes the admissi
 
 ## Proposed private API boundary
 
-The implementation should provide a DB-internal non-Clone/non-Serde borrowed execution, invoked only by the fixed actual completion producer. Its constructor receives the real physical proof/Prepared, exclusive actual Store, borrowed actual DB, sealed decision, fresh role and original cancellation. It acquires the actual journal nonwaiting and validates full original fact, birth/open, lineage, pin/freeze and writer bindings. No raw DTO, checksum, boolean or externally retained checked token can construct it.
+The implementation should provide a DB-internal non-Clone/non-Serde borrowed execution, invoked only by the fixed actual completion producer. Its constructor receives the real physical proof/Prepared, exclusive actual Store, borrowed actual DB and fresh role; the fixed producer retains the actual sealed decision and its original cancellation across every boundary. It acquires the actual journal nonwaiting and validates full original fact, birth/open, lineage, pin/freeze and writer bindings. No raw DTO, checksum, boolean or externally retained checked token can construct it.
 
-The borrowed execution may share actual immutable admission/anchor/history subfacts while the above exclusions remain true. It must retain distinct full logical checks before WAL, after actual new native pointer/archive, before catalogue publication, and after actual new catalogue binding. Native fields changed by each write must be read again, not copied from prestate. It must continue to compare original and fresh metadata/caller purpose, point, obligations and original writer at the appropriate boundaries. It cannot escape the service/DB/Frozen/pin/journal borrow or become an alternative current grant.
+The borrowed execution may share actual immutable admission/anchor/history subfacts while the above exclusions remain true. It must retain distinct full logical checks before WAL and after the actual new native pointer/archive. A separate full pre-catalogue validation remains after that first scope is dropped; after catalogue persistence, a newly constructed second scope must validate the actual new catalogue binding. Native fields changed by each write must be read again, not copied from prestate. It must continue to compare original and fresh metadata/caller purpose, point, obligations and original writer at the appropriate boundaries. It cannot escape the service/DB/Frozen/pin/journal borrow or become an alternative current grant.
 
 `NativeJointServingBridgeReceipt::current_read_scope` currently acquires its own native journal. Calling it while the new guard is held would fail the try-lock. A new borrowed-guard implementation must accept the actual guard ownership internally, with the current standalone method remaining a full wrapper. Do not use a reentrant mutex, caller boolean, skipped check switch or scoped token that outlives the actual borrow.
 
 The pure uncertain observer, later receipt currentness, purpose discovery and externally called standalone refresh keep their full validation. Persist errors, ambiguous outcomes, expired original caller and changed original writer still return refusal; exact refsync/recovery remains a distinct fresh protocol operation rather than a TTL renewal. No partial success may be reported as a returned completion.
 
 Before runtime acceptance, required focused controls include actual writer/hook replacement, original caller cancellation after persistence, wrong actual Store/open/scope, unknown persistence and exact immutable obligation/history mismatch. The existing full positive must pass unchanged under the original budgets; then actual ABA/original-caller controls and broad relevant regressions are still required. A cost reduction is a hypothesis until measured. This document does not close cold, higher-epoch/new-leader, committed-tail, minority, unavailable-origin or operator fault-safe gates.
+
+
+## Two-scope API review checkpoint
+
+This is a proposed private Rust signature, not an implemented producer or checked token:
+
+```rust
+// DB-internal constructor/callback only; the scope cannot be returned in R.
+fn with_native_completion_read_scope<R>(
+    &self,
+    prepared: &PreparedNativeRecoveryReady,
+    store: &RangeWriteStore,
+    fresh: &RecoveryRoleAdmission,
+    action: impl for<'scope> FnOnce(&NativeCompletionReadScope<'scope>) -> Result<R>,
+) -> Result<R>;
+```
+
+`NativeCompletionReadScope` owns the actual journal guard and borrows the identical DB, Store, Prepared/Frozen/pin and fresh role. Its fields and constructor remain private; it has no Clone/Serde, no raw-DTO constructor and no current-grant export. Constructor validation must establish actual health/open/birth/factory completion, full physical lineage plus absence of unfinished native Pending, exact original CurrentJoint fact and saved local promise/archive/floors, actual Store/open and phase, and original writer identity under the retained journal. Cancellation and mutable hook/schema/health state remain checked at return. Constructor errors return no partially usable scope.
+
+Scope one is limited to the existing native producer: full sealed local-QQ/prepared preflight, actual native-WAL publication, explicit new current/archive readback, exact unchanged logical/native point and final original writer/caller checks. It drops before the existing full pre-CAT validation and before catalogue fsync. The latter full pre-CAT check cannot reuse scope one's old currentness across the gap. Scope two is independently constructed after catalogue publication and validates actual new NativeCompleted phase/binding, native serving record and archive, physical point, all original domain/obligation constraints and the original writer again. It cannot reuse scope one's authority or skip initialization because the preceding write succeeded.
+
+The exact old/fresh role distinction remains: Prepared's original request may have expired when an independently authorized new role is allowed by the existing protocol; the sealed decision's **own original** caller and role cancellation still cannot be renewed. Scoped local-quorum validation must match every existing recipient/session/R/H0/H condition and evaluate the fresh role on the same actual Store/DB/Prepared as the ordinary full validator. It may not turn the observation of a persisted phase into fresh authority.
+
+The native journal is currently **global to the DB**, not per range. Extending one hold can cause an unrelated range to receive a bounded busy refusal, and a stalled disk call has no proven hard execution bound. No network call may occur while it is held. The regression plan must exercise a genuine second range during the scope and distinguish prompt explicit refusal from actual progress, then verify progress after release. Neither result alone qualifies stalled-range isolation. No per-range journal redesign, hidden blocking wait or new deadline is part of this change.
+
+Required initial API review is separate from executing a complete optimized batch. Actual other-range, original-writer/cancellation, persistence-ambiguity and unchanged full-positive controls remain prerequisites before any runtime or bounded-progress claim.

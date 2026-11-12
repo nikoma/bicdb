@@ -773,6 +773,42 @@ pub fn start_cluster_data_server_with_metadata_read_provider(
     )
 }
 
+/// Start the same metadata/data RPC receiver on an already bound socket.
+/// Ownership of the real listener moves into the common startup path, so a
+/// reserved endpoint need not be closed and raced before the receiver binds.
+/// The socket supplies no caller, role, native or metadata authority.
+#[allow(clippy::too_many_arguments)]
+pub fn start_cluster_data_server_on_listener_with_metadata_read_provider(
+    listener: TcpListener,
+    config: ClusterNetworkTransportConfig,
+    topology: Arc<RwLock<ClusterTopology>>,
+    service: Arc<Mutex<ClusterDataNodeService>>,
+    control_store: Option<Arc<Mutex<DistributionStore>>>,
+    metadata_consensus: Option<Arc<Mutex<MetadataConsensusStore>>>,
+    metadata_distribution_store: Option<Arc<Mutex<DistributionStore>>>,
+    metadata_read_provider: Option<Arc<MetadataReadProvider>>,
+) -> Result<ClusterDataServerHandle> {
+    let recovery = metadata_read_provider.as_ref().map(|provider| {
+        Arc::new(
+            crate::distribution_range_recovery::RangeRecoveryRuntime::new(
+                Arc::clone(&service),
+                Arc::clone(provider),
+            ),
+        )
+    });
+    start_cluster_data_server_on_bound_listener(
+        listener,
+        config,
+        topology,
+        service,
+        control_store,
+        metadata_consensus,
+        metadata_distribution_store,
+        metadata_read_provider,
+        recovery,
+    )
+}
+
 /// The host shares the same receiver session owner with its local coordinator.
 /// Legacy callers retain the preceding public signatures and refusal behavior.
 #[allow(clippy::too_many_arguments)]
@@ -789,6 +825,34 @@ pub(crate) fn start_cluster_data_server_with_recovery_runtime(
 ) -> Result<ClusterDataServerHandle> {
     config.validate()?;
     let listener = TcpListener::bind(address)?;
+    start_cluster_data_server_on_bound_listener(
+        listener,
+        config,
+        topology,
+        service,
+        control_store,
+        metadata_consensus,
+        metadata_distribution_store,
+        metadata_read_provider,
+        recovery_runtime,
+    )
+}
+
+// Address binding and socket handoff share ALL initialization, identity,
+// attachment, TLS, ingress, worker accounting and shutdown behavior below.
+#[allow(clippy::too_many_arguments)]
+fn start_cluster_data_server_on_bound_listener(
+    listener: TcpListener,
+    config: ClusterNetworkTransportConfig,
+    topology: Arc<RwLock<ClusterTopology>>,
+    service: Arc<Mutex<ClusterDataNodeService>>,
+    control_store: Option<Arc<Mutex<DistributionStore>>>,
+    metadata_consensus: Option<Arc<Mutex<MetadataConsensusStore>>>,
+    metadata_distribution_store: Option<Arc<Mutex<DistributionStore>>>,
+    metadata_read_provider: Option<Arc<MetadataReadProvider>>,
+    recovery_runtime: Option<Arc<crate::distribution_range_recovery::RangeRecoveryRuntime>>,
+) -> Result<ClusterDataServerHandle> {
+    config.validate()?;
     let local_addr = listener.local_addr()?;
     if config.dev_localhost_plaintext && !local_addr.ip().is_loopback() {
         return Err(transport_error(
@@ -5657,16 +5721,24 @@ mod tests {
             )
             .unwrap(),
         ));
-        let listener = start_cluster_data_server(
-            "127.0.0.1:0",
+        let reservation = TcpListener::bind("127.0.0.1:0").unwrap();
+        let reserved_address = reservation.local_addr().unwrap();
+        assert_eq!(
+            TcpListener::bind(reserved_address).unwrap_err().kind(),
+            std::io::ErrorKind::AddrInUse
+        );
+        let listener = start_cluster_data_server_on_listener_with_metadata_read_provider(
+            reservation.try_clone().unwrap(),
             config.transport.clone(),
             topology.clone(),
             service,
             None,
             None,
             None,
+            None,
         )
         .unwrap();
+        assert_eq!(listener.local_addr(), reserved_address);
         let address = listener.local_addr().to_string();
         // Both expected destinations route to ONE actual n1 listener. This is
         // request/topology DATA, not a forged response or authorization token.

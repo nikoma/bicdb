@@ -1025,6 +1025,23 @@ pub(crate) fn start_distribution_supervisor(
     server: Arc<PgWireServer>,
     supervisor: ClusterSupervisor,
 ) {
+    start_distribution_supervisor_with_listener(server, supervisor, None)
+}
+
+#[cfg(test)]
+pub(crate) fn start_distribution_supervisor_on_listener(
+    server: Arc<PgWireServer>,
+    supervisor: ClusterSupervisor,
+    listener: TcpListener,
+) {
+    start_distribution_supervisor_with_listener(server, supervisor, Some(listener))
+}
+
+fn start_distribution_supervisor_with_listener(
+    server: Arc<PgWireServer>,
+    supervisor: ClusterSupervisor,
+    reserved_listener: Option<TcpListener>,
+) {
     thread::spawn(move || {
         let _worker = BackgroundWorker::register(server.clone());
         let mut distribution = match load_distribution_config(&server.path) {
@@ -1154,16 +1171,31 @@ pub(crate) fn start_distribution_supervisor(
                 return;
             }
         };
-        let data_server = match start_cluster_data_server_with_metadata_read_provider(
-            &distribution.node_address,
-            distribution.transport.clone(),
-            Arc::clone(&shared_topology),
-            Arc::clone(&service),
-            None,
-            Some(Arc::clone(&metadata_consensus)),
-            Some(Arc::clone(&store)),
-            Some(metadata_read_provider),
-        ) {
+        let started = match reserved_listener {
+            Some(listener) => {
+                bicdb_core::start_cluster_data_server_on_listener_with_metadata_read_provider(
+                    listener,
+                    distribution.transport.clone(),
+                    Arc::clone(&shared_topology),
+                    Arc::clone(&service),
+                    None,
+                    Some(Arc::clone(&metadata_consensus)),
+                    Some(Arc::clone(&store)),
+                    Some(metadata_read_provider),
+                )
+            }
+            None => start_cluster_data_server_with_metadata_read_provider(
+                &distribution.node_address,
+                distribution.transport.clone(),
+                Arc::clone(&shared_topology),
+                Arc::clone(&service),
+                None,
+                Some(Arc::clone(&metadata_consensus)),
+                Some(Arc::clone(&store)),
+                Some(metadata_read_provider),
+            ),
+        };
+        let data_server = match started {
             Ok(handle) => handle,
             Err(error) => {
                 eprintln!("bicdb cluster data listener error: node={} cluster={} address={} error={error}", distribution.node_id, distribution.cluster_id, distribution.node_address);

@@ -3785,6 +3785,10 @@ mod tests {
                 application_program,
                 required_features,
                 max_call_depth: 16,
+
+                native_fact_publications: Vec::new(),
+                native_fact_imports: Vec::new(),
+                native_fact_projection_imports: Vec::new(),
             })),
         })
     }

@@ -6444,6 +6444,27 @@ fn lower_carrier_invariant_expression(
             let mut nested = bindings.clone();
             nested.insert(binding.clone(), resource.clone());
             if let Some(import) = application
+                .native_fact_projection_imports
+                .iter()
+                .find(|import| import.resource == *resource)
+            {
+                return Ok(NativeInvariantExpression::PublishedProjectionExists {
+                    binding: binding.clone(),
+                    owner_application: import.contract.owner_application.clone(),
+                    owner_resource: import.contract.resource.clone(),
+                    owner_version: import.contract.owner_version.clone(),
+                    publication_name: import.contract.publication_name.clone(),
+                    publication_fingerprint: import.contract.publication_fingerprint.clone(),
+                    consumer_application: application.package.application.clone(),
+                    condition: Box::new(lower_carrier_invariant_expression(
+                        application,
+                        subject_resource,
+                        &nested,
+                        condition,
+                    )?),
+                });
+            }
+            if let Some(import) = application
                 .native_fact_imports
                 .iter()
                 .find(|import| import.resource == *resource)
@@ -6532,6 +6553,12 @@ pub(crate) fn lower_carrier_invariants(
             let dependency_relations = invariant
                 .dependency_resources
                 .iter()
+                .filter(|resource| {
+                    !application
+                        .native_fact_projection_imports
+                        .iter()
+                        .any(|import| import.resource.as_str() == resource.as_str())
+                })
                 .map(|resource| {
                     application
                         .resources
@@ -7381,6 +7408,10 @@ pub(crate) mod tests {
                 application_program: None,
                 required_features: BTreeSet::<ApplicationFeature>::new(),
                 max_call_depth: 4,
+
+                native_fact_publications: Vec::new(),
+                native_fact_imports: Vec::new(),
+                native_fact_projection_imports: Vec::new(),
             })),
         })
     }

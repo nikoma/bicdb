@@ -80,6 +80,10 @@ fn one_statement() -> u32 {
 #[serde(deny_unknown_fields)]
 pub struct NativeFactPublicationPolicy {
     pub owner_application: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub owner_resource: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub owner_version: Option<String>,
     pub publication_name: String,
     pub fingerprint: String,
     pub tenant_field: String,
@@ -277,6 +281,16 @@ pub enum NativeInvariantAggregateFunction {
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum NativeInvariantExpression {
+    PublishedProjectionExists {
+        binding: String,
+        owner_application: String,
+        owner_resource: String,
+        owner_version: String,
+        publication_name: String,
+        publication_fingerprint: String,
+        consumer_application: String,
+        condition: Box<NativeInvariantExpression>,
+    },
     PublishedExists {
         binding: String,
         relation: String,

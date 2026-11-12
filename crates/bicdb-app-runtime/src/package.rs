@@ -163,6 +163,8 @@ pub(crate) struct ApplicationModuleLockV1 {
     #[serde(default)]
     pub requires: Vec<ApplicationModuleRequirementV1>,
     pub install_order: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub fact_requires: Vec<bicdb_extension::abi_v2::NativeFactProjectionImportV1>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
@@ -202,6 +204,8 @@ pub(crate) struct ApplicationModuleContractV1 {
     pub native_fact_publications: Vec<bicdb_extension::abi_v2::NativeFactPublicationV1>,
     #[serde(default)]
     pub native_fact_imports: Vec<bicdb_extension::abi_v2::NativeFactImportV1>,
+    #[serde(default)]
+    pub fact_requires: Vec<bicdb_extension::abi_v2::NativeFactProjectionImportV1>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -615,6 +619,7 @@ fn validate_application_module_contract(
         || locked.version != contract.semantic_version
         || locked.system != contract.system
         || locked.requires != contract.requires
+        || locked.fact_requires != contract.fact_requires
         || locked.install_order != contract.install_order
         || contract.semantic_version != package.manifest.identity.version
         || !valid_application_namespace(&contract.namespace)
@@ -922,6 +927,10 @@ mod tests {
             application_program: None,
             required_features: BTreeSet::new(),
             max_call_depth: 16,
+
+            native_fact_publications: Vec::new(),
+            native_fact_imports: Vec::new(),
+            native_fact_projection_imports: Vec::new(),
         };
         let manifest = ExtensionManifest {
             identity: ExtensionIdentity {

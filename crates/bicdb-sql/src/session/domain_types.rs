@@ -491,33 +491,7 @@ impl<'db> SqlSession<'db> {
                 }
                 Ok(SqlResult::command("DROP TABLE"))
             }
-            ObjectType::Index => {
-                for name in names {
-                    let index = index_relation_name(name)?;
-                    // An index belongs to its table, so the table's
-                    // authority governs it — dropping an index is a
-                    // performance and constraint change to someone else's
-                    // relation.
-                    let owning_table = self.table_owning_index(&index)?;
-                    if let Some(table) = &owning_table {
-                        self.require_table_ownership(&table, "drop an index on it")?;
-                    }
-                    if list_schemas(self.db_ref())?.iter().any(|schema| {
-                        schema.constraints.iter().any(|constraint| {
-                            matches!(constraint, ConstraintSchema::Exclusion { name, .. } if name.eq_ignore_ascii_case(&index))
-                        })
-                    }) {
-                        return Err(SqlError::dependent_objects_still_exist(format!(
-                            "cannot drop index {index} because constraint {index} requires it"
-                        )));
-                    }
-                    let existed = self.drop_session_index(&index, owning_table.as_deref())?;
-                    if !existed && !if_exists {
-                        return Err(SqlError::InvalidSql(format!("index `{index}` not found")));
-                    }
-                }
-                Ok(SqlResult::command("DROP INDEX"))
-            }
+            ObjectType::Index => self.execute_drop_indexes(names, *if_exists),
             ObjectType::Sequence => {
                 for name in names {
                     let sequence = relation_name(name)?;

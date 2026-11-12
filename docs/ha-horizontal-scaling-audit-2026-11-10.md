@@ -30,6 +30,12 @@ and explicitly hash omitted bodies. Original 461 evidence and its missing
 historical request details remain unchanged. The follow-up evidence merge does
 not change engine behavior or qualify a newer source version.
 
+A later [read-only Azure recheck](evidence/azure-owned-resource-absence-recheck-2026-11-12.json)
+at **2026-11-12 00:40:52 UTC** again found both owned experiment groups absent
+and zero resources in an independent subscription inventory filtered to their
+exact group identities. This is a current cleanup check, not a new VM campaign
+or a claim about unrelated Azure resources. No resources were created.
+
 ## P0 source follow-up — 2026-11-11
 
 The [revision-scoped recovery evidence matrix](recovery-component-evidence-2026-11-11.md)

@@ -37,6 +37,7 @@ pub const CURRENT_IMAGE_PROPOSAL_FEATURE_FLAG: &str = "current_range_image_propo
 pub const NATIVE_RECOVERY_SERVING_FEATURE_FLAG: &str = "native_recovery_serving_v1";
 /// From-birth writer enrollment; local and deliberately not a portable schema capability.
 pub const NATIVE_WRITER_ENROLLMENT_FEATURE_FLAG: &str = "native_writer_enrollment_v1";
+pub const NATIVE_JOINT_DATA_HANDOFF_FEATURE_FLAG: &str = "native_joint_data_handoff_v1";
 pub const ORACLE_SIMPLE_CASE_V1_FEATURE_FLAG: &str = "oracle_simple_case_v1";
 const KNOWN_FEATURE_FLAGS: &[&str] = &[
     ORACLE_INVALID_ROUTINES_FEATURE_FLAG,
@@ -48,6 +49,7 @@ const KNOWN_FEATURE_FLAGS: &[&str] = &[
     CURRENT_IMAGE_PROPOSAL_FEATURE_FLAG,
     NATIVE_RECOVERY_SERVING_FEATURE_FLAG,
     NATIVE_WRITER_ENROLLMENT_FEATURE_FLAG,
+    NATIVE_JOINT_DATA_HANDOFF_FEATURE_FLAG,
     "format_metadata_v2",
     SERVER_PAGED_FEATURE_FLAG,
     ONLINE_BACKUP_EXTENT_FEATURE_FLAG,
@@ -709,6 +711,34 @@ pub(crate) fn native_writer_enrollment_active(root: &Path) -> Result<bool> {
     Ok(metadata
         .feature_flags
         .contains(NATIVE_WRITER_ENROLLMENT_FEATURE_FLAG))
+}
+
+/// Reader refusal only. Actual joint producers additionally require a real
+/// immutable born-v2 record and both independent data-quorum decisions.
+pub(crate) fn enable_native_joint_data_handoff(root: &Path) -> Result<()> {
+    let lock = feature_flags_lock(root);
+    let _guard = lock.lock();
+    let mut metadata = read_or_legacy_metadata(root)?;
+    validate_supported(&metadata)?;
+    if !metadata
+        .feature_flags
+        .contains(NATIVE_WRITER_ENROLLMENT_FEATURE_FLAG)
+    {
+        return Err(BicDbError::InvalidConfig(
+            "native joint data handoff requires from-birth writer enrollment".into(),
+        ));
+    }
+    metadata
+        .feature_flags
+        .insert(NATIVE_JOINT_DATA_HANDOFF_FEATURE_FLAG.into());
+    persist_metadata(root, &metadata, true)
+}
+pub(crate) fn native_joint_data_handoff_active(root: &Path) -> Result<bool> {
+    let metadata = read_or_legacy_metadata(root)?;
+    validate_supported(&metadata)?;
+    Ok(metadata
+        .feature_flags
+        .contains(NATIVE_JOINT_DATA_HANDOFF_FEATURE_FLAG))
 }
 
 pub(crate) fn enable_current_image_proposal(root: &Path) -> Result<()> {

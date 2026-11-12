@@ -11,6 +11,11 @@ use crate::error::{BicDbError, Result};
 use crate::record::Record;
 use crate::replication::{CommitFrame, ReplicationTlsConfig};
 
+mod native_joint_handoff;
+pub use native_joint_handoff::{
+    NativeJointHandoffMetadataV1, NativeJointHandoffStageV1,
+    NATIVE_JOINT_HANDOFF_TOPOLOGY_FORMAT_VERSION,
+};
 mod native_store_birth;
 pub(crate) use native_store_birth::{
     validate_native_store_birth_snapshot, validate_native_store_birth_transition,
@@ -665,6 +670,8 @@ pub struct RangeRelocation {
     pub plan_id: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub handoff_session: Option<RangeHandoffSession>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub native_joint_handoff_v1: Option<NativeJointHandoffMetadataV1>,
     pub range_id: RangeId,
     /// Epoch observed by the planner before the learner was allocated.
     pub expected_epoch: u64,
@@ -699,6 +706,9 @@ impl RangeRelocation {
     }
 
     fn validate(&self, topology: &ClusterTopology) -> Result<()> {
+        if let Some(joint) = &self.native_joint_handoff_v1 {
+            joint.validate_for(self)?;
+        }
         if self
             .handoff_session
             .as_ref()
@@ -2077,23 +2087,36 @@ impl ClusterTopology {
         }
         if !matches!(
             self.format_version,
-            DISTRIBUTION_FORMAT_VERSION | NATIVE_STORE_BIRTH_TOPOLOGY_FORMAT_VERSION
+            DISTRIBUTION_FORMAT_VERSION
+                | NATIVE_STORE_BIRTH_TOPOLOGY_FORMAT_VERSION
+                | NATIVE_JOINT_HANDOFF_TOPOLOGY_FORMAT_VERSION
         ) {
             return Err(cluster_error(format!(
-                "unsupported distribution format version {}; supported {} or {}",
+                "unsupported distribution format version {}; supported {}, {}, or {}",
                 self.format_version,
                 DISTRIBUTION_FORMAT_VERSION,
-                NATIVE_STORE_BIRTH_TOPOLOGY_FORMAT_VERSION
+                NATIVE_STORE_BIRTH_TOPOLOGY_FORMAT_VERSION,
+                NATIVE_JOINT_HANDOFF_TOPOLOGY_FORMAT_VERSION
             )));
         }
         if self
             .nodes
             .values()
             .any(|node| node.native_store_birth_v1.is_some())
-            && self.format_version != NATIVE_STORE_BIRTH_TOPOLOGY_FORMAT_VERSION
+            && self.format_version < NATIVE_STORE_BIRTH_TOPOLOGY_FORMAT_VERSION
         {
             return Err(cluster_error(
                 "native store birth bindings require topology format 2",
+            ));
+        }
+        if self
+            .relocations
+            .values()
+            .any(|plan| plan.native_joint_handoff_v1.is_some())
+            && self.format_version < NATIVE_JOINT_HANDOFF_TOPOLOGY_FORMAT_VERSION
+        {
+            return Err(cluster_error(
+                "native joint handoff requires topology format 3",
             ));
         }
         if self.hash_version != DISTRIBUTION_HASH_VERSION {
@@ -3740,6 +3763,7 @@ impl DistributionStore {
             let relocation = RangeRelocation {
                 id: relocation_id,
                 plan_id: plan.id.clone(),
+                native_joint_handoff_v1: None,
                 handoff_session: Some(RangeHandoffSession {
                     session_id: Uuid::new_v4(),
                     nonce: Uuid::new_v4(),

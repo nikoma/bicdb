@@ -159,6 +159,7 @@ pub(crate) fn validate_native_store_birth_preservation(
     previous: &ClusterTopology,
     next: &ClusterTopology,
 ) -> Result<()> {
+    super::native_joint_handoff::validate_native_joint_handoff_preservation(previous, next)?;
     if previous.format_version >= NATIVE_STORE_BIRTH_TOPOLOGY_FORMAT_VERSION
         && next.format_version < NATIVE_STORE_BIRTH_TOPOLOGY_FORMAT_VERSION
     {

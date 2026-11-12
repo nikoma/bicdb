@@ -10,6 +10,8 @@ use uuid::Uuid;
 use crate::distribution::{ClusterId, ClusterNodeId, RangeDescriptor, RangeId, RelocationId};
 use crate::error::{BicDbError, Result};
 
+mod joint;
+
 pub(crate) const HANDOFF_RANGE_LOG_FORMAT: u32 = 4;
 pub(crate) const MAX_HANDOFF_PROMISES: usize = 65_536;
 

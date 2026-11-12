@@ -18,18 +18,23 @@ catch-up evidence or permission to serve a strong read.
 
 The listener captures the guard with its immutable identity, and checks it after
 authentication before service or database latches. Storage-policy checks use the
-same fence. Every service-owned database-read and database-write acquisition uses the checked
-borrow helpers, including schema inspection, schema mutations and ordinary snapshot export. The
+same fence. Service-owned database reads and writes validate the borrowed
+database identity. Shared checked-borrow helpers cover schema inspection,
+schema mutations and ordinary snapshot export; image-owner rotation performs
+the same check on its explicit nonwaiting borrow. The
 legacy application-event and schema-bundle dispatches also validate the actual
 borrowed database after obtaining its read guard, without holding the service
 mutex. This prevents a check of one actual database from authorizing an event
 against a replacement in the same outer handle.
 
-Two regression sources cover an actual from-birth enforced database replaced by
+Regression sources cover an actual from-birth enforced database replaced by
 a genuine legacy database while retaining the original directory lock, and a
-live-open check while both database and service latches are held. They do not
+live-open check while both database and service latches are held. An actual authenticated TLS listener regression additionally
+checks post-drop refusal while both latches remain held, and verifies the
+replacement database canary and commit sequence remain unchanged. All three
+controls await execution on the integrated candidate. They do not
 establish that an acknowledged-write exploit existed before this change, nor
-prove every RPC's replacement race or end-to-end failover semantics. The next
-acceptance test is an authenticated listener request after replacement while
-both latches are held: it must return the explicit open-ended refusal within its
-original deadline without consulting or mutating the replacement database.
+prove every RPC's replacement race or end-to-end failover semantics. Further acceptance must exercise replacement during in-flight ordinary RPCs,
+including both original-open retention and original-open expiry. The actual
+borrowed database must be checked before any use; the before-latch lifetime
+preflight alone is not an atomic pin or a universal RPC replacement-race proof.

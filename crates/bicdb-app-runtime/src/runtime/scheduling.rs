@@ -1375,6 +1375,25 @@ pub(crate) fn validate_schema_rollback(
     let active_contract = application_contract(active);
     validate_security_contract_evolution(active_contract, target_contract)?;
     validate_blob_contract_evolution(active_contract, target_contract)?;
+    // A schema superset remaining on disk does not make old code safe: old
+    // resource bindings may hide new financial facts and omit their guards.
+    // Require a forward-compatible code target even before first use, avoiding
+    // a row-count check that could race an already captured invocation. A
+    // fenced whole-store backup is the recovery boundary for older schemas.
+    let mut retained_target = target_contract.clone();
+    for resource in &mut retained_target.resources {
+        if let Some(active_resource) = active_contract
+            .resources
+            .iter()
+            .find(|active_resource| active_resource.name == resource.name)
+        {
+            // Code rollback may lower a release-derived schema version. Compare
+            // the actual signed contracts independently of that version label;
+            // never modify the package or installed schema metadata.
+            resource.schema_version = active_resource.schema_version;
+        }
+    }
+    validate_additive_contracts(active_contract, &retained_target)?;
     if validate_additive_contracts(target_contract, active_contract)? {
         let migration = latest_migration(active_contract).ok_or_else(|| {
             AppRuntimeError::InvalidPackage(

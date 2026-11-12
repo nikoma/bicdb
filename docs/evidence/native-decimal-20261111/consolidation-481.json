@@ -1,0 +1,65 @@
+{
+  "passed": true,
+  "synthetic_verifier": true,
+  "real_issuer": false,
+  "hub": false,
+  "toolchain": {
+    "format": 1,
+    "execution_target": "ordinary native bicdb ABI v2",
+    "qualified": false,
+    "carrier": {
+      "version": "2.3.88",
+      "source": "843a2c1f7667be92552b2b7574ba9ac592e6b0cb",
+      "source_code_commit": "2b6d391c8fa93416a22630aeed8f06192cbbed26",
+      "artifact": "tools/carrier-2.3.88-843a2c1f",
+      "sha256": "013a164b03a3954a71beadff528b036bf2ca65a7cf8e3b0444483b37a5e5aff9"
+    },
+    "bicdb": {
+      "version": "1.0.481-beta",
+      "source": "f52d8baaeceb83db86e2efd43494238a959ff764",
+      "artifact": "tools/bicdb-1.0.481-beta-f52d8baa",
+      "sha256": "53dbb59018e78224e1701546f492e2f451acec649b072185544282d15c0a284b",
+      "build": {
+        "host": "ny7.walknorth.com",
+        "rustc": "1.96.0 (ac68faa20 2026-05-25)",
+        "cargo": "1.96.0 (30a34c682 2026-05-25)",
+        "command": "cargo build --locked -p bicdb-cli --release",
+        "jobs": 2,
+        "incremental": false,
+        "debug": 0,
+        "tests_built": false,
+        "lto": false,
+        "source_directory": "/opt/walknorth-erp-modernization/source-decimal481",
+        "elapsed_seconds": 963
+      },
+      "source_base": "3d102759fbf4a28c4376f8588c53421f63c83462",
+      "patches": [
+        "lossless-fixed-point-predicate-comparison"
+      ],
+      "source_code_commit": "f52d8baaeceb83db86e2efd43494238a959ff764"
+    },
+    "testing": {
+      "driver": "Node v22.23.1",
+      "rust_tests": false
+    },
+    "qualification_scope": "Candidate481: exact Decimal predicate comparisons through28 fractional digits; Node runtime, all-six-operator negative, consolidation, upgrade and recovery qualification pending"
+  },
+  "package_sha256": "ea049c09e686f1926f710a01842ef0ce9ffc184ec7faded1f6adf41a08512e3f",
+  "foundation": {
+    "name": "foundation",
+    "version": "1.5.29",
+    "sha256": "740aab827655951c07cc936bbcddbc1bd9d08a6370f8c31d9a1a19b9b306a88f",
+    "artifact": "artifacts/candidate-packages/foundation/1.5.29/740aab827655951c07cc936bbcddbc1bd9d08a6370f8c31d9a1a19b9b306a88f.bicdb.json",
+    "source_archive": "artifacts/candidate-packages/foundation/1.5.29/source.tar.gz",
+    "source_archive_sha256": "6441fee4c6f630f9fefa0fbedd27425dac862cbc52c57ec747dbe0074e8295ef",
+    "source_tree_sha256": "ebda089169fbfe7671f669d27ec314594adc8b688607ff6c13fee3ffc377f7b0"
+  },
+  "source": "140_intercompany.carrier",
+  "counterparty_failure_restart": true,
+  "consolidation_workflows_executed": true,
+  "consolidation_basis": "high_precision",
+  "consolidation_high_precision_workflows_pass": true,
+  "release_qualified": false,
+  "node_bigint_oracle": true,
+  "crash_and_cold_restore": true
+}

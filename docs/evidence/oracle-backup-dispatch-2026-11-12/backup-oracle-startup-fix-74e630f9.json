@@ -1,0 +1,28 @@
+{
+  "source": "74e630f909d718f530d37b63aac8a4d3e78a8451",
+  "scope": "Corrected agent test supplies exact required startup profile; test real backup start/status/cancel/restore and retained auth/transaction restrictions on both profiles. Prior invalid fixture runs retained. Production fix same74c.",
+  "started_unix": 1794462604.4225008,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-pgwire",
+        "--test",
+        "online_backups",
+        "--",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794462604.4228556,
+      "exit": 101,
+      "finished_unix": 1794462627.1160378
+    }
+  ],
+  "status": "failed",
+  "finished_unix": 1794462627.116235
+}

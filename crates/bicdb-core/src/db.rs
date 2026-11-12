@@ -9864,7 +9864,7 @@ impl BicDb {
     }
 
     pub fn open_with_config(path: impl AsRef<Path>, config: DbConfig) -> Result<Self> {
-        Self::open_inner(path, config, None, None)
+        Self::open_inner(path, config, None, None, false)
     }
 
     pub fn open_with_encryption(
@@ -9872,7 +9872,7 @@ impl BicDb {
         config: DbConfig,
         encryption: EncryptionConfig,
     ) -> Result<Self> {
-        Self::open_inner(path, config, None, Some(encryption))
+        Self::open_inner(path, config, None, Some(encryption), false)
     }
 
     pub fn open_with_node_id(
@@ -9880,7 +9880,7 @@ impl BicDb {
         config: DbConfig,
         node_id: NodeId,
     ) -> Result<Self> {
-        Self::open_inner(path, config, Some(node_id), None)
+        Self::open_inner(path, config, Some(node_id), None, false)
     }
 
     pub fn open_with_node_id_and_encryption(
@@ -9889,7 +9889,39 @@ impl BicDb {
         node_id: NodeId,
         encryption: EncryptionConfig,
     ) -> Result<Self> {
-        Self::open_inner(path, config, Some(node_id), Some(encryption))
+        Self::open_inner(path, config, Some(node_id), Some(encryption), false)
+    }
+
+    /// Operator-only closed-store recovery entry. Never expose this handle to SQL,
+    /// HTTP, services or workers before the signed transition is admitted.
+    pub fn open_for_application_unique_scope(path: impl AsRef<Path>) -> Result<Self> {
+        Self::open_inner(path, DbConfig::default(), None, None, true)
+    }
+
+    fn ensure_application_scope_standalone_history(path: &Path) -> Result<()> {
+        for entry in fs::read_dir(path)? {
+            let name = entry?.file_name().to_string_lossy().to_ascii_lowercase();
+            if matches!(
+                name.as_str(),
+                "ha-node.json"
+                    | "ha-state.json"
+                    | "replication-state.json"
+                    | "consensus-state.json"
+            ) || name.starts_with("cluster")
+                || name.starts_with("virtual")
+            {
+                return Err(replication_error(format!(
+                    "offline application unique-scope transition excludes durable HA/distributed history or ambiguous topology marker `{name}`"
+                )));
+            }
+        }
+        Ok(())
+    }
+
+    /// Persist a reader compatibility fence before writing transition intent.
+    pub fn enable_application_unique_scope(&mut self) -> Result<()> {
+        self.ensure_writable("enable application unique scope transition")?;
+        format::enable_application_unique_scope(&self.path)
     }
 
     fn open_inner(
@@ -9897,6 +9929,7 @@ impl BicDb {
         config: DbConfig,
         configured_node_id: Option<NodeId>,
         encryption_config: Option<EncryptionConfig>,
+        application_scope_recovery: bool,
     ) -> Result<Self> {
         config.replication.validate()?;
         if config.replication.enabled
@@ -9909,6 +9942,29 @@ impl BicDb {
         }
         config.consensus.validate()?;
         let path = path.as_ref().to_path_buf();
+        if application_scope_recovery {
+            Self::ensure_application_scope_standalone_history(&path)?;
+        }
+        // A core fence protects raw SQL and every other opener, not merely the
+        // application host. Unknown/malformed states quarantine the store.
+        if !application_scope_recovery {
+            match fs::read(path.join(".application-unique-scope.json")) {
+                Ok(bytes) => {
+                    let value: serde_json::Value =
+                        serde_json::from_slice(&bytes).map_err(|error| {
+                            replication_error(format!("invalid unique-scope receipt: {error}"))
+                        })?;
+                    if !matches!(
+                        value.get("phase").and_then(serde_json::Value::as_str),
+                        Some("admitted" | "reverted")
+                    ) {
+                        return Err(replication_error("offline application unique-scope transition requires signed recovery or admission"));
+                    }
+                }
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                Err(error) => return Err(error.into()),
+            }
+        }
         online_backup::ensure_no_pending_restore(&path)?;
         // A standby bootstrap staged by the previous run is installed first.
         ha_bootstrap::finish_standby_bootstrap(&path)?;
@@ -9948,6 +10004,29 @@ impl BicDb {
                 path.display()
             ))
         })?;
+        // A core fence protects raw SQL and every other opener, not merely the
+        // application host. Unknown/malformed states quarantine the store.
+        if !application_scope_recovery {
+            match fs::read(path.join(".application-unique-scope.json")) {
+                Ok(bytes) => {
+                    let value: serde_json::Value =
+                        serde_json::from_slice(&bytes).map_err(|error| {
+                            replication_error(format!("invalid unique-scope receipt: {error}"))
+                        })?;
+                    if !matches!(
+                        value.get("phase").and_then(serde_json::Value::as_str),
+                        Some("admitted" | "reverted")
+                    ) {
+                        return Err(replication_error("offline application unique-scope transition requires signed recovery or admission"));
+                    }
+                }
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                Err(error) => return Err(error.into()),
+            }
+        }
+        if application_scope_recovery {
+            Self::ensure_application_scope_standalone_history(&path)?;
+        }
         // Recheck after claiming ownership: a restore may have started after
         // the read-only preflight and then died before this lock was acquired.
         online_backup::ensure_no_pending_restore(&path)?;
@@ -23676,6 +23755,53 @@ fn predicate_value_text(value: &Value) -> String {
     }
 }
 
+// Predicates must compare the complete fixed-point value. The repair parser is
+// deliberately restricted to 18 fractional digits; Decimal arithmetic can
+// produce up to 28, including insignificant trailing zeros. Do not round,
+// rescale into a bounded integer, or turn a valid comparison into `None`.
+fn compare_predicate_decimal_text(left: &str, right: &str) -> Option<Ordering> {
+    fn parts(text: &str) -> Option<(bool, &str, &str)> {
+        let text = text.trim();
+        let (negative, digits) = match text.strip_prefix('-') {
+            Some(rest) => (true, rest),
+            None => (false, text.strip_prefix('+').unwrap_or(text)),
+        };
+        let (integer, fraction) = digits.split_once('.').unwrap_or((digits, ""));
+        if (integer.is_empty() && fraction.is_empty())
+            || !integer.bytes().all(|byte| byte.is_ascii_digit())
+            || !fraction.bytes().all(|byte| byte.is_ascii_digit())
+        {
+            return None;
+        }
+        let integer = integer.trim_start_matches('0');
+        let fraction = fraction.trim_end_matches('0');
+        Some((
+            negative && (!integer.is_empty() || !fraction.is_empty()),
+            integer,
+            fraction,
+        ))
+    }
+    let (left_negative, left_integer, left_fraction) = parts(left)?;
+    let (right_negative, right_integer, right_fraction) = parts(right)?;
+    if left_negative != right_negative {
+        return Some(if left_negative {
+            Ordering::Less
+        } else {
+            Ordering::Greater
+        });
+    }
+    let magnitude = left_integer
+        .len()
+        .cmp(&right_integer.len())
+        .then_with(|| left_integer.cmp(right_integer))
+        .then_with(|| left_fraction.cmp(right_fraction));
+    Some(if left_negative {
+        magnitude.reverse()
+    } else {
+        magnitude
+    })
+}
+
 fn compare_predicate_values(
     left: &Value,
     right: &Value,
@@ -23694,14 +23820,7 @@ fn compare_predicate_values(
             let right = right
                 .as_str()
                 .unwrap_or_else(|| right.as_number().map_or("", |number| number.as_str()));
-            let (left_units, left_scale) = parse_repair_decimal(left)?;
-            let (right_units, right_scale) = parse_repair_decimal(right)?;
-            let scale = left_scale.max(right_scale);
-            align_decimal_scale(left_units, left_scale, scale)?.partial_cmp(&align_decimal_scale(
-                right_units,
-                right_scale,
-                scale,
-            )?)
+            compare_predicate_decimal_text(left, right)
         }
         IndexPredicateValueType::Bool => left.as_bool()?.partial_cmp(&right.as_bool()?),
         IndexPredicateValueType::String

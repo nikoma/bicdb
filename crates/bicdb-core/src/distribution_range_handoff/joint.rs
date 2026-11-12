@@ -41,3 +41,8 @@ pub(crate) use bridge::{
     NativeJointPreparedServingRound, NativeJointPreparedServingVoteData,
     NativeJointPublishedServingQuorum, NativeJointServingPublicationRound,
 };
+
+#[cfg(test)]
+mod trace;
+#[cfg(test)]
+pub(crate) use trace::NativeJointPhaseTrace;

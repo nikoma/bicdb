@@ -334,6 +334,12 @@ impl BicDb {
         frozen: &FrozenRangeMutationPermit,
         parent: &CancellationToken,
     ) -> Result<NativeJointServingBridgeReceipt> {
+        #[cfg(test)]
+        let mut trace = crate::distribution_range_handoff::NativeJointPhaseTrace::new(
+            "bridge-publish-native-total",
+            prepared.local_node_id(),
+            admission.test_phase_cancellation(),
+        );
         parent.check()?;
         admission.require_external_preparations_current()?;
         admission.committed().require_current(self)?;
@@ -359,7 +365,18 @@ impl BicDb {
             native_page_xid: 0,
             checksum_sha256: String::new(),
         };
+        #[cfg(test)]
+        let mut anchor_trace = crate::distribution_range_handoff::NativeJointPhaseTrace::new(
+            "bridge-native-actual-point",
+            prepared.local_node_id(),
+            admission.test_phase_cancellation(),
+        );
         record.require_actual_point(self, &prepared.native)?;
+        #[cfg(test)]
+        {
+            anchor_trace.complete();
+            drop(anchor_trace);
+        }
         let controlled = self.range_mutations.try_controlled_mutation(frozen)?;
         self.range_mutations.validate(
             record.prepared.range_id,
@@ -386,6 +403,12 @@ impl BicDb {
             // NEW-quorum audit rather than rewriting it with a fresh context.
             record = old;
         } else {
+            #[cfg(test)]
+            let mut wal_trace = crate::distribution_range_handoff::NativeJointPhaseTrace::new(
+                "bridge-native-page-wal",
+                prepared.local_node_id(),
+                admission.test_phase_cancellation(),
+            );
             self.in_paged_transaction(|paged, xid| {
                 record.native_page_xid = xid;
                 record.checksum_sha256 = record.checksum()?;
@@ -409,6 +432,8 @@ impl BicDb {
                 Ok(())
             })?
             .ok_or_else(|| invalid("joint bridge has no actual native page store"))?;
+            #[cfg(test)]
+            wal_trace.complete();
         }
         let native = self.native_recovery_admission(
             prepared.native.cluster_id(),
@@ -417,6 +442,12 @@ impl BicDb {
             prepared.native.local_member_incarnation(),
         )?;
         let receipt = NativeJointServingBridgeReceipt { native, record };
+        #[cfg(test)]
+        let mut readback_trace = crate::distribution_range_handoff::NativeJointPhaseTrace::new(
+            "bridge-native-post-write-readback",
+            prepared.local_node_id(),
+            admission.test_phase_cancellation(),
+        );
         receipt.require_current(self)?;
         drop(journal);
         drop(controlled);
@@ -424,6 +455,11 @@ impl BicDb {
         admission.require_live()?;
         prepared.require_current(self, store, original, catalogue, image, frozen)?;
         receipt.require_current(self)?;
+        #[cfg(test)]
+        {
+            readback_trace.complete();
+            trace.complete();
+        }
         Ok(receipt)
     }
 }

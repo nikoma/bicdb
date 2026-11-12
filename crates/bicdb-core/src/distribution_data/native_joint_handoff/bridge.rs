@@ -49,6 +49,12 @@ impl ActualServiceNativeJointPreparedEvidence {
         &self.prepared
     }
     pub(crate) fn require_current(&self, service: &ClusterDataNodeService) -> Result<()> {
+        #[cfg(test)]
+        let mut trace = crate::distribution_range_handoff::NativeJointPhaseTrace::from_deadline(
+            "prepared-service-current",
+            self.prepared.local_node_id(),
+            self.committed.deadline(),
+        );
         let database = checked_database_read(&service.db, &service.storage_policy)?;
         service.require_native_catalog_database(&database)?;
         service.require_native_writer_host_for_range(
@@ -81,6 +87,8 @@ impl ActualServiceNativeJointPreparedEvidence {
                 self.lease.frozen(),
             )?;
         }
+        #[cfg(test)]
+        trace.complete();
         Ok(())
     }
     /// Release only the owned read pin. The underlying real freeze and all
@@ -171,6 +179,12 @@ impl ClusterDataNodeService {
         actual: &ActualServiceNativeJointPreparedEvidence,
         parent: &CancellationToken,
     ) -> Result<crate::db::NativeJointServingBridgeReceipt> {
+        #[cfg(test)]
+        let mut trace = crate::distribution_range_handoff::NativeJointPhaseTrace::new(
+            "bridge-publish-service-total",
+            &self.node_id,
+            admission.test_phase_cancellation(),
+        );
         parent.check()?;
         admission.require_external_preparations_current()?;
         actual.require_current(self)?;
@@ -182,7 +196,7 @@ impl ClusterDataNodeService {
                 "joint native bridge publishes on another actual service",
             ));
         }
-        database.publish_native_joint_serving_bridge(
+        let result = database.publish_native_joint_serving_bridge(
             admission,
             &actual.committed,
             &actual.prepared,
@@ -191,7 +205,10 @@ impl ClusterDataNodeService {
             actual.lease.image(),
             actual.lease.frozen(),
             parent,
-        )
+        )?;
+        #[cfg(test)]
+        trace.complete();
+        Ok(result)
     }
     pub(crate) fn prepare_local_native_joint_serving(
         &self,

@@ -264,7 +264,11 @@ fn native_metadata_operator_actual_cli_four_process_startup_registration_and_dat
     // disagrees with the identity just committed through the real controller.
     // Use another valid numeric nonzero address so this reaches the actual
     // CONFIG comparison, not the earlier endpoint-syntax validation.
-    let other_port = TcpListener::bind("127.0.0.1:0").unwrap();
+    let mut other_port = TcpListener::bind("127.0.0.1:0").unwrap();
+    if other_port.local_addr().unwrap().to_string() == addresses[4] {
+        // Keep that original socket held while obtaining another actual port.
+        other_port = TcpListener::bind("127.0.0.1:0").unwrap();
+    }
     let wrong_address = other_port.local_addr().unwrap().to_string();
     assert_ne!(wrong_address, addresses[4]);
     let wrong_root = root.join("db4-wrong-address");

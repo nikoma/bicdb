@@ -250,3 +250,141 @@ fn metadata_append_actual_bounded_prefix_ack_cannot_commit_divergent_tail() {
         "one shared old entry cannot commit new topology3"
     );
 }
+
+#[test]
+fn metadata_append_actual_snapshot_batches_and_empty_heartbeats_report_covered_frontier() {
+    // Separate from the original divergent-tail schedule. Retain only these
+    // actual metadata stores/reports in the same optional CI evidence subtree.
+    let root = if let Some(evidence_root) = std::env::var_os("BICDB_TEST_EVIDENCE_ROOT") {
+        fs::create_dir_all(&evidence_root).unwrap();
+        tempfile::Builder::new()
+            .prefix("metadata-append-frontier-controls-")
+            .tempdir_in(evidence_root)
+            .unwrap()
+    } else {
+        tempfile::tempdir().unwrap()
+    }
+    .keep();
+    eprintln!(
+        "RETAINED_METADATA_APPEND_FRONTIER_CONTROLS {}",
+        root.display()
+    );
+    let topology = initial_topology(&root.join("topology-seed"));
+    let mut a = open(&root.join("a"), "n1", &topology);
+    let mut b = open(&root.join("b"), "n2", &topology);
+    let mut c = open(&root.join("c"), "n3", &topology);
+    let mut trace = Vec::new();
+    elect(&mut b, &mut a, &mut trace);
+    let barrier = b.append_request_from(1, 1).unwrap();
+    let ack = a.handle_append_request(barrier.clone()).unwrap();
+    assert!(ack.success);
+    assert_eq!(ack.match_index, 1);
+    assert!(b.record_append_response(&node("n1"), &ack).unwrap());
+    trace.push(
+        serde_json::json!({"event":"actual_barrier1_commit", "request":barrier,"response":ack}),
+    );
+    // Empty payload still proves the matched prev1; commit propagation must
+    // work without manufacturing an entry or returning a zero frontier.
+    let heartbeat = b.append_request_from(2, 1).unwrap();
+    assert!(heartbeat.entries.is_empty() && heartbeat.snapshot.is_none());
+    assert_eq!(heartbeat.prev_log_index, 1);
+    assert_eq!(heartbeat.leader_commit, 1);
+    let ack = a.handle_append_request(heartbeat.clone()).unwrap();
+    assert!(ack.success);
+    assert_eq!(ack.match_index, 1);
+    assert_eq!(a.status().commit_index, 1);
+    trace.push(serde_json::json!({"event":"actual_empty_heartbeat_commits_prev1", "request":heartbeat,"response":ack}));
+
+    let mut changed = topology.clone();
+    changed.generation += 1;
+    changed.nodes.get_mut(&node("n3")).unwrap().used_bytes = 777;
+    let proposed = b.propose_topology(changed.clone()).unwrap();
+    assert_eq!(proposed.index, 2);
+    let batch = b.append_request_from(1, 1).unwrap();
+    assert_eq!(batch.snapshot.as_ref().unwrap().last_included_index, 1);
+    assert_eq!(batch.entries.len(), 1);
+    assert_eq!(batch.entries[0], proposed);
+    let dropped = c.handle_append_request(batch.clone()).unwrap();
+    assert!(dropped.success);
+    assert_eq!(dropped.match_index, 2);
+    assert_eq!(c.status().commit_index, 1);
+    assert_eq!(c.status().last_log_index, 2);
+    trace.push(serde_json::json!({"event":"actual_snapshot1_plus_entry2_drop_reply", "request":batch,"response":dropped}));
+    // Genuine election2 adds barrier3. Deliver it to C and drop that real ACK,
+    // leaving C's longer matching suffix unacknowledged at B.
+    elect(&mut b, &mut a, &mut trace);
+    let barrier = b.append_request_from(3, 1).unwrap();
+    let dropped = c.handle_append_request(barrier.clone()).unwrap();
+    assert!(dropped.success);
+    assert_eq!(dropped.match_index, 3);
+    assert_eq!(b.status().commit_index, 1);
+    assert_eq!(c.status().commit_index, 1);
+    trace.push(serde_json::json!({"event":"actual_barrier3_drop_reply", "request":barrier,"response":dropped}));
+    // Both a bounded duplicate batch and snapshot1+entry2 must ACK only2,
+    // even though C has already received a valid entry3. Persist a report
+    // before each assertion so an old implementation's over-ACK is retained.
+    for from in [2, 1] {
+        let batch = b.append_request_from(from, 1).unwrap();
+        assert_eq!(batch.entries.len(), 1);
+        assert_eq!(batch.entries[0].index, 2);
+        assert_eq!(batch.snapshot.is_some(), from == 1);
+        let before = c.state.log.clone();
+        let ack = c.handle_append_request(batch.clone()).unwrap();
+        trace.push(serde_json::json!({"event":"actual_duplicate_bounded_batch", "request":batch,"response":ack,
+            "c_status":c.status(), "c_actual_log":c.state.log}));
+        report(
+            &root,
+            "snapshot-batch-control-result.json",
+            &serde_json::json!({"trace":trace}),
+        );
+        assert!(ack.success);
+        assert_eq!(
+            ack.match_index,
+            2,
+            "from={from}; retained {}",
+            root.display()
+        );
+        assert_eq!(c.state.log, before);
+        assert_eq!(c.status().last_log_index, 3);
+        assert_eq!(c.status().commit_index, 1);
+        assert!(!b.record_append_response(&node("n3"), &ack).unwrap());
+        assert_eq!(b.status().commit_index, 1);
+    }
+    // A genuine empty heartbeat matching prev3 now supplies the actual ACK3.
+    let heartbeat = b.append_request_from(4, 1).unwrap();
+    assert!(heartbeat.entries.is_empty() && heartbeat.snapshot.is_none());
+    assert_eq!(heartbeat.prev_log_index, 3);
+    let ack = c.handle_append_request(heartbeat.clone()).unwrap();
+    assert!(ack.success);
+    assert_eq!(ack.match_index, 3);
+    assert!(b.record_append_response(&node("n3"), &ack).unwrap());
+    assert_eq!(b.status().commit_index, 3);
+    trace.push(serde_json::json!({"event":"actual_empty_heartbeat_ack3", "request":heartbeat,"response":ack}));
+    let committed = b.append_request_from(4, 1).unwrap();
+    assert!(committed.entries.is_empty() && committed.snapshot.is_none());
+    assert_eq!(committed.leader_commit, 3);
+    let ack = c.handle_append_request(committed.clone()).unwrap();
+    assert!(ack.success);
+    assert_eq!(ack.match_index, 3);
+    assert_eq!(c.status().commit_index, 3);
+    let snapshot = b.append_request_from(1, 1).unwrap();
+    assert_eq!(snapshot.snapshot.as_ref().unwrap().last_included_index, 3);
+    assert!(snapshot.entries.is_empty());
+    let ack = a.handle_append_request(snapshot.clone()).unwrap();
+    assert!(ack.success);
+    assert_eq!(ack.match_index, 3);
+    assert_eq!(a.status().commit_index, 3);
+    trace.push(serde_json::json!({"event":"actual_commit_heartbeat_and_snapshot_only", "heartbeat":committed,"snapshot":snapshot,"response":ack}));
+    drop((a, b, c));
+    for (directory, id) in [("a", "n1"), ("b", "n2"), ("c", "n3")] {
+        let reopened = open(&root.join(directory), id, &topology);
+        assert_eq!(reopened.status().commit_index, 3);
+        assert_eq!(reopened.committed_topology(), &changed);
+    }
+    report(
+        &root,
+        "snapshot-batch-control-completed.json",
+        &serde_json::json!({"trace":trace,"reopen_verified":true,
+        "scope":"genuine direct metadata FSM; no TLS/physical claim; no fabricated leader_commit-above-frontier case"}),
+    );
+}

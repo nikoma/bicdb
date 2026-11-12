@@ -47,7 +47,28 @@ impl MetadataConsensusStore {
             .nodes
             .get(node)
             .ok_or_else(|| metadata_error("registered learner disappeared"))?;
+        // The schema comes ONLY from the authenticated actual factory
+        // observation, independently rebased onto this fresh leader MQ.
+        // Registration/template labels alone never publish a schema grant.
+        let actual_schema = birth.schema_sha256()?;
+        let schema_label = crate::distribution::SCHEMA_COMPATIBILITY_NODE_LABEL;
+        if target
+            .labels
+            .get(schema_label)
+            .is_some_and(|label| label != actual_schema)
+        {
+            return Err(metadata_error(
+                "learner schema label contradicts actual observed schema",
+            ));
+        }
         if let Some(existing) = &target.native_store_birth_v1 {
+            // This fresh-only producer does not retroactively repair old
+            // already-bound roots which omitted their schema audit.
+            if target.labels.get(schema_label).is_none() {
+                return Err(metadata_error(
+                    "already bound learner lacks committed actual schema label",
+                ));
+            }
             if self.state.log.iter().any(|entry| !entry.leadership_barrier) {
                 return Err(metadata_error(
                     "native learner enrollment conflicts with another pending topology proposal",
@@ -64,11 +85,14 @@ impl MetadataConsensusStore {
             return Ok(None);
         }
         let mut proposed = self.state.committed_topology.clone();
-        proposed
+        let proposed_member = proposed
             .nodes
             .get_mut(node)
-            .ok_or_else(|| metadata_error("registered learner disappeared"))?
-            .native_store_birth_v1 = Some(actual.clone());
+            .ok_or_else(|| metadata_error("registered learner disappeared"))?;
+        proposed_member.native_store_birth_v1 = Some(actual.clone());
+        proposed_member
+            .labels
+            .insert(schema_label.into(), actual_schema.into());
         proposed.generation = proposed
             .generation
             .checked_add(1)

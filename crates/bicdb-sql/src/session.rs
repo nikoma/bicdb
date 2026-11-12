@@ -4894,6 +4894,31 @@ impl<'db> SqlSession<'db> {
         )
     }
 
+    fn catalog_partition_publication_access(
+        &self,
+        changes: &[(&'static str, String, Option<Record>)],
+        undo: bool,
+    ) -> Result<Option<bicdb_core::CatalogScopeAccess>> {
+        if !undo && self.tx.is_none() {
+            return Ok(None);
+        }
+        let names = [partition_admission::CERTIFICATE_COLLECTION.to_string()];
+        let contexts = self.rename_journal_contexts();
+        for (collection, id, _) in changes {
+            if let Some(access) = rename_journal::record_mutation_access_with_publication_resources(
+                self.db_ref(),
+                self.tx.as_ref(),
+                &contexts,
+                collection,
+                id,
+                &names,
+            )? {
+                return Ok(Some(access));
+            }
+        }
+        Ok(None)
+    }
+
     pub(crate) fn save_session_schema(&mut self, schema: &TableSchema) -> Result<()> {
         let previous = load_schema(self.db_ref(), &schema.name)?;
         let created = previous.is_none();

@@ -82,6 +82,7 @@ impl SqlSession<'_> {
         if changes.is_empty() {
             return Ok(());
         }
+        let _access = self.catalog_partition_publication_access(&changes, !capture_undo)?;
         // The semantic certificate and affected descriptors/clones share the
         // same Native decision, including DDL undo and function cascades.
         if let Some(certificate) =
@@ -152,6 +153,13 @@ impl SqlSession<'_> {
         if capture_undo && self.tx.is_some() {
             let entries = changes
                 .iter()
+                // Restore the authored descriptors together, then derive a
+                // fresh certificate over the complete resulting forest.
+                // An old global certificate must not overwrite another
+                // owner's independently published partition state.
+                .filter(|(collection, _, _)| {
+                    *collection != super::partition_admission::CERTIFICATE_COLLECTION
+                })
                 .map(|(collection, id, _)| {
                     let previous = match self.db_ref().get(collection, id) {
                         Ok(record) => record.map(|record| (*record).clone()),

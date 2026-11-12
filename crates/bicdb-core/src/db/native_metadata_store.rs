@@ -102,6 +102,7 @@ impl BicDb {
             .ok_or_else(|| invalid("local birth is not enrolled"))?;
         if expected != &crate::distribution::NativeStoreBirthV1::from_actual_native(&actual)?
             || actual.writer_enforcement_version() != 1
+            || actual.metadata_initialization_version() != 1
         {
             return Err(invalid(
                 "enrolled configuration does not bind the actual born-v2 store",

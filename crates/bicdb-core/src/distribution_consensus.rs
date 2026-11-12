@@ -4,6 +4,9 @@
 //! ownership must be agreed before it is published, while row replication is
 //! driven by the resulting range catalog.
 
+#[cfg(test)]
+mod append_frontier_tests;
+
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::{Path, PathBuf};

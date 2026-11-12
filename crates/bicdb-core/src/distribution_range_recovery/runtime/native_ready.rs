@@ -33,10 +33,24 @@ impl RangeRecoveryRuntime {
         parent: &CancellationToken,
     ) -> Result<NativeReadyObservation> {
         let token = request.cancellation(parent)?;
+        #[cfg(test)]
+        let mut total_trace = crate::distribution_range_handoff::NativeJointPhaseTrace::new(
+            "recovery-prepare-total",
+            &self.local_node_id,
+            &token,
+        );
+        #[cfg(test)]
+        eprintln!("ACTUAL_RECOVERY_PREPARE_REQUEST node={} challenge={} scope={:?} parent_remaining_ms={:?}", self.local_node_id, request.challenge, request.scope, parent.deadline().map(|d|d.saturating_duration_since(Instant::now()).as_millis()));
         let _operation = self.reserve(request.scope.range_id)?;
         let business = Uuid::now_v7();
         let challenge = Uuid::now_v7();
         let scope = &request.scope;
+        #[cfg(test)]
+        let mut role_trace = crate::distribution_range_handoff::NativeJointPhaseTrace::new(
+            "recovery-prepare-metadata-role",
+            &self.local_node_id,
+            &token,
+        );
         let witness = self.provider.witness_recovery_role(
             initiator,
             business,
@@ -59,19 +73,54 @@ impl RangeRecoveryRuntime {
             &scope.purpose,
         )?;
         scope.require_role(&role)?;
+        #[cfg(test)]
+        {
+            role_trace.complete();
+            drop(role_trace);
+        }
         let token = token.child_with_deadline(role.deadline());
         {
+            #[cfg(test)]
+            let mut lock_trace = crate::distribution_range_handoff::NativeJointPhaseTrace::new(
+                "recovery-prepare-preflight-service-acquisition",
+                &self.local_node_id,
+                &token,
+            );
             let service = loop {
                 token.check()?;
                 if let Some(s) = self.service.try_lock_for(LATCH_POLL) {
                     break s;
                 }
             };
+            #[cfg(test)]
+            {
+                lock_trace.complete();
+                drop(lock_trace);
+            }
+            #[cfg(test)]
+            let mut preflight_trace = crate::distribution_range_handoff::NativeJointPhaseTrace::new(
+                "recovery-prepare-service-preflight",
+                &self.local_node_id,
+                &token,
+            );
             service.preflight_native_ready(&role, request)?;
+            #[cfg(test)]
+            preflight_trace.complete();
         }
         // The preflight found an actual Active/Prepared refusal. No completed
         // session may create a permanent freeze through this endpoint.
+        #[cfg(test)]
+        let mut frozen_trace = crate::distribution_range_handoff::NativeJointPhaseTrace::new(
+            "recovery-prepare-owned-freeze",
+            &self.local_node_id,
+            &token,
+        );
         let frozen = self.frozen(scope, &token, false)?;
+        #[cfg(test)]
+        {
+            frozen_trace.complete();
+            drop(frozen_trace);
+        }
         let evidence = if let Some(prepared) = self.retained_native_prepared(scope)? {
             let mut service = loop {
                 token.check()?;
@@ -82,14 +131,31 @@ impl RangeRecoveryRuntime {
             service.reattest_local_native_ready(&prepared, &role, request, &frozen, &token)?
         } else {
             let (prepared, evidence) = {
+                #[cfg(test)]
+                let mut lock_trace = crate::distribution_range_handoff::NativeJointPhaseTrace::new(
+                    "recovery-prepare-create-service-acquisition",
+                    &self.local_node_id,
+                    &token,
+                );
                 let mut service = loop {
                     token.check()?;
                     if let Some(s) = self.service.try_lock_for(LATCH_POLL) {
                         break s;
                     }
                 };
+                #[cfg(test)]
+                {
+                    lock_trace.complete();
+                    drop(lock_trace);
+                }
                 service.prepare_local_native_ready(role, request, frozen, &token)?
             };
+            #[cfg(test)]
+            let mut retain_trace = crate::distribution_range_handoff::NativeJointPhaseTrace::new(
+                "recovery-prepare-retain-actual-session",
+                &self.local_node_id,
+                &token,
+            );
             let mut sessions = self.sessions.lock();
             let session = sessions
                 .current
@@ -99,15 +165,22 @@ impl RangeRecoveryRuntime {
                 return Err(invalid("native preparation raced another actual session"));
             }
             session.native_prepared = Some(Arc::new(prepared));
+            #[cfg(test)]
+            retain_trace.complete();
             evidence
         };
         token.check()?;
-        NativeReadyObservation::from_local(
+        let result = NativeReadyObservation::from_local(
             evidence,
             self.provider.local_participant(),
             request,
             token.deadline().unwrap(),
-        )
+        );
+        #[cfg(test)]
+        if result.is_ok() {
+            total_trace.complete();
+        }
+        result
     }
     pub(crate) fn observe_native_ready(
         &self,

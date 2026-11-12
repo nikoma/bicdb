@@ -56,3 +56,41 @@ held throughout verification. RPC/record/finish traces show actual remaining
 original budget; a producer/collector that still exceeds it continues to fail.
 Failures retain exact partial replies and snapshots before acceptance fails.
 No token is renewed, deadline extended, authority fabricated or guard removed.
+
+## Executed 99 collector and first Prepare boundary
+
+Source 99ddcf4834997156b57f79707e91344c126f3ae3, run 43261048742 / Core
+131332124296 compiled successfully (all targets and isolated consumer also
+passed) but positive runtime failed 0/1, 908 filtered, in 80.85s. The corrected
+actual fence collection completed within the SAME five-second parent:
+
+| Receiver | Real RPC duration | Original budget remaining at immediate record |
+|---|---:|---:|
+| n1 | 1048ms | 3672ms |
+| n2 | 1059ms | 2612ms |
+| n3 | 884ms | 1727ms |
+
+Actual quorum finish/require-live succeeded with 1727ms remaining. All three
+promises and the assertions for canonical Abort3/native R3 completed. The
+first n1 `prepare_native_ready_observation` then hit the unchanged 4500ms RPC
+deadline at source line 700. No Complete request or completion timing span was
+reached. Custody later observed n1 NativePrepared R3/B4 and n2/n3 still Active.
+This proves a preparation effect by capture, not fsync-before-client-timeout or
+a successfully returned Ready observation. No Activate/ACK4/Strong R4 followed.
+
+Raw log SHA-256 is
+`f0202fae0e16a7ca49ffee2fae741a192c2fcd6a7b28d22dcfaaad1773e3f3c3`.
+Artifact 13964830796 ZIP SHA-256 is
+`196a2730d1e2a1878b337bb6268d02d673f0725064cd0c58e63ce61426ec99e2`
+(391362 bytes). Manifest file lengths/checksums were independently verified
+without engine open; capture remains observed stable with live engine owners,
+not atomic power-loss replay.
+
+The next source adds cfg(test)-only Prepare spans at the actual metadata role,
+service acquisition/preflight, owned freeze, local DB/native admission,
+resolved catalogue/refsync, physical producer, catalogue producer/fsync,
+post-persist current validation, response projection and actual-session
+retention. Markers use existing actual original deadlines, point and saved
+session. The 4500ms/5s budgets, foreign/local checks, cancellation, storage
+operations and every acceptance assertion remain unchanged. This is a profile,
+not an unmeasured optimization or a retry that revives the original request.

@@ -598,7 +598,19 @@ impl RangeWriteStore {
         physical: LocalNativeRecoveryReady,
         write: impl FnOnce(&Path, &[u8], bool) -> Result<()>,
     ) -> Result<PreparedNativeRecoveryReady> {
+        #[cfg(test)]
+        let mut physical_trace =
+            crate::distribution_range_handoff::NativeJointPhaseTrace::from_deadline(
+                "recovery-prepare-catalogue-preflight-physical-current",
+                physical.role().local_node_id(),
+                physical.role().deadline(),
+            );
         physical.require_current(db, self)?;
+        #[cfg(test)]
+        {
+            physical_trace.complete();
+            drop(physical_trace);
+        }
         if !matches!(
             physical.role().purpose(),
             MetadataRecoveryRolePurpose::NormalRecovery
@@ -671,7 +683,20 @@ impl RangeWriteStore {
         validate_native_prepared_catalog(&self.catalog)?;
         // On any rename/directory-sync ambiguity retain this refusal in memory
         // and on disk. No proof exists until actual persistence succeeds.
+        #[cfg(test)]
+        let mut persist_trace =
+            crate::distribution_range_handoff::NativeJointPhaseTrace::from_deadline(
+                "recovery-prepare-catalogue-fsync",
+                physical.role().local_node_id(),
+                physical.role().deadline(),
+            );
         self.persist_recovery_catalog_with(write)?;
+        #[cfg(test)]
+        {
+            persist_trace.complete();
+            drop(persist_trace);
+            eprintln!("ACTUAL_RECOVERY_PREPARE_CATALOGUE_PERSISTED node={} nonce={} point={:?} uncertain={} remaining_ms={}", physical.role().local_node_id(), scope.recovery_nonce, point, self.recovery_persistence_uncertain, physical.role().deadline().saturating_duration_since(std::time::Instant::now()).as_millis());
+        }
         let prepared = PreparedNativeRecoveryReady {
             physical,
             scope: scope.clone(),
@@ -682,7 +707,16 @@ impl RangeWriteStore {
                 native_completed_serving_sha256,
             }),
         };
+        #[cfg(test)]
+        let mut current_trace =
+            crate::distribution_range_handoff::NativeJointPhaseTrace::from_deadline(
+                "recovery-prepare-after-persist-current",
+                prepared.role().local_node_id(),
+                prepared.role().deadline(),
+            );
         prepared.require_current(db, self)?;
+        #[cfg(test)]
+        current_trace.complete();
         Ok(prepared)
     }
 }

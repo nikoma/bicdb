@@ -15,6 +15,7 @@ pub(super) struct NativeInitialDataCleanup {
     initial: Arc<NativeInitialConsensusLaunch>,
     enrollment: Option<NativeInitialWriterEnrollment>,
     runtime: Option<Arc<RangeRecoveryRuntime>>,
+    hot_recovery: Option<Arc<NativeHotRecoveryMaintenance>>,
     dispatcher: Option<Arc<NativeStrongEventDispatcher>>,
     listeners: Vec<ClusterDataServerHandle>,
 }
@@ -24,6 +25,7 @@ impl NativeInitialDataCleanup {
             initial: owner.initial.clone(),
             enrollment: owner.enrollment.take(),
             runtime: owner.runtime.take(),
+            hot_recovery: owner.hot_recovery.take(),
             dispatcher: owner.dispatcher.take(),
             listeners: [owner.listener.take(), owner.old_listener.take()]
                 .into_iter()
@@ -40,6 +42,12 @@ impl NativeInitialDataCleanup {
         let _ = Box::leak(Box::new(self));
     }
     fn try_finish(&mut self) -> bool {
+        if let Some(hot) = &self.hot_recovery {
+            hot.request_shutdown();
+            if !hot.try_join_finished() {
+                return false;
+            }
+        }
         let mut drained = true;
         for listener in &mut self.listeners {
             drained &= listener.poll_shutdown_drained_for_cleanup();

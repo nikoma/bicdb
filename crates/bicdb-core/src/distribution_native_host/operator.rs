@@ -386,6 +386,9 @@ impl NativeMetadataHost {
                 self.phase = NativeMetadataHostPhase::MetadataControl;
             }
             NativeMetadataHostAction::OpenInitialData => {
+                if let (Some(control), Some(supervisor)) = (&self.control, &self.supervisor) {
+                    control.retain_data_process(&supervisor.lifecycle_cancellation())?;
+                }
                 self.phase = NativeMetadataHostPhase::InitialDataOpening;
                 self.control
                     .as_mut()

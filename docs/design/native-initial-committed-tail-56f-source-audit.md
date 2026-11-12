@@ -235,3 +235,75 @@ no reset, blank genesis, generic snapshot or RowExists workaround is proposed.
   usable. Separately kill the origin: first-scope unsupported/cold refusal is not
   relabeled bounded recovery. Full cross-process relocation, all-owner restart,
   automatic five-node DATA convergence and physical RPO/RTO remain open.
+
+## HOT original-origin implementation candidate (not executed)
+
+The successor of `721c329de4196aeef96604642c439fe7d8ddb0bf` implements
+only the witnessed hot cut: the retained original INITIAL DATA owner has a
+next unmaterialized native Pending command and matching retained raw CQ; both
+peers have already materialized the committed command. This is source under
+review, with no compile, runtime, throughput, fifth-node movement, cold recovery
+or physical qualification result.
+
+The public automatic-metadata owner supplies a distinct retained process
+cancellation token. A DATA controller starts only when that actual process owner
+and the published original DATA owner both exist. Finite DataOpen/client calls
+do not start background mutators. Outside finite attempts the worker holds a
+Weak owner; each attempt retains its exact objects and original token for at
+most the existing five-second admission budget. Stop/Drop cancel it, and the
+existing cleanup reaper retains its actual owner until the worker, listener,
+read workers and runtime contexts have really drained before exact-hook
+revocation. The controller has its own serialized state and does not run on or
+hold up the metadata heartbeat worker. Diagnostic/status acquisition does not
+wait on the controller's attempt lock.
+
+Each selected job keeps its original nonce, command and phase on a refusal.
+Those values are session data, never authority. Actual authenticated recipient
+APIs acquire fresh NormalRecovery metadata/data/history evidence: fence all
+members; certify the exact historical command on all members; apply with the
+existing current certification quorum; Prepare, Complete and Activate all
+members, with the original origin last. The new private wire-29 Activate arm
+forwards the same runtime activation producer; metadata-only and registered
+replica listener allowlists gain no permission. Remote completion projections
+cannot publish recovered coordinator admission.
+
+Final publication is a separate sealed path. It observes the actual same-open
+local activated/refusal release and protected native activation decision,
+exact native command/history and all protected abort controls, then binds that
+fact to a freshly enrolled native read quorum and a distinct final range MQ.
+It validates current native birth bindings, actual original writer registration,
+DB incarnation, service/Store slot and exact range again. A single actual
+coordinator reservation covers publication and its post-cancellation rollback;
+no APP ACK can race between a transient recovered-map insertion and rollback.
+There is no caller-supplied numeric floor, recovered-epoch setter or DTO grant.
+
+A queued hot reservation shares the existing `active_ranges` map with point
+reads and writes. The active-map lock always precedes the waiter-map lock;
+exact-token RAII removes only the caller's waiter. A selected queued range
+refuses new point-read attempts while an existing reader drains, preventing
+retrying readers from overtaking the repair. This necessary scheduling refusal
+grants no authority, changes no other range's readiness and does not disable
+the dispatcher globally. The original role acquisition-parent cancellation
+fix being prepared separately is a composition prerequisite; this candidate
+also explicitly retains/checks its own original attempt and process tokens.
+
+Focused remote validation, after independent review, should retain the two
+unchanged `origin_pre_wal_fault_tests` controls and five new
+`native_hot_recovery_` controls. The unchanged baseline must now reach its
+existing twenty-second receipt gate through autonomous recovery, with the
+same complete RPC/API ledger, first immutable CoreUnknown/sequence=None,
+real TX/release/normal handler EXIT, both peers' full native command proofs,
+old ACK full payload, any SDK retry ACK and every next-write/Strong outcome.
+The two-second setting remains a per-RPC/attempt client setting, not a hard
+logical-call wall bound. No budget or success assertion was raised.
+
+The new controls cover a held actual read followed by queued repair and
+unrelated-range public APP/Strong progress; cancellation preserving the actual
+other reservation; finite DataOpen not starting a process worker; authentic
+unprepared/wrong-leader Activate refusals with unchanged catalogue/native
+point; and an actual replacement writer refusing the original controller
+without queueing, changing native state or clearing the replacement during
+old cleanup. Typecheck, no-default compilation and all execution remain
+pending. Higher epochs, changed placement, cold/replaced origin, committed
+suffixes beyond this selected next command, and the four-to-five image/joint
+wire/controller path remain separate gates.

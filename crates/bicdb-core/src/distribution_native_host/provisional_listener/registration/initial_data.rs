@@ -7,7 +7,9 @@ use crate::distribution_range_recovery::RangeRecoveryRuntime;
 use std::sync::Weak;
 
 mod cleanup;
+mod hot_recovery;
 use cleanup::{NativeInitialDataCleanup, NativeInitialDataCleanupSender};
+use hot_recovery::NativeHotRecoveryMaintenance;
 
 #[derive(Clone, Debug, serde::Serialize)]
 pub struct NativeInitialDataRangeStatus {
@@ -28,6 +30,7 @@ pub struct NativeInitialDataStatus {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub writer_binding_diagnostic: Option<serde_json::Value>,
     pub registry_refresh_last_attempt: Option<serde_json::Value>,
+    pub hot_recovery_last_attempt: Option<serde_json::Value>,
 }
 
 /// Only this actual INITIAL owner constructs it after policy publication. It
@@ -119,12 +122,16 @@ pub(super) struct NativeInitialDataHost {
     published: Arc<AtomicBool>,
     stopping: bool,
     cleanup: Option<NativeInitialDataCleanupSender>,
+    hot_recovery: Option<Arc<NativeHotRecoveryMaintenance>>,
     registry_refresh_last_attempt: Option<serde_json::Value>,
 }
 impl Drop for NativeInitialDataHost {
     fn drop(&mut self) {
         self.life.store(false, Ordering::Release);
         self.published.store(false, Ordering::Release);
+        if let Some(hot) = &self.hot_recovery {
+            hot.request_shutdown();
+        }
         if let Some(dispatcher) = &self.dispatcher {
             // Atomic ingress flags above are immediate. A contended binding
             // is cleared by the retained cleanup worker, never waited on here.
@@ -148,6 +155,16 @@ impl Drop for NativeInitialDataHost {
     }
 }
 impl NativeInitialDataHost {
+    pub(super) fn start_hot_process(&self, process: &CancellationToken) -> Result<()> {
+        process.check()?;
+        if !self.published.load(Ordering::Acquire) {
+            return Ok(());
+        }
+        self.hot_recovery
+            .as_ref()
+            .ok_or_else(|| invalid("published DATA host lost retained maintenance owner"))?
+            .start(process)
+    }
     pub(super) fn is_running(&self) -> bool {
         // A failed finite drain retains the owner/handle for retry, but must
         // not let the CLI restart a metadata supervisor on a stopping socket.
@@ -175,6 +192,7 @@ impl NativeInitialDataHost {
             published: Arc::new(AtomicBool::new(false)),
             stopping: false,
             cleanup: None,
+            hot_recovery: None,
         })
     }
     fn advance(
@@ -263,6 +281,11 @@ impl NativeInitialDataHost {
                 life: Arc::downgrade(&self.life),
                 published: self.published.clone(),
             }));
+        }
+        if self.hot_recovery.is_none() {
+            // Construction retains original objects only. Finite DataOpen
+            // NEVER starts a maintenance worker or creates process authority.
+            self.hot_recovery = Some(NativeHotRecoveryMaintenance::new(self)?);
         }
         let admission = self.admission.as_ref().unwrap();
         admission.require_live()?;
@@ -366,6 +389,7 @@ impl NativeInitialDataHost {
             ranges,
             cleanup_quarantined_owners: NativeInitialDataCleanupSender::quarantined_owners(),
             registry_refresh_last_attempt: self.registry_refresh_last_attempt.clone(),
+            hot_recovery_last_attempt: self.hot_recovery.as_ref().and_then(|h| h.diagnostic()),
             writer_binding_diagnostic: self.enrollment.as_ref().map(|owner| {
                 let mut diagnostic = owner.guard.binding_diagnostic();
                 diagnostic["retained_owner_coordinator_id"] =
@@ -456,11 +480,17 @@ impl NativeInitialDataHost {
         self.stopping = true;
         self.life.store(false, Ordering::Release);
         self.published.store(false, Ordering::Release);
+        if let Some(hot) = &self.hot_recovery {
+            hot.request_shutdown();
+        }
         if let Some(dispatcher) = &self.dispatcher {
             while !dispatcher.try_clear_for_cleanup() {
                 parent.check()?;
                 std::thread::sleep(Duration::from_millis(5));
             }
+        }
+        if let Some(hot) = &self.hot_recovery {
+            hot.stop(parent)?;
         }
         if let Some(listener) = self.listener.as_mut() {
             listener.stop_and_drain(parent)?;
@@ -523,7 +553,13 @@ impl NativeMetadataControlHost {
         parent: &CancellationToken,
     ) -> Result<()> {
         if let Some(data) = self.data.as_mut() {
-            data.refresh_registry(parent)?;
+            let registry = data.refresh_registry(parent);
+            let hot = data
+                .hot_recovery
+                .as_ref()
+                .map_or(Ok(()), |h| h.tick(parent));
+            registry?;
+            hot?;
         }
         Ok(())
     }
@@ -549,7 +585,17 @@ impl NativeMetadataControlHost {
         self.data
             .as_mut()
             .unwrap()
-            .advance(&leader, &self.network, parent)
+            .advance(&leader, &self.network, parent)?;
+        // Only an actual retained automatic-metadata owner supplies this
+        // separate PROCESS authority; never substitute the finite open token.
+        if let Some(process) = self.data_process.get() {
+            if let Err(error) = self.data.as_ref().unwrap().start_hot_process(process) {
+                if let Some(hot) = &self.data.as_ref().unwrap().hot_recovery {
+                    hot.note_start_error(&error);
+                }
+            }
+        }
+        Ok(())
     }
     #[cfg(test)]
     pub(crate) fn test_retained_initial_data_writer_guard(
@@ -702,5 +748,56 @@ impl NativeMetadataControlHost {
             .as_ref()
             .map(|owner| owner.status(parent))
             .transpose()
+    }
+}
+
+#[cfg(test)]
+impl NativeMetadataControlHost {
+    pub(crate) fn test_hot_recovery_bindings(
+        &self,
+    ) -> Result<(
+        Arc<
+            crate::distribution_range_consensus::RangeWriteCoordinator<
+                TcpClusterRelocationTransport,
+            >,
+        >,
+        Arc<crate::db::InstalledNativeWriterHostGuard>,
+        Arc<RangeRecoveryRuntime>,
+        Arc<TcpClusterRelocationTransport>,
+    )> {
+        let data = self
+            .data
+            .as_ref()
+            .ok_or_else(|| invalid("actual DATA owner absent"))?;
+        let enrollment = data
+            .enrollment
+            .as_ref()
+            .ok_or_else(|| invalid("actual original writer absent"))?;
+        Ok((
+            enrollment.coordinator.clone(),
+            enrollment.guard.clone(),
+            data.runtime.as_ref().unwrap().clone(),
+            data.initial.transport.clone(),
+        ))
+    }
+    pub(crate) fn test_hot_worker_started(&self) -> bool {
+        self.data
+            .as_ref()
+            .and_then(|d| d.hot_recovery.as_ref())
+            .is_some_and(|h| h.started_for_test())
+    }
+}
+#[cfg(test)]
+impl NativeMetadataControlHost {
+    pub(crate) fn test_actual_hot_scope(
+        &self,
+        range: &crate::RangeDescriptor,
+        parent: &CancellationToken,
+    ) -> Result<crate::distribution_range_consensus::RecoveryFenceScope> {
+        self.data
+            .as_ref()
+            .and_then(|d| d.hot_recovery.as_ref())
+            .ok_or_else(|| invalid("actual hot owner absent"))?
+            .scope_for_test(range, parent)
     }
 }

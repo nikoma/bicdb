@@ -1,8 +1,12 @@
 //! Factual, explicitly UNADMITTED candidate. Missing durable host/birth
 //! enrollment is an open gate: this type cannot authorize reads or absence.
 use super::*;
+#[cfg(feature = "tls-replication")]
+mod recovered_open;
 use crate::distribution::{ClusterNodeLifecycle, SCHEMA_COMPATIBILITY_NODE_LABEL};
 use crate::distribution_consensus::MetadataReadObservation;
+#[cfg(feature = "tls-replication")]
+pub(crate) use recovered_open::NativeHotRecoveredReadQuorum;
 use std::collections::{BTreeMap, BTreeSet};
 
 pub(crate) fn scope_from_metadata(

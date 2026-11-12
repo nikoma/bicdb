@@ -481,4 +481,5 @@ mod routing_discovery_tests;
 
 mod registry_refresh_tests;
 
+mod hot_recovery_tests;
 mod origin_pre_wal_fault_tests;

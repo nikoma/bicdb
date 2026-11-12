@@ -121,7 +121,13 @@ mod catalogue_custody;
 #[cfg(test)]
 pub(crate) use catalogue_custody::FreshCatalogueTestCut;
 #[cfg(feature = "tls-replication")]
+mod hot_recovered_open;
+#[cfg(feature = "tls-replication")]
+mod hot_recovery;
+#[cfg(feature = "tls-replication")]
 mod initial_data;
+#[cfg(feature = "tls-replication")]
+pub(crate) use hot_recovered_open::NativeHotRecoveredOpen;
 mod joint_handoff_state;
 mod native_durability;
 mod native_normal;
@@ -2120,6 +2126,8 @@ pub struct RangeWriteCoordinator<Transport: RangeWriteTransport> {
     repair_limits: RangeWriteRepairLimits,
     range_mutations: RangeMutationGate,
     active_ranges: Mutex<BTreeMap<RangeId, String>>,
+    #[cfg(feature = "tls-replication")]
+    hot_recovery_waiters: Mutex<BTreeMap<RangeId, Uuid>>,
     active_range_changed: Condvar,
     recovered_epochs: Mutex<BTreeMap<RangeId, u64>>,
     recovery_cursor: Mutex<Option<RangeId>>,
@@ -2339,6 +2347,8 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
             repair_limits,
             range_mutations,
             active_ranges: Mutex::new(BTreeMap::new()),
+            #[cfg(feature = "tls-replication")]
+            hot_recovery_waiters: Mutex::new(BTreeMap::new()),
             active_range_changed: Condvar::new(),
             recovered_epochs: Mutex::new(BTreeMap::new()),
             recovery_cursor: Mutex::new(None),

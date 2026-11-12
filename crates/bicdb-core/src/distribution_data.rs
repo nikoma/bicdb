@@ -43,6 +43,8 @@ mod range_write_slot;
 use range_write_slot::RangeWriteServiceSlot;
 pub(crate) use range_write_slot::RangeWriteServiceSlotGuard;
 
+#[cfg(feature = "tls-replication")]
+mod hot_recovery;
 mod native_abort;
 mod native_activation;
 mod native_apply;

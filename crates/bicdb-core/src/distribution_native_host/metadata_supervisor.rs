@@ -76,6 +76,10 @@ struct Driver {
     peer_cursor: usize,
 }
 impl NativeMetadataSupervisor {
+    /// Scheduling lifetime of this ACTUAL owned supervisor, never MQ/data authority.
+    pub(in crate::distribution_native_host) fn lifecycle_cancellation(&self) -> CancellationToken {
+        self.cancellation.clone()
+    }
     pub(crate) fn start(
         metadata: Arc<Mutex<MetadataConsensusStore>>,
         service: &Arc<Mutex<ClusterDataNodeService>>,

@@ -372,6 +372,7 @@ impl NativeMetadataRegistrationController {
 pub(crate) struct NativeMetadataControlHost {
     backend: Arc<NativeMetadataControlBackend>,
     data: Option<NativeInitialDataHost>,
+    data_process: std::sync::OnceLock<CancellationToken>,
     replica: Option<NativeRegisteredReplicaReceiver>,
     old_listener: Option<ClusterDataServerHandle>,
     drained: Option<DrainedClusterDataListener>,
@@ -392,6 +393,7 @@ impl NativeMetadataControlHost {
                 initial,
             ))),
             data: None,
+            data_process: std::sync::OnceLock::new(),
             replica: None,
             old_listener: Some(listener),
             drained: None,
@@ -410,6 +412,7 @@ impl NativeMetadataControlHost {
         Self {
             backend: Arc::new(backend),
             data: None,
+            data_process: std::sync::OnceLock::new(),
             replica: None,
             old_listener: Some(listener),
             drained: None,
@@ -634,8 +637,26 @@ impl NativeMetadataControlHost {
                 "automatic metadata requires owned control listener",
             ));
         }
-        self.backend
-            .start_automatic_metadata(self.network.clone(), parent)
+        let supervisor = self
+            .backend
+            .start_automatic_metadata(self.network.clone(), parent)?;
+        self.retain_data_process(&supervisor.lifecycle_cancellation())?;
+        Ok(supervisor)
+    }
+    pub(in crate::distribution_native_host) fn retain_data_process(
+        &self,
+        process: &CancellationToken,
+    ) -> Result<()> {
+        process.check()?;
+        if self.data_process.get().is_none() {
+            let _ = self.data_process.set(process.clone());
+        }
+        let original = self.data_process.get().unwrap();
+        original.check()?;
+        if let Some(data) = &self.data {
+            data.start_hot_process(original)?;
+        }
+        Ok(())
     }
     pub(crate) fn maintain_joins(
         &self,

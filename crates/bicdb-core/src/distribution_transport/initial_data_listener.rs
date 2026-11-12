@@ -56,6 +56,7 @@ pub(super) fn require_request(
         | ClusterDataRequest::PrepareNativeReady { .. }
         | ClusterDataRequest::ObserveNativeReady { .. }
         | ClusterDataRequest::CompleteNativeRecovery { .. }
+        | ClusterDataRequest::ActivateNativeRecovery { .. }
         | ClusterDataRequest::ObserveNativeCompletion { .. }
         | ClusterDataRequest::ObserveCurrentNativeRange { .. }
         | ClusterDataRequest::ObserveNativeAbortCandidate { .. }

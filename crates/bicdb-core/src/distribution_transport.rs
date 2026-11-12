@@ -79,6 +79,7 @@ mod initial_preparation;
 mod learner_birth;
 pub(crate) mod metadata_append;
 mod native_abort;
+mod native_activation;
 use crate::distribution_native_host::{
     NativeInitialBirthOfferRequest, NativeInitialBirthOfferResponse,
     NativeInitialPreparationRequest, NativeInitialPreparationResponse, NativeLearnerBirthRequest,
@@ -405,6 +406,9 @@ enum ClusterDataRequest {
     CompleteNativeRecovery {
         request: crate::distribution_range_recovery::NativeCompletionRequest,
     },
+    ActivateNativeRecovery {
+        request: crate::distribution_range_recovery::NativeCompletionRequest,
+    },
     ObserveNativeCompletion {
         request: crate::distribution_range_recovery::NativeCompletionRequest,
     },
@@ -540,6 +544,7 @@ impl ClusterDataRequest {
             | Self::ObserveNativeAbortPromise { request }
             | Self::ResolveNativeAbort { request } => Some(request.scope.range_id),
             Self::CompleteNativeRecovery { request }
+            | Self::ActivateNativeRecovery { request }
             | Self::ObserveNativeCompletion { request } => Some(request.scope.range_id),
             Self::RecoveryCertifyHistorical { request }
             | Self::RecoveryCertifySparseHistorical { request }
@@ -1827,6 +1832,20 @@ fn handle_cluster_data_connection(
             return Ok(ClusterDataResponse::NativeCompletion(
                 observation.into_reply(),
             ));
+        }
+        if let ClusterDataRequest::ActivateNativeRecovery { request } = request.request {
+            let runtime = recovery_runtime
+                .ok_or_else(|| transport_error("native activation runtime is not active"))?;
+            let caller = authenticated_caller.as_ref().ok_or_else(|| {
+                transport_error("native Activate requires an authenticated current leader")
+            })?;
+            let token =
+                CancellationToken::new(Arc::new(AtomicBool::new(false)), Some(request_deadline));
+            return runtime
+                .activate_native_recovery(caller, &request, &token)
+                .map(|observation| {
+                    ClusterDataResponse::NativeCompletion(observation.into_reply())
+                });
         }
         if let ClusterDataRequest::ObserveCurrentNativeRange { request } = request.request {
             let runtime = recovery_runtime
@@ -3333,6 +3352,7 @@ fn dispatch_cluster_data_request(
         ClusterDataRequest::PrepareNativeReady { .. }
         | ClusterDataRequest::ObserveNativeReady { .. }
         | ClusterDataRequest::CompleteNativeRecovery { .. }
+        | ClusterDataRequest::ActivateNativeRecovery { .. }
         | ClusterDataRequest::ObserveNativeCompletion { .. } => Err(transport_error(
             "authenticated native-ready runtime is not active",
         )),
@@ -5131,6 +5151,7 @@ impl TcpClusterRelocationTransport {
                 | ClusterDataRequest::ObserveNativeAbortPromise { .. }
                 | ClusterDataRequest::ResolveNativeAbort { .. }
                 | ClusterDataRequest::CompleteNativeRecovery { .. }
+                | ClusterDataRequest::ActivateNativeRecovery { .. }
                 | ClusterDataRequest::ObserveNativeCompletion { .. }
                 | ClusterDataRequest::ObserveCurrentNativeRange { .. }
                 | ClusterDataRequest::RecoveryCertifyHistorical { .. }

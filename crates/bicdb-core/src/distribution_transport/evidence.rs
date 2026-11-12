@@ -220,18 +220,24 @@ impl Attempt {
         address: &str,
         max: usize,
     ) -> Result<()> {
+        // Even a framing refusal retains the REAL allocated ID/route. No
+        // frame is invented when encoding or the existing bound rejects it.
+        self.record.topology_generation = Some(generation);
+        self.record.address = Some(address.to_owned());
+        self.record.request_id = Some(envelope.request_id);
         let body = serde_json::to_vec(envelope)?;
         if body.is_empty() || body.len() > max || body.len() > u32::MAX as usize {
-            return Err(transport_error("RPC frame exceeds configured bound"));
+            return Err(transport_error(format!(
+                "cluster RPC frame size {} exceeds configured bound {}",
+                body.len(),
+                max
+            )));
         }
         self.request_frame = Vec::with_capacity(body.len() + 4);
         self.request_frame
             .extend_from_slice(&(body.len() as u32).to_be_bytes());
         self.request_frame.extend_from_slice(&body);
         self.record.phase = "request_frame_before_dispatch";
-        self.record.topology_generation = Some(generation);
-        self.record.address = Some(address.to_owned());
-        self.record.request_id = Some(envelope.request_id);
         self.record.raw_frame = Some(self.request_frame.clone());
         self.observer.record(&self.record)?;
         self.record.raw_frame = None;

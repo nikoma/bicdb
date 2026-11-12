@@ -66,7 +66,10 @@ refusal and unchanged bytes must be proved after the SQL path is implemented.
    batches where possible; collect only rows to move, with an explicit memory
    budget. Bind the fingerprint to relevant raw metadata, actual native
    collection metadata, definitions and acknowledged row content. This is a
-   local operator snapshot binding, not authenticated portable provenance.
+   local operator snapshot binding, not authenticated portable provenance. Bind
+   the canonical local directory as an accidental-replay guard and stream role,
+   membership, privilege, routine/type and complete schema definitions into the
+   fingerprint too; a directory path never supplies Native backing authority.
 4. The public offline plan binds that exact snapshot. Policy choices are
    `keep_stored` or `preserve_historical_effective`; preserve exact old raw
    policy records in an immutable migration archive when a reviewed decision

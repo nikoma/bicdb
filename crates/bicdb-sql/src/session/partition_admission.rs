@@ -38,6 +38,7 @@ pub struct PartitionInvalidRow {
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct PartitionUpgradeInspection {
+    pub database_root: std::path::PathBuf,
     pub snapshot: String,
     pub legacy_relations: Vec<String>,
     pub policy_decisions_required: Vec<PartitionPolicyConflict>,
@@ -138,9 +139,14 @@ fn gather(db: &BicDb) -> Result<Snapshot> {
     let initial_sequence = db.last_commit_seq();
     let mut hasher = Sha256::new();
     hash_item(&mut hasher, "sql_partition_upgrade_snapshot_v1")?;
+    // Prevent accidental reuse in another local directory. This supplements
+    // content binding; a path never supplies backing-birth/replica authority.
+    let database_root = db.data_path().canonicalize().map_err(BicDbError::from)?;
+    hash_item(&mut hasher, &database_root)?;
     let mut nodes = BTreeMap::new();
     let mut retained_bytes = 0usize;
     scan(db, SCHEMA_COLLECTION, |raw| {
+        hash_item(&mut hasher, (&raw.id, &raw))?;
         if !affected(&raw) {
             return Ok(());
         }
@@ -186,20 +192,30 @@ fn gather(db: &BicDb) -> Result<Snapshot> {
         root_node(&node.schema.name, &nodes)?;
         hash_item(&mut hasher, (&node.schema.name, &node.raw))?;
     }
-    let mut metas = db
-        .collections()
-        .into_iter()
-        .filter(|meta| nodes.contains_key(&meta.name))
-        .collect::<Vec<_>>();
+    // Role membership, namespace grants and called routine/type definitions
+    // are part of the reviewed policy/constraint environment too. Stream them
+    // into the digest; do not retain unrelated business rows or secrets.
+    for collection in [
+        NAMESPACE_COLLECTION,
+        ROLE_COLLECTION,
+        ROLE_MEMBERSHIP_COLLECTION,
+        PRIVILEGE_COLLECTION,
+        DEFAULT_PRIVILEGE_COLLECTION,
+        ROUTINE_COLLECTION,
+        USER_TYPE_COLLECTION,
+        VIEW_COLLECTION,
+    ] {
+        hash_item(&mut hasher, collection)?;
+        scan(db, collection, |raw| {
+            hash_item(&mut hasher, (&raw.id, &raw))
+        })?;
+    }
+    let mut metas = db.collections().into_iter().collect::<Vec<_>>();
     metas.sort_by(|a, b| a.name.cmp(&b.name));
     for meta in metas {
         hash_item(&mut hasher, meta)?;
     }
-    let mut definitions = db
-        .index_definitions()
-        .into_iter()
-        .filter(|index| nodes.contains_key(&index.collection))
-        .collect::<Vec<_>>();
+    let mut definitions = db.index_definitions().into_iter().collect::<Vec<_>>();
     definitions.sort_by(|a, b| a.name.cmp(&b.name));
     hash_item(&mut hasher, definitions)?;
     let mut triggers = Vec::new();
@@ -289,6 +305,7 @@ fn gather(db: &BicDb) -> Result<Snapshot> {
         ));
     }
     let inspection = PartitionUpgradeInspection {
+        database_root,
         snapshot: hex::encode(hasher.finalize()),
         legacy_relations: nodes
             .values()

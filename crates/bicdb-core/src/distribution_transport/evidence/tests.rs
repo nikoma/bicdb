@@ -132,6 +132,7 @@ impl Fixture {
             ClusterDataNodeService::open(
                 config.cluster_id.clone(),
                 config.node_id.clone(),
+                root.path().join("data"),
                 db.clone(),
                 false,
             )

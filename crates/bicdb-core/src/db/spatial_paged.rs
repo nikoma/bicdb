@@ -2548,7 +2548,9 @@ impl BicDb {
                     }
                 }
                 NativeCommitValidator::ApplicationInvariant { definition } => {
-                    validate_carrier_invariant(self, tx, definition)?;
+                    if !tx.writes.is_empty() || tx.validate_existing_application_invariants {
+                        validate_carrier_invariant(self, tx, definition)?;
+                    }
                 }
             }
         }
@@ -2643,12 +2645,14 @@ impl BicDb {
         // off (default) the lock is never taken and this is a single relaxed load,
         // leaving the concurrent path byte-identical to before. Held from here so a
         // committer's full apply completes before the next committer begins.
-        let has_carrier_invariants = tx.commit_validators.iter().any(|validator| {
-            matches!(
-                validator,
-                NativeCommitValidator::ApplicationInvariant { .. }
-            )
-        });
+        let has_carrier_invariants = (!tx.writes.is_empty()
+            || tx.validate_existing_application_invariants)
+            && tx.commit_validators.iter().any(|validator| {
+                matches!(
+                    validator,
+                    NativeCommitValidator::ApplicationInvariant { .. }
+                )
+            });
         let _commit_guard = if global_commit_lock_enabled() || has_carrier_invariants {
             Some(self.commit_lock.lock())
         } else {

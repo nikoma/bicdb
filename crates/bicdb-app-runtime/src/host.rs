@@ -558,7 +558,7 @@ impl CapabilityHost {
         if let Some(handle) = transaction_handle {
             for validator in lower_carrier_invariants(host.application())? {
                 host.transaction_mut(handle)?
-                    .register_commit_validator(validator)?;
+                    .register_mutation_commit_validator(validator)?;
             }
         }
         Ok((host, transaction_handle))
@@ -1981,7 +1981,7 @@ impl CapabilityHost {
                 let mut transaction = unsafe { self.db.as_ref() }
                     .begin_application_transaction_with_isolation(actor, isolation)?;
                 for validator in lower_carrier_invariants(self.application())? {
-                    transaction.register_commit_validator(validator)?;
+                    transaction.register_mutation_commit_validator(validator)?;
                 }
                 let handle = self.next_transaction_handle();
                 self.transactions.insert(handle, transaction);

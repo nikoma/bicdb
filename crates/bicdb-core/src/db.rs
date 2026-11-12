@@ -9024,7 +9024,8 @@ fn validate_carrier_invariant(
     tx: &Transaction,
     definition: &NativeInvariantDefinition,
 ) -> Result<()> {
-    if !tx.writes.is_empty()
+    if !tx.validate_existing_application_invariants
+        && !tx.writes.is_empty()
         && !tx
             .writes
             .iter()
@@ -9436,6 +9437,10 @@ pub struct Transaction {
     native_write_issuers: Mutex<BTreeMap<usize, Option<String>>>,
     next_mutation_grant: u64,
     commit_validators: Vec<NativeCommitValidator>,
+    // Explicit existing-data admission retains full validation on a zero-write
+    // transaction. Automatically attached mutation guards do not turn ordinary
+    // reads into full-database invariant scans. Monotonic for this transaction.
+    validate_existing_application_invariants: bool,
     isolation: TransactionIsolation,
     serializable_generation_snapshot: HashMap<String, u64>,
     serializable_reads: BTreeSet<String>,
@@ -15998,6 +16003,24 @@ impl Transaction {
     }
 
     pub fn register_commit_validator(&mut self, validator: NativeCommitValidator) -> Result<()> {
+        self.register_commit_validator_inner(validator, true)
+    }
+
+    /// Attach an automatic application mutation guard. Mutating commits retain
+    /// the complete existing validation/lock path; zero-write reads do not need
+    /// to prove unrelated historical rows. Admission uses register_commit_validator.
+    pub fn register_mutation_commit_validator(
+        &mut self,
+        validator: NativeCommitValidator,
+    ) -> Result<()> {
+        self.register_commit_validator_inner(validator, false)
+    }
+
+    fn register_commit_validator_inner(
+        &mut self,
+        validator: NativeCommitValidator,
+        validate_existing: bool,
+    ) -> Result<()> {
         if self.state != TxState::Pending {
             return Err(BicDbError::TransactionNotPending);
         }
@@ -16006,6 +16029,11 @@ impl Transaction {
                 "ordinary transactions cannot register commit validators".to_string(),
             ));
         }
+        self.validate_existing_application_invariants |= validate_existing
+            && matches!(
+                &validator,
+                NativeCommitValidator::ApplicationInvariant { .. }
+            );
         self.commit_validators.push(validator);
         Ok(())
     }

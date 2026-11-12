@@ -1,0 +1,13 @@
+{
+  "custody_root": "/root/.local/state/bicdb/ha-scaling-2026-11-11/private/native-protected-image-resume-4de59df7",
+  "root_count": 18,
+  "files": 997,
+  "bytes": 17594774,
+  "manifest_sha256": "0607e176907059dfdf602bc75351db7e0bdee12411f3cccb354b1b27c764d822",
+  "all_source_destination_hashes_match": true,
+  "files_and_directories_fsynced": true,
+  "directory_mode": "0700",
+  "file_mode": "0600",
+  "global_credentials_or_binaries_copied": false,
+  "engine_reopened_for_custody": false
+}

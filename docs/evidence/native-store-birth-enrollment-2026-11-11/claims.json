@@ -1,0 +1,282 @@
+{
+  "birth_record_is_data_only": true,
+  "broad_core_suite_tested": false,
+  "ci_tested": false,
+  "cross_process_node_cluster_tested": false,
+  "distinct_passing_tests": 32,
+  "documentation_base": "f3a063902d2fe316c29264fe20549c2fdd270242",
+  "documentation_base_version": "1.0.478-beta",
+  "earlier_attempts_added_to_final_count": false,
+  "earlier_factory_and_read_fixture_failures_preserved": true,
+  "earlier_v2_psi_pause_preserved": true,
+  "effects_issue_148_closed": false,
+  "enrolled_read_result_grants_value_or_absence": false,
+  "external_ack_ledger_retained": false,
+  "final_broken_pipe_diagnostics": 522,
+  "final_group_counts": {
+    "factory": 3,
+    "metadata": 11,
+    "reads": 18
+  },
+  "final_guard_stops": 0,
+  "final_pause_episodes": 0,
+  "final_run_names": [
+    "native-birth-final-metadata",
+    "native-birth-final-reads",
+    "native-birth-final-factory"
+  ],
+  "first_compile_failure_preserved": true,
+  "generic_legacy_demotion_preserved": true,
+  "genuine_wrong_actual_birth_in_fresh_metadata_refused": true,
+  "host_writer_startup_all_voter_birth_enforcement": false,
+  "known_none_voter_live_upgrade_refused": true,
+  "minimum_available_bytes": 21637189632,
+  "new_enrollment_tls_fixture_roots_retained": false,
+  "new_factory_fixture_roots_retained": false,
+  "operator_four_to_five_tested": false,
+  "passing_executions": 32,
+  "passing_test_ids": [
+    "db::range_image_native::rf3_fixture::native_historical_tls::native_read_observation_tests::native_read_observation_recovered_serving_requires_actual_activated_open",
+    "db::range_image_native::rf3_fixture::native_historical_tls::native_read_observation_tests::native_read_observation_uses_current_r2_not_activation_anchor_and_refuses_cq_only_peer",
+    "db::range_image_native::rf3_fixture::native_historical_tls::native_read_rpc_tests::native_read_rpc_actual_local_io_context_outlives_canceled_collector",
+    "db::range_image_native::rf3_fixture::native_historical_tls::native_read_rpc_tests::native_read_rpc_actual_tls_enrolled_births_require_actual_metadata_and_peer_facts",
+    "db::range_image_native::rf3_fixture::native_historical_tls::native_read_rpc_tests::native_read_rpc_actual_tls_expired_healthy_attempt_retries_without_renewing_parent",
+    "db::range_image_native::rf3_fixture::native_historical_tls::native_read_rpc_tests::native_read_rpc_actual_tls_fresh_metadata_unadmitted_candidate",
+    "db::range_image_native::rf3_fixture::native_historical_tls::native_read_rpc_tests::native_read_rpc_actual_tls_genuine_other_birth_in_metadata_cannot_admit_local_a",
+    "db::range_image_native::rf3_fixture::native_historical_tls::native_read_rpc_tests::native_read_rpc_actual_tls_majority_returns_while_minority_worker_retains_context",
+    "db::range_image_native::rf3_fixture::native_historical_tls::native_read_rpc_tests::native_read_rpc_actual_tls_missing_quorum_never_returns_candidate",
+    "db::range_image_native::rf3_fixture::native_historical_tls::native_read_rpc_tests::native_read_rpc_actual_tls_rejects_old_challenge_actor_incarnation_and_pins",
+    "db::range_image_native::rf3_fixture::native_historical_tls::native_read_rpc_tests::native_read_rpc_actual_tls_unenrolled_quorum_cannot_be_admitted",
+    "distribution_consensus::native_store_birth_tests::native_birth_append_validates_pending_sequence_before_any_mutation_or_overwrite",
+    "distribution_consensus::native_store_birth_tests::native_birth_committed_majority_snapshot_discards_only_uncommitted_binding_and_forms_fresh_quorum",
+    "distribution_consensus::native_store_birth_tests::native_birth_existing_metadata_cannot_upgrade_unbound_initial_voter_on_reopen",
+    "distribution_consensus::native_store_birth_tests::native_birth_higher_term_majority_overwrites_only_uncommitted_binding_and_forms_fresh_quorum",
+    "distribution_consensus::native_store_birth_tests::native_birth_identity_tombstone_and_format_are_sticky",
+    "distribution_consensus::native_store_birth_tests::native_birth_live_generation_one_voter_cannot_auto_enroll_but_learner_can",
+    "distribution_consensus::native_store_birth_tests::native_birth_replacement_requires_new_incarnation_and_live_learner_phase",
+    "distribution_consensus::native_store_birth_tests::native_birth_shape_keeps_legacy_and_rejects_invalid_data_or_format",
+    "distribution_consensus::native_store_birth_tests::native_birth_snapshot_cache_and_reopen_preserve_known_bindings",
+    "distribution_consensus::native_store_birth_tests::native_birth_unbound_native_replacement_requires_new_incarnation_but_generic_legacy_demotion_remains",
+    "distribution_consensus::native_store_birth_tests::native_birth_unbound_voter_two_step_demotion_enrollment_cannot_change_actual_store",
+    "distribution_native_admission::tests::native_enrollment_actual_factory_distinguishes_same_spec_recreated_disk",
+    "distribution_native_admission::tests::native_enrollment_actual_new_learner_birth_does_not_promote_or_assign_ranges",
+    "distribution_native_admission::tests::native_enrollment_refuses_genuine_factory_after_actual_committed_write",
+    "distribution_native_read::tests::native_read_observation_actual_cold_open_invalidates_old_lifetime",
+    "distribution_native_read::tests::native_read_observation_actual_genesis_and_r1_use_target_local_data_b",
+    "distribution_native_read::tests::native_read_observation_failed_mutation_and_health_invalidate_owned_observation",
+    "distribution_native_read::tests::native_read_observation_rejects_actual_raw_prepare_and_cq_ahead_of_native",
+    "distribution_native_read::tests::native_read_observation_scope_cancellation_and_store_replacement_are_not_permissions",
+    "distribution_range_mutation::native_read_stamp_tests::native_read_stamp_invalidates_database_freeze_and_controlled_paths",
+    "distribution_range_mutation::native_read_stamp_tests::native_read_stamp_never_allocates_and_failed_writer_cannot_aba"
+  ],
+  "physical_failure_tested": false,
+  "production_qualified": false,
+  "public_engine_merge_tested": false,
+  "public_patch_base": "b0e2498842be7b01e355bb8da1cc249ff16be056",
+  "release_binary_produced": false,
+  "runner_sha256": "e4f4ca16061bf0ceb4e3431c50d7fbb22ee9c556990db842154dfd618eef6b14",
+  "runs": [
+    {
+      "broken_pipe_diagnostics": 0,
+      "classification": "compile_failure_excluded",
+      "exit_code": 101,
+      "failed_test_ids": [],
+      "name": "native-enrollment-v1",
+      "passed_test_ids": [],
+      "pause_episodes": 0,
+      "source_revision": "06da717949a062319646be72d14b31273321540a",
+      "wall_seconds": 29.045408725738525
+    },
+    {
+      "broken_pipe_diagnostics": 0,
+      "classification": "earlier_source_excluded",
+      "exit_code": 101,
+      "failed_test_ids": [
+        "distribution_native_admission::tests::native_enrollment_actual_factory_distinguishes_same_spec_recreated_disk",
+        "distribution_native_admission::tests::native_enrollment_refuses_genuine_factory_after_actual_committed_write"
+      ],
+      "name": "native-enrollment-v2",
+      "passed_test_ids": [
+        "distribution_native_admission::tests::native_enrollment_actual_new_learner_birth_does_not_promote_or_assign_ranges"
+      ],
+      "pause_episodes": 1,
+      "source_revision": "256d797860b740884ffea082a6b77f83aaf036b7",
+      "wall_seconds": 142.06146717071533
+    },
+    {
+      "broken_pipe_diagnostics": 0,
+      "classification": "earlier_source_excluded",
+      "exit_code": 101,
+      "failed_test_ids": [
+        "distribution_native_admission::tests::native_enrollment_actual_factory_distinguishes_same_spec_recreated_disk",
+        "distribution_native_admission::tests::native_enrollment_refuses_genuine_factory_after_actual_committed_write"
+      ],
+      "name": "native-enrollment-v3",
+      "passed_test_ids": [
+        "distribution_native_admission::tests::native_enrollment_actual_new_learner_birth_does_not_promote_or_assign_ranges"
+      ],
+      "pause_episodes": 0,
+      "source_revision": "6641e13bc2a1f95773cc416929a1977b91340ffa",
+      "wall_seconds": 76.0424816608429
+    },
+    {
+      "broken_pipe_diagnostics": 0,
+      "classification": "earlier_source_excluded",
+      "exit_code": 101,
+      "failed_test_ids": [
+        "distribution_native_admission::tests::native_enrollment_actual_factory_distinguishes_same_spec_recreated_disk"
+      ],
+      "name": "native-enrollment-v4",
+      "passed_test_ids": [
+        "distribution_native_admission::tests::native_enrollment_actual_new_learner_birth_does_not_promote_or_assign_ranges",
+        "distribution_native_admission::tests::native_enrollment_refuses_genuine_factory_after_actual_committed_write"
+      ],
+      "pause_episodes": 0,
+      "source_revision": "8a021a49c546d7d762650cf08c82a0c568a7c618",
+      "wall_seconds": 76.04101395606995
+    },
+    {
+      "broken_pipe_diagnostics": 0,
+      "classification": "earlier_source_excluded",
+      "exit_code": 0,
+      "failed_test_ids": [],
+      "name": "native-enrollment-v5",
+      "passed_test_ids": [
+        "distribution_native_admission::tests::native_enrollment_actual_new_learner_birth_does_not_promote_or_assign_ranges",
+        "distribution_native_admission::tests::native_enrollment_actual_factory_distinguishes_same_spec_recreated_disk",
+        "distribution_native_admission::tests::native_enrollment_refuses_genuine_factory_after_actual_committed_write"
+      ],
+      "pause_episodes": 0,
+      "source_revision": "0c687a9692667edbabf7b78b87118d839b4d26ce",
+      "wall_seconds": 76.04173374176025
+    },
+    {
+      "broken_pipe_diagnostics": 0,
+      "classification": "earlier_source_excluded",
+      "exit_code": 0,
+      "failed_test_ids": [],
+      "name": "native-metadata-v1",
+      "passed_test_ids": [
+        "distribution_consensus::native_store_birth_tests::native_birth_append_validates_pending_sequence_before_any_mutation_or_overwrite",
+        "distribution_consensus::native_store_birth_tests::native_birth_existing_metadata_cannot_upgrade_unbound_initial_voter_on_reopen",
+        "distribution_consensus::native_store_birth_tests::native_birth_committed_majority_snapshot_discards_only_uncommitted_binding_and_forms_fresh_quorum",
+        "distribution_consensus::native_store_birth_tests::native_birth_identity_tombstone_and_format_are_sticky",
+        "distribution_consensus::native_store_birth_tests::native_birth_live_generation_one_voter_cannot_auto_enroll_but_learner_can",
+        "distribution_consensus::native_store_birth_tests::native_birth_replacement_requires_new_incarnation_and_live_learner_phase",
+        "distribution_consensus::native_store_birth_tests::native_birth_shape_keeps_legacy_and_rejects_invalid_data_or_format",
+        "distribution_consensus::native_store_birth_tests::native_birth_higher_term_majority_overwrites_only_uncommitted_binding_and_forms_fresh_quorum",
+        "distribution_consensus::native_store_birth_tests::native_birth_snapshot_cache_and_reopen_preserve_known_bindings"
+      ],
+      "pause_episodes": 0,
+      "source_revision": "0c687a9692667edbabf7b78b87118d839b4d26ce",
+      "wall_seconds": 2.019709825515747
+    },
+    {
+      "broken_pipe_diagnostics": 331,
+      "classification": "earlier_source_excluded",
+      "exit_code": 101,
+      "failed_test_ids": [
+        "db::range_image_native::rf3_fixture::native_historical_tls::native_read_rpc_tests::native_read_rpc_actual_tls_enrolled_births_require_actual_metadata_and_peer_facts",
+        "db::range_image_native::rf3_fixture::native_historical_tls::native_read_rpc_tests::native_read_rpc_actual_tls_genuine_other_birth_in_metadata_cannot_admit_local_a"
+      ],
+      "name": "native-read-enrolled-v1",
+      "passed_test_ids": [
+        "db::range_image_native::rf3_fixture::native_historical_tls::native_read_observation_tests::native_read_observation_recovered_serving_requires_actual_activated_open",
+        "db::range_image_native::rf3_fixture::native_historical_tls::native_read_observation_tests::native_read_observation_uses_current_r2_not_activation_anchor_and_refuses_cq_only_peer",
+        "db::range_image_native::rf3_fixture::native_historical_tls::native_read_rpc_tests::native_read_rpc_actual_local_io_context_outlives_canceled_collector",
+        "db::range_image_native::rf3_fixture::native_historical_tls::native_read_rpc_tests::native_read_rpc_actual_tls_fresh_metadata_unadmitted_candidate",
+        "db::range_image_native::rf3_fixture::native_historical_tls::native_read_rpc_tests::native_read_rpc_actual_tls_expired_healthy_attempt_retries_without_renewing_parent",
+        "db::range_image_native::rf3_fixture::native_historical_tls::native_read_rpc_tests::native_read_rpc_actual_tls_majority_returns_while_minority_worker_retains_context",
+        "db::range_image_native::rf3_fixture::native_historical_tls::native_read_rpc_tests::native_read_rpc_actual_tls_missing_quorum_never_returns_candidate",
+        "db::range_image_native::rf3_fixture::native_historical_tls::native_read_rpc_tests::native_read_rpc_actual_tls_rejects_old_challenge_actor_incarnation_and_pins",
+        "distribution_native_read::tests::native_read_observation_actual_cold_open_invalidates_old_lifetime",
+        "distribution_native_read::tests::native_read_observation_actual_genesis_and_r1_use_target_local_data_b",
+        "db::range_image_native::rf3_fixture::native_historical_tls::native_read_rpc_tests::native_read_rpc_actual_tls_unenrolled_quorum_cannot_be_admitted",
+        "distribution_native_read::tests::native_read_observation_failed_mutation_and_health_invalidate_owned_observation",
+        "distribution_native_read::tests::native_read_observation_rejects_actual_raw_prepare_and_cq_ahead_of_native",
+        "distribution_range_mutation::native_read_stamp_tests::native_read_stamp_invalidates_database_freeze_and_controlled_paths",
+        "distribution_range_mutation::native_read_stamp_tests::native_read_stamp_never_allocates_and_failed_writer_cannot_aba",
+        "distribution_native_read::tests::native_read_observation_scope_cancellation_and_store_replacement_are_not_permissions"
+      ],
+      "pause_episodes": 0,
+      "source_revision": "0c687a9692667edbabf7b78b87118d839b4d26ce",
+      "wall_seconds": 57.03544902801514
+    },
+    {
+      "broken_pipe_diagnostics": 0,
+      "classification": "final_exact_source_passing",
+      "exit_code": 0,
+      "failed_test_ids": [],
+      "name": "native-birth-final-metadata",
+      "passed_test_ids": [
+        "distribution_consensus::native_store_birth_tests::native_birth_append_validates_pending_sequence_before_any_mutation_or_overwrite",
+        "distribution_consensus::native_store_birth_tests::native_birth_existing_metadata_cannot_upgrade_unbound_initial_voter_on_reopen",
+        "distribution_consensus::native_store_birth_tests::native_birth_committed_majority_snapshot_discards_only_uncommitted_binding_and_forms_fresh_quorum",
+        "distribution_consensus::native_store_birth_tests::native_birth_identity_tombstone_and_format_are_sticky",
+        "distribution_consensus::native_store_birth_tests::native_birth_live_generation_one_voter_cannot_auto_enroll_but_learner_can",
+        "distribution_consensus::native_store_birth_tests::native_birth_replacement_requires_new_incarnation_and_live_learner_phase",
+        "distribution_consensus::native_store_birth_tests::native_birth_shape_keeps_legacy_and_rejects_invalid_data_or_format",
+        "distribution_consensus::native_store_birth_tests::native_birth_higher_term_majority_overwrites_only_uncommitted_binding_and_forms_fresh_quorum",
+        "distribution_consensus::native_store_birth_tests::native_birth_snapshot_cache_and_reopen_preserve_known_bindings",
+        "distribution_consensus::native_store_birth_tests::native_birth_unbound_native_replacement_requires_new_incarnation_but_generic_legacy_demotion_remains",
+        "distribution_consensus::native_store_birth_tests::native_birth_unbound_voter_two_step_demotion_enrollment_cannot_change_actual_store"
+      ],
+      "pause_episodes": 0,
+      "source_revision": "ee5cb1880a946b97816a15aa4e0cb12f7d03778d",
+      "wall_seconds": 76.04205536842346
+    },
+    {
+      "broken_pipe_diagnostics": 522,
+      "classification": "final_exact_source_passing",
+      "exit_code": 0,
+      "failed_test_ids": [],
+      "name": "native-birth-final-reads",
+      "passed_test_ids": [
+        "db::range_image_native::rf3_fixture::native_historical_tls::native_read_observation_tests::native_read_observation_recovered_serving_requires_actual_activated_open",
+        "db::range_image_native::rf3_fixture::native_historical_tls::native_read_observation_tests::native_read_observation_uses_current_r2_not_activation_anchor_and_refuses_cq_only_peer",
+        "db::range_image_native::rf3_fixture::native_historical_tls::native_read_rpc_tests::native_read_rpc_actual_local_io_context_outlives_canceled_collector",
+        "db::range_image_native::rf3_fixture::native_historical_tls::native_read_rpc_tests::native_read_rpc_actual_tls_enrolled_births_require_actual_metadata_and_peer_facts",
+        "db::range_image_native::rf3_fixture::native_historical_tls::native_read_rpc_tests::native_read_rpc_actual_tls_fresh_metadata_unadmitted_candidate",
+        "db::range_image_native::rf3_fixture::native_historical_tls::native_read_rpc_tests::native_read_rpc_actual_tls_expired_healthy_attempt_retries_without_renewing_parent",
+        "db::range_image_native::rf3_fixture::native_historical_tls::native_read_rpc_tests::native_read_rpc_actual_tls_genuine_other_birth_in_metadata_cannot_admit_local_a",
+        "db::range_image_native::rf3_fixture::native_historical_tls::native_read_rpc_tests::native_read_rpc_actual_tls_majority_returns_while_minority_worker_retains_context",
+        "db::range_image_native::rf3_fixture::native_historical_tls::native_read_rpc_tests::native_read_rpc_actual_tls_missing_quorum_never_returns_candidate",
+        "db::range_image_native::rf3_fixture::native_historical_tls::native_read_rpc_tests::native_read_rpc_actual_tls_rejects_old_challenge_actor_incarnation_and_pins",
+        "distribution_native_read::tests::native_read_observation_actual_cold_open_invalidates_old_lifetime",
+        "distribution_native_read::tests::native_read_observation_actual_genesis_and_r1_use_target_local_data_b",
+        "db::range_image_native::rf3_fixture::native_historical_tls::native_read_rpc_tests::native_read_rpc_actual_tls_unenrolled_quorum_cannot_be_admitted",
+        "distribution_native_read::tests::native_read_observation_failed_mutation_and_health_invalidate_owned_observation",
+        "distribution_native_read::tests::native_read_observation_rejects_actual_raw_prepare_and_cq_ahead_of_native",
+        "distribution_range_mutation::native_read_stamp_tests::native_read_stamp_invalidates_database_freeze_and_controlled_paths",
+        "distribution_range_mutation::native_read_stamp_tests::native_read_stamp_never_allocates_and_failed_writer_cannot_aba",
+        "distribution_native_read::tests::native_read_observation_scope_cancellation_and_store_replacement_are_not_permissions"
+      ],
+      "pause_episodes": 0,
+      "source_revision": "ee5cb1880a946b97816a15aa4e0cb12f7d03778d",
+      "wall_seconds": 60.036946058273315
+    },
+    {
+      "broken_pipe_diagnostics": 0,
+      "classification": "final_exact_source_passing",
+      "exit_code": 0,
+      "failed_test_ids": [],
+      "name": "native-birth-final-factory",
+      "passed_test_ids": [
+        "distribution_native_admission::tests::native_enrollment_actual_new_learner_birth_does_not_promote_or_assign_ranges",
+        "distribution_native_admission::tests::native_enrollment_actual_factory_distinguishes_same_spec_recreated_disk",
+        "distribution_native_admission::tests::native_enrollment_refuses_genuine_factory_after_actual_committed_write"
+      ],
+      "pause_episodes": 0,
+      "source_revision": "ee5cb1880a946b97816a15aa4e0cb12f7d03778d",
+      "wall_seconds": 3.019257068634033
+    }
+  ],
+  "same_incarnation_demotion_enrollment_refused": true,
+  "same_term_same_index_conflict_refused": true,
+  "source_revision": "ee5cb1880a946b97816a15aa4e0cb12f7d03778d",
+  "source_version": "1.0.471-beta",
+  "strong_get_tested": false,
+  "unbound_voter_deletion_readd_refused": true,
+  "uncommitted_birth_can_be_replaced_by_valid_different_term_or_snapshot": true,
+  "worktree": "/tmp/bicdb-native-store-voter-admission"
+}

@@ -1,0 +1,70 @@
+{
+  "source_revision": "ee5cb1880a946b97816a15aa4e0cb12f7d03778d",
+  "source_version": "1.0.471-beta",
+  "final_distinct_tests": 32,
+  "cohorts": [
+    {
+      "run": "native-birth-final-metadata",
+      "tests": 11,
+      "ids": [
+        "distribution_consensus::native_store_birth_tests::native_birth_append_validates_pending_sequence_before_any_mutation_or_overwrite",
+        "distribution_consensus::native_store_birth_tests::native_birth_existing_metadata_cannot_upgrade_unbound_initial_voter_on_reopen",
+        "distribution_consensus::native_store_birth_tests::native_birth_committed_majority_snapshot_discards_only_uncommitted_binding_and_forms_fresh_quorum",
+        "distribution_consensus::native_store_birth_tests::native_birth_identity_tombstone_and_format_are_sticky",
+        "distribution_consensus::native_store_birth_tests::native_birth_live_generation_one_voter_cannot_auto_enroll_but_learner_can",
+        "distribution_consensus::native_store_birth_tests::native_birth_replacement_requires_new_incarnation_and_live_learner_phase",
+        "distribution_consensus::native_store_birth_tests::native_birth_shape_keeps_legacy_and_rejects_invalid_data_or_format",
+        "distribution_consensus::native_store_birth_tests::native_birth_higher_term_majority_overwrites_only_uncommitted_binding_and_forms_fresh_quorum",
+        "distribution_consensus::native_store_birth_tests::native_birth_snapshot_cache_and_reopen_preserve_known_bindings",
+        "distribution_consensus::native_store_birth_tests::native_birth_unbound_native_replacement_requires_new_incarnation_but_generic_legacy_demotion_remains",
+        "distribution_consensus::native_store_birth_tests::native_birth_unbound_voter_two_step_demotion_enrollment_cannot_change_actual_store"
+      ]
+    },
+    {
+      "run": "native-birth-final-reads",
+      "tests": 18,
+      "ids": [
+        "db::range_image_native::rf3_fixture::native_historical_tls::native_read_observation_tests::native_read_observation_recovered_serving_requires_actual_activated_open",
+        "db::range_image_native::rf3_fixture::native_historical_tls::native_read_observation_tests::native_read_observation_uses_current_r2_not_activation_anchor_and_refuses_cq_only_peer",
+        "db::range_image_native::rf3_fixture::native_historical_tls::native_read_rpc_tests::native_read_rpc_actual_local_io_context_outlives_canceled_collector",
+        "db::range_image_native::rf3_fixture::native_historical_tls::native_read_rpc_tests::native_read_rpc_actual_tls_enrolled_births_require_actual_metadata_and_peer_facts",
+        "db::range_image_native::rf3_fixture::native_historical_tls::native_read_rpc_tests::native_read_rpc_actual_tls_fresh_metadata_unadmitted_candidate",
+        "db::range_image_native::rf3_fixture::native_historical_tls::native_read_rpc_tests::native_read_rpc_actual_tls_expired_healthy_attempt_retries_without_renewing_parent",
+        "db::range_image_native::rf3_fixture::native_historical_tls::native_read_rpc_tests::native_read_rpc_actual_tls_genuine_other_birth_in_metadata_cannot_admit_local_a",
+        "db::range_image_native::rf3_fixture::native_historical_tls::native_read_rpc_tests::native_read_rpc_actual_tls_majority_returns_while_minority_worker_retains_context",
+        "db::range_image_native::rf3_fixture::native_historical_tls::native_read_rpc_tests::native_read_rpc_actual_tls_missing_quorum_never_returns_candidate",
+        "db::range_image_native::rf3_fixture::native_historical_tls::native_read_rpc_tests::native_read_rpc_actual_tls_rejects_old_challenge_actor_incarnation_and_pins",
+        "distribution_native_read::tests::native_read_observation_actual_cold_open_invalidates_old_lifetime",
+        "distribution_native_read::tests::native_read_observation_actual_genesis_and_r1_use_target_local_data_b",
+        "db::range_image_native::rf3_fixture::native_historical_tls::native_read_rpc_tests::native_read_rpc_actual_tls_unenrolled_quorum_cannot_be_admitted",
+        "distribution_native_read::tests::native_read_observation_failed_mutation_and_health_invalidate_owned_observation",
+        "distribution_native_read::tests::native_read_observation_rejects_actual_raw_prepare_and_cq_ahead_of_native",
+        "distribution_range_mutation::native_read_stamp_tests::native_read_stamp_invalidates_database_freeze_and_controlled_paths",
+        "distribution_range_mutation::native_read_stamp_tests::native_read_stamp_never_allocates_and_failed_writer_cannot_aba",
+        "distribution_native_read::tests::native_read_observation_scope_cancellation_and_store_replacement_are_not_permissions"
+      ]
+    },
+    {
+      "run": "native-birth-final-factory",
+      "tests": 3,
+      "ids": [
+        "distribution_native_admission::tests::native_enrollment_actual_new_learner_birth_does_not_promote_or_assign_ranges",
+        "distribution_native_admission::tests::native_enrollment_actual_factory_distinguishes_same_spec_recreated_disk",
+        "distribution_native_admission::tests::native_enrollment_refuses_genuine_factory_after_actual_committed_write"
+      ]
+    }
+  ],
+  "executable": {
+    "path": "/tmp/bicdb-azure-artifact-target/release/deps/bicdb_core-b0702f49611c59ed",
+    "bytes": 136680992,
+    "sha256": "b8ba1c2b7c0d9bcdba51b4b09b6f15359b1757d0edf6b2e6b9d2c5c4462a3fd3",
+    "mutable_shared_libtest": true,
+    "operator_binary": false
+  },
+  "broad_core_suite_run_on_this_source": false,
+  "strong_get_tested": false,
+  "host_writer_enrollment_enforced": false,
+  "operator_integration_tested": false,
+  "physically_qualified": false,
+  "recorded_unix": 1794439366.209904
+}

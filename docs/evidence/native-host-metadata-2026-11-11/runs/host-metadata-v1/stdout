@@ -1,0 +1,10 @@
+
+running 5 tests
+test db::range_image_native::rf3_fixture::native_historical_tls::host_metadata_tests::host_metadata_actual_tls_follower_observes_without_generic_range_leadership ... ok
+test db::range_image_native::rf3_fixture::native_historical_tls::host_metadata_tests::host_metadata_actual_tls_cancellation_and_delayed_decode_preserve_original_budget ... ok
+test db::range_image_native::rf3_fixture::native_historical_tls::host_metadata_tests::host_metadata_actual_tls_response_cannot_be_retagged_under_new_request ... ok
+test db::range_image_native::rf3_fixture::native_historical_tls::host_metadata_tests::host_metadata_actual_tls_spoofed_member_incarnation_and_missing_member_refuse ... ok
+test db::range_image_native::rf3_fixture::native_historical_tls::host_metadata_tests::host_metadata_actual_tls_unassigned_learner_observes_but_cannot_supply_quorum ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 738 filtered out; finished in 9.69s
+

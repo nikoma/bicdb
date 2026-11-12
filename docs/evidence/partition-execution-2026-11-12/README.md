@@ -30,6 +30,11 @@ timeout was changed.
 | `1d126acb226cce0c89ead6b0cbeb4d229d07ccd2` | 8 bounds/routing pass; execution 5 pass, 3 fail | Plain INSERT routes before staging writes, including INSERT SELECT, multirow refusal/rollback and an attached partitioned subtree. Remaining execution failures: UPDATE, DELETE and bare physical system columns. |
 | `3267c029cbe7244a7fa6ca06deb1dc6bd9c9c8b6` | 8 bounds/routing pass; execution 6 pass, 2 fail | Bare system columns fixed; actual parent/child tableoid/xmin/ctid equality, aggregates and join shapes pass. UPDATE/DELETE remain failing. |
 | `f19ddd769b708ae01503308fa00f68974dc89cf5` | 9 bounds/routing/delete pass; execution 7 pass, 1 fail | Physical DELETE, USING, RETURNING and rollback pass. UPDATE row movement remains a mandatory failure. |
+| `e0dafabf590d66c1b8e4f6e78b3e7c0847c5f4b6` | 0 pass, 1 mandatory fail | New atomicity check against unchanged f19 runtime observes two physical commits for one parent INSERT. Earlier preflight/rollback tests did not prove cross-heap autocommit atomicity. |
+| `751ae3d25195efe2013d8387d5c6a59cbd424150` | 21 pass | Statement transaction guard plus typed UPDATE movement; PK/FROM/RETURNING/rollback, destination conflict and parent RLS controls. |
+| `030ff8c91c01f2810abd2f90fdaa5a9f88a0ec35` | 25 pass | Adds scalar hash routing checked against 106 actual PostgreSQL physical placements plus existing text-hash regressions. |
+| `d9ff5aea602a0629e72a6b4248fa6c0dc6535767` | 0 pass, 1 mandatory fail | Actual 030 runtime plus new real-outer-heap EXISTS test: empty parent index incorrectly yields no rows. Temporary Git-index construction preserves production source exactly; see proof-source.json. |
+| `c7f6ee724866c72ec87d8e2ffbad81f5d7f9945a` | 26 pass | EXISTS falls back from parent-only candidate indexes; refreshed physical UPDATE/DELETE images recheck accessed-parent policies. |
 
 The early `f9d2000d` submission lacked a remote Git prerequisite and ran no
 tests. Its rebundled attempt and `6992ffcb` did not compile because the new test
@@ -39,15 +44,19 @@ separate from the seven subsequent actual product failures above.
 
 ## Required work before this batch is deliverable
 
-- Complete UPDATE/DELETE across physical descendants with physical provenance,
-  row movement, duplicate row IDs across leaves, transactional rollback and
-  concurrency/conflict checks. Parent privileges and policies must remain the
+- Qualify UPDATE/DELETE physical provenance, row movement and rollback beyond
+  the passing focused controls, including duplicate row IDs across leaves,
+  independent process/fault recovery, and concurrency/conflict checks. Parent privileges and policies must remain the
   authority for access through the parent; Native context admission still
   applies to each physical store.
-- Finish and qualify hash partition routing against PostgreSQL's seeded,
-  type-specific hash semantics. The present bounds parser validates hash bound
-  syntax/overlap, but row routing explicitly refuses it; metadata acceptance
-  does not establish execution support.
+- Scalar hash routing now uses PostgreSQL's seeded type-specific semantics
+  for integer, OID, boolean, deterministic text and floating types. Actual
+  PostgreSQL 16.13 INSERT/tableoid fixtures cover 106 integer/text/float/composite
+  placements including NULLs, signed boundaries, UTF-8, NaN and infinities.
+  Numeric/temporal/array/UDT and custom hash operator-class support remains
+  incomplete and explicitly refuses unsupported types; metadata acceptance
+  alone does not establish their execution support. Complete those required
+  semantics and qualify hash-key movement and existing-store upgrades.
 - Qualify ON CONFLICT, leaf and inherited triggers, constraints and foreign
   keys, DDL transaction rollback, nested partitions, namespaces, ONLY, row locks,
   statement snapshots and all fast paths. Parent-only heaps/indexes/statistics
@@ -66,3 +75,5 @@ authenticated portable rename, original iDempiere Oracle/PostgreSQL inventory,
 UI400/encrypted backup/restore, HA and approved disabled experimental-track
 qualification. Local SQL partitioning does not establish distributed placement,
 automatic node rebalancing, or elastic capacity.
+
+The physical row-lock follow-up is implemented at `22a347869620d46519c0665926fa1a4cc644eee2` and is under focused validation. Do not attribute c7 passing tests to that changed source. It preserves physical heap identities and resolves source tableoids only inside the admitted partition tree.

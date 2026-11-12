@@ -30,7 +30,13 @@ mod driver_metadata_tests;
 pub(crate) mod functions_insert;
 mod join_lookup_tests;
 mod operator_ddl;
+pub(crate) mod partition_admission;
 mod partition_exec;
+pub use partition_admission::{
+    inspect_partition_upgrade, PartitionInvalidRow, PartitionPolicyConflict,
+    PartitionPolicyDecision, PartitionRowRelocation, PartitionUpgradeInspection,
+    PartitionUpgradePlan,
+};
 mod partition_triggers;
 #[cfg(test)]
 mod primary_key_range_tests;

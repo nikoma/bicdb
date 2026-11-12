@@ -16,6 +16,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     for reopen in 0..3 {
         let mut db = BicDb::open_with_config(&path, config.clone())?;
         match case.as_str() {
+            "inspect" => {
+                let report = bicdb_sql::inspect_partition_upgrade(&db)?;
+                println!("{}", serde_json::to_string(&report)?);
+            }
             "parent_heap" => {
                 let mut sql = SqlSession::new(&mut db);
                 if reopen == 0 {

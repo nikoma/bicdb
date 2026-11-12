@@ -55,6 +55,41 @@ open independently of this SQL design. None of those receipts qualifies the
 single global decision domain's capacity, general joins, distributed isolation
 or multi-range atomic SQL writes.
 
+### Review against source 1.0.481-beta and native candidates
+
+Public main `3cce710c689ba8ec7a820538113e389481e04669` adds PostgreSQL
+catalog/type fixes; it does not implement this distributed SQL contract.
+`DistributedCommitProtocol` still has only the test `RecordingCommitProtocol`
+implementation. The `plan_cluster_*` methods still produce explicit plans;
+their existence does not show that ordinary PostgreSQL statements execute those
+plans across a cluster.
+
+The unmerged native candidate `f30e5a4b1e4f1ab46b06cc4720f23275d61f64a4`
+adds actual-open and per-use database identity refusal checks, metadata actor
+fencing and an interim refusal of explicit broker effects. Its combined CI is
+pending; these source paths are not newly qualified capabilities. They add
+three constraints for the eventual SQL implementation:
+
+- A routed fragment must validate its actual database open and stable logical
+  object mapping while holding the database borrow used for execution. A live
+  node, retained outer handle, matching table name or surviving directory lock
+  cannot authorize a replacement database under an old fragment context.
+- Retired actors must not issue new participant votes or fresh read authority.
+  Historical transaction decisions need independently validated recovery and
+  adoption; revoking an old actor must not erase an already durable decision.
+- A prepare/commit protocol must cover all transaction effects, including
+  transactional outboxes, audits and queue receipts. The current native row
+  command and explicit-broker refusal do not supply that contract. Local
+  successful effects or preserved rows alone cannot prove replicated effects.
+
+The SQL, PostgreSQL-wire and Rails checks that passed on earlier native head
+`05819560209227b233e13756e83ee5cd775fa132` remain regression evidence for that
+exact source. They do not exercise a transparent distributed SQL executor,
+cluster-wide joins, shared snapshots or atomic multi-range business operations.
+The next design review must map each such operation to a durable participant
+record, global decision lookup and crash/retry acceptance case before enabling
+application admission.
+
 ## 1. Existing code and missing boundaries
 
 | Existing boundary at the baseline | What can be reused | What must be added |

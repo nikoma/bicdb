@@ -938,3 +938,5 @@ fn native_strong_point_initial_four_metadata_members_rf3_keeps_exact_data_identi
 }
 
 mod service_open_guard_tests;
+
+mod four_member_activation_tests;

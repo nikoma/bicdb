@@ -1,0 +1,145 @@
+{
+  "source_revision": "721c329de4196aeef96604642c439fe7d8ddb0bf",
+  "requested_source": "721c329de4196aeef96604642c439fe7d8ddb0bf",
+  "authoritative_source_verified": true,
+  "run_id": 43325316433,
+  "job_id": 131556248799,
+  "job_name": "Focused Core library (origin_pre_wal_fault_tests)",
+  "job_status": "completed",
+  "job_conclusion": "failure",
+  "captured_at_utc": "2026-11-12T23:08:18.853033+00:00",
+  "raw_bytes": 1629975,
+  "raw_sha256": "22813c4146e02f380e4a994f4a46cbfebe4338c4568be763a59bf89ebb960c9f",
+  "compressed_file": "721-721-origin-pre-wal-baseline-job131556248799.log.gz",
+  "compressed_sha256": "c29b5befb982a3fa5a2457d0c3c346ea8cfa0208863625ccce6d793b498c6516",
+  "capture_exit_code": 0,
+  "test_summaries": [
+    "2026-11-12T23:07:37.0531450Z test result: FAILED. 1 passed; 1 failed; 0 ignored; 0 measured; 957 filtered out; finished in 26.04s"
+  ],
+  "failure_context": [
+    {
+      "line": 16755,
+      "remaining": 0,
+      "lines": [
+        "2026-11-12T23:07:37.0527915Z NATIVE_ORIGIN_FAULT_EVIDENCE /home/runner/work/_temp/native-core-evidence/fault-state/native-origin-pre-wal-01a1d203-e194-7833-9ae9-6593fca347b5",
+        "2026-11-12T23:07:37.0528224Z",
+        "2026-11-12T23:07:37.0528868Z thread 'distribution_native_host::provisional_listener::tests::initial_data_tests::origin_pre_wal_fault_tests::native_initial_data_actual_rpc_post_admission_fault_requires_autonomous_tail_recovery' (7403) panicked at crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/initial_data_tests/origin_pre_wal_fault_tests.rs:569:28:",
+        "2026-11-12T23:07:37.0529923Z called `Result::unwrap()` on an `Err` value: Cluster(\"REQUIRED autonomous committed-tail repair + next ACK/Strong unavailable; baseline remains RED\")",
+        "2026-11-12T23:07:37.0530328Z note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace",
+        "2026-11-12T23:07:37.0530494Z",
+        "2026-11-12T23:07:37.0530497Z",
+        "2026-11-12T23:07:37.0530547Z failures:",
+        "2026-11-12T23:07:37.0530930Z     distribution_native_host::provisional_listener::tests::initial_data_tests::origin_pre_wal_fault_tests::native_initial_data_actual_rpc_post_admission_fault_requires_autonomous_tail_recovery",
+        "2026-11-12T23:07:37.0531297Z",
+        "2026-11-12T23:07:37.0531450Z test result: FAILED. 1 passed; 1 failed; 0 ignored; 0 measured; 957 filtered out; finished in 26.04s",
+        "2026-11-12T23:07:37.0531650Z",
+        "2026-11-12T23:07:37.0567761Z error: test failed, to rerun pass `-p bicdb-core --lib`",
+        "2026-11-12T23:07:37.0708251Z ##[error]Process completed with exit code 101.",
+        "2026-11-12T23:07:37.0755026Z ##[group]Run actions/upload-artifact@v4",
+        "2026-11-12T23:07:37.0755185Z with:"
+      ]
+    }
+  ],
+  "test_observations": [
+    {
+      "line": 16604,
+      "test": "distribution_native_host::provisional_listener::tests::initial_data_tests::origin_pre_wal_fault_tests::native_initial_data_origin_fault_arm_drop_revokes_retained_probe_without_erasing_successor",
+      "result": "ok"
+    },
+    {
+      "line": 16605,
+      "test": "distribution_native_host::provisional_listener::tests::initial_data_tests::origin_pre_wal_fault_tests::native_initial_data_actual_rpc_post_admission_fault_requires_autonomous_tail_recovery",
+      "result": "FAILED"
+    }
+  ],
+  "steps": [
+    {
+      "name": "Set up job",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 1,
+      "started_at": "2026-11-12T23:02:23Z",
+      "completed_at": "2026-11-12T23:02:25Z"
+    },
+    {
+      "name": "Run actions/checkout@v4",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 2,
+      "started_at": "2026-11-12T23:02:25Z",
+      "completed_at": "2026-11-12T23:02:30Z"
+    },
+    {
+      "name": "Run dtolnay/rust-toolchain@stable",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 3,
+      "started_at": "2026-11-12T23:02:30Z",
+      "completed_at": "2026-11-12T23:02:38Z"
+    },
+    {
+      "name": "Run Swatinem/rust-cache@v2",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 4,
+      "started_at": "2026-11-12T23:02:38Z",
+      "completed_at": "2026-11-12T23:02:45Z"
+    },
+    {
+      "name": "Build projection chaos helper",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 5,
+      "started_at": "2026-11-12T23:02:45Z",
+      "completed_at": "2026-11-12T23:05:55Z"
+    },
+    {
+      "name": "Record source and list selected Core library tests",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 6,
+      "started_at": "2026-11-12T23:05:55Z",
+      "completed_at": "2026-11-12T23:07:10Z"
+    },
+    {
+      "name": "Execute selected Core library tests",
+      "status": "completed",
+      "conclusion": "failure",
+      "number": 7,
+      "started_at": "2026-11-12T23:07:10Z",
+      "completed_at": "2026-11-12T23:07:37Z"
+    },
+    {
+      "name": "Retain focused source, log and opted-in fault-state evidence",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 8,
+      "started_at": "2026-11-12T23:07:37Z",
+      "completed_at": "2026-11-12T23:07:38Z"
+    },
+    {
+      "name": "Post Run Swatinem/rust-cache@v2",
+      "status": "completed",
+      "conclusion": "skipped",
+      "number": 15,
+      "started_at": "2026-11-12T23:07:38Z",
+      "completed_at": "2026-11-12T23:07:38Z"
+    },
+    {
+      "name": "Post Run actions/checkout@v4",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 16,
+      "started_at": "2026-11-12T23:07:38Z",
+      "completed_at": "2026-11-12T23:07:38Z"
+    },
+    {
+      "name": "Complete job",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 17,
+      "started_at": "2026-11-12T23:07:38Z",
+      "completed_at": "2026-11-12T23:07:38Z"
+    }
+  ]
+}

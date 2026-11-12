@@ -7,6 +7,7 @@ pub(crate) use scheduling::*;
 mod schema_defs;
 pub(crate) use schema_defs::*;
 mod application_runtime;
+mod http_transaction;
 mod program_host;
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::fs::{self, File, OpenOptions};

@@ -1,0 +1,328 @@
+{
+  "kind": "native-synthetic-actor-regression",
+  "completed": true,
+  "closed_full_graph_template": true,
+  "package_compiler_source": "843a2c1f7667be92552b2b7574ba9ac592e6b0cb",
+  "toolchain": {
+    "format": 1,
+    "execution_target": "ordinary native bicdb ABI v2",
+    "qualified": false,
+    "carrier": {
+      "version": "2.3.88",
+      "source": "843a2c1f7667be92552b2b7574ba9ac592e6b0cb",
+      "source_code_commit": "2b6d391c8fa93416a22630aeed8f06192cbbed26",
+      "artifact": "tools/carrier-2.3.88-843a2c1f",
+      "sha256": "013a164b03a3954a71beadff528b036bf2ca65a7cf8e3b0444483b37a5e5aff9"
+    },
+    "bicdb": {
+      "version": "1.0.479-beta",
+      "source": "70a52423b408e808e538ebeed129f659e1a345b6",
+      "artifact": "tools/bicdb-1.0.479-beta-8c06cd6e",
+      "sha256": "ab2125da0eea42249df32d5818b3dd7202e5673163f826b0a7914bc614d9a000",
+      "build": {
+        "host": "ny7.walknorth.com",
+        "rustc": "1.96.0 (ac68faa20 2026-05-25)",
+        "cargo": "1.96.0 (30a34c682 2026-05-25)",
+        "command": "cargo build --locked -p bicdb-cli --release",
+        "jobs": 2,
+        "incremental": false,
+        "debug": 0,
+        "tests_built": false,
+        "lto": false
+      },
+      "source_base": "f3a063902d2fe316c29264fe20549c2fdd270242",
+      "patches": [
+        "native-http-authored-outer-isolation"
+      ],
+      "source_code_commit": "8c06cd6ef98904458638ff083e7d85c9d2ecc222"
+    },
+    "testing": {
+      "driver": "Node v22.23.1",
+      "rust_tests": false
+    },
+    "qualification_scope": "Candidate479: outer signed local-call transaction isolation inferred before HTTP idempotency transaction; runtime qualification pending"
+  },
+  "packages": [
+    {
+      "name": "foundation",
+      "version": "1.5.29",
+      "sha256": "740aab827655951c07cc936bbcddbc1bd9d08a6370f8c31d9a1a19b9b306a88f",
+      "artifact": "artifacts/candidate-packages/foundation/1.5.29/740aab827655951c07cc936bbcddbc1bd9d08a6370f8c31d9a1a19b9b306a88f.bicdb.json",
+      "source_archive": "artifacts/candidate-packages/foundation/1.5.29/source.tar.gz",
+      "source_archive_sha256": "6441fee4c6f630f9fefa0fbedd27425dac862cbc52c57ec747dbe0074e8295ef",
+      "source_tree_sha256": "ebda089169fbfe7671f669d27ec314594adc8b688607ff6c13fee3ffc377f7b0"
+    },
+    {
+      "name": "catalog",
+      "version": "1.2.29",
+      "sha256": "e4b219fd0e62f5a7a7f045122cb5581c1d5ee3b8689e380038a7545cb68c835f",
+      "artifact": "artifacts/candidate-packages/catalog/1.2.29/e4b219fd0e62f5a7a7f045122cb5581c1d5ee3b8689e380038a7545cb68c835f.bicdb.json",
+      "source_archive": "artifacts/candidate-packages/catalog/1.2.29/source.tar.gz",
+      "source_archive_sha256": "d0d30099c3d08879af93322d9b208989deb82a426901f314a9d4ca3963c65969",
+      "source_tree_sha256": "1f5a2364dd72072148918b41c44e1b085541d0852fc1d8748b1c08ab0947b03b"
+    },
+    {
+      "name": "crm",
+      "version": "1.1.32",
+      "sha256": "31cffab40d6afbe69fb5190d7156917a29c8d66ec4bd45549ac33d439054bf85",
+      "artifact": "artifacts/candidate-packages/crm/1.1.32/31cffab40d6afbe69fb5190d7156917a29c8d66ec4bd45549ac33d439054bf85.bicdb.json",
+      "source_archive": "artifacts/candidate-packages/crm/1.1.32/source.tar.gz",
+      "source_archive_sha256": "971a95b24e32ee3405d81fa65db67cbebdc17181707547996bc293950599fe1f",
+      "source_tree_sha256": "d9ac83e98cbc55900c97e7c7083f6659b731ee83f39212d166df0f605f16d7aa"
+    },
+    {
+      "name": "sales",
+      "version": "1.4.33",
+      "sha256": "90472c3d4f167ce89a7daac30f225be349cfab12702f610e03db92df277b1f22",
+      "artifact": "artifacts/candidate-packages/sales/1.4.33/90472c3d4f167ce89a7daac30f225be349cfab12702f610e03db92df277b1f22.bicdb.json",
+      "source_archive": "artifacts/candidate-packages/sales/1.4.33/source.tar.gz",
+      "source_archive_sha256": "0222b55d430fec5d29d1449670acd3e83581e66c1716361ed364d09c6196abd5",
+      "source_tree_sha256": "fc88a98ce14cb691283173a7689f23ed128ec1a41a9e7ad549828fb922a8a7ff"
+    },
+    {
+      "name": "accounting",
+      "version": "1.5.34",
+      "sha256": "e8bd3b090fbef90c0448c808f68bd175976e8acdea857ed80ea756df3c47e09a",
+      "artifact": "artifacts/candidate-packages/accounting/1.5.34/e8bd3b090fbef90c0448c808f68bd175976e8acdea857ed80ea756df3c47e09a.bicdb.json",
+      "source_archive": "artifacts/candidate-packages/accounting/1.5.34/source.tar.gz",
+      "source_archive_sha256": "11a44dd4c42418faba5257a5921bef30620d5e739b0e17b6f529bde0c4521c4d",
+      "source_tree_sha256": "2d7f7d2045b8d8e916e57ecc9da467f6908cd5b5b360472f9dde6cd30655c096"
+    },
+    {
+      "name": "inventory",
+      "version": "1.8.37",
+      "sha256": "02bc41bce14707f12bff7f029216ae73bd51409aa99aef48cb029654b91baed5",
+      "artifact": "artifacts/candidate-packages/inventory/1.8.37/02bc41bce14707f12bff7f029216ae73bd51409aa99aef48cb029654b91baed5.bicdb.json",
+      "source_archive": "artifacts/candidate-packages/inventory/1.8.37/source.tar.gz",
+      "source_archive_sha256": "069093d634ee3beaabb19274e1bb0b809ab5b85dac4b42571c7415beaf5b1b64",
+      "source_tree_sha256": "8d6e9a2214a69593467d413c75aa74c56dda9488216346a2d47b9fbfb94623b6"
+    },
+    {
+      "name": "invoicing",
+      "version": "1.6.47",
+      "sha256": "ee4dff3c960b36900b26b5b6ad2ad465998bf5314b1dce3e343cdac4b1df7b39",
+      "artifact": "artifacts/candidate-packages/invoicing/1.6.47/ee4dff3c960b36900b26b5b6ad2ad465998bf5314b1dce3e343cdac4b1df7b39.bicdb.json",
+      "source_archive": "artifacts/candidate-packages/invoicing/1.6.47/source.tar.gz",
+      "source_archive_sha256": "c254874f0c79c91fc89352fa30a679eb181bfcbd75d41ef7b72e5e2dc79e4156",
+      "source_tree_sha256": "e1a2b06f2940a226bcf2ee39edca16d31836389324c442d94a5eb394f46e0924"
+    },
+    {
+      "name": "expenses",
+      "version": "1.0.43",
+      "sha256": "60329710482fb082b6816b2cf87d131c66a656ea2bfe2925d80877fe1b21fb0f",
+      "artifact": "artifacts/candidate-packages/expenses/1.0.43/60329710482fb082b6816b2cf87d131c66a656ea2bfe2925d80877fe1b21fb0f.bicdb.json",
+      "source_archive": "artifacts/candidate-packages/expenses/1.0.43/source.tar.gz",
+      "source_archive_sha256": "e8ae3c6257efe3ba23be407ea30026a63cc48591b13b5f7c2eba47dc2dd8b4fd",
+      "source_tree_sha256": "3a7aa370c0a7291eed71ad74926f2c584af5b175dae2d8efd8eebfa898d6fbee"
+    },
+    {
+      "name": "order-to-cash",
+      "version": "1.4.48",
+      "sha256": "98b4547f8947afd8a53c24ea42aa551825412d6e48dbe38aaac33710a17f120c",
+      "artifact": "artifacts/candidate-packages/order-to-cash/1.4.48/98b4547f8947afd8a53c24ea42aa551825412d6e48dbe38aaac33710a17f120c.bicdb.json",
+      "source_archive": "artifacts/candidate-packages/order-to-cash/1.4.48/source.tar.gz",
+      "source_archive_sha256": "ef63add8d1f1139b019290b39a24fc7e0364d26aa57311714576518de919fd8c",
+      "source_tree_sha256": "2d7d7d3c64b1798ed2b7ccbdea0d8d25e144d77db150c3ff74697656927ad842"
+    }
+  ],
+  "results": [
+    {
+      "name": "foundation-test_0_organization_bootstrap_is_complete_and_cannot_run_twice-0",
+      "exit_code": 0,
+      "duration_ms": 1244,
+      "log": "/opt/walknorth-erp-modernization/features-v19/evidence/native-scenarios/1794444453881/foundation-test_0_organization_bootstrap_is_complete_and_cannot_run_twice-0.log"
+    },
+    {
+      "name": "foundation-test_1_party_role_import_is_atomic_and_rejects_an_empty_batch-0",
+      "exit_code": 0,
+      "duration_ms": 1177,
+      "log": "/opt/walknorth-erp-modernization/features-v19/evidence/native-scenarios/1794444453881/foundation-test_1_party_role_import_is_atomic_and_rejects_an_empty_batch-0.log"
+    },
+    {
+      "name": "foundation-test_2_additional_company_setup_requires_an_existing_organization-0",
+      "exit_code": 0,
+      "duration_ms": 994,
+      "log": "/opt/walknorth-erp-modernization/features-v19/evidence/native-scenarios/1794444453881/foundation-test_2_additional_company_setup_requires_an_existing_organization-0.log"
+    },
+    {
+      "name": "foundation-test_3_adding_another_company_is_retry_safe_and_preserves_the_organization_profile-0",
+      "exit_code": 0,
+      "duration_ms": 1177,
+      "log": "/opt/walknorth-erp-modernization/features-v19/evidence/native-scenarios/1794444453881/foundation-test_3_adding_another_company_is_retry_safe_and_preserves_the_organization_profile-0.log"
+    },
+    {
+      "name": "catalog-test_0_product_setup_creates_coherent_deduplicated_units_atomically-0",
+      "exit_code": 0,
+      "duration_ms": 1027,
+      "log": "/opt/walknorth-erp-modernization/features-v19/evidence/native-scenarios/1794444453881/catalog-test_0_product_setup_creates_coherent_deduplicated_units_atomically-0.log"
+    },
+    {
+      "name": "crm-test_0_lead_qualification_creates_one_opportunity_and_stages_progress_in_order-0",
+      "exit_code": 0,
+      "duration_ms": 1146,
+      "log": "/opt/walknorth-erp-modernization/features-v19/evidence/native-scenarios/1794444453881/crm-test_0_lead_qualification_creates_one_opportunity_and_stages_progress_in_order-0.log"
+    },
+    {
+      "name": "sales-test_0_quote_entry_calculates_commercial_snapshots_and_rejects_empty_documents-0",
+      "exit_code": 0,
+      "duration_ms": 1060,
+      "log": "/opt/walknorth-erp-modernization/features-v19/evidence/native-scenarios/1794444453881/sales-test_0_quote_entry_calculates_commercial_snapshots_and_rejects_empty_documents-0.log"
+    },
+    {
+      "name": "accounting-test_0_receivable_invoice_posts_one_balanced_immutable_journal-0",
+      "exit_code": 0,
+      "duration_ms": 1280,
+      "log": "/opt/walknorth-erp-modernization/features-v19/evidence/native-scenarios/1794444453881/accounting-test_0_receivable_invoice_posts_one_balanced_immutable_journal-0.log"
+    },
+    {
+      "name": "accounting-test_1_authenticated_organization_rejects_forged_accounting_scope-0",
+      "exit_code": 0,
+      "duration_ms": 978,
+      "log": "/opt/walknorth-erp-modernization/features-v19/evidence/native-scenarios/1794444453881/accounting-test_1_authenticated_organization_rejects_forged_accounting_scope-0.log"
+    },
+    {
+      "name": "accounting-test_2_employee_expense_and_reimbursement_post_balanced_journals-0",
+      "exit_code": 0,
+      "duration_ms": 1488,
+      "log": "/opt/walknorth-erp-modernization/features-v19/evidence/native-scenarios/1794444453881/accounting-test_2_employee_expense_and_reimbursement_post_balanced_journals-0.log"
+    },
+    {
+      "name": "accounting-test_3_supplier_invoice_posts_purchases_tax_and_payable_atomically-0",
+      "exit_code": 0,
+      "duration_ms": 1344,
+      "log": "/opt/walknorth-erp-modernization/features-v19/evidence/native-scenarios/1794444453881/accounting-test_3_supplier_invoice_posts_purchases_tax_and_payable_atomically-0.log"
+    },
+    {
+      "name": "accounting-test_4_bank_reconciliation_closes_a_fully_matched_statement_and_rejects_overmatching-0",
+      "exit_code": 0,
+      "duration_ms": 1297,
+      "log": "/opt/walknorth-erp-modernization/features-v19/evidence/native-scenarios/1794444453881/accounting-test_4_bank_reconciliation_closes_a_fully_matched_statement_and_rejects_overmatching-0.log"
+    },
+    {
+      "name": "accounting-test_5_typed_reports_retain_zero_accounts_exact_decimals_and_inclusive_date_boundaries-0",
+      "exit_code": 0,
+      "duration_ms": 1673,
+      "log": "/opt/walknorth-erp-modernization/features-v19/evidence/native-scenarios/1794444453881/accounting-test_5_typed_reports_retain_zero_accounts_exact_decimals_and_inclusive_date_boundaries-0.log"
+    },
+    {
+      "name": "accounting-test_6_period_close_requires_completed_evidence_and_closes_the_governed_period-0",
+      "exit_code": 0,
+      "duration_ms": 1217,
+      "log": "/opt/walknorth-erp-modernization/features-v19/evidence/native-scenarios/1794444453881/accounting-test_6_period_close_requires_completed_evidence_and_closes_the_governed_period-0.log"
+    },
+    {
+      "name": "accounting-test_7_accounting_exports_reject_inverted_periods_without_creating_evidence-0",
+      "exit_code": 0,
+      "duration_ms": 966,
+      "log": "/opt/walknorth-erp-modernization/features-v19/evidence/native-scenarios/1794444453881/accounting-test_7_accounting_exports_reject_inverted_periods_without_creating_evidence-0.log"
+    },
+    {
+      "name": "accounting-test_8_accounting_bootstrap_creates_a_complete_posting_chart_and_first_open_period_once-0",
+      "exit_code": 0,
+      "duration_ms": 1296,
+      "log": "/opt/walknorth-erp-modernization/features-v19/evidence/native-scenarios/1794444453881/accounting-test_8_accounting_bootstrap_creates_a_complete_posting_chart_and_first_open_period_once-0.log"
+    },
+    {
+      "name": "accounting-test_9_commercial_accounting_setup_posts_openings_and_imports_a_balanced_bank_feed-0",
+      "exit_code": 0,
+      "duration_ms": 1457,
+      "log": "/opt/walknorth-erp-modernization/features-v19/evidence/native-scenarios/1794444453881/accounting-test_9_commercial_accounting_setup_posts_openings_and_imports_a_balanced_bank_feed-0.log"
+    },
+    {
+      "name": "inventory-test_0_delivery_depletes_stock_atomically_and_rejects_over_delivery-0",
+      "exit_code": 0,
+      "duration_ms": 1180,
+      "log": "/opt/walknorth-erp-modernization/features-v19/evidence/native-scenarios/1794444453881/inventory-test_0_delivery_depletes_stock_atomically_and_rejects_over_delivery-0.log"
+    },
+    {
+      "name": "inventory-test_1_transfer_and_adjustment_preserve_atomic_stock_evidence-0",
+      "exit_code": 0,
+      "duration_ms": 1307,
+      "log": "/opt/walknorth-erp-modernization/features-v19/evidence/native-scenarios/1794444453881/inventory-test_1_transfer_and_adjustment_preserve_atomic_stock_evidence-0.log"
+    },
+    {
+      "name": "inventory-test_2_inventory_product_setup_validates_replenishment_and_updates_one_policy-0",
+      "exit_code": 0,
+      "duration_ms": 990,
+      "log": "/opt/walknorth-erp-modernization/features-v19/evidence/native-scenarios/1794444453881/inventory-test_2_inventory_product_setup_validates_replenishment_and_updates_one_policy-0.log"
+    },
+    {
+      "name": "inventory-test_3_stock_reservation_protects_availability_and_release_is_atomic-0",
+      "exit_code": 0,
+      "duration_ms": 1102,
+      "log": "/opt/walknorth-erp-modernization/features-v19/evidence/native-scenarios/1794444453881/inventory-test_3_stock_reservation_protects_availability_and_release_is_atomic-0.log"
+    },
+    {
+      "name": "inventory-test_4_serial_tracked_purchase_receipts_fail_closed_without_unit_allocations-0",
+      "exit_code": 0,
+      "duration_ms": 1289,
+      "log": "/opt/walknorth-erp-modernization/features-v19/evidence/native-scenarios/1794444453881/inventory-test_4_serial_tracked_purchase_receipts_fail_closed_without_unit_allocations-0.log"
+    },
+    {
+      "name": "inventory-test_5_receiving_replenishment_landed_cost_counting_and_reports_remain_consistent-0",
+      "exit_code": 0,
+      "duration_ms": 1427,
+      "log": "/opt/walknorth-erp-modernization/features-v19/evidence/native-scenarios/1794444453881/inventory-test_5_receiving_replenishment_landed_cost_counting_and_reports_remain_consistent-0.log"
+    },
+    {
+      "name": "invoicing-test_0_supplier_invoice_approval_fails_closed_on_a_three_way_match_exception-0",
+      "exit_code": 0,
+      "duration_ms": 1021,
+      "log": "/opt/walknorth-erp-modernization/features-v19/evidence/native-scenarios/1794444453881/invoicing-test_0_supplier_invoice_approval_fails_closed_on_a_three_way_match_exception-0.log"
+    },
+    {
+      "name": "invoicing-test_1_direct_invoice_preview_has_no_postings_and_confirmed_issue_is_retry_safe-0",
+      "exit_code": 0,
+      "duration_ms": 1771,
+      "log": "/opt/walknorth-erp-modernization/features-v19/evidence/native-scenarios/1794444453881/invoicing-test_1_direct_invoice_preview_has_no_postings_and_confirmed_issue_is_retry_safe-0.log"
+    },
+    {
+      "name": "invoicing-test_2_seed_the_isolated_billing_proposal_qualification_plan-0",
+      "exit_code": 0,
+      "duration_ms": 1061,
+      "log": "/opt/walknorth-erp-modernization/features-v19/evidence/native-scenarios/1794444453881/invoicing-test_2_seed_the_isolated_billing_proposal_qualification_plan-0.log"
+    },
+    {
+      "name": "invoicing-test_3_seed_the_revoked_billing_proposal_qualification_occurrence-0",
+      "exit_code": 0,
+      "duration_ms": 1206,
+      "log": "/opt/walknorth-erp-modernization/features-v19/evidence/native-scenarios/1794444453881/invoicing-test_3_seed_the_revoked_billing_proposal_qualification_occurrence-0.log"
+    },
+    {
+      "name": "invoicing-test_4_seed_the_expired_billing_proposal_qualification_occurrence-0",
+      "exit_code": 0,
+      "duration_ms": 1184,
+      "log": "/opt/walknorth-erp-modernization/features-v19/evidence/native-scenarios/1794444453881/invoicing-test_4_seed_the_expired_billing_proposal_qualification_occurrence-0.log"
+    },
+    {
+      "name": "invoicing-test_5_seed_the_retry_billing_proposal_qualification_occurrence-0",
+      "exit_code": 0,
+      "duration_ms": 1133,
+      "log": "/opt/walknorth-erp-modernization/features-v19/evidence/native-scenarios/1794444453881/invoicing-test_5_seed_the_retry_billing_proposal_qualification_occurrence-0.log"
+    },
+    {
+      "name": "invoicing-test_6_repair_and_replay_the_isolated_retry_qualification_occurrence-0",
+      "exit_code": 0,
+      "duration_ms": 1212,
+      "log": "/opt/walknorth-erp-modernization/features-v19/evidence/native-scenarios/1794444453881/invoicing-test_6_repair_and_replay_the_isolated_retry_qualification_occurrence-0.log"
+    },
+    {
+      "name": "invoicing-test_7_renew_the_isolated_retry_qualification_approval_without_dispatch-0",
+      "exit_code": 0,
+      "duration_ms": 1256,
+      "log": "/opt/walknorth-erp-modernization/features-v19/evidence/native-scenarios/1794444453881/invoicing-test_7_renew_the_isolated_retry_qualification_approval_without_dispatch-0.log"
+    },
+    {
+      "name": "expenses-test_0_expense_submission_snapshots_category_and_rejects_self_approval_before_posting-0",
+      "exit_code": 0,
+      "duration_ms": 1053,
+      "log": "/opt/walknorth-erp-modernization/features-v19/evidence/native-scenarios/1794444453881/expenses-test_0_expense_submission_snapshots_category_and_rejects_self_approval_before_posting-0.log"
+    },
+    {
+      "name": "expenses-test_1_empty_expense_report_and_forged_organization_scope_fail_closed-0",
+      "exit_code": 0,
+      "duration_ms": 1174,
+      "log": "/opt/walknorth-erp-modernization/features-v19/evidence/native-scenarios/1794444453881/expenses-test_1_empty_expense_report_and_forged_organization_scope_fail_closed-0.log"
+    }
+  ]
+}

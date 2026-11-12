@@ -88,9 +88,9 @@ fn commit_joint_stage(
     // A planning view only. The actual opaque decision + independent HostMQ
     // validate each builder; only real MStore majority ACKs commit its output.
     let root = tempfile::tempdir().unwrap();
-    let mut view = crate::DistributionStore::initialize_at(
-        root.path(),
-        crate::DistributionConfig {
+    let snapshot = crate::ClusterBootstrapSnapshot {
+        topology: current.clone(),
+        config_template: crate::DistributionConfig {
             enabled: true,
             cluster_id: current.cluster_id.clone(),
             node_id: member.id.clone(),
@@ -102,12 +102,23 @@ fn commit_joint_stage(
             replication_factor: 3,
             ..Default::default()
         },
+        metadata_leader_id: Some(node("n1")),
+    };
+    // Populate only an EMPTY planning cache from the actual fresh MQ C. Do
+    // not invent a preexisting unbound voter and then try to enroll it through
+    // snapshot installation. This creates no native owner or consensus store.
+    let config = crate::provision_cluster_member_directory(
+        root.path(),
+        &snapshot,
+        &node("n1"),
+        snapshot.config_template.transport.clone(),
         true,
-        1,
     )
     .unwrap();
-    view.install_authoritative_topology(current).unwrap();
-    let mut view = view.fork_ephemeral();
+    let mut view = crate::DistributionStore::open(root.path(), config, true)
+        .unwrap()
+        .fork_ephemeral();
+    assert_eq!(view.topology(), fresh.committed_topology(business).unwrap());
     match stage {
         0 => {
             assert!(view

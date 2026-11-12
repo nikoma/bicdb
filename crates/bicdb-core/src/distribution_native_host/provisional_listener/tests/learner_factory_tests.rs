@@ -184,7 +184,6 @@ fn native_unassigned_fifth_factory_actual_host_mq_create_reopen_and_proposal() {
     tx.insert("items", Record::new("must-not-ack-from-learner-factory"))
         .unwrap();
     assert!(tx.commit().is_err());
-    drop(tx);
     drop(database);
     drop(factory);
 

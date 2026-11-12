@@ -97,6 +97,17 @@ async fn real_catalog_acl_describe_and_text_output_preserve_oid_and_permissions(
                         let prepared = client.prepare(&query).await.unwrap();
                         assert_eq!(prepared.columns()[0].type_().oid(), 1034, "{mode} {profile}: {query}");
                     }
+                    // An empty definition catalog still describes SELECT *.
+                    for (catalog, count, name, oid) in [
+                        ("pg_enum", 4, "enumlabel", 19),
+                        ("pg_trigger", 19, "tgargs", 17),
+                    ] {
+                        let query = format!("SELECT * FROM pg_catalog.{catalog} WHERE 1=0");
+                        let prepared = client.prepare(&query).await.unwrap();
+                        assert_eq!(prepared.columns().len(), count, "{mode} {profile}: {query}");
+                        assert_eq!(prepared.columns().iter().find(|c| c.name()==name).unwrap().type_().oid(), oid);
+                        assert_eq!(rows(client.simple_query(&query).await.unwrap()), Vec::<Vec<Option<String>>>::new());
+                    }
                     let user_column = client.prepare("SELECT relacl FROM acl_items WHERE 1=0").await.unwrap();
                     assert_eq!(user_column.columns()[0].type_().oid(), 25);
                     let unavailable_codecs = rows(client.simple_query("SELECT typreceive,typsend FROM pg_catalog.pg_type WHERE oid=1033").await.unwrap());

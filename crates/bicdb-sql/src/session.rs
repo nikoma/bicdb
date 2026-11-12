@@ -4870,19 +4870,51 @@ impl<'db> SqlSession<'db> {
         )
     }
 
+    fn catalog_schema_publication_access(
+        &self,
+        table: &str,
+        certificate: bool,
+        undo: bool,
+    ) -> Result<Option<bicdb_core::CatalogScopeAccess>> {
+        if !undo && self.tx.is_none() {
+            return Ok(None);
+        }
+        let names = if certificate {
+            vec![partition_admission::CERTIFICATE_COLLECTION.to_string()]
+        } else {
+            Vec::new()
+        };
+        rename_journal::record_mutation_access_with_publication_resources(
+            self.db_ref(),
+            self.tx.as_ref(),
+            &self.rename_journal_contexts(),
+            SCHEMA_COLLECTION,
+            table,
+            &names,
+        )
+    }
+
     pub(crate) fn save_session_schema(&mut self, schema: &TableSchema) -> Result<()> {
         let previous = load_schema(self.db_ref(), &schema.name)?;
         let created = previous.is_none();
-        let record = prepare_schema_record(self.db_mut()?, schema)?;
-        {
-            let _access = self.catalog_record_mutation_access(SCHEMA_COLLECTION, &schema.name)?;
-            super::session::partition_admission::publish_schema_change(
+        let certificate = schema.partitioning.is_some()
+            || schema.partition_of.is_some()
+            || previous
+                .as_ref()
+                .is_some_and(|old| old.partitioning.is_some() || old.partition_of.is_some());
+        let saved = {
+            let _access =
+                self.catalog_schema_publication_access(&schema.name, certificate, false)?;
+            let record = prepare_schema_record(self.db_mut()?, schema)?;
+            let saved: TableSchema = serde_json::from_value(record.metadata.clone())?;
+            partition_admission::publish_schema_change(
                 self.db_mut()?,
                 schema.name.clone(),
                 Some(record),
             )?;
-        }
-        cache_saved_schema(self.db_ref(), schema);
+            saved
+        };
+        cache_saved_schema(self.db_ref(), &saved);
         if self.tx.is_some() {
             match previous.clone() {
                 Some(schema) => self.ddl_undo.push(DdlUndo::RestoreSchema { schema }),
@@ -4909,7 +4941,10 @@ impl<'db> SqlSession<'db> {
             None
         };
         {
-            let _access = self.catalog_record_mutation_access(SCHEMA_COLLECTION, table)?;
+            let certificate = previous
+                .as_ref()
+                .is_some_and(|old| old.partitioning.is_some() || old.partition_of.is_some());
+            let _access = self.catalog_schema_publication_access(table, certificate, false)?;
             delete_schema(self.db_mut()?, table)?;
         }
         for grant in list_privileges(self.db_ref())? {
@@ -5297,17 +5332,30 @@ impl<'db> SqlSession<'db> {
                 let _ = self.db_mut()?.rename_index(&new_name, &old_name)?;
             }
             DdlUndo::DeleteSchema { table } => {
-                let _access = self.catalog_record_undo_access(SCHEMA_COLLECTION, &table)?;
+                let _access = self.catalog_schema_publication_access(
+                    &table,
+                    self.db_ref().sql_partition_execution_feature_active(),
+                    true,
+                )?;
                 delete_schema(self.db_mut()?, &table)?;
             }
             DdlUndo::RestoreSchema { schema } => {
-                let record = prepare_schema_record(self.db_mut()?, &schema)?;
-                {
-                    let _access =
-                        self.catalog_record_undo_access(SCHEMA_COLLECTION, &schema.name)?;
-                    self.db_mut()?.insert(SCHEMA_COLLECTION, record)?;
-                }
-                cache_saved_schema(self.db_ref(), &schema);
+                let saved = {
+                    let _access = self.catalog_schema_publication_access(
+                        &schema.name,
+                        self.db_ref().sql_partition_execution_feature_active(),
+                        true,
+                    )?;
+                    let record = prepare_schema_record(self.db_mut()?, &schema)?;
+                    let saved: TableSchema = serde_json::from_value(record.metadata.clone())?;
+                    partition_admission::publish_schema_change(
+                        self.db_mut()?,
+                        schema.name.clone(),
+                        Some(record),
+                    )?;
+                    saved
+                };
+                cache_saved_schema(self.db_ref(), &saved);
             }
             DdlUndo::DeleteSequence { sequence } => {
                 let _ = delete_sequence(self.db_mut()?, &sequence)?;

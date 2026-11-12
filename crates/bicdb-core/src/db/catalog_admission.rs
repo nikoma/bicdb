@@ -5,6 +5,8 @@ use super::*;
 use std::cell::RefCell;
 use std::sync::Weak;
 mod created_collection;
+#[cfg(test)]
+mod publication_tests;
 pub use created_collection::CatalogCreatedCollectionUndo;
 
 pub(super) type Bindings = Mutex<FxHashMap<String, CatalogBinding>>;
@@ -23,7 +25,7 @@ pub(super) struct CatalogBinding {
     records: Option<BTreeSet<String>>,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 struct RecordReservation {
     incarnation: Option<Arc<()>>,
     ids: BTreeSet<String>,
@@ -100,6 +102,7 @@ impl Drop for CatalogReadAccess {
 #[derive(Debug)]
 pub struct CatalogScopeAccess {
     identity: Arc<()>,
+    temporary: Option<CatalogScopeToken>,
     _not_send: PhantomData<std::rc::Rc<()>>,
 }
 
@@ -110,12 +113,29 @@ impl Drop for CatalogScopeAccess {
                 .borrow_mut()
                 .retain(|frame| !Arc::ptr_eq(&frame.identity, &self.identity));
         });
+        if let Some(token) = &self.temporary {
+            if let Some(admission) = token.admission.upgrade() {
+                let mut state = admission.state.write();
+                if admission.has_overlapping_children(&state, token.serial) {
+                    // Misordered host cleanup must fence a late child commit.
+                    if let Some(scope) = state.scopes.get_mut(&token.serial) {
+                        scope.closing = true;
+                    }
+                } else {
+                    state.scopes.remove(&token.serial);
+                    admission
+                        .active
+                        .store(state.scopes.len(), AtomicOrdering::Release);
+                }
+            }
+        }
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 struct Scope {
     owner: TransactionId,
+    parent: Option<u64>,
     names: BTreeSet<String>,
     incarnations: Vec<Arc<()>>,
     records: BTreeMap<String, RecordReservation>,
@@ -235,15 +255,29 @@ impl State {
         Ok(())
     }
 
-    fn check_actor(&self, actor: Option<u64>) -> Result<()> {
-        if let Some(serial) = actor {
-            if !self.scopes.get(&serial).is_some_and(|scope| {
-                !scope.closing && (scope.owner_live || scope.context.is_some())
-            }) {
+    fn check_actor(&self, mut actor: Option<u64>) -> Result<()> {
+        let mut child_owner = None;
+        while let Some(serial) = actor {
+            let Some(scope) = self.scopes.get(&serial) else {
+                return Err(BicDbError::TransactionConflict(
+                    "internal catalog scope is no longer active".into(),
+                ));
+            };
+            if scope.closing
+                || child_owner.is_some_and(|owner| owner != scope.owner)
+                || (scope.parent.is_none() && !scope.owner_live && scope.context.is_none())
+            {
                 return Err(BicDbError::TransactionConflict(
                     "internal catalog scope is closed or no longer active".into(),
                 ));
             }
+            if scope.parent.is_some_and(|parent| parent >= serial) {
+                return Err(BicDbError::TransactionConflict(
+                    "invalid catalog scope parent".into(),
+                ));
+            }
+            child_owner = Some(scope.owner);
+            actor = scope.parent;
         }
         Ok(())
     }
@@ -689,6 +723,7 @@ impl Transaction {
             .collect();
         let scope = Scope {
             owner: self.id,
+            parent: None,
             names,
             incarnations,
             records: rows,
@@ -1110,8 +1145,110 @@ impl BicDb {
         });
         Ok(CatalogScopeAccess {
             identity,
+            temporary: None,
             _not_send: PhantomData,
         })
+    }
+
+    /// Enter a short-lived publication scope containing an existing admitted
+    /// scope and explicitly declared additional namespaces. The caller must
+    /// first establish the parent's live owner or undecided recovery authority,
+    /// as for `enter_catalog_scope`. Extra resources undergo normal foreign
+    /// scope and observation admission. They are not added to the parent's
+    /// durable undo inventory; the host must independently make their effects
+    /// recoverable. Finish every delegated transaction before dropping access.
+    pub fn enter_catalog_scope_with_publication_resources(
+        &self,
+        parent: &CatalogScopeToken,
+        names: &[String],
+    ) -> Result<CatalogScopeAccess> {
+        self.check_recovery_state()?;
+        let mut additions = BTreeSet::new();
+        let mut incarnations = Vec::new();
+        for name in names {
+            validate_collection_name(name)?;
+            additions.insert(name.clone());
+            if let Some(collection) = self.collections.get(name) {
+                incarnations.push(Arc::clone(&collection.read().incarnation));
+            }
+        }
+        if additions.is_empty() {
+            return self.enter_catalog_scope(parent);
+        }
+        let mut state = self.catalog_admission.state.write();
+        self.catalog_admission.validate_token(&state, parent)?;
+        state.check_actor(Some(parent.serial))?;
+        let mut scope = state.scopes[&parent.serial].clone();
+        // Parent record bindings are copied exactly, including stale bindings.
+        // An additional namespace may not turn a replaced record backing into
+        // newly inferred authority under the parent's original spelling.
+        if scope.records.keys().any(|name| additions.contains(name)) {
+            return Err(BicDbError::TransactionConflict(
+                "publication namespace overlaps a parent record reservation".into(),
+            ));
+        }
+        let extra = Scope {
+            owner: scope.owner,
+            parent: Some(parent.serial),
+            names: additions.clone(),
+            incarnations: incarnations.clone(),
+            records: BTreeMap::new(),
+            context: None,
+            owner_live: scope.owner_live,
+            owner_outcome: scope.owner_outcome,
+            closing: false,
+        };
+        for existing in state.scopes.values() {
+            if existing.owner != scope.owner && extra.overlaps(existing) {
+                return Err(BicDbError::TransactionConflict(
+                    "publication resources overlap another catalog owner".into(),
+                ));
+            }
+        }
+        for (id, registration) in self.catalog_admission.registrations.lock().iter() {
+            if *id == scope.owner.0 {
+                continue;
+            }
+            if let Some(bindings) = registration.bindings.upgrade() {
+                if let Some((name, _)) = bindings
+                    .lock()
+                    .iter()
+                    .find(|(name, binding)| extra.intersects_observation(name, binding))
+                {
+                    return Err(BicDbError::TransactionConflict(format!(
+                        "publication resource has an existing transaction observation on `{name}`"
+                    )));
+                }
+            }
+        }
+        let serial = state.next_serial;
+        state.next_serial = serial
+            .checked_add(1)
+            .ok_or_else(|| BicDbError::Unsupported("catalog scope identity exhausted".into()))?;
+        scope.parent = Some(parent.serial);
+        scope.names.extend(additions);
+        scope.incarnations.extend(incarnations);
+        scope.context = None;
+        state.scopes.insert(serial, scope);
+        self.catalog_admission
+            .active
+            .store(state.scopes.len(), AtomicOrdering::Release);
+        drop(state);
+        let token = CatalogScopeToken {
+            admission: Arc::downgrade(&self.catalog_admission),
+            owner: parent.owner,
+            serial,
+        };
+        match self.enter_catalog_scope(&token) {
+            Ok(mut access) => {
+                access.temporary = Some(token);
+                Ok(access)
+            }
+            Err(error) => {
+                let _ = self.finish_catalog_scope(&token);
+                Err(error)
+            }
+        }
     }
 
     /// Find an in-memory scope for a durable journal owned by this trusted

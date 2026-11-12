@@ -334,6 +334,17 @@ pub(super) fn record_mutation_access(
     collection: &str,
     record: &str,
 ) -> Result<Option<bicdb_core::CatalogScopeAccess>> {
+    record_mutation_access_with_publication_resources(db, owner, contexts, collection, record, &[])
+}
+
+pub(super) fn record_mutation_access_with_publication_resources(
+    db: &BicDb,
+    owner: Option<&Transaction>,
+    contexts: &[String],
+    collection: &str,
+    record: &str,
+    publication_names: &[String],
+) -> Result<Option<bicdb_core::CatalogScopeAccess>> {
     for id in contexts {
         let Some(scope) = db.catalog_scope_for_context(id)? else {
             continue;
@@ -352,7 +363,10 @@ pub(super) fn record_mutation_access(
             Some(owner) => owner.check_catalog_scope_owner(&scope)?,
             None => db.resume_catalog_scope_for_recovery(&scope)?,
         }
-        return Ok(Some(db.enter_catalog_scope(&scope)?));
+        return Ok(Some(db.enter_catalog_scope_with_publication_resources(
+            &scope,
+            publication_names,
+        )?));
     }
     Ok(None)
 }
@@ -368,7 +382,12 @@ fn rollback_inner(db: &mut BicDb, id: &str, mut owner: Option<&mut Transaction>)
             Some(tx) => tx.check_catalog_scope_owner(scope)?,
             None => db.resume_catalog_scope_for_recovery(scope)?,
         }
-        Some(db.enter_catalog_scope(scope)?)
+        let publication_names = if db.sql_partition_execution_feature_active() {
+            vec![partition_admission::CERTIFICATE_COLLECTION.to_string()]
+        } else {
+            Vec::new()
+        };
+        Some(db.enter_catalog_scope_with_publication_resources(scope, &publication_names)?)
     } else {
         // Startup and legacy journals have no runtime reservation. Their
         // recovery still requires the original global admission checks.
@@ -475,12 +494,24 @@ fn rollback_inner(db: &mut BicDb, id: &str, mut owner: Option<&mut Transaction>)
                 let name = backing_name(db, &storage, namespace_id)?;
                 let current = db.get(&name, &id)?;
                 if serde_json::to_value(current.as_deref())? != serde_json::to_value(&previous)? {
-                    match previous {
-                        Some(row) => {
-                            db.insert(&name, row)?;
-                        }
-                        None => {
-                            db.delete(&name, &id)?;
+                    if name == SCHEMA_COLLECTION || name == TRIGGER_COLLECTION {
+                        let collection = if name == SCHEMA_COLLECTION {
+                            SCHEMA_COLLECTION
+                        } else {
+                            TRIGGER_COLLECTION
+                        };
+                        partition_admission::publish_catalog_changes(
+                            db,
+                            vec![(collection, id.clone(), previous)],
+                        )?;
+                    } else {
+                        match previous {
+                            Some(row) => {
+                                db.insert(&name, row)?;
+                            }
+                            None => {
+                                db.delete(&name, &id)?;
+                            }
                         }
                     }
                 }

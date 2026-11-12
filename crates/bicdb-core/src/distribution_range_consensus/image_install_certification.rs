@@ -35,6 +35,17 @@ impl LocalInstallingCommittedCertification {
 }
 
 pub(super) const INSTALLING_CERTIFICATION_FORMAT: u32 = 13;
+/// Shape-only upgrade of a validated candidate catalogue. This does not
+/// change its format, writer mode, native birth, rows, floor or any proof.
+pub(super) fn ensure_installing_certification_maps(catalog: &mut RangeWriteCatalog) {
+    catalog
+        .installing_committed_certifications
+        .get_or_insert_with(BTreeMap::new);
+    catalog
+        .installing_recovery_handovers
+        .get_or_insert_with(BTreeMap::new);
+}
+
 const MAX_RECORDS_PER_RANGE: usize = 128;
 const MAX_RECORD_BYTES: usize = MAX_NATIVE_RECOVERY_ENTRY_BYTES + 256 * 1024;
 const MAX_CATALOG_BYTES: usize = 32 * 1024 * 1024;

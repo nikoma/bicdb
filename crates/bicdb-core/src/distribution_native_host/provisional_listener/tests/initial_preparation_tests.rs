@@ -384,6 +384,23 @@ fn native_initial_preparation_tls_prepared_cold_copy_reopens_same_store_without_
     let root = f.hosts[1].seed.root.clone();
     let before = record(&f.hosts[1]);
     let old_open = f.hosts[1].seed.database.read().incarnation_id().to_owned();
+    let before_native = f.hosts[1]
+        .seed
+        .spec
+        .initial_ranges
+        .iter()
+        .map(|range| {
+            let point = f.hosts[1]
+                .seed
+                .database
+                .read()
+                .native_range_prefix_observation(range.id)
+                .unwrap();
+            assert_eq!(point.native_applied_index, Some(0));
+            assert!(!point.invalidated);
+            (range.id, point.native_receipt_sha256)
+        })
+        .collect::<Vec<_>>();
     let metadata = root
         .join(crate::distribution_native_host::initial_preparation::INITIAL_METADATA_DIRECTORY)
         .join(crate::distribution_consensus::DEFAULT_CLUSTER_METADATA_CONSENSUS_STATE);
@@ -412,6 +429,19 @@ fn native_initial_preparation_tls_prepared_cold_copy_reopens_same_store_without_
         .unwrap(),
     );
     assert_ne!(seed.database.read().incarnation_id(), old_open);
+    for (range, original_receipt) in before_native {
+        let point = seed
+            .database
+            .read()
+            .native_range_prefix_observation(range)
+            .unwrap();
+        assert_eq!(point.native_applied_index, Some(0));
+        assert!(!point.invalidated && point.pending_command_index.is_none());
+        assert_eq!(
+            point.native_receipt_sha256, original_receipt,
+            "cold validation must retain actual original genesis, never reseal it"
+        );
+    }
     let host =
         NativeProvisionalHost::start(Arc::clone(&seed), f.networks[1].clone(), &token).unwrap();
     assert!(f.hosts[0]
@@ -478,17 +508,19 @@ fn native_initial_preparation_exposed_cold_copy_never_reenters_prevote_or_resets
     let mut copy = crate::db::ActualNativeRf3Fixture::copy_stopped_recovery_tree(&root).unwrap();
     copy.disable_cleanup(true);
     eprintln!("NATIVE_INITIAL_EXPOSED_COLD_COPY {}", copy.path().display());
-    assert!(NativeProvisionalNode::open_initial_preparation(
+    let error = NativeProvisionalNode::open_initial_preparation(
         copy.path(),
         db_config(),
         f.plan.clone(),
         &node(0),
-        &token
+        &token,
     )
     .err()
-    .unwrap()
-    .to_string()
-    .contains("MAY HAVE BEEN EXPOSED"));
+    .unwrap();
+    assert!(
+        error.to_string().contains("MAY HAVE BEEN EXPOSED"),
+        "{error}"
+    );
     // Ordinary ACTUAL native-owned Raft recovery preserves the durable vote;
     // this is not a new initial grant, election quorum or data readiness proof.
     let (db, _) = BicDb::open_range_image_database(copy.path(), db_config(), &spec).unwrap();

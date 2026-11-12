@@ -43,6 +43,17 @@ reads, automatic fault-safe relocation, physical throughput or production
 admission. Their source patches remain evidence artifacts, separate from engine
 implementation delivery and from the original failed Azure runs.
 
+Later [store-enrollment](evidence/native-store-birth-enrollment-2026-11-11/README.md),
+[protected cold-resume](evidence/native-protected-image-resume-2026-11-11/README.md)
+and [host-metadata](evidence/native-host-metadata-2026-11-11/README.md) receipts add
+exact-source component evidence. The cold case repairs a deterministic local
+same-source/same-epoch restart cycle; it leaves the target frozen and does not
+test power loss. Enrollment and host metadata still grant no writer or strong
+read permission. The [operator integration audit](design/native-operator-four-to-five-gap-audit-2026-11-11.md)
+identifies the missing end-to-end producers. These results do not attribute the
+original Azure invisibility or nonconvergence, merge the experimental engine,
+demonstrate five-node capacity, or change production admission.
+
 The [opt-in local namespace identity API](local-namespace-identity.md) supplies a
 durable physical backing UUID for trusted storage and journal consumers. Its
 [source-pinned validation](evidence/local-namespace-identity-2026-11-11/README.md)

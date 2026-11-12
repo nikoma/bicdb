@@ -1,0 +1,130 @@
+{
+  "activation_tested": false,
+  "cold_shutdown": "orderly_all_owner_drop_then_strict_copied_reopen",
+  "distinct_passing_tests": 7,
+  "higher_data_epoch_tested": false,
+  "independent_processes_tested": false,
+  "joint_membership_tested": false,
+  "kind": "protected-cold-image",
+  "new_application_ack_tested": false,
+  "operator_binary_produced": false,
+  "physical_qualification": false,
+  "production_qualified": false,
+  "public_patch_base": "f3a063902d2fe316c29264fe20549c2fdd270242",
+  "related_to_final_changed_paths": [
+    "crates/bicdb-core/src/distribution_range_image_install/proposal_tests.rs",
+    "crates/bicdb-core/src/distribution_range_recovery/recovery_order_tests/interrupted_normal_repair.rs",
+    "crates/bicdb-core/src/distribution_range_recovery/recovery_order_tests/protected_resume_positive.rs"
+  ],
+  "replacement_source_tested": false,
+  "runs": [
+    {
+      "exit_code": 0,
+      "failed_test_ids": [],
+      "name": "0ca-fourth-cold",
+      "passed_test_ids": [
+        "distribution_range_recovery::recovery_order_tests::interrupted_normal_repair::actual_protected_current_image_resumes_after_clear_with_fresh_installing_quorum"
+      ],
+      "source_revision": "ec19eb3d599bc4735e67e392cff6cc0797a229b3"
+    },
+    {
+      "exit_code": 101,
+      "failed_test_ids": [],
+      "name": "150-second-cold",
+      "passed_test_ids": [],
+      "source_revision": "611199b2c0cd9b1a0ed6f9d916119c7493d6d50e"
+    },
+    {
+      "exit_code": 101,
+      "failed_test_ids": [],
+      "name": "2bb-third-cold",
+      "passed_test_ids": [],
+      "source_revision": "2bb43d5054e60068126217ec60d688d8b2177fa4"
+    },
+    {
+      "exit_code": 0,
+      "failed_test_ids": [],
+      "name": "4de-corrected-protected-controls",
+      "passed_test_ids": [
+        "distribution_range_recovery::recovery_order_tests::interrupted_normal_repair::actual_protected_current_image_resumes_after_clear_with_fresh_installing_quorum",
+        "distribution_range_image_install::proposal_tests::actual_protected_proposal_orphan_preserves_native_point_and_reopens_without_intent",
+        "distribution_range_recovery::recovery_order_tests::interrupted_normal_repair::actual_protected_current_image_resumes_begin_before_history_staging",
+        "distribution_range_recovery::recovery_order_tests::interrupted_normal_repair::actual_protected_current_image_resumes_intent_before_native_marker"
+      ],
+      "source_revision": "4de59df7e36672061a37964bec821988f44975fc"
+    },
+    {
+      "exit_code": 101,
+      "failed_test_ids": [],
+      "name": "611-first-cold",
+      "passed_test_ids": [],
+      "source_revision": "611199b2c0cd9b1a0ed6f9d916119c7493d6d50e"
+    },
+    {
+      "exit_code": 0,
+      "failed_test_ids": [],
+      "name": "ec19-existing-r1",
+      "passed_test_ids": [
+        "distribution_range_image_install::current_repair_tests::actual_rf3_nonempty_current_voter_repair_uses_same_catalogue_and_keeps_recovery_closed",
+        "distribution_range_image_install::current_repair_tests::actual_rf3_nonempty_finalized_image_prepares_without_an_unfenced_window"
+      ],
+      "source_revision": "ec19eb3d599bc4735e67e392cff6cc0797a229b3"
+    },
+    {
+      "exit_code": 0,
+      "failed_test_ids": [],
+      "name": "ec19-global-format",
+      "passed_test_ids": [
+        "distribution_range_consensus::image_install_fence::tests::protected_proposal_global_upgrade_refuses_other_legacy_range_without_writing"
+      ],
+      "source_revision": "ec19eb3d599bc4735e67e392cff6cc0797a229b3"
+    },
+    {
+      "exit_code": 101,
+      "failed_test_ids": [
+        "distribution_range_image_install::proposal_tests::actual_protected_proposal_orphan_preserves_native_point_and_reopens_without_intent"
+      ],
+      "name": "ec19-protected-controls",
+      "passed_test_ids": [
+        "distribution_range_recovery::recovery_order_tests::interrupted_normal_repair::actual_protected_current_image_resumes_after_clear_with_fresh_installing_quorum",
+        "distribution_range_recovery::recovery_order_tests::interrupted_normal_repair::actual_protected_current_image_resumes_begin_before_history_staging",
+        "distribution_range_recovery::recovery_order_tests::interrupted_normal_repair::actual_protected_current_image_resumes_intent_before_native_marker"
+      ],
+      "source_revision": "ec19eb3d599bc4735e67e392cff6cc0797a229b3"
+    }
+  ],
+  "selected_passing_runs": [
+    "4de-corrected-protected-controls",
+    "ec19-existing-r1",
+    "ec19-global-format"
+  ],
+  "source_main_at_measurement": false,
+  "source_revision": "4de59df7e36672061a37964bec821988f44975fc",
+  "source_version": "1.0.471-beta",
+  "sources": [
+    {
+      "base": "f3a063902d2fe316c29264fe20549c2fdd270242",
+      "core_files": 219,
+      "patch_file": "final-source.patch.gz",
+      "patch_sha256": "c64e9059e94632c42dd266e520dc3b78535c4616e25e2e10da3318e1ebfbdb71",
+      "revision": "4de59df7e36672061a37964bec821988f44975fc",
+      "source_files": "final-source-files.json"
+    },
+    {
+      "base": "4de59df7e36672061a37964bec821988f44975fc",
+      "core_files": 219,
+      "patch_file": "related-source.patch.gz",
+      "patch_sha256": "d35f1176238440448205ea4074dfc7d26784ed60712386e8fb2d4ae9252c7b27",
+      "revision": "ec19eb3d599bc4735e67e392cff6cc0797a229b3",
+      "source_files": "related-source-files.json"
+    }
+  ],
+  "strong_get_tested": false,
+  "test_executable": {
+    "mutable_libtest": true,
+    "operator_binary": false,
+    "sha256": "85ba0cc2c5b4f405bbd2c763421905b7f29a8b1baaf52935f66384d8f42feebd"
+  },
+  "tls_exercised": false,
+  "worktree": "/tmp/bicdb-native-protected-image-proposal"
+}

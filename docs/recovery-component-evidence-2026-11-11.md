@@ -32,6 +32,9 @@ historical tested version below.
 | [Native catalogue fsync configuration](evidence/native-catalog-fsync-2026-11-11/README.md) | `574ea56074a991368e9dae2129a0734a23bc1be3`; package 1.0.471-beta | **28 distinct PASS** on this source; initial compile failure and a zero-match filter retained | Actual native catalogue fsync-off and foreign-root refusal, legacy async preservation and related read/origin/TLS controls. Source-level unsafe configuration reproduced; no observed lost ACK or physical power-loss experiment |
 | [Authenticated read-quorum candidate](evidence/native-read-rpc-candidate-2026-11-11/README.md) | `daa77b42cd8f71a212de06596a249bfbce4d36e9`; separate `453b8682` first cohort | **15 distinct PASS**, 20 executions across two sources | Six actual RPC/candidate tests plus nine local tests at final source. Matching majority can finish with a stalled minority; expired replies cannot vote. Candidate remains **unadmitted**, without host-birth continuity, MVCC row barrier, final metadata check or StrongGet. Additional retry-count assertion at `8ce4938c` is uncompiled in this receipt |
 | [Interrupted normal-image cold resume](evidence/native-interrupted-normal-image-baseline-2026-11-11/README.md) | `8707ffa42fc0b20ff30e0dd5ebd8989e20207a0d`; package 1.0.471-beta | **Failed recovery scenario**, reproduced by one passing characterization test | Source ACK1 and resolved unknown2 survive; target remains Installing/Unknown with exact Sparse2 and no installed base. After all-owner strict reopen, ordinary target fencing refuses, only one of two required data voters contributes, and the new Runtime has no source-freeze session. Earlier compile failure and disk-guard interruption reached no assertions |
+| [Native store birth enrollment](evidence/native-store-birth-enrollment-2026-11-11/README.md) | `ee5cb1880a946b97816a15aa4e0cb12f7d03778d`; package 1.0.471-beta | **32 distinct PASS**: metadata11, read18, factory3; prior compile/fixture failures retained | Actual immutable store enrollment, uncommitted metadata overwrite/snapshot controls, genuine wrong-birth rejection and actual TLS read observations. No from-birth writer policy, MVCC value/absence producer, StrongGet or operator startup qualification |
+| [Protected current-image cold resume](evidence/native-protected-image-resume-2026-11-11/README.md) | `4de59df7` final four; `ec19eb3d` three related controls; full IDs in receipt, package 1.0.471-beta | **4 PASS**, plus separate **3 PASS** on runtime-identical earlier source; failures retained | Actual protected pre-BEGIN proposal and strict all-owner copied reopen resume target to nativeR2/localB1, preserving ACK1 and resolved unknown2. Target remains frozen/Prepared; no activation, new ACK, higher-epoch replacement source, wire/controller integration or physical crash qualification |
+| [Authenticated whole-host metadata](evidence/native-host-metadata-2026-11-11/README.md) | `e6a4d6368fb961b6da0d13394e4bc0902b7d6361`; package 1.0.471-beta | **23 distinct PASS / 24 executions**; earlier no-default compile failure retained | Actual TLS follower, learner and self requests, original request/peer/deadline binding, current committed membership checks and a controlled range-change round. Host metadata observation grants no range authority, writer policy, readiness, value or absence |
 
 The bundles overlap; their counts must not be added. Each retains commands,
 resource samples, warnings, prior failed attempts and source bytes or a complete
@@ -123,9 +126,13 @@ target obligations before any destructive continuation. The separately pinned
 8707 characterization above subsequently confirms this availability cycle in a
 small actual-storage fixture. It does not establish durable-data loss or explain
 the original Azure run. The [pre-BEGIN proposal protocol](design/native-interrupted-image-proposal-protocol-2026-11-11.md)
-is a proposed repair, not a passing recovery result: it requires a protected
+was design only at publication: it requires a protected
 native-WAL proposal and preimage before the install intent, plus a fresh,
 separate InstallingFence quorum and revalidated source history on restart.
+The separately pinned protected-resume receipt above now tests that repair's
+local same-source/same-epoch storage path. Its four final tests and three related
+earlier-source controls do not retroactively turn the 8707 failure into success
+or establish higher-epoch recovery, activation or physical crash behavior.
 
 Local native birth is likewise a fact rather than voter-continuation authority.
 A future strong coordinator must compare every counted voter's actual birth
@@ -133,5 +140,27 @@ against immutable, quorum-committed enrollment for that node incarnation. A
 recreated empty database cannot become an old voter merely because its node
 name, epoch, certificate and bootstrap specification match. Missing enrollment
 must refuse admission; replacement requires a new incarnation and learner
-repair. This host admission protocol and its physical replacement tests remain
-**not implemented/qualified by the local observation receipt**.
+repair. The separate 32-test enrollment receipt now exercises that immutable
+registry and factual read-quorum check. The host-metadata receipt supplies an
+authenticated startup observation, separately from range leadership. Neither
+receipt implements or tests a writer-enforced host startup or publishes a strong
+read value. From-birth writer admission, ordinary serving integration and physical
+replacement qualification remain open.
+
+The [operator integration audit](design/native-operator-four-to-five-gap-audit-2026-11-11.md)
+records exact reviewed revisions and the missing factory/startup, shared Runtime,
+strong-read gateway, authenticated image transfer, joint-data-quorum handoff and
+controller producers. A local recovery helper or existing relocation API does
+not satisfy those operational gates. Later source compositions require their
+own compilation, focused/broad regression evidence and source-versioned delivery.
+
+Additional offline checks for these separately pinned components:
+
+```sh
+PYTHONDONTWRITEBYTECODE=1 python3 docs/evidence/native-store-birth-enrollment-2026-11-11/verify.py --repo .
+PYTHONDONTWRITEBYTECODE=1 python3 docs/evidence/native-store-birth-enrollment-2026-11-11/test_verify.py
+PYTHONDONTWRITEBYTECODE=1 python3 docs/evidence/native-protected-image-resume-2026-11-11/verify.py --repo .
+PYTHONDONTWRITEBYTECODE=1 python3 docs/evidence/native-protected-image-resume-2026-11-11/test_verify.py
+PYTHONDONTWRITEBYTECODE=1 python3 docs/evidence/native-host-metadata-2026-11-11/verify.py --repo .
+PYTHONDONTWRITEBYTECODE=1 python3 docs/evidence/native-host-metadata-2026-11-11/test_verify.py
+```

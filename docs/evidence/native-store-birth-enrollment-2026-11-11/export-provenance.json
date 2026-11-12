@@ -1,0 +1,456 @@
+{
+  "exports": [
+    {
+      "export_bytes": 762,
+      "export_path": "runs/native-enrollment-v1/inputs.json",
+      "export_sha256": "7f492ffdd1e9cfd0d87e59be94046924640266e1cf375712100e9d26736adf2a",
+      "original_bytes": 762,
+      "original_path": "/tmp/bicdb-native-store-admission-evidence/native-enrollment-v1-inputs.json",
+      "original_sha256": "7f492ffdd1e9cfd0d87e59be94046924640266e1cf375712100e9d26736adf2a",
+      "transformation": "unchanged"
+    },
+    {
+      "export_bytes": 946,
+      "export_path": "runs/native-enrollment-v1/result.json",
+      "export_sha256": "92c459fe4ecd66dcbe1da9ff0654396f5ac38df7c1ecebbd29fa98951a7af7c4",
+      "original_bytes": 946,
+      "original_path": "/tmp/bicdb-native-store-admission-evidence/native-enrollment-v1-result.json",
+      "original_sha256": "92c459fe4ecd66dcbe1da9ff0654396f5ac38df7c1ecebbd29fa98951a7af7c4",
+      "transformation": "unchanged"
+    },
+    {
+      "export_bytes": 20,
+      "export_path": "runs/native-enrollment-v1/stdout.gz",
+      "export_sha256": "f61f27bd17de546264aa58f40f3aafaac7021e0ef69c17f6b1b4cd7664a037ec",
+      "original_bytes": 0,
+      "original_path": "/tmp/bicdb-native-store-admission-evidence/native-enrollment-v1.stdout",
+      "original_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "transformation": "gzip_mtime_0"
+    },
+    {
+      "export_bytes": 3068,
+      "export_path": "runs/native-enrollment-v1/stderr.gz",
+      "export_sha256": "53d28d9f2f6fec597cc329eedf5cb2c7e9054890023d5a8ba3efc4d641cb237e",
+      "original_bytes": 15549,
+      "original_path": "/tmp/bicdb-native-store-admission-evidence/native-enrollment-v1.stderr",
+      "original_sha256": "eed39c8daba95aeb3bf542869dad85ca3958a79d65567d23b591601721f6069d",
+      "transformation": "gzip_mtime_0"
+    },
+    {
+      "export_bytes": 915,
+      "export_path": "runs/native-enrollment-v1/resources.jsonl.gz",
+      "export_sha256": "7768aa926e013154fa2acd65afc347de732ee6cd8e78ccc24eef1a2bb057d5aa",
+      "original_bytes": 7906,
+      "original_path": "/tmp/bicdb-native-store-admission-evidence/native-enrollment-v1-resources.jsonl",
+      "original_sha256": "69bb74c24aa68c51713ebf14bda005c14071015d2aacaaf577ea1f1f3c6cdee8",
+      "transformation": "gzip_mtime_0"
+    },
+    {
+      "export_bytes": 762,
+      "export_path": "runs/native-enrollment-v2/inputs.json",
+      "export_sha256": "b86e5df8bd04c53e9134c29ebf9f638bea30cd2cd053327cf0c31105053cac60",
+      "original_bytes": 762,
+      "original_path": "/tmp/bicdb-native-store-admission-evidence/native-enrollment-v2-inputs.json",
+      "original_sha256": "b86e5df8bd04c53e9134c29ebf9f638bea30cd2cd053327cf0c31105053cac60",
+      "transformation": "unchanged"
+    },
+    {
+      "export_bytes": 946,
+      "export_path": "runs/native-enrollment-v2/result.json",
+      "export_sha256": "f53c3b66e3c74ff451b539648fe5e9a71db646d2d14e4cce43f1c79f69fd6829",
+      "original_bytes": 946,
+      "original_path": "/tmp/bicdb-native-store-admission-evidence/native-enrollment-v2-result.json",
+      "original_sha256": "f53c3b66e3c74ff451b539648fe5e9a71db646d2d14e4cce43f1c79f69fd6829",
+      "transformation": "unchanged"
+    },
+    {
+      "export_bytes": 284,
+      "export_path": "runs/native-enrollment-v2/stdout.gz",
+      "export_sha256": "c046b4fd04365930cae28660f30ad9a3e77df1aeb1f39b57c432191732109767",
+      "original_bytes": 746,
+      "original_path": "/tmp/bicdb-native-store-admission-evidence/native-enrollment-v2.stdout",
+      "original_sha256": "7ee29ee95c242c1ce75d89682f11df44ec41c2ebffd2949252e23f0ece51b92e",
+      "transformation": "gzip_mtime_0"
+    },
+    {
+      "export_bytes": 14924,
+      "export_path": "runs/native-enrollment-v2/stderr.gz",
+      "export_sha256": "a0b2f06d405538c964ac9ed1a8c43d862ab9e21299c8f54c9d10bbc6c0280e31",
+      "original_bytes": 143115,
+      "original_path": "/tmp/bicdb-native-store-admission-evidence/native-enrollment-v2.stderr",
+      "original_sha256": "75d1c7fc9c8583849df1cadd59f734e389d197a8251c71e2d8170e69b9f0870d",
+      "transformation": "gzip_mtime_0"
+    },
+    {
+      "export_bytes": 4307,
+      "export_path": "runs/native-enrollment-v2/resources.jsonl.gz",
+      "export_sha256": "85217b4f02175fd9fdf4cfad6ab58f434f3348719b883f43110b0d2ef733c3f8",
+      "original_bytes": 38662,
+      "original_path": "/tmp/bicdb-native-store-admission-evidence/native-enrollment-v2-resources.jsonl",
+      "original_sha256": "e981e1b09b8d620723e823d5b15e06fd094cf4f62a599d80d3b57d5a26a7bdda",
+      "transformation": "gzip_mtime_0"
+    },
+    {
+      "export_bytes": 762,
+      "export_path": "runs/native-enrollment-v3/inputs.json",
+      "export_sha256": "2e2016ae7f2c27031f5e4ffa21d72afd05662318dcd16d87a875549bc0640647",
+      "original_bytes": 762,
+      "original_path": "/tmp/bicdb-native-store-admission-evidence/native-enrollment-v3-inputs.json",
+      "original_sha256": "2e2016ae7f2c27031f5e4ffa21d72afd05662318dcd16d87a875549bc0640647",
+      "transformation": "unchanged"
+    },
+    {
+      "export_bytes": 946,
+      "export_path": "runs/native-enrollment-v3/result.json",
+      "export_sha256": "b2e9f1e4dfa62c7282623cf31fbdd41d554da3f5512ac1e8fa3851eaa914fd51",
+      "original_bytes": 946,
+      "original_path": "/tmp/bicdb-native-store-admission-evidence/native-enrollment-v3-result.json",
+      "original_sha256": "b2e9f1e4dfa62c7282623cf31fbdd41d554da3f5512ac1e8fa3851eaa914fd51",
+      "transformation": "unchanged"
+    },
+    {
+      "export_bytes": 285,
+      "export_path": "runs/native-enrollment-v3/stdout.gz",
+      "export_sha256": "c75f4c97e7c561411099508b3feeb9c2c8f8aba38fe888ee4b37753dd4f8c0a8",
+      "original_bytes": 746,
+      "original_path": "/tmp/bicdb-native-store-admission-evidence/native-enrollment-v3.stdout",
+      "original_sha256": "27f90aed390424358d5c95d021814414b65e7dc3d4ee9b495ad0301e1f57f7ac",
+      "transformation": "gzip_mtime_0"
+    },
+    {
+      "export_bytes": 14906,
+      "export_path": "runs/native-enrollment-v3/stderr.gz",
+      "export_sha256": "9b364f871b6520ad0233dcdb05b90dba65a53ace351ae19516264de8d01f0714",
+      "original_bytes": 143050,
+      "original_path": "/tmp/bicdb-native-store-admission-evidence/native-enrollment-v3.stderr",
+      "original_sha256": "4aab6eb1f8a7833348ffbacf8704f2ddc9b81970f5524a85faff0c27420886f8",
+      "transformation": "gzip_mtime_0"
+    },
+    {
+      "export_bytes": 1947,
+      "export_path": "runs/native-enrollment-v3/resources.jsonl.gz",
+      "export_sha256": "a89c8d1c65b6e1bb07669384871daf247030839d58d9c670397fb8d41f856b53",
+      "original_bytes": 20789,
+      "original_path": "/tmp/bicdb-native-store-admission-evidence/native-enrollment-v3-resources.jsonl",
+      "original_sha256": "b8d37d2a8f88f4684c7b7220af5420161e70d80b174e38b23930f7de05cb992a",
+      "transformation": "gzip_mtime_0"
+    },
+    {
+      "export_bytes": 762,
+      "export_path": "runs/native-enrollment-v4/inputs.json",
+      "export_sha256": "d62012bd778e58a0da955e80d99d04fba1bc211378c873686f413bca0c516a42",
+      "original_bytes": 762,
+      "original_path": "/tmp/bicdb-native-store-admission-evidence/native-enrollment-v4-inputs.json",
+      "original_sha256": "d62012bd778e58a0da955e80d99d04fba1bc211378c873686f413bca0c516a42",
+      "transformation": "unchanged"
+    },
+    {
+      "export_bytes": 946,
+      "export_path": "runs/native-enrollment-v4/result.json",
+      "export_sha256": "61a0ffc814dd6fb493299abd3c932bed8d3fb764a2c5d3517942dc44089ff140",
+      "original_bytes": 946,
+      "original_path": "/tmp/bicdb-native-store-admission-evidence/native-enrollment-v4-result.json",
+      "original_sha256": "61a0ffc814dd6fb493299abd3c932bed8d3fb764a2c5d3517942dc44089ff140",
+      "transformation": "unchanged"
+    },
+    {
+      "export_bytes": 279,
+      "export_path": "runs/native-enrollment-v4/stdout.gz",
+      "export_sha256": "1170b8400e0232d83cab7d4d2c629084d8448786685a4a4d4c0566f5a583a17a",
+      "original_bytes": 629,
+      "original_path": "/tmp/bicdb-native-store-admission-evidence/native-enrollment-v4.stdout",
+      "original_sha256": "8487ca42196e9e6444bd2dadc8c9881bf296e8bd825fc86e23ef7de853140a19",
+      "transformation": "gzip_mtime_0"
+    },
+    {
+      "export_bytes": 14875,
+      "export_path": "runs/native-enrollment-v4/stderr.gz",
+      "export_sha256": "0422f0841760f22af7235b40e0ce157efed3a22952f368f47d367daa3c48430e",
+      "original_bytes": 142735,
+      "original_path": "/tmp/bicdb-native-store-admission-evidence/native-enrollment-v4.stderr",
+      "original_sha256": "b2777a04c0eef25e7a744518678fa85a08525206ea6a6593e8ec6a7c532a7236",
+      "transformation": "gzip_mtime_0"
+    },
+    {
+      "export_bytes": 1883,
+      "export_path": "runs/native-enrollment-v4/resources.jsonl.gz",
+      "export_sha256": "f35ab5719ff8399cae3640a99280b7ff682be5c7ca4dfcdfe599a67afcc77037",
+      "original_bytes": 20800,
+      "original_path": "/tmp/bicdb-native-store-admission-evidence/native-enrollment-v4-resources.jsonl",
+      "original_sha256": "072f2d1b47f0b9eb1c7dc63d78c426e5867e66c3bfb3b0d5be41b7a88191d3c6",
+      "transformation": "gzip_mtime_0"
+    },
+    {
+      "export_bytes": 762,
+      "export_path": "runs/native-enrollment-v5/inputs.json",
+      "export_sha256": "4ca5892a0dd6c77436a70e62caf97f29f7bc3d3353c239f4f789fcd965c753a2",
+      "original_bytes": 762,
+      "original_path": "/tmp/bicdb-native-store-admission-evidence/native-enrollment-v5-inputs.json",
+      "original_sha256": "4ca5892a0dd6c77436a70e62caf97f29f7bc3d3353c239f4f789fcd965c753a2",
+      "transformation": "unchanged"
+    },
+    {
+      "export_bytes": 944,
+      "export_path": "runs/native-enrollment-v5/result.json",
+      "export_sha256": "d705db158f000c40df4bd698d73201158bb4c2275d3483c2e83a190e7de506a7",
+      "original_bytes": 944,
+      "original_path": "/tmp/bicdb-native-store-admission-evidence/native-enrollment-v5-result.json",
+      "original_sha256": "d705db158f000c40df4bd698d73201158bb4c2275d3483c2e83a190e7de506a7",
+      "transformation": "unchanged"
+    },
+    {
+      "export_bytes": 246,
+      "export_path": "runs/native-enrollment-v5/stdout.gz",
+      "export_sha256": "428c3f270ec722a3c99f02dddfe6d08b915412da4f2f4c36f006ccc59d490e23",
+      "original_bytes": 485,
+      "original_path": "/tmp/bicdb-native-store-admission-evidence/native-enrollment-v5.stdout",
+      "original_sha256": "8c7f3a658f029d2551d712808bd8adc58ca28b48b587874b3793ae802362126c",
+      "transformation": "gzip_mtime_0"
+    },
+    {
+      "export_bytes": 14629,
+      "export_path": "runs/native-enrollment-v5/stderr.gz",
+      "export_sha256": "acde42798667fef0d2ce1f346e052347df69cec66b0650f59a377ac600b1a8dc",
+      "original_bytes": 142285,
+      "original_path": "/tmp/bicdb-native-store-admission-evidence/native-enrollment-v5.stderr",
+      "original_sha256": "7d4ad996dc441a4bdbae9e0d85892871424e4b19fa55d58bae941c6cf94b2756",
+      "transformation": "gzip_mtime_0"
+    },
+    {
+      "export_bytes": 1972,
+      "export_path": "runs/native-enrollment-v5/resources.jsonl.gz",
+      "export_sha256": "2c52d85e77991cfaae6ba2ba599a5fec121a1d56c008857342a5cb68101cb0a0",
+      "original_bytes": 20771,
+      "original_path": "/tmp/bicdb-native-store-admission-evidence/native-enrollment-v5-resources.jsonl",
+      "original_sha256": "a44541cbad1aa65deaceb8c1f55ce21ed8143f10cf81d892ca8652dde615be44",
+      "transformation": "gzip_mtime_0"
+    },
+    {
+      "export_bytes": 757,
+      "export_path": "runs/native-metadata-v1/inputs.json",
+      "export_sha256": "8307e6b68d67c9c38930fd04a0c9ee754d6b5c79afb8b86e633d83858d9f52b9",
+      "original_bytes": 757,
+      "original_path": "/tmp/bicdb-native-store-admission-evidence/native-metadata-v1-inputs.json",
+      "original_sha256": "8307e6b68d67c9c38930fd04a0c9ee754d6b5c79afb8b86e633d83858d9f52b9",
+      "transformation": "unchanged"
+    },
+    {
+      "export_bytes": 938,
+      "export_path": "runs/native-metadata-v1/result.json",
+      "export_sha256": "0722688b1e13d5866604a40cd1a7d17064659df7272e525b3f0f4c2709bb052c",
+      "original_bytes": 938,
+      "original_path": "/tmp/bicdb-native-store-admission-evidence/native-metadata-v1-result.json",
+      "original_sha256": "0722688b1e13d5866604a40cd1a7d17064659df7272e525b3f0f4c2709bb052c",
+      "transformation": "unchanged"
+    },
+    {
+      "export_bytes": 439,
+      "export_path": "runs/native-metadata-v1/stdout.gz",
+      "export_sha256": "a5ddb6a700350dd1b8197c1613c94d4c8bafcb89b5477277261859909ebd7011",
+      "original_bytes": 1353,
+      "original_path": "/tmp/bicdb-native-store-admission-evidence/native-metadata-v1.stdout",
+      "original_sha256": "210b6763d1bc3651a513806aefba0669868c78ffe6df1f8ab525e79e55a188f8",
+      "transformation": "gzip_mtime_0"
+    },
+    {
+      "export_bytes": 14572,
+      "export_path": "runs/native-metadata-v1/stderr.gz",
+      "export_sha256": "e5fb0059c810cc6cf79062d4089cf816ba6144eaf8ba77823ec7c2a6747f3349",
+      "original_bytes": 142186,
+      "original_path": "/tmp/bicdb-native-store-admission-evidence/native-metadata-v1.stderr",
+      "original_sha256": "b2a667e9e78c054121ae69f6d8ed9359e1e73cd64aeeb4b606b2e0aaa4297ae7",
+      "transformation": "gzip_mtime_0"
+    },
+    {
+      "export_bytes": 217,
+      "export_path": "runs/native-metadata-v1/resources.jsonl.gz",
+      "export_sha256": "5f1a921cecafbb05050e9725c857443d4459607894638489a4a28af6a10c9f80",
+      "original_bytes": 546,
+      "original_path": "/tmp/bicdb-native-store-admission-evidence/native-metadata-v1-resources.jsonl",
+      "original_sha256": "5b9bbc018e79c3ac0f2f24ae25305ad5703311915469ae15fcebefd348f79871",
+      "transformation": "gzip_mtime_0"
+    },
+    {
+      "export_bytes": 756,
+      "export_path": "runs/native-read-enrolled-v1/inputs.json",
+      "export_sha256": "b026dd32dfa9da1d971cb40a04dff5a238653bfde7bed81f25d2108b13fc91da",
+      "original_bytes": 756,
+      "original_path": "/tmp/bicdb-native-store-admission-evidence/native-read-enrolled-v1-inputs.json",
+      "original_sha256": "b026dd32dfa9da1d971cb40a04dff5a238653bfde7bed81f25d2108b13fc91da",
+      "transformation": "unchanged"
+    },
+    {
+      "export_bytes": 938,
+      "export_path": "runs/native-read-enrolled-v1/result.json",
+      "export_sha256": "f17d503e43aeec6d6d3744f59ed67b222ae392229db5d63998fb0697ea19b8f3",
+      "original_bytes": 938,
+      "original_path": "/tmp/bicdb-native-store-admission-evidence/native-read-enrolled-v1-result.json",
+      "original_sha256": "f17d503e43aeec6d6d3744f59ed67b222ae392229db5d63998fb0697ea19b8f3",
+      "transformation": "unchanged"
+    },
+    {
+      "export_bytes": 722,
+      "export_path": "runs/native-read-enrolled-v1/stdout.gz",
+      "export_sha256": "17049f79183e296184e9c9193d6041ec0e08125f05d44a521178f4abde5893d4",
+      "original_bytes": 3235,
+      "original_path": "/tmp/bicdb-native-store-admission-evidence/native-read-enrolled-v1.stdout",
+      "original_sha256": "fbbab26e97d7e7186fae851b791670d22cfde5207064595c0f92e8308ef33ef3",
+      "transformation": "gzip_mtime_0"
+    },
+    {
+      "export_bytes": 15359,
+      "export_path": "runs/native-read-enrolled-v1/stderr.gz",
+      "export_sha256": "e318b77be55b993f64ae041af518f5f3bf426ce5dc40fcb0e5e7bad2471791e8",
+      "original_bytes": 165776,
+      "original_path": "/tmp/bicdb-native-store-admission-evidence/native-read-enrolled-v1.stderr",
+      "original_sha256": "0a7a84c461076f80644477c0e9c19e12cb0065d24a9fc1b520ac057e0d3ff931",
+      "transformation": "gzip_mtime_0"
+    },
+    {
+      "export_bytes": 1373,
+      "export_path": "runs/native-read-enrolled-v1/resources.jsonl.gz",
+      "export_sha256": "ff82f68be26ba6392ec7059a6f716ce393a72032e6c22f29c48572edf325eb81",
+      "original_bytes": 15548,
+      "original_path": "/tmp/bicdb-native-store-admission-evidence/native-read-enrolled-v1-resources.jsonl",
+      "original_sha256": "27f11de42a9d717796eacb74f048b69fdadb600429e5a2ecd6ba3d6ab174d41f",
+      "transformation": "gzip_mtime_0"
+    },
+    {
+      "export_bytes": 757,
+      "export_path": "runs/native-birth-final-metadata/inputs.json",
+      "export_sha256": "ade65c60fb693768a5e946852f65fea8f1a843920673448c23b8e56ec5b24c17",
+      "original_bytes": 757,
+      "original_path": "/tmp/bicdb-native-store-admission-evidence/native-birth-final-metadata-inputs.json",
+      "original_sha256": "ade65c60fb693768a5e946852f65fea8f1a843920673448c23b8e56ec5b24c17",
+      "transformation": "unchanged"
+    },
+    {
+      "export_bytes": 938,
+      "export_path": "runs/native-birth-final-metadata/result.json",
+      "export_sha256": "2657a6798032fbb2efe98279d1fa016074d882fdfbb8118cb8d1b8b101418f65",
+      "original_bytes": 938,
+      "original_path": "/tmp/bicdb-native-store-admission-evidence/native-birth-final-metadata-result.json",
+      "original_sha256": "2657a6798032fbb2efe98279d1fa016074d882fdfbb8118cb8d1b8b101418f65",
+      "transformation": "unchanged"
+    },
+    {
+      "export_bytes": 495,
+      "export_path": "runs/native-birth-final-metadata/stdout.gz",
+      "export_sha256": "e74ef8ac2583d12e4a17862aa053d51323c37c34fee06cf67867b71e31e719dd",
+      "original_bytes": 1663,
+      "original_path": "/tmp/bicdb-native-store-admission-evidence/native-birth-final-metadata.stdout",
+      "original_sha256": "e82725462f7ff53fa6047d9194267e94bc7c5cdd4b84deaeb53c5995856a0ac5",
+      "transformation": "gzip_mtime_0"
+    },
+    {
+      "export_bytes": 14629,
+      "export_path": "runs/native-birth-final-metadata/stderr.gz",
+      "export_sha256": "97ed8536c3870eff6275f7fd195b5b96b1457874e9cb0b6d10359f05b0cd21d2",
+      "original_bytes": 142285,
+      "original_path": "/tmp/bicdb-native-store-admission-evidence/native-birth-final-metadata.stderr",
+      "original_sha256": "3ec2a085bea4c480223b7b7a06e598f34196c4ff270c7f0cfc28bd27f5636bdf",
+      "transformation": "gzip_mtime_0"
+    },
+    {
+      "export_bytes": 1953,
+      "export_path": "runs/native-birth-final-metadata/resources.jsonl.gz",
+      "export_sha256": "70bc92fd48b99052aeafc31c8a88407962e016387b42ef818c55706e538ed19d",
+      "original_bytes": 20724,
+      "original_path": "/tmp/bicdb-native-store-admission-evidence/native-birth-final-metadata-resources.jsonl",
+      "original_sha256": "3b13ee3388841d6c0ed866ba9f79246861077e9d9fa45899f46ff8204ce4b18f",
+      "transformation": "gzip_mtime_0"
+    },
+    {
+      "export_bytes": 756,
+      "export_path": "runs/native-birth-final-reads/inputs.json",
+      "export_sha256": "b8dd535a0927c0a3f8529464c04964ca70f9a3c9a10494ab58f7eee3db2c5734",
+      "original_bytes": 756,
+      "original_path": "/tmp/bicdb-native-store-admission-evidence/native-birth-final-reads-inputs.json",
+      "original_sha256": "b8dd535a0927c0a3f8529464c04964ca70f9a3c9a10494ab58f7eee3db2c5734",
+      "transformation": "unchanged"
+    },
+    {
+      "export_bytes": 937,
+      "export_path": "runs/native-birth-final-reads/result.json",
+      "export_sha256": "3dc2d328c64b3db141fede2f97c580f3f350f0fe3ab3cbca8cd8c389802729a1",
+      "original_bytes": 937,
+      "original_path": "/tmp/bicdb-native-store-admission-evidence/native-birth-final-reads-result.json",
+      "original_sha256": "3dc2d328c64b3db141fede2f97c580f3f350f0fe3ab3cbca8cd8c389802729a1",
+      "transformation": "unchanged"
+    },
+    {
+      "export_bytes": 679,
+      "export_path": "runs/native-birth-final-reads/stdout.gz",
+      "export_sha256": "1e1bcddf23682d6a95300f444f0432818533c9c31c4256ac4068f577eb9e828d",
+      "original_bytes": 2865,
+      "original_path": "/tmp/bicdb-native-store-admission-evidence/native-birth-final-reads.stdout",
+      "original_sha256": "8ddcb18772e0f2d76ccdb96abea09a0679497ea3505da4909471814c2a5b8ec4",
+      "transformation": "gzip_mtime_0"
+    },
+    {
+      "export_bytes": 15091,
+      "export_path": "runs/native-birth-final-reads/stderr.gz",
+      "export_sha256": "ed8bf786906853c368be44711d7b76fdd7870add97978f77af62444c32da1865",
+      "original_bytes": 177045,
+      "original_path": "/tmp/bicdb-native-store-admission-evidence/native-birth-final-reads.stderr",
+      "original_sha256": "2554944ea3210d38ab4f81a459fa5cad7b045ee9a48e88c2cc6262ee7141f8d4",
+      "transformation": "gzip_mtime_0"
+    },
+    {
+      "export_bytes": 1449,
+      "export_path": "runs/native-birth-final-reads/resources.jsonl.gz",
+      "export_sha256": "48b92b917ad2a0c27af8a23e2daa08f2a6c6c79e94610eb1ea21d6ce8f6bfc9c",
+      "original_bytes": 16367,
+      "original_path": "/tmp/bicdb-native-store-admission-evidence/native-birth-final-reads-resources.jsonl",
+      "original_sha256": "fb3c113499fcadf2d26368e74bc5fabdb47045933e681000464cdec844a46b6d",
+      "transformation": "gzip_mtime_0"
+    },
+    {
+      "export_bytes": 762,
+      "export_path": "runs/native-birth-final-factory/inputs.json",
+      "export_sha256": "183175a552c54f6b29832d03135a7def0cafb5697204de758e67fdcf96be5fa6",
+      "original_bytes": 762,
+      "original_path": "/tmp/bicdb-native-store-admission-evidence/native-birth-final-factory-inputs.json",
+      "original_sha256": "183175a552c54f6b29832d03135a7def0cafb5697204de758e67fdcf96be5fa6",
+      "transformation": "unchanged"
+    },
+    {
+      "export_bytes": 942,
+      "export_path": "runs/native-birth-final-factory/result.json",
+      "export_sha256": "a62662e94ab6d5c1362055759580b4920f3e0819772104248889ad005ddbf668",
+      "original_bytes": 942,
+      "original_path": "/tmp/bicdb-native-store-admission-evidence/native-birth-final-factory-result.json",
+      "original_sha256": "a62662e94ab6d5c1362055759580b4920f3e0819772104248889ad005ddbf668",
+      "transformation": "unchanged"
+    },
+    {
+      "export_bytes": 246,
+      "export_path": "runs/native-birth-final-factory/stdout.gz",
+      "export_sha256": "07b1ae1a3948c8ca17a41e639d2aca86e03f9f882584480ebfdede9abfac7f23",
+      "original_bytes": 485,
+      "original_path": "/tmp/bicdb-native-store-admission-evidence/native-birth-final-factory.stdout",
+      "original_sha256": "384fe08571bd7456c543a7e9ca4e1178ea03cfa30562df732816aeaf04dd06da",
+      "transformation": "gzip_mtime_0"
+    },
+    {
+      "export_bytes": 14572,
+      "export_path": "runs/native-birth-final-factory/stderr.gz",
+      "export_sha256": "2528cdf584f84e51723ebdf83cfd127834b0e68bbfa80a872d34a9f112192612",
+      "original_bytes": 142186,
+      "original_path": "/tmp/bicdb-native-store-admission-evidence/native-birth-final-factory.stderr",
+      "original_sha256": "50a1249111417329325a498c5a582581c841a0f89db96fcea4ab12b8c6ebdc47",
+      "transformation": "gzip_mtime_0"
+    },
+    {
+      "export_bytes": 243,
+      "export_path": "runs/native-birth-final-factory/resources.jsonl.gz",
+      "export_sha256": "823dcd89386236534959418a650e7edab91e6727bd9f338d3e26c4a178ec89cc",
+      "original_bytes": 816,
+      "original_path": "/tmp/bicdb-native-store-admission-evidence/native-birth-final-factory-resources.jsonl",
+      "original_sha256": "1f0c1d66bbd442def7ea8e4debc5fd955d86a16a42240261cb8e11653f11398f",
+      "transformation": "gzip_mtime_0"
+    }
+  ],
+  "raw_files_modified": false,
+  "redactions_applied": false
+}

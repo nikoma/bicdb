@@ -1,0 +1,61 @@
+{
+  "source": "e6a4d6368fb961b6da0d13394e4bc0902b7d6361",
+  "source_version": "1.0.471-beta",
+  "distinct_tests": 23,
+  "executions": 24,
+  "runs": [
+    {
+      "run": "host-metadata-v2",
+      "executions": 7,
+      "test_ids": [
+        "db::range_image_native::rf3_fixture::native_historical_tls::host_metadata_tests::host_metadata_actual_tls_follower_observes_without_generic_range_leadership",
+        "db::range_image_native::rf3_fixture::native_historical_tls::host_metadata_tests::host_metadata_actual_tls_cancellation_and_delayed_decode_preserve_original_budget",
+        "db::range_image_native::rf3_fixture::native_historical_tls::host_metadata_tests::host_metadata_actual_tls_metadata_leader_observes_over_its_actual_listener",
+        "db::range_image_native::rf3_fixture::native_historical_tls::host_metadata_tests::host_metadata_actual_tls_response_cannot_be_retagged_under_new_request",
+        "db::range_image_native::rf3_fixture::native_historical_tls::host_metadata_tests::host_metadata_actual_tls_spoofed_member_incarnation_and_missing_member_refuse",
+        "distribution_metadata_read_provider::tests::host_metadata_actual_store_rechecks_member_after_quorum_but_does_not_grant_range",
+        "db::range_image_native::rf3_fixture::native_historical_tls::host_metadata_tests::host_metadata_actual_tls_unassigned_learner_observes_but_cannot_supply_quorum"
+      ]
+    },
+    {
+      "run": "host-metadata-provider-controls-v2",
+      "executions": 17,
+      "test_ids": [
+        "distribution_metadata_read_provider::tests::finished_local_authority_keeps_original_context_deadline",
+        "distribution_metadata_read_provider::tests::fenced_observer_is_data_voter_scoped_and_never_mutation_admission",
+        "distribution_metadata_read_provider::tests::fresh_quorum_returns_without_waiting_for_silent_voter",
+        "distribution_metadata_read_provider::tests::fresh_role_is_data_voter_scoped_and_drain_is_not_removal",
+        "distribution_metadata_read_provider::tests::handoff_witness_is_exact_plan_purpose_for_metadata_coordinator_and_target_learner",
+        "distribution_metadata_read_provider::tests::held_probe_allows_committed_load_only_update_but_rejects_epoch_change",
+        "distribution_metadata_read_provider::tests::four_silent_sorted_voters_do_not_starve_healthy_nine_node_quorum",
+        "distribution_metadata_read_provider::tests::leadership_or_joint_configuration_change_invalidates_round",
+        "distribution_metadata_read_provider::tests::limits_and_busy_admission_fail_closed",
+        "distribution_metadata_read_provider::tests::response_nonce_quorum_identity_and_deadline_cannot_be_reused",
+        "distribution_metadata_read_provider::tests::role_scope_rejects_wrong_peer_epoch_nonce_and_response_challenge",
+        "distribution_metadata_read_provider::tests::host_metadata_actual_store_rechecks_member_after_quorum_but_does_not_grant_range",
+        "distribution_metadata_read_provider::tests::stale_epoch_wrong_caller_and_expired_parent_refuse",
+        "distribution_metadata_read_provider::tests::tls::actual_mtls_range_leader_acquires_from_different_metadata_leader_without_silent_voter_or_data_latch",
+        "distribution_metadata_read_provider::tests::tls::actual_mtls_role_witness_binds_the_real_recipient_and_initiator",
+        "distribution_metadata_read_provider::tests::tls::unwired_server_and_non_range_leader_refuse_acquisition",
+        "distribution_metadata_read_provider::tests::sliced_probes_never_admit_an_unavailable_quorum"
+      ]
+    }
+  ],
+  "test_executable": {
+    "path": "/tmp/bicdb-azure-artifact-target/release/deps/bicdb_core-b0702f49611c59ed",
+    "sha256": "fe0cf9ac85edf9502607ca58ad253277ff771248b435dea24cad813a19214f53",
+    "bytes": 137874976,
+    "mutable_libtest": true,
+    "operator_binary": false
+  },
+  "no_default_features_check": {
+    "source": "79593853e9a25122fc59c64355a0d9dca8fb43d8",
+    "result": "PASS",
+    "later_delta_tests_only": true
+  },
+  "native_writer_admission_tested": false,
+  "strong_get_tested": false,
+  "independent_processes_tested": false,
+  "physical_vm_tested": false,
+  "production_qualified": false
+}

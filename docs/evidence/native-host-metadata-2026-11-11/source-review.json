@@ -1,0 +1,53 @@
+{
+  "source_revision": "e6a4d6368fb961b6da0d13394e4bc0902b7d6361",
+  "review_kind": "bounded_independent_read_only_source_review",
+  "additional_rust_tests_executed_by_reviewer": false,
+  "concrete_blocker_found": false,
+  "production_qualified": false,
+  "findings": [
+    {
+      "boundary": "actual transport reply",
+      "files": [
+        "distribution_transport/host_metadata.rs",
+        "distribution_consensus/host_read.rs"
+      ],
+      "result": "AuthReply private fields bind original request, actual TLS participant, cluster, destination, start, deadline and child cancellation. HostObservation has no Deserialize/Clone/raw DTO constructor; from_transport consumes sealed reply, revalidates evidence/request/peer pins, and retains original deadline."
+    },
+    {
+      "boundary": "membership before and after quorum",
+      "files": [
+        "distribution_metadata_read_provider/host_read.rs",
+        "distribution_metadata_read_provider.rs",
+        "distribution_consensus/host_read.rs"
+      ],
+      "result": "ReadAdmission::HostMember validates actual caller certificate/incarnation and Active registered membership before begin and again when fresh authority is ready. Existing shared contexts/workers and parent deadlines are reused."
+    },
+    {
+      "boundary": "learner and follower eligibility",
+      "files": [
+        "distribution_consensus/host_read.rs"
+      ],
+      "result": "Host member request may be Voter or Learner; metadata quorum remains actual context voters. No generic range observation or recovery-role conversion is exposed."
+    },
+    {
+      "boundary": "metadata-only semantics",
+      "files": [
+        "distribution_metadata_read_provider.rs"
+      ],
+      "result": "Only HostMember skips same_range_read_authority on final subject. Membership is rechecked and metadata leader/term/current-pending quorum still come from begin/probe/finish. Range epoch changes are allowed for data-only metadata observation."
+    },
+    {
+      "boundary": "dispatch lock scope",
+      "files": [
+        "distribution_transport.rs"
+      ],
+      "result": "TLS-authenticated caller is captured under topology guard; guard is dropped before provider network acquisition. Host request is intercepted before DB/data-service operation dispatch."
+    }
+  ],
+  "limits": [
+    "Bounded source assessment, not additional dynamic execution or physical timing qualification.",
+    "Observation is not durable lease, writer/read permission or recovery role.",
+    "No independent-process or physical-VM experiment in Host23.",
+    "No retained DB roots or external acknowledgement ledger for Host23."
+  ]
+}

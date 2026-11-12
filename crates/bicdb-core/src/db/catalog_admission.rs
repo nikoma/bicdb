@@ -4,6 +4,8 @@
 use super::*;
 use std::cell::RefCell;
 use std::sync::Weak;
+mod created_collection;
+pub use created_collection::CatalogCreatedCollectionUndo;
 
 pub(super) type Bindings = Mutex<FxHashMap<String, CatalogBinding>>;
 

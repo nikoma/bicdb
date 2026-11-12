@@ -2,7 +2,9 @@ mod access_mutation;
 mod branching;
 mod catalog_admission;
 mod collection_rename;
-pub use catalog_admission::{CatalogReadAccess, CatalogScopeAccess, CatalogScopeToken};
+pub use catalog_admission::{
+    CatalogCreatedCollectionUndo, CatalogReadAccess, CatalogScopeAccess, CatalogScopeToken,
+};
 mod commit_snapshot;
 mod deferred_materialize;
 mod local_namespace_identity;

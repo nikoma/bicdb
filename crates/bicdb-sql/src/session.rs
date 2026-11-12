@@ -2157,6 +2157,7 @@ pub(crate) enum DdlUndo {
     DropCollection {
         name: String,
         creation_intent: Option<String>,
+        creation_receipt: Option<bicdb_core::CatalogCreatedCollectionUndo>,
     },
     RestoreCollection {
         name: String,
@@ -4483,6 +4484,7 @@ impl<'db> SqlSession<'db> {
             self.ddl_undo.push(DdlUndo::DropCollection {
                 name: name.to_string(),
                 creation_intent: None,
+                creation_receipt: None,
             });
         }
         Ok(())
@@ -5082,9 +5084,11 @@ impl<'db> SqlSession<'db> {
                 Some(DdlUndo::DropCollection {
                     name,
                     creation_intent: Some(id),
+                    creation_receipt,
                 }) => Some(DdlUndo::DropCollection {
                     name: name.clone(),
                     creation_intent: Some(id.clone()),
+                    creation_receipt: creation_receipt.clone(),
                 }),
                 _ => None,
             };
@@ -5123,9 +5127,14 @@ impl<'db> SqlSession<'db> {
             DdlUndo::DropCollection {
                 name,
                 creation_intent,
+                creation_receipt,
             } => {
                 if let Some(id) = creation_intent {
-                    recycle_bin_journal::undo_session_creation(self, &id)?;
+                    recycle_bin_journal::undo_session_creation(
+                        self,
+                        &id,
+                        creation_receipt.as_ref(),
+                    )?;
                 } else {
                     let _ = self.db_mut()?.drop_collection(&name)?;
                 }

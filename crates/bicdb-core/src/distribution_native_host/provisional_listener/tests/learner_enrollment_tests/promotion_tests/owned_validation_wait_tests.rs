@@ -50,7 +50,7 @@ fn exercise(cancel: bool) {
     let native_before = {
         let db = factory.database.read();
         serde_json::json!({"incarnation":db.incarnation_id(),"commit_sequence":db.current_commit_seq(),
-            "uids":db.capture_range_image_bindings().unwrap().namespace_ids(),"rows":db.scan("items")})
+            "uids":db.capture_range_image_bindings().unwrap().namespace_ids(),"rows":db.scan_collection("items").unwrap()})
     };
     let before = {
         let store = metadata.lock();
@@ -137,7 +137,7 @@ fn exercise(cancel: bool) {
         let db = factory.database.read();
         assert_eq!(
             serde_json::json!({"incarnation":db.incarnation_id(),"commit_sequence":db.current_commit_seq(),
-            "uids":db.capture_range_image_bindings().unwrap().namespace_ids(),"rows":db.scan("items")}),
+            "uids":db.capture_range_image_bindings().unwrap().namespace_ids(),"rows":db.scan_collection("items").unwrap()}),
             native_before
         );
     }

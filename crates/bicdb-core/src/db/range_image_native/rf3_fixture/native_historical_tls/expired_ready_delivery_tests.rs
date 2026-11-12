@@ -181,7 +181,7 @@ fn snapshot(fixture: &NetworkFixture) -> BTreeMap<ClusterNodeId, serde_json::Val
     fixture.native.databases.iter().map(|(id, db)| {
         let db = db.read();
         let actual = db.current_native_range_source_lineage(fixture.command.range_id).unwrap();
-        let mut rows = db.scan("items");
+        let mut rows = db.scan_collection("items").unwrap();
         rows.sort_by(|a, b| a.id.cmp(&b.id));
         let value = serde_json::json!({
             "raw_catalogue":std::fs::read(db.data_path().join(crate::distribution_range_consensus::DEFAULT_RANGE_WRITE_LOG)).unwrap(),

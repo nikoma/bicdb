@@ -75,6 +75,16 @@ retain complete logs/source/compiler facts but **no database or WAL custody**.
 [Complete source-pinned receipt, raw logs, artifacts and offline verifier](evidence/native-current-joint-first-success-2026-11-12/README.md).
 Original Azure qualification and production admission remain unchanged.
 
+A separate one-selected-test experiment, exact same eedf source and unchanged
+worker/deadline settings, [run 43322376572](https://github.com/nikoma/bicdb/actions/runs/43322376572),
+passes the missing-decision-archive control: **one passed, zero failed, 956
+filtered, 71.83s**; its compilation/consumer checks pass. It reaches the actual
+observer spans. In the representative boundary, tagged full-writer checks account
+for about 7.1%, so repeated writer validation is not established as the dominant
+cost. This isolated result does not replace or explain the four-selected-case
+StrongR2 failures, prove concurrency causation, or qualify the whole candidate.
+[Exact isolated source, disjoint timing accounting and limits](design/native-ready-observer-isolated-eedf-result.md).
+
 ## Executed 68b results: activation releases, then anchor projection refuses
 
 Exact source `68be040ebb00a4c606d519697f913e310c496812` has **failed full

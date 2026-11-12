@@ -1313,7 +1313,7 @@ impl ApplicationSecurityContractV1 {
                 _ => {
                     return invalid(
                         "BicDB application package names an unknown host security route",
-                    )
+                    );
                 }
             };
         let expected_scheme = (!public).then(|| self.auth_scheme.clone()).flatten();
@@ -2637,6 +2637,10 @@ pub struct ApplicationManifestV2 {
     pub resources: Vec<ResourceContractV1>,
     #[serde(default)]
     pub invariants: Vec<ApplicationInvariantV1>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub native_fact_publications: Vec<NativeFactPublicationV1>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub native_fact_imports: Vec<NativeFactImportV1>,
     #[serde(default)]
     pub migrations: Vec<MigrationPlanV1>,
     #[serde(default)]
@@ -2697,6 +2701,7 @@ impl ApplicationManifestV2 {
         }
         self.package.validate(&extension.identity.name)?;
         reject_unsupported_features(&self.required_features)?;
+        self.validate_native_facts(extension)?;
         unique_by(
             "relation permission",
             self.relation_permissions.iter().map(|item| &item.relation),
@@ -5295,7 +5300,9 @@ fn validate_resource_policy_expression(
         ApplicationExpressionV1::Variable { name } => invalid(format!(
             "resource policy references undeclared field or variable `{name}`"
         )),
-        ApplicationExpressionV1::Literal { value } if valid_resource_policy_literal(value) => Ok(()),
+        ApplicationExpressionV1::Literal { value } if valid_resource_policy_literal(value) => {
+            Ok(())
+        }
         ApplicationExpressionV1::Literal { .. } => {
             invalid("resource policy literals must be scalar or arrays of scalars")
         }
@@ -5310,9 +5317,7 @@ fn validate_resource_policy_expression(
         }
         ApplicationExpressionV1::Field { target, field } => {
             let ApplicationExpressionV1::Variable { name } = target.as_ref() else {
-                return invalid(
-                    "resource policy field access requires auth or a relation binding",
-                );
+                return invalid("resource policy field access requires auth or a relation binding");
             };
             let resource_name = bindings.get(name).ok_or_else(|| {
                 ExtensionError::InvalidManifest(format!(
@@ -5324,7 +5329,11 @@ fn validate_resource_policy_expression(
                 .iter()
                 .find(|resource| resource.name == *resource_name)
                 .expect("resource policy binding resources are validated");
-            if resource.fields.iter().any(|candidate| candidate.name == *field) {
+            if resource
+                .fields
+                .iter()
+                .any(|candidate| candidate.name == *field)
+            {
                 Ok(())
             } else {
                 invalid(format!(
@@ -5332,11 +5341,9 @@ fn validate_resource_policy_expression(
                 ))
             }
         }
-        ApplicationExpressionV1::Unary { operator, value, .. }
-            if matches!(operator.as_str(), "not" | "negate") =>
-        {
-            recurse(value, bindings)
-        }
+        ApplicationExpressionV1::Unary {
+            operator, value, ..
+        } if matches!(operator.as_str(), "not" | "negate") => recurse(value, bindings),
         ApplicationExpressionV1::Binary {
             operator,
             left,
@@ -5354,7 +5361,8 @@ fn validate_resource_policy_expression(
                 | "greater_equal"
                 | "less"
                 | "less_equal"
-        ) => {
+        ) =>
+        {
             recurse(left, bindings)?;
             recurse(right, bindings)
         }
@@ -5384,12 +5392,7 @@ fn validate_resource_policy_expression(
             condition,
         } => {
             validate_identifier("resource policy binding", binding)?;
-            if binding == "auth"
-                || subject
-                    .fields
-                    .iter()
-                    .any(|field| field.name == *binding)
-            {
+            if binding == "auth" || subject.fields.iter().any(|field| field.name == *binding) {
                 return invalid(format!(
                     "resource policy binding `{binding}` shadows a trusted or subject value"
                 ));
@@ -5459,7 +5462,8 @@ fn validate_resource_index_predicate(
                 | "greater_equal"
                 | "less"
                 | "less_equal"
-        ) => {
+        ) =>
+        {
             validate_resource_index_predicate(left, fields)?;
             validate_resource_index_predicate(right, fields)
         }
@@ -5643,22 +5647,23 @@ fn collect_carrier_blob_signed_methods_expression(
                 let method = arguments
                     .iter()
                     .find(|argument| argument.name.as_deref() == Some("method"));
-                let method =
-                    match method {
-                        None => "GET".to_string(),
-                        Some(ApplicationArgumentV1 {
-                            value:
-                                ApplicationExpressionV1::Literal {
-                                    value: JsonValue::String(value),
-                                },
-                            ..
-                        }) if matches!(value.to_ascii_uppercase().as_str(), "GET" | "PUT") => {
-                            value.to_ascii_uppercase()
-                        }
-                        _ => return invalid(
+                let method = match method {
+                    None => "GET".to_string(),
+                    Some(ApplicationArgumentV1 {
+                        value:
+                            ApplicationExpressionV1::Literal {
+                                value: JsonValue::String(value),
+                            },
+                        ..
+                    }) if matches!(value.to_ascii_uppercase().as_str(), "GET" | "PUT") => {
+                        value.to_ascii_uppercase()
+                    }
+                    _ => {
+                        return invalid(
                             "BicDB application blob signed URL method must be a literal GET or PUT",
-                        ),
-                    };
+                        );
+                    }
+                };
                 methods.insert(method);
             }
             for argument in arguments {
@@ -6068,6 +6073,7 @@ impl EgressDeclaration {
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 #[serde(rename_all = "snake_case")]
 pub enum ApplicationFeature {
+    NativeImmutableFacts,
     TrustedConnectionIdentity,
     ExactColumnAuthority,
     OidcRs256,
@@ -6427,6 +6433,99 @@ pub struct ApplicationInvariantTransitionV1 {
     pub value: ApplicationExpressionV1,
 }
 
+/// Signed immutable fact projection. This is predicate authority, never a local resource.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct NativeFactFieldV1 {
+    pub name: String,
+    pub field_type: FieldType,
+    pub nullable: bool,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct NativeFactPublicationV1 {
+    pub version: u32,
+    pub name: String,
+    pub owner_application: String,
+    pub resource: String,
+    pub relation: String,
+    pub stable_key: String,
+    pub tenant_field: String,
+    pub fields: Vec<NativeFactFieldV1>,
+    pub consumers: BTreeSet<String>,
+    pub read_roles: BTreeSet<String>,
+    pub fingerprint: String,
+    pub accept_new_references: bool,
+}
+
+impl NativeFactPublicationV1 {
+    /// Admission is monotonic durable policy, separate from structural identity.
+    pub fn structural_json(&self) -> Result<JsonValue> {
+        let mut value = serde_json::to_value(self)
+            .map_err(|error| ExtensionError::InvalidManifest(error.to_string()))?;
+        let object = value
+            .as_object_mut()
+            .expect("publication serializes as object");
+        object.remove("fingerprint");
+        object.remove("accept_new_references");
+        Ok(value)
+    }
+
+    fn validate(&self) -> Result<()> {
+        if self.version != 1 {
+            return invalid("native fact publication requires version 1");
+        }
+        validate_identifier("native fact publication", &self.name)?;
+        validate_nonempty("native fact owner", &self.owner_application, 256)?;
+        validate_identifier("native fact resource", &self.resource)?;
+        validate_nonempty("native fact relation", &self.relation, 256)?;
+        validate_nonempty("native fact stable key", &self.stable_key, 256)?;
+        validate_identifier("native fact tenant field", &self.tenant_field)?;
+        validate_sha256("native fact publication fingerprint", &self.fingerprint)?;
+        if self.fields.is_empty() || self.consumers.is_empty() || self.read_roles.is_empty() {
+            return invalid(
+                "native fact projection, consumers and roles must be explicit nonempty sets",
+            );
+        }
+        let mut names = BTreeSet::new();
+        for field in &self.fields {
+            validate_identifier("native fact field", &field.name)?;
+            if !names.insert(&field.name)
+                || !matches!(
+                    field.field_type,
+                    FieldType::String
+                        | FieldType::Bool
+                        | FieldType::Int64
+                        | FieldType::Float64
+                        | FieldType::Decimal
+                        | FieldType::Uuid
+                        | FieldType::Date
+                )
+            {
+                return invalid("native fact fields must be unique supported scalar fields");
+            }
+        }
+        if !self.fields.iter().any(|field| {
+            field.name == self.tenant_field
+                && field.field_type == FieldType::Uuid
+                && !field.nullable
+        }) {
+            return invalid("native fact tenant must be a published nonnullable UUID");
+        }
+        validate_string_set("native fact consumers", &self.consumers)?;
+        validate_string_set("native fact roles", &self.read_roles)
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct NativeFactImportV1 {
+    pub resource: String,
+    pub subject_resources: BTreeSet<String>,
+    pub publication: NativeFactPublicationV1,
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct ApplicationInvariantV1 {
@@ -6459,6 +6558,18 @@ impl ApplicationInvariantV1 {
                     self.name, self.subject_resource
                 ))
             })?;
+        if invariant_has_foreign_fact(application, &self.expression) {
+            if self.kind != ApplicationInvariantKindV1::MustAlways || self.transition.is_some() {
+                return invalid(
+                    "foreign native fact references require immutable positive must_always",
+                );
+            }
+            validate_positive_native_fact_expression(
+                application,
+                &self.subject_resource,
+                &self.expression,
+            )?;
+        }
         let mut dependencies = BTreeSet::from([self.subject_resource.clone()]);
         let bindings = BTreeMap::new();
         validate_invariant_expression(
@@ -6545,29 +6656,41 @@ fn validate_invariant_expression(
             let ApplicationExpressionV1::Variable { name } = target.as_ref() else {
                 return invalid("invariant field access requires a subject or binding variable");
             };
-            let resource = if name == "subject" {
-                subject
+            let resource_name = if name == "subject" {
+                &subject.name
             } else {
-                let resource_name = bindings.get(name).ok_or_else(|| {
-                    ExtensionError::InvalidManifest(format!(
-                        "invariant field access uses unknown binding `{name}`"
-                    ))
-                })?;
-                application
-                    .resources
-                    .iter()
-                    .find(|resource| resource.name == *resource_name)
-                    .expect("binding resources are validated")
+                bindings.get(name).ok_or_else(|| {
+                    ExtensionError::InvalidManifest(format!("unknown invariant binding `{name}`"))
+                })?
             };
-            if resource
-                .fields
+            let exists = application
+                .resources
                 .iter()
-                .any(|candidate| candidate.name == *field)
-            {
+                .find(|resource| resource.name == *resource_name)
+                .map(|resource| {
+                    resource
+                        .fields
+                        .iter()
+                        .any(|candidate| candidate.name == *field)
+                })
+                .or_else(|| {
+                    application
+                        .native_fact_imports
+                        .iter()
+                        .find(|import| import.resource == *resource_name)
+                        .map(|import| {
+                            import
+                                .publication
+                                .fields
+                                .iter()
+                                .any(|candidate| candidate.name == *field)
+                        })
+                });
+            if exists == Some(true) {
                 Ok(())
             } else {
                 invalid(format!(
-                    "invariant binding `{name}` references undeclared field `{field}`"
+                    "invariant binding `{name}` references undeclared or private field `{field}`"
                 ))
             }
         }
@@ -6640,14 +6763,22 @@ fn validate_invariant_expression(
             if binding == "subject" || bindings.contains_key(binding) {
                 return invalid(format!("duplicate invariant binding `{binding}`"));
             }
-            if !application
+            let local = application
                 .resources
                 .iter()
-                .any(|candidate| candidate.name == *resource)
-            {
+                .any(|candidate| candidate.name == *resource);
+            let imported = application
+                .native_fact_imports
+                .iter()
+                .find(|import| import.resource == *resource);
+            if !local && imported.is_none() {
                 return invalid(format!(
-                    "invariant binding `{binding}` references unknown resource `{resource}`"
+                    "invariant references unknown resource `{resource}`"
                 ));
+            }
+            if imported.is_some() && matches!(expression, ApplicationExpressionV1::Aggregate { .. })
+            {
+                return invalid("foreign native fact aggregates are unsupported");
             }
             dependencies.insert(resource.clone());
             let mut nested = bindings.clone();
@@ -6682,6 +6813,181 @@ fn validate_invariant_expression(
             Ok(())
         }
         _ => invalid("invariant contains an expression outside the enforced runtime corpus"),
+    }
+}
+
+impl ApplicationManifestV2 {
+    fn validate_native_facts(&self, extension: &ExtensionManifest) -> Result<()> {
+        if self.native_fact_publications.is_empty() && self.native_fact_imports.is_empty() {
+            return Ok(());
+        }
+        if !self
+            .required_features
+            .contains(&ApplicationFeature::NativeImmutableFacts)
+        {
+            return invalid("native facts require explicit supported feature");
+        }
+        let mut publications = BTreeSet::new();
+        let mut relations = BTreeSet::new();
+        for publication in &self.native_fact_publications {
+            publication.validate()?;
+            if publication.owner_application != extension.identity.name
+                || !publications.insert(&publication.name)
+                || !relations.insert(&publication.relation)
+            {
+                return invalid("native fact publication owner, name or relation is invalid");
+            }
+            let resource = self
+                .resources
+                .iter()
+                .find(|resource| resource.name == publication.resource)
+                .ok_or_else(|| {
+                    ExtensionError::InvalidManifest("native fact owner resource is absent".into())
+                })?;
+            if resource.schema_only
+                || resource.relation != publication.relation
+                || resource.tenant_field.as_deref() != Some(&publication.tenant_field)
+                || !resource
+                    .immutable_fields
+                    .contains(&publication.tenant_field)
+                || !resource
+                    .server_managed_fields
+                    .contains(&publication.tenant_field)
+            {
+                return invalid(
+                    "native fact owner requires actual immutable server-owned tenant policy",
+                );
+            }
+            for field in &publication.fields {
+                if !resource.fields.iter().any(|actual| {
+                    actual.name == field.name
+                        && actual.field_type == field.field_type
+                        && actual.nullable == field.nullable
+                }) || resource.redacted_fields.contains(&field.name)
+                    || resource
+                        .privacy
+                        .as_ref()
+                        .is_some_and(|privacy| privacy.fields.contains_key(&field.name))
+                {
+                    return invalid(
+                        "native fact projection references absent, mismatched or private owner field",
+                    );
+                }
+            }
+        }
+        let mut imports = BTreeSet::new();
+        for import in &self.native_fact_imports {
+            import.publication.validate()?;
+            if !imports.insert(&import.resource)
+                || !import.resource.contains('.')
+                || self.resources.iter().any(|resource| {
+                    resource.name == import.resource
+                        || resource.relation == import.publication.relation
+                })
+                || !import
+                    .publication
+                    .consumers
+                    .contains(&extension.identity.name)
+                || import.subject_resources.is_empty()
+            {
+                return invalid("native fact import is not an admitted dependency projection");
+            }
+            for subject in &import.subject_resources {
+                if !self
+                    .resources
+                    .iter()
+                    .any(|resource| resource.name == *subject && !resource.schema_only)
+                {
+                    return invalid("native fact reference subject is absent");
+                }
+            }
+        }
+        Ok(())
+    }
+}
+
+fn invariant_has_foreign_fact(
+    application: &ApplicationManifestV2,
+    expression: &ApplicationExpressionV1,
+) -> bool {
+    match expression {
+        ApplicationExpressionV1::Exists {
+            resource,
+            condition,
+            ..
+        } => {
+            application
+                .native_fact_imports
+                .iter()
+                .any(|import| import.resource == *resource)
+                || invariant_has_foreign_fact(application, condition)
+        }
+        ApplicationExpressionV1::Aggregate { condition, .. }
+        | ApplicationExpressionV1::Unary {
+            value: condition, ..
+        } => invariant_has_foreign_fact(application, condition),
+        ApplicationExpressionV1::Binary { left, right, .. } => {
+            invariant_has_foreign_fact(application, left)
+                || invariant_has_foreign_fact(application, right)
+        }
+        ApplicationExpressionV1::Call { arguments, .. } => arguments
+            .iter()
+            .any(|argument| invariant_has_foreign_fact(application, &argument.value)),
+        _ => false,
+    }
+}
+
+fn native_fact_expression_has_scan(value: &ApplicationExpressionV1) -> bool {
+    match value {
+        ApplicationExpressionV1::Exists { .. } | ApplicationExpressionV1::Aggregate { .. } => true,
+        ApplicationExpressionV1::Unary { value, .. } => native_fact_expression_has_scan(value),
+        ApplicationExpressionV1::Binary { left, right, .. } => {
+            native_fact_expression_has_scan(left) || native_fact_expression_has_scan(right)
+        }
+        ApplicationExpressionV1::Call { arguments, .. } => arguments
+            .iter()
+            .any(|argument| native_fact_expression_has_scan(&argument.value)),
+        _ => false,
+    }
+}
+
+fn validate_positive_native_fact_expression(
+    application: &ApplicationManifestV2,
+    subject: &str,
+    expression: &ApplicationExpressionV1,
+) -> Result<()> {
+    match expression {
+        ApplicationExpressionV1::Exists {
+            resource,
+            condition,
+            ..
+        } if application.native_fact_imports.iter().any(|import| {
+            import.resource == *resource && import.subject_resources.contains(subject)
+        }) =>
+        {
+            if native_fact_expression_has_scan(condition) {
+                invalid("foreign native fact predicate cannot nest scans")
+            } else {
+                Ok(())
+            }
+        }
+        ApplicationExpressionV1::Binary {
+            operator,
+            left,
+            right,
+            ..
+        } if operator == "and" => {
+            validate_positive_native_fact_expression(application, subject, left)?;
+            validate_positive_native_fact_expression(application, subject, right)
+        }
+        value if !invariant_has_foreign_fact(application, value) => {
+            if native_fact_expression_has_scan(value) {
+                invalid("foreign fact invariant cannot mix mutable local scan dependencies")
+            } else {
+                Ok(())
+            }
+        }
+        _ => invalid("foreign fact reference must be a positive immutable EXISTS conjunct"),
     }
 }
 
@@ -10741,11 +11047,13 @@ mod tests {
             .unwrap();
         logout.public = true;
         logout.auth_scheme = None;
-        assert!(forged
-            .validate()
-            .unwrap_err()
-            .to_string()
-            .contains("weakened or forged"));
+        assert!(
+            forged
+                .validate()
+                .unwrap_err()
+                .to_string()
+                .contains("weakened or forged")
+        );
 
         let mut missing = valid;
         missing
@@ -10754,11 +11062,13 @@ mod tests {
             .unwrap()
             .routes
             .retain(|route| route.export != "__carrier_security_refresh");
-        assert!(missing
-            .validate()
-            .unwrap_err()
-            .to_string()
-            .contains("lacks required host route"));
+        assert!(
+            missing
+                .validate()
+                .unwrap_err()
+                .to_string()
+                .contains("lacks required host route")
+        );
     }
 
     #[test]
@@ -10798,11 +11108,12 @@ mod tests {
         let mut app = application(BTreeSet::from([ApplicationFeature::Schedules]));
         app.schedules.push(durable);
         let manifest = extension(app.clone());
-        assert!(app
-            .validate(&manifest)
-            .unwrap_err()
-            .to_string()
-            .contains("without the DurableSchedules feature"));
+        assert!(
+            app.validate(&manifest)
+                .unwrap_err()
+                .to_string()
+                .contains("without the DurableSchedules feature")
+        );
         app.required_features
             .insert(ApplicationFeature::DurableSchedules);
         let manifest = extension(app.clone());
@@ -10817,7 +11128,8 @@ mod tests {
             ApplicationFeature::Sse,
             ApplicationFeature::WebSocket,
         ]));
-        app.realtime = vec![serde_json::from_value(json!({
+        app.realtime =
+            vec![serde_json::from_value(json!({
             "name": "WidgetEvents",
             "path": "/streams/widgets",
             "queue": queue,
@@ -10912,54 +11224,56 @@ mod tests {
             }))
             .unwrap(),
         );
-        app.resources = vec![serde_json::from_value(json!({
-            "version": 1,
-            "name": "PrivateRecord",
-            "relation": "private_records",
-            "schema_version": 1,
-            "primary_key": "id",
-            "fields": [
-                {"name": "id", "field_type": "uuid"},
-                {"name": "email", "field_type": "string"},
-                {"name": "secret", "field_type": "string"}
-            ],
-            "operations": ["get"],
-            "list_route": "/private-records",
-            "item_route": "/private-records/{id}",
-            "encrypted_fields": {"secret": "PRIVATE_RECORD_KEY"},
-            "privacy": {
-                "fields": {
-                    "email": {
-                        "pii_category": "contact",
-                        "encrypted": false,
-                        "classification": "pii",
-                        "presentation": {
-                            "list": "partial",
-                            "detail": "visible",
-                            "input": "editable",
-                            "clipboard": "explicit"
-                        }
-                    },
-                    "secret": {
-                        "encrypted": true,
-                        "classification": "confidential",
-                        "presentation": {
-                            "list": "hidden",
-                            "detail": "masked",
-                            "input": "editable",
-                            "clipboard": "never"
+        app.resources = vec![
+            serde_json::from_value(json!({
+                "version": 1,
+                "name": "PrivateRecord",
+                "relation": "private_records",
+                "schema_version": 1,
+                "primary_key": "id",
+                "fields": [
+                    {"name": "id", "field_type": "uuid"},
+                    {"name": "email", "field_type": "string"},
+                    {"name": "secret", "field_type": "string"}
+                ],
+                "operations": ["get"],
+                "list_route": "/private-records",
+                "item_route": "/private-records/{id}",
+                "encrypted_fields": {"secret": "PRIVATE_RECORD_KEY"},
+                "privacy": {
+                    "fields": {
+                        "email": {
+                            "pii_category": "contact",
+                            "encrypted": false,
+                            "classification": "pii",
+                            "presentation": {
+                                "list": "partial",
+                                "detail": "visible",
+                                "input": "editable",
+                                "clipboard": "explicit"
+                            }
+                        },
+                        "secret": {
+                            "encrypted": true,
+                            "classification": "confidential",
+                            "presentation": {
+                                "list": "hidden",
+                                "detail": "masked",
+                                "input": "editable",
+                                "clipboard": "never"
+                            }
                         }
                     }
-                }
-            },
-            "audit": {
-                "required": true,
-                "include_fields": ["id", "email", "secret"],
-                "redact_fields": ["email", "secret"]
-            },
-            "contract_sha256": hash()
-        }))
-        .unwrap()];
+                },
+                "audit": {
+                    "required": true,
+                    "include_fields": ["id", "email", "secret"],
+                    "redact_fields": ["email", "secret"]
+                },
+                "contract_sha256": hash()
+            }))
+            .unwrap(),
+        ];
         let mut manifest = extension(app);
         manifest.capabilities.extend([
             ExtensionCapability::Database,
@@ -11073,19 +11387,23 @@ mod tests {
             .unwrap()
             .helpers
             .remove("blob.metadata");
-        assert!(forged_helpers
-            .validate()
-            .unwrap_err()
-            .to_string()
-            .contains("differs from the signed behavior program"));
+        assert!(
+            forged_helpers
+                .validate()
+                .unwrap_err()
+                .to_string()
+                .contains("differs from the signed behavior program")
+        );
 
         let mut forged_limit = valid.clone();
         forged_limit.application.as_deref_mut().unwrap().blobs[0].max_blob_bytes -= 1;
-        assert!(forged_limit
-            .validate()
-            .unwrap_err()
-            .to_string()
-            .contains("size/signed-URL authority disagree"));
+        assert!(
+            forged_limit
+                .validate()
+                .unwrap_err()
+                .to_string()
+                .contains("size/signed-URL authority disagree")
+        );
 
         let mut forged_methods = valid.clone();
         forged_methods
@@ -11100,21 +11418,25 @@ mod tests {
             .unwrap()
             .signed_methods
             .insert("PUT".to_string());
-        assert!(forged_methods
-            .validate()
-            .unwrap_err()
-            .to_string()
-            .contains("differs from the signed behavior program"));
+        assert!(
+            forged_methods
+                .validate()
+                .unwrap_err()
+                .to_string()
+                .contains("differs from the signed behavior program")
+        );
 
         let mut missing_observability = valid.clone();
         missing_observability
             .capabilities
             .remove(&ExtensionCapability::Observability);
-        assert!(missing_observability
-            .validate()
-            .unwrap_err()
-            .to_string()
-            .contains("Observability capability"));
+        assert!(
+            missing_observability
+                .validate()
+                .unwrap_err()
+                .to_string()
+                .contains("Observability capability")
+        );
 
         let mut ambient_files = valid;
         ambient_files
@@ -11128,11 +11450,13 @@ mod tests {
             .as_mut()
             .unwrap()
             .virtual_files = false;
-        assert!(ambient_files
-            .validate()
-            .unwrap_err()
-            .to_string()
-            .contains("virtual files"));
+        assert!(
+            ambient_files
+                .validate()
+                .unwrap_err()
+                .to_string()
+                .contains("virtual files")
+        );
     }
 
     #[test]
@@ -11150,11 +11474,13 @@ mod tests {
             .unwrap()
             .realtime_bindings
             .clear();
-        assert!(missing_fanout
-            .validate()
-            .unwrap_err()
-            .to_string()
-            .contains("lacks its exact fan-out queue"));
+        assert!(
+            missing_fanout
+                .validate()
+                .unwrap_err()
+                .to_string()
+                .contains("lacks its exact fan-out queue")
+        );
 
         let mut weakened_transport = manifest;
         let application = weakened_transport.application.as_mut().unwrap();
@@ -11164,11 +11490,13 @@ mod tests {
             .find(|route| route.template.ends_with("/ws"))
             .unwrap()
             .streaming_request = false;
-        assert!(weakened_transport
-            .validate()
-            .unwrap_err()
-            .to_string()
-            .contains("weakened transport contract"));
+        assert!(
+            weakened_transport
+                .validate()
+                .unwrap_err()
+                .to_string()
+                .contains("weakened transport contract")
+        );
     }
 
     #[test]
@@ -11186,22 +11514,26 @@ mod tests {
             .unwrap()
             .secret_bindings
             .clear();
-        assert!(missing_binding
-            .validate()
-            .unwrap_err()
-            .to_string()
-            .contains("exact host-only secret binding"));
+        assert!(
+            missing_binding
+                .validate()
+                .unwrap_err()
+                .to_string()
+                .contains("exact host-only secret binding")
+        );
 
         let mut weakened_audit = manifest.clone();
         weakened_audit.application.as_mut().unwrap().resources[0]
             .audit
             .redact_fields
             .remove("email");
-        assert!(weakened_audit
-            .validate()
-            .unwrap_err()
-            .to_string()
-            .contains("redacted durable audit contract"));
+        assert!(
+            weakened_audit
+                .validate()
+                .unwrap_err()
+                .to_string()
+                .contains("redacted durable audit contract")
+        );
 
         let mut public_access_audit = manifest;
         let application = public_access_audit.application.as_mut().unwrap();
@@ -11235,11 +11567,13 @@ mod tests {
                 "private_record_access".to_string(),
                 serde_json::from_value(json!({"body": []})).unwrap(),
             );
-        assert!(public_access_audit
-            .validate()
-            .unwrap_err()
-            .to_string()
-            .contains("exact protected custom action"));
+        assert!(
+            public_access_audit
+                .validate()
+                .unwrap_err()
+                .to_string()
+                .contains("exact protected custom action")
+        );
     }
 
     #[test]
@@ -11343,11 +11677,13 @@ mod tests {
                 retries: 1,
             },
         );
-        assert!(overbroad
-            .validate()
-            .unwrap_err()
-            .to_string()
-            .contains("grants unused method"));
+        assert!(
+            overbroad
+                .validate()
+                .unwrap_err()
+                .to_string()
+                .contains("grants unused method")
+        );
 
         let mut undeclared = program;
         let mut undeclared_call = undeclared.callables.get("reserve").unwrap().body[0].clone();
@@ -11364,11 +11700,13 @@ mod tests {
             .unwrap()
             .body
             .push(undeclared_call);
-        assert!(undeclared
-            .validate()
-            .unwrap_err()
-            .to_string()
-            .contains("outside its exact HTTP or gRPC binding authority"));
+        assert!(
+            undeclared
+                .validate()
+                .unwrap_err()
+                .to_string()
+                .contains("outside its exact HTTP or gRPC binding authority")
+        );
     }
 
     #[test]
@@ -11485,11 +11823,13 @@ mod tests {
             unreachable!()
         };
         *percent = 101;
-        assert!(invalid
-            .validate()
-            .unwrap_err()
-            .to_string()
-            .contains("exceeds 100"));
+        assert!(
+            invalid
+                .validate()
+                .unwrap_err()
+                .to_string()
+                .contains("exceeds 100")
+        );
     }
 
     #[test]
@@ -11508,11 +11848,13 @@ mod tests {
 
         let mut invalid = program;
         invalid.callables.clear();
-        assert!(invalid
-            .validate()
-            .unwrap_err()
-            .to_string()
-            .contains("absent callable"));
+        assert!(
+            invalid
+                .validate()
+                .unwrap_err()
+                .to_string()
+                .contains("absent callable")
+        );
     }
 
     #[test]
@@ -11529,23 +11871,25 @@ mod tests {
     #[test]
     fn signed_invariant_dependencies_and_feature_are_fail_closed() {
         let mut app = application(BTreeSet::from([ApplicationFeature::CommitValidators]));
-        app.resources = vec![serde_json::from_value(json!({
-            "version": 1,
-            "name": "InventoryItem",
-            "relation": "inventory_items",
-            "schema_version": 1,
-            "schema_only": true,
-            "primary_key": "id",
-            "fields": [
-                {"name": "id", "field_type": "uuid"},
-                {"name": "quantity", "field_type": "int64"}
-            ],
-            "list_route": "/inventory",
-            "item_route": "/inventory/{id}",
-            "contract_sha256": "b".repeat(64),
-            "openapi": {}
-        }))
-        .unwrap()];
+        app.resources = vec![
+            serde_json::from_value(json!({
+                "version": 1,
+                "name": "InventoryItem",
+                "relation": "inventory_items",
+                "schema_version": 1,
+                "schema_only": true,
+                "primary_key": "id",
+                "fields": [
+                    {"name": "id", "field_type": "uuid"},
+                    {"name": "quantity", "field_type": "int64"}
+                ],
+                "list_route": "/inventory",
+                "item_route": "/inventory/{id}",
+                "contract_sha256": "b".repeat(64),
+                "openapi": {}
+            }))
+            .unwrap(),
+        ];
         app.invariants = vec![ApplicationInvariantV1 {
             version: 1,
             name: "InventoryNeverNegative".to_string(),
@@ -11617,9 +11961,11 @@ mod tests {
             workflow_bindings: BTreeMap::new(),
         });
         let error = extension(app).validate().unwrap_err();
-        assert!(error
-            .to_string()
-            .contains("exceeds application max_call_depth"));
+        assert!(
+            error
+                .to_string()
+                .contains("exceeds application max_call_depth")
+        );
     }
 
     #[test]
@@ -11651,21 +11997,27 @@ mod tests {
             }))
             .unwrap()
         };
-        assert!(program("model", "list")
-            .validate()
-            .unwrap_err()
-            .to_string()
-            .contains("repeats field"));
-        assert!(program("builtin", "list")
-            .validate()
-            .unwrap_err()
-            .to_string()
-            .contains("paged model call or typed declared SQL call"));
-        assert!(program("model", "get")
-            .validate()
-            .unwrap_err()
-            .to_string()
-            .contains("paged model call or typed declared SQL call"));
+        assert!(
+            program("model", "list")
+                .validate()
+                .unwrap_err()
+                .to_string()
+                .contains("repeats field")
+        );
+        assert!(
+            program("builtin", "list")
+                .validate()
+                .unwrap_err()
+                .to_string()
+                .contains("paged model call or typed declared SQL call")
+        );
+        assert!(
+            program("model", "get")
+                .validate()
+                .unwrap_err()
+                .to_string()
+                .contains("paged model call or typed declared SQL call")
+        );
 
         let typed_sql: ApplicationProgramV1 = serde_json::from_value(serde_json::json!({
             "version": 1,
@@ -11705,11 +12057,13 @@ mod tests {
             key: Box::new(ApplicationRouteParameterTypeV1::Json),
             value: Box::new(ApplicationRouteParameterTypeV1::String),
         };
-        assert!(invalid
-            .validate(0)
-            .unwrap_err()
-            .to_string()
-            .contains("map key"));
+        assert!(
+            invalid
+                .validate(0)
+                .unwrap_err()
+                .to_string()
+                .contains("map key")
+        );
     }
 
     #[test]
@@ -11889,9 +12243,11 @@ mod tests {
                 0,
             )
             .unwrap_err();
-            assert!(error
-                .to_string()
-                .contains("shadows a trusted or subject value"));
+            assert!(
+                error
+                    .to_string()
+                    .contains("shadows a trusted or subject value")
+            );
         }
 
         for value in [json!({"forged": true}), json!(["safe", {"forged": true}])] {
@@ -11903,9 +12259,11 @@ mod tests {
                 0,
             )
             .unwrap_err();
-            assert!(error
-                .to_string()
-                .contains("literals must be scalar or arrays of scalars"));
+            assert!(
+                error
+                    .to_string()
+                    .contains("literals must be scalar or arrays of scalars")
+            );
         }
 
         validate_resource_policy_expression(
@@ -11943,35 +12301,43 @@ mod tests {
             "cache-control",
             "bad header",
         ] {
-            assert!(IdempotencyContract {
-                header: header.to_string(),
-                ttl_seconds: 60,
+            assert!(
+                IdempotencyContract {
+                    header: header.to_string(),
+                    ttl_seconds: 60,
+                    max_key_bytes: 128,
+                }
+                .validate()
+                .is_err()
+            );
+        }
+        assert!(
+            ResourceCacheContract {
+                max_age_seconds: 60,
+                private: false,
+                vary: BTreeSet::from(["authorization".to_string()]),
+            }
+            .validate()
+            .is_err()
+        );
+        assert!(
+            ResourceCacheContract {
+                max_age_seconds: 60,
+                private: true,
+                vary: BTreeSet::from(["Cache-Control".to_string()]),
+            }
+            .validate()
+            .is_err()
+        );
+        assert!(
+            IdempotencyContract {
+                header: "idempotency-key".to_string(),
+                ttl_seconds: 31_536_001,
                 max_key_bytes: 128,
             }
             .validate()
-            .is_err());
-        }
-        assert!(ResourceCacheContract {
-            max_age_seconds: 60,
-            private: false,
-            vary: BTreeSet::from(["authorization".to_string()]),
-        }
-        .validate()
-        .is_err());
-        assert!(ResourceCacheContract {
-            max_age_seconds: 60,
-            private: true,
-            vary: BTreeSet::from(["Cache-Control".to_string()]),
-        }
-        .validate()
-        .is_err());
-        assert!(IdempotencyContract {
-            header: "idempotency-key".to_string(),
-            ttl_seconds: 31_536_001,
-            max_key_bytes: 128,
-        }
-        .validate()
-        .is_err());
+            .is_err()
+        );
     }
 
     #[test]
@@ -12006,20 +12372,24 @@ mod tests {
         let duplicate = resource(serde_json::json!([
             {"target": "external_id", "fields": ["external_id", "external_id"]}
         ]));
-        assert!(duplicate
-            .validate(&base_application)
-            .unwrap_err()
-            .to_string()
-            .contains("duplicate or undeclared fields"));
+        assert!(
+            duplicate
+                .validate(&base_application)
+                .unwrap_err()
+                .to_string()
+                .contains("duplicate or undeclared fields")
+        );
 
         let undeclared = resource(serde_json::json!([
             {"target": "external_id", "fields": ["missing"]}
         ]));
-        assert!(undeclared
-            .validate(&base_application)
-            .unwrap_err()
-            .to_string()
-            .contains("duplicate or undeclared fields"));
+        assert!(
+            undeclared
+                .validate(&base_application)
+                .unwrap_err()
+                .to_string()
+                .contains("duplicate or undeclared fields")
+        );
 
         assert!(
             serde_json::from_value::<ResourceUniqueTargetV1>(serde_json::json!({
@@ -12082,11 +12452,13 @@ mod tests {
         under_authorized.relation_permissions[1]
             .actions
             .remove(&DatabaseAction::Aggregate);
-        assert!(clinic
-            .validate(&under_authorized)
-            .unwrap_err()
-            .to_string()
-            .contains("target lacks list authority"));
+        assert!(
+            clinic
+                .validate(&under_authorized)
+                .unwrap_err()
+                .to_string()
+                .contains("target lacks list authority")
+        );
         clinic.validate(&relation_application).unwrap();
     }
 
@@ -12127,19 +12499,23 @@ mod tests {
 
         let mut wrong_dimensions = signed.clone();
         wrong_dimensions["dimensions"] = json!(4);
-        assert!(resource(wrong_dimensions)
-            .validate(&app)
-            .unwrap_err()
-            .to_string()
-            .contains("dimensions do not match"));
+        assert!(
+            resource(wrong_dimensions)
+                .validate(&app)
+                .unwrap_err()
+                .to_string()
+                .contains("dimensions do not match")
+        );
 
         let mut unsigned_text_field = signed;
         unsigned_text_field["text_fields"] = json!(["title", "summary"]);
-        assert!(resource(unsigned_text_field)
-            .validate(&app)
-            .unwrap_err()
-            .to_string()
-            .contains("invalid text field"));
+        assert!(
+            resource(unsigned_text_field)
+                .validate(&app)
+                .unwrap_err()
+                .to_string()
+                .contains("invalid text field")
+        );
     }
 
     #[test]
@@ -12190,21 +12566,25 @@ mod tests {
         .unwrap();
 
         let wrong_geometry = resource(json!("string"), "observed_at");
-        assert!(wrong_geometry
-            .validate(&app)
-            .unwrap_err()
-            .to_string()
-            .contains("exactly typed geometry"));
+        assert!(
+            wrong_geometry
+                .validate(&app)
+                .unwrap_err()
+                .to_string()
+                .contains("exactly typed geometry")
+        );
 
         let wrong_time = resource(
             json!({"geometry":{"srid":4326,"geometry_type":"point"}}),
             "location",
         );
-        assert!(wrong_time
-            .validate(&app)
-            .unwrap_err()
-            .to_string()
-            .contains("invalid signed timeseries contract"));
+        assert!(
+            wrong_time
+                .validate(&app)
+                .unwrap_err()
+                .to_string()
+                .contains("invalid signed timeseries contract")
+        );
     }
 
     #[test]
@@ -12306,29 +12686,35 @@ mod tests {
         operational_schema
             .operations
             .insert(ResourceOperation::List);
-        assert!(operational_schema
-            .validate(&app)
-            .unwrap_err()
-            .to_string()
-            .contains("operations exactly"));
+        assert!(
+            operational_schema
+                .validate(&app)
+                .unwrap_err()
+                .to_string()
+                .contains("operations exactly")
+        );
 
         let mut incomplete_generated = ledger.clone();
         incomplete_generated.fields[4].generated_expression = None;
-        assert!(incomplete_generated
-            .validate(&app)
-            .unwrap_err()
-            .to_string()
-            .contains("incomplete generated-field"));
+        assert!(
+            incomplete_generated
+                .validate(&app)
+                .unwrap_err()
+                .to_string()
+                .contains("incomplete generated-field")
+        );
 
         let mut undeclared_index = ledger.clone();
         undeclared_index.indexes[0]
             .fields
             .push("missing".to_string());
-        assert!(undeclared_index
-            .validate(&app)
-            .unwrap_err()
-            .to_string()
-            .contains("duplicate or undeclared fields"));
+        assert!(
+            undeclared_index
+                .validate(&app)
+                .unwrap_err()
+                .to_string()
+                .contains("duplicate or undeclared fields")
+        );
 
         let mut undeclared_predicate = ledger.clone();
         let ApplicationExpressionV1::Binary { left, .. } = undeclared_predicate.indexes[0]
@@ -12341,28 +12727,34 @@ mod tests {
         *left = Box::new(ApplicationExpressionV1::Variable {
             name: "missing".to_string(),
         });
-        assert!(undeclared_predicate
-            .validate(&app)
-            .unwrap_err()
-            .to_string()
-            .contains("undeclared field"));
+        assert!(
+            undeclared_predicate
+                .validate(&app)
+                .unwrap_err()
+                .to_string()
+                .contains("undeclared field")
+        );
 
         let mut invalid_exclusion = ledger.clone();
         invalid_exclusion.exclusions[0].elements[1].function = Some("intrange".to_string());
-        assert!(invalid_exclusion
-            .validate(&app)
-            .unwrap_err()
-            .to_string()
-            .contains("unsupported range constructor"));
+        assert!(
+            invalid_exclusion
+                .validate(&app)
+                .unwrap_err()
+                .to_string()
+                .contains("unsupported range constructor")
+        );
 
         let mut incompatible_foreign_key = ledger;
         incompatible_foreign_key.foreign_keys[0].target_fields = vec!["id".to_string()];
         incompatible_foreign_key.foreign_keys[0].fields = vec!["tenant_code".to_string()];
-        assert!(incompatible_foreign_key
-            .validate(&app)
-            .unwrap_err()
-            .to_string()
-            .contains("incompatible fields"));
+        assert!(
+            incompatible_foreign_key
+                .validate(&app)
+                .unwrap_err()
+                .to_string()
+                .contains("incompatible fields")
+        );
     }
 
     #[test]
@@ -12463,31 +12855,35 @@ mod tests {
 
         let mut partial = user.clone();
         partial.reverse_relations[0].via_target_field = None;
-        assert!(partial
-            .validate(&app)
-            .unwrap_err()
-            .to_string()
-            .contains("incompatible fields, join metadata"));
+        assert!(
+            partial
+                .validate(&app)
+                .unwrap_err()
+                .to_string()
+                .contains("incompatible fields, join metadata")
+        );
 
         let mut under_authorized = app.clone();
         under_authorized.relation_permissions[2]
             .actions
             .remove(&DatabaseAction::Select);
-        assert!(user
-            .validate(&under_authorized)
-            .unwrap_err()
-            .to_string()
-            .contains("incompatible fields, join metadata"));
+        assert!(
+            user.validate(&under_authorized)
+                .unwrap_err()
+                .to_string()
+                .contains("incompatible fields, join metadata")
+        );
 
         let mut missing_list_operation = app.clone();
         missing_list_operation.resources[2]
             .operations
             .remove(&ResourceOperation::List);
-        assert!(user
-            .validate(&missing_list_operation)
-            .unwrap_err()
-            .to_string()
-            .contains("incompatible fields, join metadata"));
+        assert!(
+            user.validate(&missing_list_operation)
+                .unwrap_err()
+                .to_string()
+                .contains("incompatible fields, join metadata")
+        );
     }
 
     fn service_route() -> RouteV2 {
@@ -12535,9 +12931,11 @@ mod tests {
             body: None,
         });
         let error = route.validate().unwrap_err();
-        assert!(error
-            .to_string()
-            .contains("path schema does not exactly match"));
+        assert!(
+            error
+                .to_string()
+                .contains("path schema does not exactly match")
+        );
     }
 
     #[test]
@@ -12553,21 +12951,27 @@ mod tests {
         );
         app.routes.push(service_route());
         let error = app.validate(&extension(app.clone())).unwrap_err();
-        assert!(error
-            .to_string()
-            .contains("must select an authentication scheme"));
+        assert!(
+            error
+                .to_string()
+                .contains("must select an authentication scheme")
+        );
 
         app.routes[0].auth_scheme = Some("missing".to_string());
         let error = app.validate(&extension(app.clone())).unwrap_err();
-        assert!(error
-            .to_string()
-            .contains("references absent authentication scheme"));
+        assert!(
+            error
+                .to_string()
+                .contains("references absent authentication scheme")
+        );
 
         app.routes[0].public = true;
         let error = app.validate(&extension(app.clone())).unwrap_err();
-        assert!(error
-            .to_string()
-            .contains("public route `plugin_info` cannot select"));
+        assert!(
+            error
+                .to_string()
+                .contains("public route `plugin_info` cannot select")
+        );
     }
 
     #[test]
@@ -12577,9 +12981,11 @@ mod tests {
             .response_headers
             .insert("set-cookie".to_string(), "session=forged".to_string());
         let error = route.validate().unwrap_err();
-        assert!(error
-            .to_string()
-            .contains("host-controlled response header"));
+        assert!(
+            error
+                .to_string()
+                .contains("host-controlled response header")
+        );
     }
 
     #[test]
@@ -12603,9 +13009,11 @@ mod tests {
 
         app.service_imports[0].delegated_authority = true;
         let error = app.validate(&extension(app.clone())).unwrap_err();
-        assert!(error
-            .to_string()
-            .contains("delegated service authority and its required feature"));
+        assert!(
+            error
+                .to_string()
+                .contains("delegated service authority and its required feature")
+        );
         app.required_features
             .insert(ApplicationFeature::DelegatedServiceAuthority);
         app.validate(&extension(app.clone())).unwrap();
@@ -12617,9 +13025,11 @@ mod tests {
         route.resource = Some("Widget".to_string());
         route.operation = Some(ResourceOperation::Get);
         let error = route.validate().unwrap_err();
-        assert!(error
-            .to_string()
-            .contains("both a resource and plugin service"));
+        assert!(
+            error
+                .to_string()
+                .contains("both a resource and plugin service")
+        );
     }
 
     #[test]
@@ -12627,19 +13037,23 @@ mod tests {
         let mut route = service_route();
         route.service_call = None;
         route.cache = Some(RouteCacheContract { ttl_seconds: 0 });
-        assert!(route
-            .validate()
-            .unwrap_err()
-            .to_string()
-            .contains("must be positive"));
+        assert!(
+            route
+                .validate()
+                .unwrap_err()
+                .to_string()
+                .contains("must be positive")
+        );
 
         route.cache = Some(RouteCacheContract { ttl_seconds: 60 });
         route.method = HttpMethod::Post;
-        assert!(route
-            .validate()
-            .unwrap_err()
-            .to_string()
-            .contains("requires the GET method"));
+        assert!(
+            route
+                .validate()
+                .unwrap_err()
+                .to_string()
+                .contains("requires the GET method")
+        );
 
         route.method = HttpMethod::Get;
         route.service_call = Some(RouteServiceCall {
@@ -12647,11 +13061,13 @@ mod tests {
             service: "tokenizer_plugin".to_string(),
             method: "plugin_info".to_string(),
         });
-        assert!(route
-            .validate()
-            .unwrap_err()
-            .to_string()
-            .contains("direct BicDB application program route"));
+        assert!(
+            route
+                .validate()
+                .unwrap_err()
+                .to_string()
+                .contains("direct BicDB application program route")
+        );
 
         route.service_call = None;
         route.idempotency = Some(IdempotencyContract {
@@ -12659,11 +13075,13 @@ mod tests {
             ttl_seconds: 60,
             max_key_bytes: 128,
         });
-        assert!(route
-            .validate()
-            .unwrap_err()
-            .to_string()
-            .contains("cannot combine idempotency and cache"));
+        assert!(
+            route
+                .validate()
+                .unwrap_err()
+                .to_string()
+                .contains("cannot combine idempotency and cache")
+        );
     }
 
     #[test]
@@ -12709,11 +13127,12 @@ mod tests {
             workflow_bindings: BTreeMap::new(),
         });
         let unsigned = extension(app.clone());
-        assert!(app
-            .validate(&unsigned)
-            .unwrap_err()
-            .to_string()
-            .contains("route cache requires signed database"));
+        assert!(
+            app.validate(&unsigned)
+                .unwrap_err()
+                .to_string()
+                .contains("route cache requires signed database")
+        );
 
         let mut signed = extension(app.clone());
         signed.capabilities.extend([
@@ -12747,11 +13166,12 @@ mod tests {
             },
         )]);
         let unsigned = extension(app.clone());
-        assert!(app
-            .validate(&unsigned)
-            .unwrap_err()
-            .to_string()
-            .contains("runtime cache requires signed database"));
+        assert!(
+            app.validate(&unsigned)
+                .unwrap_err()
+                .to_string()
+                .contains("runtime cache requires signed database")
+        );
     }
 
     #[test]
@@ -12868,11 +13288,13 @@ mod tests {
             .unwrap()
             .helpers
             .insert("redis.publish".to_string());
-        assert!(forged
-            .validate(&extension(forged.clone()))
-            .unwrap_err()
-            .to_string()
-            .contains("helper set differs"));
+        assert!(
+            forged
+                .validate(&extension(forged.clone()))
+                .unwrap_err()
+                .to_string()
+                .contains("helper set differs")
+        );
 
         let mut missing_feature = app.clone();
         missing_feature
@@ -12949,21 +13371,25 @@ mod tests {
             .unwrap()
             .callables
             .clear();
-        assert!(missing_callable
-            .validate(&signed)
-            .unwrap_err()
-            .to_string()
-            .contains("absent callable"));
+        assert!(
+            missing_callable
+                .validate(&signed)
+                .unwrap_err()
+                .to_string()
+                .contains("absent callable")
+        );
 
         let mut missing_feature = app.clone();
         missing_feature
             .required_features
             .remove(&ApplicationFeature::Observability);
-        assert!(missing_feature
-            .validate(&signed)
-            .unwrap_err()
-            .to_string()
-            .contains("Observability"));
+        assert!(
+            missing_feature
+                .validate(&signed)
+                .unwrap_err()
+                .to_string()
+                .contains("Observability")
+        );
     }
 
     #[test]
@@ -13111,19 +13537,22 @@ mod tests {
             .unwrap()
             .metric_names
             .insert("forged.metric".to_string());
-        assert!(forged
-            .validate(&signed)
-            .unwrap_err()
-            .to_string()
-            .contains("metric-name authority"));
+        assert!(
+            forged
+                .validate(&signed)
+                .unwrap_err()
+                .to_string()
+                .contains("metric-name authority")
+        );
 
         signed
             .capabilities
             .remove(&ExtensionCapability::Transactions);
-        assert!(app
-            .validate(&signed)
-            .unwrap_err()
-            .to_string()
-            .contains("durable audit requires"));
+        assert!(
+            app.validate(&signed)
+                .unwrap_err()
+                .to_string()
+                .contains("durable audit requires")
+        );
     }
 }

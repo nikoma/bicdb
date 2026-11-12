@@ -6,12 +6,12 @@ use std::time::{Instant, SystemTime, UNIX_EPOCH};
 use aes_gcm::{Aes256Gcm, Nonce as AesNonce};
 use base64::Engine;
 use bicdb_core::{
-    cosine_similarity, dot_product, l2_distance, AuthenticationStrength, BicDb, ConsumeOptions,
-    Geometry, MutationActor, MutationGrantId, MutationGrantSpec, MutationOperation, NackOptions,
-    NativeCommitValidator, NativeInvariantAggregateFunction, NativeInvariantBinaryOperator,
-    NativeInvariantDefinition, NativeInvariantExpression, NativeInvariantKind,
-    NativeInvariantUnaryOperator, NativeInvariantValueType, PublishOptions, Record,
-    SecurityContext, Transaction, TransactionIsolation, TransactionRollbackMark,
+    AuthenticationStrength, BicDb, ConsumeOptions, Geometry, MutationActor, MutationGrantId,
+    MutationGrantSpec, MutationOperation, NackOptions, NativeCommitValidator,
+    NativeInvariantAggregateFunction, NativeInvariantBinaryOperator, NativeInvariantDefinition,
+    NativeInvariantExpression, NativeInvariantKind, NativeInvariantUnaryOperator,
+    NativeInvariantValueType, PublishOptions, Record, SecurityContext, Transaction,
+    TransactionIsolation, TransactionRollbackMark, cosine_similarity, dot_product, l2_distance,
 };
 use bicdb_extension::abi_v2::{
     ActorContext, AggregateSpec, ApplicationAggregateFunctionV1, ApplicationCallKindV1,
@@ -30,13 +30,13 @@ use bicdb_extension::abi_v2::{
 };
 use bicdb_extension::host::ApplicationHost;
 use bicdb_extension::{ExtensionCapability, ExtensionManifest};
-use bicdb_sql::{decode_typed_storage_json, SqlSession, SqlValue};
+use bicdb_sql::{SqlSession, SqlValue, decode_typed_storage_json};
 use chacha20poly1305::aead::{Aead, KeyInit, Payload};
 use chacha20poly1305::{Key, XChaCha20Poly1305, XNonce};
 use ed25519_dalek::{Signature, Signer, SigningKey, Verifier, VerifyingKey};
 use geo::Contains as _;
 use hmac::{Hmac, Mac};
-use serde_json::{json, Map, Value};
+use serde_json::{Map, Value, json};
 use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
@@ -709,9 +709,9 @@ impl CapabilityHost {
             "tenant_id": self.actor.tenant_id,
             "workspace_id": self.actor.workspace_id,
         }));
-        let grant = self
-            .transaction_mut(transaction)?
-            .issue_mutation_grant(MutationGrantSpec {
+        let grant = self.issue_application_grant(
+            transaction,
+            MutationGrantSpec {
                 relation: RELATION.to_string(),
                 operation,
                 record_id: Some(key.to_string()),
@@ -729,7 +729,8 @@ impl CapabilityHost {
                     "kind".to_string(),
                     format!("idempotency-{state}"),
                 )]),
-            })?;
+            },
+        )?;
         match operation {
             MutationOperation::Insert => self
                 .transaction_mut(transaction)?
@@ -829,9 +830,9 @@ impl CapabilityHost {
             "tenant_id": self.actor.tenant_id,
             "workspace_id": self.actor.workspace_id,
         }));
-        let grant = self
-            .transaction_mut(transaction)?
-            .issue_mutation_grant(MutationGrantSpec {
+        let grant = self.issue_application_grant(
+            transaction,
+            MutationGrantSpec {
                 relation: RELATION.to_string(),
                 operation,
                 record_id: Some(key.to_string()),
@@ -849,7 +850,8 @@ impl CapabilityHost {
                     "kind".to_string(),
                     "route-cache-write".to_string(),
                 )]),
-            })?;
+            },
+        )?;
         match operation {
             MutationOperation::Insert => self
                 .transaction_mut(transaction)?
@@ -864,9 +866,9 @@ impl CapabilityHost {
 
     fn delete_route_cache_record(&mut self, transaction: HostHandle, key: &str) -> Result<()> {
         const RELATION: &str = "__bicdb_app_route_cache";
-        let grant = self
-            .transaction_mut(transaction)?
-            .issue_mutation_grant(MutationGrantSpec {
+        let grant = self.issue_application_grant(
+            transaction,
+            MutationGrantSpec {
                 relation: RELATION.to_string(),
                 operation: MutationOperation::Delete,
                 record_id: Some(key.to_string()),
@@ -884,7 +886,8 @@ impl CapabilityHost {
                     "kind".to_string(),
                     "route-cache-expire".to_string(),
                 )]),
-            })?;
+            },
+        )?;
         self.transaction_mut(transaction)?
             .delete_with_grant(grant, RELATION, key)?;
         Ok(())
@@ -965,9 +968,9 @@ impl CapabilityHost {
             "tenant_id": self.actor.tenant_id,
             "workspace_id": self.actor.workspace_id,
         }));
-        let grant = self
-            .transaction_mut(transaction)?
-            .issue_mutation_grant(MutationGrantSpec {
+        let grant = self.issue_application_grant(
+            transaction,
+            MutationGrantSpec {
                 relation: RELATION.to_string(),
                 operation,
                 record_id: Some(key.to_string()),
@@ -985,7 +988,8 @@ impl CapabilityHost {
                     "kind".to_string(),
                     "runtime-cache-write".to_string(),
                 )]),
-            })?;
+            },
+        )?;
         match operation {
             MutationOperation::Insert => self
                 .transaction_mut(transaction)?
@@ -1038,9 +1042,9 @@ impl CapabilityHost {
         reason: &str,
     ) -> Result<()> {
         const RELATION: &str = "__bicdb_app_runtime_cache";
-        let grant = self
-            .transaction_mut(transaction)?
-            .issue_mutation_grant(MutationGrantSpec {
+        let grant = self.issue_application_grant(
+            transaction,
+            MutationGrantSpec {
                 relation: RELATION.to_string(),
                 operation: MutationOperation::Delete,
                 record_id: Some(key.to_string()),
@@ -1058,7 +1062,8 @@ impl CapabilityHost {
                     "kind".to_string(),
                     format!("runtime-cache-{reason}"),
                 )]),
-            })?;
+            },
+        )?;
         self.transaction_mut(transaction)?
             .delete_with_grant(grant, RELATION, key)?;
         Ok(())
@@ -1126,9 +1131,9 @@ impl CapabilityHost {
             "value": value,
             "created_at_ms": now_ms(),
         }));
-        let grant = self
-            .transaction_mut(transaction)?
-            .issue_mutation_grant(MutationGrantSpec {
+        let grant = self.issue_application_grant(
+            transaction,
+            MutationGrantSpec {
                 relation: RELATION.to_string(),
                 operation: MutationOperation::Insert,
                 record_id: Some(key),
@@ -1146,7 +1151,8 @@ impl CapabilityHost {
                     "kind".to_string(),
                     format!("security-{kind}-create"),
                 )]),
-            })?;
+            },
+        )?;
         self.transaction_mut(transaction)?
             .insert_with_grant(grant, RELATION, record)?;
         Ok(())
@@ -1178,9 +1184,9 @@ impl CapabilityHost {
             ));
         }
         let value = record.metadata.get("value").cloned();
-        let grant = self
-            .transaction_mut(transaction)?
-            .issue_mutation_grant(MutationGrantSpec {
+        let grant = self.issue_application_grant(
+            transaction,
+            MutationGrantSpec {
                 relation: RELATION.to_string(),
                 operation: MutationOperation::Delete,
                 record_id: Some(key.clone()),
@@ -1198,7 +1204,8 @@ impl CapabilityHost {
                     "kind".to_string(),
                     format!("security-{kind}-consume"),
                 )]),
-            })?;
+            },
+        )?;
         self.transaction_mut(transaction)?
             .delete_with_grant(grant, RELATION, &key)?;
         Ok(value)
@@ -1253,9 +1260,9 @@ impl CapabilityHost {
                 "security record revocation crossed a kind or application boundary".to_string(),
             ));
         }
-        let grant = self
-            .transaction_mut(transaction)?
-            .issue_mutation_grant(MutationGrantSpec {
+        let grant = self.issue_application_grant(
+            transaction,
+            MutationGrantSpec {
                 relation: RELATION.to_string(),
                 operation: MutationOperation::Delete,
                 record_id: Some(storage_id.to_string()),
@@ -1273,7 +1280,8 @@ impl CapabilityHost {
                     "kind".to_string(),
                     format!("security-{kind}-revoke"),
                 )]),
-            })?;
+            },
+        )?;
         self.transaction_mut(transaction)?
             .delete_with_grant(grant, RELATION, storage_id)?;
         Ok(true)
@@ -1346,9 +1354,9 @@ impl CapabilityHost {
             MutationOperation::Insert
         };
         let record = Record::new(run_id).with_metadata(state);
-        let grant = self
-            .transaction_mut(transaction)?
-            .issue_mutation_grant(MutationGrantSpec {
+        let grant = self.issue_application_grant(
+            transaction,
+            MutationGrantSpec {
                 relation: RELATION.to_string(),
                 operation,
                 record_id: Some(run_id.to_string()),
@@ -1370,7 +1378,8 @@ impl CapabilityHost {
                         "workflow-update".to_string()
                     },
                 )]),
-            })?;
+            },
+        )?;
         match operation {
             MutationOperation::Insert => self
                 .transaction_mut(transaction)?
@@ -1405,9 +1414,9 @@ impl CapabilityHost {
             "causation_id": self.actor.causation_id,
             "created_at_ms": now_ms(),
         }));
-        let grant = self
-            .transaction_mut(transaction)?
-            .issue_mutation_grant(MutationGrantSpec {
+        let grant = self.issue_application_grant(
+            transaction,
+            MutationGrantSpec {
                 relation: RELATION.to_string(),
                 operation: MutationOperation::Insert,
                 record_id: Some(record.id.clone()),
@@ -1425,7 +1434,8 @@ impl CapabilityHost {
                     "kind".to_string(),
                     "resource-audit".to_string(),
                 )]),
-            })?;
+            },
+        )?;
         self.transaction_mut(transaction)?
             .insert_with_grant(grant, RELATION, record)?;
         self.mirror_audit_to_application_log(transaction, &action, &subject, &fields)?;
@@ -1497,9 +1507,9 @@ impl CapabilityHost {
             "metadata": fields,
             "row_hash": row_hash,
         }));
-        let grant = self
-            .transaction_mut(transaction)?
-            .issue_mutation_grant(MutationGrantSpec {
+        let grant = self.issue_application_grant(
+            transaction,
+            MutationGrantSpec {
                 relation: RELATION.to_string(),
                 operation: MutationOperation::Insert,
                 record_id: Some(record.id.clone()),
@@ -1517,7 +1527,8 @@ impl CapabilityHost {
                     "kind".to_string(),
                     "resource-audit".to_string(),
                 )]),
-            })?;
+            },
+        )?;
         self.transaction_mut(transaction)?
             .insert_with_grant(grant, RELATION, record)?;
         Ok(())
@@ -1593,6 +1604,17 @@ impl CapabilityHost {
         }
     }
 
+    fn issue_application_grant(
+        &mut self,
+        transaction: HostHandle,
+        spec: MutationGrantSpec,
+    ) -> Result<MutationGrantId> {
+        let issuer = self.extension.identity.name.clone();
+        Ok(self
+            .transaction_mut(transaction)?
+            .issue_application_mutation_grant(spec, issuer)?)
+    }
+
     fn permission(
         &self,
         relation: &str,
@@ -1601,6 +1623,54 @@ impl CapabilityHost {
         write: bool,
     ) -> Result<()> {
         self.require_capability(ExtensionCapability::Database)?;
+        if let Some(publication) = unsafe { self.db.as_ref() }
+            .mutation_policy(relation)?
+            .and_then(|policy| policy.native_fact_publication)
+        {
+            if self.extension.identity.name != publication.owner_application {
+                if write
+                    || !publication
+                        .consumers
+                        .contains(&self.extension.identity.name)
+                    || self.actor.roles.is_disjoint(&publication.read_roles)
+                {
+                    return Err(AppRuntimeError::CapabilityDenied(
+                        "native fact owner authority denied".into(),
+                    ));
+                }
+                let mut requested = columns.into_iter().collect::<Vec<_>>();
+                if requested.is_empty() {
+                    requested = self
+                        .application()
+                        .permission_for(relation)
+                        .map(|permission| permission.readable_columns.iter().cloned().collect())
+                        .unwrap_or_default();
+                    if requested.is_empty() {
+                        return Err(AppRuntimeError::CapabilityDenied(
+                            "foreign native fact wildcard denied".into(),
+                        ));
+                    }
+                }
+                if requested
+                    .iter()
+                    .any(|column| !publication.fields.contains(column))
+                {
+                    return Err(AppRuntimeError::CapabilityDenied(
+                        "private native fact field access denied".into(),
+                    ));
+                }
+                return self.permission_signed_columns(relation, action, requested, write);
+            }
+        }
+        self.permission_signed_columns(relation, action, columns, write)
+    }
+    fn permission_signed_columns(
+        &self,
+        relation: &str,
+        action: DatabaseAction,
+        columns: impl IntoIterator<Item = String>,
+        write: bool,
+    ) -> Result<()> {
         let permission = self.application().permission_for(relation).ok_or_else(|| {
             AppRuntimeError::CapabilityDenied(format!("relation `{relation}` is undeclared"))
         })?;
@@ -1634,19 +1704,36 @@ impl CapabilityHost {
     /// supplies a non-empty set, however, an empty query projection means
     /// "all authorized columns", never "all stored columns".
     fn readable_projection(&self, relation: &str, requested: &[String]) -> Vec<String> {
-        if !requested.is_empty() {
-            return requested.to_vec();
+        let mut projection = if requested.is_empty() {
+            self.application()
+                .permission_for(relation)
+                .map(|permission| permission.readable_columns.iter().cloned().collect())
+                .unwrap_or_default()
+        } else {
+            requested.to_vec()
+        };
+        if let Ok(Some(policy)) = unsafe { self.db.as_ref() }.mutation_policy(relation) {
+            if let Some(publication) = policy.native_fact_publication {
+                if publication.owner_application != self.extension.identity.name {
+                    projection.retain(|field| publication.fields.contains(field));
+                }
+            }
         }
-        self.application()
-            .permission_for(relation)
-            .filter(|permission| !permission.readable_columns.is_empty())
-            .map(|permission| permission.readable_columns.iter().cloned().collect())
-            .unwrap_or_default()
+        projection
     }
 
     fn project_readable(&self, relation: &str, mut value: Value) -> Value {
         let columns = self.readable_projection(relation, &[]);
+        let foreign_publication = unsafe { self.db.as_ref() }
+            .mutation_policy(relation)
+            .ok()
+            .flatten()
+            .and_then(|policy| policy.native_fact_publication)
+            .is_some_and(|publication| {
+                publication.owner_application != self.extension.identity.name
+            });
         if columns.is_empty()
+            && !foreign_publication
             && !self
                 .application()
                 .required_features
@@ -2145,7 +2232,7 @@ impl CapabilityHost {
             ResourceOperation::List | ResourceOperation::Get => {
                 return Err(AppRuntimeError::CapabilityDenied(
                     "read operations cannot request MutationGrants".to_string(),
-                ))
+                ));
             }
         };
         let mut allowed_columns = request.columns;
@@ -2171,9 +2258,7 @@ impl CapabilityHost {
             audit_metadata: request.audit_metadata,
         };
         let transaction = request.transaction;
-        let grant = self
-            .transaction_mut(transaction)?
-            .issue_mutation_grant(spec)?;
+        let grant = self.issue_application_grant(transaction, spec)?;
         let handle = self.next_handle(&self.grants);
         self.grants
             .insert(handle, GrantBinding { transaction, grant });
@@ -2195,6 +2280,39 @@ impl CapabilityHost {
             )));
         }
         for relation in &statement.relations {
+            if let Some(publication) = unsafe { self.db.as_ref() }
+                .mutation_policy(relation)?
+                .and_then(|policy| policy.native_fact_publication)
+            {
+                if publication.owner_application != self.extension.identity.name {
+                    let permission =
+                        self.application().permission_for(relation).ok_or_else(|| {
+                            AppRuntimeError::CapabilityDenied(
+                                "native fact relation undeclared".into(),
+                            )
+                        })?;
+                    if statement.actions.iter().any(|action| {
+                        matches!(
+                            action,
+                            DatabaseAction::Insert
+                                | DatabaseAction::Update
+                                | DatabaseAction::Delete
+                                | DatabaseAction::Upsert
+                        )
+                    }) || permission.readable_columns.is_empty()
+                    {
+                        return Err(AppRuntimeError::CapabilityDenied(
+                            "foreign native fact raw mutation or wildcard denied".into(),
+                        ));
+                    }
+                    self.permission(
+                        relation,
+                        DatabaseAction::Select,
+                        permission.readable_columns.iter().cloned(),
+                        false,
+                    )?;
+                }
+            }
             let contract = self
                 .application()
                 .resources
@@ -2264,27 +2382,28 @@ impl CapabilityHost {
                         )
                     })
                     .unwrap_or_default();
-                let grant =
-                    self.transaction_mut(transaction)?
-                        .issue_mutation_grant(MutationGrantSpec {
-                            relation: relation.clone(),
-                            operation: MutationOperation::Bulk,
-                            record_id: None,
-                            record_id_prefix: None,
-                            expected_version: None,
-                            version_field: contract.0,
-                            allowed_columns: permission.writable_columns,
-                            bulk: true,
-                            maximum_affected_rows: u64::from(statement.max_affected_rows),
-                            cascade_relations: BTreeSet::new(),
-                            statement_budget: statement.max_affected_rows,
-                            tenant_field: contract.1,
-                            workspace_field: contract.2,
-                            audit_metadata: BTreeMap::from([
-                                ("kind".to_string(), "signed-raw-sql".to_string()),
-                                ("statement_id".to_string(), statement.id.clone()),
-                            ]),
-                        })?;
+                let grant = self.issue_application_grant(
+                    transaction,
+                    MutationGrantSpec {
+                        relation: relation.clone(),
+                        operation: MutationOperation::Bulk,
+                        record_id: None,
+                        record_id_prefix: None,
+                        expected_version: None,
+                        version_field: contract.0,
+                        allowed_columns: permission.writable_columns,
+                        bulk: true,
+                        maximum_affected_rows: u64::from(statement.max_affected_rows),
+                        cascade_relations: BTreeSet::new(),
+                        statement_budget: statement.max_affected_rows,
+                        tenant_field: contract.1,
+                        workspace_field: contract.2,
+                        audit_metadata: BTreeMap::from([
+                            ("kind".to_string(), "signed-raw-sql".to_string()),
+                            ("statement_id".to_string(), statement.id.clone()),
+                        ]),
+                    },
+                )?;
                 signed_mutation_grants.insert(relation.clone(), grant);
             }
         }
@@ -3657,7 +3776,7 @@ impl CapabilityHost {
                     _ => {
                         return Err(AppRuntimeError::CapabilityDenied(format!(
                             "signing algorithm `{algorithm}` is unsupported"
-                        )))
+                        )));
                     }
                 };
                 Ok(HostValue::Bytes(signature))
@@ -6120,6 +6239,13 @@ fn lower_carrier_invariant_expression(
             .iter()
             .find(|candidate| candidate.name == resource)
             .map(|candidate| candidate.relation.clone())
+            .or_else(|| {
+                application
+                    .native_fact_imports
+                    .iter()
+                    .find(|import| import.resource == resource)
+                    .map(|import| import.publication.relation.clone())
+            })
             .ok_or_else(|| {
                 AppRuntimeError::InvalidPackage(format!(
                     "invariant dependency resource `{resource}` is unavailable"
@@ -6253,6 +6379,26 @@ fn lower_carrier_invariant_expression(
         } => {
             let mut nested = bindings.clone();
             nested.insert(binding.clone(), resource.clone());
+            if let Some(import) = application
+                .native_fact_imports
+                .iter()
+                .find(|import| import.resource == *resource)
+            {
+                return Ok(NativeInvariantExpression::PublishedExists {
+                    binding: binding.clone(),
+                    relation: import.publication.relation.clone(),
+                    owner_application: import.publication.owner_application.clone(),
+                    publication_name: import.publication.name.clone(),
+                    publication_fingerprint: import.publication.fingerprint.clone(),
+                    consumer_application: application.package.application.clone(),
+                    condition: Box::new(lower_carrier_invariant_expression(
+                        application,
+                        subject_resource,
+                        &nested,
+                        condition,
+                    )?),
+                });
+            }
             NativeInvariantExpression::Exists {
                 binding: binding.clone(),
                 relation: resource_relation(resource)?,
@@ -6328,6 +6474,13 @@ pub(crate) fn lower_carrier_invariants(
                         .iter()
                         .find(|candidate| candidate.name == *resource)
                         .map(|candidate| candidate.relation.clone())
+                        .or_else(|| {
+                            application
+                                .native_fact_imports
+                                .iter()
+                                .find(|import| import.resource == *resource)
+                                .map(|import| import.publication.relation.clone())
+                        })
                         .ok_or_else(|| {
                             AppRuntimeError::InvalidPackage(format!(
                                 "invariant `{}` dependency `{resource}` is unavailable",
@@ -6444,7 +6597,7 @@ fn lower_validator(validator: CommitValidator) -> Result<NativeCommitValidator> 
             return Err(AppRuntimeError::CapabilityDenied(
                 "custom commit validators require a separately declared native provider"
                     .to_string(),
-            ))
+            ));
         }
     })
 }
@@ -6725,12 +6878,12 @@ pub(crate) mod tests {
     use super::*;
     use bicdb_core::{CollectionPolicy, MutationPolicy};
     use bicdb_extension::abi_v2::{
-        ApplicationFeature, ApplicationManifestV2, PackageMetadata, RawSqlDeclaration,
-        RelationPermission, ServiceImport, TransactionRequest, APPLICATION_COMPATIBILITY_PROFILE,
+        APPLICATION_COMPATIBILITY_PROFILE, ApplicationFeature, ApplicationManifestV2,
+        PackageMetadata, RawSqlDeclaration, RelationPermission, ServiceImport, TransactionRequest,
     };
     use bicdb_extension::host::ApplicationHost;
     use bicdb_extension::{
-        ExtensionIdentity, ExtensionLimits, ExtensionPermissions, EXTENSION_ABI_V2,
+        EXTENSION_ABI_V2, ExtensionIdentity, ExtensionLimits, ExtensionPermissions,
     };
     use std::path::Path;
 
@@ -6878,12 +7031,14 @@ pub(crate) mod tests {
         }))
         .unwrap();
 
-        assert!(host
-            .enforce_declared_sql_role_policy(&contract, DatabaseAction::Select)
-            .is_err());
-        assert!(host
-            .enforce_declared_sql_role_policy(&contract, DatabaseAction::Insert)
-            .is_err());
+        assert!(
+            host.enforce_declared_sql_role_policy(&contract, DatabaseAction::Select)
+                .is_err()
+        );
+        assert!(
+            host.enforce_declared_sql_role_policy(&contract, DatabaseAction::Insert)
+                .is_err()
+        );
 
         host.actor.roles.insert("auditor".to_string());
         host.enforce_declared_sql_role_policy(&contract, DatabaseAction::Select)
@@ -7046,16 +7201,18 @@ pub(crate) mod tests {
         .unwrap();
         assert_eq!(contained.len(), 1);
         assert_eq!(contained[0]["id"], "inside");
-        assert!(spatial_rows(
-            Vec::new(),
-            SpatialOperation::WithinRadius {
-                field: "location".to_string(),
-                point: json!({"type":"Point","coordinates":[0.0,0.0]}),
-                radius: -1.0,
-                limit: 10,
-            }
-        )
-        .is_err());
+        assert!(
+            spatial_rows(
+                Vec::new(),
+                SpatialOperation::WithinRadius {
+                    field: "location".to_string(),
+                    point: json!({"type":"Point","coordinates":[0.0,0.0]}),
+                    radius: -1.0,
+                    limit: 10,
+                }
+            )
+            .is_err()
+        );
     }
 
     pub(crate) fn manifest() -> Arc<ExtensionManifest> {
@@ -7277,18 +7434,21 @@ pub(crate) mod tests {
                 vec![json!("row-1"), json!(parent_id), json!("tenant-1")],
             )
             .unwrap();
-            assert!(host
-                .transaction_mut(transaction)
-                .unwrap()
-                .has_deferred_hooks());
+            assert!(
+                host.transaction_mut(transaction)
+                    .unwrap()
+                    .has_deferred_hooks()
+            );
             let committed = host.transaction(TransactionRequest::Commit { transaction });
             if parent_id == 1 {
                 committed.unwrap();
             } else {
-                assert!(committed
-                    .unwrap_err()
-                    .to_string()
-                    .contains(if parent_id == 999 { "23503" } else { "23514" }));
+                assert!(
+                    committed
+                        .unwrap_err()
+                        .to_string()
+                        .contains(if parent_id == 999 { "23503" } else { "23514" })
+                );
             }
             drop(host);
             drop(db);
@@ -7346,12 +7506,13 @@ pub(crate) mod tests {
             HostValue::Handle(handle) => handle,
             other => panic!("unexpected savepoint result {other:?}"),
         };
-        assert!(host
-            .transaction(TransactionRequest::RollbackTo {
+        assert!(
+            host.transaction(TransactionRequest::RollbackTo {
                 transaction: foreign,
                 savepoint
             })
-            .is_err());
+            .is_err()
+        );
         for index in 0..2 {
             host.transaction_mut(transaction)
                 .unwrap()
@@ -7477,8 +7638,8 @@ pub(crate) mod tests {
                     && fields["nested"]["password"] == "[REDACTED]"
         ));
         drop(events);
-        assert!(host
-            .observe_carrier_audit(
+        assert!(
+            host.observe_carrier_audit(
                 None,
                 "forged.action".to_string(),
                 "Patient:patient-1".to_string(),
@@ -7486,7 +7647,8 @@ pub(crate) mod tests {
             )
             .unwrap_err()
             .to_string()
-            .contains("outside signed durable-audit authority"));
+            .contains("outside signed durable-audit authority")
+        );
     }
 
     #[derive(Default)]
@@ -8058,9 +8220,11 @@ pub(crate) mod tests {
             })
             .expect("gRPC evidence is recorded");
         assert_eq!(evidence["method"], "Reserve");
-        assert!(!serde_json::to_string(&evidence)
-            .unwrap()
-            .contains("secret-sku"));
+        assert!(
+            !serde_json::to_string(&evidence)
+                .unwrap()
+                .contains("secret-sku")
+        );
     }
 
     fn handle(value: HostCallResult) -> HostHandle {
@@ -8223,25 +8387,29 @@ pub(crate) mod tests {
         );
         assert!(publish.error.is_none());
 
-        assert!(call(
-            &mut host,
-            HostRequest::Transaction(TransactionRequest::Commit { transaction: first }),
-        )
-        .error
-        .is_none());
+        assert!(
+            call(
+                &mut host,
+                HostRequest::Transaction(TransactionRequest::Commit { transaction: first }),
+            )
+            .error
+            .is_none()
+        );
         let reused = call(
             &mut host,
             HostRequest::Transaction(TransactionRequest::Commit { transaction: first }),
         );
         assert_eq!(reused.error.unwrap().class, ErrorClass::Unauthorized);
-        assert!(call(
-            &mut host,
-            HostRequest::Transaction(TransactionRequest::Rollback {
-                transaction: second
-            }),
-        )
-        .error
-        .is_none());
+        assert!(
+            call(
+                &mut host,
+                HostRequest::Transaction(TransactionRequest::Rollback {
+                    transaction: second
+                }),
+            )
+            .error
+            .is_none()
+        );
 
         let mut expired = CapabilityHost::new(
             &db,
@@ -8388,15 +8556,17 @@ pub(crate) mod tests {
             .value,
             Some(HostValue::U64(1))
         );
-        assert!(call(
-            &mut host,
-            HostRequest::Transaction(TransactionRequest::Release {
-                transaction,
-                savepoint,
-            }),
-        )
-        .error
-        .is_none());
+        assert!(
+            call(
+                &mut host,
+                HostRequest::Transaction(TransactionRequest::Release {
+                    transaction,
+                    savepoint,
+                }),
+            )
+            .error
+            .is_none()
+        );
         let pending_rows = host
             .transaction_mut(transaction)
             .unwrap()
@@ -8428,12 +8598,14 @@ pub(crate) mod tests {
                 "value": 8
             })))
         );
-        assert!(call(
-            &mut host,
-            HostRequest::Transaction(TransactionRequest::Rollback { transaction }),
-        )
-        .error
-        .is_none());
+        assert!(
+            call(
+                &mut host,
+                HostRequest::Transaction(TransactionRequest::Rollback { transaction }),
+            )
+            .error
+            .is_none()
+        );
     }
 
     #[test]
@@ -8583,12 +8755,14 @@ pub(crate) mod tests {
                 &mut host,
                 HostRequest::Transaction(TransactionRequest::Begin { isolation }),
             ));
-            assert!(call(
-                &mut host,
-                HostRequest::Transaction(TransactionRequest::Rollback { transaction }),
-            )
-            .error
-            .is_none());
+            assert!(
+                call(
+                    &mut host,
+                    HostRequest::Transaction(TransactionRequest::Rollback { transaction }),
+                )
+                .error
+                .is_none()
+            );
         }
     }
 }

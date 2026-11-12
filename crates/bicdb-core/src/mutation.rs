@@ -76,9 +76,30 @@ fn one_statement() -> u32 {
     1
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct NativeFactPublicationPolicy {
+    pub owner_application: String,
+    pub publication_name: String,
+    pub fingerprint: String,
+    pub tenant_field: String,
+    pub fields: BTreeSet<String>,
+    pub consumers: BTreeSet<String>,
+    pub read_roles: BTreeSet<String>,
+    pub accept_new_references: bool,
+}
+
+fn native_fact_flag_disabled(value: &bool) -> bool {
+    !*value
+}
+
 #[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct MutationPolicy {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub native_fact_publication: Option<NativeFactPublicationPolicy>,
+    #[serde(default, skip_serializing_if = "native_fact_flag_disabled")]
+    pub native_fact_reference_immutable: bool,
     #[serde(default)]
     pub grants_required: bool,
     #[serde(default)]
@@ -140,6 +161,7 @@ impl MutationPolicy {
 
 #[derive(Clone, Debug)]
 pub(crate) struct MutationGrant {
+    pub(crate) issuer_application: Option<String>,
     pub(crate) id: MutationGrantId,
     pub(crate) actor: MutationActor,
     pub(crate) spec: MutationGrantSpec,
@@ -259,6 +281,15 @@ pub enum NativeInvariantAggregateFunction {
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum NativeInvariantExpression {
+    PublishedExists {
+        binding: String,
+        relation: String,
+        owner_application: String,
+        publication_name: String,
+        publication_fingerprint: String,
+        consumer_application: String,
+        condition: Box<NativeInvariantExpression>,
+    },
     SubjectField {
         field: String,
     },

@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 
 use base64::Engine;
-use bicdb_extension::{ExtensionManifest, EXTENSION_ABI_V2};
+use bicdb_extension::{EXTENSION_ABI_V2, ExtensionManifest};
 use ed25519_dalek::{Signature, Verifier, VerifyingKey};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -198,6 +198,10 @@ pub(crate) struct ApplicationModuleContractV1 {
     pub traits: Vec<serde_json::Value>,
     #[serde(default)]
     pub extensions: Vec<serde_json::Value>,
+    #[serde(default)]
+    pub native_fact_publications: Vec<bicdb_extension::abi_v2::NativeFactPublicationV1>,
+    #[serde(default)]
+    pub native_fact_imports: Vec<bicdb_extension::abi_v2::NativeFactImportV1>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -872,7 +876,7 @@ mod tests {
     use std::collections::{BTreeMap, BTreeSet};
 
     use bicdb_extension::abi_v2::{
-        ApplicationManifestV2, PackageMetadata, APPLICATION_COMPATIBILITY_PROFILE,
+        APPLICATION_COMPATIBILITY_PROFILE, ApplicationManifestV2, PackageMetadata,
     };
     use bicdb_extension::{
         ExtensionIdentity, ExtensionLimits, ExtensionManifest, ExtensionPermissions,
@@ -1121,19 +1125,23 @@ mod tests {
             .application
             .as_deref_mut()
             .unwrap()
-            .invariants = vec![serde_json::from_value(serde_json::json!({
-            "version": 1,
-            "name": "forged",
-            "subject_resource": "absent",
-            "kind": "must_always",
-            "expression": {"op":"literal", "value":true},
-            "dependency_resources": [],
-            "source": "true"
-        }))
-        .unwrap()];
-        assert!(canonical_signing_payload_without_empty_invariants(&package)
-            .unwrap()
-            .is_none());
+            .invariants = vec![
+            serde_json::from_value(serde_json::json!({
+                "version": 1,
+                "name": "forged",
+                "subject_resource": "absent",
+                "kind": "must_always",
+                "expression": {"op":"literal", "value":true},
+                "dependency_resources": [],
+                "source": "true"
+            }))
+            .unwrap(),
+        ];
+        assert!(
+            canonical_signing_payload_without_empty_invariants(&package)
+                .unwrap()
+                .is_none()
+        );
     }
 
     #[test]
@@ -1357,19 +1365,23 @@ mod tests {
             .modules
             .insert("m".repeat(crate::MAX_MODULE_NAME_BYTES + 1), vec![0]);
         let verifier = PackageVerifier::new(TrustedSigningKeys::default(), 1024 * 1024).unwrap();
-        assert!(verifier
-            .verify(&long_name)
-            .unwrap_err()
-            .to_string()
-            .contains("module name must contain"));
+        assert!(
+            verifier
+                .verify(&long_name)
+                .unwrap_err()
+                .to_string()
+                .contains("module name must contain")
+        );
         let mut many = package;
         for n in 0..crate::MAX_PACKAGE_MODULES {
             many.modules.insert(format!("m{n}"), vec![]);
         }
-        assert!(verifier
-            .verify(&many)
-            .unwrap_err()
-            .to_string()
-            .contains("module entries"));
+        assert!(
+            verifier
+                .verify(&many)
+                .unwrap_err()
+                .to_string()
+                .contains("module entries")
+        );
     }
 }

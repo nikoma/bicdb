@@ -12,31 +12,31 @@ mod ha_bootstrap;
 mod ha_node;
 mod online_backup;
 pub use ha_bootstrap::{
-    finish_standby_bootstrap, stage_standby_bootstrap, standby_bootstrap_staging, StandbyResume,
+    StandbyResume, finish_standby_bootstrap, stage_standby_bootstrap, standby_bootstrap_staging,
 };
 mod log_archiving;
 mod switchover;
 pub use switchover::SwitchoverOffer;
 mod verification;
 pub use verification::{
-    verify_restore_drill, RestoreDrillReport, TableChecksum, VerificationManifest,
+    RestoreDrillReport, TableChecksum, VerificationManifest, verify_restore_drill,
 };
 mod logical_copy;
 mod replication_journal;
 use replication_journal::freeze_audit_origin;
 mod replication_live;
-pub use branching::{diff_databases, CollectionDiff, DatabaseDiff, RecordChange, RecordChangeKind};
+pub use branching::{CollectionDiff, DatabaseDiff, RecordChange, RecordChangeKind, diff_databases};
 use ha_node::PRIMARY_MARKER;
 pub use ha_node::{
-    read_only_standby_hint, read_persisted_ha_role, HaNodeStatus, NodeRole,
-    ReplicationWriterAuthority, HA_NODE_FILE,
+    HA_NODE_FILE, HaNodeStatus, NodeRole, ReplicationWriterAuthority, read_only_standby_hint,
+    read_persisted_ha_role,
 };
 pub use log_archiving::{
-    restore_from_log_archive, restore_point_in_time, LogReplayReport, LOG_ARCHIVE_HOLDER,
+    LOG_ARCHIVE_HOLDER, LogReplayReport, restore_from_log_archive, restore_point_in_time,
 };
 pub use replication_live::{
-    take_thread_commit_seq, ReplicationCursor, ReplicationFeed, SyncQuorum, SyncQuorumStatus,
-    SyncTimeoutPolicy,
+    ReplicationCursor, ReplicationFeed, SyncQuorum, SyncQuorumStatus, SyncTimeoutPolicy,
+    take_thread_commit_seq,
 };
 mod collection_write_identity;
 mod compact_wal;
@@ -44,9 +44,9 @@ mod compact_wal;
 mod first_lock_tests;
 mod flashback;
 pub use flashback::{
-    flashback_error_sqlstate, flashback_history_collection, is_flashback_history_collection,
-    scn_to_unix_micros, unix_micros_to_scn, FlashbackConfig, FlashbackOperation, FlashbackPoint,
-    FlashbackVersion, FLASHBACK_HISTORY_PREFIX,
+    FLASHBACK_HISTORY_PREFIX, FlashbackConfig, FlashbackOperation, FlashbackPoint,
+    FlashbackVersion, flashback_error_sqlstate, flashback_history_collection,
+    is_flashback_history_collection, scn_to_unix_micros, unix_micros_to_scn,
 };
 mod commit_resolution;
 mod fts_build;
@@ -82,7 +82,7 @@ use std::ops::Bound;
 use std::path::{Path, PathBuf};
 use std::ptr::NonNull;
 use std::str::FromStr;
-use std::sync::atomic::{AtomicBool, AtomicU64, AtomicU8, AtomicUsize, Ordering as AtomicOrdering};
+use std::sync::atomic::{AtomicBool, AtomicU8, AtomicU64, AtomicUsize, Ordering as AtomicOrdering};
 use std::sync::{Arc, OnceLock};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 pub use transaction_receipts::{
@@ -95,10 +95,10 @@ pub use wait_graph::row_lock_waits_active;
 use petgraph::algo::{astar, dijkstra};
 use petgraph::graph::{DiGraph, NodeIndex};
 use petgraph::visit::EdgeRef;
-use rstar::{PointDistance, RTree, RTreeObject, AABB};
+use rstar::{AABB, PointDistance, RTree, RTreeObject};
 use serde::{Deserialize, Serialize};
 use serde_json::value::RawValue;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use sha2::Digest;
 use uuid::Uuid;
 
@@ -107,21 +107,21 @@ use crate::consensus::{
     VoteResponse,
 };
 use crate::distribution::{
-    distribution_key_token, filter_commit_frame_for_range, RangeDescriptor, RangeSnapshotBatch,
-    RangeSnapshotExport, RangeSnapshotOptions,
+    RangeDescriptor, RangeSnapshotBatch, RangeSnapshotExport, RangeSnapshotOptions,
+    distribution_key_token, filter_commit_frame_for_range,
 };
 use crate::encryption::{
     self, EncryptionConfig, EncryptionMetadata, EncryptionMode, EncryptionRuntime, KeyRotationPlan,
 };
 use crate::error::{BicDbError, Result};
 use crate::event::{
-    Event, EventQueue, EventStream, StoredEvent, CLOCK_OBSERVATION_STREAM, DEFAULT_EVENTS_DIR,
-    DEFAULT_EVENTS_SEGMENT, RECORD_AUDIT_STREAM, SPATIAL_AUDIT_STREAM,
+    CLOCK_OBSERVATION_STREAM, DEFAULT_EVENTS_DIR, DEFAULT_EVENTS_SEGMENT, Event, EventQueue,
+    EventStream, RECORD_AUDIT_STREAM, SPATIAL_AUDIT_STREAM, StoredEvent,
 };
-use crate::format::{self, FormatMetadata, FormatMigrationPlan, StorageMode, FORMAT_METADATA_FILE};
+use crate::format::{self, FORMAT_METADATA_FILE, FormatMetadata, FormatMigrationPlan, StorageMode};
 use crate::geometry::Geometry;
 use crate::graph::{
-    graph_error, GraphEdge, GraphNode, GraphProjection, GraphProjectionData, GraphVerifyReport,
+    GraphEdge, GraphNode, GraphProjection, GraphProjectionData, GraphVerifyReport, graph_error,
 };
 use crate::hnsw::{
     HnswIndex, HnswIndexConfig, HnswIndexVerifyReport, HnswSearchHit, HnswVector,
@@ -129,9 +129,9 @@ use crate::hnsw::{
 };
 use crate::large_value::{self, LargeValueReader, LargeValueRef};
 use crate::memory_index::{
-    embed_text, memory_error, record_memory_text, score_memory_results, source_hash,
     EmbeddingRuntime, MemoryIndexConsistency, MemoryIndexDefinition, MemoryIndexJob,
-    MemoryIndexMode, MemoryIndexProcessReport, MemoryJobStatus, ModelRegistryEntry,
+    MemoryIndexMode, MemoryIndexProcessReport, MemoryJobStatus, ModelRegistryEntry, embed_text,
+    memory_error, record_memory_text, score_memory_results, source_hash,
 };
 use crate::mutation::{
     MutationActor, MutationGrant, MutationGrantId, MutationGrantSpec, MutationOperation,
@@ -143,18 +143,18 @@ use crate::protected_data;
 use crate::query_exec::{self, NumericSummary, TimeSeriesFilter};
 use crate::record::{CollectionMeta, CollectionMode, CollectionPolicy, Record, StoredRecord};
 use crate::replication::{
-    replication_error, CommitFrame, ReplicationApplyReport, ReplicationApplyState,
+    CommitFrame, DEFAULT_REPLICATION_STREAM_ID, ReplicationApplyReport, ReplicationApplyState,
     ReplicationConfig, ReplicationMode, ReplicationOperationType, ReplicationRetentionStatus,
-    ReplicationWatermark, ReplicationWrite, DEFAULT_REPLICATION_STREAM_ID,
+    ReplicationWatermark, ReplicationWrite, replication_error,
 };
 use crate::residency::{self, ResidencyReport, ResidentBytes};
 use crate::spatial_packed::{self, PackedSpatialEntry, PackedSpatialMeta, SpatialPackStrategy};
 use crate::storage::{self, CompressionConfig, FrameKind, SegmentReadMode};
 use crate::sync::{OpType, SyncLog, SyncOp};
 use crate::sync_mesh::{
-    self, bundle_event_for_stored, envelope_from_metadata, event_with_sync_metadata, EventEnvelope,
-    NodeId, PeerSyncStatus, SyncBundle, SyncCheckpoint, SyncExportReport, SyncImportReport,
-    SyncMesh, SyncMeshState, SyncPendingChanges, SyncStatus, SyncVector, DEFAULT_SYNC_STATE,
+    self, DEFAULT_SYNC_STATE, EventEnvelope, NodeId, PeerSyncStatus, SyncBundle, SyncCheckpoint,
+    SyncExportReport, SyncImportReport, SyncMesh, SyncMeshState, SyncPendingChanges, SyncStatus,
+    SyncVector, bundle_event_for_stored, envelope_from_metadata, event_with_sync_metadata,
 };
 use crate::vector::{
     self, JsonFilter, ProfiledVectorSearch, VectorMetric, VectorSearchProfile, VectorSearchResult,
@@ -3142,13 +3142,14 @@ mod snapshot_count_tests {
         );
         tx.write_stored_inserts_with_statement_snapshots("entries", [(row, db.last_commit_seq())])
             .unwrap();
-        assert!(tx
-            .pending_writes_for_collection("entries")
-            .next()
-            .unwrap()
-            .record
-            .get()
-            .is_none());
+        assert!(
+            tx.pending_writes_for_collection("entries")
+                .next()
+                .unwrap()
+                .record
+                .get()
+                .is_none()
+        );
         let scope = crate::query_budget::QueryMemoryScope::new(64 * 1024);
         assert_eq!(
             tx.try_count_collection_visible_cancellable(
@@ -6400,8 +6401,8 @@ impl Clone for IndexState {
 /// index structure choice (a point-heavy mix favours an ART; material scans
 /// favour a B+Tree). Enable with `BICDB_INDEX_TRACE=1`; zero-cost when off.
 mod index_trace {
-    use std::sync::atomic::{AtomicU64, Ordering::Relaxed};
     use std::sync::OnceLock;
+    use std::sync::atomic::{AtomicU64, Ordering::Relaxed};
 
     pub static POINT: AtomicU64 = AtomicU64::new(0);
     pub static PREFIX: AtomicU64 = AtomicU64::new(0);
@@ -6477,8 +6478,8 @@ mod index_trace {
 /// while the index is a locked structure) versus parallelizable work
 /// (conflict-detect, WAL encode, record/version apply). Zero-cost when off.
 mod commit_trace {
-    use std::sync::atomic::{AtomicU64, Ordering::Relaxed};
     use std::sync::OnceLock;
+    use std::sync::atomic::{AtomicU64, Ordering::Relaxed};
     use std::time::Instant;
 
     pub static INDEX_BUILD: AtomicU64 = AtomicU64::new(0);
@@ -8674,6 +8675,70 @@ fn evaluate_native_invariant_expression(
                         .is_some_and(Ordering::is_lt),
             )
         }
+        NativeInvariantExpression::PublishedExists {
+            binding,
+            relation,
+            owner_application,
+            publication_name,
+            publication_fingerprint,
+            consumer_application,
+            condition,
+        } => {
+            let publication = db
+                .mutation_policy(relation)?
+                .and_then(|policy| policy.native_fact_publication)
+                .ok_or_else(|| {
+                    BicDbError::CommitValidation("native fact integrity failed".into())
+                })?;
+            let actor = tx.mutation_actor.as_ref().ok_or_else(|| {
+                BicDbError::CommitValidation("native fact integrity failed".into())
+            })?;
+            if publication.owner_application != *owner_application
+                || publication.publication_name != *publication_name
+                || publication.fingerprint != *publication_fingerprint
+                || !publication.accept_new_references
+                || !publication.consumers.contains(consumer_application)
+                || actor.roles.is_disjoint(&publication.read_roles)
+            {
+                return Err(BicDbError::CommitValidation(
+                    "native fact integrity failed".into(),
+                ));
+            }
+            let tenant = actor
+                .tenant_id
+                .as_deref()
+                .and_then(|tenant| Uuid::parse_str(tenant).ok())
+                .ok_or_else(|| {
+                    BicDbError::CommitValidation("native fact integrity failed".into())
+                })?;
+            let mut found = false;
+            for record in resulting_records_for_relation(db, tx, relation)? {
+                let eligible = record_invariant_field(&record, &publication.tenant_field)
+                    .as_str()
+                    .and_then(|tenant| Uuid::parse_str(tenant).ok())
+                    == Some(tenant);
+                if !eligible {
+                    continue;
+                }
+                let mut nested = bindings.clone();
+                nested.insert(binding.clone(), record);
+                if evaluate_native_invariant_expression(
+                    db,
+                    tx,
+                    subject_relation,
+                    subject,
+                    &nested,
+                    condition,
+                )?
+                .as_bool()
+                    == Some(true)
+                {
+                    found = true;
+                    break;
+                }
+            }
+            Value::Bool(found)
+        }
         NativeInvariantExpression::Exists {
             binding,
             relation,
@@ -8786,8 +8851,38 @@ fn validate_carrier_invariant(
     {
         return Ok(());
     }
+    fn has_published(value: &NativeInvariantExpression) -> bool {
+        match value {
+            NativeInvariantExpression::PublishedExists { .. } => true,
+            NativeInvariantExpression::Unary { value, .. } => has_published(value),
+            NativeInvariantExpression::Binary { left, right, .. } => {
+                has_published(left) || has_published(right)
+            }
+            NativeInvariantExpression::Exists { condition, .. }
+            | NativeInvariantExpression::Aggregate { condition, .. } => has_published(condition),
+            NativeInvariantExpression::Overlaps { values, .. } => values.iter().any(has_published),
+            _ => false,
+        }
+    }
+    let published = has_published(&definition.expression);
+    if published
+        && !tx
+            .writes
+            .iter()
+            .any(|write| write.collection == definition.subject_relation)
+    {
+        return Ok(());
+    }
     let subjects = resulting_records_for_relation(db, tx, &definition.subject_relation)?;
     for subject in subjects {
+        if published
+            && !tx.writes.iter().any(|write| {
+                write.collection == definition.subject_relation && write.record_id == subject.id
+            })
+        {
+            continue;
+        }
+
         let value = evaluate_native_invariant_expression(
             db,
             tx,
@@ -8971,6 +9066,13 @@ impl TransactionRollbackMark {
     }
 }
 
+struct AuthorizedMutation {
+    audit: Option<crate::broker::PendingBrokerPublish>,
+    issuer_application: Option<String>,
+    relation: String,
+    record_ids: Vec<String>,
+}
+
 #[derive(Debug)]
 pub struct Transaction {
     db: NonNull<BicDb>,
@@ -9081,6 +9183,7 @@ pub struct Transaction {
     // so rollback marks restore the timing as well as the queued checks.
     constraint_modes: Mutex<Vec<(String, bool)>>,
     mutation_grants: BTreeMap<MutationGrantId, MutationGrant>,
+    native_write_issuers: Mutex<BTreeMap<usize, Option<String>>>,
     next_mutation_grant: u64,
     commit_validators: Vec<NativeCommitValidator>,
     isolation: TransactionIsolation,
@@ -9980,7 +10083,9 @@ impl BicDb {
                         value.get("phase").and_then(serde_json::Value::as_str),
                         Some("admitted" | "reverted")
                     ) {
-                        return Err(replication_error("offline application unique-scope transition requires signed recovery or admission"));
+                        return Err(replication_error(
+                            "offline application unique-scope transition requires signed recovery or admission",
+                        ));
                     }
                 }
                 Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
@@ -10039,7 +10144,9 @@ impl BicDb {
                         value.get("phase").and_then(serde_json::Value::as_str),
                         Some("admitted" | "reverted")
                     ) {
-                        return Err(replication_error("offline application unique-scope transition requires signed recovery or admission"));
+                        return Err(replication_error(
+                            "offline application unique-scope transition requires signed recovery or admission",
+                        ));
                     }
                 }
                 Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
@@ -12257,7 +12364,9 @@ impl BicDb {
         expected_cluster_id: &str,
     ) -> Result<ReplicationApplyReport> {
         if !self.replication_verification_healthy() {
-            return Err(replication_error("replica verification failed; snapshot bootstrap required before importing more commits"));
+            return Err(replication_error(
+                "replica verification failed; snapshot bootstrap required before importing more commits",
+            ));
         }
         if require_standby && !self.is_replication_standby() {
             return Err(replication_error(
@@ -12640,6 +12749,9 @@ impl BicDb {
                     "collection `{collection}` mutation field names must contain 1..=256 bytes"
                 )));
             }
+        }
+        if policy.native_fact_publication.is_some() || policy.native_fact_reference_immutable {
+            format::enable_native_immutable_facts(&self.path)?;
         }
         self.collection_state_mut(collection)?.meta.mutation_policy = Some(policy);
         self.persist_catalog()?;
@@ -15242,6 +15354,28 @@ impl Transaction {
     /// [`BicDb::begin_application_transaction`]; ordinary transactions fail
     /// closed.
     pub fn issue_mutation_grant(&mut self, spec: MutationGrantSpec) -> Result<MutationGrantId> {
+        self.issue_mutation_grant_inner(spec, None)
+    }
+
+    /// Trusted native host only: the issuer is the validated executing package,
+    /// never an actor attribute, SQL parameter or application ABI request field.
+    pub fn issue_application_mutation_grant(
+        &mut self,
+        spec: MutationGrantSpec,
+        issuer_application: String,
+    ) -> Result<MutationGrantId> {
+        if issuer_application.is_empty() {
+            return Err(BicDbError::MutationDenied(
+                "empty application issuer".into(),
+            ));
+        }
+        self.issue_mutation_grant_inner(spec, Some(issuer_application))
+    }
+    fn issue_mutation_grant_inner(
+        &mut self,
+        spec: MutationGrantSpec,
+        issuer_application: Option<String>,
+    ) -> Result<MutationGrantId> {
         if self.state != TxState::Pending {
             return Err(BicDbError::TransactionNotPending);
         }
@@ -15293,6 +15427,7 @@ impl Transaction {
         self.mutation_grants.insert(
             id,
             MutationGrant {
+                issuer_application,
                 id,
                 actor,
                 remaining_rows: spec.maximum_affected_rows,
@@ -15509,7 +15644,7 @@ impl Transaction {
         collection: &str,
         operation: MutationOperation,
         records: &[Record],
-    ) -> Result<Option<crate::broker::PendingBrokerPublish>> {
+    ) -> Result<AuthorizedMutation> {
         self.authorize_mutation_with_preimage(grant_id, collection, operation, records, None)
     }
 
@@ -15520,7 +15655,7 @@ impl Transaction {
         operation: MutationOperation,
         records: &[Record],
         checked_preimage: Option<(&str, Option<Arc<Record>>)>,
-    ) -> Result<Option<crate::broker::PendingBrokerPublish>> {
+    ) -> Result<AuthorizedMutation> {
         if self.state != TxState::Pending {
             return Err(BicDbError::TransactionNotPending);
         }
@@ -15582,6 +15717,15 @@ impl Transaction {
                 .clone()
                 .unwrap_or_default()
         };
+        if let Some(publication) = &mutation_policy.native_fact_publication {
+            if grant.issuer_application.as_deref() != Some(publication.owner_application.as_str())
+                || operation != MutationOperation::Insert
+            {
+                return Err(BicDbError::MutationDenied(
+                    "immutable owner publication mutation denied".into(),
+                ));
+            }
+        }
         if mutation_policy.audit_required && grant.spec.audit_metadata.is_empty() {
             return Err(BicDbError::MutationDenied(format!(
                 "collection `{collection}` requires non-empty MutationGrant audit metadata"
@@ -15614,7 +15758,7 @@ impl Transaction {
                 Some(_) => {
                     return Err(BicDbError::TransactionConflict(
                         "checked mutation preimage does not match its row".into(),
-                    ))
+                    ));
                 }
                 None => self.get_visible_unchecked(collection, &record.id)?,
             };
@@ -15744,6 +15888,7 @@ impl Transaction {
                 message_id: Uuid::new_v4(),
             }
         });
+        let authorized_issuer = grant.issuer_application.clone();
         let grant = self
             .mutation_grants
             .get_mut(&grant_id)
@@ -15753,11 +15898,32 @@ impl Transaction {
         if grant.remaining_rows == 0 || grant.remaining_statements == 0 {
             self.mutation_grants.remove(&grant_id);
         }
-        Ok(audit)
+        Ok(AuthorizedMutation {
+            audit,
+            issuer_application: authorized_issuer,
+            relation: collection.into(),
+            record_ids: records.iter().map(|record| record.id.clone()).collect(),
+        })
     }
 
-    fn enqueue_mutation_audit(&self, audit: Option<crate::broker::PendingBrokerPublish>) {
-        if let Some(audit) = audit {
+    fn enqueue_mutation_audit(&self, authorization: AuthorizedMutation) {
+        let mut issuers = self.native_write_issuers.lock();
+        for id in &authorization.record_ids {
+            if let Some(index) = self
+                .writes
+                .iter()
+                .enumerate()
+                .rev()
+                .find_map(|(index, write)| {
+                    (write.collection == authorization.relation && write.record_id == *id)
+                        .then_some(index)
+                })
+            {
+                issuers.insert(index, authorization.issuer_application.clone());
+            }
+        }
+        drop(issuers);
+        if let Some(audit) = authorization.audit {
             self.pending_broker_publishes.lock().push(audit);
         }
     }
@@ -18216,6 +18382,7 @@ impl Transaction {
         }
         if len < self.writes.len() {
             self.writes.truncate(len);
+            self.native_write_issuers.lock().split_off(&len);
             self.rebuild_write_index();
         }
         self.rollback_write_receipts(self.writes.len());
@@ -18242,6 +18409,7 @@ impl Transaction {
         }
         if write_len < self.writes.len() {
             self.writes.truncate(write_len);
+            self.native_write_issuers.lock().split_off(&write_len);
             self.rebuild_write_index();
         }
         self.rollback_write_receipts(self.writes.len());
@@ -21578,11 +21746,7 @@ struct ClockPairObservation {
 impl ClockPairTable {
     fn pair_key(a: &NodeId, b: &NodeId) -> (String, String) {
         let (a, b) = (a.to_string(), b.to_string());
-        if a <= b {
-            (a, b)
-        } else {
-            (b, a)
-        }
+        if a <= b { (a, b) } else { (b, a) }
     }
 
     fn observe(&mut self, observation: ClockPairObservation, peer: &NodeId) {
@@ -25513,11 +25677,7 @@ pub fn fts_rank_conjunctive(term_positions: &[Option<&[u16]>], weights: [f32; 4]
             }
         }
     }
-    if result < 0.0 {
-        1e-20
-    } else {
-        result
-    }
+    if result < 0.0 { 1e-20 } else { result }
 }
 
 pub fn decode_fts_posting_payload(bytes: &[u8]) -> Option<(u32, u32, Vec<u16>)> {
@@ -27979,12 +28139,10 @@ fn validate_record_parts(
         return Err(BicDbError::EmptyRecordId);
     }
     if id.len() > MAX_RECORD_ID_BYTES {
-        return Err(BicDbError::InvalidRecordId(
-            format!(
-                "record id for collection `{collection}` is {} UTF-8 bytes; ids must be at most {MAX_RECORD_ID_BYTES} bytes",
-                id.len()
-            ),
-        ));
+        return Err(BicDbError::InvalidRecordId(format!(
+            "record id for collection `{collection}` is {} UTF-8 bytes; ids must be at most {MAX_RECORD_ID_BYTES} bytes",
+            id.len()
+        )));
     }
 
     if let Some(vector) = vector {
@@ -28201,11 +28359,13 @@ mod schema_compatibility_tests {
 
         let mut tampered = bundle;
         tampered.collections[0].vector_dim = Some(3);
-        assert!(tampered
-            .verify()
-            .unwrap_err()
-            .to_string()
-            .contains("checksum"));
+        assert!(
+            tampered
+                .verify()
+                .unwrap_err()
+                .to_string()
+                .contains("checksum")
+        );
     }
 
     #[test]
@@ -28255,13 +28415,17 @@ mod schema_compatibility_tests {
             base,
             "staging must not activate schema"
         );
-        assert!(!target
-            .collections()
-            .iter()
-            .any(|meta| meta.name == "appointments"));
-        assert!(target
-            .lookup_index("patients_name", &[IndexValue::from("Ada")])
-            .is_err());
+        assert!(
+            !target
+                .collections()
+                .iter()
+                .any(|meta| meta.name == "appointments")
+        );
+        assert!(
+            target
+                .lookup_index("patients_name", &[IndexValue::from("Ada")])
+                .is_err()
+        );
         assert_eq!(
             target
                 .stage_signed_cluster_schema_bundle(signed, &trusted, limits, 101)
@@ -28280,12 +28444,16 @@ mod schema_compatibility_tests {
             staged
         );
         assert!(reopened.get("patients", "patient-1").unwrap().is_some());
-        assert!(reopened
-            .discard_cluster_schema_stage(&trusted, limits)
-            .unwrap());
-        assert!(!reopened
-            .discard_cluster_schema_stage(&trusted, limits)
-            .unwrap());
+        assert!(
+            reopened
+                .discard_cluster_schema_stage(&trusted, limits)
+                .unwrap()
+        );
+        assert!(
+            !reopened
+                .discard_cluster_schema_stage(&trusted, limits)
+                .unwrap()
+        );
     }
 
     #[test]
@@ -28343,9 +28511,11 @@ mod schema_compatibility_tests {
         target
             .begin_cluster_schema_activation(&trusted, limits, 101)
             .unwrap();
-        assert!(target
-            .abort_cluster_schema_activation(&trusted, limits)
-            .unwrap());
+        assert!(
+            target
+                .abort_cluster_schema_activation(&trusted, limits)
+                .unwrap()
+        );
         target
             .begin_cluster_schema_activation(&trusted, limits, 102)
             .unwrap();
@@ -28364,11 +28534,13 @@ mod schema_compatibility_tests {
                 simulated_lost_checkpoint = true;
                 drop(target);
                 target = open(&target_path);
-                assert!(target
-                    .abort_cluster_schema_activation(&trusted, limits)
-                    .unwrap_err()
-                    .to_string()
-                    .contains("must be resumed"));
+                assert!(
+                    target
+                        .abort_cluster_schema_activation(&trusted, limits)
+                        .unwrap_err()
+                        .to_string()
+                        .contains("must be resumed")
+                );
             }
             if target
                 .load_cluster_schema_activation(&trusted, limits)
@@ -28390,14 +28562,18 @@ mod schema_compatibility_tests {
             desired_fingerprint
         );
         assert!(target.get("patients", "patient-1").unwrap().is_some());
-        assert!(target
-            .collections()
-            .iter()
-            .any(|meta| meta.name == "appointments"));
-        assert!(target
-            .get("__bicdb_pg_schema", "appointments")
-            .unwrap()
-            .is_some());
+        assert!(
+            target
+                .collections()
+                .iter()
+                .any(|meta| meta.name == "appointments")
+        );
+        assert!(
+            target
+                .get("__bicdb_pg_schema", "appointments")
+                .unwrap()
+                .is_some()
+        );
         assert_eq!(
             target
                 .lookup_index("patients_name", &[IndexValue::from("Ada")])
@@ -28405,11 +28581,13 @@ mod schema_compatibility_tests {
                 .len(),
             1
         );
-        assert!(target
-            .discard_cluster_schema_stage(&trusted, stage_limits)
-            .unwrap_err()
-            .to_string()
-            .contains("activation checkpoint"));
+        assert!(
+            target
+                .discard_cluster_schema_stage(&trusted, stage_limits)
+                .unwrap_err()
+                .to_string()
+                .contains("activation checkpoint")
+        );
 
         let rollout_id = Uuid::now_v7();
         let error = target
@@ -28424,9 +28602,11 @@ mod schema_compatibility_tests {
                 140,
             )
             .unwrap_err();
-        assert!(error
-            .to_string()
-            .contains("does not match an exact completed live activation"));
+        assert!(
+            error
+                .to_string()
+                .contains("does not match an exact completed live activation")
+        );
         assert!(target.path.join(DEFAULT_CLUSTER_SCHEMA_STAGE).exists());
         assert!(target.path.join(DEFAULT_CLUSTER_SCHEMA_ACTIVATION).exists());
         let staged_bytes = fs::read(target.path.join(DEFAULT_CLUSTER_SCHEMA_STAGE)).unwrap();
@@ -28511,40 +28691,46 @@ mod schema_compatibility_tests {
             "release-key".to_string(),
             SigningKey::from_bytes(&[10; 32]).verifying_key().to_bytes(),
         )]);
-        assert!(target
-            .stage_signed_cluster_schema_bundle(
-                signed.clone(),
-                &wrong_trust,
-                ClusterSchemaStageLimits::default(),
-                100,
-            )
-            .unwrap_err()
-            .to_string()
-            .contains("signature is invalid"));
+        assert!(
+            target
+                .stage_signed_cluster_schema_bundle(
+                    signed.clone(),
+                    &wrong_trust,
+                    ClusterSchemaStageLimits::default(),
+                    100,
+                )
+                .unwrap_err()
+                .to_string()
+                .contains("signature is invalid")
+        );
 
         let trusted = BTreeMap::from([(
             "release-key".to_string(),
             signing_key.verifying_key().to_bytes(),
         )]);
-        assert!(target
-            .stage_signed_cluster_schema_bundle(
-                signed,
-                &trusted,
-                ClusterSchemaStageLimits::default(),
-                100,
-            )
-            .unwrap_err()
-            .to_string()
-            .contains("index removal `patients_name`"));
+        assert!(
+            target
+                .stage_signed_cluster_schema_bundle(
+                    signed,
+                    &trusted,
+                    ClusterSchemaStageLimits::default(),
+                    100,
+                )
+                .unwrap_err()
+                .to_string()
+                .contains("index removal `patients_name`")
+        );
 
         let mut mismatched = desired.cluster_schema_bundle().unwrap();
         mismatched.fingerprint.sha256 = "00".repeat(32);
         mismatched.checksum_sha256 = mismatched.calculate_checksum().unwrap();
-        assert!(mismatched
-            .verify()
-            .unwrap_err()
-            .to_string()
-            .contains("contents do not match"));
+        assert!(
+            mismatched
+                .verify()
+                .unwrap_err()
+                .to_string()
+                .contains("contents do not match")
+        );
     }
 }
 
@@ -28602,22 +28788,25 @@ mod paged_read_ahead_tests {
                     .unwrap(),
                 1
             );
-            assert!(db
-                .get_unchecked("runtime_contexts", "context-1")
-                .unwrap()
-                .is_none());
-            assert!(db
-                .lookup_index_exact("runtime_backend_pid", &[IndexValue::from(1)])
-                .unwrap()
-                .is_empty());
+            assert!(
+                db.get_unchecked("runtime_contexts", "context-1")
+                    .unwrap()
+                    .is_none()
+            );
+            assert!(
+                db.lookup_index_exact("runtime_backend_pid", &[IndexValue::from(1)])
+                    .unwrap()
+                    .is_empty()
+            );
             db.close().unwrap();
         }
 
         let db = BicDb::open_with_config(temp.path(), config).unwrap();
-        assert!(db
-            .get_unchecked("runtime_contexts", "context-1")
-            .unwrap()
-            .is_none());
+        assert!(
+            db.get_unchecked("runtime_contexts", "context-1")
+                .unwrap()
+                .is_none()
+        );
         assert!(
             db.lookup_index_exact("runtime_backend_pid", &[IndexValue::from(1)])
                 .unwrap()
@@ -28658,8 +28847,8 @@ mod paged_read_ahead_tests {
         };
         let governor = ResourceGovernor::new(ResourceGovernorConfig::default(), 100).unwrap();
         let before = db.paged_read_ahead_queue_depth().unwrap();
-        assert!(db
-            .paged_read_ahead_step_governed(
+        assert!(
+            db.paged_read_ahead_step_governed(
                 limits,
                 &governor,
                 ResourceDemand {
@@ -28670,7 +28859,8 @@ mod paged_read_ahead_tests {
             )
             .unwrap_err()
             .to_string()
-            .contains("reserve at least"));
+            .contains("reserve at least")
+        );
         assert_eq!(db.paged_read_ahead_queue_depth(), Some(before));
 
         let mut saturated_config = ResourceGovernorConfig::default();
@@ -28887,8 +29077,8 @@ mod index_maintenance_tests {
             memory_bytes: index_demand.memory_bytes - 1,
             ..index_demand
         };
-        assert!(db
-            .append_full_text_build_batch_governed(
+        assert!(
+            db.append_full_text_build_batch_governed(
                 "missing-index",
                 &[],
                 &governor,
@@ -28897,7 +29087,8 @@ mod index_maintenance_tests {
             )
             .unwrap_err()
             .to_string()
-            .contains("configured builder may use"));
+            .contains("configured builder may use")
+        );
     }
 
     #[test]
@@ -29018,17 +29209,20 @@ mod index_maintenance_tests {
             cpu_slots: 1,
             io_charge_bytes: 1024 * 1024,
         };
-        assert!(db
-            .advance_incremental_compaction_governed(limits, &governor, demand, 101)
-            .unwrap_err()
-            .to_string()
-            .contains("database changed"));
+        assert!(
+            db.advance_incremental_compaction_governed(limits, &governor, demand, 101)
+                .unwrap_err()
+                .to_string()
+                .contains("database changed")
+        );
         assert!(db.get("items", "after").unwrap().is_some());
         assert!(db.discard_incremental_compaction(limits).unwrap());
-        assert!(!temp
-            .path()
-            .join(DEFAULT_INCREMENTAL_COMPACTION_STATE)
-            .exists());
+        assert!(
+            !temp
+                .path()
+                .join(DEFAULT_INCREMENTAL_COMPACTION_STATE)
+                .exists()
+        );
     }
 
     #[test]
@@ -29083,9 +29277,10 @@ mod index_maintenance_tests {
                 )
                 .unwrap();
             assert!(matches!(progress, PagedBTreeBuildAdvance::Progress(_)));
-            assert!(db
-                .lookup_index(&definition.name, &[IndexValue::from(1)])
-                .is_err());
+            assert!(
+                db.lookup_index(&definition.name, &[IndexValue::from(1)])
+                    .is_err()
+            );
         }
         {
             let mut db = BicDb::open_with_config(temp.path(), config.clone()).unwrap();
@@ -29229,14 +29424,16 @@ mod index_maintenance_tests {
             cpu_slots: 1,
             io_charge_bytes: 1,
         };
-        assert!(db
-            .advance_paged_btree_build_governed("idx_items_id", limits, &governor, demand, 101,)
-            .unwrap_err()
-            .to_string()
-            .contains("database changed"));
-        assert!(db
-            .discard_paged_btree_build("idx_items_id", limits)
-            .unwrap());
+        assert!(
+            db.advance_paged_btree_build_governed("idx_items_id", limits, &governor, demand, 101,)
+                .unwrap_err()
+                .to_string()
+                .contains("database changed")
+        );
+        assert!(
+            db.discard_paged_btree_build("idx_items_id", limits)
+                .unwrap()
+        );
         assert!(db.get("items", "after").unwrap().is_some());
         db.create_index(definition).unwrap();
         assert_eq!(
@@ -29321,11 +29518,13 @@ mod index_maintenance_tests {
         }
 
         let mut reopened = BicDb::open_with_config(temp.path(), config).unwrap();
-        assert!(reopened
-            .discard_paged_btree_build(&definition.name, limits)
-            .unwrap_err()
-            .to_string()
-            .contains("published catalog"));
+        assert!(
+            reopened
+                .discard_paged_btree_build(&definition.name, limits)
+                .unwrap_err()
+                .to_string()
+                .contains("published catalog")
+        );
         let report = reopened.create_index_online(definition.clone()).unwrap();
         assert!(report.interrupted_previous);
         assert_eq!(
@@ -29403,17 +29602,20 @@ mod index_maintenance_tests {
             })),
         )
         .unwrap();
-        assert!(db
-            .lookup_index("active_reservations", &[IndexValue::from("tenant-a")])
-            .unwrap()
-            .is_empty());
+        assert!(
+            db.lookup_index("active_reservations", &[IndexValue::from("tenant-a")])
+                .unwrap()
+                .is_empty()
+        );
         drop(db);
 
         let reopened = persistent_test_db(&path);
-        assert!(reopened
-            .lookup_index("active_reservations", &[IndexValue::from("tenant-a")])
-            .unwrap()
-            .is_empty());
+        assert!(
+            reopened
+                .lookup_index("active_reservations", &[IndexValue::from("tenant-a")])
+                .unwrap()
+                .is_empty()
+        );
         assert!(reopened.index_definitions()[0].predicate.is_some());
     }
 
@@ -29927,10 +30129,11 @@ mod index_maintenance_tests {
         )
         .unwrap();
         tx.commit().unwrap();
-        assert!(db
-            .lookup_index("stock_data", &[IndexValue::String("x".into())])
-            .unwrap()
-            .is_empty());
+        assert!(
+            db.lookup_index("stock_data", &[IndexValue::String("x".into())])
+                .unwrap()
+                .is_empty()
+        );
         assert_eq!(
             db.lookup_index("stock_data", &[IndexValue::String("y".into())])
                 .unwrap(),
@@ -29957,10 +30160,11 @@ mod index_maintenance_tests {
         )
         .unwrap();
         tx.commit().unwrap();
-        assert!(db
-            .lookup_index("stock_pk", &[IndexValue::Int(1), IndexValue::Int(7)])
-            .unwrap()
-            .is_empty());
+        assert!(
+            db.lookup_index("stock_pk", &[IndexValue::Int(1), IndexValue::Int(7)])
+                .unwrap()
+                .is_empty()
+        );
         assert_eq!(
             db.lookup_index("stock_pk", &[IndexValue::Int(1), IndexValue::Int(8)])
                 .unwrap(),
@@ -30697,10 +30901,12 @@ mod index_maintenance_tests {
                 tx.commit().unwrap();
                 let expected = db.get("widgets", "row").unwrap().unwrap();
                 assert_eq!(expected.metadata["counter"], 115);
-                assert!(expected.metadata["unchanged"]
-                    .as_str()
-                    .unwrap()
-                    .starts_with("a concurrently"));
+                assert!(
+                    expected.metadata["unchanged"]
+                        .as_str()
+                        .unwrap()
+                        .starts_with("a concurrently")
+                );
                 if checkpoint_after {
                     let plan = db.checkpoint_begin().unwrap();
                     db.checkpoint_write_segments(&plan).unwrap();
@@ -31084,7 +31290,7 @@ mod index_maintenance_tests {
                 name: "idx_jobs_queued_migration_version".to_string(),
                 collection: "jobs".to_string(),
                 fields: vec![IndexField::MetadataPath(vec![
-                    "queued_migration_version".to_string()
+                    "queued_migration_version".to_string(),
                 ])],
                 unique: true,
                 kind: IndexKind::BTree,
@@ -31596,10 +31802,11 @@ mod index_maintenance_tests {
 
             assert_eq!(db.scan_collection("jobs").unwrap().len(), 4);
             assert!(db.verify_index("idx_jobs_bucket").unwrap().valid);
-            assert!(db
-                .lookup_index("idx_jobs_bucket", &[IndexValue::from(0)])
-                .unwrap()
-                .is_empty());
+            assert!(
+                db.lookup_index("idx_jobs_bucket", &[IndexValue::from(0)])
+                    .unwrap()
+                    .is_empty()
+            );
         }
 
         let db =
@@ -31657,14 +31864,16 @@ mod index_maintenance_tests {
 
             assert_eq!(db.scan_collection("jobs").unwrap().len(), 2);
             assert!(db.verify_index("idx_jobs_bucket").unwrap().valid);
-            assert!(db
-                .lookup_index("idx_jobs_bucket", &[IndexValue::from(0)])
-                .unwrap()
-                .is_empty());
-            assert!(db
-                .lookup_index("idx_jobs_bucket", &[IndexValue::from(1)])
-                .unwrap()
-                .is_empty());
+            assert!(
+                db.lookup_index("idx_jobs_bucket", &[IndexValue::from(0)])
+                    .unwrap()
+                    .is_empty()
+            );
+            assert!(
+                db.lookup_index("idx_jobs_bucket", &[IndexValue::from(1)])
+                    .unwrap()
+                    .is_empty()
+            );
             assert_eq!(
                 db.lookup_index("idx_jobs_bucket", &[IndexValue::from(2)])
                     .unwrap(),
@@ -31839,7 +32048,7 @@ mod index_maintenance_tests {
             name: "idx_jobs_queued_migration_version".to_string(),
             collection: "jobs".to_string(),
             fields: vec![IndexField::MetadataPath(vec![
-                "queued_migration_version".to_string()
+                "queued_migration_version".to_string(),
             ])],
             unique: true,
             kind: IndexKind::BTree,
@@ -31930,10 +32139,11 @@ mod index_maintenance_tests {
         assert!(db.verify_index("idx_items_bucket").unwrap().valid);
 
         assert!(db.delete("items", "item-1").unwrap());
-        assert!(db
-            .lookup_index("idx_items_bucket", &[IndexValue::from("closed")])
-            .unwrap()
-            .is_empty());
+        assert!(
+            db.lookup_index("idx_items_bucket", &[IndexValue::from("closed")])
+                .unwrap()
+                .is_empty()
+        );
         assert!(db.verify_index("idx_items_bucket").unwrap().valid);
     }
 
@@ -32084,10 +32294,11 @@ mod index_maintenance_tests {
             db.get("items", "item-1").unwrap().unwrap().metadata["status"],
             "done"
         );
-        assert!(db
-            .lookup_index("idx_items_status", &[IndexValue::from("queued")])
-            .unwrap()
-            .is_empty());
+        assert!(
+            db.lookup_index("idx_items_status", &[IndexValue::from("queued")])
+                .unwrap()
+                .is_empty()
+        );
         assert_eq!(
             db.lookup_index("idx_items_status", &[IndexValue::from("done")])
                 .unwrap(),
@@ -32154,10 +32365,11 @@ mod index_maintenance_tests {
         assert_eq!(filtered.0, vec![IndexValue::from(7), IndexValue::from(5)]);
         assert_eq!(filtered.1, vec!["event-5".to_string()]);
 
-        assert!(db
-            .lookup_index_extreme("idx_events_bucket_position", &[IndexValue::from(8)], false)
-            .unwrap()
-            .is_none());
+        assert!(
+            db.lookup_index_extreme("idx_events_bucket_position", &[IndexValue::from(8)], false)
+                .unwrap()
+                .is_none()
+        );
     }
 
     #[test]
@@ -32205,8 +32417,10 @@ mod index_maintenance_tests {
         .unwrap();
         db.batch_insert(
             "ledger_entries",
-            vec![Record::new("entry-a")
-                .with_metadata(json!({"external_ref": "alpha", "state": "posted"}))],
+            vec![
+                Record::new("entry-a")
+                    .with_metadata(json!({"external_ref": "alpha", "state": "posted"})),
+            ],
         )
         .unwrap();
 
@@ -33513,8 +33727,11 @@ mod index_maintenance_tests {
                             .get("ledger", "changed")
                             .unwrap()
                             .and_then(|record| record.metadata.get("v").and_then(|v| v.as_i64()));
-                        assert_eq!(value, reinsert.then_some(30),
-                            "before={delete_before_begin} reinsert={reinsert} abort={abort_first} truncate={truncate}");
+                        assert_eq!(
+                            value,
+                            reinsert.then_some(30),
+                            "before={delete_before_begin} reinsert={reinsert} abort={abort_first} truncate={truncate}"
+                        );
                         assert!(recovered.get("ledger", "untouched").unwrap().is_some());
                     }
                 }
@@ -34318,11 +34535,12 @@ mod index_maintenance_tests {
             .unwrap();
 
         // The normal write path rejects the duplicate at validation.
-        assert!(db
-            .insert("codes", Record::new("b").with_metadata(json!({"code": 1})))
-            .unwrap_err()
-            .to_string()
-            .contains("duplicate"));
+        assert!(
+            db.insert("codes", Record::new("b").with_metadata(json!({"code": 1})))
+                .unwrap_err()
+                .to_string()
+                .contains("duplicate")
+        );
 
         // Simulate a writer that BYPASSES validation and claims, applying
         // durable entries directly inside a paged transaction: the atomic
@@ -34556,7 +34774,7 @@ enum ExternalFullTextBuildOutcome {
 
 #[cfg(test)]
 mod analyze_sampling_tests {
-    use super::{estimate_distinct_from_sample, scale_sample_count, AnalyzeSampler};
+    use super::{AnalyzeSampler, estimate_distinct_from_sample, scale_sample_count};
 
     #[test]
     fn sample_covering_the_table_is_exact() {

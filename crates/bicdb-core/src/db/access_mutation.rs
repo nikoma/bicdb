@@ -895,6 +895,7 @@ impl BicDb {
             deferred_hooks: Mutex::new(Vec::new()),
             constraint_modes: Mutex::new(Vec::new()),
             mutation_grants: BTreeMap::new(),
+            native_write_issuers: Mutex::new(BTreeMap::new()),
             next_mutation_grant: 1,
             commit_validators: Vec::new(),
             isolation: TransactionIsolation::ReadCommitted,

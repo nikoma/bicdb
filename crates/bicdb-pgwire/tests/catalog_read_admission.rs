@@ -656,3 +656,108 @@ fn created_replacement_receipts_survive_wire_messages_and_repeated_savepoint_und
         }
     }
 }
+
+#[test]
+fn prepared_information_schema_columns_keep_the_live_rename_owner_in_every_phase() {
+    for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open_with_config(
+            root.path(),
+            DbConfig::default()
+                .with_fsync(true)
+                .with_storage_mode(mode.clone()),
+        )
+        .unwrap();
+        SqlSession::new(&mut db)
+            .execute("CREATE TABLE source(id INT PRIMARY KEY,payload TEXT)")
+            .unwrap();
+        bicdb_sql::initialize_rename_journal_identities(&mut db).unwrap();
+        let shared = Arc::new(RwLock::new(db));
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        let server = PgWireServer::open_with_shared(
+            root.path(),
+            PgWireConfig {
+                fsync: true,
+                automatic_paged_checkpoint: false,
+                ..Default::default()
+            },
+            Arc::clone(&shared),
+        )
+        .unwrap();
+        let serving = Arc::clone(&server);
+        let task = thread::spawn(move || bicdb_pgwire::serve_existing_listener(serving, listener));
+        let mut owner = connect(address);
+        let mut other = connect(address);
+        let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            assert!(codes(&query(
+                &mut owner,
+                "BEGIN; ALTER TABLE source RENAME TO renamed"
+            ))
+            .is_empty());
+            // The metadata query is intentionally fully parameterized, with a
+            // LOWER call and the real public descriptor types. Parse and both
+            // Describe variants must retain the same live owner's identity.
+            let sql="SELECT table_schema,column_name,data_type,character_maximum_length,numeric_precision,numeric_scale,is_nullable,column_default FROM information_schema.columns WHERE table_name=LOWER($1) ORDER BY ordinal_position";
+            let mut parse = b"owner_metadata\0".to_vec();
+            parse.extend_from_slice(sql.as_bytes());
+            parse.push(0);
+            parse.extend_from_slice(&0i16.to_be_bytes());
+            send(&mut owner, b'P', &parse);
+            send(&mut owner, b'S', &[]);
+            let response = ready(&mut owner);
+            assert!(codes(&response).is_empty(), "{mode} Parse: {response:?}");
+            let response = describe(&mut owner, "owner_metadata");
+            assert!(
+                codes(&response).is_empty(),
+                "{mode} statement Describe: {response:?}"
+            );
+            assert!(response.iter().any(|(tag, _)| *tag == b'T'));
+            let mut bind = b"owner_portal\0owner_metadata\0".to_vec();
+            bind.extend_from_slice(&0i16.to_be_bytes());
+            bind.extend_from_slice(&1i16.to_be_bytes());
+            bind.extend_from_slice(&7i32.to_be_bytes());
+            bind.extend_from_slice(b"RENAMED");
+            bind.extend_from_slice(&0i16.to_be_bytes());
+            send(&mut owner, b'B', &bind);
+            send(&mut owner, b'S', &[]);
+            let response = ready(&mut owner);
+            assert!(codes(&response).is_empty(), "{mode} Bind: {response:?}");
+            send(&mut owner, b'D', b"Powner_portal\0");
+            send(&mut owner, b'S', &[]);
+            let response = ready(&mut owner);
+            assert!(
+                codes(&response).is_empty(),
+                "{mode} portal Describe: {response:?}"
+            );
+            let mut execute = b"owner_portal\0".to_vec();
+            execute.extend_from_slice(&0i32.to_be_bytes());
+            send(&mut owner, b'E', &execute);
+            send(&mut owner, b'S', &[]);
+            let response = ready(&mut owner);
+            assert!(codes(&response).is_empty(), "{mode} Execute: {response:?}");
+            assert_eq!(response.iter().filter(|(tag, _)| *tag == b'D').count(), 2);
+            assert_eq!(
+                codes(&query(
+                    &mut other,
+                    "SELECT column_name FROM information_schema.columns WHERE table_name='renamed'"
+                )),
+                vec!["40001"]
+            );
+            assert!(codes(&query(&mut owner, "ROLLBACK")).is_empty());
+            assert_eq!(value(&query(&mut other,"SELECT column_name FROM information_schema.columns WHERE table_name='source' ORDER BY ordinal_position LIMIT 1")),Some("id".into()));
+        }));
+        for stream in [&mut owner, &mut other] {
+            send(stream, b'X', &[]);
+        }
+        drop(owner);
+        drop(other);
+        server.request_shutdown();
+        task.join().unwrap().unwrap();
+        drop(server);
+        drop(shared);
+        if let Err(error) = outcome {
+            std::panic::resume_unwind(error);
+        }
+    }
+}

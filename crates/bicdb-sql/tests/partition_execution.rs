@@ -151,3 +151,133 @@ fn attached_default_partition_routes_new_rows_and_keeps_existing_acknowledged_da
     }
     assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
+
+#[test]
+fn parent_update_moves_rows_between_partitions_without_losing_the_ack() {
+    let mut failures = Vec::new();
+    for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
+        let root = tempfile::tempdir().unwrap();
+        let cfg = config(mode.clone());
+        let mut db = BicDb::open_with_config(root.path(), cfg.clone()).unwrap();
+        setup(&mut db);
+        SqlSession::new(&mut db)
+            .execute("CREATE TABLE upper_child PARTITION OF parent FOR VALUES FROM (10) TO (20)")
+            .unwrap();
+        SqlSession::new(&mut db)
+            .execute("UPDATE parent SET item_key=11 WHERE item_key=1")
+            .unwrap();
+        for reopen in 0..3 {
+            let low = rows(&mut db, "child");
+            let high = rows(&mut db, "upper_child");
+            if !low.is_empty() || high != vec![row(11, "child-ack")] {
+                failures.push(format!("{mode} reopen{reopen}: old={low:?} new={high:?}"));
+            }
+            db.close().unwrap();
+            if reopen < 2 {
+                db = BicDb::open_with_config(root.path(), cfg.clone()).unwrap();
+            }
+        }
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+#[test]
+fn parent_delete_visits_descendants_and_preserves_unselected_acknowledged_rows() {
+    let mut failures = Vec::new();
+    for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
+        let root = tempfile::tempdir().unwrap();
+        let cfg = config(mode.clone());
+        let mut db = BicDb::open_with_config(root.path(), cfg.clone()).unwrap();
+        setup(&mut db);
+        let mut sql = SqlSession::new(&mut db);
+        sql.execute("CREATE TABLE upper_child PARTITION OF parent FOR VALUES FROM (10) TO (20)")
+            .unwrap();
+        sql.execute("INSERT INTO upper_child VALUES(11,'other-ack')")
+            .unwrap();
+        sql.execute("DELETE FROM parent WHERE item_key=1").unwrap();
+        drop(sql);
+        for reopen in 0..3 {
+            let low = rows(&mut db, "child");
+            if !low.is_empty() {
+                failures.push(format!(
+                    "{mode} reopen{reopen}: DELETE omitted child={low:?}"
+                ));
+            }
+            assert_eq!(rows(&mut db, "upper_child"), vec![row(11, "other-ack")]);
+            db.close().unwrap();
+            if reopen < 2 {
+                db = BicDb::open_with_config(root.path(), cfg.clone()).unwrap();
+            }
+        }
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+#[test]
+fn partition_queries_use_the_privilege_and_rls_policy_of_the_accessed_relation() {
+    let mut failures = Vec::new();
+    for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
+        let root = tempfile::tempdir().unwrap();
+        let cfg = config(mode.clone());
+        let mut db = BicDb::open_with_config(root.path(), cfg.clone()).unwrap();
+        {
+            let mut sql = SqlSession::new(&mut db);
+            sql.execute("CREATE ROLE partition_reader").unwrap();
+            sql.execute(
+                "CREATE TABLE parent(item_key INT,payload TEXT) PARTITION BY RANGE(item_key)",
+            )
+            .unwrap();
+            sql.execute("ALTER TABLE parent ENABLE ROW LEVEL SECURITY")
+                .unwrap();
+            sql.execute(
+                "CREATE POLICY parent_select_policy ON parent FOR SELECT USING(item_key>=2)",
+            )
+            .unwrap();
+            sql.execute("CREATE TABLE child PARTITION OF parent FOR VALUES FROM (0) TO (10)")
+                .unwrap();
+            sql.execute("INSERT INTO child VALUES(1,'child-one-ack'),(2,'child-two-ack')")
+                .unwrap();
+            sql.execute("GRANT SELECT ON parent TO partition_reader")
+                .unwrap();
+            sql.execute("SET ROLE partition_reader").unwrap();
+            let actual = sql
+                .execute("SELECT item_key,payload FROM parent ORDER BY item_key")
+                .unwrap()
+                .rows;
+            if actual != vec![row(2, "child-two-ack")] {
+                failures.push(format!("{mode}: parent access/policy={actual:?}"));
+            }
+            assert_eq!(
+                sql.execute("SELECT * FROM child").unwrap_err().sqlstate(),
+                "42501"
+            );
+            sql.execute("RESET ROLE").unwrap();
+            sql.execute("GRANT SELECT ON child TO partition_reader")
+                .unwrap();
+        }
+        for reopen in 0..3 {
+            let mut sql = SqlSession::new(&mut db);
+            sql.execute("SET ROLE partition_reader").unwrap();
+            let actual = sql
+                .execute("SELECT item_key,payload FROM child ORDER BY item_key")
+                .unwrap()
+                .rows;
+            if actual != vec![row(1, "child-one-ack"), row(2, "child-two-ack")] {
+                failures.push(format!(
+                    "{mode} reopen{reopen}: child must use own policies={actual:?}"
+                ));
+            }
+            sql.execute("RESET ROLE").unwrap();
+            drop(sql);
+            assert_eq!(
+                rows(&mut db, "child"),
+                vec![row(1, "child-one-ack"), row(2, "child-two-ack")]
+            );
+            db.close().unwrap();
+            if reopen < 2 {
+                db = BicDb::open_with_config(root.path(), cfg.clone()).unwrap();
+            }
+        }
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}

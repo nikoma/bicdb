@@ -422,8 +422,13 @@ impl NativeRangeCommandIntent {
                 "native command cannot extend this actual native base/configuration",
             ));
         }
+        let actual_members = if self.historical_recovery {
+            lineage.physical_range_members()?
+        } else {
+            lineage.native_write_members()?
+        };
         for (id, member) in &self.members {
-            if lineage.base_members().get(id) != Some(member) {
+            if actual_members.get(id) != Some(member) {
                 return Err(range_write_error(
                     "native command voter credentials differ from its base",
                 ));

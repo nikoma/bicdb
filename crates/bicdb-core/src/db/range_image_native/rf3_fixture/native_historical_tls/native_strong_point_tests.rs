@@ -24,10 +24,16 @@ struct EnforcedNetwork {
 }
 impl EnforcedNetwork {
     fn new() -> Self {
+        Self::new_with_metadata_members(3)
+    }
+    fn new_with_metadata_members(count: usize) -> Self {
+        assert!(matches!(count, 3 | 4));
+        let names = &["n0", "n1", "n2", "n3"][..count];
         let keys = tempfile::tempdir().unwrap();
-        let ids = identities(keys.path());
-        let sockets = ["n0", "n1", "n2"]
-            .into_iter()
+        let ids = identities_for_names(keys.path(), names);
+        let sockets = names
+            .iter()
+            .copied()
             .map(|name| (node(name), TcpListener::bind("127.0.0.1:0").unwrap()))
             .collect::<BTreeMap<_, _>>();
         let network = sockets
@@ -102,16 +108,16 @@ impl EnforcedNetwork {
         let mut leader = open(&node("n1"));
         leader.start_election().unwrap();
         leader
-            .become_leader(&BTreeSet::from([node("n0"), node("n1")]))
+            .become_leader(&topology.nodes.keys().cloned().collect())
             .unwrap();
         let mut metadata = BTreeMap::new();
-        for id in [node("n0"), node("n2")] {
-            let mut follower = open(&id);
+        for id in topology.nodes.keys().filter(|id| **id != node("n1")) {
+            let mut follower = open(id);
             let response = follower
                 .handle_append_request(leader.append_request_from(1, 16).unwrap())
                 .unwrap();
-            leader.record_append_response(&id, &response).unwrap();
-            metadata.insert(id, Arc::new(Mutex::new(follower)));
+            leader.record_append_response(id, &response).unwrap();
+            metadata.insert(id.clone(), Arc::new(Mutex::new(follower)));
         }
         metadata.insert(node("n1"), Arc::new(Mutex::new(leader)));
         let providers = metadata
@@ -784,3 +790,98 @@ fn native_strong_point_policy_native_wal_publication_failure_fences_old_guard_an
 mod after_transfer;
 #[path = "native_born_v2_image_tests.rs"]
 mod native_born_v2_image_tests;
+
+// Actual mTLS metadata/host policies on FOUR fresh members precede the first
+// RF3 application ACK. The fourth member is metadata-only, not a data voter.
+#[test]
+fn native_strong_point_initial_four_metadata_members_rf3_keeps_exact_data_identity() {
+    let fixture = EnforcedNetwork::new_with_metadata_members(4);
+    let topology = fixture.native.topology.read().clone();
+    assert_eq!(topology.metadata_voters().len(), 4);
+    let (key, range) = fixture.seed();
+    let db = fixture.native.databases[&node("n0")].read();
+    let lineage = db.current_native_range_source_lineage(range.id).unwrap();
+    assert_eq!(lineage.base_members().len(), 4);
+    let actual = lineage.physical_range_members().unwrap();
+    assert_eq!(actual.len(), 3);
+    assert!(!actual.contains_key(&node("n3")));
+    assert_eq!(actual, lineage.native_write_members().unwrap());
+    let fourth = fixture.native.databases[&node("n3")].read();
+    assert!(fourth
+        .current_native_range_source_lineage(range.id)
+        .is_err());
+    assert!(fourth.get("items", &key).unwrap().is_none());
+    drop(fourth);
+    drop(db);
+    let value = observed(fixture.read(
+        fixture.request(&key, &range),
+        &CancellationToken::uncancelable(),
+    ));
+    assert_eq!(value.record().unwrap().id, key);
+    assert_eq!(value.audit().range_index, 1);
+    fixture.idle();
+
+    // Untrusted local request variants must not obtain even local factual
+    // evidence under changed data-voter identity. These are negative inputs,
+    // not manufactured roles or positive quorum grants.
+    let request = crate::distribution_native_read::NativeRangeReadRequest {
+        protocol_version: crate::distribution_native_read::NATIVE_RANGE_READ_VERSION,
+        scope: crate::distribution_native_read::NativeRangeReadScope {
+            cluster_id: topology.cluster_id.clone(),
+            bootstrap_id: topology.range_image_bootstrap_id.unwrap(),
+            range: range.clone(),
+            members: range
+                .replicas
+                .iter()
+                .filter(|r| r.role == RangeReplicaRole::Voter)
+                .map(|r| {
+                    let n = &topology.nodes[&r.node_id];
+                    (
+                        r.node_id.clone(),
+                        crate::distribution_range_recovery::RecoveryMemberIdentity {
+                            incarnation: n.incarnation,
+                            active_certificate_sha256: n.tls_certificate_sha256.clone(),
+                            pending_certificate_sha256: n.pending_tls_certificate_sha256.clone(),
+                        },
+                    )
+                })
+                .collect(),
+            schema_sha256: topology.nodes[&node("n0")].labels
+                [crate::distribution::SCHEMA_COMPATIBILITY_NODE_LABEL]
+                .clone(),
+            restore_activation: None,
+        },
+        challenge: Uuid::now_v7(),
+        budget_ms: 5000,
+    };
+    let service = fixture.native.services[&node("n0")].lock();
+    let before = service
+        .observe_current_native_range(&request, &CancellationToken::uncancelable())
+        .unwrap();
+    let mut wrong_incarnation = request.clone();
+    wrong_incarnation
+        .scope
+        .members
+        .get_mut(&node("n1"))
+        .unwrap()
+        .incarnation += 1;
+    assert!(service
+        .observe_current_native_range(&wrong_incarnation, &CancellationToken::uncancelable())
+        .is_err());
+    let mut wrong_pin = request.clone();
+    wrong_pin
+        .scope
+        .members
+        .get_mut(&node("n1"))
+        .unwrap()
+        .pending_certificate_sha256 = Some("a".repeat(64));
+    assert!(service
+        .observe_current_native_range(&wrong_pin, &CancellationToken::uncancelable())
+        .is_err());
+    let mut missing = request.clone();
+    missing.scope.members.remove(&node("n1"));
+    assert!(service
+        .observe_current_native_range(&missing, &CancellationToken::uncancelable())
+        .is_err());
+    before.require_current(&service).unwrap();
+}

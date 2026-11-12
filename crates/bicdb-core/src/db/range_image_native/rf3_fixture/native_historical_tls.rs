@@ -47,6 +47,9 @@ impl Identity {
     }
 }
 fn identities(root: &Path) -> BTreeMap<ClusterNodeId, Identity> {
+    identities_for_names(root, &["n0", "n1", "n2"])
+}
+fn identities_for_names(root: &Path, names: &[&str]) -> BTreeMap<ClusterNodeId, Identity> {
     let key = KeyPair::generate().unwrap();
     let mut params = CertificateParams::default();
     params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
@@ -57,8 +60,9 @@ fn identities(root: &Path) -> BTreeMap<ClusterNodeId, Identity> {
     let ca = params.self_signed(&key).unwrap();
     let ca_path = root.join("ca.pem");
     std::fs::write(&ca_path, ca.pem()).unwrap();
-    ["n0", "n1", "n2"]
-        .into_iter()
+    names
+        .iter()
+        .copied()
         .map(|name| {
             let leaf_key = KeyPair::generate().unwrap();
             let mut params =

@@ -4363,8 +4363,20 @@ impl ApplicationProgramV1 {
                 }
             }
             if let Some(rag) = &self.rag {
-                for pipeline in rag.pipelines.values() {
-                    used_methods.insert((pipeline.llm_client.clone(), "respond".to_string()));
+                for (name, pipeline) in &rag.pipelines {
+                    for method in ["respond", "stream_response"] {
+                        if application_program_call_matches(
+                            self,
+                            &|kind, target, candidate, _, _| {
+                                *kind == ApplicationCallKindV1::Rag
+                                    && target == name
+                                    && candidate == Some(method)
+                            },
+                        ) {
+                            used_methods
+                                .insert((pipeline.llm_client.clone(), method.to_string()));
+                        }
+                    }
                 }
             }
             if let Some(agents) = &self.agents {

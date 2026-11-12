@@ -99,6 +99,12 @@ pub(super) fn check_open_admission(
                         "unfenced Decimal predicate upgrade plan".into(),
                     ));
                 }
+                // Recovery itself can replay index mutations under the new
+                // comparator. Fence old readers before opening the page store,
+                // not only before the later shadow rebuild. A failed fence
+                // returns before any such recovery can change old generations.
+                format::enable_decimal_predicate_comparison_v1(root)?;
+                test_process_cut("after_reader_fence");
                 return Ok(Admission {
                     current: false,
                     plan: catalog.decimal_predicate_upgrade,
@@ -561,8 +567,9 @@ mod tests {
     }
 
     #[test]
-    fn owned_decimal_transition_survives_eight_process_publication_cuts() {
+    fn owned_decimal_transition_survives_nine_process_publication_cuts() {
         for point in [
+            "after_reader_fence",
             "after_plan",
             "before_build_checkpoint",
             "during_build",
@@ -648,5 +655,43 @@ mod tests {
                 .all(|report| report.valid));
             db.close().unwrap();
         }
+    }
+    #[test]
+    fn old_reader_fence_is_durable_before_any_paged_recovery_or_catalog_rebuild() {
+        let root = tempfile::tempdir().unwrap();
+        copy_actual_old_fixture(root.path());
+        let before: BTreeMap<_, _> = fs::read_dir(root.path().join("paged"))
+            .unwrap()
+            .map(|entry| {
+                let path = entry.unwrap().path();
+                (
+                    path.file_name().unwrap().to_os_string(),
+                    fs::read(path).unwrap(),
+                )
+            })
+            .collect();
+        let catalog = fs::read(root.path().join(DEFAULT_INDEX_CATALOG)).unwrap();
+        cut(root.path(), "after_reader_fence");
+        let flags = format::read_or_legacy_metadata(root.path())
+            .unwrap()
+            .feature_flags;
+        assert!(flags.contains(format::DECIMAL_PREDICATE_COMPARISON_V1_FEATURE_FLAG));
+        let after: BTreeMap<_, _> = fs::read_dir(root.path().join("paged"))
+            .unwrap()
+            .map(|entry| {
+                let path = entry.unwrap().path();
+                (
+                    path.file_name().unwrap().to_os_string(),
+                    fs::read(path).unwrap(),
+                )
+            })
+            .collect();
+        assert_eq!(before, after, "reader fence must precede all page recovery");
+        assert_eq!(
+            catalog,
+            fs::read(root.path().join(DEFAULT_INDEX_CATALOG)).unwrap(),
+            "no generation may be relabeled before the fence"
+        );
+        verify_ack_uniqueness_and_reopens(root.path());
     }
 }

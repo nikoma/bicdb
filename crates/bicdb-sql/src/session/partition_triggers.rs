@@ -76,11 +76,22 @@ impl SqlSession<'_> {
     /// no fallible derived catalog write follows publication.
     fn publish_partition_catalog(
         &mut self,
-        changes: Vec<Change>,
+        mut changes: Vec<Change>,
         capture_undo: bool,
     ) -> Result<()> {
         if changes.is_empty() {
             return Ok(());
+        }
+        // The semantic certificate and affected descriptors/clones share the
+        // same Native decision, including DDL undo and function cascades.
+        if let Some(certificate) =
+            super::partition_admission::certificate_for_catalog_changes(self.db_ref(), &changes)?
+        {
+            changes.push((
+                super::partition_admission::CERTIFICATE_COLLECTION,
+                "current".into(),
+                Some(certificate),
+            ));
         }
         let mut schema_cache = Vec::new();
         for (collection, id, record) in &changes {
@@ -121,6 +132,7 @@ impl SqlSession<'_> {
                         }
                     }
                 }
+                super::partition_admission::CERTIFICATE_COLLECTION => {}
                 _ => {
                     return Err(SqlError::InvalidSql(
                         "invalid partition catalog target".into(),

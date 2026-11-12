@@ -33,9 +33,10 @@ mod operator_ddl;
 pub(crate) mod partition_admission;
 mod partition_exec;
 pub use partition_admission::{
-    apply_partition_upgrade, inspect_partition_upgrade, PartitionInvalidRow,
-    PartitionPolicyConflict, PartitionPolicyDecision, PartitionRowRelocation,
-    PartitionUpgradeApplied, PartitionUpgradeInspection, PartitionUpgradePlan,
+    apply_partition_upgrade, check_sql_partition_admission, ensure_sql_partition_admission,
+    inspect_partition_upgrade, PartitionInvalidRow, PartitionPolicyConflict,
+    PartitionPolicyDecision, PartitionRowRelocation, PartitionUpgradeApplied,
+    PartitionUpgradeInspection, PartitionUpgradePlan,
 };
 mod partition_triggers;
 #[cfg(test)]
@@ -2948,6 +2949,7 @@ impl<'db> SqlSession<'db> {
         columns: &[String],
         rows: Vec<Vec<Option<String>>>,
     ) -> Result<usize> {
+        self.admit_partition_execution()?;
         let _case = oracle::simple_case::Scope::for_db(self.db_ref())?;
         self.require_transaction_write()?;
         self.with_implicit_guc_statement(|session| {
@@ -3070,6 +3072,12 @@ impl<'db> SqlSession<'db> {
     }
 
     pub fn execute(&mut self, sql: &str) -> Result<SqlResult> {
+        if !matches!(
+            normalize_sql(sql).as_str(),
+            "rollback" | "rollback work" | "rollback transaction"
+        ) {
+            self.admit_partition_execution()?;
+        }
         let _case = oracle::simple_case::Scope::for_db(self.db_ref())?;
         self.statement_error_recovered = false;
         self.db_ref().check_recovery_state()?;
@@ -3308,6 +3316,9 @@ impl<'db> SqlSession<'db> {
     /// diagnostics that want to preserve normal statement semantics without
     /// measuring parser or SQL-string construction cost.
     pub fn execute_statement_ast(&mut self, statement: &Statement) -> Result<SqlResult> {
+        if !matches!(statement, Statement::Rollback { .. }) {
+            self.admit_partition_execution()?;
+        }
         let _case = oracle::simple_case::Scope::for_db(self.db_ref())?;
         self.statement_error_recovered = false;
         let _clock = oracle::current_time::StatementScope::new();
@@ -3328,6 +3339,7 @@ impl<'db> SqlSession<'db> {
     /// Execute a stored procedure directly from its already-typed arguments,
     /// bypassing SQL text parsing and `CALL` AST construction.
     pub fn call_procedure(&mut self, name: &str, args: &[SqlValue]) -> Result<SqlResult> {
+        self.admit_partition_execution()?;
         let _case = oracle::simple_case::Scope::for_db(self.db_ref())?;
         self.statement_error_recovered = false;
         self.db_ref().check_recovery_state()?;

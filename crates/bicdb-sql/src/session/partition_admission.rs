@@ -2,6 +2,7 @@
 //! decisions to actual local records; it is never portable origin authority.
 use crate::*;
 use sha2::{Digest, Sha256};
+mod catalog;
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -100,7 +101,7 @@ fn scan(db: &BicDb, collection: &str, mut visit: impl FnMut(Record) -> Result<()
             collection,
             cursor.as_deref(),
             128,
-            8 * 1024 * 1024,
+            (db.query_work_memory_bytes() / 16).clamp(1, 8 * 1024 * 1024),
         ) {
             Ok(rows) => rows,
             Err(BicDbError::CollectionNotFound(_)) => return Ok(()),
@@ -352,7 +353,7 @@ pub fn inspect_partition_upgrade(db: &BicDb) -> Result<PartitionUpgradeInspectio
     Ok(gather(db)?.inspection)
 }
 
-const CERTIFICATE_COLLECTION: &str = "__bicdb_pg_partition_certificate";
+pub(super) const CERTIFICATE_COLLECTION: &str = "__bicdb_pg_partition_certificate";
 const POLICY_ARCHIVE_COLLECTION: &str = "__bicdb_pg_partition_policy_archive";
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -365,13 +366,14 @@ pub struct PartitionUpgradeApplied {
     pub already_applied: bool,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 struct UpgradeCertificate {
     version: u32,
     reader_capability: String,
     migration_id: String,
     operator_directory: std::path::PathBuf,
     plan_digest: String,
+    catalog_digest: String,
     applied: PartitionUpgradeApplied,
 }
 
@@ -395,11 +397,141 @@ fn read_certificate(db: &BicDb) -> Result<Option<UpgradeCertificate>> {
         || certificate.reader_capability != "sql_partition_execution_v1"
         || certificate.migration_id.is_empty()
         || certificate.plan_digest.len() != 64
+        || certificate.catalog_digest.len() != 64
         || !db.sql_partition_execution_feature_active()
     {
         return Err(required("unknown or unfenced completion certificate"));
     }
     Ok(Some(certificate))
+}
+
+/// Refuse legacy or incomplete partition state without modifying the store.
+/// Hosts with a writable exclusive handle can call ensure_sql_partition_admission.
+pub fn check_sql_partition_admission(db: &BicDb) -> Result<()> {
+    if catalog::needs_repair(db)? {
+        return Err(required("exclusive upgrade is required before SQL access; inspect_partition_upgrade reports required operator decisions"));
+    }
+    Ok(())
+}
+
+fn activate_empty(db: &mut BicDb) -> Result<()> {
+    db.enable_sql_partition_execution_v1()?;
+    db.create_collection(CERTIFICATE_COLLECTION)?;
+    let snapshot = "fresh_empty_partition_activation_v1".to_string();
+    let plan = PartitionUpgradePlan {
+        snapshot: snapshot.clone(),
+        ..Default::default()
+    };
+    let certificate = UpgradeCertificate {
+        version: 1,
+        reader_capability: "sql_partition_execution_v1".into(),
+        migration_id: uuid::Uuid::new_v4().to_string(),
+        operator_directory: db.data_path().canonicalize().map_err(BicDbError::from)?,
+        plan_digest: plan_digest(&plan)?,
+        catalog_digest: catalog::empty_digest()?,
+        applied: PartitionUpgradeApplied {
+            source_snapshot: snapshot,
+            moved_rows: 0,
+            policy_decisions: 0,
+            created_trigger_clones: 0,
+            already_applied: false,
+        },
+    };
+    db.insert(
+        CERTIFICATE_COLLECTION,
+        Record::new("current").with_metadata(serde_json::to_value(certificate)?),
+    )?;
+    Ok(())
+}
+
+/// Default exclusive admission, also used by hosts before opening a listener.
+/// Ambiguous policies or invalid ACKs require the explicit reviewed plan API.
+pub fn ensure_sql_partition_admission(db: &mut BicDb) -> Result<()> {
+    if !catalog::needs_repair(db)? {
+        return Ok(());
+    }
+    if db.is_read_only_standby() {
+        return Err(required(
+            "partition upgrade must complete on a writable primary before standby admission",
+        ));
+    }
+    let snapshot = gather(db)?;
+    if snapshot.nodes.is_empty() {
+        activate_empty(db)?;
+    } else {
+        apply_partition_upgrade(db, None)?;
+    }
+    check_sql_partition_admission(db)
+}
+
+/// Prepare a newly authored descriptor only after the sticky reader fence and
+/// empty/current certificate exist. Existing raw legacy descriptors are repaired
+/// by admission, never adopted by this helper.
+pub(crate) fn prepare_partition_descriptor(db: &mut BicDb, schema: &mut TableSchema) -> Result<()> {
+    if schema.partitioning.is_none() && schema.partition_of.is_none() {
+        return Ok(());
+    }
+    partition::validate_definition(schema)?;
+    ensure_sql_partition_admission(db)?;
+    if !db.sql_partition_execution_feature_active() {
+        activate_empty(db)?;
+    }
+    for version in schema
+        .partitioning
+        .iter_mut()
+        .map(|p| &mut p.execution_version)
+        .chain(
+            schema
+                .partition_of
+                .iter_mut()
+                .map(|p| &mut p.execution_version),
+        )
+    {
+        if version.is_some_and(|version| version != 1) {
+            return Err(required("unknown partition descriptor version"));
+        }
+        *version = Some(1);
+    }
+    Ok(())
+}
+
+pub(super) fn certificate_for_catalog_changes(
+    db: &BicDb,
+    changes: &[(&'static str, String, Option<Record>)],
+) -> Result<Option<Record>> {
+    catalog::certificate_for_changes(db, changes)
+}
+
+pub(crate) fn publish_schema_change(db: &mut BicDb, id: String, raw: Option<Record>) -> Result<()> {
+    let changes = vec![(SCHEMA_COLLECTION, id.clone(), raw.clone())];
+    let certificate = certificate_for_catalog_changes(db, &changes)?;
+    if let Some(certificate) = certificate {
+        let mut tx = db.begin_transaction()?;
+        if let Some(raw) = raw {
+            tx.batch_insert(SCHEMA_COLLECTION, vec![raw])?;
+        } else {
+            tx.delete(SCHEMA_COLLECTION, &id)?;
+        }
+        tx.batch_insert(CERTIFICATE_COLLECTION, vec![certificate])?;
+        tx.commit()?;
+    } else if let Some(raw) = raw {
+        db.insert(SCHEMA_COLLECTION, raw)?;
+    } else {
+        db.delete(SCHEMA_COLLECTION, &id)?;
+    }
+    Ok(())
+}
+
+impl SqlSession<'_> {
+    pub(super) fn admit_partition_execution(&mut self) -> Result<()> {
+        if catalog::needs_repair(self.db_ref())? {
+            if self.tx.is_some() {
+                return Err(required("partition upgrade requires rollback of the pending transaction and exclusive admission"));
+            }
+            ensure_sql_partition_admission(self.db_mut()?)?;
+        }
+        Ok(())
+    }
 }
 
 fn planned_destination(
@@ -448,6 +580,7 @@ pub fn apply_partition_upgrade(
                 "completed catalog contains uncertified partition state",
             ));
         }
+        check_sql_partition_admission(db)?;
         if let Some(plan) = plan {
             if certificate.operator_directory != snapshot.inspection.database_root
                 || plan.snapshot != certificate.applied.source_snapshot
@@ -665,6 +798,21 @@ pub fn apply_partition_upgrade(
             migration_id,
             operator_directory: snapshot.inspection.database_root.clone(),
             plan_digest: plan_digest(plan.unwrap_or(&automatic_plan))?,
+            catalog_digest: {
+                let nodes = schema_records
+                    .iter()
+                    .map(|raw| (raw.id.clone(), raw.clone()))
+                    .collect();
+                let mut triggers = snapshot
+                    .triggers
+                    .iter()
+                    .map(|raw| (raw.id.clone(), raw.clone()))
+                    .collect::<BTreeMap<_, _>>();
+                for raw in &trigger_records {
+                    triggers.insert(raw.id.clone(), raw.clone());
+                }
+                catalog::digest(&nodes, &triggers)?
+            },
             applied: applied.clone(),
         })?);
     let mut tx = db.begin_transaction()?;
@@ -742,14 +890,39 @@ mod tests {
         let mut db = BicDb::open_with_config(path, config(mode)).unwrap();
         let mut session = SqlSession::new(&mut db);
         for statement in [
-            "CREATE TABLE p(k INT PRIMARY KEY,payload TEXT) PARTITION BY RANGE(k)",
-            "CREATE TABLE low PARTITION OF p FOR VALUES FROM(0) TO(10)",
-            "CREATE TABLE high PARTITION OF p FOR VALUES FROM(10) TO(20)",
-            "INSERT INTO p VALUES(2,'low-ack'),(12,'high-ack')",
+            "CREATE TABLE p(k INT PRIMARY KEY,payload TEXT)",
+            "CREATE TABLE low(k INT PRIMARY KEY,payload TEXT)",
+            "CREATE TABLE high(k INT PRIMARY KEY,payload TEXT)",
+            "INSERT INTO low VALUES(2,'low-ack')",
+            "INSERT INTO high VALUES(12,'high-ack')",
         ] {
             session.execute(statement).unwrap();
         }
         drop(session);
+        // Model old raw descriptors without invoking the new fresh-DDL
+        // activation. Genuine old-binary fixtures remain separate evidence.
+        for (name, field, value) in [
+            (
+                "p",
+                "partitioning",
+                serde_json::json!({"strategy":"range","key_columns":["k"]}),
+            ),
+            (
+                "low",
+                "partition_of",
+                serde_json::json!({"parent_table":"p","parent_schema":"public","bound":"FOR VALUES FROM (0) TO (10)"}),
+            ),
+            (
+                "high",
+                "partition_of",
+                serde_json::json!({"parent_table":"p","parent_schema":"public","bound":"FOR VALUES FROM (10) TO (20)"}),
+            ),
+        ] {
+            let mut raw = (*db.get(SCHEMA_COLLECTION, name).unwrap().unwrap()).clone();
+            raw.metadata[field] = value;
+            db.insert(SCHEMA_COLLECTION, raw.clone()).unwrap();
+            cache_saved_schema(&db, &serde_json::from_value(raw.metadata).unwrap());
+        }
         db
     }
     fn config(mode: bicdb_core::StorageMode) -> bicdb_core::DbConfig {
@@ -868,9 +1041,11 @@ mod tests {
             assert!(!other.sql_partition_execution_feature_active());
             assert_eq!(other.last_commit_seq(), sequence);
             other.close().unwrap();
-            SqlSession::new(&mut db)
-                .execute("INSERT INTO p VALUES(3,'new-ack')")
-                .unwrap();
+            // An external Native writer changes the reviewed legacy input.
+            // SQL now performs admission before it could execute this write.
+            let mut changed = db.scan_collection("low").unwrap().remove(0);
+            changed.metadata["payload"] = serde_json::json!("new-ack");
+            db.insert("low", changed).unwrap();
             let sequence = db.last_commit_seq();
             assert_eq!(
                 apply_partition_upgrade(&mut db, Some(&plan))
@@ -880,7 +1055,9 @@ mod tests {
             );
             assert!(!db.sql_partition_execution_feature_active());
             assert_eq!(db.last_commit_seq(), sequence);
-            assert_eq!(db.scan_collection("low").unwrap().len(), 2);
+            let rows = db.scan_collection("low").unwrap();
+            assert_eq!(rows.len(), 1);
+            assert_eq!(rows[0].metadata["payload"], serde_json::json!("new-ack"));
             db.close().unwrap();
         }
     }
@@ -947,7 +1124,11 @@ mod tests {
                 .unwrap();
                 // This models metadata accepted by the preceding parser. Real
                 // old-binary row/policy fixtures are qualified independently.
-                SqlSession::new(&mut db).execute(ddl).unwrap();
+                let (ordinary, partitioning) = ddl.split_once(" PARTITION BY RANGE(").unwrap();
+                SqlSession::new(&mut db).execute(ordinary).unwrap();
+                let mut raw = (*db.get(SCHEMA_COLLECTION, "p").unwrap().unwrap()).clone();
+                raw.metadata["partitioning"] = serde_json::json!({"strategy":"range","key_columns":[partitioning.trim_end_matches(')')]});
+                db.insert(SCHEMA_COLLECTION, raw).unwrap();
                 let before = db.collection_generation(SCHEMA_COLLECTION);
                 let error = apply_partition_upgrade(&mut db, None).unwrap_err();
                 assert_eq!(error.sqlstate(), "0A000");

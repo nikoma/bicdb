@@ -539,14 +539,11 @@ impl<'db> SqlSession<'db> {
             .map(partitioning_schema_from_expr)
             .transpose()?;
 
-        self.create_session_collection(&table)?;
-        let (row_type_oid, row_array_type_oid) =
-            reserve_relation_type_oids(self.db_mut()?, &schema_name, &table)?;
-        let schema = TableSchema {
-            name: table,
-            schema_name,
-            row_type_oid: Some(row_type_oid),
-            row_array_type_oid: Some(row_array_type_oid),
+        let mut schema = TableSchema {
+            name: table.clone(),
+            schema_name: schema_name.clone(),
+            row_type_oid: None,
+            row_array_type_oid: None,
             columns,
             primary_key_name,
             indexes: Vec::new(),
@@ -560,6 +557,12 @@ impl<'db> SqlSession<'db> {
             partition_of: None,
             oracle_partitioning: None,
         };
+        partition::validate_definition(&schema)?;
+        self.create_session_collection(&table)?;
+        let (row_type_oid, row_array_type_oid) =
+            reserve_relation_type_oids(self.db_mut()?, &schema_name, &table)?;
+        schema.row_type_oid = Some(row_type_oid);
+        schema.row_array_type_oid = Some(row_array_type_oid);
         self.save_session_schema(&schema)?;
         if let Some(definition) = primary_key_index_definition_for_schema(&schema) {
             self.create_new_table_index(definition)?;

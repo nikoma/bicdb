@@ -1546,6 +1546,9 @@ pub(crate) fn merge_inherited_constraints(
 }
 
 pub(crate) fn prepare_schema_record(db: &mut BicDb, schema: &TableSchema) -> Result<Record> {
+    let mut schema = schema.clone();
+    crate::session::partition_admission::prepare_partition_descriptor(db, &mut schema)?;
+    let schema = &schema;
     require_user_relation_name(&schema.name)?;
     oracle::temporal_columns::prepare_save(db, schema)?;
     oracle::character_columns::prepare_save(db, schema)?;
@@ -1565,8 +1568,13 @@ pub(crate) fn cache_saved_schema(db: &BicDb, schema: &TableSchema) {
 }
 pub(crate) fn save_schema(db: &mut BicDb, schema: &TableSchema) -> Result<()> {
     let record = prepare_schema_record(db, schema)?;
-    db.insert(SCHEMA_COLLECTION, record)?;
-    cache_saved_schema(db, schema);
+    let saved: TableSchema = serde_json::from_value(record.metadata.clone())?;
+    crate::session::partition_admission::publish_schema_change(
+        db,
+        schema.name.clone(),
+        Some(record),
+    )?;
+    cache_saved_schema(db, &saved);
     Ok(())
 }
 
@@ -2482,9 +2490,10 @@ pub(crate) fn save_extension_if_missing(
 }
 
 pub(crate) fn delete_schema(db: &mut BicDb, table: &str) -> Result<()> {
-    let result = match db.delete(SCHEMA_COLLECTION, table) {
-        Ok(_) | Err(BicDbError::CollectionNotFound(_)) => Ok(()),
-        Err(error) => Err(error.into()),
+    let result = if db.has_collection(SCHEMA_COLLECTION) {
+        crate::session::partition_admission::publish_schema_change(db, table.to_string(), None)
+    } else {
+        Ok(())
     };
     if result.is_ok() {
         sql_schema_list_cache_invalidate(db);

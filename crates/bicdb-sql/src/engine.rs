@@ -4641,6 +4641,7 @@ impl<'db> SqlEngine<'db> {
     }
 
     pub fn execute(&self, sql: &str) -> Result<SqlResult> {
+        crate::session::partition_admission::check_sql_partition_admission(self.db_ref())?;
         let _join_budget = crate::join_budget::Scope::enter();
         let _case = oracle::simple_case::Scope::for_db(self.db_ref())?;
         self.db_ref().check_recovery_state()?;

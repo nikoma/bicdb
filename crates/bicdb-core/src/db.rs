@@ -6,6 +6,7 @@ mod deferred_materialize;
 mod local_namespace_identity;
 mod sql_partition_execution;
 pub use deferred_materialize::DeferredMaterializeStats;
+pub use sql_partition_execution::CollectionCacheStamp;
 mod ha_bootstrap;
 mod ha_node;
 mod online_backup;

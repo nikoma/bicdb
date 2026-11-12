@@ -2,7 +2,82 @@
 //! migration certificate; this bit never grants replica/image authority.
 use super::*;
 
+/// Process-local cache invalidation only. This cannot be serialized, minted by
+/// a caller, or used as a Native authorization or portable origin receipt.
+#[derive(Clone, Debug)]
+pub struct CollectionCacheStamp {
+    instance: u64,
+    incarnation: Arc<()>,
+    generation: u64,
+}
+
+impl PartialEq for CollectionCacheStamp {
+    fn eq(&self, other: &Self) -> bool {
+        self.same_incarnation(other) && self.generation == other.generation
+    }
+}
+impl Eq for CollectionCacheStamp {}
+impl CollectionCacheStamp {
+    pub fn same_incarnation(&self, other: &Self) -> bool {
+        self.instance == other.instance && Arc::ptr_eq(&self.incarnation, &other.incarnation)
+    }
+}
+
 impl BicDb {
+    /// Cheap metadata stamp. Recreating a collection cannot inherit an old
+    /// stamp even when its name and generation counter are identical.
+    pub fn collection_cache_stamp(&self, collection: &str) -> Result<Option<CollectionCacheStamp>> {
+        self.check_recovery_state()?;
+        Ok(self.collections.get(collection).map(|state| {
+            let state = state.read();
+            CollectionCacheStamp {
+                instance: self.instance_id(),
+                incarnation: Arc::clone(&state.incarnation),
+                generation: state.generation(),
+            }
+        }))
+    }
+
+    /// Exact recent-change coverage for a prior cache stamp. A replacement,
+    /// untracked generation bump or expired window requires a complete scan.
+    /// Row contents still require the ordinary Native read APIs and authority.
+    pub fn collection_cache_changes_since(
+        &self,
+        collection: &str,
+        previous: &CollectionCacheStamp,
+    ) -> Result<Option<Vec<ChangedRecord>>> {
+        self.check_recovery_state()?;
+        let Some(state) = self.collections.get(collection) else {
+            return Ok(None);
+        };
+        let state = state.read();
+        let current = state.generation();
+        if previous.instance != self.instance_id()
+            || !Arc::ptr_eq(&previous.incarnation, &state.incarnation)
+            || previous.generation > current
+        {
+            return Ok(None);
+        }
+        if previous.generation == current {
+            return Ok(Some(Vec::new()));
+        }
+        let changes = state.recent_changes.lock();
+        let mut next = previous.generation.checked_add(1);
+        let mut rows = Vec::new();
+        for (at, changed) in changes
+            .entries
+            .iter()
+            .filter(|(at, _)| *at > previous.generation)
+        {
+            if next != Some(*at) {
+                return Ok(None);
+            }
+            rows.extend(changed.iter().cloned());
+            next = at.checked_add(1);
+        }
+        Ok((next == current.checked_add(1)).then_some(rows))
+    }
+
     /// Persist the sticky fence before SQL publishes new partition semantics.
     /// This does not certify a legacy SQL catalog or migrate any records.
     pub fn enable_sql_partition_execution_v1(&mut self) -> Result<()> {
@@ -43,6 +118,44 @@ mod tests {
             .with_storage_mode(mode)
             .with_fsync(true)
             .with_paged_buffer_pool_bytes(8 * 1024 * 1024)
+    }
+
+    #[test]
+    fn cache_stamps_pin_runtime_incarnations_and_require_complete_change_coverage() {
+        for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
+            let root = tempfile::tempdir().unwrap();
+            let mut db = BicDb::open_with_config(root.path(), config(mode)).unwrap();
+            db.create_collection("catalog").unwrap();
+            db.insert("catalog", Record::new("one")).unwrap();
+            let first = db.collection_cache_stamp("catalog").unwrap().unwrap();
+            db.insert("catalog", Record::new("two")).unwrap();
+            let changes = db
+                .collection_cache_changes_since("catalog", &first)
+                .unwrap()
+                .unwrap();
+            assert_eq!(changes.len(), 1);
+            assert_eq!(changes[0].record_id, "two");
+            let second = db.collection_cache_stamp("catalog").unwrap().unwrap();
+            assert!(first.same_incarnation(&second));
+            assert_ne!(first, second);
+            db.collection_state("catalog").unwrap().bump_generation();
+            db.insert("catalog", Record::new("three")).unwrap();
+            assert!(db
+                .collection_cache_changes_since("catalog", &second)
+                .unwrap()
+                .is_none());
+            db.drop_collection("catalog").unwrap();
+            db.create_collection("catalog").unwrap();
+            db.insert("catalog", Record::new("replacement")).unwrap();
+            let replacement = db.collection_cache_stamp("catalog").unwrap().unwrap();
+            assert_eq!(first.generation, replacement.generation);
+            assert!(!first.same_incarnation(&replacement));
+            assert!(db
+                .collection_cache_changes_since("catalog", &first)
+                .unwrap()
+                .is_none());
+            db.close().unwrap();
+        }
     }
 
     #[test]

@@ -671,6 +671,9 @@ fn prepared_information_schema_columns_keep_the_live_rename_owner_in_every_phase
         SqlSession::new(&mut db)
             .execute("CREATE TABLE source(id INT PRIMARY KEY,payload TEXT)")
             .unwrap();
+        let source_row_oid = bicdb_sql::pg_user_type_oid_by_name(&db, "source")
+            .unwrap()
+            .unwrap();
         bicdb_sql::initialize_rename_journal_identities(&mut db).unwrap();
         let shared = Arc::new(RwLock::new(db));
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
@@ -695,6 +698,30 @@ fn prepared_information_schema_columns_keep_the_live_rename_owner_in_every_phase
                 "BEGIN; ALTER TABLE source RENAME TO renamed"
             ))
             .is_empty());
+            prepare(
+                &mut owner,
+                "all_column_descriptors",
+                "SELECT * FROM information_schema.columns WHERE 1=0",
+            );
+            let all = describe(&mut owner, "all_column_descriptors");
+            let header = &all.iter().find(|(tag, _)| *tag == b'T').unwrap().1;
+            assert_eq!(i16::from_be_bytes(header[..2].try_into().unwrap()), 44);
+            // A user row type is protected by the owner's rename scope too;
+            // fixing the built-in descriptor table alone cannot authorize it.
+            prepare(
+                &mut owner,
+                "owned_row_descriptor",
+                "SELECT NULL::renamed AS item WHERE 1=0",
+            );
+            let owned = describe(&mut owner, "owned_row_descriptor");
+            assert!(codes(&owned).is_empty());
+            let header = &owned.iter().find(|(tag, _)| *tag == b'T').unwrap().1;
+            let end_name = header[2..].iter().position(|byte| *byte == 0).unwrap() + 2;
+            let oid_offset = end_name + 1 + 4 + 2;
+            assert_eq!(
+                u32::from_be_bytes(header[oid_offset..oid_offset + 4].try_into().unwrap()),
+                source_row_oid as u32
+            );
             // The metadata query is intentionally fully parameterized, with a
             // LOWER call and the real public descriptor types. Parse and both
             // Describe variants must retain the same live owner's identity.

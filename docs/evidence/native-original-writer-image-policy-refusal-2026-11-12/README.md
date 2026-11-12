@@ -7,8 +7,11 @@ Core job 131522237759. Exactly one selected test compiled and executed:
 The separate source-68 workspace all-target/consumer job 131522179911 remained
 pending when this Core record was frozen. Its result is not asserted here.
 
-This successor changes only the pre-image diagnostic to represent the actual
-untrusted learner target without manufacturing R0. The earlier source-11f
+This successor's pre-image path changes only the diagnostic to represent the
+actual untrusted learner target without manufacturing R0. The same source tree
+also contains the separately reviewed activation-validation batch
+`a4345eda607a108cbe05f72852dc333d9b656371` (Root import `3cda3fc73`).
+That later activation path is not reached by this image-clear refusal. The earlier source-11f
 failure and its 75-file custody remain in the adjacent
 `native-original-writer-policy-baseline-2026-11-12` folder. Source-11f's separate
 all-target check and isolated consumer check subsequently passed; their complete

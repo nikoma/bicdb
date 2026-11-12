@@ -37,6 +37,35 @@ The original Azure qualification remains **FAILED**, and production admission
 remains unchanged. The following checkpoints retain their original revisions
 and pre-merge status; they are not newer claims that read489 is still unmerged.
 
+## Executed 68b results: activation releases, then anchor projection refuses
+
+Exact source `68be040ebb00a4c606d519697f913e310c496812` has **failed full
+acceptance**. All four workflow all-target and isolated-consumer checks pass;
+this does not qualify their failed runtime cases.
+
+| Finding | Classification | Exact evidence and limit |
+| --- | --- | --- |
+| New post-catalogue controls | **Failed cohort; three controls passed** | [Run 43315433251](https://github.com/nikoma/bicdb/actions/runs/43315433251), Core `131522161919`: three passed, one failed, 952 filtered, 90.87s. Foreign actual DB/Store, original cancellation with independently fresh exact recovery, and actual writer-hook replacement cuts pass. The missing-decision-archive case fails its third Complete prerequisite before injection; no archive-cut success follows. |
+| Full post-joint recovery positive | **Failed; all three activations released** | [Run 43315439379](https://github.com/nikoma/bicdb/actions/runs/43315439379), Core `131522178395`: zero passed, one failed, 955 filtered, 83.58s. All three actual native decisions, catalogue activations and arm/release steps finish. The n3 result observer rejects `activated completion anchor differs from actual current same-voter native domain` with 2594ms remaining. This is a semantic refusal, not the previous deadline failure. ACK4 and Strong R4 are not reached. |
+| Activation/idempotence cohort | **Failed; seven legacy controls passed** | [Run 43315446340](https://github.com/nikoma/bicdb/actions/runs/43315446340), Core `131522192672`: seven passed, one failed, 948 filtered, 66.97s. The heavy case likewise releases all three activations, then n3's result observer refuses with 2914ms remaining. Later ACK4/Strong/idempotence remain unexecuted. |
+| Original-writer image transition | **Failed required baseline** | [Run 43315453055](https://github.com/nikoma/bicdb/actions/runs/43315453055), Core `131522237759`: zero passed, one failed, 955 filtered, 2.31s. Both fixture writer reinstalls are omitted. Actual OLD closure and initial ACK rows survive on original writers; n3 remains correctly untrusted before image installation. Actual image clear then refuses the changed installed-writer range policy before its row mutation grant. No adoption or global joint decision is reached. [Complete original log/report and custody scope](evidence/native-original-writer-image-policy-refusal-2026-11-12/README.md). |
+| Missing-archive case's earlier Complete failure | **Inconclusive detailed cost attribution** | Actual peer service/DB queueing is negligible in the retained trace. First remote observer validation takes 774/795ms under an 801ms child allowance; retry construction takes 511/518ms under shorter remaining allowances. Entry/exit spans do not attribute cost among full writer, native admission, lineage or joint binding. Nested instrumentation is required before claiming which checks dominate. [Exact source-specific trace/profile](design/native-current-joint-activation-scope-68-result.md). |
+
+The installed image preserves OLD physical voter credentials; the current joint
+bridge protects the NEW voter set. Source review identifies the historical
+completion anchor's use of physical `base_members` as a mismatch for n3.
+Correction `ebcb23b92e66911d3b74fe96d21e8612bf2100ff` selects protected effective
+credentials **only for CurrentJoint**, binds the exact joint decision and serving
+archive, and preserves the NormalRecovery predicate. Test import
+`1ecb621d43762c9cfe772cf43ba1ff0d43c989ce` adds a real n3 AnchorR3-at-R4 positive
+and missing-serving-archive refusal after the unchanged ACK4/Strong prerequisite.
+**Both changes remain source-only, uncompiled and unexecuted at this checkpoint.**
+The exact differing runtime predicate still needs the new membership diagnostics;
+source inference is not a replacement for its passing execution.
+
+The following section preserves the earlier launch-time checkpoint. Its pending
+labels are superseded by the terminal results above, without changing source IDs.
+
 ## Current source-only correction and new executions
 
 Candidate `68be040ebb00a4c606d519697f913e310c496812` contains the independently

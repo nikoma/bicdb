@@ -286,7 +286,7 @@ fn fresh_new_scope(
                 fixture,
                 "actual-post-joint-new-fence-refusal.json",
                 &serde_json::json!({
-                    "scenario":"FAILED_UNSUPPORTED_POST_JOINT_NEW_RECOVERY_FENCE",
+                    "scenario":"FAILED_POST_JOINT_NEW_RECOVERY_FENCE",
                     "failing_recipient":destination,"exact_error":error.to_string(),
                     "actual_request":request,"fresh_scope":scope,"actual_responses":replies,
                     "before_partial_fences":before_fences,"after_partial_fences":after_fences,
@@ -347,7 +347,7 @@ pub(super) fn exercise_actual_new_domain_prepare_only_recovery(
     report(
         fixture,
         "actual-post-joint-no-data-before.json",
-        &serde_json::json!({"base_source":"61eb4d92b5938349cf18a283e936eee45fa97e9d","prerequisite":"actual all3 release + ACK1/ACK2 + StrongR2","snapshots":before}),
+        &serde_json::json!({"acceptance_baseline_source":"b277260b0b114d1f892ecad8d2e5e7a03ba7da5a","prerequisite_fixture_base":"eb5b454a578f77309900e2a248fc0b779391333e","prerequisite":"actual all3 release + ACK1/ACK2 + StrongR2","snapshots":before}),
     );
     for id in new_members.iter().filter(|id| *id != &range.leader) {
         fixture.native.services[id]

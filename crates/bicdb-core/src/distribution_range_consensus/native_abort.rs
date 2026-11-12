@@ -425,6 +425,77 @@ impl RangeWriteStore {
         }
         Ok(())
     }
+
+    /// Compare the actual protected slot inventory with this SAME Store mirror.
+    /// A retained candidate is an audit, not the selected global payload. Its
+    /// permanent vote survives independently proven materialization at the slot.
+    pub(crate) fn require_actual_abort_controls_covered(
+        &self,
+        db: &crate::BicDb,
+        range_id: RangeId,
+        actual_native_r: u64,
+    ) -> Result<()> {
+        self.require_actual_abort_catalogue(db)?;
+        if db.native_abort_catalogue_store_id()?.is_none() {
+            return Ok(());
+        }
+        let actual = db.native_abort_slot_inventory()?;
+        let actual = actual
+            .iter()
+            .filter(|r| r.command.range_id == range_id)
+            .collect::<Vec<_>>();
+        let mirror = self
+            .catalog
+            .native_abort_protocol
+            .as_ref()
+            .and_then(|p| p.ranges.get(&range_id));
+        if mirror.map_or(0, |r| r.slots.len()) != actual.len() {
+            return Err(range_write_error(
+                "actual protected abort inventory differs from range catalogue",
+            ));
+        }
+        db.require_native_abort_control_history(
+            range_id,
+            actual_native_r,
+            actual.iter().map(|r| r.command.index),
+        )?;
+        for record in actual {
+            let slot = mirror
+                .and_then(|r| r.slots.get(&record.command.index))
+                .ok_or_else(|| {
+                    range_write_error("protected writer-start absent from catalogue mirror")
+                })?;
+            if record.command.index > actual_native_r
+                || slot.domain != record.domain
+                || slot.command_id != record.command.command_id
+                || slot.command_sha256 != record.command.checksum_sha256
+                || slot.transaction_id != record.command.transaction_id
+                || slot.original_epoch != record.command.range_epoch
+                || slot.original_leader != record.command.leader_node_id
+                || slot.ever_commit != record.ever_commit
+                || slot.no_effect_sha256 != record.no_effect_sha256
+            {
+                return Err(range_write_error(
+                    "native read/ready has unresolved or mismatched protected slot control",
+                ));
+            }
+            let promise = db.observe_actual_native_abort_promise(range_id, record.command.index)?;
+            match (&slot.promise, promise) {
+                (None, None) => {}
+                (Some(saved), Some(actual))
+                    if saved.candidate_sha256 == actual.candidate_sha256
+                        && saved.command_sha256 == actual.command_sha256
+                        && saved.promised_index == actual.range_index
+                        && saved.first_recovery_nonce == actual.first_scope.recovery_nonce => {}
+                _ => {
+                    return Err(range_write_error(
+                        "actual permanent abort audit/catalogue differs",
+                    ))
+                }
+            }
+        }
+        Ok(())
+    }
     pub(crate) fn require_actual_abort_catalogue(&self, database: &crate::BicDb) -> Result<()> {
         let actual = database.native_abort_catalogue_store_id()?;
         if actual

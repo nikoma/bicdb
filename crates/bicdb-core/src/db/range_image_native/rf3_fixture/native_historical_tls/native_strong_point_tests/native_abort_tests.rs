@@ -59,6 +59,56 @@ fn native_abort_actual_enforced_prepare_failure_canonical_metadata_history_then_
                 .test_refuse_native_prepare_after_start(false);
         }
     }
+    // A peer that refused before RawPrepare still has an actual protected
+    // writer-start. Raw R0 alone must not mint a healthy empty observation.
+    let topology = fixture.native.topology.read().clone();
+    let read_request = crate::distribution_native_read::NativeRangeReadRequest {
+        protocol_version: crate::distribution_native_read::NATIVE_RANGE_READ_VERSION,
+        scope: crate::distribution_native_read::NativeRangeReadScope {
+            cluster_id: topology.cluster_id.clone(),
+            bootstrap_id: topology.range_image_bootstrap_id.unwrap(),
+            range: range.clone(),
+            members: topology
+                .nodes
+                .iter()
+                .map(|(id, n)| {
+                    (
+                        id.clone(),
+                        crate::distribution_range_recovery::RecoveryMemberIdentity {
+                            incarnation: n.incarnation,
+                            active_certificate_sha256: n.tls_certificate_sha256.clone(),
+                            pending_certificate_sha256: n.pending_tls_certificate_sha256.clone(),
+                        },
+                    )
+                })
+                .collect(),
+            schema_sha256: fixture.native.databases[&node("n1")]
+                .read()
+                .schema_compatibility_fingerprint()
+                .unwrap()
+                .sha256,
+            restore_activation: None,
+        },
+        challenge: Uuid::now_v7(),
+        budget_ms: 4500,
+    };
+    assert_eq!(
+        fixture.native.services[&node("n1")]
+            .lock()
+            .range_write_progress(range.id)
+            .last_index,
+        0
+    );
+    let protected = fixture.native.services[&node("n1")]
+        .lock()
+        .observe_current_native_range(&read_request, &token())
+        .unwrap_err();
+    assert!(
+        protected
+            .to_string()
+            .contains("unresolved protected writer-start"),
+        "{protected}"
+    );
     let scope = fixture.actual_current_recovery_scope(&range);
     let request = NativeAbortRequest {
         scope: scope.clone(),

@@ -409,6 +409,37 @@ impl NativeAbortPermanentPromise {
     }
 }
 impl BicDb {
+    pub(crate) fn require_native_abort_control_history(
+        &self,
+        range_id: RangeId,
+        actual_native_r: u64,
+        indices: impl Iterator<Item = u64>,
+    ) -> Result<()> {
+        let source = self.current_native_range_source_lineage(range_id)?;
+        if source.range_index() != actual_native_r {
+            return Err(invalid(
+                "abort control closure belongs to another actual native prefix",
+            ));
+        }
+        for index in indices {
+            if index == 0 || index > actual_native_r {
+                return Err(invalid(
+                    "unresolved protected writer-start is ahead of actual native history",
+                ));
+            }
+            let entry =
+                self.read_native_history_entry(range_id, source.history_generation(), index)?;
+            if matches!(
+                entry.outcome,
+                super::super::history::NativeLogicalHistoryOutcomeV1::Genesis
+            ) {
+                return Err(invalid(
+                    "writer-start not covered by actual immutable native outcome",
+                ));
+            }
+        }
+        Ok(())
+    }
     /// Immutable actual native history dominates an older retained no-commit
     /// audit. This is an observation only; it creates no certificate or vote.
     pub(crate) fn actual_native_abort_committed_command(

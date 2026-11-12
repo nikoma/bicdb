@@ -2079,6 +2079,7 @@ impl BicDb {
                             records_exported = records_exported.saturating_add(batch_records.len() as u64);
                             serialized_record_bytes = serialized_record_bytes.saturating_add(batch_bytes as u64);
                             visit(RangeSnapshotBatch {
+                                required_reader_features: required_reader_features.clone(),
                                 collection: collection.to_string(), range_id: range.id,
                                 range_epoch: range.epoch, snapshot_commit_sequence,
                                 resume_after_key: last_scanned_key.clone().ok_or_else(|| BicDbError::Cluster("range image scan lost its resume key".into()))?,

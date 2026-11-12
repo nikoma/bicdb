@@ -276,6 +276,53 @@ mod tests {
     }
 
     #[test]
+    fn range_image_scan_budget_preserves_semantic_readers_on_every_batch() {
+        let root = tempfile::tempdir().unwrap();
+        let db = populated(root.path());
+        format::enable_decimal_predicate_comparison_v1(root.path()).unwrap();
+        db.schema_compatibility_fingerprint().unwrap();
+        let topology_root = tempfile::tempdir().unwrap();
+        let range = range(topology_root.path());
+        let options = RangeSnapshotOptions {
+            max_records_per_batch: 3,
+            max_bytes_per_batch: 4096,
+            max_record_bytes: 1024,
+        };
+        for scan_budget in [1, 2, 5, 23] {
+            let mut cursor = None;
+            let mut ids = BTreeSet::new();
+            loop {
+                let result = db
+                    .for_each_range_snapshot_batch_with_cancellation(
+                        "items",
+                        &range,
+                        cursor.as_deref(),
+                        &options,
+                        scan_budget,
+                        &CancellationToken::uncancelable(),
+                        |batch| {
+                            assert!(batch.required_reader_features.iter().any(|feature| {
+                                feature == format::DECIMAL_PREDICATE_COMPARISON_V1_FEATURE_FLAG
+                            }), "scan budget {scan_budget} lost the Native semantic reader contract");
+                            for row in batch.records {
+                                assert!(ids.insert(row.id));
+                            }
+                            Ok(true)
+                        },
+                    )
+                    .unwrap();
+                if result.completed {
+                    break;
+                }
+                assert!(result.resume_after_key > cursor);
+                cursor = result.resume_after_key;
+            }
+            assert_eq!(ids.len(), 23);
+        }
+        assert_eq!(db.get("items", "row-0000").unwrap().unwrap().id, "row-0000");
+    }
+
+    #[test]
     fn native_semantic_reader_requirements_invalidate_prior_image_bindings() {
         for flag in [
             format::SQL_PARTITION_EXECUTION_V1_FEATURE_FLAG,

@@ -1107,3 +1107,86 @@ pub(crate) fn enable_application_unique_scope(root: &Path) -> Result<()> {
         .insert(APPLICATION_UNIQUE_SCOPE_FEATURE_FLAG.into());
     persist_metadata(root, &metadata, true)
 }
+
+#[cfg(test)]
+mod semantic_reader_capture_tests {
+    use super::*;
+    use crate::{BicDb, DbConfig, Record};
+
+    fn preserves_semantic_requirement(flag: &str, activate: impl Fn(&mut BicDb)) {
+        for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
+            let root = tempfile::tempdir().unwrap();
+            let config = DbConfig::default()
+                .with_storage_mode(mode)
+                .with_fsync(true)
+                .with_paged_buffer_pool_bytes(8 * 1024 * 1024);
+            let mut db = BicDb::open_with_config(root.path(), config.clone()).unwrap();
+            db.create_collection("reader_capture_ACK").unwrap();
+            db.insert(
+                "reader_capture_ACK",
+                Record::new("one")
+                    .with_metadata(serde_json::json!({"payload":"independent-native-ACK"})),
+            )
+            .unwrap();
+            let hash = db
+                .get("reader_capture_ACK", "one")
+                .unwrap()
+                .unwrap()
+                .content_hash()
+                .unwrap();
+            activate(&mut db);
+            assert!(read_or_legacy_metadata(root.path())
+                .unwrap()
+                .feature_flags
+                .contains(flag));
+            let sequence = db.last_commit_seq();
+            let captured = required_reader_features(root.path()).unwrap();
+            assert!(captured.iter().any(|f| f == flag), "Native reader contract silently dropped active semantic requirement {flag}: {captured:?}");
+            assert_eq!(db.last_commit_seq(), sequence, "capture must be read-only");
+            assert_eq!(
+                db.get("reader_capture_ACK", "one")
+                    .unwrap()
+                    .unwrap()
+                    .content_hash()
+                    .unwrap(),
+                hash
+            );
+            db.close().unwrap();
+            for _ in 0..2 {
+                let db = BicDb::open_with_config(root.path(), config.clone()).unwrap();
+                assert!(required_reader_features(root.path())
+                    .unwrap()
+                    .iter()
+                    .any(|f| f == flag));
+                assert_eq!(
+                    db.get("reader_capture_ACK", "one")
+                        .unwrap()
+                        .unwrap()
+                        .content_hash()
+                        .unwrap(),
+                    hash
+                );
+                db.close().unwrap();
+            }
+        }
+    }
+
+    #[test]
+    fn partition_execution_requirement_survives_native_reader_capture() {
+        preserves_semantic_requirement(SQL_PARTITION_EXECUTION_V1_FEATURE_FLAG, |db| {
+            db.enable_sql_partition_execution_v1().unwrap()
+        });
+    }
+    #[test]
+    fn decimal_comparison_requirement_survives_native_reader_capture() {
+        preserves_semantic_requirement(DECIMAL_PREDICATE_COMPARISON_V1_FEATURE_FLAG, |db| {
+            enable_decimal_predicate_comparison_v1(db.data_path()).unwrap()
+        });
+    }
+    #[test]
+    fn application_unique_scope_requirement_survives_native_reader_capture() {
+        preserves_semantic_requirement(APPLICATION_UNIQUE_SCOPE_FEATURE_FLAG, |db| {
+            db.enable_application_unique_scope().unwrap()
+        });
+    }
+}

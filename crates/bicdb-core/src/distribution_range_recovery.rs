@@ -1341,8 +1341,27 @@ pub(crate) fn test_recovery_metadata_cluster(
         .collect::<Result<BTreeMap<_, _>>>()?;
     {
         let mut leader = stores[metadata_leader].lock();
-        leader.start_election()?;
-        leader.become_leader(&topology.metadata_voters())?;
+        let request = leader.start_election()?;
+        let mut granted = BTreeSet::from([metadata_leader.clone()]);
+        for node in topology
+            .metadata_voters()
+            .iter()
+            .filter(|node| *node != metadata_leader)
+        {
+            let response = stores[node].lock().handle_vote_request(request.clone())?;
+            if response.cluster_id != topology.cluster_id
+                || &response.voter_id != node
+                || response.term != request.term
+            {
+                return Err(invalid(
+                    "test metadata election returned another identity/term",
+                ));
+            }
+            if response.vote_granted {
+                granted.insert(node.clone());
+            }
+        }
+        leader.become_leader(&granted)?;
         for node in topology
             .metadata_voters()
             .iter()

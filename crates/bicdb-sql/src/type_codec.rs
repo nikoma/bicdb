@@ -176,7 +176,11 @@ fn invalid_value(spec: &PgTypeSpec, value: &SqlValue) -> SqlError {
 }
 
 fn canonical_value_for_type(codec_type: CodecType, value: &SqlValue) -> Result<PgCanonicalValue> {
-    reject_pseudo(codec_type.spec)?;
+    // Keep existing pseudo-array handling; this extra gate only prevents a
+    // known catalog-only base type from entering an invented value codec.
+    if !codec_type.spec.pseudo && !codec_type.spec.canonical_storage_supported() {
+        reject_pseudo(codec_type.spec)?;
+    }
     if !codec_type.array {
         return canonical_value(codec_type.spec, value);
     }

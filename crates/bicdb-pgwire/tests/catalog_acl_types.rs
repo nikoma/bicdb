@@ -62,7 +62,10 @@ async fn real_catalog_acl_describe_and_text_output_preserve_oid_and_permissions(
             let connection = tokio::spawn(connection);
             let outcome = AssertUnwindSafe(async {
                 tokio::time::timeout(Duration::from_secs(20), async {
-                    client.simple_query("CREATE ROLE acl_reader; CREATE TABLE acl_items(id INT PRIMARY KEY,relacl TEXT); GRANT SELECT ON acl_items TO acl_reader").await.unwrap();
+                    // Oracle preview preserves PostgreSQL owner administration
+                    // only at its existing single-command management boundary.
+                    client.simple_query("CREATE ROLE acl_reader").await.unwrap();
+                    client.simple_query("CREATE TABLE acl_items(id INT PRIMARY KEY,relacl TEXT); GRANT SELECT ON acl_items TO acl_reader").await.unwrap();
                     // Catalog transport does not advertise unimplemented ACL
                     // user-value storage or substitute string equality for it.
                     for ddl in ["CREATE TABLE acl_scalar_storage(value aclitem)", "CREATE TABLE acl_array_storage(value aclitem[])"] {

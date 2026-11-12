@@ -16,6 +16,8 @@ pub(crate) use abort_catalogue::NativeAbortCatalogueBootstrap;
 pub(crate) mod abort_history;
 mod certified_prefix;
 mod history;
+mod initial_data;
+pub(crate) use initial_data::NativeInitialDataGenesis;
 mod history_stage;
 mod installed_anchor;
 mod native_read;

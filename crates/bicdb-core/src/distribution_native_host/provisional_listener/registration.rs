@@ -9,7 +9,11 @@ use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Instant;
 
+mod initial_data;
 mod maintenance;
+pub(crate) use initial_data::NativeInitialDataAdmission;
+use initial_data::NativeInitialDataHost;
+pub use initial_data::{NativeInitialDataRangeStatus, NativeInitialDataStatus};
 mod schema_export;
 pub(crate) use maintenance::NativeMetadataMaintenanceReport;
 
@@ -329,6 +333,7 @@ impl NativeMetadataRegistrationController {
 /// broaden in place and failed advance never drops the actual metadata owner.
 pub(crate) struct NativeMetadataControlHost {
     backend: Arc<NativeMetadataControlBackend>,
+    data: Option<NativeInitialDataHost>,
     old_listener: Option<ClusterDataServerHandle>,
     drained: Option<DrainedClusterDataListener>,
     controller: Option<Arc<NativeMetadataRegistrationController>>,
@@ -347,6 +352,7 @@ impl NativeMetadataControlHost {
             backend: Arc::new(NativeMetadataControlBackend::from_initial(Arc::new(
                 initial,
             ))),
+            data: None,
             old_listener: Some(listener),
             drained: None,
             controller: None,
@@ -363,6 +369,7 @@ impl NativeMetadataControlHost {
     ) -> Self {
         Self {
             backend: Arc::new(backend),
+            data: None,
             old_listener: Some(listener),
             drained: None,
             controller: None,
@@ -372,11 +379,16 @@ impl NativeMetadataControlHost {
         }
     }
     pub(in crate::distribution_native_host) fn is_running(&self) -> bool {
-        self.listener.is_some()
+        self.listener.is_some() || self.data.as_ref().is_some_and(|data| data.is_running())
     }
     pub(crate) fn advance(&mut self, parent: &CancellationToken) -> Result<()> {
         let token = parent.child_with_deadline(Instant::now() + Duration::from_secs(5));
         token.check()?;
+        if self.data.is_some() {
+            return Err(invalid(
+                "INITIAL DATA transition cannot revert to old control listener",
+            ));
+        }
         if self.network.dev_localhost_plaintext {
             return Err(invalid("native metadata control requires mutual TLS"));
         }
@@ -568,7 +580,7 @@ impl NativeMetadataControlHost {
         &self,
         parent: &CancellationToken,
     ) -> Result<NativeMetadataSupervisor> {
-        if self.listener.is_none() {
+        if !self.is_running() {
             return Err(invalid(
                 "automatic metadata requires owned control listener",
             ));
@@ -621,6 +633,9 @@ impl NativeMetadataControlHost {
         self.backend.heartbeat(parent)
     }
     pub(crate) fn stop(&mut self, parent: &CancellationToken) -> Result<()> {
+        if let Some(data) = self.data.as_mut() {
+            data.stop(parent)?;
+        }
         if let Some(old) = self.old_listener.as_mut() {
             let drained = old.stop_and_drain(parent)?;
             self.drained.get_or_insert(drained);

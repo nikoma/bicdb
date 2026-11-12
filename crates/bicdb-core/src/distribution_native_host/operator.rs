@@ -52,6 +52,7 @@ pub enum NativeMetadataHostAction {
     Launch,
     Elect,
     EnableControl,
+    OpenInitialData,
     Heartbeat,
     StartLearnerMetadata,
     EnrollLearner { node: ClusterNodeId },
@@ -67,6 +68,8 @@ pub enum NativeMetadataHostPhase {
     OwnedMetadata,
     MetadataControlTransition,
     MetadataControl,
+    InitialDataOpening,
+    InitialData,
     Stopped,
 }
 #[derive(Clone, Debug, Serialize)]
@@ -79,6 +82,7 @@ pub struct NativeMetadataHostStatus {
     pub last_caught_up_learner_store_id: Option<Uuid>,
     pub last_metadata_maintenance: Option<serde_json::Value>,
     pub last_metadata_promotion: Option<serde_json::Value>,
+    pub initial_data: Option<NativeInitialDataStatus>,
     pub data_serving: bool,
     pub data_refusal: &'static str,
 }
@@ -230,6 +234,21 @@ impl NativeMetadataHost {
         } else {
             None
         };
+        let initial_data = self
+            .control
+            .as_ref()
+            .map(|control| control.initial_data_status(parent))
+            .transpose()?
+            .flatten();
+        let data_serving = initial_data.as_ref().is_some_and(|data| {
+            data.receiver_listening
+                && data.writer_policy_current
+                && data.dispatcher_published
+                && data
+                    .ranges
+                    .iter()
+                    .all(|r| !r.local_leader || r.leader_admission_observed)
+        });
         Ok(NativeMetadataHostStatus {
             version: 1,
             node_id: self.template.node_id.clone(),
@@ -239,8 +258,13 @@ impl NativeMetadataHost {
             last_caught_up_learner_store_id: self.last_caught_up_learner_store_id,
             last_metadata_maintenance: self.last_metadata_maintenance.clone(),
             last_metadata_promotion: self.last_metadata_promotion.clone(),
-            data_serving: false,
-            data_refusal: "metadata-only host: data/read/SQL/promotion endpoints are not installed",
+            initial_data,
+            data_serving,
+            data_refusal: if data_serving {
+                "initial native point DATA only; Strong readiness is request-scoped; SQL/scan/placement/joint operations unsupported"
+            } else {
+                "metadata-only or pending DATA host: no successful application admission is installed"
+            },
         })
     }
     pub fn maintain_metadata(
@@ -350,6 +374,14 @@ impl NativeMetadataHost {
                 }
                 self.control.as_mut().unwrap().advance(&token)?;
                 self.phase = NativeMetadataHostPhase::MetadataControl;
+            }
+            NativeMetadataHostAction::OpenInitialData => {
+                self.phase = NativeMetadataHostPhase::InitialDataOpening;
+                self.control
+                    .as_mut()
+                    .ok_or_else(|| invalid("owned INITIAL control required before DATA open"))?
+                    .open_initial_data(&token)?;
+                self.phase = NativeMetadataHostPhase::InitialData;
             }
             NativeMetadataHostAction::Heartbeat => {
                 if let Some(control) = &self.control {

@@ -7,8 +7,8 @@ use std::time::Instant;
 
 /// Owns the real local hook/policy lifetime. This is not a range-ready proof.
 pub(crate) struct NativeInitialWriterEnrollment {
-    _coordinator: Arc<RangeWriteCoordinator<TcpClusterRelocationTransport>>,
-    _guard: crate::db::InstalledNativeWriterHostGuard,
+    pub(super) coordinator: Arc<RangeWriteCoordinator<TcpClusterRelocationTransport>>,
+    pub(super) guard: Arc<crate::db::InstalledNativeWriterHostGuard>,
     pub(crate) metadata_context_id: Uuid,
     pub(crate) metadata_term: u64,
     pub(crate) metadata_read_index: u64,
@@ -82,6 +82,18 @@ impl NativeInitialConsensusLaunch {
         metadata_leader: &ClusterNodeId,
         parent: &CancellationToken,
     ) -> Result<NativeInitialWriterEnrollment> {
+        let mut retained = None;
+        self.enroll_initial_writer_retained(metadata_leader, parent, |owner| {
+            retained = Some(owner)
+        })?;
+        retained.ok_or_else(|| invalid("initial writer owner was not retained"))
+    }
+    pub(super) fn enroll_initial_writer_retained(
+        &self,
+        metadata_leader: &ClusterNodeId,
+        parent: &CancellationToken,
+        retain: impl FnOnce(NativeInitialWriterEnrollment),
+    ) -> Result<()> {
         let token = parent.child_with_deadline(Instant::now() + Duration::from_secs(5));
         let business = Uuid::now_v7();
         let observed = self.transport.acquire_host_metadata_observation(
@@ -108,7 +120,7 @@ impl NativeInitialConsensusLaunch {
         let context = policy.metadata_context_id();
         let term = policy.metadata_term();
         let read_index = policy.metadata_read_index();
-        let coordinator = Arc::new(RangeWriteCoordinator::new_schema_fenced(
+        let coordinator = Arc::new(RangeWriteCoordinator::new_initial_schema_fenced(
             self.seed.spec.cluster_id.clone(),
             self.seed.spec.node_id.clone(),
             Arc::clone(&self.topology),
@@ -122,13 +134,15 @@ impl NativeInitialConsensusLaunch {
             .try_read()
             .ok_or_else(|| invalid("initial writer DB busy before policy"))?;
         let guard = db.install_enrolled_native_coordinator(Arc::clone(&coordinator), policy)?;
-        token.check()?;
-        Ok(NativeInitialWriterEnrollment {
-            _coordinator: coordinator,
-            _guard: guard,
+        // Transfer actual installed ownership BEFORE a fallible post-install
+        // deadline check. DataOpen retains it on timeout/unknown publication.
+        retain(NativeInitialWriterEnrollment {
+            coordinator,
+            guard: Arc::new(guard),
             metadata_context_id: context,
             metadata_term: term,
             metadata_read_index: read_index,
-        })
+        });
+        token.check()
     }
 }

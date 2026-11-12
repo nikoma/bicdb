@@ -73,6 +73,7 @@ impl Processes {
             let mut allowed = vec![
                 PathBuf::from("common-plan.json"),
                 PathBuf::from("node4-killed-metadata.json"),
+                PathBuf::from("initial-data-external-ledger.jsonl"),
             ];
             for i in 0..6 {
                 for extension in ["stderr", "stdout", "status", "command"] {

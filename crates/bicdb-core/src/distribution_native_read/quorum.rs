@@ -381,3 +381,82 @@ impl EnrolledNativeReadQuorum {
         self.candidate.point()
     }
 }
+
+/// INITIAL-host bootstrap only. A candidate alone cannot produce this: the
+/// retained actual factory/selected-range protected genesis is mandatory, and
+/// this object never authorizes a row/absence or exposes a numeric B floor.
+pub(crate) struct NativeInitialDataReadQuorum {
+    enrolled: EnrolledNativeReadQuorum,
+}
+impl NativeReadQuorumCandidate {
+    pub(crate) fn into_initial_data_genesis(
+        self,
+        genesis: &crate::db::NativeInitialDataGenesis,
+    ) -> Result<NativeInitialDataReadQuorum> {
+        let (index, h0, h) = self.point();
+        if canonical_range(genesis.range()) != self.scope().range
+            || index != 0
+            || h0 != h
+            || h0 != genesis.logical_genesis_sha256()
+        {
+            return Err(invalid(
+                "initial DATA recovery requires matching actual original genesis quorum",
+            ));
+        }
+        let enrolled = self.check_enrolled_voter_births()?;
+        let topology = enrolled
+            .candidate
+            .round
+            .metadata
+            .committed_topology(enrolled.candidate.round.business)?;
+        for node in enrolled.candidate.scope().members.keys() {
+            if topology.nodes[node]
+                .native_store_birth_v1
+                .as_ref()
+                .is_none_or(|birth| birth.abort_protocol_version() != 1)
+            {
+                return Err(invalid("initial DATA requires from-birth protected writer-start/catalogue custody on every voter"));
+            }
+        }
+        for node in enrolled.candidate.matching_member_ids() {
+            if enrolled.candidate.round.observations[node]
+                .facts()
+                .native_writer_enforcement_version
+                != 1
+            {
+                return Err(invalid(
+                    "initial DATA voter is outside enforced writer domain",
+                ));
+            }
+        }
+        Ok(NativeInitialDataReadQuorum { enrolled })
+    }
+}
+impl NativeInitialDataReadQuorum {
+    pub(crate) fn require_current(
+        &self,
+        service: &crate::ClusterDataNodeService,
+        final_metadata: &crate::distribution_consensus::MetadataReadObservation,
+        business: Uuid,
+    ) -> Result<()> {
+        let candidate = &self.enrolled.candidate;
+        candidate.require_lifetime()?;
+        let first = &candidate.round.metadata;
+        let scope = scope_from_metadata(final_metadata, business, &candidate.round.local_node)?;
+        if final_metadata.context_id() == first.context_id()
+            || final_metadata.term() < first.term()
+            || final_metadata.read_index() < first.read_index()
+            || scope != *candidate.scope()
+        {
+            return Err(invalid(
+                "initial DATA metadata changed across actual genesis collection",
+            ));
+        }
+        let local = candidate.round.observations[&candidate.round.local_node]
+            .local()
+            .ok_or_else(|| invalid("initial DATA has no SAME-service local observation"))?;
+        local.require_current(service)?;
+        final_metadata.require_live_request(business)?;
+        candidate.require_lifetime()
+    }
+}

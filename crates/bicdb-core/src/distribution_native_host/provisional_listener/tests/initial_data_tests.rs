@@ -1,0 +1,209 @@
+//! Actual INITIAL factories, real metadata votes and pinned TLS. No replay,
+//! fake progress, declared election result, reset or blank learner permission.
+use super::*;
+use crate::distribution_native_host::NativeMetadataControlHost;
+use std::time::Instant;
+
+fn budget(ms: u64) -> CancellationToken {
+    CancellationToken::uncancelable()
+        .child_with_deadline(Instant::now() + Duration::from_millis(ms))
+}
+fn template(f: &Fixture, i: usize) -> DistributionConfig {
+    let local = &f.plan.topology.nodes[&node(i)];
+    DistributionConfig {
+        enabled: true,
+        cluster_id: f.plan.topology.cluster_id.clone(),
+        range_image_bootstrap_id: f.plan.topology.range_image_bootstrap_id,
+        node_id: local.id.clone(),
+        node_address: local.address.clone(),
+        node_incarnation: local.incarnation,
+        node_capacity_bytes: local.capacity_bytes,
+        node_tls_certificate_sha256: local.tls_certificate_sha256.clone(),
+        replication_factor: f.plan.topology.replication_factor,
+        initial_ranges: f.plan.topology.ranges.len().try_into().unwrap(),
+        transport: f.networks[i].clone(),
+        ..Default::default()
+    }
+}
+
+#[test]
+fn native_initial_data_genesis_refuses_changed_epoch_restore_and_actual_foreign_birth() {
+    let f = Fixture::new();
+    let seed = &f.hosts[0].seed;
+    let range = seed.spec.initial_ranges.first().unwrap();
+    let database = seed.database.read();
+    let proof = database
+        .observe_initial_data_genesis(&seed.factory, range, &f.plan.topology)
+        .unwrap();
+    proof.require_current(&database, &f.plan.topology).unwrap();
+    let mut changed = f.plan.topology.clone();
+    changed
+        .ranges
+        .values_mut()
+        .find(|r| r.id == range.id)
+        .unwrap()
+        .epoch += 1;
+    assert!(proof.require_current(&database, &changed).is_err());
+    let mut changed = f.plan.topology.clone();
+    changed.range_image_bootstrap_id = Some(Uuid::now_v7());
+    assert!(proof.require_current(&database, &changed).is_err());
+    // Both are actual healthy native factories; an opaque proof from n0
+    // cannot be used with the different actual n1 birth/open/root.
+    assert!(proof
+        .require_current(&f.hosts[1].seed.database.read(), &f.plan.topology)
+        .is_err());
+    assert!(!database.commit_admission_ready());
+    assert!(database
+        .get("items", "not-written-by-initial-data-proof")
+        .unwrap()
+        .is_none());
+}
+
+#[test]
+fn native_initial_data_actual_tls_cancel_partial_quorum_then_nonempty_is_not_new_genesis() {
+    let mut f = Fixture::new();
+    let configuration = f.hosts[0]
+        .observe_initial_configuration(&budget(5000))
+        .unwrap();
+    let permits = f
+        .hosts
+        .iter()
+        .map(|host| {
+            host.prepare_common_initial_configuration(&configuration, &budget(5000))
+                .unwrap()
+        })
+        .collect::<Vec<_>>();
+    let launches = f
+        .hosts
+        .iter_mut()
+        .zip(&permits)
+        .map(|(host, permit)| {
+            host.finish_initial_consensus(permit, &budget(5000))
+                .unwrap()
+        })
+        .collect::<Vec<_>>();
+    let listeners = launches
+        .iter()
+        .enumerate()
+        .map(|(i, launch)| {
+            launch
+                .start_metadata_listener(f.networks[i].clone(), &budget(5000))
+                .unwrap()
+        })
+        .collect::<Vec<_>>();
+    launches[0].elect_initial_metadata(&budget(5000)).unwrap();
+    {
+        // Hold the ACTUAL service, not a synthetic transport. Constructing
+        // the finite runtime must expire without starting an uncancellable
+        // background recovery or publishing any writer/readiness.
+        let _held = launches[0].service.lock();
+        let result = crate::distribution_range_recovery::RangeRecoveryRuntime::new_cancellable(
+            launches[0].service.clone(),
+            launches[0].provider.clone(),
+            &budget(30),
+        );
+        assert!(matches!(result, Err(crate::BicDbError::QueryTimedOut)));
+    }
+    let configs = (0..3).map(|i| template(&f, i)).collect::<Vec<_>>();
+    let mut controls = launches
+        .into_iter()
+        .zip(listeners)
+        .enumerate()
+        .map(|(i, (launch, listener))| {
+            NativeMetadataControlHost::new(
+                launch,
+                listener,
+                f.networks[i].clone(),
+                configs[i].clone(),
+            )
+        })
+        .collect::<Vec<_>>();
+    for control in &mut controls {
+        control.advance(&budget(5000)).unwrap();
+    }
+    let canceled = budget(1000);
+    canceled.cancel();
+    assert!(controls[0].open_initial_data(&canceled).is_err());
+    assert!(controls[0]
+        .initial_data_status(&budget(1000))
+        .unwrap()
+        .is_none());
+    assert!(!f.hosts[0].seed.database.read().commit_admission_ready());
+    assert!(controls[0].open_initial_data(&budget(2000)).is_err());
+    let pending = controls[0]
+        .initial_data_status(&budget(1000))
+        .unwrap()
+        .unwrap();
+    assert!(pending.receiver_listening && pending.writer_policy_current);
+    assert!(!pending.dispatcher_published);
+    assert!(pending.ranges.iter().any(|r| r.local_leader));
+    assert!(pending.ranges.iter().all(|r| !r.leader_admission_observed));
+    let until = Instant::now() + Duration::from_secs(20);
+    let mut ready = [false; 3];
+    while !ready.iter().all(|r| *r) {
+        for (i, control) in controls.iter_mut().enumerate() {
+            if !ready[i] {
+                ready[i] = control.open_initial_data(&budget(1500)).is_ok();
+            }
+        }
+        assert!(
+            Instant::now() < until,
+            "actual initial DATA QQ did not complete: {ready:?}"
+        );
+    }
+    let bootstrap = crate::TcpClusterBootstrapClient::new(
+        configs[0].cluster_id.clone(),
+        node(0),
+        f.networks[0].clone(),
+    )
+    .unwrap();
+    let snapshot = bootstrap
+        .fetch_snapshot(&node(0), &configs[0].node_address)
+        .unwrap();
+    let topology = snapshot.topology;
+    let gateway = crate::ClusterEventClient::new(&configs[0], topology.clone())
+        .unwrap()
+        .with_request_timeout(Duration::from_secs(2))
+        .unwrap();
+    let key = "native-initial-real-nonempty";
+    let expected =
+        serde_json::json!({"actual":"first externally visible native point", "nested":[null,17]});
+    assert!(gateway.append("items", key, expected.clone()).unwrap());
+    assert_eq!(gateway.get_strong("items", key).unwrap(), Some(expected));
+    let id = crate::cluster_event_record_id("items", key).unwrap();
+    let range = topology
+        .range_for_key(crate::CLUSTER_EVENTS_COLLECTION, &id)
+        .unwrap();
+    let leader_index = (0..3).find(|i| node(*i) == range.leader).unwrap();
+    let leader = &f.hosts[leader_index].seed;
+    let database = leader.database.read();
+    assert_eq!(
+        database
+            .current_native_range_source_lineage(range.id)
+            .unwrap()
+            .range_index(),
+        1
+    );
+    assert!(
+        database
+            .observe_initial_data_genesis(&leader.factory, range, &topology)
+            .is_err(),
+        "real R1 is not a new initial genesis"
+    );
+    // Native local B can change because another range received an ACK. Its
+    // unchanged selected protected genesis remains eligible, without casting R.
+    for other in leader
+        .spec
+        .initial_ranges
+        .iter()
+        .filter(|r| r.id != range.id)
+    {
+        database
+            .observe_initial_data_genesis(&leader.factory, other, &topology)
+            .unwrap();
+    }
+    drop(database);
+    for control in &mut controls {
+        control.stop(&budget(5000)).unwrap();
+    }
+}

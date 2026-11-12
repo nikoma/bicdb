@@ -188,6 +188,8 @@ pub enum Action {
     Launch,
     Elect,
     EnableControl,
+    /// INITIAL owners only: retained native policy/runtime, new DATA listener, real initial readiness.
+    OpenInitialData,
     Heartbeat,
     EnrollLearner,
     CatchUpLearner,
@@ -208,6 +210,7 @@ impl Action {
             Self::Launch => C::Launch,
             Self::Elect => C::Elect,
             Self::EnableControl => C::EnableControl,
+            Self::OpenInitialData => C::OpenInitialData,
             Self::Heartbeat => C::Heartbeat,
             Self::EnrollLearner => C::EnrollLearner {
                 node: ClusterNodeId::new(target.unwrap())?,
@@ -480,7 +483,7 @@ pub fn run(command: Command) -> Result<()> {
                     process_id: std::process::id(),
                     host: Some(&status),
                     error: None,
-                    data_serving: false,
+                    data_serving: status.data_serving,
                 },
             )?;
             let mut sequence = 0;
@@ -529,7 +532,7 @@ pub fn run(command: Command) -> Result<()> {
                                 process_id: std::process::id(),
                                 host: Some(&status),
                                 error,
-                                data_serving: false,
+                                data_serving: status.data_serving,
                             },
                         )?;
                     }
@@ -537,7 +540,12 @@ pub fn run(command: Command) -> Result<()> {
                 if last_tick.elapsed() >= Duration::from_millis(500) {
                     // The one general supervisor owns election/heartbeats. This
                     // separately bounded controller owns CONFIG enrollment only.
-                    if status.phase == NativeMetadataHostPhase::MetadataControl {
+                    if matches!(
+                        status.phase,
+                        NativeMetadataHostPhase::MetadataControl
+                            | NativeMetadataHostPhase::InitialDataOpening
+                            | NativeMetadataHostPhase::InitialData
+                    ) {
                         if !manual_enrollment {
                             let _ = host.start_automatic_metadata(&lifetime);
                         }
@@ -566,7 +574,7 @@ pub fn run(command: Command) -> Result<()> {
                             process_id: std::process::id(),
                             host: Some(&status),
                             error: command_error.clone(),
-                            data_serving: false,
+                            data_serving: status.data_serving,
                         },
                     )?;
                     last_tick = Instant::now();

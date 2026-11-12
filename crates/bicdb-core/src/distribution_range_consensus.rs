@@ -59,8 +59,8 @@ pub(crate) use image_proposal_state::{
 pub(crate) mod native_abort;
 mod native_completion_observation;
 mod native_read_catalog;
-pub use native_abort::NativePrepareOnlyRejection;
-use native_abort::{NativeAbortProtocol, NATIVE_ABORT_CATALOG_FORMAT};
+use native_abort::{NativeAbortProtocol, NativeAdmissionRejection, NATIVE_ABORT_CATALOG_FORMAT};
+pub use native_abort::{NativePrepareOnlyRejection, NativeUncertainAdmissionRejection};
 mod native_ready_catalog;
 #[cfg(feature = "tls-replication")]
 mod strong_point_read;
@@ -3213,11 +3213,27 @@ impl<Transport: RangeWriteTransport> RangeAntiEntropyFenceAuthority
 }
 
 impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
+    fn retain_native_uncertain_admission(
+        &self,
+        command: &RangeWriteCommand,
+        mutation: RangeMutationPermit,
+        rejected: &mut Option<NativeAdmissionRejection>,
+        error: BicDbError,
+    ) -> BicDbError {
+        *rejected = Some(NativeAdmissionRejection::CommitMayHavePersisted(
+            NativeUncertainAdmissionRejection::new(
+                command,
+                self.local_incarnation.clone(),
+                mutation,
+            ),
+        ));
+        error
+    }
     fn admit_with_database(
         &self,
         intent: &CommitAdmissionIntent,
         database: Option<&crate::BicDb>,
-        prepare_rejection: &mut Option<NativePrepareOnlyRejection>,
+        admission_rejection: &mut Option<NativeAdmissionRejection>,
     ) -> Result<CommitAdmissionTicket> {
         self.require_expected_native_database(database)?;
         let native_database = match (self.native_image_mode, database) {
@@ -3343,7 +3359,9 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
         if let Err(error) = local_prepare {
             if let Some(attempt) = native_abort_attempt {
                 self.recovered_epochs.lock().remove(&range.id);
-                *prepare_rejection = Some(attempt.retain_mutation(mutation));
+                *admission_rejection = Some(NativeAdmissionRejection::PrepareOnly(
+                    attempt.retain_mutation(mutation),
+                ));
             }
             return Err(error);
         }
@@ -3378,7 +3396,9 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
         if prepared < quorum {
             if let Some(attempt) = native_abort_attempt {
                 self.recovered_epochs.lock().remove(&range.id);
-                *prepare_rejection = Some(attempt.retain_mutation(mutation));
+                *admission_rejection = Some(NativeAdmissionRejection::PrepareOnly(
+                    attempt.retain_mutation(mutation),
+                ));
                 return Err(range_write_error(format!(
                     "range {} command {} failed prepare quorum {prepared}/{quorum}; actual local cleanup/no-effect intent required before abort recovery", range.id, command.command_id,
                 )));
@@ -3436,7 +3456,7 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
         if let Err(error) = local_commit {
             if native_database.is_some() {
                 self.recovered_epochs.lock().remove(&range.id);
-                return Err(BicDbError::CommitOutcomeUnknown {
+                return Err(self.retain_native_uncertain_admission(&command, mutation, admission_rejection, BicDbError::CommitOutcomeUnknown {
                     sequence: None,
                     transaction_id: Some(command.transaction_id),
                     incarnation: self.local_incarnation.clone(),
@@ -3444,7 +3464,7 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
                         "range {} command {} local Commit persistence is uncertain: {error}; local application WAL has not started; retained for recovery",
                         range.id, command.command_id,
                     ),
-                });
+                }));
             }
             return Err(error);
         }
@@ -3468,7 +3488,7 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
         if committed < quorum {
             if native_database.is_some() {
                 self.recovered_epochs.lock().remove(&range.id);
-                return Err(BicDbError::CommitOutcomeUnknown {
+                return Err(self.retain_native_uncertain_admission(&command, mutation, admission_rejection, BicDbError::CommitOutcomeUnknown {
                     sequence: None,
                     transaction_id: Some(command.transaction_id),
                     incarnation: self.local_incarnation.clone(),
@@ -3476,7 +3496,7 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
                         "range {} command {} counted Commit replies {committed}/{quorum}; additional Commit decisions may be durable despite missing replies; local application WAL has not started; retained for recovery",
                         range.id, command.command_id,
                     ),
-                });
+                }));
             }
             // Preserve the legacy classification separately. Native missing
             // Commit replies above never establish a prepare-only rollback.
@@ -3499,10 +3519,10 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
         if let Err(error) = local_certificate {
             if native_database.is_some() {
                 self.recovered_epochs.lock().remove(&range.id);
-                return Err(BicDbError::CommitOutcomeUnknown {
+                return Err(self.retain_native_uncertain_admission(&command, mutation, admission_rejection, BicDbError::CommitOutcomeUnknown {
                     sequence: None, transaction_id: Some(command.transaction_id), incarnation:self.local_incarnation.clone(),
                     detail:format!("range {} command {} reached a decision quorum, but local certificate persistence is uncertain: {error}; local row apply has not started", range.id,command.command_id),
-                });
+                }));
             }
             return Err(error);
         }
@@ -3544,10 +3564,10 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
                         active.remove(&range.id);
                         self.active_range_changed.notify_all();
                     }
-                    return Err(BicDbError::CommitOutcomeUnknown {
+                    return Err(self.retain_native_uncertain_admission(&command, mutation, admission_rejection, BicDbError::CommitOutcomeUnknown {
                         sequence:None,transaction_id:Some(command.transaction_id),incarnation:self.local_incarnation.clone(),
                         detail:format!("range {} command {} is irrevocably certified but native pending persistence failed before local row apply: {error}; recovery is required",range.id,command.command_id),
-                    });
+                    }));
                 }
             };
             // A native Apply instruction is never emitted by an early ACK.
@@ -3744,17 +3764,18 @@ impl<Transport: RangeWriteTransport> CommitAdmission for RangeWriteCoordinator<T
         let mut rejected = None;
         match self.admit_with_database(intent, Some(database), &mut rejected) {
             Ok(ticket) => Ok(crate::NativeCommitAdmissionResult::Accepted(ticket)),
-            Err(error) => {
-                match rejected {
-                    Some(rejection) => {
-                        Ok(crate::NativeCommitAdmissionResult::PrepareOnlyRejected {
-                            rejection,
-                            error,
-                        })
-                    }
-                    None => Err(error),
+            Err(error) => match rejected {
+                Some(NativeAdmissionRejection::PrepareOnly(rejection)) => Ok(
+                    crate::NativeCommitAdmissionResult::PrepareOnlyRejected { rejection, error },
+                ),
+                Some(NativeAdmissionRejection::CommitMayHavePersisted(attempt)) => {
+                    Ok(crate::NativeCommitAdmissionResult::CommitMayHavePersisted {
+                        attempt,
+                        error,
+                    })
                 }
-            }
+                None => Err(error),
+            },
         }
     }
     fn native_prepare_only_cleaned(

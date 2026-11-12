@@ -194,6 +194,50 @@ impl NativeAbortProtocol {
         self.ranges.get(&range)
     }
 }
+pub(super) enum NativeAdmissionRejection {
+    PrepareOnly(NativePrepareOnlyRejection),
+    CommitMayHavePersisted(NativeUncertainAdmissionRejection),
+}
+/// Keeps the actual originating lease until Core finishes physical cleanup.
+/// It is deliberately not convertible to a prepare-only/no-effect receipt.
+#[derive(Debug)]
+pub struct NativeUncertainAdmissionRejection {
+    command: RangeWriteCommand,
+    database_incarnation: String,
+    mutation: RangeMutationPermit,
+}
+impl NativeUncertainAdmissionRejection {
+    pub(super) fn new(
+        command: &RangeWriteCommand,
+        database_incarnation: String,
+        mutation: RangeMutationPermit,
+    ) -> Self {
+        Self {
+            command: command.clone(),
+            database_incarnation,
+            mutation,
+        }
+    }
+    pub(crate) fn require_attempt(
+        &self,
+        database: &crate::BicDb,
+        transaction: u64,
+        mutations_sha256: &str,
+    ) -> Result<()> {
+        if self.database_incarnation != database.incarnation_id()
+            || self.command.transaction_id != transaction
+            || crate::db::admission_mutations_sha256(&self.command.mutations)? != mutations_sha256
+        {
+            return Err(range_write_error(
+                "uncertain admission cleanup differs from actual Core attempt",
+            ));
+        }
+        database.range_mutation_gate().validate(
+            self.command.range_id,
+            &RangeMutationAuthority::Mutation(&self.mutation),
+        )
+    }
+}
 /// Created only by the actual local Store start producer before any Prepare.
 /// The Core receives it only through a typed native admission rejection.
 #[derive(Debug)]

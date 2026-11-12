@@ -7,6 +7,10 @@ use crate::distribution_range_consensus::NativePrepareOnlyRejection;
 #[derive(Debug)]
 pub enum NativeCommitAdmissionResult {
     Accepted(CommitAdmissionTicket),
+    CommitMayHavePersisted {
+        attempt: crate::distribution_range_consensus::NativeUncertainAdmissionRejection,
+        error: BicDbError,
+    },
     PrepareOnlyRejected {
         rejection: NativePrepareOnlyRejection,
         error: BicDbError,
@@ -72,21 +76,7 @@ impl BicDb {
                 ));
             }
             self.rollback_transaction_without_outcome_receipt(tx)?;
-            tx.rollback_write_receipts(0);
-            tx.writes.clear();
-            tx.write_index.clear();
-            tx.prepared_wal = PreparedWal::default();
-            tx.pending_broker_publishes.get_mut().clear();
-            tx.pending_record_audit_events.clear();
-            tx.imported_record_audit_events.clear();
-            tx.deferred_hooks.get_mut().clear();
-            tx.constraint_modes.get_mut().clear();
-            tx.commit_validators.clear();
-            tx.mutation_grants.clear();
-            tx.postgres_serializable = None;
-            tx.native_wal_retention = None;
-            tx.range_mutation_claim = None;
-            tx.database_mutation_permit = None;
+            tx.clear_native_rejected_effect_buffers();
             let no_effect = NativeTransactionNoEffect {
                 transaction_id: tx.id.0,
                 database_incarnation: self.incarnation.clone(),
@@ -108,5 +98,66 @@ impl BicDb {
                 })
             }
         }
+    }
+}
+
+impl Transaction {
+    fn clear_native_rejected_effect_buffers(&mut self) {
+        self.rollback_write_receipts(0);
+        self.writes.clear();
+        self.write_index.clear();
+        self.prepared_wal = PreparedWal::default();
+        self.pending_broker_publishes.get_mut().clear();
+        self.pending_record_audit_events.clear();
+        self.imported_record_audit_events.clear();
+        self.deferred_hooks.get_mut().clear();
+        self.constraint_modes.get_mut().clear();
+        self.commit_validators.clear();
+        self.mutation_grants.clear();
+        self.postgres_serializable = None;
+        self.native_wal_retention = None;
+        self.range_mutation_claim = None;
+        self.database_mutation_permit = None;
+    }
+}
+impl BicDb {
+    pub(super) fn finish_native_uncertain_admission(
+        &self,
+        tx: &mut Transaction,
+        error: BicDbError,
+    ) -> Result<u64> {
+        let attempt = tx
+            .native_uncertain_admission
+            .take()
+            .expect("typed uncertain admission checked");
+        tx.receipt_native_admission_unknown();
+        let binding = actual_transaction_mutations_sha256(tx)
+            .and_then(|hash| attempt.require_attempt(self, tx.id.0, &hash));
+        let cleanup = if tx.state == TxState::Pending
+            && tx.committed_seq.is_none()
+            && tx.commit_admission_ticket.is_none()
+            && tx.native_admission_recovery_release.is_none()
+        {
+            self.rollback_transaction_without_outcome_receipt(tx)
+                .map(|()| tx.clear_native_rejected_effect_buffers())
+        } else {
+            Err(BicDbError::Cluster(
+                "uncertain admission crossed its actual before-WAL cleanup boundary".into(),
+            ))
+        };
+        // The lease is held through real lock/state/buffer cleanup. This emits
+        // neither CoreNoEffect nor Aborted, and never removes an actual decision.
+        drop(attempt);
+        tx.receipt_native_admission_unknown();
+        Err(BicDbError::CommitOutcomeUnknown {
+            sequence: tx.committed_seq,
+            transaction_id: Some(tx.id.0),
+            incarnation: self.incarnation.clone(),
+            detail: format!(
+                "{error}; actual before-WAL cleanup binding={:?}, cleanup={:?}",
+                binding.err(),
+                cleanup.err()
+            ),
+        })
     }
 }

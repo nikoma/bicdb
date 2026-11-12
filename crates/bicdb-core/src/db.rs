@@ -9229,6 +9229,8 @@ pub struct Transaction {
     native_wal_retention: Option<native_wal_apply::NativeWalRetentionPin>,
     commit_admission_ticket: Option<(Arc<dyn CommitAdmission>, CommitAdmissionTicket)>,
     native_admission_recovery_release: Option<NativeAdmissionRecoveryRelease>,
+    native_uncertain_admission:
+        Option<crate::distribution_range_consensus::NativeUncertainAdmissionRejection>,
     native_prepare_only_rejection: Option<(
         Arc<dyn CommitAdmission>,
         crate::distribution_range_consensus::NativePrepareOnlyRejection,

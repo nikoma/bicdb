@@ -313,7 +313,11 @@ fn native_abort_actual_enforced_post_durable_commit_errors_cannot_become_no_effe
     let mut tx = db.begin_transaction().unwrap();
     tx.insert("items", Record::new(&key)).unwrap();
     let observer = tx.observe_outcome();
-    let failed = tx.commit().unwrap_err();
+    // Retain the actual buffered transaction after the error: Drop alone
+    // cannot be the cleanup boundary observed by a recovery freeze.
+    let failed = db.commit_buffered_transaction(&mut tx).unwrap_err();
+    assert_eq!(tx.state(), crate::TxState::Aborted);
+    assert!(!tx.has_pending_writes("items"));
     assert!(
         matches!(&failed, BicDbError::CommitOutcomeUnknown { sequence: None, transaction_id: Some(id), .. }
         if *id == observer.transaction_id().0),
@@ -328,6 +332,19 @@ fn native_abort_actual_enforced_post_durable_commit_errors_cannot_become_no_effe
         db.tx_log_handle().stats().commits_written,
         before.commits_written
     );
+    // Real row-lock reuse succeeds while the failed buffered transaction is
+    // STILL alive. This new local probe is rolled back without any admission.
+    let mut probe = db.begin_transaction().unwrap();
+    probe.insert("items", Record::new(&key)).unwrap();
+    probe.rollback().unwrap();
+    let gate = db.range_mutation_gate();
+    let drained = gate.try_freeze(range.id, Uuid::now_v7()).unwrap();
+    drop(drained);
+    assert_eq!(
+        observer.outcome(),
+        crate::TransactionOutcome::RecoveryRequiredBeforeLocalCommit
+    );
+    drop(tx);
     drop(db);
     for id in [node("n0"), node("n1"), node("n2")] {
         let db = fixture.native.databases[&id].read();

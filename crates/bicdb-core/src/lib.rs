@@ -386,11 +386,11 @@ pub use distribution_query::{
     DISTRIBUTED_QUERY_PROTOCOL_VERSION,
 };
 pub use distribution_range_consensus::{
-    NativePrepareOnlyRejection, RangeBackupFenceQuorum, RangeBackupFenceSession,
-    RangeBackupWriteFence, RangeWriteAck, RangeWriteCatalogInspection, RangeWriteCommand,
-    RangeWriteCoordinator, RangeWriteLogEntry, RangeWriteProbe, RangeWriteProgress,
-    RangeWriteRepairBatch, RangeWriteRepairLimits, RangeWriteState, RangeWriteStore,
-    RangeWriteTransport, DEFAULT_RANGE_WRITE_LOG, RANGE_WRITE_LOG_FORMAT_VERSION,
+    NativePrepareOnlyRejection, NativeUncertainAdmissionRejection, RangeBackupFenceQuorum,
+    RangeBackupFenceSession, RangeBackupWriteFence, RangeWriteAck, RangeWriteCatalogInspection,
+    RangeWriteCommand, RangeWriteCoordinator, RangeWriteLogEntry, RangeWriteProbe,
+    RangeWriteProgress, RangeWriteRepairBatch, RangeWriteRepairLimits, RangeWriteState,
+    RangeWriteStore, RangeWriteTransport, DEFAULT_RANGE_WRITE_LOG, RANGE_WRITE_LOG_FORMAT_VERSION,
     RANGE_WRITE_PROTOCOL_VERSION,
 };
 pub use distribution_restore::{

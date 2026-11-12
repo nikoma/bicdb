@@ -2699,6 +2699,14 @@ impl BicDb {
                 {
                     let ticket = match admission.admit_native_with_rejection(&intent, self) {
                         Ok(NativeCommitAdmissionResult::Accepted(ticket)) => ticket,
+                        Ok(NativeCommitAdmissionResult::CommitMayHavePersisted {
+                            attempt,
+                            error,
+                        }) => {
+                            tx.native_uncertain_admission = Some(attempt);
+                            tx.receipt_native_admission_unknown();
+                            return Err(error);
+                        }
                         Ok(NativeCommitAdmissionResult::PrepareOnlyRejected {
                             rejection,
                             error,

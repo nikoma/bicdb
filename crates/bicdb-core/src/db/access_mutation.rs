@@ -909,6 +909,7 @@ impl BicDb {
             commit_admission_ticket: None,
             native_admission_recovery_release: None,
             native_prepare_only_rejection: None,
+            native_uncertain_admission: None,
             committed_seq: None,
             paged_snapshot: self
                 .paged_records

@@ -77,7 +77,6 @@ pub(crate) use native_recovery_ready::{LocalNativeRecoveryReady, NativeLocalVisi
 pub(crate) use range_image_native::rf3_fixture::{
     ActualNativeRf3Fixture, ActualNativeRf3RpcObservation,
 };
-pub(crate) use range_image_native::NativeActivationDecisionReceipt;
 pub(crate) use range_image_native::NativeReplicaMaterialization;
 pub(crate) use range_image_native::{
     FreshRangeGenesisAuthority, InstalledNativeWriterHostGuard, KnownNativeRecoveryPrefix,
@@ -87,6 +86,9 @@ pub(crate) use range_image_native::{
     NativeRangePendingApply, NativeRangePrefixObservation, NativeRecoveredServingReceipt,
     NativeRecoveryAdmission, NativeRecoveryAppliedReceipt, NativeWriterHostState,
     RangeImageBirthMember, RangeImageBirthSpec, SourceRangeImageLineage, StagedNativeHistoryProof,
+};
+pub(crate) use range_image_native::{
+    NativeActivationDecisionReceipt, NativeJointOldCloseReceipt, NativeJointOldPhysicalProof,
 };
 pub(crate) use range_image_native::{NativeRangeReadPhysical, NativeReadLocalDbSequence};
 mod range_image_bindings;

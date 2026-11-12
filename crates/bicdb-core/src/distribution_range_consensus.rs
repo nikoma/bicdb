@@ -112,10 +112,15 @@ pub(crate) use native_limits::{
     validate_native_recovery_entry_size, MAX_NATIVE_RECOVERY_ENTRY_BYTES,
     MIN_NATIVE_RECOVERY_FRAME_BYTES,
 };
+mod joint_handoff_state;
 mod native_durability;
 mod native_normal;
 mod native_prefix;
 mod native_writer;
+use joint_handoff_state::{NativeJointLocalState, NATIVE_JOINT_HANDOFF_CATALOG_FORMAT};
+pub(crate) use joint_handoff_state::{
+    NativeJointOldCatalogPreflight, NativeJointOldPromiseReceipt,
+};
 #[cfg(test)]
 pub(crate) use native_prefix::tests::{
     fixture as native_origin_fixture, seed_actual_origin, test_catalog_command,
@@ -142,6 +147,7 @@ const KNOWN_RANGE_WRITE_CATALOG_FORMATS: &[u32] = &[
     IMAGE_PROPOSAL_CATALOG_FORMAT,
     NATIVE_WRITER_CATALOG_FORMAT,
     INSTALLING_CERTIFICATION_FORMAT,
+    NATIVE_JOINT_HANDOFF_CATALOG_FORMAT,
 ];
 
 // Recognizing a format is not a phase, writer or recovery grant. Each caller
@@ -590,6 +596,8 @@ struct RangeWriteCatalog {
     installing_committed_certifications: Option<InstallingCertifications>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     installing_recovery_handovers: Option<InstallingHandovers>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    native_joint_handoffs: Option<BTreeMap<RangeId, NativeJointLocalState>>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -636,6 +644,25 @@ impl RangeWriteEnvelope {
             return Err(range_write_error(
                 "native writer catalog marker/format mismatch",
             ));
+        }
+        if (self.catalog.format_version >= NATIVE_JOINT_HANDOFF_CATALOG_FORMAT)
+            != self.catalog.native_joint_handoffs.is_some()
+            || (self.catalog.format_version >= NATIVE_JOINT_HANDOFF_CATALOG_FORMAT
+                && self.catalog.native_writer_enforcement_version != Some(1))
+        {
+            return Err(range_write_error(
+                "native joint catalogue format/map/enforced-writer marker mismatch",
+            ));
+        }
+        if let Some(states) = &self.catalog.native_joint_handoffs {
+            if states.len() > MAX_HANDOFF_PROMISES {
+                return Err(range_write_error(
+                    "native joint catalogue state exceeds bound",
+                ));
+            }
+            for state in states.values() {
+                state.validate()?;
+            }
         }
         sparse_certification::validate_sparse_catalog(&self.catalog)?;
         image_install_certification::validate_installing_certifications(&self.catalog)?;
@@ -842,6 +869,7 @@ impl RangeWriteStore {
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => RangeWriteCatalog {
                 format_version: RANGE_WRITE_LOG_FORMAT_VERSION,
                 native_writer_enforcement_version: None,
+                native_joint_handoffs: None,
                 cluster_id: cluster_id.clone(),
                 node_id: node_id.clone(),
                 ranges: BTreeMap::new(),
@@ -873,6 +901,13 @@ impl RangeWriteStore {
         {
             return Err(range_write_error(
                 "protected proposal catalog lacks its mandatory native reader fence",
+            ));
+        }
+        if catalog.format_version >= NATIVE_JOINT_HANDOFF_CATALOG_FORMAT
+            && !crate::format::native_joint_data_handoff_active(&root)?
+        {
+            return Err(range_write_error(
+                "joint catalogue requires its actual sticky reader fence",
             ));
         }
         let enforced = crate::format::native_writer_enrollment_active(&root)?;
@@ -4758,6 +4793,7 @@ mod tests {
         let catalog = RangeWriteCatalog {
             format_version: 1,
             native_writer_enforcement_version: None,
+            native_joint_handoffs: None,
             cluster_id: cluster.clone(),
             node_id: node.clone(),
             ranges: BTreeMap::from([(
@@ -4814,6 +4850,7 @@ mod tests {
         let envelope = RangeWriteEnvelope::new(RangeWriteCatalog {
             format_version: 2,
             native_writer_enforcement_version: None,
+            native_joint_handoffs: None,
             cluster_id: cluster.clone(),
             node_id: node.clone(),
             ranges: BTreeMap::new(),

@@ -6,4 +6,18 @@ fn invalid(detail: impl Into<String>) -> BicDbError {
     BicDbError::Cluster(format!("native joint data handoff: {}", detail.into()))
 }
 mod scope;
-use scope::NativeJointScopeData;
+use scope::{canonical_range, NativeJointScopeData};
+mod plan;
+pub(crate) use plan::NativeJointHandoffPlan;
+
+mod closed;
+pub(crate) use closed::NativeJointOldObservation;
+
+mod old_quorum;
+pub(crate) use old_quorum::{NativeJointOldClosedQuorum, NativeJointOldRound};
+
+mod materialized;
+pub(crate) use materialized::{
+    NativeJointMaterializedFacts, NativeJointMaterializedQuorums, NativeJointNewObservation,
+    NativeJointNewRound,
+};

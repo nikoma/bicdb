@@ -20,7 +20,8 @@ mod serving_configuration;
 pub(crate) use native_read::{NativeRangeReadPhysical, NativeReadLocalDbSequence};
 use serving_configuration::NativeRecoveredServingConfiguration;
 pub(crate) use serving_configuration::{
-    NativeActivationDecisionReceipt, NativeRecoveredServingReceipt,
+    NativeActivationDecisionReceipt, NativeJointOldCloseReceipt, NativeJointOldPhysicalProof,
+    NativeRecoveredServingReceipt,
 };
 #[cfg(test)]
 pub(crate) mod rf3_fixture;

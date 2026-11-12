@@ -11,6 +11,11 @@ use crate::distribution::{ClusterId, ClusterNodeId, RangeDescriptor, RangeId, Re
 use crate::error::{BicDbError, Result};
 
 mod joint;
+pub(crate) use joint::{
+    NativeJointHandoffPlan, NativeJointMaterializedFacts, NativeJointMaterializedQuorums,
+    NativeJointNewObservation, NativeJointNewRound, NativeJointOldClosedQuorum,
+    NativeJointOldObservation, NativeJointOldRound,
+};
 
 pub(crate) const HANDOFF_RANGE_LOG_FORMAT: u32 = 4;
 pub(crate) const MAX_HANDOFF_PROMISES: usize = 65_536;

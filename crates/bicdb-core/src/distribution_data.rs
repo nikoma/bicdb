@@ -42,10 +42,16 @@ use crate::{
 mod native_activation;
 mod native_apply;
 mod native_durability;
+mod native_joint_handoff;
 mod native_writer;
 use native_durability::ServiceStoragePolicy;
-mod current_image_resume;
+pub(crate) use native_joint_handoff::{
+    ActualServiceNativeJointCaptureInputs, ActualServiceNativeJointConstraints,
+    ActualServiceNativeJointNewEvidence, ActualServiceNativeJointOldEvidence,
+    NativeJointIrrevocableFacts,
+};
 mod current_image_replacement;
+mod current_image_resume;
 mod native_completion;
 mod native_image_install;
 mod native_range_read;

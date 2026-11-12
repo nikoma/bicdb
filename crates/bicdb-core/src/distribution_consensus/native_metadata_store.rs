@@ -197,9 +197,12 @@ impl MetadataConsensusStore {
         if let Some(owner) = &self.native_owner {
             owner.require_current()?;
         }
-        if self.state.native_store_id.is_some() && self.native_owner.is_none() {
+        if self.native_owner.is_none()
+            && (self.state.native_store_id.is_some()
+                || known_born_v2(&self.state.committed_topology, &self.state.node_id))
+        {
             return Err(metadata_error(
-                "protected metadata lacks actual native owner",
+                "protected/born-v2 metadata requires actual native owned store",
             ));
         }
         Ok(())
@@ -398,3 +401,6 @@ mod tests;
 
 #[cfg(test)]
 mod actor_tests;
+
+#[cfg(test)]
+mod learner_tests;

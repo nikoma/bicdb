@@ -5,6 +5,7 @@ import {spawn} from 'node:child_process';
 import {createHash,randomUUID} from 'node:crypto';
 import {makeHttpHarness} from './http-harness.mjs';
 const config=JSON.parse(await fs.readFile(process.argv[2],'utf8'));
+assert.equal(typeof config.expectProtected,'boolean');
 const sha=b=>createHash('sha256').update(b).digest('hex');
 assert.equal(sha(await fs.readFile(config.binary)),config.binarySha256);
 const bundle=path.dirname(import.meta.filename),packages=JSON.parse(await fs.readFile(bundle+'/package-lock.json'));
@@ -26,12 +27,17 @@ for(const test of [{name:'removed',from:'weak',to:'strong',bad:-1,blocked:true},
   await command(database,['upgrade',file(test.to)],test.name+'-upgrade');await h.start(tenant);
   await record(test.name+'-active-guard-refuses-bad-row',await h.call('/entries','POST',{id:randomUUID(),amount:test.bad},tenant),409);
   const initial=await record(test.name+'-before-rollback',await h.call('/entries','GET',undefined,tenant),200);assert.equal(initial.items.length,1);await h.stop();
+  const catalogBefore=await fs.readFile(database+'/applications/snapshots/active.json');
   const rollback=await command(database,['rollback',application],test.name+'-rollback',false),shouldBlock=config.expectProtected&&test.blocked;
   if(shouldBlock){assert.notEqual(rollback.code,0,'Unsafe invariant rollback must refuse');assert.match(rollback.output,/invariant|guard|contract/i);}else assert.equal(rollback.code,0,rollback.output);
+  if(shouldBlock)assert.deepEqual(await fs.readFile(database+'/applications/snapshots/active.json'),catalogBefore,'Refused rollback changed active/history/staged catalog bytes');
   await h.start(tenant);const status=shouldBlock||!test.blocked?409:201;
   await record(test.name+'-post-rollback-invalid-row',await h.call('/entries','POST',{id:randomUUID(),amount:test.bad},tenant),status);
   const after=await record(test.name+'-after-rollback',await h.call('/entries','GET',undefined,tenant),200);assert.deepEqual(after.items.find(x=>x.id===positive.id),positive);if(shouldBlock||!test.blocked)assert.deepEqual(after,initial);else assert.equal(after.items.length,2);
-  await h.restart(tenant);assert.deepEqual(await h.call('/entries','GET',undefined,tenant),{status:200,body:after});await h.coldRestore(tenant);assert.deepEqual(await h.call('/entries','GET',undefined,tenant),{status:200,body:after});
+  await h.restart(tenant);assert.deepEqual(await h.call('/entries','GET',undefined,tenant),{status:200,body:after});
+  if(shouldBlock||!test.blocked)await record(test.name+'-guard-after-SIGKILL',await h.call('/entries','POST',{id:randomUUID(),amount:test.bad},tenant),409);
+  await h.coldRestore(tenant);assert.deepEqual(await h.call('/entries','GET',undefined,tenant),{status:200,body:after});
+  if(shouldBlock||!test.blocked)await record(test.name+'-guard-after-cold-restore',await h.call('/entries','POST',{id:randomUUID(),amount:test.bad},tenant),409);
   results.push({case:test.name,rollback_refused:rollback.code!==0,invalid_write_status:status,acknowledged_row_preserved:true,restart_and_cold_restore:true});
  }finally{await h.stop();}
 }

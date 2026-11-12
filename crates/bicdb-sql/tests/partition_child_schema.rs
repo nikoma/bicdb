@@ -612,12 +612,14 @@ fn identity_savepoint_undo_restores_rows_schemas_and_owned_sequence_privileges()
             "BEGIN", "SAVEPOINT s",
             "ALTER TABLE p ADD COLUMN ident BIGINT GENERATED ALWAYS AS IDENTITY (START WITH 100 INCREMENT BY 5)",
         ] {sql.execute(text).unwrap();}
+        // Exercise the grant through the actual consumer instead of relying
+        // on an unrelated privilege-inspection builtin.
+        sql.execute("SET ROLE seq_reader").unwrap();
         assert_eq!(
-            sql.execute("SELECT has_sequence_privilege('seq_reader','p_ident_seq','USAGE')")
-                .unwrap()
-                .rows,
-            vec![vec![SqlValue::Bool(true)]]
+            sql.execute("SELECT nextval('p_ident_seq')").unwrap().rows,
+            vec![vec![SqlValue::Int(110)]]
         );
+        sql.execute("RESET ROLE").unwrap();
         sql.execute("INSERT INTO p(k) VALUES(2)").unwrap();
         sql.execute("ROLLBACK TO s").unwrap();
         sql.execute("COMMIT").unwrap();

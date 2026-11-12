@@ -42,3 +42,34 @@ The cold regression is an orderly full-owner cut with a fault after genuine nati
 - Compose current main, metadata preparation, actual-open/writer guards and joint format changes without losing their mode markers or protections; run relevant broad checks before any main merge/version bump.
 
 The origin-unavailable and already-decided adoption cases remain bounded-self-healing blockers. This checkpoint does not complete the abort protocol or the overall native-host/Azure milestone.
+
+## Integrated source review: sustained-operation blockers
+
+The following findings are **source inspection**, confirmed in the integrated
+batch at `1b191d613aa8884fcda852795c36b6cfb9fd5f55`. They are not a measured
+throughput result or an explanation of the original Azure slowdown. First
+integrated test compilation stopped on a moved test variable; source
+`be1345d3cfeed7b416a9e60af6547633b9b30114` corrects that error, and its
+[independent CI run](https://github.com/nikoma/bicdb/actions/runs/43162977062)
+was still running at this observation. No abort regression pass is claimed.
+
+| Finding | Classification | Exact source contract and smallest next control |
+| --- | --- | --- |
+| Permanent successful-write capacity | Failed against sustained-operation requirement; dynamically not tested | `distribution_range_consensus.rs` calls `begin_native_abort_attempt` before Prepare for every abort1 command. Both the mirror and native journal cap permanent slots at 4,096 per range; normal raw-log compaction and epoch changes do not reclaim them. Run 4,096 genuine ACKs and attempt 4,097 on an enforced fixture, preserve the complete ledger and verify exact refusal/history after strict reopen. Do not seed counters. |
+| Database-wide retained byte capacity | Failed against sustained-operation requirement; dynamically not tested | `db/range_image_native/abort_history/slot_journal.rs` limits the sum of encoded full slot records across all ranges to 64 MiB, each slot to 3 MiB and the inventory record separately to 8 MiB. Other no-effect/promise/decision records and WAL are outside that byte sum. This source cannot ingest an 8 GiB workload through ordinary enforced writes. Increasing constants is not a durable long-run design. |
+| Restrictive closure headroom | Inconclusive dynamically; confirmed missing reservation in source | Admission charges the current encoded slot size. Replacing `null` with a 64-character no-effect or promise hash adds about 62 bytes per field, so an admitted start near the aggregate limit can lack space for later restrictive closure. Use actual large acknowledged commands, then genuine failed Prepare/Core cleanup near the bound; retain the earliest refusal and check actual no-effect/promise publication. |
+| Point-read/Ready verification cost | Not tested for performance; growing work confirmed in source | `require_actual_abort_controls_covered` loads and validates full commands for all ranges before selecting the requested range; construction and revalidation repeat this. Characterize actual read work and memory on an unchanged range while genuine ACK history grows elsewhere. No capacity-gain claim follows from the source complexity. |
+
+Required design work remains unimplemented: publish a protected monotone
+closed-slot checkpoint before pruning, permanently reject new votes below it,
+retain immutable outcomes and audit commitments, preserve genuine committed
+decision adoption and lagging-replica catch-up, and reconcile older JSON with
+the protected checkpoint across interrupted checkpoint/truncation/reopen.
+Read validation needs an actual per-range commitment bound to the current
+open/generation. New starts must reserve terminal restrictive-control space.
+Unsafe eviction or a larger hard limit does not satisfy these obligations.
+
+Keep the six existing functional regressions and these capacity/closure
+controls separate. Until both are resolved, the candidate is not suitable for
+the proposed sustained scale-out experiment. Do not shrink the workload to
+conceal these limits or label a bounded demonstration production qualification.

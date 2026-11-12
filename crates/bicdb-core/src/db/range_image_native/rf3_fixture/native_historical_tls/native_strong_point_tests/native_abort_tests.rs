@@ -11,8 +11,15 @@ pub(super) fn token() -> CancellationToken {
 }
 #[test]
 fn native_abort_actual_enforced_prepare_failure_canonical_metadata_history_then_next_ack() {
-    let fixture = EnforcedNetwork::new();
-    let range = fixture.ranges()[0].clone();
+    actual_prepare_failure_lifecycle(false);
+}
+#[test]
+fn native_abort_actual_enforced_prior_leader_no_effect_fresh_e2_abort_then_new_leader_ack() {
+    actual_prepare_failure_lifecycle(true);
+}
+fn actual_prepare_failure_lifecycle(transfer_before_abort: bool) {
+    let mut fixture = EnforcedNetwork::new();
+    let mut range = fixture.ranges()[0].clone();
     let failed_key = fixture.key(range.id, "definitely-unacked-prepare-only");
     let before_b = [node("n0"), node("n1"), node("n2")]
         .into_iter()
@@ -124,6 +131,20 @@ fn native_abort_actual_enforced_prepare_failure_canonical_metadata_history_then_
             .contains("unresolved protected writer-start"),
         "{protected}"
     );
+    if transfer_before_abort {
+        fixture.change_committed_leader(range.id);
+        fixture.refresh_actual_writer_policies();
+        range = fixture
+            .native
+            .topology
+            .read()
+            .range_by_id(range.id)
+            .unwrap()
+            .clone();
+        assert_eq!(range.epoch, 2);
+        assert_eq!(range.leader, node("n2"));
+    }
+    let leader = range.leader.clone();
     let scope = fixture.actual_current_recovery_scope(&range);
     let request = NativeAbortRequest {
         scope: scope.clone(),
@@ -133,7 +154,7 @@ fn native_abort_actual_enforced_prepare_failure_canonical_metadata_history_then_
         challenge: Uuid::now_v7(),
         budget_ms: 4500,
     };
-    let actual_candidate = fixture.clients[&node("n0")]
+    let actual_candidate = fixture.clients[&leader]
         .observe_native_abort_candidate(&node("n0"), &request, &token())
         .unwrap();
     assert_eq!(actual_candidate.record().command, original);
@@ -143,7 +164,7 @@ fn native_abort_actual_enforced_prepare_failure_canonical_metadata_history_then_
         ..request
     };
     for id in [node("n0"), node("n1"), node("n2")] {
-        let (r, decision, b) = fixture.clients[&node("n0")]
+        let (r, decision, b) = fixture.clients[&leader]
             .resolve_native_abort_at(&id, &request, &token())
             .unwrap();
         assert_eq!(r, 1);
@@ -170,7 +191,7 @@ fn native_abort_actual_enforced_prepare_failure_canonical_metadata_history_then_
         );
     }
     for id in [node("n0"), node("n1"), node("n2")] {
-        fixture.clients[&node("n0")]
+        fixture.clients[&leader]
             .prepare_native_ready_observation(
                 &id,
                 &NativeReadyRequest {
@@ -184,7 +205,7 @@ fn native_abort_actual_enforced_prepare_failure_canonical_metadata_history_then_
         fixture.idle();
     }
     for id in [node("n0"), node("n1"), node("n2")] {
-        fixture.clients[&node("n0")]
+        fixture.clients[&leader]
             .complete_native_recovery_observation(
                 &id,
                 &NativeCompletionRequest {
@@ -197,8 +218,12 @@ fn native_abort_actual_enforced_prepare_failure_canonical_metadata_history_then_
             .unwrap();
         fixture.idle();
     }
-    let actor = fixture.clients[&node("n0")].local_metadata_read_participant();
-    for id in [node("n1"), node("n2"), node("n0")] {
+    let actor = fixture.clients[&leader].local_metadata_read_participant();
+    for id in [node("n0"), node("n1"), node("n2")]
+        .into_iter()
+        .filter(|id| id != &leader)
+        .chain(std::iter::once(leader.clone()))
+    {
         fixture.runtimes[&id]
             .activate_native_recovery(
                 &actor,
@@ -212,7 +237,7 @@ fn native_abort_actual_enforced_prepare_failure_canonical_metadata_history_then_
             .unwrap();
         fixture.idle();
     }
-    fixture.coordinators[&node("n0")]
+    fixture.coordinators[&leader]
         .recover_local_leadership(8)
         .unwrap();
     let acked_key = fixture.key(range.id, "actual-next-ack-after-canonical-abort");

@@ -11,8 +11,8 @@ use std::collections::BTreeSet;
 use std::sync::Arc;
 
 mod current_image_resume;
-mod native_activation;
 mod native_abort;
+mod native_activation;
 mod native_completion;
 mod native_completion_quorum;
 mod native_read;

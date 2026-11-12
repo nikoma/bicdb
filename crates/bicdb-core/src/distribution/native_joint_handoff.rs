@@ -57,6 +57,18 @@ impl NativeJointHandoffMetadataV1 {
                     .all(|v| v.is_ascii_digit() || (b'a'..=b'f').contains(&v))
         };
         if self.version != 1
+            || plan.id.get() == 0
+            || plan.range_id.get() == 0
+            || plan.target_replica_id.get() == 0
+            || plan.expected_epoch == 0
+            || plan.expected_epoch.checked_add(1) != Some(plan.learner_epoch)
+            || plan.plan_id.is_empty()
+            || plan.plan_id.len() > 1024
+            || plan
+                .source
+                .as_ref()
+                .is_none_or(|source| source == &plan.target)
+            || self.old_configuration_sha256 == self.new_configuration_sha256
             || self.session_id.is_nil()
             || self.nonce.is_nil()
             || plan.handoff_session.as_ref().is_none_or(|session| {
@@ -192,7 +204,9 @@ impl NativeJointHandoffMetadataV1 {
                 false,
             ),
             NativeJointHandoffStageV1::Cleaned => {
-                if plan.phase != RelocationPhase::Completed {
+                if plan.phase != RelocationPhase::Completed
+                    || plan.promoted_epoch != plan.learner_epoch.checked_add(2)
+                {
                     return Err(cluster_error(
                         "cleaned native joint handoff is not completed",
                     ));
@@ -209,6 +223,7 @@ impl NativeJointHandoffMetadataV1 {
             .find(|r| r.id == plan.target_replica_id)
             .ok_or_else(|| cluster_error("joint target replica disappeared"))?;
         if plan.phase != phase
+            || (self.stage == NativeJointHandoffStageV1::Certified && plan.promoted_epoch.is_some())
             || plan.resume_phase.is_some()
             || range.epoch != epoch
             || target.node_id != plan.target

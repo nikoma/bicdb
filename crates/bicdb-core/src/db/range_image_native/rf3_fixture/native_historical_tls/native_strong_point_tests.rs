@@ -885,3 +885,6 @@ fn native_strong_point_initial_four_metadata_members_rf3_keeps_exact_data_identi
         .is_err());
     before.require_current(&service).unwrap();
 }
+
+#[path = "native_joint_old_closure_tests.rs"]
+mod joint_old_closure_tests;

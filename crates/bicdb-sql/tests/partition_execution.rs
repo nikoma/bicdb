@@ -288,3 +288,66 @@ fn partition_queries_use_the_privilege_and_rls_policy_of_the_accessed_relation()
     }
     assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
+
+#[test]
+fn parent_query_shapes_keep_each_physical_source_and_its_system_columns() {
+    for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
+        let root = tempfile::tempdir().unwrap();
+        let cfg = config(mode);
+        let mut db = BicDb::open_with_config(root.path(), cfg.clone()).unwrap();
+        setup(&mut db);
+        SqlSession::new(&mut db)
+            .execute("INSERT INTO child VALUES(2,'second-ack')")
+            .unwrap();
+        SqlSession::new(&mut db)
+            .execute("CREATE INDEX parent_lookup ON parent(item_key)")
+            .unwrap();
+        for reopen in 0..3 {
+            let mut sql = SqlSession::new(&mut db);
+            for statement in [
+                "SELECT count(*) FROM parent",
+                "SELECT count(*) FROM parent WHERE item_key>=1",
+                "SELECT count(*) FROM (SELECT * FROM parent) q",
+                "SELECT count(*) FROM generate_series(1,2) g(n) JOIN parent p ON p.item_key=g.n",
+                "SELECT count(*) FROM parent p JOIN generate_series(1,2) g(n) ON p.item_key=g.n",
+                "SELECT count(*) FROM parent WHERE EXISTS(SELECT 1 FROM child WHERE child.item_key=parent.item_key)",
+            ] {
+                assert_eq!(sql.execute(statement).unwrap().rows, vec![vec![SqlValue::Int(2)]], "{statement}");
+            }
+            assert_eq!(
+                sql.execute("SELECT item_key FROM parent WHERE item_key=2 LIMIT 1")
+                    .unwrap()
+                    .rows,
+                vec![vec![SqlValue::Int(2)]]
+            );
+            assert_eq!(
+                sql.execute("SELECT sum(item_key),min(item_key),max(item_key) FROM parent")
+                    .unwrap()
+                    .rows,
+                vec![vec![SqlValue::Int(3), SqlValue::Int(1), SqlValue::Int(2)]]
+            );
+            let physical = sql
+                .execute("SELECT tableoid,xmin,ctid FROM child ORDER BY item_key")
+                .unwrap()
+                .rows;
+            assert_eq!(
+                sql.execute("SELECT tableoid,xmin,ctid FROM parent ORDER BY item_key")
+                    .unwrap()
+                    .rows,
+                physical
+            );
+            assert_eq!(
+                sql.execute("SELECT p.tableoid,p.xmin,p.ctid FROM parent p ORDER BY item_key")
+                    .unwrap()
+                    .rows,
+                physical
+            );
+            drop(sql);
+            if reopen < 2 {
+                db.close().unwrap();
+                db = BicDb::open_with_config(root.path(), cfg.clone()).unwrap();
+            }
+        }
+        db.close().unwrap();
+    }
+}

@@ -5187,6 +5187,15 @@ impl<'db> SqlEngine<'db> {
             return self.execute_row_query(select, query);
         }
 
+        // Parent-only statistics, heaps and indexes cannot answer a partition
+        // tree. Materialize physical sources with the accessed relation's RLS
+        // and each source's own tableoid/MVCC identity before query operators.
+        for from in &select.from {
+            if partition::from_reads_parent(self.db_ref(), from)? {
+                return self.execute_row_query(select, query);
+            }
+        }
+
         if let [from] = select.from.as_slice() {
             if let Some(rows) = self.try_bounded_uuid_primary_key_row_set(from, select, query)? {
                 return self.execute_materialized_row_query(select, query, from, rows);

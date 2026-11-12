@@ -315,6 +315,12 @@ impl<'db> SqlEngine<'db> {
         // check — a cross-tenant read of any table by any authenticated role.
         self.require_relation_privilege(&table, "SELECT")?;
         let schema = load_schema(self.db_ref(), &table)?;
+        if schema
+            .as_ref()
+            .is_some_and(|schema| schema.partitioning.is_some())
+        {
+            return Ok(None);
+        }
         if let Some(schema) = &schema {
             // The indexed shortcut does not materialize the right relation,
             // so register its declared types before binding the join predicate.

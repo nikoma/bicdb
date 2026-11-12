@@ -400,6 +400,60 @@ pub(crate) fn children(db: &BicDb, parent: &TableSchema) -> Result<Vec<TableSche
         .collect())
 }
 
+/// Preserve source collection identity alongside every heap row. Parent scans
+/// include legacy rows stored in the parent's own heap as well as descendants;
+/// an upgrade must not silently hide previously acknowledged data.
+pub(crate) fn physical_tables(db: &BicDb, parent: &TableSchema) -> Result<Vec<TableSchema>> {
+    fn visit(
+        db: &BicDb,
+        table: &TableSchema,
+        seen: &mut BTreeSet<String>,
+        out: &mut Vec<TableSchema>,
+    ) -> Result<()> {
+        if !seen.insert(table.name.clone()) {
+            return Err(invalid("cyclic partition tree"));
+        }
+        out.push(table.clone());
+        if table.partitioning.is_some() {
+            for child in children(db, table)? {
+                visit(db, &child, seen, out)?;
+            }
+        }
+        Ok(())
+    }
+    let mut out = Vec::new();
+    visit(db, parent, &mut BTreeSet::new(), &mut out)?;
+    Ok(out)
+}
+
+pub(crate) fn factor_reads_parent(db: &BicDb, factor: &TableFactor) -> Result<bool> {
+    match factor {
+        TableFactor::Table {
+            name, args: None, ..
+        } => {
+            let table = resolve_session_relation_name_if_exists(db, &relation_name(name)?);
+            Ok(load_schema(db, &table)?.is_some_and(|schema| schema.partitioning.is_some()))
+        }
+        TableFactor::NestedJoin {
+            table_with_joins, ..
+        } => from_reads_parent(db, table_with_joins),
+        // Derived tables and CTEs execute through their own query scope.
+        _ => Ok(false),
+    }
+}
+
+pub(crate) fn from_reads_parent(db: &BicDb, from: &TableWithJoins) -> Result<bool> {
+    if factor_reads_parent(db, &from.relation)? {
+        return Ok(true);
+    }
+    for join in &from.joins {
+        if factor_reads_parent(db, &join.relation)? {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
 pub(crate) fn matches_bound(parent: &TableSchema, bound: &Bound, record: &Record) -> Result<bool> {
     let columns = key_columns(parent)?;
     let values = record_column_values(

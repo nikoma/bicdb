@@ -25,7 +25,7 @@ impl CommittedNativeJointDecisionObservation {
         result.require_metadata_current()?;
         Ok(result)
     }
-    fn require_metadata_current(&self) -> Result<()> {
+    pub(super) fn require_metadata_current(&self) -> Result<()> {
         self.metadata.require_live_request(self.business)?;
         let data = self.native.data();
         let topology = self.metadata.committed_topology(self.business)?;
@@ -66,6 +66,14 @@ impl CommittedNativeJointDecisionObservation {
     }
     pub(crate) fn require_current(&self, database: &crate::BicDb) -> Result<()> {
         self.require_metadata_current()?;
+        self.require_durable_fact_current(database)
+    }
+    /// Historical protected local decision/open fact ONLY. This deliberately
+    /// grants no current metadata permission; a distinct fresh phase must
+    /// validate its own actual MQ before combining this with physical facts.
+    pub(crate) fn require_durable_fact_current(&self, database: &crate::BicDb) -> Result<()> {
+        self.metadata
+            .require_historical_request_not_canceled(self.business)?;
         if self.native.native_database_incarnation() != self.database_incarnation {
             return Err(invalid(
                 "committed joint observation actual DB-open binding changed",

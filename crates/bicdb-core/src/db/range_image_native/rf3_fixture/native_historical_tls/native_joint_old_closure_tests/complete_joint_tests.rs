@@ -8,7 +8,8 @@ use crate::distribution_range_consensus::{
 };
 use crate::distribution_range_handoff::{
     NativeJointDurableDecision, NativeJointNewObservation, NativeJointNewRound,
-    NativeJointPreparedServingObservation, NativeJointPreparedServingRound,
+    NativeJointPreparedServingObservation, NativeJointPreparedServingQuorum,
+    NativeJointPreparedServingRound,
 };
 use crate::distribution_range_image::RangeImageCapture;
 use crate::distribution_range_image_install::{
@@ -331,6 +332,18 @@ fn install_actual_target(
 
 #[test]
 fn native_joint_actual_complete_image_target_becomes_leader_ack_and_strong_read() {
+    run_complete_joint(0);
+}
+#[test]
+fn native_joint_fresh_preparation_phase_publishes_all_final_members_after_original_expiry() {
+    run_complete_joint(1);
+}
+#[test]
+fn native_joint_fresh_phase_refuses_expired_original_caller_with_later_long_budget() {
+    run_complete_joint(2);
+}
+
+fn run_complete_joint(mode: u8) {
     let parent = CancellationToken::uncancelable();
     let mut fixture = EnforcedNetwork::new_with_metadata_members(4);
     fixture.native.root.disable_cleanup(true);
@@ -467,6 +480,11 @@ fn native_joint_actual_complete_image_target_becomes_leader_ack_and_strong_read(
     assert_eq!(&activation_range, plan.activation_range());
     let preparation_started = std::time::Instant::now();
     let mut prepared_round: Option<NativeJointPreparedServingRound> = None;
+    let round_parent = if mode == 2 {
+        parent.child_with_deadline(std::time::Instant::now() + Duration::from_secs(2))
+    } else {
+        parent.child()
+    };
     for (local, (service, lease)) in decision.into_new_serving_owners().unwrap() {
         eprintln!(
             "ACTUAL_JOINT_PHASE prepare-begin node={local} elapsed_ms={}",
@@ -500,10 +518,37 @@ fn native_joint_actual_complete_image_target_becomes_leader_ack_and_strong_read(
             round.record(observation).unwrap();
         } else {
             prepared_round =
-                Some(NativeJointPreparedServingRound::begin(observation, &parent).unwrap());
+                Some(NativeJointPreparedServingRound::begin(observation, &round_parent).unwrap());
         }
     }
     let prepared = Arc::new(prepared_round.unwrap().finish().unwrap());
+    if mode == 2 {
+        std::thread::sleep(
+            round_parent
+                .deadline()
+                .unwrap()
+                .saturating_duration_since(std::time::Instant::now())
+                + Duration::from_millis(10),
+        );
+        assert!(!round_parent.is_cancel_requested());
+        let later = parent.child_with_deadline(std::time::Instant::now() + Duration::from_secs(30));
+        later.check().unwrap();
+        assert!(matches!(
+            prepared.begin_fresh_preparation_phase(Duration::from_secs(4)),
+            Err(crate::BicDbError::QueryTimedOut)
+        ));
+        assert!(prepared.require_current().is_err());
+        for id in [node("n1"), node("n2"), node("n3")] {
+            let db = fixture.native.databases[&id].read();
+            assert!(db.range_mutation_gate().try_enter(old.id).is_err());
+        }
+        return;
+    }
+    if mode == 1 {
+        exercise_fresh_native_publication(&fixture, &prepared, &parent, old.id);
+        return;
+    }
+
     let mut publication = prepared.serving_publication_round().unwrap();
     for local in [node("n1"), node("n2"), node("n3")] {
         let current = prepared.require_current();
@@ -715,4 +760,127 @@ fn native_joint_actual_complete_image_target_becomes_leader_ack_and_strong_read(
     assert_eq!(observed.record().map(|record| record.as_ref()), Some(&next));
     assert_eq!(observed.audit().range_index, 2);
     fixture.idle();
+}
+
+/// Complete ONLY the bounded Prepared→protected-native-publication phase.
+/// No catalogue/open/release grant is inferred from renewed native facts.
+fn exercise_fresh_native_publication(
+    fixture: &EnforcedNetwork,
+    prepared: &Arc<NativeJointPreparedServingQuorum>,
+    parent: &CancellationToken,
+    range: crate::RangeId,
+) {
+    let remaining = prepared.test_original_budget_remaining_ms().0.unwrap();
+    std::thread::sleep(Duration::from_millis(
+        u64::try_from(remaining).unwrap() + 10,
+    ));
+    assert!(
+        prepared.require_current().is_err(),
+        "the ORIGINAL metadata window really expired"
+    );
+    let mut wrong = prepared
+        .begin_fresh_preparation_phase(Duration::from_secs(4))
+        .unwrap();
+    assert!(
+        wrong
+            .acquire_actual_member(&fixture.clients[&node("n0")], &node("n1"))
+            .is_err(),
+        "old member0 is not a final NEW participant"
+    );
+    assert!(
+        wrong
+            .acquire_actual_member(&fixture.clients[&node("n1")], &node("n1"))
+            .is_err(),
+        "a poisoned phase cannot ignore an earlier error"
+    );
+    assert!(wrong.finish().is_err());
+    let mut partial = prepared
+        .begin_fresh_preparation_phase(Duration::from_secs(4))
+        .unwrap();
+    for id in [node("n1"), node("n2")] {
+        partial
+            .acquire_actual_member(&fixture.clients[&id], &node("n1"))
+            .unwrap();
+    }
+    match partial.finish() {
+        Ok(_) => panic!("missing actual target/leader3 must not shrink the full participant set"),
+        Err(error) => assert!(
+            error.to_string().contains("omit/replace"),
+            "missing-member check must not pass merely by timeout: {error}"
+        ),
+    }
+    let mut publication = prepared.resume_native_publication().unwrap();
+    for local in [node("n1"), node("n2"), node("n3")] {
+        let mut completed = false;
+        for attempt in 0..2 {
+            let result = (|| -> crate::Result<()> {
+                let mut fresh = prepared.begin_fresh_preparation_phase(Duration::from_secs(4))?;
+                for id in [node("n1"), node("n2"), node("n3")] {
+                    fresh.acquire_actual_member(&fixture.clients[&id], &node("n1"))?;
+                }
+                let fresh = Arc::new(fresh.finish()?);
+                assert!(
+                    prepared.require_current().is_err(),
+                    "fresh authority must NOT revive old objects"
+                );
+                let admission =
+                    fresh.acquire_local_activation(&fixture.clients[&local], &node("n1"))?;
+                publication.publish_actual_local_member(&admission, parent)
+            })();
+            match result {
+                Ok(())=>{completed=true;break;},
+                Err(crate::BicDbError::QueryTimedOut) if attempt==0=>eprintln!("ACTUAL_JOINT_PHASE bounded-fresh-publication-retry node={local} original-still-expired=true"),
+                Err(error)=>panic!("fresh native publication failed for {local}: {error}"),
+            }
+        }
+        assert!(completed);
+    }
+    // Aggregation is historical fact validation, not another native write.
+    // Recollect actual current per-node authority; preserve all native audits.
+    let mut current = prepared
+        .begin_fresh_preparation_phase(Duration::from_secs(4))
+        .unwrap();
+    for id in [node("n1"), node("n2"), node("n3")] {
+        current
+            .acquire_actual_member(&fixture.clients[&id], &node("n1"))
+            .unwrap();
+    }
+    let current = Arc::new(current.finish().unwrap());
+    publication.reaffirm_published_members(current).unwrap();
+    let published = Arc::new(publication.finish().unwrap());
+    assert_eq!(
+        published.test_actual_published_members().unwrap(),
+        vec![node("n1"), node("n2"), node("n3")]
+    );
+    assert!(
+        published
+            .acquire_local_open(&fixture.clients[&node("n3")], &node("n1"), parent)
+            .is_err(),
+        "native publication phase is NOT a renewed catalogue/open/release grant"
+    );
+    for id in [node("n1"), node("n2"), node("n3")] {
+        let db = fixture.native.databases[&id].read();
+        assert!(db.range_mutation_gate().try_enter(range).is_err());
+        assert_eq!(
+            db.current_native_range_source_lineage(range)
+                .unwrap()
+                .range_index(),
+            prepared.data().range_index()
+        );
+    }
+    assert!(prepared.require_current().is_err());
+    prepared.test_cancel_original_quorum();
+    assert!(matches!(
+        prepared.begin_fresh_preparation_phase(Duration::from_secs(4)),
+        Err(crate::BicDbError::QueryCanceled)
+    ));
+    assert!(prepared.resume_native_publication().is_err());
+    parent.cancel();
+    assert!(
+        prepared
+            .begin_fresh_preparation_phase(Duration::from_secs(4))
+            .is_err(),
+        "ORIGINAL caller cancellation must stop new phases too"
+    );
+    eprintln!("ACTUAL_JOINT_FRESH_PUBLICATION_ONLY all-final-members=3 old-quorum-expired=true original-caller-cancellation-preserved=true no-catalogue-open-release-grant=true");
 }

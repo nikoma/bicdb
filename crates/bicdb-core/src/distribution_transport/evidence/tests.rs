@@ -522,3 +522,142 @@ fn actual_rpc_evidence_mtls_response_retained_before_original_cancellation_overr
             && r["error_chain"][0].as_str().unwrap().contains("cancel")));
     assert!(parent.is_cancel_requested());
 }
+
+#[test]
+fn actual_rpc_evidence_mtls_parallel_requests_share_journal_without_false_reentrancy() {
+    struct ParallelJournal {
+        journal: Arc<Journal>,
+        arrivals: AtomicUsize,
+        until: Instant,
+    }
+    impl ClusterRpcEvidenceObserver for ParallelJournal {
+        fn record(&self, record: &ClusterRpcEvidence) -> io::Result<()> {
+            if record.phase == "request_frame_before_dispatch" {
+                self.arrivals.fetch_add(1, Ordering::SeqCst);
+                while self.arrivals.load(Ordering::SeqCst) < 2 {
+                    if Instant::now() >= self.until {
+                        return Err(io::Error::new(
+                            io::ErrorKind::TimedOut,
+                            "second genuine concurrent callback never arrived",
+                        ));
+                    }
+                    thread::yield_now();
+                }
+            }
+            self.journal.record(record)
+        }
+    }
+    let fixture = Fixture::new();
+    let journal = Journal::new(&fixture.root.path().join("parallel.jsonl"), None, false);
+    let sink = Arc::new(ParallelJournal {
+        journal,
+        arrivals: AtomicUsize::new(0),
+        until: Instant::now() + Duration::from_millis(fixture.config.transport.io_timeout_ms),
+    });
+    let transport = Arc::new(
+        fixture
+            .transport()
+            .with_rpc_evidence_observer(sink, ClusterRpcEvidenceLimits::default())
+            .unwrap(),
+    );
+    let mut handles = Vec::new();
+    for _ in 0..2 {
+        let transport = transport.clone();
+        let destination = fixture.config.node_id.clone();
+        handles.push(thread::spawn(move || {
+            transport.call(&destination, ClusterDataRequest::Ping)
+        }));
+    }
+    for handle in handles {
+        assert!(matches!(
+            handle.join().unwrap().unwrap(),
+            ClusterDataResponse::Pong
+        ));
+    }
+    let records = fixture.records("parallel.jsonl");
+    let requests = records
+        .iter()
+        .filter(|r| r["phase"] == "request_frame_before_dispatch")
+        .collect::<Vec<_>>();
+    assert_eq!(requests.len(), 2);
+    assert_ne!(requests[0]["attempt_id"], requests[1]["attempt_id"]);
+    assert_ne!(requests[0]["request_id"], requests[1]["request_id"]);
+    let sequences = records
+        .iter()
+        .map(|r| r["journal_sequence"].as_u64().unwrap())
+        .collect::<BTreeSet<_>>();
+    assert_eq!(sequences, (1..=records.len() as u64).collect());
+    for request in requests {
+        let per_call = records
+            .iter()
+            .filter(|r| r["attempt_id"] == request["attempt_id"])
+            .collect::<Vec<_>>();
+        assert!(per_call
+            .iter()
+            .all(|r| r["phase_unix_ns"].as_u64().unwrap() > 0));
+        assert!(per_call
+            .windows(2)
+            .all(|pair| pair[0]["elapsed_ns"].as_u64().unwrap()
+                <= pair[1]["elapsed_ns"].as_u64().unwrap()));
+        assert!(per_call
+            .iter()
+            .any(|r| r["phase"] == "validated_transport_result_ok"));
+    }
+}
+#[test]
+fn actual_rpc_evidence_same_thread_reentry_refuses_without_dispatch() {
+    struct Reentrant {
+        journal: Arc<Journal>,
+        transport: Mutex<Option<std::sync::Weak<TcpClusterRelocationTransport>>>,
+        rejected: AtomicBool,
+    }
+    impl ClusterRpcEvidenceObserver for Reentrant {
+        fn record(&self, record: &ClusterRpcEvidence) -> io::Result<()> {
+            if record.phase == "request_frame_before_dispatch" {
+                let transport = self.transport.lock().as_ref().unwrap().upgrade().unwrap();
+                let error = transport
+                    .call(&ClusterNodeId::new("n0").unwrap(), ClusterDataRequest::Ping)
+                    .unwrap_err();
+                assert!(
+                    error
+                        .to_string()
+                        .contains("same-thread evidence sink reentry"),
+                    "{error}"
+                );
+                self.rejected.store(true, Ordering::SeqCst);
+            }
+            self.journal.record(record)
+        }
+    }
+    let fixture = Fixture::new();
+    let journal = Journal::new(&fixture.root.path().join("reentry.jsonl"), None, false);
+    let sink = Arc::new(Reentrant {
+        journal,
+        transport: Mutex::new(None),
+        rejected: AtomicBool::new(false),
+    });
+    let transport = Arc::new(
+        fixture
+            .transport()
+            .with_rpc_evidence_observer(sink.clone(), ClusterRpcEvidenceLimits::default())
+            .unwrap(),
+    );
+    *sink.transport.lock() = Some(Arc::downgrade(&transport));
+    assert!(matches!(
+        transport.call(&fixture.config.node_id, ClusterDataRequest::Ping),
+        Err(BicDbError::RpcEvidenceFailure {
+            may_have_dispatched: false,
+            ..
+        })
+    ));
+    assert!(sink.rejected.load(Ordering::SeqCst));
+    assert_eq!(
+        transport.next_request_id.load(Ordering::SeqCst),
+        2,
+        "only outer real request ID allocated; neither frame dispatched"
+    );
+    assert!(fixture
+        .records("reentry.jsonl")
+        .iter()
+        .all(|r| r["may_have_dispatched"] == false));
+}

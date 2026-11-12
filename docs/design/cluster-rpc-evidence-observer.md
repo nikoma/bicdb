@@ -21,7 +21,10 @@ does not use `CommitOutcomeUnknown`'s database incarnation/sequence fields.
 
 ## Actual records, not reconstructed explanations
 
-Each invocation has a distinct diagnostic attempt UUID. Once the existing
+Each invocation has a distinct diagnostic attempt UUID. Every phase carries
+wall-clock Unix nanoseconds and monotonic elapsed nanoseconds from that attempt.
+An observer-wide journal sequence identifies reservation order; concurrent sink
+completion order may differ. Once the existing
 transport allocates its actual frame request ID, the record includes that ID
 and the address/topology generation taken from the SAME locked route snapshot
 used for dispatch. Request and response `raw_frame` contain exact framed JSON
@@ -56,13 +59,14 @@ remain distinct; decoding an error envelope does not replace the raw envelope.
 
 ## Failure, bounds and lifetime
 
-Limits default to 4096 records/64 MiB of compact JSONL and accept at most65536
+Limits default to 4096 records/64 MiB of compact JSONL (with conservative
+reservation for the largest sequence-number field) and accept at most65536
 records/1GiB. Each full record is counted before invoking the sink. The current
 network frame bound still applies. Neither row values nor history are truncated
 for diagnostics. The external sink must enforce its own file/format quota if
 its representation differs from compact JSONL.
 
-Any callback/quota/reentrant-or-contended callback failure permanently fences
+Any callback/quota or actual same-thread sink reentry failure permanently fences
 further dispatch on that observed transport. A new observer cannot rearm it.
 Before any frame write, `RpcEvidenceFailure.may_have_dispatched=false` refuses
 without dispatch; after possible write it is true and the actual operation must
@@ -72,21 +76,28 @@ fails. Other already concurrent operations may already have dispatched; this is
 not atomic cancellation of remote IO and never claims rollback.
 
 Observer IO consumes the original caller/network deadline, captured before
-logging begins. It cannot renew that deadline. Callbacks execute outside engine
-latches, serialize nonwaiting at the observer entry, and must not reenter this
-client. Their IO is trusted host code: a blocking filesystem callback cannot be
-interrupted by this adapter. This is not a hard-IO deadline guarantee. Original
+logging begins. It cannot renew that deadline. Quota reservation waits are
+cancellable under that same window; the reservation lock is released BEFORE
+sink IO. Normal parallel callbacks are supported. Each Send+Sync sink must write
+complete records atomically and enforce its own IO bounds/order; same-thread
+reentry into the same sink is refused. EventClient owns no engine guard here.
+The public transport adapter itself acquires no engine guard for callbacks, but
+arbitrary transport callers must ensure they hold none when opting in: this is
+not a universal public-transport lock guarantee. Sink IO is trusted host code;
+a blocking filesystem callback cannot be interrupted by this adapter. This is not a hard-IO deadline guarantee. Original
 cancellation is checked after diagnostic IO; completed durable remote work is
 not erased by cancellation or a failed reply journal.
 
 ## Required execution
 
-Seven new `actual_rpc_evidence_` controls use a genuine legacy mTLS receiver and
+Nine new `actual_rpc_evidence_` controls use a genuine legacy mTLS receiver and
 fsynced private JSONL. They cover exact discovery frames/error followed by real
 fallback, exact APP key/value and stale-epoch refusal, pre-dispatch cancellation and genuine response-before-original-cancellation,
 pre-wire persistence refusal with no application mutation, post-response actual
 journal sync then error/uncertainty, no observer rearm, and record/byte quota
-refusal without truncation. They are source assertions, not passing results.
+refusal without truncation. A real concurrent two-RPC rendezvous requires both
+callbacks to enter together and both actual TLS Pings to succeed; a separate
+same-thread reentry control must refuse before dispatch. They are source assertions, not passing results.
 They do not establish born-v2 DATA, HA, deployment or receiver relocation.
 
 Run these controls and existing Event route/discovery/deadline controls before

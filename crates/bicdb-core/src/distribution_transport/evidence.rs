@@ -9,6 +9,10 @@ use std::sync::atomic::AtomicU8;
 #[derive(Debug, Serialize)]
 pub struct ClusterRpcEvidence {
     pub attempt_id: Uuid,
+    /// Reservation order across this observer; sink completion order may differ.
+    pub journal_sequence: u64,
+    pub phase_unix_ns: u128,
+    pub elapsed_ns: u128,
     pub phase: &'static str,
     pub operation: &'static str,
     pub caller: String,
@@ -22,7 +26,9 @@ pub struct ClusterRpcEvidence {
     pub error_chain: Vec<String>,
 }
 /// Called outside engine latches. Success must mean the complete record is
-/// durable. Implementations must bound their IO and must not reenter this client.
+/// durable. Calls can run concurrently: sinks must atomically persist each full
+/// record, bound their IO, and must not reenter this observed client. Sequence
+/// fields preserve reservation order even if callback completion is reordered.
 /// A failed callback fences subsequent observed dispatch; it cannot supply replies.
 pub trait ClusterRpcEvidenceObserver: Send + Sync {
     fn record(&self, evidence: &ClusterRpcEvidence) -> io::Result<()>;
@@ -83,39 +89,83 @@ impl Observer {
             detail: detail.to_string(),
         }
     }
-    fn record(&self, record: &ClusterRpcEvidence) -> Result<()> {
+    fn record(
+        &self,
+        record: &mut ClusterRpcEvidence,
+        cancellation: &CancellationToken,
+        deadline: Instant,
+    ) -> Result<()> {
         self.require_current()
             .map_err(|error| self.fail(record.may_have_dispatched, error))?;
-        let mut counts = self.counts.try_lock().ok_or_else(|| {
+        let key = Arc::as_ptr(&self.sink) as *const () as usize;
+        let _callback = CallbackScope::enter(key).ok_or_else(|| {
             self.fail(
                 record.may_have_dispatched,
-                "concurrent/reentrant evidence callback; no dispatch admitted",
+                "same-thread evidence sink reentry; observed dispatch is fenced",
             )
         })?;
-        if counts.0 >= self.limits.max_records {
-            return Err(self.fail(
-                record.may_have_dispatched,
-                "evidence record quota exhausted; no truncation",
-            ));
-        }
+        // Serialize only into a size counter BEFORE reserving: no sink/IO is
+        // called while counts is held. Charge the largest possible sequence
+        // field, so accounting remains conservative after assigning the real ID.
+        record.journal_sequence = self.limits.max_records;
         let mut counter = CountBytes {
             bytes: 0,
-            limit: self.limits.max_bytes.saturating_sub(counts.1),
+            limit: self.limits.max_bytes,
         };
-        serde_json::to_writer(&mut counter, record)
-            .map_err(|e| self.fail(record.may_have_dispatched, e))?;
+        serde_json::to_writer(&mut counter, &*record)
+            .map_err(|error| self.fail(record.may_have_dispatched, error))?;
         let bytes = counter
             .bytes
             .checked_add(1)
             .ok_or_else(|| self.fail(record.may_have_dispatched, "evidence byte overflow"))?;
+        let mut waited = false;
+        let mut counts = loop {
+            if let Some(counts) = self.counts.try_lock_for(Duration::from_millis(1)) {
+                if waited {
+                    cancellation
+                        .check()
+                        .map_err(|error| self.fail(record.may_have_dispatched, error))?;
+                    if Instant::now() >= deadline {
+                        return Err(self.fail(
+                            record.may_have_dispatched,
+                            "original RPC deadline expired reserving evidence quota",
+                        ));
+                    }
+                }
+                break counts;
+            }
+            waited = true;
+            // This is reservation serialization, not callback IO. Waiting
+            // cannot outlive the SAME original caller/network window.
+            cancellation
+                .check()
+                .map_err(|error| self.fail(record.may_have_dispatched, error))?;
+            if Instant::now() >= deadline {
+                return Err(self.fail(
+                    record.may_have_dispatched,
+                    "original RPC deadline expired reserving evidence quota",
+                ));
+            }
+            self.require_current()
+                .map_err(|error| self.fail(record.may_have_dispatched, error))?;
+        };
+        self.require_current()
+            .map_err(|error| self.fail(record.may_have_dispatched, error))?;
         if counts.0 >= self.limits.max_records
             || bytes > self.limits.max_bytes.saturating_sub(counts.1)
         {
             return Err(self.fail(
                 record.may_have_dispatched,
-                "evidence quota exhausted; record was not truncated",
+                "complete evidence record exceeds quota; no truncation",
             ));
         }
+        record.journal_sequence = counts.0 + 1;
+        counts.0 += 1;
+        counts.1 += bytes;
+        drop(counts);
+        // Legitimate parallel callbacks are allowed. A sink is Send+Sync and
+        // owns atomic record writes/ordering; this component holds NO mutex
+        // over sink IO. Only actual same-thread reentry is prohibited above.
         let mut in_flight = FenceOnUnwind {
             observer: self,
             dispatched: record.may_have_dispatched,
@@ -123,12 +173,34 @@ impl Observer {
         };
         self.sink
             .record(record)
-            .map_err(|e| self.fail(record.may_have_dispatched, e))?;
+            .map_err(|error| self.fail(record.may_have_dispatched, error))?;
         in_flight.armed = false;
-        counts.0 += 1;
-        counts.1 += bytes;
         self.require_current()
             .map_err(|error| self.fail(record.may_have_dispatched, error))
+    }
+}
+std::thread_local! {
+    static ACTIVE_SINKS: std::cell::RefCell<BTreeSet<usize>> = std::cell::RefCell::new(BTreeSet::new());
+}
+struct CallbackScope {
+    key: usize,
+}
+impl CallbackScope {
+    fn enter(key: usize) -> Option<Self> {
+        ACTIVE_SINKS.with(|active| {
+            if active.borrow_mut().insert(key) {
+                Some(Self { key })
+            } else {
+                None
+            }
+        })
+    }
+}
+impl Drop for CallbackScope {
+    fn drop(&mut self) {
+        ACTIVE_SINKS.with(|active| {
+            active.borrow_mut().remove(&self.key);
+        });
     }
 }
 struct FenceOnUnwind<'a> {
@@ -171,6 +243,9 @@ pub(super) struct Attempt {
     observer: Arc<Observer>,
     record: ClusterRpcEvidence,
     request_frame: Vec<u8>,
+    started: Instant,
+    cancellation: CancellationToken,
+    deadline: Instant,
 }
 impl Attempt {
     pub(super) fn begin(
@@ -178,6 +253,8 @@ impl Attempt {
         caller: &ClusterNodeId,
         destination: &ClusterNodeId,
         request: &ClusterDataRequest,
+        cancellation: &CancellationToken,
+        deadline: Instant,
     ) -> Result<Self> {
         observer.require_current()?;
         let operation = match request {
@@ -192,10 +269,13 @@ impl Attempt {
             ClusterDataRequest::Ping => "ping",
             _ => "other_rpc",
         };
-        let result = Self {
+        let mut result = Self {
             observer,
             record: ClusterRpcEvidence {
                 attempt_id: Uuid::now_v7(),
+                journal_sequence: 0,
+                phase_unix_ns: 0,
+                elapsed_ns: 0,
                 phase: "invoked",
                 operation,
                 caller: caller.to_string(),
@@ -209,9 +289,21 @@ impl Attempt {
                 error_chain: Vec::new(),
             },
             request_frame: Vec::new(),
+            started: Instant::now(),
+            cancellation: cancellation.clone(),
+            deadline,
         };
-        result.observer.record(&result.record)?;
+        result.emit()?;
         Ok(result)
+    }
+    fn emit(&mut self) -> Result<()> {
+        self.record.phase_unix_ns = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_err(|error| self.observer.fail(self.record.may_have_dispatched, error))?
+            .as_nanos();
+        self.record.elapsed_ns = self.started.elapsed().as_nanos();
+        self.observer
+            .record(&mut self.record, &self.cancellation, self.deadline)
     }
     pub(super) fn dispatch(
         &mut self,
@@ -239,7 +331,7 @@ impl Attempt {
         self.request_frame.extend_from_slice(&body);
         self.record.phase = "request_frame_before_dispatch";
         self.record.raw_frame = Some(self.request_frame.clone());
-        self.observer.record(&self.record)?;
+        self.emit()?;
         self.record.raw_frame = None;
         Ok(())
     }
@@ -285,7 +377,7 @@ impl Attempt {
         };
         self.record.error_chain = read.as_ref().err().map(error_chain).unwrap_or_default();
         self.record.raw_frame = Some(frame);
-        self.observer.record(&self.record)?;
+        self.emit()?;
         let frame = self.record.raw_frame.take().unwrap();
         self.record.error_chain.clear();
         read?;
@@ -294,14 +386,14 @@ impl Attempt {
     pub(super) fn exchange_error(&mut self, error: &BicDbError) -> Result<()> {
         self.record.phase = "exchange_error_before_cancellation_override";
         self.record.error_chain = error_chain(error);
-        self.observer.record(&self.record)?;
+        self.emit()?;
         self.record.error_chain.clear();
         Ok(())
     }
     pub(super) fn return_boundary_error(&mut self, error: &BicDbError) -> Result<()> {
         self.record.phase = "return_boundary_error_after_evidence";
         self.record.error_chain = error_chain(error);
-        self.observer.record(&self.record)
+        self.emit()
     }
     pub(super) fn finish<T>(&mut self, result: &Result<T>) -> Result<()> {
         self.record.phase = if result.is_ok() {
@@ -310,7 +402,7 @@ impl Attempt {
             "validated_transport_result_error"
         };
         self.record.error_chain = result.as_ref().err().map(error_chain).unwrap_or_default();
-        self.observer.record(&self.record)
+        self.emit()
     }
 }
 fn read_exact_retained(

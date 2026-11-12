@@ -3909,7 +3909,9 @@ impl TcpClusterRelocationTransport {
 
     /// Optional exact per-RPC diagnostics. The observer cannot supply replies
     /// or authority; its persistence failure permanently fences this observed
-    /// transport. Callbacks execute outside engine locks under original budgets.
+    /// transport. This transport acquires no engine latch for callbacks; a
+    /// caller opting in must itself hold no engine guard. Sink IO must be
+    /// bounded by its host; original RPC deadlines are never renewed.
     pub fn with_rpc_evidence_observer(
         mut self,
         observer: Arc<dyn ClusterRpcEvidenceObserver>,
@@ -5052,6 +5054,8 @@ impl TcpClusterRelocationTransport {
             &self.caller_node_id,
             destination_node_id,
             &request,
+            cancellation,
+            deadline,
         )?;
         let result = self.call_with_native_destination_inner(
             cancellation,

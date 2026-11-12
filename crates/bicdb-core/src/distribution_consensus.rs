@@ -29,6 +29,9 @@ mod native_metadata_store;
 pub(crate) use host_read::{
     HostMetadataReadAcquireRequest, HostMetadataReadAcquireResponse, HostMetadataReadObservation,
 };
+#[cfg(test)]
+pub(crate) use native_metadata_store::NativeMetadataInitializationCut;
+pub(crate) use native_metadata_store::NativeMetadataPreVoteFact;
 
 /// Wire request only. This is not a read authority or a row-read permit.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]

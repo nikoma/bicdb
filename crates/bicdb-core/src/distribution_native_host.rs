@@ -17,6 +17,16 @@ use uuid::Uuid;
 
 const SEED_MANIFEST: &str = "native-bootstrap-seed.json";
 const MAX_PLAN_BYTES: usize = 2 * 1024 * 1024;
+mod initial_preparation;
+pub(crate) use initial_preparation::configuration_sha256 as initial_configuration_sha256;
+pub(crate) use initial_preparation::{
+    NativeInitialConfigurationDataObservation, NativeInitialConfigurationDataResponse,
+    NativeInitialConfigurationDataSource, NativeInitialConsensusPermit,
+    NativeInitialPreparationExchange, NativeInitialPreparationObservation,
+    NativeInitialPreparationPeerFact, NativeInitialPreparationRequest,
+    NativeInitialPreparationResponse, NativeInitialPreparationStage,
+    ValidatedInitialConfigurationProposal,
+};
 mod initial_offer;
 #[cfg(feature = "tls-replication")]
 mod provisional_listener;
@@ -25,7 +35,7 @@ pub(crate) use initial_offer::{
     NativeInitialBirthOfferResponse,
 };
 #[cfg(feature = "tls-replication")]
-pub(crate) use provisional_listener::NativeProvisionalHost;
+pub(crate) use provisional_listener::{NativeInitialConsensusLaunch, NativeProvisionalHost};
 fn invalid(detail: &str) -> BicDbError {
     BicDbError::Cluster(format!("native host bootstrap: {detail}"))
 }
@@ -201,6 +211,7 @@ pub(crate) struct NativeProvisionalNode {
     spec: RangeImageBirthSpec,
     root: PathBuf,
     manifest: NativeSeedManifest,
+    prepared_metadata: parking_lot::Mutex<Option<crate::MetadataConsensusStore>>,
 }
 impl NativeProvisionalNode {
     pub(crate) fn create(
@@ -243,6 +254,7 @@ impl NativeProvisionalNode {
             spec,
             root: root.canonicalize()?,
             manifest,
+            prepared_metadata: parking_lot::Mutex::new(None),
         })
     }
 
@@ -307,6 +319,7 @@ impl NativeProvisionalNode {
             spec,
             root: root.canonicalize()?,
             manifest: actual,
+            prepared_metadata: parking_lot::Mutex::new(None),
         })
     }
 
@@ -472,24 +485,6 @@ impl NativeInitialMetadataConfiguration {
             plan_sha256,
             schema_sha256,
         })
-    }
-
-    /// Publish a LOCAL metadata store only after the protected actual factory
-    /// receipt is durable. Initial configuration is still not a quorum proof.
-    pub(crate) fn initialize_local_metadata_store(
-        &self,
-        seed: &NativeProvisionalNode,
-        metadata_root: &Path,
-        cancellation: &CancellationToken,
-    ) -> Result<crate::MetadataConsensusStore> {
-        let topology = self.topology_for_actual_seed(seed, cancellation)?.clone();
-        crate::MetadataConsensusStore::initialize_native_owned(
-            metadata_root,
-            Arc::clone(&seed.database),
-            &seed.factory,
-            topology,
-            cancellation,
-        )
     }
 
     /// Read-only configuration data for a future fresh-metadata constructor.

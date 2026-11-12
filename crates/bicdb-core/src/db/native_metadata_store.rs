@@ -56,6 +56,9 @@ impl NativeMetadataStoreRecord {
     pub(crate) fn store_id(&self) -> Uuid {
         self.store_id
     }
+    pub(crate) fn initial_topology_sha256(&self) -> &str {
+        &self.initial_topology_sha256
+    }
     pub(crate) fn registered(&self) -> bool {
         self.registered
     }
@@ -78,7 +81,7 @@ impl NativeMetadataStoreRecord {
     }
 }
 impl BicDb {
-    fn metadata_native_admission(
+    pub(super) fn metadata_native_admission(
         &self,
         topology: &ClusterTopology,
         node: &ClusterNodeId,
@@ -185,6 +188,27 @@ impl BicDb {
             return Err(invalid("native registration changed"));
         }
         Ok(())
+    }
+    pub(crate) fn native_metadata_initialization_record(
+        &self,
+        cluster: &ClusterId,
+        bootstrap: Uuid,
+        node: &ClusterNodeId,
+        incarnation: u64,
+    ) -> Result<Option<NativeMetadataStoreRecord>> {
+        let native = self.native_recovery_admission(cluster, bootstrap, node, incarnation)?;
+        if native.metadata_initialization_version() != 1
+            || !crate::format::native_metadata_store_active(&self.path)?
+        {
+            return Err(invalid(
+                "metadata initialization was not fenced from actual birth",
+            ));
+        }
+        let record = self.read_native_range_image_record::<NativeMetadataStoreRecord>(KEY)?;
+        if let Some(r) = &record {
+            r.require_native(&native)?;
+        }
+        Ok(record)
     }
     pub(crate) fn read_native_metadata_store(
         &self,

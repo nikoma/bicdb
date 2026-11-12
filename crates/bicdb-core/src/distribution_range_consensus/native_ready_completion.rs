@@ -188,16 +188,59 @@ impl RangeWriteStore {
         fresh: &RecoveryRoleAdmission,
         write: impl FnOnce(&Path, &[u8], bool) -> Result<()>,
     ) -> Result<NativeRecoveryCompletedFrozenReceipt> {
+        #[cfg(test)]
+        let mut quorum_trace =
+            crate::distribution_range_handoff::NativeJointPhaseTrace::from_deadline(
+                "recovery-complete-final-local-quorum-check",
+                fresh.local_node_id(),
+                fresh.deadline(),
+            );
         quorum.require_local_prepared(prepared, db, self, fresh)?;
+        #[cfg(test)]
+        {
+            quorum_trace.complete();
+            drop(quorum_trace);
+        }
         // FIRST: actual native-WAL configuration, while Prepared blocks writes.
+        #[cfg(test)]
+        let mut native_trace =
+            crate::distribution_range_handoff::NativeJointPhaseTrace::from_deadline(
+                "recovery-complete-native-serving-producer",
+                fresh.local_node_id(),
+                fresh.deadline(),
+            );
         let native = quorum.persist_native(prepared, db, self, fresh)?;
+        #[cfg(test)]
+        {
+            native_trace.complete();
+            drop(native_trace);
+            eprintln!(
+                "ACTUAL_RECOVERY_COMPLETE_NATIVE_PERSISTED node={} nonce={} R={} serving_sha={}",
+                fresh.local_node_id(),
+                prepared.scope().recovery_nonce,
+                prepared.range_index(),
+                native.checksum_sha256()
+            );
+        }
         let scope = prepared.scope().clone();
         let completed = NativeCompletedPoint {
             point: prepared.actual_prepared_point(),
             native_serving_sha256: native.checksum_sha256().to_owned(),
         };
         completed.validate()?;
+        #[cfg(test)]
+        let mut pre_catalog_trace =
+            crate::distribution_range_handoff::NativeJointPhaseTrace::from_deadline(
+                "recovery-complete-before-catalogue-local-quorum-check",
+                fresh.local_node_id(),
+                fresh.deadline(),
+            );
         quorum.require_local_prepared(prepared, db, self, fresh)?;
+        #[cfg(test)]
+        {
+            pre_catalog_trace.complete();
+            drop(pre_catalog_trace);
+        }
         self.recovery_persistence_uncertain = true;
         self.catalog
             .recovery_fences
@@ -212,16 +255,53 @@ impl RangeWriteStore {
         // SECOND: completion is durable, still an ordinary-write refusal.
         // On any error retain this phase + uncertain flag; never roll it back
         // to Active or infer durability from the visible JSON rename.
+        #[cfg(test)]
+        let mut persist_trace =
+            crate::distribution_range_handoff::NativeJointPhaseTrace::from_deadline(
+                "recovery-complete-catalogue-fsync",
+                fresh.local_node_id(),
+                fresh.deadline(),
+            );
         self.persist_recovery_catalog_with(write)?;
+        #[cfg(test)]
+        {
+            persist_trace.complete();
+            drop(persist_trace);
+            eprintln!("ACTUAL_RECOVERY_COMPLETE_CATALOGUE_PERSISTED node={} nonce={} point={:?} serving_sha={} uncertain={}", fresh.local_node_id(), scope.recovery_nonce, completed.point, completed.native_serving_sha256, self.recovery_persistence_uncertain);
+        }
+        #[cfg(test)]
+        let mut refresh_trace =
+            crate::distribution_range_handoff::NativeJointPhaseTrace::from_deadline(
+                "recovery-complete-refresh-prepared-binding",
+                fresh.local_node_id(),
+                fresh.deadline(),
+            );
         prepared.refresh_after_durable_native_completion(db, self, fresh)?;
+        #[cfg(test)]
+        {
+            refresh_trace.complete();
+            drop(refresh_trace);
+        }
         let receipt = NativeRecoveryCompletedFrozenReceipt {
             store_open_id: self.open_id,
             scope,
             completed,
             native,
         };
+        #[cfg(test)]
+        let mut receipt_trace =
+            crate::distribution_range_handoff::NativeJointPhaseTrace::from_deadline(
+                "recovery-complete-receipt-current",
+                fresh.local_node_id(),
+                fresh.deadline(),
+            );
         receipt.require_current(db, self, prepared, fresh)?;
         quorum.require_recipient_role(fresh)?;
+        #[cfg(test)]
+        {
+            receipt_trace.complete();
+            drop(receipt_trace);
+        }
         Ok(receipt)
     }
 }

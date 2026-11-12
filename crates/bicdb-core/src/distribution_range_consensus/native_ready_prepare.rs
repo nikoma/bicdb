@@ -297,6 +297,13 @@ impl PreparedNativeRecoveryReady {
         store: &RangeWriteStore,
         fresh: &RecoveryRoleAdmission,
     ) -> Result<()> {
+        #[cfg(test)]
+        let mut actual_trace =
+            crate::distribution_range_handoff::NativeJointPhaseTrace::from_deadline(
+                "recovery-complete-refresh-actual-domain-physical",
+                fresh.local_node_id(),
+                fresh.deadline(),
+            );
         self.scope.require_role(fresh)?;
         if matches!(
             fresh.purpose(),
@@ -329,6 +336,11 @@ impl PreparedNativeRecoveryReady {
             &self.scope,
             &completed.native_serving_sha256,
         )?;
+        #[cfg(test)]
+        {
+            actual_trace.complete();
+            drop(actual_trace);
+        }
         let updated = NativeReadyCatalogueBinding {
             catalog_sha256: store.recovery_range_catalog_sha256(self.scope.range_id)?,
             native_completed_serving_sha256: Some(completed.native_serving_sha256.clone()),
@@ -337,7 +349,19 @@ impl PreparedNativeRecoveryReady {
             .binding
             .try_lock()
             .ok_or_else(|| range_write_error("completion binding is busy"))? = updated;
-        self.require_current_under_role(db, store, fresh)
+        #[cfg(test)]
+        let mut binding_trace =
+            crate::distribution_range_handoff::NativeJointPhaseTrace::from_deadline(
+                "recovery-complete-refresh-current-updated-binding",
+                fresh.local_node_id(),
+                fresh.deadline(),
+            );
+        let result = self.require_current_under_role(db, store, fresh);
+        #[cfg(test)]
+        if result.is_ok() {
+            binding_trace.complete();
+        }
+        result
     }
     pub(crate) fn role(&self) -> &RecoveryRoleAdmission {
         self.physical.role()

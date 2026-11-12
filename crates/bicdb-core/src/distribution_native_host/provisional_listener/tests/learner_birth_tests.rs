@@ -195,7 +195,9 @@ fn native_unassigned_learner_birth_tls_live_scope_cancel_and_permanent_provision
             .err()
             .unwrap();
         assert!(
-            error.to_string().to_ascii_lowercase().contains("canceled"),
+            error
+                .to_string()
+                .contains(&BicDbError::QueryCanceled.to_string()),
             "{error}"
         );
         assert!(

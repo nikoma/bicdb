@@ -109,10 +109,18 @@ fn native_birth_shape_keeps_legacy_and_rejects_invalid_data_or_format() {
     let mut v = value;
     v["authority"] = serde_json::json!(true);
     assert!(serde_json::from_value::<NativeStoreBirthV1>(v).is_err());
-    for format in [1, 3] {
+    // Joint handoff adds format 3 while retaining format-2 birth bindings.
+    // Unknown formats remain invalid; format 1 cannot carry those bindings.
+    let mut joint_format = t.clone();
+    joint_format.format_version = crate::distribution::NATIVE_JOINT_HANDOFF_TOPOLOGY_FORMAT_VERSION;
+    joint_format.validate().unwrap();
+    for format in [1, u32::MAX] {
         let mut wrong = t.clone();
         wrong.format_version = format;
-        assert!(wrong.validate().is_err());
+        assert!(
+            wrong.validate().is_err(),
+            "unsupported birth format {format}"
+        );
     }
     let mut wrong = t;
     wrong.range_image_bootstrap_id = Some(Uuid::new_v4());

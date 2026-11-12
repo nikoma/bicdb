@@ -112,34 +112,20 @@ impl ClusterDataNodeService {
         }
         #[cfg(test)]
         let mut prepared_trace = crate::distribution_range_handoff::NativeJointPhaseTrace::new(
-            "recovery-prepare-catalogue-producer-total",
+            "recovery-prepare-catalogue-producer-and-projection",
             physical.role().local_node_id(),
             parent,
         );
-        let prepared = self
+        let (prepared, evidence) = self
             .range_writes
             .current_mut()
-            .prepare_native_recovery_ready(&db, physical)?;
+            .prepare_and_observe_native_recovery_ready(&db, physical, request, parent)?;
         #[cfg(test)]
         {
             prepared_trace.complete();
             drop(prepared_trace);
         }
-        #[cfg(test)]
-        let mut response_trace = crate::distribution_range_handoff::NativeJointPhaseTrace::new(
-            "recovery-prepare-response-observation",
-            prepared.role().local_node_id(),
-            parent,
-        );
-        let evidence = self.range_writes.observe_prepared_native_for_role(
-            &db,
-            &prepared,
-            prepared.role(),
-            request,
-        )?;
         parent.check()?;
-        #[cfg(test)]
-        response_trace.complete();
         Ok((prepared, evidence))
     }
     pub(crate) fn reattest_local_native_ready(

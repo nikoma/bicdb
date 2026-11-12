@@ -196,6 +196,137 @@ mod tests {
     }
 
     #[test]
+    fn native_produced_ready_projects_actual_point_under_same_owned_preparation() {
+        let fixture = Fixture::new();
+        fixture.seed(fixture.range().id, 1);
+        let role = fixture.role(Uuid::now_v7());
+        let frozen = fixture.freeze(&role);
+        let scope = RecoveryFenceScope::from_role(&role).unwrap();
+        let parent =
+            CancellationToken::new(Arc::new(std::sync::atomic::AtomicBool::new(false)), None);
+        let mut store = fixture.store();
+        let physical = fixture
+            .attest(role, &mut store, Arc::clone(&frozen), &parent)
+            .unwrap();
+        let actual = (
+            physical.range_index(),
+            physical.logical_history_sha256().to_owned(),
+            physical.native_receipt_sha256().to_owned(),
+            physical.visibility().get(),
+        );
+        let request = crate::distribution_range_recovery::NativeReadyRequest {
+            scope,
+            challenge: Uuid::now_v7(),
+            budget_ms: 4500,
+        };
+        let (prepared, evidence) = store
+            .prepare_and_observe_native_recovery_ready(
+                &fixture.db.read(),
+                physical,
+                &request,
+                &parent,
+            )
+            .unwrap();
+        let reply = evidence.into_reply();
+        assert_eq!(
+            (
+                reply.range_index,
+                reply.logical_history_sha256.clone(),
+                reply.native_receipt_sha256.clone(),
+                reply.local_visibility_sequence
+            ),
+            actual
+        );
+        assert_eq!(reply.challenge, request.challenge);
+        assert!(reply.scope.same_session(&request.scope));
+        assert_eq!(
+            reply.observed_metadata_context_id,
+            prepared.role().context_id()
+        );
+        prepared
+            .require_current(&fixture.db.read(), &store)
+            .unwrap();
+        assert!(fixture
+            .db
+            .read()
+            .range_mutation_gate()
+            .try_enter(fixture.range().id)
+            .is_err());
+        assert!(store
+            .require_recovery_scope(prepared.role(), &fixture.native(), prepared.scope())
+            .is_err());
+    }
+
+    #[test]
+    fn native_produced_ready_canceled_caller_and_foreign_scope_do_not_publish_preparation() {
+        for canceled in [false, true] {
+            let fixture = Fixture::new();
+            fixture.seed(fixture.range().id, 1);
+            let role = fixture.role(Uuid::now_v7());
+            let frozen = fixture.freeze(&role);
+            let scope = RecoveryFenceScope::from_role(&role).unwrap();
+            let parent =
+                CancellationToken::new(Arc::new(std::sync::atomic::AtomicBool::new(false)), None);
+            let mut store = fixture.store();
+            let physical = fixture
+                .attest(role, &mut store, Arc::clone(&frozen), &parent)
+                .unwrap();
+            let request = crate::distribution_range_recovery::NativeReadyRequest {
+                scope: if canceled {
+                    scope.clone()
+                } else {
+                    RecoveryFenceScope::from_role(&fixture.role(Uuid::now_v7())).unwrap()
+                },
+                challenge: Uuid::now_v7(),
+                budget_ms: 4500,
+            };
+            let path = fixture.db.read().data_path().join(DEFAULT_RANGE_WRITE_LOG);
+            let before = std::fs::read(&path).unwrap();
+            if canceled {
+                parent.cancel();
+            } else {
+                parent.check().unwrap();
+                physical.role().require_live_request().unwrap();
+            }
+            let original_deadline = physical.role().deadline();
+            let error = store
+                .prepare_and_observe_native_recovery_ready(
+                    &fixture.db.read(),
+                    physical,
+                    &request,
+                    &parent,
+                )
+                .unwrap_err();
+            if canceled {
+                assert_eq!(error.to_string(), BicDbError::QueryCanceled.to_string());
+            } else {
+                parent.check().unwrap();
+                assert!(std::time::Instant::now() < original_deadline);
+                assert!(
+                    error
+                        .to_string()
+                        .contains("recovery fence does not bind the independently fresh role"),
+                    "{error}"
+                );
+            }
+            assert_eq!(std::fs::read(&path).unwrap(), before);
+            assert_eq!(
+                store.recovery_observation_phase(&scope).unwrap(),
+                crate::distribution_range_recovery::RecoveryFenceObservationPhase::ActiveRecovery
+            );
+            assert_eq!(
+                fixture
+                    .db
+                    .read()
+                    .current_native_range_source_lineage(fixture.range().id)
+                    .unwrap()
+                    .range_index(),
+                1
+            );
+        }
+    }
+
+    #[test]
     fn prepared_replica_can_be_reattested_by_a_fresh_same_session_role() {
         let fixture = Fixture::new();
         fixture.seed(fixture.range().id, 1);

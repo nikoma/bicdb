@@ -94,3 +94,65 @@ retention. Markers use existing actual original deadlines, point and saved
 session. The 4500ms/5s budgets, foreign/local checks, cancellation, storage
 operations and every acceptance assertion remain unchanged. This is a profile,
 not an unmeasured optimization or a retry that revives the original request.
+
+## Measured 6ce preparation and scoped producer projection
+
+Exact source 6ce80ad321049a3052ec7feb57cf8d74e2a08f49, run 43263149425 /
+Core 131339520155 compiled (all targets/isolated consumer passed), then the
+positive test failed 0/1, 915 filtered, in 82.18s. All three actual fence records
+and finish succeeded with 1648ms remaining. Promises and canonical Abort3/native
+R3 assertions completed. First n1 Prepare was the only preparation attempted;
+no Complete request was reached.
+
+The original request still asked for 4500ms under a five-second parent. Its
+receiver's existing transport cap yielded 3998ms remaining at Runtime entry.
+The profile establishes actual ordering and remaining original budgets:
+
+| Actual n1 phase | Duration | Original receiver budget remaining |
+|---|---:|---:|
+| Fresh metadata role | 16.9ms | 3981ms |
+| Service latch acquisition (preflight/create) | 2µs / 0µs | 3981ms / 3979ms |
+| Preflight; owned freeze | 1.9ms / 19µs | 3979ms |
+| Local DB/native admission; resolved catalogue | 1.6ms / 1.5ms | 3975ms |
+| Actual physical producer | 2385.0ms | 1590ms |
+| Catalogue producer's full physical preflight | 924.6ms | 666ms |
+| Actual catalogue fsync return | 4.0ms | 662ms |
+| Full post-persist current validation | 580.1ms | 80ms |
+| Response observation repeating full current validation | 443.7ms | expired |
+
+Total was 4361.2ms. No service-latch stall was observed in these spans. The
+NativePrepared R3/B4 catalogue persistence marker actually returned with 662ms
+remaining, and full post-persist validation returned with 80ms. This is direct
+phase-budget evidence of persistence before expiration, unlike d633/99's later
+custody-only observations. The extra response check then exhausted the original
+receiver budget; no successful Ready reply, Complete, Activate or ACK4 followed.
+
+Retained raw log SHA-256:
+`cfd4f030a6e69ab44288250c557285a7d95d2bd006114a94bdc0783ea26f8f8e`
+(`6ce-current-joint-ready-budget-job131339520155.log.gz` plus index). Artifact
+13964603688 ZIP SHA-256:
+`7223e1a0f07a758f5c5a1bbd91cb47fdae37975aa83164ffad4b14c58a27a739`.
+Its private receipt is
+`6ce-current-joint-ready-budget-artifact13964603688-receipt.json` beside the ZIP.
+All 82 manifest files / 6016569 bytes verified without engine open; the capture
+is not an independent power-loss replay.
+
+The successor adds one narrow producer-and-projection method. It consumes the
+actual owned LocalNativeRecoveryReady, performs the SAME full physical checks
+before and after durable preparation, then immediately projects that newly
+produced Prepared under the SAME exclusive Store and borrowed actual DB. The
+actual Frozen/read pin stays owned throughout. The projection keeps all existing
+scope/challenge/role/point/obligation checks; final original-caller cancellation,
+role lifetime and actual original CurrentJoint writer/session are checked again.
+It accepts no stored Prepared argument, DTO, unchecked token or cached current
+grant. Existing later observer/reattest paths keep their full validation.
+
+Only the immediate same-call redundant response physical/domain traversal is
+removed; no before/after producer validation, final foreign/local check,
+original token, 4s receiver cap, 4500ms request or five-second caller is relaxed.
+There is no new journal/network acquisition. New tests use actual RF1 native
+history/roles to check projected point, retained mutation refusal and canceled/
+foreign-scope rejection with byte-identical catalogue state. They are not RF3,
+CurrentJoint ABA or full recovery qualification. The actual full positive and
+original-writer/caller controls must execute again before any passing claim;
+no headroom or runtime-success guarantee follows from the measured savings.

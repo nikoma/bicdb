@@ -409,3 +409,5 @@ mod initial_preparation_tests;
 mod learner_factory_tests;
 
 mod learner_birth_tests;
+
+mod learner_enrollment_tests;

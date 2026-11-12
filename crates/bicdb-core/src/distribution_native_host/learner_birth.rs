@@ -486,6 +486,58 @@ impl NativeLearnerBirthObservation {
         }
         Ok(())
     }
+    /// Recheck immutable observed identity facts against separately acquired
+    /// CURRENT leader metadata. This never adopts the old requester's C.
+    pub(crate) fn require_enrollment_rebase(
+        &self,
+        current: &ClusterTopology,
+        leader: &ClusterNodeId,
+        restore: Option<&crate::distribution_consensus::MetadataRestoreActivation>,
+    ) -> Result<()> {
+        self.require_live()?;
+        let target = current
+            .nodes
+            .get(&self.response.node)
+            .ok_or_else(|| invalid("current enrollment target absent"))?;
+        let requester = current
+            .nodes
+            .get(leader)
+            .ok_or_else(|| invalid("current enrollment leader absent"))?;
+        if &current.cluster_id != &self.response.cluster
+            || current.range_image_bootstrap_id != Some(self.response.request.bootstrap_id)
+            || restore != self.response.request.restore_activation.as_ref()
+            || &self.response.request.requester != leader
+            || self.response.request.requester_incarnation != requester.incarnation
+            || requester.lifecycle != ClusterNodeLifecycle::Active
+            || requester.metadata_role != MetadataMemberRole::Voter
+            || target.lifecycle != ClusterNodeLifecycle::Active
+            || target.metadata_role != MetadataMemberRole::Learner
+            || target.incarnation != self.response.incarnation
+            || self.peer.node_id() != &target.id
+            || self.peer.member_incarnation() != target.incarnation
+            || self.peer.plaintext_loopback()
+            || !self
+                .peer
+                .certificate_sha256()
+                .is_some_and(|pin| target.accepts_tls_certificate_sha256(pin))
+            || target
+                .native_store_birth_v1
+                .as_ref()
+                .is_some_and(|old| old != &self.response.birth)
+            || current.ranges.is_empty()
+            || current.ranges.values().any(|range| {
+                range.replicas.iter().any(|r| r.node_id == target.id)
+                    || range.required_schema_sha256(&current.nodes)
+                        != Some(self.response.actual_schema_sha256.as_str())
+            })
+        {
+            return Err(invalid("current learner identity/pins/schema/restore/birth changed since actual observation"));
+        }
+        self.response
+            .birth
+            .validate_for(current.range_image_bootstrap_id, target.incarnation)?;
+        self.require_live()
+    }
     pub(crate) fn birth(&self) -> Result<&NativeStoreBirthV1> {
         self.require_live()?;
         Ok(&self.response.birth)

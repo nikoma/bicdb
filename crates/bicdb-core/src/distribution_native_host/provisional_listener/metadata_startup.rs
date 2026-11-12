@@ -14,7 +14,7 @@ pub(crate) struct NativeInitialWriterEnrollment {
     pub(crate) metadata_read_index: u64,
 }
 impl NativeInitialConsensusLaunch {
-    fn lock_initial_metadata<'a>(
+    pub(super) fn lock_initial_metadata<'a>(
         &'a self,
         parent: &CancellationToken,
     ) -> Result<parking_lot::MutexGuard<'a, MetadataConsensusStore>> {

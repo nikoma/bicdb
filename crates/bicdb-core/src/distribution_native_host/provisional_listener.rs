@@ -6,7 +6,9 @@ use crate::distribution_transport::{
 };
 use crate::{ClusterDataNodeService, ClusterNetworkTransportConfig};
 use parking_lot::Mutex;
+mod learner_enrollment;
 mod metadata_startup;
+pub(crate) use learner_enrollment::NativeLearnerMetadataEnrollment;
 pub(crate) use metadata_startup::NativeInitialWriterEnrollment;
 
 pub(crate) struct NativeProvisionalHost {

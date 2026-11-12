@@ -8,6 +8,8 @@ use parking_lot::{Mutex, RwLock};
 use std::sync::{Arc, OnceLock};
 
 mod append_ack;
+#[cfg(feature = "tls-replication")]
+mod learner_enrollment;
 pub(crate) use append_ack::NativeMetadataAppendProvenance;
 pub use append_ack::NativeMetadataAppendReceiver;
 

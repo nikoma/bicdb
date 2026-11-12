@@ -3,6 +3,7 @@
 use crate::*;
 use sha2::{Digest, Sha256};
 mod catalog;
+mod preflight;
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -415,6 +416,10 @@ pub fn check_sql_partition_admission(db: &BicDb) -> Result<()> {
 }
 
 fn activate_empty(db: &mut BicDb) -> Result<()> {
+    // Validate the complete resulting set, including stationary ACKs, against
+    // the actual proposed v1 descriptors before even the sticky reader fence.
+    // Existing index contents are not proof that historical rows are valid.
+    preflight::validate(db, &snapshot, &cached_schemas, &relocations)?;
     db.enable_sql_partition_execution_v1()?;
     db.create_collection(CERTIFICATE_COLLECTION)?;
     let snapshot = "fresh_empty_partition_activation_v1".to_string();
@@ -846,36 +851,6 @@ pub fn apply_partition_upgrade(
     }
     if !trigger_records.is_empty() {
         tx.batch_insert(TRIGGER_COLLECTION, trigger_records)?;
-    }
-    {
-        let engine = SqlEngine::new(db).with_transaction(&tx);
-        for source in snapshot.nodes.values() {
-            scan(db, &source.schema.name, |row| {
-                if let Some(target) =
-                    planned_destination(db, &snapshot, source, &row, &relocations)?
-                {
-                    let schema = &snapshot.nodes[&target].schema;
-                    let schema = if let Some(link) = &schema.partition_of {
-                        schema_with_parent_inheritance(
-                            schema.clone(),
-                            &snapshot.nodes[&link.parent_table].schema,
-                        )
-                    } else {
-                        schema.clone()
-                    };
-                    validate_records_for_write(
-                        db,
-                        Some(&tx),
-                        &target,
-                        &schema,
-                        std::slice::from_ref(&row),
-                        true,
-                        Some(&engine),
-                    )?;
-                }
-                Ok(())
-            })?;
-        }
     }
     tx.batch_insert(CERTIFICATE_COLLECTION, vec![certificate])?;
     tx.commit()?;

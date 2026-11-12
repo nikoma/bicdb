@@ -1,0 +1,3302 @@
+{
+  "recorded_unix": 1794507884.0564973,
+  "scope": "Task-owned exact oldc358 terminal broad test executable paths absent from currentcc84 successful broad. source-build.lock held; no same-target compiler; no processmapping/fd; no hardlinks; ELF/size/mtime/oldsource proof. Preserves currenttestELFs/dependencyartifacts/currentrunnable/requiredcompat binaries/allotheroutputs/stores.",
+  "old_source": "c3588bf8b029ac8579f1336bf9d170d231648f29",
+  "current_source": "cc84f24fa263965d89697f36a96a9112a16d4016",
+  "removed_count": 411,
+  "reclaimed_allocated_bytes": 119072952320,
+  "free_before": 170183225344,
+  "free_after": 289226457088,
+  "removed": [
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/access_path_routing-380f99894093cb00",
+      "bytes": 401032968,
+      "allocated": 395419648,
+      "mtime": 1794499944.19268,
+      "dev": 66306,
+      "inode": 104906833
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/aggregate_projection-82cd8d42ea96398f",
+      "bytes": 43714120,
+      "allocated": 43184128,
+      "mtime": 1794498652.4105356,
+      "dev": 66306,
+      "inode": 104906165
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/aggregate_projection_durability-847d5bfd9667a404",
+      "bytes": 43998656,
+      "allocated": 43466752,
+      "mtime": 1794498677.6898496,
+      "dev": 66306,
+      "inode": 104906515
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/aggregate_scan_cap-6fdec52b1f98be3a",
+      "bytes": 401017024,
+      "allocated": 395403264,
+      "mtime": 1794499964.8039405,
+      "dev": 66306,
+      "inode": 104906847
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/aggregate_sketch-b12748e32692800b",
+      "bytes": 5220696,
+      "allocated": 5218304,
+      "mtime": 1794498646.241459,
+      "dev": 66306,
+      "inode": 104906052
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/analyze_sampling-f4404b08da4985a2",
+      "bytes": 401065088,
+      "allocated": 395456512,
+      "mtime": 1794499970.679015,
+      "dev": 66306,
+      "inode": 104906852
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/application_invariants-c9378dd1199b9ba1",
+      "bytes": 43245560,
+      "allocated": 42717184,
+      "mtime": 1794498637.383349,
+      "dev": 66306,
+      "inode": 104905946
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/archive_fail_closed-f9400406f3b524d5",
+      "bytes": 46219456,
+      "allocated": 45666304,
+      "mtime": 1794498653.4985492,
+      "dev": 66306,
+      "inode": 104906182
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/array_storage-5e5629063c578b30",
+      "bytes": 401163528,
+      "allocated": 395550720,
+      "mtime": 1794499819.407102,
+      "dev": 66306,
+      "inode": 104906749
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/authorization_canary-8c7af15289ca9529",
+      "bytes": 401016072,
+      "allocated": 395403264,
+      "mtime": 1794500249.875545,
+      "dev": 66306,
+      "inode": 104907042
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/auto_checkpoint-c43dc5891fc71ea9",
+      "bytes": 43170872,
+      "allocated": 42647552,
+      "mtime": 1794498674.7068126,
+      "dev": 66306,
+      "inode": 104906493
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/backup-bbb301c9df62b4d9",
+      "bytes": 46498920,
+      "allocated": 45936640,
+      "mtime": 1794498655.7985778,
+      "dev": 66306,
+      "inode": 104906191
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/backup_online-509a4a2c772537b5",
+      "bytes": 44727904,
+      "allocated": 44183552,
+      "mtime": 1794498644.9974434,
+      "dev": 66306,
+      "inode": 104906031
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/backup_online_wal_rotation-886b5a252e70523b",
+      "bytes": 44414744,
+      "allocated": 43876352,
+      "mtime": 1794498638.3963616,
+      "dev": 66306,
+      "inode": 104905966
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/backup_paged-ee0742e8b5d7bb0a",
+      "bytes": 44821112,
+      "allocated": 44273664,
+      "mtime": 1794498681.097892,
+      "dev": 66306,
+      "inode": 104906537
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/backup_repository-d425688a591c7ed6",
+      "bytes": 47554720,
+      "allocated": 46989312,
+      "mtime": 1794498629.3942497,
+      "dev": 66306,
+      "inode": 104905882
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/base_types-16a9f49795041fab",
+      "bytes": 401087728,
+      "allocated": 395472896,
+      "mtime": 1794499670.8882241,
+      "dev": 66306,
+      "inode": 104906641
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/between_index_range-feeaddf5eb09153e",
+      "bytes": 401049528,
+      "allocated": 395436032,
+      "mtime": 1794500223.1102066,
+      "dev": 66306,
+      "inode": 104907025
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/bicdb_core-e22fb2846f96e94e",
+      "bytes": 83741224,
+      "allocated": 83439616,
+      "mtime": 1794498708.6762347,
+      "dev": 66306,
+      "inode": 104906565
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/bicdb_pgwire-0ddf1ceddda5a82c",
+      "bytes": 467255032,
+      "allocated": 461107200,
+      "mtime": 1794501856.5798352,
+      "dev": 66306,
+      "inode": 104907178
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/bicdb_sql-a9068ce5b85f77f1",
+      "bytes": 415581056,
+      "allocated": 413700096,
+      "mtime": 1794500433.897872,
+      "dev": 66306,
+      "inode": 104907120
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/binary_storage-c9b1665d8ed6b8f0",
+      "bytes": 401139992,
+      "allocated": 395526144,
+      "mtime": 1794500072.7023048,
+      "dev": 66306,
+      "inode": 104906922
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/bounded_collection_batches-6e8d7c6a0d4cb07d",
+      "bytes": 43162576,
+      "allocated": 42639360,
+      "mtime": 1794498664.0736804,
+      "dev": 66306,
+      "inode": 104906380
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/bounded_fts-c423c9ce1224fc15",
+      "bytes": 401062344,
+      "allocated": 395448320,
+      "mtime": 1794500136.5091116,
+      "dev": 66306,
+      "inode": 104906965
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/bounded_primary_key-7189f49f81674264",
+      "bytes": 401062840,
+      "allocated": 395448320,
+      "mtime": 1794500174.1615877,
+      "dev": 66306,
+      "inode": 104906991
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/bounded_range-4d0a7ea8b04db899",
+      "bytes": 401080336,
+      "allocated": 395468800,
+      "mtime": 1794500107.4787445,
+      "dev": 66306,
+      "inode": 104906946
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/branching-ccb07d6c18f88ae2",
+      "bytes": 43309792,
+      "allocated": 42786816,
+      "mtime": 1794498679.405871,
+      "dev": 66306,
+      "inode": 104906517
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/broker-7637be383f69906e",
+      "bytes": 43918520,
+      "allocated": 43388928,
+      "mtime": 1794498665.6917007,
+      "dev": 66306,
+      "inode": 104906388
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/broker_caller_provenance-b375042ef5dda1f6",
+      "bytes": 401038728,
+      "allocated": 395427840,
+      "mtime": 1794500052.5150497,
+      "dev": 66306,
+      "inode": 104906907
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/broker_delivery_snapshot-daddb29a612ce21d",
+      "bytes": 43296592,
+      "allocated": 42770432,
+      "mtime": 1794498645.4054487,
+      "dev": 66306,
+      "inode": 104906008
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/broker_fenced-0f9999daeb3e78fb",
+      "bytes": 43213992,
+      "allocated": 42688512,
+      "mtime": 1794498641.2043965,
+      "dev": 66306,
+      "inode": 104905980
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/broker_outbox_retention-4c85182a8572740d",
+      "bytes": 43624192,
+      "allocated": 43098112,
+      "mtime": 1794498645.9664555,
+      "dev": 66306,
+      "inode": 104906056
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/broker_sql-a2d0f96c0c1dac9c",
+      "bytes": 401128872,
+      "allocated": 395513856,
+      "mtime": 1794499864.4106712,
+      "dev": 66306,
+      "inode": 104906780
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/builtin_name_overloads-0d21bee479b81f64",
+      "bytes": 401110008,
+      "allocated": 395497472,
+      "mtime": 1794499900.5901287,
+      "dev": 66306,
+      "inode": 104906804
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/bulk_load_insert-e1127fdd61cbf4c7",
+      "bytes": 43316608,
+      "allocated": 42790912,
+      "mtime": 1794498640.3793862,
+      "dev": 66306,
+      "inode": 104905986
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/carrier_hub_compat-bb112628263b450a",
+      "bytes": 401382800,
+      "allocated": 395767808,
+      "mtime": 1794499883.0869071,
+      "dev": 66306,
+      "inode": 104906793
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/catalog_acl_types-acf3e25964091fdb",
+      "bytes": 451753728,
+      "allocated": 445485056,
+      "mtime": 1794501794.602047,
+      "dev": 66306,
+      "inode": 104907158
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/catalog_and_admin_authorization-b5b5f188f1c930bc",
+      "bytes": 401044776,
+      "allocated": 395436032,
+      "mtime": 1794499924.0094247,
+      "dev": 66306,
+      "inode": 104906819
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/catalog_default_and_index_columns-502fc27c20e27a8d",
+      "bytes": 401111328,
+      "allocated": 395497472,
+      "mtime": 1794500228.997281,
+      "dev": 66306,
+      "inode": 104907030
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/catalog_journal_visibility-cf77631197a617e8",
+      "bytes": 401027992,
+      "allocated": 395419648,
+      "mtime": 1794499615.668526,
+      "dev": 66306,
+      "inode": 104906580
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/catalog_projection-f5f20d965ec82dc4",
+      "bytes": 401023592,
+      "allocated": 395415552,
+      "mtime": 1794500095.9045982,
+      "dev": 66306,
+      "inode": 104906937
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/catalog_scalar_predicates-4c95394a6471377d",
+      "bytes": 401012352,
+      "allocated": 395399168,
+      "mtime": 1794500200.4519203,
+      "dev": 66306,
+      "inode": 104907009
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/cell_rows-50e70813f2cddf05",
+      "bytes": 401239624,
+      "allocated": 395624448,
+      "mtime": 1794500008.6814954,
+      "dev": 66306,
+      "inode": 104906879
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/centralized_authz-bfab8d756a2a6a7f",
+      "bytes": 401009848,
+      "allocated": 395395072,
+      "mtime": 1794499665.262153,
+      "dev": 66306,
+      "inode": 104906636
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/cognee_pg18_diff-180859946eb3f6e7",
+      "bytes": 451852616,
+      "allocated": 445583360,
+      "mtime": 1794501799.1021042,
+      "dev": 66306,
+      "inode": 104907160
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/cold_routine_compilation_stack-2e6d959a1fd53df3",
+      "bytes": 401243856,
+      "allocated": 395632640,
+      "mtime": 1794499867.553711,
+      "dev": 66306,
+      "inode": 104906783
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/collection_rename-be2f5acebf2f8578",
+      "bytes": 43567664,
+      "allocated": 43040768,
+      "mtime": 1794498646.6064634,
+      "dev": 66306,
+      "inode": 104906054
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/collection_rename_admission-b7258cb9464a837f",
+      "bytes": 43304088,
+      "allocated": 42778624,
+      "mtime": 1794498679.003866,
+      "dev": 66306,
+      "inode": 104906513
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/collection_rename_paged_stubs-58d6a336f3698be6",
+      "bytes": 43234016,
+      "allocated": 42713088,
+      "mtime": 1794498650.6975143,
+      "dev": 66306,
+      "inode": 104906104
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/column_references-108870b4c2205232",
+      "bytes": 401019744,
+      "allocated": 395411456,
+      "mtime": 1794500336.6776426,
+      "dev": 66306,
+      "inode": 104907097
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/comma_join_predicate-3d13d4f3a1ab0358",
+      "bytes": 401034376,
+      "allocated": 395419648,
+      "mtime": 1794500226.061244,
+      "dev": 66306,
+      "inode": 104907027
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/commit_apply_failure-d114a308dee5143c",
+      "bytes": 43252512,
+      "allocated": 42725376,
+      "mtime": 1794498651.0965192,
+      "dev": 66306,
+      "inode": 104906109
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/commit_durability_crash-9ea73201da510577",
+      "bytes": 45520328,
+      "allocated": 44974080,
+      "mtime": 1794498637.9843564,
+      "dev": 66306,
+      "inode": 104905976
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/commit_durability_isolation-355d42571b263b09",
+      "bytes": 43119280,
+      "allocated": 42598400,
+      "mtime": 1794498682.0069034,
+      "dev": 66306,
+      "inode": 104906545
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/commit_outcome_resolution-d7bf9f103a55304c",
+      "bytes": 401066072,
+      "allocated": 395452416,
+      "mtime": 1794500078.572379,
+      "dev": 66306,
+      "inode": 104906925
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/commit_recovery_atomicity-8a99a8c35ff936e4",
+      "bytes": 44083960,
+      "allocated": 43556864,
+      "mtime": 1794498664.6116872,
+      "dev": 66306,
+      "inode": 104906417
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/commit_visibility-c0a2e7f9103c1b99",
+      "bytes": 43339040,
+      "allocated": 42815488,
+      "mtime": 1794498660.497636,
+      "dev": 66306,
+      "inode": 104906237
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/composite_text_in-1e0beb208a8a2e07",
+      "bytes": 401087544,
+      "allocated": 395472896,
+      "mtime": 1794499743.9761484,
+      "dev": 66306,
+      "inode": 104906697
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/composite_types-42fd3dbf27de81eb",
+      "bytes": 401149824,
+      "allocated": 395534336,
+      "mtime": 1794500160.0674095,
+      "dev": 66306,
+      "inode": 104906982
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/computed_calendar_intervals-2d7ee1940016508b",
+      "bytes": 401010296,
+      "allocated": 395395072,
+      "mtime": 1794500210.1130424,
+      "dev": 66306,
+      "inode": 104907014
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/concurrency-32137f5a29fb9211",
+      "bytes": 43390424,
+      "allocated": 42872832,
+      "mtime": 1794498623.707179,
+      "dev": 66306,
+      "inode": 104905805
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/concurrent_create_table-e6525258d43f30ad",
+      "bytes": 401235992,
+      "allocated": 395624448,
+      "mtime": 1794500302.6012118,
+      "dev": 66306,
+      "inode": 104907077
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/concurrent_upsert-6f89ba69f8b4980a",
+      "bytes": 452279824,
+      "allocated": 446013440,
+      "mtime": 1794501748.4034595,
+      "dev": 66306,
+      "inode": 104907140
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/conflict_upsert_scaling-f8ecac3137537e01",
+      "bytes": 401045920,
+      "allocated": 395431936,
+      "mtime": 1794499849.9624884,
+      "dev": 66306,
+      "inode": 104906767
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/connectors-595b6a61b00613be",
+      "bytes": 451884400,
+      "allocated": 445616128,
+      "mtime": 1794501822.606403,
+      "dev": 66306,
+      "inode": 104907168
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/consensus_leader_writes-e7812cb514b50f30",
+      "bytes": 43131856,
+      "allocated": 42610688,
+      "mtime": 1794498675.0998175,
+      "dev": 66306,
+      "inode": 104906495
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/constraint_diagnostics-5a8bcf8420dbd002",
+      "bytes": 401311936,
+      "allocated": 395698176,
+      "mtime": 1794499789.97573,
+      "dev": 66306,
+      "inode": 104906729
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/constraint_key_waits-b6da965ac85ec55f",
+      "bytes": 43398768,
+      "allocated": 42876928,
+      "mtime": 1794498626.9702196,
+      "dev": 66306,
+      "inode": 104905836
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/core-4c1fbc55fe52f485",
+      "bytes": 50962176,
+      "allocated": 50364416,
+      "mtime": 1794498628.6622405,
+      "dev": 66306,
+      "inode": 104905879
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/count_star_fast_path-baff539821e7e39d",
+      "bytes": 401316784,
+      "allocated": 395702272,
+      "mtime": 1794500157.0053709,
+      "dev": 66306,
+      "inode": 104906980
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/cte_delete-d1c4c3b8951577f6",
+      "bytes": 401057256,
+      "allocated": 395444224,
+      "mtime": 1794499587.9921758,
+      "dev": 66306,
+      "inode": 104906556
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/cube_ddl-ac19fb3fd735a02b",
+      "bytes": 401074776,
+      "allocated": 395464704,
+      "mtime": 1794500347.1907756,
+      "dev": 66306,
+      "inode": 104907103
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/cube_read_authorization-6d3fc4e027db5ff8",
+      "bytes": 401016352,
+      "allocated": 395403264,
+      "mtime": 1794499702.3866224,
+      "dev": 66306,
+      "inode": 104906665
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/current_catalog_context-668cbc5c8a7d6a9d",
+      "bytes": 409041424,
+      "allocated": 403308544,
+      "mtime": 1794499690.962478,
+      "dev": 66306,
+      "inode": 104906657
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/database_ddl_comments-6c6d9f0a700b6445",
+      "bytes": 401020744,
+      "allocated": 395407360,
+      "mtime": 1794499604.5093849,
+      "dev": 66306,
+      "inode": 104906572
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/ddl_authorization_holes-352ae2effbc37819",
+      "bytes": 401024352,
+      "allocated": 395411456,
+      "mtime": 1794499991.2092745,
+      "dev": 66306,
+      "inode": 104906865
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/deferred_foreign_keys-4f2ecf8229e305ef",
+      "bytes": 409073544,
+      "allocated": 403341312,
+      "mtime": 1794500231.8843176,
+      "dev": 66306,
+      "inode": 104907031
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/deferred_trigger_rollback-c5fcab06f64f1e1d",
+      "bytes": 401047680,
+      "allocated": 395440128,
+      "mtime": 1794499682.3793695,
+      "dev": 66306,
+      "inode": 104906651
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/distribution_certificate_ack-597db1d1e041821f",
+      "bytes": 58468232,
+      "allocated": 57815040,
+      "mtime": 1794498647.5664754,
+      "dev": 66306,
+      "inode": 104906110
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/distribution_learner-215cb49221018f41",
+      "bytes": 60438872,
+      "allocated": 59752448,
+      "mtime": 1794498668.6667376,
+      "dev": 66306,
+      "inode": 104906461
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/distribution_rpc_deadline-557765632945c0c2",
+      "bytes": 18881128,
+      "allocated": 18743296,
+      "mtime": 1794498680.6728868,
+      "dev": 66306,
+      "inode": 104906534
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/distribution_rpc_mtls_deadline-e6a5e2ee8e276c82",
+      "bytes": 21076768,
+      "allocated": 20918272,
+      "mtime": 1794498666.5777116,
+      "dev": 66306,
+      "inode": 104906425
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/distribution_snapshot-a1d19f3085f18983",
+      "bytes": 43200888,
+      "allocated": 42676224,
+      "mtime": 1794498657.196595,
+      "dev": 66306,
+      "inode": 104906188
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/distribution_supervisor_fairness-75f44ba0581c5cc0",
+      "bytes": 10278688,
+      "allocated": 10223616,
+      "mtime": 1794498642.6604145,
+      "dev": 66306,
+      "inode": 104905997
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/domain_types-4e62a640fd85c27b",
+      "bytes": 401083912,
+      "allocated": 395472896,
+      "mtime": 1794499708.3056972,
+      "dev": 66306,
+      "inode": 104906671
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/drop_constraint_indexes-a4a6a3f7541f5cd3",
+      "bytes": 401341128,
+      "allocated": 395722752,
+      "mtime": 1794499847.160453,
+      "dev": 66306,
+      "inode": 104906768
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/durability_fail_closed-8be0cad31779f9b0",
+      "bytes": 43872504,
+      "allocated": 43343872,
+      "mtime": 1794498630.795267,
+      "dev": 66306,
+      "inode": 104905868
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/eager_relation_privileges-7d33685ac8b30a56",
+      "bytes": 401021296,
+      "allocated": 395411456,
+      "mtime": 1794500316.0823822,
+      "dev": 66306,
+      "inode": 104907087
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/ehr_routine_results-dc1692cee07b323c",
+      "bytes": 401037504,
+      "allocated": 395427840,
+      "mtime": 1794499982.402163,
+      "dev": 66306,
+      "inode": 104906859
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/element_polymorphic_routines-8fee42ecca03e685",
+      "bytes": 401074208,
+      "allocated": 395460608,
+      "mtime": 1794499926.9134614,
+      "dev": 66306,
+      "inode": 104906822
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/embedded_ha-ebf1ee307a1ec9ee",
+      "bytes": 416761168,
+      "allocated": 411013120,
+      "mtime": 1794501832.9615347,
+      "dev": 66306,
+      "inode": 104907162
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/empty_aggregates-0e51ef9916ec1b2c",
+      "bytes": 401019984,
+      "allocated": 395407360,
+      "mtime": 1794499941.276643,
+      "dev": 66306,
+      "inode": 104906831
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/empty_index_initialization-ceda54547f227692",
+      "bytes": 43136584,
+      "allocated": 42610688,
+      "mtime": 1794498655.2685711,
+      "dev": 66306,
+      "inode": 104906180
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/encryption-846bbd8fbcc8315d",
+      "bytes": 46057896,
+      "allocated": 45506560,
+      "mtime": 1794498648.190483,
+      "dev": 66306,
+      "inode": 104906115
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/event_read_fence-98bab116900df998",
+      "bytes": 43617680,
+      "allocated": 43089920,
+      "mtime": 1794498632.8652928,
+      "dev": 66306,
+      "inode": 104905902
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/events-91f25a36b3dc99d0",
+      "bytes": 44253496,
+      "allocated": 43720704,
+      "mtime": 1794498642.29541,
+      "dev": 66306,
+      "inode": 104905993
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/exact_decimal_storage-c38bc51369c1c0ec",
+      "bytes": 401030408,
+      "allocated": 395415552,
+      "mtime": 1794499956.1638312,
+      "dev": 66306,
+      "inode": 104906841
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/explain_authorization-6f821b7f160d150b",
+      "bytes": 401014832,
+      "allocated": 395403264,
+      "mtime": 1794500308.309284,
+      "dev": 66306,
+      "inode": 104907083
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/explain_matches_execution-360229aa65590713",
+      "bytes": 401073240,
+      "allocated": 395460608,
+      "mtime": 1794499720.695854,
+      "dev": 66306,
+      "inode": 104906678
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/exponent_operator-7e0f6d8de0b82a26",
+      "bytes": 401010336,
+      "allocated": 395395072,
+      "mtime": 1794500320.1904342,
+      "dev": 66306,
+      "inode": 104907089
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/extension_unicode_comments-f8db0487b2c22c03",
+      "bytes": 40147448,
+      "allocated": 39948288,
+      "mtime": 1794500214.5930989,
+      "dev": 66306,
+      "inode": 104907022
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/extensions-f2cb1886033aca77",
+      "bytes": 402703296,
+      "allocated": 397082624,
+      "mtime": 1794500235.2103596,
+      "dev": 66306,
+      "inode": 104907048
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/external_sort_stream-ac8bea5f8c0a5dd7",
+      "bytes": 401074040,
+      "allocated": 395460608,
+      "mtime": 1794500290.6080601,
+      "dev": 66306,
+      "inode": 104907071
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/fixed_snapshot_boundary-1b3d1f30318edba1",
+      "bytes": 451797752,
+      "allocated": 445530112,
+      "mtime": 1794501784.3409166,
+      "dev": 66306,
+      "inode": 104907154
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/fixed_snapshot_index_visibility-ec48f5162e20f3c0",
+      "bytes": 451737512,
+      "allocated": 445468672,
+      "mtime": 1794501728.6742086,
+      "dev": 66306,
+      "inode": 104907122
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/flashback-236fea8d3d01d917",
+      "bytes": 44089752,
+      "allocated": 43556864,
+      "mtime": 1794498661.3986473,
+      "dev": 66306,
+      "inode": 104906239
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/flashback-a9fcf5b374133ae0",
+      "bytes": 402470224,
+      "allocated": 396836864,
+      "mtime": 1794499711.2987351,
+      "dev": 66306,
+      "inode": 104906675
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/foreign_key_authorization-dbad9648df60a364",
+      "bytes": 401028688,
+      "allocated": 395415552,
+      "mtime": 1794500087.2104883,
+      "dev": 66306,
+      "inode": 104906931
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/foreign_key_unchanged_updates-a1e8d2b75adee7b8",
+      "bytes": 401021376,
+      "allocated": 395407360,
+      "mtime": 1794500069.8052683,
+      "dev": 66306,
+      "inode": 104906919
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/frame_log_torn_tail-26058d74dda32ecd",
+      "bytes": 43929120,
+      "allocated": 43401216,
+      "mtime": 1794498663.694676,
+      "dev": 66306,
+      "inode": 104906413
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/fts_adaptive_partitions-15379af30b249f64",
+      "bytes": 44278328,
+      "allocated": 43741184,
+      "mtime": 1794498678.599861,
+      "dev": 66306,
+      "inode": 104906516
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/fts_block_postings-c81d0a95f341da32",
+      "bytes": 401056408,
+      "allocated": 395448320,
+      "mtime": 1794500267.3797665,
+      "dev": 66306,
+      "inode": 104907055
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/fts_build_resume-e8658c134add143a",
+      "bytes": 44461368,
+      "allocated": 43917312,
+      "mtime": 1794498629.8842556,
+      "dev": 66306,
+      "inode": 104905859
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/fts_cancellation-7d9408eb34f466be",
+      "bytes": 44322184,
+      "allocated": 43782144,
+      "mtime": 1794498648.5934882,
+      "dev": 66306,
+      "inode": 104906095
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/fts_direct_build-94079d358655cee7",
+      "bytes": 401649968,
+      "allocated": 396038144,
+      "mtime": 1794500293.8111007,
+      "dev": 66306,
+      "inode": 104907081
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/fts_query_budgets-baf7c9674ba76baa",
+      "bytes": 401043112,
+      "allocated": 395427840,
+      "mtime": 1794500084.3044515,
+      "dev": 66306,
+      "inode": 104906929
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/fts_segment_equivalence-23c321af2bc0853d",
+      "bytes": 44648328,
+      "allocated": 44105728,
+      "mtime": 1794498665.1786942,
+      "dev": 66306,
+      "inode": 104906419
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/fts_storage_generation-375f6ba2fb0f2cd9",
+      "bytes": 44835072,
+      "allocated": 44294144,
+      "mtime": 1794498653.9885552,
+      "dev": 66306,
+      "inode": 104906178
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/fts_transaction_candidates-cd79f13be0a49931",
+      "bytes": 401058400,
+      "allocated": 395444224,
+      "mtime": 1794500119.1108916,
+      "dev": 66306,
+      "inode": 104906953
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/fts_unicode_tokenizer-25f35f560d8d9fcf",
+      "bytes": 44234816,
+      "allocated": 43696128,
+      "mtime": 1794498654.3985603,
+      "dev": 66306,
+      "inode": 104906176
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/full_text_legacy_backfill-4abb7e1ae708894f",
+      "bytes": 43334256,
+      "allocated": 42807296,
+      "mtime": 1794498634.101308,
+      "dev": 66306,
+      "inode": 104905893
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/full_text_search-60d4e9120657b76b",
+      "bytes": 401161816,
+      "allocated": 395546624,
+      "mtime": 1794499755.4722936,
+      "dev": 66306,
+      "inode": 104906706
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/gap1_page_only_batches-381dadc99f4fd71a",
+      "bytes": 43499920,
+      "allocated": 42975232,
+      "mtime": 1794498672.9057903,
+      "dev": 66306,
+      "inode": 104906482
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/generate_subscripts_from-bf56090472aa6f49",
+      "bytes": 401076464,
+      "allocated": 395464704,
+      "mtime": 1794499912.5022793,
+      "dev": 66306,
+      "inode": 104906812
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/generated_boolean_filters-1a5573c70ef7ba55",
+      "bytes": 402366080,
+      "allocated": 396730368,
+      "mtime": 1794500093.0035615,
+      "dev": 66306,
+      "inode": 104906934
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/geo_g10_temporal-5114c73489a998f6",
+      "bytes": 401024872,
+      "allocated": 395411456,
+      "mtime": 1794500121.9979281,
+      "dev": 66306,
+      "inode": 104906955
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/geo_g11_hardening-893db39d5121ccb4",
+      "bytes": 401156064,
+      "allocated": 395542528,
+      "mtime": 1794499668.0041876,
+      "dev": 66306,
+      "inode": 104906639
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/geo_g1_wkb_multi-3d000886c633e323",
+      "bytes": 401111528,
+      "allocated": 395497472,
+      "mtime": 1794499861.564635,
+      "dev": 66306,
+      "inode": 104906777
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/geo_g2_predicates-3dfae974a1cde10b",
+      "bytes": 401042712,
+      "allocated": 395427840,
+      "mtime": 1794499723.6648915,
+      "dev": 66306,
+      "inode": 104906680
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/geo_g3_spatial_join-a1095f6e53798339",
+      "bytes": 401038368,
+      "allocated": 395423744,
+      "mtime": 1794499769.7994747,
+      "dev": 66306,
+      "inode": 104906715
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/geo_g4_h3-1d7e3e6685d227b2",
+      "bytes": 401036680,
+      "allocated": 395423744,
+      "mtime": 1794500043.9969418,
+      "dev": 66306,
+      "inode": 104906901
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/geo_g5_mvt-0478d9497bf5aead",
+      "bytes": 401028152,
+      "allocated": 395415552,
+      "mtime": 1794499601.7973504,
+      "dev": 66306,
+      "inode": 104906567
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/geo_g6_geocoder-b8a209e596f568e7",
+      "bytes": 401060232,
+      "allocated": 395448320,
+      "mtime": 1794499959.1048684,
+      "dev": 66306,
+      "inode": 104906843
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/geo_g7_travel_time-1b49a2c25a280f89",
+      "bytes": 401068328,
+      "allocated": 395456512,
+      "mtime": 1794499921.176389,
+      "dev": 66306,
+      "inode": 104906817
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/geo_g8_raster-9d6f15d9da0999fa",
+      "bytes": 401024728,
+      "allocated": 395411456,
+      "mtime": 1794499985.3782008,
+      "dev": 66306,
+      "inode": 104906861
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/geo_geofence_mesh-ac3bb3a0b8351a2e",
+      "bytes": 43886648,
+      "allocated": 43356160,
+      "mtime": 1794498672.398784,
+      "dev": 66306,
+      "inode": 104906463
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/geometric_indexes-85b3144c272081d6",
+      "bytes": 401093456,
+      "allocated": 395485184,
+      "mtime": 1794499705.286659,
+      "dev": 66306,
+      "inode": 104906668
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/geometric_operations-f8fd09d66ac2ac28",
+      "bytes": 401036872,
+      "allocated": 395427840,
+      "mtime": 1794500017.2596037,
+      "dev": 66306,
+      "inode": 104906883
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/geometric_point-bd40d2b0e2c108b8",
+      "bytes": 401048256,
+      "allocated": 395436032,
+      "mtime": 1794500041.2049067,
+      "dev": 66306,
+      "inode": 104906899
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/geometric_spatial_boundary-56ea7f4724787444",
+      "bytes": 401028968,
+      "allocated": 395415552,
+      "mtime": 1794499735.2690382,
+      "dev": 66306,
+      "inode": 104906691
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/geometric_transport-28fdf98f882ddc15",
+      "bytes": 401079616,
+      "allocated": 395464704,
+      "mtime": 1794499685.2024052,
+      "dev": 66306,
+      "inode": 104906653
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/geometric_types-28117eeb37a98a7a",
+      "bytes": 401029104,
+      "allocated": 395415552,
+      "mtime": 1794500194.4718447,
+      "dev": 66306,
+      "inode": 104907004
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/ha_state_crash-4cfde22c7e7504b6",
+      "bytes": 43414008,
+      "allocated": 42889216,
+      "mtime": 1794498661.8956535,
+      "dev": 66306,
+      "inode": 104906240
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/ha_state_durability-62ba482d6542f408",
+      "bytes": 44926960,
+      "allocated": 44380160,
+      "mtime": 1794498659.595625,
+      "dev": 66306,
+      "inode": 104906203
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/hammerdb_corrected_workload-5ace250f71ebf271",
+      "bytes": 401076928,
+      "allocated": 395464704,
+      "mtime": 1794500064.011195,
+      "dev": 66306,
+      "inode": 104906915
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/hash_index_range-c354c8bfb3a6ee13",
+      "bytes": 401027760,
+      "allocated": 395415552,
+      "mtime": 1794500133.603075,
+      "dev": 66306,
+      "inode": 104906963
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/incident_observability-f31c229d87bfb5a8",
+      "bytes": 401043912,
+      "allocated": 395431936,
+      "mtime": 1794499645.3109007,
+      "dev": 66306,
+      "inode": 104906617
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/independent_commit_conflicts-4c5bec71bf714219",
+      "bytes": 401022312,
+      "allocated": 395411456,
+      "mtime": 1794500217.3011332,
+      "dev": 66306,
+      "inode": 104907020
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/index_concurrency_bench-56763c616daf6d0c",
+      "bytes": 1471288,
+      "allocated": 1470464,
+      "mtime": 1794498626.1562095,
+      "dev": 66306,
+      "inode": 104905819
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/insight_union_projection-58015c0548b70404",
+      "bytes": 401065568,
+      "allocated": 395452416,
+      "mtime": 1794499988.3602383,
+      "dev": 66306,
+      "inode": 104906864
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/integer_fractional_comparison-d83f3827f08e6802",
+      "bytes": 401034216,
+      "allocated": 395419648,
+      "mtime": 1794500246.9045076,
+      "dev": 66306,
+      "inode": 104907040
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/integrity_truncation-df333bdb8d1dac6c",
+      "bytes": 43161952,
+      "allocated": 42639360,
+      "mtime": 1794498670.804764,
+      "dev": 66306,
+      "inode": 104906438
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/intern_dictionary-5e6e5de1e86bc7a6",
+      "bytes": 8258840,
+      "allocated": 8212480,
+      "mtime": 1794498675.4348216,
+      "dev": 66306,
+      "inode": 104906499
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/interval_parameters-e6803a544ec5f667",
+      "bytes": 402347040,
+      "allocated": 396709888,
+      "mtime": 1794499693.7705135,
+      "dev": 66306,
+      "inode": 104906659
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/intervention_regression-791cf3aac8fbe4bc",
+      "bytes": 401039472,
+      "allocated": 395427840,
+      "mtime": 1794499903.5101655,
+      "dev": 66306,
+      "inode": 104906805
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/join_authz_bypass-a851664887568b33",
+      "bytes": 401016360,
+      "allocated": 395403264,
+      "mtime": 1794499732.3700016,
+      "dev": 66306,
+      "inode": 104906689
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/join_memory_budget-7df64a91226868a4",
+      "bytes": 401063216,
+      "allocated": 395448320,
+      "mtime": 1794499953.2087939,
+      "dev": 66306,
+      "inode": 104906839
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/json_key_partial_index-12de87338ca7be30",
+      "bytes": 401028464,
+      "allocated": 395419648,
+      "mtime": 1794500238.1133964,
+      "dev": 66306,
+      "inode": 104907034
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/json_storage-2f890ea00c63feda",
+      "bytes": 401235456,
+      "allocated": 395620352,
+      "mtime": 1794499764.0024016,
+      "dev": 66306,
+      "inode": 104906713
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/json_wildcard_visibility-7124dc29804ecf79",
+      "bytes": 401041496,
+      "allocated": 395431936,
+      "mtime": 1794499784.205657,
+      "dev": 66306,
+      "inode": 104906725
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/jsonb_composite-f2a2a40cd7fc7bf0",
+      "bytes": 401032544,
+      "allocated": 395423744,
+      "mtime": 1794500324.1954849,
+      "dev": 66306,
+      "inode": 104907091
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/jsonb_filter-9e78c75dc50b9f8a",
+      "bytes": 401065072,
+      "allocated": 395452416,
+      "mtime": 1794499612.8654904,
+      "dev": 66306,
+      "inode": 104906578
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/jsonb_numeric_range-fadd024b55abd1e4",
+      "bytes": 401027152,
+      "allocated": 395415552,
+      "mtime": 1794499610.0114543,
+      "dev": 66306,
+      "inode": 104906576
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/jsonb_parameter_types-ec35c4e8732056ae",
+      "bytes": 402350376,
+      "allocated": 396713984,
+      "mtime": 1794499994.0833108,
+      "dev": 66306,
+      "inode": 104906867
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/jsonb_primary_keys-f27333e208225bfe",
+      "bytes": 401059712,
+      "allocated": 395448320,
+      "mtime": 1794499838.5033436,
+      "dev": 66306,
+      "inode": 104906760
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/jsonb_srf-f87169fb992fc5fd",
+      "bytes": 401181032,
+      "allocated": 395567104,
+      "mtime": 1794499947.1837177,
+      "dev": 66306,
+      "inode": 104906836
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/jsonpath-395332d2fa9bd26b",
+      "bytes": 401098072,
+      "allocated": 395485184,
+      "mtime": 1794499607.210419,
+      "dev": 66306,
+      "inode": 104906574
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/key_inventory_memory-828c0c521814b571",
+      "bytes": 401034304,
+      "allocated": 395419648,
+      "mtime": 1794499781.3876214,
+      "dev": 66306,
+      "inode": 104906723
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/large_objects_fastpath-053fb1657f77bfc9",
+      "bytes": 449790712,
+      "allocated": 443539456,
+      "mtime": 1794501837.0005863,
+      "dev": 66306,
+      "inode": 104907149
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/large_values-5383b4b0fa893816",
+      "bytes": 44638552,
+      "allocated": 44097536,
+      "mtime": 1794498639.8633797,
+      "dev": 66306,
+      "inode": 104905969
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/lateral_plpgsql_sources-1bb5b8283fc168f8",
+      "bytes": 401022312,
+      "allocated": 395407360,
+      "mtime": 1794499950.1117547,
+      "dev": 66306,
+      "inode": 104906837
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/lateral_routine_sources-867cc8df90eba4cd",
+      "bytes": 401038184,
+      "allocated": 395423744,
+      "mtime": 1794500252.710581,
+      "dev": 66306,
+      "inode": 104907044
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/lean_l1_vacuum-5b37c4f1870bda46",
+      "bytes": 401318768,
+      "allocated": 395706368,
+      "mtime": 1794499852.8105245,
+      "dev": 66306,
+      "inode": 104906770
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/lean_l2_space_report-536676e5c4ba2a13",
+      "bytes": 401025888,
+      "allocated": 395415552,
+      "mtime": 1794500124.973966,
+      "dev": 66306,
+      "inode": 104906957
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/lean_l3_hole_punch-642ecdb501b9d6aa",
+      "bytes": 401037592,
+      "allocated": 395423744,
+      "mtime": 1794500212.9880786,
+      "dev": 66306,
+      "inode": 104907016
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/lean_l4_fold_hygiene-578b22699534eaa3",
+      "bytes": 401027688,
+      "allocated": 395415552,
+      "mtime": 1794500255.6086175,
+      "dev": 66306,
+      "inode": 104907046
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/lean_l5_audit_retention-ce7702dec9c9c867",
+      "bytes": 43795672,
+      "allocated": 43266048,
+      "mtime": 1794498662.2886584,
+      "dev": 66306,
+      "inode": 104906242
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/lean_l6_wal_prune-b610f96977d201e5",
+      "bytes": 6259784,
+      "allocated": 6242304,
+      "mtime": 1794498671.1467683,
+      "dev": 66306,
+      "inode": 104906441
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/lean_l7_value_compression-93005459129f5b11",
+      "bytes": 401032704,
+      "allocated": 395419648,
+      "mtime": 1794499726.5089273,
+      "dev": 66306,
+      "inode": 104906684
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/legacy_public_view_names-1483a9607ffb6bd1",
+      "bytes": 401031744,
+      "allocated": 395423744,
+      "mtime": 1794499618.4655612,
+      "dev": 66306,
+      "inode": 104906582
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/live_queries-baa8f02f3ff3b3a9",
+      "bytes": 452313632,
+      "allocated": 446046208,
+      "mtime": 1794501723.5311432,
+      "dev": 66306,
+      "inode": 104907130
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/live_replication-361b188d90f598d7",
+      "bytes": 47600272,
+      "allocated": 47042560,
+      "mtime": 1794498624.6631908,
+      "dev": 66306,
+      "inode": 104905824
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/lock_wait_admission-a9ac89d8632d6191",
+      "bytes": 452424576,
+      "allocated": 446152704,
+      "mtime": 1794501789.2889795,
+      "dev": 66306,
+      "inode": 104907156
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/locking_projection-8bbba462279014e2",
+      "bytes": 401095016,
+      "allocated": 395481088,
+      "mtime": 1794500258.5906553,
+      "dev": 66306,
+      "inode": 104907050
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/log_archive_pitr-eced6bf4efb15dbc",
+      "bytes": 45909328,
+      "allocated": 45355008,
+      "mtime": 1794498673.4737973,
+      "dev": 66306,
+      "inode": 104906490
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/logical_copy-851c248e438ac91a",
+      "bytes": 43598528,
+      "allocated": 43073536,
+      "mtime": 1794498679.8988771,
+      "dev": 66306,
+      "inode": 104906533
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/lua-193707552bb3c327",
+      "bytes": 44268280,
+      "allocated": 43732992,
+      "mtime": 1794498649.3984983,
+      "dev": 66306,
+      "inode": 104906096
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/memory-259c38a373f42168",
+      "bytes": 43615592,
+      "allocated": 43085824,
+      "mtime": 1794498633.3022983,
+      "dev": 66306,
+      "inode": 104905881
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/mutation_authority-241c882c55a0e9a6",
+      "bytes": 401019424,
+      "allocated": 395407360,
+      "mtime": 1794500081.406415,
+      "dev": 66306,
+      "inode": 104906927
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/mutation_grants-5613c780a1a23964",
+      "bytes": 44052944,
+      "allocated": 43520000,
+      "mtime": 1794498640.8013914,
+      "dev": 66306,
+      "inode": 104905981
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/mvcc_chain_recovery-f604287fc4f90c98",
+      "bytes": 43230792,
+      "allocated": 42708992,
+      "mtime": 1794498625.9942074,
+      "dev": 66306,
+      "inode": 104905809
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/native_field_sql_null-28440cba8ea444df",
+      "bytes": 401014448,
+      "allocated": 395399168,
+      "mtime": 1794500005.7054577,
+      "dev": 66306,
+      "inode": 104906875
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/native_unique_reservations-341866fff4f76337",
+      "bytes": 43676808,
+      "allocated": 43155456,
+      "mtime": 1794498625.162197,
+      "dev": 66306,
+      "inode": 104905812
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/nested_join_pair_budget-aebd2fdcaaf05373",
+      "bytes": 401016480,
+      "allocated": 395403264,
+      "mtime": 1794500075.6593423,
+      "dev": 66306,
+      "inode": 104906923
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/network_cidr-6eb6ad85ea5e06da",
+      "bytes": 401021968,
+      "allocated": 395407360,
+      "mtime": 1794499621.1775956,
+      "dev": 66306,
+      "inode": 104906584
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/network_indexes-5d8fb1c412ee7d92",
+      "bytes": 401072448,
+      "allocated": 395460608,
+      "mtime": 1794499636.8077931,
+      "dev": 66306,
+      "inode": 104906610
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/network_inet-0072d3683b166e6a",
+      "bytes": 401022176,
+      "allocated": 395407360,
+      "mtime": 1794499648.109936,
+      "dev": 66306,
+      "inode": 104906619
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/network_mac-6bc7c5f8afc2a83d",
+      "bytes": 401027984,
+      "allocated": 395415552,
+      "mtime": 1794499778.3965836,
+      "dev": 66306,
+      "inode": 104906721
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/network_operations-bafce8b306495ea4",
+      "bytes": 401046584,
+      "allocated": 395431936,
+      "mtime": 1794499746.8621848,
+      "dev": 66306,
+      "inode": 104906699
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/no_context_no_authority-96f000ab2c4cb54f",
+      "bytes": 401018344,
+      "allocated": 395407360,
+      "mtime": 1794499653.6740065,
+      "dev": 66306,
+      "inode": 104906628
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/null_typed_arithmetic-bc3cda65fb582059",
+      "bytes": 401014432,
+      "allocated": 395403264,
+      "mtime": 1794499841.4113803,
+      "dev": 66306,
+      "inode": 104906762
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/numeric_power_sql-ccd6dd45e8d3db39",
+      "bytes": 401021112,
+      "allocated": 395411456,
+      "mtime": 1794499825.174175,
+      "dev": 66306,
+      "inode": 104906753
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/numeric_round_scale-526be069a704956e",
+      "bytes": 401018664,
+      "allocated": 395403264,
+      "mtime": 1794500154.1083343,
+      "dev": 66306,
+      "inode": 104906977
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/object_ddl_authorization-6e40d3ccd98fbc82",
+      "bytes": 401030936,
+      "allocated": 395415552,
+      "mtime": 1794499596.306281,
+      "dev": 66306,
+      "inode": 104906562
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/observability_views-1062e4063ecebec2",
+      "bytes": 401009104,
+      "allocated": 395399168,
+      "mtime": 1794499795.8098037,
+      "dev": 66306,
+      "inode": 104906732
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/oid_aliases-5bce4b054bafa480",
+      "bytes": 401090648,
+      "allocated": 395476992,
+      "mtime": 1794499673.7842607,
+      "dev": 66306,
+      "inode": 104906643
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/oid_semantics-088fcfdd5624adf7",
+      "bytes": 401028040,
+      "allocated": 395419648,
+      "mtime": 1794499938.3806064,
+      "dev": 66306,
+      "inode": 104906829
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/online_backups-6843f7f899de771d",
+      "bytes": 451883784,
+      "allocated": 445620224,
+      "mtime": 1794501752.9605174,
+      "dev": 66306,
+      "inode": 104907142
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/operator_api-9e28e81c4e5d009d",
+      "bytes": 457986576,
+      "allocated": 451637248,
+      "mtime": 1794501828.4364772,
+      "dev": 66306,
+      "inode": 104907170
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/oracle_application_sql-715bcb48c016380b",
+      "bytes": 409161016,
+      "allocated": 403427328,
+      "mtime": 1794499897.6090908,
+      "dev": 66306,
+      "inode": 104906802
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/oracle_hr-4bc40d63dd98b751",
+      "bytes": 457841048,
+      "allocated": 451567616,
+      "mtime": 1794501779.6988575,
+      "dev": 66306,
+      "inode": 104907152
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/oracle_invalid_routine_lifecycle-286336caeaf656d4",
+      "bytes": 409064096,
+      "allocated": 403333120,
+      "mtime": 1794499729.558966,
+      "dev": 66306,
+      "inode": 104906686
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/oracle_national_columns-5bf29a2888a3eb1b",
+      "bytes": 409035752,
+      "allocated": 403304448,
+      "mtime": 1794500113.1788166,
+      "dev": 66306,
+      "inode": 104906949
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/oracle_partitioning-f01908e0459fe770",
+      "bytes": 409056008,
+      "allocated": 403324928,
+      "mtime": 1794499798.7728412,
+      "dev": 66306,
+      "inode": 104906735
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/oracle_simple_case_indexes-818376b3afbdf6a9",
+      "bytes": 43735536,
+      "allocated": 43208704,
+      "mtime": 1794498641.7934036,
+      "dev": 66306,
+      "inode": 104905990
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/oracle_simple_case_profile-ffa99efd0c7ec098",
+      "bytes": 409400024,
+      "allocated": 403664896,
+      "mtime": 1794499877.1658323,
+      "dev": 66306,
+      "inode": 104906790
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/outbox_exactly_once-f90928e50cf9c4e4",
+      "bytes": 44054784,
+      "allocated": 43524096,
+      "mtime": 1794498643.996431,
+      "dev": 66306,
+      "inode": 104906051
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/owner_privilege_metadata-a15762d59dbc0d51",
+      "bytes": 401059352,
+      "allocated": 395448320,
+      "mtime": 1794499915.4613166,
+      "dev": 66306,
+      "inode": 104906813
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/ownership_authorization-838a2d8a31fbde3d",
+      "bytes": 401037576,
+      "allocated": 395423744,
+      "mtime": 1794500287.512021,
+      "dev": 66306,
+      "inode": 104907069
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/paged_analyze_statistics-0b01d1f3f7afac60",
+      "bytes": 401031800,
+      "allocated": 395419648,
+      "mtime": 1794500020.1056397,
+      "dev": 66306,
+      "inode": 104906885
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/paged_checkpoint_maintenance-54c4bb40fee0b57c",
+      "bytes": 43985808,
+      "allocated": 43450368,
+      "mtime": 1794498648.996493,
+      "dev": 66306,
+      "inode": 104906092
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/paged_concurrency-3f7ff0332f19b17c",
+      "bytes": 44223408,
+      "allocated": 43687936,
+      "mtime": 1794498657.6966014,
+      "dev": 66306,
+      "inode": 104906194
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/paged_fts_postings-a6dce77447bacd23",
+      "bytes": 44734960,
+      "allocated": 44191744,
+      "mtime": 1794498658.2156076,
+      "dev": 66306,
+      "inode": 104906197
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/paged_fts_scan-940de925fb022a17",
+      "bytes": 401031376,
+      "allocated": 395423744,
+      "mtime": 1794499894.684054,
+      "dev": 66306,
+      "inode": 104906799
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/paged_index_entries-ecf3f7e7b09be1fe",
+      "bytes": 43703280,
+      "allocated": 43171840,
+      "mtime": 1794498670.405759,
+      "dev": 66306,
+      "inode": 104906439
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/paged_integrity_bounded-ebbffd8c503f00d9",
+      "bytes": 43296040,
+      "allocated": 42778624,
+      "mtime": 1794498633.695303,
+      "dev": 66306,
+      "inode": 104905884
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/paged_integrity_maintenance-a9253152d72163d5",
+      "bytes": 44665880,
+      "allocated": 44122112,
+      "mtime": 1794498656.2615836,
+      "dev": 66306,
+      "inode": 104906184
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/paged_maintenance-a6f40d2584e1e881",
+      "bytes": 43613168,
+      "allocated": 43081728,
+      "mtime": 1794498651.5645251,
+      "dev": 66306,
+      "inode": 104906119
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/paged_observability-ff85d1cb146ddcce",
+      "bytes": 44930344,
+      "allocated": 44388352,
+      "mtime": 1794498656.78759,
+      "dev": 66306,
+      "inode": 104906195
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/paged_orphaned_writer-43bca9e433c2142b",
+      "bytes": 43171560,
+      "allocated": 42643456,
+      "mtime": 1794498643.4644244,
+      "dev": 66306,
+      "inode": 104905992
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/paged_row_reservations-9234f73cb23f0692",
+      "bytes": 43406640,
+      "allocated": 42881024,
+      "mtime": 1794498634.5153131,
+      "dev": 66306,
+      "inode": 104905905
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/paged_streaming_scan-05154fa95576cf13",
+      "bytes": 401053032,
+      "allocated": 395444224,
+      "mtime": 1794499599.0003152,
+      "dev": 66306,
+      "inode": 104906564
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/paged_system_metadata-822aa51b5f58198e",
+      "bytes": 43150688,
+      "allocated": 42627072,
+      "mtime": 1794498626.4952135,
+      "dev": 66306,
+      "inode": 104905815
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/paged_vacuum_progress-40d7ad815383115c",
+      "bytes": 43574240,
+      "allocated": 43053056,
+      "mtime": 1794498669.0877428,
+      "dev": 66306,
+      "inode": 104906427
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/paged_visible_count-51aa995b0a6743b8",
+      "bytes": 43376760,
+      "allocated": 42852352,
+      "mtime": 1794498666.0927055,
+      "dev": 66306,
+      "inode": 104906387
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/paged_writeback_bounded-3461806a6d5677a1",
+      "bytes": 43174520,
+      "allocated": 42651648,
+      "mtime": 1794498671.5037727,
+      "dev": 66306,
+      "inode": 104906452
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/parser_tree_depth-1f052d388b11fd9b",
+      "bytes": 401025984,
+      "allocated": 395411456,
+      "mtime": 1794499918.2993524,
+      "dev": 66306,
+      "inode": 104906815
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/partition_admission-16ab76a0fd0ef68a",
+      "bytes": 401271208,
+      "allocated": 395657216,
+      "mtime": 1794499650.960972,
+      "dev": 66306,
+      "inode": 104906626
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/partition_bounds-015b6939d0945c60",
+      "bytes": 401200432,
+      "allocated": 395587584,
+      "mtime": 1794499787.0806932,
+      "dev": 66306,
+      "inode": 104906728
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/partition_copy-d7a60ae45fabe187",
+      "bytes": 401118720,
+      "allocated": 395505664,
+      "mtime": 1794499593.5762465,
+      "dev": 66306,
+      "inode": 104906560
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/partition_execution-8646893d3e2f658f",
+      "bytes": 401114064,
+      "allocated": 395501568,
+      "mtime": 1794500191.6098084,
+      "dev": 66306,
+      "inode": 104907003
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/partition_hash-d3a36c56458480b5",
+      "bytes": 401073960,
+      "allocated": 395460608,
+      "mtime": 1794499639.6778295,
+      "dev": 66306,
+      "inode": 104906611
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/partition_row_locks-5648126905bbd60e",
+      "bytes": 401045776,
+      "allocated": 395431936,
+      "mtime": 1794499880.0108683,
+      "dev": 66306,
+      "inode": 104906788
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/partition_trigger_catalog-a4e694287db1a3f0",
+      "bytes": 401084576,
+      "allocated": 395472896,
+      "mtime": 1794500061.2611601,
+      "dev": 66306,
+      "inode": 104906913
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/partition_trigger_events-a9ce96b6760f0679",
+      "bytes": 401081496,
+      "allocated": 395468800,
+      "mtime": 1794499973.5870516,
+      "dev": 66306,
+      "inode": 104906853
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/partition_trigger_lifecycle-495a432e8e019f82",
+      "bytes": 401089440,
+      "allocated": 395476992,
+      "mtime": 1794500028.7057486,
+      "dev": 66306,
+      "inode": 104906892
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/partition_trigger_visibility-4db967a283487829",
+      "bytes": 401118912,
+      "allocated": 395505664,
+      "mtime": 1794500090.108525,
+      "dev": 66306,
+      "inode": 104906935
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/partition_upsert-744ce8c91bfc2620",
+      "bytes": 401087856,
+      "allocated": 395472896,
+      "mtime": 1794500240.9784327,
+      "dev": 66306,
+      "inode": 104907037
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/pg_dump_identity_restore-5b7af7594a18c1b3",
+      "bytes": 401020528,
+      "allocated": 395411456,
+      "mtime": 1794499656.4640417,
+      "dev": 66306,
+      "inode": 104906630
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/pg_dump_schema_qualified_restore-11ac06e6946468a8",
+      "bytes": 401244008,
+      "allocated": 395628544,
+      "mtime": 1794500177.110625,
+      "dev": 66306,
+      "inode": 104906994
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/pg_lsn-2d3e76803b1bc206",
+      "bytes": 401041096,
+      "allocated": 395431936,
+      "mtime": 1794499623.9806309,
+      "dev": 66306,
+      "inode": 104906586
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/pg_snapshot-8d8131f9ab527f50",
+      "bytes": 401067216,
+      "allocated": 395456512,
+      "mtime": 1794500055.4120862,
+      "dev": 66306,
+      "inode": 104906909
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/pg_wewobo_compat-05e36ba9a704cedf",
+      "bytes": 403285432,
+      "allocated": 397651968,
+      "mtime": 1794499659.5940814,
+      "dev": 66306,
+      "inode": 104906642
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/pk_in_list_lookup-7fac72a824608f0c",
+      "bytes": 401048288,
+      "allocated": 395440128,
+      "mtime": 1794500296.8071384,
+      "dev": 66306,
+      "inode": 104907074
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/plan_diagnostics-2001a4bd653fec13",
+      "bytes": 401134168,
+      "allocated": 395522048,
+      "mtime": 1794499886.0039442,
+      "dev": 66306,
+      "inode": 104906795
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/planner_row_estimate-3f1e97ed84f7a483",
+      "bytes": 43207392,
+      "allocated": 42680320,
+      "mtime": 1794498658.6666133,
+      "dev": 66306,
+      "inode": 104906192
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/platform_correctness_audit-91a039097325ef47",
+      "bytes": 402722424,
+      "allocated": 397082624,
+      "mtime": 1794499906.6872058,
+      "dev": 66306,
+      "inode": 104906809
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/plpgsql_temporal_comparison-a4f0f029d3413f76",
+      "bytes": 401024856,
+      "allocated": 395411456,
+      "mtime": 1794500162.8884451,
+      "dev": 66306,
+      "inode": 104906983
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/postgres_dynamic_execute-854b706dfc21952e",
+      "bytes": 401058824,
+      "allocated": 395444224,
+      "mtime": 1794499766.8834379,
+      "dev": 66306,
+      "inode": 104906712
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/predicate_contradiction-3b36c859e927188f",
+      "bytes": 401117336,
+      "allocated": 395509760,
+      "mtime": 1794499627.7966793,
+      "dev": 66306,
+      "inode": 104906589
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/predicate_projection-3a9be4d4f6fc8a73",
+      "bytes": 409015120,
+      "allocated": 403279872,
+      "mtime": 1794500312.2053332,
+      "dev": 66306,
+      "inode": 104907085
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/prepared_typed_join-e42cf8b239400bc7",
+      "bytes": 401012128,
+      "allocated": 395399168,
+      "mtime": 1794500270.275803,
+      "dev": 66306,
+      "inode": 104907057
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/procedural_migration-d704d92524d6d6d6",
+      "bytes": 451621080,
+      "allocated": 445353984,
+      "mtime": 1794501803.8681648,
+      "dev": 66306,
+      "inode": 104907147
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/projection_admin-22b8f6e988cab1f2",
+      "bytes": 401099872,
+      "allocated": 395489280,
+      "mtime": 1794500165.707481,
+      "dev": 66306,
+      "inode": 104906987
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/projection_chaos-08dd658ad9e72151",
+      "bytes": 44054848,
+      "allocated": 43520000,
+      "mtime": 1794498678.1958559,
+      "dev": 66306,
+      "inode": 104906529
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/projection_checkpoint_hygiene-ced4b637ce47bd6b",
+      "bytes": 43631232,
+      "allocated": 43102208,
+      "mtime": 1794498671.9887788,
+      "dev": 66306,
+      "inode": 104906470
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/projection_distributed-7475cbe255e2e40b",
+      "bytes": 43893304,
+      "allocated": 43368448,
+      "mtime": 1794498635.06232,
+      "dev": 66306,
+      "inode": 104905920
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/projection_incremental_persistence-bd79217f2323cce6",
+      "bytes": 43985648,
+      "allocated": 43450368,
+      "mtime": 1794498675.8988276,
+      "dev": 66306,
+      "inode": 104906510
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/projection_pushdown-6e0541a1454bb1c7",
+      "bytes": 401090144,
+      "allocated": 395481088,
+      "mtime": 1794499662.4661176,
+      "dev": 66306,
+      "inode": 104906635
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/projection_query_surface-b1ab7a7d78252280",
+      "bytes": 401066328,
+      "allocated": 395456512,
+      "mtime": 1794499761.110365,
+      "dev": 66306,
+      "inode": 104906709
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/projection_rollup-d909ede645bc05c8",
+      "bytes": 43720520,
+      "allocated": 43184128,
+      "mtime": 1794498651.9935305,
+      "dev": 66306,
+      "inode": 104906120
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/projection_rollup_sql-cda7af1ba1c69f64",
+      "bytes": 401103208,
+      "allocated": 395493376,
+      "mtime": 1794500151.310299,
+      "dev": 66306,
+      "inode": 104906976
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/projection_sketch_measures-d4e32459e5d3f249",
+      "bytes": 44072800,
+      "allocated": 43536384,
+      "mtime": 1794498662.7916646,
+      "dev": 66306,
+      "inode": 104906381
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/protocol-aa021e6c84a4cf5d",
+      "bytes": 462342072,
+      "allocated": 456032256,
+      "mtime": 1794501812.676277,
+      "dev": 66306,
+      "inode": 104907164
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/pseudo_types-8d1e384422e84b97",
+      "bytes": 401050512,
+      "allocated": 395440128,
+      "mtime": 1794500340.659693,
+      "dev": 66306,
+      "inode": 104907099
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/public_schema-7f4952ead5425a39",
+      "bytes": 401049336,
+      "allocated": 395436032,
+      "mtime": 1794500116.1708546,
+      "dev": 66306,
+      "inode": 104906951
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/query_crash_hardening-64eb8d919dd0f014",
+      "bytes": 401037656,
+      "allocated": 395423744,
+      "mtime": 1794499775.4815466,
+      "dev": 66306,
+      "inode": 104906719
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/query_rule_results-89ced138445e7f29",
+      "bytes": 401043008,
+      "allocated": 395431936,
+      "mtime": 1794499676.6702971,
+      "dev": 66306,
+      "inode": 104906645
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/quoted_public_storage_names-f95375cd486e47ae",
+      "bytes": 401267392,
+      "allocated": 395649024,
+      "mtime": 1794500272.9808373,
+      "dev": 66306,
+      "inode": 104907059
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/raise_notice-8e186e7736d18f03",
+      "bytes": 401080464,
+      "allocated": 395472896,
+      "mtime": 1794500275.810873,
+      "dev": 66306,
+      "inode": 104907061
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/ranked_fts_topk-d1a9f5d530b98e1e",
+      "bytes": 401115744,
+      "allocated": 395501568,
+      "mtime": 1794499929.881499,
+      "dev": 66306,
+      "inode": 104906824
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/raw_ddl_authorization-b21a1349c61cd0ca",
+      "bytes": 401022424,
+      "allocated": 395407360,
+      "mtime": 1794499828.0072107,
+      "dev": 66306,
+      "inode": 104906755
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/raw_ddl_batches-3f765dcc5dbe2892",
+      "bytes": 401028672,
+      "allocated": 395419648,
+      "mtime": 1794499741.0001106,
+      "dev": 66306,
+      "inode": 104906695
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/read_committed_arbiters-fdc6556cf746e7d9",
+      "bytes": 451659776,
+      "allocated": 445394944,
+      "mtime": 1794501718.711082,
+      "dev": 66306,
+      "inode": 104907128
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/read_committed_lock_refresh-c6c19dc536c2caef",
+      "bytes": 401039280,
+      "allocated": 395427840,
+      "mtime": 1794500023.0006764,
+      "dev": 66306,
+      "inode": 104906887
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/read_committed_reservations-1de41af4617ee8cd",
+      "bytes": 44007960,
+      "allocated": 43479040,
+      "mtime": 1794498669.991754,
+      "dev": 66306,
+      "inode": 104906450
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/read_committed_upsert_grants-884e2a3e38e70c86",
+      "bytes": 401258656,
+      "allocated": 395644928,
+      "mtime": 1794500185.8597357,
+      "dev": 66306,
+      "inode": 104907006
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/read_committed_upsert_primary-66a78624a74e7a4f",
+      "bytes": 401031256,
+      "allocated": 395419648,
+      "mtime": 1794500180.0026617,
+      "dev": 66306,
+      "inode": 104906995
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/read_committed_upsert_signed_arbiters-e911e43095c092cd",
+      "bytes": 401456080,
+      "allocated": 395841536,
+      "mtime": 1794499714.86578,
+      "dev": 66306,
+      "inode": 104906687
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/read_committed_zero_boundary-19e8246d4608c237",
+      "bytes": 43318128,
+      "allocated": 42790912,
+      "mtime": 1794498663.1936696,
+      "dev": 66306,
+      "inode": 104906378
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/read_only_transactions-186b1894ebd47d30",
+      "bytes": 401042960,
+      "allocated": 395427840,
+      "mtime": 1794499858.6095977,
+      "dev": 66306,
+      "inode": 104906775
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/read_only_transactions-cba4cb0441979709",
+      "bytes": 452069768,
+      "allocated": 445800448,
+      "mtime": 1794501841.4176424,
+      "dev": 66306,
+      "inode": 104907176
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/record_conflicts_sql-f439a6a01b9e7892",
+      "bytes": 401401032,
+      "allocated": 395784192,
+      "mtime": 1794500046.9619794,
+      "dev": 66306,
+      "inode": 104906903
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/record_key_candidates-24885ce4ffdecefe",
+      "bytes": 43426320,
+      "allocated": 42901504,
+      "mtime": 1794498649.8065033,
+      "dev": 66306,
+      "inode": 104906102
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/recursive_query_stack-ed3b5bcd2ca0e32a",
+      "bytes": 409007984,
+      "allocated": 403271680,
+      "mtime": 1794500182.9126985,
+      "dev": 66306,
+      "inode": 104906997
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/recycle_bin-579b9bf0d791162e",
+      "bytes": 401067208,
+      "allocated": 395456512,
+      "mtime": 1794499752.591257,
+      "dev": 66306,
+      "inode": 104906703
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/recycle_bin_recovery-71b8998fa2796cf0",
+      "bytes": 401536208,
+      "allocated": 395923456,
+      "mtime": 1794499792.9707677,
+      "dev": 66306,
+      "inode": 104906734
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/regexp_split_to_table-2da7f31d5f791d57",
+      "bytes": 401019272,
+      "allocated": 395411456,
+      "mtime": 1794500343.971735,
+      "dev": 66306,
+      "inode": 104907101
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/relocation_snapshot_authorization-ad897000fb07a337",
+      "bytes": 46989776,
+      "allocated": 46419968,
+      "mtime": 1794498631.2122722,
+      "dev": 66306,
+      "inode": 104905865
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/renamed_foreign_keys-f8fd6553d2f54dd1",
+      "bytes": 401027864,
+      "allocated": 395419648,
+      "mtime": 1794500278.7609103,
+      "dev": 66306,
+      "inode": 104907063
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/renamed_table_triggers-7bb4fc13573f8183",
+      "bytes": 401044272,
+      "allocated": 395431936,
+      "mtime": 1794500139.4091482,
+      "dev": 66306,
+      "inode": 104906967
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/replication_durable_frames-ee20d09c46faa199",
+      "bytes": 45035696,
+      "allocated": 44503040,
+      "mtime": 1794498631.9902818,
+      "dev": 66306,
+      "inode": 104905897
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/replication_journal-e5ed1497bc0b38c9",
+      "bytes": 44350184,
+      "allocated": 43810816,
+      "mtime": 1794498681.6068983,
+      "dev": 66306,
+      "inode": 104906548
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/residency-00b2ab01f02c28f2",
+      "bytes": 43321576,
+      "allocated": 42795008,
+      "mtime": 1794498660.9076412,
+      "dev": 66306,
+      "inode": 104906218
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/rewrite_rule_portal_describe-5f3cba1b4628ef29",
+      "bytes": 451708720,
+      "allocated": 445440000,
+      "mtime": 1794501762.756642,
+      "dev": 66306,
+      "inode": 104907133
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/rls_boolean_depth-8d7ff92686e041f4",
+      "bytes": 401052160,
+      "allocated": 395440128,
+      "mtime": 1794499696.571549,
+      "dev": 66306,
+      "inode": 104906661
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/rls_explain_counts-244f2793bcda467b",
+      "bytes": 401022968,
+      "allocated": 395407360,
+      "mtime": 1794500011.4075298,
+      "dev": 66306,
+      "inode": 104906878
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/rls_index_candidates-56b448783aa36af6",
+      "bytes": 401166312,
+      "allocated": 395554816,
+      "mtime": 1794499997.0013475,
+      "dev": 66306,
+      "inode": 104906870
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/rls_policy_typing-dc1e1f656a490354",
+      "bytes": 401018360,
+      "allocated": 395403264,
+      "mtime": 1794500188.6907716,
+      "dev": 66306,
+      "inode": 104907000
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/rls_write_path-5e4aabca5448eb69",
+      "bytes": 401053304,
+      "allocated": 395440128,
+      "mtime": 1794500171.3825526,
+      "dev": 66306,
+      "inode": 104906989
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/role_drop_dependencies-bc561836f3722657",
+      "bytes": 401033440,
+      "allocated": 395423744,
+      "mtime": 1794499932.7855356,
+      "dev": 66306,
+      "inode": 104906825
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/rollback_index_admission-5e37e07aff39ec11",
+      "bytes": 401059336,
+      "allocated": 395448320,
+      "mtime": 1794500148.3802617,
+      "dev": 66306,
+      "inode": 104906974
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/routine_aggregate_into-38ffcc60d02aac55",
+      "bytes": 401028376,
+      "allocated": 395415552,
+      "mtime": 1794499699.507586,
+      "dev": 66306,
+      "inode": 104906663
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/routine_assignment_types-d61040266ca06c55",
+      "bytes": 401044872,
+      "allocated": 395431936,
+      "mtime": 1794499717.8728182,
+      "dev": 66306,
+      "inode": 104906676
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/routine_compiler_directives-728ed334682d8fd8",
+      "bytes": 401045728,
+      "allocated": 395431936,
+      "mtime": 1794500127.8150017,
+      "dev": 66306,
+      "inode": 104906959
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/routine_cte_case_types-612d54d20fbe8146",
+      "bytes": 401045752,
+      "allocated": 395431936,
+      "mtime": 1794500058.3081229,
+      "dev": 66306,
+      "inode": 104906911
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/routine_exclusive_access-362889a5635c7770",
+      "bytes": 451754120,
+      "allocated": 445485056,
+      "mtime": 1794501738.8573382,
+      "dev": 66306,
+      "inode": 104907125
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/routine_expression_stack-abd42652fc1fe600",
+      "bytes": 401022656,
+      "allocated": 395407360,
+      "mtime": 1794499870.6707504,
+      "dev": 66306,
+      "inode": 104906782
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/routine_header_metadata-92b0dc092b30e86c",
+      "bytes": 401053952,
+      "allocated": 395444224,
+      "mtime": 1794499999.8903842,
+      "dev": 66306,
+      "inode": 104906871
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/routine_interval_arguments-de4fc8e55549ded1",
+      "bytes": 401016232,
+      "allocated": 395403264,
+      "mtime": 1794499679.501333,
+      "dev": 66306,
+      "inode": 104906649
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/routine_named_exception_conditions-4bb9320f268b66f0",
+      "bytes": 401037888,
+      "allocated": 395423744,
+      "mtime": 1794499961.984905,
+      "dev": 66306,
+      "inode": 104906845
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/routine_owner_execution_identity-7ea696e21b772716",
+      "bytes": 401033440,
+      "allocated": 395419648,
+      "mtime": 1794499830.9602482,
+      "dev": 66306,
+      "inode": 104906757
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/routine_pattern_context-5b60c9ef60e5d115",
+      "bytes": 401022792,
+      "allocated": 395407360,
+      "mtime": 1794500261.5036922,
+      "dev": 66306,
+      "inode": 104907051
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/routine_privilege_lists-8a2aada229e6da9f",
+      "bytes": 401034368,
+      "allocated": 395419648,
+      "mtime": 1794500066.9102316,
+      "dev": 66306,
+      "inode": 104906917
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/routine_row_transaction_identity-2d0fd141120773b3",
+      "bytes": 401062992,
+      "allocated": 395448320,
+      "mtime": 1794499976.4780881,
+      "dev": 66306,
+      "inode": 104906856
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/routine_table_emission-fb3eaf61d9017806",
+      "bytes": 401032864,
+      "allocated": 395423744,
+      "mtime": 1794500220.1991699,
+      "dev": 66306,
+      "inode": 104907023
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/routine_time_zone-0387ead6b5ce428c",
+      "bytes": 401018112,
+      "allocated": 395407360,
+      "mtime": 1794499738.104074,
+      "dev": 66306,
+      "inode": 104906693
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/routing_authorization-680891b3205259ac",
+      "bytes": 401031928,
+      "allocated": 395419648,
+      "mtime": 1794499804.691916,
+      "dev": 66306,
+      "inode": 104906739
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/schema_create_privilege-73637a04d45dc6c4",
+      "bytes": 401057888,
+      "allocated": 395444224,
+      "mtime": 1794500328.9835453,
+      "dev": 66306,
+      "inode": 104907093
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/schema_table_rename-c7588f3102b16640",
+      "bytes": 409048464,
+      "allocated": 403316736,
+      "mtime": 1794500031.7017865,
+      "dev": 66306,
+      "inode": 104906893
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/select_row_locks-dfc533525d18d9be",
+      "bytes": 401157648,
+      "allocated": 395546624,
+      "mtime": 1794500299.760176,
+      "dev": 66306,
+      "inode": 104907080
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/selective_outer_join_filters-95faa69134fe8bc0",
+      "bytes": 401106456,
+      "allocated": 395493376,
+      "mtime": 1794499807.6739538,
+      "dev": 66306,
+      "inode": 104906742
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/sequence_lock_progress-316dd1d70e6b33b4",
+      "bytes": 451936904,
+      "allocated": 445669376,
+      "mtime": 1794501743.4343963,
+      "dev": 66306,
+      "inode": 104907138
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/serializable_dependencies-1e5f38d6d208e706",
+      "bytes": 452209904,
+      "allocated": 445935616,
+      "mtime": 1794501734.0752773,
+      "dev": 66306,
+      "inode": 104907134
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/server_paged_sql-a9d8e4559441c90f",
+      "bytes": 401034848,
+      "allocated": 395423744,
+      "mtime": 1794499688.0074406,
+      "dev": 66306,
+      "inode": 104906655
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/session_statement_snapshots-67a66206ddef8e8e",
+      "bytes": 401080584,
+      "allocated": 395468800,
+      "mtime": 1794500281.664947,
+      "dev": 66306,
+      "inode": 104907066
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/set_role_admin_function_bypass-d29ac34fcfb01855",
+      "bytes": 401014984,
+      "allocated": 395403264,
+      "mtime": 1794500305.4922483,
+      "dev": 66306,
+      "inode": 104907079
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/set_role_drops_privilege-d92398f50451bf63",
+      "bytes": 401009008,
+      "allocated": 395399168,
+      "mtime": 1794499967.769978,
+      "dev": 66306,
+      "inode": 104906849
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/shared_foreign_key_references-281b93f4987e23f6",
+      "bytes": 401262400,
+      "allocated": 395649024,
+      "mtime": 1794500203.9879649,
+      "dev": 66306,
+      "inode": 104907011
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/shared_sequences-ef00cafa80eafbb6",
+      "bytes": 401078848,
+      "allocated": 395464704,
+      "mtime": 1794499855.6685605,
+      "dev": 66306,
+      "inode": 104906773
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/single_writer_directory_lock-4fa910441876fe46",
+      "bytes": 43104264,
+      "allocated": 42582016,
+      "mtime": 1794498677.1958435,
+      "dev": 66306,
+      "inode": 104906505
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/sis_compatibility-d5cec4e23f96696a",
+      "bytes": 401047496,
+      "allocated": 395436032,
+      "mtime": 1794500098.805635,
+      "dev": 66306,
+      "inode": 104906939
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/skip_locked_join-8549f65043a6dc25",
+      "bytes": 401025936,
+      "allocated": 395411456,
+      "mtime": 1794499634.0027578,
+      "dev": 66306,
+      "inode": 104906592
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/small_regressions-7e11962447c4baf6",
+      "bytes": 401064232,
+      "allocated": 395452416,
+      "mtime": 1794500264.410729,
+      "dev": 66306,
+      "inode": 104907054
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/snapshot-1d9d1631c3966903",
+      "bytes": 43487624,
+      "allocated": 42962944,
+      "mtime": 1794498627.3912249,
+      "dev": 66306,
+      "inode": 104905820
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/spatial_pack_resume-37670f270dddb882",
+      "bytes": 43447504,
+      "allocated": 42921984,
+      "mtime": 1794498669.4927478,
+      "dev": 66306,
+      "inode": 104906432
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/spatial_pack_sql-88857f98067c83a9",
+      "bytes": 401070144,
+      "allocated": 395460608,
+      "mtime": 1794500101.7626724,
+      "dev": 66306,
+      "inode": 104906942
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/spatial_packed-782cedaaf38d21ab",
+      "bytes": 43788968,
+      "allocated": 43261952,
+      "mtime": 1794498659.1056187,
+      "dev": 66306,
+      "inode": 104906205
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/spatial_streaming-e5db7529a3a06545",
+      "bytes": 43470248,
+      "allocated": 42942464,
+      "mtime": 1794498630.2962608,
+      "dev": 66306,
+      "inode": 104905849
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/special_value_storage-cd97b418edbe9542",
+      "bytes": 401069152,
+      "allocated": 395456512,
+      "mtime": 1794499909.6022425,
+      "dev": 66306,
+      "inode": 104906808
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/sql-f8e0a59542346ed1",
+      "bytes": 407000200,
+      "allocated": 401362944,
+      "mtime": 1794499835.6743078,
+      "dev": 66306,
+      "inode": 104906774
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/sql_text_identifiers-930c95bf45c8ca16",
+      "bytes": 401053576,
+      "allocated": 395440128,
+      "mtime": 1794499935.575571,
+      "dev": 66306,
+      "inode": 104906828
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/sql_text_round_trip-bb04046b745c01c3",
+      "bytes": 401052720,
+      "allocated": 395440128,
+      "mtime": 1794500130.765039,
+      "dev": 66306,
+      "inode": 104906961
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/storage_conformance-79dd70b9fd223028",
+      "bytes": 43896624,
+      "allocated": 43360256,
+      "mtime": 1794498652.8925416,
+      "dev": 66306,
+      "inode": 104906166
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/storage_mode-1fedd29433bf1cab",
+      "bytes": 43776328,
+      "allocated": 43249664,
+      "mtime": 1794498639.309373,
+      "dev": 66306,
+      "inode": 104905982
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/storage_mode_migration-c5dd783dc774585d",
+      "bytes": 43866272,
+      "allocated": 43339776,
+      "mtime": 1794498636.5663388,
+      "dev": 66306,
+      "inode": 104905964
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/storage_ops_handle-8177111d237ba21f",
+      "bytes": 44469888,
+      "allocated": 43929600,
+      "mtime": 1794498635.4993255,
+      "dev": 66306,
+      "inode": 104905919
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/streaming_aggregates-73e1d23b3bd6227f",
+      "bytes": 401043392,
+      "allocated": 395431936,
+      "mtime": 1794499888.907981,
+      "dev": 66306,
+      "inode": 104906794
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/streaming_grouping-92777989b6746254",
+      "bytes": 401059104,
+      "allocated": 395444224,
+      "mtime": 1794500104.602708,
+      "dev": 66306,
+      "inode": 104906943
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/streaming_rls_guard-d5a3e9539fdf4491",
+      "bytes": 401036120,
+      "allocated": 395423744,
+      "mtime": 1794500049.6650136,
+      "dev": 66306,
+      "inode": 104906905
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/structural_cut_concurrent_failure-cbf93fcfc11bf8a2",
+      "bytes": 43297960,
+      "allocated": 42774528,
+      "mtime": 1794498666.9937167,
+      "dev": 66306,
+      "inode": 104906421
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/structural_cut_large_record-c20aee0ebd41fc75",
+      "bytes": 43125768,
+      "allocated": 42602496,
+      "mtime": 1794498636.909343,
+      "dev": 66306,
+      "inode": 104905934
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/sync_mesh-a685ea4470cc90c6",
+      "bytes": 44453704,
+      "allocated": 43921408,
+      "mtime": 1794498636.0593324,
+      "dev": 66306,
+      "inode": 104905952
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/sync_mesh_signing-77fdbc0753a5e02f",
+      "bytes": 43839304,
+      "allocated": 43307008,
+      "mtime": 1794498654.8865664,
+      "dev": 66306,
+      "inode": 104906177
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/sync_mesh_torture-e33a0dad39b3406e",
+      "bytes": 44227864,
+      "allocated": 43692032,
+      "mtime": 1794498644.5064373,
+      "dev": 66306,
+      "inode": 104906029
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/sync_transaction_visibility-5ce475723acccce1",
+      "bytes": 44109104,
+      "allocated": 43573248,
+      "mtime": 1794498673.9078026,
+      "dev": 66306,
+      "inode": 104906486
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/table_row_routines-b3641d6566800647",
+      "bytes": 401049424,
+      "allocated": 395440128,
+      "mtime": 1794499772.673511,
+      "dev": 66306,
+      "inode": 104906717
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/temporal_mutation_predicates-58d77f75d8eb6dbe",
+      "bytes": 409019104,
+      "allocated": 403288064,
+      "mtime": 1794499631.261723,
+      "dev": 66306,
+      "inode": 104906590
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/temporal_storage-c8652888489f57a7",
+      "bytes": 401200144,
+      "allocated": 395587584,
+      "mtime": 1794500244.0594716,
+      "dev": 66306,
+      "inode": 104907038
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/tid_hint_read_through-58e136e165110215",
+      "bytes": 43448440,
+      "allocated": 42921984,
+      "mtime": 1794498680.3068821,
+      "dev": 66306,
+      "inode": 104906530
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/timestamp_day_indexes-995911b444a543eb",
+      "bytes": 43284976,
+      "allocated": 42762240,
+      "mtime": 1794498632.395287,
+      "dev": 66306,
+      "inode": 104905872
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/timezone_catalog_hash-ec419bf7ba374013",
+      "bytes": 401030616,
+      "allocated": 395415552,
+      "mtime": 1794499813.389026,
+      "dev": 66306,
+      "inode": 104906745
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/tls_channel_binding-0283b2219f3c8476",
+      "bytes": 452864744,
+      "allocated": 446586880,
+      "mtime": 1794501767.2676995,
+      "dev": 66306,
+      "inode": 104907148
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/topk_order_by-105fb52d7b8c1caa",
+      "bytes": 401030440,
+      "allocated": 395415552,
+      "mtime": 1794500145.402224,
+      "dev": 66306,
+      "inode": 104906971
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/transaction_id_recovery-3b7a3d2fbb7f0bff",
+      "bytes": 43527336,
+      "allocated": 42999808,
+      "mtime": 1794498660.0736308,
+      "dev": 66306,
+      "inode": 104906228
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/transaction_isolation-8985d1bf1cb2a9c1",
+      "bytes": 43599984,
+      "allocated": 43073536,
+      "mtime": 1794498638.8683674,
+      "dev": 66306,
+      "inode": 104905975
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/transaction_receipts-b867b75e38d54d3a",
+      "bytes": 43399640,
+      "allocated": 42881024,
+      "mtime": 1794498676.4048338,
+      "dev": 66306,
+      "inode": 104906507
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/transaction_rollback_mark-4cf5c81c8bed5a15",
+      "bytes": 43329200,
+      "allocated": 42803200,
+      "mtime": 1794498676.8008387,
+      "dev": 66306,
+      "inode": 104906503
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/transaction_system_types-1045f44474e6a709",
+      "bytes": 401042896,
+      "allocated": 395427840,
+      "mtime": 1794500034.7188246,
+      "dev": 66306,
+      "inode": 104906895
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/transaction_uniqueness-6d2a60be6ec8ffdf",
+      "bytes": 401018152,
+      "allocated": 395407360,
+      "mtime": 1794499758.36033,
+      "dev": 66306,
+      "inode": 104906707
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/trigger_authorization-1f687b9b5664e31a",
+      "bytes": 401025416,
+      "allocated": 395411456,
+      "mtime": 1794499810.5719903,
+      "dev": 66306,
+      "inode": 104906743
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/trusted_identity_triggers-56ef76e43af423ba",
+      "bytes": 401080464,
+      "allocated": 395468800,
+      "mtime": 1794499590.8012114,
+      "dev": 66306,
+      "inode": 104906558
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/type_consistency-381fa8f349703d89",
+      "bytes": 402555992,
+      "allocated": 396918784,
+      "mtime": 1794499816.460065,
+      "dev": 66306,
+      "inode": 104906750
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/type_durability-349dd210b9a8a7c0",
+      "bytes": 402946776,
+      "allocated": 397312000,
+      "mtime": 1794499801.7928793,
+      "dev": 66306,
+      "inode": 104906738
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/typed_catalog_comparisons-a243386ab5939444",
+      "bytes": 410495232,
+      "allocated": 404738048,
+      "mtime": 1794500207.2620063,
+      "dev": 66306,
+      "inode": 104907017
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/typed_comparison-6156243c8e7cef3d",
+      "bytes": 401075224,
+      "allocated": 395460608,
+      "mtime": 1794500332.7095926,
+      "dev": 66306,
+      "inode": 104907095
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/typed_comparison_boundaries-e6d8c1a0ab2bc2b5",
+      "bytes": 401071240,
+      "allocated": 395456512,
+      "mtime": 1794500284.5599837,
+      "dev": 66306,
+      "inode": 104907068
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/typed_comparison_matrix-b04cdbea5585a385",
+      "bytes": 401441552,
+      "allocated": 395833344,
+      "mtime": 1794499874.1107938,
+      "dev": 66306,
+      "inode": 104906787
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/typed_scalar_storage-f63f680b8042b41e",
+      "bytes": 401041312,
+      "allocated": 395427840,
+      "mtime": 1794500197.3848815,
+      "dev": 66306,
+      "inode": 104907007
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/typed_storage_migration-7b12790686f413fd",
+      "bytes": 401056264,
+      "allocated": 395448320,
+      "mtime": 1794500110.3127804,
+      "dev": 66306,
+      "inode": 104906947
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/unique_index_build_identity-bc4bead1f7d8f5bb",
+      "bytes": 43111000,
+      "allocated": 42590208,
+      "mtime": 1794498674.3058076,
+      "dev": 66306,
+      "inode": 104906485
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/unique_nulls-ea291ab01749a393",
+      "bytes": 43372600,
+      "allocated": 42852352,
+      "mtime": 1794498650.2955093,
+      "dev": 66306,
+      "inode": 104906105
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/unique_update_order-118b59008ba8561d",
+      "bytes": 401048536,
+      "allocated": 395440128,
+      "mtime": 1794499749.7072208,
+      "dev": 66306,
+      "inode": 104906701
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/user_defined_ranges-882b893391fc8d3f",
+      "bytes": 401105200,
+      "allocated": 395493376,
+      "mtime": 1794499979.4941263,
+      "dev": 66306,
+      "inode": 104906858
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/user_type_management-d51bcd11dbdc2fbd",
+      "bytes": 401102072,
+      "allocated": 395493376,
+      "mtime": 1794500038.31587,
+      "dev": 66306,
+      "inode": 104906898
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/user_type_oid_durability-86c0d8c3ce1b43f3",
+      "bytes": 402554024,
+      "allocated": 396918784,
+      "mtime": 1794500142.4111862,
+      "dev": 66306,
+      "inode": 104906969
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/uuid_storage-143d09fcaca693e7",
+      "bytes": 401092952,
+      "allocated": 395481088,
+      "mtime": 1794499642.4738648,
+      "dev": 66306,
+      "inode": 104906615
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/v3_end_to_end-5ee9ddde96c96c97",
+      "bytes": 43503392,
+      "allocated": 42975232,
+      "mtime": 1794498667.7647264,
+      "dev": 66306,
+      "inode": 104906423
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/v3_index_entries-4d4515cb1fb3d29f",
+      "bytes": 8394848,
+      "allocated": 8347648,
+      "mtime": 1794498667.332721,
+      "dev": 66306,
+      "inode": 104906418
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/v3_rekey-0da545d9b5688bef",
+      "bytes": 43260192,
+      "allocated": 42741760,
+      "mtime": 1794498625.5832024,
+      "dev": 66306,
+      "inode": 104905806
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/verification-a76d0f35c526a525",
+      "bytes": 452243056,
+      "allocated": 445968384,
+      "mtime": 1794501817.5733392,
+      "dev": 66306,
+      "inode": 104907166
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/version_identity-35f93c0e9db68fc7",
+      "bytes": 401034880,
+      "allocated": 395423744,
+      "mtime": 1794499822.3101387,
+      "dev": 66306,
+      "inode": 104906751
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/view_column_lineage-4fbf3328ff114a22",
+      "bytes": 401024392,
+      "allocated": 395411456,
+      "mtime": 1794500025.899713,
+      "dev": 66306,
+      "inode": 104906889
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/view_dependencies-6cac6ef4b20ca14e",
+      "bytes": 401045080,
+      "allocated": 395436032,
+      "mtime": 1794500168.4095151,
+      "dev": 66306,
+      "inode": 104906986
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/view_owner_execution_identity-bc40787b86be5bbd",
+      "bytes": 401023248,
+      "allocated": 395411456,
+      "mtime": 1794499891.8600183,
+      "dev": 66306,
+      "inode": 104906797
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/wal_acknowledgement_race-a67338c4a551504b",
+      "bytes": 43129184,
+      "allocated": 42606592,
+      "mtime": 1794498643.0644195,
+      "dev": 66306,
+      "inode": 104905989
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/wewobo_compat-7ff9016b647a3043",
+      "bytes": 451662120,
+      "allocated": 445399040,
+      "mtime": 1794501771.9707592,
+      "dev": 66306,
+      "inode": 104907150
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/wildcard_projection-e1f102a9973602a2",
+      "bytes": 401088480,
+      "allocated": 395476992,
+      "mtime": 1794500002.8644218,
+      "dev": 66306,
+      "inode": 104906874
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/writable_repeatable_read-7be1e7d4b93ee2ec",
+      "bytes": 451933920,
+      "allocated": 445661184,
+      "mtime": 1794501757.9915814,
+      "dev": 66306,
+      "inode": 104907144
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/write_path_authorization-9afc928c7d187708",
+      "bytes": 401076360,
+      "allocated": 395468800,
+      "mtime": 1794499844.1974156,
+      "dev": 66306,
+      "inode": 104906764
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-tc/debug/deps/xml-0b7c261af2f63ae1",
+      "bytes": 401067000,
+      "allocated": 395452416,
+      "mtime": 1794500014.363567,
+      "dev": 66306,
+      "inode": 104906881
+    }
+  ],
+  "skipped": [],
+  "elapsed_seconds": 0.533872127532959
+}

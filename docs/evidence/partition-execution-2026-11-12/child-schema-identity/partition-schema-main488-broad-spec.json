@@ -1,0 +1,96 @@
+{
+  "label": "partition-schema-main488-broad",
+  "source": "cc84f24fa263965d89697f36a96a9112a16d4016",
+  "base": "c3588bf8b029ac8579f1336bf9d170d231648f29",
+  "repo": "/root/bicdb-partition-runtime",
+  "continue_on_failure": true,
+  "scope": "Broad allCore/allSQL/allwire library+integration qualification of exactcc84 private main488-combined source after focused batch stabilizes. Mandatory preceding exactsource focused success; failure blocks start ratherthan claiming proof. Build all3externallyselectedCorehelpers explicitly first (--lib--tests doesnot rebuildexamples), hash/sourcecustody, then unchanged fullsuites --no-fail-fast. Versioninherited488 only, not a deliverycandidate/release/deployment. Original1464Oracle/PG assertions+10swaits, UI400encryptedfullrestore/reopens, Nativeoriginproducer, ACKprocess/fault/VM/HA/P1P2 remain required. Serial/identity ADD and otherchildschema/constraints/hash/namespacegates stillopen. Memory16/14GiB j1incrementaloff, active10GiBhost/1GiBcgroup monitor; preserveall otherowners.",
+  "commands": [
+    [
+      "cargo",
+      "+1.96.0",
+      "build",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-core",
+      "--example",
+      "durability_child",
+      "--example",
+      "chaos_child",
+      "--example",
+      "ha_state_child"
+    ],
+    [
+      "python3",
+      "-c",
+      "import pathlib,json,hashlib,os,subprocess,time\nroot=pathlib.Path('/root/bicdb-durability-s3');repo=root/'repo-tc';source=subprocess.check_output(['git','rev-parse','HEAD'],cwd=repo,text=True).strip();assert source=='cc84f24fa263965d89697f36a96a9112a16d4016'\nfiles={}\nfor name in ['durability_child','chaos_child','ha_state_child']:\n p=pathlib.Path(os.environ['CARGO_TARGET_DIR'])/'debug/examples'/name;data=p.read_bytes();flags={flag:flag.encode() in data for flag in ['sql_partition_execution_v1','decimal_predicate_comparison_v1','application_unique_scope_transition_v1']};assert all(flags.values()),(name,flags);files[name]={'path':str(p),'sha256':hashlib.sha256(data).hexdigest(),'bytes':len(data),'mtime':p.stat().st_mtime,'required_features':flags}\nproof={'source':source,'files':files,'recorded_unix':time.time(),'scope':'Exactsource+successful preceding explicitbuild3Corehelpers; Native runtimeELF custody, not CLI/release/deployment.'};json.dump(proof,(root/'partition-schema-main488-current-helpers.json').open('w'),indent=2);print(json.dumps(proof))\n"
+    ],
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--no-fail-fast",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-core",
+      "--lib",
+      "--tests",
+      "--",
+      "--nocapture",
+      "--test-threads=1"
+    ],
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--no-fail-fast",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-sql",
+      "--lib",
+      "--tests",
+      "--",
+      "--nocapture",
+      "--test-threads=1"
+    ],
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--no-fail-fast",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-pgwire",
+      "--lib",
+      "--tests",
+      "--",
+      "--nocapture",
+      "--test-threads=1"
+    ]
+  ],
+  "wait_units": [
+    "bicdb-partition-schema-change-focused"
+  ],
+  "allow_isolated_builds": [],
+  "required_receipts": [
+    {
+      "path": "report-partition-schema-change-focused.json",
+      "equals": {
+        "source": "cc84f24fa263965d89697f36a96a9112a16d4016",
+        "status": "focused_passed"
+      }
+    }
+  ],
+  "remote_repo_name": "repo-tc",
+  "remote_target_name": "target-tc",
+  "remote_lock_name": "source-build.lock",
+  "source_ref": "refs/bicdb-proof/partition-schema-cc84"
+}

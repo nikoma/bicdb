@@ -1,0 +1,21 @@
+{
+  "recorded_unix": 1794509335.7316914,
+  "scope": "Own two unused superseded preview probes only; actualfa processmatrix and430I/Omatrix replaybinaries,6cqualificationprobes,old482CLI,currentrunnable,dependencycache andotherowneroutputs preserved. Metadata source lock held; no process FD/maps; exactsource/path/SHA/nlink proof.",
+  "removed": [
+    {
+      "source": "150ec9a02426a8c8f4e8fc6575d7c6e0ae3d7eb2",
+      "path": "/root/bicdb-durability-s3/qualification-artifacts-debug/150ec9a02426a8c8f4e8fc6575d7c6e0ae3d7eb2/partition_crash_probe",
+      "bytes": 264043288,
+      "reclaimed_allocated_bytes": 264048640,
+      "sha256": "44162d74d9628770b1c86005880b4a05c6516789a7c444850ec2516790329396"
+    },
+    {
+      "source": "ef77921757762aac62db02eb88f4289e922d0baf",
+      "path": "/root/bicdb-durability-s3/qualification-artifacts-debug/ef77921757762aac62db02eb88f4289e922d0baf/partition_crash_probe",
+      "bytes": 264052472,
+      "reclaimed_allocated_bytes": 264056832,
+      "sha256": "822ea698dc350a9e503987d854d1ead116419d6a53bed28500c2a78eb2a5c205"
+    }
+  ],
+  "reclaimed_allocated_bytes": 528105472
+}

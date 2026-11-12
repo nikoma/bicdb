@@ -1,0 +1,101 @@
+{
+  "label": "partition-ack-main489-broad",
+  "source": "6c16e66e742bb575041aebce4086ebf434b9fe64",
+  "base": "cc84f24fa263965d89697f36a96a9112a16d4016",
+  "repo": "/root/bicdb-partition-runtime",
+  "continue_on_failure": true,
+  "scope": "Broad exact6c combinedactualmain489 Nativefoundation + currentpartitiondata/schema/sequence/defaultACL/preflight/PK/default/identity batch. Stablebatch13upgradeunits+25schema/keyintegration actualPASS. Preserveallprior failures andsource-boundevidence. Buildexactcurrent3externalCorehelpers first/hash+allold/newrequiredflags, thenallCore+allSQL+allwire originalassertions/timeouts. Inherited489isnotnewdeliveryversion. No fulliDempiere1464/UI400encryptedrestore/portableSQLorigin/physicalRF3/P1P2/VM/scaleout completionclaim. P2off nonewspend. j1incrementaloff16/14GiB monitor10GiBhost/1GiBcgroup floor; preserveotherprocesses.",
+  "commands": [
+    [
+      "cargo",
+      "+1.96.0",
+      "build",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-core",
+      "--example",
+      "durability_child",
+      "--example",
+      "chaos_child",
+      "--example",
+      "ha_state_child"
+    ],
+    [
+      "python3",
+      "-c",
+      "import pathlib,json,hashlib,os,subprocess,time\nroot=pathlib.Path('/root/bicdb-durability-s3');repo=root/'repo-tc';source=subprocess.check_output(['git','rev-parse','HEAD'],cwd=repo,text=True).strip();assert source=='6c16e66e742bb575041aebce4086ebf434b9fe64'\nfiles={}\nfor name in ['durability_child','chaos_child','ha_state_child']:\n p=pathlib.Path(os.environ['CARGO_TARGET_DIR'])/'debug/examples'/name;data=p.read_bytes();flags={flag:flag.encode() in data for flag in ['sql_partition_execution_v1','decimal_predicate_comparison_v1','application_unique_scope_transition_v1']};assert all(flags.values()),(name,flags);files[name]={'path':str(p),'sha256':hashlib.sha256(data).hexdigest(),'bytes':len(data),'mtime':p.stat().st_mtime,'required_features':flags}\nproof={'source':source,'files':files,'recorded_unix':time.time(),'scope':'Exactsource+successful preceding explicitbuild3Corehelpers; Native runtimeELF custody, not CLI/release/deployment.'};json.dump(proof,(root/'partition-ack-main489-current-helpers.json').open('w'),indent=2);print(json.dumps(proof))\n"
+    ],
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--no-fail-fast",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-core",
+      "--lib",
+      "--tests",
+      "--",
+      "--nocapture",
+      "--test-threads=1"
+    ],
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--no-fail-fast",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-sql",
+      "--lib",
+      "--tests",
+      "--",
+      "--nocapture",
+      "--test-threads=1"
+    ],
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--no-fail-fast",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-pgwire",
+      "--lib",
+      "--tests",
+      "--",
+      "--nocapture",
+      "--test-threads=1"
+    ]
+  ],
+  "wait_units": [],
+  "allow_isolated_builds": [
+    {
+      "pid": 135525,
+      "start_ticks": 163965413,
+      "repo": "/root/bicdb-durability-s3/repo-metadata-describe",
+      "target": "/root/bicdb-durability-s3/target-metadata-describe"
+    }
+  ],
+  "required_receipts": [
+    {
+      "path": "report-partition-upgrade-all-acks-forest-focused.json",
+      "equals": {
+        "source": "6c16e66e742bb575041aebce4086ebf434b9fe64",
+        "status": "focused_passed"
+      }
+    }
+  ],
+  "remote_repo_name": "repo-tc",
+  "remote_target_name": "target-tc",
+  "remote_lock_name": "source-build.lock",
+  "source_ref": "refs/bicdb-proof/partition-ack-preflight-6c"
+}

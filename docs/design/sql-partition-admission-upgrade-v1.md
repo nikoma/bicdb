@@ -203,19 +203,40 @@ and source-preserving adapter now orders recognized options for the parser
 without altering literals/comments or hiding duplicate/unknown options. A
 separate constructor correction honors sqlparser's `NO CYCLE` boolean polarity.
 Both parser units pass at `c4c98a55`; eight child tests pass and recursive
-identity publication still fails. Source `8739d3e6` adds a proposed atomic
+identity publication still fails at that revision. Source `8739d3e6` adds atomic
 publication of all rows/schemas, the new owned sequence, default ACLs and the
-certificate, with complete retryable undo. Qualification is running; this is
-not a passing or delivered change yet. Its new exhaustion fixture needed an
+certificate, with complete retryable undo. The composed main489 source
+`3867be58` passes both parser units and all twenty-five schema/key integration
+tests, including recursive backfill, shared serial allocation and rollback of
+rows/schema/sequence/default grants. Its new exhaustion fixture needed an
 explicit MINVALUE0 so START1/MAXVALUE1 reaches exhaustion rather than rejecting
 invalid bounds. Both the failed reference fixture and corrected PG18.4 pass
 are preserved. See `child-schema-identity/summary.json` beside the earlier
 `catalog-transitions` evidence.
 
 Remote main independently advanced to `b9394418` / 1.0.489-beta (PR157 native
-read/recovery foundation). This private partition branch still inherits488 and
-must integrate and validate that new main. No new Root delivery version, CLI,
+read/recovery foundation). This private branch includes it from merge
+`3c20d54d` and inherits489; version identity and full formatting checks pass.
+No new Root delivery version, CLI,
 release, deployment or physical HA/scale-out result follows from that merge.
+
+The next baseline `4508ece8`, tests only over `3867be58`, exposed five unsafe
+stationary-ACK certifications. Source `6c16e66e` preflights every resulting row
+against proposed v1 schemas before the fence, including constraints, canonical
+Native PK binding, final-state foreign keys and exclusion constraints. It
+preserves legitimate `NOT VALID` exemptions. Thirteen admission units and the
+same twenty-five schema/key tests pass. Thirty actual old482-store controls
+also pass, preserving all fourteen independent source ACKs and original files.
+
+Separate examples with runtime trees identical to `6c16e66e` pass 152 process
+cut/volatile-emulation cases and 96 scoped one-shot/persistent EIO cases across
+the genuine old stores. The independent verifier checks exact coverage, whole
+old/new row/schema snapshots, three stable opens, independent migration ACKs,
+failed-handle refusal, Native indexes and old-reader byte identity. Those cuts
+qualify these legacy migrations; they do not replace crash qualification of
+every other DDL path. Volatile emulation is not a VM power-cut result. The new
+combined broad Core/SQL/wire run is active, with no assumed terminal pass.
+See `upgrade-recovery/README.md` and its source-scoped archive/manifest.
 
 ## Implementation and qualification checklist
 

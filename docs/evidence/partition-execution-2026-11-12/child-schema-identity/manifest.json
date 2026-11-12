@@ -235,6 +235,18 @@
     "bytes": 4068,
     "sha256": "552568d7e33fcfc4d17384ee4045fd7f526523f448488ad3b483f1c31ce4753c"
   },
+  "partition-generated-add-atomic-focused-spec.json": {
+    "bytes": 1921,
+    "sha256": "d9dee752461e7275f40f0d6ae7a58b2f1f230d9ce28cb1580ea00845603b93a6"
+  },
+  "partition-generated-add-main489-focused-spec.json": {
+    "bytes": 2194,
+    "sha256": "d50b3d984fe48ea9599d1a14bc72de53cb0b676823bc2ff193b128c55b130eb1"
+  },
+  "partition-generated-add-valid-focused-spec.json": {
+    "bytes": 1990,
+    "sha256": "47b3977c9f26c41250ca7d15ef4db4e2cb4495a84e674261dc5714e28dc27893"
+  },
   "partition-identity-default-baseline-spec.json": {
     "bytes": 1710,
     "sha256": "67d53853a4e86ce34a0dc8453f7a502d64ce4ff49a9c62f2d57093413bfa083b"
@@ -254,6 +266,18 @@
   "partition-schema-change-focused-spec.json": {
     "bytes": 3761,
     "sha256": "c117752dcbcabd210f91ddf75c6cfcce48290bc29023339caeeaf2fdbbe1d322"
+  },
+  "partition-schema-main488-broad-spec.json": {
+    "bytes": 3668,
+    "sha256": "acbb043b74a4d3e869d1ae73b43d8c85039d617dde012e8c4bfd6fe451634f5a"
+  },
+  "partition-upgrade-all-acks-baseline-spec.json": {
+    "bytes": 1568,
+    "sha256": "9c5033b6c07b27c5b321c9d006381af1e6ad19e66163b1b2622f95514e80cd9c"
+  },
+  "partition-upgrade-all-acks-focused-spec.json": {
+    "bytes": 1960,
+    "sha256": "8a55ed17bfadf976de273a8e6a5cb99e4a631452748ff58b33a632132f4d6826"
   },
   "report-partition-child-identity-baseline.json": {
     "bytes": 940,
@@ -275,6 +299,18 @@
     "bytes": 4401,
     "sha256": "5aabebda5fd53f67386d8e1cca4fa6f363fb33965a4817ee6a6bf01b41519be6"
   },
+  "report-partition-generated-add-atomic-focused.json": {
+    "bytes": 1693,
+    "sha256": "632298ddbd1178c2fb561d1304876ea751ca07d01e221194ffab972baf06f935"
+  },
+  "report-partition-generated-add-main489-focused.json": {
+    "bytes": 1973,
+    "sha256": "08ff255d179ad6c17f793ce7912967226604d970c2dca509b4dcfbbf65b16178"
+  },
+  "report-partition-generated-add-valid-focused.json": {
+    "bytes": 1606,
+    "sha256": "74d92f69a4ad524d6e35863bee5e6bd9e8ae54304df76a40876428f19ba8eec9"
+  },
   "report-partition-identity-default-baseline.json": {
     "bytes": 1482,
     "sha256": "04fe0a965cbedd9441692db8737b390d5fd2e2e672a7fa9560431ff34a0fa6b5"
@@ -294,6 +330,18 @@
   "report-partition-schema-change-focused.json": {
     "bytes": 4424,
     "sha256": "638e827043c908a6bb442557f61789ca9201d72250d57701bae34abd89bca828"
+  },
+  "report-partition-schema-main488-broad.json": {
+    "bytes": 3865,
+    "sha256": "17972797a0ea7b0b90e9123b46b266af3c261da7b3c1e323741777ea9c915146"
+  },
+  "report-partition-upgrade-all-acks-baseline.json": {
+    "bytes": 1173,
+    "sha256": "a2253a502f70902b1c81a4de84f182183019ad8d251a7a442822df1a6add9764"
+  },
+  "report-partition-upgrade-all-acks-focused.json": {
+    "bytes": 1916,
+    "sha256": "cd4526fe1c7183ed8d94b92114b54ea069f2ef363107423e28bd61c36079fa43"
   },
   "summary.json": {
     "bytes": 3610,
@@ -319,6 +367,18 @@
     "bytes": 64909,
     "sha256": "3f8b265d76c9eb024a02eeed3e318e9235d7f00beb31051a5af8ff729203d004"
   },
+  "tc-step-partition-generated-add-atomic-focused.log.gz": {
+    "bytes": 26135,
+    "sha256": "b8ebf75f145b055dda19a9b853bdc3d23b9980cedf5acf544ed3f68c5cb8cb44"
+  },
+  "tc-step-partition-generated-add-main489-focused.log.gz": {
+    "bytes": 73744,
+    "sha256": "4c09abb40a32f4c74ba658639c436c21623d59943cc1bb80a3bf89514c562318"
+  },
+  "tc-step-partition-generated-add-valid-focused.log.gz": {
+    "bytes": 14334,
+    "sha256": "713df36131442422fe6314bbb284429044fd9d457ea14090b4541584a488b3b8"
+  },
   "tc-step-partition-identity-default-baseline.log.gz": {
     "bytes": 24423,
     "sha256": "7a1f535d8a89817c82a8da2571c75cb4dbe6701860593375b65172d382819276"
@@ -338,5 +398,17 @@
   "tc-step-partition-schema-change-focused.log.gz": {
     "bytes": 95245,
     "sha256": "5685c4653843e1901d2fe830b76fdce8fd84409cb7f694642e4a0d1b180d9528"
+  },
+  "tc-step-partition-schema-main488-broad.log.gz": {
+    "bytes": 235181,
+    "sha256": "729cc27130b68af37350100170fadae6a9e154a45e024b073896f9db5798f118"
+  },
+  "tc-step-partition-upgrade-all-acks-baseline.log.gz": {
+    "bytes": 37344,
+    "sha256": "2ab050b19a0b84345f91a0c8668118e951255f53274262256b7b5379b1cbc754"
+  },
+  "tc-step-partition-upgrade-all-acks-focused.log.gz": {
+    "bytes": 66203,
+    "sha256": "70cbbed2da28c9d6b5296e2d2c3f531bc65de4ab04e6d7d3f6d6156fd24dce1e"
   }
 }

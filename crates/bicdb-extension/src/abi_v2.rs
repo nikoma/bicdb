@@ -2641,6 +2641,8 @@ pub struct ApplicationManifestV2 {
     pub native_fact_publications: Vec<NativeFactPublicationV1>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub native_fact_imports: Vec<NativeFactImportV1>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub native_fact_projection_imports: Vec<NativeFactProjectionImportV1>,
     #[serde(default)]
     pub migrations: Vec<MigrationPlanV1>,
     #[serde(default)]
@@ -6074,6 +6076,7 @@ impl EgressDeclaration {
 #[serde(rename_all = "snake_case")]
 pub enum ApplicationFeature {
     NativeImmutableFacts,
+    NativeFactProjectionContracts,
     TrustedConnectionIdentity,
     ExactColumnAuthority,
     OidcRs256,
@@ -6526,6 +6529,74 @@ pub struct NativeFactImportV1 {
     pub publication: NativeFactPublicationV1,
 }
 
+/// Nonauthoritative build projection: actual signed owner catalog is mandatory.
+/// No physical relation, admission state or recursive package digest is imported.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct NativeFactProjectionContractV1 {
+    pub version: u32,
+    pub owner_application: String,
+    pub owner_version: String,
+    pub publication_name: String,
+    pub resource: String,
+    pub stable_key: String,
+    pub tenant_field: String,
+    pub fields: Vec<NativeFactFieldV1>,
+    pub consumers: BTreeSet<String>,
+    pub read_roles: BTreeSet<String>,
+    pub publication_fingerprint: String,
+}
+
+impl NativeFactProjectionContractV1 {
+    pub fn validate(&self) -> Result<()> {
+        let version = semver::Version::parse(&self.owner_version).map_err(|_| {
+            ExtensionError::InvalidManifest(
+                "fact projection requires exact canonical owner SemVer".into(),
+            )
+        })?;
+        if version.to_string() != self.owner_version {
+            return invalid("fact projection requires exact canonical owner SemVer");
+        }
+        // Reuse scalar/identity checks only. This local sentinel is NEVER a target relation.
+        NativeFactPublicationV1 {
+            version: self.version,
+            name: self.publication_name.clone(),
+            owner_application: self.owner_application.clone(),
+            resource: self.resource.clone(),
+            relation: "__descriptor_validation_only__".into(),
+            stable_key: self.stable_key.clone(),
+            tenant_field: self.tenant_field.clone(),
+            fields: self.fields.clone(),
+            consumers: self.consumers.clone(),
+            read_roles: self.read_roles.clone(),
+            fingerprint: self.publication_fingerprint.clone(),
+            accept_new_references: true,
+        }
+        .validate()
+    }
+    pub fn matches_publication(&self, actual: &NativeFactPublicationV1) -> bool {
+        self.version == actual.version
+            && self.owner_application == actual.owner_application
+            && self.publication_name == actual.name
+            && self.resource == actual.resource
+            && self.stable_key == actual.stable_key
+            && self.tenant_field == actual.tenant_field
+            && self.fields == actual.fields
+            && self.consumers == actual.consumers
+            && self.read_roles == actual.read_roles
+            && self.publication_fingerprint == actual.fingerprint
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct NativeFactProjectionImportV1 {
+    pub resource: String,
+    pub subject_resources: BTreeSet<String>,
+    pub descriptor_sha256: String,
+    pub contract: NativeFactProjectionContractV1,
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct ApplicationInvariantV1 {
@@ -6686,6 +6757,19 @@ fn validate_invariant_expression(
                                 .any(|candidate| candidate.name == *field)
                         })
                 });
+            let exists = exists.or_else(|| {
+                application
+                    .native_fact_projection_imports
+                    .iter()
+                    .find(|import| import.resource == *resource_name)
+                    .map(|import| {
+                        import
+                            .contract
+                            .fields
+                            .iter()
+                            .any(|candidate| candidate.name == *field)
+                    })
+            });
             if exists == Some(true) {
                 Ok(())
             } else {
@@ -6771,12 +6855,17 @@ fn validate_invariant_expression(
                 .native_fact_imports
                 .iter()
                 .find(|import| import.resource == *resource);
-            if !local && imported.is_none() {
+            let projected = application
+                .native_fact_projection_imports
+                .iter()
+                .any(|import| import.resource == *resource);
+            if !local && imported.is_none() && !projected {
                 return invalid(format!(
                     "invariant references unknown resource `{resource}`"
                 ));
             }
-            if imported.is_some() && matches!(expression, ApplicationExpressionV1::Aggregate { .. })
+            if (imported.is_some() || projected)
+                && matches!(expression, ApplicationExpressionV1::Aggregate { .. })
             {
                 return invalid("foreign native fact aggregates are unsupported");
             }
@@ -6818,7 +6907,10 @@ fn validate_invariant_expression(
 
 impl ApplicationManifestV2 {
     fn validate_native_facts(&self, extension: &ExtensionManifest) -> Result<()> {
-        if self.native_fact_publications.is_empty() && self.native_fact_imports.is_empty() {
+        if self.native_fact_publications.is_empty()
+            && self.native_fact_imports.is_empty()
+            && self.native_fact_projection_imports.is_empty()
+        {
             return Ok(());
         }
         if !self
@@ -6884,7 +6976,36 @@ impl ApplicationManifestV2 {
                 }
             }
         }
+        if !self.native_fact_projection_imports.is_empty()
+            && !self
+                .required_features
+                .contains(&ApplicationFeature::NativeFactProjectionContracts)
+        {
+            return invalid(
+                "fact-only contracts require strict native_fact_projection_contracts feature",
+            );
+        }
         let mut imports = BTreeSet::new();
+        for import in &self.native_fact_projection_imports {
+            import.contract.validate()?;
+            validate_sha256("fact projection descriptor", &import.descriptor_sha256)?;
+            if !imports.insert(&import.resource)
+                || !import.resource.contains('.')
+                || self.resources.iter().any(|r| r.name == import.resource)
+                || !import.contract.consumers.contains(&extension.identity.name)
+                || import.contract.owner_application == extension.identity.name
+                || import.subject_resources.is_empty()
+                || import.subject_resources.iter().any(|name| {
+                    !self
+                        .resources
+                        .iter()
+                        .any(|r| r.name == *name && !r.schema_only)
+                })
+            {
+                return invalid("fact-only import is not an explicit immutable owner projection");
+            }
+        }
+
         for import in &self.native_fact_imports {
             import.publication.validate()?;
             if !imports.insert(&import.resource)
@@ -6945,6 +7066,10 @@ fn invariant_has_foreign_fact(
                 .native_fact_imports
                 .iter()
                 .any(|import| import.resource == *resource)
+                || application
+                    .native_fact_projection_imports
+                    .iter()
+                    .any(|import| import.resource == *resource)
                 || invariant_has_foreign_fact(application, condition)
         }
         ApplicationExpressionV1::Aggregate { condition, .. }
@@ -6988,7 +7113,12 @@ fn validate_positive_native_fact_expression(
             ..
         } if application.native_fact_imports.iter().any(|import| {
             import.resource == *resource && import.subject_resources.contains(subject)
-        }) =>
+        }) || application
+            .native_fact_projection_imports
+            .iter()
+            .any(|import| {
+                import.resource == *resource && import.subject_resources.contains(subject)
+            }) =>
         {
             if native_fact_expression_has_scan(condition) {
                 invalid("foreign native fact predicate cannot nest scans")
@@ -10922,6 +11052,10 @@ mod tests {
             application_program: None,
             required_features,
             max_call_depth: 16,
+
+            native_fact_publications: Vec::new(),
+            native_fact_imports: Vec::new(),
+            native_fact_projection_imports: Vec::new(),
         }
     }
 

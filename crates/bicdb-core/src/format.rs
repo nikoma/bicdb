@@ -32,7 +32,10 @@ pub const ORACLE_SIMPLE_CASE_V1_FEATURE_FLAG: &str = "oracle_simple_case_v1";
 pub const APPLICATION_UNIQUE_SCOPE_FEATURE_FLAG: &str = "application_unique_scope_transition_v1";
 pub const DECIMAL_PREDICATE_COMPARISON_V1_FEATURE_FLAG: &str = "decimal_predicate_comparison_v1";
 pub const NATIVE_IMMUTABLE_FACTS_FEATURE_FLAG: &str = "native_immutable_fact_publications_v1";
+pub const NATIVE_FACT_PROJECTION_CONTRACTS_FEATURE_FLAG: &str =
+    "native_fact_projection_contracts_v1";
 const KNOWN_FEATURE_FLAGS: &[&str] = &[
+    NATIVE_FACT_PROJECTION_CONTRACTS_FEATURE_FLAG,
     NATIVE_IMMUTABLE_FACTS_FEATURE_FLAG,
     DECIMAL_PREDICATE_COMPARISON_V1_FEATURE_FLAG,
     APPLICATION_UNIQUE_SCOPE_FEATURE_FLAG,
@@ -832,5 +835,17 @@ pub(crate) fn enable_native_immutable_facts(root: &Path) -> Result<()> {
     metadata
         .feature_flags
         .insert(NATIVE_IMMUTABLE_FACTS_FEATURE_FLAG.into());
+    persist_metadata(root, &metadata, true)
+}
+
+/// Sticky exact owner-version/resource policy fence, including normalized v1 publications.
+pub(crate) fn enable_native_fact_projection_contracts(root: &Path) -> Result<()> {
+    let lock = feature_flags_lock(root);
+    let _guard = lock.lock();
+    let mut metadata = read_or_legacy_metadata(root)?;
+    validate_supported(&metadata)?;
+    metadata
+        .feature_flags
+        .insert(NATIVE_FACT_PROJECTION_CONTRACTS_FEATURE_FLAG.into());
     persist_metadata(root, &metadata, true)
 }

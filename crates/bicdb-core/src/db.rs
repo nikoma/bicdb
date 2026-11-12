@@ -8675,6 +8675,64 @@ fn evaluate_native_invariant_expression(
                         .is_some_and(Ordering::is_lt),
             )
         }
+        NativeInvariantExpression::PublishedProjectionExists {
+            binding,
+            owner_application,
+            owner_resource,
+            owner_version,
+            publication_name,
+            publication_fingerprint,
+            consumer_application,
+            condition,
+        } => {
+            // Resolve only ACTUAL durable policy written from the signed owning resource.
+            // The consumer descriptor/expression carries no physical table name.
+            let mut resolved = None;
+            for (relation, state) in &db.collections {
+                let state = state.read();
+                let Some(publication) = state
+                    .meta
+                    .mutation_policy
+                    .as_ref()
+                    .and_then(|policy| policy.native_fact_publication.as_ref())
+                else {
+                    continue;
+                };
+                if publication.owner_application == *owner_application
+                    && publication.publication_name == *publication_name
+                    && publication.owner_resource.as_deref() == Some(owner_resource.as_str())
+                {
+                    if resolved.is_some()
+                        || publication.owner_version.as_deref() != Some(owner_version.as_str())
+                        || publication.fingerprint != *publication_fingerprint
+                    {
+                        return Err(BicDbError::CommitValidation(
+                            "native fact integrity failed".into(),
+                        ));
+                    }
+                    resolved = Some(relation.clone());
+                }
+            }
+            let relation = resolved.ok_or_else(|| {
+                BicDbError::CommitValidation("native fact integrity failed".into())
+            })?;
+            evaluate_native_invariant_expression(
+                db,
+                tx,
+                subject_relation,
+                subject,
+                bindings,
+                &NativeInvariantExpression::PublishedExists {
+                    binding: binding.clone(),
+                    relation,
+                    owner_application: owner_application.clone(),
+                    publication_name: publication_name.clone(),
+                    publication_fingerprint: publication_fingerprint.clone(),
+                    consumer_application: consumer_application.clone(),
+                    condition: condition.clone(),
+                },
+            )?
+        }
         NativeInvariantExpression::PublishedExists {
             binding,
             relation,
@@ -8853,7 +8911,8 @@ fn validate_carrier_invariant(
     }
     fn has_published(value: &NativeInvariantExpression) -> bool {
         match value {
-            NativeInvariantExpression::PublishedExists { .. } => true,
+            NativeInvariantExpression::PublishedExists { .. }
+            | NativeInvariantExpression::PublishedProjectionExists { .. } => true,
             NativeInvariantExpression::Unary { value, .. } => has_published(value),
             NativeInvariantExpression::Binary { left, right, .. } => {
                 has_published(left) || has_published(right)
@@ -12753,6 +12812,15 @@ impl BicDb {
         if policy.native_fact_publication.is_some() || policy.native_fact_reference_owner.is_some()
         {
             format::enable_native_immutable_facts(&self.path)?;
+        }
+        if policy
+            .native_fact_publication
+            .as_ref()
+            .is_some_and(|publication| {
+                publication.owner_resource.is_some() || publication.owner_version.is_some()
+            })
+        {
+            format::enable_native_fact_projection_contracts(&self.path)?;
         }
         self.collection_state_mut(collection)?.meta.mutation_policy = Some(policy);
         self.persist_catalog()?;

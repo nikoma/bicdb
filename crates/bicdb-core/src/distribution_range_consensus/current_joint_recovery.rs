@@ -298,7 +298,7 @@ impl RangeWriteStore {
         let scope = RecoveryFenceScope::from_role(role)?;
         // This local sub-step never renews the role. Outer callers retain and
         // check their original cancellation; the exact role deadline caps IO.
-        let token = CancellationToken::new().child_with_deadline(role.deadline());
+        let token = CancellationToken::uncancelable().child_with_deadline(role.deadline());
         let fact = self.require_current_joint_scope_domain(db, &scope, &token)?;
         fact.require_role(role)?;
         role.require_live_request()?;

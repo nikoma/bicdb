@@ -69,7 +69,8 @@ state at each new fence. This test is unexecuted at this source checkpoint.
 This first producer intentionally requires the exact protected activation
 configuration/epoch/leader, same-open writer registration and original frozen
 operation. Higher epoch or leader replacement, changed membership, unresolved
-OLD-domain tails, unavailable no-effect origin, minority promise reconciliation,
+OLD-domain tails, NEW-domain committed/CQ suffix historical adoption, unavailable
+no-effect origin, minority promise reconciliation,
 all-owner cold recovery and automatic operator recovery remain OPEN. A native
 commit obligation must be repaired as committed; it cannot become NoData.
 

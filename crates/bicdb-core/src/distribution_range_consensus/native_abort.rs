@@ -1207,6 +1207,12 @@ impl RangeWriteStore {
             .cancellation(parent)?
             .child_with_deadline(role.deadline());
         self.observe_fenced_recovery_history(role, native, &request.scope, None)?;
+        if matches!(
+            request.scope.purpose,
+            crate::distribution_consensus::MetadataRecoveryRolePurpose::CurrentJointRecovery { .. }
+        ) {
+            self.require_current_joint_scope_domain(db, &request.scope, &cancellation)?;
+        }
         self.require_actual_abort_catalogue(db)?;
         if native.abort_protocol_version() != 1 || native.writer_enforcement_version() != 1 {
             return Err(range_write_error(

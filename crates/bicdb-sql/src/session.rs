@@ -2099,6 +2099,7 @@ pub(crate) enum DdlUndo {
     },
     RestorePartitionTableStates {
         states: Vec<partition_schema::TableState>,
+        auxiliary: Vec<partition_schema::AuxiliaryState>,
     },
     DeleteUserType {
         schema_name: String,
@@ -4864,10 +4865,10 @@ impl<'db> SqlSession<'db> {
 
     pub(crate) fn rollback_ddl_to_len(&mut self, len: usize) -> Result<()> {
         while self.ddl_undo.len() > len {
-            if let Some(DdlUndo::RestorePartitionTableStates { states }) =
+            if let Some(DdlUndo::RestorePartitionTableStates { states, auxiliary }) =
                 self.ddl_undo.last().cloned()
             {
-                self.restore_partition_table_states(states)?;
+                self.restore_partition_table_states(states, auxiliary)?;
                 self.ddl_undo.pop();
                 continue;
             }
@@ -4995,8 +4996,8 @@ impl<'db> SqlSession<'db> {
             DdlUndo::RestorePartitionCatalog { entries } => {
                 self.restore_partition_catalog(entries)?
             }
-            DdlUndo::RestorePartitionTableStates { states } => {
-                self.restore_partition_table_states(states)?
+            DdlUndo::RestorePartitionTableStates { states, auxiliary } => {
+                self.restore_partition_table_states(states, auxiliary)?
             }
             DdlUndo::DeleteUserType { schema_name, name } => {
                 let _ = delete_user_type(self.db_mut()?, &schema_name, &name)?;

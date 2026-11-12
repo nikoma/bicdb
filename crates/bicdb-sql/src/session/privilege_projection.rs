@@ -107,22 +107,38 @@ impl<'db> SqlSession<'db> {
         object_type: PrivilegeObjectType,
         object_name: &str,
     ) -> Result<()> {
+        for grant in
+            self.default_privileges_for_object(owner, schema_name, object_type, object_name)?
+        {
+            self.save_session_privilege(&grant)?;
+        }
+        Ok(())
+    }
+
+    pub(super) fn default_privileges_for_object(
+        &self,
+        owner: &str,
+        schema_name: &str,
+        object_type: PrivilegeObjectType,
+        object_name: &str,
+    ) -> Result<Vec<PrivilegeGrant>> {
         let defaults = list_default_privileges(self.db_ref())?;
+        let mut grants = Vec::new();
         for default in defaults.into_iter().filter(|default| {
             default.grantor.eq_ignore_ascii_case(owner)
                 && (default.schema_name == "*"
                     || default.schema_name.eq_ignore_ascii_case(schema_name))
                 && default.object_type == object_type
         }) {
-            self.save_session_privilege(&PrivilegeGrant {
+            grants.push(PrivilegeGrant {
                 column: None,
                 object_type,
                 object_name: object_name.to_string(),
                 grantee: default.grantee,
                 privilege: default.privilege,
-            })?;
+            });
         }
-        Ok(())
+        Ok(grants)
     }
 
     pub(crate) fn save_session_routine(&mut self, routine: &RoutineSchema) -> Result<()> {

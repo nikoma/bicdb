@@ -14,6 +14,14 @@ pub(crate) fn same_registration(a: &ClusterNode, b: &ClusterNode) -> bool {
         && a.lifecycle == b.lifecycle
 }
 impl MetadataConsensusStore {
+    pub(crate) fn require_native_control_leader(
+        &self,
+        current: &HostMetadataReadObservation,
+        business: Uuid,
+    ) -> Result<()> {
+        self.require_native_learner_enrollment_leader(current, business)
+    }
+
     pub(crate) fn propose_native_metadata_registration(
         &mut self,
         ingress: &NativeMetadataRegistrationIngress,

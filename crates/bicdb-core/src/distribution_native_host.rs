@@ -61,6 +61,10 @@ pub use operator::{
     NativeMetadataBootstrapPlan, NativeMetadataCollection, NativeMetadataHost,
     NativeMetadataHostAction, NativeMetadataHostPhase, NativeMetadataHostStatus,
 };
+#[cfg(feature = "tls-replication")]
+mod operator_learner;
+#[cfg(feature = "tls-replication")]
+pub use operator_learner::{NativeMetadataLearnerHost, NativeMetadataLearnerStatus};
 fn invalid(detail: &str) -> BicDbError {
     BicDbError::Cluster(format!("native host bootstrap: {detail}"))
 }

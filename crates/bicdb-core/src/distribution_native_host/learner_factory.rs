@@ -32,6 +32,10 @@ pub(crate) struct NativeUnassignedLearnerFactory {
     manifest: LearnerManifest,
 }
 impl NativeUnassignedLearnerFactory {
+    pub(super) fn actual_birth(&self) -> &NativeStoreBirthV1 {
+        &self.manifest.birth
+    }
+
     fn context(
         observed: &HostMetadataReadObservation,
         business: Uuid,

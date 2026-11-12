@@ -1,10 +1,10 @@
 //! Explicit metadata-only host. Never calls generic pgwire/MStore startup.
 use anyhow::{ensure, Context, Result};
+use bicdb_core::NativeMetadataLearnerHost;
 use bicdb_core::{
     CancellationToken, ClusterNetworkTransportConfig, ClusterNode, ClusterNodeId,
     NativeMetadataBootstrapPlan, NativeMetadataHost, NativeMetadataHostAction,
-    NativeMetadataHostPhase, NativeMetadataHostStatus, ReplicationTlsConfig,
-    TcpClusterBootstrapClient,
+    NativeMetadataHostPhase, ReplicationTlsConfig, TcpClusterBootstrapClient,
 };
 use clap::{Subcommand, ValueEnum};
 use serde::{Deserialize, Serialize};
@@ -42,6 +42,36 @@ pub enum Command {
         #[arg(long, default_value_t = 3600)]
         run_seconds: u64,
     },
+    /// Real fresh fifth factory/birth listener; metadata backend is a later action.
+    ServeLearnerFresh {
+        root: PathBuf,
+        #[arg(long)]
+        cluster_id: String,
+        #[arg(long)]
+        seed_node_id: String,
+        #[arg(long)]
+        seed_address: String,
+        #[arg(long)]
+        node_id: String,
+        #[arg(long)]
+        address: String,
+        #[arg(long, default_value_t = 1)]
+        incarnation: u64,
+        #[arg(long)]
+        cluster_tls_cert: PathBuf,
+        #[arg(long)]
+        cluster_tls_key: PathBuf,
+        #[arg(long)]
+        cluster_tls_ca: PathBuf,
+        #[arg(long)]
+        command_file: PathBuf,
+        #[arg(long)]
+        status_file: PathBuf,
+        #[arg(long, default_value_t = 8_388_608)]
+        buffer_pool_bytes: u64,
+        #[arg(long, default_value_t = 3600)]
+        run_seconds: u64,
+    },
     /// Send one local operator action; JSON commands are DATA, not capabilities.
     Step {
         #[arg(long)]
@@ -52,6 +82,8 @@ pub enum Command {
         sequence: u64,
         #[arg(long, value_enum)]
         action: Action,
+        #[arg(long)]
+        target_node_id: Option<String>,
         #[arg(long, default_value_t = 5000)]
         timeout_ms: u64,
     },
@@ -88,20 +120,36 @@ pub enum Action {
     Elect,
     EnableControl,
     Heartbeat,
+    EnrollLearner,
+    CatchUpLearner,
+    StartLearnerMetadata,
     Status,
     Stop,
 }
-impl From<Action> for NativeMetadataHostAction {
-    fn from(a: Action) -> Self {
-        match a {
-            Action::Prepare => Self::Prepare,
-            Action::Launch => Self::Launch,
-            Action::Elect => Self::Elect,
-            Action::EnableControl => Self::EnableControl,
-            Action::Heartbeat => Self::Heartbeat,
-            Action::Status => Self::Status,
-            Action::Stop => Self::Stop,
-        }
+impl Action {
+    fn into_core(self, target: Option<String>) -> Result<NativeMetadataHostAction> {
+        use NativeMetadataHostAction as C;
+        let needs_target = matches!(self, Self::EnrollLearner | Self::CatchUpLearner);
+        ensure!(
+            needs_target == target.is_some(),
+            "target-node-id is required ONLY for enroll-learner/catch-up-learner"
+        );
+        Ok(match self {
+            Self::Prepare => C::Prepare,
+            Self::Launch => C::Launch,
+            Self::Elect => C::Elect,
+            Self::EnableControl => C::EnableControl,
+            Self::Heartbeat => C::Heartbeat,
+            Self::EnrollLearner => C::EnrollLearner {
+                node: ClusterNodeId::new(target.unwrap())?,
+            },
+            Self::CatchUpLearner => C::CatchUpLearner {
+                node: ClusterNodeId::new(target.unwrap())?,
+            },
+            Self::StartLearnerMetadata => C::StartLearnerMetadata,
+            Self::Status => C::Status,
+            Self::Stop => C::Stop,
+        })
     }
 }
 #[derive(Serialize, Deserialize)]
@@ -113,11 +161,11 @@ struct Request {
     budget_ms: u64,
 }
 #[derive(Serialize)]
-struct Reply<'a> {
+struct Reply<'a, T: Serialize> {
     version: u32,
     sequence: u64,
     process_id: u32,
-    host: Option<&'a NativeMetadataHostStatus>,
+    host: Option<&'a T>,
     error: Option<String>,
     data_serving: bool,
 }
@@ -350,11 +398,155 @@ pub fn run(command: Command) -> Result<()> {
                     .child_with_deadline(Instant::now() + Duration::from_secs(5)),
             )?;
         }
+        Command::ServeLearnerFresh {
+            root,
+            cluster_id,
+            seed_node_id,
+            seed_address,
+            node_id,
+            address,
+            incarnation,
+            cluster_tls_cert,
+            cluster_tls_key,
+            cluster_tls_ca,
+            command_file,
+            status_file,
+            buffer_pool_bytes,
+            run_seconds,
+        } => {
+            ensure!(
+                (1..=86400).contains(&run_seconds) && !root.exists(),
+                "fresh learner requires a new root and bounded run duration"
+            );
+            ensure!(
+                command_file != status_file && !command_file.exists() && !status_file.exists(),
+                "learner operator files must differ and be absent"
+            );
+            let root_parent = root
+                .parent()
+                .filter(|p| !p.as_os_str().is_empty())
+                .unwrap_or(Path::new("."))
+                .canonicalize()?;
+            let actual_root =
+                root_parent.join(root.file_name().context("learner root basename absent")?);
+            for path in [&command_file, &status_file] {
+                ensure!(
+                    !private_parent(path)?
+                        .join(path.file_name().context("operator filename absent")?)
+                        .starts_with(&actual_root),
+                    "learner operator files must stay outside native root"
+                );
+            }
+            let canceled = Arc::new(AtomicBool::new(false));
+            let signal = Arc::clone(&canceled);
+            ctrlc::set_handler(move || {
+                signal.store(true, Ordering::SeqCst);
+            })?;
+            let lifetime = CancellationToken::new(
+                canceled,
+                Some(Instant::now() + Duration::from_secs(run_seconds)),
+            );
+            let mut host = NativeMetadataLearnerHost::start_fresh_metadata_only(
+                &root,
+                bicdb_core::ClusterId::new(cluster_id)?,
+                ClusterNodeId::new(node_id)?,
+                &address,
+                incarnation,
+                ClusterNodeId::new(seed_node_id)?,
+                &seed_address,
+                own_network(cluster_tls_cert, cluster_tls_key, cluster_tls_ca),
+                buffer_pool_bytes,
+                &lifetime,
+            )?;
+            let mut status = host.refresh(&lifetime)?;
+            write(
+                &status_file,
+                &Reply {
+                    version: 1,
+                    sequence: 0,
+                    process_id: std::process::id(),
+                    host: Some(&status),
+                    error: None,
+                    data_serving: false,
+                },
+            )?;
+            let mut sequence = 0;
+            let mut last_refresh = Instant::now();
+            let mut stopping = false;
+            while lifetime.check().is_ok() && !stopping {
+                if command_file.exists() {
+                    let request: Request =
+                        serde_json::from_slice(&read_bounded(&command_file, 16 * 1024)?)?;
+                    ensure!(
+                        request.version == 1 && (1..=5000).contains(&request.budget_ms),
+                        "unsupported learner command version/budget"
+                    );
+                    if request.sequence > sequence {
+                        ensure!(
+                            request.sequence == sequence + 1,
+                            "learner sequence must advance exactly one"
+                        );
+                        let token = lifetime.child_with_deadline(
+                            Instant::now() + Duration::from_millis(request.budget_ms),
+                        );
+                        let result = match request.action {
+                            NativeMetadataHostAction::StartLearnerMetadata => {
+                                host.start_metadata(&token)
+                            }
+                            NativeMetadataHostAction::Status => host.refresh(&token),
+                            NativeMetadataHostAction::Stop => host.stop(&token).map(|_| {
+                                stopping = true;
+                                status.phase = "stopped";
+                                status.metadata_listener_owned = false;
+                                status.clone()
+                            }),
+                            _ => Err(bicdb_core::BicDbError::Unsupported(
+                                "learner owner permits only start-learner-metadata/status/stop"
+                                    .into(),
+                            )),
+                        };
+                        let error = match result {
+                            Ok(next) => {
+                                status = next;
+                                None
+                            }
+                            Err(error) => Some(error.to_string()),
+                        };
+                        sequence = request.sequence;
+                        write(
+                            &status_file,
+                            &Reply {
+                                version: 1,
+                                sequence,
+                                process_id: std::process::id(),
+                                host: Some(&status),
+                                error,
+                                data_serving: false,
+                            },
+                        )?;
+                    }
+                }
+                if last_refresh.elapsed() >= Duration::from_millis(500) && !stopping {
+                    if let Ok(next) = host.refresh(
+                        &lifetime.child_with_deadline(Instant::now() + Duration::from_secs(2)),
+                    ) {
+                        status = next;
+                    }
+                    last_refresh = Instant::now();
+                }
+                std::thread::sleep(Duration::from_millis(5));
+            }
+            host.stop(
+                &CancellationToken::uncancelable()
+                    .child_with_deadline(Instant::now() + Duration::from_secs(5)),
+            )?;
+        }
         Command::Step {
             command_file,
             status_file,
             sequence,
             action,
+            target_node_id,
             timeout_ms,
         } => {
             ensure!(
@@ -371,7 +563,7 @@ pub fn run(command: Command) -> Result<()> {
                 &Request {
                     version: 1,
                     sequence,
-                    action: action.into(),
+                    action: action.into_core(target_node_id)?,
                     budget_ms: timeout_ms,
                 },
             )?;

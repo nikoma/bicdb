@@ -48,18 +48,23 @@ fn paths(root: &Path, i: usize) -> (PathBuf, PathBuf) {
     )
 }
 fn step(root: &Path, i: usize, seq: u64, action: &str) -> Value {
+    step_target(root, i, seq, action, None)
+}
+fn step_target(root: &Path, i: usize, seq: u64, action: &str, target: Option<&str>) -> Value {
     let (command, status) = paths(root, i);
-    let output = binary()
-        .args(["cluster", "native-metadata", "step", "--command-file"])
+    let mut call = binary();
+    call.args(["cluster", "native-metadata", "step", "--command-file"])
         .arg(command)
         .arg("--status-file")
         .arg(&status)
         .arg("--sequence")
         .arg(seq.to_string())
         .arg("--action")
-        .arg(action)
-        .output()
-        .unwrap();
+        .arg(action);
+    if let Some(target) = target {
+        call.arg("--target-node-id").arg(target);
+    }
+    let output = call.output().unwrap();
     assert!(
         output.status.success(),
         "operator {action} failed: {}",
@@ -255,6 +260,88 @@ fn native_metadata_operator_actual_cli_four_process_startup_registration_and_dat
         !root.join("db4").exists(),
         "registration must not provision a generic fifth DB"
     );
+    // Continue with a REAL fifth native factory/process, not generic member
+    // provisioning. The common seed-only TLS paths are never used by it.
+    let (learner_command, learner_status) = paths(&root, 4);
+    let mut fifth = binary();
+    fifth
+        .args(["cluster", "native-metadata", "serve-learner-fresh"])
+        .arg(root.join("db4"))
+        .arg("--cluster-id")
+        .arg(config.cluster_id.as_str())
+        .arg("--seed-node-id")
+        .arg("n0")
+        .arg("--seed-address")
+        .arg(&addresses[0])
+        .arg("--node-id")
+        .arg("n4")
+        .arg("--address")
+        .arg(&addresses[4])
+        .arg("--command-file")
+        .arg(learner_command)
+        .arg("--status-file")
+        .arg(&learner_status)
+        .arg("--run-seconds")
+        .arg("120");
+    add_tls(&mut fifth, &root, 4);
+    fifth
+        .stdin(Stdio::null())
+        .stdout(std::fs::File::create(root.join("node4.stdout")).unwrap())
+        .stderr(std::fs::File::create(root.join("node4.stderr")).unwrap());
+    processes.children.push(fifth.spawn().unwrap());
+    let until = Instant::now() + Duration::from_secs(15);
+    while !learner_status.exists() {
+        assert!(
+            processes.children[4].try_wait().unwrap().is_none(),
+            "fifth factory failed; retained node4 stderr contains exact producer refusal"
+        );
+        assert!(
+            Instant::now() < until,
+            "actual fifth factory/birth listener timed out"
+        );
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    let provisional: Value =
+        serde_json::from_slice(&std::fs::read(&learner_status).unwrap()).unwrap();
+    assert_eq!(provisional["host"]["phase"], "provisional_birth");
+    assert_eq!(provisional["host"]["birth_bound"], false);
+    assert_eq!(provisional["host"]["data_serving"], false);
+    assert!(root.join("db4").exists());
+    let namespace_ids = provisional["host"]["namespace_ids"].clone();
+    assert!(!namespace_ids.as_array().unwrap().is_empty());
+    for entry in namespace_ids.as_array().unwrap() {
+        assert!(!uuid::Uuid::parse_str(entry[1].as_str().unwrap())
+            .unwrap()
+            .is_nil());
+    }
+    sequences[0] += 1;
+    let enrolled = step_target(&root, 0, sequences[0], "enroll-learner", Some("n4"));
+    assert_eq!(enrolled["host"]["last_enrolled_learner"], "n4");
+    let owned = step(&root, 4, 1, "start-learner-metadata");
+    assert_eq!(owned["host"]["phase"], "owned_metadata_learner");
+    assert_eq!(owned["host"]["birth_bound"], true);
+    assert_eq!(owned["host"]["namespace_ids"], namespace_ids);
+    assert_eq!(owned["host"]["birth_id"], provisional["host"]["birth_id"]);
+    let store_id = owned["host"]["metadata_store_id"].clone();
+    assert!(!uuid::Uuid::parse_str(store_id.as_str().unwrap())
+        .unwrap()
+        .is_nil());
+    assert_eq!(owned["host"]["metadata_listener_owned"], true);
+    sequences[0] += 1;
+    let caught = step_target(&root, 0, sequences[0], "catch-up-learner", Some("n4"));
+    assert_eq!(
+        caught["host"]["last_caught_up_learner_store_id"], store_id,
+        "actual native bound ACK must identify SAME protected hot backend"
+    );
+    let hot = step(&root, 4, 2, "status");
+    assert_eq!(hot["host"]["metadata_store_id"], store_id);
+    assert_eq!(hot["host"]["namespace_ids"], namespace_ids);
+    assert!(
+        hot["host"]["metadata"]["commit_index"].as_u64().unwrap()
+            >= enrolled["host"]["metadata"]["commit_index"]
+                .as_u64()
+                .unwrap()
+    );
     // Existing root misuse refuses BEFORE opening/resetting the real host.
     let existing = binary()
         .args(["cluster", "native-metadata", "serve-fresh"])
@@ -299,9 +386,53 @@ fn native_metadata_operator_actual_cli_four_process_startup_registration_and_dat
     .unwrap();
     let snapshot = bootstrap.fetch_snapshot(&node(0), &addresses[0]).unwrap();
     assert_eq!(snapshot.topology.nodes[&node(4)].address, addresses[4]);
-    assert!(snapshot.topology.nodes[&node(4)]
+    let bound = snapshot.topology.nodes[&node(4)]
         .native_store_birth_v1
-        .is_none());
+        .as_ref()
+        .unwrap();
+    assert_eq!(
+        bound.birth_id().to_string(),
+        provisional["host"]["birth_id"].as_str().unwrap()
+    );
+    assert_eq!(
+        snapshot.topology.nodes[&node(4)].metadata_role,
+        bicdb_core::MetadataMemberRole::Learner
+    );
+    assert_eq!(
+        provisional["host"]["schema_sha256"].as_str().unwrap(),
+        snapshot
+            .topology
+            .ranges
+            .values()
+            .next()
+            .unwrap()
+            .required_schema_sha256(&snapshot.topology.nodes)
+            .unwrap()
+    );
+    // A committed actual birth cannot be replaced with a blank factory using
+    // the same node/incarnation, even at another unused local path.
+    let replacement_root = root.join("db4-replacement");
+    let mut replacement = binary();
+    replacement
+        .args(["cluster", "native-metadata", "serve-learner-fresh"])
+        .arg(&replacement_root)
+        .arg("--cluster-id")
+        .arg(config.cluster_id.as_str())
+        .arg("--seed-node-id")
+        .arg("n0")
+        .arg("--seed-address")
+        .arg(&addresses[0])
+        .arg("--node-id")
+        .arg("n4")
+        .arg("--address")
+        .arg(&addresses[4])
+        .arg("--command-file")
+        .arg(root.join("replacement.command"))
+        .arg("--status-file")
+        .arg(root.join("replacement.status"));
+    add_tls(&mut replacement, &root, 4);
+    assert!(!replacement.output().unwrap().status.success());
+    assert!(!replacement_root.exists());
     let transport = bicdb_core::TcpClusterRelocationTransport::new(
         config.cluster_id,
         node(0),
@@ -310,7 +441,7 @@ fn native_metadata_operator_actual_cli_four_process_startup_registration_and_dat
     )
     .unwrap();
     let range = snapshot.topology.ranges.values().next().unwrap();
-    for i in 0..4 {
+    for i in 0..5 {
         assert!(transport
             .application_event(
                 &node(i),
@@ -325,8 +456,12 @@ fn native_metadata_operator_actual_cli_four_process_startup_registration_and_dat
                 }
             )
             .is_err());
-        sequences[i] += 1;
-        step(&root, i, sequences[i], "stop");
+        if i == 4 {
+            step(&root, 4, 3, "stop");
+        } else {
+            sequences[i] += 1;
+            step(&root, i, sequences[i], "stop");
+        }
     }
     let until = Instant::now() + Duration::from_secs(10);
     for child in &mut processes.children {

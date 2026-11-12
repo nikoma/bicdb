@@ -9,6 +9,8 @@ use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Instant;
 
+mod schema_export;
+
 const MAX_PENDING: usize = 32;
 const MAX_QUEUE_BYTES: usize = 1024 * 1024;
 
@@ -415,6 +417,98 @@ impl NativeMetadataControlHost {
                 .start_metadata_listener(self.network.clone(), &token)?,
         );
         token.check()
+    }
+    pub(crate) fn enroll_learner(
+        &self,
+        target: &ClusterNodeId,
+        parent: &CancellationToken,
+    ) -> Result<NativeLearnerMetadataEnrollment> {
+        self.launch.enroll_registered_native_learner(target, parent)
+    }
+    pub(crate) fn catch_up_learner(
+        &self,
+        target: &ClusterNodeId,
+        parent: &CancellationToken,
+    ) -> Result<Uuid> {
+        let token = parent.child_with_deadline(Instant::now() + Duration::from_secs(5));
+        let business = Uuid::now_v7();
+        let current = self.launch.transport.acquire_host_metadata_observation(
+            &self.launch.seed.spec.node_id,
+            business,
+            Duration::from_secs(5),
+            &token,
+        )?;
+        let open = self
+            .launch
+            .service
+            .try_lock()
+            .ok_or_else(|| invalid("learner catch-up service busy"))?
+            .listener_open_guard();
+        let mut accepted = None;
+        for _ in 0..3 {
+            let (request, required) = {
+                let store = self.launch.lock_initial_metadata(&token)?;
+                store.require_listener_database(&open)?;
+                store.require_native_control_leader(&current, business)?;
+                let member = store
+                    .committed_topology()
+                    .nodes
+                    .get(target)
+                    .ok_or_else(|| invalid("catch-up learner absent"))?;
+                if member.lifecycle != ClusterNodeLifecycle::Active
+                    || member.metadata_role != MetadataMemberRole::Learner
+                    || member.native_store_birth_v1.is_none()
+                {
+                    return Err(invalid(
+                        "catch-up requires exact committed bound metadata learner",
+                    ));
+                }
+                (
+                    store.append_request_for_peer(target, 16)?,
+                    store.status().commit_index,
+                )
+            };
+            let reply = self
+                .launch
+                .transport
+                .append_metadata_cancellable(target, request, &token)?;
+            let receiver = reply
+                .native_receiver
+                .as_ref()
+                .ok_or_else(|| invalid("learner catch-up has no actual native owned ACK"))?;
+            let id = receiver.metadata_store_id();
+            {
+                let mut store = self.launch.lock_initial_metadata(&token)?;
+                store.require_listener_database(&open)?;
+                store.record_append_response(target, &reply)?;
+                store.require_native_control_leader(&current, business)?;
+            }
+            if reply.success && reply.match_index >= required {
+                accepted = Some(id);
+                break;
+            }
+        }
+        let id = accepted.ok_or_else(|| {
+            invalid("bounded learner catch-up has not reached actual leader commit")
+        })?;
+        let post_business = Uuid::now_v7();
+        let post = self.launch.transport.acquire_host_metadata_observation(
+            &self.launch.seed.spec.node_id,
+            post_business,
+            Duration::from_secs(5),
+            &token,
+        )?;
+        if post.context_id() == current.context_id()
+            || post.committed_topology(post_business)? != current.committed_topology(business)?
+            || post.restore_activation(post_business)? != current.restore_activation(business)?
+        {
+            return Err(invalid("learner catch-up CONFIG changed"));
+        }
+        let store = self.launch.lock_initial_metadata(&token)?;
+        store.require_listener_database(&open)?;
+        store.require_native_control_leader(&post, post_business)?;
+        token.check()?;
+        Ok(id)
     }
     pub(crate) fn metadata_status(
         &self,

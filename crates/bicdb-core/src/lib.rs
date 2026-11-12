@@ -34,6 +34,7 @@ mod distribution_native_host;
 pub use distribution_native_host::{
     NativeMetadataBootstrapPlan, NativeMetadataCollection, NativeMetadataHost,
     NativeMetadataHostAction, NativeMetadataHostPhase, NativeMetadataHostStatus,
+    NativeMetadataLearnerHost, NativeMetadataLearnerStatus,
 };
 mod distribution_native_read;
 mod distribution_native_writer;

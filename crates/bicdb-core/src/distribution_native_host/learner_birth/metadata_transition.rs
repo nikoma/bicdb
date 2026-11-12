@@ -19,6 +19,27 @@ pub(super) struct NativeLearnerMetadataTransition {
     namespace_ids: Option<Vec<(String, Uuid)>>,
 }
 impl NativeUnassignedLearnerHost {
+    pub(in crate::distribution_native_host) fn owned_metadata_snapshot(
+        &self,
+        parent: &CancellationToken,
+    ) -> Result<Option<(Uuid, crate::MetadataConsensusStatus, bool)>> {
+        parent.check()?;
+        self.provider.actual_open.require_live()?;
+        let Some(metadata) = self.metadata_transition.metadata.as_ref() else {
+            return Ok(None);
+        };
+        let store = metadata
+            .try_lock()
+            .ok_or_else(|| invalid("owned learner metadata status busy"))?;
+        store.require_listener_database(&self.provider.actual_open)?;
+        let id = store.registered_native_learner_store_id()?;
+        Ok(Some((
+            id,
+            store.status(),
+            self.metadata_transition.listener.is_some() && !self.metadata_transition.stopping,
+        )))
+    }
+
     /// Current OWN learner MQ is mandatory. Enrollment's audit result is not
     /// accepted as authority, and all network acquisition happens in the caller.
     pub(crate) fn start_owned_metadata(

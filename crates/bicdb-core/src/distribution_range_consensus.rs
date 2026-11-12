@@ -119,6 +119,26 @@ use native_writer::NATIVE_WRITER_CATALOG_FORMAT;
 pub const RANGE_WRITE_LOG_FORMAT_VERSION: u32 = 3;
 pub const RANGE_WRITE_PROTOCOL_VERSION: u32 = 2;
 pub const DEFAULT_RANGE_WRITE_LOG: &str = "cluster-range-write-log.json";
+const KNOWN_RANGE_WRITE_CATALOG_FORMATS: &[u32] = &[
+    1,
+    2,
+    RANGE_WRITE_LOG_FORMAT_VERSION,
+    HANDOFF_RANGE_LOG_FORMAT,
+    IMAGE_INSTALL_RANGE_LOG_FORMAT,
+    NATIVE_IMAGE_CATALOG_FORMAT,
+    NATIVE_READY_CATALOG_FORMAT,
+    NATIVE_COMPLETED_CATALOG_FORMAT,
+    NATIVE_ACTIVATED_FORMAT,
+    SPARSE_HISTORY_CATALOG_FORMAT,
+    IMAGE_PROPOSAL_CATALOG_FORMAT,
+    NATIVE_WRITER_CATALOG_FORMAT,
+];
+
+// Recognizing a format is not a phase, writer or recovery grant. Each caller
+// must independently enforce its minimum, actual feature fences and proof.
+fn range_write_catalog_format_supported(version: u32) -> bool {
+    KNOWN_RANGE_WRITE_CATALOG_FORMATS.contains(&version)
+}
 const RETAIN_APPLIED_COMMANDS_PER_RANGE: u64 = 1_024;
 const RANGE_ADMISSION_WAIT: Duration = Duration::from_secs(30);
 const MAX_RANGE_BACKUP_FENCES: usize = 1_000_000;
@@ -579,23 +599,15 @@ impl RangeWriteEnvelope {
                 "range-write catalog checksum mismatch; refusing recovery",
             ));
         }
-        if !matches!(
-            self.catalog.format_version,
-            1 | 2
-                | RANGE_WRITE_LOG_FORMAT_VERSION
-                | HANDOFF_RANGE_LOG_FORMAT
-                | IMAGE_INSTALL_RANGE_LOG_FORMAT
-                | NATIVE_IMAGE_CATALOG_FORMAT
-                | NATIVE_READY_CATALOG_FORMAT
-                | NATIVE_COMPLETED_CATALOG_FORMAT
-                | NATIVE_ACTIVATED_FORMAT
-                | SPARSE_HISTORY_CATALOG_FORMAT
-                | IMAGE_PROPOSAL_CATALOG_FORMAT
-                | NATIVE_WRITER_CATALOG_FORMAT
-        ) {
+        if !range_write_catalog_format_supported(self.catalog.format_version) {
             return Err(range_write_error(format!(
                 "unsupported range-write log format {}; maximum supported {}",
-                self.catalog.format_version, NATIVE_WRITER_CATALOG_FORMAT
+                self.catalog.format_version,
+                KNOWN_RANGE_WRITE_CATALOG_FORMATS
+                    .iter()
+                    .copied()
+                    .max()
+                    .unwrap_or(0)
             )));
         }
         if self

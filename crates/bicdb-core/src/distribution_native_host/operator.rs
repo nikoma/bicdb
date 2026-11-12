@@ -268,6 +268,15 @@ impl NativeMetadataHost {
             },
         })
     }
+    /// Process-owned finite maintenance, separate from request authority.
+    /// Existing writer/dispatcher remain retained; no second DataOpen action.
+    pub fn refresh_initial_data_registry(&mut self, parent: &CancellationToken) -> Result<()> {
+        parent.check()?;
+        if let Some(control) = self.control.as_mut() {
+            control.refresh_initial_data_registry(parent)?;
+        }
+        Ok(())
+    }
     pub fn maintain_metadata(
         &mut self,
         parent: &CancellationToken,

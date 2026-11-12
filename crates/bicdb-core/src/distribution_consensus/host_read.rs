@@ -258,6 +258,80 @@ impl HostMetadataReadObservation {
     pub(crate) fn read_index(&self) -> u64 {
         self.response.evidence.read_index
     }
+    /// Actual live old/new quorum evidence must describe the SAME committed
+    /// voter identity domain. Pending statistics are not membership authority;
+    /// facts always come from committed C, never its uncommitted candidate.
+    pub(crate) fn stable_writer_registry_audit(&self, business: Uuid) -> Result<serde_json::Value> {
+        self.require_live_request(business)?;
+        let evidence = &self.response.evidence;
+        let identities = |voters: &[MetadataReadVoterProof]| {
+            voters
+                .iter()
+                .map(|voter| (voter.node_id.clone(), voter.clone()))
+                .collect::<BTreeMap<_, _>>()
+        };
+        if identities(&evidence.old_voters) != identities(&evidence.new_voters) {
+            return Err(metadata_error(
+                "writer registry refresh waits for finalized metadata membership",
+            ));
+        }
+        let current = &evidence.committed_topology;
+        if let Some(candidate) = &evidence.joint_configuration_candidate {
+            let ranges = |topology: &ClusterTopology| {
+                topology
+                    .ranges
+                    .iter()
+                    .map(|(key, range)| {
+                        let mut range = range.clone();
+                        range.approximate_bytes = 0;
+                        range.approximate_qps = 0;
+                        range.replicas.sort_by_key(|replica| replica.id);
+                        (*key, range)
+                    })
+                    .collect::<BTreeMap<_, _>>()
+            };
+            let members = |topology: &ClusterTopology| {
+                let mut needed = topology.metadata_voters();
+                for range in topology.ranges.values() {
+                    needed.extend(range.replicas.iter().map(|replica| replica.node_id.clone()));
+                }
+                needed.insert(self.requester_node_id().clone());
+                needed
+                    .into_iter()
+                    .map(|id| {
+                        let mut member = topology.nodes[&id].clone();
+                        member.capacity_bytes = 0;
+                        member.used_bytes = 0;
+                        member.joined_at_ms = 0;
+                        member.last_heartbeat_ms = 0;
+                        (id, member)
+                    })
+                    .collect::<BTreeMap<_, _>>()
+            };
+            if candidate.cluster_id != current.cluster_id
+                || candidate.range_image_bootstrap_id != current.range_image_bootstrap_id
+                || candidate.replication_factor != current.replication_factor
+                || ranges(candidate) != ranges(current)
+                || members(candidate) != members(current)
+                || candidate
+                    .relocations
+                    .values()
+                    .any(|r| !r.phase.is_terminal())
+            {
+                return Err(metadata_error(
+                    "writer registry refresh refuses pending policy-domain change",
+                ));
+            }
+        }
+        if current.relocations.values().any(|r| !r.phase.is_terminal()) {
+            return Err(metadata_error(
+                "writer registry refresh refuses active DATA relocation",
+            ));
+        }
+        let encoded = crate::distribution_range_image::bounded_json(&self.response, 256 * 1024)?;
+        self.require_live_request(business)?;
+        Ok(serde_json::from_slice(&encoded)?)
+    }
     pub(crate) fn deadline(&self) -> Instant {
         self.deadline
     }

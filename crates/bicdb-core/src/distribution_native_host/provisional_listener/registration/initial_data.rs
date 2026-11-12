@@ -27,6 +27,7 @@ pub struct NativeInitialDataStatus {
     pub cleanup_quarantined_owners: usize,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub writer_binding_diagnostic: Option<serde_json::Value>,
+    pub registry_refresh_last_attempt: Option<serde_json::Value>,
 }
 
 /// Only this actual INITIAL owner constructs it after policy publication. It
@@ -118,6 +119,7 @@ pub(super) struct NativeInitialDataHost {
     published: Arc<AtomicBool>,
     stopping: bool,
     cleanup: Option<NativeInitialDataCleanupSender>,
+    registry_refresh_last_attempt: Option<serde_json::Value>,
 }
 impl Drop for NativeInitialDataHost {
     fn drop(&mut self) {
@@ -161,6 +163,7 @@ impl NativeInitialDataHost {
         Ok(Self {
             initial,
             enrollment: None,
+            registry_refresh_last_attempt: None,
             genesis: BTreeMap::new(),
             runtime: None,
             dispatcher: None,
@@ -362,6 +365,7 @@ impl NativeInitialDataHost {
                 "request-scoped fresh MQ/data QQ/MVCC/final MQ; publication is not readiness",
             ranges,
             cleanup_quarantined_owners: NativeInitialDataCleanupSender::quarantined_owners(),
+            registry_refresh_last_attempt: self.registry_refresh_last_attempt.clone(),
             writer_binding_diagnostic: self.enrollment.as_ref().map(|owner| {
                 let mut diagnostic = owner.guard.binding_diagnostic();
                 diagnostic["retained_owner_coordinator_id"] =
@@ -369,6 +373,84 @@ impl NativeInitialDataHost {
                 diagnostic
             }),
         })
+    }
+    fn refresh_registry(&mut self, parent: &CancellationToken) -> Result<()> {
+        parent.check()?;
+        if self.stopping || self.enrollment.is_none() || self.admission.is_none() {
+            return Ok(());
+        }
+        let admission = self.admission.as_ref().unwrap();
+        admission.require_live()?;
+        // Cached C only skips unnecessary maintenance. It never publishes a
+        // policy or grants APP/Strong; those paths keep all actual checks.
+        if self
+            .initial
+            .topology
+            .try_read()
+            .is_some_and(|c| admission.writer.require_topology(&c).is_ok())
+        {
+            return Ok(());
+        }
+        let result = self.perform_registry_refresh(parent);
+        self.registry_refresh_last_attempt = Some(match &result {
+            Ok(()) => serde_json::json!({"result":"verified_same_writer_registry_audit_published",
+                "scope":"metadata-only policy facts; not Ready or a new role"}),
+            Err(error) => {
+                serde_json::json!({"result":"refused_or_pending","error":error.to_string()})
+            }
+        });
+        result
+    }
+    fn perform_registry_refresh(&self, parent: &CancellationToken) -> Result<()> {
+        let token = parent.child_with_deadline(Instant::now() + Duration::from_secs(5));
+        token.check()?;
+        let (route, current) = {
+            let metadata = self.initial.lock_initial_metadata(&token)?;
+            (
+                metadata
+                    .status()
+                    .leader_id
+                    .ok_or_else(|| invalid("registry refresh metadata leader unknown"))?,
+                metadata.committed_topology().clone(),
+            )
+        };
+        // Real owned committed C is routing DATA only. Fresh authority is
+        // obtained below with no DB/service/metadata guards across network.
+        self.initial.transport.install_topology(current)?;
+        let business = Uuid::now_v7();
+        let metadata = self.initial.transport.acquire_host_metadata_observation(
+            &route,
+            business,
+            Duration::from_secs(5),
+            &token,
+        )?;
+        let current = metadata.committed_topology(business)?.clone();
+        let enrollment = self
+            .enrollment
+            .as_ref()
+            .ok_or_else(|| invalid("registry refresh original enrollment ended"))?;
+        let database = self
+            .initial
+            .seed
+            .database
+            .try_read()
+            .ok_or_else(|| invalid("registry refresh actual database busy"))?;
+        let prepared = ClusterDataNodeService::prepare_native_writer_registry_refresh(
+            &self.initial.service,
+            &database,
+            &enrollment.coordinator,
+            &enrollment.guard,
+            metadata,
+            business,
+        )?;
+        // Installs routing facts only, never creates a recovery/serving grant.
+        self.initial.transport.install_topology(current)?;
+        enrollment.guard.refresh_metadata_registry(
+            &database,
+            &enrollment.coordinator,
+            prepared,
+            &token,
+        )
     }
     pub(super) fn stop(&mut self, parent: &CancellationToken) -> Result<()> {
         self.stopping = true;
@@ -436,6 +518,15 @@ fn network_address(
 }
 
 impl NativeMetadataControlHost {
+    pub(crate) fn refresh_initial_data_registry(
+        &mut self,
+        parent: &CancellationToken,
+    ) -> Result<()> {
+        if let Some(data) = self.data.as_mut() {
+            data.refresh_registry(parent)?;
+        }
+        Ok(())
+    }
     pub(crate) fn open_initial_data(&mut self, parent: &CancellationToken) -> Result<()> {
         parent.check()?;
         if self.data.is_none() {
@@ -459,6 +550,87 @@ impl NativeMetadataControlHost {
             .as_mut()
             .unwrap()
             .advance(&leader, &self.network, parent)
+    }
+    #[cfg(test)]
+    pub(crate) fn test_prepare_initial_data_registry_refresh(
+        &self,
+        parent: &CancellationToken,
+    ) -> Result<crate::distribution_data::NativeWriterRegistryRefresh> {
+        parent.check()?;
+        let data = self
+            .data
+            .as_ref()
+            .ok_or_else(|| invalid("test needs actual DATA owner"))?;
+        let (route, c) = {
+            let metadata = data.initial.lock_initial_metadata(parent)?;
+            (
+                metadata
+                    .status()
+                    .leader_id
+                    .ok_or_else(|| invalid("test metadata leader absent"))?,
+                metadata.committed_topology().clone(),
+            )
+        };
+        data.initial.transport.install_topology(c)?;
+        let business = Uuid::now_v7();
+        let metadata = data.initial.transport.acquire_host_metadata_observation(
+            &route,
+            business,
+            Duration::from_secs(5),
+            parent,
+        )?;
+        let original = data
+            .enrollment
+            .as_ref()
+            .ok_or_else(|| invalid("test original writer absent"))?;
+        let database = data
+            .initial
+            .seed
+            .database
+            .try_read()
+            .ok_or_else(|| invalid("test DB busy"))?;
+        ClusterDataNodeService::prepare_native_writer_registry_refresh(
+            &data.initial.service,
+            &database,
+            &original.coordinator,
+            &original.guard,
+            metadata,
+            business,
+        )
+    }
+    #[cfg(test)]
+    pub(crate) fn test_apply_initial_data_registry_refresh(
+        &self,
+        prepared: crate::distribution_data::NativeWriterRegistryRefresh,
+        parent: &CancellationToken,
+    ) -> Result<()> {
+        let data = self
+            .data
+            .as_ref()
+            .ok_or_else(|| invalid("test needs actual DATA owner"))?;
+        let original = data
+            .enrollment
+            .as_ref()
+            .ok_or_else(|| invalid("test original writer absent"))?;
+        let database = data
+            .initial
+            .seed
+            .database
+            .try_read()
+            .ok_or_else(|| invalid("test DB busy"))?;
+        original
+            .guard
+            .refresh_metadata_registry(&database, &original.coordinator, prepared, parent)
+    }
+    #[cfg(test)]
+    pub(crate) fn test_force_initial_data_registry_refresh(
+        &self,
+        parent: &CancellationToken,
+    ) -> Result<()> {
+        self.data
+            .as_ref()
+            .ok_or_else(|| invalid("test needs actual DATA owner"))?
+            .perform_registry_refresh(parent)
     }
     #[cfg(test)]
     pub(crate) fn test_replace_initial_data_writer_after_identity_check(

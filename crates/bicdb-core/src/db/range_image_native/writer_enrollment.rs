@@ -6,6 +6,7 @@ use crate::distribution_range_consensus::{RangeWriteCoordinator, RangeWriteTrans
 use std::sync::Weak;
 
 const POLICY_POINTER: &str = "writer-enrollment/current";
+mod registry_refresh;
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
@@ -61,6 +62,9 @@ pub(crate) struct NativeWriterHostState {
     schema_generation: u64,
     registration: Weak<CommitAdmissionRegistration>,
     coordinator: Weak<dyn CommitAdmission>,
+    registry_extension:
+        parking_lot::RwLock<Option<Arc<registry_refresh::VerifiedRegistryExtension>>>,
+    registry_publication_pending: std::sync::atomic::AtomicBool,
 }
 impl NativeWriterHostState {
     pub(crate) fn registration_generation(&self) -> Uuid {
@@ -142,9 +146,15 @@ impl NativeWriterHostState {
         Ok(())
     }
     pub(crate) fn require_topology(&self, topology: &crate::ClusterTopology) -> Result<()> {
-        self.record.facts.require_topology(topology)
+        self.require_registry_topology(topology)
     }
     pub(crate) fn require_database(&self, database: &BicDb, range: &RangeDescriptor) -> Result<()> {
+        self.require_original_database(database, range)?;
+        self.require_verified_registry_database(database)
+    }
+    // Only registry publication may reconcile a durable-but-unpublished audit.
+    // This still proves the actual original DB/hook/policy/open, not a role.
+    fn require_original_database(&self, database: &BicDb, range: &RangeDescriptor) -> Result<()> {
         self.require_lifetime()?;
         database.check_recovery_state()?;
         if database.incarnation_id() != self.record.database_incarnation
@@ -224,6 +234,7 @@ impl InstalledNativeWriterHostGuard {
             "observed_weak_directory_alive":self.state.directory.upgrade().is_some(),
             "observed_binding_lifetime_live":lifetime.is_ok(),
             "observed_binding_liveness_error":lifetime.err().map(|error|error.to_string()),
+            "actual_verified_registry_extension":self.state.registry_diagnostic(),
             "current_database_hook_slot_not_relocked":true,
             "identity_from_status_dto_is_not_authority":true,
         })
@@ -515,6 +526,8 @@ impl BicDb {
             schema_generation: self.schema_compatibility.generation(),
             registration: Arc::downgrade(&registration),
             coordinator: Arc::downgrade(&authority),
+            registry_extension: parking_lot::RwLock::new(None),
+            registry_publication_pending: std::sync::atomic::AtomicBool::new(false),
         });
         #[cfg(test)]
         if TEST_FAIL_HOST_POLICY_PUBLICATION.with(|flag| flag.replace(false)) {

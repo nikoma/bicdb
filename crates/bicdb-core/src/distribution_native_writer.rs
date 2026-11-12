@@ -145,6 +145,54 @@ impl HostWriterPolicyFacts {
         crate::distribution_range_image::bounded_json(&facts, 256 * 1024)?;
         Ok(facts)
     }
+    /// Additions only, with ALL original and previously added identities and
+    /// the original DATA policy unchanged. Neither facts object mints a grant.
+    pub(crate) fn require_registry_successor(&self, previous: &Self) -> Result<()> {
+        if self.cluster_id != previous.cluster_id
+            || self.bootstrap_id != previous.bootstrap_id
+            || self.local_node_id != previous.local_node_id
+            || self.local_incarnation != previous.local_incarnation
+            || self.local_birth_id != previous.local_birth_id
+            || self.local_birth_sha256 != previous.local_birth_sha256
+            || self.schema_sha256 != previous.schema_sha256
+            || self.restore_activation != previous.restore_activation
+            || self.ranges != previous.ranges
+            || !previous.metadata_voters.is_subset(&self.metadata_voters)
+            || self.metadata_voters.len() > 64
+            || previous
+                .members
+                .iter()
+                .any(|(id, member)| self.members.get(id) != Some(member))
+            || self
+                .members
+                .keys()
+                .any(|id| !previous.members.contains_key(id) && !self.metadata_voters.contains(id))
+        {
+            return Err(invalid(
+                "registry extension changed original DATA/birth/schema/restore/member domain",
+            ));
+        }
+        if self
+            .metadata_voters
+            .iter()
+            .any(|id| !self.members.contains_key(id))
+        {
+            return Err(invalid(
+                "registry successor omits an actual metadata voter identity",
+            ));
+        }
+        for member in self.members.values() {
+            member
+                .birth
+                .validate_for(Some(self.bootstrap_id), member.incarnation)?;
+            if member.birth.writer_enforcement_version() != 1 {
+                return Err(invalid(
+                    "registry successor member is not from-birth writer enforced",
+                ));
+            }
+        }
+        Ok(())
+    }
     pub(crate) fn checksum_sha256(&self) -> Result<String> {
         Ok(hex::encode(Sha256::digest(
             crate::distribution_range_image::bounded_json(self, 256 * 1024)?,
@@ -251,6 +299,20 @@ impl SealedHostWriterEnrollment {
             database_incarnation: database.incarnation_id().into(),
             store_open_id: store.native_writer_store_open_id(),
         })
+    }
+    pub(crate) fn stable_registry_audit(&self) -> Result<serde_json::Value> {
+        let topology = self.metadata.committed_topology(self.business)?;
+        if topology.ranges.values().any(|range| {
+            range
+                .replicas
+                .iter()
+                .any(|r| r.role != RangeReplicaRole::Voter)
+        }) {
+            return Err(invalid(
+                "metadata-only registry refresh refuses a DATA learner transition",
+            ));
+        }
+        self.metadata.stable_writer_registry_audit(self.business)
     }
     pub(crate) fn facts(&self) -> &HostWriterPolicyFacts {
         &self.facts

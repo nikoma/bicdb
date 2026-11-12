@@ -575,6 +575,14 @@ pub fn run(command: Command) -> Result<()> {
                             }
                         }
                     }
+                    if !manual_enrollment {
+                        // A distinct finite process-maintenance attempt. Public
+                        // EventClient request budgets remain unchanged. No root
+                        // reopen, genesis retry, or caller shard action.
+                        let token =
+                            lifetime.child_with_deadline(Instant::now() + Duration::from_secs(5));
+                        let _ = host.refresh_initial_data_registry(&token);
+                    }
                     if let Ok(next) = host.status(
                         &lifetime.child_with_deadline(Instant::now() + Duration::from_millis(250)),
                     ) {

@@ -146,6 +146,17 @@ impl<T: RangeWriteTransport> RangeWriteCoordinator<T> {
         }
         Ok(())
     }
+    pub(crate) fn require_registry_refresh_service(
+        &self,
+        service: &Arc<Mutex<ClusterDataNodeService>>,
+    ) -> Result<()> {
+        if !Arc::ptr_eq(&self.local_service, service) {
+            return Err(range_write_error(
+                "registry refresh changed actual coordinator service",
+            ));
+        }
+        Ok(())
+    }
     pub(crate) fn native_writer_coordinator_id(&self) -> Uuid {
         self.native_coordinator_id
     }

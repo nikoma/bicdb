@@ -13,8 +13,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_storage_mode(mode)
         .with_fsync(true)
         .with_paged_buffer_pool_bytes(8 * 1024 * 1024);
+    let mut completed_plan = None;
     for reopen in 0..3 {
         let mut db = BicDb::open_with_config(&path, config.clone())?;
+        if let Some(plan) = &completed_plan {
+            let sequence = db.last_commit_seq();
+            let repeated = bicdb_sql::apply_partition_upgrade(&mut db, Some(plan))?;
+            assert!(repeated.already_applied);
+            assert_eq!(db.last_commit_seq(), sequence);
+        }
         if reopen == 0 && case.starts_with("apply_") {
             let inspection = bicdb_sql::inspect_partition_upgrade(&db)?;
             let mut plan = bicdb_sql::PartitionUpgradePlan {
@@ -46,6 +53,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
             }
             let applied = bicdb_sql::apply_partition_upgrade(&mut db, Some(&plan))?;
+            assert!(!applied.already_applied);
+            let sequence = db.last_commit_seq();
+            assert!(bicdb_sql::apply_partition_upgrade(&mut db, Some(&plan))?.already_applied);
+            assert_eq!(db.last_commit_seq(), sequence);
+            completed_plan = Some(plan);
             println!("{}", json!({"applied":applied}));
             assert!(db.sql_partition_execution_feature_active());
             assert!(bicdb_sql::inspect_partition_upgrade(&db)?

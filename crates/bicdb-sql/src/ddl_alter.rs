@@ -3125,6 +3125,7 @@ pub(crate) fn raw_partition_by_clause(sql: &str) -> Result<Option<PartitioningSc
     Ok(Some(PartitioningSchema {
         strategy,
         key_columns,
+        execution_version: None,
     }))
 }
 

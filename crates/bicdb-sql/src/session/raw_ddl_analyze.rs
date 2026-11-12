@@ -608,6 +608,7 @@ impl<'db> SqlSession<'db> {
                     parent.schema_name.clone()
                 },
                 bound: partition.bound,
+                execution_version: None,
             }),
             oracle_partitioning: None,
         };
@@ -687,6 +688,7 @@ impl<'db> SqlSession<'db> {
                         parent.schema_name.clone()
                     },
                     bound,
+                    execution_version: None,
                 });
                 partition::validate_attachment(
                     self.db_ref(),

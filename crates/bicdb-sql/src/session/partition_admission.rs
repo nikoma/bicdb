@@ -150,10 +150,6 @@ fn gather(db: &BicDb) -> Result<Snapshot> {
         if !affected(&raw) {
             return Ok(());
         }
-        let schema: TableSchema = serde_json::from_value(raw.metadata.clone())?;
-        if raw.id != schema.name {
-            return Err(required("schema key does not match its authored identity"));
-        }
         let mut legacy = false;
         for field in ["partitioning", "partition_of"] {
             if let Some(value) = raw.metadata.get(field).filter(|v| !v.is_null()) {
@@ -165,6 +161,10 @@ fn gather(db: &BicDb) -> Result<Snapshot> {
                     }
                 }
             }
+        }
+        let schema: TableSchema = serde_json::from_value(raw.metadata.clone())?;
+        if raw.id != schema.name {
+            return Err(required("schema key does not match its authored identity"));
         }
         retained_bytes =
             retained_bytes.saturating_add(serde_json::to_vec(&raw)?.len().saturating_mul(4));
@@ -211,6 +211,12 @@ fn gather(db: &BicDb) -> Result<Snapshot> {
         })?;
     }
     let mut metas = db.collections().into_iter().collect::<Vec<_>>();
+    // These empty bookkeeping collections can survive interruption after the
+    // fence and before the atomic publication. Their existence is not a
+    // change to the operator-reviewed inputs or evidence of completion.
+    metas.retain(|meta| {
+        meta.name != CERTIFICATE_COLLECTION && meta.name != POLICY_ARCHIVE_COLLECTION
+    });
     metas.sort_by(|a, b| a.name.cmp(&b.name));
     for meta in metas {
         hash_item(&mut hasher, meta)?;
@@ -355,6 +361,45 @@ pub struct PartitionUpgradeApplied {
     pub moved_rows: usize,
     pub policy_decisions: usize,
     pub created_trigger_clones: usize,
+    #[serde(default)]
+    pub already_applied: bool,
+}
+
+#[derive(Serialize, Deserialize)]
+struct UpgradeCertificate {
+    version: u32,
+    reader_capability: String,
+    migration_id: String,
+    operator_directory: std::path::PathBuf,
+    plan_digest: String,
+    applied: PartitionUpgradeApplied,
+}
+
+fn plan_digest(plan: &PartitionUpgradePlan) -> Result<String> {
+    let mut hasher = Sha256::new();
+    hash_item(&mut hasher, "sql_partition_upgrade_plan_v1")?;
+    hash_item(&mut hasher, plan)?;
+    Ok(hex::encode(hasher.finalize()))
+}
+
+fn read_certificate(db: &BicDb) -> Result<Option<UpgradeCertificate>> {
+    let raw = match db.get(CERTIFICATE_COLLECTION, "current") {
+        Ok(raw) => raw,
+        Err(BicDbError::CollectionNotFound(_)) => None,
+        Err(error) => return Err(error.into()),
+    };
+    let Some(raw) = raw else { return Ok(None) };
+    let certificate: UpgradeCertificate = serde_json::from_value(raw.metadata.clone())
+        .map_err(|_| required("malformed or unsupported completion certificate"))?;
+    if certificate.version != 1
+        || certificate.reader_capability != "sql_partition_execution_v1"
+        || certificate.migration_id.is_empty()
+        || certificate.plan_digest.len() != 64
+        || !db.sql_partition_execution_feature_active()
+    {
+        return Err(required("unknown or unfenced completion certificate"));
+    }
+    Ok(Some(certificate))
 }
 
 fn planned_destination(
@@ -395,6 +440,28 @@ pub fn apply_partition_upgrade(
     plan: Option<&PartitionUpgradePlan>,
 ) -> Result<PartitionUpgradeApplied> {
     let snapshot = gather(db)?;
+    if let Some(certificate) = read_certificate(db)? {
+        if !snapshot.inspection.legacy_relations.is_empty()
+            || !snapshot.inspection.invalid_rows.is_empty()
+        {
+            return Err(required(
+                "completed catalog contains uncertified partition state",
+            ));
+        }
+        if let Some(plan) = plan {
+            if certificate.operator_directory != snapshot.inspection.database_root
+                || plan.snapshot != certificate.applied.source_snapshot
+                || plan_digest(plan)? != certificate.plan_digest
+            {
+                return Err(required(
+                    "retry does not match the completed local operator plan",
+                ));
+            }
+        }
+        let mut applied = certificate.applied;
+        applied.already_applied = true;
+        return Ok(applied);
+    }
     if snapshot.inspection.legacy_relations.is_empty() {
         return Err(required("there is no legacy partition transition to apply"));
     }
@@ -585,8 +652,21 @@ pub fn apply_partition_upgrade(
         moved_rows,
         policy_decisions: decisions.len(),
         created_trigger_clones: clone_count,
+        already_applied: false,
     };
-    let certificate=Record::new("current").with_metadata(serde_json::json!({"version":1,"reader_capability":"sql_partition_execution_v1","migration_id":migration_id,"applied":applied}));
+    let automatic_plan = PartitionUpgradePlan {
+        snapshot: snapshot.inspection.snapshot.clone(),
+        ..Default::default()
+    };
+    let certificate =
+        Record::new("current").with_metadata(serde_json::to_value(UpgradeCertificate {
+            version: 1,
+            reader_capability: "sql_partition_execution_v1".into(),
+            migration_id,
+            operator_directory: snapshot.inspection.database_root.clone(),
+            plan_digest: plan_digest(plan.unwrap_or(&automatic_plan))?,
+            applied: applied.clone(),
+        })?);
     let mut tx = db.begin_transaction()?;
     for source in snapshot.nodes.values() {
         scan(db, &source.schema.name, |row| {
@@ -658,6 +738,185 @@ pub fn apply_partition_upgrade(
 #[cfg(test)]
 mod tests {
     use super::*;
+    fn legacy_fixture(path: &std::path::Path, mode: bicdb_core::StorageMode) -> BicDb {
+        let mut db = BicDb::open_with_config(path, config(mode)).unwrap();
+        SqlSession::new(&mut db).execute("CREATE TABLE p(k INT PRIMARY KEY,payload TEXT) PARTITION BY RANGE(k);CREATE TABLE low PARTITION OF p FOR VALUES FROM(0) TO(10);CREATE TABLE high PARTITION OF p FOR VALUES FROM(10) TO(20);INSERT INTO p VALUES(2,'low-ack'),(12,'high-ack')").unwrap();
+        db
+    }
+    fn config(mode: bicdb_core::StorageMode) -> bicdb_core::DbConfig {
+        bicdb_core::DbConfig::default()
+            .with_storage_mode(mode)
+            .with_fsync(true)
+            .with_paged_buffer_pool_bytes(8 * 1024 * 1024)
+    }
+    fn plan(db: &BicDb) -> PartitionUpgradePlan {
+        PartitionUpgradePlan {
+            snapshot: inspect_partition_upgrade(db).unwrap().snapshot,
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn interrupted_activation_and_completed_retry_preserve_acks_and_markers() {
+        for mode in [
+            bicdb_core::StorageMode::EmbeddedMemory,
+            bicdb_core::StorageMode::ServerPaged,
+        ] {
+            let root = tempfile::tempdir().unwrap();
+            let mut db = legacy_fixture(root.path(), mode.clone());
+            let plan = plan(&db);
+            db.enable_sql_partition_execution_v1().unwrap();
+            db.create_collection(CERTIFICATE_COLLECTION).unwrap();
+            db.create_collection(POLICY_ARCHIVE_COLLECTION).unwrap();
+            assert_eq!(
+                inspect_partition_upgrade(&db).unwrap().snapshot,
+                plan.snapshot
+            );
+            db.close().unwrap();
+            let mut db = BicDb::open_with_config(root.path(), config(mode.clone())).unwrap();
+            let applied = apply_partition_upgrade(&mut db, Some(&plan)).unwrap();
+            assert!(!applied.already_applied);
+            assert_eq!(applied.moved_rows, 0);
+            for relation in ["p", "low", "high"] {
+                // Generic saves must retain the marker; otherwise the next
+                // reopen would reinterpret a completed relation as legacy.
+                let schema = load_schema(&db, relation).unwrap().unwrap();
+                save_schema(&mut db, &schema).unwrap();
+                let raw = db.get(SCHEMA_COLLECTION, relation).unwrap().unwrap();
+                let field = if relation == "p" {
+                    "partitioning"
+                } else {
+                    "partition_of"
+                };
+                assert_eq!(
+                    raw.metadata[field]["execution_version"],
+                    serde_json::json!(1)
+                );
+            }
+            db.close().unwrap();
+            for _ in 0..2 {
+                let mut db = BicDb::open_with_config(root.path(), config(mode.clone())).unwrap();
+                let sequence = db.last_commit_seq();
+                let certificate = db.get(CERTIFICATE_COLLECTION, "current").unwrap().unwrap();
+                let repeated = apply_partition_upgrade(&mut db, Some(&plan)).unwrap();
+                assert!(repeated.already_applied);
+                assert_eq!(repeated.source_snapshot, applied.source_snapshot);
+                assert_eq!(
+                    db.last_commit_seq(),
+                    sequence,
+                    "receipt retry cannot publish again"
+                );
+                assert_eq!(
+                    db.get(CERTIFICATE_COLLECTION, "current")
+                        .unwrap()
+                        .unwrap()
+                        .metadata,
+                    certificate.metadata
+                );
+                assert_eq!(
+                    db.scan_collection("low").unwrap().len()
+                        + db.scan_collection("high").unwrap().len(),
+                    2
+                );
+                assert!(inspect_partition_upgrade(&db)
+                    .unwrap()
+                    .legacy_relations
+                    .is_empty());
+                let mut changed_plan = plan.clone();
+                changed_plan
+                    .policies
+                    .insert("high".into(), PartitionPolicyDecision::KeepStored);
+                assert_eq!(
+                    apply_partition_upgrade(&mut db, Some(&changed_plan))
+                        .unwrap_err()
+                        .sqlstate(),
+                    "55000"
+                );
+                assert_eq!(db.last_commit_seq(), sequence);
+                db.close().unwrap();
+            }
+        }
+    }
+
+    #[test]
+    fn stale_and_wrong_directory_plans_refuse_before_the_reader_fence() {
+        for mode in [
+            bicdb_core::StorageMode::EmbeddedMemory,
+            bicdb_core::StorageMode::ServerPaged,
+        ] {
+            let first = tempfile::tempdir().unwrap();
+            let second = tempfile::tempdir().unwrap();
+            let mut db = legacy_fixture(first.path(), mode.clone());
+            let plan = plan(&db);
+            let mut other = legacy_fixture(second.path(), mode);
+            let sequence = other.last_commit_seq();
+            assert_eq!(
+                apply_partition_upgrade(&mut other, Some(&plan))
+                    .unwrap_err()
+                    .sqlstate(),
+                "55000"
+            );
+            assert!(!other.sql_partition_execution_feature_active());
+            assert_eq!(other.last_commit_seq(), sequence);
+            other.close().unwrap();
+            SqlSession::new(&mut db)
+                .execute("INSERT INTO p VALUES(3,'new-ack')")
+                .unwrap();
+            let sequence = db.last_commit_seq();
+            assert_eq!(
+                apply_partition_upgrade(&mut db, Some(&plan))
+                    .unwrap_err()
+                    .sqlstate(),
+                "55000"
+            );
+            assert!(!db.sql_partition_execution_feature_active());
+            assert_eq!(db.last_commit_seq(), sequence);
+            assert_eq!(db.scan_collection("low").unwrap().len(), 2);
+            db.close().unwrap();
+        }
+    }
+
+    #[test]
+    fn unknown_or_unfenced_certificates_cannot_be_overwritten_or_adopted() {
+        for mode in [
+            bicdb_core::StorageMode::EmbeddedMemory,
+            bicdb_core::StorageMode::ServerPaged,
+        ] {
+            for unknown in [false, true] {
+                let root = tempfile::tempdir().unwrap();
+                let mut db = legacy_fixture(root.path(), mode.clone());
+                let plan = plan(&db);
+                db.create_collection(CERTIFICATE_COLLECTION).unwrap();
+                let record = Record::new("current").with_metadata(serde_json::json!({
+                    "version":if unknown { 2 } else { 1 },
+                    "reader_capability":"sql_partition_execution_v1",
+                    "migration_id":"not-authorized-by-a-local-reader-fence",
+                    "operator_directory":root.path(),
+                    "plan_digest":plan_digest(&plan).unwrap(),
+                    "applied":{"source_snapshot":plan.snapshot,"moved_rows":0,"policy_decisions":0,"created_trigger_clones":0}
+                }));
+                db.insert(CERTIFICATE_COLLECTION, record.clone()).unwrap();
+                let sequence = db.last_commit_seq();
+                assert_eq!(
+                    apply_partition_upgrade(&mut db, Some(&plan))
+                        .unwrap_err()
+                        .sqlstate(),
+                    "55000"
+                );
+                assert!(!db.sql_partition_execution_feature_active());
+                assert_eq!(db.last_commit_seq(), sequence);
+                assert_eq!(
+                    db.get(CERTIFICATE_COLLECTION, "current")
+                        .unwrap()
+                        .unwrap()
+                        .metadata,
+                    record.metadata
+                );
+                db.close().unwrap();
+            }
+        }
+    }
+
     #[test]
     fn legacy_constraint_preflight_matches_native_pg_before_fence_or_publication() {
         for mode in [

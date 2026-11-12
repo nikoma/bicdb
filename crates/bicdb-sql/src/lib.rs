@@ -3145,6 +3145,8 @@ struct TableCatalogSummary {
 struct PartitioningSchema {
     strategy: String,
     key_columns: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    execution_version: Option<u32>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -3152,6 +3154,8 @@ struct PartitionOfSchema {
     parent_table: String,
     parent_schema: String,
     bound: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    execution_version: Option<u32>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

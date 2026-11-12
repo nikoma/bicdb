@@ -23,9 +23,42 @@ fn status(value: &std::process::ExitStatus) -> Value {
     serde_json::json!({"success":value.success(),"code":value.code(),"signal":signal,"display":value.to_string()})
 }
 impl Processes {
-    pub(super) fn spawn_recorded(&mut self, command: &mut Command) -> std::io::Result<Child> {
+    pub(super) fn spawn_recorded(
+        &mut self,
+        command: &mut Command,
+        database: &Path,
+    ) -> std::io::Result<Child> {
+        let fixture = self
+            .root
+            .as_ref()
+            .ok_or_else(|| io_error("missing fixture owner"))?
+            .path();
+        let name = database
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or("");
+        let args: Vec<_> = command.get_args().collect();
+        if database.parent() != Some(fixture)
+            || name
+                .strip_prefix("db")
+                .and_then(|n| n.parse::<u8>().ok())
+                .is_none_or(|n| n > 15)
+            || !args.starts_with(&[std::ffi::OsStr::new("cluster"), std::ffi::OsStr::new("native-metadata")])
+            || args.get(2).and_then(|arg| arg.to_str()).is_none_or(|mode| !matches!(mode,
+                "serve-fresh" | "join-fresh" | "serve-learner-fresh" | "serve-learner-reopen"))
+            // Public clap syntax allows bool options before the positional
+            // root (join-fresh --replica-receiver ROOT). Keep that real path.
+            || !args.iter().skip(3).any(|arg| *arg == database.as_os_str())
+            || self.owned_database_roots.len() >= 16
+                && !self.owned_database_roots.contains(database)
+        {
+            return Err(io_error(
+                "explicit owned dbN must match actual child positional root",
+            ));
+        }
         let invocation = serde_json::json!({"program":command.get_program().to_string_lossy(),"args":command.get_args().map(|a|a.to_string_lossy().into_owned()).collect::<Vec<_>>(),"cwd":command.get_current_dir().map(|p|p.to_string_lossy().into_owned()),"credential_file_contents_recorded":false});
         let child = command.spawn()?;
+        self.owned_database_roots.insert(database.to_path_buf());
         self.spawn_records
             .push(serde_json::json!({"pid":child.id(),"invocation":invocation}));
         Ok(child)

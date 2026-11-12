@@ -1,0 +1,28 @@
+{
+  "source": "fcf2617ba3ea5e26d6ea720672504fd68dbadfa0",
+  "scope": "Compile current automatic SQL admission/certificate/cache and bounded EmbeddedMemory scan changes, export private debug probe for independent original8default+8explicitold482fixture runs. Buildsuccessalone is not semanticqualification. Focused/native/wire checks submitted separately; no broad/application/HA/publicdelivery claim.",
+  "started_unix": 1794495365.2625139,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "build",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--example",
+        "partition_upgrade_probe"
+      ],
+      "started_unix": 1794495365.2627013,
+      "exit": 0,
+      "finished_unix": 1794495468.456663
+    }
+  ],
+  "status": "focused_passed",
+  "binary": "/root/bicdb-durability-s3/qualification-artifacts-debug/fcf2617ba3ea5e26d6ea720672504fd68dbadfa0/partition_upgrade_probe",
+  "binary_sha256": "f63a95ae98a427ed8ca364ad095dc95ba557fb36bd96c2a0e4757a05aa936423",
+  "finished_unix": 1794495468.7372572
+}

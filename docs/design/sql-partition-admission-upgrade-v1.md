@@ -93,11 +93,53 @@ or the required retry assertions. The corrected fixture passes at `adfa24f3`;
 retain the failed run. Raw multi-statement partition DDL handling
 is separately unqualified and must not be reported as fixed by this test change.
 
-Automatic startup, SQL text/AST/COPY/procedure entry and direct read-only engine
-admission remain unimplemented. Fresh partition constructors still emit missing
-execution markers until activation/publication is connected. The original six
-default admission requirements and two default old-reader requirements remain
-open; explicit API successes do not turn those baseline failures into passes.
+Automatic admission was implemented at `fcf2617b`: SQL text/AST/COPY/procedure
+entry, refusal by the direct read-only engine, and pgwire construction before a
+listener can serve data. The original six default requirements and two actual
+old-reader controls pass at that source and again at `08cbbfc0` and `8ed4a67b`.
+The original failed baseline remains intact. Fresh partition descriptors carry
+v1 only after the sticky reader fence and initial certificate are durable.
+
+The completion certificate now binds the exact affected schema/trigger catalog
+digest. Changes and undo publish that digest in the same Native transaction.
+Ordinary schemas do not enter the digest. A 64MiB/128-instance memo uses Native
+process-local incarnation/generation stamps and complete recent-change coverage;
+replacement, missing coverage or an untracked generation bump causes a bounded
+metadata rescan. It neither grants Native permission nor supplies portable
+backing provenance. The Native EmbeddedMemory batch API now selects bounded
+resident images before decoding, rather than materializing the whole collection.
+
+Related focused runs found and retained real regressions: an uncertified local
+child trigger (`fcf2617b`), implicit promotion of an unauthored visible `id` to
+an incompatible partitioned-table PK (`08cbbfc0`), and genuine-old-store COPY
+parent-heap writes plus copied child PK names breaking startup (`08cbbfc0`).
+`8ed4a67b` fixes the latter paths. COPY shares the existing per-row physical
+INSERT path. The v1 SQL view gives same-key inherited child PKs local identities
+while preserving raw legacy descriptors. Actual PG16.13 independently confirms
+child PK/UNIQUE names, nullable/nonunique `id` without an authored PK, and COPY
+BEFORE/AFTER physical context and prior-row visibility.
+
+At `8ed4a67b`, all eight default, eight explicit-plan and fourteen extra
+entry/startup scenarios pass in both storage modes, with two reopens. Extra
+entry cases preserve exact old full-record hashes and check read-only refusal
+plus shared-session exclusive fallback before repair. Actual old482 refuses
+every applicable upgraded copy without changing its bytes. The fourteen
+independent original ACKs and every immutable source fixture remain intact.
+
+The stabilized focused coverage is 97 SQL checks (94 unchanged source-scoped
+checks from `8ed4a67b`, plus three COPY checks at test-only `c3588bf8`) and six
+Native checks at unchanged `fcf2617b` Core/Page/workspace source. The initial new
+COPY test's postcondition SELECT had no policy under FORCE RLS; the fixture now
+adds a verification-only read policy after the COPY checks finish. Its INSERT
+policy, absent child grants, refusal assertion and ACK requirements remain.
+The failed fixture run is retained. Broad Core/SQL/pgwire validation is running
+at `c3588bf8`; it is not yet a passing result or application/HA qualification.
+
+Whole-child column/default/generated/independent-key lifecycle, non-PK UNIQUE
+identities, FKs, namespaces/rename, raw multi-statement DDL, remaining hash types,
+ONLY/snapshots/concurrency, protected Native authority, process/fault/VM and HA
+propagation remain required. PK index definition shape checks also require an
+explicit predicate/exclusion/null-policy audit. No delivery version is reserved.
 
 ## Implementation and qualification checklist
 

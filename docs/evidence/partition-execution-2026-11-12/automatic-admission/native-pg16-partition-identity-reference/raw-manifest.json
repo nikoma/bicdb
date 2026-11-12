@@ -1,0 +1,12 @@
+{
+  "result.json": {
+    "stored_as": "result.json",
+    "raw_bytes": 342,
+    "raw_sha256": "9b72e61a224ba2b6eb45612c2d4c5df102956df200e501d86bb65131ab7d4353"
+  },
+  "control.sql": {
+    "stored_as": "control.sql",
+    "raw_bytes": 1279,
+    "raw_sha256": "0524cd114100b816e8eede61b597b7c489d2c28cadcefb867ddf967e0d88b5a5"
+  }
+}

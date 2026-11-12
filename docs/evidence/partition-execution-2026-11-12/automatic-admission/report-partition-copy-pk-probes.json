@@ -1,0 +1,51 @@
+{
+  "source": "8ed4a67b81c6e2287e95cf594597df7d9099e399",
+  "scope": "Build source-pinned debug probes after actual08cbCOPYparentheap/startupPKname failures and implicitidfixture regression. COPY reusesphysicalINSERTrowpath; v1childPKnames local while rawlegacydescriptorpreserved; partitionedparent idwithoutauthoredPK notpromoted. ActualNativePG16.13 names/nullableid/COPYeventsreferencePASS. No semanticpassclaimuntilactualreruns; fullfeature/broad/app/HA stillopen.",
+  "started_unix": 1794497686.2899866,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "build",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--example",
+        "partition_upgrade_probe"
+      ],
+      "started_unix": 1794497686.2901738,
+      "exit": 0,
+      "finished_unix": 1794497765.5627234
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "build",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-pgwire",
+        "--example",
+        "partition_startup_probe"
+      ],
+      "started_unix": 1794497765.5629537,
+      "exit": 0,
+      "finished_unix": 1794497851.2209396
+    }
+  ],
+  "status": "focused_passed",
+  "binary": "/root/bicdb-durability-s3/qualification-artifacts-debug/8ed4a67b81c6e2287e95cf594597df7d9099e399/partition_upgrade_probe",
+  "binary_sha256": "a1320a1db86ac10ad5ace291c8019238d1a7b3c888689ed071ab7747a8c92df3",
+  "additional_binaries": {
+    "partition_startup_probe": {
+      "binary": "/root/bicdb-durability-s3/qualification-artifacts-debug/8ed4a67b81c6e2287e95cf594597df7d9099e399/partition_startup_probe",
+      "binary_sha256": "ee65a6b5286ba1e74c783f8c49599a4b5ea6636ff8618ee90af3038689675e84"
+    }
+  },
+  "finished_unix": 1794497851.7272594
+}

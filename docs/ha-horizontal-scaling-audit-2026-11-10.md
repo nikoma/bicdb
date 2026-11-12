@@ -46,6 +46,9 @@ and zero resources in an independent subscription inventory filtered to their
 exact group identities. This is a current cleanup check, not a new VM campaign
 or a claim about unrelated Azure resources. No resources were created.
 
+See the [November 12 revision-scoped Milestone 1 status](ha-milestone1-status-2026-11-12.md)
+for the merged metadata repair, exact CI scope and remaining recovery/operator gates.
+
 ## Current single-primary configuration correction — 2026-11-12 UTC
 
 At public main **1.0.482-beta**, `f43583da4c34209e810c5e6a8f5925831b2949a1`,

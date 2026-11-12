@@ -1,10 +1,10 @@
 # Native fifth-node enrollment: command-path delta
 
-Read-only source audit at private Root
+Read-only source audit at unmerged candidate
 `f1d1398f738868accc20e3757a33752d5e62b726`. This note updates only the
 missing-producer assessment in the existing
-[fifth-member wiring audit](native-fifth-metadata-operator-wiring-audit.md)
-and [transition audit](native-learner-metadata-transition-audit.md).
+[fifth-member wiring audit](https://github.com/nikoma/bicdb/blob/f1d1398f738868accc20e3757a33752d5e62b726/docs/design/native-fifth-metadata-operator-wiring-audit.md)
+and [transition audit](https://github.com/nikoma/bicdb/blob/f1d1398f738868accc20e3757a33752d5e62b726/docs/design/native-learner-metadata-transition-audit.md).
 Their historical source/results remain unchanged. No runtime edits, Cargo,
 command experiment, database open or cloud action were performed here.
 
@@ -14,20 +14,20 @@ ordinary operator commands still do not drive them.** In particular, source
 owner correction `0d17ec62bd7ea13f57421c835fd6b37528b27035` is composed in Root
 as `45951aabf4ec8a50a6b5e6241289c680f1562baa`. These are not an executed
 command-driven join or a qualified four-to-five system. See the separate
-[CI findings](native-milestone1-ci-findings-2026-11-12.md) for exact earlier
+[CI findings](https://github.com/nikoma/bicdb/blob/f1d1398f738868accc20e3757a33752d5e62b726/docs/design/native-milestone1-ci-findings-2026-11-12.md) for exact earlier
 passes/failures; they do not validate this final composition by association.
 
 ## Actual CLI to host path
 
 | Boundary | Current source and behavior | Remaining producer/wiring |
 | --- | --- | --- |
-| Init | [`bicdb-cli/src/main.rs`](../../crates/bicdb-cli/src/main.rs), `run_cluster_command`, `ClusterCommand::Init`: builds `DistributionConfig` with generic defaults; optional event collection uses `BicDb::open_with_config`, then ordinary distribution initialization | Native initial-plan/config lifecycle, atomic from-birth factory, complete actual schema/genesis, common initial birth preparation and owned metadata start. No live-root retrofit |
+| Init | [`bicdb-cli/src/main.rs`](https://github.com/nikoma/bicdb/blob/f1d1398f738868accc20e3757a33752d5e62b726/crates/bicdb-cli/src/main.rs), `run_cluster_command`, `ClusterCommand::Init`: builds `DistributionConfig` with generic defaults; optional event collection uses `BicDb::open_with_config`, then ordinary distribution initialization | Native initial-plan/config lifecycle, atomic from-birth factory, complete actual schema/genesis, common initial birth preparation and owned metadata start. No live-root retrofit |
 | Join | Same file, `run_remote_cluster_join`: bootstrap snapshot, unbound learner registration/poll, then `provision_cluster_member_directory`; admin-assisted Join also uses the old registration RPC | A native-mode join lifecycle preserving the empty-directory factory order, actual current HostMQ and actual schema bundle. Provisioning an ordinary directory first cannot stand in for a fresh factory |
-| Serve | `run_serve_command` calls `serve_with_host_services`. [`bicdb-pgwire/src/lib.rs`](../../crates/bicdb-pgwire/src/lib.rs), `database_config_for_server`, sets distributed storage/replication options; [`checkpoint_driver.rs`](../../crates/bicdb-pgwire/src/checkpoint_driver.rs), `start_distribution_supervisor`, calls generic `MetadataConsensusStore::open` and opens the data service | A public sealed Core native-host facade selected by actual persisted mode, strict loaders and one retained DB/service/range-store/metadata owner. Existing native generic-open guards must continue refusing unsupported paths |
-| API accessibility | [`bicdb-core/src/lib.rs`](../../crates/bicdb-core/src/lib.rs) declares private `mod distribution_native_host`; the launch/factory/learner-host/enrollment methods are crate-private. No use of these host types appears in CLI or pgwire | Export a bounded host lifecycle/control facade, not raw service/DB handles or DTO authority. CLI/pgwire must own its lifetime/shutdown and call it |
-| Native registration surface | [`distribution_transport.rs`](../../crates/bicdb-core/src/distribution_transport.rs), initial metadata-only allowlist excludes `FetchBootstrapSnapshot`, `RegisterMetadataLearner`, `PromoteMetadataLearner` and `ExportSchemaBundle`. `start_metadata_listener` supplies no distribution mutation store | Separate authenticated native control endpoints and their actual owner/queue consumer. Widening an allowlist alone supplies neither registration nor commitment |
+| Serve | `run_serve_command` calls `serve_with_host_services`. [`bicdb-pgwire/src/lib.rs`](https://github.com/nikoma/bicdb/blob/f1d1398f738868accc20e3757a33752d5e62b726/crates/bicdb-pgwire/src/lib.rs), `database_config_for_server`, sets distributed storage/replication options; [`checkpoint_driver.rs`](https://github.com/nikoma/bicdb/blob/f1d1398f738868accc20e3757a33752d5e62b726/crates/bicdb-pgwire/src/checkpoint_driver.rs), `start_distribution_supervisor`, calls generic `MetadataConsensusStore::open` and opens the data service | A public sealed Core native-host facade selected by actual persisted mode, strict loaders and one retained DB/service/range-store/metadata owner. Existing native generic-open guards must continue refusing unsupported paths |
+| API accessibility | [`bicdb-core/src/lib.rs`](https://github.com/nikoma/bicdb/blob/f1d1398f738868accc20e3757a33752d5e62b726/crates/bicdb-core/src/lib.rs) declares private `mod distribution_native_host`; the launch/factory/learner-host/enrollment methods are crate-private. No use of these host types appears in CLI or pgwire | Export a bounded host lifecycle/control facade, not raw service/DB handles or DTO authority. CLI/pgwire must own its lifetime/shutdown and call it |
+| Native registration surface | [`distribution_transport.rs`](https://github.com/nikoma/bicdb/blob/f1d1398f738868accc20e3757a33752d5e62b726/crates/bicdb-core/src/distribution_transport.rs), initial metadata-only allowlist excludes `FetchBootstrapSnapshot`, `RegisterMetadataLearner`, `PromoteMetadataLearner` and `ExportSchemaBundle`. `start_metadata_listener` supplies no distribution mutation store | Separate authenticated native control endpoints and their actual owner/queue consumer. Widening an allowlist alone supplies neither registration nor commitment |
 | Existing registration queue | Generic dispatcher checks metadata Leader, calls `queue_metadata_learner`, returns **prior committed C**. PGwire supervisor has `fork_ephemeral_with_pending_metadata_mutations` → `propose_topology` → actual replication/publication | Connect an equivalent bounded loop to the native owned host; report queued versus quorum-committed state distinctly. Do not invoke the generic metadata constructor to get a consumer |
-| Background placement | [`distribution_controller.rs`](../../crates/bicdb-pgwire/src/distribution_controller.rs), `BalancedDistributionHostService`, starts the generic `ClusterSupervisor`; its relocation driver uses legacy snapshot/catch-up/promotion/cleanup | Native lifecycle/recovery scheduling and the still-missing remote joint-data handoff/cleanup chain. A configured balanced controller is not that integration |
+| Background placement | [`distribution_controller.rs`](https://github.com/nikoma/bicdb/blob/f1d1398f738868accc20e3757a33752d5e62b726/crates/bicdb-pgwire/src/distribution_controller.rs), `BalancedDistributionHostService`, starts the generic `ClusterSupervisor`; its relocation driver uses legacy snapshot/catch-up/promotion/cleanup | Native lifecycle/recovery scheduling and the still-missing remote joint-data handoff/cleanup chain. A configured balanced controller is not that integration |
 
 Paths not otherwise qualified in this note are under `crates/bicdb-core/src/`.
 These are source conclusions; the audit did not run Init, Join or Serve to claim
@@ -129,7 +129,7 @@ listener metadata-only. The pgwire wrapper's `RangeRecoveryRuntime::new` also
 needs its actual participant transport/supervisor integration; a private API is
 not automatic recovery.
 
-The [joint cross-process audit](native-joint-cross-process-gap-audit.md) still
+The [joint cross-process audit](https://github.com/nikoma/bicdb/blob/f1d1398f738868accc20e3757a33752d5e62b726/docs/design/native-joint-cross-process-gap-audit.md) still
 applies: local Arc-based OLD closure, full history/image, durable dual DATA
 majority, NEW preparation/publication, activation/release and protected cleanup
 need actual remote producers and coordinator crash recovery. Fresh fifth data
@@ -138,3 +138,19 @@ missing-new-voter repair, origin-down and post-joint NoData gates remain separat
 Only an actual command-driven five-process data vertical can precede independent
 VM/online-copy/convergence/capacity qualification. No private proof-component
 result, source merge or metadata-voter status is substituted for those results.
+
+## Later unmerged registration source
+
+Source `169f80a78` adds a bounded native metadata-control owner, existing
+cluster-CA self-registration policy and a real owned pending/Append/commit loop.
+Its four-process test source registers a fifth CONFIG identity; it does not
+start a fifth storage backend. The integrated `a96d4065` candidate failed test
+compilation before this test ran. The corrected `dc6a13d4` candidate requires
+execution; this later source does not erase the earlier wiring audit or establish
+public command integration. See [the revision-scoped status](../ha-milestone1-status-2026-11-12.md).
+
+The existing generic remote-join path explicitly substitutes the JOINER's own
+certificate, key and CA for the seed template, and directory provisioning uses
+the committed joining identity/address plus the caller's local root/transport.
+Missing explicit remote TLS refuses. A future native public facade must preserve
+that destination-specific policy; generic provisioning is not a native factory.

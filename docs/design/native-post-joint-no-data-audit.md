@@ -130,3 +130,14 @@ remain OPEN. The 4,096 slots/range, 64 MiB permanent inventory and terminal-cont
 headroom/capacity gates remain OPEN; increasing bounds or evicting audits is not
 this fix. A bounded complete-joint case would still not qualify sustained scale-out,
 physical host failures, Strong end-to-end or the full M1 fault-safe milestone.
+
+## Later complete-joint test source
+
+`fd2510259` and `d8ef4bf04` add the proposed actual image-target/new-leader
+fixture; `a96d4065` failed compilation at three new full-record comparisons.
+Those assertions were corrected without removing checks in `dc6a13d4`; a
+subsequent fixture correction provisions an empty generic planning cache from
+the actual fresh HostMQ configuration rather than trying to auto-enroll an
+already known native voter. No passing complete-joint result is established
+by those source changes. All six post-joint NoData seams above remain open.
+See [the revision-scoped status](../ha-milestone1-status-2026-11-12.md).

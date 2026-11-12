@@ -445,6 +445,35 @@ pub(crate) struct SourceRangeImageLineage {
     current_schema_generation: u64,
 }
 
+/// Only the atomic NEW factory constructs this short-lived capability. Strict
+/// reopen returns no such token, even for a zero-index/no-policy prototype.
+pub(crate) struct FreshNativeCatalogueBootstrap<'a> {
+    database: &'a BicDb,
+    birth: &'a NativeDatabaseBirth,
+}
+impl FreshNativeCatalogueBootstrap<'_> {
+    pub(crate) fn require_current(&self) -> Result<(PathBuf, ClusterId, ClusterNodeId)> {
+        self.database.check_recovery_state()?;
+        let actual = self
+            .database
+            .read_native_birth()?
+            .ok_or_else(|| invalid("fresh catalogue has no actual native birth"))?;
+        if actual != *self.birth
+            || actual.format_version != 2
+            || !format::native_catalogue_custody_active(self.database.data_path())?
+        {
+            return Err(invalid(
+                "fresh catalogue capability changed native factory/birth",
+            ));
+        }
+        Ok((
+            self.database.data_path().to_path_buf(),
+            actual.spec.cluster_id,
+            actual.spec.node_id,
+        ))
+    }
+}
+
 impl FreshRangeGenesisAuthority {
     pub(crate) fn birth_id(&self) -> Uuid {
         self.birth.birth_id
@@ -836,6 +865,7 @@ impl BicDb {
         if enforce {
             format::enable_current_image_proposal(root)?;
             format::enable_native_writer_enrollment(root)?;
+            format::enable_native_catalogue_custody(root)?;
             if metadata_initialization {
                 format::enable_native_metadata_store(root)?;
             }
@@ -859,6 +889,11 @@ impl BicDb {
             )?,
             true,
         )?;
+        if enforce {
+            crate::distribution_range_consensus::RangeWriteStore::initialize_fresh_native_catalogue(
+                &FreshNativeCatalogueBootstrap { database: &db, birth: &birth },
+            )?;
+        }
         db.finish_native_genesis_initialization(&birth)?;
         let authority = FreshRangeGenesisAuthority {
             birth,

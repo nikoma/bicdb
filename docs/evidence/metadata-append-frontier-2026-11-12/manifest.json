@@ -1,0 +1,173 @@
+{
+  "scope": "genuine direct metadata FSM; no TLS, VM, Azure or business-row qualification",
+  "cases": [
+    {
+      "source_revision": "c295916d0030f3fbd37962150cfd1f65dc70e752",
+      "run_id": 43173136830,
+      "artifact_id": 13922259827,
+      "artifact_sha256": "4da5235e91c5cf7094d12e14c83512aa37249c2e5c37e88c06eb86c8dae5ba55",
+      "files": [
+        {
+          "path": "fault-state/metadata-append-frontier-xeVHk6/a/cluster-metadata-consensus.json",
+          "bytes": 3170,
+          "sha256": "b5038e49f44b7e80c345e1ce91c16dc0127b092782d288220e646ad277c2b6d0"
+        },
+        {
+          "path": "fault-state/metadata-append-frontier-xeVHk6/b/cluster-metadata-consensus.json",
+          "bytes": 3170,
+          "sha256": "086a0c6dc46c571110773bb8e369dcfc8d2ed2fa8c8dcb9b1e66001514c5563a"
+        },
+        {
+          "path": "fault-state/metadata-append-frontier-xeVHk6/before-recovery-a.json",
+          "bytes": 3170,
+          "sha256": "15f47dd8ba174798288425c9d110118a975997d988b9d2aaee4762d7a23c2503"
+        },
+        {
+          "path": "fault-state/metadata-append-frontier-xeVHk6/before-recovery-b.json",
+          "bytes": 13053,
+          "sha256": "3ac66706e5915a344a2e23ad69e1edf2664c5a0101d1201cefbfdc530c57c523"
+        },
+        {
+          "path": "fault-state/metadata-append-frontier-xeVHk6/before-recovery-c.json",
+          "bytes": 3170,
+          "sha256": "2424e8a8e03e56f84b1d61c5690e45341809a460a70f23ea3d5d26b023d2fbfc"
+        },
+        {
+          "path": "fault-state/metadata-append-frontier-xeVHk6/bounded-prefix-result.json",
+          "bytes": 32182,
+          "sha256": "b9396cefd030eb11a68dae63b15d72ae7155fd14926b9275e08c0acb9cfe2733"
+        },
+        {
+          "path": "fault-state/metadata-append-frontier-xeVHk6/c/cluster-metadata-consensus.json",
+          "bytes": 3170,
+          "sha256": "08baf1fe936607e35852799893b45e7f9e6bb27e686e3537c7abef5c10442beb"
+        },
+        {
+          "path": "fault-state/metadata-append-frontier-xeVHk6/majority-recovery-result.json",
+          "bytes": 50538,
+          "sha256": "cf73c4596ebe14fff9567744c10e5ab310b4d4f4e45a5bebc5e450c7602b40ae"
+        },
+        {
+          "path": "fault-state/metadata-append-frontier-xeVHk6/topology-seed/bicdb-distribution.json",
+          "bytes": 692,
+          "sha256": "d78c744bf8b92ba677a86f5899651862178eeded31a6994771f04a60d9ab0ffa"
+        },
+        {
+          "path": "fault-state/metadata-append-frontier-xeVHk6/topology-seed/cluster-topology.json",
+          "bytes": 2639,
+          "sha256": "43cfa562199fd9fb7201c2f09b4c8096da089e9a4a4f0336c7001c11d0168b9d"
+        },
+        {
+          "path": "rustc.txt",
+          "bytes": 196,
+          "sha256": "f64c55ed9f210d80a9b248206104a47175faf5ec94a093e4ad132549209089fc"
+        },
+        {
+          "path": "selected-tests.log",
+          "bytes": 93659,
+          "sha256": "f7f9f6d317d4a7a5f531052a77e8c96683bca25dc122ac96ce88f076e329cbdb"
+        },
+        {
+          "path": "source-revision.txt",
+          "bytes": 41,
+          "sha256": "e00aad97fbf12ee013ae6df0eda8a01d17f69def678102400814464295ce7cee"
+        },
+        {
+          "path": "tests.log",
+          "bytes": 94963,
+          "sha256": "d55da98416fb5b95f28f165606c4f64a75659cf93b6f93fec2fb7077b3ab2a01"
+        }
+      ],
+      "label": "c295-retained-baseline",
+      "archive": "c295-retained-baseline-artifact.zip",
+      "expected_ack": 3,
+      "expected_premature_commit": true,
+      "expected_c_commit": 3,
+      "classification": "failed"
+    },
+    {
+      "source_revision": "e0bb370fb1bad2cddc783b1b8f98775735281c05",
+      "run_id": 43173148741,
+      "artifact_id": 13923780375,
+      "artifact_sha256": "3ad9d7c26ec29c164e9e4a8a2f93f6b0e87206d905f4ac68279fba19f4554e1b",
+      "files": [
+        {
+          "path": "fault-state/metadata-append-frontier-zTVOAz/a/cluster-metadata-consensus.json",
+          "bytes": 3170,
+          "sha256": "b5038e49f44b7e80c345e1ce91c16dc0127b092782d288220e646ad277c2b6d0"
+        },
+        {
+          "path": "fault-state/metadata-append-frontier-zTVOAz/b/cluster-metadata-consensus.json",
+          "bytes": 3170,
+          "sha256": "086a0c6dc46c571110773bb8e369dcfc8d2ed2fa8c8dcb9b1e66001514c5563a"
+        },
+        {
+          "path": "fault-state/metadata-append-frontier-zTVOAz/before-recovery-a.json",
+          "bytes": 3170,
+          "sha256": "15f47dd8ba174798288425c9d110118a975997d988b9d2aaee4762d7a23c2503"
+        },
+        {
+          "path": "fault-state/metadata-append-frontier-zTVOAz/before-recovery-b.json",
+          "bytes": 13053,
+          "sha256": "3ac66706e5915a344a2e23ad69e1edf2664c5a0101d1201cefbfdc530c57c523"
+        },
+        {
+          "path": "fault-state/metadata-append-frontier-zTVOAz/before-recovery-c.json",
+          "bytes": 13054,
+          "sha256": "84c9236f8218aa836df39526fd51f0953872cc033e36643f3f5fbfa80e5dc04a"
+        },
+        {
+          "path": "fault-state/metadata-append-frontier-zTVOAz/bounded-prefix-result.json",
+          "bytes": 43440,
+          "sha256": "b38c339096c7d7f290cc122eaa7da355e750133d62547d2ddeb9f36517d1fda0"
+        },
+        {
+          "path": "fault-state/metadata-append-frontier-zTVOAz/c/cluster-metadata-consensus.json",
+          "bytes": 3170,
+          "sha256": "08baf1fe936607e35852799893b45e7f9e6bb27e686e3537c7abef5c10442beb"
+        },
+        {
+          "path": "fault-state/metadata-append-frontier-zTVOAz/majority-recovery-result.json",
+          "bytes": 61796,
+          "sha256": "ee30ababb1389e17d87838a90bb896a420a73e1e058fb734f23b3791e894c0b7"
+        },
+        {
+          "path": "fault-state/metadata-append-frontier-zTVOAz/topology-seed/bicdb-distribution.json",
+          "bytes": 692,
+          "sha256": "d78c744bf8b92ba677a86f5899651862178eeded31a6994771f04a60d9ab0ffa"
+        },
+        {
+          "path": "fault-state/metadata-append-frontier-zTVOAz/topology-seed/cluster-topology.json",
+          "bytes": 2639,
+          "sha256": "43cfa562199fd9fb7201c2f09b4c8096da089e9a4a4f0336c7001c11d0168b9d"
+        },
+        {
+          "path": "rustc.txt",
+          "bytes": 196,
+          "sha256": "f64c55ed9f210d80a9b248206104a47175faf5ec94a093e4ad132549209089fc"
+        },
+        {
+          "path": "selected-tests.log",
+          "bytes": 93659,
+          "sha256": "7826519e11f38844e0fbfc20a246779830ca198de0c1ef606cbcb4428368fa4c"
+        },
+        {
+          "path": "source-revision.txt",
+          "bytes": 41,
+          "sha256": "8a8d7461fc64d2df20b33aa19b1178bb62ed3c4882548e3d313caacbd488889f"
+        },
+        {
+          "path": "tests.log",
+          "bytes": 93655,
+          "sha256": "a437b08aab0cf698c41894f3292acbf822083a85739d7b5801d729bb5210de84"
+        }
+      ],
+      "label": "e0b-fixed-frontier",
+      "archive": "e0b-fixed-frontier-artifact.zip",
+      "expected_ack": 1,
+      "expected_premature_commit": false,
+      "expected_c_commit": 0,
+      "classification": "passed"
+    }
+  ]
+}

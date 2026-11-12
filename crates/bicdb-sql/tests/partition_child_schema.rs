@@ -408,3 +408,53 @@ fn identity_add_with_existing_partitions_matches_pg16_without_catalog_side_effec
         db.close().unwrap();
     }
 }
+
+#[test]
+fn identity_created_before_partitions_belongs_to_the_parent_in_pg16() {
+    for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
+        let root = tempfile::tempdir().unwrap();
+        let cfg = config(mode);
+        let mut db = BicDb::open_with_config(root.path(), cfg.clone()).unwrap();
+        let mut sql = SqlSession::new(&mut db);
+        for text in [
+            "CREATE TABLE p(k INT) PARTITION BY RANGE(k)",
+            "ALTER TABLE p ADD COLUMN ident BIGINT GENERATED ALWAYS AS IDENTITY (START WITH 100 INCREMENT BY 5)",
+            "CREATE TABLE low PARTITION OF p FOR VALUES FROM(0) TO(10)",
+            "INSERT INTO p(k) VALUES(1)",
+        ] {sql.execute(text).unwrap();}
+        assert_eq!(sql.execute("SELECT is_identity,column_default FROM information_schema.columns WHERE table_name='low' AND column_name='ident'").unwrap().rows,vec![vec![SqlValue::String("NO".into()),SqlValue::Null]]);
+        assert_eq!(
+            sql.execute("INSERT INTO low(k) VALUES(2)")
+                .unwrap_err()
+                .sqlstate(),
+            "23502"
+        );
+        sql.execute("INSERT INTO low(k,ident) VALUES(2,9000)")
+            .unwrap();
+        sql.execute("INSERT INTO p(k) VALUES(3)").unwrap();
+        drop(sql);
+        for _ in 0..2 {
+            let mut sql = SqlSession::new(&mut db);
+            assert_eq!(
+                sql.execute("SELECT k,ident FROM p ORDER BY k")
+                    .unwrap()
+                    .rows,
+                vec![
+                    vec![SqlValue::Int(1), SqlValue::Int(100)],
+                    vec![SqlValue::Int(2), SqlValue::Int(9000)],
+                    vec![SqlValue::Int(3), SqlValue::Int(105)]
+                ]
+            );
+            assert_eq!(
+                sql.execute("SELECT last_value FROM p_ident_seq")
+                    .unwrap()
+                    .rows,
+                vec![vec![SqlValue::Int(105)]]
+            );
+            drop(sql);
+            db.close().unwrap();
+            db = BicDb::open_with_config(root.path(), cfg.clone()).unwrap();
+        }
+        db.close().unwrap();
+    }
+}

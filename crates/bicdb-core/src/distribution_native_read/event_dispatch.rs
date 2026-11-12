@@ -99,6 +99,9 @@ impl NativeStrongEventDispatcher {
         });
         Ok(generation)
     }
+    pub(crate) fn active_workers(&self) -> usize {
+        self.active.load(Ordering::Acquire)
+    }
     pub(crate) fn clear(&self) {
         *self.binding.lock() = None;
     }

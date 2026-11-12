@@ -24,7 +24,9 @@ pub(crate) use event_wire::{
     NativeEventGetReply, NativeEventGetRequest, NativeEventGetResult,
     NativeEventGetUnavailableCode, NativeEventReadMode, NativeEventRoute, NativeEventValue,
 };
-pub(crate) use quorum::{NativeReadQuorumCandidate, NativeReadQuorumRound};
+pub(crate) use quorum::{
+    NativeInitialDataReadQuorum, NativeReadQuorumCandidate, NativeReadQuorumRound,
+};
 pub(crate) use rpc::{
     require_peer, NativeRangeReadObservation, NativeRangeReadProbeReply,
     NativeRangeReadProbeRequest,

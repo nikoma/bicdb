@@ -581,6 +581,33 @@ impl RangeRecoveryRuntime {
             let service = service.lock();
             (service.node_id().clone(), service.range_mutation_gate())
         };
+        Self::from_actual_service_parts(service, provider, local_node_id, gate)
+    }
+    pub(crate) fn new_cancellable(
+        service: Arc<Mutex<ClusterDataNodeService>>,
+        provider: Arc<MetadataReadProvider>,
+        parent: &CancellationToken,
+    ) -> Result<Self> {
+        let (local_node_id, gate) = loop {
+            parent.check()?;
+            if let Some(actual) = service.try_lock_for(LATCH_POLL) {
+                parent.check()?;
+                break (actual.node_id().clone(), actual.range_mutation_gate());
+            }
+        };
+        Ok(Self::from_actual_service_parts(
+            service,
+            provider,
+            local_node_id,
+            gate,
+        ))
+    }
+    fn from_actual_service_parts(
+        service: Arc<Mutex<ClusterDataNodeService>>,
+        provider: Arc<MetadataReadProvider>,
+        local_node_id: ClusterNodeId,
+        gate: RangeMutationGate,
+    ) -> Self {
         Self {
             service,
             provider,
@@ -630,6 +657,12 @@ impl RangeRecoveryRuntime {
             }
         }
         Ok(())
+    }
+    pub(crate) fn active_contexts(&self) -> Result<usize> {
+        self.sessions
+            .try_lock()
+            .map(|sessions| sessions.contexts)
+            .ok_or_else(|| invalid("native runtime context ownership busy"))
     }
     #[cfg(test)]
     pub(crate) fn test_active_context_count(&self) -> usize {

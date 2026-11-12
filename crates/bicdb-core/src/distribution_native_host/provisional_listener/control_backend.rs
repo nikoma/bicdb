@@ -20,6 +20,11 @@ pub(in crate::distribution_native_host) struct NativeMetadataControlBackend {
     _initial: Option<Arc<NativeInitialConsensusLaunch>>,
 }
 impl NativeMetadataControlBackend {
+    pub(super) fn initial_data_launch(&self) -> Result<Arc<NativeInitialConsensusLaunch>> {
+        self._initial.clone().ok_or_else(|| invalid(
+            "DATA bootstrap requires actual INITIAL owner; assigned-image/joint learner activation is separate"))
+    }
+
     pub(super) fn borrow_initial(initial: &NativeInitialConsensusLaunch) -> Self {
         Self {
             node_id: initial.seed.spec.node_id.clone(),

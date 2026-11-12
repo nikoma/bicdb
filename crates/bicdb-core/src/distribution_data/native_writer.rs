@@ -92,3 +92,25 @@ impl ClusterDataNodeService {
             .require_range(range)
     }
 }
+
+impl ClusterDataNodeService {
+    pub(crate) fn retain_initial_data_writer<
+        T: crate::distribution_range_consensus::RangeWriteTransport,
+    >(
+        &self,
+        coordinator: &Arc<crate::distribution_range_consensus::RangeWriteCoordinator<T>>,
+        guard: &crate::db::InstalledNativeWriterHostGuard,
+        range: &RangeDescriptor,
+    ) -> Result<(Arc<crate::db::NativeWriterHostState>, std::path::PathBuf)> {
+        let database = checked_database_read(&self.db, &self.storage_policy)?;
+        self.require_native_catalog_database(&database)?;
+        guard.require_for_coordinator(&database, range, coordinator)?;
+        let writer = self.range_writes.native_writer_host_state()?;
+        writer.require_database(&database, range)?;
+        writer.require_store(
+            database.data_path(),
+            self.range_writes.native_writer_store_open_id(),
+        )?;
+        Ok((writer, database.data_path().to_path_buf()))
+    }
+}

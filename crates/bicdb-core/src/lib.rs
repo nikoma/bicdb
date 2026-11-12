@@ -32,9 +32,10 @@ mod distribution_native_apply;
 mod distribution_native_host;
 #[cfg(feature = "tls-replication")]
 pub use distribution_native_host::{
-    NativeMetadataBootstrapPlan, NativeMetadataCollection, NativeMetadataHost,
-    NativeMetadataHostAction, NativeMetadataHostPhase, NativeMetadataHostStatus,
-    NativeMetadataLearnerHost, NativeMetadataLearnerStatus,
+    NativeInitialDataRangeStatus, NativeInitialDataStatus, NativeMetadataBootstrapPlan,
+    NativeMetadataCollection, NativeMetadataHost, NativeMetadataHostAction,
+    NativeMetadataHostPhase, NativeMetadataHostStatus, NativeMetadataLearnerHost,
+    NativeMetadataLearnerStatus,
 };
 mod distribution_native_read;
 mod distribution_native_writer;

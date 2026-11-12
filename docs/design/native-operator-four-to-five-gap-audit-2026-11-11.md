@@ -273,3 +273,61 @@ producers. A blank learner remains data-ineligible until actual assigned-image
 and joint-domain activation. Remote image sessions, joint decision/publication,
 automatic placement, cleanup and interrupted-operation recovery remain separate
 executable seams; opening a data listener supplies none of those authorities.
+
+### Source-only initial DATA successor (2026-11-12)
+
+The initial DATA source successor adds `OpenInitialData` to the public retained
+`NativeMetadataHost` and the existing live CLI `step --action open-initial-data`
+path. It consumes the actual INITIAL factory/DB/service/Store owners; a registered
+learner cannot construct it. This is the first four-host DATA prerequisite, not
+an implementation of automatic fifth-node DATA placement or movement.
+
+It installs actual own-HostMQ writer policy and a retained coordinator, drains
+the actual old metadata-control listener, then starts a **new immutable** DATA
+listener. Peer native protocols become available while application ingress and
+typed Gets remain unavailable. Each local leader range must pass a selected-range
+original protected-genesis proof, matching actual enrolled native R0/H0 voter
+observations and distinct first/final generic metadata observations under the
+original finite action budget. The real coordinator range reservation spans
+readiness publication and cancellation rollback; no uncancellable recovery worker,
+raw counter seed, historical replay or native reset is used. Other ranges may
+already have legitimate writes. Nonempty/changed-epoch/restore/joint recovery is
+outside this initial-only producer.
+
+The owner retains installed policy, listener, runtime and pending state on a
+finite failure. A separately fresh action retries that same owner and rechecks
+its actual bindings. Stop closes ingress, drains the actual listener, dispatcher
+workers and runtime contexts, and clears only its own matching installed hook.
+Replica admission, observed local leader readiness and dispatcher publication are
+separate diagnostics. Publication is a capability; Strong readiness is acquired
+for each request by the existing MQ/data QQ/MVCC/final-MQ protocol.
+
+Unexecuted acceptance source is
+`native_initial_data_actual_cli_four_process_first_ack_and_strong_full_value`:
+four actual command processes, original all-C native startup and genuine votes,
+a partial-startup no-ACK/no-absence control, finite DATA actions, and one public
+client bootstrapped over real TLS. The external JSONL journal fsyncs each complete
+payload before Append and the actual reply before the next phase; full value,
+present JSON null, present empty object and genuinely absent key are distinct.
+The test emits already-fsynced journal records to stdout. The Core
+`native_initial_data_` controls add actual factory/epoch/foreign-birth/cancellation
+and real nonempty-history boundaries. No compile or execution result is implied
+by this source description. JoinFresh DATA remains explicitly refused; general
+recovery, remote image/joint relocation, automatic range scheduling, SQL/effects,
+physical fault qualification and an 8 GiB/long-run acceptance remain open.
+
+The source successor also closes the Drop-only local ownership cycle introduced
+by initial DATA installation. A single process cleanup worker is started before
+any hook can be installed. Drop closes ingress and sends retained stopping owners
+without waiting for I/O or locks; the worker polls actual socket/handler,
+dispatcher and runtime drain, then compare-retires only the exact original hook
+under the admission/hook locks. It acquires no MQ/native/recovery/serving authority
+and cannot revive a canceled action. Pure revocation does not consult poisoned
+health, native pages or filesystem readiness. If the cleanup worker unexpectedly
+cannot receive an owner, the closed owner is explicitly retained in process
+quarantine rather than dropping an unknown cut or clearing a foreign writer.
+The additive actual-TLS test covers no successful Stop, canceled Stop and an
+injected durability failure; all external/inner open Weak owners must end. Healthy
+cases then strictly reopen the same storage roots/births and retained ACK row,
+with no serving hook revived. These remain unexecuted source assertions here;
+metadata cold-election recovery is a separate contract.

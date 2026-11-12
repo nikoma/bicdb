@@ -200,6 +200,66 @@ impl InstalledNativeWriterHostGuard {
     pub(crate) fn writer_enforcement_version(&self) -> u32 {
         1
     }
+    /// Retire only THIS actual installation after its host has drained. The
+    /// commit gate and hook lock serialize comparison and clearing with new
+    /// installs, including the SAME coordinator Arc reinstalled under a new
+    /// registration. No native journal, range permit or network is acquired.
+    pub(crate) fn retire_if_current<T: RangeWriteTransport>(
+        &self,
+        database: &BicDb,
+        coordinator: &Arc<RangeWriteCoordinator<T>>,
+    ) -> Result<bool> {
+        // Revocation must work even after a durability/recovery failure. No
+        // native reads, health/ready check or filesystem lookup belongs here:
+        // the immutable actual-open ID plus exact private slot identities
+        // below suffice to revoke THIS hook, and cannot grant any authority.
+        if database.incarnation_id() != self.state.record.database_incarnation
+            || coordinator.native_writer_coordinator_id() != self.state.record.coordinator_id
+        {
+            return Err(invalid(
+                "cannot retire a writer from another actual database/coordinator",
+            ));
+        }
+        let expected: Arc<dyn CommitAdmission> = coordinator.clone();
+        if self
+            .state
+            .coordinator
+            .upgrade()
+            .is_none_or(|actual| !Arc::ptr_eq(&actual, &expected))
+        {
+            return Err(invalid("cannot retire another actual writer Arc"));
+        }
+        let Some(registration) = self.state.registration.upgrade() else {
+            return Ok(false);
+        };
+        let _quiesced = database
+            .serializable_commit_admission
+            .try_write()
+            .ok_or_else(|| {
+                invalid("actual transactions still draining before writer retirement")
+            })?;
+        let mut hook = database
+            .commit_admission
+            .try_write()
+            .ok_or_else(|| invalid("actual writer installation busy during retirement"))?;
+        if !Arc::ptr_eq(hook.registration(), &registration)
+            || hook
+                .native_writer()
+                .is_none_or(|actual| !Arc::ptr_eq(actual, &self.state))
+            || hook
+                .as_ref()
+                .is_none_or(|actual| !Arc::ptr_eq(actual, &expected))
+        {
+            return Ok(false);
+        }
+        hook.install(None);
+        Ok(true)
+    }
+    /// Cleanup-only liveness: no registration means no slot can still own
+    /// this installation. This cannot become a writer/read permission.
+    pub(crate) fn registration_ended(&self) -> bool {
+        self.state.registration.upgrade().is_none()
+    }
     pub(crate) fn require_current(&self, database: &BicDb, range: &RangeDescriptor) -> Result<()> {
         self.state.require_database(database, range)
     }

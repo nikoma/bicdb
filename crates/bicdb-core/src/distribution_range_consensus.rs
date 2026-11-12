@@ -120,6 +120,8 @@ pub(crate) use native_limits::{
 mod catalogue_custody;
 #[cfg(test)]
 pub(crate) use catalogue_custody::FreshCatalogueTestCut;
+#[cfg(feature = "tls-replication")]
+mod initial_data;
 mod joint_handoff_state;
 mod native_durability;
 mod native_normal;
@@ -2238,8 +2240,36 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
         transport: Arc<Transport>,
         repair_limits: RangeWriteRepairLimits,
     ) -> Result<Self> {
+        Self::with_repair_limits_scheduling(
+            cluster_id,
+            local_node_id,
+            topology,
+            local_service,
+            transport,
+            repair_limits,
+            false,
+        )
+    }
+
+    // Only scheduling differs for finite INITIAL DataOpen. Legacy callers
+    // preserve their existing constructor behavior; neither path grants ready.
+    fn with_repair_limits_scheduling(
+        cluster_id: ClusterId,
+        local_node_id: ClusterNodeId,
+        topology: Arc<RwLock<ClusterTopology>>,
+        local_service: Arc<Mutex<ClusterDataNodeService>>,
+        transport: Arc<Transport>,
+        repair_limits: RangeWriteRepairLimits,
+        nonwaiting: bool,
+    ) -> Result<Self> {
         repair_limits.validate()?;
-        let current = topology.read();
+        let current = if nonwaiting {
+            topology
+                .try_read()
+                .ok_or_else(|| range_write_error("initial coordinator routing busy"))?
+        } else {
+            topology.read()
+        };
         current.validate()?;
         if current.cluster_id != cluster_id || !current.nodes.contains_key(&local_node_id) {
             return Err(range_write_error(
@@ -2251,7 +2281,13 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
         // The incarnation is immutable for this database handle; callbacks run
         // under database guards and must not attempt to reacquire that lock.
         let (database, range_mutations) = {
-            let service = local_service.lock();
+            let service = if nonwaiting {
+                local_service
+                    .try_lock()
+                    .ok_or_else(|| range_write_error("initial coordinator service busy"))?
+            } else {
+                local_service.lock()
+            };
             (service.database(), service.range_mutation_gate())
         };
         let database_guard = database.try_read().ok_or_else(|| {

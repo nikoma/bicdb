@@ -14,7 +14,10 @@ mod registration;
 pub(crate) use learner_enrollment::NativeLearnerMetadataEnrollment;
 pub(crate) use metadata_startup::NativeInitialWriterEnrollment;
 pub(in crate::distribution_native_host) use registration::NativeMetadataMaintenanceReport;
-pub(crate) use registration::{NativeMetadataControlHost, NativeMetadataRegistrationController};
+pub(crate) use registration::{
+    NativeInitialDataAdmission, NativeMetadataControlHost, NativeMetadataRegistrationController,
+};
+pub use registration::{NativeInitialDataRangeStatus, NativeInitialDataStatus};
 
 pub(crate) struct NativeProvisionalHost {
     listener: Option<ClusterDataServerHandle>,

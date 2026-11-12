@@ -274,6 +274,18 @@ impl<'db> SqlSession<'db> {
         create_table: &CreateTable,
         compression: &[RawColumnCompression],
     ) -> Result<SqlResult> {
+        if create_table.partition_of.is_some() {
+            // A mixed statement list reaches this parsed path even though a
+            // single PARTITION OF statement uses the raw compatibility path.
+            // Keep the parent link, bound, ownership checks and physical
+            // creation identical for text batches and direct AST callers.
+            let partition =
+                raw_create_partition_table(&create_table.to_string())?.ok_or_else(|| {
+                    SqlError::InvalidSql("invalid CREATE TABLE PARTITION OF definition".into())
+                })?;
+            self.apply_raw_create_partition_table(partition)?;
+            return Ok(SqlResult::command("CREATE TABLE"));
+        }
         if create_table.query.is_some() {
             return Err(SqlError::Unsupported(
                 "CREATE TABLE AS SELECT is not supported".to_string(),

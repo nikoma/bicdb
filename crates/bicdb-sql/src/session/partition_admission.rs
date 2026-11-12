@@ -740,7 +740,16 @@ mod tests {
     use super::*;
     fn legacy_fixture(path: &std::path::Path, mode: bicdb_core::StorageMode) -> BicDb {
         let mut db = BicDb::open_with_config(path, config(mode)).unwrap();
-        SqlSession::new(&mut db).execute("CREATE TABLE p(k INT PRIMARY KEY,payload TEXT) PARTITION BY RANGE(k);CREATE TABLE low PARTITION OF p FOR VALUES FROM(0) TO(10);CREATE TABLE high PARTITION OF p FOR VALUES FROM(10) TO(20);INSERT INTO p VALUES(2,'low-ack'),(12,'high-ack')").unwrap();
+        let mut session = SqlSession::new(&mut db);
+        for statement in [
+            "CREATE TABLE p(k INT PRIMARY KEY,payload TEXT) PARTITION BY RANGE(k)",
+            "CREATE TABLE low PARTITION OF p FOR VALUES FROM(0) TO(10)",
+            "CREATE TABLE high PARTITION OF p FOR VALUES FROM(10) TO(20)",
+            "INSERT INTO p VALUES(2,'low-ack'),(12,'high-ack')",
+        ] {
+            session.execute(statement).unwrap();
+        }
+        drop(session);
         db
     }
     fn config(mode: bicdb_core::StorageMode) -> bicdb_core::DbConfig {

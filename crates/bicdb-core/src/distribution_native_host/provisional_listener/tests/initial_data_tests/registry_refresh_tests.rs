@@ -240,6 +240,16 @@ fn native_initial_data_registry_original_writer_replacement_refuses_before_new_a
         .writer_binding_diagnostic
         .unwrap();
     assert_eq!(old["observed_bound_registration_active"], true);
+    let old_guard = controls[0]
+        .test_retained_initial_data_writer_guard()
+        .unwrap();
+    let old_audits = old_guard
+        .test_registry_audit_inventory(&database.read())
+        .unwrap();
+    assert!(
+        old_audits.is_empty(),
+        "original generation already has an audit"
+    );
     // Produce the actual sealed preparation while original MQ/slot/writer
     // are live. Replacement must not relabel this earlier successful capture.
     let original = budget(5000);
@@ -264,6 +274,20 @@ fn native_initial_data_registry_original_writer_replacement_refuses_before_new_a
         true
     );
     assert_eq!(replacement_binding["observed_binding_lifetime_live"], true);
+    let new_audits = replacement
+        .guard
+        .test_registry_audit_inventory(&database.read())
+        .unwrap();
+    assert!(
+        new_audits.is_empty(),
+        "replacement generation already has an audit"
+    );
+    assert_eq!(
+        old_guard
+            .test_registry_audit_inventory(&database.read())
+            .unwrap(),
+        old_audits
+    );
     let revoked = controls[0]
         .initial_data_status(&budget(1000))
         .unwrap()
@@ -317,6 +341,22 @@ fn native_initial_data_registry_original_writer_replacement_refuses_before_new_a
         .test_current_native_writer_registry_audit()
         .unwrap()
         .is_none());
+    // Check BOTH actual generations' current pointer AND all 64 immutable
+    // history keys. Following only the installed hook misses an old-generation
+    // mutation that leaves the application point and new generation unchanged.
+    assert_eq!(
+        old_guard
+            .test_registry_audit_inventory(&database.read())
+            .unwrap(),
+        old_audits
+    );
+    assert_eq!(
+        replacement
+            .guard
+            .test_registry_audit_inventory(&database.read())
+            .unwrap(),
+        new_audits
+    );
     assert_eq!(point(&database.read(), range), before);
     assert_eq!(
         database
@@ -342,6 +382,22 @@ fn native_initial_data_registry_original_writer_replacement_refuses_before_new_a
     assert_eq!(
         replacement.guard.binding_diagnostic()["observed_bound_registration_active"],
         true
+    );
+    // Check BOTH actual generations' current pointer AND all 64 immutable
+    // history keys. Following only the installed hook misses an old-generation
+    // mutation that leaves the application point and new generation unchanged.
+    assert_eq!(
+        old_guard
+            .test_registry_audit_inventory(&database.read())
+            .unwrap(),
+        old_audits
+    );
+    assert_eq!(
+        replacement
+            .guard
+            .test_registry_audit_inventory(&database.read())
+            .unwrap(),
+        new_audits
     );
     assert_eq!(point(&database.read(), range), before);
     assert_eq!(

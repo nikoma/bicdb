@@ -448,3 +448,50 @@ impl BicDb {
         Ok(serde_json::to_value(record)?)
     }
 }
+
+#[cfg(test)]
+impl InstalledNativeWriterHostGuard {
+    /// Bounded native DATA for THIS retained original generation, even after
+    /// revocation. Does not follow the current hook or grant writer authority.
+    /// The actual same DB open/root/birth is still required; no generation DTO.
+    pub(crate) fn test_registry_audit_inventory(
+        &self,
+        database: &BicDb,
+    ) -> Result<BTreeMap<String, serde_json::Value>> {
+        database.check_recovery_state()?;
+        if database.incarnation_id() != self.state.record.database_incarnation
+            || database.data_path().canonicalize()? != self.state.root
+            || self.state.directory.upgrade().is_none()
+        {
+            return Err(invalid(
+                "test audit inventory needs original actual DB open/root",
+            ));
+        }
+        let facts = &self.state.record.facts;
+        let native = database.native_recovery_admission(
+            &facts.cluster_id,
+            facts.bootstrap_id,
+            &facts.local_node_id,
+            facts.local_incarnation,
+        )?;
+        if native.writer_enforcement_version() != 1
+            || native.birth_id() != facts.local_birth_id
+            || native.birth_sha256() != facts.local_birth_sha256
+        {
+            return Err(invalid("test audit inventory actual birth differs"));
+        }
+        let generation = self.state.record.generation;
+        let mut inventory = BTreeMap::new();
+        for key in std::iter::once(current_key(generation))
+            .chain((1..=MAX_EXTENSIONS).map(|sequence| history_key(generation, sequence)))
+        {
+            let record: Option<RegistryExtensionRecord> =
+                database.read_native_range_image_record(&key)?;
+            if let Some(record) = record {
+                record.validate(&self.state.record)?;
+                inventory.insert(key, serde_json::to_value(record)?);
+            }
+        }
+        Ok(inventory)
+    }
+}

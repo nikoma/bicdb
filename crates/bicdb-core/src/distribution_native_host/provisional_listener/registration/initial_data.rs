@@ -552,6 +552,19 @@ impl NativeMetadataControlHost {
             .advance(&leader, &self.network, parent)
     }
     #[cfg(test)]
+    pub(crate) fn test_retained_initial_data_writer_guard(
+        &self,
+    ) -> Result<Arc<crate::db::InstalledNativeWriterHostGuard>> {
+        Ok(Arc::clone(
+            &self
+                .data
+                .as_ref()
+                .and_then(|data| data.enrollment.as_ref())
+                .ok_or_else(|| invalid("test original retained writer absent"))?
+                .guard,
+        ))
+    }
+    #[cfg(test)]
     pub(crate) fn test_prepare_initial_data_registry_refresh(
         &self,
         parent: &CancellationToken,

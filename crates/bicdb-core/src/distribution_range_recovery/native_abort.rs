@@ -1,7 +1,7 @@
 //! Candidate and permanent-promise observations are sealed at actual local or
 //! authenticated transport boundaries. A decoded audit/voter list is no proof.
 use super::*;
-use crate::db::range_image_native::abort_history::NativeNoEffectIntentRecord;
+use crate::db::NativeNoEffectIntentRecord;
 use crate::distribution_range_consensus::native_abort::{LocalAbortCandidate, LocalAbortPromise};
 use crate::CancellationToken;
 use std::sync::Arc;

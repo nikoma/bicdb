@@ -1,4 +1,5 @@
 //! Core-only no-effect boundary after the real admission stack has unwound.
+use super::native_wal_apply::actual_transaction_mutations_sha256;
 use super::*;
 use crate::distribution_range_consensus::NativePrepareOnlyRejection;
 

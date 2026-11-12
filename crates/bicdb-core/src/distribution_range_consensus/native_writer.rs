@@ -2,6 +2,7 @@
 use super::*;
 use crate::db::NativeWriterHostState;
 use crate::distribution_native_writer::SealedHostWriterEnrollment;
+use crate::BicDb;
 use std::sync::Weak;
 pub(super) const NATIVE_WRITER_CATALOG_FORMAT: u32 = 12;
 
@@ -57,7 +58,7 @@ impl RangeWriteStore {
         }
         Ok(())
     }
-    fn require_native_writer_command(&self, command: &RangeWriteCommand) -> Result<()> {
+    pub(super) fn require_native_writer_command(&self, command: &RangeWriteCommand) -> Result<()> {
         self.require_native_writer_host_base()?;
         if crate::format::native_writer_enrollment_active(&self.root)? {
             self.native_writer_host

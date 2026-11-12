@@ -109,7 +109,10 @@ mod tests {
             "ORA-01453: SET TRANSACTION must be first statement of transaction"
         );
         run(&mut s, "ROLLBACK").unwrap();
-        assert!(parse_transaction_control("SET TRANSACTION ISOLATION LEVEL SERIALIZABLE").is_err());
+        assert_eq!(
+            parse_transaction_control("SET TRANSACTION ISOLATION LEVEL SERIALIZABLE").unwrap(),
+            Some(TransactionControl::SetTransaction)
+        );
     }
 
     #[test]

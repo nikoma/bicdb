@@ -1325,3 +1325,22 @@ impl BicDb {
         )
     }
 }
+
+impl BicDb {
+    pub(in crate::db) fn native_image_row_marker_commitment(
+        &self,
+        range: RangeId,
+        attempt: Uuid,
+    ) -> Result<String> {
+        let marker: NativeInstalling = self
+            .read_native_range_image_record(&active_key(range))?
+            .ok_or_else(|| invalid("native image row capability has no active installation"))?;
+        if marker.format_version != INSTALL_FORMAT || marker.attempt_id != attempt {
+            return Err(invalid("native image row installation attempt changed"));
+        }
+        Ok(hex::encode(sha2::Sha256::digest(bounded_json(
+            &marker,
+            MAX_NATIVE_RECEIPT_BYTES,
+        )?)))
+    }
+}

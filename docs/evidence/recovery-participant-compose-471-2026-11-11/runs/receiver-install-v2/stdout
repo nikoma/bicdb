@@ -1,0 +1,20 @@
+
+running 14 tests
+test distribution_range_image_install::tests::actual_capture_refuses_outstanding_controlled_callback_then_succeeds_after_drain ... ok
+test distribution_range_image_install::tests::actual_installed_r1_floor_survives_physical_invalidation_and_reopen_without_readiness ... ok
+test distribution_range_image_install::tests::actual_native_image_catalogue_adoption_ambiguous_persist_needs_real_refsync_before_receipt ... ok
+test distribution_range_image_install::tests::actual_native_image_catalogue_adoption_folds_real_rows_but_keeps_every_admission_refused ... ok
+test distribution_range_image_install::tests::actual_native_image_catalogue_adoption_reopens_and_reissues_same_materialized_snapshot ... ok
+test distribution_range_image_install::tests::actual_native_image_catalogue_adoption_retry_is_idempotent_without_reapplying_rows ... ok
+test distribution_range_image_install::tests::actual_native_r0_copy_removes_extra_rows_and_preserves_target_namespace_identity ... ok
+test distribution_range_image_install::tests::actual_native_image_catalogue_finalization_retains_real_base_and_rejects_foreign_freeze ... ok
+test distribution_range_image_install::tests::actual_native_r1_install_uses_target_local_visibility_and_preserves_other_range_rows ... ok
+test distribution_range_image_install::tests::native_completed_crash_window_reopens_source_and_target_and_reissues_only_exact_attempt ... ok
+test distribution_range_image_install::tests::native_completed_nonzero_handoff_window_reaudits_history_and_reissues_exact_anchor ... ok
+test distribution_range_image_install::tests::native_partial_attempt_refuses_recreated_namespace_until_fresh_authorized_attempt ... ok
+test distribution_range_image_install::tests::partial_native_attempt_reopen_stays_unready_and_new_attempt_rejects_late_chunks ... ok
+test distribution_range_image_install::tests::actual_native_r1025_install_preserves_full_history_after_command_payload_compaction has been running for over 60 seconds
+test distribution_range_image_install::tests::actual_native_r1025_install_preserves_full_history_after_command_payload_compaction ... ok
+
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 631 filtered out; finished in 240.44s
+

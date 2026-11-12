@@ -27,7 +27,10 @@ mod distribution_gateway;
 #[cfg(feature = "tls-replication")]
 mod distribution_io;
 mod distribution_metadata_read_provider;
+mod distribution_native_admission;
+mod distribution_native_writer;
 mod distribution_native_apply;
+mod distribution_native_host;
 mod distribution_native_read;
 mod distribution_query;
 mod distribution_range_consensus;

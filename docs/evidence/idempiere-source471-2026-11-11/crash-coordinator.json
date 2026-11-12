@@ -1,0 +1,42 @@
+{
+  "status": "two_reopens_captured_independent_verification_pending",
+  "source": "b0e2498842be7b01e355bb8da1cc249ff16be056",
+  "started_unix": 1794429107.7565987,
+  "physical_power_loss": false,
+  "process_crash_performed": true,
+  "start_receipt": {
+    "status": "started_all_four_ready_sessions",
+    "started_unix": 1794429107.7528412,
+    "finished_unix": 1794429130.9183066
+  },
+  "prefix": "BicdbLoad471460e688ece75",
+  "acks_before_cut_request": {
+    "0": 20,
+    "1": 21,
+    "2": 20,
+    "3": 20
+  },
+  "pending_saves_before_cut_request": [
+    [
+      "BicdbLoad471460e688ece75-3-20",
+      3
+    ]
+  ],
+  "worker_stages_before_cut": {
+    "0": "new_record",
+    "1": "new_record",
+    "2": "document_type",
+    "3": "save"
+  },
+  "requested_unix": 1794429227.8776915,
+  "clients_continue_until_signal_acknowledged": true,
+  "remote_observer_pid": 1169716,
+  "cut_event": {
+    "event": "owned_process_sigkill_sent",
+    "source": "b0e2498842be7b01e355bb8da1cc249ff16be056",
+    "database_pid": 3406086,
+    "signal_sent_unix": 1794429229.7481103
+  },
+  "remote_exit": 0,
+  "finished_unix": 1794429266.4406629
+}

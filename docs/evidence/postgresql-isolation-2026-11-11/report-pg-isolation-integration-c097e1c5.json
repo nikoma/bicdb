@@ -1,0 +1,120 @@
+{
+  "source": "c097e1c5e78f1a39ef176ab80ca5a0eda1c3489e",
+  "scope": "Current-main integration of writable PostgreSQL RR and SSI. Retains native deferred-snapshot guard and source471 features; adds SET and AND CHAIN stale update controls in both stores. Original upstream application assertions and 10s timeouts unchanged. Focused regression, not full application acceptance.",
+  "started_unix": 1794418707.5670853,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--lib",
+        "sql_serializable"
+      ],
+      "started_unix": 1794418707.5674264,
+      "exit": 0,
+      "finished_unix": 1794418751.3885486
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--test",
+        "transaction_isolation",
+        "--test",
+        "mutation_grants"
+      ],
+      "started_unix": 1794418751.3887293,
+      "exit": 0,
+      "finished_unix": 1794418791.0783615
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-pgwire",
+        "--test",
+        "writable_repeatable_read",
+        "--test",
+        "serializable_dependencies",
+        "--test",
+        "fixed_snapshot_boundary"
+      ],
+      "started_unix": 1794418791.078558,
+      "exit": 0,
+      "finished_unix": 1794418988.8875725
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--lib",
+        "session::transaction_defaults"
+      ],
+      "started_unix": 1794418988.88789,
+      "exit": 0,
+      "finished_unix": 1794419164.8856034
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "read_committed_upsert_grants",
+        "--test",
+        "read_committed_upsert_signed_arbiters"
+      ],
+      "started_unix": 1794419164.8858454,
+      "exit": 0,
+      "finished_unix": 1794419300.9650931
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-pgwire",
+        "--test",
+        "oracle_hr",
+        "session_transaction_defaults"
+      ],
+      "started_unix": 1794419300.9653513,
+      "exit": 0,
+      "finished_unix": 1794419309.6112058
+    }
+  ],
+  "status": "focused_passed",
+  "finished_unix": 1794419309.6115074
+}

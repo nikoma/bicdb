@@ -2,6 +2,26 @@
 //! or recovery session is acquired here. Caller scope remains untrusted.
 use super::*;
 use crate::distribution_native_read::{LocalNativeRangeReadObservation, NativeRangeReadRequest};
+/// A request-bound single-use bundle. Only the actual SAME-service RPC
+/// producer can create it; retained local tokens cannot be relabeled under a
+/// different business/MQ context by the observation wrapper.
+#[derive(Debug)]
+pub(crate) struct ActualServiceNativeReadProbeEvidence {
+    request: crate::distribution_native_read::NativeRangeReadProbeRequest,
+    local: LocalNativeRangeReadObservation,
+    cancellation: CancellationToken,
+}
+impl ActualServiceNativeReadProbeEvidence {
+    pub(crate) fn into_parts(
+        self,
+    ) -> (
+        crate::distribution_native_read::NativeRangeReadProbeRequest,
+        LocalNativeRangeReadObservation,
+        CancellationToken,
+    ) {
+        (self.request, self.local, self.cancellation)
+    }
+}
 /// Only this SAME-service producer can construct the owned evidence bundle.
 /// Callers cannot retag separately retained physical/catalogue tokens.
 #[derive(Debug)]
@@ -29,6 +49,38 @@ impl ActualServiceNativeReadEvidence {
     }
 }
 impl ClusterDataNodeService {
+    pub(crate) fn observe_current_native_range_probe(
+        &self,
+        request: &crate::distribution_native_read::NativeRangeReadProbeRequest,
+        parent: &CancellationToken,
+    ) -> Result<ActualServiceNativeReadProbeEvidence> {
+        let cancellation = request.cancellation(parent)?;
+        let local = self.observe_current_native_range(request, &cancellation)?;
+        cancellation.check()?;
+        Ok(ActualServiceNativeReadProbeEvidence {
+            request: request.clone(),
+            local,
+            cancellation,
+        })
+    }
+    pub(crate) fn require_native_read_ancestor(
+        &self,
+        local: &LocalNativeRangeReadObservation,
+        peer: &crate::distribution_native_read::NativeRangeReadFacts,
+    ) -> Result<()> {
+        local.require_current(self)?;
+        {
+            let database = try_database_read(&self.db)?;
+            self.require_native_catalog_database(&database)?;
+            local.physical().require_ancestor(
+                &database,
+                peer.range_index,
+                &peer.logical_genesis_sha256,
+                &peer.logical_history_sha256,
+            )?;
+        }
+        local.require_current(self)
+    }
     pub(crate) fn observe_current_native_range(
         &self,
         request: &NativeRangeReadRequest,
@@ -37,6 +89,7 @@ impl ClusterDataNodeService {
         let cancellation = request.cancellation(parent)?;
         let database = try_database_read(&self.db)?;
         self.require_native_catalog_database(&database)?;
+        self.require_native_writer_host_for_range(&database, &request.scope.range)?;
         database.schema_compatibility_fingerprint()?;
         let lineage = database.current_native_range_source_lineage(request.scope.range.id)?;
         if lineage.local_node_id() != &self.node_id || lineage.cluster_id() != &self.cluster_id {
@@ -85,6 +138,7 @@ impl ClusterDataNodeService {
         let database = try_database_read(&self.db)?;
         self.require_native_catalog_database(&database)?;
         let scope = observation.scope();
+        self.require_native_writer_host_for_range(&database, &scope.range)?;
         observation
             .physical()
             .native_admission()

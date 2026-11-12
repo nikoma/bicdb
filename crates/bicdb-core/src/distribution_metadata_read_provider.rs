@@ -20,6 +20,7 @@ use crate::distribution_consensus::{
 };
 use crate::error::{BicDbError, Result};
 use crate::CancellationToken;
+mod host_read;
 
 fn acquisition_error(message: impl Into<String>) -> BicDbError {
     BicDbError::Cluster(format!("metadata read acquisition: {}", message.into()))
@@ -103,6 +104,7 @@ impl Drop for CancelOnReturn {
 enum ReadAdmission<'a> {
     Leader,
     RecoveryWitness(&'a MetadataRecoveryRoleRequest),
+    HostMember(&'a crate::distribution_consensus::HostMetadataReadAcquireRequest),
 }
 impl ReadAdmission<'_> {
     fn validate(
@@ -114,6 +116,7 @@ impl ReadAdmission<'_> {
         match self {
             Self::Leader => store.validate_read_acquisition_caller(request, caller),
             Self::RecoveryWitness(role) => store.validate_recovery_role_caller(role, caller),
+            Self::HostMember(host) => store.validate_host_metadata_caller(host, request, caller),
         }
     }
 }
@@ -389,10 +392,10 @@ impl MetadataReadProvider {
             {
                 let consensus = self.lock_consensus(&token)?;
                 if consensus.read_authority_ready(&context)? {
-                    if !same_range_read_authority(
-                        &admission.validate(&consensus, &request, caller)?,
-                        &range,
-                    ) {
+                    let current_subject = admission.validate(&consensus, &request, caller)?;
+                    if !matches!(&admission, ReadAdmission::HostMember(_))
+                        && !same_range_read_authority(&current_subject, &range)
+                    {
                         return Err(acquisition_error(
                             "range configuration changed during fresh quorum round",
                         ));
@@ -1318,6 +1321,83 @@ mod tests {
                         .unwrap();
                     assert_eq!(range.approximate_bytes, 999_999);
                     assert_eq!(range.approximate_qps, 876);
+                }
+            });
+        }
+    }
+
+    #[test]
+    fn host_metadata_actual_store_rechecks_member_after_quorum_but_does_not_grant_range() {
+        for remove_requester in [false, true] {
+            let mut topology = topology_with_count(3);
+            topology.range_image_bootstrap_id = Some(Uuid::now_v7());
+            topology.nodes.get_mut(&node("n3")).unwrap().metadata_role =
+                crate::distribution::MetadataMemberRole::Learner;
+            let fixture = Fixture::with_topology(topology);
+            let (entered_tx, entered_rx) = mpsc::sync_channel(1);
+            let (released_tx, released_rx) = mpsc::sync_channel(1);
+            *fixture.transport.gate.lock() = Some((entered_tx, released_rx));
+            let request = crate::distribution_consensus::HostMetadataReadAcquireRequest {
+                protocol_version: METADATA_READ_ACQUISITION_PROTOCOL_VERSION,
+                acquisition_id: Uuid::now_v7(),
+                read_request_id: Uuid::now_v7(),
+                requester_node_id: node("n3"),
+                requester_incarnation: 1,
+                budget_ms: 1000,
+            };
+            thread::scope(|scope| {
+                let acquisition = scope.spawn(|| {
+                    fixture.provider.acquire_host_metadata(
+                        &participant(&fixture.topology, "n3"),
+                        request.clone(),
+                        &CancellationToken::uncancelable(),
+                    )
+                });
+                entered_rx.recv_timeout(Duration::from_secs(1)).unwrap();
+                let mut leader = fixture.transport.leader.lock();
+                let mut changed = leader.committed_topology().clone();
+                changed.generation += 1;
+                if remove_requester {
+                    changed.nodes.get_mut(&node("n3")).unwrap().lifecycle =
+                        crate::distribution::ClusterNodeLifecycle::Decommissioned;
+                } else {
+                    let range = changed.ranges.values_mut().next().unwrap();
+                    range.epoch += 1;
+                    range.leader = node("n1");
+                    range.replicas[0].node_id = node("n1");
+                }
+                let entry = leader.propose_topology(changed).unwrap();
+                let response = fixture
+                    .transport
+                    .follower
+                    .lock()
+                    .handle_append_request(leader.append_request_from(1, 16).unwrap())
+                    .unwrap();
+                leader
+                    .record_append_response(&node("n2"), &response)
+                    .unwrap();
+                assert_eq!(leader.status().commit_index, entry.index);
+                drop(leader);
+                released_tx.send(()).unwrap();
+                let result = acquisition.join().unwrap();
+                if remove_requester {
+                    assert!(result
+                        .unwrap_err()
+                        .to_string()
+                        .contains("requester incarnation/lifecycle changed"));
+                } else {
+                    let response = result.unwrap();
+                    response.validate(&request).unwrap();
+                    let range = response
+                        .evidence
+                        .committed_topology
+                        .ranges
+                        .values()
+                        .next()
+                        .unwrap();
+                    assert_eq!(range.epoch, 2);
+                    assert_eq!(range.leader, node("n1"));
+                    assert_eq!(response.request.requester_node_id, node("n3"));
                 }
             });
         }

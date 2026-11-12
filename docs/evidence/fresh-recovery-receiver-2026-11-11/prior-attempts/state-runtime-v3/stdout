@@ -1,0 +1,7 @@
+
+running 2 tests
+test distribution_range_consensus::recovery_state::tests::actual_store_open_and_nonce_bind_resolved_observation ... ok
+test distribution_range_consensus::recovery_state::tests::actual_native_epoch_fence_preserves_unresolved_tail_and_never_grants_zero_floor ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 582 filtered out; finished in 1.18s
+

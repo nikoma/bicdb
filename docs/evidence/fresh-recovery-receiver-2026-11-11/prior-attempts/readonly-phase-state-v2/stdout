@@ -1,0 +1,8 @@
+
+running 3 tests
+test distribution_range_consensus::recovery_state::tests::actual_same_epoch_nonce_refresh_durably_refuses_delayed_old_fence ... ok
+test distribution_range_consensus::recovery_state::tests::actual_native_epoch_fence_preserves_unresolved_tail_and_never_grants_zero_floor ... ok
+test distribution_range_consensus::recovery_state::tests::actual_store_open_and_nonce_bind_resolved_observation ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 583 filtered out; finished in 1.80s
+

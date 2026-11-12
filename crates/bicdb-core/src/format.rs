@@ -35,6 +35,8 @@ pub const RANGE_IMAGE_INSTALL_FEATURE_FLAG: &str = "range_image_install_v1";
 pub const CURRENT_IMAGE_PROPOSAL_FEATURE_FLAG: &str = "current_range_image_proposal_v1";
 /// Local recovered serving epochs; older native writers must refuse this DB.
 pub const NATIVE_RECOVERY_SERVING_FEATURE_FLAG: &str = "native_recovery_serving_v1";
+/// From-birth writer enrollment; local and deliberately not a portable schema capability.
+pub const NATIVE_WRITER_ENROLLMENT_FEATURE_FLAG: &str = "native_writer_enrollment_v1";
 pub const ORACLE_SIMPLE_CASE_V1_FEATURE_FLAG: &str = "oracle_simple_case_v1";
 const KNOWN_FEATURE_FLAGS: &[&str] = &[
     ORACLE_INVALID_ROUTINES_FEATURE_FLAG,
@@ -45,6 +47,7 @@ const KNOWN_FEATURE_FLAGS: &[&str] = &[
     RANGE_IMAGE_INSTALL_FEATURE_FLAG,
     CURRENT_IMAGE_PROPOSAL_FEATURE_FLAG,
     NATIVE_RECOVERY_SERVING_FEATURE_FLAG,
+    NATIVE_WRITER_ENROLLMENT_FEATURE_FLAG,
     "format_metadata_v2",
     SERVER_PAGED_FEATURE_FLAG,
     ONLINE_BACKUP_EXTENT_FEATURE_FLAG,
@@ -680,6 +683,34 @@ pub(crate) fn enable_range_image_install(root: &Path) -> Result<()> {
     persist_metadata(root, &metadata, true)
 }
 
+/// Trusted fresh-factory use only. A flag on a birth-v1 root cannot upgrade its birth.
+pub(crate) fn enable_native_writer_enrollment(root: &Path) -> Result<()> {
+    let lock = feature_flags_lock(root);
+    let _guard = lock.lock();
+    let mut metadata = read_or_legacy_metadata(root)?;
+    validate_supported(&metadata)?;
+    if !metadata
+        .feature_flags
+        .contains(RANGE_IMAGE_INSTALL_FEATURE_FLAG)
+    {
+        return Err(BicDbError::InvalidConfig(
+            "writer enrollment requires image-aware storage".into(),
+        ));
+    }
+    metadata
+        .feature_flags
+        .insert(NATIVE_WRITER_ENROLLMENT_FEATURE_FLAG.into());
+    persist_metadata(root, &metadata, true)
+}
+
+pub(crate) fn native_writer_enrollment_active(root: &Path) -> Result<bool> {
+    let metadata = read_or_legacy_metadata(root)?;
+    validate_supported(&metadata)?;
+    Ok(metadata
+        .feature_flags
+        .contains(NATIVE_WRITER_ENROLLMENT_FEATURE_FLAG))
+}
+
 pub(crate) fn enable_current_image_proposal(root: &Path) -> Result<()> {
     let lock = feature_flags_lock(root);
     let _guard = lock.lock();
@@ -780,6 +811,23 @@ pub(crate) fn enable_oracle_invalid_routines(root: &Path) -> Result<()> {
 mod local_identity_format_tests {
     use super::*;
 
+    // The native image reader is supplied by this composition. Keep the
+    // current-main unknown-reader refusal invariant for a genuinely unknown
+    // future capability; historical source-476 evidence remains unchanged.
+    #[test]
+    fn namespace_identity_does_not_advertise_unknown_native_readers() {
+        let root = tempfile::tempdir().unwrap();
+        let mut metadata = FormatMetadata::current();
+        metadata
+            .feature_flags
+            .insert("reserved_future_native_reader_v999".into());
+        persist_metadata(root.path(), &metadata, true).unwrap();
+        let error = ensure_open_compatible(root.path(), false).unwrap_err();
+        assert!(error
+            .to_string()
+            .contains("unknown format feature flag `reserved_future_native_reader_v999`"));
+    }
+
     #[test]
     fn namespace_identity_metadata_replacements_keep_sticky_fences_durable() {
         let root = tempfile::tempdir().unwrap();
@@ -813,9 +861,9 @@ mod local_identity_format_tests {
         use std::sync::{Arc, Barrier};
         let root = tempfile::tempdir().unwrap();
         persist_current(root.path(), false).unwrap();
-        let barrier = Arc::new(Barrier::new(5));
+        let barrier = Arc::new(Barrier::new(6));
         std::thread::scope(|scope| {
-            for action in 0..5 {
+            for action in 0..6 {
                 let barrier = barrier.clone();
                 let root = root.path();
                 scope.spawn(move || {
@@ -825,7 +873,8 @@ mod local_identity_format_tests {
                             0 => enable_local_namespace_identity(root).unwrap(),
                             1 => enable_range_image_install(root).unwrap(),
                             2 => enable_unique_nulls_not_distinct(root).unwrap(),
-                            3 => persist_current(root, false).unwrap(),
+                            3 => enable_sql_catalog_intents(root).unwrap(),
+                            4 => persist_current(root, false).unwrap(),
                             _ => {
                                 persist_current_with_mode(root, StorageMode::EmbeddedMemory, false)
                                     .unwrap()
@@ -839,6 +888,7 @@ mod local_identity_format_tests {
         for flag in [
             LOCAL_NAMESPACE_IDENTITY_FEATURE_FLAG,
             RANGE_IMAGE_INSTALL_FEATURE_FLAG,
+            SQL_CATALOG_INTENTS_FEATURE_FLAG,
             UNIQUE_NULLS_NOT_DISTINCT_FEATURE_FLAG,
         ] {
             assert!(metadata.feature_flags.contains(flag));

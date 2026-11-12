@@ -62,10 +62,7 @@ impl NativePreparedPoint {
 }
 
 pub(super) fn validate_native_prepared_catalog(catalog: &RangeWriteCatalog) -> Result<()> {
-    if !matches!(
-        catalog.format_version,
-        1..=super::INSTALLING_CERTIFICATION_FORMAT
-    ) {
+    if !super::range_write_catalog_format_supported(catalog.format_version) {
         return Err(range_write_error("unknown native catalogue format"));
     }
     for (range_id, record) in &catalog.recovery_fences {

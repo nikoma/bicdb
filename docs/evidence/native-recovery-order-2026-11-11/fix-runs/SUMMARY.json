@@ -1,0 +1,200 @@
+{
+  "source": "7d2f84a50d4aeaeee211ec4d54120f5c539a8ba4",
+  "source_version": "1.0.471-beta",
+  "scope": "Private prototype historical certification preflight and retained-prefix recovery; no physical qualification",
+  "distinct_tests": 22,
+  "executions": 22,
+  "minimum_available_bytes": 21414834176,
+  "ci_tested": false,
+  "production_qualified": false,
+  "strong_get_tested": false,
+  "activation_tested": false,
+  "runs": [
+    {
+      "name": "gap-refusal-no-poison",
+      "passed": 1,
+      "tests": [
+        "distribution_range_recovery::recovery_order_tests::actual_gap_refusal_preserves_durable_observations_and_retained_prefix_recovers"
+      ],
+      "result": {
+        "source_revision": "7d2f84a50d4aeaeee211ec4d54120f5c539a8ba4",
+        "dirty_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "command": [
+          "cargo",
+          "test",
+          "--release",
+          "--locked",
+          "-p",
+          "bicdb-core",
+          "--config",
+          "profile.release.package.bicdb-core.opt-level=0",
+          "--config",
+          "profile.release.package.bicdb-core.debug=0",
+          "--lib",
+          "--features",
+          "tls-replication",
+          "actual_gap_refusal_preserves_durable_observations_and_retained_prefix_recovers",
+          "--",
+          "--nocapture"
+        ],
+        "environment": {
+          "CARGO_TARGET_DIR": "/tmp/bicdb-azure-artifact-target",
+          "CARGO_BUILD_JOBS": "1",
+          "CARGO_INCREMENTAL": "0",
+          "RUST_TEST_THREADS": "2"
+        },
+        "compiler": "rustc 1.96.0 (ac68faa20 2026-05-25)",
+        "start_unix": 1794425331.9240618,
+        "end_unix": 1794425405.983662,
+        "exit_code": 0,
+        "guard_stop_reason": null,
+        "pause_episodes": 0,
+        "minimum_available_bytes": 21414834176
+      }
+    },
+    {
+      "name": "recovery-state-controls",
+      "passed": 5,
+      "tests": [
+        "distribution_range_consensus::recovery_state::tests::actual_other_range_decisions_and_same_session_refresh_preserve_range_observation",
+        "distribution_range_consensus::recovery_state::tests::actual_native_epoch_fence_preserves_unresolved_tail_and_never_grants_zero_floor",
+        "distribution_range_consensus::recovery_state::tests::actual_rename_then_directory_sync_error_cannot_issue_durability_observations",
+        "distribution_range_consensus::recovery_state::tests::actual_same_epoch_nonce_refresh_durably_refuses_delayed_old_fence",
+        "distribution_range_consensus::recovery_state::tests::actual_store_open_and_nonce_bind_resolved_observation"
+      ],
+      "result": {
+        "source_revision": "7d2f84a50d4aeaeee211ec4d54120f5c539a8ba4",
+        "dirty_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "command": [
+          "cargo",
+          "test",
+          "--release",
+          "--locked",
+          "-p",
+          "bicdb-core",
+          "--config",
+          "profile.release.package.bicdb-core.opt-level=0",
+          "--config",
+          "profile.release.package.bicdb-core.debug=0",
+          "--lib",
+          "--features",
+          "tls-replication",
+          "distribution_range_consensus::recovery_state::tests",
+          "--",
+          "--nocapture"
+        ],
+        "environment": {
+          "CARGO_TARGET_DIR": "/tmp/bicdb-azure-artifact-target",
+          "CARGO_BUILD_JOBS": "1",
+          "CARGO_INCREMENTAL": "0",
+          "RUST_TEST_THREADS": "2"
+        },
+        "compiler": "rustc 1.96.0 (ac68faa20 2026-05-25)",
+        "start_unix": 1794425431.1000261,
+        "end_unix": 1794425435.1194756,
+        "exit_code": 0,
+        "guard_stop_reason": null,
+        "pause_episodes": 0,
+        "minimum_available_bytes": 24734806016
+      }
+    },
+    {
+      "name": "historical-tls-controls",
+      "passed": 9,
+      "tests": [
+        "db::range_image_native::rf3_fixture::native_historical_tls::actual_mtls_participant_collection_holds_no_recipient_service_or_database_latch",
+        "db::range_image_native::rf3_fixture::native_historical_tls::actual_mtls_participant_current_quorum_recovers_without_old_data_leader_and_rejects_stale_scope",
+        "db::range_image_native::rf3_fixture::native_historical_tls::actual_mtls_unwired_participant_receiver_refuses_without_materializing",
+        "db::range_image_native::rf3_fixture::native_historical_tls::native_completion_actual_tls_canceled_socket_after_real_persistence_recovers_by_readonly_status",
+        "db::range_image_native::rf3_fixture::native_historical_tls::native_completion_actual_tls_sequential_replicas_keep_frozen_pins_and_duplicate_sha",
+        "db::range_image_native::rf3_fixture::native_historical_tls::native_completion_actual_tls_wrong_actor_cannot_complete_but_current_voter_can_observe",
+        "db::range_image_native::rf3_fixture::native_historical_tls::native_ready_actual_tls_duplicate_voter_cannot_count_twice",
+        "db::range_image_native::rf3_fixture::native_historical_tls::native_ready_actual_tls_fast_clean_zero_minority_does_not_starve_matching_one_majority",
+        "db::range_image_native::rf3_fixture::native_historical_tls::native_ready_actual_tls_preparation_status_and_local_closed_quorum_remain_frozen"
+      ],
+      "result": {
+        "source_revision": "7d2f84a50d4aeaeee211ec4d54120f5c539a8ba4",
+        "dirty_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "command": [
+          "cargo",
+          "test",
+          "--release",
+          "--locked",
+          "-p",
+          "bicdb-core",
+          "--config",
+          "profile.release.package.bicdb-core.opt-level=0",
+          "--config",
+          "profile.release.package.bicdb-core.debug=0",
+          "--lib",
+          "--features",
+          "tls-replication",
+          "native_historical_tls",
+          "--",
+          "--nocapture"
+        ],
+        "environment": {
+          "CARGO_TARGET_DIR": "/tmp/bicdb-azure-artifact-target",
+          "CARGO_BUILD_JOBS": "1",
+          "CARGO_INCREMENTAL": "0",
+          "RUST_TEST_THREADS": "2"
+        },
+        "compiler": "rustc 1.96.0 (ac68faa20 2026-05-25)",
+        "start_unix": 1794425436.617592,
+        "end_unix": 1794425466.6467779,
+        "exit_code": 0,
+        "guard_stop_reason": null,
+        "pause_episodes": 0,
+        "minimum_available_bytes": 24667803648
+      }
+    },
+    {
+      "name": "recovery-quorum-controls",
+      "passed": 7,
+      "tests": [
+        "distribution_range_recovery::quorum::tests::actual_duplicate_and_insufficient_fences_cannot_create_majority",
+        "distribution_range_recovery::quorum::tests::actual_fenced_rf3_genesis_source_verifies_full_history_and_authorizes_current_voter_capture",
+        "distribution_range_recovery::quorum::tests::actual_rf1_fence_is_durable_but_unknown_native_floor_never_becomes_zero_ready",
+        "distribution_range_recovery::quorum::tests::actual_rf3_distinct_fences_succeed_without_waiting_for_data_leader_ack",
+        "distribution_range_recovery::quorum::tests::cancelled_actual_source_history_step_poisoned_round_cannot_resume_with_fresh_timeout",
+        "distribution_range_recovery::quorum::tests::original_parent_cancellation_prevents_consuming_a_real_fence_quorum",
+        "distribution_range_recovery::quorum::tests::independently_real_but_different_session_fence_is_rejected"
+      ],
+      "result": {
+        "source_revision": "7d2f84a50d4aeaeee211ec4d54120f5c539a8ba4",
+        "dirty_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "command": [
+          "cargo",
+          "test",
+          "--release",
+          "--locked",
+          "-p",
+          "bicdb-core",
+          "--config",
+          "profile.release.package.bicdb-core.opt-level=0",
+          "--config",
+          "profile.release.package.bicdb-core.debug=0",
+          "--lib",
+          "--features",
+          "tls-replication",
+          "distribution_range_recovery::quorum::tests",
+          "--",
+          "--nocapture"
+        ],
+        "environment": {
+          "CARGO_TARGET_DIR": "/tmp/bicdb-azure-artifact-target",
+          "CARGO_BUILD_JOBS": "1",
+          "CARGO_INCREMENTAL": "0",
+          "RUST_TEST_THREADS": "2"
+        },
+        "compiler": "rustc 1.96.0 (ac68faa20 2026-05-25)",
+        "start_unix": 1794425517.2515435,
+        "end_unix": 1794425526.2741017,
+        "exit_code": 0,
+        "guard_stop_reason": null,
+        "pause_episodes": 0,
+        "minimum_available_bytes": 24690802688
+      }
+    }
+  ]
+}

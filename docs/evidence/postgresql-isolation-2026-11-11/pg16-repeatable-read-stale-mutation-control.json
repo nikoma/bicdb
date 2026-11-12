@@ -1,0 +1,33 @@
+{
+  "server_version": "16.13 (Debian 16.13-1.pgdg13+1)",
+  "results": [
+    {
+      "case": "update old predicate",
+      "sqlstate": "40001"
+    },
+    {
+      "case": "update from",
+      "sqlstate": "40001"
+    },
+    {
+      "case": "delete old row",
+      "sqlstate": "40001"
+    },
+    {
+      "case": "lock old row",
+      "sqlstate": "40001"
+    },
+    {
+      "case": "plain insert duplicate",
+      "sqlstate": "23505"
+    },
+    {
+      "case": "upsert do nothing",
+      "sqlstate": "40001"
+    },
+    {
+      "case": "upsert do update",
+      "sqlstate": "40001"
+    }
+  ]
+}

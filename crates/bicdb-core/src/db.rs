@@ -69,6 +69,7 @@ pub(crate) use range_image_proposal::{
 };
 mod native_activation;
 pub(crate) use native_activation::NativeActivatedOpenGuard;
+mod commit_admission_hook;
 mod native_recovery_ready;
 mod range_image_native;
 pub(crate) use native_recovery_ready::{LocalNativeRecoveryReady, NativeLocalVisibilitySequence};
@@ -79,13 +80,13 @@ pub(crate) use range_image_native::rf3_fixture::{
 pub(crate) use range_image_native::NativeActivationDecisionReceipt;
 pub(crate) use range_image_native::NativeReplicaMaterialization;
 pub(crate) use range_image_native::{
-    FreshRangeGenesisAuthority, KnownNativeRecoveryPrefix, NativeHistoryPublicationBinding,
-    NativeHistoryStage, NativeHistoryStageProgress, NativeHistoryTargetContext,
-    NativeLogicalHistoryEntryV1, NativeLogicalHistoryOutcomeV1, NativeLogicalHistoryPoint,
-    NativeLogicalHistoryStepV1, NativeRangeInstallSafety, NativeRangePendingApply,
-    NativeRangePrefixObservation, NativeRecoveredServingReceipt, NativeRecoveryAdmission,
-    NativeRecoveryAppliedReceipt, RangeImageBirthMember, RangeImageBirthSpec,
-    SourceRangeImageLineage, StagedNativeHistoryProof,
+    FreshRangeGenesisAuthority, InstalledNativeWriterHostGuard, KnownNativeRecoveryPrefix,
+    NativeHistoryPublicationBinding, NativeHistoryStage, NativeHistoryStageProgress,
+    NativeHistoryTargetContext, NativeLogicalHistoryEntryV1, NativeLogicalHistoryOutcomeV1,
+    NativeLogicalHistoryPoint, NativeLogicalHistoryStepV1, NativeRangeInstallSafety,
+    NativeRangePendingApply, NativeRangePrefixObservation, NativeRecoveredServingReceipt,
+    NativeRecoveryAdmission, NativeRecoveryAppliedReceipt, NativeWriterHostState,
+    RangeImageBirthMember, RangeImageBirthSpec, SourceRangeImageLineage, StagedNativeHistoryProof,
 };
 pub(crate) use range_image_native::{NativeRangeReadPhysical, NativeReadLocalDbSequence};
 mod range_image_bindings;
@@ -95,6 +96,7 @@ mod record_read_snapshot;
 pub use record_read_snapshot::RecordReadSnapshot;
 mod row_lock_waiters;
 mod spatial_paged;
+mod sql_serializable;
 mod transaction_receipts;
 mod transaction_suspension;
 mod unique_reservations;
@@ -3951,7 +3953,7 @@ pub struct BicDb {
     /// Host-installed distributed durability boundary. The database owns the
     /// call site so direct API, SQL, pgwire and extension writes cannot bypass
     /// range quorum once the database is opened in distributed mode.
-    commit_admission: RwLock<Option<Arc<dyn CommitAdmission>>>,
+    commit_admission: RwLock<commit_admission_hook::CommitAdmissionSlot>,
     range_mutations: crate::distribution_range_mutation::RangeMutationGate,
     range_image_initializing: AtomicBool,
     range_image_native_birth_active: AtomicBool,
@@ -4082,6 +4084,7 @@ pub struct BicDb {
     // exclusive side. Ordinary commits therefore remain concurrent, while a
     // serializable validator observes a stable database through its apply.
     serializable_commit_admission: RwLock<()>,
+    postgres_serializable: Arc<sql_serializable::SerializableTransactions>,
     /// Set while an automatic checkpoint runs, so concurrent committers that
     /// also see a large log do not start a second one.
     auto_checkpoint_running: AtomicBool,
@@ -8619,6 +8622,19 @@ fn evaluate_native_invariant_expression(
                 bindings,
                 left,
             )?;
+            // Invariant expressions are pure. Preserve the language's boolean
+            // guards before evaluating an unreachable nested scan or arithmetic
+            // expression. Every predicate that can determine validity still runs.
+            match (operator, left.as_bool()) {
+                (NativeInvariantBinaryOperator::And, Some(false)) => {
+                    return Ok(Value::Bool(false));
+                }
+                (NativeInvariantBinaryOperator::Or, Some(true))
+                | (NativeInvariantBinaryOperator::Implies, Some(false)) => {
+                    return Ok(Value::Bool(true));
+                }
+                _ => {}
+            }
             let right = evaluate_native_invariant_expression(
                 db,
                 tx,
@@ -9177,9 +9193,11 @@ pub struct Transaction {
     isolation: TransactionIsolation,
     serializable_generation_snapshot: HashMap<String, u64>,
     serializable_reads: BTreeSet<String>,
+    postgres_serializable: Option<sql_serializable::Registration>,
     /// Used only by authenticated range-log replay. It is private to the core
     /// crate and therefore cannot be selected by SQL, pgwire, or extensions.
     bypass_commit_admission: bool,
+    native_image_row_grant: Option<range_image_native::NativeImageTransactionGrant>,
     range_mutation_claim: Option<crate::distribution_range_mutation::RangeMutationClaim>,
     database_mutation_permit: Option<crate::distribution_range_mutation::DatabaseMutationPermit>,
     native_wal_retention: Option<native_wal_apply::NativeWalRetentionPin>,
@@ -9864,7 +9882,7 @@ impl BicDb {
     /// Install or replace the trusted distributed commit authority. A
     /// distributed database remains read-only until this is called.
     pub fn install_commit_admission(&self, admission: Arc<dyn CommitAdmission>) {
-        *self.commit_admission.write() = Some(admission);
+        self.commit_admission.write().install(Some(admission));
     }
 
     /// Fence the installed writer while holding the same exclusive gate that
@@ -9899,7 +9917,7 @@ impl BicDb {
     }
 
     pub fn clear_commit_admission(&self) {
-        *self.commit_admission.write() = None;
+        self.commit_admission.write().install(None);
     }
 
     pub(crate) fn range_mutation_gate(
@@ -9928,6 +9946,7 @@ impl BicDb {
         mutations: &[CommitAdmissionMutation],
         authority: &crate::distribution_range_mutation::RangeMutationAuthority<'_>,
     ) -> Result<()> {
+        self.require_native_generic_import_allowed()?;
         self.range_mutations.validate(range_id, authority)?;
         if mutations.is_empty() {
             return Ok(());
@@ -9973,6 +9992,7 @@ impl BicDb {
         mutations: &[CommitAdmissionMutation],
         authority: &crate::distribution_range_mutation::RangeMutationAuthority<'_>,
     ) -> Result<usize> {
+        self.require_native_generic_import_allowed()?;
         self.range_mutations.validate(range.id, authority)?;
         for mutation in mutations {
             if !range.contains_token(distribution_key_token(
@@ -10988,7 +11008,7 @@ impl BicDb {
             ha_state,
             replication_state,
             consensus_state,
-            commit_admission: RwLock::new(None),
+            commit_admission: RwLock::new(commit_admission_hook::CommitAdmissionSlot::empty()),
             range_mutations: crate::distribution_range_mutation::RangeMutationGate::default(),
             range_image_initializing: AtomicBool::new(false),
             range_image_native_birth_active: AtomicBool::new(false),
@@ -11042,6 +11062,7 @@ impl BicDb {
             index_generation: AtomicU64::new(0),
             unique_reservation_indexes: RwLock::new(None),
             serializable_commit_admission: RwLock::new(()),
+            postgres_serializable: Arc::default(),
             auto_checkpoint_running: AtomicBool::new(false),
             commit_lock: Mutex::new(()),
             flashback_clock: Mutex::new(flashback::FlashbackClock::default()),
@@ -12174,6 +12195,7 @@ impl BicDb {
         batch: &RangeSnapshotBatch,
         authority: &crate::distribution_range_mutation::RangeMutationAuthority<'_>,
     ) -> Result<usize> {
+        self.require_native_generic_import_allowed()?;
         self.range_mutations.validate(range.id, authority)?;
         Self::validate_range_snapshot_fields(range, collection_meta, batch)?;
         if !self.collections.contains_key(&batch.collection) {
@@ -12249,6 +12271,34 @@ impl BicDb {
         batch: &RangeSnapshotBatch,
         authority: &crate::distribution_range_mutation::RangeMutationAuthority<'_>,
     ) -> Result<usize> {
+        self.require_native_generic_import_allowed()?;
+        self.apply_range_snapshot_batch_preinstalled_with_mutation_native_scope(
+            range,
+            collection_meta,
+            batch,
+            authority,
+            None,
+        )
+    }
+
+    pub(crate) fn apply_range_snapshot_batch_preinstalled_with_mutation_native_scope(
+        &self,
+        range: &RangeDescriptor,
+        collection_meta: &CollectionMeta,
+        batch: &RangeSnapshotBatch,
+        authority: &crate::distribution_range_mutation::RangeMutationAuthority<'_>,
+        scope: Option<&range_image_native::NativeImageRowScope<'_>>,
+    ) -> Result<usize> {
+        if let Some(scope) = scope {
+            if scope.range() != range {
+                return Err(BicDbError::Cluster(
+                    "native image row scope range differs".into(),
+                ));
+            }
+        }
+        if scope.is_none() {
+            self.require_native_generic_import_allowed()?;
+        }
         self.range_mutations.validate(range.id, authority)?;
         Self::validate_range_snapshot_fields(range, collection_meta, batch)?;
         if self
@@ -12276,8 +12326,13 @@ impl BicDb {
         // ordinary client-write admission path would make the learner try to
         // lead a second quorum decision while it is still a non-leader.
         tx.bypass_commit_admission = true;
+        tx.imported_projection =
+            scope.is_some() && self.actual_native_writer_enforcement_version()? == 1;
         tx.range_mutation_claim = Some(authority.claim());
         tx.write_upserts_unchecked(&batch.collection, batch.records.clone())?;
+        if let Some(scope) = scope {
+            scope.authorize_transaction(self, &mut tx, authority)?;
+        }
         tx.commit()?;
         Ok(count)
     }
@@ -12306,6 +12361,7 @@ impl BicDb {
         frame: &CommitFrame,
         authority: &crate::distribution_range_mutation::RangeMutationAuthority<'_>,
     ) -> Result<usize> {
+        self.require_native_generic_import_allowed()?;
         self.range_mutations.validate(range.id, authority)?;
         let filtered = filter_commit_frame_for_range(frame, range)?;
         self.ensure_replication_frame_collections(&filtered)?;
@@ -12332,6 +12388,7 @@ impl BicDb {
         frame: &CommitFrame,
         authority: &crate::distribution_range_mutation::RangeMutationAuthority<'_>,
     ) -> Result<usize> {
+        self.require_native_generic_import_allowed()?;
         self.range_mutations.validate(range.id, authority)?;
         let filtered = filter_commit_frame_for_range(frame, range)?;
         for write in &filtered.writes {
@@ -12405,6 +12462,30 @@ impl BicDb {
         record_ids: &[String],
         authority: &crate::distribution_range_mutation::RangeMutationAuthority<'_>,
     ) -> Result<usize> {
+        self.require_native_generic_import_allowed()?;
+        self.delete_range_records_as_local_with_mutation_native_scope(
+            range, collection, record_ids, authority, None,
+        )
+    }
+
+    pub(crate) fn delete_range_records_as_local_with_mutation_native_scope(
+        &self,
+        range: &RangeDescriptor,
+        collection: &str,
+        record_ids: &[String],
+        authority: &crate::distribution_range_mutation::RangeMutationAuthority<'_>,
+        scope: Option<&range_image_native::NativeImageRowScope<'_>>,
+    ) -> Result<usize> {
+        if let Some(scope) = scope {
+            if scope.range() != range {
+                return Err(BicDbError::Cluster(
+                    "native image row scope range differs".into(),
+                ));
+            }
+        }
+        if scope.is_none() {
+            self.require_native_generic_import_allowed()?;
+        }
         self.range_mutations.validate(range.id, authority)?;
         for record_id in record_ids {
             if !range.contains_token(distribution_key_token(collection, record_id)) {
@@ -12427,8 +12508,13 @@ impl BicDb {
         // fenced relocation operation and must not attempt a fresh quorum write
         // as the old (now non-leader) source.
         tx.bypass_commit_admission = true;
+        tx.imported_projection =
+            scope.is_some() && self.actual_native_writer_enforcement_version()? == 1;
         tx.range_mutation_claim = Some(authority.claim());
         tx.delete_many(collection, record_ids)?;
+        if let Some(scope) = scope {
+            scope.authorize_transaction(self, &mut tx, authority)?;
+        }
         tx.commit()?;
         Ok(record_ids.len())
     }
@@ -12469,6 +12555,7 @@ impl BicDb {
         expected_cluster_id: &str,
         authority: Option<&crate::distribution_range_mutation::RangeMutationAuthority<'_>>,
     ) -> Result<ReplicationApplyReport> {
+        self.require_native_generic_import_allowed()?;
         let _database_mutation = if let Some(authority) = authority {
             self.range_mutations.validate_claim(&authority.claim())?;
             None
@@ -15390,6 +15477,7 @@ impl Transaction {
             return Err(BicDbError::TransactionNotPending);
         }
         if self.isolation == TransactionIsolation::Serializable
+            || self.postgres_serializable.is_some()
             || self.write_len() != 0
             || self.lock_len() != 0
         {
@@ -15583,6 +15671,92 @@ impl Transaction {
         )?;
         self.write_upserts_unchecked(collection, vec![record])?;
         self.enqueue_mutation_audit(audit);
+        Ok(())
+    }
+
+    /// SQL INSERT claims a currently vacant identity, including one freed by
+    /// a delete after the reader's fixed snapshot. Keep that newer boundary
+    /// on the new write only; reads and updates retain the original snapshot.
+    pub fn insert_using_live_identities(
+        &mut self,
+        collection: &str,
+        primary_constraint: &str,
+        records: Vec<Record>,
+        grant: Option<MutationGrantId>,
+    ) -> Result<()> {
+        self.db_ref().check_recovery_state()?;
+        if self.state != TxState::Pending {
+            return Err(BicDbError::TransactionNotPending);
+        }
+        let mark = self.rollback_mark();
+        let result =
+            self.insert_using_live_identities_inner(collection, primary_constraint, records, grant);
+        if result.is_err() {
+            self.rollback_to_mark(mark)?;
+        }
+        self.fenced(result)
+    }
+
+    fn insert_using_live_identities_inner(
+        &mut self,
+        collection: &str,
+        primary_constraint: &str,
+        records: Vec<Record>,
+        grant: Option<MutationGrantId>,
+    ) -> Result<()> {
+        let mut prepared = Vec::with_capacity(records.len());
+        let mut ids = FxHashSet::default();
+        self.bind_collection_incarnation(collection)?;
+        for record in &records {
+            let db = self.db_ref();
+            match grant {
+                Some(grant) => self.validate_mutation_grant_operation(
+                    grant,
+                    collection,
+                    &record.id,
+                    MutationOperation::Insert,
+                )?,
+                None => db.ensure_unprotected_legacy_access(collection, SecureOperation::Write)?,
+            }
+            self.lock_row_for_write(self.id, collection, &record.id, false)?;
+            let current = self.overlay_pending_write(
+                collection,
+                &record.id,
+                db.get_unchecked(collection, &record.id)?,
+            );
+            if current.is_some() || !ids.insert(record.id.as_str()) {
+                return Err(BicDbError::UniqueIndexConflict {
+                    index: primary_constraint.into(),
+                });
+            }
+            prepared.push(
+                Self::latest_committed_record_sequence(db, collection, &record.id)?.unwrap_or(0),
+            );
+        }
+        drop(ids);
+        let mut audits = Vec::new();
+        if let Some(grant) = grant {
+            for record in &records {
+                audits.push(self.authorize_mutation_with_preimage(
+                    grant,
+                    collection,
+                    MutationOperation::Insert,
+                    std::slice::from_ref(record),
+                    Some((&record.id, None)),
+                )?);
+            }
+        }
+        self.write_upserts_with_reservation_preimages(
+            collection,
+            records
+                .into_iter()
+                .zip(prepared)
+                .map(|(record, sequence)| (record, sequence, Some(OldImage::none()))),
+            grant.is_none(),
+        )?;
+        for audit in audits {
+            self.enqueue_mutation_audit(audit);
+        }
         Ok(())
     }
 
@@ -16272,6 +16446,23 @@ impl Transaction {
         self.get_visible_unchecked(collection, id)
     }
 
+    /// Check visibility of a committed tuple already identified by a SQL
+    /// uniqueness arbiter. This check exposes neither the row nor its fields.
+    pub fn require_conflict_tuple_in_snapshot(&self, collection: &str, id: &str) -> Result<()> {
+        let db = self.db_ref();
+        self.bind_collection_incarnation(collection)?;
+        if self.last_pending_write(collection, id).is_none()
+            && Self::latest_committed_record_sequence(db, collection, id)?
+                .is_some_and(|sequence| sequence > self.applied_snapshot)
+        {
+            return Err(BicDbError::TransactionConflict(format!(
+                "{collection}:{id} changed after transaction {} snapshot",
+                self.id.0
+            )));
+        }
+        Ok(())
+    }
+
     /// Batch existence probe for engine-internal primary-key arbitration.
     ///
     /// Unlike a caller-visible read this neither materializes records nor
@@ -16320,6 +16511,7 @@ impl Transaction {
     fn get_visible_unchecked(&self, collection: &str, id: &str) -> Result<Option<Arc<Record>>> {
         let db = self.db_ref();
         self.bind_collection_incarnation(collection)?;
+        self.observe_postgres_record(collection, id);
         let (record, observed_version, read_stored) =
             record_read_snapshot::read_record_at_snapshot_unchecked(
                 db,
@@ -16635,6 +16827,11 @@ impl Transaction {
             stored
         };
         let mut out = deserialize_stored_batch(stored)?;
+        if self.postgres_serializable.is_some() {
+            for record in out.iter().flatten() {
+                self.observe_postgres_record(collection, &record.id);
+            }
+        }
         if has_pending {
             for slot in out.iter_mut() {
                 let pk = match slot.as_ref() {
@@ -16721,6 +16918,11 @@ impl Transaction {
                 None => self.registry_stored_by_rowid(&state, collection, rowid)?,
             });
         }
+        if self.postgres_serializable.is_some() {
+            for record in out.iter().flatten() {
+                self.observe_postgres_record(collection, &record.id);
+            }
+        }
         Ok(out)
     }
 
@@ -16755,6 +16957,11 @@ impl Transaction {
     ) -> Result<Vec<Option<Arc<Record>>>> {
         let db = self.db_ref();
         self.bind_collection_incarnation(collection)?;
+        if self.postgres_serializable.is_some() {
+            for pk in pks {
+                self.observe_postgres_record(collection, pk);
+            }
+        }
         let has_pending = self.has_pending_writes(collection);
         let snapshot = self.snapshot_tx;
         let (stored, lazy_misses): (Vec<Option<Arc<StoredRecord>>>, Vec<usize>) = {
@@ -16818,6 +17025,10 @@ impl Transaction {
         let db = self.db_ref();
         db.check_recovery_state()?;
         db.ensure_unprotected_legacy_access(collection, SecureOperation::Read)?;
+        if self.postgres_serializable.is_some() {
+            self.bind_collection_incarnation(collection)?;
+            self.observe_postgres_relation(collection);
+        }
         let state = db.collection_state(collection)?;
         if state.paged_lazy {
             let (Some(paged), Some(snapshot)) = (&db.paged_records, &self.paged_snapshot) else {
@@ -17197,6 +17408,7 @@ impl Transaction {
     fn scan_collection_visible_unchecked(&self, collection: &str) -> Result<Vec<Record>> {
         let db = self.db_ref();
         self.bind_collection_incarnation(collection)?;
+        self.observe_postgres_relation(collection);
         let mut records = BTreeMap::<String, Record>::new();
         let mut retained_bytes = 0usize;
         let state = db.collection_state(collection)?;
@@ -17323,8 +17535,17 @@ impl Transaction {
         collection: &str,
         id_prefix: &str,
     ) -> Result<Vec<String>> {
-        let db = self.db_ref();
         self.bind_collection_incarnation(collection)?;
+        self.observe_postgres_prefix(collection, id_prefix);
+        self.snapshot_record_ids_with_prefix(collection, id_prefix)
+    }
+
+    fn snapshot_record_ids_with_prefix(
+        &self,
+        collection: &str,
+        id_prefix: &str,
+    ) -> Result<Vec<String>> {
+        let db = self.db_ref();
         let state = db.collection_state(collection)?;
         let mut ids = if state.paged_lazy {
             // Base ids from the page store, then per-key chain overrides —
@@ -17407,10 +17628,11 @@ impl Transaction {
     ) -> Result<(Vec<String>, bool)> {
         let db = self.db_ref();
         self.bind_collection_incarnation(collection)?;
+        self.observe_postgres_range(collection, lower, upper);
         let state = db.collection_state(collection)?;
         if !state.paged_lazy {
             drop(state);
-            let ids = self.scan_collection_record_ids_with_prefix_unchecked(collection, "")?;
+            let ids = self.snapshot_record_ids_with_prefix(collection, "")?;
             return Ok((
                 record_ids_in_range_ordered(ids, lower, upper, descending),
                 true,
@@ -17468,9 +17690,10 @@ impl Transaction {
     ) -> Result<Vec<String>> {
         let db = self.db_ref();
         self.bind_collection_incarnation(collection)?;
+        self.observe_postgres_prefix(collection, id_prefix);
         let state = db.collection_state(collection)?;
         if !state.paged_lazy {
-            return self.scan_collection_record_ids_with_prefix_unchecked(collection, id_prefix);
+            return self.snapshot_record_ids_with_prefix(collection, id_prefix);
         }
         let mut ids = BTreeSet::new();
         if let (Some(snapshot), Some(paged)) = (&self.paged_snapshot, &db.paged_records) {
@@ -17544,6 +17767,7 @@ impl Transaction {
     ) -> Result<Option<VisibleRow>> {
         let db = self.db_ref();
         self.bind_collection_incarnation(collection)?;
+        self.observe_postgres_record(collection, id);
         let (row, observed_version) = {
             let state = db.collection_state(collection)?;
             let shard = state.shard(id).read();
@@ -17620,6 +17844,11 @@ impl Transaction {
         let db = self.db_ref();
         db.ensure_unprotected_legacy_access(collection, SecureOperation::Read)?;
         self.bind_collection_incarnation(collection)?;
+        if self.postgres_serializable.is_some() {
+            for pk in pks {
+                self.observe_postgres_record(collection, pk);
+            }
+        }
         let has_pending = self.has_pending_writes(collection);
         let snapshot = self.snapshot_tx;
         let mut observed_versions = Vec::with_capacity(pks.len());

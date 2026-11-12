@@ -1,0 +1,107 @@
+[
+  {
+    "bytes": 7972,
+    "path": "README.md",
+    "sha256": "d50f7bda8d10fb9eeaf837d1e44dbf1bb393149d5db535f2276158312531b4a8"
+  },
+  {
+    "bytes": 5744,
+    "path": "claims.json",
+    "sha256": "2e5515b1cb77e0dc8afee2f94eafca118a99e2485f52be10208ad846be6443c8"
+  },
+  {
+    "bytes": 387030,
+    "path": "engine.patch.gz",
+    "sha256": "22dd9eaf6d2e0c5c8629a0e80134a54de8218a56ffc11a9765edcabcd63066d6"
+  },
+  {
+    "bytes": 1105,
+    "path": "pending-retry-counter.patch.gz",
+    "sha256": "222f489b449176a474f8809ef9220bfead421ecf1091fd592a92132b04fc2117"
+  },
+  {
+    "bytes": 36960,
+    "path": "pending-source-files.json",
+    "sha256": "a91a7b4d4d6ab2edc66b633681a2d8b44ce3c660eac0d8b8ed68f8840baf16f1"
+  },
+  {
+    "bytes": 2979,
+    "path": "prior-453.patch.gz",
+    "sha256": "535f58b2bebdaaa45a2034561ec2de565e8e1221492d7fda1b7554c640e833f3"
+  },
+  {
+    "bytes": 36958,
+    "path": "prior-source-files.json",
+    "sha256": "c1d86172ea981bda0d29032dac6098b1041b8eb39279471b6bf673acfdd8bcaa"
+  },
+  {
+    "bytes": 2898,
+    "path": "run_cargo_guarded.executed.py",
+    "sha256": "b35ef11cdcda2da1e56728e225d71c6de3c9cd4247c5014acbc2c343ba33ecc6"
+  },
+  {
+    "bytes": 732,
+    "path": "runs/read-rpc-v1/inputs.json",
+    "sha256": "72ecf24f9884d4498ae72139f3069733dc3ee0482a16a20f4fa2a8262db49c2a"
+  },
+  {
+    "bytes": 2656,
+    "path": "runs/read-rpc-v1/resources.jsonl.gz",
+    "sha256": "408d174242fb0e46e5ec80b6b1017554b855b2eebdcfddeb3833aab9bdb5c3d6"
+  },
+  {
+    "bytes": 914,
+    "path": "runs/read-rpc-v1/result.json",
+    "sha256": "7ce2541e0e999cd0a76c40c78b12abfba086c586759e3fa2b65cebcb95221826"
+  },
+  {
+    "bytes": 14814,
+    "path": "runs/read-rpc-v1/stderr.gz",
+    "sha256": "223213c8960d14de96d8d523a0a0f71d73aeccc5a8eae2483cce4d8f9c0cc2f3"
+  },
+  {
+    "bytes": 946,
+    "path": "runs/read-rpc-v1/stdout",
+    "sha256": "02131b2108cffb1f5e50e94bab1bd60ed61cdcf9f6bf9f374971ef4441cdbdc5"
+  },
+  {
+    "bytes": 728,
+    "path": "runs/read-rpc-v2/inputs.json",
+    "sha256": "8bc7bf9b8010b8f5169655446b8ca0aef2ca0721a9bcdd0df9ae690bd96bfba4"
+  },
+  {
+    "bytes": 2936,
+    "path": "runs/read-rpc-v2/resources.jsonl.gz",
+    "sha256": "7c3f5f3caaf6e5f09a9d3a585dedb261d9ef8a9d710bfaa20fcf2d7c1c51fb48"
+  },
+  {
+    "bytes": 906,
+    "path": "runs/read-rpc-v2/result.json",
+    "sha256": "6bc47f0e5fc423b3bc49ebd2686c7381d60fcd47517477435331b2410f73cd9e"
+  },
+  {
+    "bytes": 15035,
+    "path": "runs/read-rpc-v2/stderr.gz",
+    "sha256": "a41916cff40f7ae159cfdbfe545a8721d25cbb5ecff03f418c1979edcbe97e98"
+  },
+  {
+    "bytes": 2354,
+    "path": "runs/read-rpc-v2/stdout",
+    "sha256": "ae0af22330cf9e3f7e20c072d1c5567193cf47cdacda8c3e6018339a5f3d6036"
+  },
+  {
+    "bytes": 36959,
+    "path": "source-files.json",
+    "sha256": "b883e2d926badb7366a6728e3d90eab774d212eaae4946c2006350c983ff81d3"
+  },
+  {
+    "bytes": 2529,
+    "path": "test_verify.py",
+    "sha256": "f98cf9b85ba061e98aea66db77cca168911202d019c4fd8789d0db269b0bf1c7"
+  },
+  {
+    "bytes": 7942,
+    "path": "verify.py",
+    "sha256": "b0366e2f370f2355a30515c4bcee6707e391fc6c7440b3c5ec37934ee9514140"
+  }
+]

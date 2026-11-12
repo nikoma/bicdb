@@ -1,0 +1,11 @@
+{
+  "custody_root": "/root/.local/state/bicdb/ha-scaling-2026-11-11/private/native-recovery-order-e68fa21f",
+  "manifest_sha256": "7426449ea05b610832b99ab6673fa552b0be5f409e0c6cf9da10b285b5062cf2",
+  "files": 91,
+  "bytes": 152842336,
+  "source_destination_hash_parity": true,
+  "files_and_directories_fsynced": true,
+  "completed_unix": 1794426091.2942884,
+  "contains_generated_test_database_keys": true,
+  "global_credentials_included": false
+}

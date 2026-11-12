@@ -1,0 +1,27 @@
+{
+  "source_revision": "14be3a2baf16e54167f24b992a7ab1e8fe253562",
+  "dirty_diff_sha256": "d6b718ae6f6b51a71efe43154f64a50318a49cd71ada1efe5d2e6dca98dcf1f1",
+  "command": [
+    "cargo",
+    "test",
+    "--release",
+    "--locked",
+    "-p",
+    "bicdb-core",
+    "--config",
+    "profile.release.package.bicdb-core.opt-level=0",
+    "--config",
+    "profile.release.package.bicdb-core.debug=0",
+    "--lib",
+    "handoff_witness_is_exact_plan",
+    "--",
+    "--nocapture"
+  ],
+  "environment": {
+    "CARGO_TARGET_DIR": "/tmp/bicdb-azure-artifact-target",
+    "CARGO_BUILD_JOBS": "1",
+    "CARGO_INCREMENTAL": "0",
+    "RUST_TEST_THREADS": "2"
+  },
+  "compiler": "rustc 1.96.0 (ac68faa20 2026-05-25)"
+}

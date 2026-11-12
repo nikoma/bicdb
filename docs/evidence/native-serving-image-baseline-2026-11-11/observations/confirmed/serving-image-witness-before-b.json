@@ -1,0 +1,269 @@
+{
+  "attempt_a": "01a1cbd0-2196-7a90-a303-4ec4bf25254e",
+  "attempt_b": "01a1cbd0-262c-7592-beff-591e002c6e46",
+  "catalogue_before_b": {
+    "catalog": {
+      "cluster_id": "actual-native-rf3-origin",
+      "format_version": 7,
+      "native_image_bases": {
+        "1": {
+          "attempt_id": "01a1cbd0-2196-7a90-a303-4ec4bf25254e",
+          "bootstrap_id": "01a1cbd0-1092-7ed1-bb08-15df4c7aea1a",
+          "capture_epoch": 1,
+          "cluster_id": "actual-native-rf3-origin",
+          "format_version": 1,
+          "intent_sha256": "285e3abc6dfa38e710d58bbd0f0e39a0e2db93c28fa2fd8f5cb7e2dc86bdeb26",
+          "logical_genesis_sha256": "3561204a832c1ac689d9e983c8bb55f78336e84f9ba0fe1929e10b76199b4805",
+          "logical_history_sha256": "53b21e309d37000df6302355b6e243ed22e933d32e4539a3f84b09e1eccefc52",
+          "native_birth_id": "01a1cbd0-1405-7803-971d-2172f02d7f46",
+          "native_birth_sha256": "7f8ef24ff6183dd5845dc9872ec9d773af68b98a138b45af883898b80d215365",
+          "native_receipt_sha256": "d9c7be162aadf86dbff66e1bf3cbc6e6556b6c92a7afde8796bd8e98dc31fbe9",
+          "node_id": "n1",
+          "nonce": "01a1cbd0-209c-7500-af94-4d4445f83d60",
+          "range_id": 1,
+          "range_index": 1,
+          "session_id": "01a1cbd0-209c-7500-af94-4d4445f83d60"
+        }
+      },
+      "node_id": "n1",
+      "ranges": {
+        "1": {
+          "compacted_through": 1,
+          "current_epoch": 1,
+          "entries": {},
+          "last_index": 1,
+          "resolved_through": 1
+        },
+        "2": {
+          "compacted_through": 0,
+          "current_epoch": 1,
+          "entries": {
+            "1": {
+              "command": {
+                "checksum_sha256": "13fa0e89683f7309c91fa92da380f8720b11de8d6488617a4ccfee8d39d192c5",
+                "cluster_id": "actual-native-rf3-origin",
+                "command_id": "01a1cbd0-1677-71e3-9ae8-6dc91893a86a",
+                "index": 1,
+                "leader_node_id": "n0",
+                "mutations": [
+                  {
+                    "collection": "items",
+                    "record": {
+                      "id": "source-other-0-1",
+                      "metadata": {},
+                      "payload": null,
+                      "timestamp": null,
+                      "vector": null
+                    },
+                    "record_id": "source-other-0-1"
+                  }
+                ],
+                "protocol_version": 2,
+                "range_epoch": 1,
+                "range_id": 2,
+                "transaction_id": 3
+              },
+              "state": "applied"
+            },
+            "2": {
+              "command": {
+                "checksum_sha256": "2558448cd9c8828ebdf037894f21a4d87f8f2b33bc1958c437d8eb39e075c940",
+                "cluster_id": "actual-native-rf3-origin",
+                "command_id": "01a1cbd0-176d-7511-83f9-712e6ca00c05",
+                "index": 2,
+                "leader_node_id": "n0",
+                "mutations": [
+                  {
+                    "collection": "items",
+                    "record": {
+                      "id": "source-other-1-1",
+                      "metadata": {},
+                      "payload": null,
+                      "timestamp": null,
+                      "vector": null
+                    },
+                    "record_id": "source-other-1-1"
+                  }
+                ],
+                "protocol_version": 2,
+                "range_epoch": 1,
+                "range_id": 2,
+                "transaction_id": 4
+              },
+              "state": "applied"
+            },
+            "3": {
+              "command": {
+                "checksum_sha256": "6f38ce35cd8c10b0a9891df46c63f05c03d682e9f37159c78abefd010d2f2843",
+                "cluster_id": "actual-native-rf3-origin",
+                "command_id": "01a1cbd0-18f2-72c1-9387-94b23fc9d355",
+                "index": 3,
+                "leader_node_id": "n0",
+                "mutations": [
+                  {
+                    "collection": "items",
+                    "record": {
+                      "id": "source-other-2-0",
+                      "metadata": {},
+                      "payload": null,
+                      "timestamp": null,
+                      "vector": null
+                    },
+                    "record_id": "source-other-2-0"
+                  }
+                ],
+                "protocol_version": 2,
+                "range_epoch": 1,
+                "range_id": 2,
+                "transaction_id": 5
+              },
+              "state": "applied"
+            },
+            "4": {
+              "command": {
+                "checksum_sha256": "602d8cf87f46fa8aacf4ed4888b82c92d86a15a1cd303226121bddbbc36cc921",
+                "cluster_id": "actual-native-rf3-origin",
+                "command_id": "01a1cbd0-1a78-7003-aa6d-137979d57084",
+                "index": 4,
+                "leader_node_id": "n0",
+                "mutations": [
+                  {
+                    "collection": "items",
+                    "record": {
+                      "id": "source-other-3-3",
+                      "metadata": {},
+                      "payload": null,
+                      "timestamp": null,
+                      "vector": null
+                    },
+                    "record_id": "source-other-3-3"
+                  }
+                ],
+                "protocol_version": 2,
+                "range_epoch": 1,
+                "range_id": 2,
+                "transaction_id": 6
+              },
+              "state": "quorum_committed"
+            }
+          },
+          "last_index": 4,
+          "resolved_through": 3
+        }
+      },
+      "recovery_fences": {
+        "1": {
+          "local_member_incarnation": 1,
+          "local_node_id": "n1",
+          "native_database_incarnation": "deb24528-7b10-4755-ab06-62965898fd94",
+          "phase": "Active",
+          "retired_nonces": [
+            "01a1cbd0-209c-7500-af94-4d4445f83d60"
+          ],
+          "scope": {
+            "bootstrap_id": "01a1cbd0-1092-7ed1-bb08-15df4c7aea1a",
+            "business_request_id": "01a1cbd0-2542-7d43-a4f7-8dfca407cd44",
+            "cluster_id": "actual-native-rf3-origin",
+            "configuration_sha256": "604df3513d1bfe091e395695b86647278d0f56f5f13cc80b5e78f9678570d613",
+            "initiator_incarnation": 1,
+            "initiator_node_id": "n0",
+            "metadata_context_id": "01a1cbd0-2542-7d43-a4f7-8e2410d207e1",
+            "metadata_read_index": 1,
+            "metadata_term": 1,
+            "protocol_version": 1,
+            "purpose": "NormalRecovery",
+            "range_configuration_sha256": "a6e68f783f28ad60a602563b76a3336d1ad45b15a1ba23d1e5784ecb00fc5025",
+            "range_epoch": 1,
+            "range_id": 1,
+            "recovery_nonce": "01a1cbd0-2542-7d43-a4f7-8dee1e74d3b5"
+          }
+        }
+      }
+    },
+    "checksum_sha256": "a555b86384c9b041bb75e6469cd9538450679c8d93ff78ada38350e8f12c3565"
+  },
+  "logical_history_sha256": "53b21e309d37000df6302355b6e243ed22e933d32e4539a3f84b09e1eccefc52",
+  "native_receipt_a": "d9c7be162aadf86dbff66e1bf3cbc6e6556b6c92a7afde8796bd8e98dc31fbe9",
+  "new_scope": {
+    "bootstrap_id": "01a1cbd0-1092-7ed1-bb08-15df4c7aea1a",
+    "business_request_id": "01a1cbd0-2542-7d43-a4f7-8dfca407cd44",
+    "cluster_id": "actual-native-rf3-origin",
+    "configuration_sha256": "604df3513d1bfe091e395695b86647278d0f56f5f13cc80b5e78f9678570d613",
+    "initiator_incarnation": 1,
+    "initiator_node_id": "n0",
+    "metadata_context_id": "01a1cbd0-2542-7d43-a4f7-8e2410d207e1",
+    "metadata_read_index": 1,
+    "metadata_term": 1,
+    "protocol_version": 1,
+    "purpose": "NormalRecovery",
+    "range_configuration_sha256": "a6e68f783f28ad60a602563b76a3336d1ad45b15a1ba23d1e5784ecb00fc5025",
+    "range_epoch": 1,
+    "range_id": 1,
+    "recovery_nonce": "01a1cbd0-2542-7d43-a4f7-8dee1e74d3b5"
+  },
+  "old_nonce": "01a1cbd0-209c-7500-af94-4d4445f83d60",
+  "physical_qualification": false,
+  "scope": "ACTUAL_LOCAL_INTERRUPTED_COMPLETION_THEN_SECOND_REPAIR",
+  "serving_a": {
+    "activation_history_sha256": "53b21e309d37000df6302355b6e243ed22e933d32e4539a3f84b09e1eccefc52",
+    "activation_index": 1,
+    "birth_id": "01a1cbd0-1405-7803-971d-2172f02d7f46",
+    "birth_sha256": "7f8ef24ff6183dd5845dc9872ec9d773af68b98a138b45af883898b80d215365",
+    "checksum_sha256": "c44bf0eb509856f55a7e7c6ac9b4d858002acb555a0b2e6a9ec2aebf0a5c6816",
+    "format_version": 1,
+    "local_member_incarnation": 1,
+    "local_node_id": "n1",
+    "local_visibility_at_activation": 21,
+    "logical_genesis_sha256": "3561204a832c1ac689d9e983c8bb55f78336e84f9ba0fe1929e10b76199b4805",
+    "native_receipt_at_activation_sha256": "d9c7be162aadf86dbff66e1bf3cbc6e6556b6c92a7afde8796bd8e98dc31fbe9",
+    "physical_base_sha256": "d9c7be162aadf86dbff66e1bf3cbc6e6556b6c92a7afde8796bd8e98dc31fbe9",
+    "range": {
+      "approximate_bytes": 0,
+      "approximate_qps": 0,
+      "end_token": 9223372036854775808,
+      "epoch": 1,
+      "id": 1,
+      "leader": "n0",
+      "placement": {
+        "distinct_failure_domains": [],
+        "required_node_labels": {}
+      },
+      "replicas": [
+        {
+          "id": 1,
+          "node_id": "n0",
+          "role": "voter"
+        },
+        {
+          "id": 3,
+          "node_id": "n1",
+          "role": "voter"
+        },
+        {
+          "id": 5,
+          "node_id": "n2",
+          "role": "voter"
+        }
+      ],
+      "start_token": 0
+    },
+    "scope": {
+      "bootstrap_id": "01a1cbd0-1092-7ed1-bb08-15df4c7aea1a",
+      "business_request_id": "01a1cbd0-2403-7202-8828-af31466c73de",
+      "cluster_id": "actual-native-rf3-origin",
+      "configuration_sha256": "604df3513d1bfe091e395695b86647278d0f56f5f13cc80b5e78f9678570d613",
+      "initiator_incarnation": 1,
+      "initiator_node_id": "n0",
+      "metadata_context_id": "01a1cbd0-2409-7ba2-a224-df26597fb4f7",
+      "metadata_read_index": 1,
+      "metadata_term": 1,
+      "protocol_version": 1,
+      "purpose": "NormalRecovery",
+      "range_configuration_sha256": "a6e68f783f28ad60a602563b76a3336d1ad45b15a1ba23d1e5784ecb00fc5025",
+      "range_epoch": 1,
+      "range_id": 1,
+      "recovery_nonce": "01a1cbd0-209c-7500-af94-4d4445f83d60"
+    }
+  },
+  "target_uid": "1d3852da-c900-43ef-8aba-f6b53c916a6f"
+}

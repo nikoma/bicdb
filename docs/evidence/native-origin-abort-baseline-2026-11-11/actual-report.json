@@ -1,0 +1,91 @@
+{
+  "actual_abort": {
+    "command": {
+      "checksum_sha256": "d4a89f204dbc616f6d1c604d5fbc7d4d6abc7023286aa0eaa00b25227f06a9a4",
+      "cluster_id": "actual-native-rf3-origin",
+      "command_id": "01a1cc58-e300-7840-aca2-1f3ea3da55fe",
+      "index": 1,
+      "leader_node_id": "n0",
+      "mutations": [
+        {
+          "collection": "items",
+          "record": {
+            "id": "unacknowledged-failed-prepare-1",
+            "metadata": {},
+            "payload": null,
+            "timestamp": null,
+            "vector": null
+          },
+          "record_id": "unacknowledged-failed-prepare-1"
+        }
+      ],
+      "protocol_version": 2,
+      "range_epoch": 1,
+      "range_id": 1,
+      "transaction_id": 2
+    },
+    "state": "aborted"
+  },
+  "after_abort_native": {
+    "diagnostic": null,
+    "factory_initialization_complete": true,
+    "invalidated": false,
+    "materialized_pending_index": null,
+    "native_applied_index": 0,
+    "native_base_index": 0,
+    "native_receipt_sha256": "13a3b6e178004a1c6e57f827338741abbdaf9e1cee5d97758a65a3a445c3faf6",
+    "pending_command_id": null,
+    "pending_command_index": null,
+    "range_id": 1
+  },
+  "after_abort_raw": {
+    "compacted_through": 0,
+    "current_epoch": 1,
+    "last_index": 1,
+    "node_id": "n0",
+    "range_id": 1,
+    "resolved_through": 1
+  },
+  "after_second_native": {
+    "diagnostic": null,
+    "factory_initialization_complete": true,
+    "invalidated": false,
+    "materialized_pending_index": null,
+    "native_applied_index": 0,
+    "native_base_index": 0,
+    "native_receipt_sha256": "13a3b6e178004a1c6e57f827338741abbdaf9e1cee5d97758a65a3a445c3faf6",
+    "pending_command_id": null,
+    "pending_command_index": null,
+    "range_id": 1
+  },
+  "after_second_raw": {
+    "compacted_through": 0,
+    "current_epoch": 1,
+    "last_index": 1,
+    "node_id": "n0",
+    "range_id": 1,
+    "resolved_through": 1
+  },
+  "classification": "NATIVE_ABORT_NEXT_ACK_REFUSED",
+  "first_call_acknowledged": false,
+  "first_error": "cluster error: range r1 write 01a1cc58-e300-7840-aca2-1f3ea3da55fe failed prepare quorum: 1/2; repair failures: n1: cluster error: native range image: actual RF3 fixture destination is unavailable | n2: cluster error: native range image: actual RF3 fixture destination is unavailable",
+  "initial_source_native": {
+    "diagnostic": null,
+    "factory_initialization_complete": true,
+    "invalidated": false,
+    "materialized_pending_index": null,
+    "native_applied_index": 0,
+    "native_base_index": 0,
+    "native_receipt_sha256": "13a3b6e178004a1c6e57f827338741abbdaf9e1cee5d97758a65a3a445c3faf6",
+    "pending_command_id": null,
+    "pending_command_index": null,
+    "range_id": 1
+  },
+  "irretrievable_loss_proven": false,
+  "no_counter_reset_or_epoch_seed": true,
+  "physical_qualification": false,
+  "second_call_acknowledged": false,
+  "second_error": "cluster error: native command cannot extend this actual native base/configuration",
+  "strong_get_tested": false,
+  "transport": "actual fsynced services; in-process data delivery only"
+}

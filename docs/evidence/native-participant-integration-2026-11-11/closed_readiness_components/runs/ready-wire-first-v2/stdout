@@ -1,0 +1,24 @@
+
+running 19 tests
+test db::native_recovery_ready::tests::actual_empty_genesis_ready_owns_the_read_pin_until_proof_drop ... ok
+test db::native_recovery_ready::tests::actual_closed_rf1_quorum_persists_new_serving_epoch_but_keeps_prepared_refusal ... ok
+test db::native_recovery_ready::tests::actual_native_prefix_ahead_of_rebuilt_catalogue_requires_adoption_not_numeric_floor ... ok
+test db::native_recovery_ready::tests::actual_native_completion_stays_frozen_and_can_close_a_later_ready_round ... ok
+test db::native_recovery_ready::tests::actual_native_preparation_stops_mutation_and_survives_store_reopen ... ok
+test db::native_recovery_ready::tests::actual_nonempty_native_prefix_uses_local_mvcc_sequence_not_range_index ... ok
+test db::native_recovery_ready::tests::actual_reopen_invalidates_the_prior_open_local_readiness_proof ... ok
+test db::native_recovery_ready::tests::ambiguous_native_prepare_persistence_refsyncs_exact_refusal_before_new_physical_proof ... ok
+test db::native_recovery_ready::tests::ambiguous_native_completion_requires_exact_refsync_before_refreshing_held_readiness ... ok
+test db::native_recovery_ready::tests::cancelled_local_ready_cannot_persist_a_native_preparation ... ok
+test db::native_recovery_ready::tests::cancelled_closed_quorum_cannot_persist_a_serving_epoch ... ok
+test db::native_recovery_ready::tests::catalogue_applied_without_native_materialization_cannot_become_ready ... ok
+test db::native_recovery_ready::tests::corrupt_compacted_certification_marker_cannot_become_native_ready ... ok
+test db::native_recovery_ready::tests::durable_preparation_requires_new_authority_after_original_request_cancellation ... ok
+test db::native_recovery_ready::tests::equal_index_conflicting_actual_catalogue_and_native_history_is_rejected ... ok
+test db::native_recovery_ready::tests::original_parent_cancellation_invalidates_an_actual_local_ready_proof ... ok
+test db::native_recovery_ready::tests::prepared_replica_can_be_reattested_by_a_fresh_same_session_role ... ok
+test db::native_recovery_ready::tests::recovered_native_serving_epoch_survives_strict_cold_open_without_relabelling_capture ... ok
+test db::native_recovery_ready::tests::same_identity_catalogue_from_another_actual_native_database_is_rejected ... ok
+
+test result: ok. 19 passed; 0 failed; 0 ignored; 0 measured; 645 filtered out; finished in 17.11s
+

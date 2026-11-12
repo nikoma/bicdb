@@ -1,0 +1,22 @@
+{
+  "source": "b0e2498842be7b01e355bb8da1cc249ff16be056",
+  "source_version": "1.0.471-beta",
+  "binary_sha256": "2be65220ac049f1ab19c299685acffe65eb83d80cf5599a3e7fd382af2d09d89",
+  "original_assertions_and_timeouts_unchanged": true,
+  "original_report": "public471-DBTest.xml",
+  "failures": [
+    {
+      "name": "testCreateConnectionMultipleIndependent",
+      "message": "DB.createConnection - @NoDBConnection@"
+    },
+    {
+      "name": "testCreateConnectionRepeatableRead",
+      "message": "DB.createConnection - @NoDBConnection@"
+    },
+    {
+      "name": "testCreateConnectionSerializable",
+      "message": "DB.createConnection - @NoDBConnection@"
+    }
+  ],
+  "new_source_application_rerun_required": true
+}

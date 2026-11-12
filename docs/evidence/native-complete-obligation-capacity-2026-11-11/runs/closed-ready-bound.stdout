@@ -1,0 +1,6 @@
+
+running 1 test
+test distribution_range_recovery::native_ready::obligation_bound_tests::closed_ready_obligation_bound_stays_2048_without_a_pending_tail ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 679 filtered out; finished in 0.00s
+

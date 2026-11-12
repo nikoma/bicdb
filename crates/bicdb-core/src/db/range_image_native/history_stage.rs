@@ -10,6 +10,7 @@ use crate::distribution_range_image::{
     RangeImageHistoryCursorV1, RangeImageHistoryStepV1,
     TentativeNativeRangeImageSourceAuthorization,
 };
+use crate::distribution_range_mutation::RangeMutationAuthority;
 
 const STAGE_FORMAT: u32 = 1;
 const MAX_WIRE: usize = 272 * 1024;
@@ -1561,5 +1562,117 @@ mod tests {
     #[test]
     fn native_history_stage_missing_stored_entry_refuses_proof() {
         exercise_stage(1, false, true, false)
+    }
+}
+
+/// Scoped image-only row capability from an actual fully audited history and
+/// target/source fence. A mutation permit or serialized payload cannot mint it.
+pub(crate) struct NativeImageRowScope<'a> {
+    context: &'a NativeHistoryTargetContext<'a>,
+    proof: &'a StagedNativeHistoryProof,
+    source: &'a TentativeNativeRangeImageSourceAuthorization<'a>,
+    marker_sha256: String,
+}
+#[derive(Debug)]
+pub(crate) struct NativeImageTransactionGrant {
+    database_incarnation: String,
+    transaction_id: u64,
+    mutations_sha256: String,
+    range: crate::RangeDescriptor,
+    attempt: Uuid,
+    marker_sha256: String,
+    deadline: std::time::Instant,
+    claim: crate::distribution_range_mutation::RangeMutationClaim,
+}
+impl NativeImageTransactionGrant {
+    pub(in crate::db) fn require_current(
+        &self,
+        database: &BicDb,
+        transaction: &Transaction,
+    ) -> Result<()> {
+        database.check_recovery_state()?;
+        if self.database_incarnation != database.incarnation_id()
+            || self.transaction_id != transaction.id().0
+            || std::time::Instant::now() >= self.deadline
+            || super::super::native_wal_apply::actual_transaction_mutations_sha256(transaction)?
+                != self.mutations_sha256
+            || database.native_image_row_marker_commitment(self.range.id, self.attempt)?
+                != self.marker_sha256
+        {
+            return Err(invalid(
+                "native image transaction capability changed/expired",
+            ));
+        }
+        database.range_mutations.validate_claim(&self.claim)?;
+        for mutation in &transaction.writes {
+            if !self
+                .range
+                .contains_token(crate::distribution::distribution_key_token(
+                    &mutation.collection,
+                    &mutation.record_id,
+                ))
+            {
+                return Err(invalid("native image mutation left its authorized range"));
+            }
+        }
+        database.require_installed_native_writer_database_for_range(&self.range)
+    }
+}
+impl NativeImageRowScope<'_> {
+    pub(crate) fn range(&self) -> &crate::RangeDescriptor {
+        self.context.fence.range()
+    }
+    pub(in crate::db) fn authorize_transaction(
+        &self,
+        database: &BicDb,
+        transaction: &mut Transaction,
+        authority: &RangeMutationAuthority<'_>,
+    ) -> Result<()> {
+        self.source.require_current()?;
+        self.context.role.role().require_live_request()?;
+        database
+            .range_mutations
+            .validate(self.range().id, authority)?;
+        if database
+            .native_image_row_marker_commitment(self.range().id, self.context.fence.attempt_id())?
+            != self.marker_sha256
+            || self.proof.attempt_id() != self.context.fence.attempt_id()
+        {
+            return Err(invalid("native image scope marker/attempt changed"));
+        }
+        transaction.native_image_row_grant = Some(NativeImageTransactionGrant {
+            database_incarnation: database.incarnation_id().into(),
+            transaction_id: transaction.id().0,
+            mutations_sha256: super::super::native_wal_apply::actual_transaction_mutations_sha256(
+                transaction,
+            )?,
+            range: self.range().clone(),
+            attempt: self.context.fence.attempt_id(),
+            marker_sha256: self.marker_sha256.clone(),
+            deadline: self.context.role.role().deadline(),
+            claim: authority.claim(),
+        });
+        Ok(())
+    }
+}
+impl BicDb {
+    pub(crate) fn native_image_row_scope<'a>(
+        &self,
+        context: &'a NativeHistoryTargetContext<'a>,
+        proof: &'a StagedNativeHistoryProof,
+        source: &'a TentativeNativeRangeImageSourceAuthorization<'a>,
+    ) -> Result<NativeImageRowScope<'a>> {
+        proof.require_current(self, context, source)?;
+        self.require_installed_native_writer_database_for_range(context.fence.range())?;
+        let marker_sha256 = self.native_image_row_marker_commitment(
+            context.fence.range().id,
+            context.fence.attempt_id(),
+        )?;
+        Ok(NativeImageRowScope {
+            context,
+            proof,
+            source,
+            marker_sha256,
+        })
     }
 }

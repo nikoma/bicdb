@@ -9,6 +9,20 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::time::{Duration, Instant};
 use uuid::Uuid;
+mod quorum;
+mod rpc;
+#[cfg(feature = "tls-replication")]
+mod strong;
+pub(crate) use quorum::{NativeReadQuorumCandidate, NativeReadQuorumRound};
+pub(crate) use rpc::{
+    require_peer, NativeRangeReadObservation, NativeRangeReadProbeReply,
+    NativeRangeReadProbeRequest,
+};
+#[cfg(feature = "tls-replication")]
+pub(crate) use strong::{
+    NativeStrongPointReadOutcome, NativeStrongPointReadRequest, NativeStrongPointReadUnavailable,
+    NativeStrongPointReadValue, NativeStrongReadStage,
+};
 
 pub(crate) fn invalid(detail: &str) -> crate::BicDbError {
     crate::BicDbError::Cluster(format!("native range read observation: {detail}"))
@@ -111,6 +125,8 @@ impl NativeRangeReadRequest {
 #[serde(deny_unknown_fields)]
 pub(crate) struct NativeRangeReadFacts {
     pub evidence_version: u32,
+    /// Actual birth requirement, not evidence of an installed host policy.
+    pub native_writer_enforcement_version: u32,
     pub scope_sha256: String,
     pub challenge: Uuid,
     pub node_id: ClusterNodeId,

@@ -1,0 +1,11 @@
+
+running 1 test
+test db::range_image_native::rf3_fixture::native_abort_regression::native_failed_prepare_abort_allows_next_origin_ack_and_canonical_history ... FAILED
+
+failures:
+
+failures:
+    db::range_image_native::rf3_fixture::native_abort_regression::native_failed_prepare_abort_allows_next_origin_ack_and_canonical_history
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 681 filtered out; finished in 1.49s
+

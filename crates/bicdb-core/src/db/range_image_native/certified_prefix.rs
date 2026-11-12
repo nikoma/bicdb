@@ -434,7 +434,8 @@ impl BicDb {
         transaction: &Transaction,
     ) -> Result<()> {
         if !self.native_range_image_birth_present()
-            || transaction.bypass_commit_admission
+            || (transaction.bypass_commit_admission
+                && self.actual_native_writer_enforcement_version()? == 0)
             || transaction.writes.is_empty()
         {
             return Ok(());
@@ -443,6 +444,9 @@ impl BicDb {
         // a flag alone must not manufacture a native lineage obligation.
         if self.read_native_birth()?.is_none() {
             return Ok(());
+        }
+        if let Some(grant) = &transaction.native_image_row_grant {
+            return grant.require_current(self, transaction);
         }
         let actual_hash =
             super::super::native_wal_apply::actual_transaction_mutations_sha256(transaction)?;

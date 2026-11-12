@@ -1,0 +1,23 @@
+{
+  "source_revision": "eafa6949a78ea4e97f1ea3271ff97f2de27d20c6",
+  "source_version": "1.0.471-beta",
+  "baseline_outcome": "FAIL",
+  "exit_code": 101,
+  "first_call_acknowledged": false,
+  "second_call_acknowledged": false,
+  "actual_raw_abort_index": 1,
+  "raw_resolved_after_restore": 1,
+  "actual_native_before": 0,
+  "actual_native_after_abort": 0,
+  "actual_native_after_next_attempt": 0,
+  "native_still_known": true,
+  "native_pending_absent": true,
+  "next_failure_before_prepare_2": true,
+  "canonical_aborted_producer_production_status": "absent in this source; constructor cfg(test) only",
+  "main_or_azure_cause_claim": false,
+  "native_quorum_restore_liveness_proven": false,
+  "physical_qualification": false,
+  "production_qualified": false,
+  "strong_get_tested": false,
+  "irretrievable_loss_proven": false
+}

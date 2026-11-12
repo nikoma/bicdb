@@ -1,0 +1,9 @@
+
+running 4 tests
+test distribution_range_image_install::current_repair_tests::actual_adopted_image_compacted_marker_conflict_refuses_native_preparation ... ok
+test distribution_range_image_install::current_repair_tests::actual_prepared_serving_record_survives_a_second_current_voter_image_attempt ... ok
+test distribution_range_image_install::current_repair_tests::actual_rf3_nonempty_current_voter_repair_uses_same_catalogue_and_keeps_recovery_closed ... ok
+test distribution_range_image_install::current_repair_tests::actual_rf3_nonempty_finalized_image_prepares_without_an_unfenced_window ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 670 filtered out; finished in 20.63s
+

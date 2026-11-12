@@ -42,6 +42,7 @@ use crate::{
 mod native_activation;
 mod native_apply;
 mod native_durability;
+mod native_writer;
 use native_durability::ServiceStoragePolicy;
 mod current_image_resume;
 mod current_image_replacement;
@@ -49,7 +50,9 @@ mod native_completion;
 mod native_image_install;
 mod native_range_read;
 mod native_ready;
-pub(crate) use native_range_read::ActualServiceNativeReadEvidence;
+pub(crate) use native_range_read::{
+    ActualServiceNativeReadEvidence, ActualServiceNativeReadProbeEvidence,
+};
 
 pub const RANGE_LEARNER_APPLY_FORMAT_VERSION: u32 = 1;
 pub const DEFAULT_RANGE_LEARNER_APPLY_STATE: &str = "cluster-range-learner-apply.json";
@@ -1914,7 +1917,7 @@ impl ClusterDataNodeService {
         self.range_mutations.validate(range.id, authority)?;
         self.validate_range_write(range, caller, &command)?;
         let state = self.range_writes.prepare(command.clone())?;
-        Ok(self.range_write_ack(&command, state))
+        self.range_write_ack(&command, state)
     }
 
     /// Persist the leader's commit decision without recursively applying the
@@ -1946,7 +1949,7 @@ impl ClusterDataNodeService {
         self.range_mutations.validate(range.id, authority)?;
         self.validate_range_write(range, caller, command)?;
         let state = self.range_writes.commit(command)?;
-        Ok(self.range_write_ack(command, state))
+        self.range_write_ack(command, state)
     }
 
     pub fn certify_range_write(
@@ -1975,7 +1978,7 @@ impl ClusterDataNodeService {
         self.range_mutations.validate(range.id, authority)?;
         self.validate_range_write(range, caller, command)?;
         let state = self.range_writes.certify(command)?;
-        Ok(self.range_write_ack(command, state))
+        self.range_write_ack(command, state)
     }
 
     /// Persist a provisional decision. It is not replayed or applied until the
@@ -2006,7 +2009,7 @@ impl ClusterDataNodeService {
         self.range_mutations.validate(range.id, authority)?;
         self.validate_range_write(range, caller, command)?;
         let state = self.range_writes.commit(command)?;
-        Ok(self.range_write_ack(command, state))
+        self.range_write_ack(command, state)
     }
 
     /// Apply only a quorum-certified decision. The applied checkpoint remains
@@ -2058,7 +2061,7 @@ impl ClusterDataNodeService {
             )?;
             self.range_writes.mark_applied(command)?;
         }
-        Ok(self.range_write_ack(command, RangeWriteState::Applied))
+        self.range_write_ack(command, RangeWriteState::Applied)
     }
 
     pub fn abort_range_write(
@@ -2087,7 +2090,7 @@ impl ClusterDataNodeService {
         self.range_mutations.validate(range.id, authority)?;
         self.validate_range_write(range, caller, command)?;
         let state = self.range_writes.abort(command)?;
-        Ok(self.range_write_ack(command, state))
+        self.range_write_ack(command, state)
     }
 
     pub fn mark_range_write_applied(&mut self, command_id: &str) -> Result<()> {
@@ -2206,6 +2209,7 @@ impl ClusterDataNodeService {
         caller: &ClusterNodeId,
     ) -> Result<()> {
         self.require_catalog_storage_policy()?;
+        self.require_native_writer_scope_without_database(range)?;
         if &range.leader != caller {
             return Err(data_error(format!(
                 "node {caller} is not the current leader for {} epoch {}",
@@ -2229,14 +2233,15 @@ impl ClusterDataNodeService {
         &self,
         command: &RangeWriteCommand,
         state: RangeWriteState,
-    ) -> RangeWriteAck {
-        RangeWriteAck {
+    ) -> Result<RangeWriteAck> {
+        self.range_writes.require_native_writer_host_base()?;
+        Ok(RangeWriteAck {
             node_id: self.node_id.clone(),
             range_id: command.range_id,
             range_epoch: command.range_epoch,
             index: command.index,
             state,
-        }
+        })
     }
 
     pub fn prepare_learner(&mut self, relocation: &RangeRelocation) -> Result<()> {

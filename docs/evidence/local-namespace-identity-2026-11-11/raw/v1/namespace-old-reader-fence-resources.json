@@ -1,0 +1,11 @@
+[
+  {
+    "elapsed_seconds": 0.0004034508019685745,
+    "available_bytes": 25019215872,
+    "paused": false,
+    "swap_total_bytes": 2147479552,
+    "swap_free_bytes": 45056,
+    "memory_pressure": "some avg10=0.00 avg60=0.00 avg300=0.00 total=4754231785\nfull avg10=0.00 avg60=0.00 avg300=0.00 total=4582244019\n",
+    "disk_free_bytes": 20074500096
+  }
+]

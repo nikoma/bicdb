@@ -1,0 +1,11 @@
+{
+  "custody_root": "/root/.local/state/bicdb/ha-scaling-2026-11-11/private/native-copied-obligations-d2c20220",
+  "manifest_sha256": "784e609625bdc9ca3140f9e2defc762f788cbf277865e6065314b74b021c3f52",
+  "files": 98,
+  "bytes": 8757788,
+  "source_destination_hash_parity": true,
+  "files_and_directories_fsynced": true,
+  "completed_unix": 1794428080.0483634,
+  "contains_generated_test_database_keys": true,
+  "global_credentials_included": false
+}

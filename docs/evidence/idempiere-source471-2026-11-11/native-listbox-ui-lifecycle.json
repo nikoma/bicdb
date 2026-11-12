@@ -1,0 +1,21 @@
+{
+  "status": "http_ready_login_control_pending",
+  "engine": "Oracle23.26.3",
+  "clone_service": "BICDBAPPCTRL",
+  "protected_source_service": "FREEPDB1",
+  "protected_source_used_for_mutations": false,
+  "base": "/root/.local/state/bicdb/native-oracle-app/native-ui-control-v4-7kazazux",
+  "port": 43675,
+  "loopback_only": true,
+  "original_provider_sha256": "1813c6cd6f4596e8002dacc06ee7dccca0dd5cebe22a1634651d75a8c32d3d0b",
+  "sdk_adapter_installed": false,
+  "original_product_classes_unchanged": true,
+  "started_unix": 1794427929.270599,
+  "application_qualified": false,
+  "pid": 1089827,
+  "ready_unix": 1794427957.7989798,
+  "owned_jvm_stopped": true,
+  "protected_source_counts_objects_columns_unchanged": true,
+  "finished_unix": 1794428221.1307254,
+  "clone_original_mounted_state_restored": true
+}

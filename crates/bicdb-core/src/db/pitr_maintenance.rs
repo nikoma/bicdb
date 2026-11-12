@@ -30,6 +30,7 @@ impl BicDb {
             return Ok(0);
         }
         let removed = record_ids.len();
+        self.require_native_generic_import_allowed()?;
         let mut transaction = self.begin_transaction()?;
         transaction.bypass_commit_admission = true;
         transaction.disable_memory_jobs_on_commit();
@@ -46,6 +47,7 @@ impl BicDb {
         if applied == 0 {
             return Ok(0);
         }
+        self.require_native_generic_import_allowed()?;
         let mut transaction = self.begin_transaction()?;
         transaction.bypass_commit_admission = true;
         transaction.disable_memory_jobs_on_commit();
@@ -1182,6 +1184,7 @@ impl BicDb {
         limits: ClusterSchemaActivationLimits,
         now_ms: u64,
     ) -> Result<ClusterSchemaActivationAdvance> {
+        self.require_native_generic_import_allowed()?;
         self.ensure_writable("advance cluster schema activation")?;
         limits.validate()?;
         let stage = self.load_cluster_schema_stage(trusted_keys, limits.stage)?;
@@ -1266,6 +1269,7 @@ impl BicDb {
                         }
                         None => {
                             self.ensure_no_pending_transactions()?;
+                            self.require_native_generic_import_allowed()?;
                             let mut tx = self.begin_transaction()?;
                             tx.bypass_commit_admission = true;
                             tx.write_upserts_unchecked(
@@ -1551,6 +1555,7 @@ impl BicDb {
     /// fingerprint is advertised through metadata consensus, so interruption
     /// can leave only a quarantined, safely resumable partial installation.
     pub fn install_cluster_schema_bundle(&mut self, bundle: &ClusterSchemaBundle) -> Result<bool> {
+        self.require_native_generic_import_allowed()?;
         self.ensure_writable("install cluster schema bundle")?;
         bundle.verify()?;
         if self.schema_compatibility_fingerprint()?.sha256 == bundle.fingerprint.sha256 {
@@ -1633,6 +1638,7 @@ impl BicDb {
                 records
             },
         );
+        self.require_native_generic_import_allowed()?;
         let mut tx = self.begin_transaction()?;
         tx.bypass_commit_admission = true;
         let mut structural_changed = false;

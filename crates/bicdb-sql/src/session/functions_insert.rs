@@ -951,7 +951,7 @@ impl<'db> SqlSession<'db> {
         if let Some((_, error)) = rls_violation {
             return Err(error);
         }
-        self.insert_session_records(&table, records.clone())?;
+        self.insert_session_new_records(&table, schema.as_deref(), records.clone())?;
         self.fire_after_insert_triggers(&table, schema.as_deref(), &records)?;
         self.insert_result(
             &table,
@@ -1544,6 +1544,26 @@ impl<'db> SqlSession<'db> {
                 ),
             };
             if let Some(existing) = existing {
+                if let Some(tx) = records::postgres_fixed_snapshot(self.db_ref(), self.tx.as_ref())?
+                {
+                    let context = self.security_context.as_ref();
+                    let locked = if self.exclusive {
+                        tx.try_lock_visible_record(context, table, &existing.id)?
+                    } else {
+                        tx.lock_visible_record_cancellable(
+                            context,
+                            table,
+                            &existing.id,
+                            &self.cancellation,
+                        )?
+                    };
+                    if !locked {
+                        return Err(BicDbError::TransactionConflict(format!(
+                            "cannot lock conflict tuple in {table}"
+                        ))
+                        .into());
+                    }
+                }
                 match &on_conflict.action {
                     OnConflictAction::DoNothing => {}
                     OnConflictAction::DoUpdate(update) => {
@@ -1691,17 +1711,27 @@ impl<'db> SqlSession<'db> {
                     Some(&self.sql_engine()),
                 )
                 .map_err(|error| {
-                    self.arbiter_race_as_conflict(table, Some(schema), &conflict_columns, error)
+                    self.arbiter_race_as_conflict(
+                        table,
+                        Some(schema),
+                        Some(&conflict_columns),
+                        error,
+                    )
                 })?;
             }
             let inserted = match conflict_reservation {
                 Some(reservation) => {
                     self.insert_reserved_session_record(table, reservation, record.clone(), &[])
                 }
-                None => self.insert_session_records(table, vec![record.clone()]),
+                None => self.insert_session_new_records(table, schema, vec![record.clone()]),
             };
             if let Err(error) = inserted {
-                return Err(self.arbiter_race_as_conflict(table, schema, &conflict_columns, error));
+                return Err(self.arbiter_race_as_conflict(
+                    table,
+                    schema,
+                    Some(&conflict_columns),
+                    error,
+                ));
             }
             inserted_records.push(record.clone());
             affected_records.push(record);
@@ -2143,11 +2173,11 @@ impl<'db> SqlSession<'db> {
     /// autocommit statement is then re-run under a fresh snapshot. Inside a
     /// transaction the client receives 40001 and retries. A violation of any
     /// other unique index stays a 23505 unique violation.
-    pub(crate) fn arbiter_race_as_conflict(
+    fn arbiter_race_as_conflict(
         &self,
         table: &str,
         schema: Option<&TableSchema>,
-        conflict_columns: &[String],
+        conflict_columns: Option<&[String]>,
         error: SqlError,
     ) -> SqlError {
         let Some(schema) = schema else {
@@ -2162,13 +2192,34 @@ impl<'db> SqlSession<'db> {
             SqlError::BicDb(BicDbError::UniqueIndexConflict { index }) => index.clone(),
             _ => return error,
         };
-        let arbiter = match self.memoized_unique_arbiter(table, schema, conflict_columns) {
-            Ok(Some(arbiter)) => arbiter,
-            _ => return error,
+        let matches_violation = |arbiter: &records::UniqueConflictArbiter| {
+            arbiter.name == violated || arbiter.index_name.as_deref() == Some(violated.as_str())
         };
-        if arbiter.name != violated && arbiter.index_name.as_deref() != Some(violated.as_str()) {
+        let arbiter = match conflict_columns {
+            Some(columns) => self
+                .memoized_unique_arbiter(table, schema, columns)
+                .ok()
+                .flatten()
+                .filter(matches_violation),
+            None => {
+                // Untargeted DO NOTHING accepts any of this table's unique
+                // arbiters. A fixed snapshot cannot silently ignore a tuple
+                // that became committed after its earlier arbiter probe.
+                if !matches!(
+                    records::postgres_fixed_snapshot(self.db_ref(), self.tx.as_ref()),
+                    Ok(Some(_))
+                ) {
+                    return error;
+                }
+                unique_arbiters_for_table(self.db_ref(), table, schema)
+                    .iter()
+                    .find(|arbiter| matches_violation(arbiter))
+                    .cloned()
+            }
+        };
+        let Some(arbiter) = arbiter else {
             return error;
-        }
+        };
         SqlError::BicDb(BicDbError::TransactionConflict(format!(
             "{table}: another transaction inserted the conflict key `{}` after this \
              statement's snapshot",
@@ -2207,11 +2258,17 @@ impl<'db> SqlSession<'db> {
                 Some(&self.sql_engine()),
             )
             .map_err(|error| {
-                self.arbiter_race_as_conflict(table, Some(schema), conflict_columns, error)
+                self.arbiter_race_as_conflict(table, Some(schema), Some(conflict_columns), error)
             })?;
         }
-        if let Err(error) = self.insert_session_records(table, inserted_records.clone()) {
-            return Err(self.arbiter_race_as_conflict(table, schema, conflict_columns, error));
+        if let Err(error) = self.insert_session_new_records(table, schema, inserted_records.clone())
+        {
+            return Err(self.arbiter_race_as_conflict(
+                table,
+                schema,
+                Some(conflict_columns),
+                error,
+            ));
         }
         self.fire_after_insert_triggers(table, schema, &inserted_records)?;
         self.insert_result(
@@ -2249,9 +2306,11 @@ impl<'db> SqlSession<'db> {
                 &inserted_records,
                 false,
                 Some(&self.sql_engine()),
-            )?;
+            )
+            .map_err(|error| self.arbiter_race_as_conflict(table, Some(schema), None, error))?;
         }
-        self.insert_session_records(table, inserted_records.clone())?;
+        self.insert_session_new_records(table, schema, inserted_records.clone())
+            .map_err(|error| self.arbiter_race_as_conflict(table, schema, None, error))?;
         self.fire_after_insert_triggers(table, schema, &inserted_records)?;
         self.insert_result(
             table,
@@ -2325,6 +2384,7 @@ impl<'db> SqlSession<'db> {
                 },
                 records,
                 &existing_records,
+                None,
             );
         };
         non_conflicting_records(
@@ -2382,14 +2442,33 @@ impl<'db> SqlSession<'db> {
             return Ok(None);
         }
         if let Some(arbiter) = arbiter {
+            let fixed = records::postgres_fixed_snapshot(self.db_ref(), self.tx.as_ref())?;
+            if fixed.is_some() && !arbiter.applies_to(record)? {
+                return Ok(None);
+            }
+            let mut typed_primary_key = false;
             if let Some(columns) = primary_key_columns_for_unique_arbiter(schema, &arbiter) {
-                if !primary_key_requires_typed_identity(schema) {
+                typed_primary_key = primary_key_requires_typed_identity(schema);
+                if !typed_primary_key {
                     sql_profile_index_lookup();
                     // Conflict targets may list a composite constraint in a
                     // different order. Row identity uses authoritative PK order.
                     let primary_values = record_column_values(record, schema, &columns);
                     let record_id =
                         record_id_from_column_values(table, schema, &columns, &primary_values)?;
+                    if let Some(tx) = fixed {
+                        if tx
+                            .overlay_pending_write(
+                                table,
+                                &record_id,
+                                self.db_ref().get_unchecked(table, &record_id)?,
+                            )
+                            .is_none()
+                        {
+                            return Ok(None);
+                        }
+                        tx.require_conflict_tuple_in_snapshot(table, &record_id)?;
+                    }
                     return self.conflict_record_by_id(table, &record_id);
                 }
             }
@@ -2398,6 +2477,22 @@ impl<'db> SqlSession<'db> {
             let contains_json = key_values
                 .iter()
                 .any(|value| matches!(value, SqlValue::Json(_)));
+            if let Some(tx) =
+                fixed.filter(|_| typed_primary_key || contains_json || arbiter.index_name.is_none())
+            {
+                let key_label = typed_unique_key_label(schema, &arbiter.key, &key_values)?;
+                let live = current_integrity_records(self.db_ref(), Some(tx), table)?;
+                for candidate in arbiter.covered(&live)? {
+                    let values = unique_key_values(candidate, schema, &arbiter.key);
+                    if !arbiter.skips_null_key(&values)
+                        && typed_unique_key_label(schema, &arbiter.key, &values)? == key_label
+                    {
+                        tx.require_conflict_tuple_in_snapshot(table, &candidate.id)?;
+                        return self.conflict_record_by_id(table, &candidate.id);
+                    }
+                }
+                return Ok(None);
+            }
             if let Some(index_name) = arbiter.index_name.as_ref().filter(|_| !contains_json) {
                 sql_profile_index_lookup();
                 let index_values = unique_key_index_values(schema, &arbiter.key, &key_values)?;

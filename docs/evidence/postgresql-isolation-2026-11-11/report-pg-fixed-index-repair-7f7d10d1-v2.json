@@ -1,0 +1,32 @@
+{
+  "source": "7f7d10d1252bddc533fe61d0b641c6912bb8242f",
+  "scope": "Generalize historical candidate reconciliation and current-only plan avoidance from SSI-only registration to fixed snapshots. Verify original PG historical controls across RR/read-only RR/SSI/read-only SSI plus independent Oracle snapshot profile, both stores; retain matrix and SET/CHAIN regressions. No global rename/recovery gate changed, no original assertions/timeouts changed.",
+  "started_unix": 1794419317.807019,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-pgwire",
+        "--test",
+        "fixed_snapshot_index_visibility",
+        "--test",
+        "writable_repeatable_read",
+        "--test",
+        "serializable_dependencies",
+        "--test",
+        "fixed_snapshot_boundary"
+      ],
+      "started_unix": 1794419317.8071356,
+      "exit": 101,
+      "finished_unix": 1794419514.8585584
+    }
+  ],
+  "status": "failed",
+  "finished_unix": 1794419514.8606577
+}

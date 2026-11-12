@@ -1,0 +1,13 @@
+
+running 8 tests
+test db::native_recovery_ready::tests::actual_empty_genesis_ready_owns_the_read_pin_until_proof_drop ... ok
+test db::native_recovery_ready::tests::actual_native_prefix_ahead_of_rebuilt_catalogue_requires_adoption_not_numeric_floor ... ok
+test db::native_recovery_ready::tests::actual_reopen_invalidates_the_prior_open_local_readiness_proof ... ok
+test db::native_recovery_ready::tests::actual_nonempty_native_prefix_uses_local_mvcc_sequence_not_range_index ... ok
+test db::native_recovery_ready::tests::catalogue_applied_without_native_materialization_cannot_become_ready ... ok
+test db::native_recovery_ready::tests::equal_index_conflicting_actual_catalogue_and_native_history_is_rejected ... ok
+test db::native_recovery_ready::tests::original_parent_cancellation_invalidates_an_actual_local_ready_proof ... ok
+test db::native_recovery_ready::tests::same_identity_catalogue_from_another_actual_native_database_is_rejected ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 617 filtered out; finished in 6.07s
+

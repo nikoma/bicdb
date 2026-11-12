@@ -965,7 +965,7 @@ impl RangeWriteStore {
             None => return Err(range_write_error("missing native recovery phase")),
         };
         if self.catalog.format_version < minimum
-            || self.catalog.format_version > super::INSTALLING_CERTIFICATION_FORMAT
+            || !super::range_write_catalog_format_supported(self.catalog.format_version)
         {
             return Err(range_write_error(
                 "actual native recovery phase has an unsupported format",
@@ -974,10 +974,7 @@ impl RangeWriteStore {
         Ok(())
     }
     pub(super) fn require_durable_recovery_catalog(&self) -> Result<()> {
-        if !matches!(
-            self.catalog.format_version,
-            1..=super::INSTALLING_CERTIFICATION_FORMAT
-        ) {
+        if !super::range_write_catalog_format_supported(self.catalog.format_version) {
             return Err(range_write_error("unknown range recovery catalogue format"));
         }
         if self.recovery_persistence_uncertain {

@@ -1,0 +1,33 @@
+{
+  "source_revision": "0fc157119c7fb79b44a1254e493214e2713c90cc",
+  "dirty_diff_sha256": "b07b6db5e9736ddf5db9400479197be222aa191a9e67ae3f537fd37d8f5c4433",
+  "command": [
+    "cargo",
+    "test",
+    "--release",
+    "--locked",
+    "-p",
+    "bicdb-core",
+    "--config",
+    "profile.release.package.bicdb-core.opt-level=0",
+    "--config",
+    "profile.release.package.bicdb-core.debug=0",
+    "--lib",
+    "distribution_range_mutation::tests",
+    "--",
+    "--nocapture"
+  ],
+  "environment": {
+    "CARGO_TARGET_DIR": "/tmp/bicdb-azure-artifact-target",
+    "CARGO_BUILD_JOBS": "1",
+    "CARGO_INCREMENTAL": "0",
+    "RUST_TEST_THREADS": "2"
+  },
+  "compiler": "rustc 1.96.0 (ac68faa20 2026-05-25)",
+  "start_unix": 1794407042.5979316,
+  "end_unix": 1794407043.6222837,
+  "exit_code": 0,
+  "guard_stop_reason": null,
+  "pause_episodes": 0,
+  "minimum_available_bytes": 27206705152
+}

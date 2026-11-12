@@ -1,0 +1,150 @@
+{
+  "server_version": "16.13 (Debian 16.13-1.pgdg13+1)",
+  "cases": [
+    {
+      "sql": "SET transaction_isolation='serializable'",
+      "sqlstate": "00000",
+      "rows": []
+    },
+    {
+      "sql": "SHOW transaction_isolation",
+      "sqlstate": "00000",
+      "rows": [
+        [
+          "read committed"
+        ]
+      ]
+    },
+    {
+      "sql": "BEGIN",
+      "sqlstate": "00000",
+      "rows": []
+    },
+    {
+      "sql": "SET transaction_isolation='serializable'",
+      "sqlstate": "00000",
+      "rows": []
+    },
+    {
+      "sql": "SET transaction_deferrable=on",
+      "sqlstate": "00000",
+      "rows": []
+    },
+    {
+      "sql": "SHOW transaction_isolation",
+      "sqlstate": "00000",
+      "rows": [
+        [
+          "serializable"
+        ]
+      ]
+    },
+    {
+      "sql": "SHOW transaction_deferrable",
+      "sqlstate": "00000",
+      "rows": [
+        [
+          "on"
+        ]
+      ]
+    },
+    {
+      "sql": "SELECT 1",
+      "sqlstate": "00000",
+      "rows": [
+        [
+          1
+        ]
+      ]
+    },
+    {
+      "sql": "RESET transaction_isolation",
+      "sqlstate": "0A000"
+    },
+    {
+      "sql": "ROLLBACK",
+      "sqlstate": "00000",
+      "rows": []
+    },
+    {
+      "sql": "SHOW transaction_isolation",
+      "sqlstate": "00000",
+      "rows": [
+        [
+          "read committed"
+        ]
+      ]
+    },
+    {
+      "sql": "SHOW transaction_deferrable",
+      "sqlstate": "00000",
+      "rows": [
+        [
+          "off"
+        ]
+      ]
+    },
+    {
+      "sql": "BEGIN",
+      "sqlstate": "00000",
+      "rows": []
+    },
+    {
+      "sql": "SET transaction_isolation='serializable'",
+      "sqlstate": "00000",
+      "rows": []
+    },
+    {
+      "sql": "SELECT set_config('transaction_isolation','read committed',false)",
+      "sqlstate": "25001"
+    },
+    {
+      "sql": "ROLLBACK",
+      "sqlstate": "00000",
+      "rows": []
+    },
+    {
+      "sql": "BEGIN",
+      "sqlstate": "00000",
+      "rows": []
+    },
+    {
+      "sql": "SET transaction_isolation='serializable'",
+      "sqlstate": "00000",
+      "rows": []
+    },
+    {
+      "sql": "SET transaction_deferrable=on",
+      "sqlstate": "00000",
+      "rows": []
+    },
+    {
+      "sql": "RESET ALL",
+      "sqlstate": "00000",
+      "rows": []
+    },
+    {
+      "sql": "SHOW transaction_isolation",
+      "sqlstate": "00000",
+      "rows": [
+        [
+          "serializable"
+        ]
+      ]
+    },
+    {
+      "sql": "SHOW transaction_deferrable",
+      "sqlstate": "00000",
+      "rows": [
+        [
+          "on"
+        ]
+      ]
+    },
+    {
+      "sql": "ROLLBACK",
+      "sqlstate": "00000",
+      "rows": []
+    }
+  ]
+}

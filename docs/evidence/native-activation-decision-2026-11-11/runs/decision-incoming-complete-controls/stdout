@@ -1,0 +1,8 @@
+
+running 3 tests
+test db::range_image_native::rf3_fixture::native_historical_tls::native_completion_actual_tls_canceled_socket_after_real_persistence_recovers_by_readonly_status ... ok
+test db::range_image_native::rf3_fixture::native_historical_tls::native_completion_actual_tls_sequential_replicas_keep_frozen_pins_and_duplicate_sha ... ok
+test db::range_image_native::rf3_fixture::native_historical_tls::native_completion_actual_tls_wrong_actor_cannot_complete_but_current_voter_can_observe ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 680 filtered out; finished in 18.72s
+

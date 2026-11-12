@@ -1,0 +1,11 @@
+
+running 1 test
+test db::range_image_native::rf3_fixture::native_repair_regression::native_generic_repair_after_lost_apply_never_reports_raw_applied_with_unknown_native_history ... FAILED
+
+failures:
+
+failures:
+    db::range_image_native::rf3_fixture::native_repair_regression::native_generic_repair_after_lost_apply_never_reports_raw_applied_with_unknown_native_history
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 680 filtered out; finished in 5.23s
+

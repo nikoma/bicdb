@@ -120,11 +120,14 @@ is another separate concern; see [identity and pooling](docs/database-identity-a
 
 ## Isolation
 
-The SQL/pgwire interface accepts `READ COMMITTED` and the explicit
-`REPEATABLE READ READ ONLY` combination. Writable `REPEATABLE READ`,
-`SERIALIZABLE`, `READ UNCOMMITTED`, explicit transaction snapshots, and `SNAPSHOT`
-isolation are rejected with SQLSTATE `0A000`. Internal core serializable support
-does not mean SQL `BEGIN ... SERIALIZABLE` is supported.
+The PostgreSQL SQL/pgwire interface supports `READ COMMITTED`, writable or
+read-only `REPEATABLE READ`, and local `SERIALIZABLE` with read/write dependency
+tracking. `READ UNCOMMITTED` uses Read Committed visibility. Explicit imported
+transaction snapshots and `SNAPSHOT` isolation are rejected with `0A000`.
+Serializable snapshot acquisition also refuses standby and distributed commit
+authority configurations. See [PostgreSQL transactions](docs/postgresql-transactions.md)
+for snapshot timing, retry and read-only deferrable behavior. The Oracle
+profile's Serializable mode retains its separate snapshot-isolation semantics.
 
 ```sql
 BEGIN ISOLATION LEVEL READ COMMITTED;
@@ -135,7 +138,7 @@ ROLLBACK;
 
 See `validate_transaction_modes` in
 [SQL transaction parsing](crates/bicdb-sql/src/schema_meta.rs) and
-`pgwire_transaction_isolation_commands_accept_read_only_repeatable_read` in
+`pgwire_transaction_isolation_commands_accept_repeatable_read` in
 [protocol tests](crates/bicdb-pgwire/tests/protocol.rs) for the accepted forms.
 Do not infer complete PostgreSQL transaction compatibility from command parsing
 or from concurrent commit support.
@@ -187,7 +190,8 @@ The benchmark reports:
 - Single-node only.
 - No distributed transactions.
 - HA and consensus capabilities are separate from local SQL transaction semantics.
-- SQL/pgwire `SERIALIZABLE` is not supported; core capabilities are separate.
+- Local SQL/pgwire Serializable does not imply distributed SSI or identical
+  PostgreSQL blocking and deadlock behavior.
 - Transactional writes are durable in `transactions.log`; segment compaction is
   future work.
 - Sync-log and event-log grouping with transaction commits is still planned.

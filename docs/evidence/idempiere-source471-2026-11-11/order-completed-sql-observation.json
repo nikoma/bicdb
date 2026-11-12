@@ -1,0 +1,52 @@
+{
+  "source": "b0e2498842be7b01e355bb8da1cc249ff16be056",
+  "source_version": "1.0.471-beta",
+  "binary_sha256": "e23d7c1a078b7ce6722237f35cfa67a822727d9762c928c808f3ce2767c543c2",
+  "observed_unix": 1794425989.4797084,
+  "connection_read_only": true,
+  "queries": [
+    {
+      "sql": "SELECT C_Order_ID,DocumentNo,Description,DocStatus,Processed,TotalLines,GrandTotal FROM IDEMPIERE_QUAL.C_Order WHERE Description='BicDB main471 browser acceptance 20261111'",
+      "columns": [
+        "C_ORDER_ID",
+        "DOCUMENTNO",
+        "DESCRIPTION",
+        "DOCSTATUS",
+        "PROCESSED",
+        "TOTALLINES",
+        "GRANDTOTAL"
+      ],
+      "rows": [
+        [
+          "1000000",
+          "50000",
+          "BicDB main471 browser acceptance 20261111",
+          "CO",
+          "Y",
+          "33.75",
+          "33.75"
+        ]
+      ]
+    },
+    {
+      "sql": "SELECT o.DocumentNo,l.Line,l.QtyOrdered,l.PriceActual,l.LineNetAmt FROM IDEMPIERE_QUAL.C_Order o JOIN IDEMPIERE_QUAL.C_OrderLine l ON o.C_Order_ID=l.C_Order_ID WHERE o.Description='BicDB main471 browser acceptance 20261111' ORDER BY l.Line",
+      "columns": [
+        "DOCUMENTNO",
+        "LINE",
+        "QTYORDERED",
+        "PRICEACTUAL",
+        "LINENETAMT"
+      ],
+      "rows": [
+        [
+          "50000",
+          "10",
+          "1",
+          "33.75",
+          "33.75"
+        ]
+      ]
+    }
+  ],
+  "observer_sha256": "74e289ac82720482c46a9c279278eda2d237f01e57dab5ee5d38cbd5d7dcb29a"
+}

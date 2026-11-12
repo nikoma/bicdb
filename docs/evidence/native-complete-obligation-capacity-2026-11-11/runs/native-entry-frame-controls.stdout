@@ -1,0 +1,6 @@
+
+running 1 test
+test distribution_range_consensus::native_limits::tests::native_complete_entry_limit_matches_exact_boundary_and_preserves_legacy_constructor ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 679 filtered out; finished in 0.72s
+

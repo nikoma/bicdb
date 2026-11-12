@@ -1,0 +1,7 @@
+{
+  "transport_change": "S3 SSH HTTP forwarding replaced with direct loopback access to native Oracle UI",
+  "original_worker_ast_unchanged": true,
+  "bicdb_script_sha256": "98a74d28d09c12a8efd9c65e3855e4d340ad77efb21d9183c76e3ed35718b047",
+  "native_script_sha256": "6f0406e3fbf5f7f16b8ecb2b4ac1ce95f4328fd98503185d378f783e101db04f",
+  "original_waits_and_four_worker_assertions_unchanged": true
+}

@@ -28,13 +28,13 @@ pub struct JwtClaims {
     pub tenant_id: Option<String>,
     #[serde(default)]
     pub workspace_id: Option<String>,
-    #[serde(default)]
+    #[serde(default, alias = "org_id")]
     pub organization_id: Option<String>,
-    #[serde(default)]
+    #[serde(default, alias = "sid")]
     pub session_id: Option<String>,
     #[serde(default)]
     pub roles: BTreeSet<String>,
-    #[serde(default)]
+    #[serde(default, alias = "scope", deserialize_with = "deserialize_scope_claim")]
     pub scopes: BTreeSet<String>,
     #[serde(default)]
     pub assurance_level: Option<String>,
@@ -49,6 +49,40 @@ pub struct JwtClaims {
     pub nbf: Option<i64>,
     #[serde(default)]
     pub policy: BTreeMap<String, String>,
+}
+
+fn deserialize_scope_claim<'de, D>(
+    deserializer: D,
+) -> std::result::Result<BTreeSet<String>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum ScopeClaim {
+        OAuth(String),
+        Legacy(BTreeSet<String>),
+    }
+    let scopes = match ScopeClaim::deserialize(deserializer)? {
+        ScopeClaim::OAuth(value) => value
+            .split(' ')
+            .filter(|scope| !scope.is_empty())
+            .map(str::to_owned)
+            .collect(),
+        ScopeClaim::Legacy(values) => values,
+    };
+    // RFC 6749 scope-token characters. Aliases remain one serde field, so
+    // conflicting `scope`/`scopes` values fail as duplicate claims rather than
+    // being combined into a larger grant.
+    if scopes.iter().any(|scope| {
+        scope.is_empty()
+            || !scope.bytes().all(|byte| {
+                byte == 0x21 || (0x23..=0x5b).contains(&byte) || (0x5d..=0x7e).contains(&byte)
+            })
+    }) {
+        return Err(serde::de::Error::custom("invalid JWT scope token"));
+    }
+    Ok(scopes)
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -598,7 +632,8 @@ impl JwtSchemeVerifier {
                 })?;
             }
         }
-        let claims: JwtClaims = serde_json::from_slice(&decode_url(payload)?)?;
+        let claims: JwtClaims = serde_json::from_slice(&decode_url(payload)?)
+            .map_err(|_| AppRuntimeError::Authentication("JWT claims are malformed".to_string()))?;
         let now_seconds = now_ms() / 1000;
         if claims.iss != self.configuration.issuer
             || !claims.aud.contains(&self.configuration.audience)

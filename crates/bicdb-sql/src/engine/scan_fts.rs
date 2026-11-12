@@ -3507,7 +3507,7 @@ impl<'db> SqlEngine<'db> {
                 upper,
             } => {
                 sql_profile_index_lookup();
-                let ids: Rc<[String]> = Rc::from(self.db_ref().range_index(
+                let ids: Rc<[String]> = Rc::from(self.single_field_range_index_for_snapshot(
                     index_name,
                     lower.as_ref(),
                     upper.as_ref(),
@@ -3534,7 +3534,10 @@ impl<'db> SqlEngine<'db> {
                 limit,
             } => {
                 sql_profile_index_lookup();
-                if self.tx.is_some_and(|tx| tx.write_len() > 0) {
+                if self.tx.is_some_and(|tx| {
+                    tx.write_len() > 0
+                        || tx.isolation() != bicdb_core::TransactionIsolation::ReadCommitted
+                }) {
                     sql_profile_full_scan();
                     return self.scan_records(collection);
                 }
@@ -3553,6 +3556,12 @@ impl<'db> SqlEngine<'db> {
                 if self.tx.is_some_and(|tx| tx.write_len() > 0) {
                     sql_profile_full_scan();
                     return self.scan_records(collection);
+                }
+                if self.tx.is_some_and(|tx| {
+                    tx.isolation() != bicdb_core::TransactionIsolation::ReadCommitted
+                }) {
+                    let ids = self.lookup_index_cached(index_name, prefix)?;
+                    return self.records_for_ids(collection, &ids);
                 }
                 let ids = self.db_ref().prefix_ordered_index_records(
                     index_name,

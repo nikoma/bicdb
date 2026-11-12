@@ -15,10 +15,13 @@ mod current_image_resume;
 mod native_activation;
 mod native_completion;
 mod native_completion_quorum;
+mod native_read;
 mod native_ready;
 mod native_ready_quorum;
 mod normal_apply;
 mod participants;
+#[cfg(feature = "tls-replication")]
+mod strong_point_read;
 
 const MAX_CONTEXTS: usize = 4;
 // A collector must leave capacity for the readonly peer observations needed
@@ -72,6 +75,10 @@ pub(crate) struct RangeRecoveryRuntime {
         Option<Arc<dyn crate::distribution_range_consensus::RangeWriteTransport>>,
     #[cfg(test)]
     test_completion_reply_barrier: Mutex<Option<Arc<NativeCompletionReplyBarrier>>>,
+    #[cfg(test)]
+    test_read_io_barrier: Mutex<Option<Arc<native_read::NativeReadIoBarrier>>>,
+    #[cfg(all(test, feature = "tls-replication"))]
+    test_point_snapshot_barrier: Mutex<Option<Arc<strong_point_read::NativePointSnapshotBarrier>>>,
 }
 struct Operation {
     sessions: Arc<Mutex<Sessions>>,
@@ -445,6 +452,10 @@ impl RangeRecoveryRuntime {
             participant_transport: None,
             #[cfg(test)]
             test_completion_reply_barrier: Mutex::new(None),
+            #[cfg(test)]
+            test_read_io_barrier: Mutex::new(None),
+            #[cfg(all(test, feature = "tls-replication"))]
+            test_point_snapshot_barrier: Mutex::new(None),
         }
     }
     pub(crate) fn with_participant_transport(
@@ -491,7 +502,21 @@ impl RangeRecoveryRuntime {
         self.reserve_context(range, false)
     }
     fn reserve_context(&self, range: RangeId, exclusive: bool) -> Result<Arc<Operation>> {
-        let mut sessions = self.sessions.lock();
+        self.reserve_context_locked(range, exclusive, self.sessions.lock())
+    }
+    fn try_reserve_point_context(&self, range: RangeId) -> Result<Arc<Operation>> {
+        let sessions = self
+            .sessions
+            .try_lock()
+            .ok_or_else(|| invalid("receiver contexts are busy before point-read admission"))?;
+        self.reserve_context_locked(range, true, sessions)
+    }
+    fn reserve_context_locked(
+        &self,
+        range: RangeId,
+        exclusive: bool,
+        mut sessions: parking_lot::MutexGuard<'_, Sessions>,
+    ) -> Result<Arc<Operation>> {
         if sessions
             .current
             .get(&range)

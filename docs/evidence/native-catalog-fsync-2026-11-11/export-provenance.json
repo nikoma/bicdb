@@ -1,0 +1,322 @@
+{
+  "exports": [
+    {
+      "export_bytes": 690,
+      "export_path": "runs/native-fsync-v2/inputs.json",
+      "export_sha256": "591243b591749a85bd20f0c1ddd9a8a821dc5a71e1fc04c338ac3cd31f9f5932",
+      "original_bytes": 690,
+      "original_filename": "native-fsync-v2-inputs.json",
+      "original_sha256": "591243b591749a85bd20f0c1ddd9a8a821dc5a71e1fc04c338ac3cd31f9f5932",
+      "transformation": "unchanged"
+    },
+    {
+      "export_bytes": 867,
+      "export_path": "runs/native-fsync-v2/result.json",
+      "export_sha256": "3f111aa6808804f98c959ea674dd2f49219fb6d16b43b11737ccf530d3af07e4",
+      "original_bytes": 867,
+      "original_filename": "native-fsync-v2-result.json",
+      "original_sha256": "3f111aa6808804f98c959ea674dd2f49219fb6d16b43b11737ccf530d3af07e4",
+      "transformation": "unchanged"
+    },
+    {
+      "export_bytes": 350,
+      "export_path": "runs/native-fsync-v2/stdout.gz",
+      "export_sha256": "b8df991314fdf8911b50afac32a06c5964f75c92e51368aba457b7f9abe845f6",
+      "original_bytes": 933,
+      "original_filename": "native-fsync-v2.stdout",
+      "original_sha256": "2e63c4e90f6229fbbbd251c12e4b96d9f459b3493366a84c7d8eacaaa11d4156",
+      "transformation": "gzip_mtime_0"
+    },
+    {
+      "export_bytes": 14340,
+      "export_path": "runs/native-fsync-v2/stderr.gz",
+      "export_sha256": "c68d3fe847afbfc6fc6b03609675d8ae066077f1e92c942978b011e3e56f10fb",
+      "original_bytes": 137459,
+      "original_filename": "native-fsync-v2.stderr",
+      "original_sha256": "0b5c1b2d02cf6f6b6aae75c95bde78d9ab2cb8a264dcbaf192839e846e3d9c47",
+      "transformation": "gzip_mtime_0"
+    },
+    {
+      "export_bytes": 1903,
+      "export_path": "runs/native-fsync-v2/resources.jsonl.gz",
+      "export_sha256": "463a28cc229e361cdba6a83b003478d4230b966b370a466a4f10cb5cb2b28b0d",
+      "original_bytes": 20376,
+      "original_filename": "native-fsync-v2-resources.jsonl",
+      "original_sha256": "969f3448c91493fb7f78949fea6de09a1c38b34b589e1ba41b8c68dbc125d32a",
+      "transformation": "gzip_mtime_0"
+    },
+    {
+      "export_bytes": 687,
+      "export_path": "runs/native-fsync-read-controls/inputs.json",
+      "export_sha256": "66f69ab26a124353985e82727b9f56d8ab6983e89b8f1025dc88e8004e6526f5",
+      "original_bytes": 687,
+      "original_filename": "native-fsync-read-controls-inputs.json",
+      "original_sha256": "66f69ab26a124353985e82727b9f56d8ab6983e89b8f1025dc88e8004e6526f5",
+      "transformation": "unchanged"
+    },
+    {
+      "export_bytes": 868,
+      "export_path": "runs/native-fsync-read-controls/result.json",
+      "export_sha256": "76a220b84efa9f7f0d563cd44f6d266eb0fac05193c764286bac63a1c033b8bf",
+      "original_bytes": 868,
+      "original_filename": "native-fsync-read-controls-result.json",
+      "original_sha256": "76a220b84efa9f7f0d563cd44f6d266eb0fac05193c764286bac63a1c033b8bf",
+      "transformation": "unchanged"
+    },
+    {
+      "export_bytes": 449,
+      "export_path": "runs/native-fsync-read-controls/stdout.gz",
+      "export_sha256": "3e04d0f2d352bc458bbadb7abd7b1efd835abdbd8c01e29b26ea6d0a59d90901",
+      "original_bytes": 1344,
+      "original_filename": "native-fsync-read-controls.stdout",
+      "original_sha256": "0b4ffec55fa1f8012b0cf8422e8437d9b88b4626641ed1c516b6b9057c817af5",
+      "transformation": "gzip_mtime_0"
+    },
+    {
+      "export_bytes": 14562,
+      "export_path": "runs/native-fsync-read-controls/stderr.gz",
+      "export_sha256": "bffd80fd8d432bac29bc3b3d2958d7d742d5738e78721f5b231f4e58a33953fc",
+      "original_bytes": 143459,
+      "original_filename": "native-fsync-read-controls.stderr",
+      "original_sha256": "ac9b950a38a118c0bbad6538f4a6c5d0b4adf780effb91ff6973b04787a15c5d",
+      "transformation": "gzip_mtime_0"
+    },
+    {
+      "export_bytes": 532,
+      "export_path": "runs/native-fsync-read-controls/resources.jsonl.gz",
+      "export_sha256": "45d0f8534ff52f6475e3f7759451d23938f43bd3ce72d556a9d3548617606608",
+      "original_bytes": 4343,
+      "original_filename": "native-fsync-read-controls-resources.jsonl",
+      "original_sha256": "2223f91100eb8b41aa2b8c61c2910430d3c532ac9e59445509c49a1d34c09640",
+      "transformation": "gzip_mtime_0"
+    },
+    {
+      "export_bytes": 725,
+      "export_path": "runs/native-fsync-origin-controls/inputs.json",
+      "export_sha256": "4077f6e39d2674fb38aa2aaa177b51f176576e0cc421fdeae833dfd1a7e0c336",
+      "original_bytes": 725,
+      "original_filename": "native-fsync-origin-controls-inputs.json",
+      "original_sha256": "4077f6e39d2674fb38aa2aaa177b51f176576e0cc421fdeae833dfd1a7e0c336",
+      "transformation": "unchanged"
+    },
+    {
+      "export_bytes": 907,
+      "export_path": "runs/native-fsync-origin-controls/result.json",
+      "export_sha256": "f06e6057934cdf2e1bb199c724a6d188e1c215b19e9242923de6f3d5850ae4a1",
+      "original_bytes": 907,
+      "original_filename": "native-fsync-origin-controls-result.json",
+      "original_sha256": "f06e6057934cdf2e1bb199c724a6d188e1c215b19e9242923de6f3d5850ae4a1",
+      "transformation": "unchanged"
+    },
+    {
+      "export_bytes": 439,
+      "export_path": "runs/native-fsync-origin-controls/stdout.gz",
+      "export_sha256": "53e3b9e88eb913e7b164ee5203756eb2bf5a790383b04de23e97e324a80cc820",
+      "original_bytes": 1146,
+      "original_filename": "native-fsync-origin-controls.stdout",
+      "original_sha256": "a016d642212e5bed252f1b0114256d52a2f6b02e4e5fb73cdb6d8448efcb3cd1",
+      "transformation": "gzip_mtime_0"
+    },
+    {
+      "export_bytes": 14291,
+      "export_path": "runs/native-fsync-origin-controls/stderr.gz",
+      "export_sha256": "0528683306b88d68d34805b46c4d2d1ca206bc7c5354323c290bad524086f7d0",
+      "original_bytes": 137370,
+      "original_filename": "native-fsync-origin-controls.stderr",
+      "original_sha256": "195e27a82859fbfda786f637f3f8197bb50232892f48a43cfd4830c98ff9ef9e",
+      "transformation": "gzip_mtime_0"
+    },
+    {
+      "export_bytes": 277,
+      "export_path": "runs/native-fsync-origin-controls/resources.jsonl.gz",
+      "export_sha256": "74129c134ef78091596aea0ba2d0178c0d0b99687535039dbd1c9e4605824e3d",
+      "original_bytes": 1360,
+      "original_filename": "native-fsync-origin-controls-resources.jsonl",
+      "original_sha256": "858a6131c0c57a2a1409bfc3fa262186546f5cbd5194a92e3f73fa8a88be281f",
+      "transformation": "gzip_mtime_0"
+    },
+    {
+      "export_bytes": 687,
+      "export_path": "runs/native-fsync-actual-mtls-available/inputs.json",
+      "export_sha256": "e403bb476b652e23397ac2b3541c542bbebb63a31d612a440f8da3f6c8f44de1",
+      "original_bytes": 687,
+      "original_filename": "native-fsync-actual-mtls-available-inputs.json",
+      "original_sha256": "e403bb476b652e23397ac2b3541c542bbebb63a31d612a440f8da3f6c8f44de1",
+      "transformation": "unchanged"
+    },
+    {
+      "export_bytes": 868,
+      "export_path": "runs/native-fsync-actual-mtls-available/result.json",
+      "export_sha256": "a0ae7145c7b7f36bde991f383566d96726ade02b2d063ed911369bdece9d4e4b",
+      "original_bytes": 868,
+      "original_filename": "native-fsync-actual-mtls-available-result.json",
+      "original_sha256": "a0ae7145c7b7f36bde991f383566d96726ade02b2d063ed911369bdece9d4e4b",
+      "transformation": "unchanged"
+    },
+    {
+      "export_bytes": 372,
+      "export_path": "runs/native-fsync-actual-mtls-available/stdout.gz",
+      "export_sha256": "128db296402bf38c041155a7a12b0b7255714c25b588fea16d6c329bf541dfd5",
+      "original_bytes": 864,
+      "original_filename": "native-fsync-actual-mtls-available.stdout",
+      "original_sha256": "12e83e3d8989a8c35adb43c63b23c4f64e63cc7e61642e1d9628fd2ddbbb565e",
+      "transformation": "gzip_mtime_0"
+    },
+    {
+      "export_bytes": 14291,
+      "export_path": "runs/native-fsync-actual-mtls-available/stderr.gz",
+      "export_sha256": "156d2e22150ca3dd3e930eb250b2efda164bb7c133cc982cee3013dc1fff8d1b",
+      "original_bytes": 137370,
+      "original_filename": "native-fsync-actual-mtls-available.stderr",
+      "original_sha256": "3bc8a914f1e5ea6eb5bb63845758c5cd39432c7409f8b9cef9a1c3c894d6ecf6",
+      "transformation": "gzip_mtime_0"
+    },
+    {
+      "export_bytes": 366,
+      "export_path": "runs/native-fsync-actual-mtls-available/resources.jsonl.gz",
+      "export_sha256": "c7b1459e7dc6f5b2dc0a54924e617a887d63b9668d1879a657b3b3dae5127f1f",
+      "original_bytes": 2446,
+      "original_filename": "native-fsync-actual-mtls-available-resources.jsonl",
+      "original_sha256": "7747e1be7f68e47105f7224ed319a25772f136ee1d178f08a08a7eb271ee7b9d",
+      "transformation": "gzip_mtime_0"
+    },
+    {
+      "export_bytes": 705,
+      "export_path": "runs/native-fsync-normal-embedded/inputs.json",
+      "export_sha256": "c370c8fd8b9cd9bc23e50dceba31c4ebcafcb2b94c42b40ec94ad96f56bae76a",
+      "original_bytes": 705,
+      "original_filename": "native-fsync-normal-embedded-inputs.json",
+      "original_sha256": "c370c8fd8b9cd9bc23e50dceba31c4ebcafcb2b94c42b40ec94ad96f56bae76a",
+      "transformation": "unchanged"
+    },
+    {
+      "export_bytes": 887,
+      "export_path": "runs/native-fsync-normal-embedded/result.json",
+      "export_sha256": "6485ee6162a30993ce4ec5875cdfbc69b2fa9cf3b28796a0768604dc3667e5d7",
+      "original_bytes": 887,
+      "original_filename": "native-fsync-normal-embedded-result.json",
+      "original_sha256": "6485ee6162a30993ce4ec5875cdfbc69b2fa9cf3b28796a0768604dc3667e5d7",
+      "transformation": "unchanged"
+    },
+    {
+      "export_bytes": 189,
+      "export_path": "runs/native-fsync-normal-embedded/stdout.gz",
+      "export_sha256": "6536a933ee4a340800ea791e44b87519139d4856462d38c60f11f7030cbd2ca1",
+      "original_bytes": 247,
+      "original_filename": "native-fsync-normal-embedded.stdout",
+      "original_sha256": "a947e481aa8051d84e02e605bf8f9c0ff2dd46ce8256fc86f2fea026a774c493",
+      "transformation": "gzip_mtime_0"
+    },
+    {
+      "export_bytes": 14291,
+      "export_path": "runs/native-fsync-normal-embedded/stderr.gz",
+      "export_sha256": "0528683306b88d68d34805b46c4d2d1ca206bc7c5354323c290bad524086f7d0",
+      "original_bytes": 137370,
+      "original_filename": "native-fsync-normal-embedded.stderr",
+      "original_sha256": "195e27a82859fbfda786f637f3f8197bb50232892f48a43cfd4830c98ff9ef9e",
+      "transformation": "gzip_mtime_0"
+    },
+    {
+      "export_bytes": 250,
+      "export_path": "runs/native-fsync-normal-embedded/resources.jsonl.gz",
+      "export_sha256": "bb10410c5fa645e7a64b96e1f0cbc61e29d23f55b93dc4324d515f2bb12a5c62",
+      "original_bytes": 816,
+      "original_filename": "native-fsync-normal-embedded-resources.jsonl",
+      "original_sha256": "cc54bd62940dc6189fcfdb1ed6bb54c12cb95788cafed4d0f43dc7a87674e9fb",
+      "transformation": "gzip_mtime_0"
+    },
+    {
+      "export_bytes": 700,
+      "export_path": "runs/native-fsync-tls-controls/inputs.json",
+      "export_sha256": "26d1aea13cec94422091a420cce8e1b60bc98483f64655a56ae738751339b60f",
+      "original_bytes": 700,
+      "original_filename": "native-fsync-tls-controls-inputs.json",
+      "original_sha256": "26d1aea13cec94422091a420cce8e1b60bc98483f64655a56ae738751339b60f",
+      "transformation": "unchanged"
+    },
+    {
+      "export_bytes": 881,
+      "export_path": "runs/native-fsync-tls-controls/result.json",
+      "export_sha256": "15773ccd4090fdfa04fb18589ef57079599c74280c3b47f4c515a0b5831ced58",
+      "original_bytes": 881,
+      "original_filename": "native-fsync-tls-controls-result.json",
+      "original_sha256": "15773ccd4090fdfa04fb18589ef57079599c74280c3b47f4c515a0b5831ced58",
+      "transformation": "unchanged"
+    },
+    {
+      "export_bytes": 105,
+      "export_path": "runs/native-fsync-tls-controls/stdout.gz",
+      "export_sha256": "f33b5d2a4d16e534af745d64a8b702fdf44c22c68ce9e2157ed967d23037494b",
+      "original_bytes": 115,
+      "original_filename": "native-fsync-tls-controls.stdout",
+      "original_sha256": "30816dc1adc837fa142edf0124b636126fb3c764cdc4510d12c9e56b8b5ef92b",
+      "transformation": "gzip_mtime_0"
+    },
+    {
+      "export_bytes": 14291,
+      "export_path": "runs/native-fsync-tls-controls/stderr.gz",
+      "export_sha256": "0528683306b88d68d34805b46c4d2d1ca206bc7c5354323c290bad524086f7d0",
+      "original_bytes": 137370,
+      "original_filename": "native-fsync-tls-controls.stderr",
+      "original_sha256": "195e27a82859fbfda786f637f3f8197bb50232892f48a43cfd4830c98ff9ef9e",
+      "transformation": "gzip_mtime_0"
+    },
+    {
+      "export_bytes": 185,
+      "export_path": "runs/native-fsync-tls-controls/resources.jsonl.gz",
+      "export_sha256": "f94b82cf6ed6ef196448b9cb1ab455282e0649f618a4255f052ddf992e056f3b",
+      "original_bytes": 272,
+      "original_filename": "native-fsync-tls-controls-resources.jsonl",
+      "original_sha256": "91fcc302037617b67dd54abaf5ed19eb78fac777f92ceb559754768b8507d386",
+      "transformation": "gzip_mtime_0"
+    },
+    {
+      "export_bytes": 690,
+      "export_path": "runs/native-fsync-v1/inputs.json",
+      "export_sha256": "2cb26543b5935c76a03a01d9dccfce84fea6c2707050ff9258a12f068a663d98",
+      "original_bytes": 690,
+      "original_filename": "native-fsync-v1-inputs.json",
+      "original_sha256": "2cb26543b5935c76a03a01d9dccfce84fea6c2707050ff9258a12f068a663d98",
+      "transformation": "unchanged"
+    },
+    {
+      "export_bytes": 874,
+      "export_path": "runs/native-fsync-v1/result.json",
+      "export_sha256": "25b775451aa778ff76530a2571e80da7d333a86550fabd60389e4e43bc547934",
+      "original_bytes": 874,
+      "original_filename": "native-fsync-v1-result.json",
+      "original_sha256": "25b775451aa778ff76530a2571e80da7d333a86550fabd60389e4e43bc547934",
+      "transformation": "unchanged"
+    },
+    {
+      "export_bytes": 20,
+      "export_path": "runs/native-fsync-v1/stdout.gz",
+      "export_sha256": "f61f27bd17de546264aa58f40f3aafaac7021e0ef69c17f6b1b4cd7664a037ec",
+      "original_bytes": 0,
+      "original_filename": "native-fsync-v1.stdout",
+      "original_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "transformation": "gzip_mtime_0"
+    },
+    {
+      "export_bytes": 3079,
+      "export_path": "runs/native-fsync-v1/stderr.gz",
+      "export_sha256": "eab6caf36c2dd4dc3566e16d623fbf65b2d5046cadf57066cd533109206c3218",
+      "original_bytes": 14625,
+      "original_filename": "native-fsync-v1.stderr",
+      "original_sha256": "4883b4f1d08b419904dff8bb374c3a47804faa70a722f245650b01b51e82d7c7",
+      "transformation": "gzip_mtime_0"
+    },
+    {
+      "export_bytes": 829,
+      "export_path": "runs/native-fsync-v1/resources.jsonl.gz",
+      "export_sha256": "ec44244e4efd70352f9449d31d24218d7a026a90601d5fb36fb55b6c6347fd04",
+      "original_bytes": 7611,
+      "original_filename": "native-fsync-v1-resources.jsonl",
+      "original_sha256": "f8687f84bbf02e456150043d44e012bb357e106b4607997c3894421f22a2e2d5",
+      "transformation": "gzip_mtime_0"
+    }
+  ],
+  "raw_files_modified": false,
+  "redactions_applied": false,
+  "source_directory": "/tmp/bicdb-native-fsync-validation-v1"
+}

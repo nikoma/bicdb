@@ -282,6 +282,15 @@ impl BicDb {
             &RangeMutationAuthority::Controlled(controlled),
         )?;
         let source = self.current_native_range_source_lineage(fresh.current_range().id)?;
+        // NoData does not gain joint membership permission from a historical
+        // floor/current metadata. Refuse a changed physical domain BEFORE WAL.
+        // Joint composition must additionally reject any actual protected joint
+        // domain (even a same-config joint) until its AbortQQ producer is qualified.
+        quorum
+            .candidate()
+            .record()
+            .domain
+            .require_recovery_source(&source, fresh)?;
         let index = quorum.request().range_index;
         let birth = self
             .read_native_birth()?

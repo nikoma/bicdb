@@ -45,7 +45,7 @@ impl NativeAbortDomain {
             restore_activation: source.restore_activation().cloned(),
         })
     }
-    fn require_recovery_source(
+    pub(crate) fn require_recovery_source(
         &self,
         source: &SourceRangeImageLineage,
         role: &RecoveryRoleAdmission,

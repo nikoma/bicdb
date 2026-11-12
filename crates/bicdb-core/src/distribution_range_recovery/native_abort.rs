@@ -19,6 +19,7 @@ pub(crate) struct NativeAbortRequest {
 }
 impl NativeAbortRequest {
     pub(crate) fn cancellation(&self, parent: &CancellationToken) -> Result<CancellationToken> {
+        crate::distribution_range_consensus::validate_native_json_size(self, 128 * 1024)?;
         self.scope.validate()?;
         if self.range_index == 0
             || self.challenge.is_nil()

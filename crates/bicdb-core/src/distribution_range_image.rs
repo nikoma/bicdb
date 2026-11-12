@@ -187,7 +187,7 @@ impl TentativeNativeRangeImageSourceAuthorization<'_> {
         let cancellation = self.cut().current_quorum_history_cancellation()?;
         let database = read_database(&self.capture.db)?;
         self.capture.validate(&database)?;
-        if points.len() > 3 {
+        if points.len() > 4 {
             return Err(invalid("replacement history point bound exceeded"));
         }
         for (index, expected) in points {

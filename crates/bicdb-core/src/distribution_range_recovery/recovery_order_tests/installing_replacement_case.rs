@@ -242,6 +242,13 @@ fn actual_installing_replacement_rejects_wrong_substitution_proof_prefix_target_
     run_replacement(None);
 }
 #[test]
+fn actual_installing_replacement_preserves_unmatched_target_point_across_cold_p2_resume() {
+    run_replacement_at(
+        Some(false),
+        super::interrupted_normal_repair::ImageStop::BeginBeforeStage,
+    );
+}
+#[test]
 fn actual_installing_replacement_preserves_partial_audit_across_cold_p2_resume() {
     run_replacement_at(
         Some(false),

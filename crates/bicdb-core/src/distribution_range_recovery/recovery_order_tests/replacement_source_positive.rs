@@ -250,6 +250,14 @@ pub(super) fn finish_actual_current_image_replacement(
             archive["previous_header_sha256"], previous_sha,
             "substitution must retain EXACT previous received/audited stage"
         );
+        if archive["previous_verified_entries"] == 0 {
+            assert_eq!(archive["previous_target_point"][0], 0,
+                "the actual fresh target's native Genesis commitment must survive InstallingUnknown");
+            assert_eq!(
+                archive["previous_target_point_matched"], false,
+                "no history entry was received to match the old native point before source death"
+            );
+        }
         assert_eq!(archive["previous_history_sha256"], expected_h);
         assert_eq!(archive["current_history_sha256"], expected_h);
         assert!(

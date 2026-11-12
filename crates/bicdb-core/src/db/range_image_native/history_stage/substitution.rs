@@ -33,7 +33,7 @@ impl SubstitutionRecord {
             || self.previous_header_sha256.len() != 64
             || self.source != header.source
             || self.points.is_empty()
-            || self.points.len() > 3
+            || self.points.len() > 4
             || self.points.iter().any(|(index, hash)| {
                 *index > header.source.range_index
                     || hash.len() != 64
@@ -45,29 +45,93 @@ impl SubstitutionRecord {
         Ok(())
     }
     pub(super) fn require_archive(&self, database: &BicDb, header: &StageHeader) -> Result<()> {
-        self.validate(header)?;
-        let archived: StageHeader = database
-            .read_native_range_image_record(&format!(
-                "history-stage:superseded:{}:{}",
-                header.source.range_id.get(),
-                self.previous_stage_id
-            ))?
-            .ok_or_else(|| invalid("substituted prior history stage archive is missing"))?;
-        archived.validate()?;
-        if archived.stage_id != self.previous_stage_id
-            || archived.generation != self.previous_generation
-            || archived.checksum_sha256 != self.previous_header_sha256
-            || archived.target_birth_id != header.target_birth_id
-            || archived.target_birth_sha256 != header.target_birth_sha256
-            || archived.source.logical_genesis_sha256 != header.source.logical_genesis_sha256
-            || self.points.get(&archived.source.range_index)
-                != Some(&archived.source.logical_history_sha256)
-        {
-            return Err(invalid(
-                "substituted prior stage archive/accepted point differs",
-            ));
+        self.require_archive_using(header, |key| database.read_native_range_image_record(key))
+    }
+    // The live producer is NOT reconstructed here. These are integrity checks
+    // on the entire bounded immutable archive ancestry, including old native
+    // points and earlier substitutions. Missing/deep ancestry fails closed.
+    fn require_archive_using(
+        &self,
+        header: &StageHeader,
+        mut read: impl FnMut(&str) -> Result<Option<StageHeader>>,
+    ) -> Result<()> {
+        let mut binding = self.clone();
+        let mut current = header.clone();
+        for _ in 0..128 {
+            binding.validate(&current)?;
+            let archived = read(&binding.archive_key(current.source.range_id))?
+                .ok_or_else(|| invalid("substituted prior history stage archive is missing"))?;
+            archived.validate()?;
+            if archived.stage_id != binding.previous_stage_id
+                || archived.generation != binding.previous_generation
+                || archived.checksum_sha256 != binding.previous_header_sha256
+                || archived.target_birth_id != current.target_birth_id
+                || archived.target_birth_sha256 != current.target_birth_sha256
+                || archived.source.logical_genesis_sha256 != current.source.logical_genesis_sha256
+                || binding.points.get(&archived.source.range_index)
+                    != Some(&archived.source.logical_history_sha256)
+                || archived
+                    .target_point
+                    .as_ref()
+                    .is_some_and(|(r, h)| binding.points.get(r) != Some(h))
+                || archived.substitution.as_ref().is_some_and(|old| {
+                    old.points
+                        .iter()
+                        .any(|(r, h)| binding.points.get(r) != Some(h))
+                })
+            {
+                return Err(invalid(
+                    "substituted prior stage archive/accepted/native commitment differs",
+                ));
+            }
+            match &archived.substitution {
+                None => return Ok(()),
+                Some(previous) => {
+                    binding = previous.clone();
+                    current = archived;
+                }
+            }
         }
-        Ok(())
+        Err(invalid(
+            "substitution archive ancestry exceeds supported 128-record bound",
+        ))
+    }
+    #[cfg(test)]
+    pub(super) fn assert_actual_missing_archive_refused(
+        &self,
+        database: &BicDb,
+        header: &StageHeader,
+    ) {
+        self.require_archive(database, header).unwrap();
+        // Fault-read projection of the ACTUAL existing archive. No record is
+        // removed, no DB is reopened, and no missing data becomes a positive.
+        assert!(self
+            .require_archive_using(header, |_| Ok(None))
+            .unwrap_err()
+            .to_string()
+            .contains("archive is missing"));
+        let mut reads = 0;
+        let mut nested = false;
+        let result = self.require_archive_using(header, |key| {
+            reads += 1;
+            if reads == 2 {
+                nested = true;
+                Ok(None)
+            } else {
+                database.read_native_range_image_record(key)
+            }
+        });
+        if nested {
+            assert!(
+                result
+                    .unwrap_err()
+                    .to_string()
+                    .contains("archive is missing"),
+                "nested missing archive must refuse too"
+            );
+        } else {
+            result.unwrap();
+        }
     }
 }
 
@@ -163,6 +227,28 @@ impl CurrentQuorumSubstitutionCoverage {
             previous.source.range_index,
             previous.source.logical_history_sha256.clone(),
         )]);
+        if let Some((index, expected)) = &previous.target_point {
+            if *index > source_scope.range_index
+                || points
+                    .insert(*index, expected.clone())
+                    .is_some_and(|old| old != *expected)
+            {
+                return Err(invalid(
+                    "source conflicts with prior target-native commitment",
+                ));
+            }
+        }
+        if let Some(prior) = &previous.substitution {
+            prior.require_archive(database, previous)?;
+            for (index, expected) in &prior.points {
+                if points
+                    .insert(*index, expected.clone())
+                    .is_some_and(|old| old != *expected)
+                {
+                    return Err(invalid("nested substitution history commitments conflict"));
+                }
+            }
+        }
         // A partially audited/received stage still has immutable commitments.
         // Preserve and check both actual endpoints, rather than pretending the
         // old attempt was audited, dropping its cursor or inventing a floor.
@@ -190,6 +276,9 @@ impl CurrentQuorumSubstitutionCoverage {
                 (None, None) => {}
                 _ => return Err(invalid("prior history cursor/audit has no actual endpoint")),
             }
+        }
+        if points.len() > 4 {
+            return Err(invalid("substitution exceeds four explicit history/native coverage points; paginated ancestry proof required"));
         }
         // Actual source reads under its exclusive capture pin, with the
         // ORIGINAL mixed-quorum cancellation/deadline, prove membership.
@@ -290,6 +379,24 @@ pub(super) fn assert_actual_negative_controls(
             .is_err(),
         "actual source history must reject wrong old prefix"
     );
+    if let Some((index, expected)) = &previous.target_point {
+        let mut wrong_native = coverage.record.points.clone();
+        assert_eq!(wrong_native.get(index), Some(expected));
+        wrong_native.insert(
+            *index,
+            if expected.bytes().all(|b| b == b'0') {
+                "1".repeat(64)
+            } else {
+                "0".repeat(64)
+            },
+        );
+        assert!(
+            source
+                .require_current_quorum_history_points(&wrong_native)
+                .is_err(),
+            "old target-native point must be covered independently, even if unmatched/unknown now"
+        );
+    }
     let wrong_role = NativeImageInstallRole::CurrentVoterRepair(
         source.cut().test_history_coverage_source_role(),
     );

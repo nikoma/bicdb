@@ -77,7 +77,9 @@ impl<'a> NativeHistoryTargetContext<'a> {
                 .read_native_range_image_record::<StageHeader>(&stage_key(self.fence.range().id))?
             {
                 previous.validate()?;
-                if previous.source != HistorySourceScope::actual(source)? {
+                if previous.source != HistorySourceScope::actual(source)?
+                    || previous.substitution.is_some()
+                {
                     let coverage = substitution::CurrentQuorumSubstitutionCoverage::prove(
                         database, &self, source, &previous,
                     )?;
@@ -738,6 +740,8 @@ impl BicDb {
             "previous_verified_entries":archived.verified_entries,
             "previous_audit_next_index":archived.audit_next_index,
             "previous_audit_complete":archived.audit_complete,
+            "previous_target_point":archived.target_point,
+            "previous_target_point_matched":archived.target_point_matched,
             "previous_source_range_index":archived.source.range_index,
             "previous_history_sha256":archived.source.logical_history_sha256,
             "current_source_range_index":header.source.range_index,
@@ -982,6 +986,21 @@ impl BicDb {
                     range_id: previous.source.range_id,
                 });
             }
+            if let Some(previous_point) = &previous.target_point {
+                if previous_point.0 > header.source.range_index
+                    || header.target_point.as_ref().is_some_and(|current| {
+                        current.0 == previous_point.0 && current.1 != previous_point.1
+                    })
+                {
+                    return Err(invalid(
+                        "prior target-native commitment contradicts new source/target",
+                    ));
+                }
+                if header.target_point.is_none() {
+                    header.target_point = Some(previous_point.clone());
+                    header.target_point_matched = false;
+                }
+            }
             // Preserve every not-yet-verified old command obligation too.
             // The new FULL stream must discharge this union before clearing;
             // neither a point commitment nor a new catalogue may drop it.
@@ -995,7 +1014,7 @@ impl BicDb {
                     return Err(invalid("prior staged irreversible command contradicts new target/source obligations"));
                 }
             }
-            if previous.source != header.source {
+            if previous.source != header.source || previous.substitution.is_some() {
                 if let Some(coverage) = &context.substitution {
                     coverage.require_current(self, context, source, previous)?;
                     header.substitution = Some(coverage.record().clone());
@@ -1022,9 +1041,6 @@ impl BicDb {
         }
         header.checksum_sha256 = header.checksum()?;
         header.validate()?;
-        let controlled = self
-            .range_mutations
-            .try_controlled_mutation(context.frozen)?;
         source.require_current()?;
         context.require_current_under_journal(self, &journal)?;
         if !self.config.fsync || !format::range_image_install_active(&self.path)? {
@@ -1032,6 +1048,11 @@ impl BicDb {
                 "native history stage requires sticky fsync reader fence",
             ));
         }
+        // Quiescent preflight must precede OUR own counted lease. Keep that
+        // lease through the actual synchronous page-WAL durable completion.
+        let controlled = self
+            .range_mutations
+            .try_controlled_mutation(context.frozen)?;
         // Preserve the exact old cursor/audit and generation atomically with
         // publishing the new attempt. This is neither a reset nor a new floor.
         self.in_paged_transaction(|paged, xid| {
@@ -1061,8 +1082,12 @@ impl BicDb {
             Ok(())
         })?
         .ok_or_else(|| invalid("native history stage has no page store"))?;
-        source.require_current()?;
         drop(controlled);
+        source.require_current()?;
+        #[cfg(test)]
+        if let Some(binding) = &header.substitution {
+            binding.assert_actual_missing_archive_refused(self, &header);
+        }
         Ok(NativeHistoryStage {
             database_incarnation: self.incarnation.clone(),
             stage_id: header.stage_id,

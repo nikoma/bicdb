@@ -1,6 +1,6 @@
 # Native abort-history implementation checkpoint
 
-This is an uncompiled source checkpoint, not experiment evidence. The implementation through `33096b4b9` in `feat/native-no-data-abort-history` is based on `039af8f12`. No Cargo check, test execution, merge, binary, deployment or Azure qualification is attached to this document. The earlier design and failed-prepare evidence retain their original source identities.
+This is an uncompiled source checkpoint, not experiment evidence. The implementation through `821c097d5` in `feat/native-no-data-abort-history` is based on `039af8f12`. No Cargo check, test execution, merge, binary, deployment or Azure qualification is attached to this document. The earlier design and failed-prepare evidence retain their original source identities.
 
 The candidate-first source now connects the actual enforced Core admission path to receiver-owned abort recovery:
 
@@ -20,6 +20,7 @@ Catalogue15 and the existing private protocol23 are implementation fences, not a
 | Source filter | Intended actual boundary | Execution status |
 | --- | --- | --- |
 | `native_abort_actual_enforced_prepare_failure_canonical_metadata_history_then_next_ack` | Fresh enforced RF3 policies before the first attempt; real failed peer Prepare after protected starts; actual Core cleanup; mTLS promises; unchanged per-node B; actual Ready/Complete/local activation; next user ACK | Not compiled or run |
+| `native_abort_actual_enforced_prior_leader_no_effect_fresh_e2_abort_then_new_leader_ack` | Four genuine other-range ACKs and selected ACK1; failed attempt2; actual committed E2/new leader and fresh host policies; NoData2 keeps B>R; actual recovery/activation; ACK3 and original ACK1 payload survive | Not compiled or run |
 | `native_abort_actual_enforced_post_durable_commit_errors_cannot_become_no_effect_or_abort` | Real peer Commit persistence followed by returned errors; no successful user ACK; observer unknown without local sequence; protected ever-Commit retained; bare Abort refused | Not compiled or run |
 | `native_abort_actual_canonical_publication_before_raw_mark_cold_reuses_exact_decision` | Actual durable native Abort before raw marking; all old DB/service/runtime owners gone; strict native and owned metadata reopen; fresh policies/authority; identical native decision/H/B; next ACK | Not compiled or run |
 | `native_abort_birth_registration_refuses_missing_or_foreign_range_catalogue_at_r0` | Actual registered R0 birth rejects missing/foreign catalogue; exact original restoration remains distinguishable from reset | Not compiled or run |
@@ -32,6 +33,7 @@ The cold regression is an orderly full-owner cut with a fault after genuine nati
 ## Remaining required work
 
 - Run the first coherent compilation and actual regressions after shared disk/build coordination; retain every first failure and source identity.
+- Wire automatic native host/coordinator recovery scheduling. The existing `recover_local_leadership` raw-tail path does not invoke this new Runtime route. Current lifecycle regressions explicitly orchestrate actual protocol APIs; their activation is the trusted local API, not an incoming authenticated activation wire endpoint. Automatic/cross-process self healing is not established.
 - Complete minority permanent-promise A followed by independently proven committed B adoption. Preserve A's promise/no-effect audit, persist B's genuine decision before changing the mirror, and never turn materialization into a new Commit vote.
 - Provide an origin-unavailable producer. An unavailable origin must not be replaced by a phantom Core cleanup receipt. A separate closed-next-slot protocol needs actual from-birth never-Commit evidence and current same-voter authority; its canonical absence must not synthesize a business command.
 - Implement and exercise lagging-replica canonical-abort decision adoption/gap catch-up, including original budget/cancellation and crash retry.

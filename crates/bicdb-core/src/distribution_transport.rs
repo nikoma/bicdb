@@ -3819,12 +3819,30 @@ impl TcpClusterRelocationTransport {
         voter_node_id: &ClusterNodeId,
         request: MetadataVoteRequest,
     ) -> Result<MetadataVoteResponse> {
+        self.request_metadata_vote_cancellable(
+            voter_node_id,
+            request,
+            &CancellationToken::uncancelable(),
+        )
+    }
+
+    pub(crate) fn request_metadata_vote_cancellable(
+        &self,
+        voter_node_id: &ClusterNodeId,
+        request: MetadataVoteRequest,
+        parent: &CancellationToken,
+    ) -> Result<MetadataVoteResponse> {
+        parent.check()?;
         if request.candidate_id != self.caller_node_id {
             return Err(transport_error(
                 "metadata vote candidate must be the transport caller",
             ));
         }
-        match self.call(voter_node_id, ClusterDataRequest::MetadataVote { request })? {
+        match self.call_cancellable(
+            parent,
+            voter_node_id,
+            ClusterDataRequest::MetadataVote { request },
+        )? {
             ClusterDataResponse::MetadataVote(response)
                 if response.voter_id == *voter_node_id
                     && response.cluster_id == self.cluster_id =>
@@ -3843,12 +3861,27 @@ impl TcpClusterRelocationTransport {
         follower_node_id: &ClusterNodeId,
         request: MetadataAppendRequest,
     ) -> Result<MetadataAppendResponse> {
+        self.append_metadata_cancellable(
+            follower_node_id,
+            request,
+            &CancellationToken::uncancelable(),
+        )
+    }
+
+    pub(crate) fn append_metadata_cancellable(
+        &self,
+        follower_node_id: &ClusterNodeId,
+        request: MetadataAppendRequest,
+        parent: &CancellationToken,
+    ) -> Result<MetadataAppendResponse> {
+        parent.check()?;
         if request.leader_id != self.caller_node_id {
             return Err(transport_error(
                 "metadata append leader must be the transport caller",
             ));
         }
-        match self.call(
+        match self.call_cancellable(
+            parent,
             follower_node_id,
             ClusterDataRequest::MetadataAppend { request },
         )? {

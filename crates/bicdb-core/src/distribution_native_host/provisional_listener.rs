@@ -6,6 +6,8 @@ use crate::distribution_transport::{
 };
 use crate::{ClusterDataNodeService, ClusterNetworkTransportConfig};
 use parking_lot::Mutex;
+mod metadata_startup;
+pub(crate) use metadata_startup::NativeInitialWriterEnrollment;
 
 pub(crate) struct NativeProvisionalHost {
     listener: Option<ClusterDataServerHandle>,
@@ -14,6 +16,7 @@ pub(crate) struct NativeProvisionalHost {
     // These are owned here, never exposed as a bypass around the factory.
     _service: Arc<Mutex<ClusterDataNodeService>>,
     transport: Arc<TcpClusterRelocationTransport>,
+    network: ClusterNetworkTransportConfig,
 }
 impl NativeProvisionalHost {
     pub(crate) fn start(
@@ -57,7 +60,7 @@ impl NativeProvisionalHost {
         let service = Arc::new(Mutex::new(service));
         let listener = start_cluster_data_server(
             address,
-            network,
+            network.clone(),
             topology,
             Arc::clone(&service),
             None,
@@ -71,6 +74,7 @@ impl NativeProvisionalHost {
             seed,
             _service: service,
             transport,
+            network,
         })
     }
 
@@ -138,6 +142,8 @@ pub(crate) struct NativeInitialConsensusLaunch {
     pub(crate) service: Arc<Mutex<ClusterDataNodeService>>,
     pub(crate) topology: Arc<RwLock<crate::ClusterTopology>>,
     seed: Arc<NativeProvisionalNode>,
+    transport: Arc<TcpClusterRelocationTransport>,
+    provider: Arc<crate::distribution_metadata_read_provider::MetadataReadProvider>,
 }
 impl NativeInitialConsensusLaunch {
     pub(crate) fn start_metadata_listener(
@@ -153,15 +159,17 @@ impl NativeInitialConsensusLaunch {
             .address
             .parse()
             .map_err(|_| invalid("initial consensus needs numeric planned address"))?;
-        let server = start_cluster_data_server(
-            address,
-            network,
-            Arc::clone(&self.topology),
-            Arc::clone(&self.service),
-            None,
-            Some(Arc::clone(&self.metadata)),
-            None,
-        )?;
+        let server =
+            crate::distribution_transport::start_cluster_data_server_with_metadata_read_provider(
+                address,
+                network,
+                Arc::clone(&self.topology),
+                Arc::clone(&self.service),
+                None,
+                Some(Arc::clone(&self.metadata)),
+                None,
+                Some(Arc::clone(&self.provider)),
+            )?;
         cancellation.check()?;
         Ok(server)
     }
@@ -238,13 +246,28 @@ impl NativeProvisionalHost {
             slot.take()
                 .ok_or_else(|| invalid("prepared store disappeared"))?,
         ));
+        let topology = Arc::new(RwLock::new(permit.configuration().clone()));
+        let transport = Arc::new(TcpClusterRelocationTransport::new(
+            self.seed.spec.cluster_id.clone(),
+            self.seed.spec.node_id.clone(),
+            Arc::clone(&topology),
+            self.network.clone(),
+        )?);
+        let provider = Arc::new(
+            crate::distribution_metadata_read_provider::MetadataReadProvider::new(
+                Arc::clone(&metadata),
+                transport.clone(),
+            )?,
+        );
         self.listener.take();
         self.drained.take();
         Ok(NativeInitialConsensusLaunch {
             metadata,
             service: Arc::clone(&self._service),
-            topology: Arc::new(RwLock::new(permit.configuration().clone())),
+            topology,
             seed: Arc::clone(&self.seed),
+            transport,
+            provider,
         })
     }
 }

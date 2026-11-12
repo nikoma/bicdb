@@ -439,8 +439,7 @@ impl NativeMetadataControlHost {
             .test_fail_after_proposal
             .store(true, Ordering::Release);
     }
-    #[cfg(test)]
-    pub(super) fn heartbeat(&self, parent: &CancellationToken) -> Result<()> {
+    pub(crate) fn heartbeat(&self, parent: &CancellationToken) -> Result<()> {
         self.launch.heartbeat_initial_metadata(parent)
     }
     pub(crate) fn stop(&mut self, parent: &CancellationToken) -> Result<()> {

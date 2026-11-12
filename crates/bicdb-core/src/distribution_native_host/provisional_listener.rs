@@ -128,6 +128,13 @@ impl NativeProvisionalHost {
         Ok(configuration)
     }
 
+    pub(super) fn stop_retained(&mut self, parent: &CancellationToken) -> Result<()> {
+        if let Some(listener) = self.listener.as_mut() {
+            self.drained = Some(listener.stop_and_drain(parent)?);
+        }
+        self.listener.take();
+        Ok(())
+    }
     pub(crate) fn shutdown(mut self) -> Result<()> {
         if let Some(listener) = self.listener.take() {
             listener.join()?;

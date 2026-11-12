@@ -30,6 +30,11 @@ mod distribution_metadata_read_provider;
 mod distribution_native_admission;
 mod distribution_native_apply;
 mod distribution_native_host;
+#[cfg(feature = "tls-replication")]
+pub use distribution_native_host::{
+    NativeMetadataBootstrapPlan, NativeMetadataCollection, NativeMetadataHost,
+    NativeMetadataHostAction, NativeMetadataHostPhase, NativeMetadataHostStatus,
+};
 mod distribution_native_read;
 mod distribution_native_writer;
 mod distribution_query;

@@ -50,6 +50,13 @@ pub(crate) use provisional_listener::{
     NativeInitialConsensusLaunch, NativeLearnerMetadataEnrollment, NativeMetadataControlHost,
     NativeMetadataRegistrationController, NativeProvisionalHost,
 };
+#[cfg(feature = "tls-replication")]
+mod operator;
+#[cfg(feature = "tls-replication")]
+pub use operator::{
+    NativeMetadataBootstrapPlan, NativeMetadataCollection, NativeMetadataHost,
+    NativeMetadataHostAction, NativeMetadataHostPhase, NativeMetadataHostStatus,
+};
 fn invalid(detail: &str) -> BicDbError {
     BicDbError::Cluster(format!("native host bootstrap: {detail}"))
 }

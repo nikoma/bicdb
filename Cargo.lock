@@ -1150,6 +1150,7 @@ dependencies = [
  "parking_lot",
  "protobuf",
  "ratatui",
+ "rcgen",
  "rustls",
  "rustls-native-certs",
  "rustls-pemfile",

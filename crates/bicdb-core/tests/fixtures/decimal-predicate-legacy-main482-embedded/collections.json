@@ -1,0 +1,10 @@
+{
+  "collections": [
+    {
+      "name": "precision_probe",
+      "vector_dim": null,
+      "mode": "standard",
+      "mesh_sync_enabled": false
+    }
+  ]
+}

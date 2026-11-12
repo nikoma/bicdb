@@ -61,8 +61,13 @@ fn bytes(root: &Path) -> BTreeMap<String, Vec<u8>> {
 }
 
 fn actual_legacy_fixture(target: &Path) {
+    actual_legacy_fixture_named(target, "decimal-predicate-legacy-main482");
+}
+
+fn actual_legacy_fixture_named(target: &Path, name: &str) {
     let source = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("tests/fixtures/decimal-predicate-legacy-main482");
+        .join("tests/fixtures")
+        .join(name);
     let manifest: serde_json::Value =
         serde_json::from_slice(&std::fs::read(source.join("FIXTURE.json")).unwrap()).unwrap();
     for (name, identity) in manifest["files"].as_object().unwrap() {
@@ -298,4 +303,115 @@ fn decimal_predicates_keep_the_existing_native_index_kind_contract() {
         "{error}"
     );
     assert!(db.index_definitions().is_empty());
+}
+
+#[test]
+fn actual_old_embedded_and_multiple_nested_generations_upgrade_before_admission() {
+    for (fixture, mode, expected_rows) in [
+        (
+            "decimal-predicate-legacy-main482-embedded",
+            StorageMode::EmbeddedMemory,
+            1,
+        ),
+        (
+            "decimal-predicate-legacy-main482-multiple",
+            StorageMode::ServerPaged,
+            2,
+        ),
+    ] {
+        let root = tempfile::tempdir().unwrap();
+        actual_legacy_fixture_named(root.path(), fixture);
+        for reopen in 0..3 {
+            let mut db = BicDb::open_with_config(root.path(), config(mode.clone())).unwrap();
+            assert_eq!(
+                db.collection_record_count("precision_probe").unwrap(),
+                expected_rows,
+                "{fixture} reopen={reopen}"
+            );
+            assert_eq!(
+                db.lookup_index(
+                    "native_decimal_partial",
+                    &[IndexValue::String("same".into())]
+                )
+                .unwrap(),
+                vec!["acknowledged".to_string()]
+            );
+            assert_eq!(
+                db.get("precision_probe", "acknowledged")
+                    .unwrap()
+                    .unwrap()
+                    .metadata,
+                acknowledged().metadata
+            );
+            if expected_rows == 2 {
+                assert_eq!(
+                    db.lookup_index(
+                        "nested_decimal_partial",
+                        &[IndexValue::String("same".into())]
+                    )
+                    .unwrap(),
+                    vec!["acknowledged".to_string()]
+                );
+                assert!(db
+                    .get("precision_probe", "other_acknowledged")
+                    .unwrap()
+                    .is_some());
+            }
+            assert!(db
+                .insert(
+                    "precision_probe",
+                    Record::new("duplicate")
+                        .with_metadata(json!({"business_key":"same","amount":"0.75"}))
+                )
+                .is_err());
+            assert!(db
+                .verify_indexes_consistently()
+                .unwrap()
+                .iter()
+                .all(|report| report.valid));
+            db.close().unwrap();
+        }
+    }
+}
+
+#[test]
+fn actual_old_keys_that_become_duplicates_refuse_admission_without_losing_either_ack() {
+    let root = tempfile::tempdir().unwrap();
+    actual_legacy_fixture_named(root.path(), "decimal-predicate-legacy-main482-duplicate");
+    for _ in 0..3 {
+        let error =
+            BicDb::open_with_config(root.path(), config(StorageMode::ServerPaged)).unwrap_err();
+        assert!(
+            error.to_string().contains("duplicate") || error.to_string().contains("unique"),
+            "{error}"
+        );
+        // Independent Native row inspection after the refused Core opener.
+        // This creates no public Core handle and never bypasses its gate.
+        let _root_guard = bicdb_page::DirectoryLock::acquire(root.path()).unwrap();
+        let cfg = config(StorageMode::ServerPaged);
+        let paged = bicdb_core::PagedRecords::open(
+            root.path().join("paged"),
+            bicdb_core::PagedRecordsOptions {
+                page_size: cfg.paged_page_size,
+                buffer_pool_bytes: 8 * 1024 * 1024,
+                fsync: true,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        let snapshot = paged.latest_snapshot();
+        let rows = paged
+            .scan(&snapshot, "precision_probe")
+            .unwrap()
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap();
+        assert_eq!(rows.len(), 2);
+        for (id, amount) in [
+            ("acknowledged", "0.5000000000000000000001"),
+            ("second_acknowledged", "0.5000000000000000000002"),
+        ] {
+            let row = rows.iter().find(|row| row.id == id).unwrap();
+            assert_eq!(row.metadata, json!({"business_key":"same","amount":amount}));
+        }
+    }
 }

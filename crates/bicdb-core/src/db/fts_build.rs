@@ -547,6 +547,10 @@ impl BicDb {
                     return Err(error);
                 }
                 self.schema_compatibility.invalidate();
+                #[cfg(test)]
+                if self.decimal_predicate_upgrade.is_some() {
+                    decimal_predicate::test_process_cut("after_shadow_catalog");
+                }
                 state.phase = PagedBTreeBuildPhase::Complete;
             }
             PagedBTreeBuildPhase::Complete => unreachable!(),
@@ -558,7 +562,21 @@ impl BicDb {
         }
         state.updated_at_ms = now_ms;
         state.refresh_checksum()?;
+        #[cfg(test)]
+        if self.decimal_predicate_upgrade.is_some()
+            && state.phase == PagedBTreeBuildPhase::Building
+            && state.resume_after_id.is_some()
+        {
+            decimal_predicate::test_process_cut("before_build_checkpoint");
+        }
         self.save_paged_btree_build(&state)?;
+        #[cfg(test)]
+        if self.decimal_predicate_upgrade.is_some()
+            && state.phase == PagedBTreeBuildPhase::Building
+            && state.resume_after_id.is_some()
+        {
+            decimal_predicate::test_process_cut("during_build");
+        }
         if state.phase == PagedBTreeBuildPhase::Complete {
             Ok(PagedBTreeBuildAdvance::Complete(state))
         } else {

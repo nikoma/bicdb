@@ -441,7 +441,7 @@ impl BicDb {
 // The cut seam exists only in the Core unit-test binary. Production builds
 // cannot activate it through an environment variable.
 #[inline]
-fn test_process_cut(point: &str) {
+pub(super) fn test_process_cut(point: &str) {
     #[cfg(test)]
     if std::env::var("BICDB_TEST_DECIMAL_UPGRADE_CUT").as_deref() == Ok(point) {
         std::process::abort();
@@ -463,8 +463,13 @@ mod tests {
     }
 
     fn copy_actual_old_fixture(root: &Path) {
+        copy_actual_old_fixture_named(root, "decimal-predicate-legacy-main482");
+    }
+
+    fn copy_actual_old_fixture_named(root: &Path, name: &str) {
         let source = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("tests/fixtures/decimal-predicate-legacy-main482");
+            .join("tests/fixtures")
+            .join(name);
         let manifest: serde_json::Value =
             serde_json::from_slice(&fs::read(source.join("FIXTURE.json")).unwrap()).unwrap();
         for (name, identity) in manifest["files"].as_object().unwrap() {
@@ -556,9 +561,12 @@ mod tests {
     }
 
     #[test]
-    fn owned_decimal_transition_survives_five_process_publication_cuts() {
+    fn owned_decimal_transition_survives_eight_process_publication_cuts() {
         for point in [
             "after_plan",
+            "before_build_checkpoint",
+            "during_build",
+            "after_shadow_catalog",
             "after_build",
             "after_replacement",
             "before_certificate",
@@ -609,6 +617,36 @@ mod tests {
                 error.to_string().contains("Decimal predicate transition"),
                 "{corruption}: {error}"
             );
+        }
+    }
+    #[test]
+    fn multiple_generations_resume_after_each_atomic_replacement() {
+        let root = tempfile::tempdir().unwrap();
+        copy_actual_old_fixture_named(root.path(), "decimal-predicate-legacy-main482-multiple");
+        cut(root.path(), "after_replacement");
+        cut(root.path(), "after_replacement");
+        for _ in 0..3 {
+            let mut db = BicDb::open_with_config(root.path(), config()).unwrap();
+            assert_eq!(db.collection_record_count("precision_probe").unwrap(), 2);
+            assert_eq!(db.index_definitions().len(), 2);
+            for index in ["native_decimal_partial", "nested_decimal_partial"] {
+                assert_eq!(
+                    db.lookup_index(index, &[IndexValue::String("same".into())])
+                        .unwrap(),
+                    vec!["acknowledged".to_string()]
+                );
+                assert_eq!(
+                    db.lookup_index(index, &[IndexValue::String("other".into())])
+                        .unwrap(),
+                    vec!["other_acknowledged".to_string()]
+                );
+            }
+            assert!(db
+                .verify_indexes_consistently()
+                .unwrap()
+                .iter()
+                .all(|report| report.valid));
+            db.close().unwrap();
         }
     }
 }

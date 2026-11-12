@@ -7,6 +7,7 @@ use crate::distribution_data::ClusterServiceOpenGuard;
 use crate::distribution_transport::{ClusterDataServerHandle, TcpClusterRelocationTransport};
 use parking_lot::Mutex;
 use std::time::Instant;
+mod metadata_transition;
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
@@ -234,6 +235,7 @@ pub(crate) struct NativeUnassignedLearnerHost {
     provider: Arc<NativeLearnerBirthProvider>,
     listener: Option<ClusterDataServerHandle>,
     _service: Arc<Mutex<crate::ClusterDataNodeService>>,
+    metadata_transition: metadata_transition::NativeLearnerMetadataTransition,
 }
 impl NativeUnassignedLearnerHost {
     #[cfg(test)]
@@ -328,6 +330,7 @@ impl NativeUnassignedLearnerHost {
             provider,
             listener: Some(listener),
             _service: service,
+            metadata_transition: Default::default(),
         })
     }
     pub(crate) fn refresh_metadata(
@@ -362,6 +365,9 @@ impl NativeUnassignedLearnerHost {
         Ok(())
     }
     pub(crate) fn shutdown(mut self) -> Result<()> {
+        if let Some(listener) = self.metadata_transition.listener.take() {
+            listener.join()?;
+        }
         if let Some(listener) = self.listener.take() {
             listener.join()?;
         }

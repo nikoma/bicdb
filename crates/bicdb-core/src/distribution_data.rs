@@ -981,6 +981,37 @@ impl ClusterDataNodeService {
     ) -> Option<std::sync::Weak<crate::distribution_native_host::NativeLearnerBirthProvider>> {
         self.learner_birth_provider.clone()
     }
+    /// Existing-cluster learner purpose, never an initial all-C permit.
+    /// Caller holds only nonwaiting metadata/service guards after true drain;
+    /// this method acquires NO DB latch and opens NO data surface.
+    #[cfg(feature = "tls-replication")]
+    pub(crate) fn transition_enrolled_learner_metadata_listener(
+        &mut self,
+        actual: &Arc<Mutex<Self>>,
+        drained: &crate::distribution_transport::DrainedClusterDataListener,
+        database: &Arc<RwLock<BicDb>>,
+        metadata: &crate::MetadataConsensusStore,
+    ) -> Result<()> {
+        drained.require_service(actual)?;
+        drained.require_store(self.native_initial_listener_store_open_id())?;
+        if !Arc::ptr_eq(&self.db, database)
+            || self.initial_birth_provider.is_some()
+            || self.initial_preparation_provider.is_some()
+            || (self.learner_birth_provider.is_none() && !self.initial_consensus_only)
+        {
+            return Err(data_error(
+                "drained learner service/actual DB attachment changed",
+            ));
+        }
+        metadata.require_listener_database(&self.listener_open_guard())?;
+        metadata.registered_native_learner_store_id()?;
+        // Only a NEW listener sees this mutation. Captured old Some remains
+        // immutable even when its Weak provider ends.
+        self.learner_birth_provider = None;
+        self.initial_consensus_only = true;
+        Ok(())
+    }
+
     #[cfg(feature = "tls-replication")]
     pub(crate) fn transition_initial_preparation_listener(
         &mut self,

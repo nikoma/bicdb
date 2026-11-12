@@ -257,6 +257,45 @@ impl NativeUnassignedLearnerFactory {
         })
     }
 
+    /// Fresh own learner MQ plus actual birth/schema. Valid after metadata
+    /// preparation too; unlike enrollment_proposal this never asserts uninitialized.
+    pub(super) fn enrolled_metadata_context(
+        &self,
+        observed: &HostMetadataReadObservation,
+        business: Uuid,
+        network: &ClusterNetworkTransportConfig,
+    ) -> Result<ClusterTopology> {
+        let (topology, local, schema) = Self::context(observed, business, network)?;
+        if local != self.spec.node_id
+            || schema != self.manifest.schema_sha256
+            || self.spec.restore_activation.as_ref() != observed.restore_activation(business)?
+            || topology.nodes[&local].native_store_birth_v1.as_ref() != Some(&self.manifest.birth)
+        {
+            return Err(invalid(
+                "metadata transition needs current committed actual learner binding",
+            ));
+        }
+        let db = self
+            .database
+            .try_read()
+            .ok_or_else(|| invalid("actual learner DB busy"))?;
+        if db.schema_compatibility_fingerprint()?.sha256 != schema {
+            return Err(invalid(
+                "actual learner schema changed before metadata transition",
+            ));
+        }
+        let native = self
+            .factory
+            .require_unwritten_enrollment_database(&db, &topology)?;
+        if NativeStoreBirthV1::from_actual_native(&native)? != self.manifest.birth {
+            return Err(invalid(
+                "actual learner birth changed before metadata transition",
+            ));
+        }
+        observed.require_live_request(business)?;
+        Ok(topology)
+    }
+
     /// Configuration proposal only. It must cross authenticated birth
     /// observation and metadata consensus before any owned metadata/vote/data
     /// service is exposed. This method does not commit or promote anything.

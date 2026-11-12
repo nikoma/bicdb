@@ -251,6 +251,31 @@ impl MetadataConsensusStore {
         }
         Ok(())
     }
+    pub(crate) fn registered_native_learner_store_id(&self) -> Result<Uuid> {
+        self.require_native_metadata_actor_current(false)?;
+        let owner = self
+            .native_owner
+            .as_ref()
+            .ok_or_else(|| metadata_error("actual native metadata owner absent"))?;
+        let id = owner
+            .registered_store_id
+            .ok_or_else(|| metadata_error("Prepared native metadata remains quarantined"))?;
+        if self.state.native_store_id != Some(id)
+            || self
+                .state
+                .committed_topology
+                .nodes
+                .get(&self.state.node_id)
+                .map(|n| n.metadata_role)
+                != Some(MetadataMemberRole::Learner)
+        {
+            return Err(metadata_error(
+                "metadata attachment requires the registered actual learner identity",
+            ));
+        }
+        Ok(id)
+    }
+
     /// Historical identity inspection only; no owner/read/quorum proof is minted.
     pub(crate) fn inspect_native_store_identity(
         root: impl AsRef<Path>,
@@ -516,8 +541,94 @@ impl MetadataConsensusStore {
         factory: &FreshRangeGenesisAuthority,
         topology: ClusterTopology,
         cancellation: &CancellationToken,
-        mut cut: impl FnMut(NativeMetadataInitializationCut) -> Result<()>,
+        cut: impl FnMut(NativeMetadataInitializationCut) -> Result<()>,
     ) -> Result<Self> {
+        let mut retained = None;
+        Self::initialize_native_owned_into(
+            root,
+            database,
+            factory,
+            topology,
+            cancellation,
+            &mut retained,
+            cut,
+        )?;
+        retained.ok_or_else(|| metadata_error("actual initialized owner absent"))
+    }
+
+    /// Host-only ownership continuation. The caller keeps this slot on EVERY
+    /// error. A Prepared owner cannot be exposed or recreated as term zero.
+    pub(crate) fn initialize_native_learner_owned_retaining(
+        root: &Path,
+        database: Arc<RwLock<BicDb>>,
+        factory: &FreshRangeGenesisAuthority,
+        topology: ClusterTopology,
+        cancellation: &CancellationToken,
+        retained: &mut Option<Self>,
+    ) -> Result<()> {
+        if retained.is_some()
+            || topology
+                .nodes
+                .get(factory.node_id())
+                .map(|n| n.metadata_role)
+                != Some(MetadataMemberRole::Learner)
+        {
+            return Err(metadata_error(
+                "learner host initialization requires an empty owner slot and actual learner",
+            ));
+        }
+        Self::initialize_native_owned_into(
+            root,
+            database,
+            factory,
+            topology,
+            cancellation,
+            retained,
+            |_| Ok(()),
+        )
+    }
+
+    #[cfg(test)]
+    pub(crate) fn test_initialize_native_learner_owned_retaining_with(
+        root: &Path,
+        database: Arc<RwLock<BicDb>>,
+        factory: &FreshRangeGenesisAuthority,
+        topology: ClusterTopology,
+        cancellation: &CancellationToken,
+        retained: &mut Option<Self>,
+        cut: impl FnMut(NativeMetadataInitializationCut) -> Result<()>,
+    ) -> Result<()> {
+        if retained.is_some()
+            || topology
+                .nodes
+                .get(factory.node_id())
+                .map(|n| n.metadata_role)
+                != Some(MetadataMemberRole::Learner)
+        {
+            return Err(metadata_error(
+                "actual learner initialization test scope differs",
+            ));
+        }
+        Self::initialize_native_owned_into(
+            root,
+            database,
+            factory,
+            topology,
+            cancellation,
+            retained,
+            cut,
+        )
+    }
+
+    fn initialize_native_owned_into(
+        root: &Path,
+        database: Arc<RwLock<BicDb>>,
+        factory: &FreshRangeGenesisAuthority,
+        topology: ClusterTopology,
+        cancellation: &CancellationToken,
+        retained: &mut Option<Self>,
+        mut cut: impl FnMut(NativeMetadataInitializationCut) -> Result<()>,
+    ) -> Result<()> {
         cancellation.check()?;
         topology.validate()?;
         let node = factory.node_id().clone();
@@ -566,14 +677,17 @@ impl MetadataConsensusStore {
             log: Vec::new(),
             committed_restore_activation: None,
         };
-        let mut store = Self {
+        *retained = Some(Self {
             root: root.to_path_buf(),
             fsync: true,
             state,
             match_index: BTreeMap::new(),
             last_leader_contact_ms: unix_time_ms(),
             native_owner: Some(owner),
-        };
+        });
+        let store = retained
+            .as_mut()
+            .expect("actual initializer retained its owner");
         store.reset_match_indexes();
         store.persist()?;
         cancellation.check()?;
@@ -588,7 +702,7 @@ impl MetadataConsensusStore {
             .finish_native_metadata_store(&prepared, &topology)?;
         store.native_owner.as_mut().unwrap().registered_store_id = Some(prepared.store_id());
         cancellation.check()?;
-        Ok(store)
+        Ok(())
     }
 
     pub(crate) fn reopen_native_owned(

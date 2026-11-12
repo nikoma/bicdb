@@ -227,6 +227,55 @@ fn native_metadata_actor_reused_pin_cannot_rebind_old_root_but_retirement_persis
         &replacement,
         "restriction persists before any error acknowledgement"
     );
+    // Healthy NEW actor can acknowledge learner catch-up, but cannot vote or
+    // claim a fresh metadata authority until genuinely promoted.
+    let db = Arc::new(RwLock::new(db));
+    let mut new_store = MetadataConsensusStore::initialize_native_owned(
+        f.root.path().join("replacement-meta-n0"),
+        Arc::clone(&db),
+        &factory,
+        replacement.clone(),
+        &CancellationToken::uncancelable(),
+    )
+    .unwrap();
+    let ack = new_store
+        .handle_append_request(stores[&leader].append_request_from(1, 32).unwrap())
+        .unwrap();
+    assert!(ack.success);
+    assert!(new_store.start_election().is_err());
+    assert_eq!(new_store.committed_topology(), &replacement);
+    stores
+        .get_mut(&leader)
+        .unwrap()
+        .record_append_response(&node(0), &ack)
+        .unwrap();
+    // Genuine committed promotion after the NEW physical learner caught up.
+    // The OLD root must still refuse even when its node-id is again a voter.
+    let mut promoted = replacement.clone();
+    promoted.generation += 1;
+    promoted.nodes.get_mut(&node(0)).unwrap().metadata_role = MetadataMemberRole::Voter;
+    stores
+        .get_mut(&leader)
+        .unwrap()
+        .propose_topology(promoted.clone())
+        .unwrap();
+    assert!(!replicate(&mut stores, &leader).is_empty());
+    assert_eq!(stores[&node(0)].committed_topology(), &promoted);
+    assert!(promoted.is_metadata_voter(&node(0)));
+    assert_eq!(stores[&node(0)].status().voted_for, Some(leader.clone()));
+    let current_last = stores[&leader].status().last_log_index;
+    assert!(
+        !stores
+            .get_mut(&node(0))
+            .unwrap()
+            .handle_vote_request(MetadataVoteRequest {
+                last_log_index: current_last,
+                ..same_candidate
+            })
+            .unwrap()
+            .vote_granted
+    );
+    assert!(stores.get_mut(&node(0)).unwrap().start_election().is_err());
     let saved_replacement = fs::read(
         f.root
             .path()
@@ -234,18 +283,6 @@ fn native_metadata_actor_reused_pin_cannot_rebind_old_root_but_retirement_persis
             .join(DEFAULT_CLUSTER_METADATA_CONSENSUS_STATE),
     )
     .unwrap();
-    let replacement_last_index = stores[&leader].status().last_log_index;
-    assert!(
-        !stores
-            .get_mut(&node(0))
-            .unwrap()
-            .handle_vote_request(MetadataVoteRequest {
-                last_log_index: replacement_last_index,
-                ..same_candidate
-            })
-            .unwrap()
-            .vote_granted
-    );
     drop(stores.remove(&node(0)));
     assert!(MetadataConsensusStore::reopen_native_owned(
         f.root.path().join("actor-meta-n0"),
@@ -265,21 +302,10 @@ fn native_metadata_actor_reused_pin_cannot_rebind_old_root_but_retirement_persis
         .unwrap(),
         saved_replacement
     );
-    // Healthy NEW actor can acknowledge learner catch-up, but cannot vote or
-    // claim a fresh metadata authority until genuinely promoted.
-    let db = Arc::new(RwLock::new(db));
-    let mut new_store = MetadataConsensusStore::initialize_native_owned(
-        f.root.path().join("replacement-meta-n0"),
-        Arc::clone(&db),
-        &factory,
-        replacement.clone(),
-        &CancellationToken::uncancelable(),
-    )
-    .unwrap();
-    let ack = new_store
+    let promoted_ack = new_store
         .handle_append_request(stores[&leader].append_request_from(1, 32).unwrap())
         .unwrap();
-    assert!(ack.success);
-    assert!(new_store.start_election().is_err());
-    assert_eq!(new_store.committed_topology(), &replacement);
+    assert!(promoted_ack.success);
+    assert_eq!(new_store.committed_topology(), &promoted);
+    assert_eq!(new_store.start_election().unwrap().candidate_id, node(0));
 }

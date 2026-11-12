@@ -215,14 +215,8 @@ impl RangeWriteStore {
         observer: &RecoveryObservationRoleAdmission,
         request: &NativeReadyRequest,
     ) -> Result<LocalNativeReadyEvidence> {
-        #[cfg(test)]
-        let _probe_context = crate::distribution_range_recovery::NativeProbeTraceContext::enter(
-            "ready",
-            observer.local_node_id(),
-            &request.scope,
-            request.challenge,
-            Some(observer.deadline()),
-        );
+        // Preserve the actual Data entry's Ready/completion-status trace phase:
+        // this physical validator is shared by both observation paths.
         #[cfg(test)]
         let validation_trace = crate::distribution_range_recovery::NativeProbeTraceSpan::current(
             "observer-prepared-current-total",

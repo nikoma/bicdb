@@ -498,8 +498,24 @@ impl NativeJointServingBridgeReceipt {
         completion: &'a crate::db::NativeCompletionReadScope<'_>,
     ) -> Result<NativeJointBridgeReadScope<'a>> {
         let database = completion.database();
+        completion.require_identity(
+            completion.prepared(),
+            completion.store(),
+            completion.role(),
+        )?;
         completion.journal().require_database(database)?;
         let lineage = completion.lineage();
+        let range = completion.prepared().scope().range_id;
+        if self.record.prepared.range_id != range
+            || lineage.base.range.id != range
+            || self.native.database_incarnation() != database.incarnation_id()
+            || self.native.birth_id() != lineage.birth.birth_id
+            || self.native.birth_sha256() != lineage.birth.checksum_sha256
+        {
+            return Err(invalid(
+                "borrowed completion bridge changed actual range/birth/DB open",
+            ));
+        }
         self.record.validate()?;
         self.record
             .require_actual_point_from_lineage(database, &self.native, lineage)?;

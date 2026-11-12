@@ -265,6 +265,8 @@ impl BicDb {
             return Err(BicDbError::CollectionAlreadyExists(new.to_string()));
         }
         self.ensure_renamable(old)?;
+        let _database_mutation = self.range_mutations.try_enter_database()?;
+        self.invalidate_native_range_images_before_mutation(None, "rename collection")?;
         let history = self
             .collection_state(old)?
             .meta

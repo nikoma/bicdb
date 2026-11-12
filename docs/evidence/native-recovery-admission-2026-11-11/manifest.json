@@ -1,0 +1,10 @@
+{
+  "format_version": 1,
+  "files": {
+    "README.md": "f015d9ab35f1d7e84f3314257f5400dde25e0e91354f76cff1ba208129889a1e",
+    "current-source-inputs.json": "79c3f88747e23bf20ef34ce01a1f76b71087c8a1a79bf26676d78915f6337d2f",
+    "post-test-format-only.patch": "fbd93ab2e723d0af645a34c4890cde4daeeef9d08d826a01967e2935be5958e0",
+    "source-inputs.json": "3349d9d3a22a6df03685b46bcf968e42754d1a6f5e24db4a0ffe3a9377a7b4d5",
+    "validation.json": "a097d44b516d0d8d4bc28732f013ef0e234fcecf4173bd68fa993a714e9d96a2"
+  }
+}

@@ -902,7 +902,11 @@ impl BicDb {
             serializable_reads: BTreeSet::new(),
             postgres_serializable: None,
             bypass_commit_admission: false,
+            range_mutation_claim: None,
+            database_mutation_permit: None,
+            native_wal_retention: None,
             commit_admission_ticket: None,
+            native_admission_recovery_release: None,
             committed_seq: None,
             paged_snapshot: self
                 .paged_records
@@ -1670,6 +1674,7 @@ impl BicDb {
     where
         I: IntoIterator<Item = StoredEvent>,
     {
+        let _database_mutation = self.range_mutations.try_enter_database()?;
         let mut imported = 0;
         for event in events {
             if self.event_targets_mesh_ineligible_collection(&event) {
@@ -1916,6 +1921,7 @@ impl BicDb {
         bundle: SyncBundle,
         require_signed: bool,
     ) -> Result<SyncImportReport> {
+        let _database_mutation = self.range_mutations.try_enter_database()?;
         bundle.verify()?;
         // A write context is evidence only for origin positions this receiver
         // already holds or has seen earlier in this same bundle. This binds
@@ -2496,6 +2502,7 @@ impl BicDb {
         max_events_per_batch: usize,
         max_event_bytes_per_batch: usize,
     ) -> Result<usize> {
+        let _database_mutation = self.range_mutations.try_enter_database()?;
         if max_records_per_batch == 0 || max_events_per_batch == 0 || max_event_bytes_per_batch == 0
         {
             return Err(BicDbError::Backup(
@@ -2503,6 +2510,7 @@ impl BicDb {
             ));
         }
 
+        self.invalidate_native_range_images_before_mutation(None, "PITR physical restore")?;
         let mut after_offset = None;
         let mut cleared_collections = BTreeSet::new();
         loop {

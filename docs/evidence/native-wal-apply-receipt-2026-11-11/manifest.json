@@ -1,0 +1,8 @@
+{
+  "format_version": 1,
+  "files_sha256": {
+    "validation.json": "9fae4dc890963567944b572cb28f0881ef5bebeeba1e90109536d54860dc5869",
+    "README.md": "2cf2e2e7c1f6dde2ceb7db99592f82ceb9d5553f988c1e40e763c006e916d899",
+    "source-manifest.json": "b7bf3ade0a9a3a8421254557cf96265b0482c33b5a1cb03e855a350d79b551d7"
+  }
+}

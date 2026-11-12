@@ -369,6 +369,7 @@ mod tests {
         DistributionConfig {
             enabled: true,
             cluster_id: ClusterId::new("gateway-cluster").unwrap(),
+            range_image_bootstrap_id: None,
             node_id: ClusterNodeId::new("n1").unwrap(),
             node_address: "10.0.0.1:9444".to_string(),
             node_tls_certificate_sha256: None,
@@ -397,6 +398,7 @@ mod tests {
             format_version: DISTRIBUTION_FORMAT_VERSION,
             hash_version: DISTRIBUTION_HASH_VERSION,
             cluster_id: ClusterId::new("gateway-cluster").unwrap(),
+            range_image_bootstrap_id: None,
             generation,
             replication_factor: 2,
             nodes: BTreeMap::from([(n1.clone(), node1), (n2.clone(), node2)]),

@@ -4321,6 +4321,7 @@ mod tests {
         let config = DistributionConfig {
             enabled: true,
             cluster_id: ClusterId::new("cert-cluster").unwrap(),
+            range_image_bootstrap_id: None,
             node_id: ClusterNodeId::new("n1").unwrap(),
             node_address: "127.0.0.1:11001".to_string(),
             node_tls_certificate_sha256: None,

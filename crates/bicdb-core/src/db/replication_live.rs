@@ -346,6 +346,12 @@ impl BicDb {
     /// lie before `keep_from`. Never drops a frame a standby has not yet
     /// acknowledged: the cut moves back to that standby's position instead.
     pub(crate) fn cut_transaction_log(&self, keep_from: u64, dropped_through: u64) -> Result<()> {
+        // Native receipts may still be between actual WAL delivery and their
+        // ordered page-prefix callback. Keep their exact source bytes/inode;
+        // a later empty-file sync must never stand in for that transaction.
+        let Some(_native_wal_cut) = self.tx_log.native_wal_cut_guard()? else {
+            return Ok(());
+        };
         // Every caller excludes core committers (through &mut self or commit
         // admission). Drain before replacing the inode, and invalidate here,
         // rather than relying on each checkpoint/close caller to remember it.

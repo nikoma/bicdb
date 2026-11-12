@@ -1,0 +1,14 @@
+{
+  "source_commit": "8bc0e8d85641af640a571ac3386796a93229c5e2",
+  "files": {
+    "crates/bicdb-core/src/lib.rs": "6027fc7429ec7e329cc36e977edeb991672fe62bc6f9cbb9da30026c7391d308",
+    "crates/bicdb-core/src/distribution_range_consensus.rs": "b03a3e150d81c9931eae6fce3fda7fa732debab51fb948d7c15f157989d56e66",
+    "crates/bicdb-core/src/distribution_range_consensus/image_install_fence.rs": "fc0782697826547cbef1908a0c9a199ac40247ec262b9f0d213a7201f5bf9380",
+    "crates/bicdb-core/src/distribution_range_consensus/image_install_state.rs": "20c78f2806c3d0accc98b4acd2dbd988800c316539824f9cab30ac0a20ebdc05",
+    "crates/bicdb-core/src/db/range_image_install.rs": "85b4f8f4e4e6ddb86ecd4d1ec8628fb72cd7376364c91152989b845a767e73ed",
+    "crates/bicdb-core/src/distribution_range_image_install.rs": "c166bab801106d1889e3dc17fa3c808c57169808003ac5e799190ad5eb2f0bd1",
+    "crates/bicdb-core/src/distribution_range_image.rs": "b0fbe76eacab34a5a07e8cd7fc413118452e5d50256a2e4d76a071ab8da40381",
+    "crates/bicdb-core/src/distribution_range_image/source_cut.rs": "95aec6dda95b0953846ff86847c272d0b8b431cbfd2017fe7ff712c02c29c18a"
+  },
+  "scope": "focused composed source/R1target/history software tests; no CurrentRepair factory/activation/physical qualification"
+}

@@ -667,6 +667,18 @@ pub(crate) fn write_raw_holding_gate(
     )
 }
 
+/// Explicit whole-file barrier for the native range-prefix proof. This is
+/// distinct from O_DSYNC coverage of a particular append's byte range.
+pub(crate) fn sync_append_handle_data(handle: &mut AppendHandle, path: &Path) -> Result<()> {
+    handle.check_writable()?;
+    let _backup_gate = acquire_backup_write_guard(path)?;
+    bicdb_page::test_faults::io_fault("transaction_log.native_sync", path)?;
+    handle.file.sync_data()?;
+    bicdb_page::test_faults::io_fault("transaction_log.native_directory_sync", path)?;
+    sync_parent(path)?;
+    Ok(())
+}
+
 /// The caller serializes ALL appends and truncations of this file. In
 /// particular the transaction log holds its writer mutex across this method;
 /// the backup gate alone is not an exclusive writer lock.

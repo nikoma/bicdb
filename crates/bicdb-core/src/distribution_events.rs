@@ -250,6 +250,13 @@ mod client {
             scan_range: Option<RangeId>,
         ) -> Result<ClusterEventResponse> {
             operation.validate()?;
+            if let ClusterEventOperation::Get { namespace, key } = &operation {
+                return self.get_request(
+                    namespace,
+                    key,
+                    crate::distribution_native_read::NativeEventReadMode::DeploymentDefault,
+                );
+            }
             let deadline = std::time::Instant::now() + self.request_timeout;
             let cancellation =
                 crate::CancellationToken::uncancelable().child_with_deadline(deadline);
@@ -313,6 +320,119 @@ mod client {
             Err(last_error)
         }
 
+        fn get_request(
+            &self,
+            namespace: &str,
+            key: &str,
+            mode: crate::distribution_native_read::NativeEventReadMode,
+        ) -> Result<ClusterEventResponse> {
+            use crate::distribution_native_read::{
+                NativeEventGetRequest, NativeEventGetResult, NativeEventRoute,
+            };
+            let id = cluster_event_record_id(namespace, key)?;
+            let deadline = std::time::Instant::now() + self.request_timeout;
+            let parent = crate::CancellationToken::uncancelable().child_with_deadline(deadline);
+            let business = uuid::Uuid::now_v7();
+            let mut hint: Option<NativeEventRoute> = None;
+            let mut retry_after = std::time::Duration::from_millis(50);
+            let mut last = invalid("typed event Get unavailable");
+            // A finite bound plus the SAME absolute request deadline. Typed
+            // route/unavailable results never become a successful empty row.
+            for attempt in 0..128 {
+                parent.check()?;
+                if attempt > 0 {
+                    let until = (std::time::Instant::now() + retry_after).min(deadline);
+                    while std::time::Instant::now() < until {
+                        parent.check()?;
+                        std::thread::sleep(
+                            until
+                                .saturating_duration_since(std::time::Instant::now())
+                                .min(std::time::Duration::from_millis(5)),
+                        );
+                    }
+                    if !self.refresh_members_until(deadline)? {
+                        last = invalid("no member reached during typed Get discovery");
+                        continue;
+                    }
+                }
+                parent.check()?;
+                let (destination, range_id, range_epoch) = {
+                    let topology = self.topology.read();
+                    let current = topology.range_for_key(CLUSTER_EVENTS_COLLECTION, &id)?;
+                    match hint.as_ref().filter(|h| {
+                        h.generation >= topology.generation
+                            && topology.nodes.contains_key(&h.leader)
+                    }) {
+                        Some(h) => (h.leader.clone(), h.range_id, h.range_epoch),
+                        None => (current.leader.clone(), current.id, current.epoch),
+                    }
+                };
+                let now = std::time::Instant::now();
+                let attempt_end = (now + deadline.saturating_duration_since(now) / 2)
+                    .min(now + std::time::Duration::from_secs(5));
+                let cancellation = parent.child_with_deadline(attempt_end);
+                let request = NativeEventGetRequest {
+                    version: 1,
+                    mode,
+                    business_request_id: business,
+                    challenge: uuid::Uuid::now_v7(),
+                    range_id,
+                    range_epoch,
+                    namespace: namespace.into(),
+                    key: key.into(),
+                    budget_ms: u64::try_from(
+                        attempt_end.saturating_duration_since(now).as_millis(),
+                    )
+                    .unwrap_or(5000)
+                    .clamp(1, 5000),
+                };
+                match self.transport.native_event_get_cancellable(
+                    &cancellation,
+                    &destination,
+                    &request,
+                ) {
+                    Ok(reply) => {
+                        match reply.result {
+                            NativeEventGetResult::Value { value, .. }
+                            | NativeEventGetResult::LegacyValue { value } => {
+                                parent.check()?;
+                                return Ok(ClusterEventResponse::Value {
+                                    value: value.into_option(),
+                                });
+                            }
+                            NativeEventGetResult::Redirect { route, .. } => {
+                                hint = Some(route);
+                                retry_after = std::time::Duration::from_millis(25);
+                                last=invalid("typed event Get redirected; original request deadline retained");
+                            }
+                            NativeEventGetResult::Unavailable {
+                                code,
+                                route,
+                                retry_after_ms,
+                                detail,
+                            } => {
+                                if matches!(code,crate::distribution_native_read::NativeEventGetUnavailableCode::LegacyUnsupported) {
+                                    return Err(invalid("explicit Strong Get is unsupported by this unenforced deployment"));
+                                }
+                                if route.is_some() {
+                                    hint = route;
+                                }
+                                let backoff = 25u64.saturating_mul(1u64 << attempt.min(4));
+                                retry_after = std::time::Duration::from_millis(
+                                    retry_after_ms.max(backoff).clamp(5, 250),
+                                );
+                                last = invalid(&format!(
+                                    "typed event Get unavailable ({code:?}): {detail}"
+                                ));
+                            }
+                        }
+                    }
+                    Err(error) => last = error,
+                }
+            }
+            Err(last)
+        }
+
         /// Return true for a newly committed event, false for an identical
         /// retry. Reusing a key with different content is an error. A transport
         /// failure may have an unknown outcome; retry with the exact same key.
@@ -330,6 +450,9 @@ mod client {
             }
         }
 
+        /// Born-v2 enrolled receivers return only actual Strong results;
+        /// born-v1 receivers retain their explicitly eventual behavior. Scan
+        /// remains eventual. Unsupported protocol peers refuse typed requests.
         pub fn get(&self, namespace: &str, key: &str) -> Result<Option<Value>> {
             match self.request(
                 ClusterEventOperation::Get {
@@ -340,6 +463,19 @@ mod client {
             )? {
                 ClusterEventResponse::Value { value } => Ok(value),
                 _ => Err(invalid("unexpected event get response")),
+            }
+        }
+
+        /// Require the enrolled born-v2 protocol. Legacy values and absences
+        /// are rejected explicitly; unsupported peers are never downgraded.
+        pub fn get_strong(&self, namespace: &str, key: &str) -> Result<Option<Value>> {
+            match self.get_request(
+                namespace,
+                key,
+                crate::distribution_native_read::NativeEventReadMode::Strong,
+            )? {
+                ClusterEventResponse::Value { value } => Ok(value),
+                _ => Err(invalid("unexpected typed Strong Get result")),
             }
         }
 
@@ -467,6 +603,9 @@ pub(crate) fn execute_cluster_event(
             Ok(ClusterEventResponse::Appended { inserted: true })
         }
         ClusterEventOperation::Get { namespace, key } => {
+            if db.actual_native_writer_enforcement_version()? == 1 {
+                return Err(invalid("strong_point_read_unavailable: born-v2 Get requires the actual enrolled Strong dispatcher"));
+            }
             let id = cluster_event_record_id(&namespace, &key)?;
             let value = db
                 .get(CLUSTER_EVENTS_COLLECTION, &id)?

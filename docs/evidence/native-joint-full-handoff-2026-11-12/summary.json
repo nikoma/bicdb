@@ -1,0 +1,51 @@
+{
+  "classification": "PASSED_FOCUSED_SAME_OPEN_ENGINE_TEST",
+  "source_version": "1.0.487-beta inherited working version; unmerged candidate",
+  "source_sha": "b1ba88c57d99d3601946bd02ef4aee1a4cf070b4",
+  "run_id": 43224600329,
+  "core_job_id": 131204452860,
+  "artifact_id": 13947188827,
+  "artifact_sha256": "922f11d1354b07165f8d8b011a1c4ba5be1f926fd94e0568536a4048109f1010",
+  "artifact_bytes": 46899,
+  "artifact_files": [
+    {
+      "path": "rustc.txt",
+      "bytes": 196,
+      "sha256": "f64c55ed9f210d80a9b248206104a47175faf5ec94a093e4ad132549209089fc"
+    },
+    {
+      "path": "source-revision.txt",
+      "bytes": 41,
+      "sha256": "cec01d5ef51176743abfd55d4db75ec603c780991e3715623b249b496cf867dc"
+    },
+    {
+      "path": "selected-tests.log",
+      "bytes": 242210,
+      "sha256": "8a9242b7de0b66cfdabe93c96124750090587f2f2bfb04a1f118a548ae947959"
+    },
+    {
+      "path": "tests.log",
+      "bytes": 350248,
+      "sha256": "eced0c7a4570ad44cd0deab4d0d25583d1e10213299affb5c6fde5fd229c2dd2"
+    }
+  ],
+  "raw_job_log_sha256": "002bc5275052a349f767337bc3a202354f736623ded5c4408a25f983a642bdd6",
+  "test_filter": "native_joint_actual_complete_image_target_becomes_leader_ack_and_strong_read",
+  "passed": 1,
+  "failed": 0,
+  "ignored": 0,
+  "filtered": 888,
+  "test_seconds": 59.33,
+  "terminal_marker": "ACTUAL_JOINT_FULL_ACCEPTANCE all-three-release-checked=true target-ACK2-checked=true strong-R2-checked=true idempotent-R2-checked=true ABA-and-original-caller-refusal-checked=true",
+  "not_established": [
+    "operator or wire-level handoff",
+    "automatic four-to-five expansion",
+    "all-owner cold recovery",
+    "independent-machine or physical fault safety",
+    "bounded relocation convergence",
+    "throughput gain",
+    "RPO/RTO",
+    "production qualification",
+    "deployment"
+  ]
+}

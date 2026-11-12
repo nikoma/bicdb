@@ -5,7 +5,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use parking_lot::RwLock;
+use parking_lot::{Mutex, RwLock};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use uuid::Uuid;
@@ -26,6 +26,7 @@ use crate::distribution_range_consensus::{
     RangeBackupWriteFence, RangeWriteAck, RangeWriteCommand, RangeWriteProbe, RangeWriteProgress,
     RangeWriteRepairBatch, RangeWriteRepairLimits, RangeWriteState, RangeWriteStore,
 };
+use crate::distribution_range_mutation::{RangeMutationAuthority, RangeMutationGate};
 use crate::distribution_supervisor::{
     CatchUpProgress, CleanupProgress, ClusterRelocationTransport, SnapshotCopyProgress,
 };
@@ -36,6 +37,21 @@ use crate::{
     BicDb, CancellationToken, ClusterSchemaActivationLimits, ClusterSchemaActivationPhase,
     ClusterSchemaBundle, ClusterSchemaCompatibilityWindow, ClusterSchemaStageLimits,
     SchemaCompatibilityAuthority, SchemaCompatibilityFingerprint, SignedClusterSchemaBundle,
+};
+
+mod native_activation;
+mod native_apply;
+mod native_durability;
+mod native_writer;
+pub(crate) use native_durability::ClusterServiceOpenGuard;
+use native_durability::{checked_database_read, checked_database_write, ServiceStoragePolicy};
+mod current_image_resume;
+mod native_completion;
+mod native_image_install;
+mod native_range_read;
+mod native_ready;
+pub(crate) use native_range_read::{
+    ActualServiceNativeReadEvidence, ActualServiceNativeReadProbeEvidence,
 };
 
 pub const RANGE_LEARNER_APPLY_FORMAT_VERSION: u32 = 1;
@@ -717,16 +733,23 @@ pub struct ClusterDataNodeService {
     cluster_id: ClusterId,
     node_id: ClusterNodeId,
     db: Arc<RwLock<BicDb>>,
+    storage_policy: ServiceStoragePolicy,
     schema_compatibility: SchemaCompatibilityAuthority,
     schema_compatibility_window: Option<ClusterSchemaCompatibilityWindow>,
     learner: RangeLearnerStore,
     range_writes: RangeWriteStore,
+    range_mutations: RangeMutationGate,
     range_digest_root: PathBuf,
     range_digest_repair_root: PathBuf,
     schema_signing_keys: BTreeMap<String, [u8; 32]>,
     schema_stage_limits: ClusterSchemaStageLimits,
     schema_activation_limits: ClusterSchemaActivationLimits,
     fsync: bool,
+    initial_birth_provider:
+        Option<std::sync::Weak<crate::distribution_native_host::NativeProvisionalNode>>,
+    initial_preparation_provider:
+        Option<std::sync::Weak<crate::distribution_native_host::NativeProvisionalNode>>,
+    initial_consensus_only: bool,
 }
 
 impl ClusterDataNodeService {
@@ -791,6 +814,13 @@ impl ClusterDataNodeService {
             ));
         }
         let root = root.as_ref();
+        // Refuse unsafe native configuration BEFORE opening or creating any
+        // learner/range/digest catalog. Actual DB context, never request DTO.
+        let storage_policy = {
+            let database = try_database_read(&db)?;
+            ServiceStoragePolicy::capture(&database)?
+        };
+        storage_policy.validate_configuration(root, fsync)?;
         let learner = RangeLearnerStore::open(root, cluster_id.clone(), fsync)?;
         let range_writes = RangeWriteStore::open(root, cluster_id.clone(), node_id.clone(), fsync)?;
         let range_digest_root = root.join(DEFAULT_RANGE_DIGEST_STATE_DIR);
@@ -813,7 +843,13 @@ impl ClusterDataNodeService {
                 "range digest repair state directory must not be a symbolic link",
             ));
         }
-        let schema_compatibility = db.read().schema_compatibility_authority();
+        let (schema_compatibility, range_mutations) = {
+            let database = db.read();
+            (
+                database.schema_compatibility_authority(),
+                database.range_mutation_gate(),
+            )
+        };
         let schema_compatibility_window = if schema_signing_keys.is_empty() {
             None
         } else {
@@ -828,16 +864,21 @@ impl ClusterDataNodeService {
             cluster_id,
             node_id,
             db,
+            storage_policy,
             schema_compatibility,
             schema_compatibility_window,
             learner,
             range_writes,
+            range_mutations,
             range_digest_root,
             range_digest_repair_root,
             schema_signing_keys,
             schema_stage_limits,
             schema_activation_limits,
             fsync,
+            initial_birth_provider: None,
+            initial_preparation_provider: None,
+            initial_consensus_only: false,
         };
         service.recover_committed_range_writes()?;
         Ok(service)
@@ -851,12 +892,524 @@ impl ClusterDataNodeService {
         &self.node_id
     }
 
+    pub(crate) fn range_mutation_gate(&self) -> RangeMutationGate {
+        self.range_mutations.clone()
+    }
+
     pub fn database(&self) -> Arc<RwLock<BicDb>> {
         Arc::clone(&self.db)
     }
+    pub(crate) fn attach_initial_birth_provider(
+        &mut self,
+        seed: &Arc<crate::distribution_native_host::NativeProvisionalNode>,
+    ) -> Result<()> {
+        if self.initial_birth_provider.is_some() || self.native_writer_enforcement_version()? != 1 {
+            return Err(data_error(
+                "initial factory provider must attach once before native host startup",
+            ));
+        }
+        seed.require_same_provisional_database(&self.db, &self.cluster_id, &self.node_id)?;
+        self.initial_birth_provider = Some(Arc::downgrade(seed));
+        Ok(())
+    }
+    pub(crate) fn initial_birth_provider(
+        &self,
+    ) -> Option<std::sync::Weak<crate::distribution_native_host::NativeProvisionalNode>> {
+        self.initial_birth_provider.clone()
+    }
+    pub(crate) fn initial_preparation_provider(
+        &self,
+    ) -> Option<std::sync::Weak<crate::distribution_native_host::NativeProvisionalNode>> {
+        self.initial_preparation_provider.clone()
+    }
+    pub(crate) fn native_initial_listener_store_open_id(&self) -> Uuid {
+        self.range_writes.recovery_store_open_id()
+    }
+    pub(crate) fn initial_consensus_only(&self) -> bool {
+        self.initial_consensus_only
+    }
+    #[cfg(feature = "tls-replication")]
+    pub(crate) fn transition_initial_preparation_listener(
+        &mut self,
+        actual: &Arc<Mutex<Self>>,
+        drained: &crate::distribution_transport::DrainedClusterDataListener,
+        permit: &crate::distribution_native_host::NativeInitialConsensusPermit,
+        seed: &Arc<crate::distribution_native_host::NativeProvisionalNode>,
+    ) -> Result<()> {
+        drained.require_service(actual)?;
+        drained.require_store(self.native_initial_listener_store_open_id())?;
+        permit.require_live()?;
+        seed.require_same_initial_database(&self.db, &self.cluster_id, &self.node_id)?;
+        let db = checked_database_read(&self.db, &self.storage_policy)?;
+        let node = permit
+            .configuration()
+            .nodes
+            .get(&self.node_id)
+            .ok_or_else(|| data_error("local member absent from barrier C"))?;
+        let record = db
+            .read_native_initial_preparation(
+                &self.cluster_id,
+                permit
+                    .configuration()
+                    .range_image_bootstrap_id
+                    .ok_or_else(|| data_error("initial bootstrap absent"))?,
+                &self.node_id,
+                node.incarnation,
+            )?
+            .ok_or_else(|| data_error("durable exposure missing"))?;
+        if record.stage()!=crate::distribution_native_host::NativeInitialPreparationStage::ConsensusExposedHistorical
+            || record.configuration()!=permit.configuration() || self.initial_birth_provider.is_none() {
+            return Err(data_error("stopped actual service lacks exact protected initial exposure"));
+        }
+        // Only the NEW listener observes these fields. The drained listener's
+        // captured Some remains immutable and can never become general service.
+        self.initial_birth_provider = None;
+        self.initial_preparation_provider = Some(Arc::downgrade(seed));
+        self.initial_consensus_only = true;
+        Ok(())
+    }
+    pub(crate) fn require_persisted_recovery_scope(
+        &self,
+        scope: &crate::distribution_range_consensus::RecoveryFenceScope,
+    ) -> Result<()> {
+        self.range_writes.require_persisted_recovery_scope(scope)
+    }
+    pub(crate) fn preflight_recovery_nonce(
+        &self,
+        scope: &crate::distribution_range_consensus::RecoveryFenceScope,
+    ) -> Result<()> {
+        self.range_writes.preflight_recovery_nonce(scope)
+    }
+    pub(crate) fn preflight_native_recovery(
+        &self,
+        role: &crate::distribution_range_recovery::RecoveryRoleAdmission,
+        scope: &crate::distribution_range_consensus::RecoveryFenceScope,
+        cancellation: &crate::CancellationToken,
+    ) -> Result<()> {
+        cancellation.check()?;
+        let db = checked_database_read(&self.db, &self.storage_policy)?;
+        let native = db.native_recovery_admission(
+            role.cluster_id(),
+            role.bootstrap_id(),
+            role.local_node_id(),
+            role.local_member_incarnation(),
+        )?;
+        native.require_current(&db)?;
+        self.range_writes
+            .preflight_recovery_fence(role, &native, scope)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn preflight_recovery_image_transfer(
+        &mut self,
+        source: &crate::distribution_range_image::TentativeNativeRangeImageSourceAuthorization<'_>,
+        role: &crate::distribution_range_consensus::NativeImageInstallRole<'_>,
+        frozen: &crate::distribution_range_mutation::FrozenRangeMutationPermit,
+        purpose: crate::distribution_range_consensus::ImageInstallPurpose,
+        attempt_id: Uuid,
+        cancellation: &crate::CancellationToken,
+    ) -> Result<crate::distribution_range_consensus::NativeImageInstallTransferPreflight> {
+        cancellation.check()?;
+        let actual = role.role();
+        actual.require_live_request()?;
+        self.range_mutations
+            .validate_quiescent_frozen(actual.current_range().id, frozen)?;
+        cancellation.check()?;
+        let db = checked_database_read(&self.db, &self.storage_policy)?;
+        let native = db.native_recovery_admission(
+            actual.cluster_id(),
+            actual.bootstrap_id(),
+            actual.local_node_id(),
+            actual.local_member_incarnation(),
+        )?;
+        self.range_writes.preflight_recovery_image_install(
+            &db,
+            &native,
+            source,
+            role,
+            frozen,
+            purpose,
+            attempt_id,
+            cancellation,
+        )
+    }
+
+    /// Final transfer validation and owner rotation are one local critical
+    /// section. The caller already owns the session reservation and service
+    /// latch, so DB acquisition is nonwaiting and performs no RPC or drain.
+    pub(crate) fn rotate_recovery_image_transfer(
+        &self,
+        preflight: &crate::distribution_range_consensus::NativeImageInstallTransferPreflight,
+        source: &crate::distribution_range_image::TentativeNativeRangeImageSourceAuthorization<'_>,
+        role: &crate::distribution_range_consensus::NativeImageInstallRole<'_>,
+        frozen: &mut crate::distribution_range_mutation::FrozenRangeMutationPermit,
+        cancellation: &crate::CancellationToken,
+    ) -> Result<()> {
+        cancellation.check()?;
+        let db = self.db.try_read().ok_or_else(|| {
+            BicDbError::Cluster("native DB is busy before image freeze transfer".into())
+        })?;
+        self.storage_policy.require_database(&db)?;
+        let actual = role.role();
+        let native = db.native_recovery_admission(
+            actual.cluster_id(),
+            actual.bootstrap_id(),
+            actual.local_node_id(),
+            actual.local_member_incarnation(),
+        )?;
+        preflight.require_transfer_current(
+            &self.range_writes,
+            &db,
+            &native,
+            source,
+            role,
+            frozen,
+        )?;
+        self.range_mutations
+            .validate_quiescent_frozen(preflight.range_id(), frozen)?;
+        cancellation.check()?;
+        self.range_mutations
+            .invalidate_serving_generation(preflight.range_id());
+        frozen.try_rotate_owner(preflight.attempt_id())
+    }
+
+    /// This returns only ownership to an unchanged ACTIVE recovery session.
+    /// Neither the sealed abort proof nor owner rotation grants user writes.
+    pub(crate) fn return_untouched_recovery_image_transfer(
+        &mut self,
+        original: &crate::distribution_range_consensus::NativeImageInstallTransferPreflight,
+        role: &crate::distribution_range_consensus::NativeImageInstallRole<'_>,
+        frozen: &mut crate::distribution_range_mutation::FrozenRangeMutationPermit,
+        parent: &crate::CancellationToken,
+    ) -> Result<()> {
+        parent.check()?;
+        let db = checked_database_read(&self.db, &self.storage_policy)?;
+        let actual = role.role();
+        let native = db.native_recovery_admission(
+            actual.cluster_id(),
+            actual.bootstrap_id(),
+            actual.local_node_id(),
+            actual.local_member_incarnation(),
+        )?;
+        self.range_writes
+            .require_image_install_recovery_scope(actual, &native)?;
+        let proof = self
+            .range_writes
+            .prove_untouched_image_transfer_return(original, &db, &native, role, frozen, parent)?;
+        if proof.range_id() != original.range_id()
+            || proof.attempt_id() != original.attempt_id()
+            || proof.nonce() != original.nonce()
+            || proof.session_id() != original.session_id()
+            || proof.original_freeze_owner() != original.original_freeze_owner()
+        {
+            return Err(data_error(
+                "untouched image proof differs from retained preflight",
+            ));
+        }
+        proof.require_current(&self.range_writes, &db, &native, role, frozen)?;
+        self.range_mutations
+            .validate_quiescent_frozen(proof.range_id(), frozen)?;
+        parent.check()?;
+        frozen.try_rotate_owner(proof.original_freeze_owner())
+    }
+
+    pub(crate) fn return_adopted_recovery_image_transfer(
+        &self,
+        finalization: crate::distribution_range_image_install::NativeImageCatalogueFinalization,
+        role: &crate::distribution_range_consensus::NativeImageInstallRole<'_>,
+        scope: &crate::distribution_range_consensus::RecoveryFenceScope,
+        frozen: &mut crate::distribution_range_mutation::FrozenRangeMutationPermit,
+        parent: &crate::CancellationToken,
+    ) -> Result<crate::distribution_range_image_install::FinalizedNativeRecoveryImage> {
+        parent.check()?;
+        scope.require_role(role.role())?;
+        let db = checked_database_read(&self.db, &self.storage_policy)?;
+        let actual = role.role();
+        let native = db.native_recovery_admission(
+            actual.cluster_id(),
+            actual.bootstrap_id(),
+            actual.local_node_id(),
+            actual.local_member_incarnation(),
+        )?;
+        self.range_writes
+            .require_image_install_recovery_scope(actual, &native)?;
+        if finalization.catalogue().native_database_incarnation() != native.database_incarnation()
+            || finalization.catalogue().range_id() != scope.range_id
+            || finalization.catalogue().nonce() != scope.recovery_nonce
+            || finalization.catalogue().session_id() != scope.freeze_owner()?
+        {
+            return Err(data_error(
+                "adopted image return differs from actual local recovery/native open",
+            ));
+        }
+        drop(db);
+        finalization.return_owned_image_to_recovery(&self.range_writes, role, scope, frozen, parent)
+    }
+
+    /// Receiver-only: the runtime already owns the drained range freeze and
+    /// acquired an independently fresh role before taking this service latch.
+    pub(crate) fn fence_native_recovery(
+        &mut self,
+        role: &crate::distribution_range_recovery::RecoveryRoleAdmission,
+        scope: &crate::distribution_range_consensus::RecoveryFenceScope,
+        frozen: &crate::distribution_range_mutation::FrozenRangeMutationPermit,
+        cancellation: &crate::CancellationToken,
+    ) -> Result<crate::distribution_range_recovery::RecoveryEpochFenceReply> {
+        cancellation.check()?;
+        self.range_mutations
+            .validate_quiescent_frozen(scope.range_id, frozen)?;
+        cancellation.check()?;
+        let db = checked_database_read(&self.db, &self.storage_policy)?;
+        let native = db.native_recovery_admission(
+            role.cluster_id(),
+            role.bootstrap_id(),
+            role.local_node_id(),
+            role.local_member_incarnation(),
+        )?;
+        native.require_current(&db)?;
+        role.require_live_request()?;
+        self.range_mutations
+            .validate_quiescent_frozen(scope.range_id, frozen)?;
+        self.range_writes
+            .fence_recovery_epoch(role, &native, scope)?;
+        cancellation.check()?;
+        native.require_current(&db)?;
+        role.require_live_request()?;
+        Ok(
+            crate::distribution_range_recovery::RecoveryEpochFenceReply {
+                phase: self.range_writes.recovery_observation_phase(scope)?,
+                image_history: self
+                    .range_writes
+                    .observe_recovery_image_obligations(&db, &native, scope, frozen)?,
+                scope: scope.clone(),
+                node_id: self.node_id.clone(),
+                member_incarnation: role.local_member_incarnation(),
+                store_open_id: self.range_writes.recovery_store_open_id(),
+                native_database_incarnation: native.database_incarnation().to_string(),
+                birth_initialization_complete: true,
+                progress: self.range_writes.progress(scope.range_id),
+                native: db.native_range_prefix_observation(scope.range_id)?,
+            },
+        )
+    }
+
+    pub(crate) fn observe_native_recovery_history(
+        &self,
+        role: &crate::distribution_range_recovery::RecoveryObservationRoleAdmission,
+        request: &crate::distribution_range_recovery::RecoveryFencedProbeRequest,
+        frozen: &crate::distribution_range_mutation::FrozenRangeMutationPermit,
+        cancellation: &crate::CancellationToken,
+    ) -> Result<crate::distribution_range_recovery::RecoveryFencedProbeReply> {
+        let scope = &request.scope;
+        cancellation.check()?;
+        self.range_mutations
+            .validate_quiescent_frozen(scope.range_id, frozen)?;
+        cancellation.check()?;
+        let db = checked_database_read(&self.db, &self.storage_policy)?;
+        let native = db.native_recovery_admission(
+            role.cluster_id(),
+            role.bootstrap_id(),
+            role.local_node_id(),
+            role.local_member_incarnation(),
+        )?;
+        native.require_current(&db)?;
+        let entry = self.range_writes.observe_fenced_recovery_history(
+            role,
+            &native,
+            scope,
+            request.index,
+        )?;
+        let sparse_decision = request
+            .index
+            .map(|index| {
+                self.range_writes
+                    .sparse_historical_projection(scope, index, &native)
+            })
+            .transpose()?
+            .flatten();
+        // One complete body per bounded response. A raw irreversible entry is
+        // already a durable decision; otherwise retain the independent sparse
+        // decision instead of presenting a mere raw Prepared state.
+        let (entry, sparse_decision) = match (entry, sparse_decision) {
+            (Some(entry), Some(sparse)) => {
+                if entry.command != *sparse.command() || entry.state == RangeWriteState::Aborted {
+                    return Err(data_error(
+                        "sparse committed history conflicts with actual raw history",
+                    ));
+                }
+                if matches!(
+                    entry.state,
+                    RangeWriteState::Applied | RangeWriteState::QuorumCommitted
+                ) {
+                    (Some(entry), None)
+                } else {
+                    (None, Some(sparse))
+                }
+            }
+            values => values,
+        };
+        let reply = crate::distribution_range_recovery::RecoveryFencedProbeReply {
+            fence: crate::distribution_range_recovery::RecoveryEpochFenceReply {
+                phase: self.range_writes.recovery_observation_phase(scope)?,
+                image_history: self
+                    .range_writes
+                    .observe_recovery_image_obligations(&db, &native, scope, frozen)?,
+                scope: scope.clone(),
+                node_id: self.node_id.clone(),
+                member_incarnation: role.local_member_incarnation(),
+                store_open_id: self.range_writes.recovery_store_open_id(),
+                native_database_incarnation: native.database_incarnation().to_string(),
+                birth_initialization_complete: true,
+                progress: self.range_writes.progress(scope.range_id),
+                native: db.native_range_prefix_observation(scope.range_id)?,
+            },
+            index: request.index,
+            entry,
+            sparse_decision,
+            current_certification: request
+                .index
+                .map(|index| {
+                    self.range_writes
+                        .historical_certification_observation(scope, index)
+                })
+                .transpose()?
+                .flatten(),
+        };
+        cancellation.check()?;
+        role.require_scope(scope)?;
+        Ok(reply)
+    }
+    /// Receiver-local certify-only step. The runtime collects the decision's
+    /// actual current-voter observations before entering this service latch.
+    pub(crate) fn certify_native_historical_command(
+        &mut self,
+        role: &crate::distribution_range_recovery::RecoveryRoleAdmission,
+        decision: &crate::distribution_range_recovery::HistoricalCommandDecision,
+        frozen: &crate::distribution_range_mutation::FrozenRangeMutationPermit,
+        cancellation: &crate::CancellationToken,
+    ) -> Result<crate::distribution_range_consensus::HistoricalRangeCertification> {
+        self.certify_native_historical_command_inner(
+            role,
+            decision,
+            frozen,
+            cancellation,
+            |store, native| store.certify_historical_command(role, native, decision),
+        )
+    }
+    pub(crate) fn certify_sparse_native_historical_command(
+        &mut self,
+        role: &crate::distribution_range_recovery::RecoveryRoleAdmission,
+        decision: &crate::distribution_range_recovery::HistoricalCommandDecision,
+        frozen: &crate::distribution_range_mutation::FrozenRangeMutationPermit,
+        cancellation: &crate::CancellationToken,
+    ) -> Result<crate::distribution_range_consensus::HistoricalRangeCertification> {
+        self.certify_native_historical_command_inner(
+            role,
+            decision,
+            frozen,
+            cancellation,
+            |store, native| store.certify_sparse_historical_command(role, native, decision),
+        )
+    }
+    #[cfg(test)]
+    pub(crate) fn test_certify_sparse_native_historical_command_with(
+        &mut self,
+        role: &crate::distribution_range_recovery::RecoveryRoleAdmission,
+        decision: &crate::distribution_range_recovery::HistoricalCommandDecision,
+        frozen: &crate::distribution_range_mutation::FrozenRangeMutationPermit,
+        cancellation: &crate::CancellationToken,
+        write: impl FnOnce(&std::path::Path, &[u8], bool) -> Result<()>,
+    ) -> Result<crate::distribution_range_consensus::HistoricalRangeCertification> {
+        self.certify_native_historical_command_inner(
+            role,
+            decision,
+            frozen,
+            cancellation,
+            |store, native| {
+                store.test_certify_sparse_historical_command_with(role, native, decision, write)
+            },
+        )
+    }
+    fn certify_native_historical_command_inner(
+        &mut self,
+        role: &crate::distribution_range_recovery::RecoveryRoleAdmission,
+        decision: &crate::distribution_range_recovery::HistoricalCommandDecision,
+        frozen: &crate::distribution_range_mutation::FrozenRangeMutationPermit,
+        cancellation: &crate::CancellationToken,
+        certify: impl FnOnce(
+            &mut RangeWriteStore,
+            &crate::db::NativeRecoveryAdmission,
+        ) -> Result<
+            crate::distribution_range_consensus::HistoricalRangeCertification,
+        >,
+    ) -> Result<crate::distribution_range_consensus::HistoricalRangeCertification> {
+        cancellation.check()?;
+        decision.require_recipient_role(role)?;
+        let controlled = self.range_mutations.try_controlled_mutation(frozen)?;
+        cancellation.check()?;
+        let db = checked_database_read(&self.db, &self.storage_policy)?;
+        let native = db.native_recovery_admission(
+            role.cluster_id(),
+            role.bootstrap_id(),
+            role.local_node_id(),
+            role.local_member_incarnation(),
+        )?;
+        native.require_current(&db)?;
+        self.range_mutations
+            .validate_controlled(role.current_range().id, &controlled)?;
+        let marker = certify(&mut self.range_writes, &native)?;
+        native.require_current(&db)?;
+        role.require_live_request()?;
+        cancellation.check()?;
+        drop(db);
+        drop(controlled);
+        Ok(marker)
+    }
+
+    /// Physical receiver Apply. All independent participant RPC collection is
+    /// complete before taking this service/DB guard. The owned controlled
+    /// lease remains live through actual WAL, native history and catalogue sync.
+    pub(crate) fn apply_native_historical_command(
+        &mut self,
+        role: &crate::distribution_range_recovery::RecoveryRoleAdmission,
+        admission: &crate::distribution_range_recovery::RecoveryApplyAdmission,
+        frozen: &crate::distribution_range_mutation::FrozenRangeMutationPermit,
+        cancellation: &crate::CancellationToken,
+    ) -> Result<crate::db::NativeRecoveryAppliedReceipt> {
+        cancellation.check()?;
+        admission.require_recipient_role(role)?;
+        let controlled = self.range_mutations.try_controlled_mutation(frozen)?;
+        cancellation.check()?;
+        let db = checked_database_read(&self.db, &self.storage_policy)?;
+        let native = db.native_recovery_admission(
+            role.cluster_id(),
+            role.bootstrap_id(),
+            role.local_node_id(),
+            role.local_member_incarnation(),
+        )?;
+        native.require_current(&db)?;
+        self.range_mutations
+            .validate_controlled(admission.command().range_id, &controlled)?;
+        let receipt = db.apply_historical_native_command(
+            &self.range_writes,
+            &native,
+            role,
+            admission,
+            frozen,
+            &controlled,
+            cancellation,
+        )?;
+        self.range_writes
+            .mark_historical_applied(&db, &native, role, admission, &receipt)?;
+        receipt.require_current(&db, &native, role, admission)?;
+        cancellation.check()?;
+        drop(db);
+        drop(controlled);
+        Ok(receipt)
+    }
 
     pub fn schema_compatibility_fingerprint(&self) -> Result<SchemaCompatibilityFingerprint> {
-        try_database_read(&self.db)?.schema_compatibility_fingerprint()
+        checked_database_read(&self.db, &self.storage_policy)?.schema_compatibility_fingerprint()
     }
 
     pub fn verified_schema_compatibility_sha256(&self) -> Option<String> {
@@ -905,7 +1458,8 @@ impl ClusterDataNodeService {
             bundle.verify()?;
             return Ok(false);
         }
-        try_database_write(&self.db)?.install_cluster_schema_bundle(bundle)
+        checked_database_write(&self.db, &self.storage_policy)?
+            .install_cluster_schema_bundle(bundle)
     }
 
     pub fn stage_signed_schema_bundle(
@@ -918,17 +1472,19 @@ impl ClusterDataNodeService {
                 "cluster schema staging has no host-configured trusted signing keys",
             ));
         }
-        let state = try_database_write(&self.db)?.stage_signed_cluster_schema_bundle(
-            signed_bundle,
-            &self.schema_signing_keys,
-            self.schema_stage_limits,
-            now_ms,
-        )?;
-        self.schema_compatibility_window = Some(
-            try_database_read(&self.db)?.verify_cluster_schema_compatibility_window(
+        let state = checked_database_write(&self.db, &self.storage_policy)?
+            .stage_signed_cluster_schema_bundle(
+                signed_bundle,
                 &self.schema_signing_keys,
-                self.schema_activation_limits,
-            )?,
+                self.schema_stage_limits,
+                now_ms,
+            )?;
+        self.schema_compatibility_window = Some(
+            checked_database_read(&self.db, &self.storage_policy)?
+                .verify_cluster_schema_compatibility_window(
+                    &self.schema_signing_keys,
+                    self.schema_activation_limits,
+                )?,
         );
         Ok(ClusterSchemaStageReceipt {
             stage_id: state.stage_id,
@@ -955,7 +1511,7 @@ impl ClusterDataNodeService {
                 "cluster schema activation has no host-configured trusted signing keys",
             ));
         }
-        let mut db = try_database_write(&self.db)?;
+        let mut db = checked_database_write(&self.db, &self.storage_policy)?;
         let stage =
             db.load_cluster_schema_stage(&self.schema_signing_keys, self.schema_stage_limits)?;
         if stage.stage_id != expected_stage_id
@@ -1021,7 +1577,7 @@ impl ClusterDataNodeService {
             ));
         }
         activation.validate_completion_for_node(&self.node_id)?;
-        let mut db = try_database_write(&self.db)?;
+        let mut db = checked_database_write(&self.db, &self.storage_policy)?;
         let finalized = db.finalize_cluster_schema_activation(
             &self.schema_signing_keys,
             self.schema_activation_limits,
@@ -1056,6 +1612,22 @@ impl ClusterDataNodeService {
         self.range_writes.progress(range_id)
     }
 
+    #[cfg(test)]
+    pub(crate) fn test_image_history_obligations(
+        &self,
+        range_id: RangeId,
+    ) -> Result<crate::distribution_range_consensus::TargetImageCatalogHistoryObligations> {
+        self.range_writes
+            .image_install_catalog_history_obligations(range_id)
+    }
+    #[cfg(test)]
+    pub(crate) fn test_require_image_history_obligations_current(
+        &self,
+        observed: &crate::distribution_range_consensus::TargetImageCatalogHistoryObligations,
+    ) -> Result<()> {
+        observed.require_current(&self.range_writes)
+    }
+
     pub fn range_write_progress_for_peer(
         &self,
         range: &RangeDescriptor,
@@ -1073,6 +1645,28 @@ impl ClusterDataNodeService {
         installed_at_ms: u64,
         expires_at_ms: u64,
     ) -> Result<RangeWriteProgress> {
+        let gate = self.range_mutations.clone();
+        let permit = gate.try_enter(range.id)?;
+        self.install_range_backup_fence_with_mutation(
+            range,
+            caller,
+            plan_id,
+            installed_at_ms,
+            expires_at_ms,
+            &RangeMutationAuthority::Mutation(&permit),
+        )
+    }
+
+    pub(crate) fn install_range_backup_fence_with_mutation(
+        &mut self,
+        range: &RangeDescriptor,
+        caller: &ClusterNodeId,
+        plan_id: Uuid,
+        installed_at_ms: u64,
+        expires_at_ms: u64,
+        authority: &RangeMutationAuthority<'_>,
+    ) -> Result<RangeWriteProgress> {
+        self.range_mutations.validate(range.id, authority)?;
         self.validate_range_write_peer(range, caller)?;
         self.range_writes.install_backup_fence(
             plan_id,
@@ -1089,6 +1683,24 @@ impl ClusterDataNodeService {
         caller: &ClusterNodeId,
         plan_id: Uuid,
     ) -> Result<bool> {
+        let gate = self.range_mutations.clone();
+        let permit = gate.try_enter(range.id)?;
+        self.release_range_backup_fence_with_mutation(
+            range,
+            caller,
+            plan_id,
+            &RangeMutationAuthority::Mutation(&permit),
+        )
+    }
+
+    pub(crate) fn release_range_backup_fence_with_mutation(
+        &mut self,
+        range: &RangeDescriptor,
+        caller: &ClusterNodeId,
+        plan_id: Uuid,
+        authority: &RangeMutationAuthority<'_>,
+    ) -> Result<bool> {
+        self.range_mutations.validate(range.id, authority)?;
         self.validate_range_write_peer(range, caller)?;
         self.range_writes
             .release_backup_fence(plan_id, range.id, range.epoch)
@@ -1132,6 +1744,26 @@ impl ClusterDataNodeService {
         batch: &RangeWriteRepairBatch,
         limits: &RangeWriteRepairLimits,
     ) -> Result<RangeWriteProgress> {
+        let gate = self.range_mutations.clone();
+        let permit = gate.try_enter(range.id)?;
+        self.apply_range_write_repair_with_mutation(
+            range,
+            caller,
+            batch,
+            limits,
+            &RangeMutationAuthority::Mutation(&permit),
+        )
+    }
+
+    pub(crate) fn apply_range_write_repair_with_mutation(
+        &mut self,
+        range: &RangeDescriptor,
+        caller: &ClusterNodeId,
+        batch: &RangeWriteRepairBatch,
+        limits: &RangeWriteRepairLimits,
+        authority: &RangeMutationAuthority<'_>,
+    ) -> Result<RangeWriteProgress> {
+        self.range_mutations.validate(range.id, authority)?;
         self.validate_range_write_peer(range, caller)?;
         batch.validate(limits)?;
         if batch.source_node_id != *caller
@@ -1142,7 +1774,7 @@ impl ClusterDataNodeService {
                 "range-write repair source/range/epoch fencing failed",
             ));
         }
-        self.apply_range_write_suffix(range, batch, limits)
+        self.apply_range_write_suffix(range, batch, limits, authority)
     }
 
     /// Install a quorum-evidenced resolved prefix on the newly designated
@@ -1155,6 +1787,26 @@ impl ClusterDataNodeService {
         batch: &RangeWriteRepairBatch,
         limits: &RangeWriteRepairLimits,
     ) -> Result<RangeWriteProgress> {
+        let gate = self.range_mutations.clone();
+        let permit = gate.try_enter(range.id)?;
+        self.apply_range_write_leader_recovery_with_mutation(
+            range,
+            source_voter,
+            batch,
+            limits,
+            &RangeMutationAuthority::Mutation(&permit),
+        )
+    }
+
+    pub(crate) fn apply_range_write_leader_recovery_with_mutation(
+        &mut self,
+        range: &RangeDescriptor,
+        source_voter: &ClusterNodeId,
+        batch: &RangeWriteRepairBatch,
+        limits: &RangeWriteRepairLimits,
+        authority: &RangeMutationAuthority<'_>,
+    ) -> Result<RangeWriteProgress> {
+        self.range_mutations.validate(range.id, authority)?;
         let source_is_voter = range.replicas.iter().any(|replica| {
             replica.node_id == *source_voter
                 && replica.role == crate::distribution::RangeReplicaRole::Voter
@@ -1172,7 +1824,7 @@ impl ClusterDataNodeService {
         // commit lock. Replaying exact resolved mutations here closes the gap
         // between physical snapshot parity and commands committed during the
         // final promotion boundary.
-        self.apply_range_write_suffix(range, batch, limits)
+        self.apply_range_write_suffix(range, batch, limits, authority)
     }
 
     /// Resolve one old-epoch tail command from quorum probe evidence. A
@@ -1185,6 +1837,26 @@ impl ClusterDataNodeService {
         command: &RangeWriteCommand,
         outcome: RangeWriteState,
     ) -> Result<RangeWriteProgress> {
+        let gate = self.range_mutations.clone();
+        let permit = gate.try_enter(range.id)?;
+        self.resolve_range_write_leader_tail_with_mutation(
+            range,
+            evidence_voter,
+            command,
+            outcome,
+            &RangeMutationAuthority::Mutation(&permit),
+        )
+    }
+
+    pub(crate) fn resolve_range_write_leader_tail_with_mutation(
+        &mut self,
+        range: &RangeDescriptor,
+        evidence_voter: &ClusterNodeId,
+        command: &RangeWriteCommand,
+        outcome: RangeWriteState,
+        authority: &RangeMutationAuthority<'_>,
+    ) -> Result<RangeWriteProgress> {
+        self.range_mutations.validate(range.id, authority)?;
         let source_is_voter = range.replicas.iter().any(|replica| {
             replica.node_id == *evidence_voter
                 && replica.role == crate::distribution::RangeReplicaRole::Voter
@@ -1214,7 +1886,12 @@ impl ClusterDataNodeService {
                 self.range_writes.commit(command)?;
                 let state = self.range_writes.certify(command)?;
                 if state != RangeWriteState::Applied {
-                    try_database_read(&self.db)?.apply_admitted_mutations(&command.mutations)?;
+                    checked_database_read(&self.db, &self.storage_policy)?
+                        .apply_admitted_mutations_with_mutation(
+                            command.range_id,
+                            &command.mutations,
+                            authority,
+                        )?;
                     self.range_writes.mark_applied(command)?;
                 }
             }
@@ -1233,8 +1910,15 @@ impl ClusterDataNodeService {
         range: &RangeDescriptor,
         batch: &RangeWriteRepairBatch,
         limits: &RangeWriteRepairLimits,
+        authority: &RangeMutationAuthority<'_>,
     ) -> Result<RangeWriteProgress> {
         batch.validate(limits)?;
+        if !batch.entries.is_empty()
+            && checked_database_read(&self.db, &self.storage_policy)?
+                .native_range_image_birth_present()
+        {
+            return Err(data_error("generic range suffix cannot materialize native history; use the authenticated native path"));
+        }
         let mut progress = self.range_writes.progress(range.id);
         if progress.resolved_through < batch.previous_resolved_index {
             return Err(data_error(format!(
@@ -1262,8 +1946,12 @@ impl ClusterDataNodeService {
                     self.range_writes.commit(&entry.command)?;
                     let state = self.range_writes.certify(&entry.command)?;
                     if state != RangeWriteState::Applied {
-                        try_database_read(&self.db)?
-                            .apply_admitted_mutations(&entry.command.mutations)?;
+                        checked_database_read(&self.db, &self.storage_policy)?
+                            .apply_admitted_mutations_with_mutation(
+                                entry.command.range_id,
+                                &entry.command.mutations,
+                                authority,
+                            )?;
                         self.range_writes.mark_applied(&entry.command)?;
                     }
                 }
@@ -1293,9 +1981,27 @@ impl ClusterDataNodeService {
         caller: &ClusterNodeId,
         command: RangeWriteCommand,
     ) -> Result<RangeWriteAck> {
+        let gate = self.range_mutations.clone();
+        let permit = gate.try_enter(range.id)?;
+        self.prepare_range_write_with_mutation(
+            range,
+            caller,
+            command,
+            &RangeMutationAuthority::Mutation(&permit),
+        )
+    }
+
+    pub(crate) fn prepare_range_write_with_mutation(
+        &mut self,
+        range: &RangeDescriptor,
+        caller: &ClusterNodeId,
+        command: RangeWriteCommand,
+        authority: &RangeMutationAuthority<'_>,
+    ) -> Result<RangeWriteAck> {
+        self.range_mutations.validate(range.id, authority)?;
         self.validate_range_write(range, caller, &command)?;
         let state = self.range_writes.prepare(command.clone())?;
-        Ok(self.range_write_ack(&command, state))
+        self.range_write_ack(&command, state)
     }
 
     /// Persist the leader's commit decision without recursively applying the
@@ -1307,9 +2013,33 @@ impl ClusterDataNodeService {
         caller: &ClusterNodeId,
         command: &RangeWriteCommand,
     ) -> Result<RangeWriteAck> {
+        let gate = self.range_mutations.clone();
+        let permit = gate.try_enter(range.id)?;
+        self.commit_range_write_decision_with_mutation(
+            range,
+            caller,
+            command,
+            &RangeMutationAuthority::Mutation(&permit),
+        )
+    }
+
+    pub(crate) fn commit_range_write_decision_with_mutation(
+        &mut self,
+        range: &RangeDescriptor,
+        caller: &ClusterNodeId,
+        command: &RangeWriteCommand,
+        authority: &RangeMutationAuthority<'_>,
+    ) -> Result<RangeWriteAck> {
+        self.range_mutations.validate(range.id, authority)?;
         self.validate_range_write(range, caller, command)?;
         let state = self.range_writes.commit(command)?;
-        Ok(self.range_write_ack(command, state))
+        self.range_write_ack(command, state)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn test_fail_native_commit_after_publication(&mut self) {
+        self.range_writes
+            .test_fail_native_commit_after_publication();
     }
 
     pub fn certify_range_write(
@@ -1318,9 +2048,27 @@ impl ClusterDataNodeService {
         caller: &ClusterNodeId,
         command: &RangeWriteCommand,
     ) -> Result<RangeWriteAck> {
+        let gate = self.range_mutations.clone();
+        let permit = gate.try_enter(range.id)?;
+        self.certify_range_write_with_mutation(
+            range,
+            caller,
+            command,
+            &RangeMutationAuthority::Mutation(&permit),
+        )
+    }
+
+    pub(crate) fn certify_range_write_with_mutation(
+        &mut self,
+        range: &RangeDescriptor,
+        caller: &ClusterNodeId,
+        command: &RangeWriteCommand,
+        authority: &RangeMutationAuthority<'_>,
+    ) -> Result<RangeWriteAck> {
+        self.range_mutations.validate(range.id, authority)?;
         self.validate_range_write(range, caller, command)?;
         let state = self.range_writes.certify(command)?;
-        Ok(self.range_write_ack(command, state))
+        self.range_write_ack(command, state)
     }
 
     /// Persist a provisional decision. It is not replayed or applied until the
@@ -1331,9 +2079,27 @@ impl ClusterDataNodeService {
         caller: &ClusterNodeId,
         command: &RangeWriteCommand,
     ) -> Result<RangeWriteAck> {
+        let gate = self.range_mutations.clone();
+        let permit = gate.try_enter(range.id)?;
+        self.commit_range_write_with_mutation(
+            range,
+            caller,
+            command,
+            &RangeMutationAuthority::Mutation(&permit),
+        )
+    }
+
+    pub(crate) fn commit_range_write_with_mutation(
+        &mut self,
+        range: &RangeDescriptor,
+        caller: &ClusterNodeId,
+        command: &RangeWriteCommand,
+        authority: &RangeMutationAuthority<'_>,
+    ) -> Result<RangeWriteAck> {
+        self.range_mutations.validate(range.id, authority)?;
         self.validate_range_write(range, caller, command)?;
         let state = self.range_writes.commit(command)?;
-        Ok(self.range_write_ack(command, state))
+        self.range_write_ack(command, state)
     }
 
     /// Apply only a quorum-certified decision. The applied checkpoint remains
@@ -1345,7 +2111,29 @@ impl ClusterDataNodeService {
         caller: &ClusterNodeId,
         command: &RangeWriteCommand,
     ) -> Result<RangeWriteAck> {
+        let gate = self.range_mutations.clone();
+        let permit = gate.try_enter(range.id)?;
+        self.apply_certified_range_write_with_mutation(
+            range,
+            caller,
+            command,
+            &RangeMutationAuthority::Mutation(&permit),
+        )
+    }
+
+    pub(crate) fn apply_certified_range_write_with_mutation(
+        &mut self,
+        range: &RangeDescriptor,
+        caller: &ClusterNodeId,
+        command: &RangeWriteCommand,
+        authority: &RangeMutationAuthority<'_>,
+    ) -> Result<RangeWriteAck> {
+        self.range_mutations.validate(range.id, authority)?;
         self.validate_range_write(range, caller, command)?;
+        if checked_database_read(&self.db, &self.storage_policy)?.native_range_image_birth_present()
+        {
+            return Err(data_error("native Apply requires an authenticated current-leader instruction; raw caller/CQ replay is insufficient"));
+        }
         let state = self.range_writes.state(command)?;
         if !matches!(
             state,
@@ -1357,10 +2145,15 @@ impl ClusterDataNodeService {
             )));
         }
         if state != RangeWriteState::Applied {
-            try_database_read(&self.db)?.apply_admitted_mutations(&command.mutations)?;
+            checked_database_read(&self.db, &self.storage_policy)?
+                .apply_admitted_mutations_with_mutation(
+                    command.range_id,
+                    &command.mutations,
+                    authority,
+                )?;
             self.range_writes.mark_applied(command)?;
         }
-        Ok(self.range_write_ack(command, RangeWriteState::Applied))
+        self.range_write_ack(command, RangeWriteState::Applied)
     }
 
     pub fn abort_range_write(
@@ -1369,22 +2162,75 @@ impl ClusterDataNodeService {
         caller: &ClusterNodeId,
         command: &RangeWriteCommand,
     ) -> Result<RangeWriteAck> {
+        let gate = self.range_mutations.clone();
+        let permit = gate.try_enter(range.id)?;
+        self.abort_range_write_with_mutation(
+            range,
+            caller,
+            command,
+            &RangeMutationAuthority::Mutation(&permit),
+        )
+    }
+
+    pub(crate) fn abort_range_write_with_mutation(
+        &mut self,
+        range: &RangeDescriptor,
+        caller: &ClusterNodeId,
+        command: &RangeWriteCommand,
+        authority: &RangeMutationAuthority<'_>,
+    ) -> Result<RangeWriteAck> {
+        self.range_mutations.validate(range.id, authority)?;
         self.validate_range_write(range, caller, command)?;
         let state = self.range_writes.abort(command)?;
-        Ok(self.range_write_ack(command, state))
+        self.range_write_ack(command, state)
     }
 
     pub fn mark_range_write_applied(&mut self, command_id: &str) -> Result<()> {
+        let range_id = self
+            .range_writes
+            .command_by_id(command_id)
+            .ok_or_else(|| data_error(format!("unknown range-write command {command_id}")))?
+            .range_id;
+        let gate = self.range_mutations.clone();
+        let permit = gate.try_enter(range_id)?;
+        self.mark_range_write_applied_with_mutation(
+            command_id,
+            &RangeMutationAuthority::Mutation(&permit),
+        )
+    }
+
+    pub(crate) fn mark_range_write_applied_with_mutation(
+        &mut self,
+        command_id: &str,
+        authority: &RangeMutationAuthority<'_>,
+    ) -> Result<()> {
         let command = self
             .range_writes
             .command_by_id(command_id)
             .ok_or_else(|| data_error(format!("unknown range-write command {command_id}")))?;
+        self.range_mutations.validate(command.range_id, authority)?;
+        self.require_catalog_storage_policy()?;
         self.range_writes.mark_applied(&command)
     }
 
     fn recover_committed_range_writes(&mut self) -> Result<()> {
+        if checked_database_read(&self.db, &self.storage_policy)?.native_range_image_birth_present()
+        {
+            // Native history must be resolved under fresh recovery authority
+            // and actual certificate quorum. A bare local CQ is not enough
+            // to publish or even re-attest a physical native prefix on open.
+            return Ok(());
+        }
         for command in self.range_writes.committed_not_applied() {
-            try_database_read(&self.db)?.apply_admitted_mutations(&command.mutations)?;
+            let gate = self.range_mutations.clone();
+            let permit = gate.try_enter(command.range_id)?;
+            let authority = &RangeMutationAuthority::Mutation(&permit);
+            checked_database_read(&self.db, &self.storage_policy)?
+                .apply_admitted_mutations_with_mutation(
+                    command.range_id,
+                    &command.mutations,
+                    authority,
+                )?;
             self.range_writes.mark_applied(&command)?;
         }
         Ok(())
@@ -1456,6 +2302,8 @@ impl ClusterDataNodeService {
         range: &RangeDescriptor,
         caller: &ClusterNodeId,
     ) -> Result<()> {
+        self.require_catalog_storage_policy()?;
+        self.require_native_writer_scope_without_database(range)?;
         if &range.leader != caller {
             return Err(data_error(format!(
                 "node {caller} is not the current leader for {} epoch {}",
@@ -1479,14 +2327,15 @@ impl ClusterDataNodeService {
         &self,
         command: &RangeWriteCommand,
         state: RangeWriteState,
-    ) -> RangeWriteAck {
-        RangeWriteAck {
+    ) -> Result<RangeWriteAck> {
+        self.range_writes.require_native_writer_host_base()?;
+        Ok(RangeWriteAck {
             node_id: self.node_id.clone(),
             range_id: command.range_id,
             range_epoch: command.range_epoch,
             index: command.index,
             state,
-        }
+        })
     }
 
     pub fn prepare_learner(&mut self, relocation: &RangeRelocation) -> Result<()> {
@@ -1785,6 +2634,28 @@ impl ClusterDataNodeService {
         limits: &RangeDigestRepairLimits,
         now_ms: u64,
     ) -> Result<RangeDigestRepairState> {
+        let gate = self.range_mutations.clone();
+        let permit = gate.try_enter(range.id)?;
+        self.apply_range_digest_repair_batch_with_mutation(
+            range,
+            caller,
+            batch,
+            limits,
+            now_ms,
+            &RangeMutationAuthority::Mutation(&permit),
+        )
+    }
+
+    pub(crate) fn apply_range_digest_repair_batch_with_mutation(
+        &mut self,
+        range: &RangeDescriptor,
+        caller: &ClusterNodeId,
+        batch: &RangeDigestRepairBatch,
+        limits: &RangeDigestRepairLimits,
+        now_ms: u64,
+        authority: &RangeMutationAuthority<'_>,
+    ) -> Result<RangeDigestRepairState> {
+        self.range_mutations.validate(range.id, authority)?;
         batch.validate(limits)?;
         let current_voters = range
             .replicas
@@ -1861,8 +2732,12 @@ impl ClusterDataNodeService {
         let mut next = state;
         next.record_applied(batch, limits)?;
         self.ensure_range_digest_fence(range, caller, &digest_state, now_ms)?;
-        try_database_read(&self.db)?
-            .apply_range_anti_entropy_mutations_as_local(range, &batch.mutations)?;
+        checked_database_read(&self.db, &self.storage_policy)?
+            .apply_range_anti_entropy_mutations_as_local_with_mutation(
+                range,
+                &batch.mutations,
+                authority,
+            )?;
         // The data RPC holds the node service mutex for this whole method, so a
         // prepare cannot release the fence between the two checks and commit.
         self.ensure_range_digest_fence(range, caller, &digest_state, now_ms)?;
@@ -1936,7 +2811,7 @@ impl ClusterDataNodeService {
         // (or one that will fail): labelling a snapshot with it lets
         // catch-up skip that commit's rows.
         let (collections, empty_snapshot_commit_sequence) = {
-            let source = try_database_read(&self.db)?;
+            let source = checked_database_read(&self.db, &self.storage_policy)?;
             (source.collections(), source.replication_shippable_seq())
         };
         let cursor = resume_after_key.map(decode_cursor).transpose()?;
@@ -1962,16 +2837,17 @@ impl ClusterDataNodeService {
             .as_ref()
             .and_then(|cursor| cursor.after_id.as_deref());
         let mut exported_batch = None;
-        let export = try_database_read(&self.db)?.for_each_range_snapshot_batch(
-            &collection_meta.name,
-            range,
-            after_id,
-            options,
-            |batch| {
-                exported_batch = Some(batch);
-                Ok(false)
-            },
-        )?;
+        let export = checked_database_read(&self.db, &self.storage_policy)?
+            .for_each_range_snapshot_batch(
+                &collection_meta.name,
+                range,
+                after_id,
+                options,
+                |batch| {
+                    exported_batch = Some(batch);
+                    Ok(false)
+                },
+            )?;
         if let Some(mut batch) = exported_batch {
             batch.resume_after_key = encode_cursor(&CollectionScanCursor {
                 collection: collection_meta.name.clone(),
@@ -2051,13 +2927,31 @@ impl ClusterDataNodeService {
         range: &RangeDescriptor,
         step: &SnapshotSourceStep,
     ) -> Result<SnapshotCopyProgress> {
+        let gate = self.range_mutations.clone();
+        let permit = gate.try_enter(range.id)?;
+        self.apply_snapshot_step_with_mutation(
+            relocation,
+            range,
+            step,
+            &RangeMutationAuthority::Mutation(&permit),
+        )
+    }
+
+    pub(crate) fn apply_snapshot_step_with_mutation(
+        &mut self,
+        relocation: &RangeRelocation,
+        range: &RangeDescriptor,
+        step: &SnapshotSourceStep,
+        authority: &RangeMutationAuthority<'_>,
+    ) -> Result<SnapshotCopyProgress> {
+        self.range_mutations.validate(range.id, authority)?;
         self.ensure_target(relocation)?;
         match step {
             SnapshotSourceStep::Batch {
                 collection_meta,
                 batch,
             } => {
-                let missing = !try_database_read(&self.db)?
+                let missing = !checked_database_read(&self.db, &self.storage_policy)?
                     .collections()
                     .iter()
                     .any(|meta| meta.name == batch.collection);
@@ -2065,23 +2959,36 @@ impl ClusterDataNodeService {
                 // bundle. Preserve their one-time installation path, while
                 // ordinary copied rows use shared access below.
                 if missing {
-                    let mut db = try_database_write(&self.db)?;
-                    return self.learner.apply_snapshot_batch(
-                        &mut db,
+                    let mut db = checked_database_write(&self.db, &self.storage_policy)?;
+                    return self.learner.apply_snapshot_batch_with(
                         relocation,
-                        range,
                         relocation.snapshot_resume_after_key.as_deref(),
                         collection_meta,
                         batch,
+                        || {
+                            db.apply_range_snapshot_batch_with_mutation(
+                                range,
+                                collection_meta,
+                                batch,
+                                authority,
+                            )
+                        },
                     );
                 }
-                let db = try_database_read(&self.db)?;
+                let db = checked_database_read(&self.db, &self.storage_policy)?;
                 self.learner.apply_snapshot_batch_with(
                     relocation,
                     relocation.snapshot_resume_after_key.as_deref(),
                     collection_meta,
                     batch,
-                    || db.apply_range_snapshot_batch_preinstalled(range, collection_meta, batch),
+                    || {
+                        db.apply_range_snapshot_batch_preinstalled_with_mutation(
+                            range,
+                            collection_meta,
+                            batch,
+                            authority,
+                        )
+                    },
                 )
             }
             SnapshotSourceStep::Advance {
@@ -2128,7 +3035,7 @@ impl ClusterDataNodeService {
                 "range catch-up frame limit must be between 1 and 1000000",
             ));
         }
-        let source = try_database_read(&self.db)?;
+        let source = checked_database_read(&self.db, &self.storage_policy)?;
         let source_commit_sequence = source.current_commit_seq();
         if durable_commit_sequence > source_commit_sequence {
             return Err(data_error(format!(
@@ -2152,9 +3059,27 @@ impl ClusterDataNodeService {
         range: &RangeDescriptor,
         batch: &CatchUpSourceBatch,
     ) -> Result<CatchUpProgress> {
+        let gate = self.range_mutations.clone();
+        let permit = gate.try_enter(range.id)?;
+        self.apply_catch_up_with_mutation(
+            relocation,
+            range,
+            batch,
+            &RangeMutationAuthority::Mutation(&permit),
+        )
+    }
+
+    pub(crate) fn apply_catch_up_with_mutation(
+        &mut self,
+        relocation: &RangeRelocation,
+        range: &RangeDescriptor,
+        batch: &CatchUpSourceBatch,
+        authority: &RangeMutationAuthority<'_>,
+    ) -> Result<CatchUpProgress> {
+        self.range_mutations.validate(range.id, authority)?;
         self.ensure_target(relocation)?;
         let needs_catalog_install = {
-            let db = try_database_read(&self.db)?;
+            let db = checked_database_read(&self.db, &self.storage_policy)?;
             let collections = db
                 .collections()
                 .into_iter()
@@ -2167,21 +3092,24 @@ impl ClusterDataNodeService {
                 .any(|write| !collections.contains(&write.collection))
         };
         if needs_catalog_install {
-            let mut db = try_database_write(&self.db)?;
-            return self.learner.apply_commit_frames(
-                &mut db,
+            let mut db = checked_database_write(&self.db, &self.storage_policy)?;
+            return self.learner.apply_commit_frames_with(
                 relocation,
-                range,
                 &batch.frames,
                 batch.source_commit_sequence,
+                |frame| db.apply_range_commit_frame_as_local_with_mutation(range, frame, authority),
             );
         }
-        let db = try_database_read(&self.db)?;
+        let db = checked_database_read(&self.db, &self.storage_policy)?;
         self.learner.apply_commit_frames_with(
             relocation,
             &batch.frames,
             batch.source_commit_sequence,
-            |frame| db.apply_range_commit_frame_as_local_preinstalled(range, frame),
+            |frame| {
+                db.apply_range_commit_frame_as_local_preinstalled_with_mutation(
+                    range, frame, authority,
+                )
+            },
         )
     }
 
@@ -2192,6 +3120,26 @@ impl ClusterDataNodeService {
         resume_after_key: Option<&str>,
         max_records: usize,
     ) -> Result<CleanupProgress> {
+        let gate = self.range_mutations.clone();
+        let permit = gate.try_enter(range.id)?;
+        self.cleanup_source_step_with_mutation(
+            relocation,
+            range,
+            resume_after_key,
+            max_records,
+            &RangeMutationAuthority::Mutation(&permit),
+        )
+    }
+
+    pub(crate) fn cleanup_source_step_with_mutation(
+        &mut self,
+        relocation: &RangeRelocation,
+        range: &RangeDescriptor,
+        resume_after_key: Option<&str>,
+        max_records: usize,
+        authority: &RangeMutationAuthority<'_>,
+    ) -> Result<CleanupProgress> {
+        self.range_mutations.validate(range.id, authority)?;
         if relocation.source.as_ref() != Some(&self.node_id) {
             return Err(data_error(format!(
                 "node {} is not cleanup source for {}",
@@ -2203,7 +3151,7 @@ impl ClusterDataNodeService {
                 "range cleanup record limit must be greater than zero",
             ));
         }
-        let collections = try_database_read(&self.db)?.collections();
+        let collections = checked_database_read(&self.db, &self.storage_policy)?.collections();
         let cursor = resume_after_key.map(decode_cursor).transpose()?;
         let collection_index = match cursor.as_ref() {
             Some(cursor) => collections
@@ -2234,23 +3182,15 @@ impl ClusterDataNodeService {
             max_record_bytes: 8 * 1024 * 1024,
         };
         let mut ids = Vec::new();
-        let export = try_database_read(&self.db)?.for_each_range_snapshot_batch(
-            &collection,
-            range,
-            after_id,
-            &options,
-            |batch| {
+        let export = checked_database_read(&self.db, &self.storage_policy)?
+            .for_each_range_snapshot_batch(&collection, range, after_id, &options, |batch| {
                 ids = batch.records.into_iter().map(|record| record.id).collect();
                 Ok(false)
-            },
-        )?;
+            })?;
         if !ids.is_empty() {
             let after_id = ids.last().cloned().expect("non-empty cleanup batch");
-            let deleted = try_database_read(&self.db)?.delete_range_records_as_local(
-                range,
-                &collection,
-                &ids,
-            )?;
+            let deleted = checked_database_read(&self.db, &self.storage_policy)?
+                .delete_range_records_as_local_with_mutation(range, &collection, &ids, authority)?;
             return Ok(CleanupProgress {
                 resume_after_key: Some(encode_cursor(&CollectionScanCursor {
                     collection,
@@ -2281,6 +3221,21 @@ impl ClusterDataNodeService {
     }
 
     pub fn complete_relocation(&mut self, relocation: &RangeRelocation) -> Result<bool> {
+        let gate = self.range_mutations.clone();
+        let permit = gate.try_enter(relocation.range_id)?;
+        self.complete_relocation_with_mutation(
+            relocation,
+            &RangeMutationAuthority::Mutation(&permit),
+        )
+    }
+
+    pub(crate) fn complete_relocation_with_mutation(
+        &mut self,
+        relocation: &RangeRelocation,
+        authority: &RangeMutationAuthority<'_>,
+    ) -> Result<bool> {
+        self.range_mutations
+            .validate(relocation.range_id, authority)?;
         self.ensure_target(relocation)?;
         self.learner.complete_relocation(relocation.id)
     }

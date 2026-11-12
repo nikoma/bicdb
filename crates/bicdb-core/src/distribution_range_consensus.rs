@@ -12,6 +12,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use crate::CancellationToken;
 use parking_lot::{Condvar, Mutex, RwLock};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -29,12 +30,118 @@ use crate::distribution_anti_entropy_auto::{
 use crate::distribution_anti_entropy_repair_certificate::RangeDigestRepairCertificate;
 use crate::distribution_backup::{ClusterBackupPlan, CLUSTER_BACKUP_CERTIFICATE_FORMAT_VERSION};
 use crate::distribution_data::ClusterDataNodeService;
+use crate::distribution_range_handoff::{
+    RangeHandoffPromise, HANDOFF_RANGE_LOG_FORMAT, MAX_HANDOFF_PROMISES,
+};
+use crate::distribution_range_mutation::{
+    RangeMutationAuthority, RangeMutationGate, RangeMutationPermit,
+};
 use crate::distribution_supervisor::ClusterBackupMetadata;
 use crate::error::{BicDbError, Result};
+
+mod native_image_base;
+#[cfg(test)]
+pub(crate) use native_prefix::test_validate_ordinary_native_intent;
+mod native_image_ready;
+pub(crate) use native_image_base::NativeImageCatalogueAdoptionReceipt;
+use native_image_base::{NativeImageCatalogueBase, NATIVE_IMAGE_CATALOG_FORMAT};
+pub(crate) use native_image_ready::FinalizedNativeImageCatalogueObservation;
+mod image_install_obligations;
+pub(crate) use image_install_obligations::TargetImageCatalogHistoryObligations;
+mod image_install_resume;
+mod image_install_state;
+mod image_proposal_state;
+pub(crate) use image_install_resume::CurrentImageInstallingAdmission;
+use image_proposal_state::IMAGE_PROPOSAL_CATALOG_FORMAT;
+pub(crate) use image_proposal_state::{
+    NativeCurrentImageProposalPointer, NativeImageProposalIntentBinding,
+};
+mod native_completion_observation;
+mod native_read_catalog;
+mod native_ready_catalog;
+#[cfg(feature = "tls-replication")]
+mod strong_point_read;
+pub(crate) use native_completion_observation::LocalNativeCompletionEvidence;
+pub(crate) use native_read_catalog::{NativeRangeReadCatalogue, NativeReadCatalogueDecision};
+mod native_ready_observation;
+pub(crate) use native_ready_observation::LocalNativeReadyEvidence;
+mod native_activation;
+#[cfg(test)]
+mod native_activation_domain_tests;
+pub(crate) use native_activation::NativeActivationReceipt;
+use native_activation::NATIVE_ACTIVATED_FORMAT;
+mod native_ready_completion;
+mod native_ready_prepare;
+#[cfg(test)]
+pub(crate) use native_ready_catalog::native_ready_test_command;
+pub(crate) use native_ready_completion::NativeRecoveryCompletedFrozenReceipt;
+use native_ready_completion::NATIVE_COMPLETED_CATALOG_FORMAT;
+pub(crate) use native_ready_prepare::PreparedNativeRecoveryReady;
+use native_ready_prepare::NATIVE_READY_CATALOG_FORMAT;
+mod recovery_state;
+mod sparse_certification;
+pub(crate) use image_install_state::ImageInstallPurpose;
+use image_install_state::{ImageInstallIntent, IMAGE_INSTALL_RANGE_LOG_FORMAT};
+pub(crate) use sparse_certification::{
+    SparseDecisionAudit, SparseDecisionVoteAudit, SparseHistoricalDecisionProjection,
+};
+use sparse_certification::{SparseDecisions, SPARSE_HISTORY_CATALOG_FORMAT};
+mod image_install_fence;
+pub(crate) use image_install_fence::{
+    NativeImageInstallRole, NativeImageInstallTransferPreflight, TargetImageInstallFence,
+    UntouchedNativeImageTransferReturn,
+};
+use recovery_state::RecoveryFenceRecord;
+pub(crate) use recovery_state::{
+    HistoricalRangeCertification, RecoveryFenceScope, RecoveryImageInstallSessionObservation,
+    RecoveryLocalHistoricalApplyObservation, RecoveryResolvedCatalogObservation,
+};
+
+mod native_limits;
+pub(crate) use native_limits::{
+    validate_native_json_size, validate_native_recovery_command_size,
+    validate_native_recovery_entry_size, MAX_NATIVE_RECOVERY_ENTRY_BYTES,
+    MIN_NATIVE_RECOVERY_FRAME_BYTES,
+};
+mod catalogue_custody;
+#[cfg(test)]
+pub(crate) use catalogue_custody::FreshCatalogueTestCut;
+mod native_durability;
+mod native_normal;
+mod native_prefix;
+mod native_writer;
+#[cfg(test)]
+pub(crate) use native_prefix::tests::{
+    fixture as native_origin_fixture, seed_actual_origin, test_catalog_command,
+};
+pub(crate) use native_prefix::{
+    NativeRangeCertificateEvidence, NativeRangeCommandIntent, NativeRangeCommitCertificate,
+};
+use native_writer::NATIVE_WRITER_CATALOG_FORMAT;
 
 pub const RANGE_WRITE_LOG_FORMAT_VERSION: u32 = 3;
 pub const RANGE_WRITE_PROTOCOL_VERSION: u32 = 2;
 pub const DEFAULT_RANGE_WRITE_LOG: &str = "cluster-range-write-log.json";
+const KNOWN_RANGE_WRITE_CATALOG_FORMATS: &[u32] = &[
+    1,
+    2,
+    RANGE_WRITE_LOG_FORMAT_VERSION,
+    HANDOFF_RANGE_LOG_FORMAT,
+    IMAGE_INSTALL_RANGE_LOG_FORMAT,
+    NATIVE_IMAGE_CATALOG_FORMAT,
+    NATIVE_READY_CATALOG_FORMAT,
+    NATIVE_COMPLETED_CATALOG_FORMAT,
+    NATIVE_ACTIVATED_FORMAT,
+    SPARSE_HISTORY_CATALOG_FORMAT,
+    IMAGE_PROPOSAL_CATALOG_FORMAT,
+    NATIVE_WRITER_CATALOG_FORMAT,
+];
+
+// Recognizing a format is not a phase, writer or recovery grant. Each caller
+// must independently enforce its minimum, actual feature fences and proof.
+fn range_write_catalog_format_supported(version: u32) -> bool {
+    KNOWN_RANGE_WRITE_CATALOG_FORMATS.contains(&version)
+}
 const RETAIN_APPLIED_COMMANDS_PER_RANGE: u64 = 1_024;
 const RANGE_ADMISSION_WAIT: Duration = Duration::from_secs(30);
 const MAX_RANGE_BACKUP_FENCES: usize = 1_000_000;
@@ -124,6 +231,60 @@ impl RangeWriteCommand {
         };
         command.checksum_sha256 = command.calculate_checksum()?;
         command.validate()?;
+        Ok(command)
+    }
+
+    fn new_native_bounded(
+        cluster_id: ClusterId,
+        range: &RangeDescriptor,
+        index: u64,
+        leader_node_id: ClusterNodeId,
+        intent: &CommitAdmissionIntent,
+    ) -> Result<Self> {
+        // Serialize complete shape by reference BEFORE cloning large records
+        // or allocating a checksum buffer. Native refusals precede Prepare.
+        #[derive(Serialize)]
+        struct Candidate<'a> {
+            protocol_version: u32,
+            cluster_id: &'a ClusterId,
+            range_id: RangeId,
+            range_epoch: u64,
+            index: u64,
+            command_id: &'a str,
+            leader_node_id: &'a ClusterNodeId,
+            transaction_id: u64,
+            mutations: &'a [CommitAdmissionMutation],
+            checksum_sha256: &'a str,
+        }
+        let command_id = Uuid::now_v7().to_string();
+        let checksum_placeholder = "0".repeat(64);
+        native_limits::validate_native_recovery_command_shape(&Candidate {
+            protocol_version: RANGE_WRITE_PROTOCOL_VERSION,
+            cluster_id: &cluster_id,
+            range_id: range.id,
+            range_epoch: range.epoch,
+            index,
+            command_id: &command_id,
+            leader_node_id: &leader_node_id,
+            transaction_id: intent.transaction_id,
+            mutations: &intent.mutations,
+            checksum_sha256: &checksum_placeholder,
+        })?;
+        let mut command = Self {
+            protocol_version: RANGE_WRITE_PROTOCOL_VERSION,
+            cluster_id,
+            range_id: range.id,
+            range_epoch: range.epoch,
+            index,
+            command_id,
+            leader_node_id,
+            transaction_id: intent.transaction_id,
+            mutations: intent.mutations.clone(),
+            checksum_sha256: String::new(),
+        };
+        command.checksum_sha256 = command.calculate_checksum()?;
+        command.validate()?;
+        validate_native_recovery_command_size(&command)?;
         Ok(command)
     }
 
@@ -399,11 +560,25 @@ struct RangeWriteLog {
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 struct RangeWriteCatalog {
     format_version: u32,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    native_writer_enforcement_version: Option<u32>,
     cluster_id: ClusterId,
     node_id: ClusterNodeId,
     ranges: BTreeMap<RangeId, RangeWriteLog>,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     backup_fences: BTreeMap<RangeId, RangeBackupWriteFence>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    handoff_promises: BTreeMap<RangeId, RangeHandoffPromise>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    image_install_intents: BTreeMap<RangeId, ImageInstallIntent>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    recovery_fences: BTreeMap<RangeId, RecoveryFenceRecord>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    native_image_bases: BTreeMap<RangeId, NativeImageCatalogueBase>,
+    // None is legacy ONLY. Format 10 requires Some, including an empty map:
+    // a missing/null field can never silently erase sparse committed history.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    sparse_committed_decisions: Option<SparseDecisions>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -427,14 +602,74 @@ impl RangeWriteEnvelope {
                 "range-write catalog checksum mismatch; refusing recovery",
             ));
         }
-        if !matches!(
-            self.catalog.format_version,
-            1 | 2 | RANGE_WRITE_LOG_FORMAT_VERSION
-        ) {
+        if !range_write_catalog_format_supported(self.catalog.format_version) {
             return Err(range_write_error(format!(
-                "unsupported range-write log format {}; supported formats are 1, 2, and {}",
-                self.catalog.format_version, RANGE_WRITE_LOG_FORMAT_VERSION
+                "unsupported range-write log format {}; maximum supported {}",
+                self.catalog.format_version,
+                KNOWN_RANGE_WRITE_CATALOG_FORMATS
+                    .iter()
+                    .copied()
+                    .max()
+                    .unwrap_or(0)
             )));
+        }
+        if self
+            .catalog
+            .native_writer_enforcement_version
+            .is_some_and(|version| version != 1)
+            || (self.catalog.format_version == NATIVE_WRITER_CATALOG_FORMAT
+                && self.catalog.native_writer_enforcement_version != Some(1))
+            || (self.catalog.native_writer_enforcement_version.is_some()
+                && self.catalog.format_version < NATIVE_WRITER_CATALOG_FORMAT)
+        {
+            return Err(range_write_error(
+                "native writer catalog marker/format mismatch",
+            ));
+        }
+        sparse_certification::validate_sparse_catalog(&self.catalog)?;
+        if self.catalog.recovery_fences.len() > recovery_state::MAX_RECOVERY_FENCES {
+            return Err(range_write_error("recovery refusal catalog exceeds bound"));
+        }
+        for (range_id, fence) in &self.catalog.recovery_fences {
+            fence.validate()?;
+            if fence.scope.range_id != *range_id
+                || self.catalog.format_version < 5
+                || fence.local_node_id != self.catalog.node_id
+                || fence.scope.cluster_id != self.catalog.cluster_id
+            {
+                return Err(range_write_error("damaged recovery refusal scope"));
+            }
+            let log = self
+                .catalog
+                .ranges
+                .get(range_id)
+                .ok_or_else(|| range_write_error("recovery refusal has no actual range log"))?;
+            for marker in fence.historical_certifications.values() {
+                let sparse = self
+                    .catalog
+                    .sparse_committed_decisions
+                    .as_ref()
+                    .and_then(|ranges| ranges.get(range_id))
+                    .and_then(|entries| entries.get(&marker.index));
+                let sparse_matches = sparse
+                    .is_some_and(|entry| entry.command_checksum_sha256() == marker.command_sha256);
+                if (marker.index > log.last_index && !sparse_matches)
+                    || log.entries.get(&marker.index).is_some_and(|entry| {
+                        entry.command.checksum_sha256 != marker.command_sha256
+                            || !matches!(
+                                entry.state,
+                                RangeWriteState::QuorumCommitted | RangeWriteState::Applied
+                            )
+                    })
+                    || sparse.is_some_and(|entry| {
+                        entry.command_checksum_sha256() != marker.command_sha256
+                    })
+                {
+                    return Err(range_write_error(
+                        "historical certification conflicts with retained command state",
+                    ));
+                }
+            }
         }
         for log in self.catalog.ranges.values() {
             validate_log(log)?;
@@ -459,6 +694,31 @@ impl RangeWriteEnvelope {
                 )));
             }
         }
+        if self.catalog.handoff_promises.len() > MAX_HANDOFF_PROMISES {
+            return Err(range_write_error(
+                "range handoff promise catalog exceeds its bound",
+            ));
+        }
+        for (id, promise) in &self.catalog.handoff_promises {
+            promise.validate()?;
+            let log = self
+                .catalog
+                .ranges
+                .get(id)
+                .ok_or_else(|| range_write_error("handoff promise has no range log"))?;
+            if self.catalog.format_version < HANDOFF_RANGE_LOG_FORMAT
+                || promise.range_id != *id
+                || log.current_epoch < promise.activation_epoch
+                || log.resolved_through < promise.resolved_through
+            {
+                return Err(range_write_error(
+                    "handoff promise disagrees with durable range log",
+                ));
+            }
+        }
+        image_install_state::validate_catalog_install_intents(&self.catalog)?;
+        native_image_base::validate_catalog_native_image_bases(&self.catalog)?;
+        native_ready_prepare::validate_native_prepared_catalog(&self.catalog)?;
         Ok(self.catalog)
     }
 }
@@ -487,6 +747,14 @@ pub struct RangeWriteStore {
     root: PathBuf,
     fsync: bool,
     catalog: RangeWriteCatalog,
+    open_id: Uuid,
+    recovery_persistence_uncertain: bool,
+    // Immutable provenance of the ORIGINAL verified read, never pathname existence.
+    catalogue_loaded_at_open: bool,
+    #[cfg(test)]
+    test_native_commit_write_error_once: bool,
+    native_activated_opens: BTreeMap<RangeId, crate::db::NativeActivatedOpenGuard>,
+    native_writer_host: Option<std::sync::Weak<crate::db::NativeWriterHostState>>,
 }
 
 impl RangeWriteStore {
@@ -559,15 +827,31 @@ impl RangeWriteStore {
     ) -> Result<Self> {
         let root = root.as_ref().to_path_buf();
         let path = root.join(DEFAULT_RANGE_WRITE_LOG);
-        let mut catalog = match fs::read(&path) {
-            Ok(bytes) => serde_json::from_slice::<RangeWriteEnvelope>(&bytes)?.verify()?,
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => RangeWriteCatalog {
-                format_version: RANGE_WRITE_LOG_FORMAT_VERSION,
-                cluster_id: cluster_id.clone(),
-                node_id: node_id.clone(),
-                ranges: BTreeMap::new(),
-                backup_fences: BTreeMap::new(),
-            },
+        let enforced = crate::format::native_writer_enrollment_active(&root)?;
+        let (mut catalog, existing_catalog) = match fs::read(&path) {
+            Ok(bytes) => (
+                serde_json::from_slice::<RangeWriteEnvelope>(&bytes)?.verify()?,
+                true,
+            ),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound && enforced => {
+                return Err(BicDbError::NativeRangeCatalogueCustodyMissing);
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => (
+                RangeWriteCatalog {
+                    format_version: RANGE_WRITE_LOG_FORMAT_VERSION,
+                    native_writer_enforcement_version: None,
+                    cluster_id: cluster_id.clone(),
+                    node_id: node_id.clone(),
+                    ranges: BTreeMap::new(),
+                    backup_fences: BTreeMap::new(),
+                    handoff_promises: BTreeMap::new(),
+                    image_install_intents: BTreeMap::new(),
+                    recovery_fences: BTreeMap::new(),
+                    native_image_bases: BTreeMap::new(),
+                    sparse_committed_decisions: None,
+                },
+                false,
+            ),
             Err(error) => return Err(error.into()),
         };
         if catalog.cluster_id != cluster_id || catalog.node_id != node_id {
@@ -575,8 +859,43 @@ impl RangeWriteStore {
                 "range-write catalog cluster or node identity mismatch",
             ));
         }
+        if catalog.format_version >= HANDOFF_RANGE_LOG_FORMAT
+            && (!fsync || !crate::format::range_image_install_active(&root)?)
+        {
+            return Err(range_write_error(
+                "handoff range catalog requires its durable image reader fence and fsync",
+            ));
+        }
+        if catalog.format_version >= IMAGE_PROPOSAL_CATALOG_FORMAT
+            && !crate::format::current_image_proposal_active(&root)?
+        {
+            return Err(range_write_error(
+                "protected proposal catalog lacks its mandatory native reader fence",
+            ));
+        }
+        if enforced {
+            if !crate::format::current_image_proposal_active(&root)?
+                || !fsync
+                || (existing_catalog
+                    && (catalog.format_version < NATIVE_WRITER_CATALOG_FORMAT
+                        || catalog.native_writer_enforcement_version != Some(1)))
+            {
+                return Err(range_write_error("enforced native store cannot adopt an older decision catalog or missing proposal reader fence"));
+            }
+            catalog.format_version = catalog.format_version.max(NATIVE_WRITER_CATALOG_FORMAT);
+            catalog.native_writer_enforcement_version = Some(1);
+            catalog
+                .sparse_committed_decisions
+                .get_or_insert_with(BTreeMap::new);
+        } else if catalog.native_writer_enforcement_version.is_some()
+            || catalog.format_version == NATIVE_WRITER_CATALOG_FORMAT
+        {
+            return Err(range_write_error(
+                "enforced writer catalog requires its actual sticky reader fence",
+            ));
+        }
         let migrated_v1_decisions = catalog.format_version == 1;
-        let migrated = catalog.format_version != RANGE_WRITE_LOG_FORMAT_VERSION;
+        let migrated = catalog.format_version < RANGE_WRITE_LOG_FORMAT_VERSION;
         if migrated_v1_decisions {
             // Format v1 used `Committed` as its crash-replayable terminal
             // decision. Preserve that published meaning while moving new
@@ -589,14 +908,28 @@ impl RangeWriteStore {
                 }
             }
         }
-        catalog.format_version = RANGE_WRITE_LOG_FORMAT_VERSION;
+        catalog.format_version = catalog.format_version.max(RANGE_WRITE_LOG_FORMAT_VERSION);
         let store = Self {
             root,
             fsync,
             catalog,
+            open_id: Uuid::now_v7(),
+            native_activated_opens: BTreeMap::new(),
+            native_writer_host: None,
+            recovery_persistence_uncertain: false,
+            catalogue_loaded_at_open: existing_catalog,
+            #[cfg(test)]
+            test_native_commit_write_error_once: false,
         };
-        if migrated {
-            store.persist()?;
+        // A previous service instance may have observed rename success but
+        // failed directory sync while the same live DB remained open. Reading
+        // that visible JSON is not durability evidence: re-fsync unchanged
+        // validated refusals before this new store-open can expose proofs.
+        if migrated
+            || !store.catalog.recovery_fences.is_empty()
+            || !store.catalog.native_image_bases.is_empty()
+        {
+            store.persist_verified_open_catalog()?;
         }
         Ok(store)
     }
@@ -633,6 +966,83 @@ impl RangeWriteStore {
         }
     }
 
+    /// Current metadata and the exclusive range gate are validated by the
+    /// caller. This persistence boundary records its own local resolved cut.
+    pub(crate) fn install_handoff_promise(
+        &mut self,
+        request: &RangeHandoffPromise,
+    ) -> Result<RangeHandoffPromise> {
+        self.install_handoff_promise_with(request, Self::persist)
+    }
+
+    // The private adapter keeps the production writer unchanged while allowing
+    // tests to exercise a real rename followed by an uncertain directory sync.
+    fn install_handoff_promise_with(
+        &mut self,
+        request: &RangeHandoffPromise,
+        mut persist: impl FnMut(&Self) -> Result<()>,
+    ) -> Result<RangeHandoffPromise> {
+        request.validate()?;
+        self.require_no_image_install(request.range_id)?;
+        self.require_no_active_recovery(request.range_id)?;
+        if !self.fsync || !crate::format::range_image_install_active(&self.root)? {
+            return Err(range_write_error(
+                "durable handoff requires fsync and the sticky image reader fence",
+            ));
+        }
+        if let Some(existing) = self.catalog.handoff_promises.get(&request.range_id) {
+            return if existing.same_request(request) {
+                // An earlier failure may have happened after rename but before
+                // directory fsync. Never turn an unconfirmed in-memory fence
+                // into quorum evidence without re-persisting it durably.
+                persist(self)?;
+                Ok(existing.clone())
+            } else {
+                Err(range_write_error(
+                    "range is already promised to another handoff",
+                ))
+            };
+        }
+        if self.catalog.handoff_promises.len() >= MAX_HANDOFF_PROMISES {
+            return Err(range_write_error(
+                "handoff promise catalog reached its bound",
+            ));
+        }
+        let progress = self.progress(request.range_id);
+        if progress.current_epoch > request.old_epoch
+            || progress.last_index != progress.resolved_through
+            || self.catalog.backup_fences.contains_key(&request.range_id)
+        {
+            return Err(range_write_error(
+                "handoff requires the current epoch, no backup fence and a resolved local tail",
+            ));
+        }
+        let mut promise = request.clone();
+        promise.resolved_through = progress.resolved_through;
+        let log = self
+            .catalog
+            .ranges
+            .entry(request.range_id)
+            .or_insert_with(|| RangeWriteLog {
+                current_epoch: request.old_epoch,
+                last_index: 0,
+                resolved_through: 0,
+                compacted_through: 0,
+                entries: BTreeMap::new(),
+            });
+        log.current_epoch = promise.activation_epoch;
+        self.catalog.format_version = self.catalog.format_version.max(HANDOFF_RANGE_LOG_FORMAT);
+        self.catalog
+            .handoff_promises
+            .insert(request.range_id, promise.clone());
+        // On any persistence error retain the conservative fence in memory.
+        // write_atomic may have renamed before failing a durability operation;
+        // reverting memory could otherwise admit an old writer against it.
+        // No response/certificate is issued unless persistence succeeds.
+        persist(self)?;
+        Ok(promise)
+    }
+
     pub fn active_backup_fence(&self, range_id: RangeId) -> Option<&RangeBackupWriteFence> {
         self.catalog.backup_fences.get(&range_id)
     }
@@ -649,6 +1059,8 @@ impl RangeWriteStore {
         installed_at_ms: u64,
         expires_at_ms: u64,
     ) -> Result<RangeWriteProgress> {
+        self.require_no_image_install(range_id)?;
+        self.require_no_active_recovery(range_id)?;
         let candidate = RangeBackupWriteFence {
             plan_id,
             range_id,
@@ -658,6 +1070,11 @@ impl RangeWriteStore {
             expires_at_ms,
         };
         candidate.validate()?;
+        if self.catalog.handoff_promises.contains_key(&range_id) {
+            return Err(range_write_error(
+                "range handoff must finish before a backup fence can be installed",
+            ));
+        }
         if installed_at_ms >= expires_at_ms {
             return Err(range_write_error("range backup fence is already expired"));
         }
@@ -888,11 +1305,24 @@ impl RangeWriteStore {
     }
 
     pub fn prepare(&mut self, command: RangeWriteCommand) -> Result<RangeWriteState> {
+        self.require_native_writer_command(&command)?;
         command.validate()?;
+        self.require_no_image_install(command.range_id)?;
+        self.require_no_active_recovery(command.range_id)?;
         if command.cluster_id != self.catalog.cluster_id {
             return Err(range_write_error(
                 "range-write command belongs to another cluster",
             ));
+        }
+        if self
+            .catalog
+            .handoff_promises
+            .contains_key(&command.range_id)
+        {
+            return Err(range_write_error(format!(
+                "range {} is unavailable while its durable handoff is incomplete",
+                command.range_id
+            )));
         }
         if let Some(fence) = self.catalog.backup_fences.get(&command.range_id) {
             if command.index > fence.resolved_through {
@@ -971,6 +1401,14 @@ impl RangeWriteStore {
     }
 
     pub fn commit(&mut self, command: &RangeWriteCommand) -> Result<RangeWriteState> {
+        // This persisted reader fence is a conservative storage refusal rule,
+        // not native admission authority. Actual service/DB checks still apply.
+        let native_catalog = crate::format::range_image_install_active(&self.root)?;
+        if native_catalog {
+            // Even an idempotent raw Commit cannot ACK retained-but-uncertain
+            // memory before the exact catalogue has actually been re-fsynced.
+            self.require_durable_recovery_catalog()?;
+        }
         let previous = self.catalog.clone();
         let entry = self.match_entry_mut(command)?;
         match entry.state {
@@ -985,7 +1423,32 @@ impl RangeWriteStore {
                 )))
             }
         }
-        self.persist_or_restore(previous, RangeWriteState::Committed)
+        if native_catalog {
+            // A failed rename/fsync may already have published Commit. Keep
+            // the in-memory decision and fail closed until exact re-fsync or
+            // strict reopen; never restore Prepared over that uncertainty.
+            #[cfg(test)]
+            if std::mem::take(&mut self.test_native_commit_write_error_once) {
+                return self
+                    .persist_recovery_catalog_with(|path, bytes, fsync| {
+                        crate::storage::write_atomic(path, bytes, fsync)?;
+                        Err(std::io::Error::other(
+                            "injected native Commit error after actual durable publication",
+                        )
+                        .into())
+                    })
+                    .map(|()| RangeWriteState::Committed);
+            }
+            self.persist_recovery_catalog()?;
+            Ok(RangeWriteState::Committed)
+        } else {
+            self.persist_or_restore(previous, RangeWriteState::Committed)
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn test_fail_native_commit_after_publication(&mut self) {
+        self.test_native_commit_write_error_once = true;
     }
 
     pub fn certify(&mut self, command: &RangeWriteCommand) -> Result<RangeWriteState> {
@@ -1093,7 +1556,10 @@ impl RangeWriteStore {
     }
 
     fn match_entry_mut(&mut self, command: &RangeWriteCommand) -> Result<&mut RangeWriteLogEntry> {
+        self.require_native_writer_command(command)?;
         command.validate()?;
+        self.require_no_image_install(command.range_id)?;
+        self.require_no_active_recovery(command.range_id)?;
         let entry = self
             .catalog
             .ranges
@@ -1114,13 +1580,19 @@ impl RangeWriteStore {
     }
 
     fn persist(&self) -> Result<()> {
+        self.persist_with(crate::storage::write_atomic)
+    }
+
+    fn persist_with(&self, write: impl FnOnce(&Path, &[u8], bool) -> Result<()>) -> Result<()> {
+        self.require_native_writer_host_base()?;
         fs::create_dir_all(&self.root)?;
         let envelope = RangeWriteEnvelope::new(self.catalog.clone())?;
-        crate::storage::write_atomic(
+        write(
             &self.root.join(DEFAULT_RANGE_WRITE_LOG),
             &serde_json::to_vec_pretty(&envelope)?,
             self.fsync,
-        )
+        )?;
+        self.require_native_writer_host_base()
     }
 
     fn persist_or_restore<T>(&mut self, previous: RangeWriteCatalog, value: T) -> Result<T> {
@@ -1211,6 +1683,148 @@ pub struct RangeWriteAck {
 }
 
 pub trait RangeWriteTransport: std::fmt::Debug + Send + Sync + 'static {
+    fn observe_current_native_range(
+        &self,
+        _destination: &ClusterNodeId,
+        _request: &crate::distribution_native_read::NativeRangeReadProbeRequest,
+        _parent: &CancellationToken,
+    ) -> Result<crate::distribution_native_read::NativeRangeReadObservation> {
+        Err(range_write_error(
+            "authenticated current native read observation transport is not wired",
+        ))
+    }
+
+    fn apply_native_origin(
+        &self,
+        _destination: &ClusterNodeId,
+        _command: &RangeWriteCommand,
+        _certificate: &NativeRangeCommitCertificate,
+        _parent: &CancellationToken,
+    ) -> Result<crate::distribution_native_apply::NativeReplicaApplyObservation> {
+        Err(range_write_error(
+            "authenticated ordinary native Apply transport is not wired",
+        ))
+    }
+    fn validate_native_origin_pre_admission(
+        &self,
+        _voters: &[ClusterNodeId],
+        command: &RangeWriteCommand,
+        _intent: &NativeRangeCommandIntent,
+    ) -> Result<()> {
+        validate_native_recovery_command_size(command)
+    }
+    fn observe_native_origin(
+        &self,
+        _destination: &ClusterNodeId,
+        _request: &crate::distribution_native_apply::NativeOriginStatusRequest,
+        _parent: &CancellationToken,
+    ) -> Result<crate::distribution_native_apply::NativeReplicaApplyObservation> {
+        Err(range_write_error(
+            "authenticated ordinary native status transport is not wired",
+        ))
+    }
+    fn recertify_native_origin(
+        &self,
+        _destination: &ClusterNodeId,
+        _command: &RangeWriteCommand,
+        _parent: &CancellationToken,
+    ) -> Result<RangeWriteAck> {
+        Err(range_write_error(
+            "bounded ordinary native recertification transport is not wired",
+        ))
+    }
+    fn observe_native_completion_observation(
+        &self,
+        _destination: &ClusterNodeId,
+        _request: &crate::distribution_range_recovery::NativeCompletionRequest,
+        _parent: &crate::CancellationToken,
+    ) -> Result<crate::distribution_range_recovery::NativeCompletionObservation> {
+        Err(range_write_error(
+            "authenticated native completion transport is not wired",
+        ))
+    }
+    fn prepare_native_ready_observation(
+        &self,
+        destination: &ClusterNodeId,
+        request: &crate::distribution_range_recovery::NativeReadyRequest,
+        parent: &CancellationToken,
+    ) -> Result<crate::distribution_range_recovery::NativeReadyObservation> {
+        let _ = (destination, request, parent);
+        Err(range_write_error(
+            "transport does not support actual native preparation",
+        ))
+    }
+    fn observe_native_ready_observation(
+        &self,
+        destination: &ClusterNodeId,
+        request: &crate::distribution_range_recovery::NativeReadyRequest,
+        parent: &CancellationToken,
+    ) -> Result<crate::distribution_range_recovery::NativeReadyObservation> {
+        let _ = (destination, request, parent);
+        Err(range_write_error(
+            "transport does not support actual native-ready observations",
+        ))
+    }
+
+    fn recovery_historical_command_observation(
+        &self,
+        destination: &ClusterNodeId,
+        request: &crate::distribution_range_recovery::RecoveryHistoricalCommandRequest,
+        apply: bool,
+        parent: &CancellationToken,
+    ) -> Result<crate::distribution_range_recovery::RecoveryHistoryObservation> {
+        let _ = (destination, request, apply, parent);
+        Err(range_write_error(
+            "transport does not support authenticated historical recovery",
+        ))
+    }
+
+    /// Explicit sparse certification: the receiver independently selects the
+    /// committed decision and persists its full body without an ordered Apply.
+    fn recovery_sparse_historical_command_observation(
+        &self,
+        destination: &ClusterNodeId,
+        request: &crate::distribution_range_recovery::RecoveryHistoricalCommandRequest,
+        parent: &CancellationToken,
+    ) -> Result<crate::distribution_range_recovery::RecoveryHistoryObservation> {
+        let _ = (destination, request, parent);
+        Err(range_write_error(
+            "transport does not support sparse historical certification",
+        ))
+    }
+
+    /// Validation only, before any durable native Prepare. Embedded transports
+    /// have no TCP frame; production TCP overrides its configured envelope cap.
+    fn validate_native_command_pre_admission(
+        &self,
+        _voters: &[ClusterNodeId],
+        command: &RangeWriteCommand,
+    ) -> Result<()> {
+        validate_native_recovery_command_size(command)
+    }
+
+    fn recovery_fenced_history_observation(
+        &self,
+        destination: &ClusterNodeId,
+        request: &crate::distribution_range_recovery::RecoveryFencedProbeRequest,
+        parent: &CancellationToken,
+    ) -> Result<crate::distribution_range_recovery::RecoveryHistoryObservation> {
+        let _ = (destination, request, parent);
+        Err(range_write_error(
+            "transport does not support fenced recovery history observations",
+        ))
+    }
+    fn recovery_epoch_fence_observation(
+        &self,
+        destination: &ClusterNodeId,
+        request: &crate::distribution_range_recovery::RecoveryEpochFenceRequest,
+        parent: &CancellationToken,
+    ) -> Result<crate::distribution_range_recovery::RecoveryFenceObservation> {
+        let _ = (destination, request, parent);
+        Err(range_write_error(
+            "transport does not support native recovery epoch fences",
+        ))
+    }
     fn install_range_backup_fence(
         &self,
         destination: &ClusterNodeId,
@@ -1307,12 +1921,16 @@ pub struct RangeWriteCoordinator<Transport: RangeWriteTransport> {
     local_service: Arc<Mutex<ClusterDataNodeService>>,
     transport: Arc<Transport>,
     repair_limits: RangeWriteRepairLimits,
+    range_mutations: RangeMutationGate,
     active_ranges: Mutex<BTreeMap<RangeId, String>>,
     active_range_changed: Condvar,
     recovered_epochs: Mutex<BTreeMap<RangeId, u64>>,
     recovery_cursor: Mutex<Option<RangeId>>,
     require_schema_compatibility: bool,
     local_incarnation: String,
+    native_image_mode: bool,
+    native_coordinator_id: Uuid,
+    native_writer_host: Mutex<Option<std::sync::Weak<crate::db::NativeWriterHostState>>>,
     pending_acknowledgements: Mutex<BTreeMap<String, RangeAcknowledgementEvidence>>,
 }
 
@@ -1324,6 +1942,15 @@ struct RangeAcknowledgementEvidence {
     transaction_id: u64,
     certified: usize,
     required_quorum: usize,
+    mutation: RangeMutationPermit,
+    native: Option<NativeRangeAcknowledgementEvidence>,
+}
+
+#[derive(Debug)]
+struct NativeRangeAcknowledgementEvidence {
+    pending: crate::db::NativeRangePendingApply,
+    mutations_sha256: String,
+    certificate: Option<NativeRangeCommitCertificate>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -1454,14 +2081,24 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
         // Construction must not wait behind a caller-owned database write lock.
         // The incarnation is immutable for this database handle; callbacks run
         // under database guards and must not attempt to reacquire that lock.
-        let database = local_service.lock().database();
-        let local_incarnation = database
-            .try_read()
-            .ok_or_else(|| {
-                range_write_error("database is busy while constructing range authority")
-            })?
-            .incarnation_id()
-            .to_string();
+        let (database, range_mutations) = {
+            let service = local_service.lock();
+            (service.database(), service.range_mutation_gate())
+        };
+        let database_guard = database.try_read().ok_or_else(|| {
+            range_write_error("database is busy while constructing range authority")
+        })?;
+        let local_incarnation = database_guard.incarnation_id().to_string();
+        let native_image_mode = database_guard.native_range_image_birth_present();
+        if native_image_mode {
+            local_service
+                .try_lock()
+                .ok_or_else(|| {
+                    range_write_error("service busy while checking native catalog configuration")
+                })?
+                .require_native_catalog_database(&database_guard)?;
+        }
+        drop(database_guard);
         Ok(Self {
             cluster_id,
             local_node_id,
@@ -1469,12 +2106,16 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
             local_service,
             transport,
             repair_limits,
+            range_mutations,
             active_ranges: Mutex::new(BTreeMap::new()),
             active_range_changed: Condvar::new(),
             recovered_epochs: Mutex::new(BTreeMap::new()),
             recovery_cursor: Mutex::new(None),
             require_schema_compatibility: false,
             local_incarnation,
+            native_image_mode,
+            native_coordinator_id: Uuid::now_v7(),
+            native_writer_host: Mutex::new(None),
             pending_acknowledgements: Mutex::new(BTreeMap::new()),
         })
     }
@@ -1553,6 +2194,8 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
         }
         self.require_local_schema_compatibility(&range)?;
         self.require_recovered_epoch(&range)?;
+        let mutation = self.range_mutations.try_enter(range.id)?;
+        let authority = RangeMutationAuthority::Mutation(&mutation);
         let _reservation = self.reserve_range(range.id)?;
         let voters = range
             .replicas
@@ -1579,13 +2222,17 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
             )));
         }
 
-        let local_progress = self.local_service.lock().install_range_backup_fence(
-            &range,
-            &self.local_node_id,
-            plan_id,
-            installed_at_ms,
-            expires_at_ms,
-        )?;
+        let local_progress = self
+            .local_service
+            .lock()
+            .install_range_backup_fence_with_mutation(
+                &range,
+                &self.local_node_id,
+                plan_id,
+                installed_at_ms,
+                expires_at_ms,
+                &authority,
+            )?;
         let cut = local_progress.resolved_through;
         let mut observations = vec![local_progress];
         let mut fenced_remotes = Vec::new();
@@ -1624,7 +2271,7 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
             }
         }
         if divergent_fence || observations.len() < required_quorum {
-            self.rollback_backup_fences(&range, plan_id, &fenced_remotes);
+            self.rollback_backup_fences(&range, plan_id, &fenced_remotes, &authority);
             return Err(range_write_error(format!(
                 "backup fence for {} reached only {}/{} exact-cut voters: {}",
                 range.id,
@@ -1641,7 +2288,7 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
                 })
         };
         if !still_current {
-            self.rollback_backup_fences(&range, plan_id, &fenced_remotes);
+            self.rollback_backup_fences(&range, plan_id, &fenced_remotes, &authority);
             return Err(range_write_error(format!(
                 "topology changed while fencing {} epoch {}",
                 range.id, range.epoch
@@ -1710,6 +2357,8 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
                 "backup fence release evidence has no current leader-inclusive quorum",
             ));
         }
+        let mutation = self.range_mutations.try_enter(range.id)?;
+        let authority = RangeMutationAuthority::Mutation(&mutation);
         let _reservation = self.reserve_range(range.id)?;
         let mut released = 0usize;
         let mut failures = Vec::new();
@@ -1732,11 +2381,16 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
                 failures.join(" | ")
             )));
         }
-        if self.local_service.lock().release_range_backup_fence(
-            &range,
-            &self.local_node_id,
-            plan_id,
-        )? {
+        if self
+            .local_service
+            .lock()
+            .release_range_backup_fence_with_mutation(
+                &range,
+                &self.local_node_id,
+                plan_id,
+                &authority,
+            )?
+        {
             released = released.saturating_add(1);
         }
         Ok(released)
@@ -1777,23 +2431,29 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
         range: &RangeDescriptor,
         plan_id: Uuid,
         fenced_remotes: &[ClusterNodeId],
+        authority: &RangeMutationAuthority<'_>,
     ) {
         for voter in fenced_remotes {
             let _ =
                 self.transport
                     .release_range_backup_fence(voter, plan_id, range.id, range.epoch);
         }
-        let _ = self.local_service.lock().release_range_backup_fence(
-            range,
-            &self.local_node_id,
-            plan_id,
-        );
+        let _ = self
+            .local_service
+            .lock()
+            .release_range_backup_fence_with_mutation(
+                range,
+                &self.local_node_id,
+                plan_id,
+                authority,
+            );
     }
 
     /// Recover a bounded number of ranges for which this node is the current
     /// leader. The cluster supervisor invokes this outside SQL/database locks;
     /// writes remain fail-closed until their exact range epoch is recovered.
     pub fn recover_local_leadership(&self, max_ranges: usize) -> Result<usize> {
+        self.require_expected_native_recovery_store()?;
         if max_ranges == 0 || max_ranges > 1_024 {
             return Err(range_write_error(
                 "range leadership recovery limit must be in 1..=1024",
@@ -1853,6 +2513,8 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
 
     fn recover_one_range_leadership(&self, range: &RangeDescriptor) -> Result<()> {
         self.require_local_schema_compatibility(range)?;
+        let mutation = self.range_mutations.try_enter(range.id)?;
+        let authority = &RangeMutationAuthority::Mutation(&mutation);
         let _reservation = self.try_reserve_range(range.id)?;
         let voters = range
             .replicas
@@ -1860,8 +2522,8 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
             .filter(|replica| replica.role == RangeReplicaRole::Voter)
             .map(|replica| replica.node_id.clone())
             .collect::<Vec<_>>();
-        self.recover_leader_prefix(range, &voters)?;
-        self.recover_leader_tail(range, &voters)?;
+        self.recover_leader_prefix(range, &voters, authority)?;
+        self.recover_leader_tail(range, &voters, authority)?;
         let still_current = self
             .topology
             .read()
@@ -2087,20 +2749,24 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
         range: &RangeDescriptor,
         voters: &[ClusterNodeId],
         command: &RangeWriteCommand,
+        authority: &RangeMutationAuthority<'_>,
     ) {
         for voter in voters.iter().filter(|node| **node != self.local_node_id) {
             let _ = self.transport.abort_range_write(voter, command);
         }
-        let _ = self
-            .local_service
-            .lock()
-            .abort_range_write(range, &self.local_node_id, command);
+        let _ = self.local_service.lock().abort_range_write_with_mutation(
+            range,
+            &self.local_node_id,
+            command,
+            authority,
+        );
     }
 
     fn recover_leader_prefix(
         &self,
         range: &RangeDescriptor,
         voters: &[ClusterNodeId],
+        authority: &RangeMutationAuthority<'_>,
     ) -> Result<()> {
         let quorum = voters.len() / 2 + 1;
         let mut progress_by_node = BTreeMap::new();
@@ -2136,6 +2802,9 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
             .collect::<Vec<_>>();
         resolved_watermarks.sort_unstable_by(|left, right| right.cmp(left));
         let quorum_resolved = resolved_watermarks[quorum - 1];
+        if self.native_image_mode && local.resolved_through < quorum_resolved {
+            return Err(range_write_error("native leader prefix requires fresh certified native recovery/image before generic replay"));
+        }
         let mut local_resolved = local.resolved_through;
         for _ in 0..self.repair_limits.max_batches_per_admission {
             if local_resolved >= quorum_resolved {
@@ -2206,11 +2875,12 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
             let next = self
                 .local_service
                 .lock()
-                .apply_range_write_leader_recovery(
+                .apply_range_write_leader_recovery_with_mutation(
                     range,
                     &chosen.source_node_id,
                     &chosen,
                     &self.repair_limits,
+                    authority,
                 )?;
             if next.resolved_through <= local_resolved || next.resolved_through > quorum_resolved {
                 return Err(range_write_error(
@@ -2228,7 +2898,12 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
         Ok(())
     }
 
-    fn recover_leader_tail(&self, range: &RangeDescriptor, voters: &[ClusterNodeId]) -> Result<()> {
+    fn recover_leader_tail(
+        &self,
+        range: &RangeDescriptor,
+        voters: &[ClusterNodeId],
+        authority: &RangeMutationAuthority<'_>,
+    ) -> Result<()> {
         let quorum = voters.len() / 2 + 1;
         let command_budget = self
             .repair_limits
@@ -2347,12 +3022,19 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
             } else {
                 RangeWriteState::Aborted
             };
-            let progress = self.local_service.lock().resolve_range_write_leader_tail(
-                range,
-                &evidence_voter,
-                &command,
-                outcome,
-            )?;
+            if self.native_image_mode {
+                return Err(range_write_error("native unresolved leader tail requires fresh native recovery; generic resolution cannot publish a native prefix"));
+            }
+            let progress = self
+                .local_service
+                .lock()
+                .resolve_range_write_leader_tail_with_mutation(
+                    range,
+                    &evidence_voter,
+                    &command,
+                    outcome,
+                    authority,
+                )?;
             if progress.resolved_through != index {
                 return Err(range_write_error(format!(
                     "range-write tail resolution for {} made invalid progress at index {index}",
@@ -2370,6 +3052,9 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
     }
 
     fn repair_voter(&self, range: &RangeDescriptor, voter: &ClusterNodeId) -> Result<()> {
+        if self.native_image_mode {
+            return Err(range_write_error("native repair requires actual source context and authenticated native materialization"));
+        }
         let local_progress = self.local_service.lock().range_write_progress(range.id);
         let mut remote = self
             .transport
@@ -2458,11 +3143,60 @@ impl<Transport: RangeWriteTransport> RangeAntiEntropyFenceAuthority
     }
 }
 
-impl<Transport: RangeWriteTransport> CommitAdmission for RangeWriteCoordinator<Transport> {
-    fn admit(&self, intent: &CommitAdmissionIntent) -> Result<CommitAdmissionTicket> {
+impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
+    fn admit_with_database(
+        &self,
+        intent: &CommitAdmissionIntent,
+        database: Option<&crate::BicDb>,
+    ) -> Result<CommitAdmissionTicket> {
+        self.require_expected_native_database(database)?;
+        let native_database = match (self.native_image_mode, database) {
+            (false, None) => None,
+            (false, Some(database)) if !database.native_range_image_birth_present() => None,
+            (true, Some(database))
+                if database.native_range_image_birth_present()
+                    && database.incarnation_id() == self.local_incarnation =>
+            {
+                Some(database)
+            }
+            _ => {
+                return Err(range_write_error(
+                    "native admission requires its actual originating database context",
+                ))
+            }
+        };
+        if let Some(database) = native_database {
+            self.local_service
+                .lock()
+                .require_native_catalog_database(database)?;
+        }
         let range = self.resolve_range(intent)?;
+        if let Some(database) = native_database {
+            self.require_native_writer_host_context(database, &range)?;
+        }
         self.require_recovered_epoch(&range)?;
-        let mut reservation = self.reserve_recovered_range(&range)?;
+        let mut reservation = if native_database.is_some() {
+            // Native callbacks may borrow an actual outer DB.write guard.
+            // Never wait on a point reader while holding that guard: fail
+            // before Prepare so the caller can retry after releasing it.
+            let reservation = self.try_reserve_range(range.id)?;
+            let current = self.resolve_range(intent)?;
+            if crate::distribution_native_read::canonical_range(&current)
+                != crate::distribution_native_read::canonical_range(&range)
+            {
+                return Err(range_write_error(
+                    "native range route changed before mutation admission; retry",
+                ));
+            }
+            self.require_recovered_epoch(&range)?;
+            reservation
+        } else {
+            self.reserve_recovered_range(&range)?
+        };
+        // A waiting writer must not enter native mutation admission while an
+        // actual point read holds this same logical range reservation.
+        let mutation = self.range_mutations.try_enter(range.id)?;
+        let authority = &RangeMutationAuthority::Mutation(&mutation);
         let voters = range
             .replicas
             .iter()
@@ -2471,25 +3205,72 @@ impl<Transport: RangeWriteTransport> CommitAdmission for RangeWriteCoordinator<T
             .collect::<Vec<_>>();
 
         let index = self.local_service.lock().next_range_write_index(range.id);
-        let command = RangeWriteCommand::new(
-            self.cluster_id.clone(),
-            &range,
-            index,
-            self.local_node_id.clone(),
-            intent,
-        )?;
-        self.local_service.lock().prepare_range_write(
-            &range,
-            &self.local_node_id,
-            command.clone(),
-        )?;
+        let command = if native_database.is_some() {
+            let command = RangeWriteCommand::new_native_bounded(
+                self.cluster_id.clone(),
+                &range,
+                index,
+                self.local_node_id.clone(),
+                intent,
+            )?;
+            self.transport
+                .validate_native_command_pre_admission(&voters, &command)?;
+            command
+        } else {
+            RangeWriteCommand::new(
+                self.cluster_id.clone(),
+                &range,
+                index,
+                self.local_node_id.clone(),
+                intent,
+            )?
+        };
+        let native_plan = if let Some(database) = native_database {
+            let topology = self.topology.read();
+            let bootstrap = topology.range_image_bootstrap_id.ok_or_else(|| {
+                range_write_error("native admission has no committed bootstrap domain")
+            })?;
+            let incarnation = topology
+                .nodes
+                .get(&self.local_node_id)
+                .ok_or_else(|| range_write_error("native local member missing"))?
+                .incarnation;
+            database.native_recovery_admission(
+                &self.cluster_id,
+                bootstrap,
+                &self.local_node_id,
+                incarnation,
+            )?;
+            let lineage = database.current_native_range_source_lineage(range.id)?;
+            let plan =
+                NativeRangeCommandIntent::plan_source(&command, &range, &topology, &lineage)?;
+            plan.validate_native_base(&lineage)?;
+            self.transport
+                .validate_native_origin_pre_admission(&voters, &command, &plan)?;
+            Some(plan)
+        } else {
+            None
+        };
+        self.local_service
+            .lock()
+            .prepare_range_write_with_mutation(
+                &range,
+                &self.local_node_id,
+                command.clone(),
+                authority,
+            )?;
 
         let quorum = voters.len() / 2 + 1;
         let mut prepared = 1usize;
         let mut prepared_nodes = Vec::new();
         let mut repair_failures = Vec::new();
         for voter in voters.iter().filter(|node| **node != self.local_node_id) {
-            if let Err(error) = self.repair_voter(&range, voter) {
+            let repaired = if let Some(database) = native_database {
+                self.repair_native_voter(database, &range, voter, authority)
+            } else {
+                self.repair_voter(&range, voter)
+            };
+            if let Err(error) = repaired {
                 repair_failures.push(format!("{voter}: {error}"));
             } else if let Ok(ack) = self.transport.prepare_range_write(voter, &command) {
                 if self.validate_ack(voter, &command, &ack).is_ok()
@@ -2510,7 +3291,7 @@ impl<Transport: RangeWriteTransport> CommitAdmission for RangeWriteCoordinator<T
             // A prepare may have become durable even when its response was
             // lost or malformed. Broadcast the abort to every voter so those
             // unknown outcomes cannot accumulate unresolved entries forever.
-            self.abort_prepared(&range, &voters, &command);
+            self.abort_prepared(&range, &voters, &command, authority);
             return Err(range_write_error(format!(
                 "range {} write {} failed prepare quorum: {prepared}/{quorum}; repair failures: {}",
                 range.id,
@@ -2523,14 +3304,33 @@ impl<Transport: RangeWriteTransport> CommitAdmission for RangeWriteCoordinator<T
             )));
         }
 
-        // Persist the local decision before telling any follower to commit.
-        // Therefore a committed follower always implies a recoverable decision
-        // on the designated leader.
-        self.local_service.lock().commit_range_write_decision(
-            &range,
-            &self.local_node_id,
-            &command,
-        )?;
+        // Native uncertainty starts BEFORE attempting the local Commit write:
+        // persistence can succeed even when its error/reply is lost. No native
+        // abort may be inferred from any failure after this boundary.
+        let local_commit = self
+            .local_service
+            .lock()
+            .commit_range_write_decision_with_mutation(
+                &range,
+                &self.local_node_id,
+                &command,
+                authority,
+            );
+        if let Err(error) = local_commit {
+            if native_database.is_some() {
+                self.recovered_epochs.lock().remove(&range.id);
+                return Err(BicDbError::CommitOutcomeUnknown {
+                    sequence: None,
+                    transaction_id: Some(command.transaction_id),
+                    incarnation: self.local_incarnation.clone(),
+                    detail: format!(
+                        "range {} command {} local Commit persistence is uncertain: {error}; local application WAL has not started; retained for recovery",
+                        range.id, command.command_id,
+                    ),
+                });
+            }
+            return Err(error);
+        }
         let mut committed = 1usize;
         let mut committed_nodes = Vec::new();
         for voter in &prepared_nodes {
@@ -2549,10 +3349,21 @@ impl<Transport: RangeWriteTransport> CommitAdmission for RangeWriteCoordinator<T
             }
         }
         if committed < quorum {
-            // No row has been applied yet. Provisional decisions are
-            // abortable until a decision quorum exists, so a minority outcome
-            // cannot leak visible follower state or resurrect on restart.
-            self.abort_prepared(&range, &voters, &command);
+            if native_database.is_some() {
+                self.recovered_epochs.lock().remove(&range.id);
+                return Err(BicDbError::CommitOutcomeUnknown {
+                    sequence: None,
+                    transaction_id: Some(command.transaction_id),
+                    incarnation: self.local_incarnation.clone(),
+                    detail: format!(
+                        "range {} command {} counted Commit replies {committed}/{quorum}; additional Commit decisions may be durable despite missing replies; local application WAL has not started; retained for recovery",
+                        range.id, command.command_id,
+                    ),
+                });
+            }
+            // Preserve the legacy classification separately. Native missing
+            // Commit replies above never establish a prepare-only rollback.
+            self.abort_prepared(&range, &voters, &command, authority);
             return Err(range_write_error(format!(
                 "range {} write {} failed decision quorum: {committed}/{quorum}; provisional decisions were aborted",
                 range.id, command.command_id
@@ -2562,11 +3373,25 @@ impl<Transport: RangeWriteTransport> CommitAdmission for RangeWriteCoordinator<T
         // The leader persists the quorum certificate before any replica is
         // allowed to apply. From this point onward the command must be
         // recovered/applied and may not be overtaken by a later command.
-        self.local_service
-            .lock()
-            .certify_range_write(&range, &self.local_node_id, &command)?;
+        let local_certificate = self.local_service.lock().certify_range_write_with_mutation(
+            &range,
+            &self.local_node_id,
+            &command,
+            authority,
+        );
+        if let Err(error) = local_certificate {
+            if native_database.is_some() {
+                self.recovered_epochs.lock().remove(&range.id);
+                return Err(BicDbError::CommitOutcomeUnknown {
+                    sequence: None, transaction_id: Some(command.transaction_id), incarnation:self.local_incarnation.clone(),
+                    detail:format!("range {} command {} reached a decision quorum, but local certificate persistence is uncertain: {error}; local row apply has not started", range.id,command.command_id),
+                });
+            }
+            return Err(error);
+        }
         reservation.preserve_for_recovery(&command.command_id);
         let mut certified_voters = 1usize;
+        let mut certified_nodes = BTreeSet::from([self.local_node_id.clone()]);
         for voter in &committed_nodes {
             let certified = self
                 .transport
@@ -2581,9 +3406,61 @@ impl<Transport: RangeWriteTransport> CommitAdmission for RangeWriteCoordinator<T
                 });
             if certified.is_some() {
                 certified_voters += 1;
-                let _ = self.transport.apply_range_write(voter, &command);
+                certified_nodes.insert(voter.clone());
+                if native_database.is_none() {
+                    let _ = self.transport.apply_range_write(voter, &command);
+                }
             }
         }
+        let native = if let (Some(database), Some(plan)) = (native_database, native_plan) {
+            let certificate = plan.certify(&certified_nodes).ok();
+            let pending = match database.prepare_native_range_command(
+                &plan,
+                command.transaction_id,
+                authority,
+            ) {
+                Ok(pending) => pending,
+                Err(error) => {
+                    self.recovered_epochs.lock().remove(&range.id);
+                    let mut active = self.active_ranges.lock();
+                    if active.get(&range.id) == Some(&command.command_id) {
+                        active.remove(&range.id);
+                        self.active_range_changed.notify_all();
+                    }
+                    return Err(BicDbError::CommitOutcomeUnknown {
+                        sequence:None,transaction_id:Some(command.transaction_id),incarnation:self.local_incarnation.clone(),
+                        detail:format!("range {} command {} is irrevocably certified but native pending persistence failed before local row apply: {error}; recovery is required",range.id,command.command_id),
+                    });
+                }
+            };
+            // A native Apply instruction is never emitted by an early ACK.
+            // Actual distinct certificate quorum must already be established.
+            if let Some(certificate) = &certificate {
+                let budget = CancellationToken::uncancelable().child_with_deadline(
+                    std::time::Instant::now()
+                        + std::time::Duration::from_millis(
+                            crate::distribution_native_apply::NATIVE_ORDINARY_BUDGET_MS,
+                        ),
+                );
+                for voter in certified_nodes
+                    .iter()
+                    .filter(|node| **node != self.local_node_id)
+                {
+                    // The actual QQ exists before any authenticated native
+                    // instruction. A lost materialization reply is not rollback.
+                    let _ =
+                        self.transport
+                            .apply_native_origin(voter, &command, certificate, &budget);
+                }
+            }
+            Some(NativeRangeAcknowledgementEvidence {
+                pending,
+                mutations_sha256: plan.mutations_sha256().to_string(),
+                certificate,
+            })
+        } else {
+            None
+        };
         // An irrevocable certificate already exists. Continue through the
         // ordinary local WAL/receipt boundary even if certificate replies were
         // lost; the callback must report uncertainty rather than a rollback.
@@ -2594,6 +3471,8 @@ impl<Transport: RangeWriteTransport> CommitAdmission for RangeWriteCoordinator<T
                 transaction_id: command.transaction_id,
                 certified: certified_voters,
                 required_quorum: quorum,
+                mutation,
+                native,
             },
         );
         Ok(CommitAdmissionTicket {
@@ -2602,7 +3481,12 @@ impl<Transport: RangeWriteTransport> CommitAdmission for RangeWriteCoordinator<T
         })
     }
 
-    fn local_applied(&self, ticket: &CommitAdmissionTicket, commit_seq: u64) -> Result<()> {
+    fn finish_local_application(
+        &self,
+        ticket: &CommitAdmissionTicket,
+        commit_seq: u64,
+        native_context: Option<(&crate::db::NativeWalApplyReceipt, &crate::BicDb)>,
+    ) -> Result<()> {
         if !ticket
             .authority
             .starts_with(&format!("range-quorum-v{RANGE_WRITE_PROTOCOL_VERSION}:"))
@@ -2624,18 +3508,72 @@ impl<Transport: RangeWriteTransport> CommitAdmission for RangeWriteCoordinator<T
         {
             return Err(range_write_error("commit ticket range authority mismatch"));
         }
-        let applied = self
-            .local_service
-            .lock()
-            .mark_range_write_applied(&ticket.command_id);
-        let uncertainty = match applied {
-            Err(error) => Some(format!("local range applied checkpoint failed: {error}")),
-            Ok(()) if evidence.certified < evidence.required_quorum => Some(format!(
+        let authority = &RangeMutationAuthority::Mutation(&evidence.mutation);
+        let mut problems = Vec::new();
+        let mut actual_native_apply_verified = !self.native_image_mode;
+        if let Some(native) = &evidence.native {
+            if let Some((receipt, database)) = native_context {
+                let current_range =
+                    { self.topology.read().range_by_id(evidence.range_id).cloned() };
+                let validation = current_range
+                    .ok_or_else(|| range_write_error("native callback range disappeared"))
+                    .and_then(|range| self.require_native_writer_host_context(database,&range))
+                    .and_then(|()| database.validate_native_wal_apply_receipt(receipt)).and_then(|()| {
+                    if database.incarnation_id() != self.local_incarnation
+                        || receipt.transaction_id() != evidence.transaction_id
+                        || receipt.mutations_sha256() != native.mutations_sha256
+                    {
+                        return Err(range_write_error("native callback actual database/transaction/mutations differ from admission"));
+                    }
+                    Ok(())
+                });
+                match validation {
+                    Err(error) => {
+                        problems.push(format!("native actual-WAL binding failed: {error}"))
+                    }
+                    Ok(()) => {
+                        actual_native_apply_verified = true;
+                        let completion = database.record_native_range_materialized(&native.pending, receipt, authority)
+                            .and_then(|()| {
+                                let certificate = native.certificate.as_ref().ok_or_else(|| range_write_error("native prefix has no actual certificate quorum; materialized pending remains unresolved"))?;
+                                database.complete_native_range_command(&native.pending, certificate, receipt, authority)
+                            });
+                        if let Err(error) = completion {
+                            problems.push(format!("native prefix completion failed: {error}"));
+                        }
+                    }
+                }
+            } else {
+                problems.push("native callback requires the actual borrowed DB and private WAL apply receipt; a sequence is insufficient".to_string());
+            }
+        } else if self.native_image_mode {
+            problems.push("native callback has no admitted native command journal".to_string());
+        }
+        if actual_native_apply_verified {
+            if let Err(error) = self
+                .local_service
+                .lock()
+                .mark_range_write_applied_with_mutation(&ticket.command_id, authority)
+            {
+                problems.push(format!("local range applied checkpoint failed: {error}"));
+            }
+        }
+        if evidence.certified < evidence.required_quorum {
+            problems.push(format!(
                 "durable range certificate acknowledgments reached only {}/{} voters",
                 evidence.certified, evidence.required_quorum
-            )),
-            Ok(()) => None,
-        };
+            ));
+        }
+        if let Some((_, database)) = native_context {
+            let current_range = { self.topology.read().range_by_id(evidence.range_id).cloned() };
+            let validation = current_range
+                .ok_or_else(|| range_write_error("native callback range disappeared"))
+                .and_then(|range| self.require_native_writer_host_context(database, &range));
+            if let Err(error) = validation {
+                problems.push(format!("native host policy changed before ACK: {error}"));
+            }
+        }
+        let uncertainty = (!problems.is_empty()).then(|| problems.join("; "));
         if uncertainty.is_some() {
             // Local WAL is durable and the range decision is irrevocable. Do
             // not claim rollback or let another command overtake recovery.
@@ -2654,13 +3592,81 @@ impl<Transport: RangeWriteTransport> CommitAdmission for RangeWriteCoordinator<T
         self.active_range_changed.notify_all();
         drop(active);
         if let Some(detail) = uncertainty {
+            let local_detail = if actual_native_apply_verified {
+                "local application is durable"
+            } else {
+                "local application requires independent verification"
+            };
             return Err(BicDbError::CommitOutcomeUnknown {
                 sequence: Some(commit_seq),
                 transaction_id: Some(evidence.transaction_id),
                 incarnation: self.local_incarnation.clone(),
-                detail: format!("range {} command {}: {detail}; local application is durable, cluster recovery/verification is still required before treating this as acknowledged", evidence.range_id, ticket.command_id),
+                detail: format!("range {} command {}: {detail}; {local_detail}, cluster recovery/verification is still required before treating this as acknowledged", evidence.range_id, ticket.command_id),
             });
         }
+        Ok(())
+    }
+}
+
+impl<Transport: RangeWriteTransport> CommitAdmission for RangeWriteCoordinator<Transport> {
+    fn admit(&self, intent: &CommitAdmissionIntent) -> Result<CommitAdmissionTicket> {
+        self.admit_with_database(intent, None)
+    }
+    fn admit_with_native_context(
+        &self,
+        intent: &CommitAdmissionIntent,
+        database: &crate::BicDb,
+    ) -> Result<CommitAdmissionTicket> {
+        self.admit_with_database(intent, Some(database))
+    }
+    fn local_applied(&self, ticket: &CommitAdmissionTicket, commit_seq: u64) -> Result<()> {
+        self.finish_local_application(ticket, commit_seq, None)
+    }
+    fn local_applied_with_native_context(
+        &self,
+        ticket: &CommitAdmissionTicket,
+        receipt: &crate::db::NativeWalApplyReceipt,
+        database: &crate::BicDb,
+    ) -> Result<()> {
+        self.finish_local_application(ticket, receipt.sequence(), Some((receipt, database)))
+    }
+    fn release_native_application_for_recovery(
+        &self,
+        ticket: &CommitAdmissionTicket,
+    ) -> Result<()> {
+        if !self.native_image_mode {
+            return Ok(());
+        }
+        let evidence = {
+            let mut pending = self.pending_acknowledgements.lock();
+            let Some(evidence) = pending.get(&ticket.command_id) else {
+                return Ok(());
+            };
+            if ticket.authority
+                != format!(
+                    "range-quorum-v{RANGE_WRITE_PROTOCOL_VERSION}:{}",
+                    evidence.range_id
+                )
+            {
+                return Err(range_write_error(
+                    "native recovery release ticket range mismatch",
+                ));
+            }
+            pending
+                .remove(&ticket.command_id)
+                .expect("checked pending native ticket")
+        };
+        self.recovered_epochs.lock().remove(&evidence.range_id);
+        {
+            let mut active = self.active_ranges.lock();
+            if active.get(&evidence.range_id) == Some(&ticket.command_id) {
+                active.remove(&evidence.range_id);
+                self.active_range_changed.notify_all();
+            }
+        }
+        // Drop owned local mutation/scope leases only after the caller has
+        // completed actual local cleanup. Durable CQ/pending remain untouched.
+        drop(evidence);
         Ok(())
     }
 }
@@ -2677,8 +3683,8 @@ mod tests {
     use std::sync::atomic::{AtomicBool, Ordering};
 
     #[derive(Debug)]
-    struct TestTransport {
-        available: bool,
+    pub(super) struct TestTransport {
+        pub(super) available: bool,
     }
 
     impl RangeWriteTransport for TestTransport {
@@ -3445,6 +4451,232 @@ mod tests {
         command
     }
 
+    fn handoff_request() -> RangeHandoffPromise {
+        RangeHandoffPromise {
+            session_id: Uuid::new_v4(),
+            relocation_id: crate::RelocationId::new(1).unwrap(),
+            plan_id: "actual-relocation-plan".into(),
+            range_id: RangeId::new(1).unwrap(),
+            old_epoch: 1,
+            activation_epoch: 3,
+            old_config_sha256: "a".repeat(64),
+            new_config_sha256: "b".repeat(64),
+            nonce: Uuid::new_v4(),
+            resolved_through: u64::MAX,
+        }
+    }
+
+    #[test]
+    fn handoff_promise_survives_restart_and_blocks_old_intermediate_and_future_prepares() {
+        let directory = tempfile::tempdir().unwrap();
+        crate::format::enable_range_image_install(directory.path()).unwrap();
+        let cluster = ClusterId::new("range-log-test").unwrap();
+        let node = ClusterNodeId::new("n1").unwrap();
+        let mut store =
+            RangeWriteStore::open(directory.path(), cluster.clone(), node.clone(), true).unwrap();
+        let first = command(1, 1);
+        store.prepare(first.clone()).unwrap();
+        store.commit(&first).unwrap();
+        store.certify(&first).unwrap();
+        store.mark_applied(&first).unwrap();
+        let request = handoff_request();
+        let promise = store.install_handoff_promise(&request).unwrap();
+        assert_eq!(
+            promise.resolved_through, 1,
+            "request cannot invent a local watermark"
+        );
+        assert_eq!(store.install_handoff_promise(&request).unwrap(), promise);
+        drop(store);
+        let mut store =
+            RangeWriteStore::open(directory.path(), cluster.clone(), node.clone(), true).unwrap();
+        assert_eq!(store.catalog.format_version, HANDOFF_RANGE_LOG_FORMAT);
+        for epoch in [1, 2, 3, 999] {
+            assert!(store
+                .prepare(command(2, epoch))
+                .unwrap_err()
+                .to_string()
+                .contains("handoff"));
+        }
+        assert_eq!(store.install_handoff_promise(&request).unwrap(), promise);
+        let mut conflicting = request.clone();
+        conflicting.nonce = Uuid::new_v4();
+        assert!(store.install_handoff_promise(&conflicting).is_err());
+        assert!(RangeWriteStore::open(directory.path(), cluster, node, false).is_err());
+        let mut other = command(1, 1);
+        other.range_id = RangeId::new(2).unwrap();
+        other.checksum_sha256 = other.calculate_checksum().unwrap();
+        store.prepare(other).unwrap();
+    }
+
+    #[test]
+    fn handoff_refuses_provisional_or_certified_unapplied_tail_and_unfenced_format() {
+        let directory = tempfile::tempdir().unwrap();
+        let mut store = RangeWriteStore::open(
+            directory.path(),
+            ClusterId::new("range-log-test").unwrap(),
+            ClusterNodeId::new("n1").unwrap(),
+            true,
+        )
+        .unwrap();
+        let request = handoff_request();
+        assert!(store.install_handoff_promise(&request).is_err());
+        crate::format::enable_range_image_install(directory.path()).unwrap();
+        let first = command(1, 1);
+        store.prepare(first.clone()).unwrap();
+        assert!(store.install_handoff_promise(&request).is_err());
+        store.commit(&first).unwrap();
+        store.certify(&first).unwrap();
+        assert!(store.install_handoff_promise(&request).is_err());
+        assert!(store.catalog.handoff_promises.is_empty());
+        store.mark_applied(&first).unwrap();
+        store.install_handoff_promise(&request).unwrap();
+    }
+
+    #[test]
+    fn handoff_failed_persistence_blocks_locally_without_issuing_quorum_evidence() {
+        let directory = tempfile::tempdir().unwrap();
+        crate::format::enable_range_image_install(directory.path()).unwrap();
+        let mut store = RangeWriteStore::open(
+            directory.path(),
+            ClusterId::new("range-log-test").unwrap(),
+            ClusterNodeId::new("n1").unwrap(),
+            true,
+        )
+        .unwrap();
+        let first = command(1, 1);
+        store.prepare(first.clone()).unwrap();
+        store.abort(&first).unwrap();
+        let before = store.catalog.clone();
+        let log_path = directory.path().join(DEFAULT_RANGE_WRITE_LOG);
+        let saved = directory.path().join("retained-before-interruption.json");
+        std::fs::rename(&log_path, &saved).unwrap();
+        std::fs::create_dir(&log_path).unwrap();
+        let request = handoff_request();
+        assert!(store.install_handoff_promise(&request).is_err());
+        assert!(store
+            .catalog
+            .handoff_promises
+            .contains_key(&request.range_id));
+        assert!(store.prepare(command(2, 1)).is_err());
+        std::fs::remove_dir(&log_path).unwrap();
+        std::fs::rename(saved, &log_path).unwrap();
+        drop(store);
+        let reopened = RangeWriteStore::open(
+            directory.path(),
+            ClusterId::new("range-log-test").unwrap(),
+            ClusterNodeId::new("n1").unwrap(),
+            true,
+        )
+        .unwrap();
+        assert_eq!(reopened.catalog, before);
+    }
+
+    #[test]
+    fn handoff_postrename_directory_sync_failure_survives_reopen_and_cannot_ack() {
+        use std::cell::Cell;
+        use std::io::Write;
+
+        // This reproduces the actual replacement ordering up to the fault:
+        // synced new file -> atomic rename -> failed directory fsync. It is not
+        // a power-loss simulation and does not claim the unsynced rename would
+        // survive one; its outcome is deliberately treated as uncertain.
+        fn replace_then_fail_directory_sync(path: &Path, bytes: &[u8], fsync: bool) -> Result<()> {
+            assert!(fsync, "handoff evidence requires the durable writer");
+            let temporary = path.with_extension(format!("{}.tmp", Uuid::new_v4()));
+            let mut file = OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(&temporary)?;
+            file.write_all(bytes)?;
+            file.sync_all()?;
+            drop(file);
+            fs::rename(&temporary, path)?;
+            assert_eq!(
+                fs::read(path)?,
+                bytes,
+                "new catalog is visible after rename"
+            );
+            Err(std::io::Error::other("injected post-rename directory fsync failure").into())
+        }
+
+        let directory = tempfile::tempdir().unwrap();
+        crate::format::enable_range_image_install(directory.path()).unwrap();
+        let cluster = ClusterId::new("range-log-test").unwrap();
+        let node = ClusterNodeId::new("n1").unwrap();
+        let mut store =
+            RangeWriteStore::open(directory.path(), cluster.clone(), node.clone(), true).unwrap();
+        let first = command(1, 1);
+        store.prepare(first.clone()).unwrap();
+        store.abort(&first).unwrap();
+        let request = handoff_request();
+        let persistence_calls = Cell::new(0);
+        let failed = store.install_handoff_promise_with(&request, |store| {
+            persistence_calls.set(persistence_calls.get() + 1);
+            store.persist_with(replace_then_fail_directory_sync)
+        });
+        assert!(failed.unwrap_err().to_string().contains("post-rename"));
+        assert_eq!(persistence_calls.get(), 1);
+        let expected = store.catalog.handoff_promises[&request.range_id].clone();
+        assert_eq!(expected.resolved_through, 1);
+        assert!(store.prepare(command(2, 1)).is_err());
+        drop(store);
+
+        let mut reopened =
+            RangeWriteStore::open(directory.path(), cluster.clone(), node.clone(), true).unwrap();
+        assert_eq!(reopened.catalog.format_version, HANDOFF_RANGE_LOG_FORMAT);
+        assert_eq!(
+            reopened.catalog.handoff_promises[&request.range_id],
+            expected
+        );
+        for epoch in [1, 2, 3, 999] {
+            assert!(reopened.prepare(command(2, epoch)).is_err());
+        }
+
+        // A matching in-memory/on-disk promise is not by itself permission to
+        // return quorum evidence: every idempotent retry must re-persist it.
+        let retry = reopened.install_handoff_promise_with(&request, |store| {
+            persistence_calls.set(persistence_calls.get() + 1);
+            store.persist_with(replace_then_fail_directory_sync)
+        });
+        assert!(retry.unwrap_err().to_string().contains("post-rename"));
+        assert_eq!(
+            persistence_calls.get(),
+            2,
+            "retry really reached persistence"
+        );
+        assert!(reopened.prepare(command(2, 1)).is_err());
+        drop(reopened);
+        let mut reopened =
+            RangeWriteStore::open(directory.path(), cluster.clone(), node.clone(), true).unwrap();
+        assert_eq!(
+            reopened.catalog.handoff_promises[&request.range_id],
+            expected
+        );
+
+        let synced = Cell::new(false);
+        let evidence = reopened
+            .install_handoff_promise_with(&request, |store| {
+                persistence_calls.set(persistence_calls.get() + 1);
+                store.persist_with(|path, bytes, fsync| {
+                    assert!(fsync);
+                    crate::storage::write_atomic(path, bytes, fsync)?;
+                    synced.set(true);
+                    Ok(())
+                })
+            })
+            .unwrap();
+        assert!(synced.get(), "proof follows successful durable replacement");
+        assert_eq!(persistence_calls.get(), 3);
+        assert_eq!(evidence, expected);
+        drop(reopened);
+        let mut reopened = RangeWriteStore::open(directory.path(), cluster, node, true).unwrap();
+        assert_eq!(
+            reopened.catalog.handoff_promises[&request.range_id],
+            expected
+        );
+        assert!(reopened.prepare(command(2, 3)).is_err());
+    }
+
     #[test]
     fn durable_log_recovers_committed_command_and_idempotent_retries() {
         let directory = tempfile::tempdir().unwrap();
@@ -3587,6 +4819,7 @@ mod tests {
         legacy.checksum_sha256 = legacy.calculate_checksum().unwrap();
         let catalog = RangeWriteCatalog {
             format_version: 1,
+            native_writer_enforcement_version: None,
             cluster_id: cluster.clone(),
             node_id: node.clone(),
             ranges: BTreeMap::from([(
@@ -3606,6 +4839,11 @@ mod tests {
                 },
             )]),
             backup_fences: BTreeMap::new(),
+            handoff_promises: BTreeMap::new(),
+            image_install_intents: BTreeMap::new(),
+            recovery_fences: BTreeMap::new(),
+            native_image_bases: BTreeMap::new(),
+            sparse_committed_decisions: None,
         };
         let envelope = RangeWriteEnvelope::new(catalog).unwrap();
         fs::write(
@@ -3635,10 +4873,16 @@ mod tests {
         let node = ClusterNodeId::new("n1").unwrap();
         let envelope = RangeWriteEnvelope::new(RangeWriteCatalog {
             format_version: 2,
+            native_writer_enforcement_version: None,
             cluster_id: cluster.clone(),
             node_id: node.clone(),
             ranges: BTreeMap::new(),
             backup_fences: BTreeMap::new(),
+            handoff_promises: BTreeMap::new(),
+            image_install_intents: BTreeMap::new(),
+            recovery_fences: BTreeMap::new(),
+            native_image_bases: BTreeMap::new(),
+            sparse_committed_decisions: None,
         })
         .unwrap();
         let legacy_bytes = serde_json::to_vec_pretty(&envelope).unwrap();
@@ -3733,6 +4977,44 @@ mod tests {
         )
         .unwrap();
         assert!(store.committed_not_applied().is_empty());
+    }
+
+    #[test]
+    fn range_image_gate_keeps_owned_leader_permit_through_actual_wal_callback() {
+        let topology = topology(1);
+        let range_id = topology
+            .range_for_key("items", "owned-until-wal-callback")
+            .unwrap()
+            .id;
+        let other_range = topology
+            .ranges
+            .values()
+            .find(|range| range.id != range_id)
+            .unwrap()
+            .id;
+        let (_directory, db) = coordinated_database(topology, true);
+        let (gate, log, sequence, mut tx) = {
+            let database = db.read();
+            let gate = database.range_mutation_gate();
+            let mut tx = database.begin_transaction().unwrap();
+            tx.insert("items", Record::new("owned-until-wal-callback"))
+                .unwrap();
+            let sequence = database.commit_buffered_transaction(&mut tx).unwrap();
+            (gate, database.tx_log_handle(), sequence, tx)
+        };
+        assert!(gate.try_freeze(range_id, Uuid::now_v7()).is_err());
+        let other_frozen = gate.try_freeze(other_range, Uuid::now_v7()).unwrap();
+        log.write_durable(sequence).unwrap();
+        assert!(gate.try_freeze(range_id, Uuid::now_v7()).is_err());
+        tx.finalize_commit_admission().unwrap();
+        let frozen = gate.try_freeze(range_id, Uuid::now_v7()).unwrap();
+        assert!(db
+            .read()
+            .get("items", "owned-until-wal-callback")
+            .unwrap()
+            .is_some());
+        drop(frozen);
+        drop(other_frozen);
     }
 
     #[test]
@@ -3899,10 +5181,18 @@ mod tests {
                 leader
                     .certify_range_write(&current_range, &leader_id, &command)
                     .unwrap();
-                leader_db
-                    .read()
-                    .apply_admitted_mutations(&command.mutations)
-                    .unwrap();
+                {
+                    let database = leader_db.read();
+                    let gate = database.range_mutation_gate();
+                    let permit = gate.try_enter(command.range_id).unwrap();
+                    database
+                        .apply_admitted_mutations_with_mutation(
+                            command.range_id,
+                            &command.mutations,
+                            &RangeMutationAuthority::Mutation(&permit),
+                        )
+                        .unwrap();
+                }
                 leader
                     .mark_range_write_applied(&command.command_id)
                     .unwrap();
@@ -4073,11 +5363,19 @@ mod tests {
         transport.available.store(true, Ordering::SeqCst);
         coordinator.recover_local_leadership(1_024).unwrap();
         transport.commit_available.store(false, Ordering::SeqCst);
-        let provisional = leader_db
-            .write()
-            .insert("items", Record::new(&record_ids[1]))
-            .unwrap_err();
+        let (provisional, legacy_outcome) = {
+            let db = leader_db.write();
+            let mut tx = db.begin_transaction().unwrap();
+            tx.insert("items", Record::new(&record_ids[1])).unwrap();
+            let observer = tx.observe_outcome();
+            (tx.commit().unwrap_err(), observer)
+        };
         assert!(provisional.to_string().contains("decision quorum"));
+        assert!(!matches!(
+            provisional,
+            BicDbError::CommitOutcomeUnknown { .. }
+        ));
+        assert_eq!(legacy_outcome.outcome(), crate::TransactionOutcome::Aborted);
         for follower in [&follower_two_db, &follower_three_db] {
             assert!(follower
                 .read()

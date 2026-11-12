@@ -425,6 +425,9 @@ impl PagedRecords {
         expected_head: TupleLocator,
         replacement: &Record,
     ) -> Result<VersionChainRepairReport> {
+        if collection.is_empty() {
+            return Err(BicDbError::InvalidCollectionName(collection.to_string()));
+        }
         let physical = self.physical_collection(collection);
         let collection: &str = &physical;
         if replacement.id != id {
@@ -483,6 +486,9 @@ impl PagedRecords {
     }
 
     pub fn put(&self, transaction: Xid, collection: &str, record: &Record) -> Result<TupleLocator> {
+        if collection.is_empty() {
+            return Err(BicDbError::InvalidCollectionName(collection.to_string()));
+        }
         let physical = self.physical_collection(collection);
         let collection: &str = &physical;
         let key = record_key(collection, &record.id);
@@ -532,6 +538,9 @@ impl PagedRecords {
         field: bicdb_page::paged::HeaderStampField,
         expected: u64,
     ) -> Result<bicdb_page::paged::HeaderRepair> {
+        if collection.is_empty() {
+            return Err(BicDbError::InvalidCollectionName(collection.to_string()));
+        }
         let physical = self.physical_collection(collection);
         let collection: &str = &physical;
         let key = record_key(collection, id);
@@ -602,6 +611,9 @@ impl PagedRecords {
 
     /// Delete a record. Returns whether it was present.
     pub fn delete(&self, transaction: Xid, collection: &str, id: &str) -> Result<bool> {
+        if collection.is_empty() {
+            return Err(BicDbError::InvalidCollectionName(collection.to_string()));
+        }
         let physical = self.physical_collection(collection);
         let collection: &str = &physical;
         let key = record_key(collection, id);
@@ -3902,6 +3914,11 @@ pub(crate) fn collection_intern_prefix(collection: &str) -> Vec<u8> {
 /// never collide with one — which is what lets both keyspaces share a tree
 /// (and therefore a WAL, a transaction, and a recovery pass) safely.
 const INDEX_NS: [u8; 3] = [0, 0, 1];
+/// Native range-image birth/base receipts share the same WAL/B-tree but are
+/// not collection records or indexes. Never reuse this reserved discriminator.
+/// The only writer is the trusted core native-image adapter; raw PagedStore
+/// byte-key administration is outside the ordinary database API contract.
+pub(crate) const RANGE_IMAGE_NATIVE_NS_V1: [u8; 3] = [0, 0, 16];
 /// v2 inverted-index namespace: IMPACT-ORDERED full-text entries. Layout:
 /// `[prefix2][escaped encoded_key][0x00 0x00][255 - impact_bucket][pk]` —
 /// the inverted bucket byte makes an ascending key scan visit postings in

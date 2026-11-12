@@ -168,3 +168,66 @@ fn multi_function_drop_preflights_missing_function_before_mutating_guard_depende
         );
     });
 }
+
+#[test]
+fn multiple_trigger_functions_and_their_lineages_publish_in_one_native_commit() {
+    for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
+        let dir = tempfile::tempdir().unwrap();
+        let cfg = DbConfig::default()
+            .with_storage_mode(mode)
+            .with_fsync(true)
+            .with_paged_buffer_pool_bytes(8 * 1024 * 1024);
+        let mut db = BicDb::open_with_config(dir.path(), cfg.clone()).unwrap();
+        {
+            let mut sql = SqlSession::new(&mut db);
+            setup(&mut sql);
+            tree(&mut sql);
+            sql.execute(
+                "CREATE FUNCTION g() RETURNS trigger LANGUAGE plpgsql AS $$BEGIN RETURN NEW;END$$",
+            )
+            .unwrap();
+            sql.execute(
+                "CREATE TRIGGER g_guard AFTER INSERT ON p FOR EACH ROW EXECUTE FUNCTION g()",
+            )
+            .unwrap();
+        }
+        let before = db.last_commit_seq();
+        SqlSession::new(&mut db)
+            .execute("DROP FUNCTION f(),g() CASCADE")
+            .unwrap();
+        assert_eq!(
+            db.last_commit_seq() - before,
+            1,
+            "one DROP cannot separately publish function and trigger subsets"
+        );
+        {
+            let mut sql = SqlSession::new(&mut db);
+            assert!(lineage(&mut sql).is_empty());
+            assert!(sql
+                .execute("SELECT tgname FROM pg_trigger WHERE tgname='g_guard'")
+                .unwrap()
+                .rows
+                .is_empty());
+        }
+        db.close().unwrap();
+        for _ in 0..2 {
+            let mut db = BicDb::open_with_config(dir.path(), cfg.clone()).unwrap();
+            let mut sql = SqlSession::new(&mut db);
+            assert!(lineage(&mut sql).is_empty());
+            assert!(sql
+                .execute("SELECT tgname FROM pg_trigger WHERE tgname='g_guard'")
+                .unwrap()
+                .rows
+                .is_empty());
+            assert_eq!(
+                sql.execute("SELECT k,payload FROM p").unwrap().rows,
+                vec![vec![
+                    SqlValue::Int(1),
+                    SqlValue::String("original-ack".into())
+                ]]
+            );
+            drop(sql);
+            db.close().unwrap();
+        }
+    }
+}

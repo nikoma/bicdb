@@ -87,6 +87,8 @@ impl<'db> SqlSession<'db> {
             match load_schema(self.db_ref(), &table) {
                 Ok(Some(schema))
                     if oracle::lob_storage::has_columns(&schema)
+                        || schema.partitioning.is_some()
+                        || schema.partition_of.is_some()
                         || schema.constraints.iter().any(|constraint| {
                             matches!(
                                 constraint,

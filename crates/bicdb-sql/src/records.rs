@@ -272,11 +272,40 @@ pub(crate) fn set_record_column(
     record: &mut Record,
     schema: Option<&TableSchema>,
     column: &str,
+    value: SqlValue,
+) -> Result<()> {
+    set_record_column_inner(record, schema, column, value, false)
+}
+
+/// Parent UPDATE owns a routed delete/insert plan and reconstructs the typed
+/// record identity after all assignments. Ordinary updates keep their existing
+/// primary-key move path and cannot opt into an uncoordinated identity change.
+pub(crate) fn set_partition_update_column(
+    record: &mut Record,
+    schema: Option<&TableSchema>,
+    column: &str,
+    value: SqlValue,
+) -> Result<()> {
+    set_record_column_inner(
+        record,
+        schema,
+        column,
+        value,
+        schema.is_some_and(|schema| schema.partitioning.is_some()),
+    )
+}
+
+fn set_record_column_inner(
+    record: &mut Record,
+    schema: Option<&TableSchema>,
+    column: &str,
     mut value: SqlValue,
+    routed_key_move: bool,
 ) -> Result<()> {
     let schema_column = schema.and_then(|schema| schema.column(column));
-    if schema_column.is_some_and(|column| column.primary_key)
-        || (schema.is_none() && column.eq_ignore_ascii_case("id"))
+    if !routed_key_move
+        && (schema_column.is_some_and(|column| column.primary_key)
+            || (schema.is_none() && column.eq_ignore_ascii_case("id")))
     {
         return Err(SqlError::Unsupported(
             "UPDATE of primary key is not supported".to_string(),

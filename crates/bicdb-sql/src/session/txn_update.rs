@@ -814,7 +814,10 @@ impl<'db> SqlSession<'db> {
         }
         let schema = load_schema_shared(self.db_ref(), &table)?;
         self.validate_row_assignments(update, &table, schema.as_deref())?;
-        if let Some(schema) = schema.as_deref() {
+        if let Some(schema) = schema
+            .as_deref()
+            .filter(|schema| schema.partitioning.is_none())
+        {
             if let Some(result) = self.try_move_primary_key(update, &table, schema, &ctes)? {
                 return Ok(result);
             }
@@ -823,6 +826,7 @@ impl<'db> SqlSession<'db> {
         let mut updated = 0usize;
         let mut updated_records = Vec::new();
         let mut updated_record_snapshots = Vec::new();
+        let mut updated_sources = Vec::new();
         let mut returning_rows = (update.returning.is_some() && from_rows.is_some()).then(Vec::new);
         let mut returning_columns: Option<Arc<Vec<String>>> = None;
         let target_columns = Arc::new(row_output_columns(&table, &target_alias, schema.as_deref()));
@@ -845,7 +849,20 @@ impl<'db> SqlSession<'db> {
                 return Ok(result);
             }
         }
-        let assignment_candidates = if let Some(from_rows) = from_rows.as_ref() {
+        let assignment_candidates = if let Some(parent) = schema
+            .as_deref()
+            .filter(|schema| schema.partitioning.is_some())
+        {
+            self.partition_update_candidates(
+                update,
+                &ctes,
+                parent,
+                &target_alias,
+                from_rows.as_ref(),
+                target_columns.clone(),
+                match_policy,
+            )?
+        } else if let Some(from_rows) = from_rows.as_ref() {
             self.update_assignment_candidates_from_rows(
                 &table,
                 &target_alias,
@@ -895,7 +912,10 @@ impl<'db> SqlSession<'db> {
         // row triggers, or extension event bindings. When none applies (the
         // common OLTP case) the per-row `before` deep clone and the
         // (before, after) pair clone are both skipped.
-        let needs_before_image = match_policy != UpdateMatchPolicy::First
+        let needs_before_image = schema
+            .as_ref()
+            .is_some_and(|schema| schema.partitioning.is_some())
+            || match_policy != UpdateMatchPolicy::First
             || match schema.as_deref() {
                 None => true,
                 Some(schema) => self.update_needs_before_image(update, &table, schema)?,
@@ -951,23 +971,32 @@ impl<'db> SqlSession<'db> {
             })
             .flatten();
         for (idx, mut candidate) in assignment_candidates.into_iter().enumerate() {
-            if merged_targets.contains(&candidate.record.id) {
+            let physical_identity = (
+                candidate.physical_table.clone(),
+                candidate.record.id.clone(),
+            );
+            if merged_targets.contains(&physical_identity) {
                 return Err(match_policy.duplicate_error());
             }
             if idx % 1024 == 0 {
                 self.cancellation.check()?;
             }
             let mut statement_snapshot = 0;
+            let physical_table = candidate.physical_table.as_deref().unwrap_or(&table);
             if can_read_committed_recheck {
                 let candidate_id = candidate.record.id.clone();
-                let signed_grant = self.signed_mutation_grant(&table);
+                let signed_grant = self.signed_mutation_grant(physical_table);
                 let refreshed = match self.tx.as_mut() {
                     Some(tx) => match signed_grant {
                         Some(grant) => tx
-                            .read_committed_update_record_with_grant(grant, &table, &candidate_id)
+                            .read_committed_update_record_with_grant(
+                                grant,
+                                physical_table,
+                                &candidate_id,
+                            )
                             .map_err(SqlError::from)?,
                         None => tx
-                            .read_committed_update_record(&table, &candidate_id)
+                            .read_committed_update_record(physical_table, &candidate_id)
                             .map_err(SqlError::from)?,
                     },
                     None => None,
@@ -1131,7 +1160,12 @@ impl<'db> SqlSession<'db> {
                         } else {
                             value
                         };
-                        set_record_column(&mut record, schema.as_deref(), &column, value)?;
+                        set_partition_update_column(
+                            &mut record,
+                            schema.as_deref(),
+                            &column,
+                            value,
+                        )?;
                     }
                     continue;
                 }
@@ -1183,7 +1217,13 @@ impl<'db> SqlSession<'db> {
                 if let Some(schema) = schema.as_deref() {
                     value = resolve_oid_alias_column_value(self.db_ref(), schema, &column, value)?;
                 }
-                set_record_column(&mut record, schema.as_deref(), &column, value)?;
+                set_partition_update_column(&mut record, schema.as_deref(), &column, value)?;
+            }
+            if let Some(parent) = schema
+                .as_deref()
+                .filter(|schema| schema.partitioning.is_some())
+            {
+                self.refresh_partition_update_identity(parent, &mut record)?;
             }
             // BEFORE UPDATE row triggers see the fully assigned row and may
             // veto it (skip this candidate) or modify it. They run before the
@@ -1212,6 +1252,12 @@ impl<'db> SqlSession<'db> {
                     std::slice::from_mut(&mut record),
                 )?;
             }
+            if let Some(parent) = schema
+                .as_deref()
+                .filter(|schema| schema.partitioning.is_some())
+            {
+                self.refresh_partition_update_identity(parent, &mut record)?;
+            }
             if match_policy != UpdateMatchPolicy::First {
                 let changed = match (schema.as_deref(), merge_columns.as_deref(), before.as_ref()) {
                     (Some(schema), Some(columns), Some(before)) => {
@@ -1225,7 +1271,7 @@ impl<'db> SqlSession<'db> {
                     _ => true,
                 };
                 if match_policy == UpdateMatchPolicy::PostgresMerge || changed {
-                    merged_targets.insert(record.id.clone());
+                    merged_targets.insert(physical_identity);
                 }
             }
             let repair_plan = match repair_assignments.as_ref() {
@@ -1314,6 +1360,7 @@ impl<'db> SqlSession<'db> {
             if let Some(before) = before {
                 before_after_records.push((before, record.clone()));
             }
+            updated_sources.push(candidate.physical_table);
             updated_records.push(record);
             updated_record_snapshots.push(statement_snapshot);
             updated += 1;
@@ -1373,7 +1420,26 @@ impl<'db> SqlSession<'db> {
             }
             _ => None,
         };
-        if updated_record_repairs.iter().any(Option::is_some) {
+        if let Some(parent) = schema
+            .as_deref()
+            .filter(|schema| schema.partitioning.is_some())
+        {
+            let assigned_columns = update
+                .assignments
+                .iter()
+                .flat_map(|assignment| {
+                    super::row_assignments::assignment_columns(&assignment.target)
+                })
+                .map(relation_name)
+                .collect::<Result<Vec<_>>>()?;
+            self.update_partition_records(
+                parent,
+                &before_after_records,
+                &updated_sources,
+                &updated_record_snapshots,
+                &assigned_columns,
+            )?;
+        } else if updated_record_repairs.iter().any(Option::is_some) {
             self.insert_session_records_with_repairs(
                 &table,
                 updated_records
@@ -1690,6 +1756,7 @@ impl<'db> SqlSession<'db> {
                         || seen_record_ids.insert(record.id.clone()))
                 {
                     candidates.push(UpdateAssignmentCandidate {
+                        physical_table: None,
                         record,
                         columns: candidate_columns.clone(),
                         row: candidate_row,
@@ -1851,6 +1918,7 @@ impl<'db> SqlSession<'db> {
                 };
             if matches {
                 candidates.push(UpdateAssignmentCandidate {
+                    physical_table: None,
                     record,
                     columns: target_columns.clone(),
                     row: target_row,

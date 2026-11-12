@@ -60,6 +60,7 @@ pub(crate) struct RowSet {
 
 #[derive(Clone, Debug)]
 pub(crate) struct UpdateAssignmentCandidate {
+    pub(crate) physical_table: Option<String>,
     pub(crate) record: Record,
     pub(crate) columns: Arc<Vec<String>>,
     pub(crate) row: SlotRow,

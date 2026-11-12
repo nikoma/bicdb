@@ -55,13 +55,24 @@ def verify(root,repo=None,private=None):
  require(len(calls)==4,'both APIs in two rounds');derived={}
  for lid,request in calls.items():
   req=[];resp=[];snap=[]
+  attempt_requests={}
+  successful_attempts={x['actual']['attempt_id'] for x in strict if x['kind']=='actual_rpc_phase' and x['logical_context']['diagnostic_operation_id']==lid and x['actual']['phase']=='validated_transport_result_ok'}
   for x in strict:
    if x['kind']!='actual_rpc_phase' or x['logical_context']['diagnostic_operation_id']!=lid:continue
    actual=x['actual']
    if not actual['raw_frame']:continue
    obj=json.loads(bytes(actual['raw_frame'])[4:])
    if actual['operation']=='metadata_snapshot_discovery':
-    if 'response' in obj:snap.append(actual['destination'])
+    aid=actual['attempt_id']
+    if 'request' in obj:
+     require(obj['request']=='FetchBootstrapSnapshot','actual discovery request kind');attempt_requests[aid]=obj
+    else:
+     original=attempt_requests.get(aid);require(original is not None and obj['request_id']==original['request_id'] and obj['protocol_version']==original['protocol_version'] and obj['cluster_id']==original['cluster_id'],'snapshot original request/attempt parity')
+     require(actual['destination']==original['destination_node_id']==obj['source_node_id'],'snapshot actual source/destination')
+     require(aid in successful_attempts and set(obj['response'])=={'Ok'} and set(obj['response']['Ok'])=={'BootstrapSnapshot'},'discovery was not actual validated successful snapshot')
+     topology=obj['response']['Ok']['BootstrapSnapshot']['topology'];require(topology==b and topology['generation']==4,'successful full committed C4 snapshot')
+     member=topology['nodes'][obj['source_node_id']];require(obj['actual_native_source']==member['native_store_birth_v1'] and member['incarnation']==obj['actual_native_source']['node_incarnation'],'snapshot source actual native birth/incarnation')
+     snap.append(actual['destination'])
    elif 'request' in obj:req.append((actual,obj))
    else:resp.append((actual,obj))
   if request['public_operation']=='get_strong':

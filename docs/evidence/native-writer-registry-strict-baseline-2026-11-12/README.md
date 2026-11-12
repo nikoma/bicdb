@@ -45,7 +45,10 @@ challenge in the journal. Legacy `ApplicationEvent` carries numeric request
 IDs and range/epoch, **no business UUID or topology-generation field**. Its
 attempt/request IDs and logical linkage are retained exactly; no ID is
 invented. Across these four logical calls, **109** metadata snapshot exchanges
-succeeded (34+20+35+20), rather than all nodes being offline. Typed read replies
+succeeded (34+20+35+20), rather than all nodes being offline. The verifier
+requires each actual `Ok.BootstrapSnapshot`, full observed C4 equality, native
+source birth/incarnation, source/destination, original attempt/request ID and
+validated-success trace parity; an arbitrary response frame does not count. Typed read replies
 carry generation4. Write routing scope is verified against the actual observed
 configuration, not a nonexistent write generation field.
 

@@ -1,5 +1,5 @@
 {
-  "README.md": "ca900d551b875084e05ef2c210c5af23b5df7cbbbb7860edd8b44b8574c20e13",
+  "README.md": "6540aaab92f9bcc84ee0e543cb42375b30b2ea6571ac4f888fcebb0a6cf70190",
   "catalogues/db0.json": "5dcc3729d098a81cf39d38247f1bef6c0accf9bc1bdafda0610de8d3186cc734",
   "catalogues/db1.json": "c6ad220591f0908da8b1e5bd2ba294a8c170bb87c88caac9a471f40ef5c91261",
   "catalogues/db2.json": "1b92849463a57e82d1fbbbb1807986fac10a45c4d30b52a8917d854cb30c506a",
@@ -23,6 +23,6 @@
   "source/replica_receiver_tests.rs": "ad40f656fe41d16f8c83cee9d8f241437fe37045bb6099849bd3e68785f9226b",
   "source/writer_enrollment.rs": "9bc8efe066cd6f864ff8f9a9166a8d57db9de26ef579b7e29cfcc29291451b30",
   "source/writer_registry_refresh_baseline.rs": "30cc53603a549b83e90e7f4c713aa4a452ff1bd5b680e5f378279a6d30fa568e",
-  "test_verify.py": "38c166b812acfd383a7789b32993048b929eb0c0fee58c2174a6f1b8b42863da",
-  "verify.py": "bd8a40239580d43904427556b3e1dea716c26d2599bec6b2b0a9094afab6bdf2"
+  "test_verify.py": "9d081053c285a1f2ec05cceaed71ccac0d2c5823ea05b4c687df0770c3752cfe",
+  "verify.py": "dd0fd72b4ef1ca3d756741b30cba186edb6966a3b0be988693484d8dc348b0ed"
 }

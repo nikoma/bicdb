@@ -35,7 +35,12 @@ fn replicate(stores: &mut BTreeMap<ClusterNodeId, MetadataConsensusStore>) {
 
 #[test]
 fn native_metadata_learner_cannot_vote_and_cached_legacy_store_cannot_adopt_enforced_owner() {
-    let f = ActualNativeRf3Fixture::new_with_enforced_network_and_ranges(&BTreeMap::new(), 1);
+    let mut f = ActualNativeRf3Fixture::new_with_enforced_network_and_ranges(&BTreeMap::new(), 1);
+    f.root.disable_cleanup(true);
+    eprintln!(
+        "NATIVE_DELAYED_PREBINDING_ACK_ROOT {}",
+        f.root.path().display()
+    );
     let initial = f.topology.read().clone();
     let mut stores = (0..3)
         .map(|i| {
@@ -136,7 +141,7 @@ fn native_metadata_learner_cannot_vote_and_cached_legacy_store_cannot_adopt_enfo
     );
     assert!(legacy.status().voted_for.is_none());
     let legacy_path = legacy_root.join(DEFAULT_CLUSTER_METADATA_CONSENSUS_STATE);
-    let before_binding = fs::read(&legacy_path).unwrap();
+    let before_pending_binding = fs::read(&legacy_path).unwrap();
 
     // The declaration is produced by a REAL new unassigned native factory.
     // Possessing it in topology does not attach that physical store to an
@@ -223,12 +228,37 @@ fn native_metadata_learner_cannot_vote_and_cached_legacy_store_cannot_adopt_enfo
     .bind_initial_or_unassigned_learner(&mut bound)
     .unwrap();
     bound.generation += 1;
-    stores
+    let enrollment = stores
         .get_mut(&node(0))
         .unwrap()
         .propose_topology(bound.clone())
         .unwrap();
+    // Actual legacy learner ACKs the proposed entry BEFORE it is committed.
+    // Hold that genuine returned response; do not record or edit its fields.
+    let prebinding_request = stores[&node(0)].append_request_from(1, 64).unwrap();
+    assert!(prebinding_request.leader_commit < enrollment.index);
+    assert!(prebinding_request
+        .entries
+        .iter()
+        .any(|entry| entry.index == enrollment.index));
+    let held_prebinding_ack = legacy.handle_append_request(prebinding_request).unwrap();
+    assert!(held_prebinding_ack.success);
+    assert_eq!(held_prebinding_ack.match_index, enrollment.index);
+    assert_eq!(legacy.committed_topology(), &with_learner);
+    assert!(legacy.native_owner.is_none() && legacy.state.native_store_id.is_none());
+    let before_binding = fs::read(&legacy_path).unwrap();
+    assert_ne!(
+        before_binding, before_pending_binding,
+        "actual pending enrollment entry was durably logged by the unbound learner"
+    );
+    assert_eq!(
+        decode_state(&before_binding).unwrap().committed_topology,
+        with_learner
+    );
+    eprintln!("NATIVE_DELAYED_PREBINDING_ACK held={held_prebinding_ack:?} enrollment={enrollment:?} unbound_status={:?}", legacy.status());
     replicate(&mut stores);
+    assert_eq!(stores[&node(0)].committed_topology(), &bound);
+    assert_eq!(stores[&node(0)].status().commit_index, enrollment.index);
     let mut premature = bound.clone();
     premature.generation += 1;
     premature.nodes.get_mut(&node(3)).unwrap().metadata_role = MetadataMemberRole::Voter;
@@ -245,6 +275,34 @@ fn native_metadata_learner_cannot_vote_and_cached_legacy_store_cannot_adopt_enfo
         "{error}"
     );
     assert_eq!(stores[&node(0)].status().last_log_index, before_premature);
+
+    // The commit/reset has completed. A delayed ACK from the OLD unbound
+    // request cannot become proof of current-birth OWNED metadata catch-up.
+    // This assertion is intentionally expected to expose the missing source
+    // guard until actual remote execution/fix; no test result is presumed.
+    let recorded = stores
+        .get_mut(&node(0))
+        .unwrap()
+        .record_append_response(&node(3), &held_prebinding_ack);
+    if let Err(error) = &recorded {
+        let detail = error.to_string();
+        assert!(detail.contains("native") && (detail.contains("birth") || detail.contains("owned")
+            || detail.contains("bound") || detail.contains("identity")),
+            "an unrelated I/O/persistence error is not the expected physical-identity refusal: {error}");
+    }
+    let after_delayed = stores
+        .get_mut(&node(0))
+        .unwrap()
+        .propose_topology(premature.clone());
+    eprintln!("NATIVE_DELAYED_PREBINDING_ACK after_commit recorded={recorded:?} promoted={after_delayed:?} leader={:?}", stores[&node(0)].status());
+    assert!(after_delayed.is_err(),
+        "delayed unbound ACK must NOT authorize native voter promotion; actual current-birth owned ACK is required");
+    assert_eq!(stores[&node(0)].status().last_log_index, before_premature);
+    assert_eq!(
+        fs::read(&legacy_path).unwrap(),
+        before_binding,
+        "delivering a response cannot mutate the unrelated legacy learner file"
+    );
 
     let error = legacy
         .handle_append_request(stores[&node(0)].append_request_from(1, 64).unwrap())

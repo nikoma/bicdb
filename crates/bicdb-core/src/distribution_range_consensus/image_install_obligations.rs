@@ -152,6 +152,9 @@ impl RangeWriteStore {
         for (index, checksum) in self.sparse_irreversible_commands(range_id)? {
             insert_irrevocable(&mut irrevocable_commands, index, &checksum)?;
         }
+        for (index, checksum) in self.installing_certification_obligations(range_id)? {
+            insert_irrevocable(&mut irrevocable_commands, index, &checksum)?;
+        }
         let sparse = self
             .catalog
             .sparse_committed_decisions
@@ -205,6 +208,30 @@ impl RangeWriteStore {
                 },
                 &("bicdb-image-history-extended-v1", certifications, sparse),
             )?;
+        }
+        if let Some(current) = self
+            .catalog
+            .installing_committed_certifications
+            .as_ref()
+            .and_then(|m| m.get(&range_id))
+            .filter(|m| !m.is_empty())
+        {
+            digest.update(crate::distribution_range_image::bounded_json(
+                &("Installing-existing-committed-provenance-v1", current),
+                MAX_EXTENDED_OBSERVATION_BYTES,
+            )?);
+        }
+        if let Some(h) = self
+            .catalog
+            .installing_recovery_handovers
+            .as_ref()
+            .and_then(|m| m.get(&range_id))
+            .filter(|m| !m.is_empty())
+        {
+            digest.update(crate::distribution_range_image::bounded_json(
+                &("Installing-refusal-handover-history-v1", h),
+                MAX_EXTENDED_OBSERVATION_BYTES,
+            )?);
         }
         let range_log_sha256 = hex::encode(digest.finalize());
         Ok(TargetImageCatalogHistoryObligations {

@@ -11,6 +11,11 @@ use crate::error::{BicDbError, Result};
 use crate::record::Record;
 use crate::replication::{CommitFrame, ReplicationTlsConfig};
 
+mod native_joint_handoff;
+pub use native_joint_handoff::{
+    NativeJointHandoffMetadataV1, NativeJointHandoffStageV1,
+    NATIVE_JOINT_HANDOFF_TOPOLOGY_FORMAT_VERSION,
+};
 mod native_store_birth;
 pub(crate) use native_store_birth::{
     validate_native_store_birth_snapshot, validate_native_store_birth_transition,
@@ -23,6 +28,8 @@ mod native_bootstrap_plan;
 pub(crate) use native_bootstrap_plan::plan_initial_native_topology;
 // Version 23 additionally fences peers without typed read/initial-factory RPCs.
 // Mixed protocol versions are refused; no rolling upgrade is implied.
+// Native joint metadata additionally requires topology format 3. Protocol 24
+// retains actual-destination fencing; mixed-version handoff is unqualified.
 // Unsupported typed reads are never downgraded into legacy Get.
 pub const CLUSTER_DATA_PROTOCOL_VERSION: u32 = 24;
 /// Reserved heartbeat label carrying the canonical local schema identity.
@@ -666,6 +673,8 @@ pub struct RangeRelocation {
     pub plan_id: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub handoff_session: Option<RangeHandoffSession>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub native_joint_handoff_v1: Option<NativeJointHandoffMetadataV1>,
     pub range_id: RangeId,
     /// Epoch observed by the planner before the learner was allocated.
     pub expected_epoch: u64,
@@ -697,9 +706,16 @@ pub struct RangeRelocation {
 impl RangeRelocation {
     pub fn is_active(&self) -> bool {
         !self.phase.is_terminal()
+            || self
+                .native_joint_handoff_v1
+                .as_ref()
+                .is_some_and(|joint| joint.stage() != NativeJointHandoffStageV1::Cleaned)
     }
 
     fn validate(&self, topology: &ClusterTopology) -> Result<()> {
+        if let Some(joint) = &self.native_joint_handoff_v1 {
+            return joint.validate_topology(self, topology);
+        }
         if self
             .handoff_session
             .as_ref()
@@ -2078,23 +2094,36 @@ impl ClusterTopology {
         }
         if !matches!(
             self.format_version,
-            DISTRIBUTION_FORMAT_VERSION | NATIVE_STORE_BIRTH_TOPOLOGY_FORMAT_VERSION
+            DISTRIBUTION_FORMAT_VERSION
+                | NATIVE_STORE_BIRTH_TOPOLOGY_FORMAT_VERSION
+                | NATIVE_JOINT_HANDOFF_TOPOLOGY_FORMAT_VERSION
         ) {
             return Err(cluster_error(format!(
-                "unsupported distribution format version {}; supported {} or {}",
+                "unsupported distribution format version {}; supported {}, {}, or {}",
                 self.format_version,
                 DISTRIBUTION_FORMAT_VERSION,
-                NATIVE_STORE_BIRTH_TOPOLOGY_FORMAT_VERSION
+                NATIVE_STORE_BIRTH_TOPOLOGY_FORMAT_VERSION,
+                NATIVE_JOINT_HANDOFF_TOPOLOGY_FORMAT_VERSION
             )));
         }
         if self
             .nodes
             .values()
             .any(|node| node.native_store_birth_v1.is_some())
-            && self.format_version != NATIVE_STORE_BIRTH_TOPOLOGY_FORMAT_VERSION
+            && self.format_version < NATIVE_STORE_BIRTH_TOPOLOGY_FORMAT_VERSION
         {
             return Err(cluster_error(
                 "native store birth bindings require topology format 2",
+            ));
+        }
+        if self
+            .relocations
+            .values()
+            .any(|plan| plan.native_joint_handoff_v1.is_some())
+            && self.format_version < NATIVE_JOINT_HANDOFF_TOPOLOGY_FORMAT_VERSION
+        {
+            return Err(cluster_error(
+                "native joint handoff requires topology format 3",
             ));
         }
         if self.hash_version != DISTRIBUTION_HASH_VERSION {
@@ -3682,7 +3711,10 @@ impl DistributionStore {
                 .topology
                 .relocations
                 .iter()
-                .find(|(_, relocation)| relocation.phase == RelocationPhase::Completed)
+                .find(|(_, relocation)| {
+                    relocation.phase == RelocationPhase::Completed
+                        && relocation.native_joint_handoff_v1.is_none()
+                })
                 .map(|(id, _)| *id)
             else {
                 return Err(cluster_error(
@@ -3741,6 +3773,7 @@ impl DistributionStore {
             let relocation = RangeRelocation {
                 id: relocation_id,
                 plan_id: plan.id.clone(),
+                native_joint_handoff_v1: None,
                 handoff_session: Some(RangeHandoffSession {
                     session_id: Uuid::new_v4(),
                     nonce: Uuid::new_v4(),
@@ -3928,6 +3961,7 @@ impl DistributionStore {
         now_ms: u64,
     ) -> Result<bool> {
         self.ensure_actor(actor)?;
+        self.require_legacy_relocation_mutation(relocation_id, false)?;
         let relocation = self.relocation_mut(relocation_id)?;
         match relocation.phase {
             RelocationPhase::LearnerAllocated => {
@@ -3958,6 +3992,7 @@ impl DistributionStore {
         now_ms: u64,
     ) -> Result<bool> {
         self.ensure_actor(actor)?;
+        self.require_legacy_relocation_mutation(relocation_id, false)?;
         let relocation = self.relocation_mut(relocation_id)?;
         if relocation.phase != RelocationPhase::SnapshotCopying {
             return Err(cluster_error(format!(
@@ -3997,6 +4032,7 @@ impl DistributionStore {
         now_ms: u64,
     ) -> Result<()> {
         self.ensure_actor(actor)?;
+        self.require_legacy_relocation_mutation(relocation_id, false)?;
         let snapshot_id = snapshot_id.into();
         let snapshot_sha256 = snapshot_sha256.into();
         if snapshot_id.is_empty() || snapshot_id.len() > 256 {
@@ -4048,6 +4084,7 @@ impl DistributionStore {
         now_ms: u64,
     ) -> Result<RelocationPhase> {
         self.ensure_actor(actor)?;
+        self.require_legacy_relocation_mutation(relocation_id, false)?;
         let relocation = self.relocation_mut(relocation_id)?;
         if !matches!(
             relocation.phase,
@@ -4103,6 +4140,7 @@ impl DistributionStore {
         now_ms: u64,
     ) -> Result<u64> {
         self.ensure_actor(actor)?;
+        self.require_legacy_relocation_mutation(relocation_id, true)?;
         let relocation = self
             .topology
             .relocations
@@ -4194,6 +4232,7 @@ impl DistributionStore {
         now_ms: u64,
     ) -> Result<bool> {
         self.ensure_actor(actor)?;
+        self.require_legacy_relocation_mutation(relocation_id, true)?;
         let relocation = self.relocation_mut(relocation_id)?;
         match relocation.phase {
             RelocationPhase::Promoted => {
@@ -4222,6 +4261,7 @@ impl DistributionStore {
         now_ms: u64,
     ) -> Result<u64> {
         self.ensure_actor(actor)?;
+        self.require_legacy_relocation_mutation(relocation_id, true)?;
         let relocation = self
             .topology
             .relocations
@@ -4291,6 +4331,7 @@ impl DistributionStore {
         now_ms: u64,
     ) -> Result<bool> {
         self.ensure_actor(actor)?;
+        self.require_legacy_relocation_mutation(relocation_id, true)?;
         let relocation = self.relocation_mut(relocation_id)?;
         if relocation.phase != RelocationPhase::CleaningUp {
             return Err(cluster_error(format!(
@@ -4330,6 +4371,7 @@ impl DistributionStore {
         now_ms: u64,
     ) -> Result<()> {
         self.ensure_actor(actor)?;
+        self.require_legacy_relocation_mutation(relocation_id, false)?;
         let message = message.into();
         if message.trim().is_empty() || message.len() > 4_096 {
             return Err(cluster_error(
@@ -4362,6 +4404,7 @@ impl DistributionStore {
         now_ms: u64,
     ) -> Result<RelocationPhase> {
         self.ensure_actor(actor)?;
+        self.require_legacy_relocation_mutation(relocation_id, false)?;
         let relocation = self.relocation_mut(relocation_id)?;
         if relocation.phase != RelocationPhase::Failed {
             return Err(cluster_error(format!(

@@ -48,6 +48,15 @@ use native_image_base::{NativeImageCatalogueBase, NATIVE_IMAGE_CATALOG_FORMAT};
 pub(crate) use native_image_ready::FinalizedNativeImageCatalogueObservation;
 mod image_install_obligations;
 pub(crate) use image_install_obligations::TargetImageCatalogHistoryObligations;
+mod image_replacement_handover;
+pub(crate) use image_replacement_handover::InstallingRefusalHandoverReceipt;
+use image_replacement_handover::{InstallingHandovers, ReplacedInstallingIdentity};
+mod image_install_certification;
+pub(crate) use image_install_certification::{
+    require_installing_same_voter_transition, InstallingCommittedAdmission,
+    LocalInstallingCommittedCertification, LocalInstallingCommittedFence,
+};
+use image_install_certification::{InstallingCertifications, INSTALLING_CERTIFICATION_FORMAT};
 mod image_install_resume;
 mod image_install_state;
 mod image_proposal_state;
@@ -106,10 +115,16 @@ pub(crate) use native_limits::{
     validate_native_recovery_entry_size, MAX_NATIVE_RECOVERY_ENTRY_BYTES,
     MIN_NATIVE_RECOVERY_FRAME_BYTES,
 };
+mod joint_handoff_state;
 mod native_durability;
 mod native_normal;
 mod native_prefix;
 mod native_writer;
+pub(crate) use joint_handoff_state::{
+    NativeJointBridgeCatalogue, NativeJointCatalogueActivationReceipt,
+    NativeJointOldCatalogPreflight, NativeJointOldPromiseReceipt,
+};
+use joint_handoff_state::{NativeJointLocalState, NATIVE_JOINT_HANDOFF_CATALOG_FORMAT};
 #[cfg(test)]
 pub(crate) use native_prefix::tests::{
     fixture as native_origin_fixture, seed_actual_origin, test_catalog_command,
@@ -135,6 +150,8 @@ const KNOWN_RANGE_WRITE_CATALOG_FORMATS: &[u32] = &[
     SPARSE_HISTORY_CATALOG_FORMAT,
     IMAGE_PROPOSAL_CATALOG_FORMAT,
     NATIVE_WRITER_CATALOG_FORMAT,
+    INSTALLING_CERTIFICATION_FORMAT,
+    NATIVE_JOINT_HANDOFF_CATALOG_FORMAT,
     NATIVE_ABORT_CATALOG_FORMAT,
 ];
 
@@ -581,6 +598,12 @@ struct RangeWriteCatalog {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     sparse_committed_decisions: Option<SparseDecisions>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    installing_committed_certifications: Option<InstallingCertifications>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    installing_recovery_handovers: Option<InstallingHandovers>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    native_joint_handoffs: Option<BTreeMap<RangeId, NativeJointLocalState>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     native_abort_protocol: Option<NativeAbortProtocol>,
 }
 
@@ -629,6 +652,27 @@ impl RangeWriteEnvelope {
                 "native writer catalog marker/format mismatch",
             ));
         }
+        if (self.catalog.format_version == NATIVE_JOINT_HANDOFF_CATALOG_FORMAT
+            && self.catalog.native_joint_handoffs.is_none())
+            || (self.catalog.format_version < NATIVE_JOINT_HANDOFF_CATALOG_FORMAT
+                && self.catalog.native_joint_handoffs.is_some())
+            || (self.catalog.native_joint_handoffs.is_some()
+                && self.catalog.native_writer_enforcement_version != Some(1))
+        {
+            return Err(range_write_error(
+                "native joint catalogue format/map/enforced-writer marker mismatch",
+            ));
+        }
+        if let Some(states) = &self.catalog.native_joint_handoffs {
+            if states.len() > MAX_HANDOFF_PROMISES {
+                return Err(range_write_error(
+                    "native joint catalogue state exceeds bound",
+                ));
+            }
+            for state in states.values() {
+                state.validate()?;
+            }
+        }
         if (self.catalog.format_version == NATIVE_ABORT_CATALOG_FORMAT
             && self.catalog.native_abort_protocol.is_none())
             || (self.catalog.format_version < NATIVE_ABORT_CATALOG_FORMAT
@@ -642,6 +686,8 @@ impl RangeWriteEnvelope {
             protocol.validate()?;
         }
         sparse_certification::validate_sparse_catalog(&self.catalog)?;
+        image_install_certification::validate_installing_certifications(&self.catalog)?;
+        image_replacement_handover::validate_installing_handovers(&self.catalog)?;
         if self.catalog.recovery_fences.len() > recovery_state::MAX_RECOVERY_FENCES {
             return Err(range_write_error("recovery refusal catalog exceeds bound"));
         }
@@ -767,6 +813,7 @@ pub struct RangeWriteStore {
     #[cfg(test)]
     test_native_commit_write_error_once: bool,
     native_activated_opens: BTreeMap<RangeId, crate::db::NativeActivatedOpenGuard>,
+    native_joint_activated_opens: BTreeMap<RangeId, crate::db::NativeJointActivatedOpenGuard>,
     native_writer_host: Option<std::sync::Weak<crate::db::NativeWriterHostState>>,
     _native_abort_owner: Option<bicdb_page::DirectoryLock>,
 }
@@ -858,6 +905,7 @@ impl RangeWriteStore {
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => RangeWriteCatalog {
                 format_version: RANGE_WRITE_LOG_FORMAT_VERSION,
                 native_writer_enforcement_version: None,
+                native_joint_handoffs: None,
                 cluster_id: cluster_id.clone(),
                 node_id: node_id.clone(),
                 ranges: BTreeMap::new(),
@@ -867,6 +915,8 @@ impl RangeWriteStore {
                 recovery_fences: BTreeMap::new(),
                 native_image_bases: BTreeMap::new(),
                 sparse_committed_decisions: None,
+                installing_committed_certifications: None,
+                installing_recovery_handovers: None,
                 native_abort_protocol: None,
             },
             Err(error) => return Err(error.into()),
@@ -892,6 +942,13 @@ impl RangeWriteStore {
         {
             return Err(range_write_error(
                 "protected proposal catalog lacks its mandatory native reader fence",
+            ));
+        }
+        if catalog.native_joint_handoffs.is_some()
+            && !crate::format::native_joint_data_handoff_active(&root)?
+        {
+            return Err(range_write_error(
+                "joint catalogue requires its actual sticky reader fence",
             ));
         }
         if catalog.native_abort_protocol.is_some()
@@ -944,6 +1001,7 @@ impl RangeWriteStore {
             catalog,
             open_id: Uuid::now_v7(),
             native_activated_opens: BTreeMap::new(),
+            native_joint_activated_opens: BTreeMap::new(),
             native_writer_host: None,
             _native_abort_owner: abort_owner,
             recovery_persistence_uncertain: false,
@@ -1348,6 +1406,7 @@ impl RangeWriteStore {
             .catalog
             .handoff_promises
             .contains_key(&command.range_id)
+            && !self.native_joint_command_allowed(&command)?
         {
             return Err(range_write_error(format!(
                 "range {} is unavailable while its durable handoff is incomplete",
@@ -5008,6 +5067,7 @@ mod tests {
         let catalog = RangeWriteCatalog {
             format_version: 1,
             native_writer_enforcement_version: None,
+            native_joint_handoffs: None,
             cluster_id: cluster.clone(),
             node_id: node.clone(),
             ranges: BTreeMap::from([(
@@ -5032,6 +5092,8 @@ mod tests {
             recovery_fences: BTreeMap::new(),
             native_image_bases: BTreeMap::new(),
             sparse_committed_decisions: None,
+            installing_committed_certifications: None,
+            installing_recovery_handovers: None,
             native_abort_protocol: None,
         };
         let envelope = RangeWriteEnvelope::new(catalog).unwrap();
@@ -5063,6 +5125,7 @@ mod tests {
         let envelope = RangeWriteEnvelope::new(RangeWriteCatalog {
             format_version: 2,
             native_writer_enforcement_version: None,
+            native_joint_handoffs: None,
             cluster_id: cluster.clone(),
             node_id: node.clone(),
             ranges: BTreeMap::new(),
@@ -5072,6 +5135,8 @@ mod tests {
             recovery_fences: BTreeMap::new(),
             native_image_bases: BTreeMap::new(),
             sparse_committed_decisions: None,
+            installing_committed_certifications: None,
+            installing_recovery_handovers: None,
             native_abort_protocol: None,
         })
         .unwrap();

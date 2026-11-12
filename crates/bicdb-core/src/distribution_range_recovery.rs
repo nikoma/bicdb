@@ -22,6 +22,19 @@ fn invalid(message: &str) -> BicDbError {
     BicDbError::Cluster(format!("range recovery: {message}"))
 }
 
+mod image_replacement_history;
+pub(crate) use image_replacement_history::{
+    CurrentImageReplacementHistoryRound, VerifiedCurrentImageReplacementHistory,
+};
+mod image_replacement;
+pub(crate) use image_replacement::{
+    FreshInstallingCommittedAuthority, InstallingCommittedApplyAdmission,
+    InstallingCommittedCertificationEvidence, InstallingCommittedCertificationObservation,
+    InstallingCommittedDecision, InstallingCommittedDecisionRound,
+    InstallingCommittedFenceEvidence, InstallingCommittedFenceObservation,
+    InstallingCommittedQuorumRound, InstallingCommittedRequest, InstallingCommittedVote,
+    InstallingCurrentCertificationRound, InstallingDecisionVoteAudit,
+};
 mod image_compatibility;
 mod image_history;
 mod image_proposal;

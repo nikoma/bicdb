@@ -36,6 +36,7 @@ pub(crate) struct CertifiedRecoveryImageCut {
     historical_acceptance:
         crate::distribution_range_recovery::HistoricalCurrentImageSourceAcceptance,
     resume_proposal: Option<crate::distribution_range_consensus::NativeCurrentImageProposalPointer>,
+    replacement_source: bool,
 }
 
 impl CertifiedRecoveryImageCut {
@@ -98,6 +99,7 @@ impl CertifiedRecoveryImageCut {
             historical_acceptance: history
                 .historical_current_image_acceptance(source, database, store)?,
             resume_proposal: None,
+            replacement_source: false,
         };
         history.require_current(source, database, store)?;
         Ok(cut)
@@ -156,6 +158,67 @@ impl CertifiedRecoveryImageCut {
             historical_acceptance: history
                 .historical_current_image_acceptance(source, database, store)?,
             resume_proposal: Some(authority.proposal().clone()),
+            replacement_source: false,
+        };
+        history.require_current(source, database, store)?;
+        Ok(cut)
+    }
+    pub(crate) fn from_verified_replacement_source_history(
+        history: crate::distribution_range_recovery::VerifiedCurrentImageReplacementHistory,
+        source: &crate::db::LocalNativeRecoveryReady,
+        database: &BicDb,
+        store: &crate::distribution_range_consensus::RangeWriteStore,
+    ) -> Result<Self> {
+        history.require_current(source, database, store)?;
+        let authority = history.authority();
+        let role = authority.role();
+        let target = authority.target();
+        let target_identity = authority
+            .role()
+            .member_credentials()
+            .get(target)
+            .ok_or_else(|| invalid("image repair target is no longer a current voter"))?;
+        let schema_sha256 = role
+            .expected_schema_sha256()
+            .ok_or_else(|| invalid("image repair has no committed schema contract"))?;
+        let cut = Self {
+            cluster_id: role.cluster_id().clone(),
+            bootstrap_id: role.bootstrap_id(),
+            range: role.current_range().clone(),
+            native_base_range: source.physical_base_range().clone(),
+            range_index: source.range_index(),
+            source_id: source.role().local_node_id().clone(),
+            source_incarnation: source.role().local_member_incarnation(),
+            target_id: target.clone(),
+            target_incarnation: target_identity.incarnation,
+            session_id: role.recovery_nonce(),
+            nonce: role.recovery_nonce(),
+            current_config_sha256: role.configuration_sha256()?,
+            members: role
+                .member_credentials()
+                .iter()
+                .map(|(id, identity)| {
+                    (
+                        id.clone(),
+                        RangeImageBirthMember {
+                            incarnation: identity.incarnation,
+                            tls_certificate_sha256: identity.active_certificate_sha256.clone(),
+                            pending_tls_certificate_sha256: identity
+                                .pending_certificate_sha256
+                                .clone(),
+                        },
+                    )
+                })
+                .collect(),
+            schema_sha256: schema_sha256.to_string(),
+            restore_activation: role.restore_activation().cloned(),
+            source_native_receipt_sha256: source.native_receipt_sha256().to_string(),
+            source_logical_genesis_sha256: source.logical_genesis_sha256().to_string(),
+            source_logical_history_sha256: source.logical_history_sha256().to_string(),
+            historical_acceptance: history
+                .historical_current_image_acceptance(source, database, store)?,
+            resume_proposal: Some(authority.pointer().clone()),
+            replacement_source: true,
         };
         history.require_current(source, database, store)?;
         Ok(cut)
@@ -190,6 +253,9 @@ fn semantic_range(a: &RangeDescriptor, b: &RangeDescriptor) -> bool {
     a == b
 }
 impl NativeRangeImageSourceCut {
+    pub(crate) fn is_actual_replacement_source(&self) -> bool {
+        matches!(self,Self::CurrentVoterRepair(cut)if cut.replacement_source)
+    }
     pub(crate) fn resume_proposal(
         &self,
     ) -> Option<&crate::distribution_range_consensus::NativeCurrentImageProposalPointer> {

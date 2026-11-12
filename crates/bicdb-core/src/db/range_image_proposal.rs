@@ -339,9 +339,19 @@ impl BicDb {
             .map(|p| self.read_native_current_image_proposal(native, p))
             .transpose()?;
         if let Some(prior) = &prior {
-            if prior.historical_source().scope.same_session(&audit.scope) == false
-                || prior.historical_source().source_range_index != audit.source_range_index
-                || prior.historical_source().logical_history_sha256 != audit.logical_history_sha256
+            let exact = prior.historical_source().scope.same_session(&audit.scope)
+                && prior.historical_source().source_range_index == audit.source_range_index
+                && prior.historical_source().logical_history_sha256 == audit.logical_history_sha256;
+            let replacement = source.cut().is_actual_replacement_source()
+                && source.cut().resume_proposal() == Some(&prior.pointer())
+                && audit.source_range_index >= prior.historical_source().source_range_index;
+            if replacement {
+                crate::distribution_range_consensus::require_installing_same_voter_transition(
+                    prior.historical_source(),
+                    current,
+                )?;
+            }
+            if (!exact && !replacement)
                 || prior.historical_source().logical_genesis_sha256 != audit.logical_genesis_sha256
                 || prior.target_namespace_ids() != binding.namespace_ids()
             {

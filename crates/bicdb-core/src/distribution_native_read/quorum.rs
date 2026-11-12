@@ -297,7 +297,10 @@ impl NativeReadQuorumCandidate {
             .round
             .metadata
             .committed_topology(self.round.business)?;
-        if topology.format_version != 2 {
+        if !matches!(
+            topology.format_version,
+            2 | crate::distribution::NATIVE_JOINT_HANDOFF_TOPOLOGY_FORMAT_VERSION
+        ) {
             return Err(invalid("read voters have no fenced native birth registry"));
         }
         for (id, member) in &self.scope().members {

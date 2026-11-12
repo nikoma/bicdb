@@ -43,9 +43,17 @@ mod native_abort;
 mod native_activation;
 mod native_apply;
 mod native_durability;
+mod native_joint_handoff;
 mod native_writer;
 pub(crate) use native_durability::ClusterServiceOpenGuard;
 use native_durability::{checked_database_read, checked_database_write, ServiceStoragePolicy};
+pub(crate) use native_joint_handoff::{
+    ActualServiceNativeJointCaptureInputs, ActualServiceNativeJointCommittedEvidence,
+    ActualServiceNativeJointConstraints, ActualServiceNativeJointNewEvidence,
+    ActualServiceNativeJointOldEvidence, ActualServiceNativeJointPreparedEvidence,
+    NativeJointIrrevocableFacts, NativeJointServingLease,
+};
+mod current_image_replacement;
 mod current_image_resume;
 mod native_completion;
 mod native_image_install;
@@ -890,7 +898,7 @@ impl ClusterDataNodeService {
             initial_consensus_only: false,
         };
         {
-            let database = try_database_read(&service.db)?;
+            let database = checked_database_read(&service.db, &service.storage_policy)?;
             service
                 .range_writes
                 .reconcile_actual_abort_control(&database)?;

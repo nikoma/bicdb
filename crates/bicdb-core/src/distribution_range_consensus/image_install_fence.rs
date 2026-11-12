@@ -403,8 +403,20 @@ pub(crate) struct TargetImageInstallFence {
     database_incarnation: String,
     intent: ImageInstallIntent,
     intent_sha256: String,
+    replaced_installing: Option<ReplacedInstallingIdentity>,
 }
 impl TargetImageInstallFence {
+    pub(crate) fn matches_replaced_installing_marker(
+        &self,
+        session: Uuid,
+        attempt: Uuid,
+        sha: &str,
+        r: u64,
+    ) -> bool {
+        self.replaced_installing
+            .as_ref()
+            .is_some_and(|p| p.matches(session, attempt, sha, r))
+    }
     pub(crate) fn range(&self) -> &RangeDescriptor {
         &self.intent.range
     }
@@ -746,6 +758,7 @@ impl RangeWriteStore {
         self.persist()?;
         role.role().require_live_request()?;
         let fence = TargetImageInstallFence {
+            replaced_installing: self.replaced_installing_identity(&intent)?,
             store_open_id: self.open_id,
             database_incarnation: admission.database_incarnation().to_string(),
             intent_sha256: intent.sha256()?,
@@ -1019,6 +1032,7 @@ impl RangeWriteStore {
         self.persist_native_install_intent_with(intent.clone(), persist)?;
         role.role().require_live_request()?;
         let fence = TargetImageInstallFence {
+            replaced_installing: self.replaced_installing_identity(&intent)?,
             store_open_id: self.open_id,
             database_incarnation: admission.database_incarnation().to_string(),
             intent_sha256: intent.sha256()?,

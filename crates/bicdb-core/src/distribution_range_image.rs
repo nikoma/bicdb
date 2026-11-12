@@ -140,7 +140,7 @@ pub(crate) struct LocalRangeImageSealV1 {
 pub(crate) struct RangeImageCapture {
     db: Arc<RwLock<BicDb>>,
     gate: RangeMutationGate,
-    source_read_pin: SourceCaptureReadPin,
+    source_read_pin: Arc<SourceCaptureReadPin>,
     frozen: Arc<FrozenRangeMutationPermit>,
     cut: NativeRangeImageSourceCut,
     range_index: RangeIndexCut,
@@ -307,8 +307,46 @@ impl RangeImageCapture {
         wait_budget: Duration,
         cancellation: &CancellationToken,
     ) -> Result<Self> {
-        let cut = cut.into();
-        let frozen = frozen.into();
+        Self::begin_internal(
+            db,
+            cut.into(),
+            frozen.into(),
+            lineage,
+            wait_budget,
+            cancellation,
+            None,
+        )
+    }
+    /// Share an ACTUAL existing source read lease; never acquire a second pin
+    /// or permit controlled writes while any observer/capture retains it.
+    pub(crate) fn begin_with_source_pin(
+        db: Arc<RwLock<BicDb>>,
+        cut: impl Into<NativeRangeImageSourceCut>,
+        frozen: Arc<FrozenRangeMutationPermit>,
+        lineage: SourceRangeImageLineage,
+        wait_budget: Duration,
+        cancellation: &CancellationToken,
+        pin: Arc<SourceCaptureReadPin>,
+    ) -> Result<Self> {
+        Self::begin_internal(
+            db,
+            cut.into(),
+            frozen,
+            lineage,
+            wait_budget,
+            cancellation,
+            Some(pin),
+        )
+    }
+    fn begin_internal(
+        db: Arc<RwLock<BicDb>>,
+        cut: NativeRangeImageSourceCut,
+        frozen: Arc<FrozenRangeMutationPermit>,
+        lineage: SourceRangeImageLineage,
+        wait_budget: Duration,
+        cancellation: &CancellationToken,
+        existing_pin: Option<Arc<SourceCaptureReadPin>>,
+    ) -> Result<Self> {
         if wait_budget.is_zero()
             || wait_budget > MAX_CAPTURE_WAIT
             || frozen.owner() != cut.session_id()
@@ -323,8 +361,17 @@ impl RangeImageCapture {
         let (gate, reserved, bindings, source_read_pin) = {
             let database = read_database(&db)?;
             let gate = database.range_mutation_gate();
-            gate.validate_quiescent_frozen(cut.range().id, &frozen)?;
-            let source_read_pin = gate.try_source_capture_read_pin(cut.range().id, &frozen)?;
+            let source_read_pin = match existing_pin {
+                Some(pin) => {
+                    gate.validate_frozen(cut.range().id, &frozen)?;
+                    gate.validate_source_capture_read_pin(cut.range().id, &pin)?;
+                    pin
+                }
+                None => {
+                    gate.validate_quiescent_frozen(cut.range().id, &frozen)?;
+                    Arc::new(gate.try_source_capture_read_pin(cut.range().id, &frozen)?)
+                }
+            };
             database.validate_source_range_image_lineage(
                 &lineage,
                 cut.range().id,

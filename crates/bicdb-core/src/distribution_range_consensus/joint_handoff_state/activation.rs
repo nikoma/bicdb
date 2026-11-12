@@ -189,7 +189,8 @@ impl NativeJointCatalogueActivationReceipt {
         self.cancellation.check()?;
         self.writer
             .require_store(&self.writer_root, self.store_open_id)?;
-        self.writer.require_range(&self.activated.range)
+        self.writer.require_range(&self.activated.range)?;
+        self.cancellation.check()
     }
     fn require_original_writer_current(
         &self,

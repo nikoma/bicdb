@@ -371,3 +371,5 @@ mod self_maintenance_tests;
 mod replica_receiver_tests;
 
 mod writer_registry_continuity_tests;
+
+mod owned_validation_wait_tests;

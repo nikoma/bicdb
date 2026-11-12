@@ -6,6 +6,27 @@ use crate::distribution_metadata_read_provider::MetadataReadProvider;
 use crate::distribution_transport::DrainedClusterDataListener;
 
 mod control;
+#[cfg(test)]
+mod validation_barrier;
+
+fn lock_owned_member_metadata<'a>(
+    metadata: &'a Mutex<MetadataConsensusStore>,
+    observed: &HostMetadataReadObservation,
+    business: Uuid,
+    token: &CancellationToken,
+) -> Result<parking_lot::MutexGuard<'a, MetadataConsensusStore>> {
+    loop {
+        token.check()?;
+        observed.require_live_request(business)?;
+        if let Some(store) = metadata.try_lock_for(Duration::from_millis(5)) {
+            token.check()?;
+            observed.require_live_request(business)?;
+            return Ok(store);
+        }
+        #[cfg(test)]
+        validation_barrier::record_actual_busy_acquisition();
+    }
+}
 
 const DIRECTORY: &str = "native-learner-metadata";
 #[derive(Default)]
@@ -102,17 +123,18 @@ impl NativeUnassignedLearnerHost {
         business: Uuid,
         parent: &CancellationToken,
     ) -> Result<()> {
+        observed.require_live_request(business)?;
+        let token = parent.child_with_deadline(observed.deadline());
+        token.check()?;
         let metadata = self
             .metadata_transition
             .metadata
             .as_ref()
             .ok_or_else(|| invalid("actual owned metadata backend required"))?;
         let proof = {
-            let store = metadata
-                .try_lock()
-                .ok_or_else(|| invalid("owned metadata member busy"))?;
+            let store = lock_owned_member_metadata(metadata, observed, business, &token)?;
             store.require_listener_database(&self.provider.actual_open)?;
-            store.observe_owned_native_metadata_member(observed, business, parent)?
+            store.observe_owned_native_metadata_member(observed, business, &token)?
         };
         // Never acquire a DB guard while holding the metadata mutex.
         self.provider.factory.require_owned_metadata_member(
@@ -121,10 +143,12 @@ impl NativeUnassignedLearnerHost {
             business,
             &self.provider.network,
         )?;
-        let store = metadata
-            .try_lock()
-            .ok_or_else(|| invalid("owned metadata member changed/busy"))?;
-        proof.require_current(&store)
+        #[cfg(test)]
+        validation_barrier::after_actual_factory_validation(&token)?;
+        let store = lock_owned_member_metadata(metadata, observed, business, &token)?;
+        proof.require_current(&store)?;
+        observed.require_live_request(business)?;
+        token.check()
     }
 
     pub(in crate::distribution_native_host) fn owned_metadata_snapshot(

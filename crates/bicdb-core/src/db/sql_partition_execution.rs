@@ -133,6 +133,42 @@ mod tests {
     }
 
     #[test]
+    fn sql_partition_visible_fence_reactivation_really_syncs_again() {
+        for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
+            let root = tempfile::tempdir().unwrap();
+            let cfg = config(mode);
+            let mut db = BicDb::open_with_config(root.path(), cfg.clone()).unwrap();
+            db.create_collection("ack").unwrap();
+            db.insert("ack", Record::new("one")).unwrap();
+            db.enable_sql_partition_execution_v1().unwrap();
+            db.close().unwrap();
+            let mut db = BicDb::open_with_config(root.path(), cfg.clone()).unwrap();
+            assert!(db.sql_partition_execution_feature_active());
+            let fault = bicdb_page::test_faults::arm_io_failure(
+                "sql_partition.format_fence.sync",
+                root.path(),
+                1,
+                false,
+            );
+            assert!(matches!(
+                db.enable_sql_partition_execution_v1(),
+                Err(BicDbError::WriteFailed { .. })
+            ));
+            drop(fault);
+            assert!(matches!(
+                db.insert("ack", Record::new("unsafe")),
+                Err(BicDbError::WriteFailed { .. })
+            ));
+            drop(db);
+            let mut db = BicDb::open_with_config(root.path(), cfg).unwrap();
+            assert!(db.get("ack", "one").unwrap().is_some());
+            assert!(db.get("ack", "unsafe").unwrap().is_none());
+            db.enable_sql_partition_execution_v1().unwrap();
+            db.close().unwrap();
+        }
+    }
+
+    #[test]
     fn sql_partition_legacy_repair_requires_durable_indexes_and_no_pending_owner() {
         for no_fsync in [true, false] {
             let root = tempfile::tempdir().unwrap();

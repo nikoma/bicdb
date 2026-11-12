@@ -126,7 +126,6 @@ use std::marker::PhantomData;
 use std::ops::Bound;
 use std::path::{Path, PathBuf};
 use std::ptr::NonNull;
-use std::str::FromStr;
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicU8, AtomicUsize, Ordering as AtomicOrdering};
 use std::sync::{Arc, OnceLock};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
@@ -8539,16 +8538,9 @@ fn invariant_numeric_binary(
         }
         NativeInvariantValueType::Decimal => {
             let parse = |value: &Value| {
-                value
-                    .as_str()
-                    .map(str::to_string)
-                    .or_else(|| value.as_number().map(ToString::to_string))
-                    .and_then(|value| Decimal::from_str(&value).ok())
-                    .ok_or_else(|| {
-                        BicDbError::CommitValidation(
-                            "invariant decimal operand is invalid".to_string(),
-                        )
-                    })
+                crate::json_decimal_exact(value).ok_or_else(|| {
+                    BicDbError::CommitValidation("invariant decimal operand is invalid".to_string())
+                })
             };
             let left = parse(left)?;
             let right = parse(right)?;
@@ -8610,6 +8602,22 @@ fn evaluate_native_invariant_expression(
                 ))
             })?,
         NativeInvariantExpression::Literal { value } => value.clone(),
+        NativeInvariantExpression::ProportionalInterval { arguments } => {
+            let values = arguments
+                .iter()
+                .map(|argument| {
+                    evaluate_native_invariant_expression(
+                        db,
+                        tx,
+                        subject_relation,
+                        subject,
+                        bindings,
+                        argument,
+                    )
+                })
+                .collect::<Result<Vec<_>>>()?;
+            crate::exact_proportional_interval_value(&values)?
+        }
         NativeInvariantExpression::DateAddDays { date, days } => {
             let date = evaluate_native_invariant_expression(
                 db,
@@ -10337,6 +10345,12 @@ impl BicDb {
     pub fn enable_application_unique_scope(&mut self) -> Result<()> {
         self.ensure_writable("enable application unique scope transition")?;
         format::enable_application_unique_scope(&self.path)
+    }
+
+    /// Fence old readers before activating the versioned scalar/native guard contract.
+    pub fn enable_exact_proportional_intervals(&mut self) -> Result<()> {
+        self.ensure_writable("enable exact proportional interval contract")?;
+        format::enable_exact_proportional_intervals(&self.path)
     }
 
     fn open_inner(

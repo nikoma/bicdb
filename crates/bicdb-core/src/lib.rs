@@ -7,6 +7,12 @@
 mod backup;
 mod broker;
 mod cancellation;
+mod decimal_input;
+mod exact_proportional_interval;
+pub use decimal_input::{json_decimal_exact, parse_decimal_exact};
+pub use exact_proportional_interval::{
+    exact_proportional_interval, exact_proportional_interval_value,
+};
 pub mod consensus;
 mod db;
 pub mod distribution;

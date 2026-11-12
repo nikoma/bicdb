@@ -3253,6 +3253,13 @@ impl ApplicationManifestV2 {
         }
         if let Some(program) = &self.application_program {
             program.validate()?;
+            if application_program_uses_builtin(program, &["finance.proportional_interval"])
+                && !self
+                    .required_features
+                    .contains(&ApplicationFeature::ExactProportionalIntervals)
+            {
+                return invalid("finance.proportional_interval requires signed exact_proportional_intervals feature");
+            }
             let uses_typed_declared_sql_projections =
                 application_program_uses_typed_declared_sql_projections(program);
             if uses_typed_declared_sql_projections
@@ -5186,6 +5193,10 @@ fn validate_carrier_expression(expression: &ApplicationExpressionV1) -> Result<(
             arguments,
             ..
         } => {
+            if *kind == ApplicationCallKindV1::Builtin && target == "finance.proportional_interval"
+            {
+                validate_proportional_interval_call(expression)?;
+            }
             for argument in arguments {
                 validate_carrier_expression(&argument.value)?;
             }
@@ -6075,6 +6086,7 @@ impl EgressDeclaration {
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 #[serde(rename_all = "snake_case")]
 pub enum ApplicationFeature {
+    ExactProportionalIntervals,
     NativeImmutableFacts,
     NativeFactProjectionContracts,
     TrustedConnectionIdentity,
@@ -6681,43 +6693,99 @@ impl ApplicationInvariantV1 {
     }
 }
 
-// Calendar signatures are checked against actual resource field types as well as
-// compiler-signed call metadata; a String/Time field cannot masquerade as Date.
-fn invariant_calendar_operand_type(
+fn validate_proportional_interval_call(expression: &ApplicationExpressionV1) -> Result<()> {
+    let ApplicationExpressionV1::Call {
+        kind: ApplicationCallKindV1::Builtin,
+        target,
+        method,
+        result_type,
+        argument_types,
+        argument_item_types,
+        result_projection,
+        arguments,
+    } = expression
+    else {
+        return invalid("exact proportional interval requires a scalar builtin call");
+    };
+    use ApplicationExpressionTypeV1::{Decimal, Int, String as Text};
+    if target != "finance.proportional_interval"
+        || method.is_some()
+        || result_projection.is_some()
+        || *result_type != Some(Decimal)
+        || argument_types != &[Decimal, Decimal, Int, Text, Text, Int]
+        || argument_item_types.len() != 6
+        || argument_item_types.iter().any(Option::is_some)
+        || arguments.len() != 6
+        || arguments.iter().any(|argument| argument.name.is_some())
+    {
+        return invalid("finance.proportional_interval requires six positional Decimal, Decimal, Int, String, String, Int scalars and returns Decimal");
+    }
+    Ok(())
+}
+
+// Check scalar signatures against actual local or published field types as
+// well as call metadata; a String field cannot masquerade as Date or Decimal.
+fn invariant_scalar_operand_type(
     application: &ApplicationManifestV2,
     subject: &ResourceContractV1,
     bindings: &BTreeMap<String, String>,
     expression: &ApplicationExpressionV1,
 ) -> Option<ApplicationExpressionTypeV1> {
+    let kind = |field_type: &FieldType| match field_type {
+        FieldType::Date => Some(ApplicationExpressionTypeV1::Date),
+        FieldType::Int64 => Some(ApplicationExpressionTypeV1::Int),
+        FieldType::Decimal => Some(ApplicationExpressionTypeV1::Decimal),
+        FieldType::String => Some(ApplicationExpressionTypeV1::String),
+        _ => None,
+    };
     let field_type = |resource: &ResourceContractV1, name: &str| {
-        let field = resource.fields.iter().find(|field| field.name == name)?;
-        match field.field_type {
-            FieldType::Date => Some(ApplicationExpressionTypeV1::Date),
-            FieldType::Int64 => Some(ApplicationExpressionTypeV1::Int),
-            _ => None,
-        }
+        kind(
+            &resource
+                .fields
+                .iter()
+                .find(|field| field.name == name)?
+                .field_type,
+        )
     };
     let nested =
-        |expression| invariant_calendar_operand_type(application, subject, bindings, expression);
+        |expression| invariant_scalar_operand_type(application, subject, bindings, expression);
     match expression {
         ApplicationExpressionV1::Variable { name } => field_type(subject, name),
         ApplicationExpressionV1::Field { target, field } => {
             let ApplicationExpressionV1::Variable { name } = target.as_ref() else {
                 return None;
             };
-            let resource = if name == "subject" {
-                subject
-            } else {
-                let resource = bindings.get(name)?;
-                application
-                    .resources
+            if name == "subject" {
+                return field_type(subject, field);
+            }
+            let resource = bindings.get(name)?;
+            if let Some(local) = application.resources.iter().find(|r| r.name == *resource) {
+                return field_type(local, field);
+            }
+            let fields = application
+                .native_fact_imports
+                .iter()
+                .find(|import| import.resource == *resource)
+                .map(|import| &import.publication.fields)
+                .or_else(|| {
+                    application
+                        .native_fact_projection_imports
+                        .iter()
+                        .find(|import| import.resource == *resource)
+                        .map(|import| &import.contract.fields)
+                })?;
+            kind(
+                &fields
                     .iter()
-                    .find(|candidate| candidate.name == *resource)?
-            };
-            field_type(resource, field)
+                    .find(|candidate| candidate.name == *field)?
+                    .field_type,
+            )
         }
         ApplicationExpressionV1::Literal { value } if value.as_i64().is_some() => {
             Some(ApplicationExpressionTypeV1::Int)
+        }
+        ApplicationExpressionV1::Literal { value } if value.is_string() => {
+            Some(ApplicationExpressionTypeV1::String)
         }
         ApplicationExpressionV1::Unary {
             operator, value, ..
@@ -6748,6 +6816,13 @@ fn invariant_calendar_operand_type(
             target,
             ..
         } if target == "time.diff" => Some(ApplicationExpressionTypeV1::Int),
+        ApplicationExpressionV1::Call {
+            kind: ApplicationCallKindV1::Builtin,
+            target,
+            ..
+        } if target == "finance.proportional_interval" => {
+            Some(ApplicationExpressionTypeV1::Decimal)
+        }
         ApplicationExpressionV1::Aggregate {
             function: ApplicationAggregateFunctionV1::Count,
             ..
@@ -6908,6 +6983,33 @@ fn validate_invariant_expression(
         ApplicationExpressionV1::Call {
             kind: ApplicationCallKindV1::Builtin,
             target,
+            arguments,
+            ..
+        } if target == "finance.proportional_interval" => {
+            validate_proportional_interval_call(expression)?;
+            if !application
+                .required_features
+                .contains(&ApplicationFeature::ExactProportionalIntervals)
+            {
+                return invalid("native proportional interval requires signed exact_proportional_intervals feature");
+            }
+            use ApplicationExpressionTypeV1::{Decimal, Int, String as Text};
+            for (argument, expected) in arguments
+                .iter()
+                .zip([Decimal, Decimal, Int, Text, Text, Int])
+            {
+                recurse(&argument.value, bindings, dependencies)?;
+                if invariant_scalar_operand_type(application, subject, bindings, &argument.value)
+                    != Some(expected)
+                {
+                    return invalid("native proportional interval operand does not match its actual signed scalar field type");
+                }
+            }
+            Ok(())
+        }
+        ApplicationExpressionV1::Call {
+            kind: ApplicationCallKindV1::Builtin,
+            target,
             method,
             result_type,
             argument_types,
@@ -6926,7 +7028,7 @@ fn validate_invariant_expression(
                 recurse(&argument.value, bindings, dependencies)?;
             }
             let actual = |index: usize| {
-                invariant_calendar_operand_type(
+                invariant_scalar_operand_type(
                     application,
                     subject,
                     bindings,

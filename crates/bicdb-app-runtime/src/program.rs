@@ -1508,6 +1508,7 @@ impl Evaluator<'_> {
             | "finance.subtract_money"
             | "finance.round_money"
             | "finance.round"
+            | "finance.proportional_interval"
             | "finance.abs"
             | "finance.tax_exclusive"
             | "finance.tax_inclusive"
@@ -2754,6 +2755,8 @@ fn carrier_finance(target: &str, values: &[Value]) -> Result<Value> {
             decimal(first()?, target)?,
             finance_scale(second()?, target)?,
         ))),
+        "finance.proportional_interval" => bicdb_core::exact_proportional_interval_value(values)
+            .map_err(|error| AppRuntimeError::InvalidRequest(error.to_string())),
         "finance.abs" => {
             let value = decimal(first()?, target)?;
             let value = if value.is_sign_negative() {

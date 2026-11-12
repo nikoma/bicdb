@@ -3069,6 +3069,12 @@ impl ApplicationRuntime {
         let mut db = self.db.write();
         let mut receipt = SchemaApplicationReceipt::default();
         let result = (|| -> Result<()> {
+            if application
+                .required_features
+                .contains(&bicdb_extension::abi_v2::ApplicationFeature::ExactProportionalIntervals)
+            {
+                db.enable_exact_proportional_intervals()?;
+            }
             for contract in &application.resources {
                 validate_timeseries_intervals(contract)?;
                 let existed = db

@@ -13,7 +13,6 @@ base64.workspace = true
 axum.workspace = true
 axum-server.workspace = true
 bytes.workspace = true
-bigdecimal = "=0.4.10"
 bicdb-core = { path = "../bicdb-core", version = "1.0.489-beta" }
 bicdb-lua = { path = "../bicdb-lua", version = "1.0.489-beta" }
 bicdb-script = { path = "../bicdb-script", version = "1.0.489-beta" }

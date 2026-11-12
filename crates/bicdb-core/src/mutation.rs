@@ -319,6 +319,10 @@ pub enum NativeInvariantExpression {
         end: Box<NativeInvariantExpression>,
         start: Box<NativeInvariantExpression>,
     },
+    /// Exact bounded prefix allocation, returning only the final Decimal difference.
+    ProportionalInterval {
+        arguments: [Box<NativeInvariantExpression>; 6],
+    },
     Unary {
         operator: NativeInvariantUnaryOperator,
         value: Box<NativeInvariantExpression>,

@@ -6353,6 +6353,37 @@ fn lower_carrier_invariant_expression(
             target,
             arguments,
             ..
+        } if target == "finance.proportional_interval" => {
+            if arguments.len() != 6 {
+                return Err(AppRuntimeError::InvalidPackage(
+                    "native proportional interval requires six arguments".into(),
+                ));
+            }
+            let lowered = arguments
+                .iter()
+                .map(|argument| {
+                    lower_carrier_invariant_expression(
+                        application,
+                        subject_resource,
+                        bindings,
+                        &argument.value,
+                    )
+                    .map(Box::new)
+                })
+                .collect::<Result<Vec<_>>>()?;
+            NativeInvariantExpression::ProportionalInterval {
+                arguments: lowered.try_into().map_err(|_| {
+                    AppRuntimeError::InvalidPackage(
+                        "native proportional interval requires six arguments".into(),
+                    )
+                })?,
+            }
+        }
+        ApplicationExpressionV1::Call {
+            kind: ApplicationCallKindV1::Builtin,
+            target,
+            arguments,
+            ..
         } if target == "time.add" => NativeInvariantExpression::DateAddDays {
             date: Box::new(lower_carrier_invariant_expression(
                 application,

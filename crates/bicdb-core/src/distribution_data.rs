@@ -1159,6 +1159,24 @@ impl ClusterDataNodeService {
         Ok(fact.purpose())
     }
 
+    /// Test-only necessary-constraint probe. Altered claim DATA cannot mint a
+    /// role, fence, native fact, catalogue mutation or serving permission.
+    #[cfg(test)]
+    pub(crate) fn test_current_joint_local_promise_claim(
+        &self,
+        range: crate::distribution::RangeId,
+        parent: &crate::CancellationToken,
+        alter: impl FnOnce(
+            Option<crate::distribution_range_handoff::RangeHandoffPromise>,
+        ) -> Option<crate::distribution_range_handoff::RangeHandoffPromise>,
+    ) -> Result<()> {
+        let db = checked_database_read(&self.db, &self.storage_policy)?;
+        let fact = db.observe_current_joint_recovery_domain(&self.range_writes, range, parent)?;
+        let claim = alter(fact.binding().local_handoff_promise.clone());
+        fact.test_local_promise_claim(&db, claim.as_ref())?;
+        parent.check()
+    }
+
     pub(crate) fn preflight_native_recovery(
         &self,
         role: &crate::distribution_range_recovery::RecoveryRoleAdmission,

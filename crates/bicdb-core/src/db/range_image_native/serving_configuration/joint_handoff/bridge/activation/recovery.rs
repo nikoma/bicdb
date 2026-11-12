@@ -1,5 +1,6 @@
 //! Historical activated-joint facts for a DISTINCT current recovery operation.
 //! No old request/Prepared lifetime or decoded audit becomes fresh authority.
+use super::super::super::{old_close_history_key, old_close_key, NativeJointOldCloseRecord};
 use super::*;
 use crate::distribution_range_recovery::RecoveryRoleAdmission;
 
@@ -11,6 +12,9 @@ pub(crate) struct NativeCurrentJointBinding {
     pub(crate) joint_decision_sha256: String,
     pub(crate) native_bridge_sha256: String,
     pub(crate) activation_sha256: String,
+    pub(crate) local_handoff_promise:
+        Option<crate::distribution_range_handoff::RangeHandoffPromise>,
+    pub(crate) local_old_close_sha256: Option<String>,
     pub(crate) birth_id: Uuid,
     pub(crate) birth_sha256: String,
     pub(crate) store_id: Uuid,
@@ -61,6 +65,16 @@ impl NativeCurrentJointRecoveryDomain {
                 "current joint recovery original writer object ended or was replaced",
             ));
         }
+        Ok(())
+    }
+    #[cfg(test)]
+    pub(crate) fn test_local_promise_claim(
+        &self,
+        db: &BicDb,
+        claim: Option<&crate::distribution_range_handoff::RangeHandoffPromise>,
+    ) -> Result<()> {
+        let actual = self.native.require_current_lineage(db)?;
+        db.require_current_joint_local_promise(&self.native.native, self.data(), &actual, claim)?;
         Ok(())
     }
     pub(crate) fn binding(&self) -> &NativeCurrentJointBinding {
@@ -156,8 +170,22 @@ impl NativeCurrentJointRecoveryDomain {
                 "current joint recovery belongs to another actual DB/Store open",
             ));
         }
-        self.native.require_current(db)?;
-        store.require_current_joint_handoff_constraints(self.data())?;
+        let actual = self.native.require_current_lineage(db)?;
+        let local_promise = store.current_joint_local_handoff_promise(self.data())?;
+        let local_close = db.require_current_joint_local_promise(
+            &self.native.native,
+            self.data(),
+            &actual,
+            local_promise.as_ref(),
+        )?;
+        store.require_current_joint_local_closure_pointer(self.data(), local_close.as_deref())?;
+        if local_promise != self.binding.local_handoff_promise
+            || local_close != self.binding.local_old_close_sha256
+        {
+            return Err(invalid(
+                "current joint recovery changed exact original LOCAL promise/closure evidence",
+            ));
+        }
         let actual = store.native_writer_host_state()?;
         if !Arc::ptr_eq(&actual, &self.writer) {
             return Err(invalid(
@@ -169,6 +197,82 @@ impl NativeCurrentJointRecoveryDomain {
     }
 }
 impl BicDb {
+    /// Actual protected LOCAL original-promise proof, independent of a plan's
+    /// request cut. The old TTL is historical; no fresh authority comes from it.
+    fn require_current_joint_local_promise(
+        &self,
+        native: &NativeRecoveryAdmission,
+        data: &NativeJointDecisionData,
+        actual: &SourceRangeImageLineage,
+        local: Option<&crate::distribution_range_handoff::RangeHandoffPromise>,
+    ) -> Result<Option<String>> {
+        if !data.old_members().contains_key(native.local_node_id()) {
+            if local.is_some() {
+                return Err(invalid(
+                    "image target cannot synthesize an original OLD-member promise",
+                ));
+            }
+            return Ok(None);
+        }
+        let promise = local.ok_or_else(|| {
+            invalid("surviving OLD member lost its exact permanent local promise")
+        })?;
+        let facts = data
+            .old_materialized_fact(native.local_node_id())
+            .ok_or_else(|| {
+                invalid("local original promise has no protected global OLD materialization fact")
+            })?;
+        let record: NativeJointOldCloseRecord = self
+            .read_native_range_image_record(&old_close_key(data.old_range().id))?
+            .ok_or_else(|| {
+                invalid("local original promise lacks actual protected old-close record")
+            })?;
+        record.validate()?;
+        let archive: NativeJointOldCloseRecord = self
+            .read_native_range_image_record(&old_close_history_key(
+                data.old_range().id,
+                &record.checksum_sha256,
+            ))?
+            .ok_or_else(|| {
+                invalid("local original promise immutable protected old-close archive missing")
+            })?;
+        archive.validate()?;
+        let history = self.read_native_history_entry(
+            data.old_range().id,
+            record.history_generation,
+            record.range_index,
+        )?;
+        if record != archive
+            || &record.promise != promise
+            || !promise.same_request(data.promise())
+            || promise.resolved_through != record.range_index
+            || record.range_index > data.range_index()
+            || record.scope_sha256 != data.scope_sha256()?
+            || record.birth_id != native.birth_id()
+            || record.birth_sha256 != native.birth_sha256()
+            || &record.local_node_id != native.local_node_id()
+            || record.local_incarnation != native.local_member_incarnation()
+            || record.physical_base_sha256 != actual.base.checksum_sha256
+            || record.history_generation != actual.history_generation()
+            || record.local_namespace_ids != actual.base.local_namespace_ids
+            || record.schema_sha256 != data.schema_sha256()
+            || record.logical_genesis_sha256 != actual.logical_genesis_sha256()
+            || record.logical_history_sha256 != history.commitment_sha256
+            || record.actual_local_visibility_sequence > actual.actual_local_visibility_sequence()
+            || facts.scope_sha256 != record.scope_sha256
+            || facts.node_id != record.local_node_id
+            || facts.birth_id != record.birth_id
+            || facts.birth_sha256 != record.birth_sha256
+            || facts.range_index != record.range_index
+            || facts.logical_genesis_sha256 != record.logical_genesis_sha256
+            || facts.logical_history_sha256 != record.logical_history_sha256
+            || facts.native_receipt_sha256 != record.checksum_sha256
+            || facts.actual_local_visibility_sequence != record.actual_local_visibility_sequence
+        {
+            return Err(invalid("local permanent promise is not the exact protected OLD closure covered by actual joint decision/history"));
+        }
+        Ok(Some(record.checksum_sha256))
+    }
     /// Reader validation for a protected NoData record. No SourceLineage call:
     /// this is used while the prefix reader itself is constructing lineage.
     pub(in crate::db::range_image_native) fn require_actual_current_joint_abort_domain(
@@ -251,6 +355,17 @@ impl BicDb {
             .observe_native_joint_activation_fact_with_scope(&scope, receipt.clone())?
             .ok_or_else(|| invalid("current joint recovery lacks actual catalogue activation"))?;
         let actual = &scope.lineage;
+        let local_handoff_promise = store.current_joint_local_handoff_promise(receipt.data())?;
+        let local_old_close_sha256 = self.require_current_joint_local_promise(
+            &receipt.native,
+            receipt.data(),
+            actual,
+            local_handoff_promise.as_ref(),
+        )?;
+        store.require_current_joint_local_closure_pointer(
+            receipt.data(),
+            local_old_close_sha256.as_deref(),
+        )?;
         let store_id = self
             .native_abort_catalogue_store_id()?
             .ok_or_else(|| invalid("current joint recovery lacks protected catalogue StoreUUID"))?;
@@ -258,6 +373,8 @@ impl BicDb {
             joint_decision_sha256: receipt.data().checksum_sha256().into(),
             native_bridge_sha256: receipt.checksum_sha256().into(),
             activation_sha256: activated.activation_sha256()?,
+            local_handoff_promise,
+            local_old_close_sha256,
             birth_id: receipt.native.birth_id(),
             birth_sha256: receipt.native.birth_sha256().into(),
             store_id,

@@ -14,10 +14,13 @@ fn exercise(cancel: bool, validation: Validation) {
     let setup = CancellationToken::uncancelable();
     let actual = ready(&f, &setup);
     let (post, business) = f.current();
+    // config() reads this SAME metadata mutex; capture it before the method
+    // receiver takes the promotion guard. The real proof still validates later.
+    let configuration = config(&f);
     let entry = f.launches[0]
         .metadata
         .lock()
-        .propose_native_learner_promotion(&actual, &post, business, &config(&f), 41, &setup)
+        .propose_native_learner_promotion(&actual, &post, business, &configuration, 41, &setup)
         .unwrap()
         .unwrap();
     f.launches[0].heartbeat_initial_metadata(&setup).unwrap();

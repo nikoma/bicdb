@@ -52,6 +52,7 @@ fn incompatible_backing_refuses_without_repair(change: impl Fn(&mut IndexDefinit
             let cfg = config(mode.clone());
             let mut db = BicDb::open_with_config(root.path(), cfg.clone()).unwrap();
             let relation = setup(&mut db, partitioned);
+            ensure_primary_key_indexes(&mut db).unwrap();
             let expected = db
                 .index_definitions()
                 .into_iter()
@@ -144,6 +145,7 @@ fn partial_primary_key_backing_cannot_omit_rows_from_read_only_sql() {
             let cfg = config(mode.clone());
             let mut db = BicDb::open_with_config(root.path(), cfg.clone()).unwrap();
             let relation = setup(&mut db, partitioned);
+            ensure_primary_key_indexes(&mut db).unwrap();
             let mut index = db
                 .index_definitions()
                 .into_iter()

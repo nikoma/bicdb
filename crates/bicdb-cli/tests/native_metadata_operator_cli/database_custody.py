@@ -282,7 +282,11 @@ def capture(request, caps):
         os.rename(quarantine, destination / 'database-snapshot')
         sync_directory(destination)
         manifest.update(status='COPIED_STOPPED_OWNED_ROOTS', complete=True,
-                        reason=None, payload_published=True, quarantine_path=None)
+                        reason=None, payload_published=True, quarantine_path=None,
+                        entries=copier.entries, streamed_logical_bytes=copier.bytes)
+        # Receipt publication is part of the SAME transaction as the payload
+        # rename, not an unchecked step after the rollback boundary.
+        digest = write_manifest(destination, manifest)
     except BaseException as error:
         snapshot = destination / 'database-snapshot'
         rollback_error = None
@@ -299,8 +303,21 @@ def capture(request, caps):
         for row in copier.entries:
             if row['status'] == 'pending':
                 row['status'] = 'partial_or_refused'
-    manifest.update(entries=copier.entries, streamed_logical_bytes=copier.bytes)
-    digest = write_manifest(destination, manifest)
+        manifest.update(entries=copier.entries, streamed_logical_bytes=copier.bytes)
+        try:
+            digest = write_manifest(destination, manifest)
+        except BaseException as receipt_error:
+            # The destination itself may be unable to persist any correction.
+            # Keep the best-effort truthful result in the independently retained
+            # stderr stream; an old complete/PARTIAL field is NOT authority.
+            digest = None
+            manifest.update(partial_receipt_persistence_error=str(receipt_error))
+            print('NATIVE_CLI_DATABASE_CUSTODY_PARTIAL_RECEIPT_FAILURE ' + json.dumps({
+                'path': str(destination), 'status': 'PARTIAL', 'complete': False,
+                'payload_published': (destination / 'database-snapshot').exists(),
+                'quarantine_path': str(quarantine) if quarantine.exists() else None,
+                'error': str(receipt_error), 'manifest_not_authoritative': True}),
+                file=sys.stderr, flush=True)
     print('NATIVE_CLI_DATABASE_FAILURE_CUSTODY ' + json.dumps({
         'path': str(destination), 'status': manifest['status'],
         'manifest_sha256': digest, 'complete': manifest['complete'],

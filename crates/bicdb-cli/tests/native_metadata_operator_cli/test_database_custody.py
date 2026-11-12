@@ -12,6 +12,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 import database_custody as custody
 
 
@@ -87,6 +88,105 @@ class FilesystemChecks(unittest.TestCase):
         self.assertEqual(record['manifest_sha256'], hashlib.sha256(manifest_bytes).hexdigest())
         self.assertTrue(record['complete'])
         self.assertTrue(json.loads(manifest_bytes)['payload_published'])
+
+    def test_returned_error_after_actual_final_manifest_fsync_rolls_back(self):
+        (self.db / 'page').write_bytes(b'actual finalized copy')
+        original = custody.write_manifest
+        failed = []
+
+        def write(path, value):
+            digest = original(path, value)
+            if value['complete']:
+                failed.append(True)
+                raise OSError('returned error AFTER actual final manifest/fsync')
+            return digest
+
+        with mock.patch.object(custody, 'write_manifest', side_effect=write):
+            path, manifest = self.partial()
+        self.assertEqual(failed, [True])
+        saved = json.loads((path / 'manifest.json').read_bytes())
+        self.assertFalse(saved['complete'])
+        self.assertFalse(saved['payload_published'])
+        self.assertIn('AFTER actual final', manifest['reason'])
+        self.assertEqual((self.db / 'page').read_bytes(), b'actual finalized copy')
+
+    def test_publication_directory_fsync_error_rolls_back(self):
+        (self.db / 'page').write_bytes(b'actual copied page')
+        original = custody.sync_directory
+        failed = []
+
+        def sync(path):
+            if (Path(path) / 'database-snapshot').exists() and not failed:
+                failed.append(True)
+                raise OSError('injected final publication directory fsync error')
+            return original(path)
+
+        with mock.patch.object(custody, 'sync_directory', side_effect=sync):
+            path, manifest = self.partial()
+        self.assertEqual(failed, [True])
+        self.assertIn('publication directory fsync', manifest['reason'])
+        self.assertFalse(json.loads((path / 'manifest.json').read_bytes())['payload_published'])
+
+    def test_failed_rollback_reports_actual_published_payload_not_absence(self):
+        (self.db / 'page').write_bytes(b'copy publication remains ambiguous')
+        original_write = custody.write_manifest
+        original_rename = custody.os.rename
+
+        def write(path, value):
+            digest = original_write(path, value)
+            if value['complete']:
+                raise OSError('injected final receipt returned error')
+            return digest
+
+        def rename(source, target):
+            if Path(source).name == 'database-snapshot':
+                raise OSError('injected quarantine rollback failure')
+            return original_rename(source, target)
+
+        with mock.patch.object(custody, 'write_manifest', side_effect=write), \
+                mock.patch.object(custody.os, 'rename', side_effect=rename):
+            path, manifest = self.capture()
+        self.assertEqual(manifest['status'], 'PARTIAL')
+        self.assertFalse(manifest['complete'])
+        self.assertTrue(manifest['payload_published'])
+        self.assertTrue((path / 'database-snapshot').exists())
+        self.assertIn('rollback failure', manifest['publication_rollback_error'])
+        self.assertTrue(json.loads((path / 'manifest.json').read_bytes())['payload_published'])
+
+    def test_persistent_partial_receipt_failure_emits_truthful_independent_diagnostic(self):
+        (self.db / 'page').write_bytes(b'complete bytes not a complete receipt')
+        original_write = custody.write_manifest
+        original_rename = custody.os.rename
+        final_attempted = []
+
+        def write(path, value):
+            if final_attempted:
+                raise OSError('persistent receipt storage failure')
+            digest = original_write(path, value)
+            if value['complete']:
+                final_attempted.append(True)
+                raise OSError('AFTER actual complete receipt fsync')
+            return digest
+
+        def rename(source, target):
+            if Path(source).name == 'database-snapshot':
+                raise OSError('quarantine rollback also failed')
+            return original_rename(source, target)
+
+        errors = io.StringIO()
+        with mock.patch.object(custody, 'write_manifest', side_effect=write), \
+                mock.patch.object(custody.os, 'rename', side_effect=rename), \
+                contextlib.redirect_stderr(errors):
+            path, manifest = self.capture()
+        self.assertFalse(manifest['complete'])
+        self.assertTrue(manifest['payload_published'])
+        # A stale on-disk complete field must not override actual process /
+        # independent failure evidence if its correction cannot be persisted.
+        self.assertTrue(json.loads((path / 'manifest.json').read_bytes())['complete'])
+        report = json.loads(errors.getvalue().split('NATIVE_CLI_DATABASE_CUSTODY_PARTIAL_RECEIPT_FAILURE ', 1)[1])
+        self.assertEqual(report['status'], 'PARTIAL')
+        self.assertTrue(report['manifest_not_authoritative'])
+        self.assertTrue(report['payload_published'])
 
     def test_source_symlink_refused(self):
         outside = self.base / 'outside'

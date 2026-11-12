@@ -69,10 +69,16 @@ waits, without Cargo:
 python3 crates/bicdb-cli/tests/native_metadata_operator_cli/test_database_custody.py
 ```
 
-The 12 filesystem/helper-process controls cover complete nested copy/hash/modes, actual helper subprocess/manifest protocol, source
+The 16 filesystem/helper-process controls cover complete nested copy/hash/modes, actual helper subprocess/manifest protocol, source
 metadata preservation and sibling TLS exclusion, symlink/hardlink refusal, TLS
 filenames and cross-chunk private-key markers, byte/time/actual-free-space caps,
-unwaited-child refusal, overlapping destinations and root entry counting. When
+unwaited-child refusal, overlapping destinations and root entry counting. Four
+publication controls cover actual final receipt write/fsync followed by a
+returned error, final directory-fsync failure, failed quarantine rollback with
+truthful payload-presence reporting, and persistent receipt failure with an
+independent PARTIAL diagnostic. Final manifest persistence is inside the same
+publication rollback boundary. A Rust RAII child owner also kill/waits on any
+helper polling error, not just timeout. When
 `/tmp` has no ordinary free space, these <256 KiB temporary helper cases use the
 already mounted `/dev/shm`; the real disk-floor check remains enabled. This is
 helper validation only. Rust glue and actual CLI failure capture still require

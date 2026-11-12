@@ -680,6 +680,22 @@ impl<'db> SqlSession<'db> {
             }
             prepared.push((routine, dependents, operators, triggers));
         }
+        if prepared
+            .iter()
+            .any(|(_, _, _, triggers)| !triggers.is_empty())
+            && prepared
+                .iter()
+                .all(|(_, types, operators, _)| types.is_empty() && operators.is_empty())
+        {
+            let mut routines = Vec::new();
+            let mut triggers = Vec::new();
+            for (routine, _, _, dependent_triggers) in prepared {
+                routines.push(routine);
+                triggers.extend(dependent_triggers);
+            }
+            self.drop_routines_with_trigger_dependencies(&routines, &triggers)?;
+            return Ok(SqlResult::command("DROP FUNCTION"));
+        }
         for (routine, dependents, operators, triggers) in prepared {
             if cascade && !operators.is_empty() {
                 let ids = operators
@@ -698,7 +714,10 @@ impl<'db> SqlSession<'db> {
             if triggers.is_empty() {
                 self.delete_session_routine(&routine)?;
             } else {
-                self.drop_routine_with_trigger_dependencies(&routine, &triggers)?;
+                self.drop_routines_with_trigger_dependencies(
+                    std::slice::from_ref(&routine),
+                    &triggers,
+                )?;
             }
         }
         Ok(SqlResult::command("DROP FUNCTION"))

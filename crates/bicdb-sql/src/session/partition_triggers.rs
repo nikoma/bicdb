@@ -205,11 +205,11 @@ impl SqlSession<'_> {
         Ok(dependencies)
     }
 
-    /// Publish a function deletion and all its dependent trigger records in
+    /// Publish function deletions and all their dependent trigger records in
     /// one Native transaction, retaining exact raw catalog records for undo.
-    pub(crate) fn drop_routine_with_trigger_dependencies(
+    pub(crate) fn drop_routines_with_trigger_dependencies(
         &mut self,
-        routine: &RoutineSchema,
+        routines: &[RoutineSchema],
         triggers: &[TriggerSchema],
     ) -> Result<()> {
         let mut changes = BTreeMap::new();
@@ -222,11 +222,21 @@ impl SqlSession<'_> {
                 None,
             );
         }
-        changes.insert((ROUTINE_COLLECTION, routine_storage_key(routine)), None);
-        if routine.overload.is_none() {
+        let selected = routines
+            .iter()
+            .map(routine_storage_key)
+            .collect::<BTreeSet<_>>();
+        for key in &selected {
+            changes.insert((ROUTINE_COLLECTION, key.clone()), None);
+        }
+        for routine in routines.iter().filter(|routine| routine.overload.is_none()) {
             if let Some(next) = routines_named(self.db_ref(), routine.kind, &routine.name)?
                 .into_iter()
-                .find(|other| other.overload.is_some())
+                .find(|other| {
+                    other.overload.is_some()
+                        && other.schema == routine.schema
+                        && !selected.contains(&routine_storage_key(other))
+                })
             {
                 changes.insert((ROUTINE_COLLECTION, routine_storage_key(&next)), None);
                 let mut promoted = next.clone();

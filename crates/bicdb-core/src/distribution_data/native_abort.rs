@@ -1,0 +1,51 @@
+//! Local abort-origin bookkeeping uses the SAME actual service-owned Store.
+use super::*;
+use crate::distribution_range_consensus::NativePrepareOnlyRejection;
+impl ClusterDataNodeService {
+    pub(crate) fn begin_native_abort_attempt(
+        &mut self,
+        database: &BicDb,
+        range: &RangeDescriptor,
+        command: &RangeWriteCommand,
+        authority: &RangeMutationAuthority<'_>,
+    ) -> Result<NativePrepareOnlyRejection> {
+        self.range_mutations.validate(range.id, authority)?;
+        self.require_native_catalog_database(database)?;
+        self.require_native_writer_host_for_range(database, range)?;
+        let source = database.current_native_range_source_lineage(range.id)?;
+        let native = database.native_recovery_admission(
+            &self.cluster_id,
+            source.bootstrap_id(),
+            &self.node_id,
+            source.local_member_incarnation(),
+        )?;
+        self.range_writes
+            .start_native_abort_attempt(database, &native, range, command)
+    }
+    pub(crate) fn finish_native_prepare_only_rejection(
+        &mut self,
+        database: &BicDb,
+        rejected: NativePrepareOnlyRejection,
+        cleaned: &crate::db::NativeTransactionNoEffect,
+    ) -> Result<()> {
+        self.require_native_catalog_database(database)?;
+        self.range_writes
+            .finish_native_prepare_only_rejection(database, rejected, cleaned)
+    }
+    pub(super) fn ensure_native_abort_prepare_start(
+        &mut self,
+        range: &RangeDescriptor,
+        command: &RangeWriteCommand,
+        authority: &RangeMutationAuthority<'_>,
+    ) -> Result<()> {
+        if !self.range_writes.requires_native_abort_tracking()?
+            || self.range_writes.has_native_abort_attempt(command)?
+        {
+            return Ok(());
+        }
+        let database = Arc::clone(&self.db);
+        let borrowed = try_database_read(&database)?;
+        self.begin_native_abort_attempt(&borrowed, range, command, authority)?;
+        Ok(())
+    }
+}

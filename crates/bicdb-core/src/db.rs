@@ -67,6 +67,8 @@ pub(crate) use range_image_install::{
 pub(crate) use range_image_proposal::{
     NativeCurrentImageProposalReceipt, ProtectedCurrentImagePreimageV1,
 };
+mod native_abort;
+pub use native_abort::{NativeCommitAdmissionResult, NativeTransactionNoEffect};
 mod native_metadata_store;
 pub(crate) use native_metadata_store::NativeMetadataStoreRecord;
 mod native_activation;
@@ -9014,6 +9016,25 @@ pub trait CommitAdmission: std::fmt::Debug + Send + Sync {
     ) -> Result<CommitAdmissionTicket> {
         self.admit(intent)
     }
+    fn admit_native_with_rejection(
+        &self,
+        intent: &CommitAdmissionIntent,
+        database: &BicDb,
+    ) -> Result<NativeCommitAdmissionResult> {
+        self.admit_with_native_context(intent, database)
+            .map(NativeCommitAdmissionResult::Accepted)
+    }
+    fn native_prepare_only_cleaned(
+        &self,
+        _rejection: crate::distribution_range_consensus::NativePrepareOnlyRejection,
+        _no_effect: &NativeTransactionNoEffect,
+        _database: &BicDb,
+    ) -> Result<()> {
+        Err(BicDbError::Cluster(
+            "authority does not support actual prepare-only cleanup publication".into(),
+        ))
+    }
+
     /// Record the exact durable local sequence for an admitted decision.
     /// This callback runs only after the transaction WAL is durable. Keeping
     /// the sequence in this trusted callback lets Cell writer fencing advance
@@ -9207,6 +9228,10 @@ pub struct Transaction {
     native_wal_retention: Option<native_wal_apply::NativeWalRetentionPin>,
     commit_admission_ticket: Option<(Arc<dyn CommitAdmission>, CommitAdmissionTicket)>,
     native_admission_recovery_release: Option<NativeAdmissionRecoveryRelease>,
+    native_prepare_only_rejection: Option<(
+        Arc<dyn CommitAdmission>,
+        crate::distribution_range_consensus::NativePrepareOnlyRejection,
+    )>,
     committed_seq: Option<u64>,
     // Paged mode: the page-store snapshot captured when this transaction began,
     // used to read rows a lazy collection has never touched this session (they

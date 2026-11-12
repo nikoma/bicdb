@@ -56,8 +56,11 @@ use image_proposal_state::IMAGE_PROPOSAL_CATALOG_FORMAT;
 pub(crate) use image_proposal_state::{
     NativeCurrentImageProposalPointer, NativeImageProposalIntentBinding,
 };
+pub(crate) mod native_abort;
 mod native_completion_observation;
 mod native_read_catalog;
+pub use native_abort::NativePrepareOnlyRejection;
+use native_abort::{NativeAbortProtocol, NATIVE_ABORT_CATALOG_FORMAT};
 mod native_ready_catalog;
 #[cfg(feature = "tls-replication")]
 mod strong_point_read;
@@ -132,6 +135,7 @@ const KNOWN_RANGE_WRITE_CATALOG_FORMATS: &[u32] = &[
     SPARSE_HISTORY_CATALOG_FORMAT,
     IMAGE_PROPOSAL_CATALOG_FORMAT,
     NATIVE_WRITER_CATALOG_FORMAT,
+    NATIVE_ABORT_CATALOG_FORMAT,
 ];
 
 // Recognizing a format is not a phase, writer or recovery grant. Each caller
@@ -576,6 +580,8 @@ struct RangeWriteCatalog {
     // a missing/null field can never silently erase sparse committed history.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     sparse_committed_decisions: Option<SparseDecisions>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    native_abort_protocol: Option<NativeAbortProtocol>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -622,6 +628,18 @@ impl RangeWriteEnvelope {
             return Err(range_write_error(
                 "native writer catalog marker/format mismatch",
             ));
+        }
+        if (self.catalog.format_version == NATIVE_ABORT_CATALOG_FORMAT
+            && self.catalog.native_abort_protocol.is_none())
+            || (self.catalog.format_version < NATIVE_ABORT_CATALOG_FORMAT
+                && self.catalog.native_abort_protocol.is_some())
+        {
+            return Err(range_write_error(
+                "native abort protocol marker/format mismatch",
+            ));
+        }
+        if let Some(protocol) = &self.catalog.native_abort_protocol {
+            protocol.validate()?;
         }
         sparse_certification::validate_sparse_catalog(&self.catalog)?;
         if self.catalog.recovery_fences.len() > recovery_state::MAX_RECOVERY_FENCES {
@@ -837,6 +855,7 @@ impl RangeWriteStore {
                 recovery_fences: BTreeMap::new(),
                 native_image_bases: BTreeMap::new(),
                 sparse_committed_decisions: None,
+                native_abort_protocol: None,
             },
             Err(error) => return Err(error.into()),
         };
@@ -852,11 +871,22 @@ impl RangeWriteStore {
                 "handoff range catalog requires its durable image reader fence and fsync",
             ));
         }
-        if catalog.format_version >= IMAGE_PROPOSAL_CATALOG_FORMAT
+        if (catalog.format_version == IMAGE_PROPOSAL_CATALOG_FORMAT
+            || catalog
+                .image_install_intents
+                .values()
+                .any(|i| i.protected_proposal.is_some()))
             && !crate::format::current_image_proposal_active(&root)?
         {
             return Err(range_write_error(
                 "protected proposal catalog lacks its mandatory native reader fence",
+            ));
+        }
+        if catalog.native_abort_protocol.is_some()
+            && !crate::format::native_abort_history_active(&root)?
+        {
+            return Err(range_write_error(
+                "native abort catalogue lacks its mandatory reader fence",
             ));
         }
         let enforced = crate::format::native_writer_enrollment_active(&root)?;
@@ -1292,6 +1322,7 @@ impl RangeWriteStore {
 
     pub fn prepare(&mut self, command: RangeWriteCommand) -> Result<RangeWriteState> {
         self.require_native_writer_command(&command)?;
+        self.require_no_native_abort_promise(command.range_id, command.index)?;
         command.validate()?;
         self.require_no_image_install(command.range_id)?;
         self.require_no_active_recovery(command.range_id)?;
@@ -1395,6 +1426,7 @@ impl RangeWriteStore {
             // memory before the exact catalogue has actually been re-fsynced.
             self.require_durable_recovery_catalog()?;
         }
+        self.preflight_native_commit_slot(command)?;
         let previous = self.catalog.clone();
         let entry = self.match_entry_mut(command)?;
         match entry.state {
@@ -1410,6 +1442,7 @@ impl RangeWriteStore {
             }
         }
         if native_catalog {
+            self.mark_native_ever_commit(command)?;
             // A failed rename/fsync may already have published Commit. Keep
             // the in-memory decision and fail closed until exact re-fsync or
             // strict reopen; never restore Prepared over that uncertainty.
@@ -1543,6 +1576,7 @@ impl RangeWriteStore {
 
     fn match_entry_mut(&mut self, command: &RangeWriteCommand) -> Result<&mut RangeWriteLogEntry> {
         self.require_native_writer_command(command)?;
+        self.require_no_native_abort_promise(command.range_id, command.index)?;
         command.validate()?;
         self.require_no_image_install(command.range_id)?;
         self.require_no_active_recovery(command.range_id)?;
@@ -3134,6 +3168,7 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
         &self,
         intent: &CommitAdmissionIntent,
         database: Option<&crate::BicDb>,
+        prepare_rejection: &mut Option<NativePrepareOnlyRejection>,
     ) -> Result<CommitAdmissionTicket> {
         self.require_expected_native_database(database)?;
         let native_database = match (self.native_image_mode, database) {
@@ -3237,14 +3272,28 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
         } else {
             None
         };
-        self.local_service
-            .lock()
-            .prepare_range_write_with_mutation(
-                &range,
-                &self.local_node_id,
-                command.clone(),
-                authority,
-            )?;
+        let native_abort_attempt = if let Some(database) = native_database {
+            Some(
+                self.local_service
+                    .lock()
+                    .begin_native_abort_attempt(database, &range, &command, authority)?,
+            )
+        } else {
+            None
+        };
+        let local_prepare = self.local_service.lock().prepare_range_write_with_mutation(
+            &range,
+            &self.local_node_id,
+            command.clone(),
+            authority,
+        );
+        if let Err(error) = local_prepare {
+            if let Some(attempt) = native_abort_attempt {
+                self.recovered_epochs.lock().remove(&range.id);
+                *prepare_rejection = Some(attempt.retain_mutation(mutation));
+            }
+            return Err(error);
+        }
 
         let quorum = voters.len() / 2 + 1;
         let mut prepared = 1usize;
@@ -3274,6 +3323,13 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
             }
         }
         if prepared < quorum {
+            if let Some(attempt) = native_abort_attempt {
+                self.recovered_epochs.lock().remove(&range.id);
+                *prepare_rejection = Some(attempt.retain_mutation(mutation));
+                return Err(range_write_error(format!(
+                    "range {} command {} failed prepare quorum {prepared}/{quorum}; actual local cleanup/no-effect intent required before abort recovery", range.id, command.command_id,
+                )));
+            }
             // A prepare may have become durable even when its response was
             // lost or malformed. Broadcast the abort to every voter so those
             // unknown outcomes cannot accumulate unresolved entries forever.
@@ -3596,14 +3652,45 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
 
 impl<Transport: RangeWriteTransport> CommitAdmission for RangeWriteCoordinator<Transport> {
     fn admit(&self, intent: &CommitAdmissionIntent) -> Result<CommitAdmissionTicket> {
-        self.admit_with_database(intent, None)
+        self.admit_with_database(intent, None, &mut None)
     }
     fn admit_with_native_context(
         &self,
         intent: &CommitAdmissionIntent,
         database: &crate::BicDb,
     ) -> Result<CommitAdmissionTicket> {
-        self.admit_with_database(intent, Some(database))
+        self.admit_with_database(intent, Some(database), &mut None)
+    }
+    fn admit_native_with_rejection(
+        &self,
+        intent: &CommitAdmissionIntent,
+        database: &crate::BicDb,
+    ) -> Result<crate::NativeCommitAdmissionResult> {
+        let mut rejected = None;
+        match self.admit_with_database(intent, Some(database), &mut rejected) {
+            Ok(ticket) => Ok(crate::NativeCommitAdmissionResult::Accepted(ticket)),
+            Err(error) => {
+                match rejected {
+                    Some(rejection) => {
+                        Ok(crate::NativeCommitAdmissionResult::PrepareOnlyRejected {
+                            rejection,
+                            error,
+                        })
+                    }
+                    None => Err(error),
+                }
+            }
+        }
+    }
+    fn native_prepare_only_cleaned(
+        &self,
+        rejected: NativePrepareOnlyRejection,
+        cleaned: &crate::NativeTransactionNoEffect,
+        database: &crate::BicDb,
+    ) -> Result<()> {
+        self.local_service
+            .lock()
+            .finish_native_prepare_only_rejection(database, rejected, cleaned)
     }
     fn local_applied(&self, ticket: &CommitAdmissionTicket, commit_seq: u64) -> Result<()> {
         self.finish_local_application(ticket, commit_seq, None)
@@ -4830,6 +4917,7 @@ mod tests {
             recovery_fences: BTreeMap::new(),
             native_image_bases: BTreeMap::new(),
             sparse_committed_decisions: None,
+            native_abort_protocol: None,
         };
         let envelope = RangeWriteEnvelope::new(catalog).unwrap();
         fs::write(
@@ -4869,6 +4957,7 @@ mod tests {
             recovery_fences: BTreeMap::new(),
             native_image_bases: BTreeMap::new(),
             sparse_committed_decisions: None,
+            native_abort_protocol: None,
         })
         .unwrap();
         let legacy_bytes = serde_json::to_vec_pretty(&envelope).unwrap();

@@ -721,6 +721,14 @@ impl RangeWriteStore {
         {
             serde_json::to_writer(&mut hash, &("sparse-committed-history-v1", sparse))?;
         }
+        if let Some(protocol) = self
+            .catalog
+            .native_abort_protocol
+            .as_ref()
+            .and_then(|p| p.range(range_id))
+        {
+            serde_json::to_writer(&mut hash, &("native-abort-control-v1", protocol))?;
+        }
         Ok(hex::encode(hash.0.finalize()))
     }
     /// No row/WAL Apply occurs here. Only an independently observed committed
@@ -735,6 +743,7 @@ impl RangeWriteStore {
         let scope = decision.scope();
         self.require_recovery_scope(role, native, scope)?;
         let command = decision.command();
+        self.require_no_native_abort_promise(command.range_id, command.index)?;
         role.require_historical_command_scope(command)?;
         if self
             .catalog

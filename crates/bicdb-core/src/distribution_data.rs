@@ -39,6 +39,7 @@ use crate::{
     SchemaCompatibilityAuthority, SchemaCompatibilityFingerprint, SignedClusterSchemaBundle,
 };
 
+mod native_abort;
 mod native_activation;
 mod native_apply;
 mod native_durability;
@@ -1936,6 +1937,7 @@ impl ClusterDataNodeService {
     ) -> Result<RangeWriteAck> {
         self.range_mutations.validate(range.id, authority)?;
         self.validate_range_write(range, caller, &command)?;
+        self.ensure_native_abort_prepare_start(range, &command, authority)?;
         let state = self.range_writes.prepare(command.clone())?;
         self.range_write_ack(&command, state)
     }

@@ -23676,6 +23676,53 @@ fn predicate_value_text(value: &Value) -> String {
     }
 }
 
+// Predicates must compare the complete fixed-point value. The repair parser is
+// deliberately restricted to 18 fractional digits; Decimal arithmetic can
+// produce up to 28, including insignificant trailing zeros. Do not round,
+// rescale into a bounded integer, or turn a valid comparison into `None`.
+fn compare_predicate_decimal_text(left: &str, right: &str) -> Option<Ordering> {
+    fn parts(text: &str) -> Option<(bool, &str, &str)> {
+        let text = text.trim();
+        let (negative, digits) = match text.strip_prefix('-') {
+            Some(rest) => (true, rest),
+            None => (false, text.strip_prefix('+').unwrap_or(text)),
+        };
+        let (integer, fraction) = digits.split_once('.').unwrap_or((digits, ""));
+        if (integer.is_empty() && fraction.is_empty())
+            || !integer.bytes().all(|byte| byte.is_ascii_digit())
+            || !fraction.bytes().all(|byte| byte.is_ascii_digit())
+        {
+            return None;
+        }
+        let integer = integer.trim_start_matches('0');
+        let fraction = fraction.trim_end_matches('0');
+        Some((
+            negative && (!integer.is_empty() || !fraction.is_empty()),
+            integer,
+            fraction,
+        ))
+    }
+    let (left_negative, left_integer, left_fraction) = parts(left)?;
+    let (right_negative, right_integer, right_fraction) = parts(right)?;
+    if left_negative != right_negative {
+        return Some(if left_negative {
+            Ordering::Less
+        } else {
+            Ordering::Greater
+        });
+    }
+    let magnitude = left_integer
+        .len()
+        .cmp(&right_integer.len())
+        .then_with(|| left_integer.cmp(right_integer))
+        .then_with(|| left_fraction.cmp(right_fraction));
+    Some(if left_negative {
+        magnitude.reverse()
+    } else {
+        magnitude
+    })
+}
+
 fn compare_predicate_values(
     left: &Value,
     right: &Value,
@@ -23694,14 +23741,7 @@ fn compare_predicate_values(
             let right = right
                 .as_str()
                 .unwrap_or_else(|| right.as_number().map_or("", |number| number.as_str()));
-            let (left_units, left_scale) = parse_repair_decimal(left)?;
-            let (right_units, right_scale) = parse_repair_decimal(right)?;
-            let scale = left_scale.max(right_scale);
-            align_decimal_scale(left_units, left_scale, scale)?.partial_cmp(&align_decimal_scale(
-                right_units,
-                right_scale,
-                scale,
-            )?)
+            compare_predicate_decimal_text(left, right)
         }
         IndexPredicateValueType::Bool => left.as_bool()?.partial_cmp(&right.as_bool()?),
         IndexPredicateValueType::String

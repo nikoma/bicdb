@@ -374,5 +374,144 @@ impl NativeProvisionalNode {
     }
 }
 
+/// Initial metadata CONFIGURATION assembled from still-owned, genuinely new
+/// local factories. This producer is for the local host composition; it does
+/// not stand in for authenticated birth gathering between independent hosts.
+/// It supplies no data vote, serving grant, writer policy, or strong-read permit.
+pub(crate) struct NativeInitialMetadataConfiguration {
+    topology: ClusterTopology,
+    plan_sha256: String,
+    schema_sha256: String,
+}
+
+impl NativeInitialMetadataConfiguration {
+    pub(crate) fn from_actual_seeds(
+        plan: &NativeClusterBootstrapPlan,
+        seeds: &[&NativeProvisionalNode],
+        cancellation: &CancellationToken,
+    ) -> Result<Self> {
+        plan.validate()?;
+        cancellation.check()?;
+        if seeds.len() != plan.topology.nodes.len() {
+            return Err(invalid(
+                "initial metadata needs every planned actual factory",
+            ));
+        }
+        let plan_sha256 = plan.checksum()?;
+        let mut topology = plan.topology.clone();
+        let mut seen = BTreeSet::new();
+        let mut schema_sha256 = None;
+        for seed in seeds {
+            cancellation.check()?;
+            if seed.manifest.plan_sha256 != plan_sha256
+                || seed.plan.checksum()? != plan_sha256
+                || !seen.insert(seed.spec.node_id.clone())
+            {
+                return Err(invalid(
+                    "initial metadata seeds repeat or use different plans",
+                ));
+            }
+            seed.require_unregistered()?;
+            let database = seed.database.try_read().ok_or_else(|| {
+                invalid("initial metadata factory is busy; retry without publishing metadata")
+            })?;
+            let actual = seed
+                .factory
+                .require_unwritten_enrollment_database(&database, &plan.topology)?;
+            let schema = database.schema_compatibility_fingerprint()?.sha256;
+            if actual.writer_enforcement_version() != 1
+                || actual.birth_id() != seed.manifest.birth_id
+                || actual.birth_sha256() != seed.manifest.birth_sha256
+                || schema != seed.manifest.schema_sha256
+                || schema_sha256
+                    .as_ref()
+                    .is_some_and(|expected| expected != &schema)
+            {
+                return Err(invalid(
+                    "initial metadata actual birth/schema no longer matches",
+                ));
+            }
+            schema_sha256 = Some(schema);
+            crate::distribution_native_admission::ActualNativeStoreEnrollment::from_actual_factory(
+                &seed.factory,
+                &database,
+                &plan.topology,
+            )?
+            .bind_initial_or_unassigned_learner(&mut topology)?;
+        }
+        if topology.nodes.values().any(|node| {
+            node.native_store_birth_v1
+                .as_ref()
+                .is_none_or(|birth| birth.writer_enforcement_version() != 1)
+        }) {
+            return Err(invalid("initial metadata has an unenrolled planned voter"));
+        }
+        topology.validate()?;
+        cancellation.check()?;
+        Ok(Self {
+            topology,
+            plan_sha256,
+            schema_sha256: schema_sha256
+                .ok_or_else(|| invalid("initial metadata has no schema"))?,
+        })
+    }
+
+    /// Read-only configuration data for a future fresh-metadata constructor.
+    /// Recheck the actual local seed immediately before using this data; the
+    /// result cannot upgrade or rewrite a preexisting metadata consensus root.
+    pub(crate) fn topology_for_actual_seed(
+        &self,
+        seed: &NativeProvisionalNode,
+        cancellation: &CancellationToken,
+    ) -> Result<&ClusterTopology> {
+        cancellation.check()?;
+        seed.require_unregistered()?;
+        if seed.plan.checksum()? != self.plan_sha256 {
+            return Err(invalid(
+                "initial metadata configuration belongs to another plan",
+            ));
+        }
+        let database = seed
+            .database
+            .try_read()
+            .ok_or_else(|| invalid("initial metadata factory is busy"))?;
+        let actual = seed
+            .factory
+            .require_unwritten_enrollment_database(&database, &self.topology)?;
+        let expected = self
+            .topology
+            .nodes
+            .get(&seed.spec.node_id)
+            .and_then(|node| node.native_store_birth_v1.as_ref())
+            .ok_or_else(|| invalid("local factory is absent from initial metadata"))?;
+        if &crate::distribution::NativeStoreBirthV1::from_actual_native(&actual)? != expected
+            || database.schema_compatibility_fingerprint()?.sha256 != self.schema_sha256
+        {
+            return Err(invalid(
+                "initial metadata does not bind the actual local factory",
+            ));
+        }
+        cancellation.check()?;
+        Ok(&self.topology)
+    }
+}
+
+impl NativeProvisionalNode {
+    fn require_unregistered(&self) -> Result<()> {
+        for path in [
+            crate::distribution::DEFAULT_CLUSTER_TOPOLOGY,
+            crate::distribution::DEFAULT_DISTRIBUTION_CONFIG,
+            crate::distribution_consensus::DEFAULT_CLUSTER_METADATA_CONSENSUS_STATE,
+        ] {
+            if self.root.join(path).exists() {
+                return Err(invalid(
+                    "initial metadata cannot rewrite an already registered root",
+                ));
+            }
+        }
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests;

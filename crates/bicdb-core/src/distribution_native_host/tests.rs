@@ -203,3 +203,83 @@ fn native_host_initial_seed_refuses_existing_root_and_incompatible_plan() {
     .is_err());
     assert!(!other.exists());
 }
+
+#[test]
+fn native_host_initial_metadata_binds_every_actual_factory_and_rejects_recreated_root() {
+    let parent = tempfile::tempdir().unwrap();
+    let initial = plan(3, 4);
+    let token = CancellationToken::uncancelable();
+    let seeds = (0..3)
+        .map(|i| {
+            NativeProvisionalNode::create(
+                &parent.path().join(format!("n{i}")),
+                config(),
+                initial.clone(),
+                &node(&format!("n{i}")),
+                &token,
+            )
+            .unwrap()
+        })
+        .collect::<Vec<_>>();
+    assert!(NativeInitialMetadataConfiguration::from_actual_seeds(
+        &initial,
+        &[&seeds[0], &seeds[1]],
+        &token
+    )
+    .is_err());
+    assert!(NativeInitialMetadataConfiguration::from_actual_seeds(
+        &initial,
+        &[&seeds[0], &seeds[1], &seeds[1]],
+        &token
+    )
+    .is_err());
+    let enrolled = NativeInitialMetadataConfiguration::from_actual_seeds(
+        &initial,
+        &seeds.iter().collect::<Vec<_>>(),
+        &token,
+    )
+    .unwrap();
+    for seed in &seeds {
+        let topology = enrolled.topology_for_actual_seed(seed, &token).unwrap();
+        assert_eq!(topology.format_version, 2);
+        for expected in &seeds {
+            let binding = topology.nodes[&expected.spec.node_id]
+                .native_store_birth_v1
+                .as_ref()
+                .unwrap();
+            assert_eq!(binding.birth_id(), expected.manifest.birth_id);
+            assert_eq!(binding.birth_sha256(), expected.manifest.birth_sha256);
+            assert_eq!(binding.writer_enforcement_version(), 1);
+        }
+        seed.require_unregistered().unwrap();
+    }
+    assert!(initial
+        .topology
+        .nodes
+        .values()
+        .all(|member| member.native_store_birth_v1.is_none()));
+    // Same declared node/incarnation/plan is not the same physical database.
+    let replacement = NativeProvisionalNode::create(
+        &parent.path().join("different-n0"),
+        config(),
+        initial,
+        &node("n0"),
+        &token,
+    )
+    .unwrap();
+    assert_ne!(replacement.manifest.birth_id, seeds[0].manifest.birth_id);
+    assert!(enrolled
+        .topology_for_actual_seed(&replacement, &token)
+        .is_err());
+    // Even an exact matching configuration cannot rewrite a registered root.
+    std::fs::write(
+        seeds[0]
+            .root
+            .join(crate::distribution_consensus::DEFAULT_CLUSTER_METADATA_CONSENSUS_STATE),
+        b"already registered; do not overwrite",
+    )
+    .unwrap();
+    assert!(enrolled
+        .topology_for_actual_seed(&seeds[0], &token)
+        .is_err());
+}

@@ -2542,7 +2542,10 @@ impl MetadataConsensusStore {
             &self.root.join(DEFAULT_CLUSTER_METADATA_CONSENSUS_STATE),
             &serde_json::to_vec_pretty(&envelope)?,
             self.fsync,
-        )
+        )?;
+        // A DB replacement during durable I/O cannot turn into a positive
+        // vote/Append response from the ended actual-open owner.
+        self.require_native_metadata_owner_current()
     }
 }
 

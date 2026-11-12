@@ -29,6 +29,9 @@ mod native_metadata_store;
 pub(crate) use host_read::{
     HostMetadataReadAcquireRequest, HostMetadataReadAcquireResponse, HostMetadataReadObservation,
 };
+#[cfg(test)]
+pub(crate) use native_metadata_store::NativeMetadataInitializationCut;
+pub(crate) use native_metadata_store::NativeMetadataPreVoteFact;
 
 /// Wire request only. This is not a read authority or a row-read permit.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -2542,7 +2545,10 @@ impl MetadataConsensusStore {
             &self.root.join(DEFAULT_CLUSTER_METADATA_CONSENSUS_STATE),
             &serde_json::to_vec_pretty(&envelope)?,
             self.fsync,
-        )
+        )?;
+        // A DB replacement during durable I/O cannot turn into a positive
+        // vote/Append response from the ended actual-open owner.
+        self.require_native_metadata_owner_current()
     }
 }
 

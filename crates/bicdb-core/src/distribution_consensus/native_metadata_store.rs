@@ -91,7 +91,70 @@ pub(crate) enum NativeMetadataInitializationCut {
     AfterStateFile,
 }
 
+/// Borrow of an ACTUAL owned, never-voted metadata store. No DTO/Clone path.
+pub(crate) struct NativeMetadataPreVoteFact<'a> {
+    store: &'a MetadataConsensusStore,
+}
+impl NativeMetadataPreVoteFact<'_> {
+    pub(crate) fn require_current(&self) -> Result<()> {
+        self.store.require_native_metadata_owner_current()?;
+        let s = &self.store.state;
+        if s.native_store_id.is_none()
+            || s.current_term != 0
+            || s.voted_for.is_some()
+            || s.role != MetadataConsensusRole::Follower
+            || s.leader_id.is_some()
+            || s.base_index != 0
+            || s.base_term != 0
+            || s.commit_index != 0
+            || !s.log.is_empty()
+            || s.committed_restore_activation.is_some()
+        {
+            return Err(metadata_error(
+                "initial preparation needs actual term-zero never-voted owned metadata state",
+            ));
+        }
+        Ok(())
+    }
+    pub(crate) fn store_id(&self) -> Uuid {
+        self.store.state.native_store_id.unwrap()
+    }
+    pub(crate) fn topology(&self) -> &ClusterTopology {
+        &self.store.state.committed_topology
+    }
+    pub(crate) fn state_sha256(&self) -> Result<String> {
+        self.require_current()?;
+        state_checksum(&self.store.state)
+    }
+}
+
 impl MetadataConsensusStore {
+    /// Historical identity inspection only; no owner/read/quorum proof is minted.
+    pub(crate) fn inspect_native_store_identity(
+        root: impl AsRef<Path>,
+        store_id: Uuid,
+        cluster: &ClusterId,
+        node: &ClusterNodeId,
+    ) -> Result<()> {
+        let state = decode_state(&fs::read(
+            root.as_ref().join(DEFAULT_CLUSTER_METADATA_CONSENSUS_STATE),
+        )?)?;
+        validate_state(&state)?;
+        if state.native_store_id != Some(store_id)
+            || state.cluster_id != *cluster
+            || state.node_id != *node
+        {
+            return Err(metadata_error(
+                "historical preparation metadata identity changed",
+            ));
+        }
+        Ok(())
+    }
+    pub(crate) fn native_initial_pre_vote_fact(&self) -> Result<NativeMetadataPreVoteFact<'_>> {
+        let fact = NativeMetadataPreVoteFact { store: self };
+        fact.require_current()?;
+        Ok(fact)
+    }
     pub(super) fn require_native_metadata_owner_current(&self) -> Result<()> {
         if let Some(owner) = &self.native_owner {
             owner.require_current()?;
@@ -102,6 +165,98 @@ impl MetadataConsensusStore {
             ));
         }
         Ok(())
+    }
+    /// Explicit initial-host recovery of a protected NEVER-EXPOSED prepare.
+    /// Registered/maybe-voted state uses strict reopen; it is never reset.
+    pub(crate) fn prepare_initial_native_owned(
+        root: impl AsRef<Path>,
+        database: Arc<RwLock<BicDb>>,
+        factory: &FreshRangeGenesisAuthority,
+        topology: ClusterTopology,
+        cancellation: &CancellationToken,
+    ) -> Result<Self> {
+        cancellation.check()?;
+        let node = factory.node_id().clone();
+        let record = {
+            let db = database
+                .try_read()
+                .ok_or_else(|| metadata_error("initial DB busy"))?;
+            let member = topology
+                .nodes
+                .get(&node)
+                .ok_or_else(|| metadata_error("initial local member absent"))?;
+            db.native_metadata_initialization_record(
+                &topology.cluster_id,
+                topology
+                    .range_image_bootstrap_id
+                    .ok_or_else(|| metadata_error("initial bootstrap absent"))?,
+                &node,
+                member.incarnation,
+            )?
+        };
+        let Some(record) = record else {
+            return Self::initialize_native_owned(root, database, factory, topology, cancellation);
+        };
+        if record.registered() {
+            return Self::reopen_native_owned(root, database, node, topology, cancellation);
+        }
+        let plain = hex::encode(Sha256::digest(
+            crate::distribution_range_image::bounded_json(&topology, 4 * 1024 * 1024)?,
+        ));
+        if record.initial_topology_sha256() != plain {
+            return Err(metadata_error(
+                "protected never-exposed prepare names another initial C",
+            ));
+        }
+        let root = root.as_ref();
+        let owner = NativeMetadataStoreOwner::acquire(root, Arc::clone(&database), true)?;
+        let state = match fs::read(root.join(DEFAULT_CLUSTER_METADATA_CONSENSUS_STATE)) {
+            Ok(bytes) => decode_state(&bytes)?,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => MetadataConsensusState {
+                format_version: NATIVE_METADATA_CONSENSUS_FORMAT,
+                native_store_id: Some(record.store_id()),
+                cluster_id: topology.cluster_id.clone(),
+                node_id: node.clone(),
+                current_term: 0,
+                voted_for: None,
+                role: MetadataConsensusRole::Follower,
+                leader_id: None,
+                base_index: 0,
+                base_term: 0,
+                commit_index: 0,
+                committed_topology: topology.clone(),
+                log: Vec::new(),
+                committed_restore_activation: None,
+            },
+            Err(e) => return Err(e.into()),
+        };
+        validate_state(&state)?;
+        if state.native_store_id != Some(record.store_id())
+            || state.committed_topology != topology
+            || state.node_id != node
+        {
+            return Err(metadata_error(
+                "protected initial metadata identity/C changed",
+            ));
+        }
+        let mut store = Self {
+            root: root.to_path_buf(),
+            fsync: true,
+            state,
+            match_index: BTreeMap::new(),
+            last_leader_contact_ms: unix_time_ms(),
+            native_owner: Some(owner),
+        };
+        store.native_initial_pre_vote_fact()?.require_current()?;
+        store.reset_match_indexes();
+        store.persist()?;
+        cancellation.check()?;
+        database
+            .try_read()
+            .ok_or_else(|| metadata_error("initial DB busy sealing original preparation"))?
+            .finish_native_metadata_store(&record, &topology)?;
+        cancellation.check()?;
+        Ok(store)
     }
     pub(crate) fn initialize_native_owned(
         root: impl AsRef<Path>,

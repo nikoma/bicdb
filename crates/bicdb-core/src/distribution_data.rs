@@ -746,6 +746,9 @@ pub struct ClusterDataNodeService {
     fsync: bool,
     initial_birth_provider:
         Option<std::sync::Weak<crate::distribution_native_host::NativeProvisionalNode>>,
+    initial_preparation_provider:
+        Option<std::sync::Weak<crate::distribution_native_host::NativeProvisionalNode>>,
+    initial_consensus_only: bool,
 }
 
 impl ClusterDataNodeService {
@@ -873,6 +876,8 @@ impl ClusterDataNodeService {
             schema_activation_limits,
             fsync,
             initial_birth_provider: None,
+            initial_preparation_provider: None,
+            initial_consensus_only: false,
         };
         service.recover_committed_range_writes()?;
         Ok(service)
@@ -910,6 +915,59 @@ impl ClusterDataNodeService {
         &self,
     ) -> Option<std::sync::Weak<crate::distribution_native_host::NativeProvisionalNode>> {
         self.initial_birth_provider.clone()
+    }
+    pub(crate) fn initial_preparation_provider(
+        &self,
+    ) -> Option<std::sync::Weak<crate::distribution_native_host::NativeProvisionalNode>> {
+        self.initial_preparation_provider.clone()
+    }
+    pub(crate) fn native_initial_listener_store_open_id(&self) -> Uuid {
+        self.range_writes.recovery_store_open_id()
+    }
+    pub(crate) fn initial_consensus_only(&self) -> bool {
+        self.initial_consensus_only
+    }
+    pub(crate) fn transition_initial_preparation_listener(
+        &mut self,
+        actual: &Arc<Mutex<Self>>,
+        drained: &crate::distribution_transport::DrainedClusterDataListener,
+        permit: &crate::distribution_native_host::NativeInitialConsensusPermit,
+        seed: &Arc<crate::distribution_native_host::NativeProvisionalNode>,
+    ) -> Result<()> {
+        drained.require_service(actual)?;
+        drained.require_store(self.native_initial_listener_store_open_id())?;
+        permit.require_live()?;
+        seed.require_same_initial_database(&self.db, &self.cluster_id, &self.node_id)?;
+        let db = self
+            .db
+            .try_read()
+            .ok_or_else(|| data_error("initial DB busy during stopped listener transition"))?;
+        let node = permit
+            .configuration()
+            .nodes
+            .get(&self.node_id)
+            .ok_or_else(|| data_error("local member absent from barrier C"))?;
+        let record = db
+            .read_native_initial_preparation(
+                &self.cluster_id,
+                permit
+                    .configuration()
+                    .range_image_bootstrap_id
+                    .ok_or_else(|| data_error("initial bootstrap absent"))?,
+                &self.node_id,
+                node.incarnation,
+            )?
+            .ok_or_else(|| data_error("durable exposure missing"))?;
+        if record.stage()!=crate::distribution_native_host::NativeInitialPreparationStage::ConsensusExposedHistorical
+            || record.configuration()!=permit.configuration() || self.initial_birth_provider.is_none() {
+            return Err(data_error("stopped actual service lacks exact protected initial exposure"));
+        }
+        // Only the NEW listener observes these fields. The drained listener's
+        // captured Some remains immutable and can never become general service.
+        self.initial_birth_provider = None;
+        self.initial_preparation_provider = Some(Arc::downgrade(seed));
+        self.initial_consensus_only = true;
+        Ok(())
     }
     pub(crate) fn require_persisted_recovery_scope(
         &self,

@@ -6844,6 +6844,15 @@ impl ApplicationManifestV2 {
                 .ok_or_else(|| {
                     ExtensionError::InvalidManifest("native fact owner resource is absent".into())
                 })?;
+            if self
+                .resources
+                .iter()
+                .filter(|candidate| candidate.relation == publication.relation)
+                .count()
+                != 1
+            {
+                return invalid("native fact relation may not be shadowed");
+            }
             if resource.schema_only
                 || resource.relation != publication.relation
                 || resource.tenant_field.as_deref() != Some(&publication.tenant_field)
@@ -6893,6 +6902,22 @@ impl ApplicationManifestV2 {
                 return invalid("native fact import is not an admitted dependency projection");
             }
             for subject in &import.subject_resources {
+                if let Some(resource) = self
+                    .resources
+                    .iter()
+                    .find(|resource| resource.name == *subject)
+                {
+                    if self
+                        .resources
+                        .iter()
+                        .filter(|candidate| candidate.relation == resource.relation)
+                        .count()
+                        != 1
+                    {
+                        return invalid("native reference relation may not be shadowed");
+                    }
+                }
+
                 if !self
                     .resources
                     .iter()

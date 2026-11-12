@@ -2308,7 +2308,9 @@ impl BicDb {
         let mut published_ids = BTreeSet::new();
         for (index, write) in tx.writes.iter().enumerate() {
             let policy = self.mutation_policy(&write.collection)?.unwrap_or_default();
-            if policy.native_fact_publication.is_some() || policy.native_fact_reference_immutable {
+            if policy.native_fact_publication.is_some()
+                || policy.native_fact_reference_owner.is_some()
+            {
                 if write.op != TxWriteOp::Upsert
                     || self
                         .get_unchecked(&write.collection, &write.record_id)?
@@ -2320,12 +2322,16 @@ impl BicDb {
                     ));
                 }
             }
-            if let Some(publication) = policy.native_fact_publication {
-                if issuers.get(&index).and_then(|issuer| issuer.as_deref())
-                    != Some(publication.owner_application.as_str())
+            let owner = policy
+                .native_fact_publication
+                .as_ref()
+                .map(|publication| &publication.owner_application)
+                .or(policy.native_fact_reference_owner.as_ref());
+            if let Some(owner) = owner {
+                if issuers.get(&index).and_then(|issuer| issuer.as_deref()) != Some(owner.as_str())
                 {
                     return Err(BicDbError::CommitValidation(
-                        "immutable owner publication mutation denied".into(),
+                        "immutable native fact owner mutation denied".into(),
                     ));
                 }
             }

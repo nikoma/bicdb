@@ -12750,7 +12750,8 @@ impl BicDb {
                 )));
             }
         }
-        if policy.native_fact_publication.is_some() || policy.native_fact_reference_immutable {
+        if policy.native_fact_publication.is_some() || policy.native_fact_reference_owner.is_some()
+        {
             format::enable_native_immutable_facts(&self.path)?;
         }
         self.collection_state_mut(collection)?.meta.mutation_policy = Some(policy);
@@ -15717,12 +15718,17 @@ impl Transaction {
                 .clone()
                 .unwrap_or_default()
         };
-        if let Some(publication) = &mutation_policy.native_fact_publication {
-            if grant.issuer_application.as_deref() != Some(publication.owner_application.as_str())
+        let native_owner = mutation_policy
+            .native_fact_publication
+            .as_ref()
+            .map(|publication| &publication.owner_application)
+            .or(mutation_policy.native_fact_reference_owner.as_ref());
+        if let Some(owner) = native_owner {
+            if grant.issuer_application.as_deref() != Some(owner.as_str())
                 || operation != MutationOperation::Insert
             {
                 return Err(BicDbError::MutationDenied(
-                    "immutable owner publication mutation denied".into(),
+                    "immutable native fact owner mutation denied".into(),
                 ));
             }
         }

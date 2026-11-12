@@ -89,17 +89,13 @@ pub struct NativeFactPublicationPolicy {
     pub accept_new_references: bool,
 }
 
-fn native_fact_flag_disabled(value: &bool) -> bool {
-    !*value
-}
-
 #[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct MutationPolicy {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub native_fact_publication: Option<NativeFactPublicationPolicy>,
-    #[serde(default, skip_serializing_if = "native_fact_flag_disabled")]
-    pub native_fact_reference_immutable: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub native_fact_reference_owner: Option<String>,
     #[serde(default)]
     pub grants_required: bool,
     #[serde(default)]

@@ -114,6 +114,35 @@ pub(super) fn validate_application_module_catalog(catalog: &RuntimeCatalog) -> R
             }
         }
         for import in &application.native_fact_imports {
+            for subject in &import.subject_resources {
+                let relation = &application
+                    .resources
+                    .iter()
+                    .find(|resource| resource.name == *subject)
+                    .expect("ABI validated subject")
+                    .relation;
+                for (other_name, other) in &catalog.packages {
+                    if other_name == consumer_name {
+                        continue;
+                    }
+                    if other
+                        .package
+                        .manifest
+                        .application
+                        .as_deref()
+                        .is_some_and(|app| {
+                            app.resources
+                                .iter()
+                                .any(|resource| resource.relation == *relation)
+                        })
+                    {
+                        return Err(AppRuntimeError::InvalidPackage(
+                            "foreign resource shadows immutable native reference".into(),
+                        ));
+                    }
+                }
+            }
+
             let owner = &import.publication.owner_application;
             let (_, _, provider_module) = modules.get(owner).ok_or_else(|| {
                 AppRuntimeError::InvalidPackage("native fact owner module unavailable".into())
@@ -2969,15 +2998,16 @@ impl ApplicationRuntime {
                 if publication.is_some() || reference {
                     let previous = db.mutation_policy(&contract.relation)?.unwrap_or_default();
                     if previous.native_fact_publication.is_none()
-                        && !previous.native_fact_reference_immutable
-                        && !db.scan_collection(&contract.relation)?.is_empty()
+                        && !previous.native_fact_reference_owner.is_some()
+                        && db.collection_record_count(&contract.relation)? != 0
                     {
                         return Err(AppRuntimeError::InvalidPackage(
                             "cannot adopt populated unfenced native facts".into(),
                         ));
                     }
                     mutation.append_only = true;
-                    mutation.native_fact_reference_immutable = reference;
+                    mutation.native_fact_reference_owner =
+                        reference.then(|| application.package.application.clone());
                     mutation.native_fact_publication =
                         publication.map(|publication| bicdb_core::NativeFactPublicationPolicy {
                             owner_application: publication.owner_application.clone(),

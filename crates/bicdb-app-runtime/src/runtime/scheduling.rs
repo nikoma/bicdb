@@ -1773,7 +1773,7 @@ where
             .and_then(|_| {
                 if snapshot.mutation.as_ref().is_some_and(|policy| {
                     policy.native_fact_publication.is_some()
-                        || policy.native_fact_reference_immutable
+                        || policy.native_fact_reference_owner.is_some()
                 }) {
                     Ok(())
                 } else {

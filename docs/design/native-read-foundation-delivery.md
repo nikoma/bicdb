@@ -35,8 +35,11 @@ mode, lineage and actual-local-visibility checks remain intact. A source API or
 local component test is not operator integration. Existing legacy contracts and
 historical evidence are preserved.
 
-**The delayed pre-binding metadata Append ACK provenance dependency is now
-composed, but remains uncompiled and dynamically unvalidated on this branch.**
+**The delayed pre-binding metadata Append ACK provenance dependency is composed.**
+Root reports exact `29f9e80c572638b8ff4fcefa01f70e8448535be9` focused CI
+`43169260087`: 222 passed, zero failed and two ignored, with compilation and
+isolated consumer checks passed; the full test matrix was skipped. Those
+results do not validate the later matched-frontier changes below.
 A reply produced before binding cannot be retagged with a later native identity.
 The producer owns actual persistence and protected receiver birth/StoreID;
 remote provenance is sealed by the original authenticated exchange. Counting
@@ -59,6 +62,39 @@ remain outside this delivery. Existing finite command/history bounds and
 unsupported recovery states remain explicit refusal, not broad qualification.
 No full Milestone 1, five-independent-VM expansion, zero-loss scale-out,
 convergence or stable capacity claim follows.
+
+## Subsequent matched-frontier correction: source only
+
+The metadata Append defect is independent of native enrollment: an untouched
+follower suffix must not be reported as matching a bounded leader request or
+committed merely because it exists locally. This branch separately adds:
+
+- `f0b06118cf254e14c3f5ab4531f267aff71ff1e4`, exact test cherry of
+  `36e1fddcbe0c26245f0f9d2ad7b795158314c561`: three real fsynced stores and
+  elections, divergent suffix, bounded ACK, real majority recovery, empty
+  heartbeat, committed snapshot with zero entry payloads and strict reopen.
+- `5dc886e098b0f9229c91ac7cdc42948ec6757e6a`, exact cherry of
+  `c295916d0030f3fbd37962150cfd1f65dc70e752`: opt-in retention of this
+  metadata-only fault state's files/reports in focused CI artifacts. No TLS
+  credentials or application ACK ledger is produced by this control.
+- `5d690a235680c8e88fd422a332878a6f75bc77f3`, adaptation of
+  `2e2ddd9136efa7b181532888c66606003f8a12d6`: advance only through contiguous
+  entries actually covered by the validated request. Empty requests use the
+  verified previous entry; a validated snapshot supplies its covered frontier.
+  Follower commit is capped at `min(leader_commit, matched_frontier)`.
+
+The native owned-persistence producer receives this handler-derived frontier
+and sets the reply's `match_index` **before** computing its provenance digest.
+It still owns the actual fsynced write and applies all existing actual-open,
+birth, StoreID, current lifecycle and pin checks. No public scalar setter or
+new authority/protocol/version is added; protocol27 remains unchanged.
+
+This adapted stack has not compiled or executed locally. The prior 29f result
+and Root's separate public-main FSM baseline/fix are not tests of this new
+native composition. The new regression name is
+`metadata_append_actual_bounded_prefix_ack_cannot_commit_divergent_tail`;
+a `native_` substring run does **not** select it. Run it explicitly, then the
+related native owned/TLS ACK and snapshot/election controls on the frozen head.
 
 ## Required next checks and delivery
 

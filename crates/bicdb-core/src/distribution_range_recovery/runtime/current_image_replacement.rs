@@ -341,3 +341,48 @@ impl RangeRecoveryRuntime {
         )
     }
 }
+
+#[cfg(test)]
+impl RangeRecoveryRuntime {
+    pub(crate) fn test_replacement_handover_cut(
+        &self,
+        scope: &RecoveryFenceScope,
+        source: &crate::distribution_range_image::TentativeNativeRangeImageSourceAuthorization<'_>,
+        role: &crate::distribution_range_consensus::NativeImageInstallRole<'_>,
+        attempt: Uuid,
+        before_catalogue: bool,
+        parent: &CancellationToken,
+    ) -> Result<crate::distribution_range_consensus::InstallingRefusalHandoverReceipt> {
+        let token = parent.child_with_deadline(role.role().deadline());
+        token.check()?;
+        let _operation = self.reserve(scope.range_id)?;
+        scope.require_role(role.role())?;
+        let frozen = {
+            let sessions = self.sessions.lock();
+            let s = sessions
+                .replacing
+                .get(&scope.range_id)
+                .ok_or_else(|| invalid("actual test replacement session missing"))?;
+            if !s.scope.same_session(scope) || source.cut().resume_proposal() != Some(&s.pointer) {
+                return Err(invalid("test replacement cut changed actual scope"));
+            }
+            Arc::clone(
+                s.frozen
+                    .as_ref()
+                    .ok_or_else(|| invalid("test replacement freeze leased"))?,
+            )
+        };
+        let mut service = loop {
+            token.check()?;
+            if let Some(s) = self.service.try_lock_for(LATCH_POLL) {
+                break s;
+            }
+        };
+        if before_catalogue {
+            service
+                .test_replacement_proposal_before_handover(source, role, &frozen, attempt, &token)
+        } else {
+            service.handover_current_image_replacement(source, role, &frozen, attempt, &token)
+        }
+    }
+}

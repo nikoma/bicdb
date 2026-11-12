@@ -1285,7 +1285,13 @@ impl BicDb {
                     ))
                 || previous.birth_id != admission.birth_id()
                 || previous.birth_sha256 != admission.birth_sha256()
-                || previous.source_range_index != fence.source_range_index()
+                || (previous.source_range_index != fence.source_range_index()
+                    && !fence.matches_replaced_installing_marker(
+                        previous.session_id,
+                        previous.attempt_id,
+                        &previous.intent_sha256,
+                        previous.source_range_index,
+                    ))
             {
                 return Err(invalid(
                     "previous native Installing belongs to another lineage",

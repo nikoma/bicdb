@@ -26,6 +26,7 @@ pub(super) fn finish_actual_current_image_replacement(
     target_uid: Uuid,
     expected_h: &str,
     parent: &CancellationToken,
+    handover_cut: Option<bool>,
 ) -> serde_json::Value {
     let source_id = node("n2");
     let target_id = node("n1");
@@ -147,6 +148,74 @@ pub(super) fn finish_actual_current_image_replacement(
     assert_eq!(source.cut().resume_proposal(), Some(&proposal));
     let role = recipient_role(providers, initiator, range, scope.recovery_nonce);
     let attempt = Uuid::now_v7();
+    if let Some(before_catalogue) = handover_cut {
+        let target_db = &fixture.databases[&target_id];
+        let bytes = std::fs::read(
+            target_db
+                .read()
+                .data_path()
+                .join("cluster-range-write-log.json"),
+        )
+        .unwrap();
+        let result = runtimes[&target_id].test_replacement_handover_cut(
+            scope,
+            &source,
+            &NativeImageInstallRole::CurrentVoterRepair(&role),
+            attempt,
+            before_catalogue,
+            parent,
+        );
+        if before_catalogue {
+            assert!(result
+                .unwrap_err()
+                .to_string()
+                .contains("BEFORE catalogue handover"));
+            assert_eq!(
+                std::fs::read(
+                    target_db
+                        .read()
+                        .data_path()
+                        .join("cluster-range-write-log.json")
+                )
+                .unwrap(),
+                bytes
+            );
+        } else {
+            drop(result.unwrap());
+        }
+        let db = target_db.read();
+        let native = db
+            .native_recovery_admission(
+                role.cluster_id(),
+                role.bootstrap_id(),
+                role.local_node_id(),
+                role.local_member_incarnation(),
+            )
+            .unwrap();
+        let p2 = db
+            .read_native_current_image_proposal_by_id(&native, attempt)
+            .unwrap()
+            .unwrap();
+        let p1 = db
+            .read_native_current_image_proposal(&native, &proposal)
+            .unwrap();
+        assert_eq!(p1.pointer(), proposal);
+        assert_eq!(p1.historical_source().source_id, node("n0"));
+        assert_eq!(p2.historical_source().source_id, source_id);
+        assert_eq!(p2.historical_source().range.epoch, range.epoch);
+        assert_eq!(
+            p1.historical_source().logical_history_sha256,
+            p2.historical_source().logical_history_sha256
+        );
+        assert_eq!(
+            db.native_range_prefix_observation(range.id)
+                .unwrap()
+                .native_applied_index,
+            None
+        );
+        assert!(db.range_mutation_gate().try_enter(range.id).is_err());
+        return serde_json::json!({"handover_cut":if before_catalogue{"NATIVE_P2_ORPHAN_BEFORE_CATALOGUE"}else{"DURABLE_N2_INTENT_P2_BEFORE_TRANSFER"},"attempt":attempt,"p1":proposal,"p2":p2.pointer(),"ordinary_mutation_refused":true,"native_unknown":true});
+    }
     let lease = runtimes[&target_id]
         .transfer_current_image_replacement(
             scope,

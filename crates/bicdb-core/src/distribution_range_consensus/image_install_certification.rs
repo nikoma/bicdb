@@ -717,3 +717,55 @@ impl RangeWriteStore {
         )
     }
 }
+
+#[cfg(test)]
+mod codec_tests {
+    use super::*;
+    #[test]
+    fn installing_certification_reader_fence_requires_both_complete_maps_and_preserves_legacy_bytes(
+    ) {
+        // Codec-only control, deliberately no native/quorum authority claim.
+        let root = tempfile::tempdir().unwrap();
+        let store = RangeWriteStore::open(
+            root.path(),
+            ClusterId::new("installing-codec").unwrap(),
+            ClusterNodeId::new("n0").unwrap(),
+            true,
+        )
+        .unwrap();
+        let original = store.catalog.clone();
+        let old = serde_json::to_value(&original).unwrap();
+        assert!(old.get("installing_committed_certifications").is_none());
+        assert!(old.get("installing_recovery_handovers").is_none());
+        let roundtrip: RangeWriteCatalog = serde_json::from_value(old).unwrap();
+        assert_eq!(
+            catalog_checksum(&original).unwrap(),
+            catalog_checksum(&roundtrip).unwrap()
+        );
+        let mut candidate = original.clone();
+        candidate.format_version = INSTALLING_CERTIFICATION_FORMAT;
+        candidate.sparse_committed_decisions = Some(BTreeMap::new());
+        assert!(RangeWriteEnvelope::new(candidate.clone())
+            .unwrap()
+            .verify()
+            .is_err());
+        candidate.installing_committed_certifications = Some(BTreeMap::new());
+        assert!(RangeWriteEnvelope::new(candidate.clone())
+            .unwrap()
+            .verify()
+            .is_err());
+        candidate.installing_recovery_handovers = Some(BTreeMap::new());
+        RangeWriteEnvelope::new(candidate.clone())
+            .unwrap()
+            .verify()
+            .unwrap();
+        candidate.installing_committed_certifications = None;
+        assert!(RangeWriteEnvelope::new(candidate)
+            .unwrap()
+            .verify()
+            .is_err());
+        let mut unfenced = original;
+        unfenced.installing_recovery_handovers = Some(BTreeMap::new());
+        assert!(RangeWriteEnvelope::new(unfenced).unwrap().verify().is_err());
+    }
+}

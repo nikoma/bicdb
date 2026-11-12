@@ -150,3 +150,27 @@ impl ClusterDataNodeService {
         receipt.require_current(&self.range_writes, &db, &native, role)
     }
 }
+
+#[cfg(test)]
+impl ClusterDataNodeService {
+    pub(crate) fn test_replacement_proposal_before_handover(
+        &mut self,
+        source: &crate::distribution_range_image::TentativeNativeRangeImageSourceAuthorization<'_>,
+        role: &crate::distribution_range_consensus::NativeImageInstallRole<'_>,
+        frozen: &FrozenRangeMutationPermit,
+        attempt: Uuid,
+        parent: &CancellationToken,
+    ) -> Result<crate::distribution_range_consensus::InstallingRefusalHandoverReceipt> {
+        parent.check()?;
+        let r = role.role();
+        let db = try_database_read(&self.db)?;
+        let native = db.native_recovery_admission(
+            r.cluster_id(),
+            r.bootstrap_id(),
+            r.local_node_id(),
+            r.local_member_incarnation(),
+        )?;
+        self.range_writes
+            .test_replacement_proposal_before_handover(&db, &native, source, role, frozen, attempt)
+    }
+}

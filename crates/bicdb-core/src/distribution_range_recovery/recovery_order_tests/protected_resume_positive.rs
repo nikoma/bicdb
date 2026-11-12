@@ -27,7 +27,40 @@ pub(super) fn finish_actual_current_image_resume(
     expected_h: &str,
     parent: &CancellationToken,
 ) -> serde_json::Value {
-    let source_id = node("n0");
+    finish_actual_current_image_resume_at_source(
+        node("n0"),
+        fixture,
+        providers,
+        runtimes,
+        initiator,
+        range,
+        scope,
+        proposal,
+        previously_unknown,
+        acknowledged,
+        acknowledged_sha,
+        target_uid,
+        expected_h,
+        parent,
+    )
+}
+#[allow(clippy::too_many_arguments)]
+pub(super) fn finish_actual_current_image_resume_at_source(
+    source_id: ClusterNodeId,
+    fixture: &ActualNativeRf3Fixture,
+    providers: &BTreeMap<ClusterNodeId, Arc<MetadataReadProvider>>,
+    runtimes: &BTreeMap<ClusterNodeId, Arc<RangeRecoveryRuntime>>,
+    initiator: &MetadataReadParticipant,
+    range: &RangeDescriptor,
+    scope: &RecoveryFenceScope,
+    proposal: NativeCurrentImageProposalPointer,
+    previously_unknown: &crate::distribution_range_consensus::RangeWriteCommand,
+    acknowledged: &str,
+    acknowledged_sha: &str,
+    target_uid: Uuid,
+    expected_h: &str,
+    parent: &CancellationToken,
+) -> serde_json::Value {
     let target_id = node("n1");
     let mut quorum = CurrentImageResumeQuorumRound::begin(
         fresh_role(providers, initiator, range, scope.recovery_nonce),

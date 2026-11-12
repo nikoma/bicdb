@@ -204,18 +204,29 @@ impl RangeWriteStore {
         intent: &ImageInstallIntent,
     ) -> Result<Option<ReplacedInstallingIdentity>> {
         validate_installing_handovers(&self.catalog)?;
-        let Some(h) = self
+        let Some(records) = self
             .catalog
             .installing_recovery_handovers
             .as_ref()
             .and_then(|m| m.get(&intent.range.id))
-            .and_then(|m| m.get(&intent.attempt_id))
         else {
             return Ok(None);
         };
-        if h.new_intent_sha256 != intent.sha256()? {
-            return Err(range_write_error("Installing handover new intent differs"));
+        let mut found = None;
+        for h in records.values() {
+            let mut expected = h.new_intent.clone();
+            expected.attempt_id = intent.attempt_id;
+            expected.protected_proposal = intent.protected_proposal.clone();
+            if expected == *intent {
+                if found.is_some() {
+                    return Err(range_write_error(
+                        "ambiguous retained Installing handover marker lineage",
+                    ));
+                }
+                found = Some(h);
+            }
         }
+        let Some(h) = found else { return Ok(None) };
         Ok(Some(ReplacedInstallingIdentity {
             session: h.old_intent.session_id,
             attempt: h.old_intent.attempt_id,
@@ -231,6 +242,50 @@ impl RangeWriteStore {
         role: &NativeImageInstallRole<'_>,
         frozen: &FrozenRangeMutationPermit,
         attempt: Uuid,
+    ) -> Result<InstallingRefusalHandoverReceipt> {
+        self.handover_installing_replacement_refusal_with(
+            db,
+            native,
+            source,
+            role,
+            frozen,
+            attempt,
+            || Ok(()),
+        )
+    }
+    #[cfg(test)]
+    pub(crate) fn test_replacement_proposal_before_handover(
+        &mut self,
+        db: &crate::BicDb,
+        native: &NativeRecoveryAdmission,
+        source: &TentativeNativeRangeImageSourceAuthorization<'_>,
+        role: &NativeImageInstallRole<'_>,
+        frozen: &FrozenRangeMutationPermit,
+        attempt: Uuid,
+    ) -> Result<InstallingRefusalHandoverReceipt> {
+        self.handover_installing_replacement_refusal_with(
+            db,
+            native,
+            source,
+            role,
+            frozen,
+            attempt,
+            || {
+                Err(range_write_error(
+                    "injected after actual replacement native proposal, BEFORE catalogue handover",
+                ))
+            },
+        )
+    }
+    fn handover_installing_replacement_refusal_with(
+        &mut self,
+        db: &crate::BicDb,
+        native: &NativeRecoveryAdmission,
+        source: &TentativeNativeRangeImageSourceAuthorization<'_>,
+        role: &NativeImageInstallRole<'_>,
+        frozen: &FrozenRangeMutationPermit,
+        attempt: Uuid,
+        prepublish: impl FnOnce() -> Result<()>,
     ) -> Result<InstallingRefusalHandoverReceipt> {
         source.require_current()?;
         let cut = source.cut();
@@ -372,6 +427,9 @@ impl RangeWriteStore {
         validate_installing_handovers(&candidate)?;
         super::image_install_certification::validate_installing_certifications(&candidate)?;
         super::image_install_state::validate_catalog_install_intents(&candidate)?;
+        // Test adapter may stop after REAL native page-WAL publication,
+        // before any catalogue mutation. Production continues immediately.
+        prepublish()?;
         let controlled = db.range_mutation_gate().try_controlled_mutation(frozen)?;
         self.recovery_persistence_uncertain = true;
         self.catalog = candidate;

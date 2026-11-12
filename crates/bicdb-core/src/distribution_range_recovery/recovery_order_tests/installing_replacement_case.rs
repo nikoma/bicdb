@@ -196,6 +196,17 @@ fn selected_decision(
 }
 #[test]
 fn actual_installing_existing_decision_replaces_dead_source_under_higher_data_epoch() {
+    run_replacement(None);
+}
+#[test]
+fn actual_installing_replacement_native_proposal_orphan_cold_resume() {
+    run_replacement(Some(true));
+}
+#[test]
+fn actual_installing_replacement_catalogue_handover_cold_resume() {
+    run_replacement(Some(false));
+}
+fn run_replacement(handover_cut: Option<bool>) {
     let stopped = super::interrupted_normal_repair::exercise_interrupted_normal_image(
         super::interrupted_normal_repair::ImageStop::AfterClear,
         false,
@@ -365,7 +376,114 @@ fn actual_installing_existing_decision_replaces_dead_source_under_higher_data_ep
         target_uid,
         &expected_h,
         &parent,
+        handover_cut,
     );
+    if let Some(before_catalogue) = handover_cut {
+        let weak = f.databases.values().map(Arc::downgrade).collect::<Vec<_>>();
+        let root = f.root.path().to_path_buf();
+        let second_pointer: NativeCurrentImageProposalPointer =
+            serde_json::from_value(final_result["p2"].clone()).unwrap();
+        let frozen_catalogue = std::fs::read(root.join("n1/cluster-range-write-log.json")).unwrap();
+        wait_for_contexts(&r);
+        drop(r);
+        drop(p);
+        drop(f);
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while weak.iter().any(|w| w.upgrade().is_some()) && Instant::now() < deadline {
+            std::thread::sleep(Duration::from_millis(1));
+        }
+        assert!(
+            weak.iter().all(|w| w.upgrade().is_none()),
+            "all actual replacement owners must close"
+        );
+        let copied = ActualNativeRf3Fixture::copy_stopped_recovery_tree(&root).unwrap();
+        let mut cold = ActualNativeRf3Fixture::reopen_copied_recovery_state(copied).unwrap();
+        cold.root.disable_cleanup(true);
+        eprintln!(
+            "REPLACEMENT_HANDOVER_COLD_ROOT {}",
+            cold.root.path().display()
+        );
+        assert_eq!(cold.topology.read().ranges[&range.id].epoch, range.epoch);
+        let p = test_recovery_metadata_cluster(
+            &cold.root.path().join("recovery-metadata"),
+            &new,
+            &source,
+        )
+        .unwrap();
+        let actor = p[&source].local_participant();
+        let r = runtimes(&cold, &p);
+        let current = catalogue(&cold, &target);
+        let active: NativeCurrentImageProposalPointer = serde_json::from_value(
+            current["catalog"]["image_install_intents"][&k]["protected_proposal"].clone(),
+        )
+        .unwrap();
+        let result = if before_catalogue {
+            assert_eq!(active, pointer);
+            super::replacement_source_positive::finish_actual_current_image_replacement(
+                &cold,
+                &p,
+                &r,
+                &actor,
+                &range,
+                &scope,
+                pointer.clone(),
+                &command,
+                &acknowledged,
+                &acknowledged_sha,
+                target_uid,
+                &expected_h,
+                &parent,
+                None,
+            )
+        } else {
+            assert_eq!(active, second_pointer);
+            assert_ne!(active, pointer);
+            // Genuine old-session request is refused by CURRENT MQ/intent;
+            // historical P1 is never promoted back into a current admission.
+            let old_scope: RecoveryFenceScope =
+                serde_json::from_value(old_fence["scope"].clone()).unwrap();
+            assert!(r[&target]
+                .acquire_current_image_installing_fence(
+                    &actor,
+                    &CurrentImageInstallingRequest {
+                        scope: old_scope,
+                        proposal: pointer.clone(),
+                        challenge: Uuid::now_v7(),
+                        budget_ms: 5000
+                    },
+                    &parent
+                )
+                .is_err());
+            super::protected_resume_positive::finish_actual_current_image_resume_at_source(
+                source.clone(),
+                &cold,
+                &p,
+                &r,
+                &actor,
+                &range,
+                &scope,
+                active,
+                &command,
+                &acknowledged,
+                &acknowledged_sha,
+                target_uid,
+                &expected_h,
+                &parent,
+            )
+        };
+        assert_eq!(
+            std::fs::read(root.join("n1/cluster-range-write-log.json")).unwrap(),
+            frozen_catalogue
+        );
+        let report = serde_json::json!({"classification":"ACTUAL_REPLACEMENT_HANDOVER_COLD_RESUME","cut":final_result,"cold_result":result,"seed":stopped,"first_copy":root,"final_copy":cold.root.path(),"orderly_all_owner_close":true,"physical_qualification":false,"born2_writer_policy_exercised":false,"activation_proven":false});
+        persist_json(
+            cold.root.path(),
+            "replacement-handover-cold-result.json",
+            &report,
+        );
+        eprintln!("REPLACEMENT_HANDOVER_COLD_RESULT {report}");
+        return;
+    }
     assert_eq!(
         std::fs::read(stopped.join("n1/cluster-range-write-log.json")).unwrap(),
         original_before

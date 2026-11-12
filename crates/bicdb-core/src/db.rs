@@ -402,7 +402,8 @@ pub struct DbConfig {
     /// export: those operations read the page store directly and must not pay
     /// corpus-sized index reconstruction costs before emitting their first
     /// row. The catalog remains durable and is loaded normally on the next
-    /// ordinary open.
+    /// ordinary open. Foreground mutations are refused on this handle; it
+    /// cannot admit writes without the complete secondary constraint catalog.
     pub load_secondary_indexes: bool,
     /// Document-range partitions a single ranked full-text query is split
     /// across. This is intra-QUERY parallelism: one query using many cores,
@@ -2056,7 +2057,7 @@ impl DbConfig {
 
     /// Select whether open hydrates secondary and vector indexes. A handle
     /// with this disabled supports primary-record operations but not indexed
-    /// query execution.
+    /// query execution or foreground mutations.
     pub fn with_secondary_indexes(mut self, enabled: bool) -> Self {
         self.load_secondary_indexes = enabled;
         self

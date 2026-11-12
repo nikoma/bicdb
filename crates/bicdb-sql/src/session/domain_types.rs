@@ -491,7 +491,7 @@ impl<'db> SqlSession<'db> {
                 }
                 Ok(SqlResult::command("DROP TABLE"))
             }
-            ObjectType::Index => self.execute_drop_indexes(names, *if_exists),
+            ObjectType::Index => self.execute_drop_indexes(names, if_exists),
             ObjectType::Sequence => {
                 for name in names {
                     let sequence = relation_name(name)?;

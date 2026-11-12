@@ -65,6 +65,7 @@ pub(crate) use range_image_install::{
 };
 mod native_activation;
 pub(crate) use native_activation::NativeActivatedOpenGuard;
+mod commit_admission_hook;
 mod native_recovery_ready;
 mod range_image_native;
 pub(crate) use native_recovery_ready::{LocalNativeRecoveryReady, NativeLocalVisibilitySequence};
@@ -3947,7 +3948,7 @@ pub struct BicDb {
     /// Host-installed distributed durability boundary. The database owns the
     /// call site so direct API, SQL, pgwire and extension writes cannot bypass
     /// range quorum once the database is opened in distributed mode.
-    commit_admission: RwLock<Option<Arc<dyn CommitAdmission>>>,
+    commit_admission: RwLock<commit_admission_hook::CommitAdmissionSlot>,
     range_mutations: crate::distribution_range_mutation::RangeMutationGate,
     range_image_initializing: AtomicBool,
     range_image_native_birth_active: AtomicBool,
@@ -9860,7 +9861,7 @@ impl BicDb {
     /// Install or replace the trusted distributed commit authority. A
     /// distributed database remains read-only until this is called.
     pub fn install_commit_admission(&self, admission: Arc<dyn CommitAdmission>) {
-        *self.commit_admission.write() = Some(admission);
+        self.commit_admission.write().install(Some(admission));
     }
 
     /// Fence the installed writer while holding the same exclusive gate that
@@ -9895,7 +9896,7 @@ impl BicDb {
     }
 
     pub fn clear_commit_admission(&self) {
-        *self.commit_admission.write() = None;
+        self.commit_admission.write().install(None);
     }
 
     pub(crate) fn range_mutation_gate(
@@ -10984,7 +10985,7 @@ impl BicDb {
             ha_state,
             replication_state,
             consensus_state,
-            commit_admission: RwLock::new(None),
+            commit_admission: RwLock::new(commit_admission_hook::CommitAdmissionSlot::empty()),
             range_mutations: crate::distribution_range_mutation::RangeMutationGate::default(),
             range_image_initializing: AtomicBool::new(false),
             range_image_native_birth_active: AtomicBool::new(false),

@@ -33,6 +33,8 @@ pub const LOCAL_NAMESPACE_IDENTITY_FEATURE_FLAG: &str = "local_namespace_identit
 pub const RANGE_IMAGE_INSTALL_FEATURE_FLAG: &str = "range_image_install_v1";
 /// Local recovered serving epochs; older native writers must refuse this DB.
 pub const NATIVE_RECOVERY_SERVING_FEATURE_FLAG: &str = "native_recovery_serving_v1";
+/// From-birth writer enrollment; local and deliberately not a portable schema capability.
+pub const NATIVE_WRITER_ENROLLMENT_FEATURE_FLAG: &str = "native_writer_enrollment_v1";
 pub const ORACLE_SIMPLE_CASE_V1_FEATURE_FLAG: &str = "oracle_simple_case_v1";
 const KNOWN_FEATURE_FLAGS: &[&str] = &[
     ORACLE_INVALID_ROUTINES_FEATURE_FLAG,
@@ -42,6 +44,7 @@ const KNOWN_FEATURE_FLAGS: &[&str] = &[
     LOCAL_NAMESPACE_IDENTITY_FEATURE_FLAG,
     RANGE_IMAGE_INSTALL_FEATURE_FLAG,
     NATIVE_RECOVERY_SERVING_FEATURE_FLAG,
+    NATIVE_WRITER_ENROLLMENT_FEATURE_FLAG,
     "format_metadata_v2",
     SERVER_PAGED_FEATURE_FLAG,
     ONLINE_BACKUP_EXTENT_FEATURE_FLAG,
@@ -672,6 +675,34 @@ pub(crate) fn enable_range_image_install(root: &Path) -> Result<()> {
         .feature_flags
         .insert(RANGE_IMAGE_INSTALL_FEATURE_FLAG.into());
     persist_metadata(root, &metadata, true)
+}
+
+/// Trusted fresh-factory use only. A flag on a birth-v1 root cannot upgrade its birth.
+pub(crate) fn enable_native_writer_enrollment(root: &Path) -> Result<()> {
+    let lock = feature_flags_lock(root);
+    let _guard = lock.lock();
+    let mut metadata = read_or_legacy_metadata(root)?;
+    validate_supported(&metadata)?;
+    if !metadata
+        .feature_flags
+        .contains(RANGE_IMAGE_INSTALL_FEATURE_FLAG)
+    {
+        return Err(BicDbError::InvalidConfig(
+            "writer enrollment requires image-aware storage".into(),
+        ));
+    }
+    metadata
+        .feature_flags
+        .insert(NATIVE_WRITER_ENROLLMENT_FEATURE_FLAG.into());
+    persist_metadata(root, &metadata, true)
+}
+
+pub(crate) fn native_writer_enrollment_active(root: &Path) -> Result<bool> {
+    let metadata = read_or_legacy_metadata(root)?;
+    validate_supported(&metadata)?;
+    Ok(metadata
+        .feature_flags
+        .contains(NATIVE_WRITER_ENROLLMENT_FEATURE_FLAG))
 }
 
 /// Fence older image-aware writers BEFORE persisting a recovered serving

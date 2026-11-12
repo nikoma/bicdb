@@ -29,6 +29,8 @@ pub(crate) struct NativeStrongEventDispatcher {
     local: ClusterNodeId,
     binding: Mutex<Option<Binding>>,
     active: Arc<AtomicUsize>,
+    #[cfg(test)]
+    test_requests: Mutex<std::collections::VecDeque<(Uuid, Uuid, u64)>>,
 }
 struct Active(Arc<AtomicUsize>);
 impl Drop for Active {
@@ -58,6 +60,8 @@ impl NativeStrongEventDispatcher {
             local,
             binding: Mutex::new(None),
             active: Arc::new(AtomicUsize::new(0)),
+            #[cfg(test)]
+            test_requests: Mutex::new(std::collections::VecDeque::new()),
         });
         runtime.attach_native_event_dispatcher(&out)?;
         Ok(out)
@@ -136,11 +140,27 @@ impl NativeStrongEventDispatcher {
         }
         Ok(())
     }
+    #[cfg(test)]
+    pub(crate) fn test_observed_requests(&self) -> Vec<(Uuid, Uuid, u64)> {
+        self.test_requests.lock().iter().cloned().collect()
+    }
     pub(crate) fn dispatch(
         self: &Arc<Self>,
         request: NativeEventGetRequest,
         parent: &CancellationToken,
     ) -> NativeEventGetReply {
+        #[cfg(test)]
+        {
+            let mut trace = self.test_requests.lock();
+            if trace.len() == 128 {
+                trace.pop_front();
+            }
+            trace.push_back((
+                request.business_request_id,
+                request.challenge,
+                request.range_epoch,
+            ));
+        }
         let token = match request.cancellation(parent) {
             Ok(t) => t,
             Err(e) => {

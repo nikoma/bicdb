@@ -393,6 +393,19 @@ fn native_event_endpoint_stale_route_retries_until_actual_new_leader_ready_under
     let read_key = key.clone();
     let started = Instant::now();
     let worker = std::thread::spawn(move || client.get_strong("tenant", &read_key));
+    let wait_until = Instant::now() + Duration::from_secs(3);
+    while fixture.dispatchers[&node("n2")]
+        .test_observed_requests()
+        .is_empty()
+    {
+        assert!(
+            Instant::now() < wait_until,
+            "gateway did not reach the actual unready new-leader endpoint"
+        );
+        std::thread::sleep(Duration::from_millis(2));
+    }
+    // The real new-leader endpoint has been contacted while its slot is EMPTY;
+    // successful completion therefore needs a later actual retry after readiness.
     let scope = fixture.actual_current_recovery_scope(&range);
     for id in [node("n0"), node("n1"), node("n2")] {
         fixture.clients[&node("n2")]
@@ -448,6 +461,35 @@ fn native_event_endpoint_stale_route_retries_until_actual_new_leader_ready_under
         .unwrap();
     assert_eq!(worker.join().unwrap().unwrap(), Some(json!({"acked":1})));
     assert!(started.elapsed() < Duration::from_secs(20));
+    let trace = fixture
+        .dispatchers
+        .values()
+        .flat_map(|d| d.test_observed_requests())
+        .collect::<Vec<_>>();
+    assert!(
+        trace.len() >= 3,
+        "expected stale-route, unready, and ready actual requests"
+    );
+    assert_eq!(
+        trace.iter().map(|t| t.0).collect::<BTreeSet<_>>().len(),
+        1,
+        "business correlation renewed across retry"
+    );
+    assert_eq!(
+        trace.iter().map(|t| t.1).collect::<BTreeSet<_>>().len(),
+        trace.len(),
+        "attempt challenge was reused"
+    );
+    assert!(fixture.dispatchers[&node("n0")]
+        .test_observed_requests()
+        .iter()
+        .any(|t| t.2 == old_range.epoch));
+    assert!(
+        fixture.dispatchers[&node("n2")]
+            .test_observed_requests()
+            .len()
+            >= 2
+    );
     fixture.idle();
     // Activation above is the actual LOCAL Runtime API. No incoming
     // activation endpoint, automatic election, SQL or physical-HA claim.

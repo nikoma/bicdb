@@ -41,7 +41,8 @@ use crate::distribution_consensus::{
 };
 use crate::distribution_data::{
     CatchUpSourceBatch, ClusterDataNodeService, ClusterSchemaActivationReceipt,
-    ClusterSchemaFinalizationReceipt, ClusterSchemaStageReceipt, SnapshotSourceStep,
+    ClusterSchemaFinalizationReceipt, ClusterSchemaStageReceipt, ClusterServiceOpenGuard,
+    SnapshotSourceStep,
 };
 use crate::distribution_io::DeadlineTcpStream;
 use crate::distribution_metadata_read_provider::{
@@ -807,6 +808,7 @@ pub(crate) fn start_cluster_data_server_with_recovery_runtime(
                 service.cluster_id().clone(),
                 service.node_id().clone(),
                 service.native_writer_enforcement_version()?,
+                service.listener_open_guard(),
             ),
             service.initial_birth_provider(),
             service.initial_preparation_provider(),
@@ -981,7 +983,7 @@ fn handle_cluster_data_connection(
     config: &ClusterNetworkTransportConfig,
     topology: &RwLock<ClusterTopology>,
     service: &Mutex<ClusterDataNodeService>,
-    local_identity: &(ClusterId, ClusterNodeId, u32),
+    local_identity: &(ClusterId, ClusterNodeId, u32, ClusterServiceOpenGuard),
     control_store: Option<&Arc<Mutex<DistributionStore>>>,
     metadata_consensus: Option<&Arc<Mutex<MetadataConsensusStore>>>,
     metadata_distribution_store: Option<&Arc<Mutex<DistributionStore>>>,
@@ -1000,7 +1002,7 @@ fn handle_cluster_data_connection(
     let request = recv_json_frame::<ClusterDataRequestEnvelope>(stream, config.max_frame_bytes)?;
     let request_id = request.request_id;
     let caller_node_id = request.caller_node_id.clone();
-    let (local_cluster_id, local_node_id, local_writer_enforcement_version) =
+    let (local_cluster_id, local_node_id, local_writer_enforcement_version, local_open) =
         local_identity.clone();
     let response = (|| {
         if request.protocol_version != CLUSTER_DATA_PROTOCOL_VERSION {
@@ -1046,6 +1048,9 @@ fn handle_cluster_data_connection(
             .and_then(|node| node.native_store_birth_v1.as_ref())
             .is_some_and(|birth| birth.writer_enforcement_version() == 1);
         drop(topology_guard);
+        // Refuse an expired actual DB before acquiring service/DB latches.
+        // Retaining an outer Arc or a directory lock cannot revive this open.
+        local_open.require_live()?;
         // Attaching an initial factory makes this listener provisional for its
         // ENTIRE lifetime. A Weak expiry must not expose ordinary scans,
         // digests, mutations or consensus endpoints by falling through.
@@ -1847,9 +1852,13 @@ fn dispatch_cluster_data_request(
         )),
         ClusterDataRequest::ApplicationEvent(request) => {
             request.operation.validate()?;
-            let (local_node, db) = {
+            let (local_node, db, actual_open) = {
                 let service = service.lock();
-                (service.node_id().clone(), service.database())
+                (
+                    service.node_id().clone(),
+                    service.database(),
+                    service.listener_open_guard(),
+                )
             };
             let range = {
                 let topology = published_topology.read();
@@ -1863,8 +1872,10 @@ fn dispatch_cluster_data_request(
                         transport_error("event route is stale or this node is not its leader")
                     })?
             };
+            let database = db.read();
+            actual_open.require_database(&database)?;
             let result = crate::distribution_events::execute_cluster_event(
-                &db.read(),
+                &database,
                 &range,
                 request.operation,
             )?;

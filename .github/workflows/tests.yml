@@ -270,6 +270,8 @@ jobs:
           set -euo pipefail
           # No BICDB_TEST_EVIDENCE_ROOT: generated TLS/DB fixture directories
           # stay private and are deliberately outside this uploaded subtree.
+          export BICDB_TEST_CLI_EVIDENCE_ROOT="$RUNNER_TEMP/native-cli-evidence/failure-diagnostics"
+          export BICDB_TEST_SOURCE_SHA="$GITHUB_SHA"
           cargo test -p bicdb-cli --test "$BICDB_CLI_TEST_TARGET" --locked -- --nocapture --test-threads=1 \
             2>&1 | tee "$RUNNER_TEMP/native-cli-evidence/tests.log"
           python3 - <<'PYCODE'
@@ -285,5 +287,6 @@ jobs:
         with:
           name: focused-cli-${{ github.sha }}-${{ github.run_attempt }}
           retention-days: 3
+          include-hidden-files: true
           if-no-files-found: warn
           path: ${{ runner.temp }}/native-cli-evidence/

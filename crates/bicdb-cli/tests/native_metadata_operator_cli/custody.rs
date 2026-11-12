@@ -92,6 +92,11 @@ impl Processes {
             for filename in [
                 "node4-cold.stderr",
                 "node4-cold.stdout",
+                "node4-promoted-cold.stderr",
+                "node4-promoted-cold.stdout",
+                "node4-promoted-kill-state.json",
+                "node4-promoted-before.json",
+                "node4.promoted-pre-kill.status",
                 "node4.pre-kill.command",
                 "node4.pre-kill.status",
                 "wrong-address.command",

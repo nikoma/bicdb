@@ -299,7 +299,7 @@ fn run_replacement(handover_cut: Option<bool>) {
     let acknowledged_sha = expected["record_sha256"].as_str().unwrap().to_owned();
     let mut new = old.clone();
     new.generation += 1;
-    let range = new.ranges.get_mut(&old_range.id).unwrap();
+    let range = new.ranges.get_mut(&old_range.id.get()).unwrap();
     range.epoch += 1;
     range.leader = source.clone();
     let range = range.clone();
@@ -480,7 +480,10 @@ fn run_replacement(handover_cut: Option<bool>) {
             "REPLACEMENT_HANDOVER_COLD_ROOT {}",
             cold.root.path().display()
         );
-        assert_eq!(cold.topology.read().ranges[&range.id].epoch, range.epoch);
+        assert_eq!(
+            cold.topology.read().ranges[&range.id.get()].epoch,
+            range.epoch
+        );
         let p = test_recovery_metadata_cluster(
             &cold.root.path().join("recovery-metadata"),
             &new,

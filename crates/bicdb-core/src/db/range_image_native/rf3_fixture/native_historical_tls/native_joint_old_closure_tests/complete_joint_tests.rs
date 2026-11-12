@@ -332,7 +332,9 @@ fn install_actual_target(
 
 #[test]
 fn native_joint_actual_complete_image_target_becomes_leader_ack_and_strong_read() {
-    run_complete_joint(0);
+    // Full contract uses DISTINCT bounded phases after original MQ expiry;
+    // every original row/history/UID/final replica assertion remains below.
+    run_complete_joint(4);
 }
 #[test]
 fn native_joint_fresh_preparation_phase_publishes_all_final_members_after_original_expiry() {
@@ -409,7 +411,9 @@ fn run_complete_joint(mode: u8) {
         .map(|id| {
             (
                 id.clone(),
-                NativeJointHandoffRuntime::new(fixture.native.services[&id].clone()).unwrap(),
+                Arc::new(
+                    NativeJointHandoffRuntime::new(fixture.native.services[&id].clone()).unwrap(),
+                ),
             )
         })
         .collect::<BTreeMap<_, _>>();
@@ -559,127 +563,159 @@ fn run_complete_joint(mode: u8) {
         return;
     }
 
-    let mut publication = prepared.serving_publication_round().unwrap();
-    for local in [node("n1"), node("n2"), node("n3")] {
-        let current = prepared.require_current();
-        eprintln!(
+    let release_continuation = if mode == 4 {
+        let published =
+            exercise_fresh_native_publication(&fixture, &prepared, &parent, old.id, false);
+        let (activations, image_owner) = exercise_fresh_open_boundary(
+            &fixture,
+            &prepared,
+            published.clone(),
+            &parent,
+            old.id,
+            false,
+        );
+        let survivors = [node("n1"), node("n2")]
+            .into_iter()
+            .map(|id| (id.clone(), runtimes[&id].clone()))
+            .collect();
+        let continuation = Arc::new(
+            published
+                .retain_release_continuation(activations, survivors, image_owner.unwrap())
+                .unwrap(),
+        );
+        // Real freeze owners must drain; retaining old Prepared/Published
+        // quorum objects across this transition would correctly block release.
+        drop(published);
+        drop(prepared);
+        drop(closed);
+        exercise_fresh_release(&fixture, &continuation, &parent, old.id);
+        Some(continuation)
+    } else {
+        let mut publication = prepared.serving_publication_round().unwrap();
+        for local in [node("n1"), node("n2"), node("n3")] {
+            let current = prepared.require_current();
+            eprintln!(
             "ACTUAL_JOINT_PHASE activation-preflight node={local} elapsed_ms={} remaining_original_ms={:?} result={current:?}",
             preparation_started.elapsed().as_millis(),
             prepared.test_original_budget_remaining_ms()
         );
-        current.unwrap();
-        let acquisition_started = std::time::Instant::now();
-        let admission =
-            prepared.acquire_local_activation(&fixture.clients[&local], &node("n1"), &parent);
-        eprintln!(
+            current.unwrap();
+            let acquisition_started = std::time::Instant::now();
+            let admission =
+                prepared.acquire_local_activation(&fixture.clients[&local], &node("n1"), &parent);
+            eprintln!(
             "ACTUAL_JOINT_PHASE activation-acquired node={local} elapsed_ms={} acquisition_ms={} remaining_original_ms={:?} error={:?}",
             preparation_started.elapsed().as_millis(),
             acquisition_started.elapsed().as_millis(),
             prepared.test_original_budget_remaining_ms(),
             admission.as_ref().err()
         );
-        if admission.is_err() {
-            for (id, store) in &fixture.metadata {
-                if let Some(store) = store.try_lock() {
-                    let status = store.status();
-                    eprintln!(
+            if admission.is_err() {
+                for (id, store) in &fixture.metadata {
+                    if let Some(store) = store.try_lock() {
+                        let status = store.status();
+                        eprintln!(
                         "ACTUAL_JOINT_PHASE activation-failure-metadata node={id} term={} commit={} last={} generation={}",
                         status.current_term,
                         status.commit_index,
                         status.last_log_index,
                         status.topology_generation
                     );
-                } else {
-                    eprintln!("ACTUAL_JOINT_PHASE activation-failure-metadata node={id} busy=true");
+                    } else {
+                        eprintln!(
+                            "ACTUAL_JOINT_PHASE activation-failure-metadata node={id} busy=true"
+                        );
+                    }
                 }
             }
+            let admission = admission.unwrap();
+            publication
+                .publish_actual_local_member(&admission, &parent)
+                .unwrap();
         }
-        let admission = admission.unwrap();
-        publication
-            .publish_actual_local_member(&admission, &parent)
-            .unwrap();
-    }
-    let published = Arc::new(publication.finish().unwrap());
-    let mut activations: BTreeMap<
-        ClusterNodeId,
-        Arc<crate::distribution_range_consensus::NativeJointCatalogueActivationReceipt>,
-    > = BTreeMap::new();
-    let mut image_release = None;
-    for local in [node("n1"), node("n2"), node("n3")] {
-        let admission = published
-            .acquire_local_open(&fixture.clients[&local], &node("n1"), &parent)
-            .unwrap();
-        let activation = Arc::new(
-            admission
-                .persist_local_catalogue_activation(&parent)
-                .unwrap(),
-        );
-        if local == node("n3") {
-            assert!(
+        let published = Arc::new(publication.finish().unwrap());
+        let mut activations: BTreeMap<
+            ClusterNodeId,
+            Arc<crate::distribution_range_consensus::NativeJointCatalogueActivationReceipt>,
+        > = BTreeMap::new();
+        let mut image_release = None;
+        for local in [node("n1"), node("n2"), node("n3")] {
+            let admission = published
+                .acquire_local_open(&fixture.clients[&local], &node("n1"), &parent)
+                .unwrap();
+            let activation = Arc::new(
                 admission
-                    .retain_image_release_owner(activations[&node("n1")].clone())
-                    .is_err(),
-                "another actual member receipt must not release this image"
-            );
-            image_release = Some(
-                admission
-                    .retain_image_release_owner(activation.clone())
+                    .persist_local_catalogue_activation(&parent)
                     .unwrap(),
             );
+            if local == node("n3") {
+                assert!(
+                    admission
+                        .retain_image_release_owner(activations[&node("n1")].clone())
+                        .is_err(),
+                    "another actual member receipt must not release this image"
+                );
+                image_release = Some(
+                    admission
+                        .retain_image_release_owner(activation.clone())
+                        .unwrap(),
+                );
+            }
+            activations.insert(local, activation);
         }
-        activations.insert(local, activation);
-    }
-    let mut image_release = image_release.unwrap();
-    assert!(
-        image_release.release(&parent).is_err(),
-        "actual quorum owners still hold the target freeze"
-    );
-    drop(published);
-    drop(prepared);
-    drop(closed);
-    let canceled = CancellationToken::uncancelable()
-        .child_with_deadline(Instant::now() - Duration::from_millis(1));
-    assert!(image_release.release(&canceled).is_err());
-    {
-        let held = fixture.native.services[&node("n3")].lock();
-        assert!(image_release.release(&parent).is_err());
-        drop(held);
-    }
-    assert!(fixture.native.databases[&node("n3")]
-        .read()
-        .range_mutation_gate()
-        .try_enter(old.id)
-        .is_err());
-    assert!(image_release
-        .test_release_after_actual_drop_error(&parent)
-        .is_err());
-    // Actual owner has drained, but the protected joint guard remains CLOSED
-    // until this SAME retained receipt arms it. A retry cannot mint a new TTL.
-    let before_arm = fixture.native.services[&node("n3")]
-        .lock()
-        .range_write_progress(old.id);
-    let refused_key = fixture.key(old.id, "must-refuse-before-image-arm");
-    {
-        let db = fixture.native.databases[&node("n3")].write();
-        let mut tx = db.begin_transaction().unwrap();
-        tx.insert("items", crate::Record::new(&refused_key))
-            .unwrap();
-        assert!(tx.commit().is_err());
-        assert!(db.get("items", &refused_key).unwrap().is_none());
-    }
-    assert_eq!(
-        fixture.native.services[&node("n3")]
+        let mut image_release = image_release.unwrap();
+        assert!(
+            image_release.release(&parent).is_err(),
+            "actual quorum owners still hold the target freeze"
+        );
+        drop(published);
+        drop(prepared);
+        drop(closed);
+        let canceled = CancellationToken::uncancelable()
+            .child_with_deadline(Instant::now() - Duration::from_millis(1));
+        assert!(image_release.release(&canceled).is_err());
+        {
+            let held = fixture.native.services[&node("n3")].lock();
+            assert!(image_release.release(&parent).is_err());
+            drop(held);
+        }
+        assert!(fixture.native.databases[&node("n3")]
+            .read()
+            .range_mutation_gate()
+            .try_enter(old.id)
+            .is_err());
+        assert!(image_release
+            .test_release_after_actual_drop_error(&parent)
+            .is_err());
+        // Actual owner has drained, but the protected joint guard remains CLOSED
+        // until this SAME retained receipt arms it. A retry cannot mint a new TTL.
+        let before_arm = fixture.native.services[&node("n3")]
             .lock()
-            .range_write_progress(old.id),
-        before_arm
-    );
-    image_release.release(&parent).unwrap();
-    image_release.release(&parent).unwrap();
-    for local in [node("n1"), node("n2")] {
-        runtimes[&local]
-            .release_activated_new_member(activations[&local].clone())
-            .unwrap();
-    }
+            .range_write_progress(old.id);
+        let refused_key = fixture.key(old.id, "must-refuse-before-image-arm");
+        {
+            let db = fixture.native.databases[&node("n3")].write();
+            let mut tx = db.begin_transaction().unwrap();
+            tx.insert("items", crate::Record::new(&refused_key))
+                .unwrap();
+            assert!(tx.commit().is_err());
+            assert!(db.get("items", &refused_key).unwrap().is_none());
+        }
+        assert_eq!(
+            fixture.native.services[&node("n3")]
+                .lock()
+                .range_write_progress(old.id),
+            before_arm
+        );
+        image_release.release(&parent).unwrap();
+        image_release.release(&parent).unwrap();
+        for local in [node("n1"), node("n2")] {
+            runtimes[&local]
+                .release_activated_new_member(activations[&local].clone())
+                .unwrap();
+        }
+        None
+    };
     assert!(fixture.native.databases[&node("n0")]
         .read()
         .range_mutation_gate()
@@ -738,6 +774,21 @@ fn run_complete_joint(mode: u8) {
         assert_eq!(db.get("items", &key).unwrap(), Some(acknowledged.clone()));
         assert_eq!(db.get("items", &next_key).unwrap().as_deref(), Some(&next));
     }
+    if let Some(continuation) = &release_continuation {
+        // All members are now ACTUAL R2. A fresh retry of the historical R1
+        // release must preserve that complete newer history, not reset a floor.
+        exercise_one_fresh_release(&fixture, continuation, &node("n3"), false);
+        for id in [node("n1"), node("n2"), node("n3")] {
+            let db = fixture.native.databases[&id].read();
+            assert_eq!(
+                db.current_native_range_source_lineage(old.id)
+                    .unwrap()
+                    .range_index(),
+                2
+            );
+            assert_eq!(db.get("items", &next_key).unwrap().as_deref(), Some(&next));
+        }
+    }
     {
         let db = fixture.native.databases[&node("n0")].write();
         let mut tx = db.begin_transaction().unwrap();
@@ -770,6 +821,37 @@ fn run_complete_joint(mode: u8) {
     assert_eq!(observed.record().map(|record| record.as_ref()), Some(&next));
     assert_eq!(observed.audit().range_index, 2);
     fixture.idle();
+    if let Some(continuation) = &release_continuation {
+        let stale = fresh_release_admission(&fixture, continuation, &node("n3")).unwrap();
+        let gate = fixture.native.databases[&node("n3")]
+            .read()
+            .range_mutation_gate();
+        let new_owner = gate.try_freeze(old.id, Uuid::now_v7()).unwrap();
+        drop(new_owner);
+        // Actual new-owner/drop ABA invalidates serving generation even though
+        // the gate is now unfrozen and immutable R2/H2/ACK rows are unchanged.
+        assert!(stale.release_actual_local().is_err());
+        let mut replacement = continuation
+            .begin_fresh_release_phase(Duration::from_secs(4))
+            .unwrap();
+        assert!(replacement
+            .acquire_actual_member(&fixture.clients[&node("n3")], &node("n1"))
+            .is_err());
+        assert!(replacement.finish().is_err());
+        parent.cancel();
+        assert!(continuation
+            .begin_fresh_release_phase(Duration::from_secs(4))
+            .is_err());
+        let db = fixture.native.databases[&node("n3")].read();
+        assert_eq!(
+            db.current_native_range_source_lineage(old.id)
+                .unwrap()
+                .range_index(),
+            2
+        );
+        assert_eq!(db.get("items", &key).unwrap(), Some(acknowledged.clone()));
+        assert_eq!(db.get("items", &next_key).unwrap().as_deref(), Some(&next));
+    }
 }
 
 /// Complete ONLY the bounded Prepared→protected-native-publication phase.
@@ -942,6 +1024,24 @@ fn exercise_fresh_open_while_frozen(
     parent: &CancellationToken,
     range: crate::RangeId,
 ) {
+    exercise_fresh_open_boundary(fixture, prepared, published, parent, range, true);
+}
+
+fn exercise_fresh_open_boundary(
+    fixture: &EnforcedNetwork,
+    prepared: &Arc<NativeJointPreparedServingQuorum>,
+    published: Arc<crate::distribution_range_handoff::NativeJointPublishedServingQuorum>,
+    parent: &CancellationToken,
+    range: crate::RangeId,
+    terminal_controls: bool,
+) -> (
+    BTreeMap<
+        ClusterNodeId,
+        Arc<crate::distribution_range_consensus::NativeJointCatalogueActivationReceipt>,
+    >,
+    Option<crate::distribution_data::NativeJointImageReleaseOwner>,
+) {
+    let mut image_owner = None;
     let mut activations = BTreeMap::new();
     let mut lost_target = None;
     for local in [node("n3"), node("n1"), node("n2")] {
@@ -971,6 +1071,9 @@ fn exercise_fresh_open_while_frozen(
                 stage = "actual-activate-or-reconcile-catalogue".into();
                 let receipt = Arc::new(open.persist_local_catalogue_activation(parent)?);
                 assert!(open.persist_local_catalogue_activation(parent).is_err());
+                if !terminal_controls && local == node("n3") && image_owner.is_none() {
+                    image_owner = Some(open.retain_image_release_owner(receipt.clone())?);
+                }
                 if local == node("n3") && lost_target.is_none() {
                     let sha = receipt.activation_sha256()?;
                     let before = fixture.native.services[&local]
@@ -1035,6 +1138,9 @@ fn exercise_fresh_open_while_frozen(
             published.data().range_index()
         );
     }
+    if !terminal_controls {
+        return (activations, image_owner);
+    }
     // A real new serving-generation invalidation cannot be hidden by another
     // fresh metadata request, even though all recorded hashes are unchanged.
     fixture.native.databases[&node("n3")]
@@ -1053,4 +1159,115 @@ fn exercise_fresh_open_while_frozen(
         .begin_fresh_open_phase(Duration::from_secs(4))
         .is_err());
     eprintln!("ACTUAL_JOINT_FRESH_OPEN_ONLY exact-target-epoch-transition=true all-catalogue-activations=3 lost-reply-original-expired=true native-open-generation-ABA-refused=true still-frozen=true no-release-or-newACK-claim=true");
+    (activations, image_owner)
+}
+
+fn fresh_release_admission(
+    fixture: &EnforcedNetwork,
+    continuation: &Arc<crate::distribution_range_handoff::NativeJointReleaseContinuation>,
+    local: &ClusterNodeId,
+) -> crate::Result<crate::distribution_range_handoff::NativeJointReleaseAdmission> {
+    let mut round = continuation.begin_fresh_release_phase(Duration::from_secs(4))?;
+    for id in [node("n1"), node("n2"), node("n3")] {
+        round.acquire_actual_member(&fixture.clients[&id], &node("n1"))?;
+    }
+    Arc::new(round.finish()?).acquire_local_release(&fixture.clients[local], &node("n1"))
+}
+fn exercise_one_fresh_release(
+    fixture: &EnforcedNetwork,
+    continuation: &Arc<crate::distribution_range_handoff::NativeJointReleaseContinuation>,
+    local: &ClusterNodeId,
+    drop_error: bool,
+) {
+    let mut complete = false;
+    for attempt in 0..3 {
+        let start = Instant::now();
+        let result = (|| -> crate::Result<()> {
+            let admission = fresh_release_admission(fixture, continuation, local)?;
+            if drop_error {
+                let error = admission
+                    .test_release_after_actual_drop_error()
+                    .unwrap_err();
+                if !error.to_string().contains("AFTER actual drop BEFORE arm") {
+                    return Err(error);
+                }
+                // Receipt is now a real dropped/unarmed fact. The old bounded
+                // phase expires; the original caller stays live independently.
+                std::thread::sleep(Duration::from_secs(4) + Duration::from_millis(10));
+                assert!(admission.require_live().is_err());
+                assert!(admission.release_actual_local().is_err());
+            } else {
+                admission.release_actual_local()?;
+                assert!(admission.release_actual_local().is_err());
+            }
+            Ok(())
+        })();
+        eprintln!("ACTUAL_JOINT_RELEASE_RESULT node={local} attempt={attempt} drop_error={drop_error} elapsed_ms={} error={:?}",start.elapsed().as_millis(),result.as_ref().err());
+        match result {
+            Ok(()) => {
+                complete = true;
+                break;
+            }
+            Err(crate::BicDbError::QueryTimedOut) if attempt < 2 => {}
+            Err(e) => panic!("actual fresh release failed for {local}: {e}"),
+        }
+    }
+    assert!(
+        complete,
+        "finite genuine same-open release attempts exhausted"
+    );
+}
+fn exercise_fresh_release(
+    fixture: &EnforcedNetwork,
+    continuation: &Arc<crate::distribution_range_handoff::NativeJointReleaseContinuation>,
+    parent: &CancellationToken,
+    range: crate::RangeId,
+) {
+    let mut partial = continuation
+        .begin_fresh_release_phase(Duration::from_secs(4))
+        .unwrap();
+    for id in [node("n1"), node("n2")] {
+        partial
+            .acquire_actual_member(&fixture.clients[&id], &node("n1"))
+            .unwrap();
+    }
+    assert!(
+        partial.finish().is_err(),
+        "missing actual new leader/third cannot shrink release set"
+    );
+    let mut wrong = continuation
+        .begin_fresh_release_phase(Duration::from_secs(4))
+        .unwrap();
+    assert!(wrong
+        .acquire_actual_member(&fixture.clients[&node("n0")], &node("n1"))
+        .is_err());
+    assert!(wrong.finish().is_err());
+    // Original activation receipt has actually expired; the old API is still
+    // rejected even though this new purpose can inspect the stored fact.
+    assert!(continuation.test_original_image_release().is_err());
+    exercise_one_fresh_release(fixture, continuation, &node("n3"), true);
+    let before = fixture.native.services[&node("n3")]
+        .lock()
+        .range_write_progress(range);
+    let refused_key = fixture.key(range, "fresh-release-dropped-unarmed-refuses");
+    {
+        let db = fixture.native.databases[&node("n3")].write();
+        let mut tx = db.begin_transaction().unwrap();
+        tx.insert("items", crate::Record::new(&refused_key))
+            .unwrap();
+        assert!(tx.commit().is_err());
+        assert!(db.get("items", &refused_key).unwrap().is_none());
+    }
+    assert_eq!(
+        fixture.native.services[&node("n3")]
+            .lock()
+            .range_write_progress(range),
+        before
+    );
+    exercise_one_fresh_release(fixture, continuation, &node("n3"), false);
+    for id in [node("n1"), node("n2")] {
+        exercise_one_fresh_release(fixture, continuation, &id, false);
+    }
+    parent.check().unwrap();
+    eprintln!("ACTUAL_JOINT_RELEASE all-final-members=3 target-leader-released=true old-receipt-expired=true actual-drop-before-arm-recovered=true caller-original=true still-no-ACK2-at-this-marker=true");
 }

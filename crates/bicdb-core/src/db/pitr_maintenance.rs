@@ -2895,6 +2895,11 @@ impl BicDb {
                 io_charge_bytes: limits.max_batch_bytes as u64,
             };
             let initial = self.begin_paged_btree_build(definition.clone(), limits, now)?;
+            // The synchronous wrapper advances a logical refill clock while
+            // building. A quick reopen can precede that persisted clock even
+            // though wall time never went backwards. Resume at the verified
+            // checkpoint horizon; retain the builder's monotonic clock check.
+            now = now.max(initial.updated_at_ms);
             let interrupted_previous = initial.resume_after_id.is_some()
                 || initial.phase != PagedBTreeBuildPhase::Building;
             let state = loop {

@@ -2,6 +2,7 @@ mod access_mutation;
 mod branching;
 mod collection_rename;
 mod commit_snapshot;
+mod decimal_predicate;
 mod deferred_materialize;
 mod exact_decimal_sum;
 use exact_decimal_sum::ExactDecimalSum;
@@ -3937,6 +3938,8 @@ pub struct BicDb {
     /// tiny catalog is the atomic publication point for a completed build.
     fts_generations: Mutex<FtsGenerationCatalog>,
     btree_bindings: Mutex<BTreeMap<String, String>>,
+    decimal_predicates_current: bool,
+    decimal_predicate_upgrade: Option<decimal_predicate::UpgradePlan>,
     /// Shared, explicitly byte-bounded decoded posting cache. Entries are
     /// generation-qualified, so atomic publication cannot alias old data.
     fts_block_cache: Arc<crate::fts_cache::FullTextBlockCache>,
@@ -9140,6 +9143,10 @@ struct IndexCatalog {
     indexes: Vec<IndexDefinition>,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     btree_bindings: BTreeMap<String, String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    decimal_predicate_semantics_version: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    decimal_predicate_upgrade: Option<decimal_predicate::UpgradePlan>,
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -10054,6 +10061,8 @@ impl BicDb {
         storage::initialize_backup_write_gate(&path)?;
 
         let encryption = encryption::open_runtime(&path, encryption_config, config.fsync)?;
+        let decimal_admission =
+            decimal_predicate::check_open_admission(&path, &encryption, &effective_mode, &config)?;
         if effective_mode == StorageMode::ServerPaged
             && !path.join("paged/store.pages").try_exists()?
             && (path.join(COMMIT_SEQ_FLOOR_FILE).try_exists()?
@@ -10936,6 +10945,8 @@ impl BicDb {
             paged_maintenance_lock: Arc::new(Mutex::new(())),
             fts_generations: Mutex::new(fts_generations),
             btree_bindings: Mutex::new(btree_bindings),
+            decimal_predicates_current: decimal_admission.current,
+            decimal_predicate_upgrade: decimal_admission.plan,
             fts_block_cache,
             fts_open_metrics,
             sync_log: Mutex::new(sync_log),
@@ -11009,6 +11020,7 @@ impl BicDb {
         db.prepare_replication_journal_origin()?;
         db.flashback_after_open()?;
         db.verify_after_durability_failure()?;
+        db.finish_decimal_predicate_upgrade()?;
         db.auto_checkpoint_if_due();
         Ok(db)
     }

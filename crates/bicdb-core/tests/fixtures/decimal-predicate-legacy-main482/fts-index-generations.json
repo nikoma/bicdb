@@ -1,0 +1,5 @@
+{
+  "indexes": {
+    "native_decimal_partial": "native_decimal_partial.__btree.01a1ceb6-878a-7dc2-a6d3-299dbd1bcd06"
+  }
+}

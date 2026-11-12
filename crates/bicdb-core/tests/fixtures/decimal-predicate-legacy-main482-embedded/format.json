@@ -1,0 +1,9 @@
+{
+  "format_version": 2,
+  "min_reader_version": 1,
+  "min_writer_version": 2,
+  "feature_flags": [
+    "format_metadata_v2"
+  ],
+  "storage_mode": "embedded_memory"
+}

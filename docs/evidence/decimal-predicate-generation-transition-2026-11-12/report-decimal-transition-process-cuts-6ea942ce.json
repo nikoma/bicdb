@@ -1,0 +1,49 @@
+{
+  "source": "6ea942ce0355161e11a23c9fb486312982df4a63",
+  "scope": "Two actual Native recovery controls: SIGABRT at five plan/build/replacement/certificate boundaries before public admission, preserve old ACK/Native uniqueness and2cleanreopens; four corrupt-plan owner/definition/horizon controls must refuse. Test cut seam compiled only in Core unit binary, not production. Original actual-old-store five integrations rerun. Otherdurablekinds/exclusion still held, no promotion.",
+  "started_unix": 1794474440.9649694,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--lib",
+        "db::decimal_predicate::tests",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794474440.9651673,
+      "exit": 0,
+      "finished_unix": 1794474470.162503
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--test",
+        "decimal_predicate_generations",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794474470.162699,
+      "exit": 0,
+      "finished_unix": 1794474495.5121224
+    }
+  ],
+  "status": "focused_passed",
+  "finished_unix": 1794474495.5123427
+}

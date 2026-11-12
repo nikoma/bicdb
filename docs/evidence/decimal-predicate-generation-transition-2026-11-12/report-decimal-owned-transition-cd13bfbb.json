@@ -1,0 +1,29 @@
+{
+  "source": "cd13bfbb9287ae08ec9c11d7635a745a979accde",
+  "scope": "Stage2 implement automatic owned paged B-tree semantic transition before public startup admission. Actual untouched main482 golden fixture positive, independentACK, uniqueness and2cleanreopens; fresh/refusal/certificate controls preserved. Other legacy paged kinds/exclusion remain explicitly quarantined; processcut and allkind qualification still required. No promotion or generic-completion claim.",
+  "started_unix": 1794474287.3257773,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--test",
+        "decimal_predicate_generations",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794474287.3258636,
+      "exit": 0,
+      "finished_unix": 1794474317.0678923
+    }
+  ],
+  "status": "focused_passed",
+  "finished_unix": 1794474317.0681143
+}

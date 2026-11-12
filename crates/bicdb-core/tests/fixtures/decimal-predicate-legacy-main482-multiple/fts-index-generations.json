@@ -1,0 +1,6 @@
+{
+  "indexes": {
+    "native_decimal_partial": "native_decimal_partial.__btree.01a1cf0b-5500-7b91-88b9-053cd4dbf12c",
+    "nested_decimal_partial": "nested_decimal_partial.__btree.01a1cf0b-550d-7fc2-a2e4-9d648dcf2b31"
+  }
+}

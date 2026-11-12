@@ -105,6 +105,15 @@ impl NativeStrongEventDispatcher {
     pub(crate) fn clear(&self) {
         *self.binding.lock() = None;
     }
+    /// Revocation-only owner cleanup. Never wait behind an active snapshot or
+    /// final generation check while dropping the public host.
+    pub(crate) fn try_clear_for_cleanup(&self) -> bool {
+        let Some(mut binding) = self.binding.try_lock() else {
+            return false;
+        };
+        *binding = None;
+        true
+    }
     fn snapshot(&self) -> Result<(Uuid, Arc<Coordinator>, Arc<InstalledNativeWriterHostGuard>)> {
         let binding = self
             .binding

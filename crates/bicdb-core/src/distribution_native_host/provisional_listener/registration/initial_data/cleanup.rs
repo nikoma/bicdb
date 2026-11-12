@@ -8,6 +8,7 @@ use std::sync::{mpsc, OnceLock};
 
 static CLEANUP: OnceLock<NativeInitialDataCleanupSender> = OnceLock::new();
 static INITIALIZING: Mutex<()> = Mutex::new(());
+static QUARANTINED: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
 #[derive(Clone)]
 pub(super) struct NativeInitialDataCleanupSender(mpsc::Sender<NativeInitialDataCleanup>);
 pub(super) struct NativeInitialDataCleanup {
@@ -34,7 +35,8 @@ impl NativeInitialDataCleanup {
         // Only unexpected worker/construction failure reaches this branch.
         // Keep exact owners closed rather than silently abandoning an active
         // hook or clearing a foreign installation. No authority is produced.
-        eprintln!("native initial DATA cleanup unavailable; stopping owners retained in process quarantine");
+        // Pure diagnostic counter: no stdout/stderr lock or I/O from Drop.
+        QUARANTINED.fetch_add(1, Ordering::Relaxed);
         let _ = Box::leak(Box::new(self));
     }
     fn try_finish(&mut self) -> bool {
@@ -42,7 +44,12 @@ impl NativeInitialDataCleanup {
         for listener in &mut self.listeners {
             drained &= listener.poll_shutdown_drained_for_cleanup();
         }
+        let binding_cleared = self
+            .dispatcher
+            .as_ref()
+            .is_none_or(|dispatcher| dispatcher.try_clear_for_cleanup());
         if !drained
+            || !binding_cleared
             || self
                 .dispatcher
                 .as_ref()
@@ -73,6 +80,9 @@ impl NativeInitialDataCleanup {
     }
 }
 impl NativeInitialDataCleanupSender {
+    pub(super) fn quarantined_owners() -> usize {
+        QUARANTINED.load(Ordering::Relaxed)
+    }
     pub(super) fn ensure(parent: &CancellationToken) -> Result<Self> {
         parent.check()?;
         if let Some(sender) = CLEANUP.get() {

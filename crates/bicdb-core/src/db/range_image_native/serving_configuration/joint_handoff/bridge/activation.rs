@@ -102,6 +102,15 @@ impl NativeJointServingBridgeRecord {
         native: &NativeRecoveryAdmission,
     ) -> Result<SourceRangeImageLineage> {
         let actual = database.current_native_range_source_lineage(self.prepared.range_id)?;
+        self.require_actual_point_from_lineage(database, native, &actual)?;
+        Ok(actual)
+    }
+    fn require_actual_point_from_lineage(
+        &self,
+        database: &BicDb,
+        native: &NativeRecoveryAdmission,
+        actual: &SourceRangeImageLineage,
+    ) -> Result<()> {
         self.require_actual_anchor(database, native, &actual.birth, &actual.base)?;
         if actual.range_index() < self.prepared.range_index
             || actual.actual_local_visibility_sequence()
@@ -115,7 +124,7 @@ impl NativeJointServingBridgeRecord {
                 "joint bridge is ahead of actual validated native materialization",
             ));
         }
-        Ok(actual)
+        Ok(())
     }
     // No SourceLineage recursion: prefix validation may consume this protected
     // native domain, while actual local materialization is validated afterward.
@@ -323,11 +332,36 @@ pub(crate) struct NativeJointServingBridgeReceipt {
 /// One SAME-service validation borrow, never a request/serving permission.
 /// The actual native journal stays held and the caller supplies its real freeze.
 /// No scope survives a network call or supplies a new deadline.
+enum NativeJointScopeJournal<'a> {
+    Owned(crate::db::range_image_native::NativeImageJournalGuard<'a>),
+    Borrowed(&'a crate::db::range_image_native::NativeImageJournalGuard<'a>),
+}
+impl NativeJointScopeJournal<'_> {
+    fn require_database(&self, database: &BicDb) -> Result<()> {
+        match self {
+            Self::Owned(journal) => journal.require_database(database),
+            Self::Borrowed(journal) => journal.require_database(database),
+        }
+    }
+}
+enum NativeJointScopeLineage<'a> {
+    Owned(SourceRangeImageLineage),
+    Borrowed(&'a SourceRangeImageLineage),
+}
+impl std::ops::Deref for NativeJointScopeLineage<'_> {
+    type Target = SourceRangeImageLineage;
+    fn deref(&self) -> &Self::Target {
+        match self {
+            Self::Owned(lineage) => lineage,
+            Self::Borrowed(lineage) => lineage,
+        }
+    }
+}
 pub(crate) struct NativeJointBridgeReadScope<'a> {
     database: &'a BicDb,
     native: &'a NativeJointServingBridgeReceipt,
-    journal: crate::db::range_image_native::NativeImageJournalGuard<'a>,
-    lineage: SourceRangeImageLineage,
+    journal: NativeJointScopeJournal<'a>,
+    lineage: NativeJointScopeLineage<'a>,
 }
 impl NativeJointBridgeReadScope<'_> {
     pub(crate) fn current_range_index(&self) -> u64 {
@@ -453,8 +487,28 @@ impl NativeJointServingBridgeReceipt {
         Ok(NativeJointBridgeReadScope {
             database,
             native: self,
-            journal,
-            lineage,
+            journal: NativeJointScopeJournal::Owned(journal),
+            lineage: NativeJointScopeLineage::Owned(lineage),
+        })
+    }
+    // Only the actual completion scope supplies this journal + validated
+    // lineage. The private enum cannot be constructed by another module.
+    pub(in crate::db::range_image_native) fn read_scope_for_completion<'a>(
+        &'a self,
+        completion: &'a crate::db::NativeCompletionReadScope<'_>,
+    ) -> Result<NativeJointBridgeReadScope<'a>> {
+        let database = completion.database();
+        completion.journal().require_database(database)?;
+        let lineage = completion.lineage();
+        self.record.validate()?;
+        self.record
+            .require_actual_point_from_lineage(database, &self.native, lineage)?;
+        self.require_pointer_archive(database)?;
+        Ok(NativeJointBridgeReadScope {
+            database,
+            native: self,
+            journal: NativeJointScopeJournal::Borrowed(completion.journal()),
+            lineage: NativeJointScopeLineage::Borrowed(lineage),
         })
     }
     pub(crate) fn checksum_sha256(&self) -> &str {
@@ -494,6 +548,10 @@ impl NativeJointServingBridgeReceipt {
     fn require_current_lineage(&self, database: &BicDb) -> Result<SourceRangeImageLineage> {
         self.record.validate()?;
         let lineage = self.record.require_actual_point(database, &self.native)?;
+        self.require_pointer_archive(database)?;
+        Ok(lineage)
+    }
+    fn require_pointer_archive(&self, database: &BicDb) -> Result<()> {
         let range = self.record.prepared.range_id;
         let current: NativeJointServingBridgeRecord = database
             .read_native_range_image_record(&key(range))?
@@ -506,7 +564,7 @@ impl NativeJointServingBridgeReceipt {
         if current != self.record || archive != self.record {
             return Err(invalid("native joint bridge pointer/archive changed"));
         }
-        Ok(lineage)
+        Ok(())
     }
 }
 impl BicDb {

@@ -178,6 +178,21 @@ impl NativeCurrentJointRecoveryDomain {
         let actual = self.native.require_current_lineage(db)?;
         #[cfg(test)]
         crate::distribution_range_handoff::NativeJointPhaseTrace::finish_detail(lineage_trace);
+        self.require_current_from_actual_lineage(db, store, &actual)
+    }
+    fn require_current_from_actual_lineage(
+        &self,
+        db: &BicDb,
+        store: &RangeWriteStore,
+        actual: &SourceRangeImageLineage,
+    ) -> Result<()> {
+        if self.database_incarnation != db.incarnation_id()
+            || self.store_open_id != store.recovery_store_open_id()
+        {
+            return Err(invalid(
+                "current joint completion scope changed actual DB/Store open",
+            ));
+        }
         #[cfg(test)]
         let closure_trace =
             crate::distribution_range_handoff::NativeJointPhaseTrace::refresh_detail(
@@ -338,6 +353,38 @@ impl BicDb {
         range: RangeId,
         parent: &CancellationToken,
     ) -> Result<NativeCurrentJointRecoveryDomain> {
+        self.observe_current_joint_recovery_domain_inner(store, range, parent, None)
+    }
+    pub(in crate::db::range_image_native) fn observe_current_joint_domain_in_completion_scope(
+        &self,
+        completion: &crate::db::NativeCompletionReadScope<'_>,
+    ) -> Result<NativeCurrentJointRecoveryDomain> {
+        completion.require_identity(
+            completion.prepared(),
+            completion.store(),
+            completion.role(),
+        )?;
+        if !std::ptr::eq(self, completion.database()) {
+            return Err(invalid(
+                "current joint completion scope changed actual database",
+            ));
+        }
+        let parent =
+            CancellationToken::uncancelable().child_with_deadline(completion.role().deadline());
+        self.observe_current_joint_recovery_domain_inner(
+            completion.store(),
+            completion.prepared().scope().range_id,
+            &parent,
+            Some(completion),
+        )
+    }
+    fn observe_current_joint_recovery_domain_inner(
+        &self,
+        store: &RangeWriteStore,
+        range: RangeId,
+        parent: &CancellationToken,
+        completion: Option<&crate::db::NativeCompletionReadScope<'_>>,
+    ) -> Result<NativeCurrentJointRecoveryDomain> {
         parent.check()?;
         store.require_native_catalog_durability(self.data_path())?;
         store.require_no_image_install(range)?;
@@ -375,7 +422,10 @@ impl BicDb {
         let scope_trace = crate::distribution_range_handoff::NativeJointPhaseTrace::refresh_detail(
             "refresh-joint-factory-native-journal-scope-and-catalogue",
         );
-        let scope = receipt.current_read_scope(self)?;
+        let scope = match completion {
+            Some(completion) => receipt.read_scope_for_completion(completion)?,
+            None => receipt.current_read_scope(self)?,
+        };
         let activated = store
             .observe_native_joint_activation_fact_with_scope(&scope, receipt.clone())?
             .ok_or_else(|| invalid("current joint recovery lacks actual catalogue activation"))?;
@@ -440,7 +490,14 @@ impl BicDb {
             crate::distribution_range_handoff::NativeJointPhaseTrace::refresh_detail(
                 "refresh-joint-factory-final-fact-current",
             );
-        fact.require_current(self, store)?;
+        if let Some(completion) = completion {
+            // The current/archive/anchor were validated through THIS actual
+            // completion scope and have not left its retained native journal.
+            fact.require_current_from_actual_lineage(self, store, completion.lineage())?;
+            completion.require_identity(completion.prepared(), store, completion.role())?;
+        } else {
+            fact.require_current(self, store)?;
+        }
         #[cfg(test)]
         crate::distribution_range_handoff::NativeJointPhaseTrace::finish_detail(recheck_trace);
 

@@ -334,6 +334,18 @@ impl PreparedNativeRecoveryReady {
             fresh.local_node_id(),
             fresh.deadline(),
         );
+        db.with_native_completion_read_scope(self, store, fresh, |completion| {
+            self.refresh_completed_native_binding_in_scope(completion)
+        })
+    }
+    fn refresh_completed_native_binding_in_scope(
+        &self,
+        completion: &crate::db::NativeCompletionReadScope<'_>,
+    ) -> Result<crate::db::NativeRecoveredServingReceipt> {
+        let db = completion.database();
+        let store = completion.store();
+        let fresh = completion.role();
+        completion.require_identity(self, store, fresh)?;
         #[cfg(test)]
         let mut actual_trace =
             crate::distribution_range_handoff::NativeJointPhaseTrace::from_deadline(
@@ -350,7 +362,7 @@ impl PreparedNativeRecoveryReady {
             fresh.purpose(),
             MetadataRecoveryRolePurpose::CurrentJointRecovery { .. }
         ) {
-            store.require_current_joint_recovery_domain(db, fresh)?;
+            store.require_current_joint_domain_in_completion_scope(completion)?;
         }
         #[cfg(test)]
         crate::distribution_range_handoff::NativeJointPhaseTrace::finish_detail(fact_trace);
@@ -359,7 +371,7 @@ impl PreparedNativeRecoveryReady {
             crate::distribution_range_handoff::NativeJointPhaseTrace::refresh_detail(
                 "refresh-owned-native-pin-and-physical-lineage",
             );
-        self.physical.require_owned_materialization_current(db)?;
+        self.physical.require_owned_pin_live(db)?;
         #[cfg(test)]
         crate::distribution_range_handoff::NativeJointPhaseTrace::finish_detail(physical_trace);
         #[cfg(test)]
@@ -392,11 +404,8 @@ impl PreparedNativeRecoveryReady {
             crate::distribution_range_handoff::NativeJointPhaseTrace::refresh_detail(
                 "refresh-exact-native-serving-readback-total",
             );
-        let native = db.observe_native_recovered_serving_for_physical(
-            &self.physical,
-            &self.scope,
-            &completed.native_serving_sha256,
-        )?;
+        let native = completion.observe_serving(&completed.native_serving_sha256)?;
+        completion.require_unchanged_native_point()?;
         #[cfg(test)]
         crate::distribution_range_handoff::NativeJointPhaseTrace::finish_detail(serving_trace);
         #[cfg(test)]
@@ -432,7 +441,7 @@ impl PreparedNativeRecoveryReady {
     /// Necessary live boundary after a full same-borrow producer check. This
     /// never substitutes for physical/history validation or authorizes a stored
     /// Prepared value on a later call.
-    pub(super) fn require_produced_completion_boundary(
+    pub(crate) fn require_produced_completion_boundary(
         &self,
         db: &crate::BicDb,
         store: &RangeWriteStore,
@@ -471,6 +480,47 @@ impl PreparedNativeRecoveryReady {
             crate::distribution_range_handoff::NativeJointPhaseTrace::finish_detail(boundary_trace);
         }
         result
+    }
+    // Only an actual journal-held completion scope can use the already read
+    // materialization. Later/standalone observers retain the full path below.
+    pub(crate) fn require_domain_for_completion_scope(
+        &self,
+        completion: &crate::db::NativeCompletionReadScope<'_>,
+    ) -> Result<()> {
+        let db = completion.database();
+        let store = completion.store();
+        let fresh = completion.role();
+        completion.require_identity(self, store, fresh)?;
+        if matches!(
+            fresh.purpose(),
+            MetadataRecoveryRolePurpose::CurrentJointRecovery { .. }
+        ) {
+            store.require_current_joint_domain_in_completion_scope(completion)?;
+        }
+        self.physical.require_owned_pin_live(db)?;
+        store.require_native_ready_scope(fresh, self.physical.native_admission(), &self.scope)?;
+        store.require_prepared_native_point_matches(&self.physical)?;
+        if self.store_open_id != store.open_id
+            || self.point != NativePreparedPoint::from_actual(&self.physical)
+        {
+            return Err(range_write_error(
+                "prepared proof has stale actual store/physical state",
+            ));
+        }
+        fresh.require_live_request()
+    }
+    pub(crate) fn require_current_for_completion_scope(
+        &self,
+        completion: &crate::db::NativeCompletionReadScope<'_>,
+    ) -> Result<()> {
+        self.require_domain_for_completion_scope(completion)?;
+        if let Some(sha) = self.require_binding_shape_current(completion.store())? {
+            completion.observe_serving(&sha)?;
+        }
+        completion.role().require_live_request()
+    }
+    pub(crate) fn physical_for_completion_scope(&self) -> &LocalNativeRecoveryReady {
+        &self.physical
     }
     pub(crate) fn role(&self) -> &RecoveryRoleAdmission {
         self.physical.role()

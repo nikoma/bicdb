@@ -312,6 +312,19 @@ impl RangeWriteStore {
             crate::distribution_range_handoff::NativeJointPhaseTrace::refresh_detail(
                 "refresh-joint-original-writer-and-all-archived-floors",
             );
+        self.require_current_joint_scope_against_fact(db, scope, parent, &fact)?;
+        #[cfg(test)]
+        crate::distribution_range_handoff::NativeJointPhaseTrace::finish_detail(archive_trace);
+        Ok(fact)
+    }
+    fn require_current_joint_scope_against_fact(
+        &self,
+        db: &crate::BicDb,
+        scope: &RecoveryFenceScope,
+        parent: &CancellationToken,
+        fact: &NativeCurrentJointRecoveryDomain,
+    ) -> Result<()> {
+        self.current_joint_scope_constraint(scope)?;
         if scope.purpose != fact.purpose() {
             return Err(range_write_error(
                 "saved current joint scope changed actual protected decision",
@@ -336,9 +349,25 @@ impl RangeWriteStore {
         for old in saved.archived.values() {
             fact.require_saved_binding(db, &old.binding)?;
         }
-        #[cfg(test)]
-        crate::distribution_range_handoff::NativeJointPhaseTrace::finish_detail(archive_trace);
-        parent.check()?;
+        parent.check()
+    }
+    pub(crate) fn require_current_joint_domain_in_completion_scope(
+        &self,
+        completion: &crate::db::NativeCompletionReadScope<'_>,
+    ) -> Result<NativeCurrentJointRecoveryDomain> {
+        completion.require_identity(completion.prepared(), self, completion.role())?;
+        let role = completion.role();
+        let scope = RecoveryFenceScope::from_role(role)?;
+        let fact = completion.observe_current_joint_domain()?;
+        let token = CancellationToken::uncancelable().child_with_deadline(role.deadline());
+        self.require_current_joint_scope_against_fact(
+            completion.database(),
+            &scope,
+            &token,
+            &fact,
+        )?;
+        fact.require_role(role)?;
+        role.require_live_request()?;
         Ok(fact)
     }
     pub(crate) fn require_current_joint_recovery_domain(

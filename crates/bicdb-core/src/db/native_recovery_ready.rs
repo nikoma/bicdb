@@ -1006,6 +1006,148 @@ mod tests {
     }
 
     #[test]
+    fn native_produced_completion_scope_rejects_actual_role_or_store_rebase_without_mutation() {
+        let fixture = Fixture::new();
+        fixture.seed(fixture.range().id, 1);
+        let nonce = Uuid::now_v7();
+        let role = fixture.role(nonce);
+        let frozen = fixture.freeze(&role);
+        let mut store = fixture.store();
+        let physical = fixture
+            .attest(role, &mut store, frozen, &CancellationToken::uncancelable())
+            .unwrap();
+        let prepared = store
+            .prepare_native_recovery_ready(&fixture.db.read(), physical)
+            .unwrap();
+        let fresh = fixture.role(nonce);
+        // Independently genuine MQ witnesses, not altered role DTOs. Even a
+        // semantically matching new role is not THIS callback's borrowed role.
+        let other_role = fixture.role(nonce);
+        let wrong_scope = fixture.role(Uuid::now_v7());
+        let foreign_store = fixture.store();
+        let path = fixture.db.read().data_path().join(DEFAULT_RANGE_WRITE_LOG);
+        let before = std::fs::read(&path).unwrap();
+        let database = fixture.db.read();
+        let actual_before = database
+            .current_native_range_source_lineage(fixture.range().id)
+            .unwrap();
+        database
+            .with_native_completion_read_scope(&prepared, &store, &fresh, |scope| {
+                for role in [&other_role, &wrong_scope] {
+                    role.require_live_request().unwrap();
+                    let error = scope.require_identity(&prepared, &store, role).unwrap_err();
+                    assert!(
+                        error
+                            .to_string()
+                            .contains("substituted actual Prepared/Store/role"),
+                        "{error}"
+                    );
+                }
+                let error = scope
+                    .require_identity(&prepared, &foreign_store, &fresh)
+                    .unwrap_err();
+                assert!(
+                    error
+                        .to_string()
+                        .contains("substituted actual Prepared/Store/role"),
+                    "{error}"
+                );
+                scope.require_identity(&prepared, &store, &fresh)
+            })
+            .unwrap();
+        let actual_after = database
+            .current_native_range_source_lineage(fixture.range().id)
+            .unwrap();
+        assert_eq!(actual_after.range_index(), actual_before.range_index());
+        assert_eq!(
+            actual_after.logical_history_sha256(),
+            actual_before.logical_history_sha256()
+        );
+        assert_eq!(
+            actual_after.native_receipt_sha256(),
+            actual_before.native_receipt_sha256()
+        );
+        assert_eq!(std::fs::read(path).unwrap(), before);
+        prepared
+            .require_current_under_role(&database, &store, &fresh)
+            .unwrap();
+    }
+
+    #[test]
+    fn native_produced_completion_scope_other_range_reports_busy_then_observation_resumes() {
+        let fixture = Fixture::new();
+        fixture.seed(fixture.range().id, 1);
+        let other = fixture
+            .topology
+            .ranges
+            .values()
+            .find(|range| range.id != fixture.range().id)
+            .unwrap()
+            .clone();
+        let role = fixture.role(Uuid::now_v7());
+        let nonce = role.recovery_nonce();
+        let frozen = fixture.freeze(&role);
+        let mut store = fixture.store();
+        let physical = fixture
+            .attest(role, &mut store, frozen, &CancellationToken::uncancelable())
+            .unwrap();
+        let prepared = store
+            .prepare_native_recovery_ready(&fixture.db.read(), physical)
+            .unwrap();
+        let fresh = fixture.role(nonce);
+        let native = fixture.native();
+        let database = fixture.db.read();
+        let gate = database.range_mutation_gate();
+        let other_frozen = gate.try_freeze(other.id, Uuid::now_v7()).unwrap();
+        let before = database
+            .current_native_range_source_lineage(other.id)
+            .unwrap();
+        assert_eq!(
+            before.range_index(),
+            0,
+            "actual independent initial native genesis"
+        );
+        database
+            .with_native_completion_read_scope(&prepared, &store, &fresh, |scope| {
+                let started = std::time::Instant::now();
+                let error = database
+                    .native_range_install_safety(&native, other.id, &other_frozen)
+                    .unwrap_err();
+                assert!(
+                    error.to_string().contains("journal") && error.to_string().contains("busy"),
+                    "{error}"
+                );
+                assert!(
+                    started.elapsed() < Duration::from_secs(1),
+                    "nonwaiting journal refusal must not block behind another range"
+                );
+                scope.require_identity(&prepared, &store, &fresh)
+            })
+            .unwrap();
+        let observation = database
+            .native_range_install_safety(&native, other.id, &other_frozen)
+            .unwrap();
+        assert_eq!(observation.range_id(), other.id);
+        let after = database
+            .current_native_range_source_lineage(other.id)
+            .unwrap();
+        assert_eq!(after.range_index(), before.range_index());
+        assert_eq!(
+            after.native_receipt_sha256(),
+            before.native_receipt_sha256()
+        );
+        assert_eq!(
+            after.logical_history_sha256(),
+            before.logical_history_sha256()
+        );
+        // This proves prompt refusal during the GLOBAL journal hold and actual
+        // observer progress afterward, not concurrent ACK or stalled-IO isolation.
+        prepared
+            .require_current_under_role(&database, &store, &fresh)
+            .unwrap();
+    }
+
+    #[test]
     fn native_produced_completion_projects_actual_binding_and_stays_frozen() {
         let fixture = Fixture::new();
         fixture.seed(fixture.range().id, 1);

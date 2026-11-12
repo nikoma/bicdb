@@ -866,6 +866,22 @@ impl BicDb {
         crate::distribution_range_handoff::NativeJointPhaseTrace::finish_detail(validate_trace);
         Ok(lineage)
     }
+    pub(in crate::db::range_image_native) fn current_native_range_source_lineage_under_journal(
+        &self,
+        range_id: RangeId,
+        journal: &NativeImageJournalGuard<'_>,
+    ) -> Result<SourceRangeImageLineage> {
+        journal.require_database(self)?;
+        let lineage = self.native_range_source_lineage_contract(range_id)?;
+        if self.native_range_pending_exists(range_id)? {
+            return Err(invalid(
+                "unfinished native command; source range image unavailable",
+            ));
+        }
+        self.check_recovery_state()?;
+        journal.require_database(self)?;
+        Ok(lineage)
+    }
     pub(crate) fn current_native_range_source_lineage(
         &self,
         range_id: RangeId,

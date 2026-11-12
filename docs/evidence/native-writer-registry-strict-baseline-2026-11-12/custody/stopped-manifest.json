@@ -1,0 +1,2517 @@
+{
+  "version": 1,
+  "status": "COPIED_STOPPED_OWNED_ROOTS",
+  "complete": true,
+  "reason": null,
+  "source_revision": "1d3976f9f8011f3ac7411494aa0dfb432763ce78",
+  "test": "writer_registry_refresh_baseline::native_metadata_registry_addition_actual_cli_requires_healthy_existing_read_and_fresh_ack",
+  "actual_children_waited": [
+    {
+      "slot": 0,
+      "pid": 19597,
+      "before_kill": {
+        "exited": false
+      },
+      "kill_attempted": true,
+      "kill_error": null,
+      "wait_ok": true,
+      "exit": {
+        "success": false,
+        "code": null,
+        "signal": 9,
+        "display": "signal: 9 (SIGKILL)"
+      },
+      "wait_error": null
+    },
+    {
+      "slot": 1,
+      "pid": 19598,
+      "before_kill": {
+        "exited": false
+      },
+      "kill_attempted": true,
+      "kill_error": null,
+      "wait_ok": true,
+      "exit": {
+        "success": false,
+        "code": null,
+        "signal": 9,
+        "display": "signal: 9 (SIGKILL)"
+      },
+      "wait_error": null
+    },
+    {
+      "slot": 2,
+      "pid": 19599,
+      "before_kill": {
+        "exited": false
+      },
+      "kill_attempted": true,
+      "kill_error": null,
+      "wait_ok": true,
+      "exit": {
+        "success": false,
+        "code": null,
+        "signal": 9,
+        "display": "signal: 9 (SIGKILL)"
+      },
+      "wait_error": null
+    },
+    {
+      "slot": 3,
+      "pid": 19600,
+      "before_kill": {
+        "exited": false
+      },
+      "kill_attempted": true,
+      "kill_error": null,
+      "wait_ok": true,
+      "exit": {
+        "success": false,
+        "code": null,
+        "signal": 9,
+        "display": "signal: 9 (SIGKILL)"
+      },
+      "wait_error": null
+    },
+    {
+      "slot": 4,
+      "pid": 19968,
+      "before_kill": {
+        "exited": false
+      },
+      "kill_attempted": true,
+      "kill_error": null,
+      "wait_ok": true,
+      "exit": {
+        "success": false,
+        "code": null,
+        "signal": 9,
+        "display": "signal: 9 (SIGKILL)"
+      },
+      "wait_error": null
+    }
+  ],
+  "prior_test_exits": [],
+  "actual_spawn_records": [
+    {
+      "pid": 19597,
+      "invocation": {
+        "program": "/home/runner/work/bicdb/bicdb/target/debug/bicdb",
+        "args": [
+          "cluster",
+          "native-metadata",
+          "serve-fresh",
+          "/tmp/.tmpAbo7k0/db0",
+          "--plan",
+          "/tmp/.tmpAbo7k0/common-plan.json",
+          "--node-id",
+          "n0",
+          "--address",
+          "127.0.0.1:39155",
+          "--command-file",
+          "/tmp/.tmpAbo7k0/node0.command",
+          "--status-file",
+          "/tmp/.tmpAbo7k0/node0.status",
+          "--run-seconds",
+          "120",
+          "--cluster-tls-cert",
+          "/tmp/.tmpAbo7k0/n0.pem",
+          "--cluster-tls-key",
+          "/tmp/.tmpAbo7k0/n0.key",
+          "--cluster-tls-ca",
+          "/tmp/.tmpAbo7k0/ca.pem"
+        ],
+        "cwd": null,
+        "credential_file_contents_recorded": false
+      }
+    },
+    {
+      "pid": 19598,
+      "invocation": {
+        "program": "/home/runner/work/bicdb/bicdb/target/debug/bicdb",
+        "args": [
+          "cluster",
+          "native-metadata",
+          "serve-fresh",
+          "/tmp/.tmpAbo7k0/db1",
+          "--plan",
+          "/tmp/.tmpAbo7k0/common-plan.json",
+          "--node-id",
+          "n1",
+          "--address",
+          "127.0.0.1:36355",
+          "--command-file",
+          "/tmp/.tmpAbo7k0/node1.command",
+          "--status-file",
+          "/tmp/.tmpAbo7k0/node1.status",
+          "--run-seconds",
+          "120",
+          "--cluster-tls-cert",
+          "/tmp/.tmpAbo7k0/n1.pem",
+          "--cluster-tls-key",
+          "/tmp/.tmpAbo7k0/n1.key",
+          "--cluster-tls-ca",
+          "/tmp/.tmpAbo7k0/ca.pem"
+        ],
+        "cwd": null,
+        "credential_file_contents_recorded": false
+      }
+    },
+    {
+      "pid": 19599,
+      "invocation": {
+        "program": "/home/runner/work/bicdb/bicdb/target/debug/bicdb",
+        "args": [
+          "cluster",
+          "native-metadata",
+          "serve-fresh",
+          "/tmp/.tmpAbo7k0/db2",
+          "--plan",
+          "/tmp/.tmpAbo7k0/common-plan.json",
+          "--node-id",
+          "n2",
+          "--address",
+          "127.0.0.1:33841",
+          "--command-file",
+          "/tmp/.tmpAbo7k0/node2.command",
+          "--status-file",
+          "/tmp/.tmpAbo7k0/node2.status",
+          "--run-seconds",
+          "120",
+          "--cluster-tls-cert",
+          "/tmp/.tmpAbo7k0/n2.pem",
+          "--cluster-tls-key",
+          "/tmp/.tmpAbo7k0/n2.key",
+          "--cluster-tls-ca",
+          "/tmp/.tmpAbo7k0/ca.pem"
+        ],
+        "cwd": null,
+        "credential_file_contents_recorded": false
+      }
+    },
+    {
+      "pid": 19600,
+      "invocation": {
+        "program": "/home/runner/work/bicdb/bicdb/target/debug/bicdb",
+        "args": [
+          "cluster",
+          "native-metadata",
+          "serve-fresh",
+          "/tmp/.tmpAbo7k0/db3",
+          "--plan",
+          "/tmp/.tmpAbo7k0/common-plan.json",
+          "--node-id",
+          "n3",
+          "--address",
+          "127.0.0.1:45097",
+          "--command-file",
+          "/tmp/.tmpAbo7k0/node3.command",
+          "--status-file",
+          "/tmp/.tmpAbo7k0/node3.status",
+          "--run-seconds",
+          "120",
+          "--cluster-tls-cert",
+          "/tmp/.tmpAbo7k0/n3.pem",
+          "--cluster-tls-key",
+          "/tmp/.tmpAbo7k0/n3.key",
+          "--cluster-tls-ca",
+          "/tmp/.tmpAbo7k0/ca.pem"
+        ],
+        "cwd": null,
+        "credential_file_contents_recorded": false
+      }
+    },
+    {
+      "pid": 19968,
+      "invocation": {
+        "program": "/home/runner/work/bicdb/bicdb/target/debug/bicdb",
+        "args": [
+          "cluster",
+          "native-metadata",
+          "join-fresh",
+          "--replica-receiver",
+          "/tmp/.tmpAbo7k0/db4",
+          "--cluster-id",
+          "native-operator-cli",
+          "--seed-node-id",
+          "n0",
+          "--seed-address",
+          "127.0.0.1:39155",
+          "--node-id",
+          "n4",
+          "--address",
+          "127.0.0.1:39435",
+          "--command-file",
+          "/tmp/.tmpAbo7k0/node4.command",
+          "--status-file",
+          "/tmp/.tmpAbo7k0/node4.status",
+          "--run-seconds",
+          "120",
+          "--cluster-tls-cert",
+          "/tmp/.tmpAbo7k0/n4.pem",
+          "--cluster-tls-key",
+          "/tmp/.tmpAbo7k0/n4.key",
+          "--cluster-tls-ca",
+          "/tmp/.tmpAbo7k0/ca.pem"
+        ],
+        "cwd": null,
+        "credential_file_contents_recorded": false
+      }
+    }
+  ],
+  "explicit_owned_roots": [
+    "/tmp/.tmpAbo7k0/db0",
+    "/tmp/.tmpAbo7k0/db1",
+    "/tmp/.tmpAbo7k0/db2",
+    "/tmp/.tmpAbo7k0/db3",
+    "/tmp/.tmpAbo7k0/db4"
+  ],
+  "declared_caps": {
+    "max_bytes": 536870912,
+    "max_seconds": 30,
+    "min_free_bytes": 134217728,
+    "max_entries": 16384
+  },
+  "quarantine_path": null,
+  "payload_published": true,
+  "no_engine_open_repair_or_original_fsync": true,
+  "source_powerloss_or_ack_reconciliation_proven": false,
+  "hard_kernel_io_deadline_proven": false,
+  "logical_byte_accounting": "regular file lengths; directory metadata is not file payload",
+  "entries": [
+    {
+      "path": "db0",
+      "type": "directory",
+      "source": {
+        "device": 66305,
+        "inode": 10223644,
+        "logical_bytes": 4096,
+        "mtime_ns": 1794510059924753540,
+        "ctime_ns": 1794510059924753540,
+        "mode": 493
+      },
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0700"
+    },
+    {
+      "path": "db0/.backup-write.lock",
+      "source": {
+        "device": 66305,
+        "inode": 10223671,
+        "logical_bytes": 0,
+        "mtime_ns": 1794510056209731980,
+        "ctime_ns": 1794510056209731980,
+        "mode": 384
+      },
+      "type": "regular_file",
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0600",
+      "copied_bytes": 0,
+      "copied_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "db0/cluster-range-digest-repairs",
+      "source": {
+        "device": 66305,
+        "inode": 10223733,
+        "logical_bytes": 4096,
+        "mtime_ns": 1794510056319732619,
+        "ctime_ns": 1794510056319732619,
+        "mode": 493
+      },
+      "type": "directory",
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0700"
+    },
+    {
+      "path": "db0/cluster-range-digests",
+      "source": {
+        "device": 66305,
+        "inode": 10223732,
+        "logical_bytes": 4096,
+        "mtime_ns": 1794510056319732619,
+        "ctime_ns": 1794510056319732619,
+        "mode": 493
+      },
+      "type": "directory",
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0700"
+    },
+    {
+      "path": "db0/cluster-range-write-log.json",
+      "source": {
+        "device": 66305,
+        "inode": 10223758,
+        "logical_bytes": 6821,
+        "mtime_ns": 1794510059923753534,
+        "ctime_ns": 1794510059924753540,
+        "mode": 384
+      },
+      "type": "regular_file",
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0600",
+      "copied_bytes": 6821,
+      "copied_sha256": "5dcc3729d098a81cf39d38247f1bef6c0accf9bc1bdafda0610de8d3186cc734"
+    },
+    {
+      "path": "db0/collections.json",
+      "source": {
+        "device": 66305,
+        "inode": 10223657,
+        "logical_bytes": 418,
+        "mtime_ns": 1794510056257694215,
+        "ctime_ns": 1794510056257694215,
+        "mode": 384
+      },
+      "type": "regular_file",
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0600",
+      "copied_bytes": 418,
+      "copied_sha256": "2d1e145d1137303f19a69efb907b469b062dfc28c7fcb9ac90e920c277bf484b"
+    },
+    {
+      "path": "db0/events",
+      "source": {
+        "device": 66305,
+        "inode": 10223700,
+        "logical_bytes": 4096,
+        "mtime_ns": 1794510056227715080,
+        "ctime_ns": 1794510056227715080,
+        "mode": 493
+      },
+      "type": "directory",
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0700"
+    },
+    {
+      "path": "db0/events/events.seg",
+      "source": {
+        "device": 66305,
+        "inode": 10223701,
+        "logical_bytes": 0,
+        "mtime_ns": 1794510056227560646,
+        "ctime_ns": 1794510056227560646,
+        "mode": 420
+      },
+      "type": "regular_file",
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0600",
+      "copied_bytes": 0,
+      "copied_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "db0/format.json",
+      "source": {
+        "device": 66305,
+        "inode": 10223749,
+        "logical_bytes": 466,
+        "mtime_ns": 1794510059529751248,
+        "ctime_ns": 1794510059530751254,
+        "mode": 384
+      },
+      "type": "regular_file",
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0600",
+      "copied_bytes": 466,
+      "copied_sha256": "2bced33183f2c7e6dfc2a920beb24ab017a151e8e385a9250030afb81950b62a"
+    },
+    {
+      "path": "db0/incarnations.log",
+      "source": {
+        "device": 66305,
+        "inode": 10223685,
+        "logical_bytes": 238,
+        "mtime_ns": 1794510056261732282,
+        "ctime_ns": 1794510056261732282,
+        "mode": 420
+      },
+      "type": "regular_file",
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0600",
+      "copied_bytes": 238,
+      "copied_sha256": "5b50cad5912f97eca73c8451bfbc96a082c76457249ab37e3666be65b74e8b69"
+    },
+    {
+      "path": "db0/mesh_signing_key.json",
+      "source": {
+        "device": 66305,
+        "inode": 10223704,
+        "logical_bytes": 127,
+        "mtime_ns": 1794510056228615801,
+        "ctime_ns": 1794510056269732329,
+        "mode": 384
+      },
+      "type": "regular_file",
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0600",
+      "copied_bytes": 127,
+      "copied_sha256": "fa7a34fba65b7a39d130166ff7155b2a59802aa2e2656b14b602a8b7e8356a18"
+    },
+    {
+      "path": "db0/native-bootstrap-seed.json",
+      "source": {
+        "device": 66305,
+        "inode": 10223726,
+        "logical_bytes": 366,
+        "mtime_ns": 1794510056302732520,
+        "ctime_ns": 1794510056302732520,
+        "mode": 384
+      },
+      "type": "regular_file",
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0600",
+      "copied_bytes": 366,
+      "copied_sha256": "87c98a3b04b1da2ac95d611e51c1a5b37a32a1d41bd9bcf84ff00778a3fb6e85"
+    },
+    {
+      "path": "db0/native-initial-metadata",
+      "source": {
+        "device": 66305,
+        "inode": 10223708,
+        "logical_bytes": 4096,
+        "mtime_ns": 1794510069778810949,
+        "ctime_ns": 1794510069778810949,
+        "mode": 493
+      },
+      "type": "directory",
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0700"
+    },
+    {
+      "path": "db0/native-initial-metadata/cluster-metadata-consensus.json",
+      "source": {
+        "device": 66305,
+        "inode": 10223793,
+        "logical_bytes": 9049,
+        "mtime_ns": 1794510069777810943,
+        "ctime_ns": 1794510069778810949,
+        "mode": 384
+      },
+      "type": "regular_file",
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0600",
+      "copied_bytes": 9049,
+      "copied_sha256": "1588053f56a64e6b4aa674b881b6029347fa10296691ce882b157a45a4bacae9"
+    },
+    {
+      "path": "db0/native-initial-metadata/store.lock",
+      "source": {
+        "device": 66305,
+        "inode": 10223742,
+        "logical_bytes": 0,
+        "mtime_ns": 1794510056645734511,
+        "ctime_ns": 1794510056645734511,
+        "mode": 420
+      },
+      "type": "regular_file",
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0600",
+      "copied_bytes": 0,
+      "copied_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "db0/native-range-catalogue-owner",
+      "source": {
+        "device": 66305,
+        "inode": 10223717,
+        "logical_bytes": 4096,
+        "mtime_ns": 1794510056247534017,
+        "ctime_ns": 1794510056247534017,
+        "mode": 493
+      },
+      "type": "directory",
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0700"
+    },
+    {
+      "path": "db0/native-range-catalogue-owner/store.lock",
+      "source": {
+        "device": 66305,
+        "inode": 10223718,
+        "logical_bytes": 0,
+        "mtime_ns": 1794510056247092640,
+        "ctime_ns": 1794510056247092640,
+        "mode": 420
+      },
+      "type": "regular_file",
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0600",
+      "copied_bytes": 0,
+      "copied_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "db0/paged",
+      "source": {
+        "device": 66305,
+        "inode": 10223672,
+        "logical_bytes": 4096,
+        "mtime_ns": 1794510056210621464,
+        "ctime_ns": 1794510056210621464,
+        "mode": 493
+      },
+      "type": "directory",
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0700"
+    },
+    {
+      "path": "db0/paged/store.lock",
+      "source": {
+        "device": 66305,
+        "inode": 10223673,
+        "logical_bytes": 0,
+        "mtime_ns": 1794510056210165752,
+        "ctime_ns": 1794510056210165752,
+        "mode": 420
+      },
+      "type": "regular_file",
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0600",
+      "copied_bytes": 0,
+      "copied_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "db0/paged/store.pages",
+      "source": {
+        "device": 66305,
+        "inode": 10223674,
+        "logical_bytes": 147456,
+        "mtime_ns": 1794510059922753529,
+        "ctime_ns": 1794510059922753529,
+        "mode": 420
+      },
+      "type": "regular_file",
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0600",
+      "copied_bytes": 147456,
+      "copied_sha256": "4793ed559724decb4635002a21ad47836f0f718b780994297b238c017ef35302"
+    },
+    {
+      "path": "db0/paged/store.wal",
+      "source": {
+        "device": 66305,
+        "inode": 10223675,
+        "logical_bytes": 428784,
+        "mtime_ns": 1794510059922753529,
+        "ctime_ns": 1794510059922753529,
+        "mode": 420
+      },
+      "type": "regular_file",
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0600",
+      "copied_bytes": 428784,
+      "copied_sha256": "e5102447d29e1e507859a43e69b79cb5924f6966fa1cf186b7685b4735f975b0"
+    },
+    {
+      "path": "db0/range-image-factory.json",
+      "source": {
+        "device": 66305,
+        "inode": 10223716,
+        "logical_bytes": 1935,
+        "mtime_ns": 1794510056244337658,
+        "ctime_ns": 1794510056244337658,
+        "mode": 384
+      },
+      "type": "regular_file",
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0600",
+      "copied_bytes": 1935,
+      "copied_sha256": "e948877fa5adfad75107159d8f36b09f651dec3bd0062f5b742c130019e2dad0"
+    },
+    {
+      "path": "db0/segments",
+      "source": {
+        "device": 66305,
+        "inode": 10223661,
+        "logical_bytes": 4096,
+        "mtime_ns": 1794510056209731980,
+        "ctime_ns": 1794510056209731980,
+        "mode": 493
+      },
+      "type": "directory",
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0700"
+    },
+    {
+      "path": "db0/store.lock",
+      "source": {
+        "device": 66305,
+        "inode": 10223652,
+        "logical_bytes": 0,
+        "mtime_ns": 1794510056204553339,
+        "ctime_ns": 1794510056204553339,
+        "mode": 420
+      },
+      "type": "regular_file",
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0600",
+      "copied_bytes": 0,
+      "copied_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "db0/sync.log",
+      "source": {
+        "device": 66305,
+        "inode": 10223699,
+        "logical_bytes": 291,
+        "mtime_ns": 1794510059915753488,
+        "ctime_ns": 1794510059915753488,
+        "mode": 420
+      },
+      "type": "regular_file",
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0600",
+      "copied_bytes": 291,
+      "copied_sha256": "aab7431d2f9088af64c5b8330286c364b0790497b984acdad594f3f41146f592"
+    },
+    {
+      "path": "db0/sync_state.json",
+      "source": {
+        "device": 66305,
+        "inode": 10223702,
+        "logical_bytes": 340,
+        "mtime_ns": 1794510056227715080,
+        "ctime_ns": 1794510056227715080,
+        "mode": 384
+      },
+      "type": "regular_file",
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0600",
+      "copied_bytes": 340,
+      "copied_sha256": "60ed348ab1a54198da673a4f4a528e04fb2c26636e87f7e8bc9e2721cc5ea0dd"
+    },
+    {
+      "path": "db0/transactions.log",
+      "source": {
+        "device": 66305,
+        "inode": 10223684,
+        "logical_bytes": 896,
+        "mtime_ns": 1794510059914753482,
+        "ctime_ns": 1794510059914753482,
+        "mode": 420
+      },
+      "type": "regular_file",
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0600",
+      "copied_bytes": 896,
+      "copied_sha256": "0d1baf6261e3f31d101d5857f38aa60fb74fc0aa440d33cb21c33cb387b439d8"
+    },
+    {
+      "path": "db1",
+      "type": "directory",
+      "source": {
+        "device": 66305,
+        "inode": 10223640,
+        "logical_bytes": 4096,
+        "mtime_ns": 1794510059852753122,
+        "ctime_ns": 1794510059852753122,
+        "mode": 493
+      },
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0700"
+    },
+    {
+      "path": "db1/.backup-write.lock",
+      "source": {
+        "device": 66305,
+        "inode": 10223649,
+        "logical_bytes": 0,
+        "mtime_ns": 1794510056206731963,
+        "ctime_ns": 1794510056206731963,
+        "mode": 384
+      },
+      "type": "regular_file",
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0600",
+      "copied_bytes": 0,
+      "copied_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "db1/cluster-range-digest-repairs",
+      "source": {
+        "device": 66305,
+        "inode": 10223729,
+        "logical_bytes": 4096,
+        "mtime_ns": 1794510056314732590,
+        "ctime_ns": 1794510056314732590,
+        "mode": 493
+      },
+      "type": "directory",
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0700"
+    },
+    {
+      "path": "db1/cluster-range-digests",
+      "source": {
+        "device": 66305,
+        "inode": 10223728,
+        "logical_bytes": 4096,
+        "mtime_ns": 1794510056314732590,
+        "ctime_ns": 1794510056314732590,
+        "mode": 493
+      },
+      "type": "directory",
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0700"
+    },
+    {
+      "path": "db1/cluster-range-write-log.json",
+      "source": {
+        "device": 66305,
+        "inode": 10223741,
+        "logical_bytes": 6821,
+        "mtime_ns": 1794510059852753122,
+        "ctime_ns": 1794510059852753122,
+        "mode": 384
+      },
+      "type": "regular_file",
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0600",
+      "copied_bytes": 6821,
+      "copied_sha256": "c6ad220591f0908da8b1e5bd2ba294a8c170bb87c88caac9a471f40ef5c91261"
+    },
+    {
+      "path": "db1/collections.json",
+      "source": {
+        "device": 66305,
+        "inode": 10223651,
+        "logical_bytes": 418,
+        "mtime_ns": 1794510056254732241,
+        "ctime_ns": 1794510056254732241,
+        "mode": 384
+      },
+      "type": "regular_file",
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0600",
+      "copied_bytes": 418,
+      "copied_sha256": "caf97f980f318e756dcd6ebe78ed887e23bef773ecca3568bca166c0654b2ec2"
+    },
+    {
+      "path": "db1/events",
+      "source": {
+        "device": 66305,
+        "inode": 10223688,
+        "logical_bytes": 4096,
+        "mtime_ns": 1794510056225204537,
+        "ctime_ns": 1794510056225204537,
+        "mode": 493
+      },
+      "type": "directory",
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0700"
+    },
+    {
+      "path": "db1/events/events.seg",
+      "source": {
+        "device": 66305,
+        "inode": 10223690,
+        "logical_bytes": 0,
+        "mtime_ns": 1794510056224330019,
+        "ctime_ns": 1794510056224330019,
+        "mode": 420
+      },
+      "type": "regular_file",
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0600",
+      "copied_bytes": 0,
+      "copied_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "db1/format.json",
+      "source": {
+        "device": 66305,
+        "inode": 10223740,
+        "logical_bytes": 466,
+        "mtime_ns": 1794510059611751724,
+        "ctime_ns": 1794510059611751724,
+        "mode": 384
+      },
+      "type": "regular_file",
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0600",
+      "copied_bytes": 466,
+      "copied_sha256": "2bced33183f2c7e6dfc2a920beb24ab017a151e8e385a9250030afb81950b62a"
+    },
+    {
+      "path": "db1/incarnations.log",
+      "source": {
+        "device": 66305,
+        "inode": 10223682,
+        "logical_bytes": 238,
+        "mtime_ns": 1794510056260732276,
+        "ctime_ns": 1794510056260732276,
+        "mode": 420
+      },
+      "type": "regular_file",
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0600",
+      "copied_bytes": 238,
+      "copied_sha256": "b98a4998df9f816827f669face92fd78450ba03168f990c85ad0e06f66b9129f"
+    },
+    {
+      "path": "db1/mesh_signing_key.json",
+      "source": {
+        "device": 66305,
+        "inode": 10223696,
+        "logical_bytes": 127,
+        "mtime_ns": 1794510056225783456,
+        "ctime_ns": 1794510056268732323,
+        "mode": 384
+      },
+      "type": "regular_file",
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0600",
+      "copied_bytes": 127,
+      "copied_sha256": "d9fe98ec153c2e7edad00cb1878b3adedd91fe2501f333a7f09883bd89e9cb98"
+    },
+    {
+      "path": "db1/native-bootstrap-seed.json",
+      "source": {
+        "device": 66305,
+        "inode": 10223703,
+        "logical_bytes": 366,
+        "mtime_ns": 1794510056298732497,
+        "ctime_ns": 1794510056299732503,
+        "mode": 384
+      },
+      "type": "regular_file",
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0600",
+      "copied_bytes": 366,
+      "copied_sha256": "bcccc92cefa37d5214034608a9b5ba9e4fb2c652062f41842c6dba88a285e2c5"
+    },
+    {
+      "path": "db1/native-initial-metadata",
+      "source": {
+        "device": 66305,
+        "inode": 10223698,
+        "logical_bytes": 4096,
+        "mtime_ns": 1794510069775810932,
+        "ctime_ns": 1794510069775810932,
+        "mode": 493
+      },
+      "type": "directory",
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0700"
+    },
+    {
+      "path": "db1/native-initial-metadata/cluster-metadata-consensus.json",
+      "source": {
+        "device": 66305,
+        "inode": 10223721,
+        "logical_bytes": 9051,
+        "mtime_ns": 1794510069775810932,
+        "ctime_ns": 1794510069775810932,
+        "mode": 384
+      },
+      "type": "regular_file",
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0600",
+      "copied_bytes": 9051,
+      "copied_sha256": "e7f56faa263a21820e8a71b208f8d84dead492c0ae9ab6171b135e2e4f29fbbf"
+    },
+    {
+      "path": "db1/native-initial-metadata/store.lock",
+      "source": {
+        "device": 66305,
+        "inode": 10223745,
+        "logical_bytes": 0,
+        "mtime_ns": 1794510056734735027,
+        "ctime_ns": 1794510056734735027,
+        "mode": 420
+      },
+      "type": "regular_file",
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0600",
+      "copied_bytes": 0,
+      "copied_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "db1/native-range-catalogue-owner",
+      "source": {
+        "device": 66305,
+        "inode": 10223647,
+        "logical_bytes": 4096,
+        "mtime_ns": 1794510056247092640,
+        "ctime_ns": 1794510056247092640,
+        "mode": 493
+      },
+      "type": "directory",
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0700"
+    },
+    {
+      "path": "db1/native-range-catalogue-owner/store.lock",
+      "source": {
+        "device": 66305,
+        "inode": 10223707,
+        "logical_bytes": 0,
+        "mtime_ns": 1794510056245732189,
+        "ctime_ns": 1794510056245732189,
+        "mode": 420
+      },
+      "type": "regular_file",
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0600",
+      "copied_bytes": 0,
+      "copied_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "db1/paged",
+      "source": {
+        "device": 66305,
+        "inode": 10223662,
+        "logical_bytes": 4096,
+        "mtime_ns": 1794510056207925665,
+        "ctime_ns": 1794510056207925665,
+        "mode": 493
+      },
+      "type": "directory",
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0700"
+    },
+    {
+      "path": "db1/paged/store.lock",
+      "source": {
+        "device": 66305,
+        "inode": 10223663,
+        "logical_bytes": 0,
+        "mtime_ns": 1794510056206731963,
+        "ctime_ns": 1794510056206731963,
+        "mode": 420
+      },
+      "type": "regular_file",
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0600",
+      "copied_bytes": 0,
+      "copied_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "db1/paged/store.pages",
+      "source": {
+        "device": 66305,
+        "inode": 10223664,
+        "logical_bytes": 147456,
+        "mtime_ns": 1794510059836753030,
+        "ctime_ns": 1794510059836753030,
+        "mode": 420
+      },
+      "type": "regular_file",
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0600",
+      "copied_bytes": 147456,
+      "copied_sha256": "feab7726e550cf04fda135157703e3880d1080f88ebb155134484d846707b6a9"
+    },
+    {
+      "path": "db1/paged/store.wal",
+      "source": {
+        "device": 66305,
+        "inode": 10223665,
+        "logical_bytes": 428784,
+        "mtime_ns": 1794510059837753035,
+        "ctime_ns": 1794510059837753035,
+        "mode": 420
+      },
+      "type": "regular_file",
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0600",
+      "copied_bytes": 428784,
+      "copied_sha256": "9496434628c5cd01076fd4379fe1d86c52caf885e53c9182d654e87b849655c9"
+    },
+    {
+      "path": "db1/range-image-factory.json",
+      "source": {
+        "device": 66305,
+        "inode": 10223710,
+        "logical_bytes": 1917,
+        "mtime_ns": 1794510056241732166,
+        "ctime_ns": 1794510056244337658,
+        "mode": 384
+      },
+      "type": "regular_file",
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0600",
+      "copied_bytes": 1917,
+      "copied_sha256": "759bb7731978b6d9a42ec1830ed37726d01b276599ebcea19ea98c8b5dbb75b7"
+    },
+    {
+      "path": "db1/segments",
+      "source": {
+        "device": 66305,
+        "inode": 10223648,
+        "logical_bytes": 4096,
+        "mtime_ns": 1794510056206596756,
+        "ctime_ns": 1794510056206596756,
+        "mode": 493
+      },
+      "type": "directory",
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0700"
+    },
+    {
+      "path": "db1/store.lock",
+      "source": {
+        "device": 66305,
+        "inode": 10223645,
+        "logical_bytes": 0,
+        "mtime_ns": 1794510056203560772,
+        "ctime_ns": 1794510056203560772,
+        "mode": 420
+      },
+      "type": "regular_file",
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0600",
+      "copied_bytes": 0,
+      "copied_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "db1/sync.log",
+      "source": {
+        "device": 66305,
+        "inode": 10223686,
+        "logical_bytes": 0,
+        "mtime_ns": 1794510056224330019,
+        "ctime_ns": 1794510056224330019,
+        "mode": 420
+      },
+      "type": "regular_file",
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0600",
+      "copied_bytes": 0,
+      "copied_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "db1/sync_state.json",
+      "source": {
+        "device": 66305,
+        "inode": 10223692,
+        "logical_bytes": 340,
+        "mtime_ns": 1794510056225204537,
+        "ctime_ns": 1794510056225783456,
+        "mode": 384
+      },
+      "type": "regular_file",
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0600",
+      "copied_bytes": 340,
+      "copied_sha256": "3c0d2392bdafe8a402759657d5bb6251e865b3a1306f898a0e57cd7890c5a762"
+    },
+    {
+      "path": "db1/transactions.log",
+      "source": {
+        "device": 66305,
+        "inode": 10223681,
+        "logical_bytes": 585,
+        "mtime_ns": 1794510059831753000,
+        "ctime_ns": 1794510059831753000,
+        "mode": 420
+      },
+      "type": "regular_file",
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0600",
+      "copied_bytes": 585,
+      "copied_sha256": "65672c4314bbcb568d35bee56855dc1804a47b9ee5548178fdbce65e6892441a"
+    },
+    {
+      "path": "db2",
+      "type": "directory",
+      "source": {
+        "device": 66305,
+        "inode": 10223650,
+        "logical_bytes": 4096,
+        "mtime_ns": 1794510059911753465,
+        "ctime_ns": 1794510059911753465,
+        "mode": 493
+      },
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0700"
+    },
+    {
+      "path": "db2/.backup-write.lock",
+      "source": {
+        "device": 66305,
+        "inode": 10223669,
+        "logical_bytes": 0,
+        "mtime_ns": 1794510056210621464,
+        "ctime_ns": 1794510056210621464,
+        "mode": 384
+      },
+      "type": "regular_file",
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0600",
+      "copied_bytes": 0,
+      "copied_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "db2/cluster-range-digest-repairs",
+      "source": {
+        "device": 66305,
+        "inode": 10223735,
+        "logical_bytes": 4096,
+        "mtime_ns": 1794510056323732642,
+        "ctime_ns": 1794510056323732642,
+        "mode": 493
+      },
+      "type": "directory",
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0700"
+    },
+    {
+      "path": "db2/cluster-range-digests",
+      "source": {
+        "device": 66305,
+        "inode": 10223734,
+        "logical_bytes": 4096,
+        "mtime_ns": 1794510056323732642,
+        "ctime_ns": 1794510056323732642,
+        "mode": 493
+      },
+      "type": "directory",
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0700"
+    },
+    {
+      "path": "db2/cluster-range-write-log.json",
+      "source": {
+        "device": 66305,
+        "inode": 10223753,
+        "logical_bytes": 6821,
+        "mtime_ns": 1794510059911753465,
+        "ctime_ns": 1794510059911753465,
+        "mode": 384
+      },
+      "type": "regular_file",
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0600",
+      "copied_bytes": 6821,
+      "copied_sha256": "1b92849463a57e82d1fbbbb1807986fac10a45c4d30b52a8917d854cb30c506a"
+    },
+    {
+      "path": "db2/collections.json",
+      "source": {
+        "device": 66305,
+        "inode": 10223655,
+        "logical_bytes": 418,
+        "mtime_ns": 1794510056260408935,
+        "ctime_ns": 1794510056260625425,
+        "mode": 384
+      },
+      "type": "regular_file",
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0600",
+      "copied_bytes": 418,
+      "copied_sha256": "9a8d7b624cddd9ee4420c70c094155a5af39ccea13f6c050e6483645e63c1960"
+    },
+    {
+      "path": "db2/events",
+      "source": {
+        "device": 66305,
+        "inode": 10223706,
+        "logical_bytes": 4096,
+        "mtime_ns": 1794510056230135420,
+        "ctime_ns": 1794510056230135420,
+        "mode": 493
+      },
+      "type": "directory",
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0700"
+    },
+    {
+      "path": "db2/events/events.seg",
+      "source": {
+        "device": 66305,
+        "inode": 10223709,
+        "logical_bytes": 0,
+        "mtime_ns": 1794510056228732091,
+        "ctime_ns": 1794510056228732091,
+        "mode": 420
+      },
+      "type": "regular_file",
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0600",
+      "copied_bytes": 0,
+      "copied_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "db2/format.json",
+      "source": {
+        "device": 66305,
+        "inode": 10223737,
+        "logical_bytes": 466,
+        "mtime_ns": 1794510059684752147,
+        "ctime_ns": 1794510059685752153,
+        "mode": 384
+      },
+      "type": "regular_file",
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0600",
+      "copied_bytes": 466,
+      "copied_sha256": "2bced33183f2c7e6dfc2a920beb24ab017a151e8e385a9250030afb81950b62a"
+    },
+    {
+      "path": "db2/incarnations.log",
+      "source": {
+        "device": 66305,
+        "inode": 10223695,
+        "logical_bytes": 238,
+        "mtime_ns": 1794510056270732334,
+        "ctime_ns": 1794510056270732334,
+        "mode": 420
+      },
+      "type": "regular_file",
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0600",
+      "copied_bytes": 238,
+      "copied_sha256": "0b0fe7e1d3f1eb51c4348c76fd74489b6a1e7e4862acc33cb0df3ebf5e295849"
+    },
+    {
+      "path": "db2/mesh_signing_key.json",
+      "source": {
+        "device": 66305,
+        "inode": 10223712,
+        "logical_bytes": 127,
+        "mtime_ns": 1794510056231211800,
+        "ctime_ns": 1794510056276732369,
+        "mode": 384
+      },
+      "type": "regular_file",
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0600",
+      "copied_bytes": 127,
+      "copied_sha256": "14b67348fc0bd202fa514dcb6978c600ecc92d2807eb0260bd96bba3ddaaccff"
+    },
+    {
+      "path": "db2/native-bootstrap-seed.json",
+      "source": {
+        "device": 66305,
+        "inode": 10223727,
+        "logical_bytes": 366,
+        "mtime_ns": 1794510056307732549,
+        "ctime_ns": 1794510056307732549,
+        "mode": 384
+      },
+      "type": "regular_file",
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0600",
+      "copied_bytes": 366,
+      "copied_sha256": "f6ed7673a59b3329a16bd13a20849b0ff2bc708200a409f1447fab88d2a2d63d"
+    },
+    {
+      "path": "db2/native-initial-metadata",
+      "source": {
+        "device": 66305,
+        "inode": 10223715,
+        "logical_bytes": 4096,
+        "mtime_ns": 1794510069743810745,
+        "ctime_ns": 1794510069743810745,
+        "mode": 493
+      },
+      "type": "directory",
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0700"
+    },
+    {
+      "path": "db2/native-initial-metadata/cluster-metadata-consensus.json",
+      "source": {
+        "device": 66305,
+        "inode": 10223763,
+        "logical_bytes": 9051,
+        "mtime_ns": 1794510069742810739,
+        "ctime_ns": 1794510069743810745,
+        "mode": 384
+      },
+      "type": "regular_file",
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0600",
+      "copied_bytes": 9051,
+      "copied_sha256": "c3b210db59bc463a53ef0d8ff9877381e09a3fefbb9ca6be2ed6d321db9609e9"
+    },
+    {
+      "path": "db2/native-initial-metadata/store.lock",
+      "source": {
+        "device": 66305,
+        "inode": 10223748,
+        "logical_bytes": 0,
+        "mtime_ns": 1794510056819735520,
+        "ctime_ns": 1794510056819735520,
+        "mode": 420
+      },
+      "type": "regular_file",
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0600",
+      "copied_bytes": 0,
+      "copied_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "db2/native-range-catalogue-owner",
+      "source": {
+        "device": 66305,
+        "inode": 10223722,
+        "logical_bytes": 4096,
+        "mtime_ns": 1794510056250968676,
+        "ctime_ns": 1794510056250968676,
+        "mode": 493
+      },
+      "type": "directory",
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0700"
+    },
+    {
+      "path": "db2/native-range-catalogue-owner/store.lock",
+      "source": {
+        "device": 66305,
+        "inode": 10223723,
+        "logical_bytes": 0,
+        "mtime_ns": 1794510056249732213,
+        "ctime_ns": 1794510056249732213,
+        "mode": 420
+      },
+      "type": "regular_file",
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0600",
+      "copied_bytes": 0,
+      "copied_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "db2/paged",
+      "source": {
+        "device": 66305,
+        "inode": 10223676,
+        "logical_bytes": 4096,
+        "mtime_ns": 1794510056211366933,
+        "ctime_ns": 1794510056211366933,
+        "mode": 493
+      },
+      "type": "directory",
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0700"
+    },
+    {
+      "path": "db2/paged/store.lock",
+      "source": {
+        "device": 66305,
+        "inode": 10223677,
+        "logical_bytes": 0,
+        "mtime_ns": 1794510056211133251,
+        "ctime_ns": 1794510056211133251,
+        "mode": 420
+      },
+      "type": "regular_file",
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0600",
+      "copied_bytes": 0,
+      "copied_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "db2/paged/store.pages",
+      "source": {
+        "device": 66305,
+        "inode": 10223678,
+        "logical_bytes": 147456,
+        "mtime_ns": 1794510059896753378,
+        "ctime_ns": 1794510059896753378,
+        "mode": 420
+      },
+      "type": "regular_file",
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0600",
+      "copied_bytes": 147456,
+      "copied_sha256": "aeae66548b63ca67c2ab6cdf8789f70e7a12e2dbab105ef8d8fb08e5678e6ff3"
+    },
+    {
+      "path": "db2/paged/store.wal",
+      "source": {
+        "device": 66305,
+        "inode": 10223679,
+        "logical_bytes": 428784,
+        "mtime_ns": 1794510059896753378,
+        "ctime_ns": 1794510059896753378,
+        "mode": 420
+      },
+      "type": "regular_file",
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0600",
+      "copied_bytes": 428784,
+      "copied_sha256": "1ea573eb3b00c3694e57c3de82a46201bd7ebc33d1fc55813d254e326c3f539d"
+    },
+    {
+      "path": "db2/range-image-factory.json",
+      "source": {
+        "device": 66305,
+        "inode": 10223719,
+        "logical_bytes": 1916,
+        "mtime_ns": 1794510056247534017,
+        "ctime_ns": 1794510056247534017,
+        "mode": 384
+      },
+      "type": "regular_file",
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0600",
+      "copied_bytes": 1916,
+      "copied_sha256": "aa5d77eff8a0714766a284611778e7594cd21756f00f5202a768d923438893ad"
+    },
+    {
+      "path": "db2/segments",
+      "source": {
+        "device": 66305,
+        "inode": 10223659,
+        "logical_bytes": 4096,
+        "mtime_ns": 1794510056210621464,
+        "ctime_ns": 1794510056210621464,
+        "mode": 493
+      },
+      "type": "directory",
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0700"
+    },
+    {
+      "path": "db2/store.lock",
+      "source": {
+        "device": 66305,
+        "inode": 10223658,
+        "logical_bytes": 0,
+        "mtime_ns": 1794510056206173439,
+        "ctime_ns": 1794510056206173439,
+        "mode": 420
+      },
+      "type": "regular_file",
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0600",
+      "copied_bytes": 0,
+      "copied_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "db2/sync.log",
+      "source": {
+        "device": 66305,
+        "inode": 10223705,
+        "logical_bytes": 0,
+        "mtime_ns": 1794510056228615801,
+        "ctime_ns": 1794510056228615801,
+        "mode": 420
+      },
+      "type": "regular_file",
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0600",
+      "copied_bytes": 0,
+      "copied_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "db2/sync_state.json",
+      "source": {
+        "device": 66305,
+        "inode": 10223711,
+        "logical_bytes": 340,
+        "mtime_ns": 1794510056230135420,
+        "ctime_ns": 1794510056230135420,
+        "mode": 384
+      },
+      "type": "regular_file",
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0600",
+      "copied_bytes": 340,
+      "copied_sha256": "ea7296058f3052df93ed0d61912479190b5c9a423f751c22ac9fd115b79788a9"
+    },
+    {
+      "path": "db2/transactions.log",
+      "source": {
+        "device": 66305,
+        "inode": 10223694,
+        "logical_bytes": 585,
+        "mtime_ns": 1794510059891753349,
+        "ctime_ns": 1794510059891753349,
+        "mode": 420
+      },
+      "type": "regular_file",
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0600",
+      "copied_bytes": 585,
+      "copied_sha256": "65672c4314bbcb568d35bee56855dc1804a47b9ee5548178fdbce65e6892441a"
+    },
+    {
+      "path": "db3",
+      "type": "directory",
+      "source": {
+        "device": 66305,
+        "inode": 10223641,
+        "logical_bytes": 4096,
+        "mtime_ns": 1794510058741746675,
+        "ctime_ns": 1794510058741746675,
+        "mode": 493
+      },
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0700"
+    },
+    {
+      "path": "db3/.backup-write.lock",
+      "source": {
+        "device": 66305,
+        "inode": 10223666,
+        "logical_bytes": 0,
+        "mtime_ns": 1794510056207925665,
+        "ctime_ns": 1794510056207925665,
+        "mode": 384
+      },
+      "type": "regular_file",
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0600",
+      "copied_bytes": 0,
+      "copied_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "db3/cluster-range-digest-repairs",
+      "source": {
+        "device": 66305,
+        "inode": 10223731,
+        "logical_bytes": 4096,
+        "mtime_ns": 1794510056316732602,
+        "ctime_ns": 1794510056316732602,
+        "mode": 493
+      },
+      "type": "directory",
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0700"
+    },
+    {
+      "path": "db3/cluster-range-digests",
+      "source": {
+        "device": 66305,
+        "inode": 10223730,
+        "logical_bytes": 4096,
+        "mtime_ns": 1794510056316732602,
+        "ctime_ns": 1794510056316732602,
+        "mode": 493
+      },
+      "type": "directory",
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0700"
+    },
+    {
+      "path": "db3/cluster-range-write-log.json",
+      "source": {
+        "device": 66305,
+        "inode": 10223756,
+        "logical_bytes": 501,
+        "mtime_ns": 1794510058740746669,
+        "ctime_ns": 1794510058741746675,
+        "mode": 384
+      },
+      "type": "regular_file",
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0600",
+      "copied_bytes": 501,
+      "copied_sha256": "ff8e083e817244d22ae34a163ea5efaf46d5b1b950e1a056af7ae50942fd24bf"
+    },
+    {
+      "path": "db3/collections.json",
+      "source": {
+        "device": 66305,
+        "inode": 10223653,
+        "logical_bytes": 418,
+        "mtime_ns": 1794510056252732230,
+        "ctime_ns": 1794510056253732236,
+        "mode": 384
+      },
+      "type": "regular_file",
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0600",
+      "copied_bytes": 418,
+      "copied_sha256": "a543937e87ccf94280dff63eacb9160cccd8ec681f33f64be0a5645df2f0e20e"
+    },
+    {
+      "path": "db3/events",
+      "source": {
+        "device": 66305,
+        "inode": 10223689,
+        "logical_bytes": 4096,
+        "mtime_ns": 1794510056225204537,
+        "ctime_ns": 1794510056225204537,
+        "mode": 493
+      },
+      "type": "directory",
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0700"
+    },
+    {
+      "path": "db3/events/events.seg",
+      "source": {
+        "device": 66305,
+        "inode": 10223691,
+        "logical_bytes": 0,
+        "mtime_ns": 1794510056225204537,
+        "ctime_ns": 1794510056225204537,
+        "mode": 420
+      },
+      "type": "regular_file",
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0600",
+      "copied_bytes": 0,
+      "copied_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "db3/format.json",
+      "source": {
+        "device": 66305,
+        "inode": 10223754,
+        "logical_bytes": 466,
+        "mtime_ns": 1794510056932736176,
+        "ctime_ns": 1794510056932736176,
+        "mode": 384
+      },
+      "type": "regular_file",
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0600",
+      "copied_bytes": 466,
+      "copied_sha256": "2bced33183f2c7e6dfc2a920beb24ab017a151e8e385a9250030afb81950b62a"
+    },
+    {
+      "path": "db3/incarnations.log",
+      "source": {
+        "device": 66305,
+        "inode": 10223683,
+        "logical_bytes": 238,
+        "mtime_ns": 1794510056260408935,
+        "ctime_ns": 1794510056260408935,
+        "mode": 420
+      },
+      "type": "regular_file",
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0600",
+      "copied_bytes": 238,
+      "copied_sha256": "0d140ccb1cb25f5bfab07b8216bf03c6b213b36565ceb7e202366d97d00d53fb"
+    },
+    {
+      "path": "db3/mesh_signing_key.json",
+      "source": {
+        "device": 66305,
+        "inode": 10223697,
+        "logical_bytes": 127,
+        "mtime_ns": 1794510056225783456,
+        "ctime_ns": 1794510056267732317,
+        "mode": 384
+      },
+      "type": "regular_file",
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0600",
+      "copied_bytes": 127,
+      "copied_sha256": "33ce18448a8e7be6aafa8e027c83c6da56569d085acf1a0211b4903715e0b8be"
+    },
+    {
+      "path": "db3/native-bootstrap-seed.json",
+      "source": {
+        "device": 66305,
+        "inode": 10223725,
+        "logical_bytes": 366,
+        "mtime_ns": 1794510056300732509,
+        "ctime_ns": 1794510056300732509,
+        "mode": 384
+      },
+      "type": "regular_file",
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0600",
+      "copied_bytes": 366,
+      "copied_sha256": "41fcc8a5dfb936e7891b3d3fe6b7cc8338133f5958c476c878cd377ae3bd9991"
+    },
+    {
+      "path": "db3/native-initial-metadata",
+      "source": {
+        "device": 66305,
+        "inode": 10223660,
+        "logical_bytes": 4096,
+        "mtime_ns": 1794510069751810792,
+        "ctime_ns": 1794510069751810792,
+        "mode": 493
+      },
+      "type": "directory",
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0700"
+    },
+    {
+      "path": "db3/native-initial-metadata/cluster-metadata-consensus.json",
+      "source": {
+        "device": 66305,
+        "inode": 10223747,
+        "logical_bytes": 9051,
+        "mtime_ns": 1794510069751810792,
+        "ctime_ns": 1794510069751810792,
+        "mode": 384
+      },
+      "type": "regular_file",
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0600",
+      "copied_bytes": 9051,
+      "copied_sha256": "0e886b25f552e2d7ce9f5b542322887ee68cd1299912d423e14e8d5ac613ef5c"
+    },
+    {
+      "path": "db3/native-initial-metadata/store.lock",
+      "source": {
+        "device": 66305,
+        "inode": 10223752,
+        "logical_bytes": 0,
+        "mtime_ns": 1794510056906736026,
+        "ctime_ns": 1794510056906736026,
+        "mode": 420
+      },
+      "type": "regular_file",
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0600",
+      "copied_bytes": 0,
+      "copied_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "db3/native-range-catalogue-owner",
+      "source": {
+        "device": 66305,
+        "inode": 10223713,
+        "logical_bytes": 4096,
+        "mtime_ns": 1794510056244337658,
+        "ctime_ns": 1794510056244337658,
+        "mode": 493
+      },
+      "type": "directory",
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0700"
+    },
+    {
+      "path": "db3/native-range-catalogue-owner/store.lock",
+      "source": {
+        "device": 66305,
+        "inode": 10223643,
+        "logical_bytes": 0,
+        "mtime_ns": 1794510056242732172,
+        "ctime_ns": 1794510056242732172,
+        "mode": 420
+      },
+      "type": "regular_file",
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0600",
+      "copied_bytes": 0,
+      "copied_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "db3/paged",
+      "source": {
+        "device": 66305,
+        "inode": 10223667,
+        "logical_bytes": 4096,
+        "mtime_ns": 1794510056208875853,
+        "ctime_ns": 1794510056208875853,
+        "mode": 493
+      },
+      "type": "directory",
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0700"
+    },
+    {
+      "path": "db3/paged/store.lock",
+      "source": {
+        "device": 66305,
+        "inode": 10223654,
+        "logical_bytes": 0,
+        "mtime_ns": 1794510056208245307,
+        "ctime_ns": 1794510056208245307,
+        "mode": 420
+      },
+      "type": "regular_file",
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0600",
+      "copied_bytes": 0,
+      "copied_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "db3/paged/store.pages",
+      "source": {
+        "device": 66305,
+        "inode": 10223668,
+        "logical_bytes": 114688,
+        "mtime_ns": 1794510058746746704,
+        "ctime_ns": 1794510058746746704,
+        "mode": 420
+      },
+      "type": "regular_file",
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0600",
+      "copied_bytes": 114688,
+      "copied_sha256": "6e4c6678e9dcfa6140aecc93c8451072382b8186d6c110a4ee435fcac10f8bdd"
+    },
+    {
+      "path": "db3/paged/store.wal",
+      "source": {
+        "device": 66305,
+        "inode": 10223670,
+        "logical_bytes": 255632,
+        "mtime_ns": 1794510058747746710,
+        "ctime_ns": 1794510058747746710,
+        "mode": 420
+      },
+      "type": "regular_file",
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0600",
+      "copied_bytes": 255632,
+      "copied_sha256": "375c663e97700e9ee661780d4c31edde51d5bf7ab1c0c031c2c4f898573088f0"
+    },
+    {
+      "path": "db3/range-image-factory.json",
+      "source": {
+        "device": 66305,
+        "inode": 10223714,
+        "logical_bytes": 1931,
+        "mtime_ns": 1794510056239732155,
+        "ctime_ns": 1794510056239732155,
+        "mode": 384
+      },
+      "type": "regular_file",
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0600",
+      "copied_bytes": 1931,
+      "copied_sha256": "70d71780cacc5af94b47b90c22fa177062783dbca467beb13d0ab51e1f7d0e4e"
+    },
+    {
+      "path": "db3/segments",
+      "source": {
+        "device": 66305,
+        "inode": 10223656,
+        "logical_bytes": 4096,
+        "mtime_ns": 1794510056207925665,
+        "ctime_ns": 1794510056207925665,
+        "mode": 493
+      },
+      "type": "directory",
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0700"
+    },
+    {
+      "path": "db3/store.lock",
+      "source": {
+        "device": 66305,
+        "inode": 10223646,
+        "logical_bytes": 0,
+        "mtime_ns": 1794510056203560772,
+        "ctime_ns": 1794510056203560772,
+        "mode": 420
+      },
+      "type": "regular_file",
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0600",
+      "copied_bytes": 0,
+      "copied_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "db3/sync.log",
+      "source": {
+        "device": 66305,
+        "inode": 10223687,
+        "logical_bytes": 0,
+        "mtime_ns": 1794510056224330019,
+        "ctime_ns": 1794510056224330019,
+        "mode": 420
+      },
+      "type": "regular_file",
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0600",
+      "copied_bytes": 0,
+      "copied_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "db3/sync_state.json",
+      "source": {
+        "device": 66305,
+        "inode": 10223693,
+        "logical_bytes": 340,
+        "mtime_ns": 1794510056225204537,
+        "ctime_ns": 1794510056225783456,
+        "mode": 384
+      },
+      "type": "regular_file",
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0600",
+      "copied_bytes": 340,
+      "copied_sha256": "29279fae12e917fd57403c431315f879892c3f1ee2dc130c99be06fd38da7174"
+    },
+    {
+      "path": "db3/transactions.log",
+      "source": {
+        "device": 66305,
+        "inode": 10223680,
+        "logical_bytes": 0,
+        "mtime_ns": 1794510056219732038,
+        "ctime_ns": 1794510056219732038,
+        "mode": 420
+      },
+      "type": "regular_file",
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0600",
+      "copied_bytes": 0,
+      "copied_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "db4",
+      "type": "directory",
+      "source": {
+        "device": 66305,
+        "inode": 10223738,
+        "logical_bytes": 4096,
+        "mtime_ns": 1794510061090760307,
+        "ctime_ns": 1794510061090760307,
+        "mode": 493
+      },
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0700"
+    },
+    {
+      "path": "db4/.backup-write.lock",
+      "source": {
+        "device": 66305,
+        "inode": 10223768,
+        "logical_bytes": 0,
+        "mtime_ns": 1794510060438913341,
+        "ctime_ns": 1794510060438913341,
+        "mode": 384
+      },
+      "type": "regular_file",
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0600",
+      "copied_bytes": 0,
+      "copied_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "db4/cluster-range-digest-repairs",
+      "source": {
+        "device": 66305,
+        "inode": 10223786,
+        "logical_bytes": 4096,
+        "mtime_ns": 1794510060478756755,
+        "ctime_ns": 1794510060478756755,
+        "mode": 493
+      },
+      "type": "directory",
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0700"
+    },
+    {
+      "path": "db4/cluster-range-digests",
+      "source": {
+        "device": 66305,
+        "inode": 10223785,
+        "logical_bytes": 4096,
+        "mtime_ns": 1794510060478756755,
+        "ctime_ns": 1794510060478756755,
+        "mode": 493
+      },
+      "type": "directory",
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0700"
+    },
+    {
+      "path": "db4/cluster-range-write-log.json",
+      "source": {
+        "device": 66305,
+        "inode": 10223783,
+        "logical_bytes": 501,
+        "mtime_ns": 1794510060464183100,
+        "ctime_ns": 1794510060464183100,
+        "mode": 420
+      },
+      "type": "regular_file",
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0600",
+      "copied_bytes": 501,
+      "copied_sha256": "68974f4513f6db7d1d40cf2582967d6135d2c2dec91baf932b99a7eb0e19e882"
+    },
+    {
+      "path": "db4/collections.json",
+      "source": {
+        "device": 66305,
+        "inode": 10223784,
+        "logical_bytes": 418,
+        "mtime_ns": 1794510060466756685,
+        "ctime_ns": 1794510060466756685,
+        "mode": 384
+      },
+      "type": "regular_file",
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0600",
+      "copied_bytes": 418,
+      "copied_sha256": "acdeea9ae620f5f134218004702ed8da42ae23126cd2e105ff6c3afb3b3b5757"
+    },
+    {
+      "path": "db4/events",
+      "source": {
+        "device": 66305,
+        "inode": 10223776,
+        "logical_bytes": 4096,
+        "mtime_ns": 1794510060450116270,
+        "ctime_ns": 1794510060450116270,
+        "mode": 493
+      },
+      "type": "directory",
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0700"
+    },
+    {
+      "path": "db4/events/events.seg",
+      "source": {
+        "device": 66305,
+        "inode": 10223777,
+        "logical_bytes": 0,
+        "mtime_ns": 1794510060448756581,
+        "ctime_ns": 1794510060448756581,
+        "mode": 420
+      },
+      "type": "regular_file",
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0600",
+      "copied_bytes": 0,
+      "copied_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "db4/format.json",
+      "source": {
+        "device": 66305,
+        "inode": 10223791,
+        "logical_bytes": 429,
+        "mtime_ns": 1794510061090760307,
+        "ctime_ns": 1794510061090760307,
+        "mode": 384
+      },
+      "type": "regular_file",
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0600",
+      "copied_bytes": 429,
+      "copied_sha256": "49f8103b38312683391275f424cf693e593905f8a0074dd2aff62b500b4062e4"
+    },
+    {
+      "path": "db4/incarnations.log",
+      "source": {
+        "device": 66305,
+        "inode": 10223774,
+        "logical_bytes": 238,
+        "mtime_ns": 1794510060471756715,
+        "ctime_ns": 1794510060471756715,
+        "mode": 420
+      },
+      "type": "regular_file",
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0600",
+      "copied_bytes": 238,
+      "copied_sha256": "b9cf89bcc24a7c677efc0602f570d743637cb7371234da170d5e224bbe86ddc4"
+    },
+    {
+      "path": "db4/mesh_signing_key.json",
+      "source": {
+        "device": 66305,
+        "inode": 10223779,
+        "logical_bytes": 127,
+        "mtime_ns": 1794510060450116270,
+        "ctime_ns": 1794510060474756732,
+        "mode": 384
+      },
+      "type": "regular_file",
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0600",
+      "copied_bytes": 127,
+      "copied_sha256": "6c1326b6a9167c76118e6c364013b3d74bbb3b08c90e06251bc6739625a8aab8"
+    },
+    {
+      "path": "db4/native-learner-metadata",
+      "source": {
+        "device": 66305,
+        "inode": 10223788,
+        "logical_bytes": 4096,
+        "mtime_ns": 1794510069761810850,
+        "ctime_ns": 1794510069761810850,
+        "mode": 493
+      },
+      "type": "directory",
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0700"
+    },
+    {
+      "path": "db4/native-learner-metadata/cluster-metadata-consensus.json",
+      "source": {
+        "device": 66305,
+        "inode": 10223765,
+        "logical_bytes": 9051,
+        "mtime_ns": 1794510069761810850,
+        "ctime_ns": 1794510069761810850,
+        "mode": 384
+      },
+      "type": "regular_file",
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0600",
+      "copied_bytes": 9051,
+      "copied_sha256": "a47fa0519b965bfe6855460caf5bab9bfa9d68e315e96ed8f421210afa888dd3"
+    },
+    {
+      "path": "db4/native-learner-metadata/native-learner-metadata-original-c.json",
+      "source": {
+        "device": 66305,
+        "inode": 10223790,
+        "logical_bytes": 5275,
+        "mtime_ns": 1794510061089625738,
+        "ctime_ns": 1794510061089625738,
+        "mode": 384
+      },
+      "type": "regular_file",
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0600",
+      "copied_bytes": 5275,
+      "copied_sha256": "a54b1280b1ae51f864fdc024379af55dc4ad2ca2edb16da574629820505ab60d"
+    },
+    {
+      "path": "db4/native-learner-metadata/store.lock",
+      "source": {
+        "device": 66305,
+        "inode": 10223789,
+        "logical_bytes": 0,
+        "mtime_ns": 1794510061086760284,
+        "ctime_ns": 1794510061086760284,
+        "mode": 420
+      },
+      "type": "regular_file",
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0600",
+      "copied_bytes": 0,
+      "copied_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "db4/native-range-catalogue-owner",
+      "source": {
+        "device": 66305,
+        "inode": 10223739,
+        "logical_bytes": 4096,
+        "mtime_ns": 1794510060464183100,
+        "ctime_ns": 1794510060464183100,
+        "mode": 493
+      },
+      "type": "directory",
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0700"
+    },
+    {
+      "path": "db4/native-range-catalogue-owner/store.lock",
+      "source": {
+        "device": 66305,
+        "inode": 10223782,
+        "logical_bytes": 0,
+        "mtime_ns": 1794510060462756662,
+        "ctime_ns": 1794510060462756662,
+        "mode": 420
+      },
+      "type": "regular_file",
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0600",
+      "copied_bytes": 0,
+      "copied_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "db4/native-unassigned-learner.json",
+      "source": {
+        "device": 66305,
+        "inode": 10223767,
+        "logical_bytes": 1823,
+        "mtime_ns": 1794510060476756744,
+        "ctime_ns": 1794510060476756744,
+        "mode": 384
+      },
+      "type": "regular_file",
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0600",
+      "copied_bytes": 1823,
+      "copied_sha256": "e45e67833d138b6e9e63bba6c7a109f80767f7d7af1e2ba8184cd8cf9c568f6c"
+    },
+    {
+      "path": "db4/paged",
+      "source": {
+        "device": 66305,
+        "inode": 10223769,
+        "logical_bytes": 4096,
+        "mtime_ns": 1794510060440908293,
+        "ctime_ns": 1794510060440908293,
+        "mode": 493
+      },
+      "type": "directory",
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0700"
+    },
+    {
+      "path": "db4/paged/store.lock",
+      "source": {
+        "device": 66305,
+        "inode": 10223770,
+        "logical_bytes": 0,
+        "mtime_ns": 1794510060440700129,
+        "ctime_ns": 1794510060440700129,
+        "mode": 420
+      },
+      "type": "regular_file",
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0600",
+      "copied_bytes": 0,
+      "copied_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "db4/paged/store.pages",
+      "source": {
+        "device": 66305,
+        "inode": 10223771,
+        "logical_bytes": 40960,
+        "mtime_ns": 1794510060473756726,
+        "ctime_ns": 1794510060473756726,
+        "mode": 420
+      },
+      "type": "regular_file",
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0600",
+      "copied_bytes": 40960,
+      "copied_sha256": "08a9d9017d0bcf5d62d55283173136056c44bd180330de09d0d3c114c1b39b0c"
+    },
+    {
+      "path": "db4/paged/store.wal",
+      "source": {
+        "device": 66305,
+        "inode": 10223772,
+        "logical_bytes": 41240,
+        "mtime_ns": 1794510061096760342,
+        "ctime_ns": 1794510061096760342,
+        "mode": 420
+      },
+      "type": "regular_file",
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0600",
+      "copied_bytes": 41240,
+      "copied_sha256": "08587deb5f4990d2b584964c9962ced2cf4f97b71eae2fb21cf8e2ca1cf12ff5"
+    },
+    {
+      "path": "db4/range-image-factory.json",
+      "source": {
+        "device": 66305,
+        "inode": 10223781,
+        "logical_bytes": 1076,
+        "mtime_ns": 1794510060460756651,
+        "ctime_ns": 1794510060460756651,
+        "mode": 384
+      },
+      "type": "regular_file",
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0600",
+      "copied_bytes": 1076,
+      "copied_sha256": "047aa7b8bc98c199367453d8007534fb10530634f3f601fa6c7314a6814cf0c5"
+    },
+    {
+      "path": "db4/segments",
+      "source": {
+        "device": 66305,
+        "inode": 10223766,
+        "logical_bytes": 4096,
+        "mtime_ns": 1794510060438913341,
+        "ctime_ns": 1794510060438913341,
+        "mode": 493
+      },
+      "type": "directory",
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0700"
+    },
+    {
+      "path": "db4/store.lock",
+      "source": {
+        "device": 66305,
+        "inode": 10223755,
+        "logical_bytes": 0,
+        "mtime_ns": 1794510060436461351,
+        "ctime_ns": 1794510060436461351,
+        "mode": 420
+      },
+      "type": "regular_file",
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0600",
+      "copied_bytes": 0,
+      "copied_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "db4/sync.log",
+      "source": {
+        "device": 66305,
+        "inode": 10223775,
+        "logical_bytes": 0,
+        "mtime_ns": 1794510060448756581,
+        "ctime_ns": 1794510060448756581,
+        "mode": 420
+      },
+      "type": "regular_file",
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0600",
+      "copied_bytes": 0,
+      "copied_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "db4/sync_state.json",
+      "source": {
+        "device": 66305,
+        "inode": 10223778,
+        "logical_bytes": 340,
+        "mtime_ns": 1794510060450116270,
+        "ctime_ns": 1794510060450116270,
+        "mode": 384
+      },
+      "type": "regular_file",
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0600",
+      "copied_bytes": 340,
+      "copied_sha256": "7799c40457eed25494ccf9c745338041f08cd127a72ae0c0c601d1c41c543ebb"
+    },
+    {
+      "path": "db4/transactions.log",
+      "source": {
+        "device": 66305,
+        "inode": 10223773,
+        "logical_bytes": 0,
+        "mtime_ns": 1794510060445756564,
+        "ctime_ns": 1794510060445756564,
+        "mode": 420
+      },
+      "type": "regular_file",
+      "status": "copied",
+      "durable_copy": true,
+      "destination_mode": "0600",
+      "copied_bytes": 0,
+      "copied_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ],
+  "streamed_logical_bytes": 2275560
+}

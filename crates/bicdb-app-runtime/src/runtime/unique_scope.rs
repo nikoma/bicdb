@@ -58,6 +58,10 @@ pub struct UniqueScopeResource {
 struct IndexChange {
     old: IndexDefinition,
     new: IndexDefinition,
+    /// Derived only from an identical target in the verified OLD contract.
+    /// Never accepted as caller/operator scope-plan authority.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    new_preexisting: bool,
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -551,7 +555,22 @@ impl OfflineUniqueScopeTransition {
         let result = (|| -> Result<()> {
             let mut db = self.runtime.db.write();
             for c in &receipt.changes {
-                db.create_index(c.new.clone())?;
+                match db
+                    .index_definitions()
+                    .into_iter()
+                    .find(|index| index.name == c.new.name)
+                {
+                    Some(index) if c.new_preexisting && index == c.new => {}
+                    Some(_) => {
+                        return Err(invalid(
+                            "scope index differs from signed preexisting retainer",
+                        ))
+                    }
+                    None if c.new_preexisting => {
+                        return Err(invalid("signed preexisting retainer index is missing"))
+                    }
+                    None => db.create_index(c.new.clone())?,
+                }
             }
             db.checkpoint_for_resume()?;
             for c in &receipt.changes {
@@ -753,10 +772,24 @@ impl OfflineUniqueScopeTransition {
         let db = self.runtime.db.read();
         let indexes = db.index_definitions();
         for c in &r.changes {
-            let keep = if new { &c.new } else { &c.old };
-            let gone = if new { &c.old } else { &c.new };
-            if !indexes.iter().any(|x| x == keep) || indexes.iter().any(|x| x.name == gone.name) {
-                return Err(invalid("scope physical index state differs from receipt"));
+            let expected = if new { &c.new } else { &c.old };
+            if !indexes.iter().any(|index| index == expected) {
+                return Err(invalid(
+                    "scope physical retaining index differs from receipt",
+                ));
+            }
+            if new {
+                if indexes.iter().any(|index| index.name == c.old.name) {
+                    return Err(invalid("retired global index unexpectedly remains"));
+                }
+            } else if c.new_preexisting {
+                if !indexes.iter().any(|index| index == &c.new) {
+                    return Err(invalid("rollback must retain the old signed scoped index"));
+                }
+            } else if indexes.iter().any(|index| index.name == c.new.name) {
+                return Err(invalid(
+                    "rollback leaves an index absent from old signed schema",
+                ));
             }
         }
         self.audit_receipt_rows(&db, r)
@@ -788,6 +821,19 @@ impl OfflineUniqueScopeTransition {
         let mut db = self.runtime.db.write();
         db.check_catalog_recovery_quiescent()?;
         self.audit_receipt_rows(&db, r)?;
+        // A signed old retainer is part of BOTH schemas. Rebuild it exactly if
+        // necessary for recovery, and never delete it during compensation.
+        for c in r.changes.iter().filter(|change| change.new_preexisting) {
+            match db
+                .index_definitions()
+                .into_iter()
+                .find(|index| index.name == c.new.name)
+            {
+                Some(index) if index == c.new => {}
+                Some(_) => return Err(invalid("preexisting retainer recovery identity mismatch")),
+                None => db.create_index(c.new.clone())?,
+            }
+        }
         // Restore/create the retaining index BEFORE removing the other one.
         for c in &r.changes {
             let keep = if finalize { &c.new } else { &c.old };
@@ -803,6 +849,9 @@ impl OfflineUniqueScopeTransition {
         }
         db.checkpoint_for_resume()?;
         for c in &r.changes {
+            if !finalize && c.new_preexisting {
+                continue;
+            }
             let remove = if finalize { &c.old } else { &c.new };
             if let Some(x) = db
                 .index_definitions()
@@ -935,10 +984,27 @@ fn validate_scope_contract(
             ));
         }
     }
+    // PREP installed this exact scoped target while the old global target
+    // still held. SCOPE may retire only the old global target.
+    let new_preexisting = match a
+        .unique_targets
+        .iter()
+        .find(|target| target.target == t.new_target)
+    {
+        Some(retainer) if retainer == new => true,
+        Some(_) => {
+            return Err(invalid(
+                "old scoped retainer differs from new signed target",
+            ))
+        }
+        None => false,
+    };
     let mut x = a.clone();
     let mut y = b.clone();
     x.unique_targets.retain(|u| u.target != t.old_target);
-    y.unique_targets.retain(|u| u.target != t.new_target);
+    if !new_preexisting {
+        y.unique_targets.retain(|u| u.target != t.new_target);
+    }
     x.contract_sha256.clear();
     y.contract_sha256.clear();
     x.schema_version = y.schema_version;
@@ -986,14 +1052,30 @@ fn validate_scope_contract(
         ));
     }
     let indexes = db.index_definitions();
-    if check_physical_indexes
-        && (!indexes.iter().any(|i| i == &old) || indexes.iter().any(|i| i.name == new.name))
-    {
-        return Err(invalid(
-            "old physical unique definition/new name differs from signed transition boundary",
-        ));
+    if check_physical_indexes {
+        if !indexes.iter().any(|index| index == &old) {
+            return Err(invalid(
+                "old global unique index differs from signed boundary",
+            ));
+        }
+        let actual = indexes.iter().find(|index| index.name == new.name);
+        if new_preexisting {
+            if actual != Some(&new) {
+                return Err(invalid(
+                    "old signed scoped retainer is missing or incompatible",
+                ));
+            }
+        } else if actual.is_some() {
+            return Err(invalid(
+                "unsigned/unplanned scoped index already occupies new identity",
+            ));
+        }
     }
-    Ok(IndexChange { old, new })
+    Ok(IndexChange {
+        old,
+        new,
+        new_preexisting,
+    })
 }
 
 fn row_value<'a>(row: &'a Record, field: &str) -> Option<&'a Value> {

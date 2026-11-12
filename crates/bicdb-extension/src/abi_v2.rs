@@ -4373,8 +4373,7 @@ impl ApplicationProgramV1 {
                                     && candidate == Some(method)
                             },
                         ) {
-                            used_methods
-                                .insert((pipeline.llm_client.clone(), method.to_string()));
+                            used_methods.insert((pipeline.llm_client.clone(), method.to_string()));
                         }
                     }
                 }

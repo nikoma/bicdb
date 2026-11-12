@@ -66,6 +66,25 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "apply" => {
             assert_eq!(args.len(), 5, "MODE apply DATABASE CASE EXTERNAL_ACK_FILE");
             let mut db = BicDb::open_with_config(path, config)?;
+            // Arm only after open, scoped to this disposable database. This
+            // reaches existing Native I/O boundaries in either storage mode
+            // without adding a product-only upgrade shortcut or crash hook.
+            let _io_cut = std::env::var("PARTITION_CRASH_IO").ok().map(|spec| {
+                let (site, count) = spec.rsplit_once(':').expect("SITE:HIT");
+                let site = site.to_string();
+                let label = site.clone();
+                bicdb_page::test_faults::arm_io_hook(
+                    &site,
+                    db.data_path(),
+                    count.parse().unwrap(),
+                    move || {
+                        eprintln!("partition crash I/O hook reached: {label}");
+                        bicdb_page::test_faults::crash_now(
+                            bicdb_page::test_faults::volatile_tail_enabled(),
+                        );
+                    },
+                )
+            });
             let inspection = bicdb_sql::inspect_partition_upgrade(&db)?;
             let mut plan = PartitionUpgradePlan {
                 snapshot: inspection.snapshot,
@@ -126,7 +145,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     assert!(complete, "acknowledged upgrade rolled back");
                 }
                 let certificate = if db.has_collection("__bicdb_pg_partition_certificate") {
-                    db.get("__bicdb_pg_partition_certificate", "current")?.is_some()
+                    db.get("__bicdb_pg_partition_certificate", "current")?
+                        .is_some()
                 } else {
                     false
                 };

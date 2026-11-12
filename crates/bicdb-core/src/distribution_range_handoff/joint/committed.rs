@@ -75,6 +75,21 @@ impl CommittedNativeJointDecisionObservation {
         self.require_metadata_current()?;
         scope.require_committed_identity(self)
     }
+    pub(crate) fn require_current_with_publication_scope(
+        &self,
+        scope: &crate::db::NativeJointPreparedPublicationScope<'_>,
+    ) -> Result<()> {
+        self.require_metadata_current()?;
+        scope.require_committed_identity(self)
+    }
+    pub(crate) fn require_historical_audit_with_publication_scope(
+        &self,
+        scope: &crate::db::NativeJointPreparedPublicationScope<'_>,
+    ) -> Result<()> {
+        self.metadata
+            .require_historical_request_not_canceled(self.business)?;
+        scope.require_committed_identity(self)
+    }
     pub(crate) fn require_current_with_native_read_scope(
         &self,
         scope: &crate::db::NativeJointBridgeReadScope<'_>,

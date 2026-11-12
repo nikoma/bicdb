@@ -69,6 +69,15 @@ impl NativeJointServingPublicationRound {
         }
         admission.claim_publication_attempt()?;
         let local = admission.local.local_node_id().clone();
+        if admission.phase.is_some() && !self.receipts.contains_key(&local) {
+            // ONE scoped native producer reconciles an actual old pointer or
+            // publishes only if actually absent. Do not spend another complete
+            // sweep on a separate absence probe after an unknown attempt.
+            self.pending.insert(local);
+            let receipt = admission.publish_local_native_bridge(parent)?;
+            self.record_actual_receipt(admission, receipt)?;
+            return Ok(());
+        }
         // Unknown local completion is retained across phase expiration. A new
         // phase MUST check actual protected storage before another WAL attempt.
         if self.pending.contains(&local) || self.receipts.contains_key(&local) {

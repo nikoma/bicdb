@@ -1,0 +1,117 @@
+{
+  "passed": true,
+  "expectExport": false,
+  "actualRecoveryExport": false,
+  "source": "34ba460941ddd011534b74d6054d59839bc9c84d",
+  "binary": "/opt/walknorth-erp-modernization/artifacts/tools/bicdb-1.0.488-beta-34ba4609",
+  "binary_sha256": "d4bb09c8491071511fb1583166ef3b1e5f265bc17e202a059065c1f4de3fcbee",
+  "node_only": true,
+  "rust_tests": false,
+  "local_operator_CLI": true,
+  "http_or_Hub": false,
+  "scope": "Bounded primary record recovery despite unrelated corrupt secondary/CDC metadata; ordinary indexed admission still refuses corruption",
+  "cases": [
+    {
+      "name": "decimal-predicate-legacy-main482",
+      "acknowledged_rows": 1,
+      "export_succeeded": false,
+      "ordinary_corrupt_catalog_refused": true,
+      "index_and_sync_bytes_unchanged": true,
+      "cold_copy": true,
+      "original_fixture_unchanged": true
+    },
+    {
+      "name": "decimal-predicate-legacy-main482-embedded",
+      "acknowledged_rows": 1,
+      "export_succeeded": false,
+      "ordinary_corrupt_catalog_refused": true,
+      "index_and_sync_bytes_unchanged": true,
+      "cold_copy": true,
+      "original_fixture_unchanged": true
+    },
+    {
+      "name": "decimal-predicate-legacy-main482-multiple",
+      "acknowledged_rows": 2,
+      "export_succeeded": false,
+      "ordinary_corrupt_catalog_refused": true,
+      "index_and_sync_bytes_unchanged": true,
+      "cold_copy": true,
+      "original_fixture_unchanged": true
+    },
+    {
+      "name": "decimal-predicate-legacy-main482-duplicate",
+      "acknowledged_rows": 2,
+      "export_succeeded": false,
+      "ordinary_corrupt_catalog_refused": true,
+      "index_and_sync_bytes_unchanged": true,
+      "cold_copy": true,
+      "original_fixture_unchanged": true
+    }
+  ],
+  "records": [
+    {
+      "label": "decimal-predicate-legacy-main482-acknowledged-old-reader-rows",
+      "code": 0
+    },
+    {
+      "label": "decimal-predicate-legacy-main482-ordinary-open-refuses-corrupt-catalog",
+      "code": 1
+    },
+    {
+      "label": "decimal-predicate-legacy-main482-bounded-primary-export",
+      "code": 1
+    },
+    {
+      "label": "decimal-predicate-legacy-main482-cold-primary-export",
+      "code": 1
+    },
+    {
+      "label": "decimal-predicate-legacy-main482-embedded-acknowledged-old-reader-rows",
+      "code": 0
+    },
+    {
+      "label": "decimal-predicate-legacy-main482-embedded-ordinary-open-refuses-corrupt-catalog",
+      "code": 1
+    },
+    {
+      "label": "decimal-predicate-legacy-main482-embedded-bounded-primary-export",
+      "code": 1
+    },
+    {
+      "label": "decimal-predicate-legacy-main482-embedded-cold-primary-export",
+      "code": 1
+    },
+    {
+      "label": "decimal-predicate-legacy-main482-multiple-acknowledged-old-reader-rows",
+      "code": 0
+    },
+    {
+      "label": "decimal-predicate-legacy-main482-multiple-ordinary-open-refuses-corrupt-catalog",
+      "code": 1
+    },
+    {
+      "label": "decimal-predicate-legacy-main482-multiple-bounded-primary-export",
+      "code": 1
+    },
+    {
+      "label": "decimal-predicate-legacy-main482-multiple-cold-primary-export",
+      "code": 1
+    },
+    {
+      "label": "decimal-predicate-legacy-main482-duplicate-acknowledged-old-reader-rows",
+      "code": 0
+    },
+    {
+      "label": "decimal-predicate-legacy-main482-duplicate-ordinary-open-refuses-corrupt-catalog",
+      "code": 1
+    },
+    {
+      "label": "decimal-predicate-legacy-main482-duplicate-bounded-primary-export",
+      "code": 1
+    },
+    {
+      "label": "decimal-predicate-legacy-main482-duplicate-cold-primary-export",
+      "code": 1
+    }
+  ]
+}

@@ -1679,6 +1679,12 @@ impl BicDb {
         if definition.uses_oracle_simple_case_v1() {
             format::enable_oracle_simple_case_v1(&self.path)?;
         }
+        if decimal_predicate::affected(definition) {
+            if let Err(error) = format::enable_decimal_predicate_comparison_v1(&self.path) {
+                self.fence_durability("decimal_predicate.format_fence", &error);
+                return Err(error);
+            }
+        }
         Ok(())
     }
 
@@ -1700,6 +1706,10 @@ impl BicDb {
             .map(|(name, physical)| (name.clone(), physical.clone()))
             .collect();
         let catalog = IndexCatalog {
+            decimal_predicate_semantics_version: (self.decimal_predicates_current
+                && indexes.iter().any(decimal_predicate::affected))
+            .then_some(decimal_predicate::COMPARISON_VERSION),
+            decimal_predicate_upgrade: self.decimal_predicate_upgrade.clone(),
             indexes,
             btree_bindings,
         };

@@ -1,0 +1,246 @@
+{
+  "passed": true,
+  "expectProtected": false,
+  "actualProtection": false,
+  "same_resource_contracts": true,
+  "standalone_no_dependency_mask": true,
+  "official_compiler_packages": true,
+  "source": "669b024476ac5fdbf1bdf6efb8734eab8a5157dc",
+  "binary": "/opt/walknorth-erp-modernization/artifacts/tools/bicdb-1.0.488-beta-669b0244",
+  "binary_sha256": "e070a73f523241d6d7becaffc32a4063e902733af5654ba187a7fd6364bc13f6",
+  "no_ERP_or_Hub": true,
+  "node_only": true,
+  "rust_tests": false,
+  "results": [
+    {
+      "case": "removed",
+      "rollback_refused": false,
+      "invalid_write_status": 201,
+      "acknowledged_row_preserved": true,
+      "restart_and_cold_restore": true
+    },
+    {
+      "case": "changed",
+      "rollback_refused": false,
+      "invalid_write_status": 201,
+      "acknowledged_row_preserved": true,
+      "restart_and_cold_restore": true
+    },
+    {
+      "case": "compatible",
+      "rollback_refused": false,
+      "invalid_write_status": 409,
+      "acknowledged_row_preserved": true,
+      "restart_and_cold_restore": true
+    }
+  ],
+  "records": [
+    {
+      "label": "removed-acknowledged-positive",
+      "status": 201,
+      "body": {
+        "id": "cec83aaa-cd6a-4c92-ae81-8602472b2a71",
+        "amount": 2,
+        "organization_id": "d8ccd888-1ed5-405b-8a0a-9e3bffcd84de"
+      }
+    },
+    {
+      "label": "removed-active-guard-refuses-bad-row",
+      "status": 409,
+      "body": {
+        "code": "conflict",
+        "message": "operation conflict: commit_validation (CommitValidation, trace 6a9c3d3644484eb0afbb5209e23ef33a): commit validation failed: invariant `GuardedEntryMinimum` violated on `entries`/`ec437eb4-7abd-4591-bae7-fe0424e7c2e7`: (subject.amount >= 0)"
+      }
+    },
+    {
+      "label": "removed-before-rollback",
+      "status": 200,
+      "body": {
+        "items": [
+          {
+            "organization_id": "d8ccd888-1ed5-405b-8a0a-9e3bffcd84de",
+            "amount": 2,
+            "id": "cec83aaa-cd6a-4c92-ae81-8602472b2a71"
+          }
+        ],
+        "page_info": {
+          "page": 1,
+          "per_page": 20,
+          "total": 1,
+          "has_more": false,
+          "total_is_exact": true
+        }
+      }
+    },
+    {
+      "label": "removed-post-rollback-invalid-row",
+      "status": 201,
+      "body": {
+        "id": "f6ed03ec-6ad1-452c-8a88-3d64da33d8b2",
+        "amount": -1,
+        "organization_id": "d8ccd888-1ed5-405b-8a0a-9e3bffcd84de"
+      }
+    },
+    {
+      "label": "removed-after-rollback",
+      "status": 200,
+      "body": {
+        "items": [
+          {
+            "organization_id": "d8ccd888-1ed5-405b-8a0a-9e3bffcd84de",
+            "amount": -1,
+            "id": "f6ed03ec-6ad1-452c-8a88-3d64da33d8b2"
+          },
+          {
+            "organization_id": "d8ccd888-1ed5-405b-8a0a-9e3bffcd84de",
+            "amount": 2,
+            "id": "cec83aaa-cd6a-4c92-ae81-8602472b2a71"
+          }
+        ],
+        "page_info": {
+          "page": 1,
+          "per_page": 20,
+          "total": 2,
+          "has_more": false,
+          "total_is_exact": true
+        }
+      }
+    },
+    {
+      "label": "changed-acknowledged-positive",
+      "status": 201,
+      "body": {
+        "id": "14fb9543-902a-47c5-a32b-040e11f2848c",
+        "amount": 2,
+        "organization_id": "7da71ed4-b970-4425-9fc3-fe7476105ac6"
+      }
+    },
+    {
+      "label": "changed-active-guard-refuses-bad-row",
+      "status": 409,
+      "body": {
+        "code": "conflict",
+        "message": "operation conflict: commit_validation (CommitValidation, trace a210dc58378f4beca0b49dc81a1b4b6b): commit validation failed: invariant `GuardedEntryMinimum` violated on `entries`/`81c3f3f1-c1e1-47e9-b8b7-9457799f77ce`: (subject.amount >= 1)"
+      }
+    },
+    {
+      "label": "changed-before-rollback",
+      "status": 200,
+      "body": {
+        "items": [
+          {
+            "organization_id": "7da71ed4-b970-4425-9fc3-fe7476105ac6",
+            "amount": 2,
+            "id": "14fb9543-902a-47c5-a32b-040e11f2848c"
+          }
+        ],
+        "page_info": {
+          "page": 1,
+          "per_page": 20,
+          "total": 1,
+          "has_more": false,
+          "total_is_exact": true
+        }
+      }
+    },
+    {
+      "label": "changed-post-rollback-invalid-row",
+      "status": 201,
+      "body": {
+        "id": "38c5479e-3a30-4578-9cc0-ae392bf9fdda",
+        "amount": 0,
+        "organization_id": "7da71ed4-b970-4425-9fc3-fe7476105ac6"
+      }
+    },
+    {
+      "label": "changed-after-rollback",
+      "status": 200,
+      "body": {
+        "items": [
+          {
+            "organization_id": "7da71ed4-b970-4425-9fc3-fe7476105ac6",
+            "amount": 0,
+            "id": "38c5479e-3a30-4578-9cc0-ae392bf9fdda"
+          },
+          {
+            "organization_id": "7da71ed4-b970-4425-9fc3-fe7476105ac6",
+            "amount": 2,
+            "id": "14fb9543-902a-47c5-a32b-040e11f2848c"
+          }
+        ],
+        "page_info": {
+          "page": 1,
+          "per_page": 20,
+          "total": 2,
+          "has_more": false,
+          "total_is_exact": true
+        }
+      }
+    },
+    {
+      "label": "compatible-acknowledged-positive",
+      "status": 201,
+      "body": {
+        "id": "2056496c-fb5d-4cd7-906b-6527f6a71eea",
+        "amount": 2,
+        "organization_id": "1383330f-3a6b-43e4-b0b6-e69d91f8e6b3"
+      }
+    },
+    {
+      "label": "compatible-active-guard-refuses-bad-row",
+      "status": 409,
+      "body": {
+        "code": "conflict",
+        "message": "operation conflict: commit_validation (CommitValidation, trace 16184973c49e4f009ec47e63b45698f8): commit validation failed: invariant `GuardedEntryMinimum` violated on `entries`/`4e0f2c85-dc65-4b34-a21b-05310783974c`: (subject.amount >= 0)"
+      }
+    },
+    {
+      "label": "compatible-before-rollback",
+      "status": 200,
+      "body": {
+        "items": [
+          {
+            "organization_id": "1383330f-3a6b-43e4-b0b6-e69d91f8e6b3",
+            "amount": 2,
+            "id": "2056496c-fb5d-4cd7-906b-6527f6a71eea"
+          }
+        ],
+        "page_info": {
+          "page": 1,
+          "per_page": 20,
+          "total": 1,
+          "has_more": false,
+          "total_is_exact": true
+        }
+      }
+    },
+    {
+      "label": "compatible-post-rollback-invalid-row",
+      "status": 409,
+      "body": {
+        "code": "conflict",
+        "message": "operation conflict: commit_validation (CommitValidation, trace d2eb6a471a644df4b7ca36ce012d899f): commit validation failed: invariant `GuardedEntryMinimum` violated on `entries`/`bcd2ea9b-d8c6-48dd-8bfd-1e9dd1cb818a`: (subject.amount >= 0)"
+      }
+    },
+    {
+      "label": "compatible-after-rollback",
+      "status": 200,
+      "body": {
+        "items": [
+          {
+            "organization_id": "1383330f-3a6b-43e4-b0b6-e69d91f8e6b3",
+            "amount": 2,
+            "id": "2056496c-fb5d-4cd7-906b-6527f6a71eea"
+          }
+        ],
+        "page_info": {
+          "page": 1,
+          "per_page": 20,
+          "total": 1,
+          "has_more": false,
+          "total_is_exact": true
+        }
+      }
+    }
+  ]
+}

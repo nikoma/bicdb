@@ -146,3 +146,55 @@ A real four-to-five operator demonstration must preserve acknowledged values
 through membership movement, failed actions and restart on independent hosts.
 No physical failure, Azure causality, stable8GiB throughput, SQL/PGwire native
 qualification, automatic convergence or full Milestone1 completion is implied.
+
+## Retained stale gateway: additional source-only regression
+
+The existing
+`native_event_endpoint_stale_route_retries_until_actual_new_leader_ready_under_original_budget`
+uses a genuine application ACK, committed same-voter E2/new leader, fresh actual
+writer policies, TLS Fence/Prepare/Complete, trusted **local** activation, and
+actual installed new-coordinator recovery. Its gateway is constructed after the
+transfer from a previously copied topology. Request traces prove old/new endpoint
+attempts, while independent redirect tests assert structured replies. The
+internal `native_strong_point_after_actual_same_voter_leader_transfer_and_recovery_reads_acked_value`
+also exercises ACK2/current R2, but does not consume an external gateway route.
+Those controls alone do not explicitly prove that a gateway which previously
+returned the acknowledged value remains alive with its stale route across the
+transfer and observes an actual structured rejection before its own refresh.
+
+New focused source control:
+`native_event_endpoint_same_stale_gateway_preserves_full_acked_value_after_real_transfer`.
+It creates the gateway before transfer, obtains a real gateway Append ACK and
+Strong value, and retains that **same object** throughout the real fsynced
+metadata leader/E2 change. The acknowledged value contains more than16KiB of
+payload plus nested array/object/null data; equality checks the entire value,
+not just a record ID, timestamp, presence bit or digest. The old endpoint's
+actual mTLS response must be a correlated Redirect with the current range,
+leader, epoch/generation and real HostMQ context. A direct current-route call
+while the new leader's actual slot is empty must return structured retryable
+Unavailable, never a value or absence.
+
+Without refreshing/reconstructing the retained gateway, the test starts its
+normal bounded get_strong retry loop, waits for its actual unready new-leader
+request, then drives the existing real recovery/activation helper. It requires
+the original whole20-second budget, the full original acknowledged value,
+consistent business correlation, fresh per-attempt challenges, old-epoch first
+hop and at least two real new-leader attempts. The existing stale-route test
+retains all its assertions and uses the same extracted producer helper. No
+production logic, MQ/history evidence constructor, recording backend or weaker
+read contract is added.
+
+This is a same-voter leadership-transfer component case. The metadata change is
+an actual fixture proposal/commit, not an automatically elected/operator-driven
+transfer. Native activation still uses the trusted local Runtime API. It does
+not move a replica, create a new voter, prove a placement/joint-data handoff or
+exercise separate VMs. Those need the missing full old/new DATA-quorum bridge
+and operator lifecycle, deliberately excluded from this delivery. Until those
+producers qualify the changed placement, endpoint unavailable/refusal is the
+only supported outcome; no fabricated placement proof or eventual-read fallback
+is introduced to make a success assertion possible.
+
+The new test remains uncompiled/unexecuted locally. Remote CI can select its
+full `native_event_endpoint_same_stale_gateway_` prefix, followed by the unchanged
+`native_event_endpoint_` cohort. Any earlier/frozen6c run is separate from this
+later test-source delta; no pass count is transferred to it.

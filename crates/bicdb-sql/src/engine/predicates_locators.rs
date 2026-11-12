@@ -1329,6 +1329,9 @@ impl<'db> SqlEngine<'db> {
         retain_referenced_fields(&mut fields, needed_columns, table, alias);
         let mut columns = row_output_columns_from_fields(table, alias, &fields);
         columns.extend(postgres_system_output_columns(table, alias));
+        if self.heap_lock_identity && primary_key_columns_for_schema(schema).is_empty() {
+            columns.push(format!("{alias}.{}", super::row_locks::HEAP_LOCK_IDENTITY));
+        }
         let mut rows = Vec::new();
         for physical in partition::physical_tables(self.db_ref(), schema)? {
             self.check_cancellation()?;
@@ -1364,6 +1367,9 @@ impl<'db> SqlEngine<'db> {
                 row.extend(system.iter().cloned());
                 if table != alias {
                     row.extend(system);
+                }
+                if self.heap_lock_identity && primary_key_columns_for_schema(schema).is_empty() {
+                    row.push(SqlValue::String(record.id.clone()));
                 }
                 rows.push(row);
             }

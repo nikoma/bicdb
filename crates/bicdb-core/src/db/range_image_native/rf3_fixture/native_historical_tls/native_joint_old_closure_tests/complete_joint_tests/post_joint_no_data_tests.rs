@@ -26,7 +26,7 @@ fn members(range: &crate::RangeDescriptor) -> BTreeSet<ClusterNodeId> {
         .map(|r| r.node_id.clone())
         .collect()
 }
-fn snapshot(
+pub(super) fn snapshot(
     fixture: &EnforcedNetwork,
     range: &crate::RangeDescriptor,
     id: &ClusterNodeId,
@@ -65,7 +65,7 @@ fn snapshot(
     .unwrap();
     result
 }
-fn report(fixture: &EnforcedNetwork, name: &str, value: &serde_json::Value) {
+pub(super) fn report(fixture: &EnforcedNetwork, name: &str, value: &serde_json::Value) {
     let envelope = serde_json::json!({"source_revision":std::env::var("BICDB_TEST_SOURCE_SHA").ok(),"test":std::thread::current().name(),"actual_data":value});
     crate::storage::write_atomic(
         &fixture.native.root.path().join(name),
@@ -74,7 +74,7 @@ fn report(fixture: &EnforcedNetwork, name: &str, value: &serde_json::Value) {
     )
     .unwrap();
 }
-fn require_inherited(
+pub(super) fn require_inherited(
     fixture: &EnforcedNetwork,
     range: &crate::RangeDescriptor,
     before: &BTreeMap<ClusterNodeId, serde_json::Value>,
@@ -136,7 +136,7 @@ fn require_inherited(
         }
     }
 }
-fn diagnostic_cut(
+pub(super) fn diagnostic_cut(
     fixture: &EnforcedNetwork,
     range: &crate::RangeDescriptor,
     ack1: &crate::Record,
@@ -182,7 +182,7 @@ fn diagnostic_cut(
     }).collect()
 }
 
-fn fresh_new_scope(
+pub(super) fn fresh_new_scope(
     fixture: &EnforcedNetwork,
     range: &crate::RangeDescriptor,
     inherited: &BTreeMap<ClusterNodeId, serde_json::Value>,

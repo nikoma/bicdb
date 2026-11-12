@@ -3,6 +3,8 @@
 //! stores/services, TLS metadata, the completed image and distinct data sets.
 //! Local opaque-object orchestration is NOT an operator/wire handoff test.
 use super::*;
+#[path = "complete_joint_tests/current_joint_authority_tests.rs"]
+mod current_joint_authority_tests;
 #[path = "complete_joint_tests/open_adversarial_tests.rs"]
 mod open_adversarial_tests;
 #[path = "complete_joint_tests/original_release_writer_tests.rs"]
@@ -345,6 +347,7 @@ enum JointTestOutcome {
     AdversarialOnly,
     OriginalReleaseWriterRejected,
     FullHandoffThenPostJointNoDataAck4Strong,
+    FullHandoffThenCurrentJointAuthorityRefusals,
 }
 
 #[test]
@@ -376,6 +379,7 @@ fn native_joint_fresh_open_phase_reconciles_exact_target_epoch_and_lost_catalogu
 enum JointFullContinuation {
     OriginalTerminalControls,
     PostJointNoDataRecovery,
+    CurrentJointAuthorityRefusals,
 }
 
 fn run_complete_joint(mode: u8) -> JointTestOutcome {
@@ -905,6 +909,19 @@ fn run_complete_joint_with_controls(
     assert_eq!(observed.record().map(|record| record.as_ref()), Some(&next));
     assert_eq!(observed.audit().range_index, 2);
     fixture.idle();
+    if continuation == JointFullContinuation::CurrentJointAuthorityRefusals {
+        assert!(
+            release_continuation.is_some(),
+            "authority controls require real all-member release"
+        );
+        current_joint_authority_tests::exercise(
+            &fixture,
+            &activation_range,
+            acknowledged.as_ref(),
+            &next,
+        );
+        return JointTestOutcome::FullHandoffThenCurrentJointAuthorityRefusals;
+    }
     if continuation == JointFullContinuation::PostJointNoDataRecovery {
         assert!(
             release_continuation.is_some(),

@@ -73,6 +73,11 @@ mod runtime;
 pub(crate) use runtime::{RangeRecoveryRuntime, RecoveryImageInstallFreeze};
 mod quorum;
 pub(crate) use quorum::{FreshRangeRecoveryAuthority, RecoveryFenceQuorumRound};
+pub(crate) mod native_abort;
+pub(crate) use native_abort::{
+    NativeAbortCandidateObservation, NativeAbortPromiseObservation, NativeAbortPromiseRound,
+    NativeAbortQuorum, NativeAbortRequest,
+};
 mod historical;
 pub(crate) use historical::{
     CurrentHistoricalCertificationRound, HistoricalCommandDecision, HistoricalCommandDecisionRound,

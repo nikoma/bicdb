@@ -6,7 +6,7 @@ use crate::db::NativeTransactionNoEffect;
 use crate::distribution_range_consensus::{
     NativePrepareOnlyRejection, RangeWriteLogEntry, RangeWriteState,
 };
-pub(crate) use slot_journal::NativeAbortSlotRecord;
+pub(crate) use slot_journal::{NativeAbortPermanentPromise, NativeAbortSlotRecord};
 
 fn no_effect_key(range: RangeId, index: u64) -> String {
     format!("abort-no-effect:{range}:{index:020}")
@@ -28,6 +28,15 @@ pub(crate) struct NativeNoEffectIntentRecord {
     checksum_sha256: String,
 }
 impl NativeNoEffectIntentRecord {
+    pub(crate) fn checksum_sha256(&self) -> &str {
+        &self.checksum_sha256
+    }
+    pub(crate) fn predecessor_index(&self) -> u64 {
+        self.predecessor_index
+    }
+    pub(crate) fn predecessor_history_sha256(&self) -> &str {
+        &self.predecessor_history_sha256
+    }
     fn checksum(&self) -> Result<String> {
         let mut unsigned = self.clone();
         unsigned.checksum_sha256.clear();
@@ -160,5 +169,64 @@ impl BicDb {
         }
         self.reconcile_native_abort_no_effect_slots_under_journal()?;
         Ok(actual.checksum_sha256)
+    }
+}
+
+impl BicDb {
+    pub(crate) fn observe_actual_native_no_effect(
+        &self,
+        native: &NativeRecoveryAdmission,
+        role: &crate::distribution_range_recovery::RecoveryRoleAdmission,
+        request: &crate::distribution_range_recovery::NativeAbortRequest,
+    ) -> Result<NativeNoEffectIntentRecord> {
+        native.require_current(self)?;
+        request.scope.require_role(role)?;
+        if native.abort_protocol_version() != 1
+            || native.writer_enforcement_version() != 1
+            || native.metadata_initialization_version() != 1
+            || native.local_node_id() != &request.origin_node_id
+            || native.local_node_id() != role.local_node_id()
+            || native.local_member_incarnation() != role.local_member_incarnation()
+        {
+            return Err(invalid(
+                "abort candidate requires actual enrolled origin birth/member",
+            ));
+        }
+        let _journal = self.try_native_image_journal()?;
+        let record: NativeNoEffectIntentRecord = self.read_native_range_image_record(&no_effect_key(request.scope.range_id, request.range_index))?
+            .ok_or_else(|| invalid("actual Core no-effect candidate unavailable; never infer it from rows or raw Abort"))?;
+        record.validate()?;
+        record.domain.require_role(role)?;
+        if record.birth_id != native.birth_id()
+            || record.birth_sha256 != native.birth_sha256()
+            || record.command.leader_node_id != request.origin_node_id
+            || record.command.range_id != request.scope.range_id
+            || record.command.index != request.range_index
+            || request
+                .candidate_sha256
+                .as_deref()
+                .is_some_and(|h| h != record.checksum_sha256)
+        {
+            return Err(invalid(
+                "actual protected Core candidate does not bind origin/command",
+            ));
+        }
+        let slots = self.native_abort_slot_inventory()?;
+        let slot = slots
+            .iter()
+            .find(|s| {
+                s.command.range_id == request.scope.range_id
+                    && s.command.index == request.range_index
+            })
+            .ok_or_else(|| invalid("Core candidate has no protected writer-start"))?;
+        if slot.command != record.command
+            || slot.no_effect_sha256.as_deref() != Some(record.checksum_sha256.as_str())
+            || slot.ever_commit
+        {
+            return Err(invalid(
+                "Core candidate contradicts protected native slot history",
+            ));
+        }
+        Ok(record)
     }
 }

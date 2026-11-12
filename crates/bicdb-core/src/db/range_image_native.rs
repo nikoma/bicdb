@@ -10,7 +10,7 @@ use crate::distribution_range_image::{
 use crate::distribution_range_mutation::FrozenRangeMutationPermit;
 
 mod abort_catalogue;
-mod abort_history;
+pub(crate) mod abort_history;
 mod certified_prefix;
 mod history;
 mod history_stage;

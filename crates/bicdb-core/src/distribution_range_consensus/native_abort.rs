@@ -360,9 +360,29 @@ impl RangeWriteStore {
                 || (slot.ever_commit && !record.ever_commit)
                 || slot.no_effect_sha256.is_some()
                     && slot.no_effect_sha256 != record.no_effect_sha256
-                || record.abort_promise_sha256.is_some()
             {
                 return Err(range_write_error("range catalogue control contradicts actual protected native slot; promise reconciliation requires actual audit"));
+            }
+            if let Some(promise) = database.observe_actual_native_abort_promise(
+                record.command.range_id,
+                record.command.index,
+            )? {
+                let actual = NativeAbortPromiseRecord {
+                    candidate_sha256: promise.candidate_sha256,
+                    command_sha256: promise.command_sha256,
+                    promised_index: promise.range_index,
+                    first_recovery_nonce: promise.first_scope.recovery_nonce,
+                };
+                if slot.promise.as_ref().is_some_and(|old| old != &actual) {
+                    return Err(range_write_error(
+                        "protected native promise contradicts catalogue",
+                    ));
+                }
+                slot.promise = Some(actual);
+            } else if slot.promise.is_some() {
+                return Err(range_write_error(
+                    "catalogue promise lacks actual native-WAL audit",
+                ));
             }
             slot.ever_commit = record.ever_commit;
             slot.no_effect_sha256 = record.no_effect_sha256;
@@ -631,5 +651,198 @@ impl RangeWriteStore {
             .unwrap();
         slot.no_effect_sha256 = Some(receipt);
         self.persist_recovery_catalog()
+    }
+}
+
+/// Local evidence constructors are private to actual Store methods. The
+/// projection and original clock cannot be replaced by a caller's new request.
+#[derive(Debug)]
+pub(crate) struct LocalAbortCandidate {
+    reply: crate::distribution_range_recovery::native_abort::NativeAbortCandidateReply,
+    cancellation: CancellationToken,
+}
+impl LocalAbortCandidate {
+    pub(crate) fn into_evidence(
+        self,
+    ) -> (
+        crate::distribution_range_recovery::native_abort::NativeAbortCandidateReply,
+        CancellationToken,
+    ) {
+        (self.reply, self.cancellation)
+    }
+}
+#[derive(Debug)]
+pub(crate) struct LocalAbortPromise {
+    reply: crate::distribution_range_recovery::native_abort::NativeAbortPromiseReply,
+    cancellation: CancellationToken,
+}
+impl LocalAbortPromise {
+    pub(crate) fn into_evidence(
+        self,
+    ) -> (
+        crate::distribution_range_recovery::native_abort::NativeAbortPromiseReply,
+        CancellationToken,
+    ) {
+        (self.reply, self.cancellation)
+    }
+}
+impl RangeWriteStore {
+    pub(crate) fn observe_actual_abort_candidate(
+        &self,
+        db: &crate::BicDb,
+        native: &NativeRecoveryAdmission,
+        role: &RecoveryRoleAdmission,
+        request: &crate::distribution_range_recovery::NativeAbortRequest,
+        parent: &CancellationToken,
+    ) -> Result<LocalAbortCandidate> {
+        let cancellation = request
+            .cancellation(parent)?
+            .child_with_deadline(role.deadline());
+        self.require_recovery_scope(role, native, &request.scope)?;
+        self.require_actual_abort_catalogue(db)?;
+        let record = db.observe_actual_native_no_effect(native, role, request)?;
+        let slot = self
+            .catalog
+            .native_abort_protocol
+            .as_ref()
+            .and_then(|p| p.ranges.get(&request.scope.range_id))
+            .and_then(|r| r.slots.get(&request.range_index))
+            .ok_or_else(|| {
+                range_write_error("actual candidate slot absent from current catalogue")
+            })?;
+        if slot.ever_commit
+            || slot.command_sha256 != record.command.checksum_sha256
+            || slot.no_effect_sha256.as_deref() != Some(record.checksum_sha256())
+        {
+            return Err(range_write_error(
+                "actual candidate/current catalogue disagree",
+            ));
+        }
+        cancellation.check()?;
+        Ok(LocalAbortCandidate {
+            reply: crate::distribution_range_recovery::native_abort::NativeAbortCandidateReply {
+                request: request.clone(),
+                record,
+                node_id: self.catalog.node_id.clone(),
+                member_incarnation: native.local_member_incarnation(),
+                store_open_id: self.open_id,
+                native_database_incarnation: native.database_incarnation().into(),
+                observed_metadata_context_id: role.context_id(),
+                observed_metadata_term: role.metadata_term(),
+                observed_metadata_read_index: role.metadata_read_index(),
+            },
+            cancellation,
+        })
+    }
+}
+
+impl RangeWriteStore {
+    pub(crate) fn promise_actual_native_abort(
+        &mut self,
+        db: &crate::BicDb,
+        native: &NativeRecoveryAdmission,
+        role: &RecoveryRoleAdmission,
+        request: &crate::distribution_range_recovery::NativeAbortRequest,
+        candidate: &crate::distribution_range_recovery::NativeAbortCandidateObservation,
+        authority: &RangeMutationAuthority<'_>,
+        parent: &CancellationToken,
+    ) -> Result<LocalAbortPromise> {
+        use crate::distribution_range_recovery::native_abort::{
+            NativeAbortPromiseDisposition, NativeAbortPromiseReply,
+        };
+        let cancellation = request
+            .cancellation(parent)?
+            .child_with_deadline(role.deadline());
+        self.require_recovery_scope(role, native, &request.scope)?;
+        self.require_actual_abort_catalogue(db)?;
+        candidate.require_for_role(role, request)?;
+        let command = &candidate.record().command;
+        let actual_slots = db.native_abort_slot_inventory()?;
+        let old = actual_slots.iter().find(|s| {
+            s.command.range_id == request.scope.range_id && s.command.index == request.range_index
+        });
+        let raw = self
+            .catalog
+            .ranges
+            .get(&request.scope.range_id)
+            .and_then(|r| r.entries.get(&request.range_index));
+        let irreversible = old
+            .filter(|s| s.ever_commit || s.command != *command)
+            .map(|s| s.command.checksum_sha256.clone())
+            .or_else(|| {
+                raw.filter(|e| {
+                    e.command != *command
+                        || matches!(
+                            e.state,
+                            RangeWriteState::Committed
+                                | RangeWriteState::QuorumCommitted
+                                | RangeWriteState::Applied
+                        )
+                })
+                .map(|e| e.command.checksum_sha256.clone())
+            });
+        let disposition = if let Some(command_sha256) = irreversible {
+            NativeAbortPromiseDisposition::Irreversible { command_sha256 }
+        } else {
+            if old.is_none() {
+                // The absence is meaningful ONLY inside this actual cap1,
+                // from-birth registered StoreID and drained complete prefix.
+                let source = db.current_native_range_source_lineage(request.scope.range_id)?;
+                let domain = NativeAbortDomain::from_source(&source, role.current_range())?;
+                let progress = self.progress(request.scope.range_id);
+                if domain != candidate.record().domain
+                    || source.range_index().checked_add(1) != Some(request.range_index)
+                    || progress.last_index != source.range_index()
+                    || progress.resolved_through != source.range_index()
+                {
+                    return Err(range_write_error(
+                        "absent abort slot lacks actual admitted complete writer-start history",
+                    ));
+                }
+                db.start_native_abort_slot(command, &domain, &source, authority)?;
+                // Import the actual newly protected restrictive start. It
+                // changes neither resolved/last counters nor data rows.
+                self.reconcile_actual_abort_control(db)?;
+            }
+            let promise = db
+                .persist_actual_native_abort_promise(native, role, request, candidate, authority)?;
+            let slot = self
+                .catalog
+                .native_abort_protocol
+                .as_mut()
+                .and_then(|p| p.ranges.get_mut(&request.scope.range_id))
+                .and_then(|r| r.slots.get_mut(&request.range_index))
+                .ok_or_else(|| range_write_error("actual protected promise slot not mirrored"))?;
+            let proposed = NativeAbortPromiseRecord {
+                candidate_sha256: promise.candidate_sha256.clone(),
+                command_sha256: promise.command_sha256.clone(),
+                promised_index: promise.range_index,
+                first_recovery_nonce: promise.first_scope.recovery_nonce,
+            };
+            if slot.promise.as_ref().is_some_and(|old| old != &proposed) {
+                return Err(range_write_error("permanent native promise audit changed"));
+            }
+            slot.promise = Some(proposed);
+            self.persist_recovery_catalog()?;
+            NativeAbortPromiseDisposition::Permanent {
+                promise_sha256: promise.checksum_sha256,
+            }
+        };
+        cancellation.check()?;
+        Ok(LocalAbortPromise {
+            reply: NativeAbortPromiseReply {
+                request: request.clone(),
+                node_id: self.catalog.node_id.clone(),
+                member_incarnation: native.local_member_incarnation(),
+                store_open_id: self.open_id,
+                native_database_incarnation: native.database_incarnation().into(),
+                candidate_sha256: candidate.sha256().into(),
+                disposition,
+                observed_metadata_context_id: role.context_id(),
+                observed_metadata_term: role.metadata_term(),
+                observed_metadata_read_index: role.metadata_read_index(),
+            },
+            cancellation,
+        })
     }
 }

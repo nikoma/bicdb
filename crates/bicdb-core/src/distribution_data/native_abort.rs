@@ -65,3 +65,56 @@ impl ClusterDataNodeService {
         Ok(())
     }
 }
+
+impl ClusterDataNodeService {
+    pub(crate) fn observe_native_abort_candidate(
+        &self,
+        role: &crate::distribution_range_recovery::RecoveryRoleAdmission,
+        request: &crate::distribution_range_recovery::NativeAbortRequest,
+        parent: &CancellationToken,
+    ) -> Result<crate::distribution_range_consensus::native_abort::LocalAbortCandidate> {
+        let db = try_database_read(&self.db)?;
+        self.require_native_catalog_database(&db)?;
+        self.require_native_writer_host_for_range(&db, role.current_range())?;
+        let native = db.native_recovery_admission(
+            role.cluster_id(),
+            role.bootstrap_id(),
+            &self.node_id,
+            role.local_member_incarnation(),
+        )?;
+        self.range_writes
+            .observe_actual_abort_candidate(&db, &native, role, request, parent)
+    }
+    pub(crate) fn promise_native_abort(
+        &mut self,
+        role: &crate::distribution_range_recovery::RecoveryRoleAdmission,
+        request: &crate::distribution_range_recovery::NativeAbortRequest,
+        candidate: &crate::distribution_range_recovery::NativeAbortCandidateObservation,
+        frozen: &crate::distribution_range_mutation::FrozenRangeMutationPermit,
+        parent: &CancellationToken,
+    ) -> Result<crate::distribution_range_consensus::native_abort::LocalAbortPromise> {
+        let db = try_database_read(&self.db)?;
+        self.require_native_catalog_database(&db)?;
+        self.require_native_writer_host_for_range(&db, role.current_range())?;
+        self.range_mutations
+            .validate_quiescent_frozen(request.scope.range_id, frozen)?;
+        let controlled = self.range_mutations.try_controlled_mutation(frozen)?;
+        let native = db.native_recovery_admission(
+            role.cluster_id(),
+            role.bootstrap_id(),
+            &self.node_id,
+            role.local_member_incarnation(),
+        )?;
+        let result = self.range_writes.promise_actual_native_abort(
+            &db,
+            &native,
+            role,
+            request,
+            candidate,
+            &RangeMutationAuthority::Controlled(&controlled),
+            parent,
+        );
+        drop(controlled);
+        result
+    }
+}

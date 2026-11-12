@@ -537,6 +537,7 @@ fn run_complete_joint_with_controls(
             .unwrap();
     }
     let decision = publication.finish().unwrap();
+    let actual_completed_handoff_nonce = decision.data().promise().nonce;
     let old_h = decision.data().logical_history_sha256().to_owned();
     for stage in 0..3 {
         commit_joint_stage(&mut fixture, &decision, stage);
@@ -919,7 +920,7 @@ fn run_complete_joint_with_controls(
             &activation_range,
             acknowledged.as_ref(),
             &next,
-            decision.data().promise().nonce,
+            actual_completed_handoff_nonce,
         );
         return JointTestOutcome::FullHandoffThenCurrentJointAuthorityRefusals;
     }

@@ -884,9 +884,26 @@ impl<'db> SqlSession<'db> {
         // BEFORE INSERT row triggers run before conflict arbitration and
         // constraint validation, on the exact rows about to be written.
         let triggered;
-        (records, triggered) =
-            self.apply_before_insert_row_triggers_reporting(&table, schema.as_deref(), records)?;
-        if let Some(schema) = schema.as_deref() {
+        (records, triggered) = if schema
+            .as_deref()
+            .is_some_and(|schema| schema.partitioning.is_some())
+            && insert.on.is_some()
+        {
+            // An upsert runs BEFORE INSERT immediately before arbitration
+            // for each row, interleaved with that row's BEFORE UPDATE.
+            (records, false)
+        } else if let Some(parent) = schema
+            .as_deref()
+            .filter(|schema| schema.partitioning.is_some())
+        {
+            self.before_partition_insert_triggers(parent, records)?
+        } else {
+            self.apply_before_insert_row_triggers_reporting(&table, schema.as_deref(), records)?
+        };
+        if let Some(schema) = schema
+            .as_deref()
+            .filter(|schema| schema.partitioning.is_none())
+        {
             self.materialize_generated_columns(&table, schema, &mut records)?;
         }
         if triggered {
@@ -957,10 +974,16 @@ impl<'db> SqlSession<'db> {
             .filter(|schema| schema.partitioning.is_some())
         {
             self.insert_partition_records(parent, &records)?;
+            self.publish_extension_database_events(
+                &table,
+                DatabaseOperation::Insert,
+                records.iter().map(|record| (None, Some(record))),
+            )?;
+            self.after_partition_insert_triggers(parent, &records)?;
         } else {
             self.insert_session_new_records(&table, schema.as_deref(), records.clone())?;
+            self.fire_after_insert_triggers(&table, schema.as_deref(), &records)?;
         }
-        self.fire_after_insert_triggers(&table, schema.as_deref(), &records)?;
         self.insert_result(
             &table,
             schema.as_deref(),
@@ -1534,13 +1557,23 @@ impl<'db> SqlSession<'db> {
         };
         let mut affected_records = Vec::new();
         let mut affected_identities = BTreeSet::new();
-        let mut inserted_leaf_records = Vec::new();
+        let mut partition_after_events = Vec::new();
         let mut inserted_records = Vec::new();
 
         for (idx, record) in records.into_iter().enumerate() {
             if idx % 1024 == 0 {
                 self.cancellation.check()?;
             }
+            let record = if let Some(parent) = partition_parent {
+                let (mut surviving, _) =
+                    self.before_partition_insert_triggers(parent, vec![record])?;
+                let Some(record) = surviving.pop() else {
+                    continue;
+                };
+                record
+            } else {
+                record
+            };
             let destination = partition_parent
                 .map(|parent| partition::route_record(self.db_ref(), parent, &record))
                 .transpose()?;
@@ -1616,7 +1649,7 @@ impl<'db> SqlSession<'db> {
                         )
                     })?;
                 for row in retained {
-                    inserted_leaf_records.push((target.clone(), row.clone()));
+                    partition_after_events.push((target.clone(), None, row.clone()));
                     affected_records.push(row);
                 }
                 continue;
@@ -1750,12 +1783,14 @@ impl<'db> SqlSession<'db> {
                         // ON CONFLICT DO UPDATE takes the update path, so
                         // BEFORE/AFTER UPDATE row triggers apply — the same
                         // guards a plain UPDATE of the row would run.
-                        let Some(mut updated) = self.apply_before_update_row_triggers(
-                            table,
-                            Some(schema),
-                            &existing,
-                            updated,
-                        )?
+                        let Some(mut updated) = self
+                            .apply_before_update_row_triggers_with_identity(
+                                table,
+                                Some(schema),
+                                &existing,
+                                updated,
+                                partition_parent,
+                            )?
                         else {
                             continue;
                         };
@@ -1827,12 +1862,20 @@ impl<'db> SqlSession<'db> {
                             )?;
                         }
                         self.apply_foreign_key_parent_update(table, schema, &existing, &updated)?;
-                        self.fire_after_row_triggers(
-                            table,
-                            Some(schema),
-                            "update",
-                            std::iter::once((Some(&existing), Some(&updated))),
-                        )?;
+                        if partition_parent.is_some() {
+                            partition_after_events.push((
+                                schema.clone(),
+                                Some(existing.clone()),
+                                updated.clone(),
+                            ));
+                        } else {
+                            self.fire_after_row_triggers(
+                                table,
+                                Some(schema),
+                                "update",
+                                std::iter::once((Some(&existing), Some(&updated))),
+                            )?;
+                        }
                         affected_identities.insert((table.to_string(), updated.id.clone()));
                         affected_records.push(updated);
                     }
@@ -1875,19 +1918,28 @@ impl<'db> SqlSession<'db> {
             }
             affected_identities.insert((table.to_string(), record.id.clone()));
             if let Some(target) = destination {
-                inserted_leaf_records.push((target, record.clone()));
+                partition_after_events.push((target, None, record.clone()));
             } else {
                 inserted_records.push(record.clone());
             }
             affected_records.push(record);
         }
 
-        for (target, record) in inserted_leaf_records {
-            self.fire_after_insert_triggers(
-                &target.name,
-                Some(&target),
-                std::slice::from_ref(&record),
-            )?;
+        for (target, before, record) in partition_after_events {
+            if let Some(before) = before {
+                self.fire_after_row_triggers(
+                    &target.name,
+                    Some(&target),
+                    "update",
+                    std::iter::once((Some(&before), Some(&record))),
+                )?;
+            } else {
+                self.fire_after_insert_triggers(
+                    &target.name,
+                    Some(&target),
+                    std::slice::from_ref(&record),
+                )?;
+            }
         }
         self.fire_after_insert_triggers(table, schema, &inserted_records)?;
         self.insert_result(

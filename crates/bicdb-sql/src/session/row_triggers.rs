@@ -284,6 +284,7 @@ impl<'db> SqlSession<'db> {
     /// primary-key update guard.
     fn apply_returned_row(
         schema: &TableSchema,
+        partition_identity: Option<&TableSchema>,
         record: &mut Record,
         original: &SqlValue,
         returned: &SqlValue,
@@ -304,7 +305,16 @@ impl<'db> SqlSession<'db> {
             if before.get(column) == Some(value) {
                 continue;
             }
-            set_record_column(record, Some(schema), column, json_to_sql_value(value))?;
+            if let Some(parent) = partition_identity {
+                set_partition_update_column(
+                    record,
+                    Some(parent),
+                    column,
+                    json_to_sql_value(value),
+                )?;
+            } else {
+                set_record_column(record, Some(schema), column, json_to_sql_value(value))?;
+            }
         }
         Ok(())
     }
@@ -331,6 +341,16 @@ impl<'db> SqlSession<'db> {
         schema: Option<&TableSchema>,
         records: Vec<Record>,
     ) -> Result<(Vec<Record>, bool)> {
+        self.apply_before_insert_row_triggers_with_identity(table, schema, records, None)
+    }
+
+    pub(crate) fn apply_before_insert_row_triggers_with_identity(
+        &mut self,
+        table: &str,
+        schema: Option<&TableSchema>,
+        records: Vec<Record>,
+        partition_identity: Option<&TableSchema>,
+    ) -> Result<(Vec<Record>, bool)> {
         let Some(schema) = schema else {
             return Ok((records, false));
         };
@@ -347,7 +367,16 @@ impl<'db> SqlSession<'db> {
                 match self.call_trigger_function(&trigger.name, &trigger.function_name, &vars)? {
                     Some(SqlValue::Null) => continue 'record,
                     Some(returned) => {
-                        Self::apply_returned_row(schema, &mut record, &new_value, &returned)?;
+                        Self::apply_returned_row(
+                            schema,
+                            partition_identity,
+                            &mut record,
+                            &new_value,
+                            &returned,
+                        )?;
+                        if let Some(parent) = partition_identity {
+                            self.refresh_partition_update_identity(parent, &mut record)?;
+                        }
                     }
                     None => {}
                 }
@@ -364,7 +393,18 @@ impl<'db> SqlSession<'db> {
         table: &str,
         schema: Option<&TableSchema>,
         old: &Record,
+        record: Record,
+    ) -> Result<Option<Record>> {
+        self.apply_before_update_row_triggers_with_identity(table, schema, old, record, None)
+    }
+
+    pub(crate) fn apply_before_update_row_triggers_with_identity(
+        &mut self,
+        table: &str,
+        schema: Option<&TableSchema>,
+        old: &Record,
         mut record: Record,
+        partition_identity: Option<&TableSchema>,
     ) -> Result<Option<Record>> {
         let Some(schema) = schema else {
             return Ok(Some(record));
@@ -386,7 +426,16 @@ impl<'db> SqlSession<'db> {
             match self.call_trigger_function(&trigger.name, &trigger.function_name, &vars)? {
                 Some(SqlValue::Null) => return Ok(None),
                 Some(returned) => {
-                    Self::apply_returned_row(schema, &mut record, &new_value, &returned)?;
+                    Self::apply_returned_row(
+                        schema,
+                        partition_identity,
+                        &mut record,
+                        &new_value,
+                        &returned,
+                    )?;
+                    if let Some(parent) = partition_identity {
+                        self.refresh_partition_update_identity(parent, &mut record)?;
+                    }
                 }
                 None => {}
             }

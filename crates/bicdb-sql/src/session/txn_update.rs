@@ -1257,12 +1257,22 @@ impl<'db> SqlSession<'db> {
             // `before` is None only when `update_needs_before_image` proved
             // there is no BEFORE UPDATE row trigger (among other consumers),
             // so skipping the trigger pass there is exact, not a shortcut.
+            let trigger_table = candidate.physical_table.as_deref().unwrap_or(&table);
+            let physical_trigger_schema = candidate
+                .physical_table
+                .as_deref()
+                .map(|source| load_schema_shared(self.db_ref(), source))
+                .transpose()?
+                .flatten();
             let record = match before.as_ref() {
-                Some(before) => match self.apply_before_update_row_triggers(
-                    &table,
-                    schema.as_deref(),
+                Some(before) => match self.apply_before_update_row_triggers_with_identity(
+                    trigger_table,
+                    physical_trigger_schema.as_deref().or(schema.as_deref()),
                     before,
                     record,
+                    schema
+                        .as_deref()
+                        .filter(|schema| schema.partitioning.is_some()),
                 )? {
                     Some(record) => record,
                     None => continue,
@@ -1282,6 +1292,17 @@ impl<'db> SqlSession<'db> {
                 .filter(|schema| schema.partitioning.is_some())
             {
                 self.refresh_partition_update_identity(parent, &mut record)?;
+                if let Some(before) = before.as_ref() {
+                    record = match self.before_partition_move_triggers(
+                        parent,
+                        trigger_table,
+                        before,
+                        record,
+                    )? {
+                        Some(record) => record,
+                        None => continue,
+                    };
+                }
             }
             if match_policy != UpdateMatchPolicy::First {
                 let changed = match (schema.as_deref(), merge_columns.as_deref(), before.as_ref()) {
@@ -1498,14 +1519,21 @@ impl<'db> SqlSession<'db> {
                 .iter()
                 .map(|(before, after)| (Some(before), Some(after))),
         )?;
-        self.fire_after_row_triggers(
-            &table,
-            schema.as_deref(),
-            "update",
-            before_after_records
-                .iter()
-                .map(|(before, after)| (Some(before), Some(after))),
-        )?;
+        if let Some(parent) = schema
+            .as_deref()
+            .filter(|schema| schema.partitioning.is_some())
+        {
+            self.after_partition_update_triggers(parent, &before_after_records, &updated_sources)?;
+        } else {
+            self.fire_after_row_triggers(
+                &table,
+                schema.as_deref(),
+                "update",
+                before_after_records
+                    .iter()
+                    .map(|(before, after)| (Some(before), Some(after))),
+            )?;
+        }
         if let Some(returning) = &update.returning {
             if from_rows.is_some() {
                 return self.project_update_from_returning_slot_rows(
@@ -2406,7 +2434,17 @@ impl<'db> SqlSession<'db> {
             }
             let record = candidate.record;
             // BEFORE DELETE row triggers may veto this row.
-            if !self.apply_before_delete_row_triggers(&table, schema.as_ref(), &record)? {
+            let physical_trigger_schema = candidate
+                .physical_table
+                .as_deref()
+                .map(|source| load_schema(self.db_ref(), source))
+                .transpose()?
+                .flatten();
+            if !self.apply_before_delete_row_triggers(
+                physical_table,
+                physical_trigger_schema.as_ref().or(schema.as_ref()),
+                &record,
+            )? {
                 continue;
             }
             deleted_sources.push(candidate.physical_table);
@@ -2423,10 +2461,14 @@ impl<'db> SqlSession<'db> {
                 .iter()
                 .cloned()
                 .zip(deleted_record_snapshots)
-                .zip(deleted_sources)
+                .zip(deleted_sources.iter())
             {
                 groups
-                    .entry(source.expect("partition candidate has a physical source"))
+                    .entry(
+                        source
+                            .clone()
+                            .expect("partition candidate has a physical source"),
+                    )
                     .or_default()
                     .push((id, snapshot));
             }
@@ -2457,12 +2499,30 @@ impl<'db> SqlSession<'db> {
             DatabaseOperation::Delete,
             deleted_records.iter().map(|record| (Some(record), None)),
         )?;
-        self.fire_after_row_triggers(
-            &table,
-            schema.as_ref(),
-            "delete",
-            deleted_records.iter().map(|record| (Some(record), None)),
-        )?;
+        if schema
+            .as_ref()
+            .is_some_and(|schema| schema.partitioning.is_some())
+        {
+            for (record, source) in deleted_records.iter().zip(&deleted_sources) {
+                let source = source
+                    .as_deref()
+                    .expect("partition delete has physical source");
+                let physical = load_schema(self.db_ref(), source)?;
+                self.fire_after_row_triggers(
+                    source,
+                    physical.as_ref(),
+                    "delete",
+                    std::iter::once((Some(record), None)),
+                )?;
+            }
+        } else {
+            self.fire_after_row_triggers(
+                &table,
+                schema.as_ref(),
+                "delete",
+                deleted_records.iter().map(|record| (Some(record), None)),
+            )?;
+        }
         if let Some(returning) = &delete.returning {
             return self.project_returning_records_with_alias(
                 &table,

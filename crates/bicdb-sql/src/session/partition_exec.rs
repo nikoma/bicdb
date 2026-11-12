@@ -1,6 +1,131 @@
 use crate::*;
 
 impl SqlSession<'_> {
+    /// Routing precedes BEFORE INSERT. A leaf trigger may modify the row but
+    /// cannot redirect it into another leaf; PostgreSQL reports 23514 there.
+    /// Trigger effects remain in the outer statement transaction.
+    pub(crate) fn before_partition_insert_triggers(
+        &mut self,
+        parent: &TableSchema,
+        records: Vec<Record>,
+    ) -> Result<(Vec<Record>, bool)> {
+        let mut surviving = Vec::with_capacity(records.len());
+        let mut triggered = false;
+        for record in records {
+            let target = partition::route_record(self.db_ref(), parent, &record)?;
+            let (rows, fired) = self.apply_before_insert_row_triggers_with_identity(
+                &target.name,
+                Some(&target),
+                vec![record],
+                Some(parent),
+            )?;
+            triggered |= fired;
+            for mut row in rows {
+                self.materialize_generated_columns(
+                    &target.name,
+                    &target,
+                    std::slice::from_mut(&mut row),
+                )?;
+                self.refresh_partition_update_identity(parent, &mut row)?;
+                partition::validate_record(self.db_ref(), &target, &row)?;
+                surviving.push(row);
+            }
+        }
+        Ok((surviving, triggered))
+    }
+
+    pub(crate) fn after_partition_insert_triggers(
+        &mut self,
+        parent: &TableSchema,
+        records: &[Record],
+    ) -> Result<()> {
+        // Retain input row order, rather than grouping events by leaf. This
+        // runs after every BEFORE invocation and every physical write.
+        for record in records {
+            let target = partition::route_record(self.db_ref(), parent, record)?;
+            self.fire_after_insert_triggers(
+                &target.name,
+                Some(&target),
+                std::slice::from_ref(record),
+            )?;
+        }
+        Ok(())
+    }
+
+    pub(crate) fn before_partition_move_triggers(
+        &mut self,
+        parent: &TableSchema,
+        source: &str,
+        before: &Record,
+        record: Record,
+    ) -> Result<Option<Record>> {
+        let target = partition::route_record(self.db_ref(), parent, &record)?;
+        if target.name == source {
+            return Ok(Some(record));
+        }
+        let old_schema = load_schema(self.db_ref(), source)?.ok_or_else(|| {
+            SqlError::InvalidSql(format!("partition source {source} disappeared"))
+        })?;
+        if !self.apply_before_delete_row_triggers(source, Some(&old_schema), before)? {
+            return Ok(None);
+        }
+        let (mut rows, _) = self.apply_before_insert_row_triggers_with_identity(
+            &target.name,
+            Some(&target),
+            vec![record],
+            Some(parent),
+        )?;
+        let Some(mut record) = rows.pop() else {
+            return Ok(None);
+        };
+        self.materialize_generated_columns(
+            &target.name,
+            &target,
+            std::slice::from_mut(&mut record),
+        )?;
+        self.refresh_partition_update_identity(parent, &mut record)?;
+        partition::validate_record(self.db_ref(), &target, &record)?;
+        Ok(Some(record))
+    }
+
+    pub(crate) fn after_partition_update_triggers(
+        &mut self,
+        parent: &TableSchema,
+        pairs: &[(Record, Record)],
+        sources: &[Option<String>],
+    ) -> Result<()> {
+        for ((before, after), source) in pairs.iter().zip(sources) {
+            let source = source.as_deref().ok_or_else(|| {
+                SqlError::InvalidSql("partition trigger lost physical source".into())
+            })?;
+            let old_schema = load_schema(self.db_ref(), source)?.ok_or_else(|| {
+                SqlError::InvalidSql(format!("partition source {source} disappeared"))
+            })?;
+            let target = partition::route_record(self.db_ref(), parent, after)?;
+            if source == target.name {
+                self.fire_after_row_triggers(
+                    source,
+                    Some(&old_schema),
+                    "update",
+                    std::iter::once((Some(before), Some(after))),
+                )?;
+            } else {
+                self.fire_after_row_triggers(
+                    source,
+                    Some(&old_schema),
+                    "delete",
+                    std::iter::once((Some(before), None)),
+                )?;
+                self.fire_after_insert_triggers(
+                    &target.name,
+                    Some(&target),
+                    std::slice::from_ref(after),
+                )?;
+            }
+        }
+        Ok(())
+    }
+
     pub(crate) fn partition_update_candidates(
         &self,
         update: &sqlparser::ast::Update,

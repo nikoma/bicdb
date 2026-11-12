@@ -154,7 +154,15 @@ fn inventory(
                 .ok_or_else(|| std::io::Error::other("custody non-UTF8 directory"))?
                 .into(),
         );
-        let mut entries = std::fs::read_dir(source)?.collect::<std::io::Result<Vec<_>>>()?;
+        let mut entries = Vec::new();
+        for entry in std::fs::read_dir(source)? {
+            if entries.len() >= MAX_NODES.saturating_sub(*nodes) {
+                return Err(std::io::Error::other(
+                    "bounded custody directory entry limit exceeded",
+                ));
+            }
+            entries.push(entry?);
+        }
         entries.sort_by_key(|entry| entry.file_name());
         for entry in entries {
             inventory(

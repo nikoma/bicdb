@@ -623,8 +623,15 @@ fn created_replacement_receipts_survive_wire_messages_and_repeated_savepoint_und
             server.request_shutdown();
             task.join().unwrap().unwrap();
             drop(server);
-            shared.write().close().unwrap();
-            drop(shared);
+            let deadline = std::time::Instant::now() + Duration::from_secs(10);
+            while Arc::strong_count(&shared) > 1 && std::time::Instant::now() < deadline {
+                thread::sleep(Duration::from_millis(10));
+            }
+            Arc::try_unwrap(shared)
+                .expect("wire handlers must release the owned database before reopen")
+                .into_inner()
+                .close()
+                .unwrap();
             if let Err(error) = outcome {
                 std::panic::resume_unwind(error);
             }

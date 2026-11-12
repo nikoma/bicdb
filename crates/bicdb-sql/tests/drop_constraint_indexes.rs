@@ -233,3 +233,53 @@ fn oracle_constraint_owned_indexes_keep_the_native_02429_diagnostic() {
         }
     }
 }
+
+#[test]
+fn explicitly_qualified_index_creation_and_drop_keep_exact_namespace_identity() {
+    for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
+        for oracle_profile in [false, true] {
+            let root = tempfile::tempdir().unwrap();
+            let config = DbConfig::default()
+                .with_fsync(true)
+                .with_storage_mode(mode.clone());
+            let mut db = BicDb::open_with_config(root.path(), config.clone()).unwrap();
+            if oracle_profile {
+                bicdb_sql::oracle::ensure_database_profile(
+                    &mut db,
+                    bicdb_sql::oracle::ORACLE_PREVIEW_PROFILE,
+                )
+                .unwrap();
+            }
+            let mut sql = SqlSession::new(&mut db);
+            sql.execute("CREATE SCHEMA red; CREATE SCHEMA blue; CREATE TABLE red.entries(k INT PRIMARY KEY,payload INT); CREATE TABLE blue.entries(k INT PRIMARY KEY,payload INT); INSERT INTO red.entries VALUES(1,10); INSERT INTO blue.entries VALUES(2,20); CREATE INDEX red.local_idx ON red.entries(payload); CREATE INDEX blue.local_idx ON blue.entries(payload); DROP INDEX red.local_idx").unwrap();
+            let before = db.index_definitions().len();
+            assert_eq!(
+                before, 3,
+                "{mode} oracle={oracle_profile}: remove exactly one backing"
+            );
+            db.close().unwrap();
+            let mut db = BicDb::open_with_config(root.path(), config).unwrap();
+            let mut sql = SqlSession::new(&mut db);
+            sql.execute("SET search_path=blue; DROP INDEX local_idx")
+                .unwrap();
+            assert_eq!(db.index_definitions().len(), before - 1);
+            let mut sql = SqlSession::new(&mut db);
+            assert!(sql.execute("INSERT INTO red.entries VALUES(1,30)").is_err());
+            assert!(sql
+                .execute("INSERT INTO blue.entries VALUES(2,30)")
+                .is_err());
+            assert_eq!(
+                sql.execute("SELECT payload FROM red.entries WHERE k=1")
+                    .unwrap()
+                    .rows,
+                vec![vec![SqlValue::Int(10)]]
+            );
+            assert_eq!(
+                sql.execute("SELECT payload FROM blue.entries WHERE k=2")
+                    .unwrap()
+                    .rows,
+                vec![vec![SqlValue::Int(20)]]
+            );
+        }
+    }
+}

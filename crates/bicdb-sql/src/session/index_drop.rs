@@ -22,7 +22,11 @@ impl<'db> SqlSession<'db> {
         let views = list_views(self.db_ref())?;
         let definitions = self.db_ref().index_definitions();
         for namespace in namespaces {
-            let storage = sql_index_storage_name(&namespace, logical);
+            // CREATE INDEX may store a qualified index under the encoded
+            // relation identity. Keep that exact identity for the later
+            // removal; comparing only the visible last identifier misses it.
+            let qualified = relation_name_from_parts(&[namespace.clone(), logical.into()])?;
+            let identities = BTreeSet::from([logical.to_string(), qualified]);
             let mut candidates = BTreeSet::new();
             for schema in &schemas {
                 let schema_namespace = if schema.schema_name.is_empty() {
@@ -33,21 +37,29 @@ impl<'db> SqlSession<'db> {
                 if schema_namespace != namespace {
                     continue;
                 }
-                if (!primary_key_columns_for_schema(schema).is_empty() && schema.primary_key_constraint_name() == logical)
-                    || schema.constraints.iter().any(|constraint| matches!(constraint,
-                        ConstraintSchema::Unique { name, .. } | ConstraintSchema::UniqueWithNullPolicy { name, .. } | ConstraintSchema::Exclusion { name, .. } if name == logical))
-                    || schema.indexes.iter().any(|index| index.name == logical)
-                    || definitions.iter().any(|index| index.name == storage && index.collection == schema.name)
-                { candidates.insert(schema.name.clone()); }
+                for identity in &identities {
+                    let storage = sql_index_storage_name(&namespace, identity);
+                    if (!primary_key_columns_for_schema(schema).is_empty()
+                        && schema.primary_key_constraint_name() == *identity)
+                        || schema.constraints.iter().any(|constraint| matches!(constraint,
+                            ConstraintSchema::Unique { name, .. } | ConstraintSchema::UniqueWithNullPolicy { name, .. } | ConstraintSchema::Exclusion { name, .. } if name == identity))
+                        || schema.indexes.iter().any(|index| &index.name == identity)
+                        || definitions.iter().any(|index| index.name == storage && index.collection == schema.name)
+                    { candidates.insert((identity.clone(), schema.name.clone())); }
+                }
             }
             for view in &views {
-                if relation_catalog_namespace(self.db_ref(), &view.name)? == namespace
-                    && (view.indexes.iter().any(|index| index.name == logical)
-                        || definitions
-                            .iter()
-                            .any(|index| index.name == storage && index.collection == view.name))
-                {
-                    candidates.insert(view.name.clone());
+                if relation_catalog_namespace(self.db_ref(), &view.name)? == namespace {
+                    for identity in &identities {
+                        let storage = sql_index_storage_name(&namespace, identity);
+                        if view.indexes.iter().any(|index| &index.name == identity)
+                            || definitions
+                                .iter()
+                                .any(|index| index.name == storage && index.collection == view.name)
+                        {
+                            candidates.insert((identity.clone(), view.name.clone()));
+                        }
+                    }
                 }
             }
             // Native-only collections retain their existing public-namespace
@@ -55,22 +67,17 @@ impl<'db> SqlSession<'db> {
             // actual schema/view above, never another namespace's index name.
             if namespace == "public" {
                 for index in &definitions {
-                    if index.name == storage
+                    if index.name == sql_index_storage_name(&namespace, logical)
                         && !schemas.iter().any(|schema| schema.name == index.collection)
                         && !views.iter().any(|view| view.name == index.collection)
                     {
-                        candidates.insert(index.collection.clone());
+                        candidates.insert((logical.to_string(), index.collection.clone()));
                     }
                 }
             }
             match candidates.len() {
                 0 => {}
-                1 => {
-                    return Ok(Some((
-                        logical.to_string(),
-                        candidates.into_iter().next().unwrap(),
-                    )))
-                }
+                1 => return Ok(candidates.into_iter().next()),
                 _ => {
                     return Err(SqlError::InvalidSql(format!(
                         "index {name} has ambiguous owning relations"

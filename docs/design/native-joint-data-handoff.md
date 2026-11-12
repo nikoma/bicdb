@@ -69,7 +69,9 @@ such a bridge.
 8. Conditionally commit topology format 3 stages `Certified`, then union
    membership at E3 `PromotedFrozen`, then final `{n1,n2,n4}` membership at E4
    `AwaitingActivation`. These operations require the actual dual durable
-   decision and independently fresh committed metadata. The E3 union is not
+   decision and independently fresh committed metadata. They construct only an
+   ephemeral proposal view; a direct local topology-file mutation is refused.
+   The real metadata consensus append/commit must publish each candidate. The E3 union is not
    allowed to acknowledge application data. Physical source deletion has NOT
    happened at E4; cleanup remains explicitly pending.
 9. After final metadata commit, acquire fresh host observations and publish

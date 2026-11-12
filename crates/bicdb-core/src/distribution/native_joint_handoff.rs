@@ -249,6 +249,9 @@ impl DistributionStore {
         fresh: &crate::distribution_consensus::HostMetadataReadObservation,
         business: Uuid,
     ) -> Result<()> {
+        if !self.ephemeral {
+            return Err(cluster_error("native joint metadata requires an ephemeral consensus-proposal view; local topology-file publication is insufficient"));
+        }
         fresh.require_live_request(business)?;
         proof.require_current()?;
         let observed = fresh.committed_topology(business)?;

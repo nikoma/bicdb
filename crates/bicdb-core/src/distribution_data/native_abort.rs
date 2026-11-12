@@ -147,6 +147,10 @@ impl ClusterDataNodeService {
             &controlled,
             parent,
         )?;
+        #[cfg(test)]
+        if std::mem::take(&mut self.test_fail_abort_after_native_publication) {
+            return Err(data_error("injected recovery response loss after actual canonical Abort native WAL before raw mark"));
+        }
         self.range_writes
             .mark_actual_native_abort_resolved(&db, &native, role, quorum, &receipt)?;
         parent.check()?;
@@ -157,6 +161,9 @@ impl ClusterDataNodeService {
 
 #[cfg(test)]
 impl ClusterDataNodeService {
+    pub(crate) fn test_fail_abort_after_native_publication(&mut self) {
+        self.test_fail_abort_after_native_publication = true;
+    }
     pub(crate) fn test_refuse_native_prepare_after_start(&mut self, refuse: bool) {
         self.test_refuse_native_prepare_after_start = refuse;
     }

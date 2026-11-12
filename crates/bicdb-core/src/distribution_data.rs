@@ -732,6 +732,8 @@ impl ClusterSchemaFinalizationReceipt {
 pub struct ClusterDataNodeService {
     #[cfg(test)]
     test_refuse_native_prepare_after_start: bool,
+    #[cfg(test)]
+    test_fail_abort_after_native_publication: bool,
     cluster_id: ClusterId,
     node_id: ClusterNodeId,
     db: Arc<RwLock<BicDb>>,
@@ -862,6 +864,8 @@ impl ClusterDataNodeService {
         let mut service = Self {
             #[cfg(test)]
             test_refuse_native_prepare_after_start: false,
+            #[cfg(test)]
+            test_fail_abort_after_native_publication: false,
             cluster_id,
             node_id,
             db,

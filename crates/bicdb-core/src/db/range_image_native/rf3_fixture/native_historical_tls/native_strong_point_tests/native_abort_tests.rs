@@ -6,7 +6,7 @@ use crate::distribution_range_recovery::{
     NativeAbortRequest, NativeCompletionRequest, NativeReadyRequest,
 };
 
-fn token() -> CancellationToken {
+pub(super) fn token() -> CancellationToken {
     CancellationToken::uncancelable().child_with_deadline(Instant::now() + Duration::from_secs(5))
 }
 #[test]

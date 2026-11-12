@@ -416,9 +416,20 @@ pub fn run(command: Command) -> Result<()> {
             )?;
             let network = own_network(cluster_tls_cert, cluster_tls_key, cluster_tls_ca);
             let id = ClusterNodeId::new(node_id)?;
-            let desired = ClusterNode::new(id.clone(), address, incarnation, capacity_bytes, 1)?
-                .as_metadata_learner()
-                .with_tls_certificate_sha256(pin)?;
+            let registration_time_ms = u64::try_from(
+                std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)?
+                    .as_millis(),
+            )?;
+            let desired = ClusterNode::new(
+                id.clone(),
+                address,
+                incarnation,
+                capacity_bytes,
+                registration_time_ms,
+            )?
+            .as_metadata_learner()
+            .with_tls_certificate_sha256(pin)?;
             let client = TcpClusterBootstrapClient::new(
                 bicdb_core::ClusterId::new(cluster_id)?,
                 id.clone(),
@@ -466,7 +477,7 @@ pub fn run(command: Command) -> Result<()> {
                         &leader.id,
                         &leader.address,
                         desired.clone(),
-                        1,
+                        registration_time_ms,
                     ) {
                         last = error.to_string();
                     }

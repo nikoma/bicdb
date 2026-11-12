@@ -330,6 +330,11 @@ impl PreparedNativeRecoveryReady {
         fresh: &RecoveryRoleAdmission,
     ) -> Result<crate::db::NativeRecoveredServingReceipt> {
         #[cfg(test)]
+        let _detail_context = crate::distribution_range_handoff::NativeRefreshTraceContext::enter(
+            fresh.local_node_id(),
+            fresh.deadline(),
+        );
+        #[cfg(test)]
         let mut actual_trace =
             crate::distribution_range_handoff::NativeJointPhaseTrace::from_deadline(
                 "recovery-complete-refresh-actual-domain-physical",
@@ -337,13 +342,30 @@ impl PreparedNativeRecoveryReady {
                 fresh.deadline(),
             );
         self.scope.require_role(fresh)?;
+        #[cfg(test)]
+        let fact_trace = crate::distribution_range_handoff::NativeJointPhaseTrace::refresh_detail(
+            "refresh-current-joint-fact-and-original-archives",
+        );
         if matches!(
             fresh.purpose(),
             MetadataRecoveryRolePurpose::CurrentJointRecovery { .. }
         ) {
             store.require_current_joint_recovery_domain(db, fresh)?;
         }
+        #[cfg(test)]
+        crate::distribution_range_handoff::NativeJointPhaseTrace::finish_detail(fact_trace);
+        #[cfg(test)]
+        let physical_trace =
+            crate::distribution_range_handoff::NativeJointPhaseTrace::refresh_detail(
+                "refresh-owned-native-pin-and-physical-lineage",
+            );
         self.physical.require_owned_materialization_current(db)?;
+        #[cfg(test)]
+        crate::distribution_range_handoff::NativeJointPhaseTrace::finish_detail(physical_trace);
+        #[cfg(test)]
+        let scope_trace = crate::distribution_range_handoff::NativeJointPhaseTrace::refresh_detail(
+            "refresh-current-role-durable-scope-point",
+        );
         store.require_native_ready_scope(fresh, self.physical.native_admission(), &self.scope)?;
         let saved = store
             .catalog
@@ -363,11 +385,20 @@ impl PreparedNativeRecoveryReady {
                 "completion refresh changed the actual pinned point/session",
             ));
         }
+        #[cfg(test)]
+        crate::distribution_range_handoff::NativeJointPhaseTrace::finish_detail(scope_trace);
+        #[cfg(test)]
+        let serving_trace =
+            crate::distribution_range_handoff::NativeJointPhaseTrace::refresh_detail(
+                "refresh-exact-native-serving-readback-total",
+            );
         let native = db.observe_native_recovered_serving_for_physical(
             &self.physical,
             &self.scope,
             &completed.native_serving_sha256,
         )?;
+        #[cfg(test)]
+        crate::distribution_range_handoff::NativeJointPhaseTrace::finish_detail(serving_trace);
         #[cfg(test)]
         {
             actual_trace.complete();
@@ -408,7 +439,18 @@ impl PreparedNativeRecoveryReady {
         fresh: &RecoveryRoleAdmission,
     ) -> Result<()> {
         self.scope.require_role(fresh)?;
+        #[cfg(test)]
+        let pin_trace = crate::distribution_range_handoff::NativeJointPhaseTrace::refresh_detail(
+            "refresh-return-boundary-actual-native-pin",
+        );
         self.physical.require_owned_pin_live(db)?;
+        #[cfg(test)]
+        crate::distribution_range_handoff::NativeJointPhaseTrace::finish_detail(pin_trace);
+        #[cfg(test)]
+        let boundary_trace =
+            crate::distribution_range_handoff::NativeJointPhaseTrace::refresh_detail(
+                "refresh-return-boundary-scope-binding-original-writer",
+            );
         store.require_native_ready_scope(fresh, self.physical.native_admission(), &self.scope)?;
         store.require_prepared_native_point_matches(&self.physical)?;
         self.require_binding_shape_current(store)?;
@@ -423,7 +465,12 @@ impl PreparedNativeRecoveryReady {
                 "completed producer changed original writer/session",
             ));
         }
-        fresh.require_live_request()
+        let result = fresh.require_live_request();
+        #[cfg(test)]
+        if result.is_ok() {
+            crate::distribution_range_handoff::NativeJointPhaseTrace::finish_detail(boundary_trace);
+        }
+        result
     }
     pub(crate) fn role(&self) -> &RecoveryRoleAdmission {
         self.physical.role()

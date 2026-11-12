@@ -48,4 +48,4 @@ pub(crate) use bridge::{
 #[cfg(test)]
 mod trace;
 #[cfg(test)]
-pub(crate) use trace::NativeJointPhaseTrace;
+pub(crate) use trace::{NativeJointPhaseTrace, NativeRefreshTraceContext};

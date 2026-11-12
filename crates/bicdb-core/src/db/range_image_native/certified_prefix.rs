@@ -822,6 +822,11 @@ impl BicDb {
         &self,
         range_id: RangeId,
     ) -> Result<SourceRangeImageLineage> {
+        #[cfg(test)]
+        let construct_trace =
+            crate::distribution_range_handoff::NativeJointPhaseTrace::refresh_detail(
+                "refresh-source-lineage-construct-native-point",
+            );
         let birth = self
             .read_native_birth()?
             .ok_or_else(|| invalid("no native birth"))?;
@@ -845,11 +850,20 @@ impl BicDb {
             current_database_incarnation: self.incarnation.clone(),
             current_schema_generation: self.schema_compatibility.generation(),
         };
+        #[cfg(test)]
+        crate::distribution_range_handoff::NativeJointPhaseTrace::finish_detail(construct_trace);
+        #[cfg(test)]
+        let validate_trace =
+            crate::distribution_range_handoff::NativeJointPhaseTrace::refresh_detail(
+                "refresh-source-lineage-first-full-contract",
+            );
         self.validate_source_range_image_lineage_contract(
             &lineage,
             range_id,
             lineage.range_index(),
         )?;
+        #[cfg(test)]
+        crate::distribution_range_handoff::NativeJointPhaseTrace::finish_detail(validate_trace);
         Ok(lineage)
     }
     pub(crate) fn current_native_range_source_lineage(
@@ -857,7 +871,17 @@ impl BicDb {
         range_id: RangeId,
     ) -> Result<SourceRangeImageLineage> {
         let lineage = self.native_range_source_lineage_contract(range_id)?;
+        #[cfg(test)]
+        let second_trace = crate::distribution_range_handoff::NativeJointPhaseTrace::refresh_detail(
+            "refresh-source-lineage-second-contract-and-pending",
+        );
+        #[cfg(test)]
+        if second_trace.is_some() {
+            eprintln!("ACTUAL_REFRESH_LINEAGE_RANGE range={range_id}");
+        }
         self.validate_source_range_image_lineage(&lineage, range_id, lineage.range_index())?;
+        #[cfg(test)]
+        crate::distribution_range_handoff::NativeJointPhaseTrace::finish_detail(second_trace);
         Ok(lineage)
     }
     /// The coordinator must persist this before the actual native row apply.

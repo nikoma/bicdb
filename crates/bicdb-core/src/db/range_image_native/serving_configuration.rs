@@ -379,7 +379,20 @@ impl BicDb {
         scope: &RecoveryFenceScope,
         expected_checksum: &str,
     ) -> Result<NativeRecoveredServingReceipt> {
+        #[cfg(test)]
+        let physical_trace =
+            crate::distribution_range_handoff::NativeJointPhaseTrace::refresh_detail(
+                "refresh-serving-owned-materialization",
+            );
         physical.require_owned_materialization_current(self)?;
+        #[cfg(test)]
+        crate::distribution_range_handoff::NativeJointPhaseTrace::finish_detail(physical_trace);
+        #[cfg(test)]
+        let lineage_trace =
+            crate::distribution_range_handoff::NativeJointPhaseTrace::refresh_detail(
+                "refresh-serving-actual-current-lineage",
+            );
+
         let actual = self.current_native_range_source_lineage(scope.range_id)?;
         let record = actual
             .serving
@@ -397,14 +410,30 @@ impl BicDb {
                 "completed native record differs from actual pinned materialization",
             ));
         }
+        #[cfg(test)]
+        crate::distribution_range_handoff::NativeJointPhaseTrace::finish_detail(lineage_trace);
+        #[cfg(test)]
+        let admission_trace =
+            crate::distribution_range_handoff::NativeJointPhaseTrace::refresh_detail(
+                "refresh-serving-admission-mint",
+            );
         let native = self.native_recovery_admission(
             &record.scope.cluster_id,
             record.scope.bootstrap_id,
             &record.local_node_id,
             record.local_member_incarnation,
         )?;
+        #[cfg(test)]
+        crate::distribution_range_handoff::NativeJointPhaseTrace::finish_detail(admission_trace);
+        #[cfg(test)]
+        let receipt_trace =
+            crate::distribution_range_handoff::NativeJointPhaseTrace::refresh_detail(
+                "refresh-serving-receipt-full-current",
+            );
         let receipt = NativeRecoveredServingReceipt { native, record };
         receipt.require_current(self)?;
+        #[cfg(test)]
+        crate::distribution_range_handoff::NativeJointPhaseTrace::finish_detail(receipt_trace);
         Ok(receipt)
     }
     /// Caller retains the actual owned Prepared pin/freeze throughout both

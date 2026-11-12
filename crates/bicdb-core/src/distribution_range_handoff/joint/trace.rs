@@ -3,6 +3,41 @@
 use crate::{CancellationToken, ClusterNodeId};
 use std::time::Instant;
 
+#[derive(Clone)]
+struct RefreshClock {
+    node: ClusterNodeId,
+    deadline: Instant,
+}
+thread_local! {
+    static REFRESH_CLOCK: std::cell::RefCell<Option<RefreshClock>> = const { std::cell::RefCell::new(None) };
+}
+/// Test-only attribution, never a budget/authority token. RAII restores nested
+/// context after every error/panic; it cannot move to another test thread.
+pub(crate) struct NativeRefreshTraceContext {
+    previous: Option<RefreshClock>,
+    _same_thread: std::marker::PhantomData<std::rc::Rc<()>>,
+}
+impl NativeRefreshTraceContext {
+    pub(crate) fn enter(node: &ClusterNodeId, deadline: Instant) -> Self {
+        Self {
+            previous: REFRESH_CLOCK.with(|c| {
+                c.replace(Some(RefreshClock {
+                    node: node.clone(),
+                    deadline,
+                }))
+            }),
+            _same_thread: std::marker::PhantomData,
+        }
+    }
+}
+impl Drop for NativeRefreshTraceContext {
+    fn drop(&mut self) {
+        REFRESH_CLOCK.with(|c| {
+            c.replace(self.previous.take());
+        });
+    }
+}
+
 pub(crate) struct NativeJointPhaseTrace {
     stage: &'static str,
     node: ClusterNodeId,
@@ -12,6 +47,15 @@ pub(crate) struct NativeJointPhaseTrace {
     completed: bool,
 }
 impl NativeJointPhaseTrace {
+    pub(crate) fn refresh_detail(stage: &'static str) -> Option<Self> {
+        let clock = REFRESH_CLOCK.with(|c| c.borrow().clone());
+        clock.map(|clock| Self::from_deadline(stage, &clock.node, clock.deadline))
+    }
+    pub(crate) fn finish_detail(trace: Option<Self>) {
+        if let Some(mut trace) = trace {
+            trace.complete();
+        }
+    }
     pub(crate) fn new(
         stage: &'static str,
         node: &ClusterNodeId,

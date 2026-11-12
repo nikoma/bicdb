@@ -30,6 +30,9 @@ fn same_install_lineage_for_new_attempt(
     let mut normalized = existing.clone();
     normalized.range = candidate.range.clone();
     normalized.attempt_id = candidate.attempt_id;
+    // The protected producer validates the old pointer and immutable preimage;
+    // pointer identity itself changes on a fresh explicitly authorized attempt.
+    normalized.protected_proposal = candidate.protected_proposal.clone();
     if existing.attempt_id != candidate.attempt_id {
         normalized.target_namespace_ids = candidate.target_namespace_ids.clone();
     }
@@ -143,7 +146,7 @@ impl NativeImageInstallRole<'_> {
     }
 }
 
-fn require_intent_live_role(
+pub(super) fn require_intent_live_role(
     intent: &ImageInstallIntent,
     role: &NativeImageInstallRole<'_>,
 ) -> Result<()> {
@@ -863,6 +866,28 @@ impl RangeWriteStore {
         Ok(())
     }
 
+    /// Catalogue format is global. A new protected range must not publish
+    /// format11 while another legacy CurrentRepair intent lacks its proposal.
+    /// Such a legacy range needs independent qualified recovery first.
+    fn require_protected_proposal_upgrade_possible(&self, replacing: RangeId) -> Result<()> {
+        if self
+            .catalog
+            .image_install_intents
+            .iter()
+            .any(|(range, intent)| {
+                *range != replacing
+                    && matches!(
+                        intent.source_purpose,
+                        RangeImageSourcePurposeV1::CurrentVoterRepair
+                    )
+                    && intent.protected_proposal.is_none()
+            })
+        {
+            return Err(range_write_error("protected proposal upgrade would strand another legacy current-image intent; recover it before format11"));
+        }
+        Ok(())
+    }
+
     /// Persist the catalog refusal before the native Installing marker or rows.
     /// The independently minted native safety observation is checked by the
     /// target installer under this same freeze immediately before this call.
@@ -878,9 +903,40 @@ impl RangeWriteStore {
         purpose: ImageInstallPurpose,
         attempt_id: Uuid,
     ) -> Result<TargetImageInstallFence> {
+        self.begin_native_image_install_with(
+            database,
+            admission,
+            native_safety,
+            source,
+            role,
+            frozen,
+            purpose,
+            attempt_id,
+            Self::persist,
+        )
+    }
+    #[allow(clippy::too_many_arguments)]
+    fn begin_native_image_install_with(
+        &mut self,
+        database: &crate::BicDb,
+        admission: &NativeRecoveryAdmission,
+        native_safety: &NativeRangeInstallSafety,
+        source: &TentativeNativeRangeImageSourceAuthorization<'_>,
+        role: &NativeImageInstallRole<'_>,
+        frozen: &FrozenRangeMutationPermit,
+        purpose: ImageInstallPurpose,
+        attempt_id: Uuid,
+        persist: impl FnOnce(&Self) -> Result<()>,
+    ) -> Result<TargetImageInstallFence> {
         let mut intent = self.candidate_native_image_install_intent(
             database, admission, source, role, frozen, purpose, attempt_id, attempt_id,
         )?;
+        if matches!(
+            intent.source_purpose,
+            RangeImageSourcePurposeV1::CurrentVoterRepair
+        ) {
+            self.require_protected_proposal_upgrade_possible(intent.range.id)?;
+        }
         self.require_native_install_recovery_preflight(database, admission, role, &intent)?;
         let cut = source.cut();
         native_safety.require_current(database, admission, frozen)?;
@@ -900,6 +956,28 @@ impl RangeWriteStore {
         // full staged logical-history compatibility is a separate mandatory
         // prerequisite of the target row/final-publication state machine.
         self.validate_install_local_log(cut.range(), cut.range_index())?;
+        if matches!(cut.purpose(), RangeImageSourcePurposeV1::CurrentVoterRepair) {
+            let binding = super::NativeImageProposalIntentBinding::from_actual_candidate(
+                self, admission, &intent,
+            )?;
+            let catalogue = self.image_install_catalog_history_obligations(intent.range.id)?;
+            let proposal = database.persist_native_current_image_proposal(
+                self,
+                &binding,
+                admission,
+                native_safety,
+                &catalogue,
+                source,
+                role,
+                frozen,
+            )?;
+            if proposal.intent_core_sha256() != intent.core_sha256()? {
+                return Err(range_write_error(
+                    "protected proposal differs from exact BEGIN core",
+                ));
+            }
+            intent.protected_proposal = Some(proposal.pointer());
+        }
         self.invalidate_native_activation_open(intent.range.id);
         if let Some(existing) = self.catalog.image_install_intents.get(&intent.range.id) {
             if existing.attempt_id == intent.attempt_id
@@ -938,7 +1016,7 @@ impl RangeWriteStore {
                 .image_install_intents
                 .insert(intent.range.id, intent.clone());
         }
-        self.persist_native_install_intent_with(intent.clone(), Self::persist)?;
+        self.persist_native_install_intent_with(intent.clone(), persist)?;
         role.role().require_live_request()?;
         let fence = TargetImageInstallFence {
             store_open_id: self.open_id,
@@ -952,8 +1030,37 @@ impl RangeWriteStore {
         Ok(fence)
     }
 
+    #[cfg(test)]
     #[allow(clippy::too_many_arguments)]
-    fn candidate_native_image_install_intent(
+    pub(crate) fn test_current_proposal_without_intent_publication(
+        &mut self,
+        database: &crate::BicDb,
+        admission: &NativeRecoveryAdmission,
+        native_safety: &NativeRangeInstallSafety,
+        source: &TentativeNativeRangeImageSourceAuthorization<'_>,
+        role: &NativeImageInstallRole<'_>,
+        frozen: &FrozenRangeMutationPermit,
+        attempt_id: Uuid,
+    ) -> Result<TargetImageInstallFence> {
+        self.begin_native_image_install_with(
+            database,
+            admission,
+            native_safety,
+            source,
+            role,
+            frozen,
+            ImageInstallPurpose::CurrentVoterRepair,
+            attempt_id,
+            |_| {
+                Err(range_write_error(
+                    "injected before ANY catalogue intent publication",
+                ))
+            },
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub(super) fn candidate_native_image_install_intent(
         &self,
         database: &crate::BicDb,
         admission: &NativeRecoveryAdmission,
@@ -1064,6 +1171,7 @@ impl RangeWriteStore {
             target_credentials: credentials(current.local_member_identity()),
             restore_activation: current.restore_activation().cloned(),
             schema_sha256: source.bindings().schema_sha256().to_string(),
+            protected_proposal: None,
         };
         intent.validate()?;
         Ok(intent)
@@ -1075,13 +1183,21 @@ impl RangeWriteStore {
         persist: impl FnOnce(&Self) -> Result<()>,
     ) -> Result<()> {
         intent.validate()?;
+        let protected = intent.protected_proposal.is_some();
         self.catalog
             .image_install_intents
             .insert(intent.range.id, intent);
-        self.catalog.format_version = self
-            .catalog
-            .format_version
-            .max(IMAGE_INSTALL_RANGE_LOG_FORMAT);
+        self.catalog.format_version = self.catalog.format_version.max(if protected {
+            super::IMAGE_PROPOSAL_CATALOG_FORMAT
+        } else {
+            IMAGE_INSTALL_RANGE_LOG_FORMAT
+        });
+        if protected {
+            // Format10+ requires the explicit sparse field even when empty.
+            self.catalog
+                .sparse_committed_decisions
+                .get_or_insert_with(BTreeMap::new);
+        }
         // write_atomic may rename before returning a directory-sync error.
         // Never restore the previous permissive in-memory catalog on failure.
         persist(self)
@@ -1097,6 +1213,14 @@ impl RangeWriteStore {
     ) -> Result<()> {
         fence.require_live_role(role)?;
         admission.require_current(database)?;
+        if let Some(pointer) = &fence.intent.protected_proposal {
+            let protected = database.read_native_current_image_proposal(admission, pointer)?;
+            if protected.intent_core_sha256() != fence.intent.core_sha256()? {
+                return Err(range_write_error(
+                    "image fence protected proposal/core mismatch",
+                ));
+            }
+        }
         database
             .range_mutation_gate()
             .validate_frozen(fence.range().id, frozen)?;
@@ -1222,12 +1346,67 @@ mod tests {
             target_credentials: member,
             restore_activation: None,
             schema_sha256: "f".repeat(64),
+            protected_proposal: None,
         }
     }
     fn store(root: &Path) -> RangeWriteStore {
         crate::format::enable_range_image_install(root).unwrap();
         RangeWriteStore::open(root, command(1).cluster_id, node("n2"), true).unwrap()
     }
+    #[test]
+    fn protected_proposal_global_upgrade_refuses_other_legacy_range_without_writing() {
+        // Lower storage compatibility fixture only: this is a valid historical
+        // refusal DTO, not a source-cut/role/replication authority constructor.
+        let root = tempfile::tempdir().unwrap();
+        let mut local = store(root.path());
+        let legacy_id = RangeId::new(2).unwrap();
+        let mut legacy = intent(0);
+        legacy.range.id = legacy_id;
+        legacy.range.replicas[1].role = RangeReplicaRole::Voter;
+        legacy.purpose = ImageInstallPurpose::CurrentVoterRepair;
+        legacy.source_purpose = RangeImageSourcePurposeV1::CurrentVoterRepair;
+        legacy.intended_range = legacy.range.clone();
+        legacy.activation_epoch = legacy.range.epoch;
+        legacy.intended_config_sha256 = legacy.old_config_sha256.clone();
+        legacy.protected_proposal = None;
+        legacy.validate().unwrap();
+        local
+            .catalog
+            .image_install_intents
+            .insert(legacy_id, legacy);
+        local.catalog.format_version = super::super::SPARSE_HISTORY_CATALOG_FORMAT;
+        local.catalog.sparse_committed_decisions = Some(BTreeMap::new());
+        local.persist().unwrap();
+        let before = std::fs::read(root.path().join(DEFAULT_RANGE_WRITE_LOG)).unwrap();
+        let error = local
+            .require_protected_proposal_upgrade_possible(RangeId::new(1).unwrap())
+            .unwrap_err();
+        assert!(error.to_string().contains("strand another legacy"));
+        assert_eq!(
+            std::fs::read(root.path().join(DEFAULT_RANGE_WRITE_LOG)).unwrap(),
+            before
+        );
+        assert!(!crate::format::current_image_proposal_active(root.path()).unwrap());
+        assert_eq!(
+            local.catalog.format_version,
+            super::super::SPARSE_HISTORY_CATALOG_FORMAT
+        );
+        drop(local);
+        let reopened = store(root.path());
+        assert!(reopened.catalog.image_install_intents[&legacy_id]
+            .protected_proposal
+            .is_none());
+        // Same-range replacement still requires the real actual source/native
+        // producer; passing THIS read-only preflight publishes nothing.
+        reopened
+            .require_protected_proposal_upgrade_possible(legacy_id)
+            .unwrap();
+        assert_eq!(
+            std::fs::read(root.path().join(DEFAULT_RANGE_WRITE_LOG)).unwrap(),
+            before
+        );
+    }
+
     #[test]
     fn install_intent_reopen_blocks_all_ordinary_decisions_without_changing_watermarks() {
         let root = tempfile::tempdir().unwrap();

@@ -48,7 +48,14 @@ use native_image_base::{NativeImageCatalogueBase, NATIVE_IMAGE_CATALOG_FORMAT};
 pub(crate) use native_image_ready::FinalizedNativeImageCatalogueObservation;
 mod image_install_obligations;
 pub(crate) use image_install_obligations::TargetImageCatalogHistoryObligations;
+mod image_install_resume;
 mod image_install_state;
+mod image_proposal_state;
+pub(crate) use image_install_resume::CurrentImageInstallingAdmission;
+use image_proposal_state::IMAGE_PROPOSAL_CATALOG_FORMAT;
+pub(crate) use image_proposal_state::{
+    NativeCurrentImageProposalPointer, NativeImageProposalIntentBinding,
+};
 mod native_completion_observation;
 mod native_read_catalog;
 mod native_ready_catalog;
@@ -578,9 +585,10 @@ impl RangeWriteEnvelope {
                 | NATIVE_COMPLETED_CATALOG_FORMAT
                 | NATIVE_ACTIVATED_FORMAT
                 | SPARSE_HISTORY_CATALOG_FORMAT
+                | IMAGE_PROPOSAL_CATALOG_FORMAT
         ) {
             return Err(range_write_error(format!(
-                "unsupported range-write log format {}; supported formats are 1, 2, {}, {}, {}, {}, {}, {}, {}, and {}",
+                "unsupported range-write log format {}; supported formats are 1, 2, {}, {}, {}, {}, {}, {}, {}, {}, and {}",
                 self.catalog.format_version,
                 RANGE_WRITE_LOG_FORMAT_VERSION,
                 HANDOFF_RANGE_LOG_FORMAT,
@@ -589,7 +597,8 @@ impl RangeWriteEnvelope {
                 NATIVE_READY_CATALOG_FORMAT,
                 NATIVE_COMPLETED_CATALOG_FORMAT,
                 NATIVE_ACTIVATED_FORMAT,
-                SPARSE_HISTORY_CATALOG_FORMAT
+                SPARSE_HISTORY_CATALOG_FORMAT,
+                IMAGE_PROPOSAL_CATALOG_FORMAT
             )));
         }
         sparse_certification::validate_sparse_catalog(&self.catalog)?;
@@ -815,6 +824,13 @@ impl RangeWriteStore {
         {
             return Err(range_write_error(
                 "handoff range catalog requires its durable image reader fence and fsync",
+            ));
+        }
+        if catalog.format_version >= IMAGE_PROPOSAL_CATALOG_FORMAT
+            && !crate::format::current_image_proposal_active(&root)?
+        {
+            return Err(range_write_error(
+                "protected proposal catalog lacks its mandatory native reader fence",
             ));
         }
         if crate::format::native_writer_enrollment_active(&root)?

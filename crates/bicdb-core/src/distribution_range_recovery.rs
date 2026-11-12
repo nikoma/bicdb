@@ -24,6 +24,23 @@ fn invalid(message: &str) -> BicDbError {
 
 mod image_compatibility;
 mod image_history;
+mod image_proposal;
+mod image_resume_history;
+mod image_resume_quorum;
+mod installing_fence;
+pub(crate) use image_proposal::{
+    HistoricalCurrentImageAcceptanceV1, HistoricalCurrentImageSourceAcceptance,
+};
+pub(crate) use image_resume_history::{
+    CurrentImageResumeHistoryRound, VerifiedCurrentImageResumeHistory,
+};
+pub(crate) use image_resume_quorum::{
+    CurrentImageResumeQuorumRound, CurrentImageResumeVote, FreshCurrentImageResumeAuthority,
+};
+pub(crate) use installing_fence::{
+    CurrentImageInstallingEvidence, CurrentImageInstallingObservation,
+    CurrentImageInstallingRequest,
+};
 #[cfg(test)]
 mod recovery_order_tests;
 pub(crate) use image_compatibility::{RecoverySourceHistoryRound, VerifiedRecoverySourceHistory};

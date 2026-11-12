@@ -58,10 +58,14 @@ use index_binding::load_btree_bindings;
 mod integrity_reservations;
 mod pitr_maintenance;
 mod range_image_install;
+mod range_image_proposal;
 pub(crate) use range_image_install::{
     NativeInstalledRangeImageBase, NativeInstalledRangeImageIntegrity,
     NativeTargetImageVerificationProgress, NativeTargetImageVerifier,
     TargetNativeImageSnapshotBound,
+};
+pub(crate) use range_image_proposal::{
+    NativeCurrentImageProposalReceipt, ProtectedCurrentImagePreimageV1,
 };
 mod native_activation;
 pub(crate) use native_activation::NativeActivatedOpenGuard;

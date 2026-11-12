@@ -25,8 +25,29 @@ fn sha(bytes: &[u8]) -> String {
     hex::encode(Sha256::digest(bytes))
 }
 
+#[derive(Clone, Copy, Debug)]
+enum ImageStop {
+    CatalogueBeforeMarker,
+    BeginBeforeStage,
+    AfterClear,
+}
 #[test]
 fn actual_interrupted_normal_image_cold_resume_is_characterized_without_forged_cut() {
+    exercise_interrupted_normal_image(ImageStop::AfterClear, false);
+}
+#[test]
+fn actual_protected_current_image_resumes_after_clear_with_fresh_installing_quorum() {
+    exercise_interrupted_normal_image(ImageStop::AfterClear, true);
+}
+#[test]
+fn actual_protected_current_image_resumes_begin_before_history_staging() {
+    exercise_interrupted_normal_image(ImageStop::BeginBeforeStage, true);
+}
+#[test]
+fn actual_protected_current_image_resumes_intent_before_native_marker() {
+    exercise_interrupted_normal_image(ImageStop::CatalogueBeforeMarker, true);
+}
+fn exercise_interrupted_normal_image(stop: ImageStop, resume: bool) {
     let mut fixture = ActualNativeRf3Fixture::new();
     fixture.root.disable_cleanup(true);
     fixture.transport.enable_native_delivery();
@@ -234,17 +255,35 @@ fn actual_interrupted_normal_image_cold_resume_is_characterized_without_forged_c
             &parent,
         )
         .unwrap();
-    let mut install = target_service
-        .lock()
-        .begin_native_range_image_install(
-            &source,
-            &NativeImageInstallRole::CurrentVoterRepair(&role),
-            lease,
-            ImageInstallPurpose::CurrentVoterRepair,
-            attempt,
-            &parent,
+    let mut lease = Some(lease);
+    let mut install = if matches!(stop, ImageStop::CatalogueBeforeMarker) {
+        let fence = target_service
+            .lock()
+            .test_current_image_catalogue_boundary(
+                &source,
+                &NativeImageInstallRole::CurrentVoterRepair(&role),
+                lease.as_ref().unwrap().as_frozen(),
+                attempt,
+                false,
+            )
+            .unwrap();
+        assert_eq!(fence.attempt_id(), attempt);
+        None
+    } else {
+        Some(
+            target_service
+                .lock()
+                .begin_native_range_image_install(
+                    &source,
+                    &NativeImageInstallRole::CurrentVoterRepair(&role),
+                    lease.take().unwrap(),
+                    ImageInstallPurpose::CurrentVoterRepair,
+                    attempt,
+                    &parent,
+                )
+                .unwrap(),
         )
-        .unwrap();
+    };
     drop(source);
     drop(role);
     let obligations = target_service
@@ -255,27 +294,33 @@ fn actual_interrupted_normal_image_cold_resume_is_characterized_without_forged_c
         obligations.irrevocable_commands(),
         &BTreeMap::from([(2, tail.command.checksum_sha256.clone())])
     );
-    let stage_id = install.history_stage_id();
-    stage_and_clear_actual_current_repair_image(
-        &mut capture,
-        target_service,
-        &|| recipient_role(&providers, &initiator, &range, nonce),
-        || {
-            target_service
-                .lock()
-                .test_require_image_history_obligations_current(&obligations)
-                .unwrap()
-        },
-        &mut install,
-    );
+    let stage_id = install.as_ref().map(|i| i.history_stage_id());
+    if matches!(stop, ImageStop::AfterClear) {
+        stage_and_clear_actual_current_repair_image(
+            &mut capture,
+            target_service,
+            &|| recipient_role(&providers, &initiator, &range, nonce),
+            || {
+                target_service
+                    .lock()
+                    .test_require_image_history_obligations_current(&obligations)
+                    .unwrap()
+            },
+            install.as_mut().unwrap(),
+        );
+    }
     // Stop at the EXACT requested boundary: stage0..2 audited, clear complete,
     // NO row copy, no completed source, no installed base or catalogue adoption.
     let partial = target_db
         .read()
         .native_range_prefix_observation(range.id)
         .unwrap();
-    assert_eq!(partial.native_applied_index, None);
-    assert!(partial.invalidated);
+    let marker_expected = !matches!(stop, ImageStop::CatalogueBeforeMarker);
+    assert_eq!(
+        partial.native_applied_index,
+        if marker_expected { None } else { Some(0) }
+    );
+    assert_eq!(partial.invalidated, marker_expected);
     assert!(target_db
         .read()
         .get("items", acknowledged)
@@ -288,7 +333,6 @@ fn actual_interrupted_normal_image_cold_resume_is_characterized_without_forged_c
     let stage_sha = target_db
         .read()
         .native_history_stage_state_commitment(range.id)
-        .unwrap()
         .unwrap();
     let old_native = target_db
         .read()
@@ -304,6 +348,13 @@ fn actual_interrupted_normal_image_cold_resume_is_characterized_without_forged_c
         .native_installed_range_image_integrity(&old_native, range.id)
         .unwrap()
         .is_none());
+    let protected = target_db
+        .read()
+        .read_native_current_image_proposal_by_id(&old_native, attempt)
+        .unwrap()
+        .unwrap();
+    let protected_pointer = protected.pointer();
+    drop(protected);
     let old_open = old_native.database_incarnation().to_string();
     let birth = old_native.birth_id();
     let birth_sha = old_native.birth_sha256().to_owned();
@@ -342,7 +393,7 @@ fn actual_interrupted_normal_image_cold_resume_is_characterized_without_forged_c
         fixture.root.path(),
         "interrupted-before-close.json",
         &serde_json::json!({
-            "stage":"AFTER_CLEAR_BEFORE_ANY_ROW_COPY", "source_native":2,"target_native":partial,
+            "stage":format!("{stop:?}"),"resume_requested":resume,"protected_proposal":protected_pointer, "source_native":2,"target_native":partial,
             "target_birth":birth,"target_birth_sha256":birth_sha,"target_open":old_open,
             "target_uid":target_uid,"target_local_db_sequence":local_b,"image_attempt":attempt,
             "history_stage_id":stage_id,"history_stage_sha256":stage_sha,"sparse_sha256":sparse_sha,
@@ -370,6 +421,7 @@ fn actual_interrupted_normal_image_cold_resume_is_characterized_without_forged_c
         .collect::<Vec<_>>();
     drop(old_native);
     drop(install);
+    drop(lease);
     drop(capture);
     drop(obligations);
     drop(sparse_observation);
@@ -422,7 +474,7 @@ fn actual_interrupted_normal_image_cold_resume_is_characterized_without_forged_c
             .read()
             .native_history_stage_state_commitment(range.id)
             .unwrap(),
-        Some(stage_sha.clone())
+        stage_sha.clone()
     );
     assert!(cold_target
         .read()
@@ -433,7 +485,10 @@ fn actual_interrupted_normal_image_cold_resume_is_characterized_without_forged_c
         .read()
         .native_range_prefix_observation(range.id)
         .unwrap();
-    assert_eq!(cold_native.native_applied_index, None);
+    assert_eq!(
+        cold_native.native_applied_index,
+        if marker_expected { None } else { Some(0) }
+    );
     let cold_phase = catalogue(cold.root.path(), &target_id);
     assert_eq!(
         cold_phase["catalog"]["image_install_intents"][&key],
@@ -599,9 +654,38 @@ fn actual_interrupted_normal_image_cold_resume_is_characterized_without_forged_c
             bytes
         );
     }
+    let resumed = if resume {
+        drop(source_ready);
+        Some(
+            super::protected_resume_positive::finish_actual_current_image_resume(
+                &cold,
+                &providers,
+                &runtimes,
+                &initiator,
+                &range,
+                &scope,
+                protected_pointer.clone(),
+                &tail.command,
+                acknowledged,
+                &acknowledged_sha,
+                target_uid,
+                &source_h,
+                &parent,
+            ),
+        )
+    } else {
+        None
+    };
     wait_for_contexts(&runtimes);
-    let report = serde_json::json!({
-        "characterization_test_passed":true,"recovery_scenario":"FAILED_UNSUPPORTED_COLD_RESUME",
+    let recovery_scenario = if resume {
+        "RECOVERED_TO_NATIVE_PREPARED_READY_USING_EXPLICIT_FRESH_INSTALLING_PROTOCOL"
+    } else {
+        "ORDINARY_PATH_REFUSES_INTERRUPTED_IMAGE_USE_EXPLICIT_INSTALLING_PROTOCOL"
+    };
+    let mut report = serde_json::json!({
+        "characterization_test_passed":true,"recovery_scenario":recovery_scenario,
+        "outer_snapshot_phase":"COLD_BEFORE_EXPLICIT_RESUME",
+        "stop":format!("{stop:?}"),"purpose_specific_resume":resumed,"ordinary_path_still_refuses":true,
         "evidence_kind":"actual_in_process_protocol_storage_and_strict_copied_reopen",
         "original_root":original_root,"copied_root":cold.root.path(),"source_actual_native":2,
         "source_logical_history_sha256":source_h,"source_identity_before_close":source_identity,
@@ -610,15 +694,21 @@ fn actual_interrupted_normal_image_cold_resume_is_characterized_without_forged_c
         "target_uid":target_uid,"target_birth":birth,"target_birth_sha256":birth_sha,
         "original_target_open":old_open,"current_target_open":new_open,"target_local_db_sequence":local_b,
         "image_attempt":attempt,"stage_id":stage_id,"stage_sha256":stage_sha,"published_image_base_present":false,
+    });
+    let continuation = serde_json::json!({
         "fresh_metadata_term":metadata_term,"fresh_metadata_read_index":metadata_index,
         "fresh_data_fence_observations":1,"required_data_quorum":needed,
         "target_fence_error":target_error.to_string(),"data_quorum_error":quorum_error.to_string(),
         "runtime_session_error":missing_session.to_string(),"target_ready_error":ready_error.to_string(),
-        "new_current_source_cut_constructed":false,"original_catalogues_unchanged":true,
+        "new_current_source_cut_constructed":resume,"original_catalogues_unchanged":true,
         "acknowledged_values_reconciled_on_source":1,"unknown2_resolved_on_source_but_not_new_ack":true,
         "intent_cleared":false,"new_genesis_created_after_reopen":false,"stale_authority_reused":false,
         "activation_proven":false,"physical_qualification":false,"strong_get_tested":false
     });
+    report
+        .as_object_mut()
+        .unwrap()
+        .extend(continuation.as_object().unwrap().clone());
     save(
         cold.root.path(),
         "interrupted-normal-cold-result.json",

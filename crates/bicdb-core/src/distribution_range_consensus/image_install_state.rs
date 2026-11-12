@@ -44,9 +44,14 @@ pub(super) struct ImageInstallIntent {
     pub(super) target_credentials: crate::db::RangeImageBirthMember,
     pub(super) restore_activation: Option<crate::distribution_consensus::MetadataRestoreActivation>,
     pub(super) schema_sha256: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(super) protected_proposal: Option<super::NativeCurrentImageProposalPointer>,
 }
 impl ImageInstallIntent {
     pub(super) fn validate(&self) -> Result<()> {
+        if let Some(pointer) = &self.protected_proposal {
+            pointer.validate()?;
+        }
         let digest =
             |value: &str| value.len() == 64 && value.bytes().all(|byte| byte.is_ascii_hexdigit());
         if self.bootstrap_id.is_nil()
@@ -106,6 +111,11 @@ impl ImageInstallIntent {
         crate::distribution_range_image::bounded_json(self, 128 * 1024)?;
         Ok(())
     }
+    pub(super) fn core_sha256(&self) -> Result<String> {
+        let mut core = self.clone();
+        core.protected_proposal = None;
+        core.sha256()
+    }
     pub(super) fn sha256(&self) -> Result<String> {
         Ok(hex::encode(Sha256::digest(
             crate::distribution_range_image::bounded_json(self, 128 * 1024)?,
@@ -121,6 +131,17 @@ pub(super) fn validate_catalog_install_intents(catalog: &RangeWriteCatalog) -> R
     }
     for (range_id, intent) in &catalog.image_install_intents {
         intent.validate()?;
+        if catalog.format_version >= super::IMAGE_PROPOSAL_CATALOG_FORMAT
+            && matches!(
+                intent.source_purpose,
+                crate::distribution_range_image::RangeImageSourcePurposeV1::CurrentVoterRepair
+            )
+            && intent.protected_proposal.is_none()
+        {
+            return Err(range_write_error(
+                "current image intent lacks protected pre-BEGIN proposal",
+            ));
+        }
         if catalog.format_version < IMAGE_INSTALL_RANGE_LOG_FORMAT
             || *range_id != intent.range.id
             || catalog.cluster_id != intent.cluster_id

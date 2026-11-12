@@ -31,7 +31,11 @@ struct PlannedNetwork {
     ports: Vec<TcpListener>,
 }
 fn planned_network(count: usize) -> PlannedNetwork {
+    planned_network_with_spare(count, 0)
+}
+fn planned_network_with_spare(count: usize, spare: usize) -> PlannedNetwork {
     assert!(matches!(count, 3 | 4));
+    assert!(spare <= 1);
     let root = tempfile::tempdir().unwrap();
     let ca_key = KeyPair::generate().unwrap();
     let mut params = CertificateParams::default();
@@ -43,7 +47,7 @@ fn planned_network(count: usize) -> PlannedNetwork {
     let ca = params.self_signed(&ca_key).unwrap();
     let ca_path = root.path().join("ca.pem");
     std::fs::write(&ca_path, ca.pem()).unwrap();
-    let ports = (0..count)
+    let ports = (0..count + spare)
         .map(|_| TcpListener::bind("127.0.0.1:0").unwrap())
         .collect::<Vec<_>>();
     let mut networks = Vec::new();
@@ -107,7 +111,7 @@ fn planned_network(count: usize) -> PlannedNetwork {
     let token = CancellationToken::uncancelable();
     let plan = NativeClusterBootstrapPlan::new(
         &config,
-        members,
+        members.into_iter().take(count).collect(),
         vec![
             NativeBootstrapCollection {
                 name: "items".into(),
@@ -401,3 +405,4 @@ fn native_initial_birth_tls_provisional_surface_never_falls_through_even_after_f
 mod process_tests;
 
 mod initial_preparation_tests;
+mod learner_factory_tests;

@@ -186,6 +186,9 @@ impl NativeUnassignedLearnerFactory {
             &serde_json::to_vec_pretty(&manifest)?,
             true,
         )?;
+        // The actual observation has its own cancellation ancestry. Checking
+        // only the caller-derived token after fsync cannot renew that proof.
+        observed.require_live_request(business)?;
         token.check()?;
         Ok(Self {
             database: Arc::new(RwLock::new(db)),
@@ -206,6 +209,7 @@ impl NativeUnassignedLearnerFactory {
         parent: &CancellationToken,
     ) -> Result<Self> {
         let token = parent.child_with_deadline(observed.deadline());
+        token.check()?;
         let (topology, local, schema) = Self::context(observed, business, network)?;
         let mut bytes = Vec::new();
         File::open(root.join(MANIFEST))?

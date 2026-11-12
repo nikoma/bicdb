@@ -902,6 +902,110 @@ mod tests {
     }
 
     #[test]
+    fn native_produced_completion_direct_native_mutator_rejects_foreign_actual_store_open() {
+        let fixture = Fixture::new();
+        fixture.seed(fixture.range().id, 1);
+        let nonce = Uuid::now_v7();
+        let role = fixture.role(nonce);
+        let frozen = fixture.freeze(&role);
+        let mut store = fixture.store();
+        let physical = fixture
+            .attest(role, &mut store, frozen, &CancellationToken::uncancelable())
+            .unwrap();
+        let prepared = store
+            .prepare_native_recovery_ready(&fixture.db.read(), physical)
+            .unwrap();
+        let closed = actual_local_closed_ready_quorum(
+            &fixture,
+            &store,
+            &prepared,
+            nonce,
+            &CancellationToken::uncancelable(),
+        );
+        // A real second Store open is a FOREIGN consumer, never a producer
+        // substitute. Its durable bytes match; its actual ephemeral owner does not.
+        let foreign = fixture.store();
+        let fresh = fixture.role(nonce);
+        let path = fixture.db.read().data_path().join(DEFAULT_RANGE_WRITE_LOG);
+        let before = std::fs::read(&path).unwrap();
+        let serving = || {
+            let db = fixture.db.read();
+            let _journal = db.try_native_image_journal().unwrap();
+            db.read_native_range_image_record::<serde_json::Value>(&format!(
+                "serving-configuration/{}",
+                fixture.range().id
+            ))
+            .unwrap()
+        };
+        let native_before = serving();
+        let error = fixture
+            .db
+            .read()
+            .persist_native_recovered_serving_configuration(&prepared, &foreign, &closed, &fresh)
+            .unwrap_err();
+        fresh.require_live_request().unwrap();
+        closed.require_live().unwrap();
+        assert!(
+            error
+                .to_string()
+                .contains("prepared proof has stale actual store/physical state"),
+            "{error}"
+        );
+        assert_eq!(serving(), native_before);
+        assert_eq!(std::fs::read(path).unwrap(), before);
+        prepared
+            .require_current_under_role(&fixture.db.read(), &store, &fresh)
+            .unwrap();
+    }
+
+    #[test]
+    fn native_produced_completion_direct_native_mutator_keeps_original_quorum_cancellation() {
+        let fixture = Fixture::new();
+        fixture.seed(fixture.range().id, 1);
+        let nonce = Uuid::now_v7();
+        let role = fixture.role(nonce);
+        let frozen = fixture.freeze(&role);
+        let mut store = fixture.store();
+        let physical = fixture
+            .attest(role, &mut store, frozen, &CancellationToken::uncancelable())
+            .unwrap();
+        let prepared = store
+            .prepare_native_recovery_ready(&fixture.db.read(), physical)
+            .unwrap();
+        let original =
+            CancellationToken::new(Arc::new(std::sync::atomic::AtomicBool::new(false)), None);
+        let closed =
+            actual_local_closed_ready_quorum(&fixture, &store, &prepared, nonce, &original);
+        let fresh = fixture.role(nonce);
+        let path = fixture.db.read().data_path().join(DEFAULT_RANGE_WRITE_LOG);
+        let before = std::fs::read(&path).unwrap();
+        let serving = || {
+            let db = fixture.db.read();
+            let _journal = db.try_native_image_journal().unwrap();
+            db.read_native_range_image_record::<serde_json::Value>(&format!(
+                "serving-configuration/{}",
+                fixture.range().id
+            ))
+            .unwrap()
+        };
+        let native_before = serving();
+        original.cancel();
+        fresh.require_live_request().unwrap();
+        let error = fixture
+            .db
+            .read()
+            .persist_native_recovered_serving_configuration(&prepared, &store, &closed, &fresh)
+            .unwrap_err();
+        assert_eq!(error.to_string(), BicDbError::QueryCanceled.to_string());
+        fresh.require_live_request().unwrap();
+        assert_eq!(serving(), native_before);
+        assert_eq!(std::fs::read(path).unwrap(), before);
+        prepared
+            .require_current_under_role(&fixture.db.read(), &store, &fresh)
+            .unwrap();
+    }
+
+    #[test]
     fn native_produced_completion_projects_actual_binding_and_stays_frozen() {
         let fixture = Fixture::new();
         fixture.seed(fixture.range().id, 1);
@@ -929,6 +1033,20 @@ mod tests {
             challenge: Uuid::now_v7(),
             budget_ms: 4500,
         };
+        let path = fixture.db.read().data_path().join(DEFAULT_RANGE_WRITE_LOG);
+        let before = std::fs::read(&path).unwrap();
+        let uncompleted = store
+            .observe_native_completion_for_role(&fixture.db.read(), &prepared, &fresh, &request)
+            .unwrap_err();
+        fresh.require_live_request().unwrap();
+        parent.check().unwrap();
+        assert!(
+            uncompleted
+                .to_string()
+                .contains("native completion has not actually persisted"),
+            "{uncompleted}"
+        );
+        assert_eq!(std::fs::read(&path).unwrap(), before);
         let reply = store
             .complete_and_observe_native_recovery_frozen(
                 &fixture.db.read(),
@@ -959,6 +1077,11 @@ mod tests {
             .require_completed_for_activation(&fixture.db.read(), &store, &fresh)
             .unwrap();
         assert_eq!(reply.native_serving_sha256, actual.checksum_sha256());
+        let observed = store
+            .observe_native_completion_for_role(&fixture.db.read(), &prepared, &fresh, &request)
+            .unwrap()
+            .into_reply();
+        assert_eq!(observed.native_serving_sha256, reply.native_serving_sha256);
         prepared
             .require_current_under_role(&fixture.db.read(), &store, &fresh)
             .unwrap();

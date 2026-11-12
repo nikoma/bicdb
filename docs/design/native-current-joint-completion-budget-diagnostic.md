@@ -245,3 +245,95 @@ actual caller cancellation after fsync with no returned observation. These are
 source-only until executed and do not replace genuine CurrentJoint original
 writer/caller/ABA controls, full positive acceptance or final broad regression.
 No runtime success or measured savings is claimed for this successor.
+
+## Executed f861: nine controls pass; earlier native readback fails
+
+All three source-frozen f861b7f8160e96f704266d2eb49aa5f294068faf runs compiled,
+including all-target and isolated-consumer checks:
+
+| Run / Core job | Scope | Actual result |
+|---|---|---|
+| 43269882708 / 131363371166 | Produced Ready/Complete controls | 5 passed, 0 failed, 917 filtered, 0.60s |
+| 43269883151 / 131363330475 | CurrentJoint authority controls | 4 passed, 0 failed, 918 filtered, 72.62s |
+| 43269882718 / 131363333401 | Full post-joint recovery positive | 0 passed, 1 failed, 921 filtered, 78.12s |
+
+All three Ready responses returned (n1 3102.3ms, n2 3113.7ms, n3 2465.1ms).
+First n1 Complete began with 3998ms. Its actual profile was:
+
+| Phase | Duration | Original budget remaining |
+|---|---:|---:|
+| Completion protocol selection | 1255.3ms | 2743ms |
+| Worker drain | 5.1ms | 2738ms |
+| Actual closed Ready QQ | 800.2ms | 1938ms |
+| Fresh post-QQ role | 11.4ms | 1926ms |
+| Outer local quorum/physical check | 413.3ms | 1513ms |
+| Native producer preflight | 1168.5ms | 344ms |
+| Native WAL publication return | 172.0ms | 172ms |
+| Native readback/current check | 172.6ms, incomplete | expired |
+
+Service/DB acquisition took 1/14 microseconds. The WAL return marker records
+R3/B4 and checksum
+`0013601d007bd2b74d78f46830447caa8af51f435095e081928943592cd73681`
+before the original deadline. Catalogue completion, binding refresh and the new
+produced completion response path were NOT reached in this run. Custody retains
+all three catalogues at NativePrepared. The response is uncertain; full recovery,
+Activate, ACK4 and Strong R4 remain unqualified. Timing differences from 2a7 are
+not evidence that f861 caused an earlier failure or a capacity improvement.
+
+Private raw checksums (same foundations directory / per-cohort index):
+
+- Controls: `18efdd3541e8407b634fe2e4ce02843f9c163a2427a56d708e0fff23d9074cc8`.
+- Authority: `9b101f8a7a27241dbb8c719727fd629bd7563c536b19d87a8497ff015e416ce6`.
+- Positive: `09f412a8483b6e6a2ab3cfd350d9edf66b66be7504113547fc2543ec9cb6f29f`.
+- Artifact 13967014988 ZIP:
+  `377c5d045d3fa41f92a9737537f91efd55da08a48cb0a081cbd903dcd2f26e04`.
+- Manifest: `138f2e312ed261be8e767f57a502c6687cd28e4437d55ae347d6937f8897e5c9`.
+
+All 82 manifest files / 6058699 bytes verified without opening the engine.
+Capture remains observed stable with live owners, not atomic power-loss replay.
+
+### Narrow measured-cost successor and role audit
+
+The completion observer now rejects an actual durable NativePrepared phase
+BEFORE deep physical validation, after checking the live request role/scope and
+actual durable catalogue session/format. It returns an ERROR, never completion,
+absence, Ready, source or a quorum vote. NativeCompleted/activated observation
+validation remains full. This avoids deep work only to produce the same pure
+refusal during protocol selection; no result is cached or reclassified.
+
+The other two removed calls are exact duplicates under the same actual mutator
+borrow. Outer completion retains sealed QQ recipient/original lifetime plus
+actual prepared scope/open/Frozen/pin/binding/original-writer refusal checks.
+The native serving mutator then immediately calls the SAME opaque decision's
+`require_local_prepared(prepared, db, store, fresh)`. That method is a strict
+superset of the removed direct `prepared.require_current_under_role` call:
+
+| Sealed decision | Actual kernel validation retained |
+|---|---|
+| ClosedNativeReadyQuorum | recipient/original QQ lifetime, full prepared-current under fresh role, exact session/R/H0/H |
+| NativeCompletionQuorum | recipient/original QQ lifetime, exact session/R/H0/H, full prepared-current under fresh role |
+| ActivatedNativeCompletionDecision | recipient/original decision lifetime, full prepared-current under fresh role, exact immutable session/R/H0/H |
+
+Both dispatch layers borrow the IDENTICAL Prepared, fresh role, actual Store/DB
+and sealed QQ; no new token or decision is created. Neither removed call used
+`prepared.role()` as the authority: both used the supplied **fresh** role, just
+as the retained full kernel call does. The historical preparation may outlive
+its creation request only under a genuinely independent fresh role/QQ. The QQ's
+ORIGINAL caller/role token remains checked at outer entry, inside the kernel,
+before/inside WAL publication and afterward. Fresh authority cannot revive it.
+
+The full native mutator check before WAL, full native readback after WAL, full
+pre-catalogue quorum/physical check, catalogue fsync, full post-catalogue native/
+physical/domain check and exact refreshed binding remain. No activation check,
+storage ordering, uncertainty/refsync rule, 4s receiver cap, 4500ms request or
+five-second parent is changed.
+
+New direct-mutator controls use actual native R1/Prepared and genuine sealed QQ
+facts: a second real Store open must refuse with no native serving/catalogue
+change, and canceling the QQ's ORIGINAL token must refuse despite a still-live
+fresh role. A role-status control refuses before completion and succeeds only
+after actual completion. The full positive adds a genuine readonly TLS denial
+on NativePrepared with the original request still live and exact native/raw/row
+state unchanged; all existing recovery/ACK/Strong assertions remain. These new
+controls and the positive have not run at this source checkpoint. No measured
+savings or successful recovery is claimed for the successor.

@@ -466,7 +466,11 @@ impl BicDb {
                 fresh.local_node_id(),
                 fresh.deadline(),
             );
-        prepared.require_current_under_role(self, store, fresh)?;
+        // require_local_prepared below is a strict superset: it checks THIS
+        // Prepared under THIS fresh role/Store/DB and additionally matches the
+        // sealed quorum's exact point. Retain pure scope/lifetime preflight;
+        // do not repeat the identical deep physical check in this borrow.
+        prepared.scope().require_role(fresh)?;
         quorum.require_recipient_role(fresh)?;
         quorum.require_local_prepared(prepared, self, store, fresh)?;
         let joint_fact = match fresh.purpose() {

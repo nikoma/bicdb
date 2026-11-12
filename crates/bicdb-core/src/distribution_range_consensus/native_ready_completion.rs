@@ -243,7 +243,12 @@ impl RangeWriteStore {
                 fresh.local_node_id(),
                 fresh.deadline(),
             );
-        quorum.require_local_prepared(prepared, db, self, fresh)?;
+        // Lifetime/session/writer refusal only here. The SAME sealed decision's
+        // actual native mutator immediately performs the full local physical +
+        // exact quorum-point check before WAL; no proof is inferred from this
+        // boundary. The full pre-catalogue check below remains separate.
+        quorum.require_recipient_role(fresh)?;
+        prepared.require_produced_completion_boundary(db, self, fresh)?;
         #[cfg(test)]
         {
             quorum_trace.complete();

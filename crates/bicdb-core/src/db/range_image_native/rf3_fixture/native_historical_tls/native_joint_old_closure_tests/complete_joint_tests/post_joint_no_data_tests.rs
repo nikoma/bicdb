@@ -700,6 +700,34 @@ pub(super) fn exercise_actual_new_domain_prepare_only_recovery(
             .unwrap();
         fixture.idle();
     }
+    // Actual readonly TLS observation of a durable but uncompleted phase is a
+    // DENIAL, never absence/Ready/completion evidence. Capture outside the
+    // independent request budget and preserve every actual row/raw/native fact.
+    let uncompleted_before = diagnostic_cut(fixture, range, ack1, ack2, &failed_key);
+    let denial_parent = token();
+    let denied = fixture.clients[&range.leader]
+        .observe_native_completion_observation(
+            &node("n1"),
+            &NativeCompletionRequest {
+                scope: scope.clone(),
+                challenge: Uuid::now_v7(),
+                budget_ms: 4500,
+            },
+            &denial_parent,
+        )
+        .unwrap_err();
+    denial_parent.check().unwrap();
+    assert!(
+        denied
+            .to_string()
+            .contains("native completion has not actually persisted"),
+        "{denied}"
+    );
+    assert_eq!(
+        diagnostic_cut(fixture, range, ack1, ack2, &failed_key),
+        uncompleted_before
+    );
+    eprintln!("ACTUAL_POST_JOINT_UNCOMPLETED_OBSERVATION_DENIED live_original_request=true no_state_change=true no_completion_or_absence_grant=true");
     for id in &new_members {
         fixture.clients[&range.leader]
             .complete_native_recovery_observation(

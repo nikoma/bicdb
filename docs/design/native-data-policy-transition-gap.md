@@ -31,6 +31,26 @@ not DATA Ready, a native membership bridge, recovery or Strong permission.
 The independent native/joint checks remain required. This audit does not infer
 an unsafe ACK path from that necessary-policy API alone.
 
+## Earlier fixture reinstall during learner allocation
+
+A subsequent source review at `6e00ba519715ee0ca392357394f2b0a9749a1358`
+also identifies `native_joint_old_closure_tests.rs::commit_pending`. It commits
+the learner allocation and epoch 1→2 through the actual metadata stores, then
+unconditionally performs fresh HostMQ enrollment and coordinator installation
+for all four fixture members before OLD closure. This is a second explicit
+fixture policy replacement, preceding the post-decision `refresh_hosts` above.
+Capturing original guards before this helper and later claiming they survived
+would be incorrect; capturing them afterward would establish a narrower window.
+
+The source does not by itself establish that the earlier reinstall is necessary
+for the typed OLD-close/image/decision producers. The relevant old-close entry
+checks the installed range ID and actual base lifetime, rather than directly
+requiring the new full DATA descriptor. A distinct no-reinstall test must attempt
+the actual protocol with the from-birth guards retained through both boundaries,
+then record its earliest actual refusal or successful prerequisite. Preserve both
+existing fixture defaults and the full terminal ACK/Strong acceptance. This
+source finding is not an executed failure or an authorization to weaken policy.
+
 ## The exact original-writer window
 
 `distribution_data/native_joint_handoff/bridge.rs::prepare_local_native_joint_serving`

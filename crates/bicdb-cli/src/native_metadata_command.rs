@@ -694,6 +694,7 @@ pub fn run(command: Command) -> Result<()> {
                             NativeMetadataHostAction::StartLearnerMetadata => {
                                 host.start_metadata(&token)
                             }
+                            NativeMetadataHostAction::Elect => host.elect_metadata(&token),
                             NativeMetadataHostAction::Status => host.refresh(&token),
                             NativeMetadataHostAction::Stop => host.stop(&token).map(|_| {
                                 stopping = true;
@@ -702,7 +703,7 @@ pub fn run(command: Command) -> Result<()> {
                                 status.clone()
                             }),
                             _ => Err(bicdb_core::BicDbError::Unsupported(
-                                "learner owner permits only start-learner-metadata/status/stop"
+                                "learner owner permits only start-learner-metadata/elect/status/stop"
                                     .into(),
                             )),
                         };
@@ -747,6 +748,26 @@ pub fn run(command: Command) -> Result<()> {
                             }
                         }
                         Err(e) => error = Some(e.to_string()),
+                    }
+                    if automatic_join
+                        && status.metadata_role == bicdb_core::MetadataMemberRole::Voter
+                    {
+                        match host.enable_metadata_control(&token) {
+                            Ok(next) => status = next,
+                            Err(e) => error = Some(e.to_string()),
+                        }
+                    }
+                    if automatic_join
+                        && status.metadata_control_owned
+                        && status
+                            .metadata
+                            .as_ref()
+                            .is_some_and(|m| m.role == bicdb_core::MetadataConsensusRole::Leader)
+                    {
+                        match host.maintain_metadata(&token) {
+                            Ok(next) => status = next,
+                            Err(e) => error = Some(e.to_string()),
+                        }
                     }
                     if automatic_join && status.metadata_listener_owned {
                         if let Err(e) = host.start_automatic_metadata(&lifetime) {

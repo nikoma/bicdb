@@ -5,6 +5,8 @@ use crate::distribution_consensus::MetadataConsensusStore;
 use crate::distribution_metadata_read_provider::MetadataReadProvider;
 use crate::distribution_transport::DrainedClusterDataListener;
 
+mod control;
+
 const DIRECTORY: &str = "native-learner-metadata";
 #[derive(Default)]
 pub(super) struct NativeLearnerMetadataTransition {
@@ -17,6 +19,7 @@ pub(super) struct NativeLearnerMetadataTransition {
     pub(super) listener: Option<ClusterDataServerHandle>,
     stopping: bool,
     supervisor: Option<NativeMetadataSupervisor>,
+    control: Option<NativeMetadataControlHost>,
     namespace_ids: Option<Vec<(String, Uuid)>>,
 }
 impl NativeUnassignedLearnerHost {
@@ -26,12 +29,19 @@ impl NativeUnassignedLearnerHost {
     ) -> Result<()> {
         parent.check()?;
         let transition = &mut self.metadata_transition;
-        if transition.listener.is_none() || transition.stopping {
+        if (transition.listener.is_none()
+            && !transition.control.as_ref().is_some_and(|c| c.is_running()))
+            || transition.stopping
+        {
             return Err(invalid(
                 "automatic learner metadata requires running Registered listener",
             ));
         }
         if transition.supervisor.is_some() {
+            return Ok(());
+        }
+        if let Some(control) = &transition.control {
+            transition.supervisor = Some(control.start_automatic_metadata(parent)?);
             return Ok(());
         }
         transition.supervisor = Some(NativeMetadataSupervisor::start(
@@ -102,7 +112,13 @@ impl NativeUnassignedLearnerHost {
         Ok(Some((
             id,
             store.status(),
-            self.metadata_transition.listener.is_some() && !self.metadata_transition.stopping,
+            (self.metadata_transition.listener.is_some()
+                || self
+                    .metadata_transition
+                    .control
+                    .as_ref()
+                    .is_some_and(|c| c.is_running()))
+                && !self.metadata_transition.stopping,
         )))
     }
 
@@ -368,6 +384,9 @@ impl NativeUnassignedLearnerHost {
         if let Some(supervisor) = self.metadata_transition.supervisor.as_mut() {
             supervisor.stop(parent)?;
             self.metadata_transition.supervisor.take();
+        }
+        if let Some(control) = self.metadata_transition.control.as_mut() {
+            control.stop(parent)?;
         }
         if let Some(listener) = self.metadata_transition.listener.as_mut() {
             self.metadata_transition.stopping = true;

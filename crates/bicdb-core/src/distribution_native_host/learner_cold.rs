@@ -7,6 +7,8 @@ use crate::distribution_metadata_read_provider::MetadataReadProvider;
 use crate::distribution_transport::{ClusterDataServerHandle, TcpClusterRelocationTransport};
 use parking_lot::Mutex;
 
+mod control;
+
 const DIRECTORY: &str = "native-learner-metadata";
 pub(crate) struct NativeColdLearnerMetadataHost {
     factory: Arc<NativeUnassignedLearnerFactory>,
@@ -20,6 +22,7 @@ pub(crate) struct NativeColdLearnerMetadataHost {
     listener: Option<ClusterDataServerHandle>,
     stopping: bool,
     supervisor: Option<NativeMetadataSupervisor>,
+    control: Option<NativeMetadataControlHost>,
 }
 impl NativeColdLearnerMetadataHost {
     pub(in crate::distribution_native_host) fn start_automatic_metadata(
@@ -27,12 +30,18 @@ impl NativeColdLearnerMetadataHost {
         parent: &CancellationToken,
     ) -> Result<()> {
         parent.check()?;
-        if self.listener.is_none() || self.stopping {
+        if (self.listener.is_none() && !self.control.as_ref().is_some_and(|c| c.is_running()))
+            || self.stopping
+        {
             return Err(invalid(
                 "automatic cold metadata requires running Registered listener",
             ));
         }
         if self.supervisor.is_some() {
+            return Ok(());
+        }
+        if let Some(control) = &self.control {
+            self.supervisor = Some(control.start_automatic_metadata(parent)?);
             return Ok(());
         }
         self.supervisor = Some(NativeMetadataSupervisor::start(
@@ -107,7 +116,8 @@ impl NativeColdLearnerMetadataHost {
         Ok(Some((
             id,
             store.status(),
-            self.listener.is_some() && !self.stopping,
+            (self.listener.is_some() || self.control.as_ref().is_some_and(|c| c.is_running()))
+                && !self.stopping,
         )))
     }
 
@@ -157,6 +167,7 @@ impl NativeColdLearnerMetadataHost {
             listener: None,
             stopping: false,
             supervisor: None,
+            control: None,
         })
     }
 
@@ -310,6 +321,9 @@ impl NativeColdLearnerMetadataHost {
         if let Some(supervisor) = self.supervisor.as_mut() {
             supervisor.stop(parent)?;
             self.supervisor.take();
+        }
+        if let Some(control) = self.control.as_mut() {
+            control.stop(parent)?;
         }
         if let Some(listener) = self.listener.as_mut() {
             self.stopping = true;

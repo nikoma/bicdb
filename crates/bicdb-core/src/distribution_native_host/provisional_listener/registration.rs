@@ -17,7 +17,7 @@ const MAX_PENDING: usize = 32;
 const MAX_QUEUE_BYTES: usize = 1024 * 1024;
 
 pub(crate) struct NativeMetadataRegistrationController {
-    launch: Arc<NativeInitialConsensusLaunch>,
+    backend: Arc<NativeMetadataControlBackend>,
     config: DistributionConfig,
     store_open_id: Uuid,
     queue: Mutex<BTreeMap<ClusterNodeId, Arc<NativeMetadataRegistrationIngress>>>,
@@ -34,13 +34,13 @@ impl std::fmt::Debug for NativeMetadataRegistrationController {
 }
 impl NativeMetadataRegistrationController {
     fn new(
-        launch: Arc<NativeInitialConsensusLaunch>,
+        backend: Arc<NativeMetadataControlBackend>,
         config: DistributionConfig,
         parent: &CancellationToken,
     ) -> Result<Self> {
         config.validate()?;
         let (actual_open, store_open_id) = {
-            let service = launch
+            let service = backend
                 .service
                 .try_lock()
                 .ok_or_else(|| invalid("native control service busy before construction"))?;
@@ -49,14 +49,14 @@ impl NativeMetadataRegistrationController {
                 service.native_initial_listener_store_open_id(),
             )
         };
-        let store = launch.lock_initial_metadata(parent)?;
+        let store = backend.lock_metadata(parent)?;
         store.require_listener_database(&actual_open)?;
         let topology = store.committed_topology();
         let member = topology
             .nodes
             .get(&config.node_id)
             .ok_or_else(|| invalid("native control template member absent"))?;
-        if config.node_id != launch.seed.spec.node_id
+        if config.node_id != backend.node_id
             || config.node_incarnation != member.incarnation
             || config.node_address != member.address
             || config.node_capacity_bytes != member.capacity_bytes
@@ -72,7 +72,7 @@ impl NativeMetadataRegistrationController {
         crate::DistributionStore::native_registration_plan(config.clone(), topology.clone())?;
         drop(store);
         Ok(Self {
-            launch,
+            backend,
             config,
             store_open_id,
             queue: Mutex::new(BTreeMap::new()),
@@ -87,7 +87,7 @@ impl NativeMetadataRegistrationController {
         actual: &Arc<Mutex<ClusterDataNodeService>>,
         store_open_id: Uuid,
     ) -> Result<()> {
-        if !Arc::ptr_eq(actual, &self.launch.service) || store_open_id != self.store_open_id {
+        if !Arc::ptr_eq(actual, &self.backend.service) || store_open_id != self.store_open_id {
             return Err(invalid(
                 "native controller belongs to another actual service/store open",
             ));
@@ -97,12 +97,12 @@ impl NativeMetadataRegistrationController {
     pub(crate) fn bootstrap(&self, parent: &CancellationToken) -> Result<ClusterBootstrapSnapshot> {
         parent.check()?;
         let actual = self
-            .launch
+            .backend
             .service
             .try_lock()
             .ok_or_else(|| invalid("native bootstrap service busy"))?
             .listener_open_guard();
-        let store = self.launch.lock_initial_metadata(parent)?;
+        let store = self.backend.lock_metadata(parent)?;
         store.require_listener_database(&actual)?;
         let status = store.status();
         let snapshot = ClusterBootstrapSnapshot {
@@ -127,7 +127,7 @@ impl NativeMetadataRegistrationController {
         // contribute an ACK and are not contacted to commit their registration.
         for _ in 0..3 {
             let peers = {
-                let store = self.launch.lock_initial_metadata(parent)?;
+                let store = self.backend.lock_metadata(parent)?;
                 if store.status().role != MetadataConsensusRole::Leader {
                     return Err(invalid("native registration metadata leader changed"));
                 }
@@ -141,7 +141,7 @@ impl NativeMetadataRegistrationController {
                     .filter(|n| {
                         n.lifecycle == ClusterNodeLifecycle::Active
                             && n.metadata_role == MetadataMemberRole::Voter
-                            && n.id != self.launch.seed.spec.node_id
+                            && n.id != self.backend.node_id
                     })
                     .map(|n| n.id.clone())
                     .collect::<Vec<_>>()
@@ -149,7 +149,7 @@ impl NativeMetadataRegistrationController {
             for peer in peers {
                 parent.check()?;
                 let request = {
-                    let store = self.launch.lock_initial_metadata(parent)?;
+                    let store = self.backend.lock_metadata(parent)?;
                     if store.status().role != MetadataConsensusRole::Leader {
                         return Err(invalid("native registration metadata leader changed"));
                     }
@@ -170,13 +170,13 @@ impl NativeMetadataRegistrationController {
                     store.append_request_for_peer(&peer, 16)?
                 };
                 match self
-                    .launch
+                    .backend
                     .transport
                     .append_metadata_cancellable(&peer, request, parent)
                 {
                     Ok(reply) => {
-                        self.launch
-                            .lock_initial_metadata(parent)?
+                        self.backend
+                            .lock_metadata(parent)?
                             .record_append_response(&peer, &reply)?;
                     }
                     Err(_) => {
@@ -185,7 +185,7 @@ impl NativeMetadataRegistrationController {
                 }
             }
         }
-        self.launch.publish_initial_committed_metadata(parent)
+        self.backend.publish_committed_metadata(parent)
     }
     pub(crate) fn register(
         &self,
@@ -196,7 +196,7 @@ impl NativeMetadataRegistrationController {
             .child_with_deadline(Instant::now() + Duration::from_secs(5));
         let snapshot = self.bootstrap(&token)?;
         ingress.require_current(&snapshot.topology)?;
-        if snapshot.metadata_leader_id.as_ref() != Some(&self.launch.seed.spec.node_id) {
+        if snapshot.metadata_leader_id.as_ref() != Some(&self.backend.node_id) {
             return Err(invalid(&format!(
                 "native registration must route to current metadata leader {:?}",
                 snapshot.metadata_leader_id
@@ -250,22 +250,22 @@ impl NativeMetadataRegistrationController {
             }
         }
         let _operation = Driving(&self.driving);
-        let leader = &self.launch.seed.spec.node_id;
+        let leader = &self.backend.node_id;
         let business = Uuid::now_v7();
-        let current = self.launch.transport.acquire_host_metadata_observation(
+        let current = self.backend.transport.acquire_host_metadata_observation(
             leader,
             business,
             Duration::from_secs(5),
             &token,
         )?;
         let actual = self
-            .launch
+            .backend
             .service
             .try_lock()
             .ok_or_else(|| invalid("native registration service busy"))?
             .listener_open_guard();
         let proposed = {
-            let mut store = self.launch.lock_initial_metadata(&token)?;
+            let mut store = self.backend.lock_metadata(&token)?;
             store.require_listener_database(&actual)?;
             store.propose_native_metadata_registration(
                 &ingress,
@@ -282,7 +282,7 @@ impl NativeMetadataRegistrationController {
         }
         self.replicate_registration(proposed.as_ref().map(|p| p.index), &token)?;
         let final_business = Uuid::now_v7();
-        let final_mq = self.launch.transport.acquire_host_metadata_observation(
+        let final_mq = self.backend.transport.acquire_host_metadata_observation(
             leader,
             final_business,
             Duration::from_secs(5),
@@ -290,7 +290,7 @@ impl NativeMetadataRegistrationController {
         )?;
         final_mq.require_live_request(final_business)?;
         token.check()?;
-        let store = self.launch.lock_initial_metadata(&token)?;
+        let store = self.backend.lock_metadata(&token)?;
         store.require_listener_database(&actual)?;
         let status = store.status();
         if status.role != MetadataConsensusRole::Leader
@@ -328,7 +328,7 @@ impl NativeMetadataRegistrationController {
 /// Owns all phase inputs before fallible drain/bind. The old socket cannot
 /// broaden in place and failed advance never drops the actual metadata owner.
 pub(crate) struct NativeMetadataControlHost {
-    launch: Arc<NativeInitialConsensusLaunch>,
+    backend: Arc<NativeMetadataControlBackend>,
     old_listener: Option<ClusterDataServerHandle>,
     drained: Option<DrainedClusterDataListener>,
     controller: Option<Arc<NativeMetadataRegistrationController>>,
@@ -338,13 +338,15 @@ pub(crate) struct NativeMetadataControlHost {
 }
 impl NativeMetadataControlHost {
     pub(crate) fn new(
-        launch: NativeInitialConsensusLaunch,
+        initial: NativeInitialConsensusLaunch,
         listener: ClusterDataServerHandle,
         network: ClusterNetworkTransportConfig,
         config: DistributionConfig,
     ) -> Self {
         Self {
-            launch: Arc::new(launch),
+            backend: Arc::new(NativeMetadataControlBackend::from_initial(Arc::new(
+                initial,
+            ))),
             old_listener: Some(listener),
             drained: None,
             controller: None,
@@ -352,6 +354,25 @@ impl NativeMetadataControlHost {
             network,
             config,
         }
+    }
+    pub(in crate::distribution_native_host) fn from_registered_member(
+        backend: NativeMetadataControlBackend,
+        listener: ClusterDataServerHandle,
+        network: ClusterNetworkTransportConfig,
+        config: DistributionConfig,
+    ) -> Self {
+        Self {
+            backend: Arc::new(backend),
+            old_listener: Some(listener),
+            drained: None,
+            controller: None,
+            listener: None,
+            network,
+            config,
+        }
+    }
+    pub(in crate::distribution_native_host) fn is_running(&self) -> bool {
+        self.listener.is_some()
     }
     pub(crate) fn advance(&mut self, parent: &CancellationToken) -> Result<()> {
         let token = parent.child_with_deadline(Instant::now() + Duration::from_secs(5));
@@ -392,34 +413,31 @@ impl NativeMetadataControlHost {
             );
         }
         let drained = self.drained.as_ref().unwrap();
-        drained.require_service(&self.launch.service)?;
+        drained.require_service(&self.backend.service)?;
         if self.controller.is_none() {
             self.controller = Some(Arc::new(NativeMetadataRegistrationController::new(
-                Arc::clone(&self.launch),
+                Arc::clone(&self.backend),
                 self.config.clone(),
                 &token,
             )?));
         }
         let controller = self.controller.as_ref().unwrap();
         {
-            let store = self.launch.lock_initial_metadata(&token)?;
+            let store = self.backend.lock_metadata(&token)?;
             let mut service = self
-                .launch
+                .backend
                 .service
                 .try_lock()
                 .ok_or_else(|| invalid("native transition service busy"))?;
             service.attach_native_metadata_control(
-                &self.launch.service,
+                &self.backend.service,
                 drained,
                 &store,
                 controller,
             )?;
         }
         self.old_listener.take();
-        self.listener = Some(
-            self.launch
-                .start_metadata_listener(self.network.clone(), &token)?,
-        );
+        self.listener = Some(self.backend.start_listener(self.network.clone(), &token)?);
         token.check()
     }
     pub(crate) fn ensure_enrolled_target(
@@ -428,13 +446,13 @@ impl NativeMetadataControlHost {
         parent: &CancellationToken,
     ) -> Result<ClusterNodeId> {
         let business = Uuid::now_v7();
-        let current = self.launch.transport.acquire_host_metadata_observation(
-            &self.launch.seed.spec.node_id,
+        let current = self.backend.transport.acquire_host_metadata_observation(
+            &self.backend.node_id,
             business,
             Duration::from_secs(5),
             parent,
         )?;
-        let store = self.launch.lock_initial_metadata(parent)?;
+        let store = self.backend.lock_metadata(parent)?;
         store.require_native_control_leader(&current, business)?;
         let member = store
             .committed_topology()
@@ -449,7 +467,7 @@ impl NativeMetadataControlHost {
         }
         drop(store);
         Ok(self
-            .launch
+            .backend
             .enroll_registered_native_learner(target, parent)?
             .node()
             .clone())
@@ -459,7 +477,8 @@ impl NativeMetadataControlHost {
         target: &ClusterNodeId,
         parent: &CancellationToken,
     ) -> Result<NativeLearnerMetadataEnrollment> {
-        self.launch.enroll_registered_native_learner(target, parent)
+        self.backend
+            .enroll_registered_native_learner(target, parent)
     }
     pub(crate) fn catch_up_learner(
         &self,
@@ -468,14 +487,14 @@ impl NativeMetadataControlHost {
     ) -> Result<Uuid> {
         let token = parent.child_with_deadline(Instant::now() + Duration::from_secs(5));
         let business = Uuid::now_v7();
-        let current = self.launch.transport.acquire_host_metadata_observation(
-            &self.launch.seed.spec.node_id,
+        let current = self.backend.transport.acquire_host_metadata_observation(
+            &self.backend.node_id,
             business,
             Duration::from_secs(5),
             &token,
         )?;
         let open = self
-            .launch
+            .backend
             .service
             .try_lock()
             .ok_or_else(|| invalid("learner catch-up service busy"))?
@@ -483,7 +502,7 @@ impl NativeMetadataControlHost {
         let mut accepted = None;
         for _ in 0..3 {
             let (request, required) = {
-                let store = self.launch.lock_initial_metadata(&token)?;
+                let store = self.backend.lock_metadata(&token)?;
                 store.require_listener_database(&open)?;
                 store.require_native_control_leader(&current, business)?;
                 let member = store
@@ -504,7 +523,7 @@ impl NativeMetadataControlHost {
                 )
             };
             let reply = self
-                .launch
+                .backend
                 .transport
                 .append_metadata_cancellable(target, request, &token)?;
             let receiver = reply
@@ -513,7 +532,7 @@ impl NativeMetadataControlHost {
                 .ok_or_else(|| invalid("learner catch-up has no actual native owned ACK"))?;
             let id = receiver.metadata_store_id();
             {
-                let mut store = self.launch.lock_initial_metadata(&token)?;
+                let mut store = self.backend.lock_metadata(&token)?;
                 store.require_listener_database(&open)?;
                 store.record_append_response(target, &reply)?;
                 store.require_native_control_leader(&current, business)?;
@@ -527,8 +546,8 @@ impl NativeMetadataControlHost {
             invalid("bounded learner catch-up has not reached actual leader commit")
         })?;
         let post_business = Uuid::now_v7();
-        let post = self.launch.transport.acquire_host_metadata_observation(
-            &self.launch.seed.spec.node_id,
+        let post = self.backend.transport.acquire_host_metadata_observation(
+            &self.backend.node_id,
             post_business,
             Duration::from_secs(5),
             &token,
@@ -539,7 +558,7 @@ impl NativeMetadataControlHost {
         {
             return Err(invalid("learner catch-up CONFIG changed"));
         }
-        let store = self.launch.lock_initial_metadata(&token)?;
+        let store = self.backend.lock_metadata(&token)?;
         store.require_listener_database(&open)?;
         store.require_native_control_leader(&post, post_business)?;
         token.check()?;
@@ -554,7 +573,7 @@ impl NativeMetadataControlHost {
                 "automatic metadata requires owned control listener",
             ));
         }
-        self.launch
+        self.backend
             .start_automatic_metadata(self.network.clone(), parent)
     }
     pub(crate) fn maintain_joins(
@@ -572,12 +591,12 @@ impl NativeMetadataControlHost {
     ) -> Result<crate::MetadataConsensusStatus> {
         parent.check()?;
         let actual = self
-            .launch
+            .backend
             .service
             .try_lock()
             .ok_or_else(|| invalid("native control status service busy"))?
             .listener_open_guard();
-        let store = self.launch.lock_initial_metadata(parent)?;
+        let store = self.backend.lock_metadata(parent)?;
         store.require_listener_database(&actual)?;
         Ok(store.status())
     }
@@ -589,10 +608,24 @@ impl NativeMetadataControlHost {
             .test_fail_after_proposal
             .store(true, Ordering::Release);
     }
+    pub(in crate::distribution_native_host) fn elect(
+        &self,
+        parent: &CancellationToken,
+    ) -> Result<()> {
+        if !self.is_running() {
+            return Err(invalid("actual metadata control listener is not running"));
+        }
+        self.backend.elect(parent).map(|_| ())
+    }
     pub(crate) fn heartbeat(&self, parent: &CancellationToken) -> Result<()> {
-        self.launch.heartbeat_initial_metadata(parent)
+        self.backend.heartbeat(parent)
     }
     pub(crate) fn stop(&mut self, parent: &CancellationToken) -> Result<()> {
+        if let Some(old) = self.old_listener.as_mut() {
+            let drained = old.stop_and_drain(parent)?;
+            self.drained.get_or_insert(drained);
+            self.old_listener.take();
+        }
         if let Some(listener) = self.listener.as_mut() {
             listener.stop_and_drain(parent)?;
         }

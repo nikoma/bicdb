@@ -16,7 +16,7 @@ impl NativeMetadataRegistrationController {
             .metadata_leader_id
             .ok_or_else(|| invalid("native schema source has no metadata leader"))?;
         let first_business = Uuid::now_v7();
-        let first = self.launch.transport.acquire_host_metadata_observation(
+        let first = self.backend.transport.acquire_host_metadata_observation(
             &leader,
             first_business,
             Duration::from_secs(5),
@@ -29,7 +29,7 @@ impl NativeMetadataRegistrationController {
             .ok_or_else(|| invalid("native schema caller absent"))?;
         let source = topology
             .nodes
-            .get(&self.launch.seed.spec.node_id)
+            .get(&self.backend.node_id)
             .ok_or_else(|| invalid("native schema source absent"))?;
         let range = topology
             .range_by_id(range_id)
@@ -48,12 +48,8 @@ impl NativeMetadataRegistrationController {
                 .any(|r| r.replicas.iter().any(|p| &p.node_id == caller.node_id()))
             || source.lifecycle != ClusterNodeLifecycle::Active
             || source.metadata_role != MetadataMemberRole::Voter
-            || !range
-                .replicas
-                .iter()
-                .any(|r| r.node_id == source.id && r.role == crate::RangeReplicaRole::Voter)
         {
-            return Err(invalid("native schema export requires actual unassigned learner/current registered source voter"));
+            return Err(invalid("native schema export requires actual unassigned learner/current registered metadata voter"));
         }
         let expected = range
             .required_schema_sha256(&topology.nodes)
@@ -65,18 +61,18 @@ impl NativeMetadataRegistrationController {
             .ok_or_else(|| invalid("native schema source birth unbound"))?;
         let (database, open) = {
             let service = self
-                .launch
+                .backend
                 .service
                 .try_lock()
                 .ok_or_else(|| invalid("native schema service busy"))?;
             self.require_service(
-                &self.launch.service,
+                &self.backend.service,
                 service.native_initial_listener_store_open_id(),
             )?;
             (service.database(), service.listener_open_guard())
         };
         {
-            let store = self.launch.lock_initial_metadata(&token)?;
+            let store = self.backend.lock_metadata(&token)?;
             store.require_listener_database(&open)?;
             if store.committed_topology() != topology {
                 return Err(invalid(
@@ -89,6 +85,7 @@ impl NativeMetadataRegistrationController {
                 .try_read()
                 .ok_or_else(|| invalid("native schema source DB busy"))?;
             open.require_database(&db)?;
+            self.backend.require_database(&db, topology)?;
             db.check_recovery_state()?;
             let native = db.native_recovery_admission(
                 &topology.cluster_id,
@@ -137,7 +134,7 @@ impl NativeMetadataRegistrationController {
         token.check()?;
         // Distinct genuinely fresh OWN MQ, after ALL service/DB latches drop.
         let post_business = Uuid::now_v7();
-        let post = self.launch.transport.acquire_host_metadata_observation(
+        let post = self.backend.transport.acquire_host_metadata_observation(
             &leader,
             post_business,
             Duration::from_secs(5),
@@ -155,7 +152,7 @@ impl NativeMetadataRegistrationController {
             ));
         }
         {
-            let store = self.launch.lock_initial_metadata(&token)?;
+            let store = self.backend.lock_metadata(&token)?;
             store.require_listener_database(&open)?;
             if store.committed_topology() != topology {
                 return Err(invalid("native schema current owned CONFIG changed"));
@@ -166,6 +163,7 @@ impl NativeMetadataRegistrationController {
                 .try_read()
                 .ok_or_else(|| invalid("native schema post-export DB busy"))?;
             open.require_database(&db)?;
+            self.backend.require_database(&db, topology)?;
             native.require_current(&db)?;
             db.check_recovery_state()?;
             let mut current = db

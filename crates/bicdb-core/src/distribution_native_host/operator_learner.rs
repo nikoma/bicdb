@@ -20,6 +20,9 @@ pub struct NativeMetadataLearnerStatus {
     pub metadata_role: MetadataMemberRole,
     pub metadata: Option<MetadataConsensusStatus>,
     pub metadata_listener_owned: bool,
+    pub metadata_control_owned: bool,
+    pub last_metadata_maintenance: Option<serde_json::Value>,
+    pub last_metadata_promotion: Option<serde_json::Value>,
     pub phase: &'static str,
     pub data_serving: bool,
 }
@@ -32,6 +35,8 @@ pub struct NativeMetadataLearnerHost {
     address: String,
     network: ClusterNetworkTransportConfig,
     metadata_started: bool,
+    last_metadata_maintenance: Option<serde_json::Value>,
+    last_metadata_promotion: Option<serde_json::Value>,
     transitioning: bool,
     stopped: bool,
 }
@@ -171,6 +176,8 @@ impl NativeMetadataLearnerHost {
             address: address.to_owned(),
             network,
             metadata_started: false,
+            last_metadata_maintenance: None,
+            last_metadata_promotion: None,
             transitioning: false,
             stopped: false,
         })
@@ -263,6 +270,8 @@ impl NativeMetadataLearnerHost {
             address: address.to_owned(),
             network,
             metadata_started: false,
+            last_metadata_maintenance: None,
+            last_metadata_promotion: None,
             transitioning: true,
             stopped: false,
         })
@@ -410,6 +419,10 @@ impl NativeMetadataLearnerHost {
                 host.refresh_metadata(observed, business, &token)?;
             }
         }
+        let metadata_control_owned = match &self.host {
+            NativeLearnerLifecycle::Fresh(host) => host.metadata_control_owned(),
+            NativeLearnerLifecycle::Cold(host) => host.metadata_control_owned(),
+        };
         Ok(NativeMetadataLearnerStatus {
             version: 1,
             node_id: self.factory.spec.node_id.clone(),
@@ -422,8 +435,16 @@ impl NativeMetadataLearnerHost {
             metadata_role,
             metadata,
             metadata_listener_owned: listener,
-            phase: if self.metadata_started && metadata_role == MetadataMemberRole::Voter {
+            metadata_control_owned,
+            last_metadata_maintenance: self.last_metadata_maintenance.clone(),
+            last_metadata_promotion: self.last_metadata_promotion.clone(),
+            phase: if self.metadata_started
+                && metadata_role == MetadataMemberRole::Voter
+                && metadata_control_owned
+            {
                 "owned_metadata_voter"
+            } else if self.metadata_started && metadata_role == MetadataMemberRole::Voter {
+                "owned_metadata_voter_awaiting_control"
             } else if self.metadata_started {
                 "owned_metadata_learner"
             } else if self.transitioning {
@@ -459,6 +480,88 @@ impl NativeMetadataLearnerHost {
         }
         self.metadata_started = true;
         self.transitioning = false;
+        self.refresh(&token)
+    }
+    /// Move the existing Registered metadata backend through an actual drain
+    /// to a NEW immutable control listener. No initial-factory permit is minted.
+    pub fn enable_metadata_control(
+        &mut self,
+        parent: &CancellationToken,
+    ) -> Result<NativeMetadataLearnerStatus> {
+        let token = parent.child_with_deadline(Instant::now() + Duration::from_secs(5));
+        token.check()?;
+        if !self.metadata_started || self.stopped {
+            return Err(invalid(
+                "actual started metadata owner required before control",
+            ));
+        }
+        let (observed, business) = self.own_metadata(&token)?;
+        let topology = observed.committed_topology(business)?;
+        let local = &topology.nodes[&self.factory.spec.node_id];
+        let config = crate::DistributionConfig {
+            enabled: true,
+            cluster_id: topology.cluster_id.clone(),
+            range_image_bootstrap_id: topology.range_image_bootstrap_id,
+            node_id: local.id.clone(),
+            node_address: self.address.clone(),
+            node_incarnation: local.incarnation,
+            node_capacity_bytes: local.capacity_bytes,
+            node_tls_certificate_sha256: local.tls_certificate_sha256.clone(),
+            replication_factor: topology.replication_factor,
+            // Template planning DATA only, never a data initialization request.
+            initial_ranges: u32::try_from(topology.ranges.len())
+                .map_err(|_| invalid("native range count overflow"))?
+                .checked_next_power_of_two()
+                .ok_or_else(|| invalid("native range count overflow"))?,
+            transport: self.network.clone(),
+            ..Default::default()
+        };
+        match &mut self.host {
+            NativeLearnerLifecycle::Fresh(host) => {
+                host.enable_metadata_control(&observed, business, config, &token)?
+            }
+            NativeLearnerLifecycle::Cold(host) => {
+                host.enable_metadata_control(&observed, business, config, &token)?
+            }
+        }
+        self.refresh(&token)
+    }
+    pub fn maintain_metadata(
+        &mut self,
+        parent: &CancellationToken,
+    ) -> Result<NativeMetadataLearnerStatus> {
+        let token = parent.child_with_deadline(Instant::now() + Duration::from_secs(5));
+        token.check()?;
+        let report = match &self.host {
+            NativeLearnerLifecycle::Fresh(host) => host.maintain_metadata_control(&token),
+            NativeLearnerLifecycle::Cold(host) => host.maintain_metadata_control(&token),
+        };
+        self.last_metadata_maintenance = Some(match report {
+            Ok(report) => {
+                let value = serde_json::to_value(&report)?;
+                if report.stage == "promoted_and_installed" {
+                    self.last_metadata_promotion = Some(value.clone());
+                }
+                value
+            }
+            Err(error) => {
+                serde_json::json!({"stage":"unavailable_or_pending", "error":error.to_string().chars().take(2048).collect::<String>()})
+            }
+        });
+        self.refresh(&token)
+    }
+    /// Explicit diagnostic election uses actual votes and a committed current-
+    /// term barrier, exactly as the initial-member finite producer does.
+    pub fn elect_metadata(
+        &mut self,
+        parent: &CancellationToken,
+    ) -> Result<NativeMetadataLearnerStatus> {
+        let token = parent.child_with_deadline(Instant::now() + Duration::from_secs(5));
+        token.check()?;
+        match &self.host {
+            NativeLearnerLifecycle::Fresh(host) => host.elect_metadata_control(&token)?,
+            NativeLearnerLifecycle::Cold(host) => host.elect_metadata_control(&token)?,
+        }
         self.refresh(&token)
     }
     /// Starts scheduling only after the actual same-service Registered

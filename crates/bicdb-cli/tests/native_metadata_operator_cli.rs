@@ -110,7 +110,7 @@ fn four_processes(
     ];
     let ca = ca_params.self_signed(&ca_key).unwrap();
     std::fs::write(root.join("ca.pem"), ca.pem()).unwrap();
-    let ports = (0..5)
+    let ports = (0..6)
         .map(|_| TcpListener::bind("127.0.0.1:0").unwrap())
         .collect::<Vec<_>>();
     let addresses = ports
@@ -118,7 +118,7 @@ fn four_processes(
         .map(|l| l.local_addr().unwrap().to_string())
         .collect::<Vec<_>>();
     let mut members = Vec::new();
-    for i in 0..5 {
+    for i in 0..6 {
         let key = KeyPair::generate().unwrap();
         let mut p = CertificateParams::new(vec!["localhost".into(), "127.0.0.1".into()]).unwrap();
         p.extended_key_usages = vec![
@@ -733,6 +733,7 @@ fn native_metadata_operator_actual_cli_single_join_fresh_becomes_local_metadata_
         if let Some(ready) = ready {
             let host = &ready["host"];
             if host["phase"] == "owned_metadata_voter"
+                && host["metadata_control_owned"] == true
                 && host["metadata"]["voters"]
                     .as_array()
                     .is_some_and(|v| v.contains(&serde_json::json!("n4")))
@@ -771,6 +772,83 @@ fn native_metadata_operator_actual_cli_single_join_fresh_becomes_local_metadata_
     // No diagnostic action was submitted to the fifth, even for polling.
     assert!(!command.exists());
     assert_eq!(ready["sequence"], 0);
+    // Now exercise the lifecycle that a promotion-only result cannot prove:
+    // the fifth campaigns using real authenticated votes/current-term barrier,
+    // then serves registration AND verified schema to a sixth actual backend.
+    let elected = step(&root, 4, 1, "elect");
+    assert_eq!(elected["host"]["metadata"]["role"], "leader");
+    assert_eq!(elected["host"]["metadata"]["node_id"], "n4");
+    assert_eq!(elected["host"]["metadata_control_owned"], true);
+    let (sixth_command, sixth_status) = paths(&root, 5);
+    let mut sixth = binary();
+    sixth
+        .args(["cluster", "native-metadata", "join-fresh"])
+        .arg(root.join("db5"))
+        .arg("--cluster-id")
+        .arg(config.cluster_id.as_str())
+        // Keep the ORIGINAL seed hint. It must route DATA to actual leader4,
+        // not assume the first seed remains the leader/registration controller.
+        .arg("--seed-node-id")
+        .arg("n0")
+        .arg("--seed-address")
+        .arg(&addresses[0])
+        .arg("--node-id")
+        .arg("n5")
+        .arg("--address")
+        .arg(&addresses[5])
+        .arg("--capacity-bytes")
+        .arg((1u64 << 30).to_string())
+        .arg("--command-file")
+        .arg(&sixth_command)
+        .arg("--status-file")
+        .arg(&sixth_status)
+        .arg("--run-seconds")
+        .arg("120");
+    add_tls(&mut sixth, &root, 5);
+    sixth
+        .stdin(Stdio::null())
+        .stdout(std::fs::File::create(root.join("node5.stdout")).unwrap())
+        .stderr(std::fs::File::create(root.join("node5.stderr")).unwrap());
+    processes.children.push(sixth.spawn().unwrap());
+    let until = Instant::now() + Duration::from_secs(45);
+    let sixth = loop {
+        for (i, child) in processes.children.iter_mut().enumerate() {
+            assert!(
+                child.try_wait().unwrap().is_none(),
+                "real native process{i} exited; logs retained"
+            );
+        }
+        let actual: Option<Value> = std::fs::read(&sixth_status)
+            .ok()
+            .map(|b| serde_json::from_slice(&b).unwrap());
+        if let Some(actual) = actual {
+            if actual["host"]["phase"] == "owned_metadata_voter"
+                && actual["host"]["metadata_control_owned"] == true
+                && actual["host"]["metadata"]["voters"]
+                    .as_array()
+                    .is_some_and(|v| v.contains(&serde_json::json!("n5")))
+            {
+                break actual;
+            }
+        }
+        assert!(
+            Instant::now() < until,
+            "sixth join through actual promoted metadata leader did not finish; logs retained"
+        );
+        std::thread::sleep(Duration::from_millis(20));
+    };
+    assert!(sixth["error"].is_null(), "{sixth}");
+    assert_eq!(sixth["host"]["birth_bound"], true);
+    assert_eq!(sixth["host"]["metadata_listener_owned"], true);
+    assert_eq!(sixth["host"]["data_serving"], false);
+    let sixth_id = sixth["host"]["metadata_store_id"].as_str().unwrap();
+    assert!(!uuid::Uuid::parse_str(sixth_id).unwrap().is_nil());
+    assert_ne!(sixth_id, id);
+    assert!(
+        !sixth_command.exists(),
+        "no hidden sixth diagnostic protocol actions"
+    );
+    assert_eq!(sixth["sequence"], 0);
     let network = ClusterNetworkTransportConfig {
         tls: Some(ReplicationTlsConfig {
             cert_path: root.join("n0.pem"),
@@ -794,6 +872,20 @@ fn native_metadata_operator_actual_cli_single_join_fresh_becomes_local_metadata_
         snapshot.topology.nodes[&node(4)].metadata_role,
         bicdb_core::MetadataMemberRole::Voter
     );
+    assert_eq!(snapshot.metadata_leader_id, Some(node(4)));
+    assert_eq!(
+        snapshot.topology.nodes[&node(5)].metadata_role,
+        bicdb_core::MetadataMemberRole::Voter
+    );
+    assert_eq!(
+        snapshot.topology.nodes[&node(5)]
+            .native_store_birth_v1
+            .as_ref()
+            .unwrap()
+            .birth_id()
+            .to_string(),
+        sixth["host"]["birth_id"].as_str().unwrap()
+    );
     assert!(snapshot
         .topology
         .ranges
@@ -807,7 +899,7 @@ fn native_metadata_operator_actual_cli_single_join_fresh_becomes_local_metadata_
     )
     .unwrap();
     let range = snapshot.topology.ranges.values().next().unwrap();
-    for i in 0..5 {
+    for i in 0..6 {
         assert!(
             transport
                 .application_event(

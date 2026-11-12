@@ -129,6 +129,42 @@ fn native_metadata_promotion_requires_actual_owned_ack_and_original_live_budget(
         .unwrap();
     host.validate_owned_metadata_member(&own, business, &token)
         .unwrap();
+    // Promotion did not mutate the old immutable listener's allowlist.
+    assert!(f
+        .learner_transport
+        .fetch_metadata_snapshot(&node(4))
+        .is_err());
+    let member = &own.committed_topology(business).unwrap().nodes[&node(4)];
+    let mut member_config = configuration.clone();
+    member_config.node_id = member.id.clone();
+    member_config.node_address = member.address.clone();
+    member_config.node_incarnation = member.incarnation;
+    member_config.node_capacity_bytes = member.capacity_bytes;
+    member_config.node_tls_certificate_sha256 = member.tls_certificate_sha256.clone();
+    member_config.transport = f.networks[4].clone();
+    host.enable_metadata_control(&own, business, member_config, &token)
+        .unwrap();
+    assert!(host.metadata_control_owned());
+    let snapshot = f
+        .learner_transport
+        .fetch_metadata_snapshot(&node(4))
+        .unwrap();
+    assert!(snapshot.topology.nodes[&node(4)]
+        .native_store_birth_v1
+        .is_some());
+    assert_eq!(
+        snapshot.topology.nodes[&node(4)].metadata_role,
+        MetadataMemberRole::Voter
+    );
+    // The SAME actual backend campaigns with real TLS votes/barrier, not a
+    // forced role/term. Its current store UUID and original namespaces survive.
+    host.elect_metadata_control(&token).unwrap();
+    assert_eq!(
+        owned.lock().status().role,
+        crate::MetadataConsensusRole::Leader
+    );
+    assert_eq!(owned.lock().status().node_id, node(4));
+
     assert_eq!(
         owned
             .lock()

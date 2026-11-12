@@ -57,6 +57,8 @@ pub(crate) use provisional_listener::{
 #[cfg(feature = "tls-replication")]
 mod metadata_supervisor;
 #[cfg(feature = "tls-replication")]
+use provisional_listener::{NativeMetadataControlBackend, NativeMetadataMaintenanceReport};
+#[cfg(feature = "tls-replication")]
 mod operator;
 #[cfg(feature = "tls-replication")]
 pub(crate) use metadata_supervisor::{NativeMetadataSupervisor, NativeMetadataSupervisorConfig};

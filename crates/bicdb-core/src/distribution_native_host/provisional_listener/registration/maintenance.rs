@@ -19,7 +19,7 @@ pub(super) struct NativeMetadataMaintenanceState {
 impl NativeMetadataRegistrationController {
     fn choose(&self, parent: &CancellationToken) -> Result<Option<ClusterNodeId>> {
         let snapshot = self.bootstrap(parent)?;
-        if snapshot.metadata_leader_id.as_ref() != Some(&self.launch.seed.spec.node_id) {
+        if snapshot.metadata_leader_id.as_ref() != Some(&self.backend.node_id) {
             return Err(invalid(
                 "automatic enrollment requires current metadata leader",
             ));
@@ -156,23 +156,23 @@ impl NativeMetadataRegistrationController {
         parent: &CancellationToken,
     ) -> Result<NativeMetadataMaintenanceReport> {
         let business = Uuid::now_v7();
-        let first = self.launch.transport.acquire_host_metadata_observation(
-            &self.launch.seed.spec.node_id,
+        let first = self.backend.transport.acquire_host_metadata_observation(
+            &self.backend.node_id,
             business,
             Duration::from_secs(5),
             parent,
         )?;
-        self.launch
+        self.backend
             .transport
             .install_topology(first.committed_topology(business)?.clone())?;
         let open = self
-            .launch
+            .backend
             .service
             .try_lock()
             .ok_or_else(|| invalid("voter installation service busy"))?
             .listener_open_guard();
         let (request, required) = {
-            let store = self.launch.lock_initial_metadata(parent)?;
+            let store = self.backend.lock_metadata(parent)?;
             store.require_listener_database(&open)?;
             store.require_native_control_leader(&first, business)?;
             let member = store
@@ -192,7 +192,7 @@ impl NativeMetadataRegistrationController {
             (store.append_request_from(required, 16)?, required)
         };
         let reply = self
-            .launch
+            .backend
             .transport
             .append_metadata_cancellable(target, request, parent)?;
         let id = reply
@@ -201,7 +201,7 @@ impl NativeMetadataRegistrationController {
             .ok_or_else(|| invalid("installed voter lacks actual owned ACK"))?
             .metadata_store_id();
         {
-            let mut store = self.launch.lock_initial_metadata(parent)?;
+            let mut store = self.backend.lock_metadata(parent)?;
             store.require_listener_database(&open)?;
             store.record_append_response(target, &reply)?;
         }
@@ -211,13 +211,13 @@ impl NativeMetadataRegistrationController {
             ));
         }
         let post_business = Uuid::now_v7();
-        let post = self.launch.transport.acquire_host_metadata_observation(
-            &self.launch.seed.spec.node_id,
+        let post = self.backend.transport.acquire_host_metadata_observation(
+            &self.backend.node_id,
             post_business,
             Duration::from_secs(5),
             parent,
         )?;
-        let store = self.launch.lock_initial_metadata(parent)?;
+        let store = self.backend.lock_metadata(parent)?;
         store.require_listener_database(&open)?;
         store.require_native_control_leader(&post, post_business)?;
         if post.context_id() == first.context_id()
@@ -254,7 +254,7 @@ impl NativeMetadataRegistrationController {
             return self.verify_installed_member(target, parent);
         }
         if member.native_store_birth_v1.is_none() {
-            self.launch
+            self.backend
                 .enroll_registered_native_learner(target, parent)?;
             return Ok(NativeMetadataMaintenanceReport {
                 node: Some(target.clone()),
@@ -265,17 +265,17 @@ impl NativeMetadataRegistrationController {
             });
         }
         let business = Uuid::now_v7();
-        let first = self.launch.transport.acquire_host_metadata_observation(
-            &self.launch.seed.spec.node_id,
+        let first = self.backend.transport.acquire_host_metadata_observation(
+            &self.backend.node_id,
             business,
             Duration::from_secs(5),
             parent,
         )?;
-        self.launch
+        self.backend
             .transport
             .install_topology(first.committed_topology(business)?.clone())?;
         let open = self
-            .launch
+            .backend
             .service
             .try_lock()
             .ok_or_else(|| invalid("maintenance service busy"))?
@@ -283,16 +283,16 @@ impl NativeMetadataRegistrationController {
         let mut readiness = None;
         for _ in 0..3 {
             let request = {
-                let store = self.launch.lock_initial_metadata(parent)?;
+                let store = self.backend.lock_metadata(parent)?;
                 store.require_listener_database(&open)?;
                 store.require_native_control_leader(&first, business)?;
                 store.append_request_for_peer(target, 16)?
             };
             let reply = self
-                .launch
+                .backend
                 .transport
                 .append_metadata_cancellable(target, request, parent)?;
-            let mut store = self.launch.lock_initial_metadata(parent)?;
+            let mut store = self.backend.lock_metadata(parent)?;
             store.require_listener_database(&open)?;
             store.record_append_response(target, &reply)?;
             if reply.success && reply.match_index >= store.status().commit_index {
@@ -307,8 +307,8 @@ impl NativeMetadataRegistrationController {
         let expected_store_id = proof.receiver_store_id();
         // Independently fresh authority AFTER the actual protected bound ACK.
         let post_business = Uuid::now_v7();
-        let post = self.launch.transport.acquire_host_metadata_observation(
-            &self.launch.seed.spec.node_id,
+        let post = self.backend.transport.acquire_host_metadata_observation(
+            &self.backend.node_id,
             post_business,
             Duration::from_secs(5),
             parent,
@@ -319,7 +319,7 @@ impl NativeMetadataRegistrationController {
             ));
         }
         let entry = {
-            let mut store = self.launch.lock_initial_metadata(parent)?;
+            let mut store = self.backend.lock_metadata(parent)?;
             store.require_listener_database(&open)?;
             store.propose_native_learner_promotion(
                 &proof,
@@ -336,9 +336,9 @@ impl NativeMetadataRegistrationController {
             )?
         };
         // Normal proposal replication still requires genuine old/new quorums.
-        self.launch.heartbeat_initial_metadata(parent)?;
+        self.backend.heartbeat(parent)?;
         let (request, index) = {
-            let store = self.launch.lock_initial_metadata(parent)?;
+            let store = self.backend.lock_metadata(parent)?;
             store.require_listener_database(&open)?;
             let index = entry
                 .as_ref()
@@ -359,13 +359,13 @@ impl NativeMetadataRegistrationController {
             // an ACK of the learner's earlier pre-promotion tail.
             (store.append_request_from(index, 16)?, index)
         };
-        self.launch.publish_initial_committed_metadata(parent)?;
+        self.backend.publish_committed_metadata(parent)?;
         let reply = self
-            .launch
+            .backend
             .transport
             .append_metadata_cancellable(target, request, parent)?;
         {
-            let mut store = self.launch.lock_initial_metadata(parent)?;
+            let mut store = self.backend.lock_metadata(parent)?;
             store.require_listener_database(&open)?;
             store.record_append_response(target, &reply)?;
         }
@@ -381,13 +381,13 @@ impl NativeMetadataRegistrationController {
             ));
         }
         let final_business = Uuid::now_v7();
-        let final_mq = self.launch.transport.acquire_host_metadata_observation(
-            &self.launch.seed.spec.node_id,
+        let final_mq = self.backend.transport.acquire_host_metadata_observation(
+            &self.backend.node_id,
             final_business,
             Duration::from_secs(5),
             parent,
         )?;
-        let store = self.launch.lock_initial_metadata(parent)?;
+        let store = self.backend.lock_metadata(parent)?;
         store.require_listener_database(&open)?;
         store.require_native_control_leader(&final_mq, final_business)?;
         if store

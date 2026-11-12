@@ -109,7 +109,9 @@ fn native_registered_replica_receiver_actual_cli_four_data_then_fifth_same_owner
         .stdin(Stdio::null())
         .stdout(std::fs::File::create(root.join("node4.stdout")).unwrap())
         .stderr(std::fs::File::create(root.join("node4.stderr")).unwrap());
-    let child = processes.spawn_recorded(&mut fifth).unwrap();
+    let child = processes
+        .spawn_recorded(&mut fifth, &root.join("db4"))
+        .unwrap();
     let fifth_pid = child.id();
     processes.children.push(child);
     let until = Instant::now() + Duration::from_secs(45);

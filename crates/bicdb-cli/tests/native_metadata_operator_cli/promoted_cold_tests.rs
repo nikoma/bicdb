@@ -68,7 +68,9 @@ fn native_metadata_operator_actual_cli_automatic_promoted_voter_kill_reopen_same
     fresh
         .stdout(std::fs::File::create(root.join("node4.stdout")).unwrap())
         .stderr(std::fs::File::create(root.join("node4.stderr")).unwrap());
-    let child = processes.spawn_recorded(&mut fresh).unwrap();
+    let child = processes
+        .spawn_recorded(&mut fresh, &root.join("db4"))
+        .unwrap();
     processes.children.push(child);
     let ready = wait_ready(&mut processes, &root);
     let id = ready["host"]["metadata_store_id"]
@@ -175,7 +177,9 @@ fn native_metadata_operator_actual_cli_automatic_promoted_voter_kill_reopen_same
     let mut cold = learner_command(&root, &config, &addresses, "serve-learner-reopen", true);
     cold.stdout(std::fs::File::create(root.join("node4-promoted-cold.stdout")).unwrap())
         .stderr(std::fs::File::create(root.join("node4-promoted-cold.stderr")).unwrap());
-    processes.children[4] = processes.spawn_recorded(&mut cold).unwrap();
+    processes.children[4] = processes
+        .spawn_recorded(&mut cold, &root.join("db4"))
+        .unwrap();
     let reopened = wait_ready(&mut processes, &root);
     assert_ne!(processes.children[4].id(), old_pid);
     assert_eq!(reopened["process_id"], processes.children[4].id());

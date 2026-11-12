@@ -1,0 +1,485 @@
+{
+  "passed": true,
+  "expectExact": false,
+  "actualExactFilters": false,
+  "defects": [
+    {
+      "name": "exact-direct_decimal--79228162514264337593543950335",
+      "value": "-79228162514264337593543950335",
+      "status": 200,
+      "expected_ids": [
+        "59ba5d94-6b8d-489e-8bb6-6aa7c2f9edbb"
+      ],
+      "actual_ids": []
+    },
+    {
+      "name": "exact-direct_decimal--0.10",
+      "value": "-0.10",
+      "status": 200,
+      "expected_ids": [
+        "a8b7b89d-4bbf-4da8-acd6-2ce9a2ed3851"
+      ],
+      "actual_ids": []
+    },
+    {
+      "name": "exact-direct_decimal-0",
+      "value": "0",
+      "status": 200,
+      "expected_ids": [
+        "a0e14dbc-7886-431e-9ea4-7c307c1b9195"
+      ],
+      "actual_ids": []
+    },
+    {
+      "name": "exact-direct_decimal-0.0000000000000000000000000001",
+      "value": "0.0000000000000000000000000001",
+      "status": 200,
+      "expected_ids": [
+        "b46b303d-94f6-4ce2-b3db-474abecde5d1"
+      ],
+      "actual_ids": []
+    },
+    {
+      "name": "exact-direct_decimal-0.10",
+      "value": "0.10",
+      "status": 200,
+      "expected_ids": [
+        "bc482207-afc5-4b56-8048-4a7b0f5c9df7"
+      ],
+      "actual_ids": []
+    },
+    {
+      "name": "exact-direct_decimal-9007199254740992.01",
+      "value": "9007199254740992.01",
+      "status": 200,
+      "expected_ids": [
+        "239f98f2-657b-413c-b0ca-4e098ec18af7"
+      ],
+      "actual_ids": []
+    },
+    {
+      "name": "exact-direct_decimal-9007199254740992.02",
+      "value": "9007199254740992.02",
+      "status": 200,
+      "expected_ids": [
+        "40004b0b-67f1-4011-83c3-d6ac1d094938"
+      ],
+      "actual_ids": []
+    },
+    {
+      "name": "exact-direct_decimal-79228162514264337593543950334",
+      "value": "79228162514264337593543950334",
+      "status": 200,
+      "expected_ids": [
+        "141fbb74-fcba-45cf-9843-c055fb6c52a6"
+      ],
+      "actual_ids": []
+    },
+    {
+      "name": "exact-direct_decimal-79228162514264337593543950335",
+      "value": "79228162514264337593543950335",
+      "status": 200,
+      "expected_ids": [
+        "75ad1b5d-a791-4539-886b-dac8bbe7c8ca"
+      ],
+      "actual_ids": []
+    },
+    {
+      "name": "exact-direct_decimal-79228162514264337593543950335.0",
+      "value": "79228162514264337593543950335.0",
+      "status": 200,
+      "expected_ids": [
+        "75ad1b5d-a791-4539-886b-dac8bbe7c8ca"
+      ],
+      "actual_ids": []
+    },
+    {
+      "name": "exact-direct_decimal-7.9228162514264337593543950335e28",
+      "value": "7.9228162514264337593543950335e28",
+      "status": 200,
+      "expected_ids": [
+        "75ad1b5d-a791-4539-886b-dac8bbe7c8ca"
+      ],
+      "actual_ids": []
+    },
+    {
+      "name": "minimum--79228162514264337593543950335",
+      "value": "-79228162514264337593543950335",
+      "status": 200,
+      "expected_ids": [
+        "141fbb74-fcba-45cf-9843-c055fb6c52a6",
+        "239f98f2-657b-413c-b0ca-4e098ec18af7",
+        "40004b0b-67f1-4011-83c3-d6ac1d094938",
+        "59ba5d94-6b8d-489e-8bb6-6aa7c2f9edbb",
+        "75ad1b5d-a791-4539-886b-dac8bbe7c8ca",
+        "a0e14dbc-7886-431e-9ea4-7c307c1b9195",
+        "a8b7b89d-4bbf-4da8-acd6-2ce9a2ed3851",
+        "b46b303d-94f6-4ce2-b3db-474abecde5d1",
+        "bc482207-afc5-4b56-8048-4a7b0f5c9df7"
+      ],
+      "actual_ids": []
+    },
+    {
+      "name": "minimum-0",
+      "value": "0",
+      "status": 200,
+      "expected_ids": [
+        "141fbb74-fcba-45cf-9843-c055fb6c52a6",
+        "239f98f2-657b-413c-b0ca-4e098ec18af7",
+        "40004b0b-67f1-4011-83c3-d6ac1d094938",
+        "75ad1b5d-a791-4539-886b-dac8bbe7c8ca",
+        "a0e14dbc-7886-431e-9ea4-7c307c1b9195",
+        "b46b303d-94f6-4ce2-b3db-474abecde5d1",
+        "bc482207-afc5-4b56-8048-4a7b0f5c9df7"
+      ],
+      "actual_ids": []
+    },
+    {
+      "name": "minimum-0.0000000000000000000000000001",
+      "value": "0.0000000000000000000000000001",
+      "status": 200,
+      "expected_ids": [
+        "141fbb74-fcba-45cf-9843-c055fb6c52a6",
+        "239f98f2-657b-413c-b0ca-4e098ec18af7",
+        "40004b0b-67f1-4011-83c3-d6ac1d094938",
+        "75ad1b5d-a791-4539-886b-dac8bbe7c8ca",
+        "b46b303d-94f6-4ce2-b3db-474abecde5d1",
+        "bc482207-afc5-4b56-8048-4a7b0f5c9df7"
+      ],
+      "actual_ids": []
+    },
+    {
+      "name": "minimum-9007199254740992.015",
+      "value": "9007199254740992.015",
+      "status": 200,
+      "expected_ids": [
+        "141fbb74-fcba-45cf-9843-c055fb6c52a6",
+        "40004b0b-67f1-4011-83c3-d6ac1d094938",
+        "75ad1b5d-a791-4539-886b-dac8bbe7c8ca"
+      ],
+      "actual_ids": []
+    },
+    {
+      "name": "minimum-79228162514264337593543950335",
+      "value": "79228162514264337593543950335",
+      "status": 200,
+      "expected_ids": [
+        "75ad1b5d-a791-4539-886b-dac8bbe7c8ca"
+      ],
+      "actual_ids": []
+    },
+    {
+      "name": "minimum-7.9228162514264337593543950335e28",
+      "value": "7.9228162514264337593543950335e28",
+      "status": 200,
+      "expected_ids": [
+        "75ad1b5d-a791-4539-886b-dac8bbe7c8ca"
+      ],
+      "actual_ids": []
+    },
+    {
+      "name": "unsupported-filter-accepted",
+      "relation": "direct_decimal",
+      "parameter": "amount",
+      "value": "7922816251426433759354395033.55",
+      "status": 200
+    },
+    {
+      "name": "unsupported-filter-accepted",
+      "relation": "direct_decimal",
+      "parameter": "amount_min",
+      "value": "7922816251426433759354395033.55",
+      "status": 200
+    },
+    {
+      "name": "unsupported-filter-accepted",
+      "relation": "direct_decimal",
+      "parameter": "amount",
+      "value": "79228162514264337593543950335.1",
+      "status": 200
+    },
+    {
+      "name": "unsupported-filter-accepted",
+      "relation": "direct_decimal",
+      "parameter": "amount_min",
+      "value": "79228162514264337593543950335.1",
+      "status": 200
+    },
+    {
+      "name": "unsupported-filter-accepted",
+      "relation": "direct_decimal",
+      "parameter": "amount",
+      "value": "79228162514264337593543950336",
+      "status": 200
+    },
+    {
+      "name": "unsupported-filter-accepted",
+      "relation": "direct_decimal",
+      "parameter": "amount_min",
+      "value": "79228162514264337593543950336",
+      "status": 200
+    },
+    {
+      "name": "unsupported-filter-accepted",
+      "relation": "direct_decimal",
+      "parameter": "amount",
+      "value": "1e-29",
+      "status": 200
+    },
+    {
+      "name": "unsupported-filter-accepted",
+      "relation": "direct_decimal",
+      "parameter": "amount_min",
+      "value": "1e-29",
+      "status": 200
+    },
+    {
+      "name": "unsupported-filter-accepted",
+      "relation": "direct_decimal",
+      "parameter": "amount",
+      "value": "1.00000000000000000000000000001",
+      "status": 200
+    },
+    {
+      "name": "unsupported-filter-accepted",
+      "relation": "direct_decimal",
+      "parameter": "amount_min",
+      "value": "1.00000000000000000000000000001",
+      "status": 200
+    },
+    {
+      "name": "unsupported-filter-accepted",
+      "relation": "direct_decimal",
+      "parameter": "amount",
+      "value": "1e29",
+      "status": 200
+    },
+    {
+      "name": "unsupported-filter-accepted",
+      "relation": "direct_decimal",
+      "parameter": "amount_min",
+      "value": "1e29",
+      "status": 200
+    },
+    {
+      "name": "unsupported-filter-accepted",
+      "relation": "direct_decimal",
+      "parameter": "amount",
+      "value": "1e-9223372036854775808",
+      "status": 200
+    },
+    {
+      "name": "unsupported-filter-accepted",
+      "relation": "direct_decimal",
+      "parameter": "amount_min",
+      "value": "1e-9223372036854775808",
+      "status": 200
+    },
+    {
+      "name": "exact-legacy_decimal--79228162514264337593543950335",
+      "value": "-79228162514264337593543950335",
+      "status": 200,
+      "expected_ids": [
+        "6f1b02b9-886e-4dda-a01d-cd512e46a0c6"
+      ],
+      "actual_ids": []
+    },
+    {
+      "name": "exact-legacy_decimal--0.10",
+      "value": "-0.10",
+      "status": 200,
+      "expected_ids": [
+        "968b057b-44d1-4eb9-b6d3-f74b4657df4c"
+      ],
+      "actual_ids": []
+    },
+    {
+      "name": "exact-legacy_decimal-0",
+      "value": "0",
+      "status": 200,
+      "expected_ids": [
+        "b4059b81-1f88-443d-9d79-fe17fcfb1543"
+      ],
+      "actual_ids": []
+    },
+    {
+      "name": "exact-legacy_decimal-0.0000000000000000000000000001",
+      "value": "0.0000000000000000000000000001",
+      "status": 200,
+      "expected_ids": [
+        "7a4a7b59-f2d0-477a-87ce-d426f3e2115a"
+      ],
+      "actual_ids": []
+    },
+    {
+      "name": "exact-legacy_decimal-0.10",
+      "value": "0.10",
+      "status": 200,
+      "expected_ids": [
+        "ba5a3fd0-ffbc-4a79-b239-1f56c7f99391"
+      ],
+      "actual_ids": []
+    },
+    {
+      "name": "exact-legacy_decimal-9007199254740992.01",
+      "value": "9007199254740992.01",
+      "status": 200,
+      "expected_ids": [
+        "f906f113-a45d-419a-bc6a-05f073ab5a89"
+      ],
+      "actual_ids": []
+    },
+    {
+      "name": "exact-legacy_decimal-9007199254740992.02",
+      "value": "9007199254740992.02",
+      "status": 200,
+      "expected_ids": [
+        "697bba4a-e4d9-4213-b4ec-5f732863f327"
+      ],
+      "actual_ids": []
+    },
+    {
+      "name": "exact-legacy_decimal-79228162514264337593543950334",
+      "value": "79228162514264337593543950334",
+      "status": 200,
+      "expected_ids": [
+        "2510d1a8-3b42-4737-adeb-d7dea19ecd78"
+      ],
+      "actual_ids": []
+    },
+    {
+      "name": "exact-legacy_decimal-79228162514264337593543950335",
+      "value": "79228162514264337593543950335",
+      "status": 200,
+      "expected_ids": [
+        "924014da-c756-4ac2-98e7-048184a7a11a"
+      ],
+      "actual_ids": []
+    },
+    {
+      "name": "exact-legacy_decimal-79228162514264337593543950335.0",
+      "value": "79228162514264337593543950335.0",
+      "status": 200,
+      "expected_ids": [
+        "924014da-c756-4ac2-98e7-048184a7a11a"
+      ],
+      "actual_ids": []
+    },
+    {
+      "name": "exact-legacy_decimal-7.9228162514264337593543950335e28",
+      "value": "7.9228162514264337593543950335e28",
+      "status": 200,
+      "expected_ids": [
+        "924014da-c756-4ac2-98e7-048184a7a11a"
+      ],
+      "actual_ids": []
+    },
+    {
+      "name": "unsupported-filter-accepted",
+      "relation": "legacy_decimal",
+      "parameter": "filter[amount]",
+      "value": "7922816251426433759354395033.55",
+      "status": 200
+    },
+    {
+      "name": "unsupported-filter-accepted",
+      "relation": "legacy_decimal",
+      "parameter": "filter[amount]",
+      "value": "79228162514264337593543950335.1",
+      "status": 200
+    },
+    {
+      "name": "unsupported-filter-accepted",
+      "relation": "legacy_decimal",
+      "parameter": "filter[amount]",
+      "value": "79228162514264337593543950336",
+      "status": 200
+    },
+    {
+      "name": "unsupported-filter-accepted",
+      "relation": "legacy_decimal",
+      "parameter": "filter[amount]",
+      "value": "1e-29",
+      "status": 200
+    },
+    {
+      "name": "unsupported-filter-accepted",
+      "relation": "legacy_decimal",
+      "parameter": "filter[amount]",
+      "value": "1.00000000000000000000000000001",
+      "status": 200
+    },
+    {
+      "name": "unsupported-filter-accepted",
+      "relation": "legacy_decimal",
+      "parameter": "filter[amount]",
+      "value": "1e29",
+      "status": 200
+    },
+    {
+      "name": "unsupported-filter-accepted",
+      "relation": "legacy_decimal",
+      "parameter": "filter[amount]",
+      "value": "1e9223372036854775807",
+      "status": 200
+    },
+    {
+      "name": "unsupported-filter-accepted",
+      "relation": "legacy_decimal",
+      "parameter": "filter[amount]",
+      "value": "1e-9223372036854775808",
+      "status": 200
+    },
+    {
+      "name": "filter-after-SIGKILL-direct_decimal",
+      "value": "79228162514264337593543950335",
+      "status": 200,
+      "expected_ids": [
+        "75ad1b5d-a791-4539-886b-dac8bbe7c8ca"
+      ],
+      "actual_ids": []
+    },
+    {
+      "name": "filter-after-SIGKILL-legacy_decimal",
+      "value": "79228162514264337593543950335",
+      "status": 200,
+      "expected_ids": [
+        "924014da-c756-4ac2-98e7-048184a7a11a"
+      ],
+      "actual_ids": []
+    },
+    {
+      "name": "filter-after-cold-restore-direct_decimal",
+      "value": "79228162514264337593543950335",
+      "status": 200,
+      "expected_ids": [
+        "75ad1b5d-a791-4539-886b-dac8bbe7c8ca"
+      ],
+      "actual_ids": []
+    },
+    {
+      "name": "filter-after-cold-restore-legacy_decimal",
+      "value": "79228162514264337593543950335",
+      "status": 200,
+      "expected_ids": [
+        "924014da-c756-4ac2-98e7-048184a7a11a"
+      ],
+      "actual_ids": []
+    }
+  ],
+  "records": 87,
+  "source": "22a2714cd1f97103a4c3ad6aa03c36cd8a0783a2",
+  "binary_sha256": "b1fcce8e5f55a27be8169cb05b1aaa751984c1e33dbf9632b5860882e1d38be9",
+  "fixture_sha256": "41099d8bae25b5e2555fe4a7552d36d0d07f8f952ac28164deadb913dd807578",
+  "source_authored_ABI": true,
+  "generated_product_input": false,
+  "field_value_type_absent": true,
+  "BigInt_oracle": true,
+  "actual_database_filters": true,
+  "tenant_and_role_denials": true,
+  "SIGKILL_and_cold_restore": true,
+  "Node_only": true,
+  "Rust_tests": false,
+  "Hub": false,
+  "real_issuer": false
+}

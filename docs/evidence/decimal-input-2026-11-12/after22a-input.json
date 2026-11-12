@@ -1,0 +1,22 @@
+{
+  "passed": true,
+  "expectExact": true,
+  "actualExactAdmission": true,
+  "critical_rounding_reproduced": false,
+  "unsupported_accepted": [],
+  "legacy_syntax_limits": [],
+  "record_count": 313,
+  "binary_sha256": "b1fcce8e5f55a27be8169cb05b1aaa751984c1e33dbf9632b5860882e1d38be9",
+  "source": "22a2714cd1f97103a4c3ad6aa03c36cd8a0783a2",
+  "fixture_sha256": "5b3436838c2c73b1af96bd4e9028680ea2c557c06546381059ae0b0bc97e2078",
+  "node_only": true,
+  "rust_tests": false,
+  "ordinary_native": true,
+  "synthetic_verifier": true,
+  "real_issuer": false,
+  "Hub": false,
+  "main_account_untouched": true,
+  "late_batch_atomicity": true,
+  "valid_rows_and_replays_survive_SIGKILL_and_cold_restore": true,
+  "raw_JSON_numeric_tokens": true
+}

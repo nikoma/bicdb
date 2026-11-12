@@ -67,6 +67,10 @@ crud DecimalInputRow at "/decimal-input/rows" {
   list:protect InputAuth roles [probe_operator]
   get:protect InputAuth roles [probe_operator]
   create:protect InputAuth roles [probe_operator]
+  filters {
+    amount: exact
+    amount_min: amount min
+  }
 }
 route POST "/decimal-input/typed" protect InputAuth roles [probe_operator] idempotent -> DecimalInputRow {input:DecimalInput handler{return typed_decimal(input)}}
 route POST "/decimal-input/raw-model" protect InputAuth roles [probe_operator] idempotent -> DecimalInputRow {input:RawDecimalInput handler{return raw_decimal(input)}}

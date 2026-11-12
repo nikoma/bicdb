@@ -30,6 +30,7 @@ function rational(text){
 }
 function exact(text){const n=rational(text);return n.scale>=0n&&n.scale<=28n&&n.coefficient>=-MAX&&n.coefficient<=MAX;}
 function equal(left,right){assert.deepEqual(rational(left),rational(right),'Money changed: '+left+' versus '+right);}
+function compare(left,right){const a=rational(left),b=rational(right),scale=a.scale>b.scale?a.scale:b.scale;const difference=a.coefficient*10n**(scale-a.scale)-b.coefficient*10n**(scale-b.scale);return difference<0n?-1:difference>0n?1:0;}
 const format=(coefficient,scale)=>{const s=coefficient.toString().padStart(scale+1,'0');return scale?s.slice(0,-scale)+'.'+s.slice(-scale):s;};
 const valid=['0','-0.00','0.10','+001.2300','1_000.0100','9007199254740992.01',MAX.toString(),'-'+MAX,MAX+'.0','1e-28','1.2300e2','1e28',...Array.from({length:7},(_,scale)=>format(MAX,scale)),format(MAX,28)];
 const enhanced=[MAX+'0e-1','-'+MAX+'0e-1','0e-1000','0e1000'];
@@ -80,6 +81,15 @@ try{
  const float=await record('explicit-float-domain-unchanged',await h.call('/decimal-input/float','POST',{amount:1e30},tenant));assert.equal(float.status,200);assert.equal(float.body.amount,1e30);
  assert.ok(replay);assert.deepEqual(await h.call(replay.url,'POST',replay.body,tenant,{'Idempotency-Key':replay.key}),replay.response);
  const snapshot=await all();
+ for(const amount of ['0','1e-28','9007199254740992.01','9007199254740992.015',MAX.toString(),'7.9228162514264337593543950335e28'])for(const parameter of ['amount','amount_min']){
+  const r=await record('database-filter-'+parameter+'-'+amount,await h.call('/decimal-input/rows?limit=1000&'+parameter+'='+encodeURIComponent(amount),'GET',undefined,tenant));assert.equal(r.status,200,JSON.stringify(r));
+  const wanted=snapshot.filter(row=>parameter==='amount'?compare(row.amount,amount)===0:compare(row.amount,amount)>=0).map(row=>row.id).sort();assert.deepEqual(r.body.items.map(row=>row.id).sort(),wanted,'Database Decimal filter changed meaning');
+ }
+ for(const amount of invalid)for(const parameter of ['amount','amount_min']){
+  const r=await record('invalid-database-filter-'+parameter+'-'+amount,await h.call('/decimal-input/rows?'+parameter+'='+encodeURIComponent(amount),'GET',undefined,tenant));
+  if(r.status===200){unsafe.push({text:amount,mode:'database-filter-'+parameter});assert.equal(config.expectExact,false,'Unsupported Decimal resource filter accepted');}else assert.ok(r.status>=400&&r.status<500,JSON.stringify(r));
+ }
+ assert.deepEqual(await all(),snapshot,'Read filters changed rows');
  const foreign=await record('other-tenant-cannot-read',await h.call('/decimal-input/rows/'+replay.response.body.id,'GET',undefined,other));assert.equal(foreign.status,404);
  const denied=await record('wrong-role-cannot-create',await h.call('/decimal-input/typed','POST',{id:randomUUID(),amount:'1'},tenant,{'Idempotency-Key':randomUUID()},[]));assert.equal(denied.status,403);assert.deepEqual(await all(),snapshot);
  for(const phase of['SIGKILL','cold-restore']){
@@ -90,7 +100,7 @@ try{
  }
  const actualExactAdmission=unsafe.length===0;
  if(config.expectExact)assert.equal(actualExactAdmission,true);else{assert.equal(criticalRounded,true,'Original exact typed-input defect was not reproduced');assert.ok(unsafe.length>0);}
- await fs.writeFile(run+'/qualification.json',JSON.stringify({passed:true,expectExact:config.expectExact,actualExactAdmission,critical_rounding_reproduced:criticalRounded,unsupported_accepted:unsafe,legacy_syntax_limits:validRejected,record_count:records.length,binary_sha256:config.binarySha256,source:config.source,fixture_sha256:fixture.package_sha256,node_only:true,rust_tests:false,ordinary_native:true,synthetic_verifier:true,real_issuer:false,Hub:false,main_account_untouched:true,late_batch_atomicity:true,valid_rows_and_replays_survive_SIGKILL_and_cold_restore:true,raw_JSON_numeric_tokens:true},null,2));
+ await fs.writeFile(run+'/qualification.json',JSON.stringify({passed:true,expectExact:config.expectExact,actualExactAdmission,critical_rounding_reproduced:criticalRounded,unsupported_accepted:unsafe,legacy_syntax_limits:validRejected,record_count:records.length,binary_sha256:config.binarySha256,source:config.source,fixture_sha256:fixture.package_sha256,node_only:true,rust_tests:false,ordinary_native:true,synthetic_verifier:true,real_issuer:false,Hub:false,main_account_untouched:true,late_batch_atomicity:true,valid_rows_and_replays_survive_SIGKILL_and_cold_restore:true,raw_JSON_numeric_tokens:true,actual_database_Decimal_exact_and_minimum_filters:true},null,2));
  console.log(JSON.stringify({run,actualExactAdmission,expectExact:config.expectExact,records:records.length,unsupported_accepted:unsafe.length}));
 }catch(error){await fs.writeFile(run+'/failure.json',JSON.stringify({error:error.stack,records:records.length},null,2));throw error;}
 finally{await h.stop();await fs.writeFile(run+'/results.json',JSON.stringify({records},null,2));}

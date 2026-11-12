@@ -137,6 +137,7 @@ impl Fixture {
             networks,
             ports,
         } = planned_network(3);
+        let token = CancellationToken::uncancelable();
         let seeds = (0..3)
             .map(|i| {
                 Arc::new(

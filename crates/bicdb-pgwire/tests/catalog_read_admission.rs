@@ -895,3 +895,133 @@ fn cold_prepared_origins_observe_only_the_referenced_table_during_a_foreign_rena
         }
     }
 }
+
+#[test]
+fn prepared_regclass_metadata_tracks_the_live_path_and_created_partition_parent() {
+    for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
+        let root = tempfile::tempdir().unwrap();
+        let config = DbConfig::default()
+            .with_fsync(true)
+            .with_storage_mode(mode.clone());
+        let mut db = BicDb::open_with_config(root.path(), config.clone()).unwrap();
+        SqlSession::new(&mut db)
+            .execute("CREATE SCHEMA tenant_a; CREATE SCHEMA tenant_b; CREATE TABLE tenant_a.source(id INT PRIMARY KEY,payload INT); CREATE TABLE tenant_b.source(id INT PRIMARY KEY,payload INT); INSERT INTO tenant_a.source VALUES(1,10); INSERT INTO tenant_b.source VALUES(2,20)")
+            .unwrap();
+        bicdb_sql::initialize_rename_journal_identities(&mut db).unwrap();
+        let shared = Arc::new(RwLock::new(db));
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        let server = PgWireServer::open_with_shared(
+            root.path(),
+            PgWireConfig {
+                fsync: true,
+                automatic_paged_checkpoint: false,
+                ..Default::default()
+            },
+            Arc::clone(&shared),
+        )
+        .unwrap();
+        let serving = Arc::clone(&server);
+        let task = thread::spawn(move || bicdb_pgwire::serve_existing_listener(serving, listener));
+        let mut owner = connect(address);
+        let mut writer = connect(address);
+        let mut observer = connect(address);
+        let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            assert!(codes(&query(&mut owner, "SET search_path=tenant_a,tenant_b")).is_empty());
+            prepare(
+                &mut owner,
+                "partition_metadata",
+                "SELECT COUNT(*) FROM pg_constraint c WHERE conrelid=LOWER($1)::regclass",
+            );
+            let count = |owner: &mut TcpStream| {
+                let mut bind = b"metadata_portal\0partition_metadata\0".to_vec();
+                bind.extend_from_slice(&0i16.to_be_bytes());
+                bind.extend_from_slice(&1i16.to_be_bytes());
+                bind.extend_from_slice(&6i32.to_be_bytes());
+                bind.extend_from_slice(b"SOURCE");
+                bind.extend_from_slice(&0i16.to_be_bytes());
+                send(owner, b'B', &bind);
+                send(owner, b'D', b"Pmetadata_portal\0");
+                let mut execute = b"metadata_portal\0".to_vec();
+                execute.extend_from_slice(&0i32.to_be_bytes());
+                send(owner, b'E', &execute);
+                send(owner, b'S', &[]);
+                let response = ready(owner);
+                assert!(codes(&response).is_empty(), "{mode}: {response:?}");
+                value(&response).unwrap()
+            };
+            assert_eq!(count(&mut owner), "1");
+            assert!(codes(&query(
+                &mut writer,
+                "BEGIN; UPDATE tenant_b.source SET payload=99 WHERE id=2"
+            ))
+            .is_empty());
+            for command in [
+                "BEGIN",
+                "ALTER TABLE source RENAME TO source_default_partition",
+                "CREATE TABLE source(id INT,tenant_id INT) PARTITION BY LIST(tenant_id)",
+            ] {
+                let response = query(&mut owner, command);
+                assert!(
+                    codes(&response).is_empty(),
+                    "{mode} {command}: {response:?}"
+                );
+            }
+            assert_eq!(count(&mut owner), "0");
+            for query_text in [
+                "SELECT to_regclass('tenant_a.source')::oid",
+                "SELECT 'tenant_a.source_default_partition'::regclass::oid",
+            ] {
+                assert_eq!(codes(&query(&mut observer, query_text)), vec!["40001"]);
+            }
+            assert!(codes(&query(&mut writer, "COMMIT")).is_empty());
+            assert!(codes(&query(&mut owner, "SAVEPOINT before_path")).is_empty());
+            assert!(codes(&query(
+                &mut owner,
+                "SET LOCAL search_path=tenant_b,tenant_a"
+            ))
+            .is_empty());
+            assert_eq!(count(&mut owner), "1");
+            assert!(codes(&query(&mut owner, "ROLLBACK TO before_path")).is_empty());
+            assert_eq!(count(&mut owner), "0");
+            assert!(codes(&query(&mut owner, "ROLLBACK")).is_empty());
+            assert_eq!(count(&mut owner), "1");
+        }));
+        for stream in [&mut owner, &mut writer, &mut observer] {
+            send(stream, b'X', &[]);
+        }
+        drop(owner);
+        drop(writer);
+        drop(observer);
+        server.request_shutdown();
+        task.join().unwrap().unwrap();
+        drop(server);
+        Arc::try_unwrap(shared)
+            .expect("wire handlers must release the database before reopen")
+            .into_inner()
+            .close()
+            .unwrap();
+        if let Err(error) = outcome {
+            std::panic::resume_unwind(error);
+        }
+        for _ in 0..2 {
+            let mut reopened = BicDb::open_with_config(root.path(), config.clone()).unwrap();
+            bicdb_sql::oracle::initialize_existing_database_profile(&mut reopened).unwrap();
+            let mut sql = SqlSession::new(&mut reopened);
+            assert_eq!(
+                sql.execute("SELECT payload FROM tenant_a.source WHERE id=1")
+                    .unwrap()
+                    .rows[0][0],
+                bicdb_sql::SqlValue::Int(10)
+            );
+            assert_eq!(
+                sql.execute("SELECT payload FROM tenant_b.source WHERE id=2")
+                    .unwrap()
+                    .rows[0][0],
+                bicdb_sql::SqlValue::Int(99)
+            );
+            drop(sql);
+            reopened.close().unwrap();
+        }
+    }
+}

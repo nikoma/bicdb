@@ -21,6 +21,38 @@ pub(crate) struct NativeColdLearnerMetadataHost {
     stopping: bool,
 }
 impl NativeColdLearnerMetadataHost {
+    pub(in crate::distribution_native_host) fn validate_owned_metadata_member(
+        &self,
+        observed: &HostMetadataReadObservation,
+        business: Uuid,
+        parent: &CancellationToken,
+    ) -> Result<()> {
+        let open = self
+            .service
+            .as_ref()
+            .ok_or_else(|| invalid("actual cold metadata service absent"))?
+            .try_lock()
+            .ok_or_else(|| invalid("cold metadata service busy"))?
+            .listener_open_guard();
+        let metadata = self
+            .metadata
+            .as_ref()
+            .ok_or_else(|| invalid("actual cold metadata backend absent"))?;
+        let proof = {
+            let store = metadata
+                .try_lock()
+                .ok_or_else(|| invalid("cold owned member busy"))?;
+            store.require_listener_database(&open)?;
+            store.observe_owned_native_metadata_member(observed, business, parent)?
+        };
+        self.factory
+            .require_owned_metadata_member(&proof, observed, business, &self.network)?;
+        let store = metadata
+            .try_lock()
+            .ok_or_else(|| invalid("cold owned member changed/busy"))?;
+        proof.require_current(&store)
+    }
+
     pub(in crate::distribution_native_host) fn factory_owner(
         &self,
     ) -> Arc<NativeUnassignedLearnerFactory> {
@@ -37,7 +69,7 @@ impl NativeColdLearnerMetadataHost {
         let store = metadata
             .try_lock()
             .ok_or_else(|| invalid("cold owned metadata status busy"))?;
-        let id = store.registered_native_learner_store_id()?;
+        let id = store.registered_native_metadata_member_store_id()?;
         Ok(Some((
             id,
             store.status(),

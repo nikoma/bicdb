@@ -86,8 +86,15 @@ fn add_tls(command: &mut Command, root: &Path, i: usize) {
         .arg("--cluster-tls-ca")
         .arg(root.join("ca.pem"));
 }
-#[test]
-fn native_metadata_operator_actual_cli_four_process_startup_registration_and_data_refusal() {
+fn four_processes(
+    manual_enrollment: bool,
+) -> (
+    Processes,
+    PathBuf,
+    DistributionConfig,
+    Vec<String>,
+    [u64; 4],
+) {
     let root = tempfile::tempdir().unwrap();
     let mut processes = Processes {
         children: Vec::new(),
@@ -192,6 +199,9 @@ fn native_metadata_operator_actual_cli_four_process_startup_registration_and_dat
             .arg(status)
             .arg("--run-seconds")
             .arg("120");
+        if manual_enrollment {
+            process.arg("--manual-enrollment");
+        }
         add_tls(&mut process, &root, i);
         process
             .stdin(Stdio::null())
@@ -232,6 +242,11 @@ fn native_metadata_operator_actual_cli_four_process_startup_registration_and_dat
         let reply = step(&root, i, sequences[i], "enable-control");
         assert_eq!(reply["host"]["phase"], "metadata_control");
     }
+    (processes, root, config, addresses, sequences)
+}
+#[test]
+fn native_metadata_operator_actual_cli_four_process_startup_registration_and_data_refusal() {
+    let (mut processes, root, config, addresses, mut sequences) = four_processes(true);
     let mut register = binary();
     register
         .args(["cluster", "native-metadata", "register", "--cluster-id"])
@@ -660,5 +675,146 @@ fn native_metadata_operator_actual_cli_four_process_startup_registration_and_dat
             assert!(Instant::now() < until, "native public host failed to drain");
             std::thread::sleep(Duration::from_millis(5));
         }
+    }
+}
+
+/// Four live native processes maintain metadata automatically. The fifth runs
+/// exactly ONE public join command; no diagnostic registration/start/enroll/
+/// catch-up step participates in this positive.
+#[test]
+fn native_metadata_operator_actual_cli_single_join_fresh_becomes_local_metadata_voter() {
+    let (mut processes, root, config, addresses, _sequences) = four_processes(false);
+    let (command, status) = paths(&root, 4);
+    let mut fifth = binary();
+    fifth
+        .args(["cluster", "native-metadata", "join-fresh"])
+        .arg(root.join("db4"))
+        .arg("--cluster-id")
+        .arg(config.cluster_id.as_str())
+        .arg("--seed-node-id")
+        .arg("n0")
+        .arg("--seed-address")
+        .arg(&addresses[0])
+        .arg("--node-id")
+        .arg("n4")
+        .arg("--address")
+        .arg(&addresses[4])
+        .arg("--capacity-bytes")
+        .arg((1u64 << 30).to_string())
+        .arg("--command-file")
+        .arg(&command)
+        .arg("--status-file")
+        .arg(&status)
+        .arg("--run-seconds")
+        .arg("120");
+    add_tls(&mut fifth, &root, 4);
+    fifth
+        .stdin(Stdio::null())
+        .stdout(std::fs::File::create(root.join("node4.stdout")).unwrap())
+        .stderr(std::fs::File::create(root.join("node4.stderr")).unwrap());
+    processes.children.push(fifth.spawn().unwrap());
+    let until = Instant::now() + Duration::from_secs(45);
+    let (ready, source) = loop {
+        for (i, child) in processes.children.iter_mut().enumerate() {
+            assert!(
+                child.try_wait().unwrap().is_none(),
+                "real native process{i} exited; logs retained"
+            );
+        }
+        let ready: Option<Value> = std::fs::read(&status)
+            .ok()
+            .map(|b| serde_json::from_slice(&b).unwrap());
+        let source: Value =
+            serde_json::from_slice(&std::fs::read(paths(&root, 0).1).unwrap()).unwrap();
+        if let Some(ready) = ready {
+            let host = &ready["host"];
+            if host["phase"] == "owned_metadata_voter"
+                && host["metadata"]["voters"]
+                    .as_array()
+                    .is_some_and(|v| v.contains(&serde_json::json!("n4")))
+                && source["host"]["last_metadata_promotion"]["node"] == "n4"
+            {
+                break (ready, source);
+            }
+        }
+        assert!(
+            Instant::now() < until,
+            "single join did not reach actual local installed voter state; retained logs"
+        );
+        std::thread::sleep(Duration::from_millis(20));
+    };
+    assert!(ready["error"].is_null(), "{ready}");
+    assert_eq!(ready["host"]["birth_bound"], true);
+    assert_eq!(ready["host"]["metadata_listener_owned"], true);
+    assert_eq!(ready["host"]["data_serving"], false);
+    let id = ready["host"]["metadata_store_id"].as_str().unwrap();
+    assert!(!uuid::Uuid::parse_str(id).unwrap().is_nil());
+    let receipt = &source["host"]["last_metadata_promotion"];
+    assert_eq!(receipt["stage"], "promoted_and_installed");
+    assert_eq!(receipt["receiver_store_id"], id);
+    assert!(
+        ready["host"]["metadata"]["commit_index"].as_u64().unwrap()
+            >= receipt["installed_through_index"].as_u64().unwrap()
+    );
+    assert!(!ready["host"]["namespace_ids"]
+        .as_array()
+        .unwrap()
+        .is_empty());
+    // No diagnostic action was submitted to the fifth, even for polling.
+    assert!(!command.exists());
+    assert_eq!(ready["sequence"], 0);
+    let network = ClusterNetworkTransportConfig {
+        tls: Some(ReplicationTlsConfig {
+            cert_path: root.join("n0.pem"),
+            key_path: root.join("n0.key"),
+            ca_path: root.join("ca.pem"),
+            require_client_cert: true,
+            dev_localhost_plaintext: false,
+        }),
+        dev_localhost_plaintext: false,
+        ..Default::default()
+    };
+    let bootstrap = bicdb_core::TcpClusterBootstrapClient::new(
+        config.cluster_id.clone(),
+        node(0),
+        network.clone(),
+    )
+    .unwrap();
+    let snapshot = bootstrap.fetch_snapshot(&node(0), &addresses[0]).unwrap();
+    assert_eq!(
+        snapshot.topology.nodes[&node(4)].metadata_role,
+        bicdb_core::MetadataMemberRole::Voter
+    );
+    assert!(snapshot
+        .topology
+        .ranges
+        .values()
+        .all(|r| r.replicas.iter().all(|p| p.node_id != node(4))));
+    let transport = bicdb_core::TcpClusterRelocationTransport::new(
+        config.cluster_id,
+        node(0),
+        std::sync::Arc::new(parking_lot::RwLock::new(snapshot.topology.clone())),
+        network,
+    )
+    .unwrap();
+    let range = snapshot.topology.ranges.values().next().unwrap();
+    for i in 0..5 {
+        assert!(
+            transport
+                .application_event(
+                    &node(i),
+                    bicdb_core::ClusterEventRequest {
+                        range_id: range.id,
+                        range_epoch: range.epoch,
+                        operation: bicdb_core::ClusterEventOperation::Scan {
+                            namespace: "items".into(),
+                            after: None,
+                            limit: 1,
+                        },
+                    }
+                )
+                .is_err(),
+            "node{i} must remain metadata-only"
+        );
     }
 }

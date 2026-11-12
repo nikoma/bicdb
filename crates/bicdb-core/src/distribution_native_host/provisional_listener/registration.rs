@@ -9,7 +9,9 @@ use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Instant;
 
+mod maintenance;
 mod schema_export;
+pub(crate) use maintenance::NativeMetadataMaintenanceReport;
 
 const MAX_PENDING: usize = 32;
 const MAX_QUEUE_BYTES: usize = 1024 * 1024;
@@ -20,6 +22,7 @@ pub(crate) struct NativeMetadataRegistrationController {
     store_open_id: Uuid,
     queue: Mutex<BTreeMap<ClusterNodeId, Arc<NativeMetadataRegistrationIngress>>>,
     driving: AtomicBool,
+    maintenance: Mutex<maintenance::NativeMetadataMaintenanceState>,
     #[cfg(test)]
     test_fail_after_proposal: AtomicBool,
 }
@@ -74,6 +77,7 @@ impl NativeMetadataRegistrationController {
             store_open_id,
             queue: Mutex::new(BTreeMap::new()),
             driving: AtomicBool::new(false),
+            maintenance: Mutex::new(Default::default()),
             #[cfg(test)]
             test_fail_after_proposal: AtomicBool::new(false),
         })
@@ -418,6 +422,38 @@ impl NativeMetadataControlHost {
         );
         token.check()
     }
+    pub(crate) fn ensure_enrolled_target(
+        &self,
+        target: &ClusterNodeId,
+        parent: &CancellationToken,
+    ) -> Result<ClusterNodeId> {
+        let business = Uuid::now_v7();
+        let current = self.launch.transport.acquire_host_metadata_observation(
+            &self.launch.seed.spec.node_id,
+            business,
+            Duration::from_secs(5),
+            parent,
+        )?;
+        let store = self.launch.lock_initial_metadata(parent)?;
+        store.require_native_control_leader(&current, business)?;
+        let member = store
+            .committed_topology()
+            .nodes
+            .get(target)
+            .ok_or_else(|| invalid("enrollment target absent"))?;
+        if member.lifecycle != ClusterNodeLifecycle::Active {
+            return Err(invalid("enrollment target retired"));
+        }
+        if member.native_store_birth_v1.is_some() {
+            return Ok(target.clone());
+        }
+        drop(store);
+        Ok(self
+            .launch
+            .enroll_registered_native_learner(target, parent)?
+            .node()
+            .clone())
+    }
     pub(crate) fn enroll_learner(
         &self,
         target: &ClusterNodeId,
@@ -456,7 +492,6 @@ impl NativeMetadataControlHost {
                     .get(target)
                     .ok_or_else(|| invalid("catch-up learner absent"))?;
                 if member.lifecycle != ClusterNodeLifecycle::Active
-                    || member.metadata_role != MetadataMemberRole::Learner
                     || member.native_store_birth_v1.is_none()
                 {
                     return Err(invalid(
@@ -521,6 +556,15 @@ impl NativeMetadataControlHost {
         }
         self.launch
             .start_automatic_metadata(self.network.clone(), parent)
+    }
+    pub(crate) fn maintain_joins(
+        &self,
+        parent: &CancellationToken,
+    ) -> Result<NativeMetadataMaintenanceReport> {
+        self.controller
+            .as_ref()
+            .ok_or_else(|| invalid("actual controller absent"))?
+            .maintain(parent)
     }
     pub(crate) fn metadata_status(
         &self,

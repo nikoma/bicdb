@@ -14,6 +14,10 @@ mod learner_cold;
 #[cfg(feature = "tls-replication")]
 mod learner_enrollment;
 #[cfg(feature = "tls-replication")]
+mod learner_promotion;
+#[cfg(feature = "tls-replication")]
+pub(crate) use learner_promotion::NativeLearnerPromotionReadiness;
+#[cfg(feature = "tls-replication")]
 mod registration;
 pub(crate) use append_ack::NativeMetadataAppendProvenance;
 pub use append_ack::NativeMetadataAppendReceiver;

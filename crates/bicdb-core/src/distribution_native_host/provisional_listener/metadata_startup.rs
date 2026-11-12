@@ -168,6 +168,15 @@ impl NativeInitialConsensusLaunch {
                     {
                         continue;
                     }
+                    // Native operator endpoints are numeric. An invalid
+                    // registered learner must not block maintenance in DNS.
+                    if store.committed_topology().nodes[&peer]
+                        .address
+                        .parse::<std::net::SocketAddr>()
+                        .is_err()
+                    {
+                        continue;
+                    }
                     store.append_request_for_peer(&peer, 16)?
                 };
                 let reply = match self

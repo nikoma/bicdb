@@ -20,6 +20,9 @@ pub enum Command {
     /// FRESH roots only. Starts metadata listeners; never SQL/data Serving.
     ServeFresh {
         root: PathBuf,
+        /// Manual diagnostic scheduling; all proof and admission guards remain mandatory.
+        #[arg(long)]
+        manual_enrollment: bool,
         #[arg(long)]
         plan: PathBuf,
         #[arg(long)]
@@ -67,6 +70,38 @@ pub enum Command {
         command_file: PathBuf,
         #[arg(long)]
         status_file: PathBuf,
+        #[arg(long, default_value_t = 8_388_608)]
+        buffer_pool_bytes: u64,
+        #[arg(long, default_value_t = 3600)]
+        run_seconds: u64,
+    },
+    /// Register and start ONE fresh metadata learner; automatic leader maintenance promotes it.
+    JoinFresh {
+        root: PathBuf,
+        #[arg(long)]
+        cluster_id: String,
+        #[arg(long)]
+        seed_node_id: String,
+        #[arg(long)]
+        seed_address: String,
+        #[arg(long)]
+        node_id: String,
+        #[arg(long)]
+        address: String,
+        #[arg(long, default_value_t = 1)]
+        incarnation: u64,
+        #[arg(long)]
+        cluster_tls_cert: PathBuf,
+        #[arg(long)]
+        cluster_tls_key: PathBuf,
+        #[arg(long)]
+        cluster_tls_ca: PathBuf,
+        #[arg(long)]
+        command_file: PathBuf,
+        #[arg(long)]
+        status_file: PathBuf,
+        #[arg(long, default_value_t = 1_099_511_627_776)]
+        capacity_bytes: u64,
         #[arg(long, default_value_t = 8_388_608)]
         buffer_pool_bytes: u64,
         #[arg(long, default_value_t = 3600)]
@@ -270,10 +305,73 @@ fn own_network(cert: PathBuf, key: PathBuf, ca: PathBuf) -> ClusterNetworkTransp
     }
 }
 pub fn run(command: Command) -> Result<()> {
+    let command_started = Instant::now();
+    let automatic_join = matches!(&command, Command::JoinFresh { .. });
+    // Registration returns committed CONFIG DATA only. The subsequent fresh
+    // factory independently checks actual own MQ, TLS, schema and native birth.
+    let command = match command {
+        Command::JoinFresh {
+            root,
+            cluster_id,
+            seed_node_id,
+            seed_address,
+            node_id,
+            address,
+            incarnation,
+            cluster_tls_cert,
+            cluster_tls_key,
+            cluster_tls_ca,
+            command_file,
+            status_file,
+            capacity_bytes,
+            buffer_pool_bytes,
+            run_seconds,
+        } => {
+            ensure!(!root.exists(), "join-fresh refuses an existing native root");
+            ensure!(
+                (1..=86400).contains(&run_seconds),
+                "join duration outside1..86400 seconds"
+            );
+            let endpoint: std::net::SocketAddr =
+                address.parse().context("join needs own numeric endpoint")?;
+            ensure!(endpoint.port() != 0, "join needs own fixed endpoint");
+            run(Command::Register {
+                cluster_id: cluster_id.clone(),
+                seed_node_id: seed_node_id.clone(),
+                seed_address: seed_address.clone(),
+                node_id: node_id.clone(),
+                address: address.clone(),
+                incarnation,
+                capacity_bytes,
+                cluster_tls_cert: cluster_tls_cert.clone(),
+                cluster_tls_key: cluster_tls_key.clone(),
+                cluster_tls_ca: cluster_tls_ca.clone(),
+                timeout_ms: (run_seconds * 1000).min(5000),
+            })?;
+            Command::ServeLearnerFresh {
+                root,
+                cluster_id,
+                seed_node_id,
+                seed_address,
+                node_id,
+                address,
+                incarnation,
+                cluster_tls_cert,
+                cluster_tls_key,
+                cluster_tls_ca,
+                command_file,
+                status_file,
+                buffer_pool_bytes,
+                run_seconds,
+            }
+        }
+        other => other,
+    };
     let reopening_learner = matches!(&command, Command::ServeLearnerReopen { .. });
     match command {
         Command::ServeFresh {
             root,
+            manual_enrollment,
             plan,
             node_id,
             address,
@@ -328,7 +426,7 @@ pub fn run(command: Command) -> Result<()> {
             })?;
             let lifetime = CancellationToken::new(
                 canceled,
-                Some(Instant::now() + Duration::from_secs(run_seconds)),
+                Some(command_started + Duration::from_secs(run_seconds)),
             );
             let mut host = NativeMetadataHost::start_fresh_metadata_only(
                 &root,
@@ -352,6 +450,7 @@ pub fn run(command: Command) -> Result<()> {
                 },
             )?;
             let mut sequence = 0;
+            let mut command_error: Option<String> = None;
             let mut last_tick = Instant::now();
             while lifetime.check().is_ok() && status.phase != NativeMetadataHostPhase::Stopped {
                 if command_file.exists() {
@@ -385,6 +484,7 @@ pub fn run(command: Command) -> Result<()> {
                                 Some(error.to_string())
                             }
                         };
+                        command_error = error.clone();
                         sequence = request.sequence;
                         // No successful phase/readiness claim is inferred on error.
                         write(
@@ -400,23 +500,39 @@ pub fn run(command: Command) -> Result<()> {
                         )?;
                     }
                 }
-                // Retained finite metadata maintenance, not election/data recovery.
-                if last_tick.elapsed() >= Duration::from_millis(500)
-                    && status
-                        .metadata
-                        .as_ref()
-                        .is_some_and(|m| m.role == bicdb_core::MetadataConsensusRole::Leader)
-                    && matches!(
-                        status.phase,
-                        NativeMetadataHostPhase::OwnedMetadata
-                            | NativeMetadataHostPhase::MetadataControl
-                    )
-                {
-                    let token =
-                        lifetime.child_with_deadline(Instant::now() + Duration::from_secs(1));
-                    if let Ok(next) = host.apply(NativeMetadataHostAction::Heartbeat, &token) {
+                if last_tick.elapsed() >= Duration::from_millis(500) {
+                    // The one general supervisor owns election/heartbeats. This
+                    // separately bounded controller owns CONFIG enrollment only.
+                    if status.phase == NativeMetadataHostPhase::MetadataControl {
+                        let _ = host.start_automatic_metadata(&lifetime);
+                        if !manual_enrollment
+                            && status.metadata.as_ref().is_some_and(|m| {
+                                m.role == bicdb_core::MetadataConsensusRole::Leader
+                            })
+                        {
+                            let token = lifetime
+                                .child_with_deadline(Instant::now() + Duration::from_millis(1250));
+                            if let Ok(next) = host.maintain_metadata(&token) {
+                                status = next;
+                            }
+                        }
+                    }
+                    if let Ok(next) = host.status(
+                        &lifetime.child_with_deadline(Instant::now() + Duration::from_millis(250)),
+                    ) {
                         status = next;
                     }
+                    write(
+                        &status_file,
+                        &Reply {
+                            version: 1,
+                            sequence,
+                            process_id: std::process::id(),
+                            host: Some(&status),
+                            error: command_error.clone(),
+                            data_serving: false,
+                        },
+                    )?;
                     last_tick = Instant::now();
                 }
                 std::thread::sleep(Duration::from_millis(5));
@@ -499,7 +615,7 @@ pub fn run(command: Command) -> Result<()> {
             })?;
             let lifetime = CancellationToken::new(
                 canceled,
-                Some(Instant::now() + Duration::from_secs(run_seconds)),
+                Some(command_started + Duration::from_secs(run_seconds)),
             );
             let constructor = if reopening_learner {
                 NativeMetadataLearnerHost::reopen_metadata_only
@@ -531,6 +647,7 @@ pub fn run(command: Command) -> Result<()> {
                 },
             )?;
             let mut sequence = 0;
+            let mut command_error: Option<String> = None;
             let mut last_refresh = Instant::now();
             let mut stopping = false;
             while lifetime.check().is_ok() && !stopping {
@@ -572,6 +689,7 @@ pub fn run(command: Command) -> Result<()> {
                             }
                             Err(error) => Some(error.to_string()),
                         };
+                        command_error = error.clone();
                         sequence = request.sequence;
                         write(
                             &status_file,
@@ -587,11 +705,45 @@ pub fn run(command: Command) -> Result<()> {
                     }
                 }
                 if last_refresh.elapsed() >= Duration::from_millis(500) && !stopping {
-                    if let Ok(next) = host.refresh(
-                        &lifetime.child_with_deadline(Instant::now() + Duration::from_secs(2)),
-                    ) {
-                        status = next;
+                    let token =
+                        lifetime.child_with_deadline(Instant::now() + Duration::from_secs(2));
+                    let refreshed = host.refresh(&token);
+                    let mut error = None;
+                    match refreshed {
+                        Ok(next) => {
+                            status = next;
+                            if automatic_join
+                                && status.birth_bound
+                                && !status.metadata_listener_owned
+                            {
+                                match host.start_metadata(&token) {
+                                    Ok(next) => status = next,
+                                    Err(e) => error = Some(e.to_string()),
+                                }
+                            }
+                        }
+                        Err(e) => error = Some(e.to_string()),
                     }
+                    if automatic_join && status.metadata_listener_owned {
+                        if let Err(e) = host.start_automatic_metadata(&lifetime) {
+                            error = Some(e.to_string());
+                        }
+                    }
+                    write(
+                        &status_file,
+                        &Reply {
+                            version: 1,
+                            sequence,
+                            process_id: std::process::id(),
+                            host: Some(&status),
+                            error: if sequence > 0 {
+                                command_error.clone()
+                            } else {
+                                error
+                            },
+                            data_serving: false,
+                        },
+                    )?;
                     last_refresh = Instant::now();
                 }
                 std::thread::sleep(Duration::from_millis(5));
@@ -601,6 +753,7 @@ pub fn run(command: Command) -> Result<()> {
                     .child_with_deadline(Instant::now() + Duration::from_secs(5)),
             )?;
         }
+        Command::JoinFresh { .. } => unreachable!("join-fresh is normalized before dispatch"),
         Command::Step {
             command_file,
             status_file,

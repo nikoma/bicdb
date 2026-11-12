@@ -126,6 +126,9 @@ impl MetadataConsensusStore {
         {
             return Err(metadata_error("owned metadata member is retired/replaced"));
         }
+        if member.metadata_role == MetadataMemberRole::Voter {
+            self.require_native_metadata_actor_current(true)?;
+        }
         let birth = member
             .native_store_birth_v1
             .clone()

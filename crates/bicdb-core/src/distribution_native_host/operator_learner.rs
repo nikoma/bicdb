@@ -17,6 +17,7 @@ pub struct NativeMetadataLearnerStatus {
     pub schema_sha256: String,
     pub namespace_ids: Vec<(String, Uuid)>,
     pub metadata_store_id: Option<Uuid>,
+    pub metadata_role: MetadataMemberRole,
     pub metadata: Option<MetadataConsensusStatus>,
     pub metadata_listener_owned: bool,
     pub phase: &'static str,
@@ -298,13 +299,25 @@ impl NativeMetadataLearnerHost {
         }
         let (observed, business) = self.own_metadata(&token)?;
         let topology = observed.committed_topology(business)?;
-        if self.metadata_started || self.transitioning {
+        if self.metadata_started
+            && topology.nodes[&self.factory.spec.node_id].metadata_role == MetadataMemberRole::Voter
+        {
+            match &self.host {
+                NativeLearnerLifecycle::Fresh(host) => {
+                    host.validate_owned_metadata_member(&observed, business, &token)?
+                }
+                NativeLearnerLifecycle::Cold(host) => {
+                    host.validate_owned_metadata_member(&observed, business, &token)?
+                }
+            }
+        } else if self.metadata_started || self.transitioning {
             self.factory
                 .enrolled_metadata_context(&observed, business, &self.network)?;
         } else {
             self.factory
                 .enrollment_proposal(&observed, business, &self.network)?;
         }
+        let metadata_role = topology.nodes[&self.factory.spec.node_id].metadata_role;
         let birth = self.factory.actual_birth();
         let bound = topology.nodes[&self.factory.spec.node_id]
             .native_store_birth_v1
@@ -354,9 +367,12 @@ impl NativeMetadataLearnerHost {
             schema_sha256,
             namespace_ids,
             metadata_store_id,
+            metadata_role,
             metadata,
             metadata_listener_owned: listener,
-            phase: if self.metadata_started {
+            phase: if self.metadata_started && metadata_role == MetadataMemberRole::Voter {
+                "owned_metadata_voter"
+            } else if self.metadata_started {
                 "owned_metadata_learner"
             } else if self.transitioning {
                 "metadata_transition"
@@ -373,6 +389,9 @@ impl NativeMetadataLearnerHost {
         let token = parent.child_with_deadline(Instant::now() + Duration::from_secs(5));
         if self.stopped {
             return Err(invalid("stopped learner cannot start metadata"));
+        }
+        if self.metadata_started {
+            return self.refresh(&token);
         }
         let (observed, business) = self.own_metadata(&token)?;
         self.factory

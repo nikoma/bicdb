@@ -488,6 +488,9 @@ impl NativeInitialPreparationObservation {
             cancellation,
         })
     }
+    pub(crate) fn stage(&self) -> NativeInitialPreparationStage {
+        self.response.stage
+    }
     pub(crate) fn configuration_data(&self) -> &ClusterTopology {
         &self.response.configuration
     }

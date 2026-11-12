@@ -257,14 +257,16 @@ impl NativeProvisionalHost {
         network: ClusterNetworkTransportConfig,
         parent: &CancellationToken,
     ) -> Result<()> {
-        parent.check()?;
+        let operation =
+            parent.child_with_deadline(std::time::Instant::now() + Duration::from_secs(5));
+        operation.check()?;
         self.seed.require_initial_preparation_surface()?;
         if self.drained.is_none() {
             self.drained = Some(
                 self.listener
                     .as_mut()
                     .ok_or_else(|| invalid("stopping listener custody missing"))?
-                    .stop_and_drain(parent)?,
+                    .stop_and_drain(&operation)?,
             );
         }
         self.drained
@@ -295,7 +297,7 @@ impl NativeProvisionalHost {
         )?;
         self.listener = Some(listener);
         self.drained.take();
-        parent.check()?;
+        operation.check()?;
         Ok(())
     }
 }

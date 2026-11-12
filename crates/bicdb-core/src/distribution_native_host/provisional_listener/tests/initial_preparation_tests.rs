@@ -147,6 +147,44 @@ fn native_initial_preparation_tls_sequential_launch_uses_historical_same_c_after
         }
     }
     assert!(launches[0].metadata.lock().status().commit_index > 0);
+    // Real later metadata commit (load-only topology change), not a forged
+    // generation or a claim that the historical C is current authority.
+    let mut next = launches[0].metadata.lock().committed_topology().clone();
+    next.generation += 1;
+    next.ranges.values_mut().next().unwrap().approximate_bytes += 17;
+    launches[0]
+        .metadata
+        .lock()
+        .propose_topology(next.clone())
+        .unwrap();
+    for _ in 0..3 {
+        for index in 1..3 {
+            let request = launches[0]
+                .metadata
+                .lock()
+                .append_request_from(1, 16)
+                .unwrap();
+            let reply = f.hosts[0]
+                .transport
+                .append_metadata(&node(index), request)
+                .unwrap();
+            launches[0]
+                .metadata
+                .lock()
+                .record_append_response(&node(index), &reply)
+                .unwrap();
+        }
+    }
+    assert_eq!(launches[0].metadata.lock().committed_topology(), &next);
+    let historical = f.hosts[2]
+        .transport
+        .acquire_initial_preparation(&node(0), &f.plan, Some(c.topology.clone()), &token)
+        .unwrap();
+    assert_eq!(
+        historical.stage(),
+        NativeInitialPreparationStage::ConsensusExposedHistorical
+    );
+    assert_eq!(historical.configuration_data(), &c.topology);
     for host in &f.hosts {
         assert_eq!(
             record(host).stage(),

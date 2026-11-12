@@ -12,6 +12,40 @@ pub(crate) struct NativePointReadReservation<'a, T: RangeWriteTransport> {
 }
 
 impl<T: RangeWriteTransport> RangeWriteCoordinator<T> {
+    /// Publication is not a read permit. Check the REAL hook/DB/coordinator;
+    /// every request still acquires its own metadata/data/snapshot protocol.
+    pub(crate) fn validate_strong_event_dispatch_install(
+        self: &Arc<Self>,
+        runtime: &RangeRecoveryRuntime,
+        host: &crate::db::InstalledNativeWriterHostGuard,
+    ) -> Result<()> {
+        self.require_strong_point_runtime(runtime)?;
+        let ranges = self
+            .topology
+            .read()
+            .ranges
+            .values()
+            .map(crate::distribution_native_read::canonical_range)
+            .collect::<Vec<_>>();
+        if ranges.is_empty() {
+            return Err(range_write_error(
+                "installed event writer has no range configuration",
+            ));
+        }
+        let service = self
+            .local_service
+            .try_lock()
+            .ok_or_else(|| range_write_error("service busy publishing Strong dispatcher"))?;
+        let database = service.database();
+        let database = database
+            .try_read()
+            .ok_or_else(|| range_write_error("database busy publishing Strong dispatcher"))?;
+        for range in ranges {
+            host.require_for_coordinator(&database, &range, self)?;
+        }
+        Ok(())
+    }
+
     pub(crate) fn strong_point_read(
         self: &Arc<Self>,
         runtime: &Arc<RangeRecoveryRuntime>,

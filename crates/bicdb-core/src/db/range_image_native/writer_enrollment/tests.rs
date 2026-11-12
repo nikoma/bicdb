@@ -150,6 +150,7 @@ fn native_writer_birth_v2_partial_factory_keeps_fence_and_refuses_reopen() {
         config(),
         spec.clone(),
         true,
+        true,
         |_| Err(invalid("injected factory after actual flags")),
     );
     assert!(result.is_err());

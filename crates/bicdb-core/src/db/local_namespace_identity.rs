@@ -385,12 +385,15 @@ mod tests {
     #[test]
     fn namespace_identity_image_receipt_capability_is_separate_and_default_off() {
         let root = tempfile::tempdir().unwrap();
-        let db = BicDb::open_with_config(root.path(), config(StorageMode::EmbeddedMemory)).unwrap();
+        // Native image records have a page-store reader. Test the independent
+        // sticky capability in its supported storage mode; it still creates
+        // no native factory, namespace activation or image/read authority.
+        let db = BicDb::open_with_config(root.path(), config(StorageMode::ServerPaged)).unwrap();
         db.close().unwrap();
         assert!(!format::range_image_install_active(root.path()).unwrap());
         format::enable_range_image_install(root.path()).unwrap();
         assert!(format::range_image_install_active(root.path()).unwrap());
-        let db = BicDb::open_with_config(root.path(), config(StorageMode::EmbeddedMemory)).unwrap();
+        let db = BicDb::open_with_config(root.path(), config(StorageMode::ServerPaged)).unwrap();
         assert!(!db.local_namespace_identity_feature_active());
     }
 

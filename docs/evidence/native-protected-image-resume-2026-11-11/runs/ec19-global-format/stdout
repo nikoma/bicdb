@@ -1,0 +1,6 @@
+
+running 1 test
+test distribution_range_consensus::image_install_fence::tests::protected_proposal_global_upgrade_refuses_other_legacy_range_without_writing ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 719 filtered out; finished in 0.14s
+

@@ -99,6 +99,41 @@ impl RangeWriteStore {
     }
 }
 impl<T: RangeWriteTransport> RangeWriteCoordinator<T> {
+    fn expected_enforced_native_store(&self) -> bool {
+        self.topology
+            .read()
+            .nodes
+            .get(&self.local_node_id)
+            .and_then(|node| node.native_store_birth_v1.as_ref())
+            .is_some_and(|birth| birth.writer_enforcement_version() == 1)
+    }
+    // Metadata may require a store, but cannot manufacture that store's birth.
+    pub(super) fn require_expected_native_database(&self, database: Option<&BicDb>) -> Result<()> {
+        if self.expected_enforced_native_store()
+            && database
+                .map(BicDb::actual_native_writer_enforcement_version)
+                .transpose()?
+                != Some(1)
+        {
+            return Err(range_write_error(
+                "registered enforced native coordinator requires its actual born-v2 database",
+            ));
+        }
+        Ok(())
+    }
+    pub(super) fn require_expected_native_recovery_store(&self) -> Result<()> {
+        if self.expected_enforced_native_store() {
+            let service = self.local_service.try_lock().ok_or_else(|| {
+                range_write_error("service busy before native recovery store check")
+            })?;
+            if service.native_writer_enforcement_version()? != 1 {
+                return Err(range_write_error(
+                    "registered enforced native coordinator cannot recover a legacy store",
+                ));
+            }
+        }
+        Ok(())
+    }
     pub(crate) fn native_writer_coordinator_id(&self) -> Uuid {
         self.native_coordinator_id
     }

@@ -193,9 +193,9 @@ impl History {
         match self.origin.outcome() {
             TransactionOutcome::Pending | TransactionOutcome::Committed { .. } => self.latest(None),
             TransactionOutcome::Aborted => self.aborted_baseline(),
-            TransactionOutcome::Committing { .. } | TransactionOutcome::RecoveryRequired { .. } => {
-                Err(uncertain_outcome())
-            }
+            TransactionOutcome::Committing { .. }
+            | TransactionOutcome::RecoveryRequired { .. }
+            | TransactionOutcome::RecoveryRequiredBeforeLocalCommit => Err(uncertain_outcome()),
         }
     }
 }
@@ -310,7 +310,9 @@ impl ReadVersion {
                     return Ok(self.bytes.clone());
                 }
             }
-            TransactionOutcome::Committing { .. } | TransactionOutcome::RecoveryRequired { .. } => {
+            TransactionOutcome::Committing { .. }
+            | TransactionOutcome::RecoveryRequired { .. }
+            | TransactionOutcome::RecoveryRequiredBeforeLocalCommit => {
                 return Err(uncertain_outcome())
             }
         };

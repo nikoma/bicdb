@@ -2697,7 +2697,18 @@ impl BicDb {
                     .range_image_native_birth_active
                     .load(AtomicOrdering::Acquire)
                 {
-                    let ticket = admission.admit_with_native_context(&intent, self)?;
+                    let ticket = match admission.admit_with_native_context(&intent, self) {
+                        Ok(ticket) => ticket,
+                        Err(error) => {
+                            if matches!(&error, BicDbError::CommitOutcomeUnknown { .. }) {
+                                // Admission precedes local WAL allocation. Keep
+                                // the real uncertainty without inventing B/0;
+                                // pending-transaction Drop must not say Aborted.
+                                tx.receipt_native_admission_unknown();
+                            }
+                            return Err(error);
+                        }
+                    };
                     tx.commit_admission_ticket = Some((Arc::clone(admission), ticket.clone()));
                     tx.native_admission_recovery_release = Some(NativeAdmissionRecoveryRelease {
                         admission: Arc::clone(admission),

@@ -5,7 +5,7 @@ use super::*;
 use crate::distribution_range_recovery::{NativeCompletionRequest, NativeReadyRequest};
 
 impl EnforcedNetwork {
-    fn refresh_actual_writer_policies(&mut self) {
+    pub(super) fn refresh_actual_writer_policies(&mut self) {
         for id in [node("n0"), node("n1"), node("n2")] {
             let business = Uuid::now_v7();
             // Fresh HostMQ before either local latch, never a topology DTO.
@@ -59,7 +59,10 @@ impl EnforcedNetwork {
             &parent,
         )
     }
-    fn actual_current_recovery_scope(&self, range: &RangeDescriptor) -> RecoveryFenceScope {
+    pub(super) fn actual_current_recovery_scope(
+        &self,
+        range: &RangeDescriptor,
+    ) -> RecoveryFenceScope {
         let actor = self.clients[&range.leader].local_metadata_read_participant();
         let business = Uuid::now_v7();
         let challenge = Uuid::now_v7();

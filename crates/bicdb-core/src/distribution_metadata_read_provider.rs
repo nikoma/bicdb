@@ -135,6 +135,20 @@ struct Candidate {
 impl MetadataReadProvider {
     /// Actual locally configured transport identity, never a caller-selected
     /// participant DTO. Recovery uses it for local fence observations.
+    /// Routing hint only. A caller MUST still acquire actual fresh HostMQ or
+    /// generic range authority; this status cannot authorize a row or absence.
+    pub(crate) fn current_metadata_leader_hint(
+        &self,
+        parent: &CancellationToken,
+    ) -> Result<Option<ClusterNodeId>> {
+        let consensus = self.lock_consensus(parent)?;
+        let status = consensus.status();
+        Ok(if status.role == MetadataConsensusRole::Leader {
+            Some(self.local_participant().node_id().clone())
+        } else {
+            status.leader_id
+        })
+    }
     pub(crate) fn local_participant(&self) -> MetadataReadParticipant {
         self.transport.local_participant()
     }

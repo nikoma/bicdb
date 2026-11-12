@@ -295,7 +295,7 @@ mod tests {
     }
 
     #[test]
-    fn range_image_gate_blocks_unscoped_commit_but_finishes_already_owned_native_callback() {
+    fn range_image_gate_rejects_bare_frozen_copy_and_requires_owned_controlled_scope() {
         let root = tempfile::tempdir().unwrap();
         let mut db = populated(root.path());
         let topology_root = tempfile::tempdir().unwrap();
@@ -321,14 +321,26 @@ mod tests {
         assert!(db
             .apply_range_snapshot_batch_preinstalled(&range, &meta, &batch)
             .is_err());
+        assert!(
+            db.apply_range_snapshot_batch_preinstalled_with_mutation(
+                &range,
+                &meta,
+                &batch,
+                &RangeMutationAuthority::Frozen(&frozen),
+            )
+            .is_err(),
+            "a read-only frozen lease is not copy/write admission"
+        );
+        let controlled = gate.try_controlled_mutation(&frozen).unwrap();
         db.apply_range_snapshot_batch_preinstalled_with_mutation(
             &range,
             &meta,
             &batch,
-            &RangeMutationAuthority::Frozen(&frozen),
+            &RangeMutationAuthority::Controlled(&controlled),
         )
         .unwrap();
         assert!(db.get("items", "trusted-copy").unwrap().is_some());
+        drop(controlled);
         drop(frozen);
         db.batch_insert("items", [Record::new("unscoped")]).unwrap();
     }

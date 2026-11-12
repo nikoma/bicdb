@@ -48,6 +48,10 @@ use crate::distribution_metadata_read_provider::{
     MetadataReadProbeTransport, MetadataReadProvider,
 };
 mod host_metadata;
+mod initial_birth;
+use crate::distribution_native_host::{
+    NativeInitialBirthOfferRequest, NativeInitialBirthOfferResponse,
+};
 use crate::distribution_range_consensus::{
     RangeWriteAck, RangeWriteCommand, RangeWriteProbe, RangeWriteProgress, RangeWriteRepairBatch,
     RangeWriteRepairLimits, RangeWriteState, RangeWriteTransport,
@@ -66,6 +70,7 @@ use crate::replication_transport::{
 };
 use crate::{CancellationToken, ClusterSchemaBundle, SignedClusterSchemaBundle};
 pub(crate) use host_metadata::AuthenticatedHostMetadataReadReply;
+pub(crate) use initial_birth::AuthenticatedNativeInitialBirthReply;
 
 const FRAME_HEADER_BYTES: usize = 4;
 
@@ -216,6 +221,7 @@ enum NativeCommandRequestRef<'a> {
 enum ClusterDataRequest {
     Ping,
     ApplicationEvent(crate::ClusterEventRequest),
+    NativeEventGet(crate::distribution_native_read::NativeEventGetRequest),
     ExportSchemaBundle {
         range_id: RangeId,
         range_epoch: u64,
@@ -318,6 +324,9 @@ enum ClusterDataRequest {
     },
     HostMetadataReadAcquire {
         request: HostMetadataReadAcquireRequest,
+    },
+    NativeInitialBirthOffer {
+        request: NativeInitialBirthOfferRequest,
     },
     AcquireMetadataRecoveryRole {
         request: MetadataRecoveryRoleRequest,
@@ -431,6 +440,7 @@ impl ClusterDataRequest {
     fn range_id_for_schema_fence(&self) -> Option<RangeId> {
         match self {
             Self::ApplicationEvent(request) => Some(request.range_id),
+            Self::NativeEventGet(_) => None,
             Self::ExportSchemaBundle { range_id, .. } => Some(*range_id),
             Self::InstallSchemaBundle { .. }
             | Self::StageSignedSchemaBundle { .. }
@@ -484,6 +494,7 @@ impl ClusterDataRequest {
             | Self::MetadataReadProbe { .. }
             | Self::MetadataReadAcquire { .. }
             | Self::HostMetadataReadAcquire { .. }
+            | Self::NativeInitialBirthOffer { .. }
             | Self::AcquireMetadataRecoveryRole { .. } => None,
         }
     }
@@ -502,6 +513,7 @@ struct ClusterDataResponseEnvelope {
 enum ClusterDataResponse {
     Pong,
     ApplicationEvent(crate::ClusterEventResponse),
+    NativeEventGet(crate::distribution_native_read::NativeEventGetReply),
     Ack,
     SchemaBundle(ClusterSchemaBundle),
     SchemaStage(ClusterSchemaStageReceipt),
@@ -520,6 +532,7 @@ enum ClusterDataResponse {
     MetadataReadProbe(MetadataReadProbeResponse),
     MetadataReadAcquire(MetadataReadAcquireResponse),
     HostMetadataReadAcquire(HostMetadataReadAcquireResponse),
+    NativeInitialBirthOffer(NativeInitialBirthOfferResponse),
     MetadataRecoveryRole(MetadataRecoveryRoleResponse),
     RecoveryEpochFence(crate::distribution_range_recovery::RecoveryEpochFenceReply),
     RecoveryFencedProbe(crate::distribution_range_recovery::RecoveryFencedProbeReply),
@@ -713,12 +726,15 @@ pub(crate) fn start_cluster_data_server_with_recovery_runtime(
     // These identities are immutable for the listener's lifetime. Metadata
     // heartbeats must not wait behind data-service row/snapshot I/O merely to
     // validate the request envelope.
-    let local_identity = {
+    let (local_identity, initial_birth_provider) = {
         let service = service.lock();
         (
-            service.cluster_id().clone(),
-            service.node_id().clone(),
-            service.native_writer_enforcement_version()?,
+            (
+                service.cluster_id().clone(),
+                service.node_id().clone(),
+                service.native_writer_enforcement_version()?,
+            ),
+            service.initial_birth_provider(),
         )
     };
     let thread = thread::spawn(move || {
@@ -751,6 +767,7 @@ pub(crate) fn start_cluster_data_server_with_recovery_runtime(
                     let tls = server_tls.as_ref().map(|tls| Arc::clone(&tls.config));
                     let config = config.clone();
                     let local_identity = local_identity.clone();
+                    let initial_birth_provider = initial_birth_provider.clone();
                     thread::spawn(move || {
                         let _active = ActiveConnection(active);
                         let _ = configure_stream(&stream, &config);
@@ -781,6 +798,7 @@ pub(crate) fn start_cluster_data_server_with_recovery_runtime(
                                     Some(&peer_certificate_sha256),
                                     metadata_read_provider.as_ref(),
                                     recovery_runtime.as_ref(),
+                                    initial_birth_provider.as_ref(),
                                     request_deadline,
                                 )
                             })
@@ -798,6 +816,7 @@ pub(crate) fn start_cluster_data_server_with_recovery_runtime(
                                 None,
                                 metadata_read_provider.as_ref(),
                                 recovery_runtime.as_ref(),
+                                initial_birth_provider.as_ref(),
                                 request_deadline,
                             )
                         };
@@ -881,6 +900,9 @@ fn handle_cluster_data_connection(
     peer_certificate_sha256: Option<&str>,
     metadata_read_provider: Option<&Arc<MetadataReadProvider>>,
     recovery_runtime: Option<&Arc<crate::distribution_range_recovery::RangeRecoveryRuntime>>,
+    initial_birth_provider: Option<
+        &std::sync::Weak<crate::distribution_native_host::NativeProvisionalNode>,
+    >,
     request_deadline: Instant,
 ) -> Result<()> {
     let request = recv_json_frame::<ClusterDataRequestEnvelope>(stream, config.max_frame_bytes)?;
@@ -924,7 +946,60 @@ fn handle_cluster_data_connection(
                 config.dev_localhost_plaintext,
             )
         });
+        // A committed birth declaration is a necessary refusal fence, never
+        // authority to upgrade the actual local store or admit an operation.
+        let expected_enforced_store = topology_guard
+            .nodes
+            .get(&local_node_id)
+            .and_then(|node| node.native_store_birth_v1.as_ref())
+            .is_some_and(|birth| birth.writer_enforcement_version() == 1);
         drop(topology_guard);
+        // Attaching an initial factory makes this listener provisional for its
+        // ENTIRE lifetime. A Weak expiry must not expose ordinary scans,
+        // digests, mutations or consensus endpoints by falling through.
+        // Registration starts a separately wired listener after this one
+        // stops; a factory observation grants no data/read/voting authority.
+        if initial_birth_provider.is_some() {
+            match &request.request {
+                ClusterDataRequest::Ping => return Ok(ClusterDataResponse::Pong),
+                ClusterDataRequest::NativeInitialBirthOffer { .. } => {}
+                _ => return Err(transport_error(
+                    "provisional factory listener permits only initial birth observations and ping",
+                )),
+            }
+        }
+        if let ClusterDataRequest::NativeInitialBirthOffer { request } = request.request {
+            let provider = initial_birth_provider
+                .and_then(std::sync::Weak::upgrade)
+                .ok_or_else(|| {
+                    transport_error("actual provisional factory provider is not active")
+                })?;
+            let caller = authenticated_caller.as_ref().ok_or_else(|| {
+                transport_error("initial birth requires authenticated planned membership")
+            })?;
+            let cancellation =
+                CancellationToken::new(Arc::new(AtomicBool::new(false)), Some(request_deadline));
+            return provider
+                .observe_initial_birth(caller, request, &cancellation)
+                .map(ClusterDataResponse::NativeInitialBirthOffer);
+        }
+        let native_store_mismatch =
+            expected_enforced_store && local_writer_enforcement_version != 1;
+        if native_store_mismatch
+            && !matches!(
+                &request.request,
+                ClusterDataRequest::Ping
+                    | ClusterDataRequest::NativeEventGet(_)
+                    | ClusterDataRequest::ApplicationEvent(crate::ClusterEventRequest {
+                        operation: crate::ClusterEventOperation::Get { .. },
+                        ..
+                    })
+            )
+        {
+            return Err(transport_error(
+                "registered enforced native member has another actual local store",
+            ));
+        }
         if let ClusterDataRequest::HostMetadataReadAcquire { request } = request.request {
             let provider = metadata_read_provider
                 .ok_or_else(|| transport_error("fresh host metadata provider is not active"))?;
@@ -937,14 +1012,111 @@ fn handle_cluster_data_connection(
                 .acquire_host_metadata(caller, request, &cancellation)
                 .map(ClusterDataResponse::HostMetadataReadAcquire);
         }
-        if local_writer_enforcement_version == 1
-            && matches!(&request.request, ClusterDataRequest::ApplicationEvent(event)
-                if matches!(&event.operation, crate::ClusterEventOperation::Get { .. }))
-        {
-            // The Core host's future Strong dispatcher must intercept here,
-            // outside DB/service latches. Until installed, born-v2 clients get
-            // an explicit unavailable error, never a bare false None/404.
-            return Err(transport_error("strong_point_read_unavailable: the enforced native host dispatcher is not installed; retry after host readiness"));
+        // Correlated native Get and born-v2 legacy-syntax Get are intercepted
+        // BEFORE schema/service/DB latches. HostMQ startup remains independent.
+        let native_get = match &request.request {
+            ClusterDataRequest::NativeEventGet(get) => Some(get.clone()),
+            ClusterDataRequest::ApplicationEvent(event)
+                if local_writer_enforcement_version == 1 || expected_enforced_store =>
+            {
+                if let crate::ClusterEventOperation::Get { namespace, key } = &event.operation {
+                    Some(crate::distribution_native_read::NativeEventGetRequest {
+                        version: 1,
+                        mode:
+                            crate::distribution_native_read::NativeEventReadMode::DeploymentDefault,
+                        business_request_id: Uuid::now_v7(),
+                        challenge: Uuid::now_v7(),
+                        range_id: event.range_id,
+                        range_epoch: event.range_epoch,
+                        namespace: namespace.clone(),
+                        key: key.clone(),
+                        budget_ms: u64::try_from(
+                            request_deadline
+                                .saturating_duration_since(Instant::now())
+                                .as_millis(),
+                        )
+                        .unwrap_or(5000)
+                        .clamp(1, 5000),
+                    })
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        };
+        if let Some(get) = native_get {
+            use crate::distribution_native_read::{
+                NativeEventGetReply, NativeEventGetResult, NativeEventGetUnavailableCode,
+            };
+            get.validate()?;
+            if native_store_mismatch {
+                return Ok(ClusterDataResponse::NativeEventGet(
+                    NativeEventGetReply::unavailable(
+                        &get,
+                        NativeEventGetUnavailableCode::InvalidRequest,
+                        None,
+                        "registered enforced native member has another actual local store",
+                    ),
+                ));
+            }
+            if local_writer_enforcement_version == 0 {
+                if get.mode == crate::distribution_native_read::NativeEventReadMode::Strong {
+                    return Ok(ClusterDataResponse::NativeEventGet(
+                        NativeEventGetReply::unavailable(
+                            &get,
+                            NativeEventGetUnavailableCode::LegacyUnsupported,
+                            None,
+                            "explicit Strong Get is unavailable on an unenforced legacy store",
+                        ),
+                    ));
+                }
+                if !topology
+                    .read()
+                    .nodes
+                    .get(&caller_node_id)
+                    .is_some_and(|node| {
+                        node.lifecycle == ClusterNodeLifecycle::Active
+                            && node.metadata_role == MetadataMemberRole::Voter
+                    })
+                {
+                    return Err(transport_error(
+                        "legacy application event callers must be active voting members",
+                    ));
+                }
+                // Explicit ACTUAL born-v1 behavior, not a downgrade following
+                // an unsupported protocol, failed Strong proof or missing slot.
+                let legacy = dispatch_cluster_data_request(
+                    service,
+                    control_store,
+                    metadata_consensus,
+                    metadata_distribution_store,
+                    topology,
+                    &caller_node_id,
+                    ClusterDataRequest::ApplicationEvent(get.legacy_request()),
+                )?;
+                let ClusterDataResponse::ApplicationEvent(crate::ClusterEventResponse::Value {
+                    value,
+                }) = legacy
+                else {
+                    return Err(transport_error("legacy Get returned another operation"));
+                };
+                return Ok(ClusterDataResponse::NativeEventGet(
+                    NativeEventGetReply::new(
+                        &get,
+                        NativeEventGetResult::LegacyValue {
+                            value: value.into(),
+                        },
+                    ),
+                ));
+            }
+            let token =
+                CancellationToken::new(Arc::new(AtomicBool::new(false)), Some(request_deadline));
+            let reply=match recovery_runtime.and_then(|runtime|runtime.native_event_dispatcher()) {
+                Some(dispatcher)=>dispatcher.dispatch(get.clone(),&token),
+                None=>NativeEventGetReply::unavailable(&get,NativeEventGetUnavailableCode::MissingDispatcher,None,
+                    "strong_point_read_unavailable: actual enforced host dispatcher is not installed"),
+            };
+            return Ok(ClusterDataResponse::NativeEventGet(reply));
         }
         if let ClusterDataRequest::MetadataReadAcquire { request } = request.request {
             let provider = metadata_read_provider.ok_or_else(|| {
@@ -1171,6 +1343,13 @@ fn authorize_cluster_data_caller(
     let bootstrap_fetch = matches!(request, ClusterDataRequest::FetchBootstrapSnapshot);
     if caller.is_none() && !self_registration && !bootstrap_fetch {
         return Err(transport_error("cluster data caller is not a member"));
+    }
+    if matches!(request, ClusterDataRequest::NativeEventGet(_))
+        && !caller.is_some_and(|node| node.lifecycle == ClusterNodeLifecycle::Active)
+    {
+        return Err(transport_error(
+            "typed read caller must be an active registered member",
+        ));
     }
     if matches!(request, ClusterDataRequest::ApplicationEvent(_))
         && !caller.is_some_and(|node| {
@@ -1536,6 +1715,9 @@ fn dispatch_cluster_data_request(
     }
     match request {
         ClusterDataRequest::Ping => Ok(ClusterDataResponse::Pong),
+        ClusterDataRequest::NativeEventGet(_) => Err(transport_error(
+            "typed Get requires the before-latch dispatcher",
+        )),
         ClusterDataRequest::ApplicationEvent(request) => {
             request.operation.validate()?;
             let (local_node, db) = {
@@ -2579,6 +2761,9 @@ fn dispatch_cluster_data_request(
         ClusterDataRequest::HostMetadataReadAcquire { .. } => Err(transport_error(
             "host metadata acquisition requires its authenticated runtime provider",
         )),
+        ClusterDataRequest::NativeInitialBirthOffer { .. } => Err(transport_error(
+            "initial birth acquisition requires its actual factory provider",
+        )),
     }
 }
 
@@ -3057,6 +3242,45 @@ impl TcpClusterRelocationTransport {
         request: crate::ClusterEventRequest,
     ) -> Result<crate::ClusterEventResponse> {
         request.operation.validate()?;
+        if let crate::ClusterEventOperation::Get { namespace, key } = &request.operation {
+            use crate::distribution_native_read::{NativeEventGetRequest, NativeEventGetResult};
+            let remaining = cancellation
+                .deadline()
+                .map(|d| d.saturating_duration_since(Instant::now()))
+                .unwrap_or(Duration::from_secs(5))
+                .min(Duration::from_secs(5));
+            cancellation.check()?;
+            let get = NativeEventGetRequest {
+                version: 1,
+                mode: crate::distribution_native_read::NativeEventReadMode::DeploymentDefault,
+                business_request_id: Uuid::now_v7(),
+                challenge: Uuid::now_v7(),
+                range_id: request.range_id,
+                range_epoch: request.range_epoch,
+                namespace: namespace.clone(),
+                key: key.clone(),
+                budget_ms: u64::try_from(remaining.as_millis())
+                    .unwrap_or(5000)
+                    .clamp(1, 5000),
+            };
+            return match self
+                .native_event_get_cancellable(cancellation, destination, &get)?
+                .result
+            {
+                NativeEventGetResult::Value { value, .. }
+                | NativeEventGetResult::LegacyValue { value } => {
+                    Ok(crate::ClusterEventResponse::Value {
+                        value: value.into_option(),
+                    })
+                }
+                NativeEventGetResult::Redirect { .. } => {
+                    Err(transport_error("typed native Get requires route refresh"))
+                }
+                NativeEventGetResult::Unavailable { detail, .. } => Err(transport_error(format!(
+                    "strong_point_read_unavailable: {detail}"
+                ))),
+            };
+        }
         match self.call_cancellable(
             cancellation,
             destination,
@@ -3064,6 +3288,73 @@ impl TcpClusterRelocationTransport {
         )? {
             ClusterDataResponse::ApplicationEvent(result) => Ok(result),
             response => Err(unexpected_response("application event", response)),
+        }
+    }
+
+    pub(crate) fn native_event_get_cancellable(
+        &self,
+        cancellation: &CancellationToken,
+        destination: &ClusterNodeId,
+        request: &crate::distribution_native_read::NativeEventGetRequest,
+    ) -> Result<crate::distribution_native_read::NativeEventGetReply> {
+        request.validate()?;
+        cancellation.check()?;
+        let expected_enforced_store = self
+            .topology
+            .read()
+            .nodes
+            .get(destination)
+            .and_then(|node| node.native_store_birth_v1.as_ref())
+            .is_some_and(|birth| birth.writer_enforcement_version() == 1);
+        let mut wire_request = request.clone();
+        if expected_enforced_store {
+            wire_request.mode = crate::distribution_native_read::NativeEventReadMode::Strong;
+        }
+        let response = self.call_cancellable(
+            cancellation,
+            destination,
+            ClusterDataRequest::NativeEventGet(wire_request.clone()),
+        )?;
+        let ClusterDataResponse::NativeEventGet(reply) = response else {
+            return Err(unexpected_response(
+                "correlated typed Get (no legacy downgrade)",
+                response,
+            ));
+        };
+        reply.validate_for(&wire_request)?;
+        if matches!(
+            &reply.result,
+            crate::distribution_native_read::NativeEventGetResult::LegacyValue { .. }
+        ) && self
+            .topology
+            .read()
+            .nodes
+            .get(destination)
+            .and_then(|n| n.native_store_birth_v1.as_ref())
+            .is_some_and(|birth| birth.writer_enforcement_version() == 1)
+        {
+            return Err(transport_error(
+                "enforced native member returned a legacy read",
+            ));
+        }
+        cancellation.check()?;
+        Ok(reply)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn test_original_event_get(
+        &self,
+        cancellation: &CancellationToken,
+        destination: &ClusterNodeId,
+        request: crate::ClusterEventRequest,
+    ) -> Result<crate::distribution_native_read::NativeEventGetReply> {
+        match self.call_cancellable(
+            cancellation,
+            destination,
+            ClusterDataRequest::ApplicationEvent(request),
+        )? {
+            ClusterDataResponse::NativeEventGet(reply) => Ok(reply),
+            other => Err(unexpected_response("original Get mismatch refusal", other)),
         }
     }
 
@@ -3980,6 +4271,7 @@ impl TcpClusterRelocationTransport {
             ClusterDataRequest::MetadataReadProbe { .. }
                 | ClusterDataRequest::MetadataReadAcquire { .. }
                 | ClusterDataRequest::HostMetadataReadAcquire { .. }
+                | ClusterDataRequest::NativeInitialBirthOffer { .. }
                 | ClusterDataRequest::AcquireMetadataRecoveryRole { .. }
                 | ClusterDataRequest::RecoveryEpochFence { .. }
                 | ClusterDataRequest::RecoveryFencedProbe { .. }
@@ -6111,7 +6403,8 @@ mod event_client_retry_tests {
                     recv_json_frame(&mut stream, max_frame_bytes).unwrap();
                 let should_be_silent = silent_remaining
                     && match &request.request {
-                        ClusterDataRequest::ApplicationEvent(_) => {
+                        ClusterDataRequest::ApplicationEvent(_)
+                        | ClusterDataRequest::NativeEventGet(_) => {
                             silent_first == SilentFirst::Application
                         }
                         ClusterDataRequest::FetchBootstrapSnapshot => {
@@ -6141,6 +6434,18 @@ mod event_client_retry_tests {
                     continue;
                 }
                 let response = match request.request {
+                    ClusterDataRequest::NativeEventGet(get) => {
+                        seen.applications.fetch_add(1, Ordering::SeqCst);
+                        if discovered {
+                            Ok(ClusterDataResponse::NativeEventGet(crate::distribution_native_read::NativeEventGetReply::new(
+                                &get,crate::distribution_native_read::NativeEventGetResult::LegacyValue {
+                                    value:Some(serde_json::json!({"kept":true})).into(),
+                                },
+                            )))
+                        } else {
+                            Err(unavailable())
+                        }
+                    }
                     ClusterDataRequest::ApplicationEvent(_) => {
                         seen.applications.fetch_add(1, Ordering::SeqCst);
                         if discovered {
@@ -6338,6 +6643,16 @@ mod event_client_retry_tests {
                 let response = match request.request {
                     ClusterDataRequest::FetchBootstrapSnapshot => {
                         ClusterDataResponse::BootstrapSnapshot(snapshot.clone())
+                    }
+                    ClusterDataRequest::NativeEventGet(get) => {
+                        assert_eq!(request.destination_node_id, new_id);
+                        assert_eq!(get.range_epoch, moved_epoch);
+                        seen_new.fetch_add(1, Ordering::SeqCst);
+                        ClusterDataResponse::NativeEventGet(crate::distribution_native_read::NativeEventGetReply::new(
+                            &get,crate::distribution_native_read::NativeEventGetResult::LegacyValue {
+                                value:Some(serde_json::json!({"kept":true})).into(),
+                            },
+                        ))
                     }
                     ClusterDataRequest::ApplicationEvent(event) => {
                         assert_eq!(request.destination_node_id, new_id);

@@ -28,6 +28,29 @@ impl NativePointSnapshotBarrier {
     }
 }
 impl RangeRecoveryRuntime {
+    pub(crate) fn point_read_local_node_id(&self) -> &ClusterNodeId {
+        &self.local_node_id
+    }
+    pub(crate) fn attach_native_event_dispatcher(
+        self: &Arc<Self>,
+        dispatcher: &Arc<crate::distribution_native_read::NativeStrongEventDispatcher>,
+    ) -> Result<()> {
+        dispatcher.require_runtime(self)?;
+        *self.event_dispatcher.lock() = Arc::downgrade(dispatcher);
+        Ok(())
+    }
+    pub(crate) fn native_event_dispatcher(
+        &self,
+    ) -> Option<Arc<crate::distribution_native_read::NativeStrongEventDispatcher>> {
+        self.event_dispatcher.lock().upgrade()
+    }
+    pub(crate) fn event_metadata_leader_hint(
+        &self,
+        token: &CancellationToken,
+    ) -> Result<Option<ClusterNodeId>> {
+        self.provider.current_metadata_leader_hint(token)
+    }
+
     #[cfg(test)]
     pub(crate) fn test_hold_point_after_actual_snapshot(&self) -> Arc<NativePointSnapshotBarrier> {
         let barrier = Arc::new(NativePointSnapshotBarrier::default());

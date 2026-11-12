@@ -70,6 +70,9 @@ pub(crate) struct RangeRecoveryRuntime {
     provider: Arc<MetadataReadProvider>,
     local_node_id: ClusterNodeId,
     gate: RangeMutationGate,
+    #[cfg(feature = "tls-replication")]
+    event_dispatcher:
+        Mutex<std::sync::Weak<crate::distribution_native_read::NativeStrongEventDispatcher>>,
     sessions: Arc<Mutex<Sessions>>,
     participant_transport:
         Option<Arc<dyn crate::distribution_range_consensus::RangeWriteTransport>>,
@@ -448,6 +451,8 @@ impl RangeRecoveryRuntime {
             provider,
             local_node_id,
             gate,
+            #[cfg(feature = "tls-replication")]
+            event_dispatcher: Mutex::new(std::sync::Weak::new()),
             sessions: Arc::new(Mutex::new(Sessions::default())),
             participant_transport: None,
             #[cfg(test)]

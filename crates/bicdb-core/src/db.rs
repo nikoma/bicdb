@@ -67,6 +67,8 @@ pub(crate) use range_image_install::{
 pub(crate) use range_image_proposal::{
     NativeCurrentImageProposalReceipt, ProtectedCurrentImagePreimageV1,
 };
+mod native_metadata_store;
+pub(crate) use native_metadata_store::NativeMetadataStoreRecord;
 mod native_activation;
 pub(crate) use native_activation::NativeActivatedOpenGuard;
 mod commit_admission_hook;
@@ -3947,6 +3949,8 @@ pub struct BicDb {
     /// one covers the database root, so every storage mode is excluded rather
     /// than only the paged one.
     _directory_lock: Option<Arc<bicdb_page::DirectoryLock>>,
+    // ONLY this BicDb owns a strong token; metadata leases receive Weak.
+    native_metadata_open_lifetime: Arc<()>,
     config: DbConfig,
     // Opt-in, sticky local format capability; never a portable reader flag.
     local_namespace_identity_active: bool,
@@ -11006,6 +11010,7 @@ impl BicDb {
             durability: durability.clone(),
             incarnation: incarnation.clone(),
             _directory_lock: Some(Arc::new(directory_lock)),
+            native_metadata_open_lifetime: Arc::new(()),
             config,
             local_namespace_identity_active,
             ha_state,

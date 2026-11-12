@@ -17,6 +17,15 @@ use uuid::Uuid;
 
 const SEED_MANIFEST: &str = "native-bootstrap-seed.json";
 const MAX_PLAN_BYTES: usize = 2 * 1024 * 1024;
+mod initial_offer;
+#[cfg(feature = "tls-replication")]
+mod provisional_listener;
+pub(crate) use initial_offer::{
+    NativeInitialBirthOfferObservation, NativeInitialBirthOfferRequest,
+    NativeInitialBirthOfferResponse,
+};
+#[cfg(feature = "tls-replication")]
+pub(crate) use provisional_listener::NativeProvisionalHost;
 fn invalid(detail: &str) -> BicDbError {
     BicDbError::Cluster(format!("native host bootstrap: {detail}"))
 }
@@ -266,6 +275,8 @@ impl NativeProvisionalNode {
             return Err(invalid("saved seed belongs to another initial plan/member"));
         }
         let (database, factory) = BicDb::open_range_image_database(root, config, &spec)?;
+        // Check protected metadata before reattesting/writing any genesis.
+        database.require_native_metadata_uninitialized()?;
         // Check the refusal record BEFORE reattesting/writing any genesis.
         let native = database.native_recovery_admission(
             &spec.cluster_id,
@@ -463,6 +474,24 @@ impl NativeInitialMetadataConfiguration {
         })
     }
 
+    /// Publish a LOCAL metadata store only after the protected actual factory
+    /// receipt is durable. Initial configuration is still not a quorum proof.
+    pub(crate) fn initialize_local_metadata_store(
+        &self,
+        seed: &NativeProvisionalNode,
+        metadata_root: &Path,
+        cancellation: &CancellationToken,
+    ) -> Result<crate::MetadataConsensusStore> {
+        let topology = self.topology_for_actual_seed(seed, cancellation)?.clone();
+        crate::MetadataConsensusStore::initialize_native_owned(
+            metadata_root,
+            Arc::clone(&seed.database),
+            &seed.factory,
+            topology,
+            cancellation,
+        )
+    }
+
     /// Read-only configuration data for a future fresh-metadata constructor.
     /// Recheck the actual local seed immediately before using this data; the
     /// result cannot upgrade or rewrite a preexisting metadata consensus root.
@@ -505,6 +534,10 @@ impl NativeInitialMetadataConfiguration {
 
 impl NativeProvisionalNode {
     fn require_unregistered(&self) -> Result<()> {
+        self.database
+            .try_read()
+            .ok_or_else(|| invalid("factory busy checking protected metadata"))?
+            .require_native_metadata_uninitialized()?;
         for path in [
             crate::distribution::DEFAULT_CLUSTER_TOPOLOGY,
             crate::distribution::DEFAULT_DISTRIBUTION_CONFIG,

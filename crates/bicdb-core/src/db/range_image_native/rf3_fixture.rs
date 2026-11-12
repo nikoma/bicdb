@@ -32,6 +32,7 @@ pub(crate) struct ActualNativeRf3ServiceTransport {
     unavailable: Mutex<BTreeSet<ClusterNodeId>>,
     native_delivery: std::sync::atomic::AtomicBool,
     native_drop_once: Mutex<Option<(ClusterNodeId, u64)>>,
+    lose_commit_replies_after_durability: std::sync::atomic::AtomicBool,
 }
 impl ActualNativeRf3ServiceTransport {
     fn range(&self, id: RangeId, epoch: u64) -> Result<RangeDescriptor> {
@@ -74,6 +75,10 @@ impl ActualNativeRf3ServiceTransport {
     }
     pub(crate) fn drop_native_apply_once(&self, node: ClusterNodeId, index: u64) {
         *self.native_drop_once.lock() = Some((node, index));
+    }
+    pub(crate) fn lose_commit_replies_after_durability(&self, lose: bool) {
+        self.lose_commit_replies_after_durability
+            .store(lose, std::sync::atomic::Ordering::SeqCst);
     }
     pub(crate) fn set_unavailable(&self, node: &ClusterNodeId, unavailable: bool) {
         let mut nodes = self.unavailable.lock();
@@ -227,7 +232,16 @@ impl RangeWriteTransport for ActualNativeRf3ServiceTransport {
             .service(node)?
             .lock()
             .commit_range_write(&range, &self.caller, command);
-        self.record_ack("commit", node, command, result)
+        let ack = self.record_ack("commit", node, command, result)?;
+        if self
+            .lose_commit_replies_after_durability
+            .load(std::sync::atomic::Ordering::SeqCst)
+        {
+            // The genuine service completed its fsynced Commit first. Only the
+            // response delivery is lost; no synthetic positive reply exists.
+            return Err(invalid("injected lost reply after actual durable Commit"));
+        }
+        Ok(ack)
     }
     fn certify_range_write(
         &self,
@@ -273,6 +287,7 @@ pub(crate) struct ActualNativeRf3Fixture {
     pub(crate) databases: BTreeMap<ClusterNodeId, Arc<RwLock<BicDb>>>,
     pub(crate) services: BTreeMap<ClusterNodeId, Arc<Mutex<ClusterDataNodeService>>>,
     pub(crate) specs: BTreeMap<ClusterNodeId, RangeImageBirthSpec>,
+    pub(crate) fresh_factories: BTreeMap<ClusterNodeId, FreshRangeGenesisAuthority>,
     pub(crate) transport: Arc<ActualNativeRf3ServiceTransport>,
     pub(crate) coordinator: Arc<RangeWriteCoordinator<ActualNativeRf3ServiceTransport>>,
 }
@@ -294,12 +309,12 @@ impl ActualNativeRf3Fixture {
         network: &BTreeMap<ClusterNodeId, (String, String)>,
         initial_ranges: u32,
     ) -> Self {
-        Self::new_with_initial_enrollment(network, initial_ranges, false, false)
+        Self::new_with_initial_enrollment(network, initial_ranges, false, false, false)
     }
     pub(crate) fn new_with_enrolled_network_precondition(
         network: &BTreeMap<ClusterNodeId, (String, String)>,
     ) -> Self {
-        Self::new_with_initial_enrollment(network, 1, true, false)
+        Self::new_with_initial_enrollment(network, 1, true, false, false)
     }
     /// Fresh born-v2 fixture. There are NO application writes, recovery calls,
     /// or legacy hook installation before the caller installs all host policies.
@@ -307,13 +322,20 @@ impl ActualNativeRf3Fixture {
         network: &BTreeMap<ClusterNodeId, (String, String)>,
         initial_ranges: u32,
     ) -> Self {
-        Self::new_with_initial_enrollment(network, initial_ranges, true, true)
+        Self::new_with_initial_enrollment(network, initial_ranges, true, true, false)
+    }
+    pub(crate) fn new_with_enforced_event_network(
+        network: &BTreeMap<ClusterNodeId, (String, String)>,
+        initial_ranges: u32,
+    ) -> Self {
+        Self::new_with_initial_enrollment(network, initial_ranges, true, true, true)
     }
     fn new_with_initial_enrollment(
         network: &BTreeMap<ClusterNodeId, (String, String)>,
         initial_ranges: u32,
         enroll: bool,
         enforce_from_birth: bool,
+        event_schema: bool,
     ) -> Self {
         assert!(matches!(initial_ranges, 1 | 2));
         let root = tempfile::tempdir().unwrap();
@@ -409,6 +431,7 @@ impl ActualNativeRf3Fixture {
             .with_paged_buffer_pool_bytes(8 * 1024 * 1024);
         let mut databases = BTreeMap::new();
         let mut specs = BTreeMap::new();
+        let mut fresh_factories = BTreeMap::new();
         let mut schema = None;
         // Explicit new-cluster fixture before any native factory, app write
         // or metadata-consensus store exists. Existing defaults are unchanged.
@@ -444,6 +467,10 @@ impl ActualNativeRf3Fixture {
             }
             .unwrap();
             db.create_collection("items").unwrap();
+            if event_schema {
+                db.create_collection(crate::CLUSTER_EVENTS_COLLECTION)
+                    .unwrap();
+            }
             drop(db);
             let (db, genesis) =
                 BicDb::open_range_image_database(&path, config.clone(), &spec).unwrap();
@@ -473,6 +500,7 @@ impl ActualNativeRf3Fixture {
                     &genesis, &db.read(), &topology,
                 ).unwrap());
             }
+            fresh_factories.insert(node.id.clone(), genesis);
             databases.insert(node.id.clone(), db);
             specs.insert(node.id.clone(), spec);
         }
@@ -510,6 +538,7 @@ impl ActualNativeRf3Fixture {
             unavailable: Mutex::new(BTreeSet::new()),
             native_delivery: std::sync::atomic::AtomicBool::new(false),
             native_drop_once: Mutex::new(None),
+            lose_commit_replies_after_durability: std::sync::atomic::AtomicBool::new(false),
         });
         let coordinator = Arc::new(
             RangeWriteCoordinator::new_schema_fenced(
@@ -533,6 +562,7 @@ impl ActualNativeRf3Fixture {
             databases,
             services,
             specs,
+            fresh_factories,
             transport,
             coordinator,
         }
@@ -774,3 +804,5 @@ fn native_normal_apply_actual_rf3_services_materialize_two_acks_and_lost_apply_c
 
 #[cfg(test)]
 mod native_repair_regression;
+
+mod native_commit_uncertainty;

@@ -20,6 +20,8 @@ struct EnforcedNetwork {
     coordinators: BTreeMap<ClusterNodeId, Arc<Coordinator>>,
     hosts: BTreeMap<ClusterNodeId, Arc<InstalledNativeWriterHostGuard>>,
     servers: Vec<ClusterDataServerHandle>,
+    dispatchers:
+        BTreeMap<ClusterNodeId, Arc<crate::distribution_native_read::NativeStrongEventDispatcher>>,
     _keys: tempfile::TempDir,
 }
 impl EnforcedNetwork {
@@ -27,6 +29,16 @@ impl EnforcedNetwork {
         Self::new_with_metadata_members(3)
     }
     fn new_with_metadata_members(count: usize) -> Self {
+        Self::new_endpoint_mode_and_metadata_members(false, false, count)
+    }
+    fn new_endpoint_mode(event_schema: bool, publish: bool) -> Self {
+        Self::new_endpoint_mode_and_metadata_members(event_schema, publish, 3)
+    }
+    fn new_endpoint_mode_and_metadata_members(
+        event_schema: bool,
+        publish: bool,
+        count: usize,
+    ) -> Self {
         assert!(matches!(count, 3 | 4));
         let names = &["n0", "n1", "n2", "n3"][..count];
         let keys = tempfile::tempdir().unwrap();
@@ -47,7 +59,11 @@ impl EnforcedNetwork {
             .collect();
         // This constructor does NOT recover or install a generic hook and
         // does NOT write an application row. Legacy fixtures stay unchanged.
-        let native = ActualNativeRf3Fixture::new_with_enforced_network_and_ranges(&network, 2);
+        let native = if event_schema {
+            ActualNativeRf3Fixture::new_with_enforced_event_network(&network, 2)
+        } else {
+            ActualNativeRf3Fixture::new_with_enforced_network_and_ranges(&network, 2)
+        };
         let topology = native.topology.read().clone();
         for id in topology.nodes.keys() {
             assert_eq!(
@@ -94,12 +110,12 @@ impl EnforcedNetwork {
             })
             .collect::<BTreeMap<_, _>>();
         let open = |id: &ClusterNodeId| {
-            MetadataConsensusStore::open(
+            MetadataConsensusStore::initialize_native_owned(
                 keys.path().join(format!("strong-meta-{id}")),
-                topology.cluster_id.clone(),
-                id.clone(),
+                Arc::clone(&native.databases[id]),
+                &native.fresh_factories[id],
                 topology.clone(),
-                true,
+                &CancellationToken::uncancelable(),
             )
             .unwrap()
         };
@@ -147,6 +163,29 @@ impl EnforcedNetwork {
                 )
             })
             .collect::<BTreeMap<_, _>>();
+        let dispatchers: BTreeMap<
+            ClusterNodeId,
+            Arc<crate::distribution_native_read::NativeStrongEventDispatcher>,
+        > = if event_schema {
+            topology
+                .nodes
+                .keys()
+                .map(|id| {
+                    (
+                        id.clone(),
+                        crate::distribution_native_read::NativeStrongEventDispatcher::new(
+                            &native.services[id],
+                            &runtimes[id],
+                            &clients[id],
+                            &native.topology,
+                        )
+                        .unwrap(),
+                    )
+                })
+                .collect()
+        } else {
+            BTreeMap::new()
+        };
         drop(sockets);
         let servers = topology
             .nodes
@@ -209,6 +248,13 @@ impl EnforcedNetwork {
                 .unwrap();
             hosts.insert(id.clone(), Arc::new(host));
         }
+        if publish {
+            for id in topology.nodes.keys() {
+                dispatchers[id]
+                    .publish(&coordinators[id], &hosts[id])
+                    .unwrap();
+            }
+        }
         // ALL current voter policies now exist. Only now may the installed
         // actual TCP coordinator establish its ordinary recovery prerequisite.
         coordinators[&node("n0")]
@@ -223,6 +269,7 @@ impl EnforcedNetwork {
             coordinators,
             hosts,
             servers,
+            dispatchers,
             _keys: keys,
         }
     }
@@ -790,6 +837,10 @@ fn native_strong_point_policy_native_wal_publication_failure_fences_old_guard_an
 mod after_transfer;
 #[path = "native_born_v2_image_tests.rs"]
 mod native_born_v2_image_tests;
+
+mod endpoint_tests;
+
+mod mismatch_tests;
 
 // Actual mTLS metadata/host policies on FOUR fresh members precede the first
 // RF3 application ACK. The fourth member is metadata-only, not a data voter.

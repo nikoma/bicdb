@@ -791,6 +791,8 @@ pub struct RangeWriteStore {
     catalog: RangeWriteCatalog,
     open_id: Uuid,
     recovery_persistence_uncertain: bool,
+    #[cfg(test)]
+    test_native_commit_write_error_once: bool,
     native_activated_opens: BTreeMap<RangeId, crate::db::NativeActivatedOpenGuard>,
     native_writer_host: Option<std::sync::Weak<crate::db::NativeWriterHostState>>,
 }
@@ -957,6 +959,8 @@ impl RangeWriteStore {
             native_activated_opens: BTreeMap::new(),
             native_writer_host: None,
             recovery_persistence_uncertain: false,
+            #[cfg(test)]
+            test_native_commit_write_error_once: false,
         };
         // A previous service instance may have observed rename success but
         // failed directory sync while the same live DB remained open. Reading
@@ -1438,6 +1442,14 @@ impl RangeWriteStore {
     }
 
     pub fn commit(&mut self, command: &RangeWriteCommand) -> Result<RangeWriteState> {
+        // This persisted reader fence is a conservative storage refusal rule,
+        // not native admission authority. Actual service/DB checks still apply.
+        let native_catalog = crate::format::range_image_install_active(&self.root)?;
+        if native_catalog {
+            // Even an idempotent raw Commit cannot ACK retained-but-uncertain
+            // memory before the exact catalogue has actually been re-fsynced.
+            self.require_durable_recovery_catalog()?;
+        }
         let previous = self.catalog.clone();
         let entry = self.match_entry_mut(command)?;
         match entry.state {
@@ -1452,7 +1464,32 @@ impl RangeWriteStore {
                 )))
             }
         }
-        self.persist_or_restore(previous, RangeWriteState::Committed)
+        if native_catalog {
+            // A failed rename/fsync may already have published Commit. Keep
+            // the in-memory decision and fail closed until exact re-fsync or
+            // strict reopen; never restore Prepared over that uncertainty.
+            #[cfg(test)]
+            if std::mem::take(&mut self.test_native_commit_write_error_once) {
+                return self
+                    .persist_recovery_catalog_with(|path, bytes, fsync| {
+                        crate::storage::write_atomic(path, bytes, fsync)?;
+                        Err(std::io::Error::other(
+                            "injected native Commit error after actual durable publication",
+                        )
+                        .into())
+                    })
+                    .map(|()| RangeWriteState::Committed);
+            }
+            self.persist_recovery_catalog()?;
+            Ok(RangeWriteState::Committed)
+        } else {
+            self.persist_or_restore(previous, RangeWriteState::Committed)
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn test_fail_native_commit_after_publication(&mut self) {
+        self.test_native_commit_write_error_once = true;
     }
 
     pub fn certify(&mut self, command: &RangeWriteCommand) -> Result<RangeWriteState> {
@@ -2457,6 +2494,7 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
     /// leader. The cluster supervisor invokes this outside SQL/database locks;
     /// writes remain fail-closed until their exact range epoch is recovered.
     pub fn recover_local_leadership(&self, max_ranges: usize) -> Result<usize> {
+        self.require_expected_native_recovery_store()?;
         if max_ranges == 0 || max_ranges > 1_024 {
             return Err(range_write_error(
                 "range leadership recovery limit must be in 1..=1024",
@@ -3152,6 +3190,7 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
         intent: &CommitAdmissionIntent,
         database: Option<&crate::BicDb>,
     ) -> Result<CommitAdmissionTicket> {
+        self.require_expected_native_database(database)?;
         let native_database = match (self.native_image_mode, database) {
             (false, None) => None,
             (false, Some(database)) if !database.native_range_image_birth_present() => None,
@@ -3306,17 +3345,33 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
             )));
         }
 
-        // Persist the local decision before telling any follower to commit.
-        // Therefore a committed follower always implies a recoverable decision
-        // on the designated leader.
-        self.local_service
+        // Native uncertainty starts BEFORE attempting the local Commit write:
+        // persistence can succeed even when its error/reply is lost. No native
+        // abort may be inferred from any failure after this boundary.
+        let local_commit = self
+            .local_service
             .lock()
             .commit_range_write_decision_with_mutation(
                 &range,
                 &self.local_node_id,
                 &command,
                 authority,
-            )?;
+            );
+        if let Err(error) = local_commit {
+            if native_database.is_some() {
+                self.recovered_epochs.lock().remove(&range.id);
+                return Err(BicDbError::CommitOutcomeUnknown {
+                    sequence: None,
+                    transaction_id: Some(command.transaction_id),
+                    incarnation: self.local_incarnation.clone(),
+                    detail: format!(
+                        "range {} command {} local Commit persistence is uncertain: {error}; local application WAL has not started; retained for recovery",
+                        range.id, command.command_id,
+                    ),
+                });
+            }
+            return Err(error);
+        }
         let mut committed = 1usize;
         let mut committed_nodes = Vec::new();
         for voter in &prepared_nodes {
@@ -3335,9 +3390,20 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
             }
         }
         if committed < quorum {
-            // No row has been applied yet. Provisional decisions are
-            // abortable until a decision quorum exists, so a minority outcome
-            // cannot leak visible follower state or resurrect on restart.
+            if native_database.is_some() {
+                self.recovered_epochs.lock().remove(&range.id);
+                return Err(BicDbError::CommitOutcomeUnknown {
+                    sequence: None,
+                    transaction_id: Some(command.transaction_id),
+                    incarnation: self.local_incarnation.clone(),
+                    detail: format!(
+                        "range {} command {} counted Commit replies {committed}/{quorum}; additional Commit decisions may be durable despite missing replies; local application WAL has not started; retained for recovery",
+                        range.id, command.command_id,
+                    ),
+                });
+            }
+            // Preserve the legacy classification separately. Native missing
+            // Commit replies above never establish a prepare-only rollback.
             self.abort_prepared(&range, &voters, &command, authority);
             return Err(range_write_error(format!(
                 "range {} write {} failed decision quorum: {committed}/{quorum}; provisional decisions were aborted",
@@ -5344,11 +5410,19 @@ mod tests {
         transport.available.store(true, Ordering::SeqCst);
         coordinator.recover_local_leadership(1_024).unwrap();
         transport.commit_available.store(false, Ordering::SeqCst);
-        let provisional = leader_db
-            .write()
-            .insert("items", Record::new(&record_ids[1]))
-            .unwrap_err();
+        let (provisional, legacy_outcome) = {
+            let db = leader_db.write();
+            let mut tx = db.begin_transaction().unwrap();
+            tx.insert("items", Record::new(&record_ids[1])).unwrap();
+            let observer = tx.observe_outcome();
+            (tx.commit().unwrap_err(), observer)
+        };
         assert!(provisional.to_string().contains("decision quorum"));
+        assert!(!matches!(
+            provisional,
+            BicDbError::CommitOutcomeUnknown { .. }
+        ));
+        assert_eq!(legacy_outcome.outcome(), crate::TransactionOutcome::Aborted);
         for follower in [&follower_two_db, &follower_three_db] {
             assert!(follower
                 .read()

@@ -751,6 +751,8 @@ pub struct ClusterDataNodeService {
     schema_stage_limits: ClusterSchemaStageLimits,
     schema_activation_limits: ClusterSchemaActivationLimits,
     fsync: bool,
+    initial_birth_provider:
+        Option<std::sync::Weak<crate::distribution_native_host::NativeProvisionalNode>>,
 }
 
 impl ClusterDataNodeService {
@@ -877,6 +879,7 @@ impl ClusterDataNodeService {
             schema_stage_limits,
             schema_activation_limits,
             fsync,
+            initial_birth_provider: None,
         };
         service.recover_committed_range_writes()?;
         Ok(service)
@@ -896,6 +899,24 @@ impl ClusterDataNodeService {
 
     pub fn database(&self) -> Arc<RwLock<BicDb>> {
         Arc::clone(&self.db)
+    }
+    pub(crate) fn attach_initial_birth_provider(
+        &mut self,
+        seed: &Arc<crate::distribution_native_host::NativeProvisionalNode>,
+    ) -> Result<()> {
+        if self.initial_birth_provider.is_some() || self.native_writer_enforcement_version()? != 1 {
+            return Err(data_error(
+                "initial factory provider must attach once before native host startup",
+            ));
+        }
+        seed.require_same_provisional_database(&self.db, &self.cluster_id, &self.node_id)?;
+        self.initial_birth_provider = Some(Arc::downgrade(seed));
+        Ok(())
+    }
+    pub(crate) fn initial_birth_provider(
+        &self,
+    ) -> Option<std::sync::Weak<crate::distribution_native_host::NativeProvisionalNode>> {
+        self.initial_birth_provider.clone()
     }
     pub(crate) fn require_persisted_recovery_scope(
         &self,
@@ -1956,6 +1977,12 @@ impl ClusterDataNodeService {
         self.validate_range_write(range, caller, command)?;
         let state = self.range_writes.commit(command)?;
         self.range_write_ack(command, state)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn test_fail_native_commit_after_publication(&mut self) {
+        self.range_writes
+            .test_fail_native_commit_after_publication();
     }
 
     pub fn certify_range_write(

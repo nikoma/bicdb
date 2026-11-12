@@ -436,23 +436,33 @@ fn run(
     let health_start = Instant::now();
     let health_end = health_start + Duration::from_secs(20);
     let mut healthy = false;
+    let mut ever_next_ack = false;
     let mut rounds = 0;
     while Instant::now() < health_end {
         rounds += 1;
         let old_read = read(journal, &client, &old);
         let committed_read = read(journal, &client, &failed);
         let next_ack = append(journal, &client, &next, &next_value);
+        ever_next_ack |= next_ack.is_ok();
         let next_read = read(journal, &client, &next);
         let receipt = health_start.elapsed().as_nanos();
         journal.append(serde_json::json!({"kind":"health_round","round":rounds,
             "receipt_elapsed_ns":receipt,"health_limit_ns":20_000_000_000u64,
             "old_exact":old_read.as_ref().is_ok_and(|v|v.as_ref()==Some(&old_value)),
             "committed_exact":committed_read.as_ref().is_ok_and(|v|v.as_ref()==Some(&failed_value)),
-            "next_user_ack":next_ack.is_ok(),"next_exact":next_read.as_ref().is_ok_and(|v|v.as_ref()==Some(&next_value))}))?;
+            "next_user_ack":next_ack.is_ok(),"ever_next_user_ack":ever_next_ack,
+            "next_exact":next_read.as_ref().is_ok_and(|v|v.as_ref()==Some(&next_value))}))?;
         check(
             no_false_successful_value(&old_read, &old_value)
                 && no_false_successful_value(&committed_read, &failed_value),
             "post-fault Strong false absence/wrong value",
+        )?;
+        // Once ANY actual API call ACKed this event, a later successful None
+        // or wrong value is immediately fatal; a healthier later round cannot
+        // erase it. Errors remain unsuccessful observations, never absence.
+        check(
+            !ever_next_ack || no_false_successful_value(&next_read, &next_value),
+            "Strong returned false absence/wrong value after a next-event ACK",
         )?;
         healthy = receipt <= 20_000_000_000
             && old_read
@@ -497,6 +507,7 @@ fn run(
         &output.join("terminal.json"),
         &serde_json::to_vec_pretty(&serde_json::json!({
         "bounded_autonomous_repair_and_next_ack":healthy,"rounds":rounds,
+        "ever_next_user_ack":ever_next_ack,
         "first_actual_origin_error":fault,"first_origin_unknown_is_not_rollback":true,
         "actual_public_api_user_ack":faulted_append.is_ok(),
         "no_manual_recovery_or_counter_reset":true,"physical_qualification":false,

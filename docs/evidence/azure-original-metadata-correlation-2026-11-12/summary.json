@@ -1,0 +1,137 @@
+{
+  "runtime_source": "b05385d4b033edf0db03f3eccf4bdd86f7c8eddb",
+  "runtime_version": "1.0.461-beta",
+  "scope": "original pre-diagnostic sequential stopped archives; read-only metadata derivation",
+  "archive_custody": "passed",
+  "metadata_envelope_checksums": "passed",
+  "rows": [
+    {
+      "node": 0,
+      "archive_sha256": "715102a2cbbdc3af2c38a76e9fb9235a512aeae390daa6300cfcadb0cc7a3e23",
+      "member": "db/cluster-metadata-consensus.json",
+      "metadata_sha256": "ae14abf8b1f2a4a6ce1ec2abb46be84a0ef2d1e55c7726ee9e44965cd1d649b0",
+      "state_checksum_valid": true,
+      "current_term": 4,
+      "base_index": 1812,
+      "base_term": 4,
+      "commit_index": 1812,
+      "topology_generation": 8969,
+      "topology_sha256": "da43f331e76e6d006fccbd4bd5c668c0f5909f2788da9fa51ee6ed42778922ad",
+      "role": "follower",
+      "leader_id": "n1",
+      "log_length": 0,
+      "log_entries": []
+    },
+    {
+      "node": 1,
+      "archive_sha256": "0e41786e146a89f3f45e60647e30addc737e5849dbf43cedd8040bd45a6e24e2",
+      "member": "db/cluster-metadata-consensus.json",
+      "metadata_sha256": "eadc882c5f5abcdd9059555c00912b698504279b64108b7f6d0a41af7935593c",
+      "state_checksum_valid": true,
+      "current_term": 4,
+      "base_index": 1820,
+      "base_term": 4,
+      "commit_index": 1820,
+      "topology_generation": 9034,
+      "topology_sha256": "2b95767b932fdf16fb4149e99fbad77eb1e35a540a48244424b0dbc971ed6dae",
+      "role": "leader",
+      "leader_id": "n1",
+      "log_length": 0,
+      "log_entries": []
+    },
+    {
+      "node": 2,
+      "archive_sha256": "74bb92c062e8828894bc904f303cc7761d2bf0b6e7e29ec89a96feb19db75113",
+      "member": "db/cluster-metadata-consensus.json",
+      "metadata_sha256": "96ee3658980e1d3fb213019ec22a5d78d764c698e7df81972e8dc11da59c5ae0",
+      "state_checksum_valid": true,
+      "current_term": 5,
+      "base_index": 1825,
+      "base_term": 5,
+      "commit_index": 1825,
+      "topology_generation": 9066,
+      "topology_sha256": "89b2c717c3cddfcb1580fdf35a763ee631f37c95297be66b4793f8a5fdb6dac3",
+      "role": "follower",
+      "leader_id": "n4",
+      "log_length": 1,
+      "log_entries": [
+        {
+          "index": 1826,
+          "term": 5,
+          "generation": 9073,
+          "barrier": false
+        }
+      ]
+    },
+    {
+      "node": 3,
+      "archive_sha256": "d7215e9e7ee8a9df3c5853ecd9a2eb18bb2267010b05003999e6055676ee0f82",
+      "member": "db/cluster-metadata-consensus.json",
+      "metadata_sha256": "b45a55c0a50d0f4ed5fa3a6064c87044f7c4045390a26105dfc0a4d1a289c206",
+      "state_checksum_valid": true,
+      "current_term": 5,
+      "base_index": 1826,
+      "base_term": 5,
+      "commit_index": 1826,
+      "topology_generation": 9073,
+      "topology_sha256": "a05867b95ea477407e4e9e0e1f4c1a4e2a5604048fa76caec64fa63ee81a1b00",
+      "role": "follower",
+      "leader_id": "n4",
+      "log_length": 1,
+      "log_entries": [
+        {
+          "index": 1827,
+          "term": 5,
+          "generation": 9079,
+          "barrier": false
+        }
+      ]
+    },
+    {
+      "node": 4,
+      "archive_sha256": "db3a4c4726d0aec3e697d40578493bcb4daf6909a74041fc763854d4d5687172",
+      "member": "db/cluster-metadata-consensus.json",
+      "metadata_sha256": "40c5001d7589ccdb63dd8e095dc0485f7488aecb43541e1dab7b065f607ecee7",
+      "state_checksum_valid": true,
+      "current_term": 6,
+      "base_index": 1826,
+      "base_term": 5,
+      "commit_index": 1826,
+      "topology_generation": 9073,
+      "topology_sha256": "a05867b95ea477407e4e9e0e1f4c1a4e2a5604048fa76caec64fa63ee81a1b00",
+      "role": "candidate",
+      "leader_id": null,
+      "log_length": 1,
+      "log_entries": [
+        {
+          "index": 1827,
+          "term": 5,
+          "generation": 9079,
+          "barrier": false
+        }
+      ]
+    }
+  ],
+  "same_positive_committed_index_comparisons": [
+    {
+      "nodes": [
+        3,
+        4
+      ],
+      "index": 1826,
+      "agreement": true
+    }
+  ],
+  "same_positive_committed_index_conflicts": [],
+  "historical_causality": "inconclusive",
+  "row_visibility": "not_tested",
+  "quorum_signatures": "not_tested",
+  "production_qualification": "not_tested",
+  "limitations": [
+    "non-simultaneous stopped captures",
+    "no intermediate or request-time metadata retained by this extraction",
+    "absence of final conflict cannot rule out an earlier transient false commit",
+    "different committed indices cannot be compared as identical snapshots",
+    "uncommitted suffix differences alone do not establish a safety violation"
+  ]
+}

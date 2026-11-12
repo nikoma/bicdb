@@ -2462,6 +2462,17 @@ pub(crate) fn normalize_relation_identifier(value: &str) -> String {
     normalize_identifier(last_separator.map_or(value, |idx| &value[idx + 1..]))
 }
 
+/// Metadata outside SqlSession still belongs to the connection's actual live
+/// owner. The returned guard owns its handles; no database read lock is held
+/// while a caller subsequently executes SQL or acquires another server lock.
+pub(crate) fn connection_catalog_read_access(
+    server: &Arc<PgWireServer>,
+    state: &ConnectionState,
+) -> Result<Option<bicdb_core::CatalogReadAccess>> {
+    let db = server.read_db_for_transaction_progress()?;
+    Ok(db.enter_catalog_read_access(state.tx.as_ref())?)
+}
+
 pub(crate) fn parse_message(
     payload: &[u8],
     server: &Arc<PgWireServer>,
@@ -2471,6 +2482,7 @@ pub(crate) fn parse_message(
         parse_payload_sql(payload).is_some_and(bicdb_sql::postgres_parse_requires_snapshot)
     })?;
     let db = server.read_db_for_transaction_progress()?;
+    let _catalog_owner = db.enter_catalog_read_access(state.tx.as_ref())?;
     state.catalog_cache.with_schema_cache(&db, || {
         parse_message_inner(payload, server, &db, &state.session_state, &state.user)
     })
@@ -2657,12 +2669,22 @@ pub(crate) fn bind_message(
     ))
 }
 
+pub(crate) fn bind_message_for_connection(
+    payload: &[u8],
+    server: &Arc<PgWireServer>,
+    state: &ConnectionState,
+) -> Result<(String, Portal, bool)> {
+    let _catalog_owner = connection_catalog_read_access(server, state)?;
+    bind_message(payload, &state.prepared, server)
+}
+
 pub(crate) fn describe_message(
     stream: &mut ClientStream,
     payload: &[u8],
     server: &Arc<PgWireServer>,
     state: &mut ConnectionState,
 ) -> Result<()> {
+    let mut catalog_owner = connection_catalog_read_access(server, state)?;
     let mut idx = 0;
     let target = *payload
         .get(idx)
@@ -2853,6 +2875,11 @@ pub(crate) fn describe_message(
             } else {
                 let materialization_watermark = region_reads::snapshot_watermark(server, state);
                 let result = execute_server_sql_with_options(server, state, &portal_sql, true)?;
+                // This fallback can execute transaction control. Replace the
+                // old metadata identity before describing its result, including
+                // explicitly masking an owner that COMMIT/ROLLBACK consumed.
+                drop(catalog_owner);
+                catalog_owner = connection_catalog_read_access(server, state)?;
                 describe_result(
                     stream,
                     server,
@@ -2874,6 +2901,7 @@ pub(crate) fn describe_message(
             )));
         }
     }
+    drop(catalog_owner);
     Ok(())
 }
 

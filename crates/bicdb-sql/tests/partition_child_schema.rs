@@ -434,7 +434,7 @@ fn identity_created_before_partitions_is_shared_by_parent_and_children() {
             "CREATE TABLE low PARTITION OF p FOR VALUES FROM(0) TO(10)",
             "INSERT INTO p(k) VALUES(1)",
         ] {sql.execute(text).unwrap();}
-        assert_eq!(sql.execute("SELECT is_identity,column_default FROM information_schema.columns WHERE table_name='low' AND column_name='ident'").unwrap().rows,vec![vec![SqlValue::String("NO".into()),SqlValue::Null]]);
+        assert_eq!(sql.execute("SELECT is_identity,column_default FROM information_schema.columns WHERE table_name='low' AND column_name='ident'").unwrap().rows,vec![vec![SqlValue::String("YES".into()),SqlValue::Null]]);
         sql.execute("INSERT INTO low(k) VALUES(2)").unwrap();
         assert_eq!(
             sql.execute("INSERT INTO low(k,ident) VALUES(3,9000)")

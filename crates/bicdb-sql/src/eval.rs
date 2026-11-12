@@ -20,6 +20,7 @@ pub(crate) use numeric_power::numeric_power;
 pub(crate) use operators_compare::*;
 mod aggregates;
 pub(crate) use aggregates::*;
+mod identity_sequence_options;
 pub(crate) mod rewrite_helpers;
 pub(crate) use rewrite_helpers::*;
 mod text_rewrite;

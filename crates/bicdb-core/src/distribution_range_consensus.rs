@@ -115,6 +115,9 @@ pub(crate) use native_limits::{
     validate_native_recovery_entry_size, MAX_NATIVE_RECOVERY_ENTRY_BYTES,
     MIN_NATIVE_RECOVERY_FRAME_BYTES,
 };
+mod catalogue_custody;
+#[cfg(test)]
+pub(crate) use catalogue_custody::FreshCatalogueTestCut;
 mod joint_handoff_state;
 mod native_durability;
 mod native_normal;
@@ -811,6 +814,7 @@ pub struct RangeWriteStore {
     catalog: RangeWriteCatalog,
     open_id: Uuid,
     recovery_persistence_uncertain: bool,
+    catalogue_loaded_at_open: bool,
     #[cfg(test)]
     test_native_commit_write_error_once: bool,
     native_activated_opens: BTreeMap<RangeId, crate::db::NativeActivatedOpenGuard>,
@@ -889,21 +893,17 @@ impl RangeWriteStore {
     ) -> Result<Self> {
         let root = root.as_ref().to_path_buf();
         let path = root.join(DEFAULT_RANGE_WRITE_LOG);
-        let existing_catalog = path.exists();
+        let enforced = crate::format::native_writer_enrollment_active(&root)?;
         let abort_protocol = crate::format::native_abort_history_active(&root)?;
-        if abort_protocol && !existing_catalog {
-            return Err(range_write_error(
-                "abort-aware range catalogue missing; strict factory/reopen required",
-            ));
-        }
         let abort_owner = if abort_protocol {
             Some(Self::abort_catalogue_owner(&root)?)
         } else {
             None
         };
-        let mut catalog = match fs::read(&path) {
-            Ok(bytes) => serde_json::from_slice::<RangeWriteEnvelope>(&bytes)?.verify()?,
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => RangeWriteCatalog {
+        let (mut catalog, existing_catalog) = match fs::read(&path) {
+            Ok(bytes) => (serde_json::from_slice::<RangeWriteEnvelope>(&bytes)?.verify()?, true),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound && (enforced || abort_protocol) => return Err(BicDbError::NativeRangeCatalogueCustodyMissing),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => (RangeWriteCatalog {
                 format_version: RANGE_WRITE_LOG_FORMAT_VERSION,
                 native_writer_enforcement_version: None,
                 native_joint_handoffs: None,
@@ -919,7 +919,7 @@ impl RangeWriteStore {
                 installing_committed_certifications: None,
                 installing_recovery_handovers: None,
                 native_abort_protocol: None,
-            },
+            }, false),
             Err(error) => return Err(error.into()),
         };
         if catalog.cluster_id != cluster_id || catalog.node_id != node_id {
@@ -959,7 +959,7 @@ impl RangeWriteStore {
                 "native abort catalogue lacks its mandatory reader fence",
             ));
         }
-        let enforced = crate::format::native_writer_enrollment_active(&root)?;
+
         if enforced {
             if !crate::format::current_image_proposal_active(&root)?
                 || !fsync
@@ -1006,6 +1006,7 @@ impl RangeWriteStore {
             native_writer_host: None,
             _native_abort_owner: abort_owner,
             recovery_persistence_uncertain: false,
+            catalogue_loaded_at_open: existing_catalog,
             #[cfg(test)]
             test_native_commit_write_error_once: false,
         };

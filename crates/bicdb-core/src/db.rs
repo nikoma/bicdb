@@ -92,7 +92,7 @@ pub(crate) use range_image_native::rf3_fixture::{
 };
 pub(crate) use range_image_native::NativeReplicaMaterialization;
 pub(crate) use range_image_native::{
-    FreshRangeGenesisAuthority, InstalledNativeWriterHostGuard, KnownNativeRecoveryPrefix,
+    FreshNativeCatalogueBootstrap, FreshRangeGenesisAuthority, InstalledNativeWriterHostGuard, KnownNativeRecoveryPrefix,
     NativeHistoryPublicationBinding, NativeHistoryStage, NativeHistoryStageProgress,
     NativeHistoryTargetContext, NativeLogicalHistoryEntryV1, NativeLogicalHistoryOutcomeV1,
     NativeLogicalHistoryPoint, NativeLogicalHistoryStepV1, NativeRangeInstallSafety,

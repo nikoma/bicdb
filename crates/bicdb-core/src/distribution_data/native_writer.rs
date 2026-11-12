@@ -36,6 +36,7 @@ impl ClusterDataNodeService {
     ) -> Result<()> {
         self.require_native_catalog_database(database)?;
         policy.require_live()?;
+        database.require_native_writer_catalogue_custody(&self.range_writes)?;
         if self.native_writer_enforcement_version()? != 1
             || database.actual_native_writer_enforcement_version()? != 1
             || policy.database_incarnation() != database.incarnation_id()

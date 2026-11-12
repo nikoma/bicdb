@@ -184,6 +184,34 @@ impl NativeRecoveryAbortedReceipt {
     }
 }
 impl BicDb {
+    pub(crate) fn require_actual_native_abort_decision_digest(
+        &self,
+        range: RangeId,
+        index: u64,
+        expected: &str,
+    ) -> Result<()> {
+        let birth = self
+            .read_native_birth()?
+            .ok_or_else(|| invalid("abort decision birth missing"))?;
+        let record: NativeAbortDecisionRecord = self
+            .read_native_range_image_record(&decision_key(range, index))?
+            .ok_or_else(|| invalid("catalogue abort receipt lacks actual protected decision"))?;
+        record.validate(&birth)?;
+        let source = self.current_native_range_source_lineage(range)?;
+        let entry = self.read_native_history_entry(range, source.history_generation(), index)?;
+        if record.checksum_sha256 != expected
+            || record.scope.range_id != range
+            || record.range_index != index
+            || record.logical_genesis_sha256 != source.logical_genesis_sha256()
+            || entry.outcome != history::NativeLogicalHistoryOutcomeV1::Aborted
+            || entry.commitment_sha256 != record.logical_history_sha256
+        {
+            return Err(invalid(
+                "catalogue/native abort receipt and immutable history differ",
+            ));
+        }
+        Ok(())
+    }
     pub(super) fn validate_native_abort_prefix_record(
         &self,
         birth: &NativeDatabaseBirth,

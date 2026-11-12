@@ -517,6 +517,13 @@ impl RangeWriteStore {
                     "native read/ready has unresolved or mismatched protected slot control",
                 ));
             }
+            if let Some(expected) = &slot.resolved_native_receipt_sha256 {
+                db.require_actual_native_abort_decision_digest(
+                    range_id,
+                    record.command.index,
+                    expected,
+                )?;
+            }
             let promise = db.observe_actual_native_abort_promise(range_id, record.command.index)?;
             match (&slot.promise, promise) {
                 (None, None) => {}

@@ -65,6 +65,22 @@ impl NativeMetadataControlBackend {
                 "registered control requires actual current owned metadata voter",
             ));
         }
+        for participant in [
+            provider.local_participant(),
+            transport.local_metadata_read_participant(),
+        ] {
+            if participant.node_id() != &node_id
+                || participant.member_incarnation() != member.incarnation
+                || participant.plaintext_loopback()
+                || !participant
+                    .certificate_sha256()
+                    .is_some_and(|pin| member.accepts_tls_certificate_sha256(pin))
+            {
+                return Err(invalid(
+                    "registered control provider/transport actual identity differs",
+                ));
+            }
+        }
         let (database, open) = {
             let service = service
                 .try_lock()

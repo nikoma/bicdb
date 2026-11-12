@@ -3,6 +3,8 @@ mod branching;
 mod collection_rename;
 mod commit_snapshot;
 mod deferred_materialize;
+mod exact_decimal_sum;
+use exact_decimal_sum::ExactDecimalSum;
 mod local_namespace_identity;
 pub use deferred_materialize::DeferredMaterializeStats;
 mod ha_bootstrap;
@@ -8708,6 +8710,12 @@ fn evaluate_native_invariant_expression(
         } => {
             let records = resulting_records_for_relation(db, tx, relation)?;
             let mut count = 0i64;
+            // Each input keeps Decimal's existing admission contract. The
+            // aggregate must not round an intermediate total before later
+            // positive/negative rows cancel it.
+            let mut decimal_sum = (*function == NativeInvariantAggregateFunction::Sum
+                && *value_type == NativeInvariantValueType::Decimal)
+                .then(ExactDecimalSum::default);
             let mut sum = match value_type {
                 NativeInvariantValueType::Decimal => Value::String("0".to_string()),
                 NativeInvariantValueType::Float64 => Value::from(0.0),
@@ -8739,17 +8747,23 @@ fn evaluate_native_invariant_expression(
                             BicDbError::CommitValidation("invariant sum lacks a field".to_string())
                         })?,
                     );
-                    sum = invariant_numeric_binary(
-                        NativeInvariantBinaryOperator::Add,
-                        &sum,
-                        &value,
-                        *value_type,
-                    )?;
+                    if let Some(decimal_sum) = &mut decimal_sum {
+                        decimal_sum.add(&value)?;
+                    } else {
+                        sum = invariant_numeric_binary(
+                            NativeInvariantBinaryOperator::Add,
+                            &sum,
+                            &value,
+                            *value_type,
+                        )?;
+                    }
                 }
             }
             match function {
                 NativeInvariantAggregateFunction::Count => Value::from(count),
-                NativeInvariantAggregateFunction::Sum => sum,
+                NativeInvariantAggregateFunction::Sum => {
+                    decimal_sum.map(ExactDecimalSum::finish).unwrap_or(sum)
+                }
             }
         }
     })

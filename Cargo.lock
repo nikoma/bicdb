@@ -1171,6 +1171,7 @@ dependencies = [
  "argon2",
  "bicdb-lua",
  "bicdb-page",
+ "bigdecimal",
  "chacha20poly1305 0.10.1",
  "crc32fast",
  "crossbeam-skiplist",

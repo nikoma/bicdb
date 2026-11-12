@@ -391,6 +391,11 @@ impl RangeWriteStore {
         let actual = database.native_abort_slot_inventory()?;
         let native_birth = database.current_native_abort_birth_identity()?;
         let before = self.catalog.native_abort_protocol.clone();
+        let was_uncertain = self.recovery_persistence_uncertain;
+        // Importing restrictive native facts still mutates the in-memory
+        // catalogue. Retain refusal across every validation/publication error;
+        // a successful import must not clear earlier unrelated uncertainty.
+        self.recovery_persistence_uncertain = true;
         let protocol = self
             .catalog
             .native_abort_protocol
@@ -461,6 +466,7 @@ impl RangeWriteStore {
             // actual protected native journal, before any host policy/ACK.
             self.persist_verified_open_catalog()?;
         }
+        self.recovery_persistence_uncertain = was_uncertain;
         Ok(())
     }
 

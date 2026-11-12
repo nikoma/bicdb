@@ -70,7 +70,7 @@ impl ClusterDataNodeService {
     ) -> Result<()> {
         local.require_current(self)?;
         {
-            let database = try_database_read(&self.db)?;
+            let database = checked_database_read(&self.db, &self.storage_policy)?;
             self.require_native_catalog_database(&database)?;
             local.physical().require_ancestor(
                 &database,
@@ -87,7 +87,7 @@ impl ClusterDataNodeService {
         parent: &CancellationToken,
     ) -> Result<LocalNativeRangeReadObservation> {
         let cancellation = request.cancellation(parent)?;
-        let database = try_database_read(&self.db)?;
+        let database = checked_database_read(&self.db, &self.storage_policy)?;
         self.require_native_catalog_database(&database)?;
         self.require_native_writer_host_for_range(&database, &request.scope.range)?;
         database.schema_compatibility_fingerprint()?;
@@ -140,7 +140,7 @@ impl ClusterDataNodeService {
         observation: &LocalNativeRangeReadObservation,
     ) -> Result<()> {
         observation.require_lifetime()?;
-        let database = try_database_read(&self.db)?;
+        let database = checked_database_read(&self.db, &self.storage_policy)?;
         self.require_native_catalog_database(&database)?;
         let scope = observation.scope();
         self.require_native_writer_host_for_range(&database, &scope.range)?;

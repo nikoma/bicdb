@@ -87,6 +87,7 @@ pub struct MetadataReadProvider {
     transport: Arc<dyn MetadataReadProbeTransport>,
     limits: MetadataReadProviderLimits,
     inflight: Arc<AtomicUsize>,
+    listener_database: std::sync::OnceLock<crate::distribution_data::ClusterServiceOpenGuard>,
 }
 
 struct ContextPermit(Arc<AtomicUsize>);
@@ -133,6 +134,36 @@ struct Candidate {
 }
 
 impl MetadataReadProvider {
+    pub(crate) fn bind_listener_database(
+        &self,
+        consensus: &Arc<Mutex<MetadataConsensusStore>>,
+        actual: &crate::distribution_data::ClusterServiceOpenGuard,
+    ) -> Result<()> {
+        if !Arc::ptr_eq(consensus, &self.consensus) {
+            return Err(BicDbError::Cluster(
+                "metadata provider is attached to another consensus store".into(),
+            ));
+        }
+        self.consensus
+            .try_lock()
+            .ok_or_else(|| {
+                BicDbError::Cluster("metadata provider busy before listener attachment".into())
+            })?
+            .require_listener_database(actual)?;
+        if let Some(previous) = self.listener_database.get() {
+            // Validate the already-bound provider against the SAME actual open.
+            let store = self.consensus.try_lock().ok_or_else(|| {
+                BicDbError::Cluster("metadata provider busy during listener attachment".into())
+            })?;
+            store.require_listener_database(previous)?;
+            store.require_listener_database(actual)?;
+        } else {
+            self.listener_database
+                .set(actual.clone())
+                .map_err(|_| BicDbError::Cluster("metadata provider attachment raced".into()))?;
+        }
+        Ok(())
+    }
     /// Actual locally configured transport identity, never a caller-selected
     /// participant DTO. Recovery uses it for local fence observations.
     /// Routing hint only. A caller MUST still acquire actual fresh HostMQ or
@@ -170,6 +201,7 @@ impl MetadataReadProvider {
             transport,
             limits,
             inflight: Arc::new(AtomicUsize::new(0)),
+            listener_database: std::sync::OnceLock::new(),
         })
     }
 
@@ -185,6 +217,9 @@ impl MetadataReadProvider {
             cancellation.check()?;
             if let Some(guard) = self.consensus.try_lock_for(Duration::from_millis(10)) {
                 cancellation.check()?;
+                if let Some(actual) = self.listener_database.get() {
+                    guard.require_listener_database(actual)?;
+                }
                 return Ok(guard);
             }
         }

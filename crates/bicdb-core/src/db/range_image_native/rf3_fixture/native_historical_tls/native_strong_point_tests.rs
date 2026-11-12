@@ -937,6 +937,7 @@ fn native_strong_point_initial_four_metadata_members_rf3_keeps_exact_data_identi
     before.require_current(&service).unwrap();
 }
 
-mod native_abort_tests;
-
+mod four_member_activation_tests;
 mod native_abort_cold;
+mod native_abort_tests;
+mod service_open_guard_tests;

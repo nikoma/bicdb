@@ -69,6 +69,10 @@ pub(crate) use range_image_proposal::{
 };
 mod native_abort;
 pub use native_abort::{NativeCommitAdmissionResult, NativeTransactionNoEffect};
+mod native_initial_preparation;
+pub(crate) use native_initial_preparation::{
+    NativeInitialConfigurationProposalRecord, NativeInitialPreparationRecord,
+};
 mod native_metadata_store;
 pub(crate) use native_metadata_store::NativeMetadataStoreRecord;
 mod native_activation;

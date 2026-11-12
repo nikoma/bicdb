@@ -18,7 +18,7 @@ impl ClusterDataNodeService {
                 "native ordinary observer belongs to another service",
             ));
         }
-        let database = try_database_read(&self.db)?;
+        let database = checked_database_read(&self.db, &self.storage_policy)?;
         self.require_native_catalog_database(&database)?;
         self.require_native_writer_host_for_range(&database, role.current_range())?;
         let actual = database.observe_native_replica_for_role(role)?;
@@ -57,7 +57,7 @@ impl ClusterDataNodeService {
                 "native ordinary instruction has no actual local durable CQ",
             ));
         }
-        let database = try_database_read(&self.db)?;
+        let database = checked_database_read(&self.db, &self.storage_policy)?;
         self.require_native_catalog_database(&database)?;
         self.require_native_writer_host_for_range(&database, range)?;
         // Raw Applied is intentionally not a physical fast path. The native
@@ -88,7 +88,7 @@ impl ClusterDataNodeService {
         challenge: Uuid,
     ) -> Result<NativeReplicaApplyObservation> {
         self.validate_range_write_peer(range, caller)?;
-        let database = try_database_read(&self.db)?;
+        let database = checked_database_read(&self.db, &self.storage_policy)?;
         self.require_native_catalog_database(&database)?;
         let actual = database.observe_native_embedded_replica(range, None)?;
         NativeReplicaApplyObservation::from_native_materialization(
@@ -123,7 +123,7 @@ impl ClusterDataNodeService {
                 "embedded native apply requires exact actual certificate and local CQ",
             ));
         }
-        let database = try_database_read(&self.db)?;
+        let database = checked_database_read(&self.db, &self.storage_policy)?;
         self.require_native_catalog_database(&database)?;
         let before = database.current_native_range_source_lineage(range.id)?;
         certificate

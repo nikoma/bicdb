@@ -89,6 +89,9 @@ impl TcpClusterRelocationTransport {
                 cluster_id: self.cluster_id.clone(),
                 caller_node_id: self.caller_node_id.clone(),
                 destination_node_id: destination.clone(),
+                // Abort requests are not metadata-destination envelopes; the
+                // actual sender adds this binding only for the metadata arms.
+                expected_native_destination: None,
                 request_id: u64::MAX,
                 request: &payload,
             },

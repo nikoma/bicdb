@@ -191,9 +191,12 @@ impl RangeWriteStore {
     pub(crate) fn arm_native_joint_from_fresh_release(
         &self,
         scope: &crate::db::NativeJointHistoricalCutScope<'_>,
-        fact: &NativeJointCatalogueActivationFact,
+        admission: &crate::distribution_range_handoff::NativeJointReleaseAdmission,
+        original: &NativeJointCatalogueActivationReceipt,
     ) -> Result<()> {
-        fact.require_current_with_historical_cut_scope(scope, self)?;
+        let owner = crate::distribution_data::NativeJointReleaseOwnerView::Dropped(original);
+        admission.require_local_with_store_scope(self, scope, owner)?;
+        let fact = admission.activation();
         let guard = self
             .native_joint_activated_opens
             .get(&scope.native().data().old_range().id)
@@ -204,9 +207,10 @@ impl RangeWriteStore {
         if current.armed() {
             // A SAME actual armed generation is an idempotent completed fact.
             // Ordinary writes may be active; do not require a read stamp here.
-            current.require_current(guard, self.open_id, &fact.activation_sha256()?)
+            current.require_current(guard, self.open_id, &fact.activation_sha256()?)?;
         } else {
-            guard.arm_after_actual_release(self.open_id, &fact.activation_sha256()?)
+            guard.arm_after_actual_release(self.open_id, &fact.activation_sha256()?)?;
         }
+        admission.require_local_with_store_scope(self, scope, owner)
     }
 }

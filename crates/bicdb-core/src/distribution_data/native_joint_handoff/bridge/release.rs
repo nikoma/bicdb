@@ -77,16 +77,29 @@ impl ActualServiceNativeJointReleaseEvidence {
         scope: &crate::db::NativeJointHistoricalCutScope<'_>,
         owner: NativeJointReleaseOwnerView<'_>,
     ) -> Result<()> {
+        if self.native.local_node_id() != &service.node_id {
+            return Err(data_error(
+                "joint release scope belongs to another actual service member",
+            ));
+        }
+        self.require_current_with_store_scope(&service.range_writes, scope, owner)
+    }
+    pub(crate) fn require_current_with_store_scope(
+        &self,
+        store: &crate::distribution_range_consensus::RangeWriteStore,
+        scope: &crate::db::NativeJointHistoricalCutScope<'_>,
+        owner: NativeJointReleaseOwnerView<'_>,
+    ) -> Result<()> {
         self.require_live()?;
         scope.require_native(&self.native)?;
         let database = scope.database();
         self.committed
             .require_current_with_historical_cut_scope(scope)?;
         self.activation
-            .require_current_with_historical_cut_scope(scope, &service.range_writes)?;
-        let writer = service.range_writes.native_writer_host_state()?;
+            .require_current_with_historical_cut_scope(scope, store)?;
+        let writer = store.native_writer_host_state()?;
         writer.require_database(database, self.native.data().activation_range())?;
-        if !Arc::ptr_eq(&writer, &self.writer) || self.native.local_node_id() != &service.node_id {
+        if !Arc::ptr_eq(&writer, &self.writer) {
             return Err(data_error(
                 "joint release current writer registration/open/member changed",
             ));
@@ -98,27 +111,18 @@ impl ActualServiceNativeJointReleaseEvidence {
                         "joint release cannot refreeze/reassign an ended owner",
                     ));
                 }
-                service
-                    .range_writes
-                    .require_frozen_joint_release_complete(scope, frozen)?;
-                service
-                    .range_writes
-                    .observe_owned_frozen_joint_generation(&self.activation)?;
+                store.require_frozen_joint_release_complete(scope, frozen)?;
+                store.observe_owned_frozen_joint_generation(&self.activation)?;
             }
             NativeJointReleaseOwnerView::Dropped(original) => {
                 require_original_dropped_binding(original, &self.activation, &self.native)?;
                 // Actual armed guard OR actual dropped/unarmed drain, never a
                 // numeric absence or resurrection of the old Frozen.
-                service
-                    .range_writes
-                    .observe_native_joint_open_continuity(&self.activation)?;
+                store.observe_native_joint_open_continuity(&self.activation)?;
             }
         }
-        service
-            .range_writes
-            .require_native_joint_open_continuity(&self.activation, &self.continuity)?;
-        self.obligations
-            .require_preserved_current(&service.range_writes, scope)?;
+        store.require_native_joint_open_continuity(&self.activation, &self.continuity)?;
+        self.obligations.require_preserved_current(store, scope)?;
         self.committed
             .require_current_with_historical_cut_scope(scope)?;
         self.require_live()
@@ -215,10 +219,7 @@ impl ClusterDataNodeService {
             admission.native().data().activation_range(),
         )?;
         let scope = admission.native().historical_cut_scope(&database)?;
-        let owner = NativeJointReleaseOwnerView::Dropped(original);
-        admission.require_local_with_scope(self, &scope, owner)?;
         self.range_writes
-            .arm_native_joint_from_fresh_release(&scope, admission.activation())?;
-        admission.require_local_with_scope(self, &scope, owner)
+            .arm_native_joint_from_fresh_release(&scope, admission, original)
     }
 }

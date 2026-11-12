@@ -395,6 +395,18 @@ impl NativeJointReleaseAdmission {
             .require_current_with_scope(service, scope, owner)?;
         self.require_live()
     }
+    pub(crate) fn require_local_with_store_scope(
+        &self,
+        store: &crate::distribution_range_consensus::RangeWriteStore,
+        scope: &crate::db::NativeJointHistoricalCutScope<'_>,
+        owner: NativeJointReleaseOwnerView<'_>,
+    ) -> Result<()> {
+        self.require_live()?;
+        self.phase.members[&self.local].require_current_with_store_scope(store, scope, owner)?;
+        self.post
+            .require_current_with_store_scope(store, scope, owner)?;
+        self.require_live()
+    }
     pub(crate) fn require_external_current(&self) -> Result<()> {
         self.require_live()?;
         for node in self.phase.members.keys() {

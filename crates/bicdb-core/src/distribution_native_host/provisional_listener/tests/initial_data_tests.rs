@@ -476,3 +476,5 @@ fn native_initial_data_actual_tls_drop_without_stop_ends_inner_owner_and_reopens
         drop(_root);
     }
 }
+
+mod discovery_latch_baseline;

@@ -186,3 +186,90 @@ bootstrap or migration commands.
 
 Physical-host qualification follows a runnable, validated candidate and renewed
 infrastructure budget. This audit grants none of those states.
+
+## Executable operator delta at `cf91eda301` (2026-11-12)
+
+This additive read-only audit covers exact unmerged source
+`cf91eda3011f4bb441124a9707d2418d9e362430`. It preserves the historical
+findings/results above. No command run, build, database open or data-serving
+qualification was performed for this update. The separate stale-seed constructor
+baseline/fix does not explain the earlier sixth-process exit.
+
+Native metadata startup/registration/owned catch-up and promotion now have real
+public Core/CLI paths: `cluster native-metadata serve-fresh` and `join-fresh`.
+That closes the older **metadata** wiring assessment, not the data vertical.
+Each process receives its own root, numeric address and TLS files; the seed
+configuration's local paths must never replace them.
+
+| Next executable boundary | Exact source at this revision |
+| --- | --- |
+| Native DATA open | `distribution_native_host/operator.rs` exposes metadata actions only; `status` always returns `data_serving=false`. `operator_learner.rs` likewise exposes no data-serving transition. |
+| Writer policy/coordinator | `provisional_listener/metadata_startup.rs::enroll_initial_writer` exists, but its only callsite is private `tests/process_tests/startup_tests.rs`, not the public operator/CLI. A policy/hook alone is not recovered leader readiness. |
+| Shared recovery/read owner | The public metadata-provider listener wrapper in `distribution_transport.rs` constructs `RangeRecoveryRuntime::new` without participant transport. `NativeStrongEventDispatcher::new` is called only in the RF3 TLS test fixture. No public native host retains/publishes that complete owner set. |
+| Native data listener | The immutable metadata-control allowlist rejects application events and typed point Get before data dispatch. Neither an enrolled learner nor an expired controller may fall through to data. A new supported owned transition is required. |
+| Ordinary commands | CLI `cluster init/join/serve` still uses generic initialization/provisioning and pgwire startup. `checkpoint_driver.rs::start_distribution_supervisor` uses generic MStore open and `install_commit_admission`; it does not install born2 policy/Strong ownership. These paths cannot retrofit an existing native root. |
+| Client/ledger | `cluster_events_command.rs::client` expects a generic distribution configuration/store directory. Native seed creation writes its own manifest. Its workload ledger is written at phase end; its CLI Get `value: Option<Value>` JSON also loses present-null versus absence. Neither is a complete native Strong acceptance oracle. |
+| Automatic range move | Native maintenance schedules metadata enrollment/promotion only. `TransportClusterRelocationDriver` still runs legacy snapshot/sequence phases. `distribution/native_joint_handoff.rs::require_legacy_relocation_mutation` correctly refuses enforced membership/cleanup. Local joint runtime/image proof components have no complete native transport/controller path. |
+
+### First real acceptance gate
+
+Use the existing CLI process harness, genuine common initial preparation and
+real metadata elections. Initial configuration is RF3/four ranges on four
+separate fresh processes, with the actual events collection and distinct local
+roots/TLS. Before launching the fifth, an external trusted host client must
+obtain one genuine application ACK, then `get_strong` must return its complete
+value; a separately missing key must return genuine absence. No private DB,
+coordinator, proof constructor or test-only setter may bypass startup.
+
+At this revision the first APP request is expected to meet the restrictive
+metadata listener. Record `DATA_SERVE_CONTRACT_MISSING` and
+`fifth_data_stage_not_reached`; zero ACKs cannot make verification green. This
+is a proposed executable gate, not an additional executed failure. A separate
+five-metadata-process result is not a five-data-process result.
+
+Only after that gate passes, start the fifth with one `join-fresh`, retain the
+same cached gateway, and demand one **automatic** native range move, actual
+joint activation/authorized cleanup, a new ACK and both complete values. Do not
+supply a low-level topology proposal or invoke the legacy relocation driver to
+make the move appear automatic.
+
+The external append-only ledger must fsync full logical intents/payload hashes,
+physical dispatch/replies, ACK-observed records plus durable ACK receipts,
+unknown outcomes, routes/deadlines/retries and every reconciliation result.
+Preserve tagged present/null/absent values and fail on successful absence of an
+ACKed key. Generic end-of-phase workload output and the historical eventual-read
+trace-client verdict must not be relabeled Strong evidence.
+
+### Minimal proposed DataOpen composition (not implemented)
+
+Reuse the actual initial launch's DB/service/StoreUUID, protected birth/genesis,
+fresh OWN HostMQ writer policy, installed coordinator guard, configured
+participant transport, `RangeRecoveryRuntime`, and `NativeStrongEventDispatcher`
+producer checks. The TLS fixture illustrates these ownership connections; its
+declared-election setup is not a production election producer and must not be
+copied into the host. Keep actual supervisor elections/current-term barriers.
+
+New seams are an owned public native data lifecycle and sealed listener
+transition: retain coordinator/guard/runtime/dispatcher together; obtain and
+revalidate actual current same-DB/store/birth/schema/restore/catalogue custody
+before publishing; stop/drain the old listener, then expose a **new immutable**
+native data mode using that same service. Do not widen the old control allowlist,
+clear a mode boolean, deserialize a permit or fabricate an InitialLaunch for an
+existing learner. Partial bind/cancel/recovery failures retain their real owners.
+
+Replica admission needs actual installed current writer policy and native
+materialization/refusal checks; it grants neither a leader ACK nor a read.
+Leader write readiness additionally requires actual current recovery and
+coordinator admission, not an installed-hook boolean or seeded recovered epoch.
+Dispatcher publication is only plumbing: each Strong request still performs its
+own range reservation, first fresh metadata, enrolled data quorum, actual local
+MVCC snapshot and distinct final fresh metadata/currentness checks. Prepared and
+CompletedFrozen remain refusals; an old Activated anchor does not prove current
+R+1 materialization. Report these states separately.
+
+Fresh initial data open can reuse actual protected genesis; strict reopened or
+post-transfer data open must consume the existing genuine recovery/activation
+producers. A blank learner remains data-ineligible until actual assigned-image
+and joint-domain activation. Remote image sessions, joint decision/publication,
+automatic placement, cleanup and interrupted-operation recovery remain separate
+executable seams; opening a data listener supplies none of those authorities.

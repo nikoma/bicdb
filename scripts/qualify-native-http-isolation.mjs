@@ -95,19 +95,20 @@ try {
  await ready();
  const check=async(name,path,method='GET',body,key,expected=200,claims={})=>{const r=await call(path,bearer(claims),method,body,key);results.push({name,...r});await writeFile(join(root,'results.json'),JSON.stringify({synthetic_issuer:true,tls,known_broken:process.env.EXPECT_HTTP_ISOLATION_REJECTION==='1',results},null,2)+'\n');assert.equal(r.status,expected,JSON.stringify(r));console.log(name+': '+r.status);return r;};
  const broken=process.env.EXPECT_HTTP_ISOLATION_REJECTION==='1';
- const accepted=[];
+ const accepted=[];let lastAccepted;
  for(const level of ['rc','rr','serializable','wrapped']) {
    const body={id:randomUUID(),name:level==='wrapped'?'wrapped':level},key=randomUUID(),status=broken&&level!=='rc'?500:200;
    const first=await check('idempotent-'+level,'/idempotent/'+level,'POST',body,key,status);
    if(status===500){assert.match(first.body.message,/cannot strengthen/);continue;}
-   accepted.push(body.id);const replay=await check('replay-'+level,'/idempotent/'+level,'POST',body,key);assert.deepEqual(replay,first);
+   accepted.push(body.id);lastAccepted={path:'/idempotent/'+level,body,key,first};const replay=await check('replay-'+level,'/idempotent/'+level,'POST',body,key);assert.deepEqual(replay,first);
    await check('changed-request-'+level,'/idempotent/'+level,'POST',{...body,name:'changed'},key,409);
  }
  const invalid=await check('invalid-nested-still-rejected','/idempotent/invalid','POST',{id:randomUUID(),name:'invalid'},randomUUID(),500);assert.match(invalid.body.message,/cannot strengthen/);
+ await check('idempotency-key-still-required','/idempotent/serializable','POST',{id:randomUUID(),name:'missing-key'},undefined,400);
  await check('strong-isolation-does-not-grant-role','/idempotent/serializable','POST',{id:randomUUID(),name:'denied'},randomUUID(),403,{roles:['viewer']});
  const snapshot=await check('no-partial-writes','/records');assert.equal(snapshot.body.items.length,accepted.length);assert.deepEqual(snapshot.body.items.map(x=>x.id).sort(),accepted.sort());
- await stop('SIGKILL');server=start();await ready();assert.deepEqual((await check('crash-retains-exact-records','/records')).body,snapshot.body);
- await stop();await cp(join(root,'database'),join(root,'restored-database'),{recursive:true});await rename(join(root,'database'),join(root,'original-offline'));args[args.indexOf(join(root,'database'))]=join(root,'restored-database');server=start();await ready();assert.deepEqual((await check('coldrestore-retains-exact-records','/records')).body,snapshot.body);
+ await stop('SIGKILL');server=start();await ready();assert.deepEqual((await check('crash-retains-exact-records','/records')).body,snapshot.body);assert.deepEqual(await check('crash-retains-idempotent-receipt',lastAccepted.path,'POST',lastAccepted.body,lastAccepted.key),lastAccepted.first);
+ await stop();await cp(join(root,'database'),join(root,'restored-database'),{recursive:true});await rename(join(root,'database'),join(root,'original-offline'));args[args.indexOf(join(root,'database'))]=join(root,'restored-database');server=start();await ready();assert.deepEqual((await check('coldrestore-retains-exact-records','/records')).body,snapshot.body);assert.deepEqual(await check('coldrestore-retains-idempotent-receipt',lastAccepted.path,'POST',lastAccepted.body,lastAccepted.key),lastAccepted.first);
  console.log(broken?'Old HTTP wrapper isolation failure reproduced':'Native HTTP idempotency isolation, replay, nested refusal and recovery passed');
 } finally {
   await stop();

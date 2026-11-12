@@ -1523,6 +1523,15 @@ pub(crate) fn column_schema_from_def(db: &BicDb, column: &ColumnDef) -> Result<C
             let (pg_type, vector_dim) = pg_type_from_data_type(&column.data_type)?;
             (pg_type, vector_dim, None)
         };
+    let element_type = pg_type.strip_suffix("[]").unwrap_or(&pg_type);
+    if user_type.is_none()
+        && pg_type_spec(element_type)
+            .is_some_and(|spec| !spec.pseudo && !spec.canonical_storage_supported())
+    {
+        return Err(SqlError::Unsupported(format!(
+            "PostgreSQL type {pg_type} has no supported canonical storage codec"
+        )));
+    }
     let primary_key = column
         .options
         .iter()

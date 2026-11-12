@@ -70,6 +70,13 @@ pub enum PgInternalCodecDirection {
 }
 
 impl PgTypeSpec {
+    /// Catalog descriptors can be known before user-value storage is supported.
+    /// This engine currently transports ACL catalog values as text only; it has
+    /// no role-OID-aware canonical ACL carrier or key codec.
+    pub fn canonical_storage_supported(self) -> bool {
+        !self.pseudo && self.name != "aclitem"
+    }
+
     pub fn stable_id(self) -> &'static str {
         self.name
     }

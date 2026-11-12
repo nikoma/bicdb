@@ -176,9 +176,45 @@ pub(super) fn report_before_image(
         assert!(Arc::ptr_eq(&actual_writer(fixture, id), &original.state));
         assert_eq!(fixture.hosts[id].binding_diagnostic(), original.binding);
         original.state.require_range(original_range).unwrap();
+        let actual = {
+            let db = fixture.native.databases[id].read();
+            // A not-yet-installed learner legitimately has NO trusted anchor.
+            // Preserve its actual refusal; never invent a trusted R0 floor or
+            // let an observation helper prevent the real image operation.
+            let native = match db.current_native_range_source_lineage(original_range.id) {
+                Ok(point) => serde_json::json!({
+                    "r":point.range_index(),"h0":point.logical_genesis_sha256(),
+                    "h":point.logical_history_sha256(),
+                    "local_data_b":point.actual_local_visibility_sequence(),
+                    "history_generation":point.history_generation(),
+                }),
+                Err(error) => serde_json::json!({"actual_source_refusal":error.to_string()}),
+            };
+            let raw: serde_json::Value = serde_json::from_slice(
+                &std::fs::read(
+                    db.data_path()
+                        .join(crate::distribution_range_consensus::DEFAULT_RANGE_WRITE_LOG),
+                )
+                .unwrap(),
+            )
+            .unwrap();
+            let key = original_range.id.get().to_string();
+            let record = db.get("items", &acknowledged.id).unwrap();
+            if closed.plan().old_members().contains_key(id) {
+                assert_eq!(record.as_deref(), Some(acknowledged));
+            }
+            serde_json::json!({
+                "native":native,"uid":db.local_namespace_identity("items").unwrap(),
+                "acknowledged_record_on_this_node":record.as_deref(),
+                "slots":db.native_abort_slot_inventory().unwrap(),
+                "raw_range_log":raw["catalog"]["ranges"][&key],
+                "handoff_promise":raw["catalog"]["handoff_promises"][&key],
+                "joint":raw["catalog"]["native_joint_handoffs"][&key],
+            })
+        };
         observations.push(serde_json::json!({
             "node":id,"original_writer_binding":original.binding,
-            "actual_native":post_joint_no_data_tests::snapshot(fixture, original_range, id),
+            "actual_native":actual,
         }));
     }
     let report = serde_json::json!({

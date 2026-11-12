@@ -351,3 +351,44 @@ fn parent_query_shapes_keep_each_physical_source_and_its_system_columns() {
         db.close().unwrap();
     }
 }
+
+#[test]
+fn parent_primary_key_exists_probes_use_descendant_rows_instead_of_empty_parent_indexes() {
+    for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
+        let root = tempfile::tempdir().unwrap();
+        let cfg = config(mode);
+        let mut db = BicDb::open_with_config(root.path(), cfg.clone()).unwrap();
+        {
+            let mut sql = SqlSession::new(&mut db);
+            sql.execute("CREATE TABLE p(k INT PRIMARY KEY,payload TEXT) PARTITION BY RANGE(k)")
+                .unwrap();
+            sql.execute("CREATE TABLE c PARTITION OF p FOR VALUES FROM(0) TO(10)")
+                .unwrap();
+            sql.execute("INSERT INTO p VALUES(1,'first-ack'),(2,'second-ack')")
+                .unwrap();
+            sql.execute("CREATE INDEX empty_parent_probe ON p(k)")
+                .unwrap();
+        }
+        for reopen in 0..3 {
+            let mut sql = SqlSession::new(&mut db);
+            for statement in [
+                "SELECT g.n FROM generate_series(1,3) g(n) WHERE EXISTS(SELECT 1 FROM p WHERE p.k=g.n) ORDER BY g.n",
+                "SELECT g.n FROM generate_series(1,3) g(n) WHERE g.n IN(SELECT k FROM p) ORDER BY g.n",
+            ] {
+                assert_eq!(sql.execute(statement).unwrap().rows,vec![vec![SqlValue::Int(1)],vec![SqlValue::Int(2)]],"{statement} reopen{reopen}");
+            }
+            assert_eq!(
+                sql.execute("SELECT EXISTS(SELECT 1 FROM p WHERE k=2)")
+                    .unwrap()
+                    .rows,
+                vec![vec![SqlValue::Bool(true)]]
+            );
+            drop(sql);
+            if reopen < 2 {
+                db.close().unwrap();
+                db = BicDb::open_with_config(root.path(), cfg.clone()).unwrap();
+            }
+        }
+        db.close().unwrap();
+    }
+}

@@ -57,6 +57,24 @@ fn actual_role(
     )
     .expect("actual sealed role, not a purpose DTO as authority")
 }
+fn require_no_canonical_abort3(fixture: &EnforcedNetwork, range: crate::RangeId) {
+    for id in [node("n1"), node("n2"), node("n3")] {
+        let database = fixture.native.databases[&id].read();
+        // Actual protected record read under ONE local native journal; this
+        // decodes no authority and does not hold a service/network latch.
+        let _journal = database.try_native_image_journal().unwrap();
+        let record = database
+            .read_native_range_image_record::<serde_json::Value>(&format!(
+                "abort-decision:{range}:{:020}",
+                3
+            ))
+            .unwrap();
+        assert!(
+            record.is_none(),
+            "{id}: refusal cannot publish an actual canonical NoData decision"
+        );
+    }
+}
 fn reject_claim(
     fixture: &EnforcedNetwork,
     range: &crate::RangeDescriptor,
@@ -103,6 +121,7 @@ fn reject_claim(
         after, before,
         "{label}: no catalogue bytes, native point, rows, UID, promises or slot controls changed"
     );
+    require_no_canonical_abort3(fixture, range.id);
     for id in [node("n1"), node("n2"), node("n3")] {
         assert!(fixture.native.databases[&id].read().range_mutation_gate().try_enter(range.id).is_ok(),
             "{label}: receiver preflight must refuse BEFORE rotating/freezing actual serving generation on {id}");
@@ -113,6 +132,7 @@ pub(super) fn exercise(
     range: &crate::RangeDescriptor,
     ack1: &crate::Record,
     ack2: &crate::Record,
+    actual_protected_handoff_nonce: Uuid,
 ) {
     assert_eq!(range.leader, node("n3"));
     let key = fixture.key(range.id, "actual-current-joint-authority-no-row");
@@ -172,6 +192,10 @@ pub(super) fn exercise(
         .unwrap()
         .parse::<Uuid>()
         .unwrap();
+    assert_eq!(
+        original_nonce, actual_protected_handoff_nonce,
+        "decoded refusal nonce must equal the actual completed protected decision's original nonce"
+    );
     reject_claim(
         fixture,
         range,
@@ -214,6 +238,7 @@ pub(super) fn exercise(
         &serde_json::json!({
             "scope":expired_scope,"actual_error":error.to_string(),"before":before,"after":after,
             "fresh_role_or_parent_after_expiry":false,
+        "refusal_boundary":"original-caller-client-pre-IO", "receiver_late-role_rejection_observed":false,
         }),
     );
     assert_eq!(
@@ -225,6 +250,8 @@ pub(super) fn exercise(
         .range_mutation_gate()
         .try_enter(range.id)
         .is_ok());
+
+    require_no_canonical_abort3(fixture, range.id);
 
     // Now a DIFFERENT actual operation obtains its real full current-member
     // fence quorum, preserving the unmodified genuine positive producer.
@@ -282,6 +309,7 @@ pub(super) fn exercise(
         &serde_json::json!({
             "scope":scope,"actual_error":error.to_string(),"original_host_retained":true,
             "original_role_live":true,"before":before,"after":after,
+            "continued_old_registration_liveness_claim":false,
             "native_policy_reinstallation_is_expected_metadata_only":true,
         }),
     );
@@ -300,5 +328,6 @@ pub(super) fn exercise(
         );
     }
     require_inherited(fixture, range, &points, ack1, ack2);
-    eprintln!("ACTUAL_CURRENT_JOINT_AUTHORITY_TERMINAL real-joint-ACK2-StrongR2=true semantic-refusals=3 original-expiry=true actual-full-current-fence=true original-writer-rebase-refused=true native-noData-not-published=true no-ACK4-claim=true");
+    require_no_canonical_abort3(fixture, range.id);
+    eprintln!("ACTUAL_CURRENT_JOINT_AUTHORITY_TERMINAL real-joint-ACK2-StrongR2=true semantic-refusals=3 original-caller-client-expiry=true actual-full-current-fence=true original-writer-rebase-refused=true native-noData-not-published=true no-ACK4-claim=true");
 }

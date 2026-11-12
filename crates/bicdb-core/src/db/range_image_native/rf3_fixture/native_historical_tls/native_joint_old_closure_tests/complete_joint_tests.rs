@@ -919,6 +919,7 @@ fn run_complete_joint_with_controls(
             &activation_range,
             acknowledged.as_ref(),
             &next,
+            decision.data().promise().nonce,
         );
         return JointTestOutcome::FullHandoffThenCurrentJointAuthorityRefusals;
     }

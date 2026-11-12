@@ -1,8 +1,10 @@
 //! Certification of an EXISTING committed decision while a protected image is
 //! Installing. This never prepares/commits/applies a command or advances a log.
 //! Historical intent and ordinary recovery refusal stay intact.
+use super::recovery_state::RecoveryFencePhase;
 use super::*;
 use crate::db::{NativeCurrentImageProposalReceipt, NativeRecoveryAdmission};
+use crate::distribution_consensus::MetadataRecoveryRolePurpose;
 use crate::distribution_range_mutation::FrozenRangeMutationPermit;
 use crate::distribution_range_recovery::{
     HistoricalCurrentImageAcceptanceV1, RecoveryRoleAdmission,

@@ -1,8 +1,10 @@
 //! Final-only refusal transition after the ACTUAL full replacement source cut.
 //! New native proposal is durable first; one catalogue publication archives
 //! old refusals and installs new refusals. No rows/floors/serving are released.
+use super::recovery_state::RecoveryFencePhase;
 use super::*;
 use crate::db::NativeRecoveryAdmission;
+use crate::distribution_consensus::MetadataRecoveryRolePurpose;
 use crate::distribution_range_image::TentativeNativeRangeImageSourceAuthorization;
 use crate::distribution_range_mutation::FrozenRangeMutationPermit;
 use crate::distribution_range_recovery::RecoveryRoleAdmission;

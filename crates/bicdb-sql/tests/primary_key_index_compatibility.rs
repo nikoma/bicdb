@@ -141,7 +141,7 @@ fn partial_primary_key_backing_cannot_omit_rows_from_read_only_sql() {
     for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
         for partitioned in [false, true] {
             let root = tempfile::tempdir().unwrap();
-            let cfg = config(mode);
+            let cfg = config(mode.clone());
             let mut db = BicDb::open_with_config(root.path(), cfg.clone()).unwrap();
             let relation = setup(&mut db, partitioned);
             let mut index = db

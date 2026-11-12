@@ -111,3 +111,34 @@ Keep all RPC/deadline/persist/drain failure receipts. The test ends at metadata
 membership. Data placement, joint-data handoff, native recovery, ordinary listener
 release, Ready/Serving, Strong reads and the first application ACK remain separate
 gates; this sequence must never be labeled automatic join or operator completion.
+
+## Follow-up, 2026-11-11 Pacific / 2026-11-12 UTC
+
+The source-only delayed-ACK concern above is now an executed direct-delivery
+failure. Source `cdc5203854bab7f5db194d44e8085977acef5b3c`, GitHub run
+`43166739631` / job `131010271504`, produced 227 passes, 4 failures and 2 ignored
+controls. In the genuine legacy learner schedule, recording the held pre-binding
+ACK returned `Ok(false)` and the leader then accepted promotion at index 4; the
+strict safety assertion failed. This proves that component schedule, not an
+mTLS attack or an Azure cause.
+
+The separate native ACK correction was actually exercised on source
+`983addf4e` in run `43168817748`: 230 passes, 1 unrelated replacement-fixture
+failure and 2 ignored. The delayed pre-binding regression, owned/decoded/
+tampered/receiver-ended controls, real mTLS retired-actor negative and learner
+birth RPC control passed. All-target compilation and the isolated no-TLS
+consumer check also succeeded. The independent read-foundation source `29f9e80c5`
+had 222 passing focused controls; that cohort excludes the learner birth RPC.
+Neither result validates later enrollment code by association.
+
+Source `1d88047c9f1ca53588612b6c831090a25a9ea80a` now adds the finite typed
+consumer/controller described in
+[native-registered-learner-enrollment.md](native-registered-learner-enrollment.md).
+It commits only an already registered unassigned learner's genuine observed
+birth, using a separately fresh actual owned leader Host MQ and ordinary
+metadata quorum replication. Its three new actual TLS control sources have
+not executed at this checkpoint. The registration queue, same-service drain
+and owned-MStore transition/catch-up, promotion, ordinary-data release, and an
+automatic fifth-node operational loop remain open. The generic metadata matched-
+frontier ACK defect/correction is a separate current-main safety track; no
+end-to-end HA result follows from these enrollment component checks.

@@ -409,13 +409,12 @@ impl MetadataConsensusStore {
             ));
         }
         let mut owner = NativeMetadataStoreOwner::acquire(root, Arc::clone(&database), true)?;
-        owner.bind_actual_actor(
-            &database
+        {
+            let actual_database = database
                 .try_read()
-                .ok_or_else(|| metadata_error("native DB busy binding initial actor"))?,
-            &topology,
-            &node,
-        )?;
+                .ok_or_else(|| metadata_error("native DB busy binding initial actor"))?;
+            owner.bind_actual_actor(&actual_database, &topology, &node)?;
+        }
         let path = root.join(DEFAULT_CLUSTER_METADATA_CONSENSUS_STATE);
         match fs::symlink_metadata(&path) {
             Ok(_) => {
@@ -531,13 +530,12 @@ impl MetadataConsensusStore {
         if actual != receipt {
             return Err(metadata_error("protected metadata receipt changed"));
         }
-        owner.bind_actual_actor(
-            &database
+        {
+            let actual_database = database
                 .try_read()
-                .ok_or_else(|| metadata_error("native DB busy binding reopened actor"))?,
-            &state.committed_topology,
-            &node,
-        )?;
+                .ok_or_else(|| metadata_error("native DB busy binding reopened actor"))?;
+            owner.bind_actual_actor(&actual_database, &state.committed_topology, &node)?;
+        }
         cancellation.check()?;
         state.role = MetadataConsensusRole::Follower;
         state.leader_id = None;

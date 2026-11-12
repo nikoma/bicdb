@@ -750,6 +750,8 @@ pub struct ClusterDataNodeService {
     initial_preparation_provider:
         Option<std::sync::Weak<crate::distribution_native_host::NativeProvisionalNode>>,
     initial_consensus_only: bool,
+    #[cfg(feature = "tls-replication")]
+    learner_birth_provider: Option<std::sync::Weak<crate::distribution_native_host::NativeLearnerBirthProvider>>,
 }
 
 impl ClusterDataNodeService {
@@ -879,6 +881,8 @@ impl ClusterDataNodeService {
             initial_birth_provider: None,
             initial_preparation_provider: None,
             initial_consensus_only: false,
+            #[cfg(feature = "tls-replication")]
+            learner_birth_provider: None,
         };
         service.recover_committed_range_writes()?;
         Ok(service)
@@ -927,6 +931,23 @@ impl ClusterDataNodeService {
     }
     pub(crate) fn initial_consensus_only(&self) -> bool {
         self.initial_consensus_only
+    }
+    #[cfg(feature = "tls-replication")]
+    pub(crate) fn attach_learner_birth_provider(&mut self,
+        provider: &Arc<crate::distribution_native_host::NativeLearnerBirthProvider>) -> Result<()> {
+        if self.learner_birth_provider.is_some() || self.initial_birth_provider.is_some()
+            || self.initial_preparation_provider.is_some() || self.initial_consensus_only
+            || self.native_writer_enforcement_version()? != 1 {
+            return Err(data_error("learner factory provider must attach once to an actual provisional service"));
+        }
+        provider.require_same_database(&self.db, &self.cluster_id, &self.node_id)?;
+        self.learner_birth_provider = Some(Arc::downgrade(provider));
+        Ok(())
+    }
+    #[cfg(feature = "tls-replication")]
+    pub(crate) fn learner_birth_provider(&self)
+        -> Option<std::sync::Weak<crate::distribution_native_host::NativeLearnerBirthProvider>> {
+        self.learner_birth_provider.clone()
     }
     pub(crate) fn transition_initial_preparation_listener(
         &mut self,

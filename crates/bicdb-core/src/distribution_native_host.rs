@@ -31,6 +31,11 @@ mod initial_offer;
 mod learner_factory;
 pub(crate) use learner_factory::NativeUnassignedLearnerFactory;
 #[cfg(feature = "tls-replication")]
+mod learner_birth;
+#[cfg(feature = "tls-replication")]
+pub(crate) use learner_birth::{NativeLearnerBirthObservation, NativeLearnerBirthProvider,
+    NativeLearnerBirthRequest, NativeLearnerBirthResponse, NativeUnassignedLearnerHost};
+#[cfg(feature = "tls-replication")]
 mod provisional_listener;
 pub(crate) use initial_offer::{
     NativeInitialBirthOfferObservation, NativeInitialBirthOfferRequest,

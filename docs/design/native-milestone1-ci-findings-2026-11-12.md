@@ -111,3 +111,39 @@ and a single-record crate-visible reexport were corrected at
 [run `43161948968`](https://github.com/nikoma/bicdb/actions/runs/43161948968)
 was still live at this observation. A compile fix does not establish
 canonical abort recovery, automatic recovery or post-handoff recovery.
+
+## Abort-enabled runtime at `be1345d3cfee`
+
+[Run `43162977062`](https://github.com/nikoma/bicdb/actions/runs/43162977062)
+passed all-target compilation and PostgreSQL-wire. Its Core job
+`130998239851` completed with **820 passed, 18 failed, eight ignored**,
+305.61 seconds. The separate one-test child invocation is not added to that
+total. The tested source is `be1345d3cfeed7b416a9e60af6547633b9b30114`;
+it enables the new abort1 contract in the enforced fixtures. Earlier passing
+results do not qualify this changed contract.
+
+| Finding/control | Classification | Evidence, limitation and next deterministic action |
+| --- | --- | --- |
+| All three previously failed cold-preparation controls and the actual-open lifetime control | Passed | Original controls now pass, including unchanged native genesis receipt checks. No reset or fresh genesis was substituted for cold recovery. |
+| Actual fifth registered learner: factory create, strict reopen and configuration-only proposal | Passed | Four real metadata TLS listeners plus a fifth requester, on one host. No fifth metadata backend, enrollment, data relocation, Serving or user ACK is claimed. |
+| Twelve strong-read/activation controls | Failed | Most reject n1/n2 with `native read/ready has unresolved or mismatched protected slot control`; one final-metadata control times out. Source investigation identifies a peer Commit path updating the raw mirror without publishing the protected ever-Commit fact first. Repair the actual producer ordering and rerun unchanged read/ACK assertions; never remove the inventory guard. These unavailable results do not establish durable loss or false absence. |
+| Three canonical abort lifecycle controls | Failed | Prepare-failure, E2 and cold-publication recovery stop at `actual permanent AbortPromise quorum unavailable`. Participant errors need explicit bounded diagnostics. Follower Resolve currently fans out mutating requests under its own transport identity while NormalRecovery requires the current data leader; preserve that authority check and separately observe actual existing permanent promises. |
+| Lost durable-Commit negative | Failed | The raw JSON lookup returned null where the assertion expected `committed`. The test uses displayed `range-N` as a JSON map key while transparent numeric RangeId keys serialize differently. Correct the verifier lookup, retaining all protected ever-Commit/no-effect/row checks. No data-loss finding follows from a null verifier path. |
+| Two uninstalled-writer controls | Failed | They assert the range-catalogue file is absent, while the new from-birth protocol requires an empty registered catalogue before an operation. Preserve exact pre/post bytes, zero Prepare/entries, no rows and no application-WAL mutation; do not disable abort1 to retain an obsolete file-absence expectation. |
+| Missing/foreign registered-catalogue refusal and birth serialization shape | Passed | Two of the six `native_abort_` controls passed. Four lifecycle controls failed as above; there is no six-test passing abort result. |
+
+Full compressed logs, SHA-256 indexes and all 18 failed test names are retained
+in restricted custody. Temporary test database/TLS roots were not uploaded;
+log paths are not retained database images. Remaining SQL/workspace jobs were
+still live at this observation. The original Azure result remains failed.
+
+The later joint/learner-wire candidate `0934b108a5a8f06acd9ac8582845a45a59d18e79`
+failed test compilation in
+[run `43163698294`](https://github.com/nikoma/bicdb/actions/runs/43163698294).
+Two replacement controls indexed a `BTreeMap<u64, _>` with `RangeId`
+(`installing_replacement_case.rs:302,483`, E0308). Source `57cd5c98c`
+uses the actual numeric map keys, retaining the same epoch/value assertions.
+No joint or new learner-birth RPC test execution is claimed for that run.
+Subsequent startup-cancellation and same-open joint-release retry source
+changes also require independent validation; no complete activated handoff
+fixture or physical convergence result exists yet.

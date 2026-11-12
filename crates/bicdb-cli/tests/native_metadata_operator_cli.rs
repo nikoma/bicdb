@@ -1,5 +1,6 @@
 //! Real executable/process commands. Metadata-only enrollment is not native
-//! data Serving, a fifth backend, automatic election or a multi-host result.
+//! data Serving, automatic election or a multi-host result. Cold coverage kills
+//! the fifth process only; the four existing metadata owners remain live.
 use bicdb_core::{
     ClusterId, ClusterNetworkTransportConfig, ClusterNode, ClusterNodeId, CollectionMode,
     DistributionConfig, NativeMetadataBootstrapPlan, NativeMetadataCollection,
@@ -389,6 +390,145 @@ fn native_metadata_operator_actual_cli_four_process_startup_registration_and_dat
                 .as_u64()
                 .unwrap()
     );
+    // A real process crash drops EVERY fifth-node owner. Preserve the killed
+    // process outputs/operator files and exact durable state at the cut. The
+    // four metadata voters remain live; this is not an all-cluster outage.
+    let killed_pid = processes.children[4].id();
+    processes.children[4].kill().unwrap();
+    let killed = processes.children[4].wait().unwrap();
+    assert!(!killed.success());
+    let metadata_path = root.join("db4/native-learner-metadata/cluster-metadata-consensus.json");
+    let original_c_path =
+        root.join("db4/native-learner-metadata/native-learner-metadata-original-c.json");
+    let original_c_at_kill = std::fs::read(&original_c_path).unwrap();
+    let persisted_at_kill = std::fs::read(&metadata_path).unwrap();
+    let persisted_state: Value = serde_json::from_slice(&persisted_at_kill).unwrap();
+    assert_eq!(persisted_state["state"]["native_store_id"], store_id);
+    assert!(persisted_state["state"]["commit_index"].as_u64().unwrap() > 0);
+    std::fs::write(root.join("node4-killed-metadata.json"), &persisted_at_kill).unwrap();
+    std::fs::rename(paths(&root, 4).0, root.join("node4.pre-kill.command")).unwrap();
+    std::fs::rename(&learner_status, root.join("node4.pre-kill.status")).unwrap();
+    let learner_process = |mode: &str, command: &Path, status: &Path| {
+        let mut call = binary();
+        call.args(["cluster", "native-metadata", mode])
+            .arg(root.join("db4"))
+            .arg("--cluster-id")
+            .arg(config.cluster_id.as_str())
+            .arg("--seed-node-id")
+            .arg("n0")
+            .arg("--seed-address")
+            .arg(&addresses[0])
+            .arg("--node-id")
+            .arg("n4")
+            .arg("--address")
+            .arg(&addresses[4])
+            .arg("--command-file")
+            .arg(command)
+            .arg("--status-file")
+            .arg(status)
+            .arg("--run-seconds")
+            .arg("120");
+        add_tls(&mut call, &root, 4);
+        call
+    };
+    // Fresh MUST still refuse the same existing root, before touching the
+    // original protected metadata state or publishing a status/listener.
+    let fresh_command = root.join("fresh-over-existing.command");
+    let fresh_status = root.join("fresh-over-existing.status");
+    let refused = learner_process("serve-learner-fresh", &fresh_command, &fresh_status)
+        .output()
+        .unwrap();
+    assert!(!refused.status.success());
+    assert!(!fresh_command.exists() && !fresh_status.exists());
+    assert_eq!(std::fs::read(&metadata_path).unwrap(), persisted_at_kill);
+    let (cold_command, cold_status) = paths(&root, 4);
+    let mut cold_process = learner_process("serve-learner-reopen", &cold_command, &cold_status);
+    cold_process
+        .stdin(Stdio::null())
+        .stdout(std::fs::File::create(root.join("node4-cold.stdout")).unwrap())
+        .stderr(std::fs::File::create(root.join("node4-cold.stderr")).unwrap());
+    processes.children[4] = cold_process.spawn().unwrap();
+    let until = Instant::now() + Duration::from_secs(15);
+    while !cold_status.exists() {
+        assert!(
+            processes.children[4].try_wait().unwrap().is_none(),
+            "cold fifth failed; retained node4-cold.stderr contains exact refusal"
+        );
+        assert!(
+            Instant::now() < until,
+            "strict existing fifth reopen timed out"
+        );
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    let cold: Value = serde_json::from_slice(&std::fs::read(&cold_status).unwrap()).unwrap();
+    assert_eq!(cold["process_id"], processes.children[4].id());
+    assert_ne!(processes.children[4].id(), killed_pid);
+    assert_eq!(cold["host"]["phase"], "metadata_transition");
+    assert_eq!(cold["host"]["birth_bound"], true);
+    assert_eq!(cold["host"]["birth_id"], provisional["host"]["birth_id"]);
+    assert_eq!(
+        cold["host"]["birth_sha256"],
+        provisional["host"]["birth_sha256"]
+    );
+    assert_eq!(
+        cold["host"]["schema_sha256"],
+        provisional["host"]["schema_sha256"]
+    );
+    assert_eq!(cold["host"]["namespace_ids"], namespace_ids);
+    assert_eq!(cold["host"]["metadata_store_id"], Value::Null);
+    assert_eq!(cold["host"]["metadata_listener_owned"], false);
+    assert_eq!(cold["host"]["data_serving"], false);
+    // Reopening the actual factory alone neither recreates a metadata backend
+    // nor resets its state. Starting it is a separate fresh OWN-MQ action.
+    assert_eq!(std::fs::read(&metadata_path).unwrap(), persisted_at_kill);
+    let resumed = step(&root, 4, 1, "start-learner-metadata");
+    assert_eq!(resumed["host"]["phase"], "owned_metadata_learner");
+    assert_eq!(resumed["host"]["metadata_store_id"], store_id);
+    assert_eq!(resumed["host"]["metadata_listener_owned"], true);
+    assert_eq!(
+        resumed["host"]["birth_sha256"],
+        provisional["host"]["birth_sha256"]
+    );
+    assert_eq!(resumed["host"]["namespace_ids"], namespace_ids);
+    let resumed_state: Value =
+        serde_json::from_slice(&std::fs::read(&metadata_path).unwrap()).unwrap();
+    let durable = |envelope: &Value| {
+        let mut state = envelope["state"].clone();
+        // These two labels are volatile on strict reopen. All term/vote/base/
+        // log/commit/config/restore/native UUID fields must remain EXACT.
+        state.as_object_mut().unwrap().remove("role");
+        state.as_object_mut().unwrap().remove("leader_id");
+        state
+    };
+    assert_eq!(durable(&resumed_state), durable(&persisted_state));
+    assert_eq!(
+        std::fs::read(&original_c_path).unwrap(),
+        original_c_at_kill,
+        "Registered reopen must preserve the exact original-C historical fact"
+    );
+    sequences[0] += 1;
+    let caught_cold = step_target(&root, 0, sequences[0], "catch-up-learner", Some("n4"));
+    assert_eq!(
+        caught_cold["host"]["last_caught_up_learner_store_id"], store_id,
+        "new TLS bound ACK must come from the SAME protected cold backend"
+    );
+    let after_cold_ack = step(&root, 4, 2, "status");
+    assert_eq!(after_cold_ack["host"]["metadata_store_id"], store_id);
+    assert_eq!(after_cold_ack["host"]["namespace_ids"], namespace_ids);
+    assert_eq!(
+        after_cold_ack["host"]["metadata"]["learners"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|id| id.as_str() == Some("n4"))
+            .count(),
+        1
+    );
+    assert!(!after_cold_ack["host"]["metadata"]["voters"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|id| id.as_str() == Some("n4")));
     // Existing root misuse refuses BEFORE opening/resetting the real host.
     let existing = binary()
         .args(["cluster", "native-metadata", "serve-fresh"])

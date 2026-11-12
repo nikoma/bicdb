@@ -72,6 +72,36 @@ pub enum Command {
         #[arg(long, default_value_t = 3600)]
         run_seconds: u64,
     },
+    /// Strict existing enrolled learner root; never recreates schema/genesis/metadata identity.
+    ServeLearnerReopen {
+        root: PathBuf,
+        #[arg(long)]
+        cluster_id: String,
+        #[arg(long)]
+        seed_node_id: String,
+        #[arg(long)]
+        seed_address: String,
+        #[arg(long)]
+        node_id: String,
+        #[arg(long)]
+        address: String,
+        #[arg(long, default_value_t = 1)]
+        incarnation: u64,
+        #[arg(long)]
+        cluster_tls_cert: PathBuf,
+        #[arg(long)]
+        cluster_tls_key: PathBuf,
+        #[arg(long)]
+        cluster_tls_ca: PathBuf,
+        #[arg(long)]
+        command_file: PathBuf,
+        #[arg(long)]
+        status_file: PathBuf,
+        #[arg(long, default_value_t = 8_388_608)]
+        buffer_pool_bytes: u64,
+        #[arg(long, default_value_t = 3600)]
+        run_seconds: u64,
+    },
     /// Send one local operator action; JSON commands are DATA, not capabilities.
     Step {
         #[arg(long)]
@@ -240,6 +270,7 @@ fn own_network(cert: PathBuf, key: PathBuf, ca: PathBuf) -> ClusterNetworkTransp
     }
 }
 pub fn run(command: Command) -> Result<()> {
+    let reopening_learner = matches!(&command, Command::ServeLearnerReopen { .. });
     match command {
         Command::ServeFresh {
             root,
@@ -413,10 +444,31 @@ pub fn run(command: Command) -> Result<()> {
             status_file,
             buffer_pool_bytes,
             run_seconds,
+        }
+        | Command::ServeLearnerReopen {
+            root,
+            cluster_id,
+            seed_node_id,
+            seed_address,
+            node_id,
+            address,
+            incarnation,
+            cluster_tls_cert,
+            cluster_tls_key,
+            cluster_tls_ca,
+            command_file,
+            status_file,
+            buffer_pool_bytes,
+            run_seconds,
         } => {
             ensure!(
-                (1..=86400).contains(&run_seconds) && !root.exists(),
-                "fresh learner requires a new root and bounded run duration"
+                (1..=86400).contains(&run_seconds)
+                    && if reopening_learner {
+                        root.is_dir()
+                    } else {
+                        !root.exists()
+                    },
+                "learner requires bounded duration and the explicit fresh/reopen root mode"
             );
             ensure!(
                 command_file != status_file && !command_file.exists() && !status_file.exists(),
@@ -427,8 +479,11 @@ pub fn run(command: Command) -> Result<()> {
                 .filter(|p| !p.as_os_str().is_empty())
                 .unwrap_or(Path::new("."))
                 .canonicalize()?;
-            let actual_root =
-                root_parent.join(root.file_name().context("learner root basename absent")?);
+            let actual_root = if reopening_learner {
+                root.canonicalize()?
+            } else {
+                root_parent.join(root.file_name().context("learner root basename absent")?)
+            };
             for path in [&command_file, &status_file] {
                 ensure!(
                     !private_parent(path)?
@@ -446,7 +501,12 @@ pub fn run(command: Command) -> Result<()> {
                 canceled,
                 Some(Instant::now() + Duration::from_secs(run_seconds)),
             );
-            let mut host = NativeMetadataLearnerHost::start_fresh_metadata_only(
+            let constructor = if reopening_learner {
+                NativeMetadataLearnerHost::reopen_metadata_only
+            } else {
+                NativeMetadataLearnerHost::start_fresh_metadata_only
+            };
+            let mut host = constructor(
                 &root,
                 bicdb_core::ClusterId::new(cluster_id)?,
                 ClusterNodeId::new(node_id)?,

@@ -21,6 +21,30 @@ pub(crate) struct NativeColdLearnerMetadataHost {
     stopping: bool,
 }
 impl NativeColdLearnerMetadataHost {
+    pub(in crate::distribution_native_host) fn factory_owner(
+        &self,
+    ) -> Arc<NativeUnassignedLearnerFactory> {
+        Arc::clone(&self.factory)
+    }
+    pub(in crate::distribution_native_host) fn owned_metadata_snapshot(
+        &self,
+        parent: &CancellationToken,
+    ) -> Result<Option<(Uuid, crate::MetadataConsensusStatus, bool)>> {
+        parent.check()?;
+        let Some(metadata) = self.metadata.as_ref() else {
+            return Ok(None);
+        };
+        let store = metadata
+            .try_lock()
+            .ok_or_else(|| invalid("cold owned metadata status busy"))?;
+        let id = store.registered_native_learner_store_id()?;
+        Ok(Some((
+            id,
+            store.status(),
+            self.listener.is_some() && !self.stopping,
+        )))
+    }
+
     /// This opens ONLY the existing actual root/manifest. It neither starts a
     /// listener nor initializes metadata. The caller keeps this owner when a
     /// later `start` fails, including protected Prepare/Registered ambiguity.

@@ -1,5 +1,5 @@
-//! Fresh unassigned learner process owner. No raw DB/service/metadata handles,
-//! promotion, data Serving or cold reconstruction path is exposed.
+//! Explicit fresh or strict persisted learner owner. No raw handles, promotion,
+//! data Serving, schema retrofit or metadata identity reset is exposed.
 use super::*;
 use crate::{
     ClusterNetworkTransportConfig, MetadataConsensusStatus, TcpClusterBootstrapClient,
@@ -24,7 +24,7 @@ pub struct NativeMetadataLearnerStatus {
 }
 pub struct NativeMetadataLearnerHost {
     factory: Arc<NativeUnassignedLearnerFactory>,
-    host: NativeUnassignedLearnerHost,
+    host: NativeLearnerLifecycle,
     transport: Arc<TcpClusterRelocationTransport>,
     leader: ClusterNodeId,
     address: String,
@@ -32,6 +32,10 @@ pub struct NativeMetadataLearnerHost {
     metadata_started: bool,
     transitioning: bool,
     stopped: bool,
+}
+enum NativeLearnerLifecycle {
+    Fresh(NativeUnassignedLearnerHost),
+    Cold(NativeColdLearnerMetadataHost),
 }
 impl NativeMetadataLearnerHost {
     pub fn start_fresh_metadata_only(
@@ -157,13 +161,103 @@ impl NativeMetadataLearnerHost {
         )?;
         Ok(Self {
             factory,
-            host,
+            host: NativeLearnerLifecycle::Fresh(host),
             transport,
             leader,
             address: address.to_owned(),
             network,
             metadata_started: false,
             transitioning: false,
+            stopped: false,
+        })
+    }
+    /// Reopen ONLY the existing enrolled learner root. Bootstrap configuration
+    /// supplies routing DATA; this owner's independently fresh Host MQ and the
+    /// actual protected birth/UUID/original-C checks authorize the cold path.
+    /// No schema import, factory creation or genesis initialization occurs.
+    pub fn reopen_metadata_only(
+        root: &Path,
+        cluster: crate::ClusterId,
+        local: ClusterNodeId,
+        address: &str,
+        incarnation: u64,
+        seed: ClusterNodeId,
+        seed_address: &str,
+        network: ClusterNetworkTransportConfig,
+        paged_buffer_pool_bytes: u64,
+        parent: &CancellationToken,
+    ) -> Result<Self> {
+        let token = parent.child_with_deadline(Instant::now() + Duration::from_secs(5));
+        token.check()?;
+        network.validate()?;
+        if !root.is_dir()
+            || network.dev_localhost_plaintext
+            || !(8 * 1024 * 1024..=1024 * 1024 * 1024).contains(&paged_buffer_pool_bytes)
+        {
+            return Err(invalid(
+                "cold learner requires an existing root, TLS and supported memory",
+            ));
+        }
+        let numeric: std::net::SocketAddr = address
+            .parse()
+            .map_err(|_| invalid("cold learner needs own numeric endpoint"))?;
+        if numeric.port() == 0 {
+            return Err(invalid("cold learner requires a fixed port"));
+        }
+        let bootstrap =
+            TcpClusterBootstrapClient::new(cluster.clone(), local.clone(), network.clone())?;
+        let snapshot = bootstrap.fetch_snapshot(&seed, seed_address)?;
+        token.check()?;
+        let leader = snapshot
+            .metadata_leader_id
+            .ok_or_else(|| invalid("cold learner metadata leader unknown"))?;
+        let transport = Arc::new(TcpClusterRelocationTransport::new(
+            cluster,
+            local.clone(),
+            Arc::new(RwLock::new(snapshot.topology)),
+            network.clone(),
+        )?);
+        let business = Uuid::now_v7();
+        let current = transport.acquire_host_metadata_observation(
+            &leader,
+            business,
+            Duration::from_secs(5),
+            &token,
+        )?;
+        let member = current
+            .committed_topology(business)?
+            .nodes
+            .get(&local)
+            .ok_or_else(|| invalid("cold learner absent from actual current metadata"))?;
+        if member.address != address || member.incarnation != incarnation {
+            return Err(invalid(
+                "cold learner explicit endpoint/incarnation differs",
+            ));
+        }
+        transport.install_topology(current.committed_topology(business)?.clone())?;
+        let host = NativeColdLearnerMetadataHost::reopen(
+            root,
+            DbConfig::default()
+                .with_fsync(true)
+                .with_storage_mode(StorageMode::ServerPaged)
+                .with_paged_buffer_pool_bytes(paged_buffer_pool_bytes),
+            &current,
+            business,
+            network.clone(),
+            &token,
+        )?;
+        let factory = host.factory_owner();
+        current.require_live_request(business)?;
+        token.check()?;
+        Ok(Self {
+            factory,
+            host: NativeLearnerLifecycle::Cold(host),
+            transport,
+            leader,
+            address: address.to_owned(),
+            network,
+            metadata_started: false,
+            transitioning: true,
             stopped: false,
         })
     }
@@ -236,7 +330,10 @@ impl NativeMetadataLearnerHost {
             ids.sort();
             (schema, ids)
         };
-        let metadata = self.host.owned_metadata_snapshot(&token)?;
+        let metadata = match &self.host {
+            NativeLearnerLifecycle::Fresh(host) => host.owned_metadata_snapshot(&token)?,
+            NativeLearnerLifecycle::Cold(host) => host.owned_metadata_snapshot(&token)?,
+        };
         let (metadata_store_id, metadata, listener) = match metadata {
             Some((id, status, listener)) => (Some(id), Some(status), listener),
             None => (None, None, false),
@@ -244,7 +341,9 @@ impl NativeMetadataLearnerHost {
         observed.require_live_request(business)?;
         token.check()?;
         if !self.metadata_started && !self.transitioning {
-            self.host.refresh_metadata(observed, business, &token)?;
+            if let NativeLearnerLifecycle::Fresh(host) = &self.host {
+                host.refresh_metadata(observed, business, &token)?;
+            }
         }
         Ok(NativeMetadataLearnerStatus {
             version: 1,
@@ -279,15 +378,26 @@ impl NativeMetadataLearnerHost {
         self.factory
             .enrolled_metadata_context(&observed, business, &self.network)?;
         self.transitioning = true;
-        self.host
-            .start_owned_metadata(&observed, business, &token)?;
+        match &mut self.host {
+            NativeLearnerLifecycle::Fresh(host) => {
+                host.start_owned_metadata(&observed, business, &token)?;
+            }
+            NativeLearnerLifecycle::Cold(host) => {
+                host.start(&observed, business, &token)?;
+            }
+        }
         self.metadata_started = true;
         self.transitioning = false;
         self.refresh(&token)
     }
     pub fn stop(&mut self, parent: &CancellationToken) -> Result<()> {
-        self.host.stop_owned_metadata(parent)?;
-        self.host.stop_and_drain(parent)?;
+        match &mut self.host {
+            NativeLearnerLifecycle::Fresh(host) => {
+                host.stop_owned_metadata(parent)?;
+                host.stop_and_drain(parent)?;
+            }
+            NativeLearnerLifecycle::Cold(host) => host.stop(parent)?,
+        }
         self.stopped = true;
         Ok(())
     }

@@ -67,6 +67,8 @@ pub(crate) use range_image_install::{
 pub(crate) use range_image_proposal::{
     NativeCurrentImageProposalReceipt, ProtectedCurrentImagePreimageV1,
 };
+mod native_metadata_store;
+pub(crate) use native_metadata_store::NativeMetadataStoreRecord;
 mod native_activation;
 pub(crate) use native_activation::NativeActivatedOpenGuard;
 mod commit_admission_hook;

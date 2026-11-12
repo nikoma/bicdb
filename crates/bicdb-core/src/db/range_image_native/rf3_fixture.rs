@@ -273,6 +273,7 @@ pub(crate) struct ActualNativeRf3Fixture {
     pub(crate) databases: BTreeMap<ClusterNodeId, Arc<RwLock<BicDb>>>,
     pub(crate) services: BTreeMap<ClusterNodeId, Arc<Mutex<ClusterDataNodeService>>>,
     pub(crate) specs: BTreeMap<ClusterNodeId, RangeImageBirthSpec>,
+    pub(crate) fresh_factories: BTreeMap<ClusterNodeId, FreshRangeGenesisAuthority>,
     pub(crate) transport: Arc<ActualNativeRf3ServiceTransport>,
     pub(crate) coordinator: Arc<RangeWriteCoordinator<ActualNativeRf3ServiceTransport>>,
 }
@@ -403,6 +404,7 @@ impl ActualNativeRf3Fixture {
             .with_paged_buffer_pool_bytes(8 * 1024 * 1024);
         let mut databases = BTreeMap::new();
         let mut specs = BTreeMap::new();
+        let mut fresh_factories = BTreeMap::new();
         let mut schema = None;
         // Explicit new-cluster fixture before any native factory, app write
         // or metadata-consensus store exists. Existing defaults are unchanged.
@@ -462,6 +464,7 @@ impl ActualNativeRf3Fixture {
                     &genesis, &db.read(), &topology,
                 ).unwrap());
             }
+            fresh_factories.insert(node.id.clone(), genesis);
             databases.insert(node.id.clone(), db);
             specs.insert(node.id.clone(), spec);
         }
@@ -522,6 +525,7 @@ impl ActualNativeRf3Fixture {
             databases,
             services,
             specs,
+            fresh_factories,
             transport,
             coordinator,
         }

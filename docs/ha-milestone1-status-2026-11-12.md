@@ -37,6 +37,33 @@ The original Azure qualification remains **FAILED**, and production admission
 remains unchanged. The following checkpoints retain their original revisions
 and pre-merge status; they are not newer claims that read489 is still unmerged.
 
+## Latest native acceptance: completion progresses, activation still fails
+
+**Milestone 1 remains incomplete.** These results belong to the unmerged candidate
+revisions below. They do not establish release admission, a deployed binary,
+physical failover, automatic four-to-five-node convergence or throughput gain.
+Earlier failures remain retained; passing controls do not waive full acceptance.
+
+| Finding | Classification | Exact executed evidence and limit |
+| --- | --- | --- |
+| Original-writer registry replacement controls | **Passed focused controls** | Source `29bfd6c9af7652a8e40a97e46b23d4629777ece9`, [run 43308056358](https://github.com/nikoma/bicdb/actions/runs/43308056358), Core job `131496514002`: five passed, zero failed, 947 filtered, 7.61s. This includes the corrected test of actual old/new writer-generation custody. Workspace all-target and isolated consumer compilation pass at this revision. It is not DATA relocation. |
+| Discovery under actual held DATA-service locks | **Passed focused controls** | Same source 29b, [run 43308063984](https://github.com/nikoma/bicdb/actions/runs/43308063984), Core job `131496564730`: three passed, zero failed, 947 filtered, 5.71s. Bounded fixture-holder startup retains the original actual three-lock hold and quorum/read assertions. All-target and isolated consumer compilation pass. |
+| Original owned-validation fixtures | **Inconclusive suites; cancelled after a confirmed fixture deadlock** | Source `ded3c412cf25c12f3c6fe524d22aac02310a1c0b`, [run 43303070364](https://github.com/nikoma/bicdb/actions/runs/43303070364), Core job `131479132858`, records 57 individual passes and one ignored helper, but no final suite result. Source 29b, [run 43308048131](https://github.com/nikoma/bicdb/actions/runs/43308048131), Core job `131496490839`, selects four controls and completes none. The fixture calls `config(&f)` while already holding the same non-reentrant metadata mutex; `config` locks it again. Both task-owned runs were explicitly cancelled for this source-proven setup deadlock, with partial logs retained. This is not evidence of a production relocation deadlock or a passed broad suite. |
+| Corrected owned-validation execution | **Passed focused controls; broader compilation pending at checkpoint** | Source `6e00ba519715ee0ca392357394f2b0a9749a1358`, [run 43310478213](https://github.com/nikoma/bicdb/actions/runs/43310478213), Core job `131505005808`: four passed, zero failed, 947 filtered, 2.30s. Configuration is captured before acquiring the fixture mutex. Both strict-owned and both HOT registered-catch-up contention/release/cancellation cases execute. No production condition or authority deadline is relaxed. Workspace job `131504948931` remains in progress at this checkpoint. No COLD fault-control or whole-CLI pass follows. |
+| CurrentJoint observer-scope controls | **Passed focused controls** | Source `f58d14fc8836e5cb14ba5251d4415d5ac47fd5b0`, [run 43309668194](https://github.com/nikoma/bicdb/actions/runs/43309668194), Core job `131502198055`: five passed, zero failed, 946 filtered, 75.06s. Includes actual full-handoff R2 Completed preparation followed by foreign DB/Store, original-parent cancellation and real writer-hook replacement refusals, alongside existing codec/authority controls. This does not establish activation or a post-transfer ACK. |
+| Native producer controls | **Passed focused controls** | Same f58 source, [run 43309675405](https://github.com/nikoma/bicdb/actions/runs/43309675405), Core job `131502195020`: nine passed, zero failed, 942 filtered, 0.79s. This selector does not substitute for the full handoff. |
+| Activation continuation | **Failed; useful later durable cut** | Same f58 source, [run 43309691294](https://github.com/nikoma/bicdb/actions/runs/43309691294), Core job `131502250718`: seven passed, one failed, 62.07s. All three Complete calls return within their original deadlines. First activation persists the actual native decision and `NativeActivated` catalogue, then its final catalogue-receipt validation consumes 986.139ms with approximately 746ms remaining. The runtime refuses to arm after expiry. No successful activation reply, ACK4, Strong R4 or idempotent continuation is established. Retained catalogues are n1 Activated, n2/n3 Completed; this is observed custody, not cold-replay qualification. |
+| Unchanged full positive handoff | **Failed at activation preflight** | Same f58 source, [run 43309683056](https://github.com/nikoma/bicdb/actions/runs/43309683056), Core job `131502214629`: zero passed, one failed, 950 filtered, 102.51s. All three Complete calls return; activation expires during native preflight before the new decision WAL. All retained catalogues remain Completed. This is a different cut from the activation continuation above. Workspace all-target and isolated consumer compilation pass at exact f58; the complete workflow fails its acceptance test. Nested debug timings are not summed or extrapolated to physical performance. |
+| Initial native committed-tail recovery | **Open source-level gap; automatic recovery not tested by this audit** | The retained 56f CLI unknown operation is not established as lost or rolled back. A source audit distinguishes a still-running original APP worker from genuine post-admission error/cleanup. Fresh Strong reads must refuse unresolved history; no automatic NativeHost committed-tail controller is established. The next deterministic test must prove actual handler exit before requiring autonomous recovery and the next ACK/Strong. See [source audit and exact test specification](design/native-initial-committed-tail-56f-source-audit.md). |
+
+The next activation correction must independently establish current native facts
+after catalogue fsync. Reusing a pre-fsync currentness check is insufficient.
+Repeated full lineage/materialization checks are source-proven; the trace does
+not attribute all elapsed time to individual repeated calls. Removing repetition
+must preserve actual current/archive proofs, original writer and caller fences,
+fresh quorum/role authority and entry/exit checks for mutable facts. The original
+full acceptance, time limits, terminal ACK4 and Strong R4 remain mandatory.
+
 ## Current native candidate checkpoint: discovery and registry admission
 
 The working native candidate remains **unmerged and unqualified**. The results

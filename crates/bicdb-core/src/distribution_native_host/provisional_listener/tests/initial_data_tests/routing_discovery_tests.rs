@@ -182,21 +182,58 @@ fn native_initial_data_healthy_metadata_discovery_while_all_data_services_held()
         .collect::<Vec<_>>();
     // The holder owns the DATA guards on its own thread. The public RPC
     // caller/observer holds no engine latch and does no reentrant engine work.
-    // Channels are inside scope: panic drops release_tx before scoped join,
-    // so even a failed MQ prerequisite cannot strand the holder.
+    // Channels are inside scope: panic drops release_tx before scoped join.
+    // Startup also has its own finite acquisition bound: a holder waiting for
+    // an earlier service cannot otherwise notice that disconnected channel.
+    // This does not change any business request or metadata-proof deadline.
     let (discovery, captured) = std::thread::scope(|scope| {
         let (ready_tx, ready_rx) = std::sync::mpsc::channel();
         let (release_tx, release_rx) = std::sync::mpsc::channel::<()>();
+        let acquisition = budget(5000);
         scope.spawn(move || {
-            let held = services
-                .iter()
-                .map(|service| service.lock())
-                .collect::<Vec<_>>();
-            ready_tx.send(held.len()).unwrap();
-            let _ = release_rx.recv();
-            drop(held);
+            let held = (|| {
+                let mut held = Vec::with_capacity(services.len());
+                for (index, service) in services.iter().enumerate() {
+                    let guard = loop {
+                        acquisition.check().map_err(|error| {
+                            format!("DATA holder startup at service {index}: {error}")
+                        })?;
+                        if let Some(guard) = service.try_lock_for(Duration::from_millis(5)) {
+                            acquisition.check().map_err(|error| {
+                                format!("DATA holder startup after service {index}: {error}")
+                            })?;
+                            break guard;
+                        }
+                    };
+                    held.push(guard);
+                }
+                Ok::<_, String>(held)
+            })();
+            match held {
+                Ok(held) => {
+                    if ready_tx.send(Ok(held.len())).is_ok() {
+                        // Keep ALL guards until the original main-thread
+                        // release/disconnect, never silently time out a hold.
+                        let _ = release_rx.recv();
+                    }
+                    drop(held);
+                }
+                Err(error) => {
+                    // Partial guards have already dropped on the error path.
+                    let _ = ready_tx.send(Err(error));
+                }
+            }
         });
-        let held_count = ready_rx.recv().unwrap();
+        let held_result = ready_rx
+            .recv_timeout(Duration::from_secs(6))
+            .expect("actual DATA holder did not report its bounded startup result");
+        if let Err(error) = &held_result {
+            audit
+                .append(&serde_json::json!({"phase":"service_hold_startup_refusal", "error":error}))
+                .unwrap();
+        }
+        let held_count =
+            held_result.expect("all actual DATA services must be held before discovery");
         assert_eq!(held_count, 3);
         // Healthy metadata is a genuine new QQ while ALL actual DATA mutexes
         // remain held. No test-created topology/term is a substitute for this.

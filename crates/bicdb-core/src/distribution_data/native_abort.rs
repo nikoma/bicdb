@@ -34,7 +34,7 @@ impl ClusterDataNodeService {
         self.require_native_catalog_database(database)?;
         self.require_native_writer_host_for_range(database, range)?;
         self.validate_range_write(range, caller, command)?;
-        database.native_abort_mark_ever_commit(command, authority)?;
+        database.native_abort_mark_ever_commit(command, range, authority)?;
         let state = self.range_writes.commit(command)?;
         self.range_write_ack(command, state)
     }

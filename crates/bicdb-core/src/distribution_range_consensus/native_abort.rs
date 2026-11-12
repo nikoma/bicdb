@@ -509,7 +509,7 @@ impl RangeWriteStore {
                 "abort format upgrade cannot invalidate another legacy image intent",
             ));
         }
-        database.start_native_abort_slot(command, &domain, &source, authority)?;
+        database.start_native_abort_slot(command, &domain, &source, range, authority)?;
         crate::format::enable_native_abort_history(&self.root)?;
         self.catalog.format_version = self.catalog.format_version.max(NATIVE_ABORT_CATALOG_FORMAT);
         self.catalog
@@ -799,7 +799,13 @@ impl RangeWriteStore {
                         "absent abort slot lacks actual admitted complete writer-start history",
                     ));
                 }
-                db.start_native_abort_slot(command, &domain, &source, authority)?;
+                db.start_native_abort_slot(
+                    command,
+                    &domain,
+                    &source,
+                    role.current_range(),
+                    authority,
+                )?;
                 // Import the actual newly protected restrictive start. It
                 // changes neither resolved/last counters nor data rows.
                 self.reconcile_actual_abort_control(db)?;

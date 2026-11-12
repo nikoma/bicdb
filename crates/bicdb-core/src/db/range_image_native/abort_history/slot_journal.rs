@@ -218,8 +218,10 @@ impl BicDb {
         command: &crate::RangeWriteCommand,
         domain: &NativeAbortDomain,
         source: &SourceRangeImageLineage,
+        current_range: &RangeDescriptor,
         authority: &RangeMutationAuthority<'_>,
     ) -> Result<()> {
+        self.require_installed_native_writer_database_for_range(current_range)?;
         self.range_mutations.validate(command.range_id, authority)?;
         self.validate_source_range_image_lineage_contract(
             source,
@@ -281,8 +283,10 @@ impl BicDb {
     pub(crate) fn native_abort_mark_ever_commit(
         &self,
         command: &crate::RangeWriteCommand,
+        current_range: &RangeDescriptor,
         authority: &RangeMutationAuthority<'_>,
     ) -> Result<()> {
+        self.require_installed_native_writer_database_for_range(current_range)?;
         self.range_mutations.validate(command.range_id, authority)?;
         let (birth, store_id) = self.abort_slot_identity()?;
         let _journal = self.try_native_image_journal()?;
@@ -432,6 +436,7 @@ impl BicDb {
     ) -> Result<NativeAbortPermanentPromise> {
         native.require_current(self)?;
         request.scope.require_role(role)?;
+        self.require_installed_native_writer_database_for_range(role.current_range())?;
         self.range_mutations
             .validate(request.scope.range_id, authority)?;
         candidate.require_for_role(role, request)?;

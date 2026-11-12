@@ -181,6 +181,7 @@ impl BicDb {
     ) -> Result<NativeNoEffectIntentRecord> {
         native.require_current(self)?;
         request.scope.require_role(role)?;
+        self.require_installed_native_writer_database_for_range(role.current_range())?;
         if native.abort_protocol_version() != 1
             || native.writer_enforcement_version() != 1
             || native.metadata_initialization_version() != 1

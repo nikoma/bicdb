@@ -79,3 +79,31 @@ applies. No fallback may match by name, SQL OID, alias or donor UUID alone.
 - Old readers reject the portable format; old local-only images are not
   retroactively authenticated. Original application and replica assertions stay
   intact, and final-source crash/VM/application qualification remains required.
+
+## Local savepoint cleanup of a created namespace
+
+A separate local Native integration gate is now demonstrated on private source
+`4ff5a08582b13e263ff57c966db14e11594c69a3`. The exact original default ACL
+closure is reserved before rename capture, so creating and writing a replacement
+under the old name succeeds. `ROLLBACK TO` removes that replacement. Recreating
+it then fails because the live owner retains its binding to the removed
+incarnation (`collection original was replaced after this transaction observed
+it`). The regression keeps its commit, savepoint and full rollback assertions;
+refusal is not treated as successful SQL compatibility.
+
+The required Native contract must retire only a binding to a namespace that this
+host-owned creation undo actually removed. Before any removal, validate the
+actual pending owner, retained catalog scope, Native-issued current namespace
+birth/UUID and complete absence of surviving pending writes or row locks on the
+created namespace. The undo result must be tied to that exact native incarnation;
+a logical name or SQL-supplied UUID cannot authorize clearing an observation.
+A later same-name namespace must never satisfy the old removal proof. Missing,
+foreign, stale, reused and wrong-database proofs must leave all bindings intact.
+Unrelated bindings, write observations and acknowledged work must survive.
+
+This requires an actual Native producer/consumer boundary for the trusted
+creation undo. It is not permission for SQL to clear all collection bindings or
+for generic savepoint rollback to forget ordinary reads. Both local storage
+modes, repeated create/rollback/recreate cycles, foreign replacements, two clean
+reopens and independent unrelated ACKs remain required positive/negative gates.
+The public catalog-descriptor change is independent of this private gate.

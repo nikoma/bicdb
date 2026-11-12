@@ -136,7 +136,7 @@ impl NativeInitialConsensusLaunch {
             for peer in peers {
                 let request = self
                     .lock_initial_metadata(&token)?
-                    .append_request_from(1, 16)?;
+                    .append_request_for_peer(&peer, 16)?;
                 let reply = match self
                     .transport
                     .append_metadata_cancellable(&peer, request, &token)

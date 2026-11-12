@@ -2053,6 +2053,9 @@ impl ProjectedRecordField {
             Self::Field(FieldRef::PrimaryKey { pg_type, .. }) => Some(pg_type.clone()),
             Self::Field(FieldRef::TypedColumn { pg_type, .. }) => Some(pg_type.clone()),
             Self::Field(FieldRef::OracleBlobColumn { .. }) => Some("bytea".into()),
+            Self::Field(FieldRef::Cast(_, data_type)) => pg_type_from_data_type(data_type)
+                .ok()
+                .map(|(pg_type, _)| pg_type),
             Self::Field(_) => None,
         }
     }

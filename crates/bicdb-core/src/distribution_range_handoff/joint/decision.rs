@@ -403,3 +403,79 @@ impl NativeJointDurableDecision {
         Ok(())
     }
 }
+
+impl NativeJointDecisionData {
+    pub(crate) fn source_snapshot_db_sequence(&self) -> u64 {
+        self.old_closed[&self.selected_source].actual_local_visibility_sequence
+    }
+    pub(crate) fn target_local_snapshot_db_sequence(&self) -> Result<u64> {
+        self.new_materialized
+            .get(&self.scope.target)
+            .map(|fact| fact.actual_local_visibility_sequence)
+            .ok_or_else(|| {
+                invalid("joint metadata publication requires the actual completed target image")
+            })
+    }
+    pub(crate) fn require_metadata_domain(
+        &self,
+        topology: &crate::distribution::ClusterTopology,
+        restore: Option<&crate::distribution_consensus::MetadataRestoreActivation>,
+    ) -> Result<()> {
+        self.validate()?;
+        topology.validate()?;
+        if topology.cluster_id != self.scope.cluster_id
+            || topology.range_image_bootstrap_id != Some(self.scope.bootstrap_id)
+            || restore != self.scope.restore_activation.as_ref()
+        {
+            return Err(invalid(
+                "joint metadata publication changed cluster/bootstrap/restore",
+            ));
+        }
+        for (id, birth) in &self.scope.enrolled_births {
+            let node = topology
+                .nodes
+                .get(id)
+                .ok_or_else(|| invalid("joint enrolled member disappeared"))?;
+            if node.native_store_birth_v1.as_ref() != Some(birth)
+                || node.incarnation != birth.node_incarnation()
+                || node.lifecycle != crate::distribution::ClusterNodeLifecycle::Active
+                || node
+                    .labels
+                    .get(crate::distribution::SCHEMA_COMPATIBILITY_NODE_LABEL)
+                    != Some(&self.scope.schema_sha256)
+            {
+                return Err(invalid("joint enrolled birth/incarnation/schema changed"));
+            }
+        }
+        for (id, expected) in self
+            .scope
+            .old_members
+            .iter()
+            .chain(self.scope.new_members.iter())
+        {
+            let node = &topology.nodes[id];
+            if node.incarnation != expected.incarnation
+                || node.tls_certificate_sha256 != expected.tls_certificate_sha256
+                || node.pending_tls_certificate_sha256 != expected.pending_tls_certificate_sha256
+            {
+                return Err(invalid("joint data-voter credentials changed"));
+            }
+        }
+        let relocation = topology
+            .relocations
+            .get(&self.promise().relocation_id)
+            .ok_or_else(|| invalid("joint relocation disappeared"))?;
+        if relocation.range_id != self.promise().range_id
+            || relocation.plan_id != self.promise().plan_id
+            || relocation.source.as_ref() != Some(&self.scope.old_source)
+            || relocation.target != self.scope.target
+            || relocation.learner_epoch != self.promise().old_epoch
+            || relocation.handoff_session.as_ref().is_none_or(|s| {
+                s.session_id != self.promise().session_id || s.nonce != self.promise().nonce
+            })
+        {
+            return Err(invalid("joint committed relocation/session changed"));
+        }
+        Ok(())
+    }
+}

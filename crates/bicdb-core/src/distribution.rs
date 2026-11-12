@@ -703,11 +703,15 @@ pub struct RangeRelocation {
 impl RangeRelocation {
     pub fn is_active(&self) -> bool {
         !self.phase.is_terminal()
+            || self
+                .native_joint_handoff_v1
+                .as_ref()
+                .is_some_and(|joint| joint.stage() != NativeJointHandoffStageV1::Cleaned)
     }
 
     fn validate(&self, topology: &ClusterTopology) -> Result<()> {
         if let Some(joint) = &self.native_joint_handoff_v1 {
-            joint.validate_for(self)?;
+            return joint.validate_topology(self, topology);
         }
         if self
             .handoff_session
@@ -3951,6 +3955,7 @@ impl DistributionStore {
         now_ms: u64,
     ) -> Result<bool> {
         self.ensure_actor(actor)?;
+        self.require_legacy_relocation_mutation(relocation_id, false)?;
         let relocation = self.relocation_mut(relocation_id)?;
         match relocation.phase {
             RelocationPhase::LearnerAllocated => {
@@ -3981,6 +3986,7 @@ impl DistributionStore {
         now_ms: u64,
     ) -> Result<bool> {
         self.ensure_actor(actor)?;
+        self.require_legacy_relocation_mutation(relocation_id, false)?;
         let relocation = self.relocation_mut(relocation_id)?;
         if relocation.phase != RelocationPhase::SnapshotCopying {
             return Err(cluster_error(format!(
@@ -4020,6 +4026,7 @@ impl DistributionStore {
         now_ms: u64,
     ) -> Result<()> {
         self.ensure_actor(actor)?;
+        self.require_legacy_relocation_mutation(relocation_id, false)?;
         let snapshot_id = snapshot_id.into();
         let snapshot_sha256 = snapshot_sha256.into();
         if snapshot_id.is_empty() || snapshot_id.len() > 256 {
@@ -4071,6 +4078,7 @@ impl DistributionStore {
         now_ms: u64,
     ) -> Result<RelocationPhase> {
         self.ensure_actor(actor)?;
+        self.require_legacy_relocation_mutation(relocation_id, false)?;
         let relocation = self.relocation_mut(relocation_id)?;
         if !matches!(
             relocation.phase,
@@ -4126,6 +4134,7 @@ impl DistributionStore {
         now_ms: u64,
     ) -> Result<u64> {
         self.ensure_actor(actor)?;
+        self.require_legacy_relocation_mutation(relocation_id, true)?;
         let relocation = self
             .topology
             .relocations
@@ -4217,6 +4226,7 @@ impl DistributionStore {
         now_ms: u64,
     ) -> Result<bool> {
         self.ensure_actor(actor)?;
+        self.require_legacy_relocation_mutation(relocation_id, true)?;
         let relocation = self.relocation_mut(relocation_id)?;
         match relocation.phase {
             RelocationPhase::Promoted => {
@@ -4245,6 +4255,7 @@ impl DistributionStore {
         now_ms: u64,
     ) -> Result<u64> {
         self.ensure_actor(actor)?;
+        self.require_legacy_relocation_mutation(relocation_id, true)?;
         let relocation = self
             .topology
             .relocations
@@ -4314,6 +4325,7 @@ impl DistributionStore {
         now_ms: u64,
     ) -> Result<bool> {
         self.ensure_actor(actor)?;
+        self.require_legacy_relocation_mutation(relocation_id, true)?;
         let relocation = self.relocation_mut(relocation_id)?;
         if relocation.phase != RelocationPhase::CleaningUp {
             return Err(cluster_error(format!(
@@ -4353,6 +4365,7 @@ impl DistributionStore {
         now_ms: u64,
     ) -> Result<()> {
         self.ensure_actor(actor)?;
+        self.require_legacy_relocation_mutation(relocation_id, false)?;
         let message = message.into();
         if message.trim().is_empty() || message.len() > 4_096 {
             return Err(cluster_error(
@@ -4385,6 +4398,7 @@ impl DistributionStore {
         now_ms: u64,
     ) -> Result<RelocationPhase> {
         self.ensure_actor(actor)?;
+        self.require_legacy_relocation_mutation(relocation_id, false)?;
         let relocation = self.relocation_mut(relocation_id)?;
         if relocation.phase != RelocationPhase::Failed {
             return Err(cluster_error(format!(

@@ -3711,7 +3711,10 @@ impl DistributionStore {
                 .topology
                 .relocations
                 .iter()
-                .find(|(_, relocation)| relocation.phase == RelocationPhase::Completed)
+                .find(|(_, relocation)| {
+                    relocation.phase == RelocationPhase::Completed
+                        && relocation.native_joint_handoff_v1.is_none()
+                })
                 .map(|(id, _)| *id)
             else {
                 return Err(cluster_error(

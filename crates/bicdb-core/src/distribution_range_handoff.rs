@@ -12,11 +12,12 @@ use crate::error::{BicDbError, Result};
 
 mod joint;
 pub(crate) use joint::{
-    NativeJointDecisionData, NativeJointDecisionPublicationAdmission,
-    NativeJointDecisionPublicationRound, NativeJointDurableDecision, NativeJointHandoffPlan,
-    NativeJointHandoffRuntime, NativeJointMaterializedFacts, NativeJointMaterializedQuorums,
-    NativeJointNewObservation, NativeJointNewRound, NativeJointOldClosedQuorum,
-    NativeJointOldObservation, NativeJointOldRound, NativeJointPreparedDecision,
+    CommittedNativeJointDecisionObservation, NativeJointDecisionData,
+    NativeJointDecisionPublicationAdmission, NativeJointDecisionPublicationRound,
+    NativeJointDurableDecision, NativeJointHandoffPlan, NativeJointHandoffRuntime,
+    NativeJointMaterializedFacts, NativeJointMaterializedQuorums, NativeJointNewObservation,
+    NativeJointNewRound, NativeJointOldClosedQuorum, NativeJointOldObservation,
+    NativeJointOldRound, NativeJointPreparedDecision,
 };
 
 pub(crate) const HANDOFF_RANGE_LOG_FORMAT: u32 = 4;

@@ -30,3 +30,6 @@ pub(crate) use decision::{
 
 mod runtime;
 pub(crate) use runtime::NativeJointHandoffRuntime;
+
+mod committed;
+pub(crate) use committed::CommittedNativeJointDecisionObservation;

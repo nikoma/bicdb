@@ -35,6 +35,18 @@ pub struct NativeJointHandoffMetadataV1 {
     source_cleanup_sha256: Option<String>,
 }
 impl NativeJointHandoffMetadataV1 {
+    pub fn session_id(&self) -> Uuid {
+        self.session_id
+    }
+    pub fn nonce(&self) -> Uuid {
+        self.nonce
+    }
+    pub fn old_configuration_sha256(&self) -> &str {
+        &self.old_configuration_sha256
+    }
+    pub fn new_configuration_sha256(&self) -> &str {
+        &self.new_configuration_sha256
+    }
     pub fn stage(&self) -> NativeJointHandoffStageV1 {
         self.stage
     }

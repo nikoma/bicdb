@@ -46,9 +46,9 @@ mod native_joint_handoff;
 mod native_writer;
 use native_durability::ServiceStoragePolicy;
 pub(crate) use native_joint_handoff::{
-    ActualServiceNativeJointCaptureInputs, ActualServiceNativeJointConstraints,
-    ActualServiceNativeJointNewEvidence, ActualServiceNativeJointOldEvidence,
-    NativeJointIrrevocableFacts,
+    ActualServiceNativeJointCaptureInputs, ActualServiceNativeJointCommittedEvidence,
+    ActualServiceNativeJointConstraints, ActualServiceNativeJointNewEvidence,
+    ActualServiceNativeJointOldEvidence, NativeJointIrrevocableFacts,
 };
 mod current_image_replacement;
 mod current_image_resume;

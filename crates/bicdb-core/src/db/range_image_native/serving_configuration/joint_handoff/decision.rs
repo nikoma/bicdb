@@ -85,6 +85,15 @@ pub(crate) struct NativeJointDecisionReceipt {
     record: NativeJointDecisionRecord,
 }
 impl NativeJointDecisionReceipt {
+    pub(crate) fn native_database_incarnation(&self) -> &str {
+        self.native.database_incarnation()
+    }
+    pub(crate) fn metadata_anchor(&self) -> (u64, u64) {
+        (
+            self.record.post_quorum_metadata_term,
+            self.record.post_quorum_metadata_read_index,
+        )
+    }
     pub(crate) fn checksum_sha256(&self) -> &str {
         &self.record.checksum_sha256
     }

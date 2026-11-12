@@ -674,3 +674,99 @@ impl ClusterDataNodeService {
         receipt.require_current(&database)
     }
 }
+
+/// Exact same-service bundle. A separately retained local receipt cannot be
+/// retagged under caller-supplied MQ/request/open fields by the observation.
+pub(crate) struct ActualServiceNativeJointCommittedEvidence {
+    native: crate::db::NativeJointDecisionReceipt,
+    metadata: crate::distribution_consensus::HostMetadataReadObservation,
+    business: Uuid,
+    database_incarnation: String,
+}
+impl ActualServiceNativeJointCommittedEvidence {
+    pub(crate) fn into_parts(
+        self,
+    ) -> (
+        crate::db::NativeJointDecisionReceipt,
+        crate::distribution_consensus::HostMetadataReadObservation,
+        Uuid,
+        String,
+    ) {
+        (
+            self.native,
+            self.metadata,
+            self.business,
+            self.database_incarnation,
+        )
+    }
+}
+impl ClusterDataNodeService {
+    /// MQ/network acquisition happened before the caller's service/DB latches.
+    /// This producer reads actual local protected WAL; it never imports a
+    /// decision DTO and grants no current physical floor or membership cast.
+    pub(crate) fn observe_committed_native_joint_decision(
+        &self,
+        metadata: crate::distribution_consensus::HostMetadataReadObservation,
+        business: Uuid,
+        range: RangeId,
+    ) -> Result<crate::distribution_range_handoff::CommittedNativeJointDecisionObservation> {
+        metadata.require_live_request(business)?;
+        let topology = metadata.committed_topology(business)?;
+        let descriptor = topology
+            .range_by_id(range)
+            .ok_or_else(|| data_error("joint committed range absent"))?;
+        // A cleaned tombstone remains historical publication evidence. It is
+        // never converted into a current-open/serving permission here.
+        let record = topology
+            .relocations
+            .values()
+            .filter(|plan| {
+                plan.range_id == range && plan.promoted_epoch.is_some_and(|e| e <= descriptor.epoch)
+            })
+            .filter_map(|plan| {
+                plan.native_joint_handoff_v1
+                    .as_ref()
+                    .map(|record| (plan, record))
+            })
+            .filter(|(_, record)| {
+                record.stage() >= crate::distribution::NativeJointHandoffStageV1::AwaitingActivation
+            })
+            .max_by_key(|(plan, _)| (plan.promoted_epoch, plan.id))
+            .map(|(_, record)| record)
+            .ok_or_else(|| {
+                data_error("actual metadata has no committed native joint decision/tombstone")
+            })?;
+        let local = topology
+            .nodes
+            .get(&self.node_id)
+            .ok_or_else(|| data_error("joint committed local member absent"))?;
+        let database = try_database_read(&self.db)?;
+        self.require_native_catalog_database(&database)?;
+        self.require_native_writer_host_for_range(&database, descriptor)?;
+        let native = database.native_recovery_admission(
+            &self.cluster_id,
+            topology
+                .range_image_bootstrap_id
+                .ok_or_else(|| data_error("joint committed metadata has no native bootstrap"))?,
+            &self.node_id,
+            local.incarnation,
+        )?;
+        if native.writer_enforcement_version() != 1 || metadata.requester_node_id() != &self.node_id
+        {
+            return Err(data_error(
+                "joint committed observation requires actual local born2 requester",
+            ));
+        }
+        let actual =
+            database.read_native_joint_decision(&native, range, record.decision_sha256())?;
+        let evidence = ActualServiceNativeJointCommittedEvidence {
+            database_incarnation: native.database_incarnation().into(),
+            native: actual,
+            metadata,
+            business,
+        };
+        let observation=crate::distribution_range_handoff::CommittedNativeJointDecisionObservation::from_actual_service(evidence)?;
+        observation.require_current(&database)?;
+        Ok(observation)
+    }
+}

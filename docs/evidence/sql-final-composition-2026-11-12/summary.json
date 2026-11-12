@@ -1,0 +1,47 @@
+{
+  "composition_parents": {
+    "partition": "b2d996d8a",
+    "hardened_rename": "e897c1c73"
+  },
+  "compile_source": "c727a6fade74c070384a9191fbf9ac0a455111c2",
+  "compile_result": "Core+SQL+PGwire alltargets compile and29packageversioncheck passed; inherited489, no tests claimed by compile",
+  "baseline_source": "54bf4151bc888ab2d3015b5e1316ba5ab8374694",
+  "baseline": {
+    "passed": 0,
+    "failed": 1,
+    "scope": "Real imported format flags present, live partition cache false. Stopped firstEmbedded iteration; Paged and reopens not reached."
+  },
+  "fixed_source": "1348dcc58e3f007d4de481b20172019f0fd86728",
+  "focused": {
+    "distinct_passed": 19,
+    "passed_invocations": 21,
+    "repeated_invocations": 2,
+    "failed": 0,
+    "ignored": 0,
+    "test_names": [
+      "db::range_image_bindings::tests::native_semantic_reader_requirements_invalidate_prior_image_bindings",
+      "db::range_image_bindings::tests::range_image_bindings_reject_schema_roundtrip_and_new_backing",
+      "db::range_image_bindings::tests::range_image_gate_rejects_bare_frozen_copy_and_requires_owned_controlled_scope",
+      "db::range_image_bindings::tests::range_image_scan_budget_advances_over_nonmatching_keys_and_preserves_all_rows",
+      "db::range_image_bindings::tests::range_image_scan_budget_preserves_semantic_readers_on_every_batch",
+      "db::snapshot_reader_tests::replicated_semantic_requirements_activate_live_native_reader_state_and_keep_acks",
+      "db::snapshot_reader_tests::shared_snapshot_apply_installs_capabilities_and_invalidates_readiness_once",
+      "db::snapshot_reader_tests::signed_activation_installs_capabilities_before_schema_and_resumes_after_reopen",
+      "db::snapshot_reader_tests::unprotected_schema_bundle_keeps_the_frozen_v1_checksum_payload",
+      "distribution_range_image_install::tests::native_image_install_refuses_different_semantic_reader_requirements_before_writes",
+      "fence_installation_does_not_replace_unknown_capabilities",
+      "format::semantic_reader_capture_tests::application_unique_scope_requirement_survives_native_reader_capture",
+      "format::semantic_reader_capture_tests::decimal_comparison_requirement_survives_native_reader_capture",
+      "format::semantic_reader_capture_tests::partition_execution_requirement_survives_native_reader_capture",
+      "legacy_unprotected_snapshot_wire_still_round_trips_byte_for_byte",
+      "native_replication_installs_the_rename_reader_fence_before_journal_data",
+      "range_snapshot_installs_source_reader_requirements_before_business_rows",
+      "rename_capability_is_separate_sticky_and_preserves_existing_data",
+      "schema_bootstrap_installs_source_reader_requirements_even_for_equal_schema"
+    ]
+  },
+  "new_SQL_replica_and_original_rename_gate_source": "e2a49d96dba1e07a5985e60fcf996890647b0fbc",
+  "new_SQL_gates_status": "submitted; no outcome claimed here",
+  "source_version": "inherited1.0.489-beta, no delivery version reserved; standalonePR165 source490 separate",
+  "scope": "No final currentcomposition broad/app/portableorigin/physicalHA/capacity/CLI/release/deployment qualification. Full original goal active; P2productionoff; no newcloudspend."
+}

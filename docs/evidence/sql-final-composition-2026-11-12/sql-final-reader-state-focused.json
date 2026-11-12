@@ -1,0 +1,126 @@
+{
+  "label": "sql-final-reader-state-focused",
+  "source": "1348dcc58e3f007d4de481b20172019f0fd86728",
+  "base": "54bf4151bc888ab2d3015b5e1316ba5ab8374694",
+  "repo": "/root/bicdb-sql-final-composition",
+  "scope": "Native live partition requirement cache fix after real0P1F baseline. Atomically publish live state after durable import and schema invalidation; partition/appunique local enables invalidate schema compatibility; updated test fixture recomputes actual verified schema before new capture. Actual source/standby ACK+fullflag+two reopen positive, shared snapshot/signed bundle and prior Native capture/reader-fence regressions. No portablecollectionorigin/HA/capacity/application/oldreaderbinary/release or mainmerge claim. Original tests/assertions/waits preserved.",
+  "continue_on_failure": false,
+  "commands": [
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--no-fail-fast",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-core",
+      "--lib",
+      "snapshot_reader_tests",
+      "--",
+      "--nocapture",
+      "--test-threads=1"
+    ],
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--no-fail-fast",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-core",
+      "--lib",
+      "semantic_reader",
+      "--",
+      "--nocapture",
+      "--test-threads=1"
+    ],
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--no-fail-fast",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-core",
+      "--lib",
+      "range_image_bindings::tests",
+      "--",
+      "--nocapture",
+      "--test-threads=1"
+    ],
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--no-fail-fast",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-core",
+      "--test",
+      "sql_rename_replication_fence",
+      "--",
+      "--nocapture",
+      "--test-threads=1"
+    ],
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--no-fail-fast",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-core",
+      "--test",
+      "sql_rename_snapshot_fence",
+      "--",
+      "--nocapture",
+      "--test-threads=1"
+    ],
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--no-fail-fast",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-core",
+      "--test",
+      "sql_rename_format_fence",
+      "--",
+      "--nocapture",
+      "--test-threads=1"
+    ]
+  ],
+  "required_receipts": [
+    {
+      "path": "report-sql-final-reader-state-baseline.json",
+      "equals": {
+        "source": "54bf4151bc888ab2d3015b5e1316ba5ab8374694",
+        "status": "failed"
+      }
+    }
+  ],
+  "allow_isolated_builds": [
+    {
+      "pid": 3447154,
+      "start_ticks": 165215890,
+      "repo": "/root/bicdb-durability-s3/repo-metadata-describe",
+      "target": "/root/bicdb-durability-s3/target-metadata-describe"
+    }
+  ],
+  "wait_units": [
+    "bicdb-sql-final-reader-state-baseline"
+  ]
+}

@@ -2919,10 +2919,14 @@ pub(crate) fn list_triggers(db: &BicDb) -> Result<Vec<TriggerSchema>> {
 
 pub(crate) fn save_trigger(db: &mut BicDb, trigger: &TriggerSchema) -> Result<()> {
     ensure_trigger_collection(db)?;
-    db.insert(
-        TRIGGER_COLLECTION,
-        Record::new(trigger_key(&trigger.table_name, &trigger.name))
-            .with_metadata(serde_json::to_value(trigger)?),
+    let id = trigger_key(&trigger.table_name, &trigger.name);
+    crate::session::partition_admission::publish_catalog_changes(
+        db,
+        vec![(
+            TRIGGER_COLLECTION,
+            id.clone(),
+            Some(Record::new(id).with_metadata(serde_json::to_value(trigger)?)),
+        )],
     )?;
     Ok(())
 }
@@ -2944,11 +2948,17 @@ pub(crate) fn save_trigger_if_missing(
 
 pub(crate) fn delete_trigger(db: &mut BicDb, name: &str, table_name: Option<&str>) -> Result<bool> {
     if let Some(table_name) = table_name {
-        return match db.delete(TRIGGER_COLLECTION, &trigger_key(table_name, name)) {
-            Ok(existed) => Ok(existed),
-            Err(BicDbError::CollectionNotFound(_)) => Ok(false),
-            Err(error) => Err(error.into()),
-        };
+        if !db.has_collection(TRIGGER_COLLECTION) {
+            return Ok(false);
+        }
+        let id = trigger_key(table_name, name);
+        let existed = db.get(TRIGGER_COLLECTION, &id)?.is_some();
+        // Still stage a missing delete, so Native grant checks remain in force.
+        crate::session::partition_admission::publish_catalog_changes(
+            db,
+            vec![(TRIGGER_COLLECTION, id, None)],
+        )?;
+        return Ok(existed);
     }
     for trigger in list_triggers(db)? {
         if trigger.name.eq_ignore_ascii_case(name) {

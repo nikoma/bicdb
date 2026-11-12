@@ -353,7 +353,7 @@ pub fn inspect_partition_upgrade(db: &BicDb) -> Result<PartitionUpgradeInspectio
     Ok(gather(db)?.inspection)
 }
 
-pub(super) const CERTIFICATE_COLLECTION: &str = "__bicdb_pg_partition_certificate";
+pub(crate) const CERTIFICATE_COLLECTION: &str = "__bicdb_pg_partition_certificate";
 const POLICY_ARCHIVE_COLLECTION: &str = "__bicdb_pg_partition_policy_archive";
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -495,7 +495,7 @@ pub(crate) fn prepare_partition_descriptor(db: &mut BicDb, schema: &mut TableSch
     Ok(())
 }
 
-pub(super) fn certificate_for_catalog_changes(
+pub(crate) fn certificate_for_catalog_changes(
     db: &BicDb,
     changes: &[(&'static str, String, Option<Record>)],
 ) -> Result<Option<Record>> {
@@ -503,22 +503,25 @@ pub(super) fn certificate_for_catalog_changes(
 }
 
 pub(crate) fn publish_schema_change(db: &mut BicDb, id: String, raw: Option<Record>) -> Result<()> {
-    let changes = vec![(SCHEMA_COLLECTION, id.clone(), raw.clone())];
-    let certificate = certificate_for_catalog_changes(db, &changes)?;
-    if let Some(certificate) = certificate {
-        let mut tx = db.begin_transaction()?;
-        if let Some(raw) = raw {
-            tx.batch_insert(SCHEMA_COLLECTION, vec![raw])?;
-        } else {
-            tx.delete(SCHEMA_COLLECTION, &id)?;
-        }
-        tx.batch_insert(CERTIFICATE_COLLECTION, vec![certificate])?;
-        tx.commit()?;
-    } else if let Some(raw) = raw {
-        db.insert(SCHEMA_COLLECTION, raw)?;
-    } else {
-        db.delete(SCHEMA_COLLECTION, &id)?;
+    publish_catalog_changes(db, vec![(SCHEMA_COLLECTION, id, raw)])
+}
+
+pub(crate) fn publish_catalog_changes(
+    db: &mut BicDb,
+    mut changes: Vec<(&'static str, String, Option<Record>)>,
+) -> Result<()> {
+    if let Some(certificate) = certificate_for_catalog_changes(db, &changes)? {
+        changes.push((CERTIFICATE_COLLECTION, "current".into(), Some(certificate)));
     }
+    let mut tx = db.begin_transaction()?;
+    for (collection, id, raw) in changes {
+        if let Some(raw) = raw {
+            tx.batch_insert(collection, vec![raw])?;
+        } else {
+            tx.delete(collection, &id)?;
+        }
+    }
+    tx.commit()?;
     Ok(())
 }
 

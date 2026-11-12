@@ -13,6 +13,102 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_storage_mode(mode)
         .with_fsync(true)
         .with_paged_buffer_pool_bytes(8 * 1024 * 1024);
+    if case.starts_with("entry_") {
+        let mut original_hashes = Vec::new();
+        for reopen in 0..3 {
+            let mut db = BicDb::open_with_config(&path, config.clone())?;
+            if reopen == 0 {
+                for source in ["p", "low", "high"] {
+                    for row in db.scan_collection(source)? {
+                        original_hashes.push(row.content_hash()?);
+                    }
+                }
+                let before = db.last_commit_seq();
+                let error = bicdb_sql::SqlEngine::new(&db)
+                    .execute("SELECT k FROM p")
+                    .unwrap_err();
+                assert_eq!(
+                    error.sqlstate(),
+                    "55000",
+                    "read-only execution never upgrades a legacy store"
+                );
+                let error = SqlSession::new_shared(&db)
+                    .execute("SELECT k FROM p")
+                    .unwrap_err();
+                assert!(error
+                    .to_string()
+                    .contains("operation requires exclusive database access"));
+                assert_eq!(db.last_commit_seq(), before);
+                assert!(!db.sql_partition_execution_feature_active());
+                let mut sql = SqlSession::new(&mut db);
+                match case.as_str() {
+                    "entry_text" => {
+                        assert_eq!(sql.execute("SELECT k FROM p ORDER BY k")?.rows.len(), 4);
+                    }
+                    "entry_ast" => {
+                        let ast = sqlparser::parser::Parser::parse_sql(
+                            &sqlparser::dialect::PostgreSqlDialect {},
+                            "SELECT k FROM p ORDER BY k",
+                        )?
+                        .remove(0);
+                        assert_eq!(sql.execute_statement_ast(&ast)?.rows.len(), 4);
+                    }
+                    "entry_copy" => {
+                        assert_eq!(
+                            sql.copy_insert_rows(
+                                "p",
+                                &["k".into(), "payload".into()],
+                                vec![vec![Some("3".into()), Some("entry-copy-ack".into())]]
+                            )?,
+                            1
+                        );
+                    }
+                    "entry_procedure" => {
+                        sql.call_procedure("add_partition_ack", &[])?;
+                    }
+                    _ => panic!("unknown entry case"),
+                }
+            }
+            assert!(db.sql_partition_execution_feature_active());
+            assert!(db.scan_collection("p")?.is_empty());
+            let physical = [db.scan_collection("low")?, db.scan_collection("high")?].concat();
+            let hashes = physical
+                .iter()
+                .map(|row| row.content_hash())
+                .collect::<Result<Vec<_>, _>>()?;
+            assert!(
+                original_hashes.iter().all(|hash| hashes.contains(hash)),
+                "every independent old ACK retains its exact full record content"
+            );
+            let extra = matches!(case.as_str(), "entry_copy" | "entry_procedure");
+            assert_eq!(physical.len(), if extra { 5 } else { 4 });
+            let expected = if extra {
+                vec![1, 2, 3, 11, 12]
+            } else {
+                vec![1, 2, 11, 12]
+            };
+            let actual = SqlSession::new(&mut db)
+                .execute("SELECT k FROM p ORDER BY k")?
+                .rows;
+            assert_eq!(
+                actual,
+                expected
+                    .into_iter()
+                    .map(|key| vec![SqlValue::Int(key)])
+                    .collect::<Vec<_>>()
+            );
+            assert!(db
+                .verify_indexes_consistently()?
+                .iter()
+                .all(|report| report.valid));
+            println!(
+                "{}",
+                json!({"case":case,"reopen":reopen,"ack_records_preserved":original_hashes.len(),"rows":physical.len()})
+            );
+            db.close()?;
+        }
+        return Ok(());
+    }
     let mut completed_plan = None;
     for reopen in 0..3 {
         let mut db = BicDb::open_with_config(&path, config.clone())?;

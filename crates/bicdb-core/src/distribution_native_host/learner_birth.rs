@@ -20,6 +20,7 @@ pub(crate) struct NativeLearnerBirthRequest {
     pub requester_metadata_term: u64,
     pub requester_metadata_read_index: u64,
     pub bootstrap_id: Uuid,
+    pub restore_activation: Option<crate::distribution_consensus::MetadataRestoreActivation>,
     pub target: ClusterNodeId,
     pub target_incarnation: u64,
     pub expected_birth: Option<NativeStoreBirthV1>,
@@ -163,6 +164,9 @@ impl NativeLearnerBirthProvider {
         if request.target != self.factory.spec.node_id
             || request.target_incarnation != self.factory.spec.member_incarnation
             || request.bootstrap_id != self.factory.spec.bootstrap_id
+            || request.restore_activation != self.factory.spec.restore_activation
+            || request.restore_activation.as_ref()
+                != source.observed.restore_activation(source.business)?
             || request.expected_schema_sha256 != self.schema_sha256
             || request
                 .expected_birth
@@ -232,6 +236,14 @@ pub(crate) struct NativeUnassignedLearnerHost {
     _service: Arc<Mutex<crate::ClusterDataNodeService>>,
 }
 impl NativeUnassignedLearnerHost {
+    #[cfg(test)]
+    pub(super) fn test_service(&self) -> Arc<Mutex<crate::ClusterDataNodeService>> {
+        Arc::clone(&self._service)
+    }
+    #[cfg(test)]
+    pub(super) fn test_take_listener(&mut self) -> ClusterDataServerHandle {
+        self.listener.take().expect("actual test listener")
+    }
     pub(crate) fn start(
         factory: Arc<NativeUnassignedLearnerFactory>,
         observed: HostMetadataReadObservation,
@@ -386,6 +398,17 @@ impl NativeLearnerBirthObservation {
             || original.requester_metadata_context != requester_metadata.context_id()
             || original.requester_metadata_term != requester_metadata.term()
             || original.requester_metadata_read_index != requester_metadata.read_index()
+            || original.restore_activation.as_ref()
+                != requester_metadata.restore_activation(business)?
+            || topology.range_image_bootstrap_id != Some(original.bootstrap_id)
+            || original.target != destination
+            || original.target_incarnation != target.incarnation
+            || original.expected_birth != target.native_store_birth_v1
+            || topology.ranges.is_empty()
+            || topology.ranges.values().any(|range| {
+                range.required_schema_sha256(&topology.nodes)
+                    != Some(original.expected_schema_sha256.as_str())
+            })
             || topology.cluster_id != cluster
             || response.cluster != cluster
             || response.node != destination

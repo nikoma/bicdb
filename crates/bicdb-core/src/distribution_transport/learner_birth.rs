@@ -142,6 +142,7 @@ impl TcpClusterRelocationTransport {
             bootstrap_id: topology
                 .range_image_bootstrap_id
                 .ok_or_else(|| transport_error("learner birth bootstrap missing"))?,
+            restore_activation: observed.restore_activation(business)?.cloned(),
             target: destination.clone(),
             target_incarnation: target.incarnation,
             expected_birth: target.native_store_birth_v1.clone(),

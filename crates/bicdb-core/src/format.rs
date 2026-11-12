@@ -1371,6 +1371,30 @@ mod semantic_reader_capture_tests {
             db.enable_application_unique_scope().unwrap()
         });
     }
+
+    #[test]
+    fn finance_requirements_survive_native_reader_capture_and_reopens() {
+        for (flag, activate) in [
+            (
+                NATIVE_IMMUTABLE_FACTS_FEATURE_FLAG,
+                enable_native_immutable_facts as fn(&Path) -> Result<()>,
+            ),
+            (
+                NATIVE_FACT_PROJECTION_CONTRACTS_FEATURE_FLAG,
+                enable_native_fact_projection_contracts,
+            ),
+            (
+                EXACT_PROPORTIONAL_INTERVALS_FEATURE_FLAG,
+                enable_exact_proportional_intervals,
+            ),
+            (
+                EXACT_DECIMAL_LIST_SUM_FEATURE_FLAG,
+                enable_exact_decimal_list_sum,
+            ),
+        ] {
+            preserves_semantic_requirement(flag, |db| activate(db.data_path()).unwrap());
+        }
+    }
 }
 
 pub(crate) fn enable_decimal_predicate_comparison_v1(root: &Path) -> Result<()> {

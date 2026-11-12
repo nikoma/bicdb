@@ -57,7 +57,7 @@ impl NativeCompletionReadScope<'_> {
     // This re-reads the full physical contract after our own WAL write. The
     // journal excludes another protected native publication, not hook clearing,
     // cancellation, schema invalidation or health poison: all remain checked.
-    pub(crate) fn require_unchanged_native_point(&self) -> Result<()> {
+    pub(crate) fn require_physical_domain_current(&self) -> Result<()> {
         self.require_identity(self.prepared, self.store, self.fresh)?;
         self.database.validate_source_range_image_lineage(
             &self.lineage,
@@ -67,12 +67,18 @@ impl NativeCompletionReadScope<'_> {
         self.prepared
             .physical_for_completion_scope()
             .require_owned_pin_live(self.database)?;
-        self.prepared.require_produced_completion_boundary(
-            self.database,
-            self.store,
-            self.fresh,
-        )?;
+        // Refresh deliberately precedes the cached binding update. Validate
+        // actual physical/domain/original writer and persisted scope here;
+        // this grants no cached binding or completion response.
+        self.prepared.require_domain_for_completion_scope(self)?;
         self.fresh.require_live_request()
+    }
+    pub(crate) fn require_unchanged_native_point(&self) -> Result<()> {
+        self.require_physical_domain_current()?;
+        // Always required after the fixed callback has installed the ACTUAL
+        // updated binding (and on ordinary native producer readback).
+        self.prepared
+            .require_produced_completion_boundary(self.database, self.store, self.fresh)
     }
     pub(crate) fn observe_serving(
         &self,

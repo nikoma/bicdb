@@ -405,7 +405,7 @@ impl PreparedNativeRecoveryReady {
                 "refresh-exact-native-serving-readback-total",
             );
         let native = completion.observe_serving(&completed.native_serving_sha256)?;
-        completion.require_unchanged_native_point()?;
+        completion.require_physical_domain_current()?;
         #[cfg(test)]
         crate::distribution_range_handoff::NativeJointPhaseTrace::finish_detail(serving_trace);
         #[cfg(test)]

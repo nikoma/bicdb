@@ -4204,19 +4204,35 @@ fn registry_planner_and_pgwire_oids_agree_exhaustively() {
     let mut expected_oids = Vec::new();
     for spec in PG_TYPE_REGISTRY.all().iter().filter(|spec| !spec.pseudo) {
         let scalar_column = format!("scalar_{}", spec.oid);
-        declarations.push(format!(
-            "{scalar_column} {}",
-            registry_declaration_name(spec.name)
-        ));
-        projections.push(scalar_column);
+        if spec.canonical_storage_supported() {
+            declarations.push(format!(
+                "{scalar_column} {}",
+                registry_declaration_name(spec.name)
+            ));
+            projections.push(scalar_column);
+        } else {
+            // A catalog-only type still participates in exhaustive wire OID
+            // inference, without pretending it can be a user storage column.
+            projections.push(format!(
+                "NULL::{} AS {scalar_column}",
+                registry_declaration_name(spec.name)
+            ));
+        }
         expected_oids.push(spec.oid);
         if let Some(array_oid) = spec.array_oid {
             let array_column = format!("array_{array_oid}");
-            declarations.push(format!(
-                "{array_column} {}[]",
-                registry_declaration_name(spec.name)
-            ));
-            projections.push(array_column);
+            if spec.canonical_storage_supported() {
+                declarations.push(format!(
+                    "{array_column} {}[]",
+                    registry_declaration_name(spec.name)
+                ));
+                projections.push(array_column);
+            } else {
+                projections.push(format!(
+                    "NULL::{}[] AS {array_column}",
+                    registry_declaration_name(spec.name)
+                ));
+            }
             expected_oids.push(array_oid);
         }
     }

@@ -158,6 +158,12 @@ fn reject_pseudo(spec: &PgTypeSpec) -> Result<()> {
             spec.name
         )));
     }
+    if !spec.canonical_storage_supported() {
+        return Err(SqlError::Unsupported(format!(
+            "PostgreSQL type {} has no supported canonical storage codec",
+            spec.name
+        )));
+    }
     Ok(())
 }
 
@@ -170,6 +176,11 @@ fn invalid_value(spec: &PgTypeSpec, value: &SqlValue) -> SqlError {
 }
 
 fn canonical_value_for_type(codec_type: CodecType, value: &SqlValue) -> Result<PgCanonicalValue> {
+    // Keep existing pseudo-array handling; this extra gate only prevents a
+    // known catalog-only base type from entering an invented value codec.
+    if !codec_type.spec.pseudo && !codec_type.spec.canonical_storage_supported() {
+        reject_pseudo(codec_type.spec)?;
+    }
     if !codec_type.array {
         return canonical_value(codec_type.spec, value);
     }
@@ -1460,7 +1471,7 @@ mod tests {
     }
 
     #[test]
-    fn every_registered_storable_type_has_deterministic_keys() {
+    fn registered_types_have_deterministic_keys_or_explicitly_refuse_unsupported_storage() {
         let fixtures = [
             ("bool", SqlValue::Bool(true)),
             ("bytea", SqlValue::String("\\x00ff".into())),
@@ -1593,6 +1604,27 @@ mod tests {
                         PgCodecContext::new(spec.oid, -1)
                     )
                     .is_err());
+                continue;
+            }
+            if !spec.canonical_storage_supported() {
+                // Knowing the catalog OID does not invent scalar/array storage.
+                // Check active refusal for every key path rather than adding a
+                // text or null-only fixture that would hide the missing codec.
+                for (oid, value) in
+                    std::iter::once((spec.oid, SqlValue::String("reader=r/bicdb".into()))).chain(
+                        spec.array_oid
+                            .map(|oid| (oid, SqlValue::json(json!(["reader=r/bicdb"])))),
+                    )
+                {
+                    let context = PgCodecContext::new(oid, -1);
+                    for error in [
+                        codec.index_key(&value, context).unwrap_err(),
+                        codec.hash_key(&value, context).unwrap_err(),
+                    ] {
+                        assert_eq!(error.sqlstate(), "0A000");
+                        assert!(error.to_string().contains("canonical storage codec"));
+                    }
+                }
                 continue;
             }
             let (_, value) =

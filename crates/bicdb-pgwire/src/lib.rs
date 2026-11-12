@@ -2850,23 +2850,27 @@ fn handle_frontend_message(
                 if let Some(seq) = bicdb_core::take_thread_commit_seq() {
                     server.sync_quorum.wait_for(seq)?;
                 }
-                Ok(executed)
+                write_session_parameter_status(stream, state)?;
+                // Encoding can raise a SQL error (for example a type with no
+                // binary output function). Keep it inside Execute's ordinary
+                // error path so the client receives ErrorResponse and can
+                // recover at Sync rather than losing the connection.
+                let stats = write_query_result(
+                    stream,
+                    server,
+                    &executed.result,
+                    &executed.result_formats,
+                    Some(&executed.source_sql),
+                    false,
+                    !executed.suspended,
+                    Some(&mut state.catalog_cache),
+                )?;
+                Ok((executed.suspended, stats))
             });
             match executed {
-                Ok(executed) => {
-                    write_session_parameter_status(stream, state)?;
-                    let stats = write_query_result(
-                        stream,
-                        server,
-                        &executed.result,
-                        &executed.result_formats,
-                        Some(&executed.source_sql),
-                        false,
-                        !executed.suspended,
-                        Some(&mut state.catalog_cache),
-                    )?;
+                Ok((suspended, stats)) => {
                     server.record_streamed_rows(stats.rows, stats.bytes);
-                    if executed.suspended {
+                    if suspended {
                         portal_suspended(stream)?;
                     }
                 }

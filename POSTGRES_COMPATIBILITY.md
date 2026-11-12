@@ -75,6 +75,10 @@ GUI clients remain explicitly outside the passing automated matrix.
 
 ## Compatibility Boundaries
 
+- ACL catalog inspection recognizes `aclitem`/`aclitem[]` identity and text output. ACL user-value
+  columns and canonical storage/key codecs remain unsupported and fail with SQLSTATE `0A000`;
+  registering catalog descriptors does not extend the exercised storage guarantee to ACL values.
+  Binary ACL input/output is unavailable (`42883`), and column-level `GRANT` remains unsupported.
 - Type parity does not imply PostgreSQL optimizer, replication, high availability, extension, or
   exhaustive SQL-language parity.
 - Binary COPY, client-certificate authentication, SCRAM channel binding, and isolation stronger than

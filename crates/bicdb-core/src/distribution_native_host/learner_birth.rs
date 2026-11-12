@@ -368,6 +368,7 @@ impl NativeUnassignedLearnerHost {
 /// constructor. It is not a metadata ACK, enrollment, promotion or data grant.
 pub(crate) struct NativeLearnerBirthObservation {
     response: NativeLearnerBirthResponse,
+    peer: MetadataReadParticipant,
     requester_metadata: HostMetadataReadObservation,
     business: Uuid,
     deadline: Instant,
@@ -449,6 +450,7 @@ impl NativeLearnerBirthObservation {
         cancellation.check()?;
         let result = Self {
             response,
+            peer,
             requester_metadata,
             business,
             deadline,
@@ -477,5 +479,17 @@ impl NativeLearnerBirthObservation {
     pub(crate) fn node(&self) -> Result<&ClusterNodeId> {
         self.require_live()?;
         Ok(&self.response.node)
+    }
+    /// Retain the actual presented peer for a later controller's INDEPENDENT
+    /// current pin/incarnation checks. This is never a generic role grant.
+    pub(crate) fn actual_peer(&self) -> Result<&MetadataReadParticipant> {
+        self.require_live()?;
+        Ok(&self.peer)
+    }
+    pub(crate) fn restore_activation(
+        &self,
+    ) -> Result<Option<&crate::distribution_consensus::MetadataRestoreActivation>> {
+        self.require_live()?;
+        Ok(self.response.request.restore_activation.as_ref())
     }
 }

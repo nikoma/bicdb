@@ -143,3 +143,26 @@ prove completion in a four-/five-second authority window or for an 8 GiB data
 range. This audit makes no measured-performance or physical qualification
 claim. If one mandatory validation cannot fit, the solution needs a sound
 bounded checkpoint/fresh-purpose continuation, not renewal of expired proof.
+
+## First execution: destination-binding prerequisite failed
+
+Source `286ca38a86cdd175b1430b9d9570456eb94b916c`, run `43276644122`,
+Core job `131386760357`: **0 passed, 1 failed, 931 filtered**, 2.88 seconds.
+All-target and isolated-consumer checks passed. The artifact retains the
+actual first n0 APP ACK, its value, the public RPC journal and the actual
+first held-MQ error: `metadata RPC destination differs from actual native
+birth/incarnation`. It does NOT establish healthy MQ while held or discovery
+unavailability: public refresh and the second APP/Strong lane were not reached.
+The failed fixture used the original provisional transport's pre-enrollment
+plan. Its destination binding correctly disagreed with the now-enrolled store.
+
+The test-only successor constructs its real HostMQ transport using the already
+authenticated committed bootstrap snapshot and the same actual n0 TLS identity.
+Snapshot data supplies routing/destination intent only; the real metadata
+receiver must still produce fresh opaque quorum authority. No metadata or
+listener guard is changed. Original source/result remain separate.
+Raw log SHA-256: `232fc5cdc1273c129d9e9c9082f41bad6212dc4302be7b0ab3c213e758ca461d`.
+Artifact `13972080317` SHA-256:
+`bcad7bd7bf749e4d4a65d5c95dcbaf8650a32b4f40e475135cbfe6743f14a338`.
+Its six files are logs/toolchain/source plus exact audit/RPC journals. No DB
+or private TLS roots were archived; a client error is not ACK reconciliation.

@@ -139,6 +139,16 @@ fn native_initial_data_healthy_metadata_discovery_while_all_data_services_held()
         .fetch_snapshot(&node(0), &configs[0].node_address)
         .unwrap()
         .topology;
+    // The provisional host transport still has the BEFORE-enrollment plan.
+    // Use actual authenticated committed snapshot DATA for destination binding,
+    // exactly as the public gateway does; only the real server can mint HostMQ.
+    let metadata_transport = TcpClusterRelocationTransport::new(
+        configs[0].cluster_id.clone(),
+        node(0),
+        Arc::new(RwLock::new(topology.clone())),
+        f.networks[0].clone(),
+    )
+    .unwrap();
     let gateway = crate::ClusterEventClient::new(&configs[0], topology.clone())
         .unwrap()
         .with_request_timeout(Duration::from_secs(2))
@@ -191,7 +201,7 @@ fn native_initial_data_healthy_metadata_discovery_while_all_data_services_held()
         // Healthy metadata is a genuine new QQ while ALL actual DATA mutexes
         // remain held. No test-created topology/term is a substitute for this.
         let business = Uuid::now_v7();
-        let mq = f.hosts[0].transport.acquire_host_metadata_observation(
+        let mq = metadata_transport.acquire_host_metadata_observation(
             &node(0),
             business,
             Duration::from_secs(5),
@@ -224,7 +234,7 @@ fn native_initial_data_healthy_metadata_discovery_while_all_data_services_held()
         "rpc_record_start":record_start, "rpc_record_end":captured.len()}))
             .unwrap();
         let post_business = Uuid::now_v7();
-        let post_mq = f.hosts[0].transport.acquire_host_metadata_observation(
+        let post_mq = metadata_transport.acquire_host_metadata_observation(
             &node(0),
             post_business,
             Duration::from_secs(5),

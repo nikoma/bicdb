@@ -172,6 +172,7 @@ impl RangeWriteStore {
     }
 
     pub(crate) fn require_no_image_install(&self, range_id: RangeId) -> Result<()> {
+        self.require_native_writer_host_range_id(range_id)?;
         if self.catalog.image_install_intents.contains_key(&range_id) {
             return Err(range_write_error(format!(
                 "range {range_id} is unavailable while durable native image installation is incomplete"

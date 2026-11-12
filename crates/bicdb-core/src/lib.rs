@@ -28,6 +28,7 @@ mod distribution_gateway;
 mod distribution_io;
 mod distribution_metadata_read_provider;
 mod distribution_native_admission;
+mod distribution_native_writer;
 mod distribution_native_apply;
 mod distribution_native_read;
 mod distribution_query;

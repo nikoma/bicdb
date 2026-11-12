@@ -97,6 +97,7 @@ pub(crate) use native_limits::{
 mod native_durability;
 mod native_normal;
 mod native_prefix;
+mod native_writer;
 #[cfg(test)]
 pub(crate) use native_prefix::tests::{
     fixture as native_origin_fixture, seed_actual_origin, test_catalog_command,
@@ -715,6 +716,7 @@ pub struct RangeWriteStore {
     open_id: Uuid,
     recovery_persistence_uncertain: bool,
     native_activated_opens: BTreeMap<RangeId, crate::db::NativeActivatedOpenGuard>,
+    native_writer_host: Option<std::sync::Weak<crate::db::NativeWriterHostState>>,
 }
 
 impl RangeWriteStore {
@@ -815,6 +817,13 @@ impl RangeWriteStore {
                 "handoff range catalog requires its durable image reader fence and fsync",
             ));
         }
+        if crate::format::native_writer_enrollment_active(&root)?
+            && catalog.format_version < RANGE_WRITE_LOG_FORMAT_VERSION
+        {
+            return Err(range_write_error(
+                "enforced native store cannot adopt a legacy decision catalog",
+            ));
+        }
         let migrated_v1_decisions = catalog.format_version == 1;
         let migrated = catalog.format_version < RANGE_WRITE_LOG_FORMAT_VERSION;
         if migrated_v1_decisions {
@@ -836,6 +845,7 @@ impl RangeWriteStore {
             catalog,
             open_id: Uuid::now_v7(),
             native_activated_opens: BTreeMap::new(),
+            native_writer_host: None,
             recovery_persistence_uncertain: false,
         };
         // A previous service instance may have observed rename success but
@@ -846,7 +856,7 @@ impl RangeWriteStore {
             || !store.catalog.recovery_fences.is_empty()
             || !store.catalog.native_image_bases.is_empty()
         {
-            store.persist()?;
+            store.persist_verified_open_catalog()?;
         }
         Ok(store)
     }
@@ -1222,6 +1232,7 @@ impl RangeWriteStore {
     }
 
     pub fn prepare(&mut self, command: RangeWriteCommand) -> Result<RangeWriteState> {
+        self.require_native_writer_command(&command)?;
         command.validate()?;
         self.require_no_image_install(command.range_id)?;
         self.require_no_active_recovery(command.range_id)?;
@@ -1439,6 +1450,7 @@ impl RangeWriteStore {
     }
 
     fn match_entry_mut(&mut self, command: &RangeWriteCommand) -> Result<&mut RangeWriteLogEntry> {
+        self.require_native_writer_command(command)?;
         command.validate()?;
         self.require_no_image_install(command.range_id)?;
         self.require_no_active_recovery(command.range_id)?;
@@ -1466,13 +1478,15 @@ impl RangeWriteStore {
     }
 
     fn persist_with(&self, write: impl FnOnce(&Path, &[u8], bool) -> Result<()>) -> Result<()> {
+        self.require_native_writer_host_base()?;
         fs::create_dir_all(&self.root)?;
         let envelope = RangeWriteEnvelope::new(self.catalog.clone())?;
         write(
             &self.root.join(DEFAULT_RANGE_WRITE_LOG),
             &serde_json::to_vec_pretty(&envelope)?,
             self.fsync,
-        )
+        )?;
+        self.require_native_writer_host_base()
     }
 
     fn persist_or_restore<T>(&mut self, previous: RangeWriteCatalog, value: T) -> Result<T> {
@@ -1809,6 +1823,8 @@ pub struct RangeWriteCoordinator<Transport: RangeWriteTransport> {
     require_schema_compatibility: bool,
     local_incarnation: String,
     native_image_mode: bool,
+    native_coordinator_id: Uuid,
+    native_writer_host: Mutex<Option<std::sync::Weak<crate::db::NativeWriterHostState>>>,
     pending_acknowledgements: Mutex<BTreeMap<String, RangeAcknowledgementEvidence>>,
 }
 
@@ -1992,6 +2008,8 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
             require_schema_compatibility: false,
             local_incarnation,
             native_image_mode,
+            native_coordinator_id: Uuid::now_v7(),
+            native_writer_host: Mutex::new(None),
             pending_acknowledgements: Mutex::new(BTreeMap::new()),
         })
     }
@@ -3045,6 +3063,9 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
                 .require_native_catalog_database(database)?;
         }
         let range = self.resolve_range(intent)?;
+        if let Some(database) = native_database {
+            self.require_native_writer_host_context(database, &range)?;
+        }
         self.require_recovered_epoch(&range)?;
         let mutation = self.range_mutations.try_enter(range.id)?;
         let authority = &RangeMutationAuthority::Mutation(&mutation);
@@ -3338,7 +3359,12 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
         let mut actual_native_apply_verified = !self.native_image_mode;
         if let Some(native) = &evidence.native {
             if let Some((receipt, database)) = native_context {
-                let validation = database.validate_native_wal_apply_receipt(receipt).and_then(|()| {
+                let current_range =
+                    { self.topology.read().range_by_id(evidence.range_id).cloned() };
+                let validation = current_range
+                    .ok_or_else(|| range_write_error("native callback range disappeared"))
+                    .and_then(|range| self.require_native_writer_host_context(database,&range))
+                    .and_then(|()| database.validate_native_wal_apply_receipt(receipt)).and_then(|()| {
                     if database.incarnation_id() != self.local_incarnation
                         || receipt.transaction_id() != evidence.transaction_id
                         || receipt.mutations_sha256() != native.mutations_sha256
@@ -3383,6 +3409,15 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
                 "durable range certificate acknowledgments reached only {}/{} voters",
                 evidence.certified, evidence.required_quorum
             ));
+        }
+        if let Some((_, database)) = native_context {
+            let current_range = { self.topology.read().range_by_id(evidence.range_id).cloned() };
+            let validation = current_range
+                .ok_or_else(|| range_write_error("native callback range disappeared"))
+                .and_then(|range| self.require_native_writer_host_context(database, &range));
+            if let Err(error) = validation {
+                problems.push(format!("native host policy changed before ACK: {error}"));
+            }
         }
         let uncertainty = (!problems.is_empty()).then(|| problems.join("; "));
         if uncertainty.is_some() {

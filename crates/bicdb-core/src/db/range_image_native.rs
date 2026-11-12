@@ -14,6 +14,8 @@ mod history;
 mod history_stage;
 mod installed_anchor;
 mod native_read;
+mod writer_enrollment;
+pub(crate) use writer_enrollment::{InstalledNativeWriterHostGuard, NativeWriterHostState};
 mod serving_configuration;
 pub(crate) use native_read::{NativeRangeReadPhysical, NativeReadLocalDbSequence};
 use serving_configuration::NativeRecoveredServingConfiguration;

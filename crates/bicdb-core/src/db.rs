@@ -76,13 +76,13 @@ pub(crate) use range_image_native::rf3_fixture::{
 pub(crate) use range_image_native::NativeActivationDecisionReceipt;
 pub(crate) use range_image_native::NativeReplicaMaterialization;
 pub(crate) use range_image_native::{
-    FreshRangeGenesisAuthority, KnownNativeRecoveryPrefix, NativeHistoryPublicationBinding,
-    NativeHistoryStage, NativeHistoryStageProgress, NativeHistoryTargetContext,
-    NativeLogicalHistoryEntryV1, NativeLogicalHistoryOutcomeV1, NativeLogicalHistoryPoint,
-    NativeLogicalHistoryStepV1, NativeRangeInstallSafety, NativeRangePendingApply,
-    NativeRangePrefixObservation, NativeRecoveredServingReceipt, NativeRecoveryAdmission,
-    NativeRecoveryAppliedReceipt, RangeImageBirthMember, RangeImageBirthSpec,
-    SourceRangeImageLineage, StagedNativeHistoryProof,
+    FreshRangeGenesisAuthority, InstalledNativeWriterHostGuard, KnownNativeRecoveryPrefix,
+    NativeHistoryPublicationBinding, NativeHistoryStage, NativeHistoryStageProgress,
+    NativeHistoryTargetContext, NativeLogicalHistoryEntryV1, NativeLogicalHistoryOutcomeV1,
+    NativeLogicalHistoryPoint, NativeLogicalHistoryStepV1, NativeRangeInstallSafety,
+    NativeRangePendingApply, NativeRangePrefixObservation, NativeRecoveredServingReceipt,
+    NativeRecoveryAdmission, NativeRecoveryAppliedReceipt, NativeWriterHostState,
+    RangeImageBirthMember, RangeImageBirthSpec, SourceRangeImageLineage, StagedNativeHistoryProof,
 };
 pub(crate) use range_image_native::{NativeRangeReadPhysical, NativeReadLocalDbSequence};
 mod range_image_bindings;

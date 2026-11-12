@@ -118,3 +118,21 @@ recovery, cold all-owner host startup, joint-data serving/handoff/cleanup and
 physical four-to-five operation. Generic pgwire/CLI paths are not used as
 substitutes. No application ACK, data4-to5, independent-VM availability, SQL
 compatibility, throughput, Azure causality or full Milestone1 claim follows.
+
+## Manual remote CLI selection
+
+The tests workflow accepts optional `cli_target=native_metadata_operator_cli`
+with an empty `core_filter`. That explicit manual selection runs the serial
+90-minute focused CLI job and skips the broad matrix only for that dispatch.
+Ordinary PR/push and empty-selector dispatch retain the full matrix; workspace
+all-target compilation and the isolated workflow-consumer check stay independent.
+Target names pass a bounded alphanumeric/underscore/hyphen check and enter the
+shell through a quoted environment variable, never expression interpolation.
+The job lists actual tests and refuses zero selection, preserves Cargo pipeline
+failure, and refuses a zero-executed/all-ignored success.
+
+Its artifact includes the exact tracked-source archive/revision, Rust toolchain,
+full list/build/test output and target name, always uploaded on success/failure.
+Only the dedicated evidence subtree is uploaded. It never opts generated
+private TLS/database fixture roots into that subtree. Adding this workflow is
+not evidence of a CLI execution; a dispatched run must supply the actual result.

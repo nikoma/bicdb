@@ -65,6 +65,10 @@ jobs:
       # bicdb-sql's unit tests failing to compile against a changed signature.
       - name: cargo check --workspace --all-targets
         run: cargo check --workspace --all-targets --locked
+      # Workspace feature unification enables TLS in Core. Check this actual
+      # consumer separately so TLS-only APIs cannot leak into its Core build.
+      - name: Workflow consumer compiles without Core defaults
+        run: cargo check -p bicdb-workflow --all-targets --locked
 
   fmt:
     name: Formatting

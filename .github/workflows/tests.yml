@@ -224,6 +224,7 @@ jobs:
         with:
           name: focused-core-${{ github.sha }}-${{ github.run_attempt }}
           retention-days: 3
+          include-hidden-files: true
           if-no-files-found: warn
           path: ${{ runner.temp }}/native-core-evidence/
 

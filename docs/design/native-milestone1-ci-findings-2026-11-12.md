@@ -170,3 +170,30 @@ the larger native engine batch. The native ACK digest must be produced from the
 correct matched frontier; a valid physical birth alone cannot make a divergent
 suffix replication evidence. No run above qualifies operator join, remote joint
 data handoff, complete relocation, current physical RPO/RTO or capacity gain.
+
+
+## Subsequent executed failures and separate safety delivery
+
+| Exact source and executed check | Classification | Result and next smallest check |
+| --- | --- | --- |
+| `e3bb1204a0c0d35e091675d631b05881bdac4feb`, [43173550574](https://github.com/nikoma/bicdb/actions/runs/43173550574) | Failed | 232 passed, two failed, two ignored, 620 filtered out, 297.11 s. Compilation and isolated consumer checks passed. The newly added cancellation/expiry and persisted exact-entry retry controls passed. A positive enrollment fixture's old fact expired before its intended identity assertion; the separate orphan-replacement control reached a catalog format validation failure. |
+| Same source, ordinary source certification | Failed | `sparse decision field lacks its required reader fence`: the candidate inserted sparse history before advancing its catalog format gate. `e5c4a92b1` moves candidate validation after the existing format upgrade and mandatory-field preparation, preserving validation before mutation/publication. This concerns persistent-format reader compatibility, not a missing strong-read barrier. |
+| `71737b29cb8c126cecb73d9966f166ec7145f512`, [43175510487](https://github.com/nikoma/bicdb/actions/runs/43175510487) | Failed | Two replacement controls executed: zero passed, two failed, 856 filtered out, 1.70 s. Both pass the former sparse-format failure and later stop on an assertion expecting the word `duplicate` from a generic current-domain refusal. `965714909` diagnoses genuine duplicate receivers separately after all authenticated-domain checks; the original distinct-vote/duplicate refusal assertions remain. This correction is not covered by the run. |
+| `d9fdffd32741df4a216532c4a5d94ce22bb56e1e`, [43174437808](https://github.com/nikoma/bicdb/actions/runs/43174437808) | Failed | Zero passed, one failed, 857 filtered out, 6.17 s. Actual TLS votes generate 17 uncommitted leadership barriers. Two real heartbeat calls leave healthy followers at 16, leader commit at zero; a genuine subsequent election still lacks durable quorum. The current-term Host MQ correctly refuses. This is a native-prototype recovery stall, not evidence about public-main operator behavior or the original Azure cause. |
+| Progress fix `232258bd1` and 65-barrier control `2c73af35401a3894e18b69fe5cdaaa746f51baf8` | Not tested at this checkpoint | Resume from accepted per-peer metadata progress across calls, retaining three rounds and 16-entry batches, term/configuration resets and current-term read fencing. The new genuine TLS control checks multi-call progress and conservative reply/NACK/reset handling. [43176666917](https://github.com/nikoma/bicdb/actions/runs/43176666917) was executing; inspect its terminal result before claiming a pass. |
+| Retained learner transition `45951aabf`, included in the same `2c73af354` run | Not tested at this checkpoint | Same-service/store drain, actual protected StoreUUID, immutable replacement metadata-only listener and three transition controls are source additions. Prepared cuts quarantine; complete cold host recovery remains open. Compilation alone does not establish catch-up, promotion or data serving. |
+
+Enrollment fixture correction `71737b29c` completes both actual physical factories
+before holding an old fact and obtains each NEW source observation before its
+identity change. It retains original five-second scope checks; it never refreshes
+an old fact after the change or accepts expiry as the intended identity rejection.
+The original expiry failure remains recorded above.
+
+The independent public-main metadata frontier repair has its own exact
+failing/fixed artifact pair and two passing direct-FSM controls. It is proposed
+as **1.0.484-beta**, PR [160](https://github.com/nikoma/bicdb/pull/160), source
+`4de8399579d2607aa05a7950d33c09e5b4710bc8`, incorporating the queued
+1.0.483 source. Its complete final-version matrix is separate from these focused
+native results. None of the larger native feature batch enters that safety PR.
+Main merge, binary publication, verified deployment and physical qualification
+remain separate states.

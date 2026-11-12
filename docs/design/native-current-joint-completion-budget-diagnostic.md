@@ -396,3 +396,32 @@ extension is added by the instrumentation. Trace formatting itself has test
 cost; the profile is not a capacity benchmark. No before/after physical check
 is removed, and no private checked-admission composite is implemented or claimed
 safe until the actual detailed profile identifies its binding requirements.
+
+
+## Executed fd85 detailed refresh profile
+
+Exact fd85a24392abf8a273479f8637e040523c053109, run 43278537440 / Core
+131393411593, built all targets and the isolated consumer successfully, then
+FAILED the full positive: 0 passed, 1 failed, 932 filtered, 83.78s. All three
+Prepare replies returned. N1 Complete actually returned in 3772.539ms with
+226ms of its original role deadline remaining. N2 native WAL and catalogue
+fsync returned before its original deadline (39ms after catalogue), then full
+refresh expired in its first CurrentJoint fact validation. Its response is
+uncertain; N3 Complete, recovery activation, ACK4 and Strong R4 were not reached.
+
+The measured table, nested-cost caveats and source mutation/invalidation audit
+are in [the proposed borrowed-scope contract](native-current-joint-refresh-borrow-scope-contract.md).
+The [portable exact-source evidence](../evidence/native-current-joint-refresh-fd85-2026-11-12/README.md)
+retains full raw job output, artifact logs, counts and a reconstruction patch
+from public main488. Raw SHA-256 is
+`b3e5b12d1934d7e032987a8d1822da0a9b1a5938ec4aab96337aad517fd7a265`;
+artifact ZIP SHA-256 is
+`c33eaee85c576a437d6e52dd54c052f56752d3b9b16e9139e646ce95bece2b74`.
+All 82 private manifest files / 6,100,203 bytes matched without engine open.
+
+Earlier d633/99 remain failed cohorts. Their post-failure custody snapshots
+prove NativeCompleted only BY capture time; workers can continue while client
+timeout handling and custody wait on locks. They do not independently prove
+fsync preceded the client timeout. The later direct fd85 trace supports that
+ordering for its own source and nodes only. No new runtime optimization or
+passing full recovery is claimed by this docs/evidence checkpoint.

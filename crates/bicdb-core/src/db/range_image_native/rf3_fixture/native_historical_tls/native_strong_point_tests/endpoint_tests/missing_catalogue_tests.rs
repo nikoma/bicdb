@@ -182,7 +182,7 @@ fn reopen_stopped(
     let mut databases = BTreeMap::new();
     for (id, member) in &saved.nodes {
         let (db, _) = BicDb::open_range_image_database(
-            root.path().join(id.as_str()),
+            &root.path().join(id.as_str()),
             native_config(),
             &specs[id],
         )

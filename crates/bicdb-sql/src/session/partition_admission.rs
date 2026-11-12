@@ -941,6 +941,183 @@ mod tests {
         }
     }
 
+    fn store_legacy_schema(db: &mut BicDb, schema: TableSchema) {
+        db.insert(
+            SCHEMA_COLLECTION,
+            Record::new(schema.name.clone()).with_metadata(serde_json::to_value(&schema).unwrap()),
+        )
+        .unwrap();
+        cache_saved_schema(db, &schema);
+    }
+
+    fn physical_snapshot(db: &BicDb) -> JsonValue {
+        let mut rows = BTreeMap::new();
+        for name in [SCHEMA_COLLECTION, "p", "low", "high"] {
+            let mut records = db.scan_collection(name).unwrap();
+            records.sort_by(|a, b| a.id.cmp(&b.id));
+            rows.insert(name, records);
+        }
+        serde_json::to_value(rows).unwrap()
+    }
+
+    fn assert_upgrade_refuses_without_publication(db: &mut BicDb) {
+        let before = physical_snapshot(db);
+        let sequence = db.last_commit_seq();
+        let error = apply_partition_upgrade(db, None).unwrap_err();
+        assert_eq!(error.sqlstate(), "55000", "{error}");
+        assert!(!db.sql_partition_execution_feature_active());
+        assert_eq!(db.last_commit_seq(), sequence);
+        assert_eq!(physical_snapshot(db), before);
+        assert!(!db.has_collection(CERTIFICATE_COLLECTION));
+    }
+
+    #[test]
+    fn stationary_leaf_check_is_validated_before_any_upgrade_publication() {
+        for mode in [
+            bicdb_core::StorageMode::EmbeddedMemory,
+            bicdb_core::StorageMode::ServerPaged,
+        ] {
+            let root = tempfile::tempdir().unwrap();
+            let mut db = legacy_fixture(root.path(), mode.clone());
+            let mut schema: TableSchema = serde_json::from_value(
+                db.get(SCHEMA_COLLECTION, "low")
+                    .unwrap()
+                    .unwrap()
+                    .metadata
+                    .clone(),
+            )
+            .unwrap();
+            schema.constraints.push(ConstraintSchema::Check {
+                name: "low_payload_check".into(),
+                expression: "payload <> 'low-ack'".into(),
+                validated: true,
+            });
+            store_legacy_schema(&mut db, schema);
+            assert_upgrade_refuses_without_publication(&mut db);
+            db.close().unwrap();
+            for _ in 0..2 {
+                let mut db = BicDb::open_with_config(root.path(), config(mode.clone())).unwrap();
+                assert_upgrade_refuses_without_publication(&mut db);
+                db.close().unwrap();
+            }
+        }
+    }
+
+    #[test]
+    fn stationary_leaf_not_null_is_validated_before_any_upgrade_publication() {
+        for mode in [
+            bicdb_core::StorageMode::EmbeddedMemory,
+            bicdb_core::StorageMode::ServerPaged,
+        ] {
+            let root = tempfile::tempdir().unwrap();
+            let mut db = legacy_fixture(root.path(), mode.clone());
+            let mut schema: TableSchema = serde_json::from_value(
+                db.get(SCHEMA_COLLECTION, "low")
+                    .unwrap()
+                    .unwrap()
+                    .metadata
+                    .clone(),
+            )
+            .unwrap();
+            schema
+                .columns
+                .iter_mut()
+                .find(|column| column.name == "payload")
+                .unwrap()
+                .nullable = false;
+            store_legacy_schema(&mut db, schema);
+            let mut row = db.scan_collection("low").unwrap().remove(0);
+            row.metadata["payload"] = JsonValue::Null;
+            db.insert("low", row).unwrap();
+            assert_upgrade_refuses_without_publication(&mut db);
+            db.close().unwrap();
+        }
+    }
+
+    #[test]
+    fn stationary_leaf_unique_is_validated_before_any_upgrade_publication() {
+        for mode in [
+            bicdb_core::StorageMode::EmbeddedMemory,
+            bicdb_core::StorageMode::ServerPaged,
+        ] {
+            let root = tempfile::tempdir().unwrap();
+            let mut db = legacy_fixture(root.path(), mode.clone());
+            let mut schema: TableSchema = serde_json::from_value(
+                db.get(SCHEMA_COLLECTION, "low")
+                    .unwrap()
+                    .unwrap()
+                    .metadata
+                    .clone(),
+            )
+            .unwrap();
+            schema.constraints.push(ConstraintSchema::Unique {
+                name: "low_payload_key".into(),
+                columns: vec!["payload".into()],
+                validated: true,
+            });
+            store_legacy_schema(&mut db, schema);
+            db.insert(
+                "low",
+                Record::new("3").with_metadata(serde_json::json!({"k":3,"payload":"low-ack"})),
+            )
+            .unwrap();
+            assert_upgrade_refuses_without_publication(&mut db);
+            db.close().unwrap();
+        }
+    }
+
+    #[test]
+    fn stationary_leaf_foreign_key_is_validated_before_any_upgrade_publication() {
+        for mode in [
+            bicdb_core::StorageMode::EmbeddedMemory,
+            bicdb_core::StorageMode::ServerPaged,
+        ] {
+            let root = tempfile::tempdir().unwrap();
+            let mut db = legacy_fixture(root.path(), mode.clone());
+            let mut schema: TableSchema = serde_json::from_value(
+                db.get(SCHEMA_COLLECTION, "low")
+                    .unwrap()
+                    .unwrap()
+                    .metadata
+                    .clone(),
+            )
+            .unwrap();
+            schema.constraints.push(ConstraintSchema::ForeignKey {
+                name: "low_k_fkey".into(),
+                constraint_id: "legacy-low-fk".into(),
+                columns: vec!["k".into()],
+                foreign_table: "high".into(),
+                referred_columns: vec!["k".into()],
+                on_delete: ForeignKeyAction::NoAction,
+                on_update: ForeignKeyAction::NoAction,
+                validated: true,
+                deferrable: true,
+                initially_deferred: true,
+            });
+            store_legacy_schema(&mut db, schema);
+            assert_upgrade_refuses_without_publication(&mut db);
+            db.close().unwrap();
+        }
+    }
+
+    #[test]
+    fn stationary_leaf_native_identity_must_match_its_declared_primary_key() {
+        for mode in [
+            bicdb_core::StorageMode::EmbeddedMemory,
+            bicdb_core::StorageMode::ServerPaged,
+        ] {
+            let root = tempfile::tempdir().unwrap();
+            let mut db = legacy_fixture(root.path(), mode.clone());
+            let mut row = db.scan_collection("low").unwrap().remove(0);
+            db.delete("low", &row.id).unwrap();
+            row.id = "shadow-native-key".into();
+            row.metadata["k"] = serde_json::json!(2);
+            db.insert("low", row).unwrap();
+            assert_upgrade_refuses_without_publication(&mut db);
+            db.close().unwrap();
+        }
+    }
+
     #[test]
     fn interrupted_activation_and_completed_retry_preserve_acks_and_markers() {
         for mode in [

@@ -881,29 +881,27 @@ impl<'db> SqlSession<'db> {
                 )?,
             }
         };
-        // BEFORE INSERT row triggers run before conflict arbitration and
-        // constraint validation, on the exact rows about to be written.
-        let triggered;
-        (records, triggered) = if schema
-            .as_deref()
-            .is_some_and(|schema| schema.partitioning.is_some())
-            && insert.on.is_some()
-        {
-            // An upsert runs BEFORE INSERT immediately before arbitration
-            // for each row, interleaved with that row's BEFORE UPDATE.
-            (records, false)
-        } else if let Some(parent) = schema
+        if let Some(parent) = schema
             .as_deref()
             .filter(|schema| schema.partitioning.is_some())
         {
-            self.before_partition_insert_triggers(parent, records)?
-        } else {
-            self.apply_before_insert_row_triggers_reporting(&table, schema.as_deref(), records)?
-        };
-        if let Some(schema) = schema
-            .as_deref()
-            .filter(|schema| schema.partitioning.is_none())
-        {
+            if let Some(on_insert) = &insert.on {
+                return self.execute_insert_on_conflict(
+                    &table,
+                    Some(parent),
+                    records,
+                    on_insert,
+                    insert.returning.as_deref(),
+                );
+            }
+            return self.execute_partition_insert(parent, records, insert);
+        }
+        // BEFORE INSERT row triggers run before conflict arbitration and
+        // constraint validation, on the exact rows about to be written.
+        let triggered;
+        (records, triggered) =
+            self.apply_before_insert_row_triggers_reporting(&table, schema.as_deref(), records)?;
+        if let Some(schema) = schema.as_deref() {
             self.materialize_generated_columns(&table, schema, &mut records)?;
         }
         if triggered {
@@ -969,21 +967,8 @@ impl<'db> SqlSession<'db> {
         if let Some((_, error)) = rls_violation {
             return Err(error);
         }
-        if let Some(parent) = schema
-            .as_deref()
-            .filter(|schema| schema.partitioning.is_some())
-        {
-            self.insert_partition_records(parent, &records)?;
-            self.publish_extension_database_events(
-                &table,
-                DatabaseOperation::Insert,
-                records.iter().map(|record| (None, Some(record))),
-            )?;
-            self.after_partition_insert_triggers(parent, &records)?;
-        } else {
-            self.insert_session_new_records(&table, schema.as_deref(), records.clone())?;
-            self.fire_after_insert_triggers(&table, schema.as_deref(), &records)?;
-        }
+        self.insert_session_new_records(&table, schema.as_deref(), records.clone())?;
+        self.fire_after_insert_triggers(&table, schema.as_deref(), &records)?;
         self.insert_result(
             &table,
             schema.as_deref(),

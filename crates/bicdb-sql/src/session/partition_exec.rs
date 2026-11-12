@@ -1,6 +1,63 @@
 use crate::*;
 
+pub(super) type PartitionRowEvent = (TableSchema, Option<Record>, Option<Record>);
+
+pub(super) enum PartitionUpdateResult {
+    Skipped,
+    Deleted,
+    Updated(Record),
+}
+
 impl SqlSession<'_> {
+    pub(crate) fn execute_partition_insert(
+        &mut self,
+        parent: &TableSchema,
+        records: Vec<Record>,
+        insert: &Insert,
+    ) -> Result<SqlResult> {
+        let mut inserted = Vec::with_capacity(records.len());
+        for record in records {
+            self.cancellation.check()?;
+            let (rows, _) = self.before_partition_insert_triggers(parent, vec![record])?;
+            for record in rows {
+                self.enforce_rls_write_checks(
+                    &parent.name,
+                    Some(parent),
+                    PolicyAction::Insert,
+                    super::functions_insert::insert_reads_target(insert),
+                    std::slice::from_ref(&record),
+                )?;
+                validate_records_for_write(
+                    self.db_ref(),
+                    self.read_tx(),
+                    &parent.name,
+                    parent,
+                    std::slice::from_ref(&record),
+                    false,
+                    Some(&self.sql_engine()),
+                )?;
+                // Each next BEFORE trigger sees the writes of earlier input
+                // rows. The outer statement transaction still makes the
+                // whole statement atomic if any later row fails.
+                self.insert_partition_records(parent, std::slice::from_ref(&record))?;
+                inserted.push(record);
+            }
+        }
+        self.publish_extension_database_events(
+            &parent.name,
+            DatabaseOperation::Insert,
+            inserted.iter().map(|record| (None, Some(record))),
+        )?;
+        self.after_partition_insert_triggers(parent, &inserted)?;
+        self.insert_result(
+            &parent.name,
+            Some(parent),
+            insert.returning.as_deref(),
+            &inserted,
+            inserted.len(),
+        )
+    }
+
     /// Routing precedes BEFORE INSERT. A leaf trigger may modify the row but
     /// cannot redirect it into another leaf; PostgreSQL reports 23514 there.
     /// Trigger effects remain in the outer statement transaction.
@@ -52,75 +109,148 @@ impl SqlSession<'_> {
         Ok(())
     }
 
-    pub(crate) fn before_partition_move_triggers(
+    pub(super) fn stage_partition_update_record(
         &mut self,
         parent: &TableSchema,
         source: &str,
         before: &Record,
-        record: Record,
-    ) -> Result<Option<Record>> {
+        mut record: Record,
+        snapshot: u64,
+        assigned_columns: &[String],
+        reads_existing: bool,
+        after_events: &mut Vec<PartitionRowEvent>,
+    ) -> Result<PartitionUpdateResult> {
         let target = partition::route_record(self.db_ref(), parent, &record)?;
-        if target.name == source {
-            return Ok(Some(record));
-        }
-        let old_schema = load_schema(self.db_ref(), source)?.ok_or_else(|| {
+        let source_schema = load_schema(self.db_ref(), source)?.ok_or_else(|| {
             SqlError::InvalidSql(format!("partition source {source} disappeared"))
         })?;
-        if !self.apply_before_delete_row_triggers(source, Some(&old_schema), before)? {
-            return Ok(None);
-        }
-        let (mut rows, _) = self.apply_before_insert_row_triggers_with_identity(
-            &target.name,
-            Some(&target),
-            vec![record],
+        self.enforce_rls_write_checks(
+            &parent.name,
             Some(parent),
+            PolicyAction::Update,
+            reads_existing,
+            std::slice::from_ref(&record),
         )?;
-        let Some(mut record) = rows.pop() else {
-            return Ok(None);
-        };
-        self.materialize_generated_columns(
-            &target.name,
-            &target,
-            std::slice::from_mut(&mut record),
-        )?;
-        self.refresh_partition_update_identity(parent, &mut record)?;
-        partition::validate_record(self.db_ref(), &target, &record)?;
-        Ok(Some(record))
+        if source != target.name {
+            if !self.apply_before_delete_row_triggers(source, Some(&source_schema), before)? {
+                return Ok(PartitionUpdateResult::Skipped);
+            }
+            self.delete_session_records_with_statement_snapshots(
+                source,
+                std::iter::once((before.id.clone(), snapshot)),
+            )?;
+            after_events.push((source_schema, Some(before.clone()), None));
+            // PostgreSQL deletes the source before invoking destination BEFORE
+            // INSERT. A NULL destination result suppresses the insertion; it
+            // does not undo that deletion and contributes no UPDATE row.
+            let (mut rows, _) = self.apply_before_insert_row_triggers_with_identity(
+                &target.name,
+                Some(&target),
+                vec![record],
+                Some(parent),
+            )?;
+            let Some(next) = rows.pop() else {
+                return Ok(PartitionUpdateResult::Deleted);
+            };
+            record = next;
+            self.materialize_generated_columns(
+                &target.name,
+                &target,
+                std::slice::from_mut(&mut record),
+            )?;
+            self.refresh_partition_update_identity(parent, &mut record)?;
+            partition::validate_record(self.db_ref(), &target, &record)?;
+            self.enforce_rls_write_checks(
+                &parent.name,
+                Some(parent),
+                PolicyAction::Update,
+                reads_existing,
+                std::slice::from_ref(&record),
+            )?;
+            validate_updated_records(
+                self.db_ref(),
+                self.read_tx(),
+                &parent.name,
+                parent,
+                std::slice::from_ref(&record),
+                &[(before.clone(), record.clone())],
+                Some(&self.sql_engine()),
+                assigned_columns,
+            )?;
+            if self
+                .sql_engine()
+                .get_raw_record_cached(&target.name, &record.id)?
+                .is_some()
+            {
+                return Err(unique_violation(
+                    &target,
+                    &target.primary_key_constraint_name(),
+                ));
+            }
+            validate_records_for_write(
+                self.db_ref(),
+                self.read_tx(),
+                &target.name,
+                &target,
+                std::slice::from_ref(&record),
+                false,
+                Some(&self.sql_engine()),
+            )?;
+            self.insert_session_new_records(&target.name, Some(&target), vec![record.clone()])?;
+            after_events.push((target, None, Some(record.clone())));
+        } else {
+            validate_updated_records(
+                self.db_ref(),
+                self.read_tx(),
+                &parent.name,
+                parent,
+                std::slice::from_ref(&record),
+                &[(before.clone(), record.clone())],
+                Some(&self.sql_engine()),
+                assigned_columns,
+            )?;
+            self.update_partition_records(
+                parent,
+                &[(before.clone(), record.clone())],
+                &[Some(source.to_string())],
+                &[snapshot],
+                assigned_columns,
+            )?;
+            after_events.push((source_schema, Some(before.clone()), Some(record.clone())));
+        }
+        Ok(PartitionUpdateResult::Updated(record))
     }
 
-    pub(crate) fn after_partition_update_triggers(
+    pub(super) fn fire_partition_after_events(
         &mut self,
-        parent: &TableSchema,
-        pairs: &[(Record, Record)],
-        sources: &[Option<String>],
+        events: Vec<PartitionRowEvent>,
     ) -> Result<()> {
-        for ((before, after), source) in pairs.iter().zip(sources) {
-            let source = source.as_deref().ok_or_else(|| {
-                SqlError::InvalidSql("partition trigger lost physical source".into())
-            })?;
-            let old_schema = load_schema(self.db_ref(), source)?.ok_or_else(|| {
-                SqlError::InvalidSql(format!("partition source {source} disappeared"))
-            })?;
-            let target = partition::route_record(self.db_ref(), parent, after)?;
-            if source == target.name {
-                self.fire_after_row_triggers(
-                    source,
-                    Some(&old_schema),
-                    "update",
-                    std::iter::once((Some(before), Some(after))),
-                )?;
-            } else {
-                self.fire_after_row_triggers(
-                    source,
-                    Some(&old_schema),
-                    "delete",
-                    std::iter::once((Some(before), None)),
-                )?;
-                self.fire_after_insert_triggers(
-                    &target.name,
-                    Some(&target),
-                    std::slice::from_ref(after),
-                )?;
+        for (schema, before, after) in events {
+            match (before.as_ref(), after.as_ref()) {
+                (None, Some(record)) => self.fire_after_insert_triggers(
+                    &schema.name,
+                    Some(&schema),
+                    std::slice::from_ref(record),
+                )?,
+                (Some(before), after) => {
+                    let (op, operation) = if after.is_some() {
+                        ("update", DatabaseOperation::Update)
+                    } else {
+                        ("delete", DatabaseOperation::Delete)
+                    };
+                    self.publish_extension_database_events(
+                        &schema.name,
+                        operation,
+                        std::iter::once((Some(before), after)),
+                    )?;
+                    self.fire_after_row_triggers(
+                        &schema.name,
+                        Some(&schema),
+                        op,
+                        std::iter::once((Some(before), after)),
+                    )?;
+                }
+                _ => return Err(SqlError::InvalidSql("empty partition trigger event".into())),
             }
         }
         Ok(())

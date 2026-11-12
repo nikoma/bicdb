@@ -826,7 +826,6 @@ impl<'db> SqlSession<'db> {
         let mut updated = 0usize;
         let mut updated_records = Vec::new();
         let mut updated_record_snapshots = Vec::new();
-        let mut updated_sources = Vec::new();
         let mut returning_rows = (update.returning.is_some() && from_rows.is_some()).then(Vec::new);
         let mut returning_columns: Option<Arc<Vec<String>>> = None;
         let target_columns = Arc::new(row_output_columns(&table, &target_alias, schema.as_deref()));
@@ -907,6 +906,23 @@ impl<'db> SqlSession<'db> {
             assignment_candidates
         };
         let mut before_after_records = Vec::new();
+        let mut partition_after_events = Vec::new();
+        let mut partition_suppressed_deletes = Vec::new();
+        let partition_assigned_columns = if schema
+            .as_deref()
+            .is_some_and(|schema| schema.partitioning.is_some())
+        {
+            update
+                .assignments
+                .iter()
+                .flat_map(|assignment| {
+                    super::row_assignments::assignment_columns(&assignment.target)
+                })
+                .map(relation_name)
+                .collect::<Result<Vec<_>>>()?
+        } else {
+            Vec::new()
+        };
         // Whether anything downstream reads the pre-update image of a row:
         // unique-key change validation, inbound foreign keys, AFTER UPDATE
         // row triggers, or extension event bindings. When none applies (the
@@ -1293,14 +1309,22 @@ impl<'db> SqlSession<'db> {
             {
                 self.refresh_partition_update_identity(parent, &mut record)?;
                 if let Some(before) = before.as_ref() {
-                    record = match self.before_partition_move_triggers(
+                    record = match self.stage_partition_update_record(
                         parent,
                         trigger_table,
                         before,
                         record,
+                        statement_snapshot,
+                        &partition_assigned_columns,
+                        reads_existing,
+                        &mut partition_after_events,
                     )? {
-                        Some(record) => record,
-                        None => continue,
+                        super::partition_exec::PartitionUpdateResult::Updated(record) => record,
+                        super::partition_exec::PartitionUpdateResult::Skipped => continue,
+                        super::partition_exec::PartitionUpdateResult::Deleted => {
+                            partition_suppressed_deletes.push(before.clone());
+                            continue;
+                        }
                     };
                 }
             }
@@ -1408,7 +1432,6 @@ impl<'db> SqlSession<'db> {
             if let Some(before) = before {
                 before_after_records.push((before, record.clone()));
             }
-            updated_sources.push(candidate.physical_table);
             updated_records.push(record);
             updated_record_snapshots.push(statement_snapshot);
             updated += 1;
@@ -1417,14 +1440,24 @@ impl<'db> SqlSession<'db> {
         // the existing rows, SELECT USING (an updated row must stay visible
         // to its writer), before their constraints and unique keys:
         // PostgreSQL's order, so a refused key is not revealed by 23505.
-        let rls_violation = self.first_rls_write_violation(
-            &table,
-            schema.as_deref(),
-            PolicyAction::Update,
-            reads_existing,
-            &updated_records,
-        )?;
-        if let Some(schema) = schema.as_deref() {
+        let rls_violation = if schema
+            .as_deref()
+            .is_some_and(|schema| schema.partitioning.is_some())
+        {
+            None // Already checked each row before its physical write.
+        } else {
+            self.first_rls_write_violation(
+                &table,
+                schema.as_deref(),
+                PolicyAction::Update,
+                reads_existing,
+                &updated_records,
+            )?
+        };
+        if let Some(schema) = schema
+            .as_deref()
+            .filter(|schema| schema.partitioning.is_none())
+        {
             let assigned_columns = update
                 .assignments
                 .iter()
@@ -1468,49 +1501,42 @@ impl<'db> SqlSession<'db> {
             }
             _ => None,
         };
-        if let Some(parent) = schema
+        if schema
             .as_deref()
-            .filter(|schema| schema.partitioning.is_some())
+            .is_none_or(|schema| schema.partitioning.is_none())
         {
-            let assigned_columns = update
-                .assignments
+            if updated_record_repairs.iter().any(Option::is_some) {
+                self.insert_session_records_with_repairs(
+                    &table,
+                    updated_records
+                        .into_iter()
+                        .zip(updated_record_snapshots.into_iter())
+                        .zip(updated_record_repairs.into_iter())
+                        .map(|((record, snapshot), repair)| (record, snapshot, repair)),
+                )?;
+            } else if updated_record_snapshots
                 .iter()
-                .flat_map(|assignment| {
-                    super::row_assignments::assignment_columns(&assignment.target)
-                })
-                .map(relation_name)
-                .collect::<Result<Vec<_>>>()?;
-            self.update_partition_records(
-                parent,
-                &before_after_records,
-                &updated_sources,
-                &updated_record_snapshots,
-                &assigned_columns,
-            )?;
-        } else if updated_record_repairs.iter().any(Option::is_some) {
-            self.insert_session_records_with_repairs(
-                &table,
-                updated_records
-                    .into_iter()
-                    .zip(updated_record_snapshots.into_iter())
-                    .zip(updated_record_repairs.into_iter())
-                    .map(|((record, snapshot), repair)| (record, snapshot, repair)),
-            )?;
-        } else if updated_record_snapshots
-            .iter()
-            .any(|snapshot| *snapshot != 0)
-        {
-            self.insert_session_records_with_statement_snapshots(
-                &table,
-                updated_records
-                    .into_iter()
-                    .zip(updated_record_snapshots.into_iter()),
-            )?;
-        } else {
-            self.insert_session_records(&table, updated_records)?;
+                .any(|snapshot| *snapshot != 0)
+            {
+                self.insert_session_records_with_statement_snapshots(
+                    &table,
+                    updated_records
+                        .into_iter()
+                        .zip(updated_record_snapshots.into_iter()),
+                )?;
+            } else {
+                self.insert_session_records(&table, updated_records)?;
+            }
         }
         if let Some(schema) = schema.as_deref() {
             self.apply_foreign_key_parent_update_batch(&table, schema, &before_after_records)?;
+            if !partition_suppressed_deletes.is_empty() {
+                self.apply_foreign_key_parent_delete_batch(
+                    &table,
+                    schema,
+                    &partition_suppressed_deletes,
+                )?;
+            }
         }
         self.publish_extension_database_events(
             &table,
@@ -1519,11 +1545,18 @@ impl<'db> SqlSession<'db> {
                 .iter()
                 .map(|(before, after)| (Some(before), Some(after))),
         )?;
-        if let Some(parent) = schema
+        if schema
             .as_deref()
-            .filter(|schema| schema.partitioning.is_some())
+            .is_some_and(|schema| schema.partitioning.is_some())
         {
-            self.after_partition_update_triggers(parent, &before_after_records, &updated_sources)?;
+            self.publish_extension_database_events(
+                &table,
+                DatabaseOperation::Delete,
+                partition_suppressed_deletes
+                    .iter()
+                    .map(|record| (Some(record), None)),
+            )?;
+            self.fire_partition_after_events(partition_after_events)?;
         } else {
             self.fire_after_row_triggers(
                 &table,
@@ -2358,6 +2391,7 @@ impl<'db> SqlSession<'db> {
         let mut deleted_record_ids = Vec::new();
         let mut deleted_sources = Vec::new();
         let mut deleted_record_snapshots = Vec::new();
+        let mut partition_deleted = 0;
         let can_read_committed_recheck = self.tx.is_some();
         for (idx, mut candidate) in records_to_delete.into_iter().enumerate() {
             if idx % 1024 == 0 {
@@ -2447,6 +2481,19 @@ impl<'db> SqlSession<'db> {
             )? {
                 continue;
             }
+            if schema
+                .as_ref()
+                .is_some_and(|schema| schema.partitioning.is_some())
+            {
+                let count = self.delete_session_records_with_statement_snapshots(
+                    physical_table,
+                    std::iter::once((record.id.clone(), statement_snapshot)),
+                )?;
+                if count == 0 {
+                    continue;
+                }
+                partition_deleted += count;
+            }
             deleted_sources.push(candidate.physical_table);
             deleted_record_ids.push(record.id.clone());
             deleted_record_snapshots.push(statement_snapshot);
@@ -2456,27 +2503,7 @@ impl<'db> SqlSession<'db> {
             .as_ref()
             .is_some_and(|schema| schema.partitioning.is_some())
         {
-            let mut groups: BTreeMap<String, Vec<(String, u64)>> = BTreeMap::new();
-            for ((id, snapshot), source) in deleted_record_ids
-                .iter()
-                .cloned()
-                .zip(deleted_record_snapshots)
-                .zip(deleted_sources.iter())
-            {
-                groups
-                    .entry(
-                        source
-                            .clone()
-                            .expect("partition candidate has a physical source"),
-                    )
-                    .or_default()
-                    .push((id, snapshot));
-            }
-            let mut count = 0;
-            for (source, rows) in groups {
-                count += self.delete_session_records_with_statement_snapshots(&source, rows)?;
-            }
-            count
+            partition_deleted
         } else if deleted_record_snapshots
             .iter()
             .any(|snapshot| *snapshot != 0)

@@ -157,3 +157,93 @@ case!(
     None,
     "DELETE FROM p RETURNING k,payload"
 );
+
+#[test]
+fn late_trigger_failure_rolls_back_prior_physical_writes_and_all_audit_effects() {
+    for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
+        for (op, mutation, trigger) in [
+            ("insert", "INSERT INTO p VALUES(11,'must-rollback'),(12,'must-rollback')", "CREATE TRIGGER z_fail BEFORE INSERT ON high FOR EACH ROW EXECUTE FUNCTION late_fail()"),
+            ("update", "UPDATE p SET k=k+10", "CREATE TRIGGER z_fail BEFORE INSERT ON high FOR EACH ROW EXECUTE FUNCTION late_fail()"),
+            ("delete", "DELETE FROM p", "CREATE TRIGGER z_fail BEFORE DELETE ON low FOR EACH ROW EXECUTE FUNCTION late_fail()"),
+        ] {
+            let dir=tempfile::tempdir().unwrap();
+            let cfg=DbConfig::default().with_storage_mode(mode).with_fsync(true).with_paged_buffer_pool_bytes(8*1024*1024);
+            let mut db=BicDb::open_with_config(dir.path(),cfg.clone()).unwrap();
+            {
+                let mut sql=SqlSession::new(&mut db);setup(&mut sql);
+                sql.execute("INSERT INTO p VALUES(1,'first-ack'),(2,'second-ack')").unwrap();
+                sql.execute("DELETE FROM audit").unwrap();
+                sql.execute("CREATE FUNCTION late_fail() RETURNS trigger LANGUAGE plpgsql AS $$BEGIN IF TG_OP='DELETE' THEN IF OLD.k=2 THEN IF (SELECT COUNT(*) FROM low)=1 THEN RAISE EXCEPTION 'prior physical write observed'; ELSE RAISE EXCEPTION 'missing prior physical write'; END IF; END IF; RETURN OLD; ELSE IF NEW.k=12 THEN IF (SELECT COUNT(*) FROM high)=1 THEN RAISE EXCEPTION 'prior physical write observed'; ELSE RAISE EXCEPTION 'missing prior physical write'; END IF; END IF; RETURN NEW; END IF; END$$").unwrap();
+                sql.execute(trigger).unwrap();
+                let error=sql.execute(mutation).unwrap_err();
+                assert!(error.to_string().contains("prior physical write observed"),"{mode:?}/{op}: {error}");
+                assert_eq!(sql.execute("SELECT k,payload FROM p ORDER BY k").unwrap().rows,vec![vec![SqlValue::Int(1),SqlValue::String("first-ack".into())],vec![SqlValue::Int(2),SqlValue::String("second-ack".into())]]);
+                assert!(sql.execute("SELECT * FROM audit").unwrap().rows.is_empty());
+            }
+            db.close().unwrap();
+            for _ in 0..2 {
+                let mut db=BicDb::open_with_config(dir.path(),cfg.clone()).unwrap();
+                let mut sql=SqlSession::new(&mut db);
+                assert_eq!(sql.execute("SELECT k,payload FROM p ORDER BY k").unwrap().rows,vec![vec![SqlValue::Int(1),SqlValue::String("first-ack".into())],vec![SqlValue::Int(2),SqlValue::String("second-ack".into())]]);
+                assert!(sql.execute("SELECT * FROM audit").unwrap().rows.is_empty());
+                drop(sql);db.close().unwrap();
+            }
+        }
+    }
+}
+
+#[test]
+fn savepoint_undo_restores_source_deleted_by_destination_trigger_veto() {
+    for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
+        let dir = tempfile::tempdir().unwrap();
+        let cfg = DbConfig::default()
+            .with_storage_mode(mode)
+            .with_fsync(true)
+            .with_paged_buffer_pool_bytes(8 * 1024 * 1024);
+        let mut db = BicDb::open_with_config(dir.path(), cfg.clone()).unwrap();
+        {
+            let mut sql = SqlSession::new(&mut db);
+            setup(&mut sql);
+            sql.execute("INSERT INTO p VALUES(1,'original-ack')")
+                .unwrap();
+            sql.execute("DELETE FROM audit").unwrap();
+            sql.execute(
+                "CREATE TRIGGER z_veto BEFORE INSERT ON high FOR EACH ROW EXECUTE FUNCTION veto()",
+            )
+            .unwrap();
+            sql.execute("BEGIN").unwrap();
+            sql.execute("SAVEPOINT movement").unwrap();
+            assert!(sql
+                .execute("UPDATE p SET k=11 WHERE k=1 RETURNING k")
+                .unwrap()
+                .rows
+                .is_empty());
+            assert!(sql.execute("SELECT k FROM p").unwrap().rows.is_empty());
+            sql.execute("ROLLBACK TO SAVEPOINT movement").unwrap();
+            sql.execute("COMMIT").unwrap();
+            assert_eq!(
+                sql.execute("SELECT k,payload FROM p").unwrap().rows,
+                vec![vec![
+                    SqlValue::Int(1),
+                    SqlValue::String("original-ack".into())
+                ]]
+            );
+            assert!(sql.execute("SELECT * FROM audit").unwrap().rows.is_empty());
+        }
+        db.close().unwrap();
+        for _ in 0..2 {
+            let mut db = BicDb::open_with_config(dir.path(), cfg.clone()).unwrap();
+            let mut sql = SqlSession::new(&mut db);
+            assert_eq!(
+                sql.execute("SELECT k,payload FROM p").unwrap().rows,
+                vec![vec![
+                    SqlValue::Int(1),
+                    SqlValue::String("original-ack".into())
+                ]]
+            );
+            assert!(sql.execute("SELECT * FROM audit").unwrap().rows.is_empty());
+            drop(sql);
+            db.close().unwrap();
+        }
+    }
+}

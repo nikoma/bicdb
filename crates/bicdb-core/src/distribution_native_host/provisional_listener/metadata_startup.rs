@@ -134,9 +134,25 @@ impl NativeInitialConsensusLaunch {
                     .collect::<Vec<_>>()
             };
             for peer in peers {
-                let request = self
-                    .lock_initial_metadata(&token)?
-                    .append_request_for_peer(&peer, 16)?;
+                let request = {
+                    let store = self.lock_initial_metadata(&token)?;
+                    if store.status().role != MetadataConsensusRole::Leader {
+                        return Err(invalid("initial metadata leader changed during heartbeat"));
+                    }
+                    // An earlier peer's accepted ACK can commit retirement
+                    // while this round still owns its old list of peer IDs.
+                    // Check current membership under the SAME guard as request
+                    // construction; all other builder refusals remain errors.
+                    if !store
+                        .committed_topology()
+                        .nodes
+                        .get(&peer)
+                        .is_some_and(|member| member.lifecycle == ClusterNodeLifecycle::Active)
+                    {
+                        continue;
+                    }
+                    store.append_request_for_peer(&peer, 16)?
+                };
                 let reply = match self
                     .transport
                     .append_metadata_cancellable(&peer, request, &token)

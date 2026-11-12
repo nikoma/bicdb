@@ -197,3 +197,42 @@ as **1.0.484-beta**, PR [160](https://github.com/nikoma/bicdb/pull/160), source
 native results. None of the larger native feature batch enters that safety PR.
 Main merge, binary publication, verified deployment and physical qualification
 remain separate states.
+
+## Main 485 repair and later isolated native receipts
+
+Public main **1.0.485-beta**, `e3fa39974d23c13d6212d5b94ab84437271c50bf`,
+now contains the separate metadata frontier repair from PR 162. Its tested
+`ce02303676fe5fe730ffd7fc822a3a27ee8189aa` tree equals the merge tree.
+Full Core (library 536 passed / zero failed / four ignored plus integration
+invocations), SQL, PostgreSQL-wire and workspace [run 43179263914](https://github.com/nikoma/bicdb/actions/runs/43179263914),
+and [Rails run 43179264201](https://github.com/nikoma/bicdb/actions/runs/43179264201)
+pass, with all-target/isolated-consumer compilation and static jobs. The larger
+native read/abort/joint/registration candidate below is not merged by that PR.
+
+| Exact source / executed check | Classification | Result and bounded conclusion |
+| --- | --- | --- |
+| `2c73af354`, [43176666917](https://github.com/nikoma/bicdb/actions/runs/43176666917) | Failed | Focused native cohort: 237 passed / two failed / two ignored / 621 filtered, 226.71 s. Actual 17/65-barrier heartbeat and all three retained-owner learner-transition controls pass. Positive enrollment exposes retirement during a captured heartbeat peer list; replacement controls also have an obsolete generic error expectation. No new physical result. |
+| `f1d1398f738868accc20e3757a33752d5e62b726`, [43177871485](https://github.com/nikoma/bicdb/actions/runs/43177871485) | Failed | Two replacement cases fail at the kernel's explicit current-quorum substitution-proof requirement. The source verified a replacement but discarded the consumed live verifier. Retained P1/stage facts alone cannot supply current authority. |
+| `f1f7ebdf96b737c8f9c192b2e7831ee108abe6f6`, [43181969102](https://github.com/nikoma/bicdb/actions/runs/43181969102) | Passed, focused | Three real TLS heartbeat controls, zero failures, 860 filtered, 3.49 s: 17/65 genuine barriers and peer retirement during one heartbeat. Full matrix skipped; this is not scheduler or failover qualification. |
+| Same `f1f7ebdf`, [43181974286](https://github.com/nikoma/bicdb/actions/runs/43181974286) | Passed, focused | Three real TLS enrollment/cancellation/pending retry controls, zero failures, 860 filtered, 4.86 s. All-target and isolated-consumer compile checks pass in both runs. |
+| `ba868e9ff6780e98d4d799f5cbd83bacf0fdb210`, [43183211113](https://github.com/nikoma/bicdb/actions/runs/43183211113) | Failed | Zero passed / six failed before substitution assertions. Controlled-WAL preflight ran under its own counted write lease. Corrective source performs quiescent preflight before acquiring that lease and retains the lease only through the actual synchronous publication; it does not relax the guard. |
+| `72964ed7`, [43189691020](https://github.com/nikoma/bicdb/actions/runs/43189691020) and [43189697430](https://github.com/nikoma/bicdb/actions/runs/43189697430) | Failed compilation | New complete-joint module needed an explicit path under its explicitly located parent. No runtime assertion result follows. The path was corrected separately. |
+| `a96d406596991057e6f4167b7185783f06f3c8fd`, [43190505814](https://github.com/nikoma/bicdb/actions/runs/43190505814) and [43190512897](https://github.com/nikoma/bicdb/actions/runs/43190512897) | Failed compilation | Three new complete-joint assertions mixed `Record` and `Arc<Record>`. Corrected full-record comparisons preserve ledger and read assertions. Neither new test set executed at this source. |
+| `dc6a13d4c5823c39f16fdfb8e2f135f3d2987a6b`, [43191731082](https://github.com/nikoma/bicdb/actions/runs/43191731082), job 131092478826 | Passed, focused | Seven actual Installing replacement/resume tests pass, zero failed/ignored, 862 filtered, 10.89 s. Includes dead source/higher epoch, native-proposal orphan/durable P2 cold resume, partial received/audited history, wrong-proof rejection and unmatched actual R0 target point. All-target and isolated-consumer compilation pass. This does not prove a nonzero target point, higher accepted cut, learner repair or general operational recovery. |
+| Same `dc6a13d4`, [43191727563](https://github.com/nikoma/bicdb/actions/runs/43191727563), job 131092467880 | Failed | Focused native cohort: 241 passed / one failed / two ignored / 625 filtered, 277.39 s. Four-process CONFIG-registration and all three same-service learner-transition tests pass. Complete-joint fixture fails before its closure assertion because it initialized a planning cache with an already known unbound native voter, then attempted to install born2 C. The existing native-enrollment guard correctly refuses. Correction uses the actual fresh MQ's C to provision an EMPTY planning cache; no native authority is created by that cache. |
+
+Both `dc6` full logs and checksummed indexes are retained privately. Recovery
+log raw SHA-256: `1d7b0c3827f98fd3f043b151f3878ed5d3b250fd48adaadefa13c29c657e2e0d`;
+native-cohort raw SHA-256: `f1d6d3cd21f8632c3a9016c03ec4c11f4a8174a4d25cf2d65b7739e6c906628e`.
+These are log-custody hashes, not retained database images. The fixture's
+RETAINED path messages do not mean its private TLS/database directories were
+uploaded. No new VM or physical disk-failure experiment ran.
+
+The later `c29227e0e` batch composes the empty planning-cache correction, main
+485 (native consensus implementation remains byte-identical across that merge),
+a genuine acknowledged R1-target/source-R2 cold-substitution test and the
+independent long-lived stale-gateway test source. Those new source controls
+require their own executed CI results; the seven `dc6` passes are not attributed
+to changed tests. Higher accepted-cut, complete handoff/new-leader ACK/Strong,
+all-owner cold host, post-joint NoData, public Init/Join/Serve, protected cleanup,
+long-run slot/history capacity and physical convergence remain open.

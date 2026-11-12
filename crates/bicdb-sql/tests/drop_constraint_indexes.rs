@@ -148,10 +148,10 @@ fn quoted_case_distinct_indexes_keep_exact_native_and_sql_identity_after_reopen(
             .with_fsync(true)
             .with_storage_mode(mode.clone());
         let mut db = BicDb::open_with_config(root.path(), config.clone()).unwrap();
-        SqlSession::new(&mut db).execute("CREATE TABLE case_target(item_key INT,payload INT); CREATE INDEX \"Index.Case\" ON case_target(payload); CREATE INDEX \"index.case\" ON case_target(payload)").unwrap();
+        SqlSession::new(&mut db).execute("CREATE TABLE case_target(item_key INT,payload INT); CREATE INDEX \"CaseIndex\" ON case_target(payload); CREATE INDEX \"caseindex\" ON case_target(payload)").unwrap();
         let before = db.index_definitions().len();
         SqlSession::new(&mut db)
-            .execute("DROP INDEX \"Index.Case\"")
+            .execute("DROP INDEX \"CaseIndex\"")
             .unwrap();
         assert_eq!(
             db.index_definitions().len(),
@@ -160,9 +160,9 @@ fn quoted_case_distinct_indexes_keep_exact_native_and_sql_identity_after_reopen(
         );
         db.close().unwrap();
         let mut db = BicDb::open_with_config(root.path(), config.clone()).unwrap();
-        assert_eq!(SqlSession::new(&mut db).execute("SELECT indexname FROM pg_indexes WHERE tablename='case_target' AND indexname IN ('Index.Case','index.case')").unwrap().rows,vec![vec![SqlValue::String("index.case".into())]]);
+        assert_eq!(SqlSession::new(&mut db).execute("SELECT indexname FROM pg_indexes WHERE tablename='case_target' AND indexname IN ('CaseIndex','caseindex')").unwrap().rows,vec![vec![SqlValue::String("caseindex".into())]]);
         SqlSession::new(&mut db)
-            .execute("DROP INDEX \"index.case\"")
+            .execute("DROP INDEX \"caseindex\"")
             .unwrap();
         assert_eq!(
             db.index_definitions().len(),
@@ -171,7 +171,7 @@ fn quoted_case_distinct_indexes_keep_exact_native_and_sql_identity_after_reopen(
         );
         db.close().unwrap();
         let mut db = BicDb::open_with_config(root.path(), config).unwrap();
-        assert_eq!(SqlSession::new(&mut db).execute("SELECT count(*) FROM pg_indexes WHERE tablename='case_target' AND indexname IN ('Index.Case','index.case')").unwrap().rows,vec![vec![SqlValue::Int(0)]]);
+        assert_eq!(SqlSession::new(&mut db).execute("SELECT count(*) FROM pg_indexes WHERE tablename='case_target' AND indexname IN ('CaseIndex','caseindex')").unwrap().rows,vec![vec![SqlValue::Int(0)]]);
     }
 }
 

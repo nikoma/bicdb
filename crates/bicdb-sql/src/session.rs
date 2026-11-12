@@ -4596,6 +4596,20 @@ impl<'db> SqlSession<'db> {
                 }
             }
         }
+        for view in list_views(self.db_ref())? {
+            if table != Some(view.name.as_str()) {
+                continue;
+            }
+            let namespace = relation_catalog_namespace(self.db_ref(), &view.name)?;
+            internal_names.push(sql_index_storage_name(&namespace, name));
+            for index in &view.indexes {
+                if index.name == name {
+                    internal_names.extend(index.internal_index_names.iter().map(|name| {
+                        sql_index_storage_name(&namespace, name)
+                    }));
+                }
+            }
+        }
         let executable_definitions = self
             .db_ref()
             .index_definitions()

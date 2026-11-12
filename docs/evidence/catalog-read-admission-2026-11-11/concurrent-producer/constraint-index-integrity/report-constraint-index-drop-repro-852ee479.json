@@ -1,0 +1,30 @@
+{
+  "source": "852ee479746c9867d55478261a110413394831a6",
+  "scope": "Actual originala68 permitted DROP of a constraint index where migrated nativePG18 refused2BP01. Reproduce primary/unique ownership refusal, qualified/path names and statement preflight with Native executable definitions, unchanged duplicate-key assertions and2reopens. Separate DEFAULT/rollback/portable gates stay open; no original app assertions modified.",
+  "started_unix": 1794465569.7864852,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "--no-fail-fast",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "drop_constraint_indexes",
+        "--",
+        "--test-threads=1",
+        "--nocapture"
+      ],
+      "started_unix": 1794465569.7868876,
+      "exit": 101,
+      "finished_unix": 1794465570.9155748
+    }
+  ],
+  "status": "failed",
+  "finished_unix": 1794465570.9158964
+}

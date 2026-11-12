@@ -367,9 +367,7 @@ impl NativeAbortPromiseRound {
                     "abort vote actual birth differs from fresh metadata enrollment",
                 ));
             }
-            if !reply.request.scope.same_session(&self.request.scope)
-                || reply.request.range_index != self.request.range_index
-                || reply.request.origin_node_id != self.request.origin_node_id
+            if reply.request != self.request
                 || reply.candidate_sha256 != self.candidate.sha256()
                 || reply.predecessor_index != self.candidate.record().predecessor_index()
                 || reply.predecessor_history_sha256

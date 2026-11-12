@@ -49,6 +49,12 @@ pub(crate) enum NativeRangeCertificateEvidence {
         restore_activation: Option<crate::distribution_consensus::MetadataRestoreActivation>,
         scope_sha256: String,
     },
+    AbortPromiseQuorum {
+        recovery_nonce: Uuid,
+        configuration_sha256: String,
+        current_range_epoch: u64,
+        metadata_context_id: Uuid,
+    },
     HistoricalCurrentCertificateQuorum {
         recovery_nonce: Uuid,
         configuration_sha256: String,
@@ -91,6 +97,12 @@ impl NativeRangeCertificateEvidence {
             }
         }
         if let Self::HistoricalCurrentCertificateQuorum {
+            recovery_nonce,
+            configuration_sha256,
+            current_range_epoch,
+            metadata_context_id,
+        }
+        | Self::AbortPromiseQuorum {
             recovery_nonce,
             configuration_sha256,
             current_range_epoch,

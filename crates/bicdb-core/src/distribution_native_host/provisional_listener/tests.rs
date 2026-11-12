@@ -31,7 +31,11 @@ struct PlannedNetwork {
     ports: Vec<TcpListener>,
 }
 fn planned_network(count: usize) -> PlannedNetwork {
+    planned_network_with_spare(count, 0)
+}
+fn planned_network_with_spare(count: usize, spare: usize) -> PlannedNetwork {
     assert!(matches!(count, 3 | 4));
+    assert!(spare <= 1);
     let root = tempfile::tempdir().unwrap();
     let ca_key = KeyPair::generate().unwrap();
     let mut params = CertificateParams::default();
@@ -43,7 +47,7 @@ fn planned_network(count: usize) -> PlannedNetwork {
     let ca = params.self_signed(&ca_key).unwrap();
     let ca_path = root.path().join("ca.pem");
     std::fs::write(&ca_path, ca.pem()).unwrap();
-    let ports = (0..count)
+    let ports = (0..count + spare)
         .map(|_| TcpListener::bind("127.0.0.1:0").unwrap())
         .collect::<Vec<_>>();
     let mut networks = Vec::new();
@@ -107,7 +111,7 @@ fn planned_network(count: usize) -> PlannedNetwork {
     let token = CancellationToken::uncancelable();
     let plan = NativeClusterBootstrapPlan::new(
         &config,
-        members,
+        members.into_iter().take(count).collect(),
         vec![
             NativeBootstrapCollection {
                 name: "items".into(),
@@ -203,6 +207,7 @@ fn native_initial_birth_tls_all_actual_factories_bind_initial_config_without_adm
         assert_eq!(birth.birth_id(), host.seed.manifest.birth_id);
         assert_eq!(birth.birth_sha256(), host.seed.manifest.birth_sha256);
         assert_eq!(birth.writer_enforcement_version(), 1);
+        assert_eq!(birth.abort_protocol_version(), 1);
         assert!(births.insert(birth.birth_id()));
         assert_eq!(
             member.labels[crate::distribution::SCHEMA_COMPATIBILITY_NODE_LABEL],
@@ -401,3 +406,4 @@ fn native_initial_birth_tls_provisional_surface_never_falls_through_even_after_f
 mod process_tests;
 
 mod initial_preparation_tests;
+mod learner_factory_tests;

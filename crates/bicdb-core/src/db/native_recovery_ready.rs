@@ -1200,6 +1200,11 @@ impl LocalNativeRecoveryReady {
     }
     pub(crate) fn require_current(&self, db: &BicDb, store: &RangeWriteStore) -> Result<()> {
         self.require_physical_current(db)?;
+        store.require_actual_abort_controls_covered(
+            db,
+            self.role.current_range().id,
+            self.range_index(),
+        )?;
         match &self.catalogue {
             LocalNativeRecoveryCatalogue::Resolved(observed) => {
                 store.revalidate_recovery_resolved_observation(
@@ -1341,6 +1346,7 @@ impl BicDb {
                 "native anchor does not match the current physical recovery scope",
             ));
         }
+        store.require_actual_abort_controls_covered(self, range.id, lineage.range_index())?;
         match &catalogue {
             LocalNativeRecoveryCatalogue::Resolved(observed) => {
                 store.verify_native_ready_catalog(

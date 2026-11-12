@@ -10,6 +10,30 @@ use crate::distribution_range_recovery::{
     HistoricalCurrentImageAcceptanceV1, RecoveryRoleAdmission,
 };
 
+/// Actual local producer result, not a deserialized evidence grant.
+#[derive(Debug)]
+pub(crate) struct LocalInstallingCommittedFence {
+    evidence: crate::distribution_range_recovery::InstallingCommittedFenceEvidence,
+}
+impl LocalInstallingCommittedFence {
+    pub(crate) fn into_evidence(
+        self,
+    ) -> crate::distribution_range_recovery::InstallingCommittedFenceEvidence {
+        self.evidence
+    }
+}
+#[derive(Debug)]
+pub(crate) struct LocalInstallingCommittedCertification {
+    evidence: crate::distribution_range_recovery::InstallingCommittedCertificationEvidence,
+}
+impl LocalInstallingCommittedCertification {
+    pub(crate) fn into_evidence(
+        self,
+    ) -> crate::distribution_range_recovery::InstallingCommittedCertificationEvidence {
+        self.evidence
+    }
+}
+
 pub(super) const INSTALLING_CERTIFICATION_FORMAT: u32 = 13;
 const MAX_RECORDS_PER_RANGE: usize = 128;
 const MAX_RECORD_BYTES: usize = MAX_NATIVE_RECOVERY_ENTRY_BYTES + 256 * 1024;
@@ -230,7 +254,7 @@ impl RangeWriteStore {
         admission: &InstallingCommittedAdmission,
         frozen: &FrozenRangeMutationPermit,
         challenge: Uuid,
-    ) -> Result<crate::distribution_range_recovery::InstallingCommittedFenceEvidence> {
+    ) -> Result<LocalInstallingCommittedFence> {
         admission.require_current(self, db, native, role)?;
         if challenge.is_nil() || frozen.owner() != admission.scope().freeze_owner()? {
             return Err(range_write_error(
@@ -294,7 +318,7 @@ impl RangeWriteStore {
         safety.require_current(db, native, frozen)?;
         obligations.require_current(self)?;
         admission.require_current(self, db, native, role)?;
-        Ok(result)
+        Ok(LocalInstallingCommittedFence { evidence: result })
     }
 }
 
@@ -570,7 +594,7 @@ impl RangeWriteStore {
         role: &RecoveryRoleAdmission,
         decision: &crate::distribution_range_recovery::InstallingCommittedDecision,
         frozen: &FrozenRangeMutationPermit,
-    ) -> Result<crate::distribution_range_recovery::InstallingCommittedCertificationEvidence> {
+    ) -> Result<LocalInstallingCommittedCertification> {
         self.certify_existing_installing_decision_with(
             db,
             native,
@@ -589,7 +613,7 @@ impl RangeWriteStore {
         decision: &crate::distribution_range_recovery::InstallingCommittedDecision,
         frozen: &FrozenRangeMutationPermit,
         write: impl FnOnce(&Path, &[u8], bool) -> Result<()>,
-    ) -> Result<crate::distribution_range_recovery::InstallingCommittedCertificationEvidence> {
+    ) -> Result<LocalInstallingCommittedCertification> {
         self.certify_existing_installing_decision_with(db, native, role, decision, frozen, write)
     }
     fn certify_existing_installing_decision_with(
@@ -600,7 +624,7 @@ impl RangeWriteStore {
         decision: &crate::distribution_range_recovery::InstallingCommittedDecision,
         frozen: &FrozenRangeMutationPermit,
         write: impl FnOnce(&Path, &[u8], bool) -> Result<()>,
-    ) -> Result<crate::distribution_range_recovery::InstallingCommittedCertificationEvidence> {
+    ) -> Result<LocalInstallingCommittedCertification> {
         decision.require_recipient_role(role)?;
         let a = decision.authority();
         let scope = a.scope();
@@ -778,26 +802,27 @@ impl RangeWriteStore {
         self.persist_recovery_catalog_with(write)?;
         decision.require_live()?;
         native.require_current(db)?;
-        Ok(
-            crate::distribution_range_recovery::InstallingCommittedCertificationEvidence {
-                scope: scope.clone(),
-                node_id: role.local_node_id().clone(),
-                member_incarnation: role.local_member_incarnation(),
-                native_birth_id: native.birth_id(),
-                native_birth_sha256: native.birth_sha256().to_owned(),
-                native_database_incarnation: native.database_incarnation().to_owned(),
-                store_open_id: self.open_id,
-                proposal: record.proposal,
-                intent_sha256: record.protected_intent_sha256,
-                command: command.clone(),
-                marker,
-                record_sha256: record.checksum_sha256,
-                metadata_context_id: role.context_id(),
-                metadata_term: role.metadata_term(),
-                metadata_read_index: role.metadata_read_index(),
-                installing: is_target,
-            },
-        )
+        Ok(LocalInstallingCommittedCertification {
+            evidence:
+                crate::distribution_range_recovery::InstallingCommittedCertificationEvidence {
+                    scope: scope.clone(),
+                    node_id: role.local_node_id().clone(),
+                    member_incarnation: role.local_member_incarnation(),
+                    native_birth_id: native.birth_id(),
+                    native_birth_sha256: native.birth_sha256().to_owned(),
+                    native_database_incarnation: native.database_incarnation().to_owned(),
+                    store_open_id: self.open_id,
+                    proposal: record.proposal,
+                    intent_sha256: record.protected_intent_sha256,
+                    command: command.clone(),
+                    marker,
+                    record_sha256: record.checksum_sha256,
+                    metadata_context_id: role.context_id(),
+                    metadata_term: role.metadata_term(),
+                    metadata_read_index: role.metadata_read_index(),
+                    installing: is_target,
+                },
+        })
     }
 }
 

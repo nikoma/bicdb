@@ -170,11 +170,12 @@ pub(crate) struct InstallingCommittedFenceObservation {
 }
 impl InstallingCommittedFenceObservation {
     pub(super) fn from_local(
-        evidence: InstallingCommittedFenceEvidence,
+        actual: crate::distribution_range_consensus::LocalInstallingCommittedFence,
         peer: MetadataReadParticipant,
         request: &InstallingCommittedRequest,
         token: &CancellationToken,
     ) -> Result<Self> {
+        let evidence = actual.into_evidence();
         token.check()?;
         evidence.validate_shape()?;
         let deadline = token
@@ -610,11 +611,12 @@ pub(crate) struct InstallingCommittedCertificationObservation {
 }
 impl InstallingCommittedCertificationObservation {
     pub(super) fn from_local(
-        evidence: InstallingCommittedCertificationEvidence,
+        actual: crate::distribution_range_consensus::LocalInstallingCommittedCertification,
         peer: MetadataReadParticipant,
         decision: &InstallingCommittedDecision,
         token: &CancellationToken,
     ) -> Result<Self> {
+        let evidence = actual.into_evidence();
         token.check()?;
         decision.require_live()?;
         let a = decision.authority();

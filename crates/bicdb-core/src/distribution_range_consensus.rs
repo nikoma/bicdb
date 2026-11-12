@@ -54,6 +54,7 @@ use image_replacement_handover::{InstallingHandovers, ReplacedInstallingIdentity
 mod image_install_certification;
 pub(crate) use image_install_certification::{
     require_installing_same_voter_transition, InstallingCommittedAdmission,
+    LocalInstallingCommittedCertification, LocalInstallingCommittedFence,
 };
 use image_install_certification::{InstallingCertifications, INSTALLING_CERTIFICATION_FORMAT};
 mod image_install_resume;

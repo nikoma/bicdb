@@ -5,10 +5,7 @@ use crate::distribution_range_consensus::{
     InstallingCommittedAdmission, NativeCurrentImageProposalPointer,
 };
 use crate::distribution_range_mutation::FrozenRangeMutationPermit;
-use crate::distribution_range_recovery::{
-    InstallingCommittedCertificationEvidence, InstallingCommittedDecision,
-    InstallingCommittedFenceEvidence, RecoveryRoleAdmission,
-};
+use crate::distribution_range_recovery::{InstallingCommittedDecision, RecoveryRoleAdmission};
 impl ClusterDataNodeService {
     pub(crate) fn preflight_installing_committed(
         &self,
@@ -34,7 +31,7 @@ impl ClusterDataNodeService {
         frozen: &FrozenRangeMutationPermit,
         challenge: Uuid,
         parent: &CancellationToken,
-    ) -> Result<InstallingCommittedFenceEvidence> {
+    ) -> Result<crate::distribution_range_consensus::LocalInstallingCommittedFence> {
         parent.check()?;
         let db = try_database_read(&self.db)?;
         let native = db.native_recovery_admission(
@@ -54,7 +51,7 @@ impl ClusterDataNodeService {
         decision: &InstallingCommittedDecision,
         frozen: &FrozenRangeMutationPermit,
         parent: &CancellationToken,
-    ) -> Result<InstallingCommittedCertificationEvidence> {
+    ) -> Result<crate::distribution_range_consensus::LocalInstallingCommittedCertification> {
         parent.check()?;
         decision.require_live()?;
         let role = decision.authority().role();
@@ -205,7 +202,7 @@ impl ClusterDataNodeService {
         frozen: &FrozenRangeMutationPermit,
         parent: &CancellationToken,
         write: impl FnOnce(&std::path::Path, &[u8], bool) -> Result<()>,
-    ) -> Result<InstallingCommittedCertificationEvidence> {
+    ) -> Result<crate::distribution_range_consensus::LocalInstallingCommittedCertification> {
         parent.check()?;
         decision.require_live()?;
         let role = decision.authority().role();

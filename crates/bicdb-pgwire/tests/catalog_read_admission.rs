@@ -502,3 +502,150 @@ fn oid_cache_hits_keep_affected_and_unknown_identities_fenced() {
 fn a_quoted_table_row_type_keeps_its_exact_identity_during_another_reservation() {
     exercise(Case::Typed("SELECT ROW(2)::\"independent.dot\"", "(2)"));
 }
+
+#[test]
+fn created_replacement_receipts_survive_wire_messages_and_repeated_savepoint_undo() {
+    for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
+        for ending in ["commit", "savepoint", "rollback"] {
+            let root = tempfile::tempdir().unwrap();
+            let config = DbConfig::default()
+                .with_fsync(true)
+                .with_storage_mode(mode.clone());
+            let mut db = BicDb::open_with_config(root.path(), config.clone()).unwrap();
+            bicdb_sql::initialize_rename_journal_identities(&mut db).unwrap();
+            SqlSession::new(&mut db).execute("CREATE TABLE source(id INT PRIMARY KEY,payload INT); INSERT INTO source VALUES(1,10); CREATE TABLE unrelated(id INT PRIMARY KEY,payload INT); INSERT INTO unrelated VALUES(2,2)").unwrap();
+            let shared = Arc::new(RwLock::new(db));
+            let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+            let address = listener.local_addr().unwrap();
+            let server = PgWireServer::open_with_shared(
+                root.path(),
+                PgWireConfig {
+                    fsync: true,
+                    automatic_paged_checkpoint: false,
+                    ..Default::default()
+                },
+                Arc::clone(&shared),
+            )
+            .unwrap();
+            let serving = Arc::clone(&server);
+            let task =
+                thread::spawn(move || bicdb_pgwire::serve_existing_listener(serving, listener));
+            let mut owner = connect(address);
+            let mut writer = connect(address);
+            let mut observer = connect(address);
+            let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                let response = query(
+                    &mut writer,
+                    "BEGIN; UPDATE unrelated SET payload=99 WHERE id=2",
+                );
+                assert!(codes(&response).is_empty(), "{response:?}");
+                for command in [
+                    "BEGIN",
+                    "SAVEPOINT before_rename",
+                    "UPDATE source SET payload=20",
+                    "ALTER TABLE source RENAME TO renamed",
+                    "SAVEPOINT before_replacement",
+                ] {
+                    let response = query(&mut owner, command);
+                    assert!(
+                        codes(&response).is_empty(),
+                        "{mode} {ending} {command}: {response:?}"
+                    );
+                }
+                for _ in 0..3 {
+                    for command in [
+                        "CREATE TABLE source(id INT PRIMARY KEY,payload INT)",
+                        "INSERT INTO source VALUES(2,30)",
+                        "ROLLBACK TO before_replacement",
+                    ] {
+                        let response = query(&mut owner, command);
+                        assert!(
+                            codes(&response).is_empty(),
+                            "{mode} {ending} {command}: {response:?}"
+                        );
+                    }
+                }
+                for command in [
+                    "CREATE TABLE source(id INT PRIMARY KEY,payload INT)",
+                    "INSERT INTO source VALUES(2,30)",
+                ] {
+                    let response = query(&mut owner, command);
+                    assert!(
+                        codes(&response).is_empty(),
+                        "{mode} {ending} {command}: {response:?}"
+                    );
+                }
+                assert!(codes(&query(&mut writer, "COMMIT")).is_empty());
+                assert_eq!(
+                    value(&query(
+                        &mut observer,
+                        "SELECT payload FROM unrelated WHERE id=2"
+                    )),
+                    Some("99".into())
+                );
+                assert_eq!(
+                    codes(&query(&mut observer, "SELECT payload FROM source")),
+                    vec!["40001"]
+                );
+                let response = query(
+                    &mut owner,
+                    match ending {
+                        "commit" => "COMMIT",
+                        "savepoint" => "ROLLBACK TO before_rename; COMMIT",
+                        _ => "ROLLBACK",
+                    },
+                );
+                assert!(codes(&response).is_empty(), "{mode} {ending}: {response:?}");
+                assert_eq!(
+                    value(&query(&mut observer, "SELECT payload FROM source")),
+                    Some(if ending == "commit" { "30" } else { "10" }.into())
+                );
+                if ending == "commit" {
+                    assert_eq!(
+                        value(&query(&mut observer, "SELECT payload FROM renamed")),
+                        Some("20".into())
+                    );
+                }
+                assert_eq!(
+                    value(&query(
+                        &mut observer,
+                        "SELECT payload FROM unrelated WHERE id=2"
+                    )),
+                    Some("99".into())
+                );
+            }));
+            for stream in [&mut owner, &mut writer, &mut observer] {
+                send(stream, b'X', &[]);
+            }
+            drop(owner);
+            drop(writer);
+            drop(observer);
+            server.request_shutdown();
+            task.join().unwrap().unwrap();
+            drop(server);
+            shared.write().close().unwrap();
+            drop(shared);
+            if let Err(error) = outcome {
+                std::panic::resume_unwind(error);
+            }
+            for _ in 0..2 {
+                let mut reopened = BicDb::open_with_config(root.path(), config.clone()).unwrap();
+                bicdb_sql::oracle::initialize_existing_database_profile(&mut reopened).unwrap();
+                let mut session = SqlSession::new(&mut reopened);
+                assert_eq!(
+                    session.execute("SELECT payload FROM source").unwrap().rows[0][0],
+                    bicdb_sql::SqlValue::Int(if ending == "commit" { 30 } else { 10 })
+                );
+                assert_eq!(
+                    session
+                        .execute("SELECT payload FROM unrelated WHERE id=2")
+                        .unwrap()
+                        .rows[0][0],
+                    bicdb_sql::SqlValue::Int(99)
+                );
+                drop(session);
+                reopened.close().unwrap();
+            }
+        }
+    }
+}

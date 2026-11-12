@@ -2106,6 +2106,13 @@ pub(crate) fn pg_type_row(
             format!("{name}_{suffix}")
         }
     };
+    // A missing regproc is OID zero. Keep its numeric identity internally;
+    // the wire regproc renderer supplies PostgreSQL's "-" text spelling.
+    // Storing that spelling as an ordinary string breaks numeric casts.
+    let type_function_value = |suffix: &str| match type_function(suffix).as_str() {
+        "-" => SqlValue::Int(0),
+        name => SqlValue::String(name.to_string()),
+    };
     virtual_row([
         ("oid", SqlValue::Int(oid)),
         ("typname", SqlValue::String(name.to_string())),
@@ -2166,10 +2173,10 @@ pub(crate) fn pg_type_row(
         ),
         ("typelem", SqlValue::Int(typelem)),
         ("typarray", SqlValue::Int(typarray)),
-        ("typinput", SqlValue::String(type_function("in"))),
-        ("typoutput", SqlValue::String(type_function("out"))),
-        ("typreceive", SqlValue::String(type_function("recv"))),
-        ("typsend", SqlValue::String(type_function("send"))),
+        ("typinput", type_function_value("in")),
+        ("typoutput", type_function_value("out")),
+        ("typreceive", type_function_value("recv")),
+        ("typsend", type_function_value("send")),
         (
             "typmodin",
             SqlValue::String(

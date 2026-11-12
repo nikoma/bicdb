@@ -616,6 +616,9 @@ pub(crate) fn decode_binary_array_parameter_inner(
             "binary array element oid {element_oid} does not match expected oid {expected_element_oid}"
         )));
     }
+    if expected_element_oid == 1033 {
+        return Err(aclitem_binary_error("input"));
+    }
 
     let mut dimensions = Vec::with_capacity(rank as usize);
     let mut element_count = if rank == 0 { 0_usize } else { 1_usize };

@@ -282,7 +282,10 @@ fn native_metadata_registry_addition_actual_cli_requires_healthy_existing_read_a
     // request's unchanged 2s budget. No fresh schema/genesis/coordinator is
     // installed by the test, and no private command performs enrollment.
     const REQUEST_MS: u64 = 2000;
-    let health_deadline = Instant::now() + Duration::from_secs(10);
+    let health_started = Instant::now();
+    let health_limit = Duration::from_secs(10);
+    let health_deadline = health_started + health_limit;
+    let mut healthy_triple_receipt_ns = None;
     let fresh_key = "fresh-ack-after-fifth-registry-addition";
     let fresh_value = serde_json::json!({"whole":"new external ACK after registry addition",
         "nested":[null,{"unchanged_data_assignment":true}],"empty":{}});
@@ -303,16 +306,23 @@ fn native_metadata_registry_addition_actual_cli_requires_healthy_existing_read_a
             "request_timeout_ms":REQUEST_MS,"eventual_health_gate_ms":10000}))
             .unwrap();
         let old = gateway.get_strong("items", key);
+        let old_receipt_elapsed = health_started.elapsed();
         journal(
             &mut ledger,
             serde_json::json!({"logical_operation_id":old_call.id,
             "stage":"strict_old_ack_read","round":round,"expected":expected,
+            "health_receipt_elapsed_ns":old_receipt_elapsed.as_nanos(),
+            "within_health_receipt_budget":old_receipt_elapsed<=health_limit,
             "success":old.is_ok(),"present":old.as_ref().ok().map(Option::is_some),
             "value":old.as_ref().ok(),"error":old.as_ref().err().map(ToString::to_string)}),
         );
-        old_ack_read |= old
-            .as_ref()
-            .is_ok_and(|value| value == &Some(expected.clone()));
+        old_ack_read |= old_receipt_elapsed <= health_limit
+            && old
+                .as_ref()
+                .is_ok_and(|value| value == &Some(expected.clone()));
+        if old_ack_read && fresh_ack && fresh_ack_read {
+            healthy_triple_receipt_ns.get_or_insert(old_receipt_elapsed.as_nanos());
+        }
         observed_false_absence |= matches!(&old, Ok(None));
         observed_wrong_value |= old
             .as_ref()
@@ -333,15 +343,21 @@ fn native_metadata_registry_addition_actual_cli_requires_healthy_existing_read_a
             "stage":"strict_fresh_append_intent","round":round,"key":fresh_key,"value":fresh_value}),
         );
         let ack = gateway.append("items", fresh_key, fresh_value.clone());
+        let append_receipt_elapsed = health_started.elapsed();
         journal(
             &mut ledger,
             serde_json::json!({"logical_operation_id":append_call.id,
             "stage":"strict_fresh_append_reply","round":round,"key":fresh_key,"value":fresh_value,
+            "health_receipt_elapsed_ns":append_receipt_elapsed.as_nanos(),
+            "within_health_receipt_budget":append_receipt_elapsed<=health_limit,
             "acknowledged":ack.is_ok(),"inserted":ack.as_ref().ok(),
             "classification":if ack.is_ok(){"EXTERNAL_ACK"}else{"NO_USER_ACK_OUTCOME_UNKNOWN"},
             "error":ack.as_ref().err().map(ToString::to_string)}),
         );
-        fresh_ack |= ack.is_ok();
+        fresh_ack |= ack.is_ok() && append_receipt_elapsed <= health_limit;
+        if old_ack_read && fresh_ack && fresh_ack_read {
+            healthy_triple_receipt_ns.get_or_insert(append_receipt_elapsed.as_nanos());
+        }
         append_call.append(&ack).unwrap();
         if fresh_ack
             && health_deadline.saturating_duration_since(Instant::now())
@@ -353,16 +369,23 @@ fn native_metadata_registry_addition_actual_cli_requires_healthy_existing_read_a
                 "round":round,"request_timeout_ms":REQUEST_MS}))
                 .unwrap();
             let read = gateway.get_strong("items", fresh_key);
+            let read_receipt_elapsed = health_started.elapsed();
             journal(
                 &mut ledger,
                 serde_json::json!({"logical_operation_id":read_call.id,
                 "stage":"strict_fresh_ack_read_reply","round":round,"expected":fresh_value,
+                "health_receipt_elapsed_ns":read_receipt_elapsed.as_nanos(),
+                "within_health_receipt_budget":read_receipt_elapsed<=health_limit,
                 "success":read.is_ok(),"value":read.as_ref().ok(),
                 "error":read.as_ref().err().map(ToString::to_string)}),
             );
-            fresh_ack_read |= read
-                .as_ref()
-                .is_ok_and(|value| value == &Some(fresh_value.clone()));
+            fresh_ack_read |= read_receipt_elapsed <= health_limit
+                && read
+                    .as_ref()
+                    .is_ok_and(|value| value == &Some(fresh_value.clone()));
+            if old_ack_read && fresh_ack && fresh_ack_read {
+                healthy_triple_receipt_ns.get_or_insert(read_receipt_elapsed.as_nanos());
+            }
             observed_false_absence |= matches!(&read, Ok(None));
             observed_wrong_value |= read
                 .as_ref()
@@ -417,6 +440,8 @@ fn native_metadata_registry_addition_actual_cli_requires_healthy_existing_read_a
         &mut ledger,
         serde_json::json!({"stage":"strict_registry_addition_terminal",
         "rounds":round,"old_ack_read":old_ack_read,"fresh_ack":fresh_ack,
+        "healthy_triple_receipt_ns":healthy_triple_receipt_ns,"health_limit_ns":health_limit.as_nanos(),
+        "health_gate_scope":"original API receipt monotonic budget; no hard OS or diagnostic-fsync wall bound",
         "fresh_ack_read":fresh_ack_read,"observed_false_absence":observed_false_absence,"observed_wrong_value":observed_wrong_value,
         "fifth_data_serving":false,"data_move":"not_attempted",
         "scope":"unchanged assignments require actual bounded healthy existing read AND fresh ACK"}),
@@ -434,6 +459,10 @@ fn native_metadata_registry_addition_actual_cli_requires_healthy_existing_read_a
     assert!(
         round > 0,
         "the health gate must actually dispatch read AND write probes"
+    );
+    assert!(
+        healthy_triple_receipt_ns.is_some_and(|ns| ns <= health_limit.as_nanos()),
+        "healthy triple was not actually received within the original10s health budget"
     );
     assert!(old_ack_read && fresh_ack && fresh_ack_read,
         "metadata-only registry addition left unchanged DATA unavailable: old_ack_read={old_ack_read}, fresh_ack={fresh_ack}, fresh_ack_read={fresh_ack_read}; all attempted outcomes retained");

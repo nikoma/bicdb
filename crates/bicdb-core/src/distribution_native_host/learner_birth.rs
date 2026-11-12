@@ -263,14 +263,19 @@ impl NativeUnassignedLearnerHost {
                 "learner observer requires the complete from-birth native writer/abort contract",
             ));
         }
+        let database_path = {
+            let database = factory
+                .database
+                .try_read()
+                .ok_or_else(|| invalid("learner DB busy at host start"))?;
+            database.data_path().to_path_buf()
+        };
+        // The service constructor can acquire its own actual DB borrow.
+        // Never carry the path-producing read guard into that constructor.
         let mut service = crate::ClusterDataNodeService::open(
             factory.spec.cluster_id.clone(),
             factory.spec.node_id.clone(),
-            factory
-                .database
-                .try_read()
-                .ok_or_else(|| invalid("learner DB busy at host start"))?
-                .data_path(),
+            &database_path,
             Arc::clone(&factory.database),
             true,
         )?;
@@ -311,6 +316,13 @@ impl NativeUnassignedLearnerHost {
             None,
             None,
         )?;
+        {
+            let source = provider
+                .metadata
+                .try_lock()
+                .ok_or_else(|| invalid("learner source metadata busy after listener start"))?;
+            source.observed.require_live_request(source.business)?;
+        }
         parent.check()?;
         Ok(Self {
             provider,

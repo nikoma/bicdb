@@ -38,6 +38,10 @@
     {
       "file": "financial-workflow-481-summary.json",
       "sha256": "7b6a0c0dd171fbeeff9ab9b15271e0cfe15a4891381a4706b7a1d1eb12abfcd0"
+    },
+    {
+      "file": "worker-authority-481.json",
+      "sha256": "491aafbecdc97c835a8a19effb67610d62265ae63f6500bc045324f0d6787366"
     }
   ]
 }

@@ -6,7 +6,45 @@ frontier repair in [PR 162](https://github.com/nikoma/bicdb/pull/162). The exact
 tested candidate was `ce02303676fe5fe730ffd7fc822a3a27ee8189aa`. The merge has
 the same tree. A source version is not a published binary or verified deployment.
 Evidence updates do not establish a new release binary or deployment. The
-larger read/recovery candidate remains unmerged; its source-scoped results follow.
+larger recovery/relocation candidate remains unmerged; its source-scoped results follow.
+
+## Current operational verdict
+
+Remote main is source **1.0.490-beta**, `702f0435a12944563c7751525f8429d80374a3d0`,
+at this documentation checkpoint. The read-safety foundation below is merged;
+the larger candidate is not. The proposed 1.0.491-beta delivery contains only
+documentation/evidence and synchronized version metadata, not these candidate
+implementation changes, a new binary or a deployment.
+
+The newest executed autonomous-recovery baseline is **failed**, exact candidate
+`721c329de4196aeef96604642c439fe7d8ddb0bf`,
+[run 43325316433](https://github.com/nikoma/bicdb/actions/runs/43325316433):
+one control passed, one required recovery test failed, 957 filtered, 26.04s.
+All-target and isolated-consumer compilation passed. After actual quorum
+admission and a pre-local-WAL fault, the original leader's normal APP handler
+has exited and release callback has returned. Two actual native replicas
+contain the complete committed command at R2/B2, while the original leader
+retains R1/Pending2. The original call remains Unknown with no user ACK; it is
+not rollback. Subsequent Strong calls return unavailable, and neither next-write
+API call ACKs. The two completed health-round receipts are 7.650s and 15.333s
+under a declared 20-second success limit; sampling ends at 15.333s, not second20.
+This confirms a missing bounded autonomous committed-tail recovery path in the
+candidate, not acknowledged data loss or the cause of the old Azure incident.
+[Complete attempt ledger, actual native observations and offline verifier](evidence/native-origin-pre-wal-2026-11-12/README.md).
+
+The no-reinstall handoff baseline separately fails at image admission before
+rows are cleared. A [read-only source audit](design/native-closed-handoff-image-admission-audit.md)
+identifies missing closed-purpose admission for the retained original writer
+and for a genuine Registered receiver; the latter cannot borrow INITIAL-genesis
+authority. These are proposed contracts, not implemented fixes.
+
+The passing post-joint component tests below establish useful protocol paths,
+but require explicit fixture orchestration and writer re-enrollment. Automatic
+DATA movement to a genuine fifth node, crash-safe convergence, current physical
+RPO/RTO and stable-five throughput gain remain unqualified. Original Azure
+qualification remains **FAILED**. Historical sections retain their own
+revision-scoped outcomes; their old pending/open labels do not override this
+current verdict or the later executed results.
 
 ## Documentation delivery on current main
 
@@ -127,7 +165,7 @@ source inference is not a replacement for its passing execution.
 The following section preserves the earlier launch-time checkpoint. Its pending
 labels are superseded by the terminal results above, without changing source IDs.
 
-## Current source-only correction and new executions
+## Historical launch checkpoint: 68b correction and new executions
 
 Candidate `68be040ebb00a4c606d519697f913e310c496812` contains the independently
 reviewed [activation validation scope batch](design/native-current-joint-activation-validation-scopes.md),
@@ -161,7 +199,7 @@ learner's actual refusal as data, asserts actual OLD-member ACK rows and continu
 toward the unchanged image operation; it does not invent a trusted zero floor.
 The new run must establish the earliest real operational boundary independently.
 
-## Latest native acceptance: completion progresses, activation still fails
+## Historical f58 acceptance: completion progresses, activation fails
 
 **Milestone 1 remains incomplete.** These results belong to the unmerged candidate
 revisions below. They do not establish release admission, a deployed binary,
@@ -193,7 +231,7 @@ must preserve actual current/archive proofs, original writer and caller fences,
 fresh quorum/role authority and entry/exit checks for mutable facts. The original
 full acceptance, time limits, terminal ACK4 and Strong R4 remain mandatory.
 
-## Current native candidate checkpoint: discovery and registry admission
+## Historical native candidate checkpoint: discovery and registry admission
 
 The working native candidate remains **unmerged and unqualified**. The results
 below identify their actual tested revisions; they do not qualify the later
@@ -401,9 +439,11 @@ data moves automatically or that five nodes provide greater sustained capacity.
 | --- | --- |
 | Strong-read authority and visibility after leadership movement | Actual acknowledged value immediately after transfer: latest value or bounded retryable unavailable. No successful false absence. Independently observe replica-ready, leader-ready and strong-read-ready; none is inferred solely from election or topology. |
 | Stale gateway route | Hold an actual stale route across promotion, record its structured refusal, bounded refresh and final read against the same ACK ledger. Preserve request/response bytes, topology generation, range epoch, leader and applied/commit positions. |
-| Same-birth reopen after range-catalog loss | **Confirmed unsafe Strong absence in the unmerged candidate.** Source 3d0041e09 at run 43218099779: intact stopped twin recovered ACK1/full value; removing only the other twin's n1 catalog admitted clean zero and successful absence. No permanent loss of every copy, ordinary main487 single-host defect or Azure causality is established. [Retained paired witness, fifty-file custody and portable checks](evidence/native-read-catalogue-loss-2026-11-12/README.md). Hold delivery for fail-closed custody, genuine bootstrap ordering, repeated-reopen and compatibility tests. |
+| Same-birth reopen after range-catalog loss | **Baseline failed; scoped repair delivered in main489.** Source 3d0041e09 at run 43218099779 admitted successful absence after only a twin's catalogue was removed. [Retained paired witness](evidence/native-read-catalogue-loss-2026-11-12/README.md). The subsequent fail-closed custody and reopen controls passed and were included in the read489 delivery above. This does not qualify arbitrary snapshot rollback, every recovery defect or Azure causality. Compose later recovery/relocation changes with current main and rerun their relevant final-head checks. |
 | Source fails during image installation | Complete actual current-quorum replacement/resume while target is Installing. Cover nonzero target-native prefix and a higher replacement cut, original cancellation/authority, cold restart, retained archived stage ancestry and all inherited command obligations. No historical receipt may become fresh quorum authority. |
-| Joint handoff and post-joint recovery | Same-open handoff, target ACK2 and Strong R2 have passed the exact component cohort above. The subsequent recovery acceptance still fails its target fence. Complete NEW-domain Prepare-only/no-effect recovery with fresh NEW quorum and next ACK. Preserve permanent promises and prior Commit obligations; see [post-joint audit](design/native-post-joint-no-data-audit.md). |
+| Joint handoff and post-joint recovery | Exact eedf passes full PrepareOnly/Abort3/activation/ACK4/Strong R4 and its separate idempotence/archive controls. Its four-case sibling cohort fails the earlier Strong R2 prerequisite, while an isolated archive case passes. Resolve and rerun the failed cohort; the isolated pass is not a waiver. Replace fixture re-enrollment/orchestration with actual operator-owned producers and qualify the genuine fifth-node path. See the executed results above and [post-joint audit](design/native-post-joint-no-data-audit.md). |
+| Hot committed-tail autonomous repair | Exact721 reaches the intended fault and fails recovery after the normal origin handler has exited. Recover the actual quorum-committed command into the same original writer, then obtain exact old/new Strong values and the next ACK/Strong without a manual reset or coordinator replacement. Preserve the complete attempt ledger; do not convert a committed tail into NoData/Abort. See the [failed baseline](evidence/native-origin-pre-wal-2026-11-12/README.md). |
+| Original writer and genuine receiver image admission | Both image row-scope construction and transaction authorization require the actual native writer descriptor. Pending's epoch differs from original C1. Supply closed-purpose, actual-proof-bound admission for the original writer and a distinct genuine Registered receiver, without weakening ordinary APP/Strong guards. Prove first and second range images with the same owners; see the [source audit](design/native-closed-handoff-image-admission-audit.md). |
 | One stalled move versus independent ranges | Stall actual disk/catch-up work, prove other ranges continue, persist bounded progress and explicit refusal reason; restart controller at promotion and cleanup cuts. Distinguish progress, blocked condition, oscillation and controller error from request-time traces. |
 | All-owner restart and command lifecycle | Strictly reopen actual birth/namespace/store UUID, term/vote/log and exact original configuration. Drive registration, catch-up, promotion and data activation through operator commands. See [command-path delta](design/native-command-driven-enrollment-delta.md) and [cold-recovery design](design/native-learner-all-owner-cold-recovery-design.md). |
 | Long-running availability | Resolve bounded permanent-slot/inventory and archived-history limits with crash-safe reader and persistence contracts. Small tests do not qualify an 8 GiB/long-running relocation workload by avoiding those limits. |

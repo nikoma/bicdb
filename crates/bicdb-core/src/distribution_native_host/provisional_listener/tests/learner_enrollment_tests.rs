@@ -13,15 +13,21 @@ struct EnrollmentFixture {
     networks: Vec<ClusterNetworkTransportConfig>,
     learner_transport: TcpClusterRelocationTransport,
     root: tempfile::TempDir,
+    next_learner_address: Option<String>,
 }
 impl EnrollmentFixture {
     fn new() -> Self {
+        Self::with_spares(1)
+    }
+    fn with_spares(spares: usize) -> Self {
+        assert!((1..=2).contains(&spares));
         let PlannedNetwork {
             mut root,
             plan,
             networks,
             ports,
-        } = planned_network_with_spare(4, 1);
+        } = planned_network_with_spare(4, spares);
+        let next_learner_address = ports.get(5).map(|p| p.local_addr().unwrap().to_string());
         root.disable_cleanup(true);
         eprintln!("NATIVE_LEARNER_ENROLLMENT_ROOT {}", root.path().display());
         let token = CancellationToken::uncancelable();
@@ -114,6 +120,7 @@ impl EnrollmentFixture {
             networks,
             learner_transport,
             root,
+            next_learner_address,
         }
     }
     fn factory_only(&self, name: &str) -> Arc<NativeUnassignedLearnerFactory> {

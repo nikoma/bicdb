@@ -62,7 +62,7 @@ fn start_owned(f: &EnrollmentFixture, host: &mut NativeUnassignedLearnerHost) ->
 }
 #[test]
 fn native_metadata_promotion_requires_actual_owned_ack_and_original_live_budget() {
-    let f = EnrollmentFixture::new();
+    let f = EnrollmentFixture::with_spares(2);
     let (_factory, mut host) = f.factory("actual-promotion");
     let token = CancellationToken::uncancelable();
     let configuration = config(&f);
@@ -164,6 +164,136 @@ fn native_metadata_promotion_requires_actual_owned_ack_and_original_live_budget(
         crate::MetadataConsensusRole::Leader
     );
     assert_eq!(owned.lock().status().node_id, node(4));
+    // Exact receiver proof without adding tracing fields: a SIXTH separately
+    // certified identity sends a genuine Register RPC to the newly elected
+    // fifth control listener. No supervisor runs in this deterministic fixture.
+    let client = crate::TcpClusterBootstrapClient::new(
+        configuration.cluster_id.clone(),
+        node(5),
+        f.networks[5].clone(),
+    )
+    .unwrap();
+    let address = own.committed_topology(business).unwrap().nodes[&node(4)]
+        .address
+        .clone();
+    let before = client.fetch_snapshot(&node(4), &address).unwrap();
+    assert_eq!(before.config_template.node_id, node(4));
+    assert_eq!(before.metadata_leader_id, Some(node(4)));
+    let now: u64 = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis()
+        .try_into()
+        .unwrap();
+    let sixth = ClusterNode::new(
+        node(5),
+        f.next_learner_address.as_ref().unwrap().clone(),
+        1,
+        1 << 30,
+        now,
+    )
+    .unwrap()
+    .as_metadata_learner()
+    .with_tls_certificate_sha256(
+        crate::replication_transport::replication_certificate_sha256(
+            &f.networks[5].tls.as_ref().unwrap().cert_path,
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    let committed = client
+        .register_metadata_learner(&node(4), &address, sixth, now)
+        .unwrap();
+    let event = committed
+        .history
+        .iter()
+        .find(|e| e.summary == "node n5 joined as metadata Learner")
+        .unwrap();
+    assert_eq!(event.actor, node(4));
+    assert!(event.generation > before.topology.generation);
+    assert_eq!(
+        committed.nodes[&node(5)].metadata_role,
+        MetadataMemberRole::Learner
+    );
+    assert!(committed.nodes[&node(5)].native_store_birth_v1.is_none());
+    assert!(committed
+        .ranges
+        .values()
+        .all(|r| r.replicas.iter().all(|p| p.node_id != node(5))));
+    let after = client.fetch_snapshot(&node(4), &address).unwrap();
+    assert_eq!(after.topology, committed);
+    assert_eq!(after.metadata_leader_id, Some(node(4)));
+    assert_eq!(owned.lock().status().node_id, node(4));
+    // Publish actual committed registration to the OLD leader before testing
+    // its refusal. This rules out unknown-caller/stale-C as the negative cause.
+    f.learner_transport
+        .install_topology(committed.clone())
+        .unwrap();
+    let request = {
+        let store = owned.lock();
+        store
+            .append_request_from(store.status().commit_index, 16)
+            .unwrap()
+    };
+    let ack = f
+        .learner_transport
+        .append_metadata(&node(0), request)
+        .unwrap();
+    owned.lock().record_append_response(&node(0), &ack).unwrap();
+    assert_eq!(
+        f.launches[0].metadata.lock().committed_topology(),
+        &committed
+    );
+    assert_eq!(
+        f.launches[0].metadata.lock().status().role,
+        crate::MetadataConsensusRole::Follower
+    );
+    assert_eq!(
+        f.launches[0].metadata.lock().status().leader_id,
+        Some(node(4))
+    );
+    let transport = TcpClusterRelocationTransport::new(
+        configuration.cluster_id.clone(),
+        node(5),
+        Arc::new(RwLock::new(committed.clone())),
+        f.networks[5].clone(),
+    )
+    .unwrap();
+    let original = token.child_with_deadline(Instant::now() + Duration::from_secs(5));
+    let original_deadline = original.deadline();
+    let stale = original.child_with_deadline(Instant::now() + Duration::from_millis(200));
+    assert!(transport
+        .acquire_host_metadata_observation(&node(0), Uuid::now_v7(), Duration::from_secs(5), &stale)
+        .is_err());
+    stale.cancel();
+    original.check().unwrap();
+    let business = Uuid::now_v7();
+    let fresh = transport
+        .acquire_host_metadata_observation(&node(4), business, Duration::from_secs(5), &original)
+        .unwrap();
+    assert_eq!(fresh.metadata_leader_id(), &node(4));
+    assert_eq!(original.deadline(), original_deadline);
+    let range = fresh
+        .committed_topology(business)
+        .unwrap()
+        .ranges
+        .values()
+        .next()
+        .unwrap();
+    // Exact n4 schema receiver is evidenced by this actual pinned transport
+    // call, independently of the CLI's existing data-leader source selection.
+    let bundle = transport
+        .export_native_learner_schema(&node(4), range, &original)
+        .unwrap();
+    bundle.verify().unwrap();
+    assert_eq!(
+        Some(bundle.fingerprint.sha256.as_str()),
+        range.required_schema_sha256(&fresh.committed_topology(business).unwrap().nodes)
+    );
+    fresh.require_live_request(business).unwrap();
+    original.check().unwrap();
+    // This component test registers an identity, not a sixth storage backend;
+    // the independent CLI case creates that backend with one join-fresh call.
 
     assert_eq!(
         owned

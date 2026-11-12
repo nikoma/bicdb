@@ -732,7 +732,8 @@ fn native_metadata_operator_actual_cli_single_join_fresh_becomes_local_metadata_
             .collect::<Vec<_>>();
         if let Some(ready) = ready {
             let host = &ready["host"];
-            if host["phase"] == "owned_metadata_voter"
+            if ready["error"].is_null()
+                && host["phase"] == "owned_metadata_voter"
                 && host["metadata_control_owned"] == true
                 && host["metadata"]["voters"]
                     .as_array()
@@ -774,7 +775,9 @@ fn native_metadata_operator_actual_cli_single_join_fresh_becomes_local_metadata_
     assert_eq!(ready["sequence"], 0);
     // Now exercise the lifecycle that a promotion-only result cannot prove:
     // the fifth campaigns using real authenticated votes/current-term barrier,
-    // then serves registration AND verified schema to a sixth actual backend.
+    // then exercises current-leader registration/control for a sixth backend.
+    // The CLI still fetches schema from an actual original data leader; exact
+    // fifth-node schema mirror handling is a separate deterministic Core case.
     let elected = step(&root, 4, 1, "elect");
     assert_eq!(elected["host"]["metadata"]["role"], "leader");
     assert_eq!(elected["host"]["metadata"]["node_id"], "n4");
@@ -786,8 +789,8 @@ fn native_metadata_operator_actual_cli_single_join_fresh_becomes_local_metadata_
         .arg(root.join("db5"))
         .arg("--cluster-id")
         .arg(config.cluster_id.as_str())
-        // Keep the ORIGINAL seed hint. It must route DATA to actual leader4,
-        // not assume the first seed remains the leader/registration controller.
+        // Keep the ORIGINAL seed hint. It must discover actual current leader
+        // authority after the real fifth election, including later elections.
         .arg("--seed-node-id")
         .arg("n0")
         .arg("--seed-address")
@@ -822,7 +825,8 @@ fn native_metadata_operator_actual_cli_single_join_fresh_becomes_local_metadata_
             .ok()
             .map(|b| serde_json::from_slice(&b).unwrap());
         if let Some(actual) = actual {
-            if actual["host"]["phase"] == "owned_metadata_voter"
+            if actual["error"].is_null()
+                && actual["host"]["phase"] == "owned_metadata_voter"
                 && actual["host"]["metadata_control_owned"] == true
                 && actual["host"]["metadata"]["voters"]
                     .as_array()
@@ -872,7 +876,59 @@ fn native_metadata_operator_actual_cli_single_join_fresh_becomes_local_metadata_
         snapshot.topology.nodes[&node(4)].metadata_role,
         bicdb_core::MetadataMemberRole::Voter
     );
-    assert_eq!(snapshot.metadata_leader_id, Some(node(4)));
+    let current_leader = snapshot.metadata_leader_id.as_ref().unwrap();
+    assert_eq!(
+        snapshot.topology.nodes[current_leader].metadata_role,
+        bicdb_core::MetadataMemberRole::Voter
+    );
+    let registered = snapshot
+        .topology
+        .history
+        .iter()
+        .filter(|event| event.summary == "node n5 joined as metadata Learner")
+        .collect::<Vec<_>>();
+    assert_eq!(registered.len(), 1);
+    let event = registered[0];
+    assert!(
+        event.generation
+            > elected["host"]["metadata"]["topology_generation"]
+                .as_u64()
+                .unwrap()
+    );
+    assert!(event.generation <= snapshot.topology.generation);
+    assert_eq!(
+        snapshot.topology.nodes[&event.actor].metadata_role,
+        bicdb_core::MetadataMemberRole::Voter
+    );
+    assert!(snapshot.topology.nodes[&event.actor]
+        .native_store_birth_v1
+        .is_some());
+    // This committed audit records the actual proposing store's actor under
+    // fresh leader MQ. Do not require it remain leader after autonomous votes.
+    let manifest: Value = serde_json::from_slice(
+        &std::fs::read(root.join("db5/native-unassigned-learner.json")).unwrap(),
+    )
+    .unwrap();
+    assert!(
+        !uuid::Uuid::parse_str(manifest["initial_metadata_context"].as_str().unwrap())
+            .unwrap()
+            .is_nil()
+    );
+    assert!(
+        manifest["initial_metadata_term"].as_u64().unwrap()
+            >= elected["host"]["metadata"]["current_term"]
+                .as_u64()
+                .unwrap()
+    );
+    assert!(
+        manifest["initial_metadata_read_index"].as_u64().unwrap()
+            > elected["host"]["metadata"]["commit_index"]
+                .as_u64()
+                .unwrap()
+    );
+    assert_eq!(manifest["schema_sha256"], sixth["host"]["schema_sha256"]);
+    assert_eq!(elected["host"]["metadata_store_id"], id);
+    eprintln!("NATIVE_SIXTH_REGISTRATION actor={} generation={} factory_mq_term={} factory_mq_index={} schema_source=initial_data_leader", event.actor, event.generation, manifest["initial_metadata_term"], manifest["initial_metadata_read_index"]);
     assert_eq!(
         snapshot.topology.nodes[&node(5)].metadata_role,
         bicdb_core::MetadataMemberRole::Voter
@@ -886,11 +942,10 @@ fn native_metadata_operator_actual_cli_single_join_fresh_becomes_local_metadata_
             .to_string(),
         sixth["host"]["birth_id"].as_str().unwrap()
     );
-    assert!(snapshot
-        .topology
-        .ranges
-        .values()
-        .all(|r| r.replicas.iter().all(|p| p.node_id != node(4))));
+    assert!(snapshot.topology.ranges.values().all(|r| r
+        .replicas
+        .iter()
+        .all(|p| p.node_id != node(4) && p.node_id != node(5))));
     let transport = bicdb_core::TcpClusterRelocationTransport::new(
         config.cluster_id,
         node(0),

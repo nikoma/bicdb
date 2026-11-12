@@ -68,9 +68,15 @@ original cancellation/decoded-ACK/installed-voter assertions remain.
 The default automatic CLI process case still starts the fifth with only
 `join-fresh` and requires actual local installed Voter state. It then invokes
 public diagnostic election on that fifth. A sixth REAL backend starts with only
-`join-fresh`, retains the original seed0 hint, and must receive actual
-registration/schema/owned-metadata/promotion through the newly elected control
-leader. The sixth has its own root, TLS files, namespaces, birth and StoreUUID;
+`join-fresh` and retains the original seed0 hint. Registration follows actual
+current metadata authority after the fifth's real election; autonomous elections
+may subsequently change that leader. The CLI currently selects its schema source
+using the first actual range's DATA leader, not the metadata leader. Thus CLI
+success does not prove schema export by the fifth metadata-only mirror. This is
+an availability dependency on an initial data leader. The deterministic Core
+successor instead issues a real sixth-client registration and schema RPC directly
+to the elected fifth, proving that exact receiver without new tracing fields.
+The sixth CLI backend has its own root, TLS files, namespaces, birth and StoreUUID;
 no private proposal or hidden learner protocol step supplies the positive. All
 six actual application Scan requests remain refused. The previous manual/cold
 CLI test stays separate and unchanged in scheduling mode.
@@ -90,3 +96,31 @@ track and must retain the strict installed-member readiness check. A stopped
 control owner deliberately retains its actual MStore/provider until the opaque
 host is dropped; callers must not assume the old pre-control Arc count when
 claiming all owners have closed. No UUID reset or root recreation is supported.
+
+
+### Existing observability successor (source-only)
+
+The test-only successor records the actual committed registration history actor
+and generation. The native registration producer fills that actor from its
+actual local metadata store after fresh OWN leader MQ; it is not a caller's
+asserted handler list. The automatic case permits legitimate later elections and
+checks that the audited actor is an actual admitted metadata voter. It preserves
+the fifth's actual election/control/StoreUUID assertions. The fresh learner
+manifest records factory OWN MQ context/term/readIndex and schema SHA. Those
+fields are not registration-event term or schema issuer and are not relabelled
+as such. ClusterSchemaBundle contains no receiver/issuer audit.
+
+The deterministic Core control adds a distinct sixth TLS identity, actual
+registration directly to fifth leader4, exact committed actor4/generation,
+actual pinned schema export to leader4, and a stale old-leader MQ refusal after
+that old leader has actually applied the sixth registration. A new fresh OWN MQ
+and exact-fifth schema call then succeed under the SAME original budget; the
+expired/refused attempt never renews it. This Core case registers a sixth CONFIG
+identity, not a sixth storage backend. The independent CLI case creates the
+backend. Poll loops require error-free current status before accepting ready
+fields so transient cached-error status cannot end the retry window early.
+
+First successor compilation at Root fe43 failed before tests because the new
+listener address parse needed an explicit SocketAddr type. Root retains that
+failure and supplies the separate 3b75b095b type-only correction. No local builds
+or runtime results are claimed for these added assertions.

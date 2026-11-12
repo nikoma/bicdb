@@ -1,0 +1,65 @@
+{
+  "actual_origin_acks": 2,
+  "classification": "ACTUAL_NATIVE_GENERIC_REPAIR_CHARACTERIZATION",
+  "embedded_bare_apply_native_limitation": true,
+  "fault": "only Apply1 to n2 deliberately not delivered after genuine CQ1",
+  "irretrievable_loss_proven": false,
+  "new_leader_readiness_proven": false,
+  "physical_qualification": false,
+  "repair_result": {
+    "destination": "n2",
+    "error": null,
+    "progress": {
+      "compacted_through": 0,
+      "current_epoch": 1,
+      "last_index": 1,
+      "node_id": "n2",
+      "range_id": 1,
+      "resolved_through": 1
+    },
+    "successful": true
+  },
+  "source_native_after": 2,
+  "target_copied_row_present": true,
+  "target_native_after": {
+    "diagnostic": "native base unknown/invalid; repair or re-attestation required",
+    "factory_initialization_complete": false,
+    "invalidated": true,
+    "materialized_pending_index": null,
+    "native_applied_index": null,
+    "native_base_index": null,
+    "native_receipt_sha256": null,
+    "pending_command_id": null,
+    "pending_command_index": null,
+    "range_id": 1
+  },
+  "target_native_before": {
+    "diagnostic": null,
+    "factory_initialization_complete": true,
+    "invalidated": false,
+    "materialized_pending_index": null,
+    "native_applied_index": 0,
+    "native_base_index": 0,
+    "native_receipt_sha256": "691645f339b9c4614a682e206eef25639cb8d11d5765ab3bbb3c830371c2bc72",
+    "pending_command_id": null,
+    "pending_command_index": null,
+    "range_id": 1
+  },
+  "target_raw_after": {
+    "compacted_through": 0,
+    "current_epoch": 1,
+    "last_index": 2,
+    "node_id": "n2",
+    "range_id": 1,
+    "resolved_through": 1
+  },
+  "target_raw_before": {
+    "compacted_through": 0,
+    "current_epoch": 1,
+    "last_index": 1,
+    "node_id": "n2",
+    "range_id": 1,
+    "resolved_through": 0
+  },
+  "transport": "in-process actual service replies; no TLS claim"
+}

@@ -1,0 +1,35 @@
+{
+  "source_commit": "bc3953904659856be93a96d0efdddfd6cde1dbb5",
+  "evidence_kind": "source_review_only",
+  "scenario": "all_owners_lost_after_target_clear_before_full_copy",
+  "source_actual_native_range_index": 1026,
+  "target_retained_sparse_index": 1026,
+  "target_published_installed_base": false,
+  "unavailable_data_members": ["n2"],
+  "metadata_majority_distinct_from_data_majority": true,
+  "existing_integrated_cold_resume_established": false,
+  "boundaries": [
+    {
+      "id": "fresh_data_quorum_through_installing_target",
+      "source_chain": ["RangeRecoveryRuntime::fence_epoch", "ClusterDataNodeService::preflight_native_recovery", "RangeWriteStore::preflight_recovery_fence", "RangeWriteStore::require_no_image_install"],
+      "assessment": "ordinary target fence refuses its durable image intent; n0 alone is not a data majority"
+    },
+    {
+      "id": "runtime_resume_ownership",
+      "source_chain": ["RangeRecoveryRuntime::transfer_image_install", "RangeRecoveryRuntime::source_capture_freeze"],
+      "assessment": "new Runtime lacks the exact-session freeze; normal session creator is also intent-guarded"
+    },
+    {
+      "id": "opaque_source_authorization",
+      "source_chain": ["CertifiedRecoveryImageCut::from_verified_source_history", "NativeRangeImageInstaller::begin", "NativeRangeImageInstaller::recover_completed"],
+      "assessment": "persisted refusal is not a fresh SourceCut; completed recovery additionally requires a published native receipt"
+    }
+  ],
+  "next_test": "copy-only strict reopen at exact clear-before-copy boundary, actual MQ witnesses, actual ordinary fence/refusal and quorum results, native and sparse custody checks",
+  "dynamic_defect_confirmed": false,
+  "source_and_target_data_irretrievable": false,
+  "current_main_attribution": false,
+  "azure_cause_claim": false,
+  "production_qualified": false,
+  "implementation_added": false
+}

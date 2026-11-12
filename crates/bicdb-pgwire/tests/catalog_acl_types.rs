@@ -119,6 +119,8 @@ async fn real_catalog_acl_describe_and_text_output_preserve_oid_and_permissions(
                     }
                     let user_column = client.prepare("SELECT relacl FROM acl_items WHERE 1=0").await.unwrap();
                     assert_eq!(user_column.columns()[0].type_().oid(), 25);
+                    let mixed_casts = client.prepare("SELECT id,NULL::aclitem AS scalar_acl,NULL::aclitem[] AS array_acl FROM acl_items LIMIT 0").await.unwrap();
+                    assert_eq!(mixed_casts.columns().iter().map(|column| column.type_().oid()).collect::<Vec<_>>(), vec![23,1033,1034], "{mode} {profile}: table projection must preserve cast types even without rows");
                     let unavailable_codecs = rows(client.simple_query("SELECT typreceive,typsend FROM pg_catalog.pg_type WHERE oid=1033").await.unwrap());
                     assert_eq!(unavailable_codecs, vec![vec![Some("-".into()), Some("-".into())]]);
                     let metadata = rows(client.simple_query("SELECT typname,typlen,typalign,typreceive::oid,typsend::oid,typarray FROM pg_catalog.pg_type WHERE oid=1033").await.unwrap());
@@ -127,16 +129,17 @@ async fn real_catalog_acl_describe_and_text_output_preserve_oid_and_permissions(
                     assert_eq!(error.as_db_error().unwrap().code().code(), "42883");
                     assert_eq!(rows(client.simple_query("SELECT 1").await.unwrap()), vec![vec![Some("1".into())]]);
                     client.simple_query("BEGIN").await.unwrap();
+                    client.simple_query("INSERT INTO acl_items(id) VALUES(1)").await.unwrap();
                     let transactional = client.query("SELECT relacl FROM pg_catalog.pg_class WHERE relname IN ('acl_items','ACL_ITEMS')", &[]).await.unwrap_err();
                     assert_eq!(transactional.as_db_error().unwrap().code().code(), "42883");
-                    if profile == "postgres" {
-                        let failed = client.simple_query("SELECT 1").await.unwrap_err();
-                        assert_eq!(failed.as_db_error().unwrap().code().code(), "25P02");
-                    } else {
-                        assert_eq!(rows(client.simple_query("SELECT 1").await.unwrap()), vec![vec![Some("1".into())]]);
-                    }
+                    // Output encoding runs after SQL execution. There is no
+                    // SQL statement-rollback receipt, so neither profile may
+                    // report recovery while pending writes remain in doubt.
+                    let failed = client.simple_query("SELECT 1").await.unwrap_err();
+                    assert_eq!(failed.as_db_error().unwrap().code().code(), "25P02");
                     client.simple_query("ROLLBACK").await.unwrap();
                     assert_eq!(rows(client.simple_query("SELECT 1").await.unwrap()), vec![vec![Some("1".into())]]);
+                    assert_eq!(rows(client.simple_query("SELECT count(*) FROM acl_items WHERE id=1").await.unwrap()), vec![vec![Some("0".into())]]);
                 }).await.expect("catalog metadata query exceeded its focused test bound");
             }).catch_unwind().await;
             drop(client);

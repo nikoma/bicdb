@@ -1,0 +1,23 @@
+{
+  "actual_new_application_ack": true,
+  "custody": {
+    "bytes": 1107478,
+    "database_reopened_for_custody": false,
+    "files": 57,
+    "generated_database_keys_private": true,
+    "manifest_sha256": "5223cda0abea9591fb7cbca9202ea7f20e989ce65acbf2c74482f37471dbf4cd"
+  },
+  "incoming_activate_rpc_tested": false,
+  "late_follower_caught_up_r2": false,
+  "patch_sha256": "2dd4660b1ae1b89a3a6394563fdc85bb05c63f9c1a78ce921d00ecd449fdb48a",
+  "physical_qualification": false,
+  "production_qualified": false,
+  "source_revision": "1cd28523c2f8a3970635dcae4ca43977727b1afe",
+  "strong_get_tested": false,
+  "test_count": 1,
+  "test_executable": {
+    "mutable_shared_target_path": true,
+    "path": "/tmp/bicdb-azure-artifact-target/release/deps/bicdb_core-b0702f49611c59ed",
+    "sha256": "85f1d007fdb41837a391d9514a6eabf6d01dd87919f08b41f9890ffb23145b4c"
+  }
+}

@@ -1,0 +1,29 @@
+{
+  "source": "b0e2498842be7b01e355bb8da1cc249ff16be056",
+  "source_version": "1.0.471-beta",
+  "status": "scripted_order_invoice_payment_posting_and_report_workflow_passed",
+  "binary_sha256": "e23d7c1a078b7ce6722237f35cfa67a822727d9762c928c808f3ce2767c543c2",
+  "independent_sql_connection_read_only": true,
+  "database_opened_by_verifier": false,
+  "application_qualified": false,
+  "order": "50000",
+  "invoice": "100001",
+  "payment": "400001",
+  "invoice_paid": true,
+  "payment_allocated": true,
+  "accounting_schemas_balanced": [
+    "101",
+    "200000"
+  ],
+  "fresh_session_retrieval": true,
+  "report_screenshot": "/root/.local/state/bicdb/typed-compare/main471-ui-browser/capture-042.png",
+  "report_screenshot_sha256": "48d31594380ad98acc6b2acb710fa324de34bc13a9bb6d1ae6d8165e2c66db15",
+  "report_pdf_download_verified": false,
+  "report_unauthenticated_fetch": "HTTP410 preserved; authenticated report rendering visually verified in capture-042.png",
+  "report_render_visual_review": "Order Confirmation 50000, source marker, Patio Chair quantity1, total33.75USD visible in rendered PDF viewer",
+  "automation_errors_preserved": 0,
+  "remaining": [
+    "multi-user application load",
+    "independent ACK reconciliation after crash during application load"
+  ]
+}

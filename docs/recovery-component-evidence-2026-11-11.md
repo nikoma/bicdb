@@ -10,6 +10,31 @@ historical tested version below.
 | [Fresh recovery receiver foundation](evidence/fresh-recovery-receiver-2026-11-11/README.md) | `bcddd35a` equivalent to pinned `9979638e` plus retained patch; package 1.0.466-beta | 44 distinct focused tests, 45 executions | Fresh roles, fences, quorum observations, native local physical proof and mutation ownership; later historical Apply/RPC collection excluded |
 | [Native catalogue adoption and historical replay](evidence/native-catalogue-historical-recovery-2026-11-11/README.md) | `9e37d812369de61bb9489ce5415d73d47fdcef35`; package 1.0.471-beta | 38 distinct focused tests | Actual image catalogue adoption and fresh local WAL replay after checkpoint/reopen; recovery still blocks ordinary new writes |
 | [Coherent participant source composition](evidence/recovery-participant-compose-471-2026-11-11/README.md) | `5d70669eec9fcea8f9963894ef73d243ef9d208f`; package 1.0.471-beta | 55 distinct focused tests | New recipient RPC collector and recovery-to-installer lease compile; neither new path was exercised in this bundle |
+| [Local preparation and authenticated receiver](evidence/native-prepared-receiver-2026-11-11/README.md) | `d440c58ebc962f1e62374d86faecbfcc051e2bbf`; package 1.0.471-beta | 40 distinct focused tests | Actual mTLS historical receiver and owned lease components; durable local preparation still grants no NativeReadyQQ or RecoveryComplete |
+| [Nonempty current-voter repair](evidence/native-rf3-current-repair-2026-11-11/README.md) | `33ffcf88a470a7f267838561d1b8f04d9b1f5820`; package 1.0.471-beta | 10 distinct focused tests | Actual local RF3 source/copy/history/catalogue repair and cold MVCC read; recovery and image refusals remain |
+| [Participant and readiness integration](evidence/native-participant-integration-2026-11-11/README.md) | `1c91526c`, `fd9dea6d`, `c8859805`; full IDs in receipt, each package 1.0.471-beta | Separate cohorts of 10, 38 and 8 tests | Historical TLS and owned lease; local completed-frozen producer; then actual Ready TLS with a trusted local quorum collector |
+| [Recovery composition](evidence/native-recovery-compose-72-2026-11-11/README.md) | `d52e73726edaedc90d1a5d134f205e99c7c46d0a`; package 1.0.471-beta | 72 distinct focused tests | One exact source cohort; incoming Complete and activation excluded |
+| [Serving/image failure baseline](evidence/native-serving-image-baseline-2026-11-11/README.md) | `1978a0ea8eec099ab5285c7ff5d30118ae5c1825`; package 1.0.471-beta | Expected failure: 0 passed, 1 failed | Retained serving record A blocks physical readiness after compatible image B; separate earlier wrong-recipient fixture also preserved |
+| [Authenticated frozen completion](evidence/native-completion-participants-2026-11-11/README.md) | `cad84207e8a4329db47449e43f658325d8f8cf55`; package 1.0.471-beta | 66 distinct focused tests, 67 executions | Actual incoming Complete/readonly TLS, post-persistence canceled socket and floor-preserving image controls; state remains NativeCompletedFrozen |
+
+
+| [Certification preflight and recovery order](evidence/native-recovery-order-2026-11-11/README.md) | `9eace333`, `021ba5c4`, `7d2f84a5`, `e68fa21f`; full IDs in receipt | **Failed**, then separate **1 PASS**, **22 PASS**, and large-case **failure** | Pure gap refusal formerly poisoned durable observations; larger fixture first exceeded complete-obligation reply bound |
+| [Complete obligation capacity](evidence/native-complete-obligation-capacity-2026-11-11/README.md) | `d2c202202943f047618784994b929a49738cd627`; package 1.0.471-beta | **21 distinct PASS** | Actual copied 1025-ACK fixture retains every obligation and all ACK digests; compacted gap, native catch-up and activation remain unproved |
+| [Generic repair failure baseline](evidence/native-generic-repair-baseline-2026-11-11/README.md) | `035fd22f40028a4d7c23e4a086af19791674677f` | **Failed** positive catch-up test | Generic repair reports success/raw Applied while native history becomes unknown; not an Azure attribution |
+| [Late Prepared failure baseline](evidence/native-late-prepared-baseline-2026-11-11/README.md) | `e3572fc655fe0dff9e634f56c5c01019ab8de173` | **Failed** positive completion test | Activated+Prepared available quorum cannot complete in that earlier source; ACK remains readable |
+| [Native abort failure baseline](evidence/native-origin-abort-baseline-2026-11-11/README.md) | `eafa6949a78ea4e97f1ea3271ff97f2de27d20c6` | **Failed** positive continuation test | Failed prepare leaves raw Aborted1/native0; restored quorum still cannot ACK the next transaction |
+| [Protected activation decision](evidence/native-activation-decision-2026-11-11/README.md) | `7b36642b444dc57051dde1fbb369f15ddb3cc3e1`, then separate `1cd28523c2f8a3970635dcae4ca43977727b1afe` | **10 distinct PASS**, then **1 separate PASS** | Protected prior decision repairs original late-follower test; later genuine ACK2 and late activation of old R1 tested separately. Late R2 catch-up and strong reads not tested |
+
+| [Sparse committed-decision source recovery](evidence/native-sparse-source-tail-2026-11-11/README.md) | `0d58359b07c31b38ed432e0a72ef7996ee2544b7`; package 1.0.471-beta | **3 distinct PASS**; separate codec pass at `1e6e3a0a`; two prior failures retained | Actual lagging voter stores full committed1026 without data/raw advancement; current quorum lets source reach native/Ready1026 and 1025 ACK digests match. Behind image repair/cold sparse reissue not tested by this cohort |
+
+| [Native ordinary Apply and catch-up](evidence/native-normal-apply-2026-11-11/README.md) | `18723cf4f1ddbb01e37f3762067b30000707cadb`; separate prior `87f1da00` cohort; package 1.0.471-beta | **5 distinct PASS**, with **7 earlier origin PASS** kept separate | Actual mTLS retained-command catch-up, new writes, duplicate preservation and wrong-actor/domain refusals. Original exact before-Prepare2 regression not rerun here; successful DB archives/external ACK ledgers not retained |
+| [Local native read observations](evidence/native-read-observation-foundation-2026-11-11/README.md) | `6d07ded1ec9e44d688f2263a7804c236b3aa9f14`; package 1.0.471-beta | **9 distinct PASS**; earlier compile and fixture failures retained | Actual local native R/H and target-local B, current-open activation, raw-ahead refusal, cancellation and gate invalidation. No authenticated read RPC, read quorum, admitted host/store identity, MVCC read barrier or StrongGet in this cohort |
+| [Native catalogue fsync configuration](evidence/native-catalog-fsync-2026-11-11/README.md) | `574ea56074a991368e9dae2129a0734a23bc1be3`; package 1.0.471-beta | **28 distinct PASS** on this source; initial compile failure and a zero-match filter retained | Actual native catalogue fsync-off and foreign-root refusal, legacy async preservation and related read/origin/TLS controls. Source-level unsafe configuration reproduced; no observed lost ACK or physical power-loss experiment |
+| [Authenticated read-quorum candidate](evidence/native-read-rpc-candidate-2026-11-11/README.md) | `daa77b42cd8f71a212de06596a249bfbce4d36e9`; separate `453b8682` first cohort | **15 distinct PASS**, 20 executions across two sources | Six actual RPC/candidate tests plus nine local tests at final source. Matching majority can finish with a stalled minority; expired replies cannot vote. Candidate remains **unadmitted**, without host-birth continuity, MVCC row barrier, final metadata check or StrongGet. Additional retry-count assertion at `8ce4938c` is uncompiled in this receipt |
+| [Interrupted normal-image cold resume](evidence/native-interrupted-normal-image-baseline-2026-11-11/README.md) | `8707ffa42fc0b20ff30e0dd5ebd8989e20207a0d`; package 1.0.471-beta | **Failed recovery scenario**, reproduced by one passing characterization test | Source ACK1 and resolved unknown2 survive; target remains Installing/Unknown with exact Sparse2 and no installed base. After all-owner strict reopen, ordinary target fencing refuses, only one of two required data voters contributes, and the new Runtime has no source-freeze session. Earlier compile failure and disk-guard interruption reached no assertions |
+| [Native store birth enrollment](evidence/native-store-birth-enrollment-2026-11-11/README.md) | `ee5cb1880a946b97816a15aa4e0cb12f7d03778d`; package 1.0.471-beta | **32 distinct PASS**: metadata11, read18, factory3; prior compile/fixture failures retained | Actual immutable store enrollment, uncommitted metadata overwrite/snapshot controls, genuine wrong-birth rejection and actual TLS read observations. No from-birth writer policy, MVCC value/absence producer, StrongGet or operator startup qualification |
+| [Protected current-image cold resume](evidence/native-protected-image-resume-2026-11-11/README.md) | `4de59df7` final four; `ec19eb3d` three related controls; full IDs in receipt, package 1.0.471-beta | **4 PASS**, plus separate **3 PASS** on runtime-identical earlier source; failures retained | Actual protected pre-BEGIN proposal and strict all-owner copied reopen resume target to nativeR2/localB1, preserving ACK1 and resolved unknown2. Target remains frozen/Prepared; no activation, new ACK, higher-epoch replacement source, wire/controller integration or physical crash qualification |
+| [Authenticated whole-host metadata](evidence/native-host-metadata-2026-11-11/README.md) | `e6a4d6368fb961b6da0d13394e4bc0902b7d6361`; package 1.0.471-beta | **23 distinct PASS / 24 executions**; earlier no-default compile failure retained | Actual TLS follower, learner and self requests, original request/peer/deadline binding, current committed membership checks and a controlled range-change round. Host metadata observation grants no range authority, writer policy, readiness, value or absence |
 
 The bundles overlap; their counts must not be added. Each retains commands,
 resource samples, warnings, prior failed attempts and source bytes or a complete
@@ -21,19 +46,38 @@ fixtures, byte-for-byte checked against that public base; it contains no live
 member keys or cloud credentials. Verification checks retained evidence and does
 not rerun Rust or independently attest execution.
 
-Most metadata participants use registered in-process transports. The metadata
-provider groups include actual loopback mTLS tests; that does not turn the
-historical Apply scenarios into authenticated remote receiver tests. Those
-scenarios use actual fsynced native stores, quorum observations and local WAL
-callbacks. A declared new metadata epoch/leader in a fixture is not an observed
-automatic election. Later source or runtime experiments need separate receipts;
-they do not retroactively extend these results.
+Transport coverage is specific to each cohort. The earlier local historical
+Apply scenarios use actual fsynced native stores, quorum observations and local
+WAL callbacks; separate provider TLS tests do not make those scenarios remote
+receiver tests. The 40-test and later participant receipts execute actual
+authenticated historical receiver collection on their own sources. The Ready
+TLS cases use actual peer messages with a trusted local collector. The 66-test
+receipt additionally executes incoming Complete and readonly completion TLS.
+A declared metadata epoch/leader is not an observed automatic election. These
+later receipts do not extend the earlier 55-test compiled-only boundary.
+
+The [72-test progress snapshot](native-recovery-progress-2026-11-11.md) retains
+its observed public-main timestamp and subsequent failed-image finding. The
+separate failed baseline and later 66-test source preserve both sides of that
+counterexample: the original failure remains failed, while the later source
+keeps A as a historical floor and obtains a new closed quorum for B. The GREEN
+witness retains assertions and logs but no post-test database archive. Neither
+of those older cohorts establishes a successful ordinary write after recovery.
+The later, separately pinned 1cd follow-up does: actual nodes 0 and 2 ACK write 2,
+then nodes 0 and 1 complete/activate the old R1 decision. Node 1 remains honestly
+at R1, without row 2 and without current Ready; this is not an R2 catch-up result.
 
 No bundle establishes physical scale-out, sustained throughput gain, hardware
-RPO/RTO or production p50/p95/p99. Actual RecoveryComplete, ordinary new writes
-after recovery, serving configuration activation, ordinary remote native Apply,
-complete audit/sync/broker effects, StrongGet and fault-safe four-to-five-node
-relocation remain outside these claims. General distributed SQL and atomic
+RPO/RTO or production p50/p95/p99. The activation receipt exercises a trusted
+local Runtime activation API after actual authenticated completion observations;
+it does not establish an incoming Activate endpoint or operator/controller
+integration. Ordinary native Apply and retained-command catch-up have the separate local/mTLS
+component evidence above; this does not establish the complete recovery/serving
+lifecycle. Complete audit/sync/broker effects, StrongGet and fault-safe
+four-to-five-node relocation remain outside these claims. The late follower's current R2 catch-up remains **not tested**;
+the original Azure visibility cause and convergence cause remain **inconclusive**.
+All failures above are private-prototype findings unless a receipt explicitly
+identifies a public runtime; no source-level fix alone establishes qualification. General distributed SQL and atomic
 multi-range transactions are not supplied by this component evidence. The
 [HA/scaling audit](ha-horizontal-scaling-audit-2026-11-10.md) and
 [Azure results](azure-scale-out-results-2026-11-11.md) remain the operational
@@ -46,9 +90,77 @@ PYTHONDONTWRITEBYTECODE=1 python3 docs/evidence/fresh-recovery-receiver-2026-11-
 PYTHONDONTWRITEBYTECODE=1 python3 docs/evidence/fresh-recovery-receiver-2026-11-11/test_verify.py
 PYTHONDONTWRITEBYTECODE=1 python3 docs/evidence/recovery-participant-compose-471-2026-11-11/verify.py --repo .
 PYTHONDONTWRITEBYTECODE=1 python3 docs/evidence/recovery-participant-compose-471-2026-11-11/test_verify.py
+PYTHONDONTWRITEBYTECODE=1 python3 docs/evidence/native-prepared-receiver-2026-11-11/verify.py --repo .
+PYTHONDONTWRITEBYTECODE=1 python3 docs/evidence/native-prepared-receiver-2026-11-11/test_verify.py
+PYTHONDONTWRITEBYTECODE=1 python3 docs/evidence/native-participant-integration-2026-11-11/verify.py --repo .
+PYTHONDONTWRITEBYTECODE=1 python3 docs/evidence/native-participant-integration-2026-11-11/test_verify.py
+PYTHONDONTWRITEBYTECODE=1 python3 scripts/verify-native-rf3-current-repair-evidence.py
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s scripts/tests -p test_native_rf3_current_repair_evidence.py
+PYTHONDONTWRITEBYTECODE=1 python3 docs/evidence/native-recovery-compose-72-2026-11-11/verify.py --repo .
+PYTHONDONTWRITEBYTECODE=1 python3 docs/evidence/native-recovery-compose-72-2026-11-11/test_verify.py
+PYTHONDONTWRITEBYTECODE=1 python3 scripts/verify-native-serving-image-baseline.py
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s scripts/tests -p test_native_serving_image_baseline.py
+PYTHONDONTWRITEBYTECODE=1 python3 docs/evidence/native-completion-participants-2026-11-11/verify.py --repo .
+PYTHONDONTWRITEBYTECODE=1 python3 docs/evidence/native-completion-participants-2026-11-11/test_verify.py
 ```
 
 The catalogue/replay bundle retains its exact manifest, compressed source
 snapshots, public-base patch, prior-failure reverse patch and reconstruction
 receipt. Its README describes the source reconstruction and the original fixture
 budget failure; both the failure and correction remain preserved.
+
+The [native no-data abort-history proposal](design/native-abort-history-recovery.md)
+is design only. It requires actual completed transaction cleanup, permanent
+no-commit promises and a real abort quorum before publishing canonical abort
+history with unchanged local data visibility. Raw Aborted alone is insufficient;
+no implementation or executed acceptance follows from that document.
+
+The [interrupted current-image resume review](design/native-interrupted-current-image-resume-review-2026-11-11.md)
+is a separate **source review**, not itself an executed recovery result. It identifies
+an admission cycle after all owners reopen a partially installed image: the
+ordinary target fence refuses the durable install intent, while obtaining a new
+source cut needs the currently unavailable data quorum. A persisted intent is
+a refusal fence, not evidence of fresh quorum authority. The review preserves
+the requirement for fresh InstallingFence observations and revalidation of all
+target obligations before any destructive continuation. The separately pinned
+8707 characterization above subsequently confirms this availability cycle in a
+small actual-storage fixture. It does not establish durable-data loss or explain
+the original Azure run. The [pre-BEGIN proposal protocol](design/native-interrupted-image-proposal-protocol-2026-11-11.md)
+was design only at publication: it requires a protected
+native-WAL proposal and preimage before the install intent, plus a fresh,
+separate InstallingFence quorum and revalidated source history on restart.
+The separately pinned protected-resume receipt above now tests that repair's
+local same-source/same-epoch storage path. Its four final tests and three related
+earlier-source controls do not retroactively turn the 8707 failure into success
+or establish higher-epoch recovery, activation or physical crash behavior.
+
+Local native birth is likewise a fact rather than voter-continuation authority.
+A future strong coordinator must compare every counted voter's actual birth
+against immutable, quorum-committed enrollment for that node incarnation. A
+recreated empty database cannot become an old voter merely because its node
+name, epoch, certificate and bootstrap specification match. Missing enrollment
+must refuse admission; replacement requires a new incarnation and learner
+repair. The separate 32-test enrollment receipt now exercises that immutable
+registry and factual read-quorum check. The host-metadata receipt supplies an
+authenticated startup observation, separately from range leadership. Neither
+receipt implements or tests a writer-enforced host startup or publishes a strong
+read value. From-birth writer admission, ordinary serving integration and physical
+replacement qualification remain open.
+
+The [operator integration audit](design/native-operator-four-to-five-gap-audit-2026-11-11.md)
+records exact reviewed revisions and the missing factory/startup, shared Runtime,
+strong-read gateway, authenticated image transfer, joint-data-quorum handoff and
+controller producers. A local recovery helper or existing relocation API does
+not satisfy those operational gates. Later source compositions require their
+own compilation, focused/broad regression evidence and source-versioned delivery.
+
+Additional offline checks for these separately pinned components:
+
+```sh
+PYTHONDONTWRITEBYTECODE=1 python3 docs/evidence/native-store-birth-enrollment-2026-11-11/verify.py --repo .
+PYTHONDONTWRITEBYTECODE=1 python3 docs/evidence/native-store-birth-enrollment-2026-11-11/test_verify.py
+PYTHONDONTWRITEBYTECODE=1 python3 docs/evidence/native-protected-image-resume-2026-11-11/verify.py --repo .
+PYTHONDONTWRITEBYTECODE=1 python3 docs/evidence/native-protected-image-resume-2026-11-11/test_verify.py
+PYTHONDONTWRITEBYTECODE=1 python3 docs/evidence/native-host-metadata-2026-11-11/verify.py --repo .
+PYTHONDONTWRITEBYTECODE=1 python3 docs/evidence/native-host-metadata-2026-11-11/test_verify.py
+```

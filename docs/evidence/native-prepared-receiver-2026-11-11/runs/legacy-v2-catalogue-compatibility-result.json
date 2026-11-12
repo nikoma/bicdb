@@ -1,0 +1,31 @@
+{
+  "git_head": "d440c58ebc962f1e62374d86faecbfcc051e2bbf",
+  "uncommitted_patch_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "source_version": "1.0.471-beta",
+  "scope": "NativePrepared actual owned physical pin and durable immutable point, same-session fresh-role/read-only validation, persistence ambiguity refusal/refsync; actual TLS historical recovery and owned image lease regression controls. No NativeReadyQQ/RecoveryComplete/serving-config/newwrite/StrongGet/physical qualification; core opt-level=0/debug=0",
+  "physical_qualification": false,
+  "environment_override": {},
+  "name": "legacy-v2-catalogue-compatibility",
+  "command": [
+    "cargo",
+    "test",
+    "--release",
+    "--locked",
+    "-p",
+    "bicdb-core",
+    "--features",
+    "tls-replication",
+    "--config",
+    "profile.release.package.bicdb-core.opt-level=0",
+    "--config",
+    "profile.release.package.bicdb-core.debug=0",
+    "--lib",
+    "distribution_range_consensus::tests::v2_log_without_a_fence_field_migrates_without_checksum_drift",
+    "--",
+    "--nocapture"
+  ],
+  "exit_code": 0,
+  "interrupted_reason": null,
+  "elapsed_seconds": 1.0006784200668335,
+  "minimum_available_bytes": 25433128960
+}

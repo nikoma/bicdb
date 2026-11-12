@@ -1,0 +1,30 @@
+{
+  "status": "same_cold_concurrent_login_constraint_failure_reproduced_on_native_oracle_ui",
+  "bicdb_source": "b0e2498842be7b01e355bb8da1cc249ff16be056",
+  "bicdb_version": "1.0.471-beta",
+  "bicdb_binary_sha256": "e23d7c1a078b7ce6722237f35cfa67a822727d9762c928c808f3ce2767c543c2",
+  "native_engine": "Oracle23.26.3.0.0",
+  "native_service": "BICDBAPPCTRL",
+  "constraint": "IDEMPIERE_QUAL.AD_PREFERENCE_ATTRIBUTE",
+  "user_id": 102,
+  "bicdb_load_acks": 0,
+  "original_failure_retained": true,
+  "ui_login_preference_model_query_bytecode_equal": true,
+  "native_sdk_adapter_installed": false,
+  "native_original_oracle_driver_loaded": true,
+  "protected_source_counts_objects_columns_unchanged": true,
+  "clone_original_mounted_state_restored": true,
+  "comparison_scope": "First-use concurrent login race only. Native Oracle JDBC errorCode1/SQLState23000 vs PostgreSQL transport errorCode0/SQLState23505 are recorded separately; no complete Oracle JDBC parity claim. JDK17 patch and OS kernel differ.",
+  "application_qualified": false,
+  "inputs": {
+    "/root/.local/state/bicdb/typed-compare/main471-ui-load-v1/result.json": "16697d4c3ec921c039c029daa7a4d60ca5028c2f8ddbf908f2462a79bfcf5ae0",
+    "/root/.local/state/bicdb/native-oracle-app/ui-login-control-v3/result.json": "b83aae6513df2da6cee3311e3fc543e57dd31ed3300a060169db24937d9289ec",
+    "/root/.local/state/bicdb/native-oracle-app/ui-control-v3.json": "e65b9b4362fa45fec31c402d0abaf2719b5b5f4e7ca40a25eaa8db4fa1ce8354",
+    "/root/.local/state/bicdb/native-oracle-app/ui-bytecode-comparison.json": "d3e1a8528ad2b84938261473bb4bf450f07ba3fa4e9960671ef9ac2b62d7267f",
+    "/root/.local/state/bicdb/native-oracle-app/ui-protected-source-before-v3.json": "0487b453d2c912213e70b8c27430e8cb97a7cd6ab88f48ac621e25171b459575",
+    "/root/.local/state/bicdb/native-oracle-app/ui-protected-source-after-v3.json": "0487b453d2c912213e70b8c27430e8cb97a7cd6ab88f48ac621e25171b459575",
+    "/root/.local/state/bicdb/native-oracle-app/ui-native-engine-and-restored-clone-state.log": "8219aee909298d765729e0d6b5760031960a9104e9d2170f182550ef34c6737c",
+    "/root/.local/state/bicdb/native-oracle-app/native-ui-control-v3-0ncyqzx1/class-load.log": "b36f81b75c7e9106772271b27b702bc08cec0bc34dcd050b7ca93618d738a436"
+  },
+  "verified_unix": 1794427425.0352097
+}

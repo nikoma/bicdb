@@ -1,0 +1,60 @@
+{
+  "actual_retained_entries": {
+    "1": {
+      "command": {
+        "checksum_sha256": "d54b0f18c2aacf185cfcf22e93c580052ce4385ce2cf2b3b24120ad97be3fae5",
+        "cluster_id": "actual-native-rf3-origin",
+        "command_id": "01a1ccc9-da42-7070-adc2-13256a92af7f",
+        "index": 1,
+        "leader_node_id": "n0",
+        "mutations": [
+          {
+            "collection": "items",
+            "record": {
+              "id": "interrupted-normal-ack-1",
+              "metadata": {},
+              "payload": null,
+              "timestamp": null,
+              "vector": null
+            },
+            "record_id": "interrupted-normal-ack-1"
+          }
+        ],
+        "protocol_version": 2,
+        "range_epoch": 1,
+        "range_id": 1,
+        "transaction_id": 2
+      },
+      "state": "applied"
+    },
+    "2": {
+      "command": {
+        "checksum_sha256": "39e4265e24fa42c51636809174f60be4531d084b97a5f4e7af7a06eb8658a013",
+        "cluster_id": "actual-native-rf3-origin",
+        "command_id": "01a1ccc9-db1f-7d60-a8e9-5511c55bc66d",
+        "index": 2,
+        "leader_node_id": "n0",
+        "mutations": [
+          {
+            "collection": "items",
+            "record": {
+              "id": "interrupted-normal-uncertain-2",
+              "metadata": {},
+              "payload": null,
+              "timestamp": null,
+              "vector": null
+            },
+            "record_id": "interrupted-normal-uncertain-2"
+          }
+        ],
+        "protocol_version": 2,
+        "range_epoch": 1,
+        "range_id": 1,
+        "transaction_id": 3
+      },
+      "state": "applied"
+    }
+  },
+  "projection_is_additional_database_read": false,
+  "source_file_sha256": "c0c5993e888bfa4cb68a4e1fa949b5553d9f6b75084e9a9a7f136d54fec0b715"
+}

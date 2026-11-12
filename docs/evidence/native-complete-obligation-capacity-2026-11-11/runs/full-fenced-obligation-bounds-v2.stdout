@@ -1,0 +1,9 @@
+
+running 3 tests
+test distribution_range_consensus::native_ready_catalog::obligation_bound_tests::complete_fenced_obligation_producer_deduplicates_without_dropping_conflicts_or_overflow ... ok
+test distribution_range_recovery::image_history::obligation_bound_tests::complete_fenced_obligation_bound_preserves_every_entry_and_refuses_overflow ... ok
+structural_full_native_obligation_envelope_bytes=2283918 frame_floor=4194304 complete_checksums=2049
+test distribution_transport::native_obligation_frame_tests::complete_fenced_obligation_envelope_and_maximum_entry_fit_native_frame_floor ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 677 filtered out; finished in 0.66s
+

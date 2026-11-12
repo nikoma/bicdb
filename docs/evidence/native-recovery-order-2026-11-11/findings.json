@@ -1,0 +1,53 @@
+{
+  "format_version": 1,
+  "scope": "private local component experiments; injected data-RPC delivery",
+  "current_main_causal_claim": false,
+  "ci_tested": false,
+  "physical_qualification": false,
+  "production_qualified": false,
+  "activation_tested": false,
+  "strong_get_tested": false,
+  "irretrievable_loss_proven": false,
+  "cohorts": [
+    {
+      "source": "9eace333c198e28e5416fb2943760e6286d5be59",
+      "outcome": "FAIL",
+      "exit_code": 101,
+      "finding": "pure-gap-validation-refusal-poisons-durable-observations",
+      "run": "runs/attempt-1-retained-prefix-result.json"
+    },
+    {
+      "source": "021ba5c42d9acd025760cb9496ff9b03f98d5f18",
+      "outcome": "PASS",
+      "exit_code": 0,
+      "distinct_tests": 1,
+      "finding": "retained-prefix-then-tail-recovers-after-actual-session-refsync",
+      "run": "runs/attempt-2-retained-prefix-refsync-result.json"
+    },
+    {
+      "source": "7d2f84a50d4aeaeee211ec4d54120f5c539a8ba4",
+      "outcome": "PASS",
+      "exit_code": 0,
+      "distinct_tests": 22,
+      "finding": "pure-preflight-does-not-poison-and-persistence-ambiguity-stays-refused",
+      "summary": "fix-runs/SUMMARY.json"
+    },
+    {
+      "source": "e68fa21fc4bfc52b53294e73dde57e42eb36876f",
+      "outcome": "FAIL",
+      "exit_code": 101,
+      "finding": "first-fence-response-rejects-1025-actual-irreversible-obligations",
+      "run": "runs/attempt-3-compacted-prefix-baseline-result.json",
+      "earliest_operation": "fence_epoch(n0)",
+      "later_compacted_gap_exercised": false,
+      "ack_ledger_rows": 1025,
+      "raw_entry_counts": {
+        "applied": 1024,
+        "quorum_committed": 1
+      },
+      "source_native_index": 1025,
+      "source_pending_index": 1026,
+      "source_compacted_through": 1
+    }
+  ]
+}

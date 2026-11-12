@@ -1,0 +1,30 @@
+{
+  "read_only": true,
+  "groups": [
+    {
+      "group_identity_sha256": "22daf499758beb75a00e35fc2d6c5f39ac7635caf987c0d04e2df25b52e4e8fd",
+      "group_query_exit": 0,
+      "group_exists": "false",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "checked_at_utc": "2026-11-12T00:40:52.506545+00:00",
+      "inventory_remaining_owned_resources": 0
+    },
+    {
+      "group_identity_sha256": "8b415fcb6dde4396cb169a20049063492d933974c9b380e7d7fdba8f5fc99018",
+      "group_query_exit": 0,
+      "group_exists": "false",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "checked_at_utc": "2026-11-12T00:40:52.197779+00:00",
+      "inventory_remaining_owned_resources": 0
+    }
+  ],
+  "new_resources_created": false,
+  "scope": "Only the original461 and instrumented463 owned experiment groups; no claim about unrelated Azure resources.",
+  "queries": [
+    "az group exists --subscription PINNED_SUBSCRIPTION -n EXACT_OWNED_GROUP -o tsv",
+    "az resource list --subscription PINNED_SUBSCRIPTION --query [].id -o json; local exact owned resourceGroup ID prefix filter"
+  ],
+  "query_timeout_seconds": 45,
+  "subscription_and_resource_group_identities": "Retained in the existing restricted experiment state; identity hashes match the original source461 public and source463 restricted deletion receipts.",
+  "execution_authenticity": "Captured CLI query results; not independent third-party attestation."
+}

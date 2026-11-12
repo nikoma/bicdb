@@ -1,0 +1,59 @@
+{
+  "status": "native_login_control_completed",
+  "started_unix": 1794427133.2244813,
+  "engine": "Oracle23.26.3",
+  "clone_service": "BICDBAPPCTRL",
+  "sdk_adapter_installed": false,
+  "sessions": {
+    "warm-admin": {
+      "username": "GardenAdmin",
+      "status": "ready",
+      "native_preference_constraint_failure": false
+    },
+    "0": {
+      "username": "GardenAdmin",
+      "status": "ready",
+      "native_preference_constraint_failure": false
+    },
+    "1": {
+      "username": "GardenUser",
+      "status": "ready",
+      "native_preference_constraint_failure": false
+    },
+    "2": {
+      "username": "GardenAdmin",
+      "status": "ready",
+      "native_preference_constraint_failure": false
+    },
+    "3": {
+      "username": "GardenUser",
+      "status": "error",
+      "error": "TimeoutError('Locator.wait_for: Timeout 120000ms exceeded.\\nCall log:\\n  - waiting for get_by_text(\"Log Out\", exact=True) to be visible\\n')",
+      "body": "Select Role\n\n\nTenant\n\t\n\n\nRole\n\t\n\n\nDefaults\n\n\nOrg\n\t\n\n\nWarehouse\n\t\n\n\nLanguage\n\t\n\n\nDate\n\t\nOK\nCancel\nHelp\niDempiere 13 Orion Online Demonstration\nVersion\t:\t13.0.0.202611011311\nDatabase Version\t:\t202609261812_IDEMPIERE-7125.sql\nVendor\t:\tSupported by iDempiere community\nJVM\t:\tOpenJDK 64-Bit Server VM 17.0.21.0.3+1-1-24.04.1-Ubuntu\nOS\t:\tLinux 6.8.0-139-generic null\nHost\t:\t127.0.0.1\niDempiere\nCould not save record - Require unique data:\n\nPlease change information.: ORA-00001: unique constraint (IDEMPIERE_QUAL.AD_PREFERENCE_ATTRIBUTE) violated on table IDEMPIERE_QUAL.AD_PREFERENCE columns (PREFERENCEFOR, AD_INFOWINDOW_ID, AD_PROCESS_ID, AD_CLIENT_ID, AD_ORG_ID, AD_WINDOW_ID, AD_USER_ID, ATTRIBUTE)\nORA-03301: (ORA-00001 details) row with column values (PREFERENCEFOR:'W', AD_INFOWINDOW_ID:NULL, AD_PROCESS_ID:NULL, AD_CLIENT_ID:11, AD_ORG_ID:0, AD_WINDOW_ID:NULL, AD_USER_ID:102, ATTRIBUTE:'Client') already exists\n\nhttps://docs.oracle.com/error-help/db/ora-00001/[SQL: 1, 23000]\nOK",
+      "native_preference_constraint_failure": true
+    }
+  },
+  "original_login_waits_unchanged": true,
+  "full_bicdb_application_qualified": false,
+  "native_ui_record_sha256": "4b4674c0d5a4fbb56c3d4535140f371e387629a52dafe1ff6bf927bc19f047f9",
+  "native_ui_base": "/root/.local/state/bicdb/native-oracle-app/native-ui-control-v3-0ncyqzx1",
+  "clone_cold_preference_setup": {
+    "clone_only": true,
+    "user_id": 102,
+    "preference_rows_before": 0,
+    "keys_reset": [
+      "Language",
+      "Role",
+      "Client",
+      "Organization",
+      "Warehouse",
+      "MenuCollapsed",
+      "HelpCollapsed",
+      "HeaderCollapsed",
+      "RecordInfoDefaultTab"
+    ]
+  },
+  "concurrent_sessions_reported": true,
+  "native_gardenuser_preference_failure_reproduced": true,
+  "finished_unix": 1794427293.6685126
+}

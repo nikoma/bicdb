@@ -1,0 +1,72 @@
+{
+  "n0": {
+    "catalog_file_present": true,
+    "raw_file_sha256": "3308bbfaa5fb612a732ba5ca6726d48bdd4e8da3d884b674279146faa1262e0a",
+    "envelope_checksum_sha256": "d0dbffee6468abea029f8d16c1a3faff4e41c483fdb480679632fc72114fd613",
+    "envelope_checksum_independently_matches": true,
+    "format_version": 5,
+    "range_progress": {
+      "current_epoch": 1,
+      "last_index": 1026,
+      "resolved_through": 1025,
+      "compacted_through": 1
+    },
+    "retained_entries": 1025,
+    "retained_state_counts": {
+      "applied": 1024,
+      "quorum_committed": 1
+    },
+    "lowest_retained_index": 2,
+    "highest_retained_index": 1026,
+    "recovery_fences": {
+      "1": {
+        "scope": {
+          "protocol_version": 1,
+          "cluster_id": "actual-native-rf3-origin",
+          "bootstrap_id": "01a1cc1a-5d45-7f51-85a5-9f3cadd6559d",
+          "range_id": 1,
+          "range_epoch": 1,
+          "initiator_node_id": "n0",
+          "initiator_incarnation": 1,
+          "recovery_nonce": "01a1cc1f-cc0d-7883-bf38-dc602ab25ebc",
+          "business_request_id": "01a1cc1f-cc0d-7883-bf38-dc766df705df",
+          "metadata_context_id": "01a1cc1f-cc0d-7883-bf38-dcaf5d6549fa",
+          "metadata_term": 1,
+          "metadata_read_index": 1,
+          "configuration_sha256": "455c9b6b024be1f0522530f60f43832063715c518625cb40db5a051c2ecb18d1",
+          "range_configuration_sha256": "163870c43590e0a02b830d21f71d7b1d2b662d2af28b5bbac3ed7dd78991b459",
+          "purpose": "NormalRecovery"
+        },
+        "phase": "Active",
+        "local_node_id": "n0",
+        "local_member_incarnation": 1,
+        "native_database_incarnation": "8179fc14-5a24-445a-aa19-c185f88610bf"
+      }
+    }
+  },
+  "n1": {
+    "catalog_file_present": false,
+    "meaning": "No data command delivery or fence request reached this actual fixture member; no missing-file-to-zero inference."
+  },
+  "n2": {
+    "catalog_file_present": true,
+    "raw_file_sha256": "3d8543c81165601f53831cc72a28574d8eb17e910460b262ee812d2c9cd3296d",
+    "envelope_checksum_sha256": "a18d0487e659b0c368d6eb84d8c1df9c16d7146ac74918e649218eb42f4c0631",
+    "envelope_checksum_independently_matches": true,
+    "format_version": 3,
+    "range_progress": {
+      "current_epoch": 1,
+      "last_index": 1026,
+      "resolved_through": 1025,
+      "compacted_through": 1
+    },
+    "retained_entries": 1025,
+    "retained_state_counts": {
+      "applied": 1024,
+      "quorum_committed": 1
+    },
+    "lowest_retained_index": 2,
+    "highest_retained_index": 1026,
+    "recovery_fences": {}
+  }
+}

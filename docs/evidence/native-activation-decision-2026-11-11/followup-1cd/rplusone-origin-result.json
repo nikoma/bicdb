@@ -1,0 +1,39 @@
+{
+  "acknowledged": true,
+  "error": null,
+  "late_node_native": {
+    "diagnostic": null,
+    "factory_initialization_complete": true,
+    "invalidated": false,
+    "materialized_pending_index": null,
+    "native_applied_index": 1,
+    "native_base_index": 0,
+    "native_receipt_sha256": "3f061f647dac246b284f8158ca49208a04f5f9a97b665b146a052fc65f31dd8e",
+    "pending_command_id": null,
+    "pending_command_index": null,
+    "range_id": 1
+  },
+  "late_node_raw": {
+    "compacted_through": 0,
+    "current_epoch": 2,
+    "last_index": 1,
+    "node_id": "n1",
+    "range_id": 1,
+    "resolved_through": 1
+  },
+  "phase": "NEW_ORIGIN_AFTER_ACTIVATION",
+  "physical_qualification": false,
+  "source_native": {
+    "diagnostic": null,
+    "factory_initialization_complete": true,
+    "invalidated": false,
+    "materialized_pending_index": null,
+    "native_applied_index": 2,
+    "native_base_index": 0,
+    "native_receipt_sha256": "63a99d157b73198f5730f87b504ca039b41c10e748d58b4fd8a43dc02f455e9a",
+    "pending_command_id": null,
+    "pending_command_index": null,
+    "range_id": 1
+  },
+  "strong_get_tested": false
+}

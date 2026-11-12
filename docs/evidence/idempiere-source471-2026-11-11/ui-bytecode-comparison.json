@@ -1,0 +1,15 @@
+{
+  "native_controller": {
+    "org/adempiere/webui/util/UserPreference.class": "6d43334263334192e16a314f429bd8e53741244e2968c6603ea64de498833a2d",
+    "org/adempiere/webui/panel/RolePanel.class": "a522b29d77eda052f35770c75a6478cd5953c00a4baa76cda1a7901849d2a57b",
+    "org/compiere/model/MPreference.class": "65fa77f1d8216750464b4d8632d5cc0721352c43907bedd446e8317f9aefbe8a",
+    "org/compiere/model/Query.class": "6a565bd1905d840bd6b4e28db159ea73174e66e455beb878a83dec65296ea200"
+  },
+  "bicdb_s3": {
+    "org/adempiere/webui/util/UserPreference.class": "6d43334263334192e16a314f429bd8e53741244e2968c6603ea64de498833a2d",
+    "org/adempiere/webui/panel/RolePanel.class": "a522b29d77eda052f35770c75a6478cd5953c00a4baa76cda1a7901849d2a57b",
+    "org/compiere/model/MPreference.class": "65fa77f1d8216750464b4d8632d5cc0721352c43907bedd446e8317f9aefbe8a",
+    "org/compiere/model/Query.class": "6a565bd1905d840bd6b4e28db159ea73174e66e455beb878a83dec65296ea200"
+  },
+  "equal": true
+}

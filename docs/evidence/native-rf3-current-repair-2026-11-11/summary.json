@@ -1,0 +1,136 @@
+{
+  "format_version": 1,
+  "source_revision": "33ffcf88a470a7f267838561d1b8f04d9b1f5820",
+  "source_version": "1.0.471-beta",
+  "scope": "LOCAL_COMPONENT_TESTS_ONLY",
+  "private_candidate": true,
+  "ci_for_this_candidate": "NOT_RUN",
+  "test_count": 10,
+  "phases": {
+    "final-normal-repair": {
+      "tests": [
+        "distribution_range_image_install::current_repair_tests::actual_rf3_nonempty_current_voter_repair_uses_same_catalogue_and_keeps_recovery_closed"
+      ],
+      "count": 1,
+      "result": "runs/final-normal-repair-result.json"
+    },
+    "final-owned-leases": {
+      "tests": [
+        "distribution_range_image_install::lease_tests::actual_runtime_lease_post_intent_drop_refuses_untouched_return",
+        "distribution_range_image_install::lease_tests::actual_runtime_lease_full_image_adoption_returns_only_control_and_preserves_all_refusals",
+        "distribution_range_image_install::lease_tests::actual_runtime_lease_untouched_cancel_drop_requires_fresh_authority_and_keeps_recovery_fenced"
+      ],
+      "count": 3,
+      "result": "runs/final-owned-leases-result.json"
+    },
+    "final-historical": {
+      "tests": [
+        "db::range_image_native::certified_prefix::recovery_apply::tests::actual_native_historical_replica_uses_current_marker_quorum_without_data_leader_certifier",
+        "db::range_image_native::certified_prefix::recovery_apply::tests::actual_post_wal_unknown_checkpoint_reopen_uses_new_local_attempt_and_original_command"
+      ],
+      "count": 2,
+      "result": "runs/final-historical-result.json"
+    },
+    "final-participant-tls": {
+      "tests": [
+        "db::range_image_native::rf3_fixture::native_historical_tls::actual_mtls_participant_collection_holds_no_recipient_service_or_database_latch",
+        "db::range_image_native::rf3_fixture::native_historical_tls::actual_mtls_participant_current_quorum_recovers_without_old_data_leader_and_rejects_stale_scope",
+        "db::range_image_native::rf3_fixture::native_historical_tls::actual_mtls_unwired_participant_receiver_refuses_without_materializing"
+      ],
+      "count": 3,
+      "result": "runs/final-participant-tls-result.json"
+    },
+    "final-two-range-origin": {
+      "tests": [
+        "db::range_image_native::rf3_fixture::actual_rf3_two_initial_ranges_have_real_genesis_and_independent_origin_indices"
+      ],
+      "count": 1,
+      "result": "runs/final-two-range-origin-result.json"
+    }
+  },
+  "actual_repair_observation": {
+    "cold_recovery_and_image_refusals_retained": true,
+    "cold_target_db_sequence": 21,
+    "current_data_quorum_members": [
+      "n0",
+      "n1"
+    ],
+    "installed_target_local_db_sequence": 21,
+    "logical_history_sha256": "b179ab86cd570d1b4a3346070fa15f1e1d89e7ab8adf8dbf0d37bcbaf7936b02",
+    "metadata_leader": "n2",
+    "native_ready_after_adoption": "REFUSED_RETAINED_IMAGE_INTENT",
+    "other_range_diagnostic_imports": 17,
+    "other_range_imports_are_rf3_user_acks": false,
+    "physical_qualification": false,
+    "selected_native_r0_unchanged_by_diagnostic_other_range_imports": true,
+    "source_data_leader": "n0",
+    "source_db_sequence": 5,
+    "source_range_index": 1,
+    "target_before_db_sequence": 20,
+    "target_local_namespace_preserved": true
+  },
+  "source_snapshots": {
+    "crates/bicdb-core/src/distribution_data/native_image_install.rs": "fcd9fc8a4ec0d0fd44017ff66a25c67e1226ead05fb5b21ada36a3d39f83071b",
+    "crates/bicdb-core/src/distribution_range_image_install/current_repair_tests.rs": "b7b046e74c9734845924b167ce67d5c44c9c69ff06fd957eebf59ea910a766dc",
+    "crates/bicdb-core/src/distribution_range_image_install/lease_tests.rs": "c44bc3713a246a61468c6094450aa86cf170c2132c7b072739625cae2b9fc5d1",
+    "crates/bicdb-core/src/distribution_range_image_install.rs": "51ec408297aaf6e3e404f62547e38216d77935c4b026af1ac291910289ccfd00",
+    "crates/bicdb-core/src/distribution_range_image/source_cut.rs": "80139218a192a553971847ba5299045706871335a91f10307205886a21fe98db",
+    "crates/bicdb-core/src/distribution_range_image.rs": "b0fbe76eacab34a5a07e8cd7fc413118452e5d50256a2e4d76a071ab8da40381",
+    "crates/bicdb-core/src/distribution_range_recovery/quorum.rs": "6d1adc58e7b2523704ebe0efd6cc5d2f59d7516ebfe8dc189660f8141a14a2fd",
+    "crates/bicdb-core/src/distribution_range_recovery/image_compatibility.rs": "94624464f364e0c42ece618f19e2de240646dc2e86754a5645897b8f0e1a4db7",
+    "crates/bicdb-core/src/distribution_range_recovery/runtime.rs": "0250156b1027e4b3d561977b7f39d804cc1b75835475630143a1cfc35efe0e9a",
+    "crates/bicdb-core/src/distribution_range_consensus/recovery_state.rs": "4101d037e4c939a14c7aa2659fefcd7f5cae1746ad22a7783abc499caa30e886",
+    "crates/bicdb-core/src/distribution_range_consensus/native_image_base.rs": "305825743047c52c1aa89f6be9f4b1b04a5e56e0b9336b29969c39ab2b5dbdda",
+    "crates/bicdb-core/src/db/range_image_install.rs": "01ce2f52ac154ba756fd5a006dc2a29649f0512b06508c1d59d2b985fad4477c",
+    "crates/bicdb-core/src/db/range_image_native/rf3_fixture.rs": "10fd723c68e39e088580e07ec0a5d0f1cfed2ebccd62fca4816175c09f7bb6fc",
+    "crates/bicdb-core/src/db/range_image_native/rf3_fixture/native_historical_tls.rs": "f84421d3ed9d2393d52115d889a5466d18ccb3b84cfb074e3dbe3217ada298dc",
+    "crates/bicdb-core/src/db/range_image_native/certified_prefix/recovery_apply.rs": "cb4bd57abdaceb0e56fbe39231bbc2b7dd58e39f42645362bf03ed979433a88a",
+    "crates/bicdb-core/src/db/range_image_native/history_stage.rs": "ebc885767748507752ec1333ec22c7728bf37317c23066de823a350075246aea",
+    "crates/bicdb-core/src/db/native_recovery_ready.rs": "bb0280a6d6f8866e2bb8010bfc9f8da3f70d1c88c4b06d8557817affa0ca53cb"
+  },
+  "failed_attempts": [
+    {
+      "result": "runs/attempt-1-normal-repair-result.json",
+      "classification": "COMPILE_ERROR_MISSING_EXISTING_SCOPE_ARGUMENT",
+      "tests_ran": false
+    },
+    {
+      "result": "runs/attempt-2-normal-repair-result.json",
+      "classification": "FIXTURE_EXPECTED_ORDINARY_WRITE_BUT_DISTRIBUTED_AUTHORITY_CORRECTLY_REFUSED",
+      "tests_ran": true
+    }
+  ],
+  "earlier_green": {
+    "result": "runs/attempt-3-normal-repair-result.json",
+    "source_revision": "36be678009579b477b0c8308b0e8c02d766770e1",
+    "count": 1,
+    "not_counted_as_final_source": true
+  },
+  "test_binary": {
+    "path_at_run": "/tmp/bicdb-azure-artifact-target/release/deps/bicdb_core-b0702f49611c59ed",
+    "sha256": "20a06c8853c84292476b83480a18f43800b930f824080f64f34e199f673288b1",
+    "bytes": 128198344,
+    "retained_as_operator_binary": false
+  },
+  "qualification": {
+    "physically_tested": false,
+    "production_qualified": false,
+    "deployed": false,
+    "sustained_scale_out_proven": false,
+    "rpo": null,
+    "rto": null,
+    "p50": null,
+    "p95": null,
+    "p99": null
+  },
+  "open_gates": [
+    "sealed_image_to_Prepared_transition",
+    "Normal_repair_cold_resume",
+    "new_acknowledged_write_after_repair",
+    "serving_configuration_and_leader_readiness",
+    "strong_read_visibility_and_authority",
+    "image_wire_source_admission",
+    "RF3_R1025_repair",
+    "physical_failover_rebalance_and_capacity_qualification"
+  ]
+}

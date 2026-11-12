@@ -1,0 +1,74 @@
+{
+  "activation_tested": false,
+  "behind_raw_and_native_after": 0,
+  "binary_release_produced": false,
+  "distinct_passing_tests": 3,
+  "main_merged_at_measurement": false,
+  "new_application_ack_tested": false,
+  "original_ack_values_reconciled": 1025,
+  "original_unknown_tail_is_new_ack": false,
+  "passing_test_ids": [
+    "distribution_range_consensus::native_activation_domain_tests::native_activation_other_range_completed_domain_survives_global_format_upgrade",
+    "distribution_range_consensus::native_activation_domain_tests::native_activation_other_range_prepared_domain_survives_global_format_upgrade",
+    "distribution_range_recovery::recovery_order_tests::sparse_current_case::copied_actual_1025_prefix_sparse_current_quorum_finishes_native_tail"
+  ],
+  "patch_sha256": "485a1c3055aeced185498e96f9ba63bd8759cf4422ef730123c7bd8200b8e44f",
+  "physical_qualification": false,
+  "production_qualified": false,
+  "public_patch_base": "b0e2498842be7b01e355bb8da1cc249ff16be056",
+  "runs": [
+    {
+      "exit_code": 101,
+      "failed_test_ids": [
+        "distribution_range_consensus::sparse_certification::codec_tests::sparse_catalog_codec_requires_explicit_new_format_field_and_preserves_legacy_shape"
+      ],
+      "name": "sparse-codec",
+      "passed_test_ids": [],
+      "source_revision": "b435f68c5d9bda8d4f87b9d05f2d84a8bdcf653b"
+    },
+    {
+      "exit_code": 0,
+      "failed_test_ids": [],
+      "name": "sparse-codec-v2",
+      "passed_test_ids": [
+        "distribution_range_consensus::sparse_certification::codec_tests::sparse_catalog_codec_requires_explicit_new_format_field_and_preserves_legacy_shape"
+      ],
+      "source_revision": "1e6e3a0a0e60fbdba8abcfed3b78bdd82535c1f5"
+    },
+    {
+      "exit_code": 101,
+      "failed_test_ids": [
+        "distribution_range_recovery::recovery_order_tests::sparse_current_case::copied_actual_1025_prefix_sparse_current_quorum_finishes_native_tail"
+      ],
+      "name": "copied-sparse-actual1025",
+      "passed_test_ids": [],
+      "source_revision": "1e6e3a0a0e60fbdba8abcfed3b78bdd82535c1f5"
+    },
+    {
+      "exit_code": 0,
+      "failed_test_ids": [],
+      "name": "two-range-domain",
+      "passed_test_ids": [
+        "distribution_range_consensus::native_activation_domain_tests::native_activation_other_range_prepared_domain_survives_global_format_upgrade",
+        "distribution_range_consensus::native_activation_domain_tests::native_activation_other_range_completed_domain_survives_global_format_upgrade"
+      ],
+      "source_revision": "0d58359b07c31b38ed432e0a72ef7996ee2544b7"
+    },
+    {
+      "exit_code": 0,
+      "failed_test_ids": [],
+      "name": "copied-sparse-actual1025-v2",
+      "passed_test_ids": [
+        "distribution_range_recovery::recovery_order_tests::sparse_current_case::copied_actual_1025_prefix_sparse_current_quorum_finishes_native_tail"
+      ],
+      "source_revision": "0d58359b07c31b38ed432e0a72ef7996ee2544b7"
+    }
+  ],
+  "source_native_applied_after": 1026,
+  "source_native_ready_after": 1026,
+  "source_revision": "0d58359b07c31b38ed432e0a72ef7996ee2544b7",
+  "source_version": "1.0.471-beta",
+  "strong_get_tested": false,
+  "target_image_install_tested": false,
+  "worktree": "/tmp/bicdb-native-sparse-current-certification"
+}

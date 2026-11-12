@@ -1,0 +1,6 @@
+{
+  "path": "/tmp/bicdb-azure-artifact-target/release/deps/bicdb_core-b0702f49611c59ed",
+  "sha256": "21619959b59643ee14be56a0dd5ebd2c972408d71c534470407997f99d384f2e",
+  "bytes": 129759024,
+  "classification": "shared target mutable path, hash captured after intended forced compile; not a frozen release binary"
+}

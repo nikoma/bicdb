@@ -1,0 +1,66 @@
+{
+  "before_fix_dynamic_experiment_run": false,
+  "classification": "SOURCE_LEVEL_UNSAFE_NATIVE_SERVICE_CONFIGURATION",
+  "not_claimed": "No process/VM failure or acknowledged-loss reproduction was executed for this configuration audit.",
+  "observed_lost_ack": false,
+  "paths": [
+    "ClusterDataNodeService::open_with_schema_runtime passed independent fsync directly to RangeWriteStore::open",
+    "RangeWriteStore::open rejected !fsync only for catalog format>=4, not fresh3",
+    "ordinary Prepare/Commit/Certify returned actual service ACKs after persist_with forwarded self.fsync to storage::write_atomic",
+    "require_durable_recovery_catalog checked format/uncertainty, not fsync",
+    "ordinary NativeApply/read facts alone were not a proof that every counted raw CQ was synced"
+  ],
+  "scope": "fresh format3 range catalog alongside actual native factory DB; DB fsync=true does not imply Service/RangeWriteStore fsync=true",
+  "source_inputs": [
+    {
+      "files": [
+        {
+          "bytes": 136711,
+          "path": "crates/bicdb-core/src/distribution_data.rs",
+          "sha256": "d6a11ef7ea4b8a4fdb4b10c55d9ce298e9f779820a5b9727a972707e56618261"
+        },
+        {
+          "bytes": 228177,
+          "path": "crates/bicdb-core/src/distribution_range_consensus.rs",
+          "sha256": "12152ab3037636d2acea936acd6c2bf60373ee3898dc88c35acf06c9ad8293aa"
+        },
+        {
+          "bytes": 75220,
+          "path": "crates/bicdb-core/src/distribution_range_consensus/recovery_state.rs",
+          "sha256": "d4b3b9fb981b1d96dab924d2996a68b5eeddfe95f01f91a389e4439c116be5bc"
+        },
+        {
+          "bytes": 124759,
+          "path": "crates/bicdb-core/src/storage.rs",
+          "sha256": "e77ccd6c2d2498f592e335931048ad6992c39c600cb3cd479bb6e8203cb4e5a2"
+        }
+      ],
+      "revision": "18723cf4f1ddbb01e37f3762067b30000707cadb"
+    },
+    {
+      "files": [
+        {
+          "bytes": 141007,
+          "path": "crates/bicdb-core/src/distribution_data.rs",
+          "sha256": "fa89ad1a886f71049f6d1c4009e2049abb6660faf288e611be4cd71a299745aa"
+        },
+        {
+          "bytes": 230396,
+          "path": "crates/bicdb-core/src/distribution_range_consensus.rs",
+          "sha256": "15d0489f9ab994650a1afe4513841fd5fa752313558d4a90a752912b89a76102"
+        },
+        {
+          "bytes": 76010,
+          "path": "crates/bicdb-core/src/distribution_range_consensus/recovery_state.rs",
+          "sha256": "b6b9d493bd6d8e36264d1c6ba23731551ffbfa0946c689a007740d997d6729e8"
+        },
+        {
+          "bytes": 124759,
+          "path": "crates/bicdb-core/src/storage.rs",
+          "sha256": "e77ccd6c2d2498f592e335931048ad6992c39c600cb3cd479bb6e8203cb4e5a2"
+        }
+      ],
+      "revision": "6d07ded1ec9e44d688f2263a7804c236b3aa9f14"
+    }
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "active_source_fd_or_map_users": 0,
+  "bytes": 824217,
+  "contains_private_generated_database_keys": true,
+  "custody_root": "/root/.local/state/bicdb/ha-scaling-2026-11-11/private/native-store-birth-ee5cb188",
+  "database_opened_for_copy": false,
+  "directories_fsynced": true,
+  "directory_mode": "0700",
+  "external_ack_ledger_retained": false,
+  "file_mode": "0600",
+  "files": 47,
+  "files_fsynced": true,
+  "fixture": "existing genuine R2 read-observation fixture; not new enrollment/factory fixture roots",
+  "manifest_sha256": "63e2da1e0da7e313469c0a4f28e23ab8f06b866620dd4ecccfc8c5dd18a9d056",
+  "new_enrollment_tls_fixture_roots_retained": false,
+  "new_factory_fixture_roots_retained": false,
+  "source_destination_hash_parity": true,
+  "source_revision": "ee5cb1880a946b97816a15aa4e0cb12f7d03778d",
+  "source_root_printed_in_final_reads_stderr": "/tmp/.tmpv3ISIJ",
+  "source_unchanged_after_copy": true
+}

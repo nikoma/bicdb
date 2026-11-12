@@ -1,0 +1,188 @@
+{
+  "acknowledged_data_loss_observed": false,
+  "binary_release_produced": false,
+  "config_test_database_roots_retained": false,
+  "distinct_passing_tests": 28,
+  "effects_issue_148_closed": false,
+  "embedded_normal_apply_controls": 1,
+  "existing_legacy_service_after_actual_format_activation_tested": true,
+  "explicit_legacy_async_behavior_preserved": true,
+  "external_ack_ledger_retained": false,
+  "historical_mtls_controls": 3,
+  "main_merged_at_measurement": false,
+  "metadata_mtls_controls": 2,
+  "minimum_available_bytes": 21236314112,
+  "native_config_tests": 6,
+  "native_foreign_root_refusal_tested": true,
+  "normal_apply_mtls_specific_tests": 0,
+  "origin_controls": 7,
+  "passing_executions": 28,
+  "passing_test_ids": [
+    "db::range_image_native::rf3_fixture::native_historical_tls::actual_mtls_participant_collection_holds_no_recipient_service_or_database_latch",
+    "db::range_image_native::rf3_fixture::native_historical_tls::actual_mtls_participant_current_quorum_recovers_without_old_data_leader_and_rejects_stale_scope",
+    "db::range_image_native::rf3_fixture::native_historical_tls::actual_mtls_unwired_participant_receiver_refuses_without_materializing",
+    "db::range_image_native::rf3_fixture::native_historical_tls::native_read_observation_tests::native_read_observation_recovered_serving_requires_actual_activated_open",
+    "db::range_image_native::rf3_fixture::native_historical_tls::native_read_observation_tests::native_read_observation_uses_current_r2_not_activation_anchor_and_refuses_cq_only_peer",
+    "db::range_image_native::rf3_fixture::native_normal_apply_actual_rf3_services_materialize_two_acks_and_lost_apply_catchup",
+    "distribution_data::native_durability::tests::native_catalog_existing_legacy_async_service_refuses_cq_after_actual_format_activation",
+    "distribution_data::native_durability::tests::native_catalog_explicit_legacy_async_prepare_commit_certify_stays_supported",
+    "distribution_data::native_durability::tests::native_catalog_fsync_false_born_service_refuses_before_catalogs_or_native_changes",
+    "distribution_data::native_durability::tests::native_catalog_fsync_true_real_origin_ack_and_local_observation_remain_available",
+    "distribution_data::native_durability::tests::native_catalog_lower_native_proof_guards_refuse_false_fsync_without_mutation",
+    "distribution_data::native_durability::tests::native_catalog_separate_root_refuses_before_any_foreign_catalog_creation",
+    "distribution_metadata_read_provider::tests::tls::actual_mtls_range_leader_acquires_from_different_metadata_leader_without_silent_voter_or_data_latch",
+    "distribution_metadata_read_provider::tests::tls::actual_mtls_role_witness_binds_the_real_recipient_and_initiator",
+    "distribution_native_read::tests::native_read_observation_actual_cold_open_invalidates_old_lifetime",
+    "distribution_native_read::tests::native_read_observation_actual_genesis_and_r1_use_target_local_data_b",
+    "distribution_native_read::tests::native_read_observation_failed_mutation_and_health_invalidate_owned_observation",
+    "distribution_native_read::tests::native_read_observation_rejects_actual_raw_prepare_and_cq_ahead_of_native",
+    "distribution_native_read::tests::native_read_observation_scope_cancellation_and_store_replacement_are_not_permissions",
+    "distribution_range_consensus::native_prefix::tests::native_history_actual_coordinator_spine_exports_full_bounded_contiguous_prefix",
+    "distribution_range_consensus::native_prefix::tests::native_install_safety_preserves_floor_when_raw_repair_invalidates_source",
+    "distribution_range_consensus::native_prefix::tests::native_origin_actual_coordinator_commits_under_outer_db_write_guard_without_reacquire",
+    "distribution_range_consensus::native_prefix::tests::native_origin_post_admission_pre_wal_unknown_cleans_local_attempt_before_recovery_freeze",
+    "distribution_range_consensus::native_prefix::tests::native_origin_public_ticket_without_actual_pending_scope_cannot_apply_rows",
+    "distribution_range_consensus::native_prefix::tests::native_pending_never_raises_source_floor_and_survives_reopen_without_forged_quorum",
+    "distribution_range_consensus::native_prefix::tests::native_prefix_actual_wal_and_quorum_extend_and_reopen_with_database_seq_distinct_from_range_index",
+    "distribution_range_mutation::native_read_stamp_tests::native_read_stamp_invalidates_database_freeze_and_controlled_paths",
+    "distribution_range_mutation::native_read_stamp_tests::native_read_stamp_never_allocates_and_failed_writer_cannot_aba"
+  ],
+  "physical_failure_tested": false,
+  "pre_fix_dynamic_unsafe_ack_run": false,
+  "production_qualified": false,
+  "protected_native_false_fsync_refusal_tested": true,
+  "public_patch_base": "b0e2498842be7b01e355bb8da1cc249ff16be056",
+  "read_foundation_controls": 9,
+  "read_quorum_rpc_tested": false,
+  "reconstruction_prefixes": [
+    "Cargo.toml",
+    "Cargo.lock",
+    ".cargo",
+    "crates",
+    "examples/extensions"
+  ],
+  "restricted_custody_contains_database_keys": true,
+  "retained_r2_root_count": 1,
+  "runs": [
+    {
+      "broken_pipe_diagnostics": 0,
+      "classification": "exact-source-passing",
+      "exit_code": 0,
+      "failed_test_ids": [],
+      "name": "native-fsync-v2",
+      "passed_test_ids": [
+        "distribution_data::native_durability::tests::native_catalog_explicit_legacy_async_prepare_commit_certify_stays_supported",
+        "distribution_data::native_durability::tests::native_catalog_existing_legacy_async_service_refuses_cq_after_actual_format_activation",
+        "distribution_data::native_durability::tests::native_catalog_fsync_false_born_service_refuses_before_catalogs_or_native_changes",
+        "distribution_data::native_durability::tests::native_catalog_fsync_true_real_origin_ack_and_local_observation_remain_available",
+        "distribution_data::native_durability::tests::native_catalog_lower_native_proof_guards_refuse_false_fsync_without_mutation",
+        "distribution_data::native_durability::tests::native_catalog_separate_root_refuses_before_any_foreign_catalog_creation"
+      ],
+      "source_revision": "574ea56074a991368e9dae2129a0734a23bc1be3"
+    },
+    {
+      "broken_pipe_diagnostics": 88,
+      "classification": "exact-source-passing",
+      "exit_code": 0,
+      "failed_test_ids": [],
+      "name": "native-fsync-read-controls",
+      "passed_test_ids": [
+        "db::range_image_native::rf3_fixture::native_historical_tls::native_read_observation_tests::native_read_observation_recovered_serving_requires_actual_activated_open",
+        "db::range_image_native::rf3_fixture::native_historical_tls::native_read_observation_tests::native_read_observation_uses_current_r2_not_activation_anchor_and_refuses_cq_only_peer",
+        "distribution_native_read::tests::native_read_observation_actual_cold_open_invalidates_old_lifetime",
+        "distribution_native_read::tests::native_read_observation_actual_genesis_and_r1_use_target_local_data_b",
+        "distribution_native_read::tests::native_read_observation_failed_mutation_and_health_invalidate_owned_observation",
+        "distribution_native_read::tests::native_read_observation_scope_cancellation_and_store_replacement_are_not_permissions",
+        "distribution_range_mutation::native_read_stamp_tests::native_read_stamp_invalidates_database_freeze_and_controlled_paths",
+        "distribution_range_mutation::native_read_stamp_tests::native_read_stamp_never_allocates_and_failed_writer_cannot_aba",
+        "distribution_native_read::tests::native_read_observation_rejects_actual_raw_prepare_and_cq_ahead_of_native"
+      ],
+      "source_revision": "574ea56074a991368e9dae2129a0734a23bc1be3"
+    },
+    {
+      "broken_pipe_diagnostics": 0,
+      "classification": "exact-source-passing",
+      "exit_code": 0,
+      "failed_test_ids": [],
+      "name": "native-fsync-origin-controls",
+      "passed_test_ids": [
+        "distribution_range_consensus::native_prefix::tests::native_install_safety_preserves_floor_when_raw_repair_invalidates_source",
+        "distribution_range_consensus::native_prefix::tests::native_history_actual_coordinator_spine_exports_full_bounded_contiguous_prefix",
+        "distribution_range_consensus::native_prefix::tests::native_origin_actual_coordinator_commits_under_outer_db_write_guard_without_reacquire",
+        "distribution_range_consensus::native_prefix::tests::native_origin_post_admission_pre_wal_unknown_cleans_local_attempt_before_recovery_freeze",
+        "distribution_range_consensus::native_prefix::tests::native_origin_public_ticket_without_actual_pending_scope_cannot_apply_rows",
+        "distribution_range_consensus::native_prefix::tests::native_pending_never_raises_source_floor_and_survives_reopen_without_forged_quorum",
+        "distribution_range_consensus::native_prefix::tests::native_prefix_actual_wal_and_quorum_extend_and_reopen_with_database_seq_distinct_from_range_index"
+      ],
+      "source_revision": "574ea56074a991368e9dae2129a0734a23bc1be3"
+    },
+    {
+      "broken_pipe_diagnostics": 0,
+      "classification": "exact-source-passing",
+      "exit_code": 0,
+      "failed_test_ids": [],
+      "name": "native-fsync-actual-mtls-available",
+      "passed_test_ids": [
+        "db::range_image_native::rf3_fixture::native_historical_tls::actual_mtls_participant_collection_holds_no_recipient_service_or_database_latch",
+        "db::range_image_native::rf3_fixture::native_historical_tls::actual_mtls_participant_current_quorum_recovers_without_old_data_leader_and_rejects_stale_scope",
+        "distribution_metadata_read_provider::tests::tls::actual_mtls_range_leader_acquires_from_different_metadata_leader_without_silent_voter_or_data_latch",
+        "distribution_metadata_read_provider::tests::tls::actual_mtls_role_witness_binds_the_real_recipient_and_initiator",
+        "db::range_image_native::rf3_fixture::native_historical_tls::actual_mtls_unwired_participant_receiver_refuses_without_materializing"
+      ],
+      "source_revision": "574ea56074a991368e9dae2129a0734a23bc1be3"
+    },
+    {
+      "broken_pipe_diagnostics": 0,
+      "classification": "exact-source-passing",
+      "exit_code": 0,
+      "failed_test_ids": [],
+      "name": "native-fsync-normal-embedded",
+      "passed_test_ids": [
+        "db::range_image_native::rf3_fixture::native_normal_apply_actual_rf3_services_materialize_two_acks_and_lost_apply_catchup"
+      ],
+      "source_revision": "574ea56074a991368e9dae2129a0734a23bc1be3"
+    },
+    {
+      "broken_pipe_diagnostics": 0,
+      "classification": "zero-match-excluded",
+      "exit_code": 0,
+      "failed_test_ids": [],
+      "name": "native-fsync-tls-controls",
+      "passed_test_ids": [],
+      "source_revision": "574ea56074a991368e9dae2129a0734a23bc1be3"
+    },
+    {
+      "broken_pipe_diagnostics": 0,
+      "classification": "compile-failure-excluded",
+      "exit_code": 101,
+      "failed_test_ids": [],
+      "name": "native-fsync-v1",
+      "passed_test_ids": [],
+      "source_revision": "6141729b928e91964160d91ac9f4c017fe838488"
+    }
+  ],
+  "source_issue_is_new_azure_cause": false,
+  "source_revision": "574ea56074a991368e9dae2129a0734a23bc1be3",
+  "source_version": "1.0.471-beta",
+  "sources": [
+    {
+      "directory": "source/primary",
+      "input_files": 1364,
+      "name": "primary",
+      "patch_parent": "b0e2498842be7b01e355bb8da1cc249ff16be056",
+      "patch_sha256": "cc803a3df7dcc90992fa7b0738dd72ff927bc2a9d1beab5f7a363990281c4851",
+      "revision": "574ea56074a991368e9dae2129a0734a23bc1be3"
+    },
+    {
+      "directory": "source/compile-failure",
+      "input_files": 1364,
+      "name": "compile-failure",
+      "patch_parent": "574ea56074a991368e9dae2129a0734a23bc1be3",
+      "patch_sha256": "17ff95cc2476f7f62146c3ebacc1b574599816a5ea37c91f60edec7dc2ebc9fc",
+      "revision": "6141729b928e91964160d91ac9f4c017fe838488"
+    }
+  ],
+  "strong_get_tested": false,
+  "worktree": "/tmp/bicdb-native-fsync-fence",
+  "zero_match_counted_as_pass": false
+}

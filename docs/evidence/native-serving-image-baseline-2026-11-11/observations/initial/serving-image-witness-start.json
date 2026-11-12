@@ -1,0 +1,109 @@
+{
+  "physical_qualification": false,
+  "scope": {
+    "bootstrap_id": "01a1cbcd-7443-7321-899e-6c679b60ccdd",
+    "business_request_id": "01a1cbcd-8412-7b61-8e08-f0f0c79c88b0",
+    "cluster_id": "actual-native-rf3-origin",
+    "configuration_sha256": "b6d338642059cfa6ee5f62dbd41629e623bac247d00f19d1fad2289cbb5a8efc",
+    "initiator_incarnation": 1,
+    "initiator_node_id": "n0",
+    "metadata_context_id": "01a1cbcd-8412-7b61-8e08-f12dbcb0c606",
+    "metadata_read_index": 1,
+    "metadata_term": 1,
+    "protocol_version": 1,
+    "purpose": "NormalRecovery",
+    "range_configuration_sha256": "e91f26094bee84378c8b3c50937f48742dd8573db6372e7e8222023521fd6ee1",
+    "range_epoch": 1,
+    "range_id": 1,
+    "recovery_nonce": "01a1cbcd-8412-7b61-8e08-f0ea607b8ef0"
+  },
+  "source_b": 5,
+  "target_b_before": 20,
+  "target_birth_spec": {
+    "bootstrap_id": "01a1cbcd-7443-7321-899e-6c679b60ccdd",
+    "cluster_id": "actual-native-rf3-origin",
+    "initial_members": {
+      "n0": {
+        "incarnation": 1,
+        "pending_tls_certificate_sha256": null,
+        "tls_certificate_sha256": null
+      },
+      "n1": {
+        "incarnation": 1,
+        "pending_tls_certificate_sha256": null,
+        "tls_certificate_sha256": null
+      },
+      "n2": {
+        "incarnation": 1,
+        "pending_tls_certificate_sha256": null,
+        "tls_certificate_sha256": null
+      }
+    },
+    "initial_ranges": [
+      {
+        "approximate_bytes": 0,
+        "approximate_qps": 0,
+        "end_token": 9223372036854775808,
+        "epoch": 1,
+        "id": 1,
+        "leader": "n0",
+        "placement": {
+          "distinct_failure_domains": [],
+          "required_node_labels": {}
+        },
+        "replicas": [
+          {
+            "id": 1,
+            "node_id": "n0",
+            "role": "voter"
+          },
+          {
+            "id": 3,
+            "node_id": "n1",
+            "role": "voter"
+          },
+          {
+            "id": 5,
+            "node_id": "n2",
+            "role": "voter"
+          }
+        ],
+        "start_token": 0
+      },
+      {
+        "approximate_bytes": 0,
+        "approximate_qps": 0,
+        "end_token": null,
+        "epoch": 1,
+        "id": 2,
+        "leader": "n0",
+        "placement": {
+          "distinct_failure_domains": [],
+          "required_node_labels": {}
+        },
+        "replicas": [
+          {
+            "id": 2,
+            "node_id": "n0",
+            "role": "voter"
+          },
+          {
+            "id": 4,
+            "node_id": "n1",
+            "role": "voter"
+          },
+          {
+            "id": 6,
+            "node_id": "n2",
+            "role": "voter"
+          }
+        ],
+        "start_token": 9223372036854775808
+      }
+    ],
+    "member_incarnation": 1,
+    "node_id": "n1",
+    "restore_activation": null
+  },
+  "target_uid": "6e9d2172-54d6-48bb-9d81-3792b6c47eb2"
+}

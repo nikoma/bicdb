@@ -1,0 +1,11 @@
+{
+  "custody_root": "/root/.local/state/bicdb/ha-scaling-2026-11-11/private/native-sparse-source-tail-0d58359b",
+  "manifest_sha256": "40305c743676d805d2fde2e0e910592c573cd9727052e27ef0add0952d2646e6",
+  "files": 137,
+  "bytes": 16401076,
+  "source_destination_hash_parity": true,
+  "files_and_directories_fsynced": true,
+  "completed_unix": 1794431128.173351,
+  "contains_generated_test_database_keys": true,
+  "global_credentials_included": false
+}

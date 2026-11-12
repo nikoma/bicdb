@@ -1,0 +1,866 @@
+{
+  "tls": true,
+  "results": [
+    {
+      "name": "standard-oauth-scope",
+      "status": 200,
+      "body": {
+        "accepted": true
+      }
+    },
+    {
+      "name": "legacy-scope-array",
+      "status": 200,
+      "body": {
+        "accepted": true
+      }
+    },
+    {
+      "name": "wrong-scope",
+      "status": 403,
+      "body": {
+        "code": "forbidden",
+        "message": "application capability denied: actor lacks route roles or scopes"
+      }
+    },
+    {
+      "name": "wrong-role",
+      "status": 403,
+      "body": {
+        "code": "forbidden",
+        "message": "application capability denied: actor lacks route roles or scopes"
+      }
+    },
+    {
+      "name": "wrong-audience",
+      "status": 401,
+      "body": {
+        "code": "unauthenticated",
+        "message": "authentication failed: JWT claims violate issuer, audience, time, or subject policy"
+      }
+    },
+    {
+      "name": "wrong-issuer",
+      "status": 401,
+      "body": {
+        "code": "unauthenticated",
+        "message": "authentication failed: JWT claims violate issuer, audience, time, or subject policy"
+      }
+    },
+    {
+      "name": "expired",
+      "status": 401,
+      "body": {
+        "code": "unauthenticated",
+        "message": "authentication failed: JWT claims violate issuer, audience, time, or subject policy"
+      }
+    },
+    {
+      "name": "conflicting-scope-claims",
+      "status": 401,
+      "body": {
+        "code": "unauthenticated",
+        "message": "authentication failed: JWT claims are malformed"
+      }
+    },
+    {
+      "name": "invalid-scope-token",
+      "status": 401,
+      "body": {
+        "code": "unauthenticated",
+        "message": "authentication failed: JWT claims are malformed"
+      }
+    },
+    {
+      "name": "tenant-stamped-create",
+      "status": 201,
+      "body": {
+        "name": "Tenant A",
+        "version": 1,
+        "tenant_id": "11111111-1111-4111-8111-111111111111",
+        "id": "eec2f4f2-4e6e-4647-beeb-7d71c19184d4"
+      }
+    },
+    {
+      "name": "forged-tenant-body",
+      "status": 403,
+      "body": {
+        "code": "forbidden",
+        "message": "application capability denied: field `tenant_id` is not writable"
+      }
+    },
+    {
+      "name": "other-tenant-isolation",
+      "status": 200,
+      "body": {
+        "items": [],
+        "page_info": {
+          "page": 1,
+          "per_page": 20,
+          "total": 0,
+          "has_more": false,
+          "total_is_exact": true
+        }
+      }
+    },
+    {
+      "name": "eight-concurrent-editors",
+      "statuses": [
+        200,
+        409,
+        409,
+        409,
+        409,
+        409,
+        409,
+        409
+      ]
+    },
+    {
+      "name": "read-concurrent-winner",
+      "status": 200,
+      "body": {
+        "name": "Writer 0",
+        "version": 2,
+        "tenant_id": "11111111-1111-4111-8111-111111111111",
+        "id": "eec2f4f2-4e6e-4647-beeb-7d71c19184d4"
+      }
+    },
+    {
+      "name": "seed-page-0",
+      "status": 201,
+      "body": {
+        "name": "Page 00",
+        "version": 1,
+        "tenant_id": "11111111-1111-4111-8111-111111111111",
+        "id": "b35635ce-f086-4c1f-93a5-1605380351fb"
+      }
+    },
+    {
+      "name": "seed-page-1",
+      "status": 201,
+      "body": {
+        "name": "Page 01",
+        "version": 1,
+        "tenant_id": "11111111-1111-4111-8111-111111111111",
+        "id": "57b5dd29-d4ee-491d-81f6-1227fc5792ac"
+      }
+    },
+    {
+      "name": "seed-page-2",
+      "status": 201,
+      "body": {
+        "name": "Page 02",
+        "version": 1,
+        "tenant_id": "11111111-1111-4111-8111-111111111111",
+        "id": "b317d37b-3f8b-4c70-92c9-330041a39a1c"
+      }
+    },
+    {
+      "name": "seed-page-3",
+      "status": 201,
+      "body": {
+        "name": "Page 03",
+        "version": 1,
+        "tenant_id": "11111111-1111-4111-8111-111111111111",
+        "id": "2c41fdbd-7986-4389-b287-00c46030edb1"
+      }
+    },
+    {
+      "name": "seed-page-4",
+      "status": 201,
+      "body": {
+        "name": "Page 04",
+        "version": 1,
+        "tenant_id": "11111111-1111-4111-8111-111111111111",
+        "id": "6700eda1-43f5-4e9e-8ecc-0187d55c3a83"
+      }
+    },
+    {
+      "name": "seed-page-5",
+      "status": 201,
+      "body": {
+        "name": "Page 05",
+        "version": 1,
+        "tenant_id": "11111111-1111-4111-8111-111111111111",
+        "id": "2e4866ff-f231-4bcc-a8a5-3010f49f5f5e"
+      }
+    },
+    {
+      "name": "seed-page-6",
+      "status": 201,
+      "body": {
+        "name": "Page 06",
+        "version": 1,
+        "tenant_id": "11111111-1111-4111-8111-111111111111",
+        "id": "0fec54d4-c316-4dad-87c9-cc657600dfda"
+      }
+    },
+    {
+      "name": "seed-page-7",
+      "status": 201,
+      "body": {
+        "name": "Page 07",
+        "version": 1,
+        "tenant_id": "11111111-1111-4111-8111-111111111111",
+        "id": "f2cb2705-7d31-4770-b5ec-c4e88aacd1e5"
+      }
+    },
+    {
+      "name": "seed-page-8",
+      "status": 201,
+      "body": {
+        "name": "Page 08",
+        "version": 1,
+        "tenant_id": "11111111-1111-4111-8111-111111111111",
+        "id": "bbccc29f-b6af-44e0-b2db-fd4ac88387e3"
+      }
+    },
+    {
+      "name": "seed-page-9",
+      "status": 201,
+      "body": {
+        "name": "Page 09",
+        "version": 1,
+        "tenant_id": "11111111-1111-4111-8111-111111111111",
+        "id": "9936a972-5346-4c54-9dd3-f14cb865744b"
+      }
+    },
+    {
+      "name": "seed-page-10",
+      "status": 201,
+      "body": {
+        "name": "Page 10",
+        "version": 1,
+        "tenant_id": "11111111-1111-4111-8111-111111111111",
+        "id": "87f71697-371f-431e-9b23-1cf7d1e74a93"
+      }
+    },
+    {
+      "name": "seed-page-11",
+      "status": 201,
+      "body": {
+        "name": "Page 11",
+        "version": 1,
+        "tenant_id": "11111111-1111-4111-8111-111111111111",
+        "id": "5410c702-2d79-4a9e-99b8-84cea7b88ebd"
+      }
+    },
+    {
+      "name": "seed-page-12",
+      "status": 201,
+      "body": {
+        "name": "Page 12",
+        "version": 1,
+        "tenant_id": "11111111-1111-4111-8111-111111111111",
+        "id": "d045a20b-be4f-476e-a6b4-0b0ab2b944f1"
+      }
+    },
+    {
+      "name": "seed-page-13",
+      "status": 201,
+      "body": {
+        "name": "Page 13",
+        "version": 1,
+        "tenant_id": "11111111-1111-4111-8111-111111111111",
+        "id": "81868fba-377a-49bd-8584-318c21d94f7f"
+      }
+    },
+    {
+      "name": "seed-page-14",
+      "status": 201,
+      "body": {
+        "name": "Page 14",
+        "version": 1,
+        "tenant_id": "11111111-1111-4111-8111-111111111111",
+        "id": "095af3c3-e631-4a65-bdf8-696b4143dd76"
+      }
+    },
+    {
+      "name": "seed-page-15",
+      "status": 201,
+      "body": {
+        "name": "Page 15",
+        "version": 1,
+        "tenant_id": "11111111-1111-4111-8111-111111111111",
+        "id": "6351baa3-c31d-4d42-b85e-1fae998f565b"
+      }
+    },
+    {
+      "name": "seed-page-16",
+      "status": 201,
+      "body": {
+        "name": "Page 16",
+        "version": 1,
+        "tenant_id": "11111111-1111-4111-8111-111111111111",
+        "id": "f389e07d-0edd-499d-a376-5478aaedd215"
+      }
+    },
+    {
+      "name": "seed-page-17",
+      "status": 201,
+      "body": {
+        "name": "Page 17",
+        "version": 1,
+        "tenant_id": "11111111-1111-4111-8111-111111111111",
+        "id": "5c83af0c-c8d9-472c-89a0-cb4e9c3bd0a8"
+      }
+    },
+    {
+      "name": "seed-page-18",
+      "status": 201,
+      "body": {
+        "name": "Page 18",
+        "version": 1,
+        "tenant_id": "11111111-1111-4111-8111-111111111111",
+        "id": "1d024b48-b803-4ec5-8d7e-37766eda02e1"
+      }
+    },
+    {
+      "name": "seed-page-19",
+      "status": 201,
+      "body": {
+        "name": "Page 19",
+        "version": 1,
+        "tenant_id": "11111111-1111-4111-8111-111111111111",
+        "id": "9c906453-0008-4ab8-bd6c-f54fe3583a2b"
+      }
+    },
+    {
+      "name": "seed-page-20",
+      "status": 201,
+      "body": {
+        "name": "Page 20",
+        "version": 1,
+        "tenant_id": "11111111-1111-4111-8111-111111111111",
+        "id": "bea4b2b0-98b3-4a08-9795-306197d6b43d"
+      }
+    },
+    {
+      "name": "seed-page-21",
+      "status": 201,
+      "body": {
+        "name": "Page 21",
+        "version": 1,
+        "tenant_id": "11111111-1111-4111-8111-111111111111",
+        "id": "0a99fa05-85a3-4b92-b02c-26c7fa6b72cd"
+      }
+    },
+    {
+      "name": "seed-page-22",
+      "status": 201,
+      "body": {
+        "name": "Page 22",
+        "version": 1,
+        "tenant_id": "11111111-1111-4111-8111-111111111111",
+        "id": "0daaf8bf-e717-436c-9763-3c8773ab650e"
+      }
+    },
+    {
+      "name": "seed-page-23",
+      "status": 201,
+      "body": {
+        "name": "Page 23",
+        "version": 1,
+        "tenant_id": "11111111-1111-4111-8111-111111111111",
+        "id": "2c35edac-5a40-4a3c-b246-0785a8a5729c"
+      }
+    },
+    {
+      "name": "carrier-page-two",
+      "status": 200,
+      "body": {
+        "items": [
+          {
+            "name": "Page 10",
+            "version": 1,
+            "tenant_id": "11111111-1111-4111-8111-111111111111",
+            "id": "87f71697-371f-431e-9b23-1cf7d1e74a93"
+          },
+          {
+            "name": "Page 11",
+            "version": 1,
+            "tenant_id": "11111111-1111-4111-8111-111111111111",
+            "id": "5410c702-2d79-4a9e-99b8-84cea7b88ebd"
+          },
+          {
+            "name": "Page 12",
+            "version": 1,
+            "tenant_id": "11111111-1111-4111-8111-111111111111",
+            "id": "d045a20b-be4f-476e-a6b4-0b0ab2b944f1"
+          },
+          {
+            "name": "Page 13",
+            "version": 1,
+            "tenant_id": "11111111-1111-4111-8111-111111111111",
+            "id": "81868fba-377a-49bd-8584-318c21d94f7f"
+          },
+          {
+            "name": "Page 14",
+            "version": 1,
+            "tenant_id": "11111111-1111-4111-8111-111111111111",
+            "id": "095af3c3-e631-4a65-bdf8-696b4143dd76"
+          },
+          {
+            "name": "Page 15",
+            "version": 1,
+            "tenant_id": "11111111-1111-4111-8111-111111111111",
+            "id": "6351baa3-c31d-4d42-b85e-1fae998f565b"
+          },
+          {
+            "name": "Page 16",
+            "version": 1,
+            "tenant_id": "11111111-1111-4111-8111-111111111111",
+            "id": "f389e07d-0edd-499d-a376-5478aaedd215"
+          },
+          {
+            "name": "Page 17",
+            "version": 1,
+            "tenant_id": "11111111-1111-4111-8111-111111111111",
+            "id": "5c83af0c-c8d9-472c-89a0-cb4e9c3bd0a8"
+          },
+          {
+            "name": "Page 18",
+            "version": 1,
+            "tenant_id": "11111111-1111-4111-8111-111111111111",
+            "id": "1d024b48-b803-4ec5-8d7e-37766eda02e1"
+          },
+          {
+            "name": "Page 19",
+            "version": 1,
+            "tenant_id": "11111111-1111-4111-8111-111111111111",
+            "id": "9c906453-0008-4ab8-bd6c-f54fe3583a2b"
+          }
+        ],
+        "page_info": {
+          "page": 2,
+          "per_page": 10,
+          "total": 25,
+          "has_more": true,
+          "total_is_exact": true
+        }
+      }
+    },
+    {
+      "name": "legacy-offset-compatible",
+      "status": 200,
+      "body": {
+        "items": [
+          {
+            "name": "Page 10",
+            "version": 1,
+            "tenant_id": "11111111-1111-4111-8111-111111111111",
+            "id": "87f71697-371f-431e-9b23-1cf7d1e74a93"
+          },
+          {
+            "name": "Page 11",
+            "version": 1,
+            "tenant_id": "11111111-1111-4111-8111-111111111111",
+            "id": "5410c702-2d79-4a9e-99b8-84cea7b88ebd"
+          },
+          {
+            "name": "Page 12",
+            "version": 1,
+            "tenant_id": "11111111-1111-4111-8111-111111111111",
+            "id": "d045a20b-be4f-476e-a6b4-0b0ab2b944f1"
+          },
+          {
+            "name": "Page 13",
+            "version": 1,
+            "tenant_id": "11111111-1111-4111-8111-111111111111",
+            "id": "81868fba-377a-49bd-8584-318c21d94f7f"
+          },
+          {
+            "name": "Page 14",
+            "version": 1,
+            "tenant_id": "11111111-1111-4111-8111-111111111111",
+            "id": "095af3c3-e631-4a65-bdf8-696b4143dd76"
+          },
+          {
+            "name": "Page 15",
+            "version": 1,
+            "tenant_id": "11111111-1111-4111-8111-111111111111",
+            "id": "6351baa3-c31d-4d42-b85e-1fae998f565b"
+          },
+          {
+            "name": "Page 16",
+            "version": 1,
+            "tenant_id": "11111111-1111-4111-8111-111111111111",
+            "id": "f389e07d-0edd-499d-a376-5478aaedd215"
+          },
+          {
+            "name": "Page 17",
+            "version": 1,
+            "tenant_id": "11111111-1111-4111-8111-111111111111",
+            "id": "5c83af0c-c8d9-472c-89a0-cb4e9c3bd0a8"
+          },
+          {
+            "name": "Page 18",
+            "version": 1,
+            "tenant_id": "11111111-1111-4111-8111-111111111111",
+            "id": "1d024b48-b803-4ec5-8d7e-37766eda02e1"
+          },
+          {
+            "name": "Page 19",
+            "version": 1,
+            "tenant_id": "11111111-1111-4111-8111-111111111111",
+            "id": "9c906453-0008-4ab8-bd6c-f54fe3583a2b"
+          }
+        ],
+        "page_info": {
+          "page": 2,
+          "per_page": 10,
+          "total": 25,
+          "has_more": true,
+          "total_is_exact": true
+        }
+      }
+    },
+    {
+      "name": "last-page-remainder",
+      "status": 200,
+      "body": {
+        "items": [
+          {
+            "name": "Page 20",
+            "version": 1,
+            "tenant_id": "11111111-1111-4111-8111-111111111111",
+            "id": "bea4b2b0-98b3-4a08-9795-306197d6b43d"
+          },
+          {
+            "name": "Page 21",
+            "version": 1,
+            "tenant_id": "11111111-1111-4111-8111-111111111111",
+            "id": "0a99fa05-85a3-4b92-b02c-26c7fa6b72cd"
+          },
+          {
+            "name": "Page 22",
+            "version": 1,
+            "tenant_id": "11111111-1111-4111-8111-111111111111",
+            "id": "0daaf8bf-e717-436c-9763-3c8773ab650e"
+          },
+          {
+            "name": "Page 23",
+            "version": 1,
+            "tenant_id": "11111111-1111-4111-8111-111111111111",
+            "id": "2c35edac-5a40-4a3c-b246-0785a8a5729c"
+          },
+          {
+            "name": "Writer 0",
+            "version": 2,
+            "tenant_id": "11111111-1111-4111-8111-111111111111",
+            "id": "eec2f4f2-4e6e-4647-beeb-7d71c19184d4"
+          }
+        ],
+        "page_info": {
+          "page": 3,
+          "per_page": 10,
+          "total": 25,
+          "has_more": false,
+          "total_is_exact": true
+        }
+      }
+    },
+    {
+      "name": "complete-page-1",
+      "status": 200,
+      "body": {
+        "items": [
+          {
+            "name": "Page 00",
+            "version": 1,
+            "tenant_id": "11111111-1111-4111-8111-111111111111",
+            "id": "b35635ce-f086-4c1f-93a5-1605380351fb"
+          },
+          {
+            "name": "Page 01",
+            "version": 1,
+            "tenant_id": "11111111-1111-4111-8111-111111111111",
+            "id": "57b5dd29-d4ee-491d-81f6-1227fc5792ac"
+          },
+          {
+            "name": "Page 02",
+            "version": 1,
+            "tenant_id": "11111111-1111-4111-8111-111111111111",
+            "id": "b317d37b-3f8b-4c70-92c9-330041a39a1c"
+          },
+          {
+            "name": "Page 03",
+            "version": 1,
+            "tenant_id": "11111111-1111-4111-8111-111111111111",
+            "id": "2c41fdbd-7986-4389-b287-00c46030edb1"
+          },
+          {
+            "name": "Page 04",
+            "version": 1,
+            "tenant_id": "11111111-1111-4111-8111-111111111111",
+            "id": "6700eda1-43f5-4e9e-8ecc-0187d55c3a83"
+          },
+          {
+            "name": "Page 05",
+            "version": 1,
+            "tenant_id": "11111111-1111-4111-8111-111111111111",
+            "id": "2e4866ff-f231-4bcc-a8a5-3010f49f5f5e"
+          },
+          {
+            "name": "Page 06",
+            "version": 1,
+            "tenant_id": "11111111-1111-4111-8111-111111111111",
+            "id": "0fec54d4-c316-4dad-87c9-cc657600dfda"
+          },
+          {
+            "name": "Page 07",
+            "version": 1,
+            "tenant_id": "11111111-1111-4111-8111-111111111111",
+            "id": "f2cb2705-7d31-4770-b5ec-c4e88aacd1e5"
+          },
+          {
+            "name": "Page 08",
+            "version": 1,
+            "tenant_id": "11111111-1111-4111-8111-111111111111",
+            "id": "bbccc29f-b6af-44e0-b2db-fd4ac88387e3"
+          },
+          {
+            "name": "Page 09",
+            "version": 1,
+            "tenant_id": "11111111-1111-4111-8111-111111111111",
+            "id": "9936a972-5346-4c54-9dd3-f14cb865744b"
+          }
+        ],
+        "page_info": {
+          "page": 1,
+          "per_page": 10,
+          "total": 25,
+          "has_more": true,
+          "total_is_exact": true
+        }
+      }
+    },
+    {
+      "name": "complete-page-2",
+      "status": 200,
+      "body": {
+        "items": [
+          {
+            "name": "Page 10",
+            "version": 1,
+            "tenant_id": "11111111-1111-4111-8111-111111111111",
+            "id": "87f71697-371f-431e-9b23-1cf7d1e74a93"
+          },
+          {
+            "name": "Page 11",
+            "version": 1,
+            "tenant_id": "11111111-1111-4111-8111-111111111111",
+            "id": "5410c702-2d79-4a9e-99b8-84cea7b88ebd"
+          },
+          {
+            "name": "Page 12",
+            "version": 1,
+            "tenant_id": "11111111-1111-4111-8111-111111111111",
+            "id": "d045a20b-be4f-476e-a6b4-0b0ab2b944f1"
+          },
+          {
+            "name": "Page 13",
+            "version": 1,
+            "tenant_id": "11111111-1111-4111-8111-111111111111",
+            "id": "81868fba-377a-49bd-8584-318c21d94f7f"
+          },
+          {
+            "name": "Page 14",
+            "version": 1,
+            "tenant_id": "11111111-1111-4111-8111-111111111111",
+            "id": "095af3c3-e631-4a65-bdf8-696b4143dd76"
+          },
+          {
+            "name": "Page 15",
+            "version": 1,
+            "tenant_id": "11111111-1111-4111-8111-111111111111",
+            "id": "6351baa3-c31d-4d42-b85e-1fae998f565b"
+          },
+          {
+            "name": "Page 16",
+            "version": 1,
+            "tenant_id": "11111111-1111-4111-8111-111111111111",
+            "id": "f389e07d-0edd-499d-a376-5478aaedd215"
+          },
+          {
+            "name": "Page 17",
+            "version": 1,
+            "tenant_id": "11111111-1111-4111-8111-111111111111",
+            "id": "5c83af0c-c8d9-472c-89a0-cb4e9c3bd0a8"
+          },
+          {
+            "name": "Page 18",
+            "version": 1,
+            "tenant_id": "11111111-1111-4111-8111-111111111111",
+            "id": "1d024b48-b803-4ec5-8d7e-37766eda02e1"
+          },
+          {
+            "name": "Page 19",
+            "version": 1,
+            "tenant_id": "11111111-1111-4111-8111-111111111111",
+            "id": "9c906453-0008-4ab8-bd6c-f54fe3583a2b"
+          }
+        ],
+        "page_info": {
+          "page": 2,
+          "per_page": 10,
+          "total": 25,
+          "has_more": true,
+          "total_is_exact": true
+        }
+      }
+    },
+    {
+      "name": "complete-page-3",
+      "status": 200,
+      "body": {
+        "items": [
+          {
+            "name": "Page 20",
+            "version": 1,
+            "tenant_id": "11111111-1111-4111-8111-111111111111",
+            "id": "bea4b2b0-98b3-4a08-9795-306197d6b43d"
+          },
+          {
+            "name": "Page 21",
+            "version": 1,
+            "tenant_id": "11111111-1111-4111-8111-111111111111",
+            "id": "0a99fa05-85a3-4b92-b02c-26c7fa6b72cd"
+          },
+          {
+            "name": "Page 22",
+            "version": 1,
+            "tenant_id": "11111111-1111-4111-8111-111111111111",
+            "id": "0daaf8bf-e717-436c-9763-3c8773ab650e"
+          },
+          {
+            "name": "Page 23",
+            "version": 1,
+            "tenant_id": "11111111-1111-4111-8111-111111111111",
+            "id": "2c35edac-5a40-4a3c-b246-0785a8a5729c"
+          },
+          {
+            "name": "Writer 0",
+            "version": 2,
+            "tenant_id": "11111111-1111-4111-8111-111111111111",
+            "id": "eec2f4f2-4e6e-4647-beeb-7d71c19184d4"
+          }
+        ],
+        "page_info": {
+          "page": 3,
+          "per_page": 10,
+          "total": 25,
+          "has_more": false,
+          "total_is_exact": true
+        }
+      }
+    },
+    {
+      "name": "zero-page",
+      "status": 400,
+      "body": {
+        "code": "invalid_request",
+        "message": "invalid request: page must be at least one"
+      }
+    },
+    {
+      "name": "negative-page",
+      "status": 400,
+      "body": {
+        "code": "invalid_request",
+        "message": "invalid request: invalid page parameter"
+      }
+    },
+    {
+      "name": "zero-size",
+      "status": 400,
+      "body": {
+        "code": "invalid_request",
+        "message": "invalid request: per_page must be positive"
+      }
+    },
+    {
+      "name": "negative-size",
+      "status": 400,
+      "body": {
+        "code": "invalid_request",
+        "message": "invalid request: invalid per_page parameter"
+      }
+    },
+    {
+      "name": "excess-size",
+      "status": 400,
+      "body": {
+        "code": "invalid_request",
+        "message": "application invocation failed: resource pagination exceeds contract runtime limits"
+      }
+    },
+    {
+      "name": "overflow",
+      "status": 400,
+      "body": {
+        "code": "invalid_request",
+        "message": "invalid request: page offset exceeds the supported range"
+      }
+    },
+    {
+      "name": "conflicting-size",
+      "status": 400,
+      "body": {
+        "code": "invalid_request",
+        "message": "invalid request: limit and per_page disagree"
+      }
+    },
+    {
+      "name": "conflicting-offset",
+      "status": 400,
+      "body": {
+        "code": "invalid_request",
+        "message": "invalid request: page and offset disagree"
+      }
+    },
+    {
+      "name": "duplicate-page",
+      "status": 400,
+      "body": {
+        "code": "invalid_request",
+        "message": "invalid request: duplicate pagination parameter `page`"
+      }
+    },
+    {
+      "name": "page-counts-remain-tenant-scoped",
+      "status": 200,
+      "body": {
+        "items": [],
+        "page_info": {
+          "page": 2,
+          "per_page": 10,
+          "total": 0,
+          "has_more": false,
+          "total_is_exact": true
+        }
+      }
+    },
+    {
+      "name": "acknowledged-write-survives-crash",
+      "status": 200,
+      "body": {
+        "name": "Writer 0",
+        "version": 2,
+        "tenant_id": "11111111-1111-4111-8111-111111111111",
+        "id": "eec2f4f2-4e6e-4647-beeb-7d71c19184d4"
+      }
+    },
+    {
+      "name": "cold-backup-restores-data-and-signed-catalog",
+      "status": 200,
+      "body": {
+        "name": "Writer 0",
+        "version": 2,
+        "tenant_id": "11111111-1111-4111-8111-111111111111",
+        "id": "eec2f4f2-4e6e-4647-beeb-7d71c19184d4"
+      }
+    }
+  ]
+}

@@ -126,6 +126,48 @@ fn registry_catalog_attribute_and_planner_types_agree_exhaustively() {
 }
 
 #[test]
+fn table_scan_cast_types_survive_empty_and_populated_projections() {
+    for mode in [
+        bicdb_core::StorageMode::EmbeddedMemory,
+        bicdb_core::StorageMode::ServerPaged,
+    ] {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open_with_config(
+            root.path(),
+            bicdb_core::DbConfig::default().with_storage_mode(mode),
+        )
+        .unwrap();
+        let mut session = SqlSession::new(&mut db);
+        session
+            .execute(
+                "CREATE TABLE scan_casts(id INTEGER PRIMARY KEY); INSERT INTO scan_casts VALUES(7)",
+            )
+            .unwrap();
+        for limit in [0, 1] {
+            let result = session.execute(&format!(
+                "SELECT id::bigint AS wide,id::text AS label,NULL::aclitem AS scalar_acl,NULL::aclitem[] AS array_acl FROM scan_casts LIMIT {limit}"
+            )).unwrap();
+            assert_eq!(
+                result.column_types,
+                ["int8", "text", "aclitem", "aclitem[]"].map(|name| Some(name.to_string()))
+            );
+            assert_eq!(result.rows.len(), limit);
+            if limit == 1 {
+                assert_eq!(
+                    result.rows[0],
+                    vec![
+                        SqlValue::Int(7),
+                        SqlValue::String("7".into()),
+                        SqlValue::Null,
+                        SqlValue::Null
+                    ]
+                );
+            }
+        }
+    }
+}
+
+#[test]
 fn typed_result_views_preserve_expression_types_without_changing_sql_value() {
     let root = tempfile::tempdir().unwrap();
     let mut db = BicDb::open(root.path()).unwrap();

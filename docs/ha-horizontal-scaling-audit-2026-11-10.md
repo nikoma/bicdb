@@ -30,7 +30,35 @@ and explicitly hash omitted bodies. Original 461 evidence and its missing
 historical request details remain unchanged. The follow-up evidence merge does
 not change engine behavior or qualify a newer source version.
 
+A later [read-only Azure recheck](evidence/azure-owned-resource-absence-recheck-2026-11-12.json)
+at **2026-11-12 00:40:52 UTC** again found both owned experiment groups absent
+and zero resources in an independent subscription inventory filtered to their
+exact group identities. This is a current cleanup check, not a new VM campaign
+or a claim about unrelated Azure resources. No resources were created.
+
 ## P0 source follow-up — 2026-11-11
+
+The [revision-scoped recovery evidence matrix](recovery-component-evidence-2026-11-11.md)
+and [subsequent engineering findings](native-recovery-progress-2026-11-11.md)
+classify the later private engine experiments separately. They retain failed
+certification, native catch-up, abort and late-completion witnesses alongside
+focused repairs. A later local test acknowledges a new write and late-activates
+an older completion decision, while the lagging follower still honestly refuses
+current Ready. These are neither merged runtime capabilities nor proof of strong
+reads, automatic fault-safe relocation, physical throughput or production
+admission. Their source patches remain evidence artifacts, separate from engine
+implementation delivery and from the original failed Azure runs.
+
+Later [store-enrollment](evidence/native-store-birth-enrollment-2026-11-11/README.md),
+[protected cold-resume](evidence/native-protected-image-resume-2026-11-11/README.md)
+and [host-metadata](evidence/native-host-metadata-2026-11-11/README.md) receipts add
+exact-source component evidence. The cold case repairs a deterministic local
+same-source/same-epoch restart cycle; it leaves the target frozen and does not
+test power loss. Enrollment and host metadata still grant no writer or strong
+read permission. The [operator integration audit](design/native-operator-four-to-five-gap-audit-2026-11-11.md)
+identifies the missing end-to-end producers. These results do not attribute the
+original Azure invisibility or nonconvergence, merge the experimental engine,
+demonstrate five-node capacity, or change production admission.
 
 The [opt-in local namespace identity API](local-namespace-identity.md) supplies a
 durable physical backing UUID for trusted storage and journal consumers. Its

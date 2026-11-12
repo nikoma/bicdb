@@ -1,0 +1,43 @@
+{
+  "source_revision": "1978a0ea8eec099ab5285c7ff5d30118ae5c1825",
+  "classification": "ACTUAL_STALE_SERVING_PHYSICAL_BASE_BINDING_BLOCKS_SECOND_REPAIR_PREPARATION",
+  "retained_root": "/tmp/.tmpzza4mt",
+  "scope_epoch": 1,
+  "range_id": "1",
+  "old_nonce": "01a1cbd0-209c-7500-af94-4d4445f83d60",
+  "new_nonce": "01a1cbd0-2542-7d43-a4f7-8dee1e74d3b5",
+  "attempt_a": "01a1cbd0-2196-7a90-a303-4ec4bf25254e",
+  "attempt_b": "01a1cbd0-262c-7592-beff-591e002c6e46",
+  "native_birth_id": "01a1cbd0-1405-7803-971d-2172f02d7f46",
+  "native_birth_sha256": "7f8ef24ff6183dd5845dc9872ec9d773af68b98a138b45af883898b80d215365",
+  "birth_retained": true,
+  "range_index_a": 1,
+  "range_index_b": 1,
+  "logical_history_a": "53b21e309d37000df6302355b6e243ed22e933d32e4539a3f84b09e1eccefc52",
+  "logical_history_b": "53b21e309d37000df6302355b6e243ed22e933d32e4539a3f84b09e1eccefc52",
+  "native_receipt_a": "d9c7be162aadf86dbff66e1bf3cbc6e6556b6c92a7afde8796bd8e98dc31fbe9",
+  "native_receipt_b": "3a9b953e72111f4ee708b5db3f87eaf05210c613ccadd70357b82c1cc3317d18",
+  "serving_record_a_physical_base_sha256": "d9c7be162aadf86dbff66e1bf3cbc6e6556b6c92a7afde8796bd8e98dc31fbe9",
+  "serving_record_checksum_sha256": "c44bf0eb509856f55a7e7c6ac9b4d858002acb555a0b2e6a9ec2aebf0a5c6816",
+  "serving_record_unchanged": true,
+  "serving_epoch_floor": 1,
+  "after_b_phase": "Active",
+  "after_b_image_intent_attempt": "01a1cbd0-262c-7592-beff-591e002c6e46",
+  "namespace_uid": "1d3852da-c900-43ef-8aba-f6b53c916a6f",
+  "after_b_intent_namespace_ids": [
+    [
+      "items",
+      "1d3852da-c900-43ef-8aba-f6b53c916a6f"
+    ]
+  ],
+  "result": {
+    "Err": "cluster error: native range image: recovered serving record does not bind the actual same-voter physical/native domain"
+  },
+  "second_native_content_verification_passed": true,
+  "ordinary_second_mvcc_get_separately_measured": false,
+  "activation_proven": false,
+  "irretrievable_data_loss_claimed": false,
+  "physical_qualification": false,
+  "source_is_unmerged_native_candidate": true,
+  "current_main_or_azure_defect_attribution": false
+}

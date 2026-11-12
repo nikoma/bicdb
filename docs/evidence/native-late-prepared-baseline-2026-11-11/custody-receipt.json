@@ -1,0 +1,11 @@
+{
+  "custody_root": "/root/.local/state/bicdb/ha-scaling-2026-11-11/private/native-late-prepared-e3572fc6",
+  "manifest_sha256": "35f0cce9233a063c9df3d5cf9578da836280d20135761366e4ec3ba8fc0bf54e",
+  "files": 65,
+  "bytes": 1071545,
+  "source_destination_hash_parity": true,
+  "files_and_directories_fsynced": true,
+  "completed_unix": 1794426372.5757036,
+  "contains_generated_test_database_keys": true,
+  "global_credentials_included": false
+}

@@ -1,0 +1,70 @@
+{
+  "date": "2026-11-11",
+  "source_code_commit": "0e11b2315e942a56003e9f95ec95ced59e5930df",
+  "source_base": "745b700f905e66c6222cd5cb401fa7aa902e7648",
+  "version": "1.0.477-beta",
+  "binary": {
+    "version": "1.0.477-beta",
+    "source": "0e11b2315e942a56003e9f95ec95ced59e5930df",
+    "artifact": "tools/bicdb-1.0.477-beta-merged-candidate",
+    "sha256": "ecce788bb26a5b89e09a355a135db077de43cf978e0f58a2dfeaf66bb1437bc3",
+    "build": {
+      "host": "ny7.walknorth.com",
+      "rustc": "1.96.0 (ac68faa20 2026-05-25)",
+      "cargo": "1.96.0 (30a34c682 2026-05-25)",
+      "command": "cargo build --locked -p bicdb-cli --release",
+      "jobs": 2,
+      "incremental": false,
+      "debug": 0,
+      "tests_built": false,
+      "lto": false
+    },
+    "source_base": "745b700f905e66c6222cd5cb401fa7aa902e7648",
+    "patches": [
+      "carrier-http-pagination",
+      "pure-invariant-boolean-short-circuit"
+    ],
+    "source_code_commit": "406688a3"
+  },
+  "tests": {
+    "driver": "Node",
+    "rust_tests": false,
+    "real_issuer": false,
+    "real_hub": false
+  },
+  "evidence": [
+    {
+      "name": "pagination",
+      "path": "docs/evidence/native-477-erp-20261111/pagination.json",
+      "sha256": "bacaef610cf79a74d6bdc46e7d8dda3aeb83634f2ee66315dba9e302c67bf0fb"
+    },
+    {
+      "name": "invariant-guards",
+      "path": "docs/evidence/native-477-erp-20261111/invariant-guards.json",
+      "sha256": "dd312a83b5d9da3cc338c9209dc425b854a59bd3609cde9e2e3654a1fcfecc49"
+    },
+    {
+      "name": "permission-regression",
+      "path": "docs/evidence/native-477-erp-20261111/permission-regression.json",
+      "sha256": "f4f941d53be40f35d1e594516d870cc1d7605ad1b92a3fe305de2f439bdbf04a"
+    },
+    {
+      "name": "financial-regression",
+      "path": "docs/evidence/native-477-erp-20261111/financial-regression.json",
+      "sha256": "dace06bd188889fb47325e316f79cdb74dff124c0c9b3d1cee5765c347854086"
+    }
+  ],
+  "performance": {
+    "old474": "Same scaled copied store trial returned504 at30005ms",
+    "private_fix": "Same copied store trial333ms, preview124ms, invoice546ms",
+    "final477": "Complete fresh scaled financial workflow passed with the original30s per-request deadline"
+  },
+  "scope": "Native HTTP pagination + pure invariant Boolean short-circuit qualification on merged475/476 source. Guard, denial, tenant, reservation race, CAS, financial and all-book crash/coldrestore evidence.",
+  "financial_scope": "Historical ERP graph13 with Carrier84 qualifies financial behavior only. Compiler84/85 permission defect was separately discovered and corrected in Carrier86/87. Complete updated nine-module graph16 qualification continues; this is not a complete ERP release or iDempiere parity claim.",
+  "not_claimed": [
+    "Real human Hub acceptance (user-deferred)",
+    "Full ERP/accounting parity",
+    "Public binary release publication",
+    "Production deployment"
+  ]
+}

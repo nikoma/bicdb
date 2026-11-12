@@ -370,6 +370,9 @@ enum ClusterDataRequest {
     PromiseNativeAbort {
         request: crate::distribution_range_recovery::NativeAbortRequest,
     },
+    ObserveNativeAbortPromise {
+        request: crate::distribution_range_recovery::NativeAbortRequest,
+    },
     ResolveNativeAbort {
         request: crate::distribution_range_recovery::NativeAbortRequest,
     },
@@ -508,6 +511,7 @@ impl ClusterDataRequest {
             }
             Self::ObserveNativeAbortCandidate { request }
             | Self::PromiseNativeAbort { request }
+            | Self::ObserveNativeAbortPromise { request }
             | Self::ResolveNativeAbort { request } => Some(request.scope.range_id),
             Self::CompleteNativeRecovery { request }
             | Self::ObserveNativeCompletion { request } => Some(request.scope.range_id),
@@ -1522,6 +1526,7 @@ fn handle_cluster_data_connection(
             &request.request,
             ClusterDataRequest::ObserveNativeAbortCandidate { .. }
                 | ClusterDataRequest::PromiseNativeAbort { .. }
+                | ClusterDataRequest::ObserveNativeAbortPromise { .. }
                 | ClusterDataRequest::ResolveNativeAbort { .. }
         ) {
             return native_abort::dispatch(
@@ -3037,6 +3042,7 @@ fn dispatch_cluster_data_request(
         )),
         ClusterDataRequest::ObserveNativeAbortCandidate { .. }
         | ClusterDataRequest::PromiseNativeAbort { .. }
+        | ClusterDataRequest::ObserveNativeAbortPromise { .. }
         | ClusterDataRequest::ResolveNativeAbort { .. } => Err(transport_error(
             "authenticated native abort runtime is not active",
         )),
@@ -4656,6 +4662,7 @@ impl TcpClusterRelocationTransport {
                 | ClusterDataRequest::ObserveNativeReady { .. }
                 | ClusterDataRequest::ObserveNativeAbortCandidate { .. }
                 | ClusterDataRequest::PromiseNativeAbort { .. }
+                | ClusterDataRequest::ObserveNativeAbortPromise { .. }
                 | ClusterDataRequest::ResolveNativeAbort { .. }
                 | ClusterDataRequest::CompleteNativeRecovery { .. }
                 | ClusterDataRequest::ObserveNativeCompletion { .. }
@@ -4869,6 +4876,14 @@ impl RangeWriteTransport for TcpClusterRelocationTransport {
         parent: &CancellationToken,
     ) -> Result<crate::distribution_range_recovery::NativeAbortCandidateObservation> {
         self.native_abort_candidate_exchange(destination, request, parent)
+    }
+    fn observe_native_abort_promise(
+        &self,
+        destination: &ClusterNodeId,
+        request: &crate::distribution_range_recovery::NativeAbortRequest,
+        parent: &CancellationToken,
+    ) -> Result<crate::distribution_range_recovery::NativeAbortPromiseObservation> {
+        self.native_abort_existing_promise_exchange(destination, request, parent)
     }
     fn promise_native_abort(
         &self,

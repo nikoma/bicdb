@@ -409,6 +409,79 @@ impl NativeAbortPermanentPromise {
     }
 }
 impl BicDb {
+    /// Re-observe an EXISTING permanent vote under fresh readonly authority.
+    /// This never creates a slot/promise or changes its original audit.
+    pub(crate) fn observe_native_abort_promise_for_observer(
+        &self,
+        native: &NativeRecoveryAdmission,
+        role: &crate::distribution_range_recovery::RecoveryObservationRoleAdmission,
+        request: &crate::distribution_range_recovery::NativeAbortRequest,
+    ) -> Result<(NativeAbortPermanentPromise, NativeAbortSlotRecord)> {
+        native.require_current(self)?;
+        role.require_scope(&request.scope)?;
+        role.require_native_identity(native)?;
+        self.require_installed_native_writer_database_for_range(role.current_range())?;
+        let source = self.current_native_range_source_lineage(request.scope.range_id)?;
+        let _journal = self.try_native_image_journal()?;
+        self.validate_source_range_image_lineage(
+            &source,
+            request.scope.range_id,
+            source.range_index(),
+        )?;
+        let promise = self
+            .observe_actual_native_abort_promise(request.scope.range_id, request.range_index)?
+            .ok_or_else(|| invalid("readonly abort observation has no actual permanent promise"))?;
+        promise.domain.require_observer(role)?;
+        if promise.range_id != request.scope.range_id
+            || promise.range_index != request.range_index
+            || promise.predecessor_index > source.range_index()
+            || role.metadata_term() < promise.observed_metadata_term
+            || role.metadata_read_index() < promise.observed_metadata_read_index
+        {
+            return Err(invalid(
+                "existing promise domain/history/metadata anchor differs",
+            ));
+        }
+        if source.range_index() == promise.predecessor_index {
+            if source.logical_history_sha256() != promise.predecessor_history_sha256 {
+                return Err(invalid("existing promise has another actual predecessor"));
+            }
+        } else {
+            let entry = self.read_native_history_entry(
+                request.scope.range_id,
+                source.history_generation(),
+                request.range_index,
+            )?;
+            if entry.outcome != super::super::history::NativeLogicalHistoryOutcomeV1::Aborted {
+                return Err(invalid(
+                    "readonly no-commit vote cannot be reissued after committed materialization",
+                ));
+            }
+        }
+        let (birth, store_id) = self.abort_slot_identity()?;
+        let slot: NativeAbortSlotRecord = self
+            .read_native_range_image_record(&slot_key(request.scope.range_id, request.range_index))?
+            .ok_or_else(|| invalid("existing promise lost its actual protected slot"))?;
+        slot.validate(&birth, store_id)?;
+        if let Some(expected) = &slot.no_effect_sha256 {
+            let no_effect: NativeNoEffectIntentRecord = self
+                .read_native_range_image_record(&no_effect_key(
+                    request.scope.range_id,
+                    request.range_index,
+                ))?
+                .ok_or_else(|| invalid("existing promise no-effect audit is absent"))?;
+            no_effect.validate()?;
+            if no_effect.checksum_sha256() != expected
+                || no_effect.command != slot.command
+                || no_effect.domain != slot.domain
+                || no_effect.birth_id() != birth.birth_id
+                || no_effect.birth_sha256() != birth.checksum_sha256
+            {
+                return Err(invalid("existing promise no-effect audit differs"));
+            }
+        }
+        Ok((promise, slot))
+    }
     pub(crate) fn require_native_abort_control_history(
         &self,
         range_id: RangeId,

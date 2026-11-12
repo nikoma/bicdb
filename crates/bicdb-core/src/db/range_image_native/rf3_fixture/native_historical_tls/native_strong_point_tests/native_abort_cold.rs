@@ -285,6 +285,19 @@ fn native_abort_actual_canonical_publication_before_raw_mark_cold_reuses_exact_d
         challenge: Uuid::now_v7(),
         budget_ms: 4500,
     };
+    let candidate = fixture.clients[&node("n0")]
+        .observe_native_abort_candidate(&node("n0"), &request, &super::native_abort_tests::token())
+        .unwrap();
+    let request = crate::distribution_range_recovery::NativeAbortRequest {
+        candidate_sha256: Some(candidate.sha256().into()),
+        ..request
+    };
+    for id in [node("n0"), node("n1"), node("n2")] {
+        fixture.clients[&node("n0")]
+            .promise_native_abort(&id, &request, &super::native_abort_tests::token())
+            .unwrap();
+        fixture.idle();
+    }
     fixture.native.services[&node("n0")]
         .lock()
         .test_fail_abort_after_native_publication();

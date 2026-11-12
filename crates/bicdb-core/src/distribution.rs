@@ -31,7 +31,8 @@ pub(crate) use native_bootstrap_plan::plan_initial_native_topology;
 // Native joint metadata additionally requires topology format 3. Protocol 24
 // retains actual-destination fencing; mixed-version handoff is unqualified.
 // Unsupported typed reads are never downgraded into legacy Get.
-pub const CLUSTER_DATA_PROTOCOL_VERSION: u32 = 25;
+// Version 26 adds explicit readonly observation of existing permanent abort votes.
+pub const CLUSTER_DATA_PROTOCOL_VERSION: u32 = 26;
 /// Reserved heartbeat label carrying the canonical local schema identity.
 /// Once the range leader advertises this label, placement and data operations
 /// are fenced to nodes advertising the identical schema.

@@ -12,6 +12,54 @@ impl Drop for CancelAbortWorkers {
     }
 }
 impl RangeRecoveryRuntime {
+    pub(crate) fn observe_native_abort_promise(
+        &self,
+        actor: &MetadataReadParticipant,
+        request: &NativeAbortRequest,
+        parent: &CancellationToken,
+    ) -> Result<NativeAbortPromiseObservation> {
+        let _operation = self.reserve_observer(request.scope.range_id)?;
+        self.observe_native_abort_promise_inner(actor, request, parent)
+    }
+    fn observe_native_abort_promise_inner(
+        &self,
+        actor: &MetadataReadParticipant,
+        request: &NativeAbortRequest,
+        parent: &CancellationToken,
+    ) -> Result<NativeAbortPromiseObservation> {
+        let token = request.cancellation(parent)?;
+        let business = Uuid::now_v7();
+        let challenge = Uuid::now_v7();
+        let witness = self.provider.witness_recovery_role(
+            actor,
+            business,
+            request.scope.range_id,
+            request.scope.range_epoch,
+            request.scope.recovery_nonce,
+            challenge,
+            RecoveryObservationRoleAdmission::purpose(&request.scope)?,
+            &token,
+        )?;
+        let role = RecoveryObservationRoleAdmission::from_witness(
+            witness,
+            actor,
+            &self.local_node_id,
+            business,
+            challenge,
+            &request.scope,
+        )?;
+        let evidence = {
+            let service = loop {
+                token.check()?;
+                if let Some(service) = self.service.try_lock_for(LATCH_POLL) {
+                    break service;
+                }
+            };
+            service.observe_existing_native_abort_promise(&role, request, &token)?
+        };
+        token.check()?;
+        NativeAbortPromiseObservation::from_local(evidence, self.provider.local_participant())
+    }
     fn abort_role(
         &self,
         actor: &MetadataReadParticipant,
@@ -167,6 +215,10 @@ impl RangeRecoveryRuntime {
         let mut vote_request = request.clone();
         vote_request.candidate_sha256 = Some(candidate.sha256().into());
         let role = self.abort_role(actor, &vote_request, &token)?;
+        // Only the actual current leader may ask peers to CREATE promises.
+        // Other recipients collect fresh readonly projections of votes which
+        // already exist; they never delegate the leader's transport identity.
+        let creates_promises = role.local_node_id() == role.initiator_node_id();
         let members = role
             .member_credentials()
             .keys()
@@ -180,10 +232,20 @@ impl RangeRecoveryRuntime {
         )?;
         // A local failure is not a fabricated vote. An actual irreversible
         // observation poisons the round through record just like a remote one.
-        if let Ok(observation) =
+        let mut failures = BTreeMap::new();
+        let local = if creates_promises {
             self.promise_native_abort_inner(actor, &vote_request, &candidate, &token)
-        {
-            round.record(observation)?;
+        } else {
+            self.observe_native_abort_promise_inner(actor, &vote_request, &token)
+        };
+        match local {
+            Ok(observation) => round.record(observation)?,
+            Err(error) => {
+                failures.insert(
+                    self.local_node_id.clone(),
+                    error.to_string().chars().take(1024).collect::<String>(),
+                );
+            }
         }
         let mut queue = members
             .into_iter()
@@ -218,9 +280,17 @@ impl RangeRecoveryRuntime {
                                 Err(mpsc::RecvTimeoutError::Disconnected) => break,
                             };
                             let result = child.check().and_then(|_| {
-                                transport.promise_native_abort(&destination, &request, &child)
+                                if creates_promises {
+                                    transport.promise_native_abort(&destination, &request, &child)
+                                } else {
+                                    transport.observe_native_abort_promise(
+                                        &destination,
+                                        &request,
+                                        &child,
+                                    )
+                                }
                             });
-                            if tx.send(result).is_err() {
+                            if tx.send((destination, result)).is_err() {
                                 break;
                             }
                         }
@@ -240,23 +310,35 @@ impl RangeRecoveryRuntime {
                 }
                 // Consume every already received contradiction before using an
                 // available majority; a held minority retains its Operation.
-                while let Ok(result) = results.try_recv() {
+                while let Ok((node, result)) = results.try_recv() {
                     outstanding -= 1;
-                    if let Ok(observation) = result {
-                        round.record(observation)?;
+                    match result {
+                        Ok(observation) => round.record(observation)?,
+                        Err(error) => {
+                            failures.insert(
+                                node,
+                                error.to_string().chars().take(1024).collect::<String>(),
+                            );
+                        }
                     }
                 }
                 if round.has_quorum() {
                     break;
                 }
                 if outstanding == 0 && queue.is_empty() {
-                    return Err(invalid("actual permanent AbortPromise quorum unavailable"));
+                    return Err(invalid(format!("actual permanent AbortPromise quorum unavailable; participant failures: {failures:?}")));
                 }
                 match results.recv_timeout(LATCH_POLL) {
-                    Ok(result) => {
+                    Ok((node, result)) => {
                         outstanding -= 1;
-                        if let Ok(observation) = result {
-                            round.record(observation)?;
+                        match result {
+                            Ok(observation) => round.record(observation)?,
+                            Err(error) => {
+                                failures.insert(
+                                    node,
+                                    error.to_string().chars().take(1024).collect::<String>(),
+                                );
+                            }
                         }
                     }
                     Err(mpsc::RecvTimeoutError::Timeout) => {}

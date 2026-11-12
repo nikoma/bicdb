@@ -62,6 +62,9 @@ pub(super) fn dispatch(
         ClusterDataRequest::PromiseNativeAbort { request } => runtime
             .promise_native_abort(caller, &request, &token)
             .map(|o| ClusterDataResponse::NativeAbortPromise(o.into_reply())),
+        ClusterDataRequest::ObserveNativeAbortPromise { request } => runtime
+            .observe_native_abort_promise(caller, &request, &token)
+            .map(|o| ClusterDataResponse::NativeAbortPromise(o.into_reply())),
         ClusterDataRequest::ResolveNativeAbort { request } => {
             let receipt = runtime.resolve_native_abort(caller, &request, &token)?;
             Ok(ClusterDataResponse::NativeAbortResolved {
@@ -75,6 +78,43 @@ pub(super) fn dispatch(
     }
 }
 impl TcpClusterRelocationTransport {
+    pub(super) fn native_abort_existing_promise_exchange(
+        &self,
+        destination: &ClusterNodeId,
+        request: &NativeAbortRequest,
+        parent: &CancellationToken,
+    ) -> Result<NativeAbortPromiseObservation> {
+        let token = request.cancellation(parent)?;
+        let (reply, peer) = self.abort_exchange(
+            destination,
+            request,
+            ClusterDataRequest::ObserveNativeAbortPromise {
+                request: request.clone(),
+            },
+            &token,
+        )?;
+        match reply {
+            ClusterDataResponse::NativeAbortPromise(reply) => {
+                if &reply.node_id != destination || peer.node_id() != destination {
+                    return Err(transport_error(
+                        "readonly native AbortPromise peer/destination differs",
+                    ));
+                }
+                NativeAbortPromiseObservation::from_transport(
+                    AuthenticatedNativeAbortPromiseReply {
+                        reply,
+                        original: request.clone(),
+                        peer,
+                        token,
+                    },
+                )
+            }
+            reply => Err(unexpected_response(
+                "actual existing native AbortPromise",
+                reply,
+            )),
+        }
+    }
     fn abort_exchange(
         &self,
         destination: &ClusterNodeId,

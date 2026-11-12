@@ -103,10 +103,16 @@ impl Fixture {
         let plan = NativeClusterBootstrapPlan::new(
             &config,
             members,
-            vec![NativeBootstrapCollection {
-                name: "items".into(),
-                mode: CollectionMode::Standard,
-            }],
+            vec![
+                NativeBootstrapCollection {
+                    name: "items".into(),
+                    mode: CollectionMode::Standard,
+                },
+                NativeBootstrapCollection {
+                    name: crate::CLUSTER_EVENTS_COLLECTION.into(),
+                    mode: CollectionMode::Standard,
+                },
+            ],
             10,
             &token,
         )
@@ -309,4 +315,64 @@ fn native_initial_birth_tls_refuses_registered_root_stale_peer_and_plaintext_hos
         .root
         .join(crate::distribution_consensus::DEFAULT_CLUSTER_METADATA_CONSENSUS_STATE)
         .exists());
+}
+
+#[test]
+fn native_initial_birth_tls_provisional_surface_never_falls_through_even_after_factory_owner_ends()
+{
+    let mut f = Fixture::new();
+    let range = f.plan.topology.ranges.values().next().unwrap().clone();
+    let request = crate::ClusterEventRequest {
+        range_id: range.id,
+        range_epoch: range.epoch,
+        operation: crate::ClusterEventOperation::Scan {
+            namespace: "tenant".into(),
+            after: None,
+            limit: 1,
+        },
+    };
+    let service = Arc::clone(&f.hosts[1]._service);
+    {
+        let _latch = service.lock();
+        let start = std::time::Instant::now();
+        let error = f.hosts[0]
+            .transport
+            .application_event(&node(1), request.clone())
+            .unwrap_err();
+        assert!(
+            error.to_string().contains("provisional factory listener"),
+            "{error}"
+        );
+        assert!(start.elapsed() < Duration::from_secs(2));
+    }
+    f.hosts.remove(1).shutdown().unwrap();
+    assert!(service
+        .lock()
+        .initial_birth_provider()
+        .unwrap()
+        .upgrade()
+        .is_none());
+    // Keep the real DB/service alive while ending ONLY its factory owner.
+    // Restart the same private listener with its expired provider option.
+    let listener = start_cluster_data_server(
+        &f.plan.topology.nodes[&node(1)].address,
+        f.networks[1].clone(),
+        Arc::new(RwLock::new(f.plan.topology.clone())),
+        service,
+        None,
+        None,
+        None,
+    )
+    .unwrap();
+    let error = f.hosts[0]
+        .transport
+        .application_event(&node(1), request)
+        .unwrap_err();
+    assert!(
+        error.to_string().contains("provisional factory listener"),
+        "{error}"
+    );
+    assert!(f.offer(1, &CancellationToken::uncancelable()).is_err());
+    listener.join().unwrap();
+    f.assert_no_metadata();
 }

@@ -947,6 +947,20 @@ fn handle_cluster_data_connection(
             )
         });
         drop(topology_guard);
+        // Attaching an initial factory makes this listener provisional for its
+        // ENTIRE lifetime. A Weak expiry must not expose ordinary scans,
+        // digests, mutations or consensus endpoints by falling through.
+        // Registration starts a separately wired listener after this one
+        // stops; a factory observation grants no data/read/voting authority.
+        if initial_birth_provider.is_some() {
+            match &request.request {
+                ClusterDataRequest::Ping => return Ok(ClusterDataResponse::Pong),
+                ClusterDataRequest::NativeInitialBirthOffer { .. } => {}
+                _ => return Err(transport_error(
+                    "provisional factory listener permits only initial birth observations and ping",
+                )),
+            }
+        }
         if let ClusterDataRequest::NativeInitialBirthOffer { request } = request.request {
             let provider = initial_birth_provider
                 .and_then(std::sync::Weak::upgrade)

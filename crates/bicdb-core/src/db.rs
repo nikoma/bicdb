@@ -10358,6 +10358,11 @@ impl BicDb {
         format::enable_exact_proportional_intervals(&self.path)
     }
 
+    pub fn enable_exact_decimal_list_sum(&mut self) -> Result<()> {
+        self.ensure_writable("enable exact memory Decimal sum contract")?;
+        format::enable_exact_decimal_list_sum(&self.path)
+    }
+
     fn open_inner(
         path: impl AsRef<Path>,
         config: DbConfig,

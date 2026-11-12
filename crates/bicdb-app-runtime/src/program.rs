@@ -1223,6 +1223,30 @@ impl Evaluator<'_> {
             })
         };
         match target {
+            "query.decimal_sum" => {
+                if values.len() != 1 || arguments[0].0.is_some() {
+                    return Err(AppRuntimeError::InvalidRequest(
+                        "exact memory Decimal sum requires one positional list".into(),
+                    ));
+                }
+                let items = values[0].as_array().ok_or_else(|| {
+                    AppRuntimeError::InvalidRequest(
+                        "exact memory Decimal sum requires a list".into(),
+                    )
+                })?;
+                if items.len() > bicdb_core::MAX_EXACT_DECIMAL_LIST_SUM_ITEMS {
+                    return Err(AppRuntimeError::InvalidRequest(
+                        "exact memory Decimal sum exceeds its bounded element count".into(),
+                    ));
+                }
+                // Work remains subject to the existing per-invocation budget
+                // and deadline; a native aggregate is not unmetered iteration.
+                for _ in items {
+                    self.step()?;
+                }
+                bicdb_core::exact_decimal_list_sum_value(&values[0])
+                    .map_err(|error| AppRuntimeError::InvalidRequest(error.to_string()))
+            }
             "string.lower" => Ok(Value::String(string(first()?, target)?.to_lowercase())),
             "string.upper" => Ok(Value::String(string(first()?, target)?.to_uppercase())),
             "string.trim" => Ok(Value::String(string(first()?, target)?.trim().to_string())),

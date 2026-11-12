@@ -3253,6 +3253,13 @@ impl ApplicationManifestV2 {
         }
         if let Some(program) = &self.application_program {
             program.validate()?;
+            if application_program_uses_builtin(program, &["query.decimal_sum"])
+                && !self
+                    .required_features
+                    .contains(&ApplicationFeature::ExactDecimalListSum)
+            {
+                return invalid("query.decimal_sum requires signed exact_decimal_list_sum feature");
+            }
             if application_program_uses_builtin(program, &["finance.proportional_interval"])
                 && !self
                     .required_features
@@ -5197,6 +5204,9 @@ fn validate_carrier_expression(expression: &ApplicationExpressionV1) -> Result<(
             {
                 validate_proportional_interval_call(expression)?;
             }
+            if *kind == ApplicationCallKindV1::Builtin && target == "query.decimal_sum" {
+                validate_decimal_list_sum_call(expression)?;
+            }
             for argument in arguments {
                 validate_carrier_expression(&argument.value)?;
             }
@@ -6086,6 +6096,7 @@ impl EgressDeclaration {
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 #[serde(rename_all = "snake_case")]
 pub enum ApplicationFeature {
+    ExactDecimalListSum,
     ExactProportionalIntervals,
     NativeImmutableFacts,
     NativeFactProjectionContracts,
@@ -6691,6 +6702,36 @@ impl ApplicationInvariantV1 {
         }
         Ok(())
     }
+}
+
+fn validate_decimal_list_sum_call(expression: &ApplicationExpressionV1) -> Result<()> {
+    let ApplicationExpressionV1::Call {
+        kind: ApplicationCallKindV1::Builtin,
+        target,
+        method,
+        result_type,
+        argument_types,
+        argument_item_types,
+        result_projection,
+        arguments,
+    } = expression
+    else {
+        return invalid("exact Decimal list sum requires its typed builtin call");
+    };
+    if target != "query.decimal_sum"
+        || method.is_some()
+        || result_projection.is_some()
+        || *result_type != Some(ApplicationExpressionTypeV1::Decimal)
+        || argument_types != &[ApplicationExpressionTypeV1::Other]
+        || argument_item_types != &[Some(ApplicationExpressionTypeV1::Decimal)]
+        || arguments.len() != 1
+        || arguments[0].name.is_some()
+    {
+        return invalid(
+            "query.decimal_sum requires one positional typed Decimal list and returns Decimal",
+        );
+    }
+    Ok(())
 }
 
 fn validate_proportional_interval_call(expression: &ApplicationExpressionV1) -> Result<()> {

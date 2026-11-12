@@ -13,6 +13,13 @@ guards. Actor and resource permissions, tenant policy, record visibility,
 transaction isolation and serializable-read conflict validation remain active.
 Native validators explicitly registered by a caller retain their old semantics.
 
+Before publishing a restored signed catalog or activating routes, workers or
+schedules, the runtime explicitly validates its active local application guards
+in zero-write admission transactions. This also covers invalid active history
+that an older binary incorrectly admitted. Refusal leaves that history blocked;
+it does not normalize facts or offer a traffic-time bypass. This one-time audit
+does not apply schema changes or backfills.
+
 `Transaction::register_commit_validator` explicitly requests existing-data
 application invariant validation. That request is monotonic for the transaction:
 automatic registration, a borrowed service invocation or a savepoint rollback

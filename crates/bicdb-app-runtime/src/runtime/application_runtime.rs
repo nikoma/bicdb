@@ -2774,6 +2774,40 @@ impl ApplicationRuntime {
         self.restore_active_snapshot_with_supervisors(true)
     }
 
+    /// Validate a restored signed catalog before exposing routes or workers.
+    /// Older binaries may have admitted invalid local history when unrelated
+    /// backfills hid an invariant's dependencies. Ordinary reads can omit full
+    /// rescans only after this explicit, zero-write admission has succeeded.
+    fn validate_restored_application_invariants(&self, catalog: &RuntimeCatalog) -> Result<()> {
+        let db = self.db.read();
+        for (name, snapshot) in &catalog.packages {
+            let application = snapshot
+                .package
+                .manifest
+                .application
+                .as_deref()
+                .ok_or_else(|| {
+                    AppRuntimeError::InvalidPackage(
+                        "restored snapshot lacks its signed application manifest".into(),
+                    )
+                })?;
+            let validators = lower_carrier_invariants(application)?;
+            if validators.is_empty() {
+                continue;
+            }
+            let mut transaction = db.begin_application_transaction(migration_actor(application))?;
+            for validator in validators {
+                transaction.register_commit_validator(validator)?;
+            }
+            transaction.commit().map_err(|error| {
+                AppRuntimeError::NotReady(format!(
+                    "restored application `{name}` failed existing-data invariant admission: {error}"
+                ))
+            })?;
+        }
+        Ok(())
+    }
+
     pub(super) fn restore_active_snapshot_with_supervisors(
         &self,
         start_supervisors: bool,
@@ -2845,6 +2879,7 @@ impl ApplicationRuntime {
                 }),
             );
         }
+        self.validate_restored_application_invariants(&catalog)?;
         *self.active.write() = Arc::new(catalog);
         *self.staged.write() = staged;
         *self.history.lock().expect("package history poisoned") = history;
@@ -3069,6 +3104,12 @@ impl ApplicationRuntime {
         let mut db = self.db.write();
         let mut receipt = SchemaApplicationReceipt::default();
         let result = (|| -> Result<()> {
+            if application
+                .required_features
+                .contains(&bicdb_extension::abi_v2::ApplicationFeature::ExactDecimalListSum)
+            {
+                db.enable_exact_decimal_list_sum()?;
+            }
             if application
                 .required_features
                 .contains(&bicdb_extension::abi_v2::ApplicationFeature::ExactProportionalIntervals)

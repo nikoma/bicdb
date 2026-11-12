@@ -8,6 +8,8 @@ mod backup;
 mod broker;
 mod cancellation;
 mod decimal_input;
+mod exact_decimal_list_sum;
+pub use exact_decimal_list_sum::{exact_decimal_list_sum_value, MAX_EXACT_DECIMAL_LIST_SUM_ITEMS};
 mod exact_proportional_interval;
 pub use decimal_input::{json_decimal_exact, parse_decimal_exact};
 pub use exact_proportional_interval::{

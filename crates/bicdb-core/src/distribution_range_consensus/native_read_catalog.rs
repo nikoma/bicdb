@@ -175,6 +175,10 @@ impl RangeWriteStore {
             self.catalog.native_image_bases.get(&range),
             &decisions,
             &sparse_record_commitments,
+            self.catalog
+                .native_abort_protocol
+                .as_ref()
+                .and_then(|p| p.range(range)),
         );
         validate_native_json_size(&commitment, 4 * 1024 * 1024)?;
         struct HashWriter(Sha256);

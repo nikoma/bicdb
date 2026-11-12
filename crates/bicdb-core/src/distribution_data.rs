@@ -39,6 +39,7 @@ use crate::{
     SchemaCompatibilityAuthority, SchemaCompatibilityFingerprint, SignedClusterSchemaBundle,
 };
 
+mod native_abort;
 mod native_activation;
 mod native_apply;
 mod native_durability;
@@ -730,6 +731,10 @@ impl ClusterSchemaFinalizationReceipt {
 /// deployment modes.
 #[derive(Debug)]
 pub struct ClusterDataNodeService {
+    #[cfg(test)]
+    test_refuse_native_prepare_after_start: bool,
+    #[cfg(test)]
+    test_fail_abort_after_native_publication: bool,
     cluster_id: ClusterId,
     node_id: ClusterNodeId,
     db: Arc<RwLock<BicDb>>,
@@ -861,6 +866,10 @@ impl ClusterDataNodeService {
                 .ok()
         };
         let mut service = Self {
+            #[cfg(test)]
+            test_refuse_native_prepare_after_start: false,
+            #[cfg(test)]
+            test_fail_abort_after_native_publication: false,
             cluster_id,
             node_id,
             db,
@@ -880,6 +889,12 @@ impl ClusterDataNodeService {
             initial_preparation_provider: None,
             initial_consensus_only: false,
         };
+        {
+            let database = try_database_read(&service.db)?;
+            service
+                .range_writes
+                .reconcile_actual_abort_control(&database)?;
+        }
         service.recover_committed_range_writes()?;
         Ok(service)
     }
@@ -2000,6 +2015,15 @@ impl ClusterDataNodeService {
     ) -> Result<RangeWriteAck> {
         self.range_mutations.validate(range.id, authority)?;
         self.validate_range_write(range, caller, &command)?;
+        self.ensure_native_abort_prepare_start(range, &command, authority)?;
+        #[cfg(test)]
+        if self.test_refuse_native_prepare_after_start
+            && self.range_writes.requires_native_abort_tracking()?
+        {
+            return Err(data_error(
+                "injected actual Prepare refusal after durable native writer-start",
+            ));
+        }
         let state = self.range_writes.prepare(command.clone())?;
         self.range_write_ack(&command, state)
     }
@@ -2032,6 +2056,13 @@ impl ClusterDataNodeService {
     ) -> Result<RangeWriteAck> {
         self.range_mutations.validate(range.id, authority)?;
         self.validate_range_write(range, caller, command)?;
+        if self.range_writes.requires_native_abort_tracking()? {
+            let db = Arc::clone(&self.db);
+            let database = try_database_read(&db)?;
+            return self.commit_native_range_write_with_context(
+                &database, range, caller, command, authority,
+            );
+        }
         let state = self.range_writes.commit(command)?;
         self.range_write_ack(command, state)
     }

@@ -56,8 +56,11 @@ use image_proposal_state::IMAGE_PROPOSAL_CATALOG_FORMAT;
 pub(crate) use image_proposal_state::{
     NativeCurrentImageProposalPointer, NativeImageProposalIntentBinding,
 };
+pub(crate) mod native_abort;
 mod native_completion_observation;
 mod native_read_catalog;
+use native_abort::{NativeAbortProtocol, NativeAdmissionRejection, NATIVE_ABORT_CATALOG_FORMAT};
+pub use native_abort::{NativePrepareOnlyRejection, NativeUncertainAdmissionRejection};
 mod native_ready_catalog;
 #[cfg(feature = "tls-replication")]
 mod strong_point_read;
@@ -132,6 +135,7 @@ const KNOWN_RANGE_WRITE_CATALOG_FORMATS: &[u32] = &[
     SPARSE_HISTORY_CATALOG_FORMAT,
     IMAGE_PROPOSAL_CATALOG_FORMAT,
     NATIVE_WRITER_CATALOG_FORMAT,
+    NATIVE_ABORT_CATALOG_FORMAT,
 ];
 
 // Recognizing a format is not a phase, writer or recovery grant. Each caller
@@ -576,6 +580,8 @@ struct RangeWriteCatalog {
     // a missing/null field can never silently erase sparse committed history.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     sparse_committed_decisions: Option<SparseDecisions>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    native_abort_protocol: Option<NativeAbortProtocol>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -622,6 +628,18 @@ impl RangeWriteEnvelope {
             return Err(range_write_error(
                 "native writer catalog marker/format mismatch",
             ));
+        }
+        if (self.catalog.format_version == NATIVE_ABORT_CATALOG_FORMAT
+            && self.catalog.native_abort_protocol.is_none())
+            || (self.catalog.format_version < NATIVE_ABORT_CATALOG_FORMAT
+                && self.catalog.native_abort_protocol.is_some())
+        {
+            return Err(range_write_error(
+                "native abort protocol marker/format mismatch",
+            ));
+        }
+        if let Some(protocol) = &self.catalog.native_abort_protocol {
+            protocol.validate()?;
         }
         sparse_certification::validate_sparse_catalog(&self.catalog)?;
         if self.catalog.recovery_fences.len() > recovery_state::MAX_RECOVERY_FENCES {
@@ -750,6 +768,7 @@ pub struct RangeWriteStore {
     test_native_commit_write_error_once: bool,
     native_activated_opens: BTreeMap<RangeId, crate::db::NativeActivatedOpenGuard>,
     native_writer_host: Option<std::sync::Weak<crate::db::NativeWriterHostState>>,
+    _native_abort_owner: Option<bicdb_page::DirectoryLock>,
 }
 
 impl RangeWriteStore {
@@ -823,6 +842,17 @@ impl RangeWriteStore {
         let root = root.as_ref().to_path_buf();
         let path = root.join(DEFAULT_RANGE_WRITE_LOG);
         let existing_catalog = path.exists();
+        let abort_protocol = crate::format::native_abort_history_active(&root)?;
+        if abort_protocol && !existing_catalog {
+            return Err(range_write_error(
+                "abort-aware range catalogue missing; strict factory/reopen required",
+            ));
+        }
+        let abort_owner = if abort_protocol {
+            Some(Self::abort_catalogue_owner(&root)?)
+        } else {
+            None
+        };
         let mut catalog = match fs::read(&path) {
             Ok(bytes) => serde_json::from_slice::<RangeWriteEnvelope>(&bytes)?.verify()?,
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => RangeWriteCatalog {
@@ -837,6 +867,7 @@ impl RangeWriteStore {
                 recovery_fences: BTreeMap::new(),
                 native_image_bases: BTreeMap::new(),
                 sparse_committed_decisions: None,
+                native_abort_protocol: None,
             },
             Err(error) => return Err(error.into()),
         };
@@ -852,11 +883,22 @@ impl RangeWriteStore {
                 "handoff range catalog requires its durable image reader fence and fsync",
             ));
         }
-        if catalog.format_version >= IMAGE_PROPOSAL_CATALOG_FORMAT
+        if (catalog.format_version == IMAGE_PROPOSAL_CATALOG_FORMAT
+            || catalog
+                .image_install_intents
+                .values()
+                .any(|i| i.protected_proposal.is_some()))
             && !crate::format::current_image_proposal_active(&root)?
         {
             return Err(range_write_error(
                 "protected proposal catalog lacks its mandatory native reader fence",
+            ));
+        }
+        if catalog.native_abort_protocol.is_some()
+            && !crate::format::native_abort_history_active(&root)?
+        {
+            return Err(range_write_error(
+                "native abort catalogue lacks its mandatory reader fence",
             ));
         }
         let enforced = crate::format::native_writer_enrollment_active(&root)?;
@@ -903,6 +945,7 @@ impl RangeWriteStore {
             open_id: Uuid::now_v7(),
             native_activated_opens: BTreeMap::new(),
             native_writer_host: None,
+            _native_abort_owner: abort_owner,
             recovery_persistence_uncertain: false,
             #[cfg(test)]
             test_native_commit_write_error_once: false,
@@ -1292,6 +1335,7 @@ impl RangeWriteStore {
 
     pub fn prepare(&mut self, command: RangeWriteCommand) -> Result<RangeWriteState> {
         self.require_native_writer_command(&command)?;
+        self.require_no_native_abort_promise(command.range_id, command.index)?;
         command.validate()?;
         self.require_no_image_install(command.range_id)?;
         self.require_no_active_recovery(command.range_id)?;
@@ -1395,13 +1439,26 @@ impl RangeWriteStore {
             // memory before the exact catalogue has actually been re-fsynced.
             self.require_durable_recovery_catalog()?;
         }
+        self.preflight_native_commit_slot(command)?;
         let previous = self.catalog.clone();
         let entry = self.match_entry_mut(command)?;
         match entry.state {
             RangeWriteState::Prepared => entry.state = RangeWriteState::Committed,
             RangeWriteState::Committed
             | RangeWriteState::QuorumCommitted
-            | RangeWriteState::Applied => return Ok(entry.state),
+            | RangeWriteState::Applied => {
+                let state = entry.state;
+                // Materialization of an independently decided command need
+                // not itself have cast a local Commit vote. A later genuine
+                // idempotent Commit must mirror the newly protected ever-fact
+                // before returning its vote; do not leave read/Ready proofs
+                // seeing a stale JSON mirror of the actual native journal.
+                self.mark_native_ever_commit(command)?;
+                if previous.native_abort_protocol != self.catalog.native_abort_protocol {
+                    self.persist_recovery_catalog()?;
+                }
+                return Ok(state);
+            }
             RangeWriteState::Aborted => {
                 return Err(range_write_error(format!(
                     "cannot commit aborted range-write command {}",
@@ -1410,6 +1467,7 @@ impl RangeWriteStore {
             }
         }
         if native_catalog {
+            self.mark_native_ever_commit(command)?;
             // A failed rename/fsync may already have published Commit. Keep
             // the in-memory decision and fail closed until exact re-fsync or
             // strict reopen; never restore Prepared over that uncertainty.
@@ -1485,6 +1543,9 @@ impl RangeWriteStore {
     }
 
     pub fn abort(&mut self, command: &RangeWriteCommand) -> Result<RangeWriteState> {
+        if self.requires_native_abort_tracking()? {
+            return Err(range_write_error("native abort-aware slots require actual permanent AbortPromise quorum and canonical native history; raw Abort is not a decision"));
+        }
         let previous = self.catalog.clone();
         let range_id = command.range_id;
         let entry = self.match_entry_mut(command)?;
@@ -1543,6 +1604,7 @@ impl RangeWriteStore {
 
     fn match_entry_mut(&mut self, command: &RangeWriteCommand) -> Result<&mut RangeWriteLogEntry> {
         self.require_native_writer_command(command)?;
+        self.require_no_native_abort_promise(command.range_id, command.index)?;
         command.validate()?;
         self.require_no_image_install(command.range_id)?;
         self.require_no_active_recovery(command.range_id)?;
@@ -1669,6 +1731,27 @@ pub struct RangeWriteAck {
 }
 
 pub trait RangeWriteTransport: std::fmt::Debug + Send + Sync + 'static {
+    fn observe_native_abort_candidate(
+        &self,
+        _destination: &ClusterNodeId,
+        _request: &crate::distribution_range_recovery::NativeAbortRequest,
+        _parent: &CancellationToken,
+    ) -> Result<crate::distribution_range_recovery::NativeAbortCandidateObservation> {
+        Err(range_write_error(
+            "authenticated native abort candidate transport is not wired",
+        ))
+    }
+    fn promise_native_abort(
+        &self,
+        _destination: &ClusterNodeId,
+        _request: &crate::distribution_range_recovery::NativeAbortRequest,
+        _parent: &CancellationToken,
+    ) -> Result<crate::distribution_range_recovery::NativeAbortPromiseObservation> {
+        Err(range_write_error(
+            "authenticated native AbortPromise transport is not wired",
+        ))
+    }
+
     fn observe_current_native_range(
         &self,
         _destination: &ClusterNodeId,
@@ -3130,10 +3213,27 @@ impl<Transport: RangeWriteTransport> RangeAntiEntropyFenceAuthority
 }
 
 impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
+    fn retain_native_uncertain_admission(
+        &self,
+        command: &RangeWriteCommand,
+        mutation: RangeMutationPermit,
+        rejected: &mut Option<NativeAdmissionRejection>,
+        error: BicDbError,
+    ) -> BicDbError {
+        *rejected = Some(NativeAdmissionRejection::CommitMayHavePersisted(
+            NativeUncertainAdmissionRejection::new(
+                command,
+                self.local_incarnation.clone(),
+                mutation,
+            ),
+        ));
+        error
+    }
     fn admit_with_database(
         &self,
         intent: &CommitAdmissionIntent,
         database: Option<&crate::BicDb>,
+        admission_rejection: &mut Option<NativeAdmissionRejection>,
     ) -> Result<CommitAdmissionTicket> {
         self.require_expected_native_database(database)?;
         let native_database = match (self.native_image_mode, database) {
@@ -3237,14 +3337,51 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
         } else {
             None
         };
-        self.local_service
-            .lock()
-            .prepare_range_write_with_mutation(
-                &range,
-                &self.local_node_id,
-                command.clone(),
-                authority,
-            )?;
+        let native_abort_attempt = if let Some(database) = native_database {
+            if database.native_abort_catalogue_store_id()?.is_some() {
+                let started = self
+                    .local_service
+                    .lock()
+                    .begin_native_abort_attempt(database, &range, &command, authority);
+                match started {
+                    Ok(attempt) => Some(attempt),
+                    Err(error) => {
+                        // The protected writer-start may already be durable.
+                        // Hold the actual lease through Core cleanup, without
+                        // inventing a prepare-only/no-effect receipt.
+                        self.recovered_epochs.lock().remove(&range.id);
+                        return Err(self.retain_native_uncertain_admission(
+                            &command, mutation, admission_rejection,
+                            BicDbError::CommitOutcomeUnknown {
+                                sequence: None,
+                                transaction_id: Some(command.transaction_id),
+                                incarnation: self.local_incarnation.clone(),
+                                detail: format!("range {} command {} writer-start publication is uncertain before Prepare: {error}; protected controls require recovery", range.id, command.command_id),
+                            },
+                        ));
+                    }
+                }
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+        let local_prepare = self.local_service.lock().prepare_range_write_with_mutation(
+            &range,
+            &self.local_node_id,
+            command.clone(),
+            authority,
+        );
+        if let Err(error) = local_prepare {
+            if let Some(attempt) = native_abort_attempt {
+                self.recovered_epochs.lock().remove(&range.id);
+                *admission_rejection = Some(NativeAdmissionRejection::PrepareOnly(
+                    attempt.retain_mutation(mutation),
+                ));
+            }
+            return Err(error);
+        }
 
         let quorum = voters.len() / 2 + 1;
         let mut prepared = 1usize;
@@ -3274,6 +3411,15 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
             }
         }
         if prepared < quorum {
+            if let Some(attempt) = native_abort_attempt {
+                self.recovered_epochs.lock().remove(&range.id);
+                *admission_rejection = Some(NativeAdmissionRejection::PrepareOnly(
+                    attempt.retain_mutation(mutation),
+                ));
+                return Err(range_write_error(format!(
+                    "range {} command {} failed prepare quorum {prepared}/{quorum}; actual local cleanup/no-effect intent required before abort recovery", range.id, command.command_id,
+                )));
+            }
             // A prepare may have become durable even when its response was
             // lost or malformed. Broadcast the abort to every voter so those
             // unknown outcomes cannot accumulate unresolved entries forever.
@@ -3293,19 +3439,43 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
         // Native uncertainty starts BEFORE attempting the local Commit write:
         // persistence can succeed even when its error/reply is lost. No native
         // abort may be inferred from any failure after this boundary.
-        let local_commit = self
-            .local_service
-            .lock()
-            .commit_range_write_decision_with_mutation(
-                &range,
-                &self.local_node_id,
-                &command,
-                authority,
-            );
+        let local_commit = (|| {
+            if let Some(database) = native_database {
+                if database.native_abort_catalogue_store_id()?.is_some() {
+                    self.local_service
+                        .lock()
+                        .commit_native_range_write_with_context(
+                            database,
+                            &range,
+                            &self.local_node_id,
+                            &command,
+                            authority,
+                        )
+                } else {
+                    self.local_service
+                        .lock()
+                        .commit_range_write_decision_with_mutation(
+                            &range,
+                            &self.local_node_id,
+                            &command,
+                            authority,
+                        )
+                }
+            } else {
+                self.local_service
+                    .lock()
+                    .commit_range_write_decision_with_mutation(
+                        &range,
+                        &self.local_node_id,
+                        &command,
+                        authority,
+                    )
+            }
+        })();
         if let Err(error) = local_commit {
             if native_database.is_some() {
                 self.recovered_epochs.lock().remove(&range.id);
-                return Err(BicDbError::CommitOutcomeUnknown {
+                return Err(self.retain_native_uncertain_admission(&command, mutation, admission_rejection, BicDbError::CommitOutcomeUnknown {
                     sequence: None,
                     transaction_id: Some(command.transaction_id),
                     incarnation: self.local_incarnation.clone(),
@@ -3313,7 +3483,7 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
                         "range {} command {} local Commit persistence is uncertain: {error}; local application WAL has not started; retained for recovery",
                         range.id, command.command_id,
                     ),
-                });
+                }));
             }
             return Err(error);
         }
@@ -3337,7 +3507,7 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
         if committed < quorum {
             if native_database.is_some() {
                 self.recovered_epochs.lock().remove(&range.id);
-                return Err(BicDbError::CommitOutcomeUnknown {
+                return Err(self.retain_native_uncertain_admission(&command, mutation, admission_rejection, BicDbError::CommitOutcomeUnknown {
                     sequence: None,
                     transaction_id: Some(command.transaction_id),
                     incarnation: self.local_incarnation.clone(),
@@ -3345,7 +3515,7 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
                         "range {} command {} counted Commit replies {committed}/{quorum}; additional Commit decisions may be durable despite missing replies; local application WAL has not started; retained for recovery",
                         range.id, command.command_id,
                     ),
-                });
+                }));
             }
             // Preserve the legacy classification separately. Native missing
             // Commit replies above never establish a prepare-only rollback.
@@ -3368,10 +3538,10 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
         if let Err(error) = local_certificate {
             if native_database.is_some() {
                 self.recovered_epochs.lock().remove(&range.id);
-                return Err(BicDbError::CommitOutcomeUnknown {
+                return Err(self.retain_native_uncertain_admission(&command, mutation, admission_rejection, BicDbError::CommitOutcomeUnknown {
                     sequence: None, transaction_id: Some(command.transaction_id), incarnation:self.local_incarnation.clone(),
                     detail:format!("range {} command {} reached a decision quorum, but local certificate persistence is uncertain: {error}; local row apply has not started", range.id,command.command_id),
-                });
+                }));
             }
             return Err(error);
         }
@@ -3413,10 +3583,10 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
                         active.remove(&range.id);
                         self.active_range_changed.notify_all();
                     }
-                    return Err(BicDbError::CommitOutcomeUnknown {
+                    return Err(self.retain_native_uncertain_admission(&command, mutation, admission_rejection, BicDbError::CommitOutcomeUnknown {
                         sequence:None,transaction_id:Some(command.transaction_id),incarnation:self.local_incarnation.clone(),
                         detail:format!("range {} command {} is irrevocably certified but native pending persistence failed before local row apply: {error}; recovery is required",range.id,command.command_id),
-                    });
+                    }));
                 }
             };
             // A native Apply instruction is never emitted by an early ACK.
@@ -3596,14 +3766,46 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
 
 impl<Transport: RangeWriteTransport> CommitAdmission for RangeWriteCoordinator<Transport> {
     fn admit(&self, intent: &CommitAdmissionIntent) -> Result<CommitAdmissionTicket> {
-        self.admit_with_database(intent, None)
+        self.admit_with_database(intent, None, &mut None)
     }
     fn admit_with_native_context(
         &self,
         intent: &CommitAdmissionIntent,
         database: &crate::BicDb,
     ) -> Result<CommitAdmissionTicket> {
-        self.admit_with_database(intent, Some(database))
+        self.admit_with_database(intent, Some(database), &mut None)
+    }
+    fn admit_native_with_rejection(
+        &self,
+        intent: &CommitAdmissionIntent,
+        database: &crate::BicDb,
+    ) -> Result<crate::NativeCommitAdmissionResult> {
+        let mut rejected = None;
+        match self.admit_with_database(intent, Some(database), &mut rejected) {
+            Ok(ticket) => Ok(crate::NativeCommitAdmissionResult::Accepted(ticket)),
+            Err(error) => match rejected {
+                Some(NativeAdmissionRejection::PrepareOnly(rejection)) => Ok(
+                    crate::NativeCommitAdmissionResult::PrepareOnlyRejected { rejection, error },
+                ),
+                Some(NativeAdmissionRejection::CommitMayHavePersisted(attempt)) => {
+                    Ok(crate::NativeCommitAdmissionResult::CommitMayHavePersisted {
+                        attempt,
+                        error,
+                    })
+                }
+                None => Err(error),
+            },
+        }
+    }
+    fn native_prepare_only_cleaned(
+        &self,
+        rejected: NativePrepareOnlyRejection,
+        cleaned: &crate::NativeTransactionNoEffect,
+        database: &crate::BicDb,
+    ) -> Result<()> {
+        self.local_service
+            .lock()
+            .finish_native_prepare_only_rejection(database, rejected, cleaned)
     }
     fn local_applied(&self, ticket: &CommitAdmissionTicket, commit_seq: u64) -> Result<()> {
         self.finish_local_application(ticket, commit_seq, None)
@@ -4830,6 +5032,7 @@ mod tests {
             recovery_fences: BTreeMap::new(),
             native_image_bases: BTreeMap::new(),
             sparse_committed_decisions: None,
+            native_abort_protocol: None,
         };
         let envelope = RangeWriteEnvelope::new(catalog).unwrap();
         fs::write(
@@ -4869,6 +5072,7 @@ mod tests {
             recovery_fences: BTreeMap::new(),
             native_image_bases: BTreeMap::new(),
             sparse_committed_decisions: None,
+            native_abort_protocol: None,
         })
         .unwrap();
         let legacy_bytes = serde_json::to_vec_pretty(&envelope).unwrap();

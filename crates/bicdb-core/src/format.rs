@@ -41,6 +41,7 @@ pub const NATIVE_WRITER_ENROLLMENT_FEATURE_FLAG: &str = "native_writer_enrollmen
 pub const NATIVE_METADATA_STORE_FEATURE_FLAG: &str = "native_metadata_store_v1";
 pub const NATIVE_INITIAL_PREPARATION_FEATURE_FLAG: &str = "native_initial_preparation_v1";
 pub const ORACLE_SIMPLE_CASE_V1_FEATURE_FLAG: &str = "oracle_simple_case_v1";
+pub const NATIVE_ABORT_HISTORY_FEATURE_FLAG: &str = "native_abort_history_v1";
 const KNOWN_FEATURE_FLAGS: &[&str] = &[
     ORACLE_INVALID_ROUTINES_FEATURE_FLAG,
     ORACLE_SIMPLE_CASE_V1_FEATURE_FLAG,
@@ -51,6 +52,7 @@ const KNOWN_FEATURE_FLAGS: &[&str] = &[
     CURRENT_IMAGE_PROPOSAL_FEATURE_FLAG,
     NATIVE_RECOVERY_SERVING_FEATURE_FLAG,
     NATIVE_WRITER_ENROLLMENT_FEATURE_FLAG,
+    NATIVE_ABORT_HISTORY_FEATURE_FLAG,
     NATIVE_METADATA_STORE_FEATURE_FLAG,
     NATIVE_INITIAL_PREPARATION_FEATURE_FLAG,
     "format_metadata_v2",
@@ -1003,4 +1005,37 @@ mod local_identity_format_tests {
             });
         }
     }
+}
+
+/// Fence old writers before the first monotone abort-aware range start.
+pub(crate) fn enable_native_abort_history(root: &Path) -> Result<()> {
+    let lock = feature_flags_lock(root);
+    let _guard = lock.lock();
+    let mut metadata = read_or_legacy_metadata(root)?;
+    validate_supported(&metadata)?;
+    if !metadata
+        .feature_flags
+        .contains(RANGE_IMAGE_INSTALL_FEATURE_FLAG)
+        || !metadata
+            .feature_flags
+            .contains(NATIVE_WRITER_ENROLLMENT_FEATURE_FLAG)
+        || !metadata
+            .feature_flags
+            .contains(NATIVE_METADATA_STORE_FEATURE_FLAG)
+    {
+        return Err(BicDbError::InvalidConfig(
+            "native abort writer requires from-birth enforced writer and metadata initialization fences".into(),
+        ));
+    }
+    metadata
+        .feature_flags
+        .insert(NATIVE_ABORT_HISTORY_FEATURE_FLAG.into());
+    persist_metadata(root, &metadata, true)
+}
+pub(crate) fn native_abort_history_active(root: &Path) -> Result<bool> {
+    let metadata = read_or_legacy_metadata(root)?;
+    validate_supported(&metadata)?;
+    Ok(metadata
+        .feature_flags
+        .contains(NATIVE_ABORT_HISTORY_FEATURE_FLAG))
 }

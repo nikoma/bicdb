@@ -253,7 +253,7 @@ pub use db::{
 pub use db::{timestamp_day_index_inputs_supported, timestamp_day_index_value};
 pub use db::{
     CommitAdmission, CommitAdmissionIntent, CommitAdmissionMutation, CommitAdmissionTicket,
-    NativeWalApplyReceipt,
+    NativeCommitAdmissionResult, NativeTransactionNoEffect, NativeWalApplyReceipt,
 };
 pub use db::{CommitResolution, INCARNATION_JOURNAL};
 pub use db::{WalArchiveReport, WalArchiveStatus};
@@ -386,11 +386,12 @@ pub use distribution_query::{
     DISTRIBUTED_QUERY_PROTOCOL_VERSION,
 };
 pub use distribution_range_consensus::{
-    RangeBackupFenceQuorum, RangeBackupFenceSession, RangeBackupWriteFence, RangeWriteAck,
-    RangeWriteCatalogInspection, RangeWriteCommand, RangeWriteCoordinator, RangeWriteLogEntry,
-    RangeWriteProbe, RangeWriteProgress, RangeWriteRepairBatch, RangeWriteRepairLimits,
-    RangeWriteState, RangeWriteStore, RangeWriteTransport, DEFAULT_RANGE_WRITE_LOG,
-    RANGE_WRITE_LOG_FORMAT_VERSION, RANGE_WRITE_PROTOCOL_VERSION,
+    NativePrepareOnlyRejection, NativeUncertainAdmissionRejection, RangeBackupFenceQuorum,
+    RangeBackupFenceSession, RangeBackupWriteFence, RangeWriteAck, RangeWriteCatalogInspection,
+    RangeWriteCommand, RangeWriteCoordinator, RangeWriteLogEntry, RangeWriteProbe,
+    RangeWriteProgress, RangeWriteRepairBatch, RangeWriteRepairLimits, RangeWriteState,
+    RangeWriteStore, RangeWriteTransport, DEFAULT_RANGE_WRITE_LOG, RANGE_WRITE_LOG_FORMAT_VERSION,
+    RANGE_WRITE_PROTOCOL_VERSION,
 };
 pub use distribution_restore::{
     load_cluster_restore_admission, load_cluster_restore_admission_run_state,

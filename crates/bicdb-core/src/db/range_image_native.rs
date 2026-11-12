@@ -246,7 +246,11 @@ impl NativeDatabaseBirth {
     fn validate(&self) -> Result<()> {
         self.spec.validate()?;
         if !matches!(self.format_version, 1 | 2)
-            || self.abort_protocol_version.is_some_and(|v| v != 1)
+            || self.abort_protocol_version.is_some_and(|v| {
+                v != 1
+                    || self.format_version != 2
+                    || self.metadata_initialization_version != Some(1)
+            })
             || self
                 .metadata_initialization_version
                 .is_some_and(|v| v != 1 || self.format_version != 2)
@@ -831,7 +835,7 @@ impl BicDb {
             spec,
             false,
             false,
-            true,
+            false,
             after_flags,
         )
     }

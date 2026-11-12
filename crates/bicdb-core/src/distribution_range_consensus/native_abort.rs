@@ -359,7 +359,10 @@ impl RangeWriteStore {
         command: &RangeWriteCommand,
     ) -> Result<NativePrepareOnlyRejection> {
         native.require_current(database)?;
-        if native.abort_protocol_version() != 1 {
+        if native.abort_protocol_version() != 1
+            || native.writer_enforcement_version() != 1
+            || native.metadata_initialization_version() != 1
+        {
             return Err(range_write_error(
                 "old native birth lacks from-birth abort eligibility",
             ));

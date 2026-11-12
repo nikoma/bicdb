@@ -989,9 +989,15 @@ pub(crate) fn enable_native_abort_history(root: &Path) -> Result<()> {
     if !metadata
         .feature_flags
         .contains(RANGE_IMAGE_INSTALL_FEATURE_FLAG)
+        || !metadata
+            .feature_flags
+            .contains(NATIVE_WRITER_ENROLLMENT_FEATURE_FLAG)
+        || !metadata
+            .feature_flags
+            .contains(NATIVE_METADATA_STORE_FEATURE_FLAG)
     {
         return Err(BicDbError::InvalidConfig(
-            "native abort writer requires actual native reader fence".into(),
+            "native abort writer requires from-birth enforced writer and metadata initialization fences".into(),
         ));
     }
     metadata

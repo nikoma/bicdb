@@ -356,12 +356,13 @@ impl<'db> SqlEngine<'db> {
                 {
                     return Ok(value);
                 }
-                if let Some(value) = eval_db_catalog_function_value(
+                if let Some(value) = eval_db_catalog_function_value_with_engine(
                     self.db_ref(),
                     &name,
                     &args,
                     self.tx.map(Transaction::visibility_watermark),
                     Some(&self.session_gucs),
+                    Some(self),
                 )? {
                     return Ok(value);
                 }
@@ -3550,6 +3551,7 @@ impl<'db> SqlEngine<'db> {
             | "pg_has_role"
             | "pg_catalog.pg_has_role" => Some("bool".to_string()),
             "sum" => aggregate_pg_type_for_sum(self.infer_env_expr_type(args.first()?, env)?),
+            "bicdb_exact_sum_units" => Some("text".to_string()),
             "avg" => aggregate_pg_type_for_avg(self.infer_env_expr_type(args.first()?, env)?),
             "lag" | "lead" | "first_value" | "last_value" | "nth_value" => {
                 self.infer_env_expr_type(args.first()?, env)

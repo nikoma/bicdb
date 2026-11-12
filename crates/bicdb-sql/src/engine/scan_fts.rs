@@ -859,6 +859,7 @@ impl<'db> SqlEngine<'db> {
             CountAll,
             CountField,
             Sum { money: bool },
+            ExactSumUnits(bicdb_core::ExactDecimalUnitsSum),
             Min,
             Max,
             BoolAnd,
@@ -905,6 +906,16 @@ impl<'db> SqlEngine<'db> {
                     }
                     crate::eval::Aggregate::Sum(field, false, money) => {
                         (StreamingFoldKind::Sum { money }, field, None)
+                    }
+                    crate::eval::Aggregate::ExactSumUnits(aggregate, field) => {
+                        self.require_exact_decimal_units()?;
+                        (
+                            StreamingFoldKind::ExactSumUnits(crate::eval::new_exact_units_sum(
+                                aggregate.scale,
+                            )?),
+                            field,
+                            None,
+                        )
                     }
                     crate::eval::Aggregate::Min(field, pg_type) => {
                         (StreamingFoldKind::Min, field, pg_type)
@@ -1012,6 +1023,7 @@ impl<'db> SqlEngine<'db> {
                 money: bool,
                 partial: Option<SqlValue>,
             },
+            ExactSumUnits(bicdb_core::ExactDecimalUnitsSum),
             Extreme {
                 greatest: bool,
                 pg_type: Option<String>,
@@ -1045,6 +1057,9 @@ impl<'db> SqlEngine<'db> {
                             }
                         }
                     }
+                    Self::ExactSumUnits(sum) => {
+                        crate::eval::add_exact_units_value(sum, value)?;
+                    }
                     Self::Extreme {
                         greatest,
                         pg_type,
@@ -1077,13 +1092,16 @@ impl<'db> SqlEngine<'db> {
                 }
                 Ok(())
             }
-            fn finalize(self) -> SqlValue {
-                match self {
+            fn finalize(self) -> Result<SqlValue> {
+                Ok(match self {
                     Self::Count(count) => SqlValue::Int(count),
                     Self::Sum { partial, .. } => partial.unwrap_or(SqlValue::Null),
+                    Self::ExactSumUnits(sum) => {
+                        return crate::eval::finish_exact_units_sum(sum);
+                    }
                     Self::Extreme { best, .. } => best,
                     Self::Bool { state, .. } => state.map(SqlValue::Bool).unwrap_or(SqlValue::Null),
-                }
+                })
             }
         }
         let fresh_accumulators = |items: &[Item]| -> Vec<Accumulator> {
@@ -1098,6 +1116,9 @@ impl<'db> SqlEngine<'db> {
                             money: *money,
                             partial: None,
                         },
+                        StreamingFoldKind::ExactSumUnits(sum) => {
+                            Accumulator::ExactSumUnits(sum.clone())
+                        }
                         StreamingFoldKind::Min => Accumulator::Extreme {
                             greatest: false,
                             pg_type: pg_type.clone(),
@@ -1126,11 +1147,12 @@ impl<'db> SqlEngine<'db> {
         let mut current: Option<(Vec<u8>, Vec<SqlValue>, Vec<Accumulator>)> = None;
         let emit = |group_values: Vec<SqlValue>,
                     accumulators: Vec<Accumulator>,
-                    rows: &mut Vec<Vec<SqlValue>>| {
+                    rows: &mut Vec<Vec<SqlValue>>|
+         -> Result<()> {
             let mut finals = accumulators
                 .into_iter()
                 .map(Accumulator::finalize)
-                .collect::<Vec<_>>();
+                .collect::<Result<Vec<_>>>()?;
             // Consume in slot order.
             let mut finals_iter = finals.drain(..);
             let row = items
@@ -1141,6 +1163,7 @@ impl<'db> SqlEngine<'db> {
                 })
                 .collect::<Vec<_>>();
             rows.push(row);
+            Ok(())
         };
         let merged = sorter.finish_each(|key, mut spilled| {
             let fold_values = spilled.split_off(group_count);
@@ -1153,7 +1176,7 @@ impl<'db> SqlEngine<'db> {
                 }
                 _ => {
                     if let Some((_, group_values, accumulators)) = current.take() {
-                        emit(group_values, accumulators, &mut rows);
+                        emit(group_values, accumulators, &mut rows)?;
                     }
                     let mut accumulators = fresh_accumulators(&items);
                     for (accumulator, value) in accumulators.iter_mut().zip(fold_values) {
@@ -1171,7 +1194,7 @@ impl<'db> SqlEngine<'db> {
             return Ok(None);
         }
         if let Some((_, group_values, accumulators)) = current.take() {
-            emit(group_values, accumulators, &mut rows);
+            emit(group_values, accumulators, &mut rows)?;
         }
         sql_profile_full_scan();
         let column_types = aggregate_projection_column_types(&select.projection, schema.as_ref());
@@ -2870,6 +2893,10 @@ impl<'db> SqlEngine<'db> {
                 money: bool,
                 partial: Option<SqlValue>,
             },
+            ExactSumUnits {
+                field: FieldRef,
+                sum: bicdb_core::ExactDecimalUnitsSum,
+            },
             Extreme {
                 field: FieldRef,
                 pg_type: Option<String>,
@@ -2910,6 +2937,13 @@ impl<'db> SqlEngine<'db> {
                     money,
                     partial: None,
                 },
+                crate::eval::Aggregate::ExactSumUnits(aggregate, field) => {
+                    self.require_exact_decimal_units()?;
+                    Fold::ExactSumUnits {
+                        field,
+                        sum: crate::eval::new_exact_units_sum(aggregate.scale)?,
+                    }
+                }
                 crate::eval::Aggregate::Min(field, pg_type) => Fold::Extreme {
                     field,
                     pg_type,
@@ -2988,6 +3022,11 @@ impl<'db> SqlEngine<'db> {
                         Fold::CountField(field, count) => {
                             *count += crate::eval::record_aggregate_count(&matching, field, false)?
                                 as i64;
+                        }
+                        Fold::ExactSumUnits { field, sum } => {
+                            for record in &matching {
+                                crate::eval::add_exact_units_value(sum, field.value(record)?)?;
+                            }
                         }
                         Fold::Sum {
                             field,
@@ -3080,6 +3119,7 @@ impl<'db> SqlEngine<'db> {
             row.push(match fold {
                 Fold::CountAll(count) | Fold::CountField(_, count) => SqlValue::Int(count),
                 Fold::Sum { partial, .. } => partial.unwrap_or(SqlValue::Null),
+                Fold::ExactSumUnits { sum, .. } => crate::eval::finish_exact_units_sum(sum)?,
                 Fold::Extreme { best, .. } => best,
                 Fold::Bool { state, .. } => state.map(SqlValue::Bool).unwrap_or(SqlValue::Null),
                 Fold::Avg { state, .. } => state.finish()?,

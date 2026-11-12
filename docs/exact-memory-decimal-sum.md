@@ -35,3 +35,52 @@ ordinary Decimal arithmetic, and other backend fallback bodies retain their
 existing behavior. Decimal Average still needs a separate widened
 sum-through-division implementation, including `[MAX96, MAX96] -> MAX96`; it is
 an open compatibility gap and is not established by Sum qualification.
+
+## Wide unit operations
+
+The separate signed application feature `exact_decimal_units` admits
+`finance.sum_units(Decimal[], Int) -> String`,
+`finance.prorate_units(String, String, Decimal, Int, Int) -> Decimal`, and
+`finance.display_ratio_units(String, String, Int, Int) -> Decimal`.
+Activation records sticky storage feature `exact_decimal_units_v1` before
+exposing the application so older readers refuse the database. The strict SDK
+call signatures are validated even in unreachable program expressions.
+
+`sum_units` requires every nonnull Decimal operand to be individually integral
+at the requested scale (0 through 28). Nulls are refused. Empty input returns
+`"0"`. The list wrapper retains the 100,000 item bound and invocation charging.
+The final canonical signed unit magnitude must be less than `2^254`.
+
+The SQL aggregate `bicdb_exact_sum_units(Decimal, Int)` shares the same streaming
+accumulator without a Decimal subtotal or application list limit. It runs over
+the genuine authorized database relation and owning transaction. Its scale is
+constant for the statement, including typed statement parameters. DISTINCT,
+FILTER and window forms are refused. Decimal schema typing is mandatory; null,
+Float, Bool and container coercions fail. Carrier's standalone `.SumUnits(scale)`
+terminal carries an explicit compiler-only native feature marker.
+
+The SQL execution context records the current signed application's allowance
+as trusted session/engine state, never a GUC or a transaction-wide union of past
+allowances. Query AST checks cover nested SQL, empty relations and LIMIT 0.
+Routine execution, SECURITY DEFINER, autonomous sessions, parallel expression
+workers and `ts_rewrite` must preserve that context. Local operator SQL retains
+its operator context; an application cannot select it. Genuine capability and
+parameter errors have typed origins (42501 and 22023); matching RAISE strings
+do not acquire those origins. The host restores its owning transaction before
+error mapping and rolls back failed deferred validation.
+
+Proration takes canonical unsigned ASCII cost units and positive quantity atoms,
+each less than `2^254`, with no signs, leading zeros except `"0"`, whitespace or
+exponents. Quantity precision is 0 through 12 and amount scale 0 through 8.
+Operated Decimal quantity must be positive, integral at that precision and no
+greater than the remaining quantity. The operation computes a single half-even
+rounding of `remaining_cost * operated_atoms / remaining_atoms`, then admits only
+a representable native Decimal result. Sequential moving-average consumers
+subtract the actual resulting cost and quantity before their next operation.
+
+The display ratio uses the greatest native scale whose once-rounded coefficient
+fits the 96-bit Decimal domain. It is nonauthoritative: display rate times
+quantity must never price inventory or COGS. Ordinary scalar division, source
+ownership, posting authority, quotas and financial locks are unchanged.
+Native invariant calls to these three new operations and Cell execution are
+not admitted. Source implementation and preflight are not runtime qualification.

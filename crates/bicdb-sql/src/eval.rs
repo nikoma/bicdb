@@ -20,6 +20,8 @@ pub(crate) use numeric_power::numeric_power;
 pub(crate) use operators_compare::*;
 mod aggregates;
 pub(crate) use aggregates::*;
+mod exact_units;
+pub(crate) use exact_units::*;
 pub(crate) mod rewrite_helpers;
 pub(crate) use rewrite_helpers::*;
 mod text_rewrite;

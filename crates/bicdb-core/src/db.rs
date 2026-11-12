@@ -10363,6 +10363,11 @@ impl BicDb {
         format::enable_exact_decimal_list_sum(&self.path)
     }
 
+    pub fn enable_exact_decimal_units(&mut self) -> Result<()> {
+        self.ensure_writable("enable exact Decimal units contract")?;
+        format::enable_exact_decimal_units(&self.path)
+    }
+
     fn open_inner(
         path: impl AsRef<Path>,
         config: DbConfig,

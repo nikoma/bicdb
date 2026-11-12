@@ -3253,6 +3253,21 @@ impl ApplicationManifestV2 {
         }
         if let Some(program) = &self.application_program {
             program.validate()?;
+            if application_program_uses_builtin(
+                program,
+                &[
+                    "finance.sum_units",
+                    "finance.prorate_units",
+                    "finance.display_ratio_units",
+                ],
+            ) && !self
+                .required_features
+                .contains(&ApplicationFeature::ExactDecimalUnits)
+            {
+                return invalid(
+                    "exact unit arithmetic requires signed exact_decimal_units feature",
+                );
+            }
             if application_program_uses_builtin(program, &["query.decimal_sum"])
                 && !self
                     .required_features
@@ -5207,6 +5222,14 @@ fn validate_carrier_expression(expression: &ApplicationExpressionV1) -> Result<(
             if *kind == ApplicationCallKindV1::Builtin && target == "query.decimal_sum" {
                 validate_decimal_list_sum_call(expression)?;
             }
+            if *kind == ApplicationCallKindV1::Builtin
+                && matches!(
+                    target.as_str(),
+                    "finance.sum_units" | "finance.prorate_units" | "finance.display_ratio_units"
+                )
+            {
+                validate_exact_decimal_units_call(expression)?;
+            }
             for argument in arguments {
                 validate_carrier_expression(&argument.value)?;
             }
@@ -6096,6 +6119,7 @@ impl EgressDeclaration {
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 #[serde(rename_all = "snake_case")]
 pub enum ApplicationFeature {
+    ExactDecimalUnits,
     ExactDecimalListSum,
     ExactProportionalIntervals,
     NativeImmutableFacts,
@@ -6702,6 +6726,46 @@ impl ApplicationInvariantV1 {
         }
         Ok(())
     }
+}
+
+fn validate_exact_decimal_units_call(expression: &ApplicationExpressionV1) -> Result<()> {
+    let ApplicationExpressionV1::Call {
+        kind: ApplicationCallKindV1::Builtin,
+        target,
+        method,
+        result_type,
+        argument_types,
+        argument_item_types,
+        result_projection,
+        arguments,
+    } = expression
+    else {
+        return invalid("exact units require their typed builtin call");
+    };
+    use ApplicationExpressionTypeV1::{Decimal, Int, Other, String as Text};
+    let (expected, items, output): (&[_], &[_], _) = match target.as_str() {
+        "finance.sum_units" => (&[Other, Int], &[Some(Decimal), None], Text),
+        "finance.prorate_units" => (
+            &[Text, Text, Decimal, Int, Int],
+            &[None, None, None, None, None],
+            Decimal,
+        ),
+        "finance.display_ratio_units" => {
+            (&[Text, Text, Int, Int], &[None, None, None, None], Decimal)
+        }
+        _ => return invalid("unknown exact units builtin"),
+    };
+    if method.is_some()
+        || result_projection.is_some()
+        || *result_type != Some(output)
+        || argument_types != expected
+        || argument_item_types != items
+        || arguments.len() != expected.len()
+        || arguments.iter().any(|argument| argument.name.is_some())
+    {
+        return invalid("exact units require strict positional Decimal-list/Int or String/String/Decimal/Int scalar signatures and their declared result type");
+    }
+    Ok(())
 }
 
 fn validate_decimal_list_sum_call(expression: &ApplicationExpressionV1) -> Result<()> {

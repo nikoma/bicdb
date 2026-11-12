@@ -3106,6 +3106,12 @@ impl ApplicationRuntime {
         let result = (|| -> Result<()> {
             if application
                 .required_features
+                .contains(&bicdb_extension::abi_v2::ApplicationFeature::ExactDecimalUnits)
+            {
+                db.enable_exact_decimal_units()?;
+            }
+            if application
+                .required_features
                 .contains(&bicdb_extension::abi_v2::ApplicationFeature::ExactDecimalListSum)
             {
                 db.enable_exact_decimal_list_sum()?;

@@ -3045,6 +3045,7 @@ pub(crate) fn is_aggregate_function(function: &Function) -> bool {
             .as_str(),
         "count"
             | "sum"
+            | "bicdb_exact_sum_units"
             | "avg"
             | "min"
             | "max"

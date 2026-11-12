@@ -1,6 +1,7 @@
 //! PostgreSQL partition bounds and physical relation identities. Oracle's
 //! partition metadata and routing are deliberately handled by its own module.
 use crate::*;
+mod hash;
 
 #[derive(Clone, Debug)]
 pub(crate) enum BoundValue {
@@ -482,9 +483,9 @@ pub(crate) fn matches_bound(parent: &TableSchema, bound: &Bound, record: &Record
             Ok(false)
         }
         Bound::Default => Err(invalid("default bounds require sibling exclusion")),
-        Bound::Hash { .. } => Err(SqlError::Unsupported(
-            "PostgreSQL hash partition row routing is not implemented".into(),
-        )),
+        Bound::Hash { modulus, remainder } => {
+            Ok(hash::row_hash(&columns, &values)? % modulus == *remainder)
+        }
     }
 }
 

@@ -1492,12 +1492,15 @@ impl<'db> SqlSession<'db> {
                 "INSERT ON DUPLICATE KEY UPDATE is not supported".to_string(),
             ));
         };
+        let access_table = table;
+        let access_schema = schema;
+        let partition_parent = schema.filter(|schema| schema.partitioning.is_some());
         // An arbiter reads the target relation (PostgreSQL requires SELECT
         // rights for it), so the SELECT policies join the new-row checks.
         let select_required = on_conflict.conflict_target.is_some()
             || matches!(on_conflict.action, OnConflictAction::DoUpdate(_))
             || returning.is_some_and(select_items_reference_stored_columns);
-        if matches!(on_conflict.action, OnConflictAction::DoNothing) {
+        if partition_parent.is_none() && matches!(on_conflict.action, OnConflictAction::DoNothing) {
             if on_conflict.conflict_target.is_none() {
                 return self.execute_insert_on_conflict_do_nothing_all_unique(
                     table,
@@ -1521,24 +1524,102 @@ impl<'db> SqlSession<'db> {
         if let OnConflictAction::DoUpdate(update) = &on_conflict.action {
             self.require_update_privileges(table, &update.assignments)?;
         }
-        let conflict_columns =
-            conflict_target_columns(table, schema, on_conflict.conflict_target.as_ref())?;
+        let conflict_columns = if matches!(on_conflict.action, OnConflictAction::DoNothing)
+            && on_conflict.conflict_target.is_none()
+        {
+            Vec::new()
+        } else {
+            conflict_target_columns(table, schema, on_conflict.conflict_target.as_ref())?
+        };
         let mut affected_records = Vec::new();
+        let mut affected_identities = BTreeSet::new();
+        let mut inserted_leaf_records = Vec::new();
         let mut inserted_records = Vec::new();
 
         for (idx, record) in records.into_iter().enumerate() {
             if idx % 1024 == 0 {
                 self.cancellation.check()?;
             }
+            let destination = partition_parent
+                .map(|parent| partition::route_record(self.db_ref(), parent, &record))
+                .transpose()?;
+            let table = destination
+                .as_ref()
+                .map(|schema| schema.name.as_str())
+                .unwrap_or(access_table);
+            let schema = destination.as_ref().or(access_schema);
             // The proposed row passes the INSERT checks before arbitration,
             // whichever path it then takes.
             self.enforce_rls_write_checks(
-                table,
-                schema,
+                access_table,
+                access_schema,
                 PolicyAction::Insert,
                 select_required,
                 std::slice::from_ref(&record),
             )?;
+            if partition_parent.is_some()
+                && matches!(on_conflict.action, OnConflictAction::DoNothing)
+            {
+                let retained = if on_conflict.conflict_target.is_none() {
+                    self.non_conflicting_insert_records_all_unique(
+                        table,
+                        schema,
+                        vec![record.clone()],
+                    )?
+                } else {
+                    self.non_conflicting_insert_records(
+                        table,
+                        schema,
+                        vec![record.clone()],
+                        &conflict_columns,
+                    )?
+                };
+                if retained.is_empty() {
+                    continue;
+                }
+                let target = destination
+                    .as_ref()
+                    .expect("partition insert has destination");
+                validate_records_for_write(
+                    self.db_ref(),
+                    self.read_tx(),
+                    table,
+                    target,
+                    &retained,
+                    false,
+                    Some(&self.sql_engine()),
+                )
+                .map_err(|error| {
+                    self.arbiter_race_as_conflict(
+                        table,
+                        schema,
+                        if on_conflict.conflict_target.is_none() {
+                            None
+                        } else {
+                            Some(&conflict_columns)
+                        },
+                        error,
+                    )
+                })?;
+                self.insert_session_new_records(table, schema, retained.clone())
+                    .map_err(|error| {
+                        self.arbiter_race_as_conflict(
+                            table,
+                            schema,
+                            if on_conflict.conflict_target.is_none() {
+                                None
+                            } else {
+                                Some(&conflict_columns)
+                            },
+                            error,
+                        )
+                    })?;
+                for row in retained {
+                    inserted_leaf_records.push((target.clone(), row.clone()));
+                    affected_records.push(row);
+                }
+                continue;
+            }
             // A READ COMMITTED primary-key upsert must reserve the row before
             // deciding INSERT versus UPDATE. The winner may commit while this
             // statement waits, leaving it invisible to the statement snapshot.
@@ -1581,8 +1662,12 @@ impl<'db> SqlSession<'db> {
                                 "ON CONFLICT DO UPDATE requires a table schema".to_string(),
                             ));
                         };
-                        let mut update_row =
-                            row_from_record(table, table, Some(schema), &existing)?;
+                        let mut update_row = row_from_record(
+                            access_table,
+                            access_table,
+                            access_schema.or(Some(schema)),
+                            &existing,
+                        )?;
                         update_row = merge_rows(
                             &update_row,
                             &row_from_record("excluded", "excluded", Some(schema), &record)?,
@@ -1600,7 +1685,11 @@ impl<'db> SqlSession<'db> {
                         // failing USING), PostgreSQL errors when the
                         // conflicting existing row is not updatable or not
                         // visible; the DO UPDATE WHERE is evaluated first.
-                        self.enforce_rls_conflict_check(table, schema, &existing)?;
+                        self.enforce_rls_conflict_check(
+                            access_table,
+                            access_schema.unwrap_or(schema),
+                            &existing,
+                        )?;
 
                         let mut updated = existing.clone();
                         let mut assigned_columns = Vec::with_capacity(update.assignments.len());
@@ -1646,7 +1735,16 @@ impl<'db> SqlSession<'db> {
                                 &column,
                                 value,
                             )?;
-                            set_record_column(&mut updated, Some(schema), &column, value)?;
+                            if partition_parent.is_some() {
+                                set_partition_update_column(
+                                    &mut updated,
+                                    access_schema,
+                                    &column,
+                                    value,
+                                )?;
+                            } else {
+                                set_record_column(&mut updated, Some(schema), &column, value)?;
+                            }
                         }
                         // ON CONFLICT DO UPDATE takes the update path, so
                         // BEFORE/AFTER UPDATE row triggers apply — the same
@@ -1665,25 +1763,56 @@ impl<'db> SqlSession<'db> {
                             schema,
                             std::slice::from_mut(&mut updated),
                         )?;
+                        if let Some(parent) = partition_parent {
+                            self.refresh_partition_update_identity(parent, &mut updated)?;
+                        }
                         // The updated row: UPDATE WITH CHECK and SELECT USING,
                         // before its constraints (PostgreSQL's order).
                         self.enforce_rls_write_checks(
-                            table,
-                            Some(schema),
+                            access_table,
+                            access_schema.or(Some(schema)),
                             PolicyAction::Update,
                             true,
                             std::slice::from_ref(&updated),
                         )?;
-                        validate_records_for_write(
-                            self.db_ref(),
-                            self.tx.as_ref(),
-                            table,
-                            schema,
-                            &[updated.clone()],
-                            true,
-                            Some(&self.sql_engine()),
-                        )?;
-                        if let Some(reservation) = conflict_reservation {
+                        if partition_parent.is_some() {
+                            if let Err(error) =
+                                partition::validate_record(self.db_ref(), schema, &updated)
+                            {
+                                if error.sqlstate() == "23514" {
+                                    return Err(SqlError::Unsupported("ON CONFLICT DO UPDATE cannot move a conflicting row to another partition".into()));
+                                }
+                                return Err(error);
+                            }
+                        }
+                        if !affected_identities.insert((table.to_string(), existing.id.clone())) {
+                            return Err(SqlError::data_exception(
+                                "21000",
+                                "ON CONFLICT DO UPDATE command cannot affect row a second time",
+                                None,
+                            ));
+                        }
+                        if partition_parent.is_none() || updated.id == existing.id {
+                            validate_records_for_write(
+                                self.db_ref(),
+                                self.read_tx(),
+                                table,
+                                schema,
+                                std::slice::from_ref(&updated),
+                                true,
+                                Some(&self.sql_engine()),
+                            )?;
+                        }
+                        if let Some(parent) = partition_parent.filter(|_| updated.id != existing.id)
+                        {
+                            self.update_partition_records(
+                                parent,
+                                &[(existing.clone(), updated.clone())],
+                                &[Some(table.to_string())],
+                                &[conflict_snapshot],
+                                &assigned_columns,
+                            )?;
+                        } else if let Some(reservation) = conflict_reservation {
                             self.insert_reserved_session_record(
                                 table,
                                 reservation,
@@ -1703,6 +1832,7 @@ impl<'db> SqlSession<'db> {
                             "update",
                             std::iter::once((Some(&existing), Some(&updated))),
                         )?;
+                        affected_identities.insert((table.to_string(), updated.id.clone()));
                         affected_records.push(updated);
                     }
                 }
@@ -1742,10 +1872,22 @@ impl<'db> SqlSession<'db> {
                     error,
                 ));
             }
-            inserted_records.push(record.clone());
+            affected_identities.insert((table.to_string(), record.id.clone()));
+            if let Some(target) = destination {
+                inserted_leaf_records.push((target, record.clone()));
+            } else {
+                inserted_records.push(record.clone());
+            }
             affected_records.push(record);
         }
 
+        for (target, record) in inserted_leaf_records {
+            self.fire_after_insert_triggers(
+                &target.name,
+                Some(&target),
+                std::slice::from_ref(&record),
+            )?;
+        }
         self.fire_after_insert_triggers(table, schema, &inserted_records)?;
         self.insert_result(
             table,

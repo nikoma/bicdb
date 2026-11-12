@@ -79,104 +79,10 @@ impl RecoveryFenceQuorumRound {
         self.cancellation.check()?;
         self.role.require_live_request()?;
         observation.require_live()?;
-        if !observation.is_active_recovery() {
-            return Err(invalid(
-                "completed epoch authority is not an active recovery fence",
-            ));
-        }
-        // Recipients obtain independent fresh metadata contexts. Their durable
-        // recovery session must match; their context UUID need not equal ours.
-        observation.scope().require_role(&self.role)?;
-        if !self.scope.same_session(observation.scope()) {
-            return Err(invalid(
-                "epoch-fence reply belongs to another recovery session",
-            ));
-        }
         if self.observations.contains_key(observation.node_id()) {
             return Err(invalid("duplicate recovery fence voter"));
         }
-        let member = self
-            .role
-            .member_credentials()
-            .get(observation.node_id())
-            .ok_or_else(|| invalid("recovery fence observer is not a current data voter"))?;
-        let peer = observation.authenticated_peer();
-        if peer.node_id() != observation.node_id()
-            || peer.member_incarnation() != member.incarnation
-            || observation.member_incarnation() != member.incarnation
-        {
-            return Err(invalid(
-                "recovery fence peer incarnation differs from fresh membership",
-            ));
-        }
-        let has_pins = member.active_certificate_sha256.is_some()
-            || member.pending_certificate_sha256.is_some();
-        if has_pins {
-            let actual = peer
-                .certificate_sha256()
-                .ok_or_else(|| invalid("recovery fence peer has no actual certificate"))?;
-            if member.active_certificate_sha256.as_deref() != Some(actual)
-                && member.pending_certificate_sha256.as_deref() != Some(actual)
-            {
-                return Err(invalid(
-                    "recovery fence peer certificate is no longer authorized",
-                ));
-            }
-        } else if !peer.plaintext_loopback() {
-            return Err(invalid(
-                "unpinned recovery peer requires explicit loopback development mode",
-            ));
-        }
-        let progress = observation.progress();
-        let extra_handoff_epoch = match self.role.purpose() {
-            MetadataRecoveryRolePurpose::NormalRecovery => None,
-            MetadataRecoveryRolePurpose::CommittedHandoff { .. } => {
-                self.role.current_range().epoch.checked_add(2)
-            }
-            MetadataRecoveryRolePurpose::ObserveFencedRecovery { .. } => {
-                return Err(invalid(
-                    "read-only observation role cannot collect mutation fences",
-                ));
-            }
-        };
-        if progress.node_id != *observation.node_id()
-            || progress.range_id != self.scope.range_id
-            || (progress.current_epoch != self.scope.range_epoch
-                && Some(progress.current_epoch) != extra_handoff_epoch)
-            || progress.resolved_through > progress.last_index
-            || progress.compacted_through > progress.resolved_through
-            || observation.store_open_id().is_nil()
-            || observation.native_database_incarnation().is_empty()
-            || observation.native_database_incarnation().len() > MAX_OBSERVATION_TEXT
-        {
-            return Err(invalid(
-                "recovery fence log identity, epoch or watermarks are invalid",
-            ));
-        }
-        let native = observation.native();
-        if native.range_id != self.scope.range_id
-            || native
-                .native_base_index
-                .zip(native.native_applied_index)
-                .is_some_and(|(base, applied)| base > applied)
-            || native.pending_command_index.is_some_and(|index| index == 0)
-            || native
-                .materialized_pending_index
-                .is_some_and(|index| native.pending_command_index != Some(index))
-            || native
-                .pending_command_id
-                .as_ref()
-                .is_some_and(|id| id.is_empty() || id.len() > MAX_OBSERVATION_TEXT)
-            || native
-                .diagnostic
-                .as_ref()
-                .is_some_and(|message| message.len() > MAX_OBSERVATION_TEXT)
-            || native.native_receipt_sha256.as_ref().is_some_and(|sha| {
-                sha.len() != 64 || !sha.bytes().all(|byte| byte.is_ascii_hexdigit())
-            })
-        {
-            return Err(invalid("recovery fence native observation is malformed"));
-        }
+        validate_ordinary_fence_for_role(&self.role, &self.scope, &observation)?;
         // Unknown/invalidated native floors can join a logical fence quorum.
         // They must be repaired before native-ready certification; None is
         // never converted to verified empty genesis or a snapshot floor.
@@ -749,4 +655,111 @@ mod tests {
             .is_err());
         assert!(round.finish(&ready, &database, &store).is_err());
     }
+}
+
+/// Shared checks for an ACTUAL ordinary observation. This never accepts an
+/// Installing DTO or converts an interrupted-image observation to ordinary.
+pub(super) fn validate_ordinary_fence_for_role(
+    role: &RecoveryRoleAdmission,
+    scope: &RecoveryFenceScope,
+    observation: &RecoveryFenceObservation,
+) -> Result<()> {
+    role.require_live_request()?;
+    observation.require_live()?;
+    if !observation.is_active_recovery() {
+        return Err(invalid(
+            "completed epoch authority is not an active recovery fence",
+        ));
+    }
+    // Recipients obtain independent fresh metadata contexts. Their durable
+    // recovery session must match; their context UUID need not equal ours.
+    observation.scope().require_role(&role)?;
+    if !scope.same_session(observation.scope()) {
+        return Err(invalid(
+            "epoch-fence reply belongs to another recovery session",
+        ));
+    }
+    let member = role
+        .member_credentials()
+        .get(observation.node_id())
+        .ok_or_else(|| invalid("recovery fence observer is not a current data voter"))?;
+    let peer = observation.authenticated_peer();
+    if peer.node_id() != observation.node_id()
+        || peer.member_incarnation() != member.incarnation
+        || observation.member_incarnation() != member.incarnation
+    {
+        return Err(invalid(
+            "recovery fence peer incarnation differs from fresh membership",
+        ));
+    }
+    let has_pins =
+        member.active_certificate_sha256.is_some() || member.pending_certificate_sha256.is_some();
+    if has_pins {
+        let actual = peer
+            .certificate_sha256()
+            .ok_or_else(|| invalid("recovery fence peer has no actual certificate"))?;
+        if member.active_certificate_sha256.as_deref() != Some(actual)
+            && member.pending_certificate_sha256.as_deref() != Some(actual)
+        {
+            return Err(invalid(
+                "recovery fence peer certificate is no longer authorized",
+            ));
+        }
+    } else if !peer.plaintext_loopback() {
+        return Err(invalid(
+            "unpinned recovery peer requires explicit loopback development mode",
+        ));
+    }
+    let progress = observation.progress();
+    let extra_handoff_epoch = match role.purpose() {
+        MetadataRecoveryRolePurpose::NormalRecovery => None,
+        MetadataRecoveryRolePurpose::CommittedHandoff { .. } => {
+            role.current_range().epoch.checked_add(2)
+        }
+        MetadataRecoveryRolePurpose::ObserveFencedRecovery { .. } => {
+            return Err(invalid(
+                "read-only observation role cannot collect mutation fences",
+            ));
+        }
+    };
+    if progress.node_id != *observation.node_id()
+        || progress.range_id != scope.range_id
+        || (progress.current_epoch != scope.range_epoch
+            && Some(progress.current_epoch) != extra_handoff_epoch)
+        || progress.resolved_through > progress.last_index
+        || progress.compacted_through > progress.resolved_through
+        || observation.store_open_id().is_nil()
+        || observation.native_database_incarnation().is_empty()
+        || observation.native_database_incarnation().len() > MAX_OBSERVATION_TEXT
+    {
+        return Err(invalid(
+            "recovery fence log identity, epoch or watermarks are invalid",
+        ));
+    }
+    let native = observation.native();
+    if native.range_id != scope.range_id
+        || native
+            .native_base_index
+            .zip(native.native_applied_index)
+            .is_some_and(|(base, applied)| base > applied)
+        || native.pending_command_index.is_some_and(|index| index == 0)
+        || native
+            .materialized_pending_index
+            .is_some_and(|index| native.pending_command_index != Some(index))
+        || native
+            .pending_command_id
+            .as_ref()
+            .is_some_and(|id| id.is_empty() || id.len() > MAX_OBSERVATION_TEXT)
+        || native
+            .diagnostic
+            .as_ref()
+            .is_some_and(|message| message.len() > MAX_OBSERVATION_TEXT)
+        || native
+            .native_receipt_sha256
+            .as_ref()
+            .is_some_and(|sha| sha.len() != 64 || !sha.bytes().all(|byte| byte.is_ascii_hexdigit()))
+    {
+        return Err(invalid("recovery fence native observation is malformed"));
+    }
+    Ok(())
 }

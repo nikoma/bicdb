@@ -1,0 +1,8 @@
+[package]
+name = "qualification/decimal-input"
+version = "999.1.1"
+
+[module]
+namespace = "qualification.decimal_input"
+version = "999.1.1"
+system = false

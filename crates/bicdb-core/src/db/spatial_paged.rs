@@ -2309,6 +2309,40 @@ impl BicDb {
     /// seq)` (after releasing the database write lock, so concurrent commits
     /// pipeline and coalesce) before acknowledging the commit.
     pub(crate) fn validate_native_commit_validators(&self, tx: &Transaction) -> Result<()> {
+        // Current durable policy wins over a captured pre-publication invocation.
+        let issuers = tx.native_write_issuers.lock();
+        let mut published_ids = BTreeSet::new();
+        for (index, write) in tx.writes.iter().enumerate() {
+            let policy = self.mutation_policy(&write.collection)?.unwrap_or_default();
+            if policy.native_fact_publication.is_some()
+                || policy.native_fact_reference_owner.is_some()
+            {
+                if write.op != TxWriteOp::Upsert
+                    || self
+                        .get_unchecked(&write.collection, &write.record_id)?
+                        .is_some()
+                    || !published_ids.insert((&write.collection, &write.record_id))
+                {
+                    return Err(BicDbError::CommitValidation(
+                        "immutable native fact mutation denied".into(),
+                    ));
+                }
+            }
+            let owner = policy
+                .native_fact_publication
+                .as_ref()
+                .map(|publication| &publication.owner_application)
+                .or(policy.native_fact_reference_owner.as_ref());
+            if let Some(owner) = owner {
+                if issuers.get(&index).and_then(|issuer| issuer.as_deref()) != Some(owner.as_str())
+                {
+                    return Err(BicDbError::CommitValidation(
+                        "immutable native fact owner mutation denied".into(),
+                    ));
+                }
+            }
+        }
+        drop(issuers);
         for validator in &tx.commit_validators {
             match validator {
                 NativeCommitValidator::AppendOnly { relation } => {
@@ -2514,7 +2548,9 @@ impl BicDb {
                     }
                 }
                 NativeCommitValidator::ApplicationInvariant { definition } => {
-                    validate_carrier_invariant(self, tx, definition)?;
+                    if !tx.writes.is_empty() || tx.validate_existing_application_invariants {
+                        validate_carrier_invariant(self, tx, definition)?;
+                    }
                 }
             }
         }
@@ -2609,12 +2645,14 @@ impl BicDb {
         // off (default) the lock is never taken and this is a single relaxed load,
         // leaving the concurrent path byte-identical to before. Held from here so a
         // committer's full apply completes before the next committer begins.
-        let has_carrier_invariants = tx.commit_validators.iter().any(|validator| {
-            matches!(
-                validator,
-                NativeCommitValidator::ApplicationInvariant { .. }
-            )
-        });
+        let has_carrier_invariants = (!tx.writes.is_empty()
+            || tx.validate_existing_application_invariants)
+            && tx.commit_validators.iter().any(|validator| {
+                matches!(
+                    validator,
+                    NativeCommitValidator::ApplicationInvariant { .. }
+                )
+            });
         let _commit_guard = if global_commit_lock_enabled() || has_carrier_invariants {
             Some(self.commit_lock.lock())
         } else {

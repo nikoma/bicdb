@@ -76,9 +76,30 @@ fn one_statement() -> u32 {
     1
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct NativeFactPublicationPolicy {
+    pub owner_application: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub owner_resource: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub owner_version: Option<String>,
+    pub publication_name: String,
+    pub fingerprint: String,
+    pub tenant_field: String,
+    pub fields: BTreeSet<String>,
+    pub consumers: BTreeSet<String>,
+    pub read_roles: BTreeSet<String>,
+    pub accept_new_references: bool,
+}
+
 #[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct MutationPolicy {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub native_fact_publication: Option<NativeFactPublicationPolicy>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub native_fact_reference_owner: Option<String>,
     #[serde(default)]
     pub grants_required: bool,
     #[serde(default)]
@@ -140,6 +161,7 @@ impl MutationPolicy {
 
 #[derive(Clone, Debug)]
 pub(crate) struct MutationGrant {
+    pub(crate) issuer_application: Option<String>,
     pub(crate) id: MutationGrantId,
     pub(crate) actor: MutationActor,
     pub(crate) spec: MutationGrantSpec,
@@ -259,6 +281,25 @@ pub enum NativeInvariantAggregateFunction {
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum NativeInvariantExpression {
+    PublishedProjectionExists {
+        binding: String,
+        owner_application: String,
+        owner_resource: String,
+        owner_version: String,
+        publication_name: String,
+        publication_fingerprint: String,
+        consumer_application: String,
+        condition: Box<NativeInvariantExpression>,
+    },
+    PublishedExists {
+        binding: String,
+        relation: String,
+        owner_application: String,
+        publication_name: String,
+        publication_fingerprint: String,
+        consumer_application: String,
+        condition: Box<NativeInvariantExpression>,
+    },
     SubjectField {
         field: String,
     },
@@ -268,6 +309,19 @@ pub enum NativeInvariantExpression {
     },
     Literal {
         value: serde_json::Value,
+    },
+    /// Checked proleptic-Gregorian arithmetic on the existing native Date domain.
+    DateAddDays {
+        date: Box<NativeInvariantExpression>,
+        days: Box<NativeInvariantExpression>,
+    },
+    DateDifferenceDays {
+        end: Box<NativeInvariantExpression>,
+        start: Box<NativeInvariantExpression>,
+    },
+    /// Exact bounded prefix allocation, returning only the final Decimal difference.
+    ProportionalInterval {
+        arguments: [Box<NativeInvariantExpression>; 6],
     },
     Unary {
         operator: NativeInvariantUnaryOperator,

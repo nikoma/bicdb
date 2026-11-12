@@ -1,0 +1,122 @@
+{
+  "source_revision": "ca7d481467c40cf6ac324ceb8c0c7e943d4d1cfc",
+  "requested_source": "ca7d481467c40cf6ac324ceb8c0c7e943d4d1cfc",
+  "authoritative_source_verified": true,
+  "run_id": 43275067911,
+  "job_id": 131381248091,
+  "job_name": "Focused CLI integration (native_metadata_operator_cli)",
+  "job_status": "completed",
+  "job_conclusion": "success",
+  "captured_at_utc": "2026-11-12T18:15:03.025887+00:00",
+  "raw_bytes": 2124685,
+  "raw_sha256": "e4ff1e1a48a483f1dd09682451a96abcd79203e79ff366dea8e4ce9538544ea6",
+  "compressed_file": "ca7-public-cli-rpc-custody-job131381248091.log.gz",
+  "compressed_sha256": "bf5246247a20481f4d692bc13985e07213d69cc810f44e8fbbfc642e40bd076a",
+  "capture_exit_code": 0,
+  "test_summaries": [
+    "2026-11-12T18:14:09.5267176Z test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 57.38s"
+  ],
+  "failure_context": [],
+  "test_observations": [
+    {
+      "line": 22312,
+      "test": "native_metadata_operator_actual_cli_four_process_startup_registration_and_data_refusal",
+      "result": "ok"
+    },
+    {
+      "line": 22315,
+      "test": "promoted_cold_tests::native_metadata_operator_actual_cli_automatic_promoted_voter_kill_reopen_same_root",
+      "result": "ok"
+    }
+  ],
+  "steps": [
+    {
+      "name": "Set up job",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 1,
+      "started_at": "2026-11-12T17:59:08Z",
+      "completed_at": "2026-11-12T17:59:09Z"
+    },
+    {
+      "name": "Run actions/checkout@v4",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 2,
+      "started_at": "2026-11-12T17:59:09Z",
+      "completed_at": "2026-11-12T17:59:12Z"
+    },
+    {
+      "name": "Run dtolnay/rust-toolchain@stable",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 3,
+      "started_at": "2026-11-12T17:59:12Z",
+      "completed_at": "2026-11-12T17:59:12Z"
+    },
+    {
+      "name": "Run Swatinem/rust-cache@v2",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 4,
+      "started_at": "2026-11-12T17:59:12Z",
+      "completed_at": "2026-11-12T17:59:20Z"
+    },
+    {
+      "name": "Record exact source and list CLI integration tests",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 5,
+      "started_at": "2026-11-12T17:59:20Z",
+      "completed_at": "2026-11-12T18:13:11Z"
+    },
+    {
+      "name": "Execute CLI integration target serially",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 6,
+      "started_at": "2026-11-12T18:13:11Z",
+      "completed_at": "2026-11-12T18:14:09Z"
+    },
+    {
+      "name": "Retain exact tracked source and full CLI logs only",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 7,
+      "started_at": "2026-11-12T18:14:09Z",
+      "completed_at": "2026-11-12T18:14:12Z"
+    },
+    {
+      "name": "Retain explicitly opted-in stopped native databases only",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 8,
+      "started_at": "2026-11-12T18:14:12Z",
+      "completed_at": "2026-11-12T18:14:12Z"
+    },
+    {
+      "name": "Post Run Swatinem/rust-cache@v2",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 15,
+      "started_at": "2026-11-12T18:14:12Z",
+      "completed_at": "2026-11-12T18:14:24Z"
+    },
+    {
+      "name": "Post Run actions/checkout@v4",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 16,
+      "started_at": "2026-11-12T18:14:24Z",
+      "completed_at": "2026-11-12T18:14:25Z"
+    },
+    {
+      "name": "Complete job",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 17,
+      "started_at": "2026-11-12T18:14:25Z",
+      "completed_at": "2026-11-12T18:14:25Z"
+    }
+  ]
+}

@@ -1115,6 +1115,11 @@ impl Evaluator<'_> {
         }
         let decimal_operands = left_type == Some(ApplicationExpressionTypeV1::Decimal)
             || right_type == Some(ApplicationExpressionTypeV1::Decimal);
+        // Date text is not chronologically sortable across BCE/extended years.
+        // Only actual typed Date operands use this path; strings/UUIDs and
+        // persisted SQL/index predicate semantics are intentionally unchanged.
+        let date_operands = left_type == Some(ApplicationExpressionTypeV1::Date)
+            && right_type == Some(ApplicationExpressionTypeV1::Date);
         match operator {
             "add" if value_type == Some(ApplicationExpressionTypeV1::String) => {
                 Ok(Value::String(format!(
@@ -1158,6 +1163,14 @@ impl Evaluator<'_> {
             "not_equal" if left.is_null() || right.is_null() => {
                 Ok(Value::Bool(left.is_null() != right.is_null()))
             }
+            "equal" if date_operands => date_compare(left, right, |ordering| ordering.is_eq()),
+            "not_equal" if date_operands => date_compare(left, right, |ordering| ordering.is_ne()),
+            "greater" if date_operands => date_compare(left, right, |ordering| ordering.is_gt()),
+            "greater_equal" if date_operands => {
+                date_compare(left, right, |ordering| ordering.is_ge())
+            }
+            "less" if date_operands => date_compare(left, right, |ordering| ordering.is_lt()),
+            "less_equal" if date_operands => date_compare(left, right, |ordering| ordering.is_le()),
             "equal" if decimal_operands => {
                 decimal_compare(left, right, |ordering| ordering.is_eq())
             }
@@ -1210,6 +1223,30 @@ impl Evaluator<'_> {
             })
         };
         match target {
+            "query.decimal_sum" => {
+                if values.len() != 1 || arguments[0].0.is_some() {
+                    return Err(AppRuntimeError::InvalidRequest(
+                        "exact memory Decimal sum requires one positional list".into(),
+                    ));
+                }
+                let items = values[0].as_array().ok_or_else(|| {
+                    AppRuntimeError::InvalidRequest(
+                        "exact memory Decimal sum requires a list".into(),
+                    )
+                })?;
+                if items.len() > bicdb_core::MAX_EXACT_DECIMAL_LIST_SUM_ITEMS {
+                    return Err(AppRuntimeError::InvalidRequest(
+                        "exact memory Decimal sum exceeds its bounded element count".into(),
+                    ));
+                }
+                // Work remains subject to the existing per-invocation budget
+                // and deadline; a native aggregate is not unmetered iteration.
+                for _ in items {
+                    self.step()?;
+                }
+                bicdb_core::exact_decimal_list_sum_value(&values[0])
+                    .map_err(|error| AppRuntimeError::InvalidRequest(error.to_string()))
+            }
             "string.lower" => Ok(Value::String(string(first()?, target)?.to_lowercase())),
             "string.upper" => Ok(Value::String(string(first()?, target)?.to_uppercase())),
             "string.trim" => Ok(Value::String(string(first()?, target)?.trim().to_string())),
@@ -1495,6 +1532,7 @@ impl Evaluator<'_> {
             | "finance.subtract_money"
             | "finance.round_money"
             | "finance.round"
+            | "finance.proportional_interval"
             | "finance.abs"
             | "finance.tax_exclusive"
             | "finance.tax_inclusive"
@@ -2462,7 +2500,7 @@ fn decimal(value: Value, label: &str) -> Result<Decimal> {
             "BicDB application {label} must be an exact decimal string; got {value}"
         ))
     })?;
-    value.parse::<Decimal>().map_err(|error| {
+    crate::decimal_input::parse_decimal_exact(value).map_err(|error| {
         AppRuntimeError::InvalidRequest(format!(
             "BicDB application {label} is not a valid Decimal: {error}"
         ))
@@ -2507,6 +2545,21 @@ fn decimal_compare(
     }
     let left = decimal(left, "comparison operand")?;
     let right = decimal(right, "comparison operand")?;
+    Ok(Value::Bool(predicate(left.cmp(&right))))
+}
+
+fn date_compare(
+    left: Value,
+    right: Value,
+    predicate: impl FnOnce(std::cmp::Ordering) -> bool,
+) -> Result<Value> {
+    // Equality's null guards run before this helper. Ordered comparisons on a
+    // nullable Date retain ordinary-program false-on-null behavior.
+    if left.is_null() || right.is_null() {
+        return Ok(Value::Bool(false));
+    }
+    let left = parse_time_date(left, "Date comparison")?;
+    let right = parse_time_date(right, "Date comparison")?;
     Ok(Value::Bool(predicate(left.cmp(&right))))
 }
 
@@ -2726,6 +2779,8 @@ fn carrier_finance(target: &str, values: &[Value]) -> Result<Value> {
             decimal(first()?, target)?,
             finance_scale(second()?, target)?,
         ))),
+        "finance.proportional_interval" => bicdb_core::exact_proportional_interval_value(values)
+            .map_err(|error| AppRuntimeError::InvalidRequest(error.to_string())),
         "finance.abs" => {
             let value = decimal(first()?, target)?;
             let value = if value.is_sign_negative() {
@@ -3443,7 +3498,7 @@ fn compare(
         // numbers, so `quantity > 0`-shaped comparisons mix the two. Compare
         // through Decimal — never through f64, which would round money.
         (Value::String(text), Value::Number(_)) => {
-            let left = text.parse::<Decimal>().map_err(|_| {
+            let left = crate::decimal_input::parse_decimal_exact(text).map_err(|_| {
                 AppRuntimeError::InvalidRequest(format!(
                     "BicDB application ordered comparison requires matching numbers or strings; got {left} and {right}"
                 ))
@@ -3451,7 +3506,7 @@ fn compare(
             left.cmp(&decimal(right.clone(), "comparison operand")?)
         }
         (Value::Number(_), Value::String(text)) => {
-            let right = text.parse::<Decimal>().map_err(|_| {
+            let right = crate::decimal_input::parse_decimal_exact(text).map_err(|_| {
                 AppRuntimeError::InvalidRequest(format!(
                     "BicDB application ordered comparison requires matching numbers or strings; got {left} and {right}"
                 ))

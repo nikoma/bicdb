@@ -24,6 +24,7 @@ bicdb-page = { path = "../bicdb-page", version = "1.0.490-beta" }
 argon2.workspace = true
 bigdecimal = "=0.4.10"
 chacha20poly1305.workspace = true
+chrono.workspace = true
 crc32fast.workspace = true
 ed25519-dalek.workspace = true
 unicode_categories.workspace = true

@@ -143,41 +143,66 @@ pub(crate) fn alter_table_alter_column(
             schema.columns[idx].nullable = true;
             save_schema(db, schema)
         }
-        AlterColumnOperation::SetDefault { value } => {
-            if schema.columns[idx].identity.is_some() {
-                return Err(SqlError::InvalidSql(format!(
-                    "column \"{column}\" of relation \"{table}\" is an identity column"
-                )));
-            }
-            if let Some(sequence) = default_sequence_from_expr(value)? {
-                load_sequence_required(db, &sequence)?;
-                schema.columns[idx].default_sequence = Some(sequence);
-                schema.columns[idx].default_value = None;
-                schema.columns[idx].default_expr = None;
-            } else {
-                schema.columns[idx].default_sequence = None;
-                let pg_type = schema.columns[idx].pg_type.clone();
-                schema.columns[idx].default_value =
-                    literal_default_value_from_expr_with_db(db, value, &pg_type)?;
-                schema.columns[idx].default_expr = Some(crate::sql_text::sql_text(value));
-            }
-            save_schema(db, schema)
-        }
-        AlterColumnOperation::DropDefault => {
-            if schema.columns[idx].identity.is_some() {
-                return Err(SqlError::InvalidSql(format!(
-                    "column \"{column}\" of relation \"{table}\" is an identity column"
-                )));
-            }
-            schema.columns[idx].default_sequence = None;
-            schema.columns[idx].default_value = None;
-            schema.columns[idx].default_expr = None;
+        AlterColumnOperation::SetDefault { .. } | AlterColumnOperation::DropDefault => {
+            let actual = schema.columns[idx].name.clone();
+            alter_column_default(db, schema, &actual, op)?;
             save_schema(db, schema)
         }
         AlterColumnOperation::AddGenerated { .. } => Err(SqlError::Unsupported(format!(
             "ALTER COLUMN {op} is not supported"
         ))),
     }
+}
+
+pub(crate) fn alter_column_default(
+    db: &BicDb,
+    schema: &mut TableSchema,
+    column: &str,
+    op: &AlterColumnOperation,
+) -> Result<()> {
+    let index = schema
+        .columns
+        .iter()
+        .position(|candidate| candidate.name == column)
+        .ok_or_else(|| SqlError::UndefinedColumn {
+            table: schema.name.clone(),
+            column: column.into(),
+        })?;
+    if schema.columns[index].identity.is_some() {
+        return Err(SqlError::InvalidSql(format!(
+            "column \"{column}\" of relation \"{}\" is an identity column",
+            schema.name
+        )));
+    }
+    match op {
+        AlterColumnOperation::SetDefault { value } => {
+            if let Some(sequence) = default_sequence_from_expr(value)? {
+                load_sequence_required(db, &sequence)?;
+                schema.columns[index].default_sequence = Some(sequence);
+                schema.columns[index].default_value = None;
+                schema.columns[index].default_expr = None;
+            } else {
+                schema.columns[index].default_sequence = None;
+                schema.columns[index].default_value = literal_default_value_from_expr_with_db(
+                    db,
+                    value,
+                    &schema.columns[index].pg_type,
+                )?;
+                schema.columns[index].default_expr = Some(crate::sql_text::sql_text(value));
+            }
+        }
+        AlterColumnOperation::DropDefault => {
+            schema.columns[index].default_sequence = None;
+            schema.columns[index].default_value = None;
+            schema.columns[index].default_expr = None;
+        }
+        _ => {
+            return Err(SqlError::Unsupported(format!(
+                "not a column default operation: {op}"
+            )))
+        }
+    }
+    Ok(())
 }
 
 pub(crate) fn alter_column_using_is_self_cast(expr: &Expr, column: &str) -> bool {

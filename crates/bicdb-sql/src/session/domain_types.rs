@@ -1181,7 +1181,9 @@ impl<'db> SqlSession<'db> {
                 operation,
                 AlterTableOperation::AddColumn { .. }
                     | AlterTableOperation::AlterColumn {
-                        op: AlterColumnOperation::SetDataType { .. },
+                        op: AlterColumnOperation::SetDataType { .. }
+                            | AlterColumnOperation::SetDefault { .. }
+                            | AlterColumnOperation::DropDefault,
                         ..
                     }
             ) {
@@ -1486,6 +1488,16 @@ impl<'db> SqlSession<'db> {
                             using.as_ref(),
                         )?;
                     } else {
+                        if (schema.partitioning.is_some() || schema.partition_of.is_some())
+                            && matches!(
+                                op,
+                                AlterColumnOperation::SetDefault { .. }
+                                    | AlterColumnOperation::DropDefault
+                            )
+                        {
+                            self.alter_partition_column_default(&mut schema, &column_name, op)?;
+                            continue;
+                        }
                         self.capture_table_state_undo(&table, &schema)?;
                         alter_table_alter_column(
                             self.db_mut()?,
@@ -1769,6 +1781,28 @@ impl<'db> SqlSession<'db> {
                         .map(|(_, updated)| updated)
                         .expect("partition parent queued after its type change");
                     let mut updated = schema_with_parent_inheritance(child.clone(), parent);
+                    let child_index = updated
+                        .columns
+                        .iter()
+                        .position(|column| column.name == previous_column.name)
+                        .ok_or_else(|| SqlError::UndefinedColumn {
+                            table: updated.name.clone(),
+                            column: previous_column.name.clone(),
+                        })?;
+                    let previous_child_column = child.columns[child_index].clone();
+                    let inherited_type = &parent.columns[column_index];
+                    let child_column = &mut updated.columns[child_index];
+                    child_column.pg_type = inherited_type.pg_type.clone();
+                    child_column.user_type = inherited_type.user_type.clone();
+                    child_column.collation = inherited_type.collation.clone();
+                    child_column.type_modifier = inherited_type.type_modifier.clone();
+                    child_column.array_ndims = inherited_type.array_ndims;
+                    child_column.vector_dim = inherited_type.vector_dim;
+                    self.rewrite_altered_column_default(
+                        &child.name,
+                        &previous_child_column,
+                        child_column,
+                    )?;
                     self.revalidate_altered_column_indexes(
                         &previous_column,
                         &mut updated,

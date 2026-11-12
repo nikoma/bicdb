@@ -1531,7 +1531,12 @@ pub(crate) fn schema_with_parent_inheritance(
         {
             schema.primary_key_name = Some(default_primary_key_name(&schema.name));
         }
-        schema.columns = parent.columns.clone();
+        // Current descriptors own their complete column definitions. Parent
+        // DDL publishes explicit changes to the descendants; a read must not
+        // erase local defaults, generated expressions or independent keys.
+        if !current {
+            schema.columns = parent.columns.clone();
+        }
         let mut inherited = parent.clone();
         if current && same_key {
             let child_key = schema.primary_key_constraint_name();

@@ -427,6 +427,27 @@ pub(crate) fn physical_tables(db: &BicDb, parent: &TableSchema) -> Result<Vec<Ta
     Ok(out)
 }
 
+/// Preserve visible values when a physical leaf uses a different Native key
+/// than the relation named by the statement. Ordinary single-column PK records
+/// may store that value only in their Native ID. The transient row image keeps
+/// the real physical ID for writes, system columns and row locks.
+pub(crate) fn materialize_primary_key_fields(schema: &TableSchema, record: &mut Record) {
+    for column in schema
+        .columns
+        .iter()
+        .filter(|column| column.primary_key && !column.hidden)
+    {
+        if record.metadata.get(&column.name).is_none() {
+            let value = record_column_value(record, schema, &column.name);
+            set_json_object_value(
+                &mut record.metadata,
+                &column.name,
+                sql_value_to_column_storage_json(value, Some(column)),
+            );
+        }
+    }
+}
+
 pub(crate) fn factor_reads_parent(db: &BicDb, factor: &TableFactor) -> Result<bool> {
     match factor {
         TableFactor::Table {

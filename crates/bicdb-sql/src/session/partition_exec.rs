@@ -85,7 +85,8 @@ impl SqlSession<'_> {
     ) -> Result<(Vec<Record>, bool)> {
         let mut surviving = Vec::with_capacity(records.len());
         let mut triggered = false;
-        for record in records {
+        for mut record in records {
+            partition::materialize_primary_key_fields(parent, &mut record);
             let target = partition::route_record(self.db_ref(), parent, &record)?;
             let (rows, fired) = self.apply_before_insert_row_triggers_with_identity(
                 &target.name,
@@ -100,7 +101,7 @@ impl SqlSession<'_> {
                     &target,
                     std::slice::from_mut(&mut row),
                 )?;
-                self.refresh_partition_update_identity(parent, &mut row)?;
+                self.refresh_partition_update_identity(&target, &mut row)?;
                 partition::validate_record(self.db_ref(), &target, &row)?;
                 surviving.push(row);
             }
@@ -141,6 +142,7 @@ impl SqlSession<'_> {
         let source_schema = load_schema(self.db_ref(), source)?.ok_or_else(|| {
             SqlError::InvalidSql(format!("partition source {source} disappeared"))
         })?;
+        self.refresh_partition_update_identity(&target, &mut record)?;
         self.enforce_rls_write_checks(
             &parent.name,
             Some(parent),
@@ -175,7 +177,7 @@ impl SqlSession<'_> {
                 &target,
                 std::slice::from_mut(&mut record),
             )?;
-            self.refresh_partition_update_identity(parent, &mut record)?;
+            self.refresh_partition_update_identity(&target, &mut record)?;
             partition::validate_record(self.db_ref(), &target, &record)?;
             self.enforce_rls_write_checks(
                 &parent.name,
@@ -294,7 +296,16 @@ impl SqlSession<'_> {
             })
             .unwrap_or_else(|| target_columns.clone());
         for physical in partition::physical_tables(self.db_ref(), schema)? {
+            let different_keys =
+                primary_key_columns_for_schema(&physical) != primary_key_columns_for_schema(schema);
             for record in engine.scan_raw_records(&physical.name)? {
+                let record = if different_keys {
+                    let mut record = (*record).clone();
+                    partition::materialize_primary_key_fields(&physical, &mut record);
+                    Arc::new(record)
+                } else {
+                    record
+                };
                 self.cancellation.check()?;
                 if !rls_allows_record_with_schema(
                     &engine,
@@ -472,7 +483,16 @@ impl SqlSession<'_> {
             })
             .unwrap_or_else(|| target_columns.clone());
         for physical in partition::physical_tables(self.db_ref(), schema)? {
+            let different_keys =
+                primary_key_columns_for_schema(&physical) != primary_key_columns_for_schema(schema);
             for record in engine.scan_raw_records(&physical.name)? {
+                let record = if different_keys {
+                    let mut record = (*record).clone();
+                    partition::materialize_primary_key_fields(&physical, &mut record);
+                    Arc::new(record)
+                } else {
+                    record
+                };
                 self.cancellation.check()?;
                 if !rls_allows_record_with_schema(
                     &engine,

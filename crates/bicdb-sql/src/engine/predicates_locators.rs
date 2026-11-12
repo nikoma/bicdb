@@ -1339,7 +1339,16 @@ impl<'db> SqlEngine<'db> {
             // grants and SQL row policies apply to the accessed parent; a
             // direct child query independently uses that child's own policy.
             let mut records = Vec::new();
+            let different_keys =
+                primary_key_columns_for_schema(&physical) != primary_key_columns_for_schema(schema);
             for record in self.scan_raw_records(&physical.name)? {
+                let record = if different_keys {
+                    let mut record = (*record).clone();
+                    partition::materialize_primary_key_fields(&physical, &mut record);
+                    Arc::new(record)
+                } else {
+                    record
+                };
                 if rls_allows_record_with_schema(
                     self,
                     table,

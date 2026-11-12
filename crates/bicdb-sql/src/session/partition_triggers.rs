@@ -74,7 +74,7 @@ impl SqlSession<'_> {
     /// All changes, including a partition link and its trigger clones, become
     /// visible in one Native transaction. Prepare/cache-decode before commit;
     /// no fallible derived catalog write follows publication.
-    fn publish_partition_catalog(
+    pub(super) fn publish_partition_catalog(
         &mut self,
         mut changes: Vec<Change>,
         capture_undo: bool,

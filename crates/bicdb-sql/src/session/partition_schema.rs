@@ -8,6 +8,41 @@ pub(crate) struct TableState {
 }
 
 impl SqlSession<'_> {
+    pub(super) fn alter_partition_column_default(
+        &mut self,
+        schema: &mut TableSchema,
+        column: &str,
+        operation: &AlterColumnOperation,
+    ) -> Result<()> {
+        let mut parent = schema.clone();
+        alter_column_default(self.db_ref(), &mut parent, column, operation)?;
+        let candidates = list_schemas_raw(self.db_ref())?;
+        let mut schemas = vec![parent.clone()];
+        let mut cursor = 0;
+        while cursor < schemas.len() {
+            let name = schemas[cursor].name.clone();
+            for child in candidates.iter().filter(|child| {
+                child
+                    .partition_of
+                    .as_ref()
+                    .is_some_and(|link| link.parent_table == name)
+            }) {
+                let mut child = child.clone();
+                alter_column_default(self.db_ref(), &mut child, column, operation)?;
+                schemas.push(child);
+            }
+            cursor += 1;
+        }
+        let mut changes = Vec::with_capacity(schemas.len());
+        for schema in schemas {
+            let record = prepare_schema_record(self.db_mut()?, &schema)?;
+            changes.push((SCHEMA_COLLECTION, schema.name, Some(record)));
+        }
+        self.publish_partition_catalog(changes, true)?;
+        *schema = parent;
+        Ok(())
+    }
+
     pub(super) fn alter_partition_add_column(
         &mut self,
         schema: &mut TableSchema,

@@ -113,6 +113,8 @@ impl RangeWriteStore {
         role: &RecoveryRoleAdmission,
         request: &NativeCompletionRequest,
     ) -> Result<LocalNativeCompletionEvidence> {
+        request.scope.require_role(role)?;
+        self.refuse_unpersisted_completion(&request.scope)?;
         let ready = self
             .observe_prepared_native_for_role(db, prepared, role, &request.ready_request())?
             .into_reply();
@@ -125,10 +127,38 @@ impl RangeWriteStore {
         observer: &RecoveryObservationRoleAdmission,
         request: &NativeCompletionRequest,
     ) -> Result<LocalNativeCompletionEvidence> {
+        observer.require_scope(&request.scope)?;
+        self.refuse_unpersisted_completion(&request.scope)?;
         let ready = self
             .observe_prepared_native_for_observer(db, prepared, observer, &request.ready_request())?
             .into_reply();
         self.project_native_completion(ready, prepared)
+    }
+    /// Pure refusal before deep physical validation. An actual uncompleted
+    /// catalogue phase cannot produce completion evidence, absence, readiness
+    /// or a quorum vote. Completed replies still take the full observer path.
+    fn refuse_unpersisted_completion(&self, scope: &RecoveryFenceScope) -> Result<()> {
+        self.require_durable_recovery_catalog()?;
+        self.require_native_phase_format(scope.range_id)?;
+        let saved = self
+            .catalog
+            .recovery_fences
+            .get(&scope.range_id)
+            .ok_or_else(|| range_write_error("completion observation lost its actual refusal"))?;
+        if !saved.scope.same_session(scope) {
+            return Err(range_write_error(
+                "completion observation has another actual saved session",
+            ));
+        }
+        if matches!(
+            saved.phase,
+            recovery_state::RecoveryFencePhase::NativePrepared(_)
+        ) {
+            return Err(range_write_error(
+                "native completion has not actually persisted",
+            ));
+        }
+        Ok(())
     }
     pub(crate) fn observe_activated_completion_for_observer(
         &self,

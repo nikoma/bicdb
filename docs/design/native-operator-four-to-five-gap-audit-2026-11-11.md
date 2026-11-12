@@ -331,3 +331,23 @@ injected durability failure; all external/inner open Weak owners must end. Healt
 cases then strictly reopen the same storage roots/births and retained ACK row,
 with no serving hook revived. These remain unexecuted source assertions here;
 metadata cold-election recovery is a separate contract.
+
+### Exact lifecycle runtime checkpoint
+
+Composition `8e9642433d064d87c79fdf396194bdbf9289fadc` passed four Core
+initial-data lifecycle controls at run43244356602 (zero failed, zero ignored,
+7.37 seconds). [Exact scope and unchanged artifact](../evidence/native-initial-data-lifecycle-2026-11-12/README.md).
+That pass precedes the final nonwaiting dispatcher-clear correction and stronger
+full-record/native-history cold assertions, which require fresh validation.
+The public four-process CLI target is separately running at
+[run 43244401559](https://github.com/nikoma/bicdb/actions/runs/43244401559);
+no public DATA or fifth-node success follows from the Core result.
+
+The next registered-learner receiver must retain the same actual factory DB,
+service, StoreUUID, protected birth and committed metadata owner. It cannot
+fabricate an INITIAL launch or genesis and must leave APP/Strong unpublished
+until actual image/joint recovery. Current transport has no qualified native
+image/joint request-response consumers; generic snapshots are not substitutes.
+Registered replica receiver, authenticated native image/joint collectors and
+a native placement controller are separate unfinished executable seams. A
+receiver-ready/data-serving-false status is not data relocation or scale-out.

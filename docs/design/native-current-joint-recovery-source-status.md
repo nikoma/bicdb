@@ -79,3 +79,37 @@ re-fsync only once the actual-domain/durable-store preconditions hold; a general
 uncertain/cold reopening controller is not supplied here. Unsupported cases are
 refusals, not a bounded self-healing or physical HA qualification. Permanent abort
 inventory capacity (4096 slots / 64 MiB) also remains a separate open gate.
+
+## Composed runtime checkpoint, November 12
+
+The first integrated source `d3108a84714a9239d42a1d381f105a5cad9b7c2f`,
+[run 43243151043](https://github.com/nikoma/bicdb/actions/runs/43243151043),
+failed compilation: five diagnostics from an incorrectly placed candidate/
+observer check and two invalid cancellation constructors. No runtime acceptance
+executed. Corrective source `26cb5fe24` separates the actual mutation producer
+from readonly existing-promise observation and retains original request bounds.
+
+Corrected composition `8b37a8be071637f4f3648f7820402565c4de7814`,
+[run 43243897329](https://github.com/nikoma/bicdb/actions/runs/43243897329),
+compiled all targets and the isolated consumer, but the positive acceptance
+**failed: zero passed, one failed**, 901 filtered, 53.78 seconds. Actual handoff,
+ACK2 and Strong R2 prerequisites completed. At `post_joint_no_data_tests.rs:243`,
+the genuine CurrentJoint role reached `RecoveryFenceQuorumRound::begin`, whose
+purpose whitelist rejected it as readonly. New fences, NoData, Ready and ACK4
+were not reached. This differs from the retained older NormalRecovery receiver
+refusal; neither failure is successful recovery.
+
+Original artifact13955069214 remains restricted because it contains generated
+key material: 317,608 bytes, SHA-256
+`245018e53b72051f9794f1a19ec1ff2b07d815d5cc96eed308730f866c519cd1`.
+All 78 manifest-listed files, 5,059,991 bytes, match their hashes/lengths and exact
+file set. Owners were alive; no engine replay or physical qualification follows.
+The raw complete job-log digest is recorded in the root CI custody checkpoint.
+
+`c4c614180` adds only the distinct CurrentJoint purpose to that collector and an
+actual metadata-role/empty-round/readonly rejection control. Composition
+`71af097e1722a173bffa534052518bdda8e93fb2` is under focused positive validation
+at [run 43245592794](https://github.com/nikoma/bicdb/actions/runs/43245592794).
+No passing recovery result is claimed while that run is pending. The original
+positive assertions remain unchanged. Historical/committed-tail/image/cold
+exclusions above remain explicit open gates.

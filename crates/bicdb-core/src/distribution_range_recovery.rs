@@ -797,7 +797,7 @@ impl RecoveryRoleAdmission {
                 "normal recovery cannot authorize native handoff installation",
             ));
         }
-        Ok(HandoffRoleAdmission(self))
+        Ok(HandoffRoleAdmission(std::sync::Arc::new(self)))
     }
     pub(crate) fn require_historical_command_scope(
         &self,
@@ -972,8 +972,13 @@ impl RecoveryObservationRoleAdmission {
 /// Exact committed-plan permission. It cannot be constructed from a normal
 /// recovery witness and is not a capture/install/native receipt by itself.
 #[derive(Debug)]
-pub(crate) struct HandoffRoleAdmission(RecoveryRoleAdmission);
+pub(crate) struct HandoffRoleAdmission(std::sync::Arc<RecoveryRoleAdmission>);
 impl HandoffRoleAdmission {
+    /// Retain this SAME sealed request, including its original cancellation
+    /// and deadline. This never reacquires or renews metadata authority.
+    pub(crate) fn retain_original(&self) -> std::sync::Arc<RecoveryRoleAdmission> {
+        self.0.clone()
+    }
     pub(crate) fn role(&self) -> &RecoveryRoleAdmission {
         &self.0
     }

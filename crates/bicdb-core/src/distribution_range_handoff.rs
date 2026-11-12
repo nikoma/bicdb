@@ -17,14 +17,14 @@ pub(crate) use joint::{
     NativeJointDecisionPublicationRound, NativeJointDurableDecision, NativeJointHandoffPlan,
     NativeJointHandoffRuntime, NativeJointMaterializedFacts, NativeJointMaterializedQuorums,
     NativeJointNewObservation, NativeJointNewRound, NativeJointOldClosedQuorum,
-    NativeJointOldObservation, NativeJointOldRound, NativeJointOpenAdmission,
-    NativeJointOpenPhaseQuorum, NativeJointOpenPhaseRound, NativeJointPreparationPhaseQuorum,
-    NativeJointPreparationPhaseRound, NativeJointPreparedDecision,
-    NativeJointPreparedServingObservation, NativeJointPreparedServingQuorum,
-    NativeJointPreparedServingRound, NativeJointPreparedServingVoteData,
-    NativeJointPublishedServingQuorum, NativeJointReleaseAdmission, NativeJointReleaseContinuation,
-    NativeJointReleasePhaseQuorum, NativeJointReleasePhaseRound,
-    NativeJointServingPublicationRound,
+    NativeJointOldImageProof, NativeJointOldObservation, NativeJointOldRound,
+    NativeJointOpenAdmission, NativeJointOpenPhaseQuorum, NativeJointOpenPhaseRound,
+    NativeJointPreparationPhaseQuorum, NativeJointPreparationPhaseRound,
+    NativeJointPreparedDecision, NativeJointPreparedServingObservation,
+    NativeJointPreparedServingQuorum, NativeJointPreparedServingRound,
+    NativeJointPreparedServingVoteData, NativeJointPublishedServingQuorum,
+    NativeJointReleaseAdmission, NativeJointReleaseContinuation, NativeJointReleasePhaseQuorum,
+    NativeJointReleasePhaseRound, NativeJointServingPublicationRound,
 };
 #[cfg(test)]
 pub(crate) use joint::{NativeJointPhaseTrace, NativeRefreshTraceContext};
@@ -84,6 +84,8 @@ impl RangeHandoffPromise {
 /// A source DB commit sequence is deliberately not a field of this observation.
 #[derive(Debug)]
 pub(crate) struct CertifiedRangeImageCut {
+    // Only the native OLD round can supply this live, non-serializable proof.
+    native_old: Option<std::sync::Arc<NativeJointOldImageProof>>,
     promise: RangeHandoffPromise,
     cluster_id: ClusterId,
     range: RangeDescriptor,
@@ -104,6 +106,11 @@ pub(crate) struct CertifiedRangeImageCut {
 }
 
 impl CertifiedRangeImageCut {
+    pub(crate) fn native_old_image_proof(
+        &self,
+    ) -> Option<&std::sync::Arc<NativeJointOldImageProof>> {
+        self.native_old.as_ref()
+    }
     pub(crate) fn bootstrap_id(&self) -> Option<Uuid> {
         self.bootstrap_id
     }
@@ -647,6 +654,7 @@ impl HandoffCutRound {
             })
             .collect();
         Ok(CertifiedRangeImageCut {
+            native_old: None,
             promise: self.request,
             cluster_id: topology.cluster_id.clone(),
             range: self.range,

@@ -25,6 +25,53 @@ pub(crate) struct NativeJointOldClosedQuorum {
     h: String,
     cut: Option<CertifiedRangeImageCut>,
 }
+/// Live retained OLD closure, not a new metadata/data quorum or a decoded
+/// audit. Weak observations deliberately cannot prolong serving freeze owners.
+#[derive(Debug)]
+pub(crate) struct NativeJointOldImageProof {
+    plan: Arc<NativeJointHandoffPlan>,
+    observations: BTreeMap<ClusterNodeId, std::sync::Weak<NativeJointOldObservation>>,
+    source: ClusterNodeId,
+    r: u64,
+    h0: String,
+    h: String,
+}
+impl NativeJointOldImageProof {
+    pub(crate) fn require_role(
+        &self,
+        role: &crate::distribution_range_recovery::RecoveryRoleAdmission,
+    ) -> Result<()> {
+        self.plan.require_role(role)
+    }
+    pub(crate) fn require_current(
+        &self,
+        role: &crate::distribution_range_recovery::RecoveryRoleAdmission,
+        lineage: &crate::db::SourceRangeImageLineage,
+    ) -> Result<()> {
+        self.plan.require_role(role)?;
+        self.plan.require_old_native_configuration(lineage)?;
+        if self.observations.len() < self.plan.old_members().len() / 2 + 1
+            || lineage.local_node_id() != &self.source
+            || lineage.range_index() != self.r
+            || lineage.logical_genesis_sha256() != self.h0
+            || lineage.logical_history_sha256() != self.h
+        {
+            return Err(invalid(
+                "closed image lost exact actual native OLD quorum/source point",
+            ));
+        }
+        for (id, weak) in &self.observations {
+            let actual = weak
+                .upgrade()
+                .ok_or_else(|| invalid("closed image OLD owner ended"))?;
+            if actual.node_id() != id || !self.plan.old_members().contains_key(id) {
+                return Err(invalid("closed image OLD participant changed"));
+            }
+            actual.require_current()?;
+        }
+        self.plan.require_role(role)
+    }
+}
 impl NativeJointOldRound {
     pub(crate) fn begin(
         metadata: MetadataReadObservation,
@@ -149,6 +196,18 @@ impl NativeJointOldRound {
             .get(&relocation.target)
             .ok_or_else(|| invalid("planned new member absent"))?;
         let cut = CertifiedRangeImageCut {
+            native_old: Some(Arc::new(NativeJointOldImageProof {
+                plan: self.plan.clone(),
+                observations: self
+                    .observations
+                    .iter()
+                    .map(|(id, actual)| (id.clone(), Arc::downgrade(actual)))
+                    .collect(),
+                source: selected_source.clone(),
+                r,
+                h0: h0.clone(),
+                h: h.clone(),
+            })),
             promise: self.metadata.request.clone(),
             cluster_id: topology.cluster_id.clone(),
             range: self.metadata.range.clone(),

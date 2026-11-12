@@ -50,6 +50,20 @@ pub(super) fn capture(
         .collect()
 }
 
+pub(super) fn require_original_unchanged(
+    fixture: &EnforcedNetwork,
+    old: &crate::RangeDescriptor,
+    original: &BTreeMap<ClusterNodeId, OriginalPolicy>,
+) {
+    assert_eq!(original.len(), 4);
+    for (id, saved) in original {
+        assert!(Arc::ptr_eq(&fixture.hosts[id], &saved.guard));
+        assert_eq!(saved.binding, fixture.hosts[id].binding_diagnostic());
+        assert!(Arc::ptr_eq(&actual_writer(fixture, id), &saved.state));
+        saved.state.require_range(old).unwrap();
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 pub(super) fn exercise(
     fixture: &EnforcedNetwork,

@@ -25,6 +25,7 @@ mod history;
 mod initial_data;
 pub(crate) use initial_data::NativeInitialDataGenesis;
 mod history_stage;
+pub(crate) use history_stage::ClosedImageOriginalWriter;
 mod installed_anchor;
 mod native_read;
 mod writer_enrollment;

@@ -14,7 +14,9 @@ mod closed;
 pub(crate) use closed::NativeJointOldObservation;
 
 mod old_quorum;
-pub(crate) use old_quorum::{NativeJointOldClosedQuorum, NativeJointOldRound};
+pub(crate) use old_quorum::{
+    NativeJointOldClosedQuorum, NativeJointOldImageProof, NativeJointOldRound,
+};
 
 mod materialized;
 pub(crate) use materialized::{

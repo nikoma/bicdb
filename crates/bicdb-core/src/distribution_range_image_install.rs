@@ -458,6 +458,13 @@ impl VerifiedNativeRangeImageInstall {
 }
 
 impl NativeRangeImageInstaller {
+    #[cfg(test)]
+    pub(crate) fn test_closed_original_request_live(&self) -> Result<()> {
+        self.fence
+            .closed_original_writer()
+            .ok_or_else(|| invalid("actual closed C1 original request absent"))?
+            .test_require_original_request_live()
+    }
     /// A process may have died after native receipt commit but before catalog
     /// activation. Recompute the actual complete image and mint a new opaque
     /// token for the SAME durable attempt, without clearing or copying rows.
@@ -535,7 +542,10 @@ impl NativeRangeImageInstaller {
         frozen: impl Into<NativeImageInstallFreeze>,
         purpose: ImageInstallPurpose,
         attempt_id: Uuid,
+        slot: Option<crate::distribution_data::RangeWriteServiceSlotGuard>,
+        caller: &CancellationToken,
     ) -> Result<Self> {
+        caller.check()?;
         let frozen = frozen.into();
         source.require_current()?;
         let db = database
@@ -567,16 +577,26 @@ impl NativeRangeImageInstaller {
             source.cut().range().id,
             frozen.as_frozen(),
         )?;
-        let fence = store.begin_native_image_install(
-            &db,
-            &admission,
-            &safety,
-            source,
-            role,
-            frozen.as_frozen(),
-            purpose,
-            attempt_id,
-        )?;
+        let fence = store
+            .begin_native_image_install(
+                &db,
+                &admission,
+                &safety,
+                source,
+                role,
+                frozen.as_frozen(),
+                purpose,
+                attempt_id,
+            )?
+            .bind_closed_original_writer(
+                &db,
+                store,
+                source,
+                role,
+                frozen.as_frozen(),
+                caller,
+                slot.as_ref(),
+            )?;
         store.validate_native_image_install_step(
             &fence,
             &db,
@@ -816,6 +836,7 @@ impl NativeRangeImageInstaller {
                 .as_ref()
                 .ok_or_else(|| invalid("image row grant requires audited history"))?,
             source,
+            cancellation,
         )?;
         let controlled = db
             .range_mutation_gate()
@@ -911,6 +932,7 @@ impl NativeRangeImageInstaller {
                     .as_ref()
                     .ok_or_else(|| invalid("image row grant requires audited history"))?,
                 source,
+                cancellation,
             )?;
             let controlled = db
                 .range_mutation_gate()
@@ -1427,6 +1449,8 @@ pub(crate) mod tests {
                 frozen,
                 ImageInstallPurpose::RelocationLearner,
                 attempt,
+                None,
+                &CancellationToken::uncancelable(),
             )
         }
         fn clear(&mut self, store: &RangeWriteStore, install: &mut NativeRangeImageInstaller) {

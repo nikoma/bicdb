@@ -213,6 +213,7 @@ impl ClusterDataNodeService {
                 actual.local_member_incarnation(),
             )?
         };
+        let slot = self.native_replica_listener_store_open_guard();
         let installer = NativeRangeImageInstaller::begin(
             Arc::clone(&self.db),
             self.range_writes.current_mut(),
@@ -222,6 +223,8 @@ impl ClusterDataNodeService {
             frozen,
             purpose,
             attempt_id,
+            Some(slot),
+            cancellation,
         )?;
         cancellation.check()?;
         Ok(installer)

@@ -12,7 +12,11 @@ use crate::distribution_range_image::{
 };
 use crate::distribution_range_mutation::RangeMutationAuthority;
 
+mod closed_writer;
 mod substitution;
+#[cfg(test)]
+pub(super) use closed_writer::test_before_closed_image_transaction;
+pub(crate) use closed_writer::ClosedImageOriginalWriter;
 
 const STAGE_FORMAT: u32 = 1;
 const MAX_WIRE: usize = 272 * 1024;
@@ -1733,6 +1737,14 @@ pub(crate) struct NativeImageRowScope<'a> {
     proof: &'a StagedNativeHistoryProof,
     source: &'a TentativeNativeRangeImageSourceAuthorization<'a>,
     marker_sha256: String,
+    closed_writer: Option<Arc<ClosedImageOriginalWriter>>,
+    caller: &'a CancellationToken,
+}
+#[derive(Debug)]
+struct ClosedImageTransactionBinding {
+    writer: Arc<ClosedImageOriginalWriter>,
+    header: StageHeader,
+    caller: CancellationToken,
 }
 #[derive(Debug)]
 pub(crate) struct NativeImageTransactionGrant {
@@ -1744,6 +1756,7 @@ pub(crate) struct NativeImageTransactionGrant {
     marker_sha256: String,
     deadline: std::time::Instant,
     claim: crate::distribution_range_mutation::RangeMutationClaim,
+    closed: Option<ClosedImageTransactionBinding>,
 }
 impl NativeImageTransactionGrant {
     pub(in crate::db) fn require_current(
@@ -1776,7 +1789,24 @@ impl NativeImageTransactionGrant {
                 return Err(invalid("native image mutation left its authorized range"));
             }
         }
-        database.require_installed_native_writer_database_for_range(&self.range)
+        if let Some(closed) = &self.closed {
+            closed.caller.check()?;
+            closed.writer.require_current(database)?;
+            // Same private synchronous import call still owns the exclusive
+            // Store borrow and Controlled claim. Recheck the actual protected
+            // audited header without asking for quiescence during our write.
+            if database.read_history_stage(self.range.id)? != closed.header
+                || !closed.header.audit_complete
+                || closed.header.attempt_id != self.attempt
+            {
+                return Err(invalid(
+                    "closed image actual staged history changed before transaction",
+                ));
+            }
+            closed.caller.check()
+        } else {
+            database.require_installed_native_writer_database_for_range(&self.range)
+        }
     }
 }
 impl NativeImageRowScope<'_> {
@@ -1791,6 +1821,10 @@ impl NativeImageRowScope<'_> {
     ) -> Result<()> {
         self.source.require_current()?;
         self.context.role.role().require_live_request()?;
+        if let Some(closed) = &self.closed_writer {
+            self.caller.check()?;
+            closed.require_context(database, self.context)?;
+        }
         database
             .range_mutations
             .validate(self.range().id, authority)?;
@@ -1812,7 +1846,19 @@ impl NativeImageRowScope<'_> {
             marker_sha256: self.marker_sha256.clone(),
             deadline: self.context.role.role().deadline(),
             claim: authority.claim(),
+            closed: self
+                .closed_writer
+                .as_ref()
+                .map(|writer| ClosedImageTransactionBinding {
+                    writer: writer.clone(),
+                    header: self.proof.header.clone(),
+                    caller: self.caller.clone(),
+                }),
         });
+        #[cfg(test)]
+        if self.closed_writer.is_some() {
+            closed_writer::before_transaction();
+        }
         Ok(())
     }
 }
@@ -1822,9 +1868,16 @@ impl BicDb {
         context: &'a NativeHistoryTargetContext<'a>,
         proof: &'a StagedNativeHistoryProof,
         source: &'a TentativeNativeRangeImageSourceAuthorization<'a>,
+        caller: &'a CancellationToken,
     ) -> Result<NativeImageRowScope<'a>> {
         proof.require_current(self, context, source)?;
-        self.require_installed_native_writer_database_for_range(context.fence.range())?;
+        let closed_writer = context.fence.closed_original_writer().cloned();
+        if let Some(closed) = &closed_writer {
+            caller.check()?;
+            closed.require_context(self, context)?;
+        } else {
+            self.require_installed_native_writer_database_for_range(context.fence.range())?;
+        }
         let marker_sha256 = self.native_image_row_marker_commitment(
             context.fence.range().id,
             context.fence.attempt_id(),
@@ -1834,6 +1887,8 @@ impl BicDb {
             proof,
             source,
             marker_sha256,
+            closed_writer,
+            caller,
         })
     }
 }

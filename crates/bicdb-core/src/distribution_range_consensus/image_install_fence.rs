@@ -399,6 +399,7 @@ impl UntouchedNativeImageTransferReturn {
 /// Reopening requires a fresh role observation and a new persistence proof.
 #[derive(Debug)]
 pub(crate) struct TargetImageInstallFence {
+    closed_original_writer: Option<std::sync::Arc<crate::db::ClosedImageOriginalWriter>>,
     store_open_id: Uuid,
     database_incarnation: String,
     intent: ImageInstallIntent,
@@ -406,6 +407,45 @@ pub(crate) struct TargetImageInstallFence {
     replaced_installing: Option<ReplacedInstallingIdentity>,
 }
 impl TargetImageInstallFence {
+    pub(crate) fn bind_closed_original_writer(
+        mut self,
+        database: &crate::BicDb,
+        store: &RangeWriteStore,
+        source: &TentativeNativeRangeImageSourceAuthorization<'_>,
+        role: &NativeImageInstallRole<'_>,
+        frozen: &FrozenRangeMutationPermit,
+        caller: &crate::CancellationToken,
+        slot: Option<&crate::distribution_data::RangeWriteServiceSlotGuard>,
+    ) -> Result<Self> {
+        if self.closed_original_writer.is_some() {
+            return Err(range_write_error(
+                "closed image original writer already bound",
+            ));
+        }
+        self.closed_original_writer = database
+            .prepare_closed_image_original_writer(store, &self, source, role, caller, slot)?;
+        if self.closed_original_writer.is_some() {
+            store.validate_native_image_install_step(
+                &self,
+                database,
+                &database.native_recovery_admission(
+                    role.role().cluster_id(),
+                    role.role().bootstrap_id(),
+                    role.role().local_node_id(),
+                    role.role().local_member_incarnation(),
+                )?,
+                role,
+                frozen,
+            )?;
+        }
+        caller.check()?;
+        Ok(self)
+    }
+    pub(crate) fn closed_original_writer(
+        &self,
+    ) -> Option<&std::sync::Arc<crate::db::ClosedImageOriginalWriter>> {
+        self.closed_original_writer.as_ref()
+    }
     pub(crate) fn matches_replaced_installing_marker(
         &self,
         session: Uuid,
@@ -761,6 +801,7 @@ impl RangeWriteStore {
         self.persist()?;
         role.role().require_live_request()?;
         let fence = TargetImageInstallFence {
+            closed_original_writer: None,
             replaced_installing: self.replaced_installing_identity(&intent)?,
             store_open_id: self.open_id,
             database_incarnation: admission.database_incarnation().to_string(),
@@ -1035,6 +1076,7 @@ impl RangeWriteStore {
         self.persist_native_install_intent_with(intent.clone(), persist)?;
         role.role().require_live_request()?;
         let fence = TargetImageInstallFence {
+            closed_original_writer: None,
             replaced_installing: self.replaced_installing_identity(&intent)?,
             store_open_id: self.open_id,
             database_incarnation: admission.database_incarnation().to_string(),

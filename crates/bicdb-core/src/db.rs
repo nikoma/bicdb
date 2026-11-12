@@ -120,6 +120,7 @@ pub(crate) use range_image_native::{
 pub(crate) use range_image_native::{NativeRangeReadPhysical, NativeReadLocalDbSequence};
 mod range_image_bindings;
 pub(crate) use range_image_bindings::RangeImageDbBindings;
+pub(crate) use range_image_native::ClosedImageOriginalWriter;
 mod read_committed_reservation;
 mod record_read_snapshot;
 pub use record_read_snapshot::RecordReadSnapshot;

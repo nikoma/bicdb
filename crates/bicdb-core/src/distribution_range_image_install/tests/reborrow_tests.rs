@@ -115,6 +115,8 @@ fn native_image_reborrow_begin_checks_actual_admission_before_replacement_bindin
         frozen,
         ImageInstallPurpose::RelocationLearner,
         attempt,
+        None,
+        &CancellationToken::uncancelable(),
     )
     .err()
     .expect("A admission cannot inspect/install B");

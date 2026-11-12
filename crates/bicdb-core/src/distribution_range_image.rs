@@ -24,7 +24,9 @@ use crate::{BicDb, BicDbError, CancellationToken, CollectionMeta, Result};
 
 mod history_export;
 pub(crate) use history_export::{RangeImageHistoryCursorV1, RangeImageHistoryStepV1};
+mod closed_image_source;
 mod source_cut;
+pub(crate) use closed_image_source::ClosedNativeImageSource;
 pub(crate) use source_cut::{
     CertifiedRecoveryImageCut, NativeRangeImageSourceCut, RangeImageSourcePurposeV1,
 };
@@ -138,6 +140,8 @@ pub(crate) struct LocalRangeImageSealV1 {
 /// owned until this session is dropped; durable remote promises survive that
 /// drop and must be resolved by the handoff coordinator, never by a timer.
 pub(crate) struct RangeImageCapture {
+    closed_image_lifetime: Arc<()>,
+    original_cancellation: CancellationToken,
     db: Arc<RwLock<BicDb>>,
     gate: RangeMutationGate,
     source_read_pin: Arc<SourceCaptureReadPin>,
@@ -449,6 +453,8 @@ impl RangeImageCapture {
         let range_index = RangeIndexCut::certified(&cut);
         let complete = bindings.collections().is_empty();
         Ok(Self {
+            closed_image_lifetime: Arc::new(()),
+            original_cancellation: cancellation.clone(),
             db,
             gate,
             source_read_pin,

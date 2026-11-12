@@ -2225,8 +2225,8 @@ pub(crate) fn sequence_from_options(
             SequenceOptions::Cache(expr) => {
                 sequence.cache_size = sequence_option_i64(expr, "CACHE")?;
             }
-            SequenceOptions::Cycle(cycle) => {
-                sequence.cycle = *cycle;
+            SequenceOptions::Cycle(no_cycle) => {
+                sequence.cycle = !*no_cycle;
             }
         }
     }

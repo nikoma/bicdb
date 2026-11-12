@@ -37,6 +37,40 @@ The original Azure qualification remains **FAILED**, and production admission
 remains unchanged. The following checkpoints retain their original revisions
 and pre-merge status; they are not newer claims that read489 is still unmerged.
 
+## Current source-only correction and new executions
+
+Candidate `68be040ebb00a4c606d519697f913e310c496812` contains the independently
+reviewed [activation validation scope batch](design/native-current-joint-activation-validation-scopes.md),
+author commit `a4345eda607a108cbe05f72852dc333d9b656371`, imported as
+`3cda3fc73b5e6a563bceacdc0f9d40a136ba6881`. It uses separate actual pre-catalogue,
+post-catalogue and late-arm scopes. Current authority, original writer/caller,
+current/archive records and physical ownership remain required; no deadline,
+retry or worker count is changed. Formatting, diff and all 29 source-version
+identity checks pass locally. **Runtime and compilation results for this new
+batch are pending**, not inherited from f58. Source remains unmerged.
+
+Actual focused executions at exact 68b are:
+
+| Selection | Run | Status at this checkpoint |
+| --- | --- | --- |
+| Four new post-catalogue fault controls | [43315433251](https://github.com/nikoma/bicdb/actions/runs/43315433251) | **Not yet established**; execution/compilation in progress |
+| Unchanged full Abort3 → activation → ACK4/Strong positive | [43315439379](https://github.com/nikoma/bicdb/actions/runs/43315439379) | **Not yet established**; execution/compilation in progress |
+| Existing activation controls and full idempotence continuation | [43315446340](https://github.com/nikoma/bicdb/actions/runs/43315446340) | **Not yet established**; execution/compilation in progress |
+| Original writers retained through both fixture reinstall boundaries | [43315453055](https://github.com/nikoma/bicdb/actions/runs/43315453055) | **Not yet established**; separate required diagnostic baseline |
+
+The preceding diagnostic at source
+`11f5b4b222f4bd84d1f3870dbd59da11ee8cd17c`,
+[run 43314169894](https://github.com/nikoma/bicdb/actions/runs/43314169894),
+Core job `131517781459`, **failed**: zero passed, one failed, 951 filtered,
+2.12s. Its observation helper incorrectly required the not-yet-installed learner
+to have a trusted native anchor. The actual error is `no trusted native anchor;
+image repair required`. This is a **test observation defect**, not execution of
+the expected image-policy refusal or proof of an engine defect. Original raw log,
+source and complete 75-file custody are preserved. Correction 68b records the
+learner's actual refusal as data, asserts actual OLD-member ACK rows and continues
+toward the unchanged image operation; it does not invent a trusted zero floor.
+The new run must establish the earliest real operational boundary independently.
+
 ## Latest native acceptance: completion progresses, activation still fails
 
 **Milestone 1 remains incomplete.** These results belong to the unmerged candidate

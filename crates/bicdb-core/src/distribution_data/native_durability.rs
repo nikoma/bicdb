@@ -95,6 +95,7 @@ impl ClusterDataNodeService {
     }
     pub(crate) fn require_native_catalog_database(&self, database: &BicDb) -> Result<()> {
         self.storage_policy.require_database(database)?;
+        self.range_writes.require_actual_abort_catalogue(database)?;
         self.range_writes
             .require_native_catalog_durability(database.data_path())
     }

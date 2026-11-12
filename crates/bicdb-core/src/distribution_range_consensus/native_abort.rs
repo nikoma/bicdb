@@ -99,13 +99,17 @@ pub(super) struct NativeAbortRange {
     start_native_history_sha256: String,
     slots: BTreeMap<u64, NativeAbortSlot>,
 }
-#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub(super) struct NativeAbortProtocol {
+    store_id: Uuid,
     ranges: BTreeMap<RangeId, NativeAbortRange>,
 }
 impl NativeAbortProtocol {
     pub(super) fn validate(&self) -> Result<()> {
+        if self.store_id.is_nil() {
+            return Err(range_write_error("native abort catalogue StoreID is nil"));
+        }
         for (range, record) in &self.ranges {
             if record.domain.range.id != *range
                 || record.native_birth_id.is_nil()
@@ -195,8 +199,139 @@ impl NativePrepareOnlyRejection {
     }
 }
 impl RangeWriteStore {
+    pub(crate) fn abort_catalogue_owner(root: &Path) -> Result<bicdb_page::DirectoryLock> {
+        let owned = root.join("native-range-catalogue-owner");
+        fs::create_dir_all(&owned)?;
+        bicdb_page::DirectoryLock::acquire(&owned).map_err(|e| {
+            range_write_error(format!(
+                "native range catalogue already owned/unavailable: {e}"
+            ))
+        })
+    }
+    pub(crate) fn require_abort_catalogue_identity(
+        root: &Path,
+        cluster: &ClusterId,
+        node: &ClusterNodeId,
+        store_id: Uuid,
+    ) -> Result<()> {
+        let bytes = fs::read(root.join(DEFAULT_RANGE_WRITE_LOG)).map_err(|e| {
+            range_write_error(format!(
+                "registered native range catalogue missing; never reset: {e}"
+            ))
+        })?;
+        if bytes.len() > 64 * 1024 * 1024 {
+            return Err(range_write_error(
+                "native range catalogue byte bound exceeded",
+            ));
+        }
+        let catalogue = serde_json::from_slice::<RangeWriteEnvelope>(&bytes)?.verify()?;
+        if &catalogue.cluster_id != cluster
+            || &catalogue.node_id != node
+            || catalogue.native_abort_protocol.as_ref().map(|p| p.store_id) != Some(store_id)
+        {
+            return Err(range_write_error(
+                "actual protected native range catalogue StoreID/domain differs",
+            ));
+        }
+        Ok(())
+    }
+    pub(crate) fn initialize_abort_catalogue_identity(
+        root: &Path,
+        cluster: &ClusterId,
+        node: &ClusterNodeId,
+        store_id: Uuid,
+        writer_enforced: bool,
+    ) -> Result<()> {
+        if store_id.is_nil() {
+            return Err(range_write_error("nil native range catalogue StoreID"));
+        }
+        let _owner = Self::abort_catalogue_owner(root)?;
+        let path = root.join(DEFAULT_RANGE_WRITE_LOG);
+        let mut catalog = match fs::read(&path) {
+            Ok(bytes) => {
+                let old = serde_json::from_slice::<RangeWriteEnvelope>(&bytes)?.verify()?;
+                if &old.cluster_id != cluster || &old.node_id != node {
+                    return Err(range_write_error(
+                        "fresh native catalogue belongs to another identity",
+                    ));
+                }
+                if let Some(protocol) = &old.native_abort_protocol {
+                    if protocol.store_id != store_id {
+                        return Err(range_write_error(
+                            "pending native catalogue StoreID changed",
+                        ));
+                    }
+                }
+                if !old.ranges.is_empty()
+                    || !old.recovery_fences.is_empty()
+                    || !old.handoff_promises.is_empty()
+                    || !old.image_install_intents.is_empty()
+                    || !old.native_image_bases.is_empty()
+                    || !old.backup_fences.is_empty()
+                    || old
+                        .sparse_committed_decisions
+                        .as_ref()
+                        .is_some_and(|r| !r.is_empty())
+                    || old
+                        .native_abort_protocol
+                        .as_ref()
+                        .is_some_and(|p| !p.ranges.is_empty())
+                {
+                    return Err(range_write_error(
+                        "actual factory cannot initialize over a used range catalogue",
+                    ));
+                }
+                old
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => RangeWriteCatalog {
+                format_version: NATIVE_ABORT_CATALOG_FORMAT,
+                native_writer_enforcement_version: writer_enforced.then_some(1),
+                cluster_id: cluster.clone(),
+                node_id: node.clone(),
+                ranges: BTreeMap::new(),
+                backup_fences: BTreeMap::new(),
+                handoff_promises: BTreeMap::new(),
+                image_install_intents: BTreeMap::new(),
+                recovery_fences: BTreeMap::new(),
+                native_image_bases: BTreeMap::new(),
+                sparse_committed_decisions: Some(BTreeMap::new()),
+                native_abort_protocol: None,
+            },
+            Err(e) => return Err(e.into()),
+        };
+        catalog.format_version = catalog.format_version.max(NATIVE_ABORT_CATALOG_FORMAT);
+        catalog.native_abort_protocol = Some(NativeAbortProtocol {
+            store_id,
+            ranges: BTreeMap::new(),
+        });
+        catalog
+            .sparse_committed_decisions
+            .get_or_insert_with(BTreeMap::new);
+        if writer_enforced {
+            catalog.native_writer_enforcement_version = Some(1);
+        }
+        let envelope = RangeWriteEnvelope::new(catalog)?;
+        envelope.clone().verify()?;
+        crate::storage::write_atomic(&path, &serde_json::to_vec_pretty(&envelope)?, true)?;
+        Self::require_abort_catalogue_identity(root, cluster, node, store_id)
+    }
+    pub(crate) fn require_actual_abort_catalogue(&self, database: &crate::BicDb) -> Result<()> {
+        let actual = database.native_abort_catalogue_store_id()?;
+        if actual
+            != self
+                .catalog
+                .native_abort_protocol
+                .as_ref()
+                .map(|p| p.store_id)
+        {
+            return Err(range_write_error(
+                "actual native range catalogue/open identity changed",
+            ));
+        }
+        Ok(())
+    }
     pub(crate) fn requires_native_abort_tracking(&self) -> Result<bool> {
-        crate::format::range_image_install_active(&self.root)
+        crate::format::native_abort_history_active(&self.root)
     }
     pub(crate) fn has_native_abort_attempt(&self, command: &RangeWriteCommand) -> Result<bool> {
         let slot = self
@@ -224,6 +359,12 @@ impl RangeWriteStore {
         command: &RangeWriteCommand,
     ) -> Result<NativePrepareOnlyRejection> {
         native.require_current(database)?;
+        if native.abort_protocol_version() != 1 {
+            return Err(range_write_error(
+                "old native birth lacks from-birth abort eligibility",
+            ));
+        }
+        self.require_actual_abort_catalogue(database)?;
         self.require_native_catalog_durability(database.data_path())?;
         self.require_no_active_recovery(range.id)?;
         self.require_no_image_install(range.id)?;
@@ -293,7 +434,8 @@ impl RangeWriteStore {
         let record = self
             .catalog
             .native_abort_protocol
-            .get_or_insert_with(Default::default)
+            .as_mut()
+            .ok_or_else(|| range_write_error("native birth lacks registered abort catalogue"))?
             .ranges
             .entry(range.id)
             .or_insert_with(|| NativeAbortRange {

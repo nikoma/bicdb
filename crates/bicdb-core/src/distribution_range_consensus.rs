@@ -768,6 +768,7 @@ pub struct RangeWriteStore {
     test_native_commit_write_error_once: bool,
     native_activated_opens: BTreeMap<RangeId, crate::db::NativeActivatedOpenGuard>,
     native_writer_host: Option<std::sync::Weak<crate::db::NativeWriterHostState>>,
+    _native_abort_owner: Option<bicdb_page::DirectoryLock>,
 }
 
 impl RangeWriteStore {
@@ -841,6 +842,17 @@ impl RangeWriteStore {
         let root = root.as_ref().to_path_buf();
         let path = root.join(DEFAULT_RANGE_WRITE_LOG);
         let existing_catalog = path.exists();
+        let abort_protocol = crate::format::native_abort_history_active(&root)?;
+        if abort_protocol && !existing_catalog {
+            return Err(range_write_error(
+                "abort-aware range catalogue missing; strict factory/reopen required",
+            ));
+        }
+        let abort_owner = if abort_protocol {
+            Some(Self::abort_catalogue_owner(&root)?)
+        } else {
+            None
+        };
         let mut catalog = match fs::read(&path) {
             Ok(bytes) => serde_json::from_slice::<RangeWriteEnvelope>(&bytes)?.verify()?,
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => RangeWriteCatalog {
@@ -933,6 +945,7 @@ impl RangeWriteStore {
             open_id: Uuid::now_v7(),
             native_activated_opens: BTreeMap::new(),
             native_writer_host: None,
+            _native_abort_owner: abort_owner,
             recovery_persistence_uncertain: false,
             #[cfg(test)]
             test_native_commit_write_error_once: false,
@@ -3273,11 +3286,15 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
             None
         };
         let native_abort_attempt = if let Some(database) = native_database {
-            Some(
-                self.local_service
-                    .lock()
-                    .begin_native_abort_attempt(database, &range, &command, authority)?,
-            )
+            if database.native_abort_catalogue_store_id()?.is_some() {
+                Some(
+                    self.local_service
+                        .lock()
+                        .begin_native_abort_attempt(database, &range, &command, authority)?,
+                )
+            } else {
+                None
+            }
         } else {
             None
         };

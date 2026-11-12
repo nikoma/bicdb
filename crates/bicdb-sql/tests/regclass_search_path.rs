@@ -72,6 +72,11 @@ fn regclass_metadata_predicates_see_new_parent_identity_and_local_path_changes()
         .unwrap();
         let mut sql = SqlSession::new(&mut db);
         sql.execute("CREATE SCHEMA app_a; CREATE SCHEMA app_b; CREATE TABLE app_a.target(id INT PRIMARY KEY); CREATE TABLE app_b.target(id INT PRIMARY KEY)").unwrap();
+        drop(sql);
+        // Embedded hosts perform this trusted startup step before admitting
+        // transactions, as the PostgreSQL server/profile initialization does.
+        bicdb_sql::initialize_rename_journal_identities(&mut db).unwrap();
+        let mut sql = SqlSession::new(&mut db);
         sql.execute("SET search_path=app_a,app_b").unwrap();
         let count = |sql: &mut SqlSession<'_>| {
             // Isolate identity resolution across catalog versions: BicDB's

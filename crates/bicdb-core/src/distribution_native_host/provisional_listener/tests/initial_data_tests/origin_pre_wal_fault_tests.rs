@@ -63,7 +63,8 @@ impl Journal {
             "diagnostic_id_is_wire_business_id":false,"operation":operation,
             "event_id":crate::cluster_event_record_id("items",key).unwrap(),"key":key,
             "payload":value,"payload_sha256":value.map(|v|hex::encode(Sha256::digest(serde_json::to_vec(v).unwrap()))),
-            "request_timeout_ms":2000,"wire_command_hash_not_supplied_by_client":true});
+            "configured_rpc_or_attempt_timeout_ms":2000,"whole_logical_call_hard_bound_claimed":false,
+            "wire_command_hash_not_supplied_by_client":true});
         self.append(serde_json::json!({"kind":"logical_intent","context":context}))?;
         *self
             .context
@@ -279,7 +280,7 @@ fn run(
     )?;
     // The public client may retry. The observer retains every physical attempt;
     // later failures cannot overwrite the first actual origin receipt.
-    let unknown = append(journal, &client, &failed, &failed_value);
+    let faulted_append = append(journal, &client, &failed, &failed_value);
     let end = Instant::now() + Duration::from_secs(6);
     let fault = loop {
         let snapshot = probe.snapshot();
@@ -292,12 +293,15 @@ fn run(
         )?;
         std::thread::sleep(Duration::from_millis(2));
     };
-    journal.append(serde_json::json!({"kind":"actual_origin_exit","probe":fault,
-        "api_error":unknown.as_ref().err().map(ToString::to_string),"no_ack_inferred_from_probe":true}))?;
-    check(
-        unknown.is_err(),
-        "faulted public call unexpectedly ACKed; inspect full ledger",
+    journal.append(
+        serde_json::json!({"kind":"actual_origin_exit","probe":fault,
+        "api_error":faulted_append.as_ref().err().map(ToString::to_string),
+        "actual_api_user_ack":faulted_append.is_ok(),"api_inserted":faulted_append.as_ref().ok(),
+        "no_ack_inferred_from_probe":true}),
     )?;
+    // The FIRST actual origin attempt must fail below. A legitimate automatic
+    // repair plus a later SDK retry may nevertheless produce a real public ACK.
+    // The immutable probe never overwrites that first failure or supplies ACK.
     check(
         fault["fired"] == true
             && fault["core_result"] == "commit_outcome_unknown"
@@ -344,6 +348,34 @@ fn run(
             || origin.native_applied_index.is_some_and(|r| r >= old_r + 1),
         "actual origin prefix neither retained the intended Pending nor made genuine progress",
     )?;
+    if faulted_append.is_ok() {
+        let full_ack = {
+            let db = database.read();
+            let lineage = db.current_native_range_source_lineage(range.id)?;
+            db.require_native_command_materialized(&lineage, &entry.command)?;
+            let record = db
+                .get(
+                    crate::CLUSTER_EVENTS_COLLECTION,
+                    &crate::cluster_event_record_id("items", &failed)?,
+                )?
+                .ok_or_else(|| {
+                    BicDbError::Cluster("ACKed SDK retry lacks actual full local record".into())
+                })?;
+            check(
+                record.metadata == failed_value,
+                "ACKed SDK retry full payload differs",
+            )?;
+            serde_json::json!({"actual_full_record":record,"native_R":lineage.range_index(),
+                "H0":lineage.logical_genesis_sha256(),"H":lineage.logical_history_sha256(),
+                "typed_local_B":lineage.actual_local_visibility_sequence()})
+        };
+        journal.append(
+            serde_json::json!({"kind":"actual_sdk_retry_ack_reconciliation",
+            "event_id":crate::cluster_event_record_id("items",&failed)?,
+            "full_payload":failed_value,"actual_native":full_ack,
+            "ack_source":"actual public API result only; not the first-origin probe"}),
+        )?;
+    }
     let mut physical = Vec::new();
     let mut materialized = 0;
     for (i, host) in f.hosts.iter().enumerate() {
@@ -465,7 +497,8 @@ fn run(
         &output.join("terminal.json"),
         &serde_json::to_vec_pretty(&serde_json::json!({
         "bounded_autonomous_repair_and_next_ack":healthy,"rounds":rounds,
-        "first_actual_origin_error":fault,"unknown_api_call_is_not_rollback":true,
+        "first_actual_origin_error":fault,"first_origin_unknown_is_not_rollback":true,
+        "actual_public_api_user_ack":faulted_append.is_ok(),
         "no_manual_recovery_or_counter_reset":true,"physical_qualification":false,
         "health_elapsed_ns":health_start.elapsed().as_nanos(),"health_limit_ns":20_000_000_000u64}))?,
         true,

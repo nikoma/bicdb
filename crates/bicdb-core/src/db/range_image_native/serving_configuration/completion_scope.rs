@@ -55,8 +55,10 @@ impl NativeCompletionReadScope<'_> {
         prepared.scope().require_role(fresh)
     }
     // This re-reads the full physical contract after our own WAL write. The
-    // journal excludes another protected native publication, not hook clearing,
-    // cancellation, schema invalidation or health poison: all remain checked.
+    // journal excludes another protected native publication, not cancellation,
+    // schema invalidation or health poison. Existing domain checks remain;
+    // CurrentJoint additionally retains its saved original-writer/hook fence.
+    // NormalRecovery has no new original-writer operation proof here.
     pub(crate) fn require_physical_domain_current(&self) -> Result<()> {
         self.require_identity(self.prepared, self.store, self.fresh)?;
         self.database.validate_source_range_image_lineage(

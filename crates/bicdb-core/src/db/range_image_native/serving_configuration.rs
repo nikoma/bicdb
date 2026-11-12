@@ -638,9 +638,9 @@ impl BicDb {
             let current_key = native_key(&key(record.range.id));
             let encoded = bounded_json(&record, MAX_NATIVE_RECEIPT_BYTES)?;
             quorum.require_recipient_role(fresh)?;
-            // Shared hook/schema/health/cancel invalidation is possible even
-            // under the journal. Recheck the original live owner immediately
-            // before entering the unchanged native WAL transaction.
+            // Shared invalidation is possible even under the journal. Repeat
+            // the existing domain-specific boundary immediately before WAL;
+            // CurrentJoint includes its saved original-writer/hook fence.
             prepared.require_produced_completion_boundary(self, store, fresh)?;
             self.in_paged_transaction(|paged, xid| {
                 quorum.require_recipient_role(fresh)?;

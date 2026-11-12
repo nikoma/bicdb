@@ -1,6 +1,6 @@
 # CurrentJoint completion: measured cost and a proposed borrowed scope
 
-Status on 2026-11-12: **design and source audit only; no borrowed producer has been implemented or validated**. Exact profile source is `fd85a24392abf8a273479f8637e040523c053109`, candidate `1.0.489-beta`. The [portable evidence](../evidence/native-current-joint-refresh-fd85-2026-11-12/README.md) retains raw logs, a source reconstruction and the failed outcome. No phase budget, timeout, quorum, validation requirement or persistence boundary is proposed for removal.
+Status on 2026-11-12: **borrowed producer implemented in an unmerged source batch and independently reviewed; runtime validation pending**. The implementation checkpoint below supersedes the earlier design-only API checkpoint. Exact original profile source is `fd85a24392abf8a273479f8637e040523c053109`, candidate `1.0.489-beta`. The [portable evidence](../evidence/native-current-joint-refresh-fd85-2026-11-12/README.md) retains raw logs, a source reconstruction and the failed outcome. No phase budget, timeout, quorum, validation requirement or persistence boundary is proposed for removal.
 
 ## Observed execution
 
@@ -115,3 +115,13 @@ New entry/exit phase spans are test-only and use the identical original role dea
 
 
 Source review caught a necessary phase distinction before execution: post-CAT refresh initially has an OLD in-memory Prepared binding and an ACTUAL new NativeCompleted catalogue. Its pre-update check therefore validates full physical/domain/current persisted scope and original writer without claiming that old cached binding is current. Only after reading the actual serving current/archive and installing the exact new catalogue digest does the full produced-binding boundary run; it also runs at scope exit. There is no caller boolean or skipped-return check. Native producer readback still checks its actual existing binding, and the pre-WAL boundary rechecks shared hook/schema/health/cancellation immediately before entering the native page transaction. The original 6e source has not executed and must not be submitted unchanged.
+
+The original-writer operation proof in this document is **CurrentJoint-specific**:
+its actual domain fact and saved Weak/registration binding retain the original
+writer Arc. NormalRecovery retains its existing full physical/admission,
+Frozen/pin, catalogue phase/scope and native serving checks, but those original
+checks do not capture an equivalent original-writer operation identity. This
+batch neither adds that proof nor qualifies Normal born-v2 hook replacement.
+The RF1 controls and a source-level preservation argument cannot establish
+uniform all-purpose writer-replacement safety. Cold, higher-leader and stalled
+independent-range progress qualification remain open.

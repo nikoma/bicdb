@@ -1902,11 +1902,35 @@ mod tests {
             tempfile::tempdir().unwrap(),
             tempfile::tempdir().unwrap(),
         ];
-        let addresses = [
-            unused_loopback_address(),
-            unused_loopback_address(),
-            unused_loopback_address(),
+        // Keep ownership of three distinct REAL sockets throughout the test.
+        // The serving path consumes duplicate descriptors of these sockets;
+        // no selected address is ever dropped and raced before startup/restart.
+        // During the failed node's interval its reserved socket has no serving
+        // acceptor and grants no reply/metadata authority.
+        let listeners = [
+            TcpListener::bind("127.0.0.1:0").unwrap(),
+            TcpListener::bind("127.0.0.1:0").unwrap(),
+            TcpListener::bind("127.0.0.1:0").unwrap(),
         ];
+        let addresses = listeners
+            .each_ref()
+            .map(|listener| listener.local_addr().unwrap().to_string());
+        for listener in &listeners {
+            let address = listener.local_addr().unwrap();
+            assert_eq!(
+                TcpListener::bind(address).unwrap_err().kind(),
+                std::io::ErrorKind::AddrInUse,
+                "reserved member socket must exclude another listener at {address}"
+            );
+        }
+        eprintln!("METADATA_FAILOVER_FIXTURE declared_addresses={addresses:?}");
+        assert!(
+            addresses
+                .iter()
+                .enumerate()
+                .all(|(i, address)| addresses[..i].iter().all(|other| other != address)),
+            "fixture endpoints must be distinct before startup: {addresses:?}"
+        );
         let node_ids = [
             bicdb_core::ClusterNodeId::new("n1").unwrap(),
             bicdb_core::ClusterNodeId::new("n2").unwrap(),
@@ -1964,8 +1988,23 @@ mod tests {
             .iter()
             .map(|root| PgWireServer::open(root.path(), pgwire.clone()).unwrap())
             .collect::<Vec<_>>();
-        for server in &servers {
-            start_distribution_supervisor(Arc::clone(server), automatic_test_supervisor());
+        struct ShutdownOwners(Vec<Arc<PgWireServer>>);
+        impl Drop for ShutdownOwners {
+            fn drop(&mut self) {
+                for server in &self.0 {
+                    server.request_shutdown();
+                }
+            }
+        }
+        // Panic also shuts down actual supervisors; a failed test must not
+        // leave its listeners running into another concurrent test cluster.
+        let mut shutdown_owners = ShutdownOwners(servers.clone());
+        for (server, listener) in servers.iter().zip(&listeners) {
+            start_distribution_supervisor_on_listener(
+                Arc::clone(server),
+                automatic_test_supervisor(),
+                listener.try_clone().unwrap(),
+            );
         }
 
         let first_deadline = Instant::now() + Duration::from_secs(10);
@@ -2015,6 +2054,9 @@ mod tests {
         };
         let failed_server = servers.remove(failed_index);
         failed_server.request_shutdown();
+        shutdown_owners
+            .0
+            .retain(|server| !Arc::ptr_eq(server, &failed_server));
         drop(failed_server);
 
         let failover_deadline = Instant::now() + Duration::from_secs(10);
@@ -2092,7 +2134,12 @@ mod tests {
         // former authority or stale topology.
         thread::sleep(Duration::from_millis(1_100));
         let restarted = PgWireServer::open(roots[failed_index].path(), pgwire.clone()).unwrap();
-        start_distribution_supervisor(Arc::clone(&restarted), automatic_test_supervisor());
+        shutdown_owners.0.push(restarted.clone());
+        start_distribution_supervisor_on_listener(
+            Arc::clone(&restarted),
+            automatic_test_supervisor(),
+            listeners[failed_index].try_clone().unwrap(),
+        );
         let restart_deadline = Instant::now() + Duration::from_secs(10);
         let mut authority_checkpoint = None;
         loop {

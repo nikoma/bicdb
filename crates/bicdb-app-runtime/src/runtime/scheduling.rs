@@ -1375,6 +1375,7 @@ pub(crate) fn validate_schema_rollback(
     let active_contract = application_contract(active);
     validate_security_contract_evolution(active_contract, target_contract)?;
     validate_blob_contract_evolution(active_contract, target_contract)?;
+    validate_native_invariant_rollback(active_contract, target_contract)?;
     // A schema superset remaining on disk does not make old code safe: old
     // resource bindings may hide new financial facts and omit their guards.
     // Require a forward-compatible code target even before first use, avoiding
@@ -1404,6 +1405,46 @@ pub(crate) fn validate_schema_rollback(
             return Err(AppRuntimeError::InvalidPackage(
                 "active structural schema cannot be rolled back safely".to_string(),
             ));
+        }
+    }
+    Ok(())
+}
+
+pub(crate) fn validate_native_invariant_rollback(
+    active: &bicdb_extension::abi_v2::ApplicationManifestV2,
+    target: &bicdb_extension::abi_v2::ApplicationManifestV2,
+) -> Result<()> {
+    if active.invariants.len() != target.invariants.len() {
+        return Err(AppRuntimeError::InvalidPackage(
+            "application rollback changes the active native invariant set".to_string(),
+        ));
+    }
+    for invariant in &active.invariants {
+        let retained = target
+            .invariants
+            .iter()
+            .find(|candidate| candidate.name == invariant.name)
+            .ok_or_else(|| {
+                AppRuntimeError::InvalidPackage(format!(
+                    "application rollback removes active native invariant `{}`",
+                    invariant.name
+                ))
+            })?;
+        // Source descriptions are diagnostics, not executable authority. Every
+        // semantic field must remain identical. An extra historical rule is
+        // unsafe too: acknowledged rows may not satisfy it. A changed rule
+        // requires an explicitly signed forward release, not code rollback.
+        if retained.version != invariant.version
+            || retained.subject_resource != invariant.subject_resource
+            || retained.kind != invariant.kind
+            || retained.expression != invariant.expression
+            || retained.transition != invariant.transition
+            || retained.dependency_resources != invariant.dependency_resources
+        {
+            return Err(AppRuntimeError::InvalidPackage(format!(
+                "application rollback changes active native invariant `{}`",
+                invariant.name
+            )));
         }
     }
     Ok(())

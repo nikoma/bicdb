@@ -214,9 +214,15 @@ fn native_registered_replica_receiver_actual_tls_preserves_owner_and_refuses_bla
     {
         // Rejection precedes the service latch even with the old Store live.
         let _busy_service = service.lock();
-        assert!(client
+        let refusal = client
             .native_event_get_cancellable(&token, &node(4), &get)
-            .is_err());
+            .unwrap_err();
+        assert!(
+            refusal
+                .to_string()
+                .contains("actual service range Store slot ended or changed"),
+            "expected the actual pre-latch slot refusal, not a timeout: {refusal}"
+        );
     }
     // Test cleanup restores the exact old object, NOT its revoked binding.
     let replaced = service

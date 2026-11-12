@@ -158,9 +158,10 @@ credentials **only for CurrentJoint**, binds the exact joint decision and servin
 archive, and preserves the NormalRecovery predicate. Test import
 `1ecb621d43762c9cfe772cf43ba1ff0d43c989ce` adds a real n3 AnchorR3-at-R4 positive
 and missing-serving-archive refusal after the unchanged ACK4/Strong prerequisite.
-**Both changes remain source-only, uncompiled and unexecuted at this checkpoint.**
-The exact differing runtime predicate still needs the new membership diagnostics;
-source inference is not a replacement for its passing execution.
+At the earlier 68b checkpoint, these changes were source-only, uncompiled and
+unexecuted. The subsequent exact eedf results above compile and exercise both,
+including the actual n3 membership diagnostics. Those later component passes
+do not qualify the whole candidate or replace its failed sibling cohort.
 
 The following section preserves the earlier launch-time checkpoint. Its pending
 labels are superseded by the terminal results above, without changing source IDs.

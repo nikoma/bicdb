@@ -35,7 +35,11 @@ Versioned source `2f09872918406347f4dcdbfed1215b8d3c3be6bd` passed Core,
 SQL, PostgreSQL-wire, all-target/isolated-consumer compilation and formatting
 in [PR CI 43232044386](https://github.com/nikoma/bicdb/actions/runs/43232044386),
 and [stock Rails 43232044327](https://github.com/nikoma/bicdb/actions/runs/43232044327).
-The remaining-workspace job was still running when this update was prepared.
+The remaining-workspace job subsequently **failed** its
+`export_does_not_load_unrelated_secondary_indexes` assertion: corrupted unrelated
+index JSON was decoded during primary-only export. This exact failure was
+retained; it is the already identified prospective488 base defect, not a passing
+release check.
 Core library coverage is 846 passed, zero failed, nine ignored; integration
 invocations are not added to this count. These results belong to the superseded
 488-base composition, not `7d742557b` or an eventual main merge. In particular,
@@ -252,3 +256,15 @@ for mergec48c804d6 of preserved809 with PR162 candidatece023036, exact conflict
 resolution, read/routing invariants, local configuration override review and
 remote validation filters. That candidate inherits version1.0.485-beta; no new
 version, PR157 update, executed test or public delivery is claimed here.
+
+## Corrected-base final validation in progress
+
+At `a7ecd9450b9b78c438cd365aed005a95f756a001` (corrected488 base),
+[run 43243818809](https://github.com/nikoma/bicdb/actions/runs/43243818809)
+passed the Core job: library846 passed, zero failed, nine ignored in174.23s,
+plus integration invocations; all-target and isolated-consumer checks passed.
+There are128 invocation summaries, not128 unique tests. SQL, PostgreSQL-wire,
+remaining workspace and stock Rails43243823778 are still running. These results
+cover this exact source, not an unobserved main merge. Final requirements remain.
+The earlier2f failed workspace raw-log digest is recorded in retained CI custody;
+its failed assertion has not been waived.

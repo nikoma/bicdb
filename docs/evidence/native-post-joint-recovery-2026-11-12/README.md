@@ -74,3 +74,28 @@ including the new refusal and partial-progress reports. The file set is exact.
 generated key material. Owners were alive; no engine replay, stopped-owner
 snapshot or physical power-loss claim follows. Complete raw-job-log SHA-256:
 `a956b144d0f2c992621cc33734f8de1f428088973b80ad519c20f365ece2fb0a`.
+
+## CurrentJoint implementation: distinct later failures
+
+Composition `8b37a8be071637f4f3648f7820402565c4de7814`,
+[run43243897329](https://github.com/nikoma/bicdb/actions/runs/43243897329),
+compiled but failed0/1 in53.78s at the collector's missing CurrentJoint-purpose
+whitelist, before any new fence. Restricted artifact13955069214:317,608bytes,
+SHA-256 `245018e53b72051f9794f1a19ec1ff2b07d815d5cc96eed308730f866c519cd1`;
+all78files/5,059,991bytes verify. Owners alive; no replay.
+
+Successor `71af097e1722a173bffa534052518bdda8e93fb2`,
+[run43245592794](https://github.com/nikoma/bicdb/actions/runs/43245592794),
+compiled but failed0/1 in60.04s at the actual n1 receiver:
+
+    current joint recovery cannot bypass a DIFFERENT permanent handoff/backup refusal
+
+NoData, Ready and ACK4 are not reached. The archive retains the exact request,
+partial refusal and unchanged ACK/native state. Raw n1/n2 promises retain
+`resolved_through=1`; backup fences are absent. The protected plan's precise
+local-cut relationship is being checked before any comparator change. Deleting
+that guard or assuming the difference harmless is not a repair.
+Restricted artifact13958235525:348,749bytes, SHA-256
+`5825e57f2aa0569f8ab11854a5c61ff25eb9d39e7b8b1e45702390a53b6039e2`;
+all81files/5,501,667bytes verify with an exact file set. Owners alive; no replay,
+physical fault tolerance or successful recovery claim follows.

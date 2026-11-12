@@ -6,6 +6,9 @@ use crate::distribution_native_read::NativeStrongEventDispatcher;
 use crate::distribution_range_recovery::RangeRecoveryRuntime;
 use std::sync::Weak;
 
+mod cleanup;
+use cleanup::{NativeInitialDataCleanup, NativeInitialDataCleanupSender};
+
 #[derive(Clone, Debug, serde::Serialize)]
 pub struct NativeInitialDataRangeStatus {
     pub range_id: crate::RangeId,
@@ -85,6 +88,7 @@ pub(super) struct NativeInitialDataHost {
     life: Arc<AtomicBool>,
     published: Arc<AtomicBool>,
     stopping: bool,
+    cleanup: Option<NativeInitialDataCleanupSender>,
 }
 impl Drop for NativeInitialDataHost {
     fn drop(&mut self) {
@@ -92,6 +96,21 @@ impl Drop for NativeInitialDataHost {
         self.published.store(false, Ordering::Release);
         if let Some(dispatcher) = &self.dispatcher {
             dispatcher.clear();
+        }
+        for listener in [&self.listener, &self.old_listener].into_iter().flatten() {
+            listener.request_shutdown();
+        }
+        if self.enrollment.is_some() {
+            // The reaper exists BEFORE any installed hook. Dropping never
+            // waits for network/DB/commit locks and never creates new grants.
+            let cleanup = NativeInitialDataCleanup::take_from(self);
+            if let Some(sender) = &self.cleanup {
+                sender.defer(cleanup);
+            } else {
+                // Construction cannot install without the reaper. Preserve
+                // owners rather than accidentally revoke/lose an unknown cut.
+                cleanup.quarantine();
+            }
         }
     }
 }
@@ -121,6 +140,7 @@ impl NativeInitialDataHost {
             life: Arc::new(AtomicBool::new(true)),
             published: Arc::new(AtomicBool::new(false)),
             stopping: false,
+            cleanup: None,
         })
     }
     fn advance(
@@ -132,6 +152,11 @@ impl NativeInitialDataHost {
         parent.check()?;
         if self.stopping {
             return Err(invalid("stopping INITIAL data owner cannot restart"));
+        }
+        if self.cleanup.is_none() {
+            // This retained revocation-only worker must exist BEFORE an
+            // actual hook can create coor -> service -> DB ownership.
+            self.cleanup = Some(NativeInitialDataCleanupSender::ensure(parent)?);
         }
         if self.enrollment.is_none() {
             let topology = self

@@ -732,6 +732,22 @@ impl ClusterDataServerHandle {
             service_store_open_id: self.service_store_open_id,
         })
     }
+    /// Revocation/owner cleanup only. Never mints a new-listener admission.
+    /// Poll without waiting; join only an accept thread already known ended.
+    pub(crate) fn poll_shutdown_drained_for_cleanup(&mut self) -> bool {
+        self.request_shutdown();
+        if self
+            .thread
+            .as_ref()
+            .is_some_and(|thread| !thread.is_finished())
+        {
+            return false;
+        }
+        if let Some(thread) = self.thread.take() {
+            let _ = thread.join(); // Already finished; a panic grants nothing.
+        }
+        self.active.load(Ordering::SeqCst) == 0
+    }
     #[cfg(test)]
     pub(crate) fn active_connections(&self) -> usize {
         self.active.load(Ordering::SeqCst)

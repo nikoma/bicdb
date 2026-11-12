@@ -315,3 +315,19 @@ and real nonempty-history boundaries. No compile or execution result is implied
 by this source description. JoinFresh DATA remains explicitly refused; general
 recovery, remote image/joint relocation, automatic range scheduling, SQL/effects,
 physical fault qualification and an 8 GiB/long-run acceptance remain open.
+
+The source successor also closes the Drop-only local ownership cycle introduced
+by initial DATA installation. A single process cleanup worker is started before
+any hook can be installed. Drop closes ingress and sends retained stopping owners
+without waiting for I/O or locks; the worker polls actual socket/handler,
+dispatcher and runtime drain, then compare-retires only the exact original hook
+under the admission/hook locks. It acquires no MQ/native/recovery/serving authority
+and cannot revive a canceled action. Pure revocation does not consult poisoned
+health, native pages or filesystem readiness. If the cleanup worker unexpectedly
+cannot receive an owner, the closed owner is explicitly retained in process
+quarantine rather than dropping an unknown cut or clearing a foreign writer.
+The additive actual-TLS test covers no successful Stop, canceled Stop and an
+injected durability failure; all external/inner open Weak owners must end. Healthy
+cases then strictly reopen the same storage roots/births and retained ACK row,
+with no serving hook revived. These remain unexecuted source assertions here;
+metadata cold-election recovery is a separate contract.

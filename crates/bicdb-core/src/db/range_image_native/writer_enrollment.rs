@@ -206,9 +206,11 @@ impl InstalledNativeWriterHostGuard {
         database: &BicDb,
         coordinator: &Arc<RangeWriteCoordinator<T>>,
     ) -> Result<bool> {
-        database.check_recovery_state()?;
+        // Revocation must work even after a durability/recovery failure. No
+        // native reads, health/ready check or filesystem lookup belongs here:
+        // the immutable actual-open ID plus exact private slot identities
+        // below suffice to revoke THIS hook, and cannot grant any authority.
         if database.incarnation_id() != self.state.record.database_incarnation
-            || database.data_path().canonicalize()? != self.state.root
             || coordinator.native_writer_coordinator_id() != self.state.record.coordinator_id
         {
             return Err(invalid(
@@ -249,6 +251,11 @@ impl InstalledNativeWriterHostGuard {
         }
         hook.install(None);
         Ok(true)
+    }
+    /// Cleanup-only liveness: no registration means no slot can still own
+    /// this installation. This cannot become a writer/read permission.
+    pub(crate) fn registration_ended(&self) -> bool {
+        self.state.registration.upgrade().is_none()
     }
     pub(crate) fn require_current(&self, database: &BicDb, range: &RangeDescriptor) -> Result<()> {
         self.state.require_database(database, range)

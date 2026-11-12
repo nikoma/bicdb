@@ -20,19 +20,20 @@ fn node(i: usize) -> ClusterNodeId {
 fn binary() -> Command {
     Command::new(env!("CARGO_BIN_EXE_bicdb"))
 }
+#[path = "native_metadata_operator_cli/custody.rs"]
+mod custody;
+
 struct Processes {
     children: Vec<Child>,
     root: Option<tempfile::TempDir>,
+    spawn_records: Vec<Value>,
+    prior_exits: Vec<Value>,
 }
 impl Drop for Processes {
     fn drop(&mut self) {
-        for child in &mut self.children {
-            if child.try_wait().ok().flatten().is_none() {
-                let _ = child.kill();
-                let _ = child.wait();
-            }
-        }
+        let exits = self.stop_children_for_drop();
         if std::thread::panicking() {
+            self.capture_cli_failure(&exits);
             if let Some(root) = self.root.take() {
                 eprintln!(
                     "RETAINED_NATIVE_METADATA_OPERATOR_PRIVATE {}",
@@ -99,6 +100,8 @@ fn four_processes(
     let mut processes = Processes {
         children: Vec::new(),
         root: Some(root),
+        spawn_records: Vec::new(),
+        prior_exits: Vec::new(),
     };
     let root = processes.root.as_ref().unwrap().path().to_path_buf();
     let ca_key = KeyPair::generate().unwrap();
@@ -207,7 +210,8 @@ fn four_processes(
             .stdin(Stdio::null())
             .stdout(std::fs::File::create(root.join(format!("node{i}.stdout"))).unwrap())
             .stderr(std::fs::File::create(root.join(format!("node{i}.stderr"))).unwrap());
-        processes.children.push(process.spawn().unwrap());
+        let child = processes.spawn_recorded(&mut process).unwrap();
+        processes.children.push(child);
     }
     let until = Instant::now() + Duration::from_secs(30);
     for i in 0..4 {
@@ -352,7 +356,8 @@ fn native_metadata_operator_actual_cli_four_process_startup_registration_and_dat
         .stdin(Stdio::null())
         .stdout(std::fs::File::create(root.join("node4.stdout")).unwrap())
         .stderr(std::fs::File::create(root.join("node4.stderr")).unwrap());
-    processes.children.push(fifth.spawn().unwrap());
+    let child = processes.spawn_recorded(&mut fifth).unwrap();
+    processes.children.push(child);
     let until = Instant::now() + Duration::from_secs(15);
     while !learner_status.exists() {
         assert!(
@@ -412,6 +417,7 @@ fn native_metadata_operator_actual_cli_four_process_startup_registration_and_dat
     let killed_pid = processes.children[4].id();
     processes.children[4].kill().unwrap();
     let killed = processes.children[4].wait().unwrap();
+    processes.record_prior_exit(killed_pid, &killed);
     assert!(!killed.success());
     let metadata_path = root.join("db4/native-learner-metadata/cluster-metadata-consensus.json");
     let original_c_path =
@@ -463,7 +469,8 @@ fn native_metadata_operator_actual_cli_four_process_startup_registration_and_dat
         .stdin(Stdio::null())
         .stdout(std::fs::File::create(root.join("node4-cold.stdout")).unwrap())
         .stderr(std::fs::File::create(root.join("node4-cold.stderr")).unwrap());
-    processes.children[4] = cold_process.spawn().unwrap();
+    let cold_child = processes.spawn_recorded(&mut cold_process).unwrap();
+    processes.children[4] = cold_child;
     let until = Instant::now() + Duration::from_secs(15);
     while !cold_status.exists() {
         assert!(
@@ -713,7 +720,8 @@ fn native_metadata_operator_actual_cli_single_join_fresh_becomes_local_metadata_
         .stdin(Stdio::null())
         .stdout(std::fs::File::create(root.join("node4.stdout")).unwrap())
         .stderr(std::fs::File::create(root.join("node4.stderr")).unwrap());
-    processes.children.push(fifth.spawn().unwrap());
+    let child = processes.spawn_recorded(&mut fifth).unwrap();
+    processes.children.push(child);
     let until = Instant::now() + Duration::from_secs(45);
     let (ready, source) = loop {
         for (i, child) in processes.children.iter_mut().enumerate() {
@@ -812,7 +820,8 @@ fn native_metadata_operator_actual_cli_single_join_fresh_becomes_local_metadata_
         .stdin(Stdio::null())
         .stdout(std::fs::File::create(root.join("node5.stdout")).unwrap())
         .stderr(std::fs::File::create(root.join("node5.stderr")).unwrap());
-    processes.children.push(sixth.spawn().unwrap());
+    let child = processes.spawn_recorded(&mut sixth).unwrap();
+    processes.children.push(child);
     let until = Instant::now() + Duration::from_secs(45);
     let sixth = loop {
         for (i, child) in processes.children.iter_mut().enumerate() {

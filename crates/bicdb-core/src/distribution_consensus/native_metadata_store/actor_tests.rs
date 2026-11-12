@@ -2,8 +2,10 @@
 //! delivery. Pins come from real generated certificates, but this is simulated
 //! delivery, NOT authenticated TLS/physical HA or a data-handoff qualification.
 use super::*;
-use crate::db::{ActualNativeRf3Fixture, RangeImageBirthMember, RangeImageBirthSpec};
+use crate::db::{RangeImageBirthMember, RangeImageBirthSpec};
+mod fixture;
 use crate::{DbConfig, StorageMode};
+use fixture::ActorFixture;
 use rcgen::{CertificateParams, KeyPair};
 fn node(i: usize) -> ClusterNodeId {
     ClusterNodeId::new(format!("n{i}")).unwrap()
@@ -25,7 +27,7 @@ fn pin() -> String {
 fn replicate(
     stores: &mut BTreeMap<ClusterNodeId, MetadataConsensusStore>,
     leader: &ClusterNodeId,
-    fixture: &ActualNativeRf3Fixture,
+    fixture: &ActorFixture,
 ) -> Vec<String> {
     let mut refused = Vec::new();
     for _ in 0..3 {
@@ -77,10 +79,10 @@ fn replicate(
 }
 #[test]
 fn native_metadata_actor_reused_pin_cannot_rebind_old_root_but_retirement_persists() {
-    let network = (0..3)
+    let network = (0..4)
         .map(|i| (node(i), (format!("127.0.0.1:{}", 19100 + i), pin())))
         .collect::<BTreeMap<_, _>>();
-    let mut f = ActualNativeRf3Fixture::new_with_enforced_network_and_ranges(&network, 1);
+    let mut f = ActorFixture::new(&network);
     f.root.disable_cleanup(true);
     eprintln!("NATIVE_METADATA_ACTOR_ROOT {}", f.root.path().display());
     let initial = f.topology.read().clone();
@@ -131,13 +133,13 @@ fn native_metadata_actor_reused_pin_cannot_rebind_old_root_but_retirement_persis
     let mut retired = stores[&leader].committed_topology().clone();
     retired.generation += 1;
     retired.nodes.get_mut(&node(0)).unwrap().lifecycle = ClusterNodeLifecycle::Decommissioned;
-    for range in retired.ranges.values_mut() {
-        range.replicas.retain(|r| r.node_id != node(0));
-        if range.leader == node(0) {
-            range.leader = leader.clone();
-        }
-        range.epoch += 1;
-    }
+    // Actor n0 NEVER owned a data replica. Retirement changes metadata only;
+    // no online data membership transition or joint-proof bypass is modeled.
+    assert_eq!(retired.ranges, initial.ranges);
+    assert!(retired.ranges.values().all(|range| range
+        .replicas
+        .iter()
+        .all(|replica| replica.node_id != node(0))));
     retired.validate().unwrap();
     stores
         .get_mut(&leader)
@@ -190,16 +192,22 @@ fn native_metadata_actor_reused_pin_cannot_rebind_old_root_but_retirement_persis
     assert!(!refused_probe.append.success);
     assert_eq!(refused_probe.append.match_index, 0);
     assert_eq!(stores[&node(0)].committed_topology(), &retired);
-    assert_eq!(
-        fs::read(
-            f.root
-                .path()
-                .join("actor-meta-n0")
-                .join(DEFAULT_CLUSTER_METADATA_CONSENSUS_STATE)
-        )
-        .unwrap(),
-        saved
-    );
+    let after_probe_bytes = fs::read(
+        f.root
+            .path()
+            .join("actor-meta-n0")
+            .join(DEFAULT_CLUSTER_METADATA_CONSENSUS_STATE),
+    )
+    .unwrap();
+    // A valid existing leader's probe can update the durable leader hint even
+    // though this retired actor cannot return a countable acknowledgement.
+    // Verify both checksummed envelopes, then require every OTHER state field
+    // (including term, self-vote, log, commit, birth, and topology) unchanged.
+    let before_probe = decode_state(&saved).unwrap();
+    let mut after_probe = decode_state(&after_probe_bytes).unwrap();
+    assert_eq!(after_probe.leader_id, Some(leader.clone()));
+    after_probe.leader_id = before_probe.leader_id.clone();
+    assert_eq!(after_probe, before_probe);
     // Actual new higher-incarnation factory, deliberately REUSING the old
     // real-certificate pin. Neither node-id nor pin equality is native identity.
     let mut replacement = retired.clone();
@@ -352,4 +360,102 @@ fn native_metadata_actor_reused_pin_cannot_rebind_old_root_but_retirement_persis
     assert!(promoted_ack.success);
     assert_eq!(new_store.committed_topology(), &promoted);
     assert_eq!(new_store.start_election().unwrap().candidate_id, node(0));
+}
+
+/// Deliberately isolates dispatch from an independent operational publisher.
+/// Pgwire republishes on every checkpoint loop; this is NOT a claim that its
+/// runtime stays stale, nor a full native-host restart/serving qualification.
+#[cfg(feature = "tls-replication")]
+#[test]
+fn native_metadata_dispatch_replayed_durable_prefix_does_not_repair_older_cache() {
+    let network = (0..4)
+        .map(|i| (node(i), (format!("127.0.0.1:{}", 19200 + i), pin())))
+        .collect::<BTreeMap<_, _>>();
+    let mut fixture = ActorFixture::new(&network);
+    fixture.root.disable_cleanup(true);
+    eprintln!(
+        "NATIVE_METADATA_DISPATCH_RETRY_ROOT {}",
+        fixture.root.path().display()
+    );
+    let initial = fixture.topology.read().clone();
+    let leader = node(1);
+    let mut stores = (0..3)
+        .map(|i| {
+            let id = node(i);
+            let store = MetadataConsensusStore::initialize_native_owned(
+                fixture.root.path().join(format!("retry-meta-{id}")),
+                Arc::clone(&fixture.databases[&id]),
+                &fixture.fresh_factories[&id],
+                initial.clone(),
+                &CancellationToken::uncancelable(),
+            )
+            .unwrap();
+            (id, store)
+        })
+        .collect::<BTreeMap<_, _>>();
+    let election = stores.get_mut(&leader).unwrap().start_election().unwrap();
+    let mut votes = BTreeSet::from([leader.clone()]);
+    for i in [0, 2] {
+        let reply = stores
+            .get_mut(&node(i))
+            .unwrap()
+            .handle_vote_request(election.clone())
+            .unwrap();
+        assert!(reply.vote_granted);
+        votes.insert(reply.voter_id);
+    }
+    stores
+        .get_mut(&leader)
+        .unwrap()
+        .become_leader(&votes)
+        .unwrap();
+    assert!(replicate(&mut stores, &leader, &fixture).is_empty());
+    let mut retired = stores[&leader].committed_topology().clone();
+    retired.generation += 1;
+    retired.nodes.get_mut(&node(0)).unwrap().lifecycle = ClusterNodeLifecycle::Decommissioned;
+    assert_eq!(retired.ranges, initial.ranges);
+    stores
+        .get_mut(&leader)
+        .unwrap()
+        .propose_topology(retired.clone())
+        .unwrap();
+    replicate(&mut stores, &leader, &fixture);
+    assert_eq!(stores[&node(2)].committed_topology(), &retired);
+    // Simulate only loss of the volatile publisher update. Do not roll back
+    // metadata state or manufacture a different authority/certificate.
+    let older_cache = Arc::new(RwLock::new(initial.clone()));
+    let root = fixture.root.path().join("retry-meta-n2");
+    drop(stores.remove(&node(2)));
+    let actual = Arc::new(Mutex::new(
+        MetadataConsensusStore::reopen_native_owned(
+            &root,
+            Arc::clone(&fixture.databases[&node(2)]),
+            node(2),
+            initial.clone(),
+            &CancellationToken::uncancelable(),
+        )
+        .unwrap(),
+    ));
+    let durable_before = actual.lock().status().commit_index;
+    assert_eq!(actual.lock().committed_topology(), &retired);
+    let request = stores[&leader].append_request_from(1, 32).unwrap();
+    let response = crate::distribution_transport::test_dispatch_metadata_append_with_actual_store(
+        &fixture.services[&node(2)],
+        &actual,
+        &older_cache,
+        &leader,
+        request,
+    )
+    .unwrap();
+    assert!(
+        response.success,
+        "healthy unchanged physical actor can acknowledge retry"
+    );
+    assert_eq!(actual.lock().status().commit_index, durable_before);
+    assert_eq!(actual.lock().committed_topology(), &retired);
+    assert_eq!(
+        *older_cache.read(),
+        initial,
+        "dispatch alone publishes on commit advance; independent host publication is separate"
+    );
 }

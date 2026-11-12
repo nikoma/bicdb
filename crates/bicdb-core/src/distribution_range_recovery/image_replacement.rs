@@ -304,7 +304,6 @@ impl InstallingCommittedQuorumRound {
             p.plaintext_loopback() && p.certificate_sha256().is_none()
         };
         if e.node_id != self.target
-            || self.votes.contains_key(&e.node_id)
             || e.proposal != self.pointer
             || !self.scope.same_session(&e.current_scope)
             || p.node_id() != &e.node_id
@@ -317,6 +316,11 @@ impl InstallingCommittedQuorumRound {
             return Err(invalid(
                 "Installing committed vote is not current exact authenticated domain",
             ));
+        }
+        // Diagnose a genuine repeated receiver separately after checking its
+        // complete current authenticated domain. It remains ONE physical vote.
+        if self.votes.contains_key(&e.node_id) {
+            return Err(invalid("duplicate Installing committed voter observation"));
         }
         self.votes.insert(
             e.node_id.clone(),

@@ -96,6 +96,48 @@ native composition. The new regression name is
 a `native_` substring run does **not** select it. Run it explicitly, then the
 related native owned/TLS ACK and snapshot/election controls on the frozen head.
 
+## Finite heartbeat continuation: independent source adaptation
+
+This branch adds only the following bounded-startup continuation to the read
+foundation at `92d5b30fa`. These cherry-picks do not import their original full
+prototype ancestry:
+
+| Input | Independent cherry | Scope |
+| --- | --- | --- |
+| Original 17-barrier regression `8be0d3b05` | `ffac1823552f943b8047410cfb9e1a07c86b9b86` | Actual factories, common C, owned metadata stores, genuine TLS votes and withheld Append delivery; exercise the real finite heartbeat and recovery entry point |
+| Accepted-peer progress `c95d89ebf` | `80403d306f079b02946aa739b1b95dc7f293485f` | Construct the next request from the leader's accepted per-peer match index plus one; retain three rounds and sixteen entries per request |
+| 65-barrier controls `5b19455ec` | `18d2bbf86aa63b10389d89c0db0d88140432f8c7` | Genuine bounded progress across calls, no current-term read anchor before65, wrong-peer/unaccepted replies, real negative reply, actual new-term and committed-C resets |
+
+Only the heartbeat test-module declaration was resolved. No Abort, joint-data,
+learner-birth RPC or learner-enrollment transition module is added. Protocol27,
+native birth fields and reader flags remain unchanged. The owned native Append
+ACK producer still seals the handler-derived matched frontier before its digest;
+its actual birth, protected StoreID, current identity, pin and body checks are
+unchanged. The cursor consumes only that existing validated `match_index`, never
+an ACK count, transport completion or conflict hint. Leadership, open and
+committed-configuration resets remain in force. A same-term negative reply
+removes only that peer's cached progress conservatively.
+
+Root separately reports that full-prototype source `d9fdffd32`, CI `43174437808`,
+reached the intended 17-barrier failure: both followers remained at16 after two
+finite heartbeat calls, and the new recovery barrier lacked a durable quorum.
+That is an earlier prototype result, not a test of this independent adaptation.
+No passing result for either adapted regression is claimed here.
+
+The exact regression names are:
+
+- `native_initial_metadata_actual_tls_barrier_backlog_advances_beyond_first_batch`
+- `native_initial_metadata_actual_tls_65_barriers_resume_across_finite_heartbeat_calls`
+
+A `native_initial_metadata_actual_tls_` filter selects both. The 65-barrier source
+requires the first finite call to reach48 on each peer with commit0 and HostMQ
+refusal; after validated progress, a second call must commit65. It also checks
+real new-term/configuration resets and unchanged application WAL without any
+installed writer hook. Public evidence roots receive only sanitized metadata
+traces; generated test TLS keys and native files remain in a separate private
+fixture root. These are one-host component controls, not scheduler, writer,
+Strong-serving, physical failover or Azure qualification.
+
 ## Required next checks and delivery
 
 1. Compile and run the newly composed metadata reply provenance correction:

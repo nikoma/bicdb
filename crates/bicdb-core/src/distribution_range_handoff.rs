@@ -24,7 +24,9 @@ pub(crate) use joint::{
     NativeJointPreparationPhaseRound, NativeJointPreparedDecision,
     NativeJointPreparedServingObservation, NativeJointPreparedServingQuorum,
     NativeJointPreparedServingRound, NativeJointPreparedServingVoteData,
-    NativeJointPublishedServingQuorum, NativeJointServingPublicationRound,
+    NativeJointPublishedServingQuorum, NativeJointReleaseAdmission, NativeJointReleaseContinuation,
+    NativeJointReleasePhaseQuorum, NativeJointReleasePhaseRound,
+    NativeJointServingPublicationRound,
 };
 
 pub(crate) const HANDOFF_RANGE_LOG_FORMAT: u32 = 4;

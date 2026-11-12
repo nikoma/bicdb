@@ -9,7 +9,8 @@ use crate::distribution_range_recovery::RecoveryRoleAdmission;
 
 mod bridge;
 pub(crate) use bridge::{
-    ActualServiceNativeJointPreparedEvidence, NativeJointImageReleaseOwner, NativeJointServingLease,
+    ActualServiceNativeJointPreparedEvidence, ActualServiceNativeJointReleaseEvidence,
+    NativeJointImageReleaseOwner, NativeJointReleaseOwnerView, NativeJointServingLease,
 };
 
 /// Single-use actual service evidence. No request IDs, peer identities, points

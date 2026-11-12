@@ -64,6 +64,10 @@ impl CommittedNativeJointDecisionObservation {
         }
         Ok(())
     }
+    /// Request-bound metadata/domain check only, never data visibility.
+    pub(crate) fn require_current_metadata_only(&self) -> Result<()> {
+        self.require_metadata_current()
+    }
     pub(crate) fn require_current_with_historical_cut_scope(
         &self,
         scope: &crate::db::NativeJointHistoricalCutScope<'_>,

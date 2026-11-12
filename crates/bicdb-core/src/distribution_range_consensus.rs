@@ -123,8 +123,7 @@ mod native_writer;
 pub(crate) use joint_handoff_state::{
     NativeJointBridgeCatalogue, NativeJointCatalogueActivationFact,
     NativeJointCatalogueActivationReceipt, NativeJointOldCatalogPreflight,
-    NativeJointOldPromiseReceipt, NativeJointReleaseCatalogue,
-    NativeJointReleaseObservedObligations,
+    NativeJointOldPromiseReceipt, NativeJointReleaseObservedObligations,
 };
 use joint_handoff_state::{NativeJointLocalState, NATIVE_JOINT_HANDOFF_CATALOG_FORMAT};
 #[cfg(test)]

@@ -55,6 +55,20 @@ impl NativeJointOpenContinuity {
     pub(crate) fn armed(&self) -> bool {
         self.armed
     }
+    /// Cheap actual lifetime/generation recheck between complete service
+    /// sweeps. This does not replace the actual Store-slot comparison below.
+    pub(crate) fn require_observed_lifetime(&self) -> Result<()> {
+        let actual = self
+            .guard
+            .upgrade()
+            .ok_or_else(|| BicDbError::Cluster("joint observed guard ended".into()))?;
+        if self.armed && !actual.armed.load(Ordering::Acquire) {
+            return Err(BicDbError::Cluster(
+                "joint armed generation regressed".into(),
+            ));
+        }
+        actual.require_binding(self.store_open_id, &self.activation_sha256)
+    }
     pub(crate) fn require_current(
         &self,
         actual: &Arc<NativeJointActivatedOpenGuard>,

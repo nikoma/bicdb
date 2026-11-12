@@ -2,7 +2,12 @@
 //! activation. These opaque facts cannot be decoded from quorum audit data.
 use super::*;
 mod open_phase;
+mod release_phase;
 pub(crate) use open_phase::{NativeJointOpenPhaseQuorum, NativeJointOpenPhaseRound};
+pub(crate) use release_phase::{
+    NativeJointReleaseAdmission, NativeJointReleaseContinuation, NativeJointReleasePhaseQuorum,
+    NativeJointReleasePhaseRound,
+};
 
 pub(crate) struct NativeJointServingPublicationRound {
     fresh_required: bool,

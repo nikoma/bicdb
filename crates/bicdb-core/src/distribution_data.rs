@@ -51,7 +51,8 @@ pub(crate) use native_joint_handoff::{
     ActualServiceNativeJointCaptureInputs, ActualServiceNativeJointCommittedEvidence,
     ActualServiceNativeJointConstraints, ActualServiceNativeJointNewEvidence,
     ActualServiceNativeJointOldEvidence, ActualServiceNativeJointPreparedEvidence,
-    NativeJointImageReleaseOwner, NativeJointIrrevocableFacts, NativeJointServingLease,
+    ActualServiceNativeJointReleaseEvidence, NativeJointImageReleaseOwner,
+    NativeJointIrrevocableFacts, NativeJointReleaseOwnerView, NativeJointServingLease,
 };
 mod current_image_replacement;
 mod current_image_resume;

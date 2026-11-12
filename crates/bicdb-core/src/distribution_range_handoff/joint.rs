@@ -40,7 +40,9 @@ pub(crate) use bridge::{
     NativeJointOpenPhaseRound, NativeJointPreparationPhaseQuorum, NativeJointPreparationPhaseRound,
     NativeJointPreparedServingObservation, NativeJointPreparedServingQuorum,
     NativeJointPreparedServingRound, NativeJointPreparedServingVoteData,
-    NativeJointPublishedServingQuorum, NativeJointServingPublicationRound,
+    NativeJointPublishedServingQuorum, NativeJointReleaseAdmission, NativeJointReleaseContinuation,
+    NativeJointReleasePhaseQuorum, NativeJointReleasePhaseRound,
+    NativeJointServingPublicationRound,
 };
 
 #[cfg(test)]

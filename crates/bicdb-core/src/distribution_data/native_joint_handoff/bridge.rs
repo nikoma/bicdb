@@ -8,7 +8,9 @@ use crate::distribution_range_image_install::{
 };
 
 mod image_release;
+mod release;
 pub(crate) use image_release::NativeJointImageReleaseOwner;
+pub(crate) use release::{ActualServiceNativeJointReleaseEvidence, NativeJointReleaseOwnerView};
 
 /// Keep the actual owner alive, including an installer's nonextractable
 /// recovery lease. No raw Frozen is created from a metadata plan or number.

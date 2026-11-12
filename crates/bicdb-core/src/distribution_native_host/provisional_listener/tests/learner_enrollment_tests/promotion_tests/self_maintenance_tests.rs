@@ -93,6 +93,11 @@ fn native_metadata_promoted_leader_maintenance_never_appends_to_itself() {
         Duration::from_secs(5),
         &original,
     );
+    // Validate this original finite proof BEFORE closing its real owners;
+    // stopping a fixture cannot renew an observation or its TTL.
+    let fresh_after_live = fresh_after
+        .as_ref()
+        .is_ok_and(|observation| observation.require_live_request(after_business).is_ok());
     let summary = serde_json::json!({
         "source_revision":std::env::var("BICDB_TEST_SOURCE_SHA").ok(),
         "scope":"single finite actual owned metadata maintenance; no DATA or VM claim",
@@ -113,6 +118,7 @@ fn native_metadata_promoted_leader_maintenance_never_appends_to_itself() {
     // Close all real owners before reporting the intended invariant failure.
     // Fixture private files remain retained by its existing custody policy.
     drop(fresh_before);
+    drop(fresh_after);
     drop(owned);
     host.stop_owned_metadata(&token).unwrap();
     host.shutdown().unwrap();
@@ -127,8 +133,5 @@ fn native_metadata_promoted_leader_maintenance_never_appends_to_itself() {
     let report = report.unwrap();
     assert_eq!(report.node, None);
     assert_eq!(report.stage, "idle_or_backoff");
-    fresh_after
-        .unwrap()
-        .require_live_request(after_business)
-        .unwrap();
+    assert!(fresh_after_live, "the SAME original finite maintenance budget must still obtain actual current leader MQ before shutdown");
 }

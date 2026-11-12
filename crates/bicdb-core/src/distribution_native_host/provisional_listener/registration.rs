@@ -497,6 +497,9 @@ impl NativeMetadataControlHost {
         target: &ClusterNodeId,
         parent: &CancellationToken,
     ) -> Result<Uuid> {
+        if target == &self.backend.node_id {
+            return Err(invalid("learner catch-up requires an actual REMOTE member"));
+        }
         let token = parent.child_with_deadline(Instant::now() + Duration::from_secs(5));
         let business = Uuid::now_v7();
         let current = self.backend.transport.acquire_host_metadata_observation(

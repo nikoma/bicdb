@@ -29,7 +29,8 @@ impl NativeMetadataRegistrationController {
             .nodes
             .values()
             .filter(|m| {
-                m.lifecycle == ClusterNodeLifecycle::Active
+                m.id != self.backend.node_id
+                    && m.lifecycle == ClusterNodeLifecycle::Active
                     && !snapshot
                         .topology
                         .ranges
@@ -155,6 +156,11 @@ impl NativeMetadataRegistrationController {
         target: &ClusterNodeId,
         parent: &CancellationToken,
     ) -> Result<NativeMetadataMaintenanceReport> {
+        if target == &self.backend.node_id {
+            return Err(invalid(
+                "installed-member verification requires an actual REMOTE member",
+            ));
+        }
         let business = Uuid::now_v7();
         let first = self.backend.transport.acquire_host_metadata_observation(
             &self.backend.node_id,
@@ -189,7 +195,9 @@ impl NativeMetadataRegistrationController {
                 ));
             }
             let required = store.status().commit_index;
-            (store.append_request_from(required, 16)?, required)
+            // Keep the shared accepted-frontier/current remote-member guard.
+            // Never manufacture an Append-to-self via the index-only builder.
+            (store.append_request_for_peer(target, 16)?, required)
         };
         let reply = self
             .backend

@@ -15,6 +15,7 @@ mod joint_handoff;
 pub(crate) use activation_decision::NativeActivationDecisionReceipt;
 pub(crate) use joint_handoff::{
     NativeJointDecisionReceipt, NativeJointOldCloseReceipt, NativeJointOldPhysicalProof,
+    NativeJointServingPreparation,
 };
 
 #[cfg(test)]

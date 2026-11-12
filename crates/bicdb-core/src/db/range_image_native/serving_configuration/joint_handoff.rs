@@ -9,6 +9,9 @@ use crate::distribution_range_mutation::{
     ControlledFrozenMutationPermit, FrozenRangeMutationPermit, RangeMutationAuthority,
 };
 
+mod bridge;
+pub(crate) use bridge::NativeJointServingPreparation;
+
 /// Actual physical preflight under an owned/drained handoff freeze. No serde,
 /// Clone, raw-counter constructor, mutation permission or vote conversion.
 #[derive(Debug)]

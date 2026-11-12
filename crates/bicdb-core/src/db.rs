@@ -91,7 +91,7 @@ pub(crate) use range_image_native::{
 };
 pub(crate) use range_image_native::{
     NativeActivationDecisionReceipt, NativeJointDecisionReceipt, NativeJointOldCloseReceipt,
-    NativeJointOldPhysicalProof,
+    NativeJointOldPhysicalProof, NativeJointServingPreparation,
 };
 pub(crate) use range_image_native::{NativeRangeReadPhysical, NativeReadLocalDbSequence};
 mod range_image_bindings;

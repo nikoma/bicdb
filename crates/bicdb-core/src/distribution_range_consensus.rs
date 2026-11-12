@@ -117,10 +117,10 @@ mod native_durability;
 mod native_normal;
 mod native_prefix;
 mod native_writer;
-use joint_handoff_state::{NativeJointLocalState, NATIVE_JOINT_HANDOFF_CATALOG_FORMAT};
 pub(crate) use joint_handoff_state::{
-    NativeJointOldCatalogPreflight, NativeJointOldPromiseReceipt,
+    NativeJointBridgeCatalogue, NativeJointOldCatalogPreflight, NativeJointOldPromiseReceipt,
 };
+use joint_handoff_state::{NativeJointLocalState, NATIVE_JOINT_HANDOFF_CATALOG_FORMAT};
 #[cfg(test)]
 pub(crate) use native_prefix::tests::{
     fixture as native_origin_fixture, seed_actual_origin, test_catalog_command,

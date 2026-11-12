@@ -4,6 +4,9 @@ use super::*;
 use crate::distribution_range_handoff::NativeJointHandoffPlan;
 use crate::distribution_range_recovery::RecoveryRoleAdmission;
 
+mod bridge;
+pub(crate) use bridge::NativeJointBridgeCatalogue;
+
 pub(super) const NATIVE_JOINT_HANDOFF_CATALOG_FORMAT: u32 = 14;
 #[derive(Debug)]
 pub(crate) struct NativeJointOldCatalogPreflight {

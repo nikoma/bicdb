@@ -7,6 +7,9 @@ use crate::distribution_range_handoff::NativeJointHandoffPlan;
 use crate::distribution_range_mutation::{FrozenRangeMutationPermit, SourceCaptureReadPin};
 use crate::distribution_range_recovery::RecoveryRoleAdmission;
 
+mod bridge;
+pub(crate) use bridge::{ActualServiceNativeJointPreparedEvidence, NativeJointServingLease};
+
 /// Single-use actual service evidence. No request IDs, peer identities, points
 /// or native receipts can be substituted when the observation consumes it.
 pub(crate) struct ActualServiceNativeJointOldEvidence {

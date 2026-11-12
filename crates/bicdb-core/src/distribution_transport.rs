@@ -1456,9 +1456,14 @@ fn handle_cluster_data_connection(
                         .map(ClusterDataResponse::SchemaBundle);
                 }
                 ClusterDataRequest::FetchBootstrapSnapshot => {
-                    return provider
-                        .bootstrap(&token)
-                        .map(ClusterDataResponse::BootstrapSnapshot)
+                    // Only the actual immutable INITIAL DATA mode has this
+                    // pre-service-latch routing producer. Existing CONFIG and
+                    // registered receiver bootstrap keep their original path.
+                    let snapshot = match initial_data {
+                        Some(admission) => provider.bootstrap_initial_data(admission, &token),
+                        None => provider.bootstrap(&token),
+                    };
+                    return snapshot.map(ClusterDataResponse::BootstrapSnapshot);
                 }
                 _ => {}
             }

@@ -35,6 +35,8 @@ pub(crate) struct NativeInitialDataAdmission {
     writer: Arc<NativeWriterHostState>,
     root: PathBuf,
     store_open: Uuid,
+    // Actual service SLOT identity, not merely a live removed Store/old ID.
+    store_slot: crate::distribution_data::RangeWriteServiceSlotGuard,
     life: Weak<AtomicBool>,
     published: Arc<AtomicBool>,
 }
@@ -47,7 +49,31 @@ impl NativeInitialDataAdmission {
         {
             return Err(invalid("initial DATA owner is stopping or ended"));
         }
+        self.store_slot.require_live()?;
+        if self.store_slot.id() != self.store_open {
+            return Err(invalid("initial DATA actual Store slot/open differs"));
+        }
         self.writer.require_store(&self.root, self.store_open)
+    }
+    /// Necessary same-service/current-slot refusal, never routing/Q/read/write
+    /// authority. The constructor captured the actual slot under that service.
+    pub(crate) fn require_routing_service(
+        &self,
+        service: &Arc<Mutex<ClusterDataNodeService>>,
+        expected_store_open: Uuid,
+    ) -> Result<()> {
+        self.require_live()?;
+        if self
+            .service
+            .upgrade()
+            .is_none_or(|actual| !Arc::ptr_eq(&actual, service))
+            || self.store_open != expected_store_open
+        {
+            return Err(invalid(
+                "initial DATA routing belongs to another actual service/Store",
+            ));
+        }
+        Ok(())
     }
     pub(crate) fn require_listener(
         &self,
@@ -228,6 +254,7 @@ impl NativeInitialDataHost {
                 writer,
                 root,
                 store_open: service.native_initial_listener_store_open_id(),
+                store_slot: service.native_replica_listener_store_open_guard(),
                 life: Arc::downgrade(&self.life),
                 published: self.published.clone(),
             }));
@@ -456,6 +483,23 @@ impl NativeMetadataControlHost {
                 .require_for_coordinator(&database, range, &old.coordinator)?;
         }
         data.initial.enroll_initial_writer(leader, parent)
+    }
+    #[cfg(test)]
+    pub(crate) fn test_initial_data_routing_inputs(
+        &self,
+    ) -> Result<(
+        Arc<NativeMetadataRegistrationController>,
+        Arc<NativeInitialDataAdmission>,
+    )> {
+        Ok((
+            self.controller
+                .clone()
+                .ok_or_else(|| invalid("actual controller absent"))?,
+            self.data
+                .as_ref()
+                .and_then(|data| data.admission.clone())
+                .ok_or_else(|| invalid("actual INITIAL admission absent"))?,
+        ))
     }
     pub(crate) fn initial_data_status(
         &self,

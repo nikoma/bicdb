@@ -28,6 +28,7 @@ pub(crate) struct NativeMetadataRegistrationController {
     backend: Arc<NativeMetadataControlBackend>,
     config: DistributionConfig,
     store_open_id: Uuid,
+    actual_open: crate::distribution_data::ClusterServiceOpenGuard,
     queue: Mutex<BTreeMap<ClusterNodeId, Arc<NativeMetadataRegistrationIngress>>>,
     driving: AtomicBool,
     maintenance: Mutex<maintenance::NativeMetadataMaintenanceState>,
@@ -83,6 +84,7 @@ impl NativeMetadataRegistrationController {
             backend,
             config,
             store_open_id,
+            actual_open,
             queue: Mutex::new(BTreeMap::new()),
             driving: AtomicBool::new(false),
             maintenance: Mutex::new(Default::default()),
@@ -123,6 +125,38 @@ impl NativeMetadataRegistrationController {
             },
         };
         snapshot.validate()?;
+        parent.check()?;
+        Ok(snapshot)
+    }
+    /// INITIAL-only committed routing DATA before the DATA service latch.
+    /// The real captured open/current slot/owned MStore remain mandatory; no
+    /// quorum/readiness/write grant or cached schema authority is returned.
+    pub(crate) fn bootstrap_initial_data(
+        &self,
+        admission: &NativeInitialDataAdmission,
+        parent: &CancellationToken,
+    ) -> Result<ClusterBootstrapSnapshot> {
+        parent.check()?;
+        admission.require_routing_service(&self.backend.service, self.store_open_id)?;
+        self.actual_open.require_live()?;
+        let store = self.backend.lock_metadata(parent)?;
+        store.require_listener_database(&self.actual_open)?;
+        let status = store.status();
+        let snapshot = ClusterBootstrapSnapshot {
+            topology: store.committed_topology().clone(),
+            config_template: self.config.clone(),
+            metadata_leader_id: if status.role == MetadataConsensusRole::Leader {
+                Some(status.node_id)
+            } else {
+                status.leader_id
+            },
+        };
+        snapshot.validate()?;
+        // A retained removed Store or ended owner must not keep this route
+        // alive across the read. Same metadata lock, no service/DB reborrow.
+        store.require_listener_database(&self.actual_open)?;
+        self.actual_open.require_live()?;
+        admission.require_routing_service(&self.backend.service, self.store_open_id)?;
         parent.check()?;
         Ok(snapshot)
     }

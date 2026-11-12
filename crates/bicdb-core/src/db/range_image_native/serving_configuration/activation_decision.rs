@@ -142,6 +142,14 @@ impl NativeActivationDecisionRecord {
     ) -> Result<()> {
         native.require_current(db)?;
         let actual = db.current_native_range_source_lineage(self.scope.range_id)?;
+        // Ordinary activation binds data voters, not every metadata member
+        // retained in birth ancestry. Historical reuse remains bound to the
+        // physical same-voter domain validated by the archived serving floor.
+        let actual_members = if current_serving {
+            actual.native_write_members()?
+        } else {
+            actual.physical_range_members()?
+        };
         if self.birth_id != native.birth_id()
             || self.birth_sha256 != native.birth_sha256()
             || self.scope.cluster_id != *native.cluster_id()
@@ -153,9 +161,9 @@ impl NativeActivationDecisionRecord {
             || actual.range_index() < self.range_index
             || actual.schema_sha256() != self.schema_sha256
             || actual.restore_activation() != self.restore_activation.as_ref()
-            || actual.base_members().len() != self.members.len()
+            || actual_members.len() != self.members.len()
             || self.members.iter().any(|(id, member)| {
-                actual.base_members().get(id).is_none_or(|stored| {
+                actual_members.get(id).is_none_or(|stored| {
                     stored.incarnation != member.incarnation
                         || stored.tls_certificate_sha256 != member.active_certificate_sha256
                         || stored.pending_tls_certificate_sha256

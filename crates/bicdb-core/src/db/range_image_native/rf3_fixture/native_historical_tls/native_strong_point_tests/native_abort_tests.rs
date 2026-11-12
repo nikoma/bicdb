@@ -166,3 +166,76 @@ fn native_abort_actual_enforced_prepare_failure_canonical_metadata_history_then_
         );
     }
 }
+
+#[test]
+fn native_abort_actual_enforced_post_durable_commit_errors_cannot_become_no_effect_or_abort() {
+    let fixture = EnforcedNetwork::new();
+    let range = fixture.ranges()[0].clone();
+    let key = fixture.key(range.id, "unacked-durable-commit-not-abort");
+    // The real services persist Commit and then return the injected publication
+    // error. These are lost successful votes, not fabricated positive replies.
+    for id in [node("n1"), node("n2")] {
+        fixture.native.services[&id]
+            .lock()
+            .test_fail_native_commit_after_publication();
+    }
+    let db = fixture.native.databases[&node("n0")].write();
+    let before = db.tx_log_handle().stats();
+    let mut tx = db.begin_transaction().unwrap();
+    tx.insert("items", Record::new(&key)).unwrap();
+    let observer = tx.observe_outcome();
+    let failed = tx.commit().unwrap_err();
+    assert!(
+        matches!(&failed, BicDbError::CommitOutcomeUnknown { sequence: None, transaction_id: Some(id), .. }
+        if *id == observer.transaction_id().0),
+        "{failed}"
+    );
+    assert_eq!(
+        observer.outcome(),
+        crate::TransactionOutcome::RecoveryRequiredBeforeLocalCommit
+    );
+    assert_eq!(db.tx_log_handle().stats().written_seq, before.written_seq);
+    assert_eq!(
+        db.tx_log_handle().stats().commits_written,
+        before.commits_written
+    );
+    drop(db);
+    for id in [node("n0"), node("n1"), node("n2")] {
+        let db = fixture.native.databases[&id].read();
+        assert!(db.get("items", &key).unwrap().is_none());
+        let slot = db
+            .native_abort_slot_inventory()
+            .unwrap()
+            .into_iter()
+            .find(|s| s.command.range_id == range.id && s.command.index == 1)
+            .unwrap();
+        assert!(slot.ever_commit);
+        assert!(slot.no_effect_sha256.is_none());
+        assert!(slot.abort_promise_sha256.is_none());
+        assert_eq!(
+            db.current_native_range_source_lineage(range.id)
+                .unwrap()
+                .range_index(),
+            0
+        );
+        // Inspect genuine persisted JSON even when a returned write error has
+        // conservatively made the in-memory catalogue uncertain.
+        let bytes = std::fs::read(
+            db.data_path()
+                .join(crate::distribution_range_consensus::DEFAULT_RANGE_WRITE_LOG),
+        )
+        .unwrap();
+        let value: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        let raw = &value["catalog"]["ranges"][range.id.to_string()]["entries"]["1"];
+        assert_eq!(raw["state"], serde_json::json!("committed"), "{id}: {raw}");
+    }
+    let retry = fixture
+        .native
+        .append(&fixture.key(range.id, "unknown-must-recover-first"))
+        .unwrap_err();
+    assert!(!matches!(retry, BicDbError::CommitOutcomeUnknown { .. }));
+    assert_eq!(
+        observer.outcome(),
+        crate::TransactionOutcome::RecoveryRequiredBeforeLocalCommit
+    );
+}

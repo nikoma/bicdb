@@ -1,6 +1,7 @@
 //! Copy-only missing-decision-catalogue baseline. No production guard is changed.
 //! Actual TLS votes/metadata, APP ACK and real service CQ precede the fault.
 use super::*;
+mod custody;
 use crate::distribution_native_apply::{NativeOriginStatusRequest, NativeReplicaApplyObservation};
 use crate::distribution_range_consensus::{
     NativeRangeCommitCertificate, RangeWriteAck, RangeWriteCommand, RangeWriteProbe,
@@ -158,6 +159,7 @@ fn save(root: &Path, report: &Value) {
     let file = root.join("missing-catalogue-result.json");
     std::fs::write(&file, &bytes).unwrap();
     std::fs::File::open(&file).unwrap().sync_all().unwrap();
+    custody::mirror_report(report);
     eprintln!(
         "NATIVE_MISSING_CATALOGUE {}",
         String::from_utf8(bytes).unwrap()
@@ -768,6 +770,7 @@ fn native_event_endpoint_missing_catalogue_same_birth_restart_must_never_return_
     drop(faults);
     drop(original);
     require_all_owners_ended(&original_weaks);
+    custody::retain_stopped_original(&data_source, &keys_source, &report);
     // Two independent stopped copies from the SAME original cut. Original
     // keys/databases are retained and are never reopened or edited.
     let mut intact_data = ActualNativeRf3Fixture::copy_stopped_recovery_tree(&data_source).unwrap();

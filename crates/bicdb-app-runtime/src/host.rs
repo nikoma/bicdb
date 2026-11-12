@@ -1623,6 +1623,11 @@ impl CapabilityHost {
         write: bool,
     ) -> Result<()> {
         self.require_capability(ExtensionCapability::Database)?;
+        // Check signed authority before consulting storage metadata. Otherwise
+        // an undeclared absent relation leaks its existence through an internal
+        // collection-not-found error instead of the required authority denial.
+        let columns = columns.into_iter().collect::<Vec<_>>();
+        self.permission_signed_columns(relation, action, columns.iter().cloned(), write)?;
         if let Some(publication) = unsafe { self.db.as_ref() }
             .mutation_policy(relation)?
             .and_then(|policy| policy.native_fact_publication)
@@ -1638,7 +1643,7 @@ impl CapabilityHost {
                         "native fact owner authority denied".into(),
                     ));
                 }
-                let mut requested = columns.into_iter().collect::<Vec<_>>();
+                let mut requested = columns;
                 if requested.is_empty() {
                     requested = self
                         .application()
@@ -1662,7 +1667,7 @@ impl CapabilityHost {
                 return self.permission_signed_columns(relation, action, requested, write);
             }
         }
-        self.permission_signed_columns(relation, action, columns, write)
+        Ok(())
     }
     fn permission_signed_columns(
         &self,

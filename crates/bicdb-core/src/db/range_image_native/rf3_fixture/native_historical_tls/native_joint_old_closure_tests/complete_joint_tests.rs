@@ -3,6 +3,8 @@
 //! stores/services, TLS metadata, the completed image and distinct data sets.
 //! Local opaque-object orchestration is NOT an operator/wire handoff test.
 use super::*;
+#[path = "complete_joint_tests/closed_policy_baseline_tests.rs"]
+mod closed_policy_baseline_tests;
 #[path = "complete_joint_tests/current_joint_authority_tests.rs"]
 mod current_joint_authority_tests;
 #[path = "complete_joint_tests/native_activation_idempotence_tests.rs"]
@@ -344,6 +346,7 @@ fn install_actual_target(
 
 #[derive(Debug, PartialEq, Eq)]
 enum JointTestOutcome {
+    ClosedPolicyTransitionStillUnsupported,
     FullHandoffAckAndStrong,
     PublicationOnly,
     OriginalCallerRejected,
@@ -383,6 +386,7 @@ fn native_joint_fresh_open_phase_reconciles_exact_target_epoch_and_lost_catalogu
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum JointFullContinuation {
+    ClosedPolicyBaseline,
     OriginalTerminalControls,
     PostJointNoDataRecovery,
     PostJointNativeActivationIdempotence,
@@ -454,7 +458,13 @@ fn run_complete_joint_with_controls(
         .read()
         .local_namespace_identity("items")
         .unwrap();
-    let relocation = commit_pending(&mut fixture, &old);
+    let original_policies = (continuation == JointFullContinuation::ClosedPolicyBaseline)
+        .then(|| closed_policy_baseline_tests::capture(&fixture, &old));
+    let relocation = if original_policies.is_some() {
+        commit_pending_retaining_original_writer(&mut fixture, &old)
+    } else {
+        commit_pending(&mut fixture, &old)
+    };
     let current = fixture
         .native
         .topology
@@ -509,6 +519,15 @@ fn run_complete_joint_with_controls(
         .begin_capture(Duration::from_secs(2), &parent)
         .unwrap();
     let closed = Arc::new(closed);
+    if let Some(original) = original_policies.as_ref() {
+        closed_policy_baseline_tests::report_before_image(
+            &fixture,
+            &old,
+            &closed,
+            original,
+            &acknowledged,
+        );
+    }
     let (frozen, image) = install_actual_target(&fixture, &plan, capture);
     assert!(matches!(&frozen, NativeImageInstallFreeze::Recovery(_)));
     assert_eq!(
@@ -549,6 +568,18 @@ fn run_complete_joint_with_controls(
     let old_h = decision.data().logical_history_sha256().to_owned();
     for stage in 0..3 {
         commit_joint_stage(&mut fixture, &decision, stage);
+    }
+    if let Some(original) = original_policies {
+        closed_policy_baseline_tests::exercise(
+            &fixture,
+            &old,
+            &decision,
+            &closed,
+            original,
+            &acknowledged,
+            &parent,
+        );
+        return JointTestOutcome::ClosedPolicyTransitionStillUnsupported;
     }
     refresh_hosts(&mut fixture);
     let activation_range = fixture

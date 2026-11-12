@@ -12,6 +12,26 @@ use crate::distribution_range_handoff::{NativeJointHandoffRuntime, NativeJointOl
 mod complete_joint_tests;
 
 fn commit_pending(fixture: &mut EnforcedNetwork, original: &RangeDescriptor) -> RelocationId {
+    commit_pending_with_policy(fixture, original, PendingPolicy::ReinstallFromActualQuorum)
+}
+
+fn commit_pending_retaining_original_writer(
+    fixture: &mut EnforcedNetwork,
+    original: &RangeDescriptor,
+) -> RelocationId {
+    commit_pending_with_policy(fixture, original, PendingPolicy::RetainOriginal)
+}
+
+enum PendingPolicy {
+    ReinstallFromActualQuorum,
+    RetainOriginal,
+}
+
+fn commit_pending_with_policy(
+    fixture: &mut EnforcedNetwork,
+    original: &RangeDescriptor,
+    policy: PendingPolicy,
+) -> RelocationId {
     let mut candidate = fixture.native.topology.read().clone();
     // Explicit operator plan DATA, proposed and committed by real fsynced
     // metadata stores below. No role/quorum/native grant is constructed here.
@@ -88,6 +108,9 @@ fn commit_pending(fixture: &mut EnforcedNetwork, original: &RangeDescriptor) -> 
         assert_eq!(store.lock().committed_topology(), &committed);
     }
     *fixture.native.topology.write() = committed;
+    if matches!(policy, PendingPolicy::RetainOriginal) {
+        return id;
+    }
     // Fresh actual HostMQ policy on EVERY process after the committed route
     // change, before any further data decision. No historical R1 retrofit.
     for local in [node("n0"), node("n1"), node("n2"), node("n3")] {

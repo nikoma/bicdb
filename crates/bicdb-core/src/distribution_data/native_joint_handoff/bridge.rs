@@ -180,19 +180,35 @@ impl ActualServiceNativeJointPreparedEvidence {
             native_trace.complete();
             drop(native_trace);
         }
+        let writer =
+            self.require_local_open_scope(&scope, &service.range_writes, fresh, bridge.clone())?;
+        #[cfg(test)]
+        trace.complete();
+        Ok(writer)
+    }
+    /// Reuse the SAME locked actual local proof inside the final catalogue
+    /// boundary; no extra DB/service lock or network operation is acquired.
+    pub(crate) fn require_local_open_scope(
+        &self,
+        scope: &crate::db::NativeJointBridgeReadScope<'_>,
+        store: &crate::distribution_range_consensus::RangeWriteStore,
+        fresh: &CommittedNativeJointDecisionObservation,
+        bridge: Arc<crate::db::NativeJointServingBridgeReceipt>,
+    ) -> Result<Arc<crate::db::NativeWriterHostState>> {
         self.committed
-            .require_historical_audit_with_native_read_scope(&scope)?;
-        fresh.require_current_with_native_read_scope(&scope)?;
+            .require_historical_audit_with_native_read_scope(scope)?;
+        fresh.require_current_with_native_read_scope(scope)?;
         let old = self.committed.metadata_anchor();
         let current = fresh.metadata_anchor();
         let preparation = self.prepared.metadata_anchor();
         if fresh.data() != self.committed.data()
-            || bridge.data() != fresh.data()
-            || bridge.native_preparation_sha256() != self.prepared.checksum_sha256()
-            || bridge.native_database_incarnation() != self.prepared.native_database_incarnation()
+            || scope.native().data() != fresh.data()
+            || scope.native().native_preparation_sha256() != self.prepared.checksum_sha256()
+            || scope.native().native_database_incarnation()
+                != self.prepared.native_database_incarnation()
             || fresh.native_receipt().checksum_sha256()
                 != self.committed.native_receipt().checksum_sha256()
-            || self.prepared.local_node_id() != &service.node_id
+            || self.prepared.local_node_id() != scope.native().local_node_id()
             || current.0 < old.0
             || current.1 < old.1
             || current.2 == old.2
@@ -202,25 +218,22 @@ impl ActualServiceNativeJointPreparedEvidence {
         {
             return Err(data_error("fresh joint open phase changed original protected preparation/bridge/open/metadata"));
         }
-        let activation = service
-            .range_writes
-            .observe_native_joint_activation_fact_with_scope(&scope, bridge.clone())?;
+        let activation =
+            store.observe_native_joint_activation_fact_with_scope(scope, bridge.clone())?;
         if let Some(fact) = &activation {
             // Necessary rejection BEFORE touching a potentially consumed image lease.
-            service
-                .range_writes
-                .require_joint_open_phase_not_released(fact)?;
+            store.require_joint_open_phase_not_released(fact)?;
             self.catalogue.require_after_exact_activation(
-                &service.range_writes,
-                &scope,
+                store,
+                scope,
                 fresh,
                 fact,
                 self.lease.try_frozen()?,
             )?;
         } else {
             self.catalogue.require_current(
-                &service.range_writes,
-                &database,
+                store,
+                scope.database(),
                 fresh,
                 self.lease.image(),
                 self.lease.try_frozen()?,
@@ -232,18 +245,18 @@ impl ActualServiceNativeJointPreparedEvidence {
             .try_lock()
             .ok_or_else(|| data_error("joint open phase pin busy"))?;
         if let Some(pin) = pin.as_ref() {
-            database
+            scope
+                .database()
                 .range_mutation_gate()
                 .validate_source_capture_read_pin(fresh.data().old_range().id, pin)?;
         } else {
-            database
+            scope
+                .database()
                 .range_mutation_gate()
                 .validate_quiescent_frozen(fresh.data().old_range().id, self.lease.try_frozen()?)?;
         }
-        let writer = service.range_writes.native_writer_host_state()?;
-        writer.require_database(&database, fresh.data().activation_range())?;
-        #[cfg(test)]
-        trace.complete();
+        let writer = store.native_writer_host_state()?;
+        writer.require_database(scope.database(), fresh.data().activation_range())?;
         Ok(writer)
     }
     pub(crate) fn require_phase_writer_lifetime(
@@ -323,8 +336,10 @@ impl ClusterDataNodeService {
             admission.cancellation(),
         );
         parent.check()?;
-        admission.require_external_publications_current()?;
-        admission.require_local_open_preparation(self)?;
+        if !admission.has_fresh_open_phase() {
+            admission.require_external_publications_current()?;
+            admission.require_local_open_preparation(self)?;
+        }
         let database = checked_database_read(&self.db, &self.storage_policy)?;
         self.storage_policy.require_database(&database)?;
         self.range_writes
@@ -345,6 +360,8 @@ impl ClusterDataNodeService {
                 &recovered,
                 actual.lease.try_frozen()?,
             )?;
+            parent.check()?;
+            admission.require_live()?;
             #[cfg(test)]
             {
                 eprintln!("ACTUAL_JOINT_OPEN_RECOVERED exact-protected-activation=true node={} no-catalogue-rewrite=true",self.node_id);

@@ -153,3 +153,41 @@ receipt (newly persisted or recovered), rather than lucky attempt zero. Three
 pre-receipt phase attempts remain; one additional bounded phase is reserved
 solely to reconcile that deliberately lost receipt. Every phase still uses the
 unchanged four-second/original-caller bounds.
+
+## Local execution-boundary refactor (unexecuted)
+
+The 505 logs lacked open substage spans, so its exact before/after-persist cause
+is not inferred. A separate diagnostic/custody checkpoint records those spans
+without changing the phase algorithm. The following source refactor addresses
+visible repeated work, and still needs its own compile/runtime feedback.
+
+For a fresh open, all nonwaiting external-participant checks now happen at the
+final kernel boundary before the local native journal is acquired. The same
+checked DB/service borrow then performs the complete original local preparation
+check under ONE actual native read scope, including exact old/new decision,
+metadata anchors, writer-registration Arc, full catalogue digest (with only the
+protected activation epoch transition), current/archive native preparation, real
+freeze/read pin, schema/UID/history/generation and strict local R/H/B. This is
+the same checker used by phase collection, not a weaker kernel substitute.
+
+Every captured resolved catalogue decision is read directly from the actual
+immutable native history under that scope. This replaces per-index source
+export calls that each revalidated the entire source lineage; no decision is
+filtered and no higher obligation may disappear from the actual catalogue
+digest. The scope/journal stays held through controlled catalogue fsync and
+exact receipt readback. It is dropped before installing the open generation.
+There is no native page-WAL acquisition inside this already-held journal.
+
+Recovery first checks whether any actual activation exists. An absence result
+grants nothing; the new-publication branch still performs the complete final
+checks. A present activation is fully verified under fresh full-set authority
+and the same local scope, yielding the exact existing record without rewriting
+it. Existing unarmed guards are checked and retained; new guards perform their
+complete constructor check once. No private current-proof cache survives the
+synchronous local call or becomes a serving permission.
+
+Original APIs keep their original validation path and deadlines. This refactor
+does not enlarge a phase, skip a participant, remove the target leader or satisfy
+the release/new-ACK/Strong gates. If measurements show collection itself exceeds
+the original window, a separate real bounded collection protocol is required;
+repeating expired facts or silently increasing TTL is not a remedy.

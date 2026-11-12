@@ -21,8 +21,11 @@ Native installer also refuses a target whose Decimal or application uniqueness
 reader contract differs, before writes, preserving its sequence, namespace and
 format bytes. Three existing binding, gate and snapshot controls passed too.
 
-Full existing format/image-install modules are running separately. This focused
-receipt does not claim their completion or replace final Core regression. The
+The complete existing format and image-install modules also passed, with
+35 tests, zero failed/ignored. Across the focused and module runs,
+39 distinct tests passed (44 total invocations). Full current Core
+regression is queued after the preceding broader run and owned artifact
+cleanup; no passing broad result is claimed for this changed contract. The
 source is on the private partition branch; it is not part of standalone
 1.0.490-beta PR165 and has no independently reserved delivery version.
 

@@ -52,6 +52,32 @@
       "path": "semantic-reader-capture-focused-runner.py",
       "sha256": "679260d14e9f4351cf0ee9d15024270f66e9daf47959e0e7b6981b582bf6314b",
       "bytes": 5033
+    },
+    {
+      "path": "semantic-reader-existing-image-regressions-receipt.json",
+      "sha256": "5ced535f0d15fa55748a6a632a3d5b66cadbd091ef2f92b986772694534df012",
+      "bytes": 1738,
+      "original_remote_path": "/root/bicdb-durability-s3/report-semantic-reader-existing-image-regressions.json",
+      "raw_sha256": "5ced535f0d15fa55748a6a632a3d5b66cadbd091ef2f92b986772694534df012",
+      "raw_bytes": 1738
+    },
+    {
+      "path": "semantic-reader-existing-image-regressions-original.log.gz",
+      "sha256": "8930eecebdcc1e347103eec27d6525d62c156d92e4254bf35a68e4fc7d15ff4b",
+      "bytes": 33263,
+      "original_remote_path": "/root/bicdb-durability-s3/tc-step-semantic-reader-existing-image-regressions.log",
+      "raw_sha256": "0575b3fd5fc7732d72030275a4077c45bf9b2122d51615718675bf3251dee8e1",
+      "raw_bytes": 303984
+    },
+    {
+      "path": "semantic-reader-existing-image-regressions.json",
+      "sha256": "39b72f85d4d85e7a01594b04aa89357545fda0a14305047db0947ad46514fada",
+      "bytes": 2164
+    },
+    {
+      "path": "semantic-reader-existing-image-regressions-runner.py",
+      "sha256": "679260d14e9f4351cf0ee9d15024270f66e9daf47959e0e7b6981b582bf6314b",
+      "bytes": 5033
     }
   ]
 }

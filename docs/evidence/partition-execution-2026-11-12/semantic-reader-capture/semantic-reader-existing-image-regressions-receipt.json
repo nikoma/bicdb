@@ -1,0 +1,51 @@
+{
+  "source": "e8c426a73a14c1d97851082b90b815da60d4ef82",
+  "scope": "Retain actual active partition/Decimal/application-unique Native semantic requirements in protected image reader contracts. Reuse unchanged baseline regressions plus actual protected bindings stale-capture and ACK/namespace/reopen checks; actual Native target installer rejects mismatched semantic flags before writes. Capture/compatibility qualification only; no claim portable origin, legacy logical propagation, application acceptance, HA capacity or promotion. Original assertions/timeouts preserved. Broader goal active; P2 off/no new spend. Additional complete existing format and Native image install library modules on same production code. Does not replace required final Core broad qualification.",
+  "started_unix": 1794519545.2996125,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--no-fail-fast",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--lib",
+        "format::",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794519545.2997792,
+      "exit": 0,
+      "finished_unix": 1794519546.4236822
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--no-fail-fast",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--lib",
+        "distribution_range_image_install::",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794519546.4238532,
+      "exit": 0,
+      "finished_unix": 1794519679.2771924
+    }
+  ],
+  "status": "focused_passed",
+  "finished_unix": 1794519679.2774665
+}

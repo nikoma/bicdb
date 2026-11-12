@@ -1,0 +1,51 @@
+{
+  "source": "e170e4bbb0eb0ff909c6a3e72f387b048f4ca73a",
+  "scope": "Corrected fixture-only baseline on exact f7fb main488-integrated runtime before both PK matcher and AST partition creation fixes. Prior90cb baseline failed compiling movedStorageMode, not a product counterexample; original failure preserved. Exact seven regression assertions shared with current196f. Ordinary+child/modes/two reopens; Native actualexclusionnonunique control. Not application/broad/HA. V2 also failed test compilation: private method instead of public execute_statement_ast; fixed fixture only. No product pass/fail claim from either compile failure. This proof differs from f7fb only in two testfiles.",
+  "started_unix": 1794501762.7461681,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--no-fail-fast",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "primary_key_index_compatibility",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794501762.7464406,
+      "exit": 101,
+      "finished_unix": 1794501764.8105884
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--no-fail-fast",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "partition_statement_batches",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794501764.8113208,
+      "exit": 101,
+      "finished_unix": 1794501771.0865088
+    }
+  ],
+  "status": "failed",
+  "finished_unix": 1794501771.0869474
+}

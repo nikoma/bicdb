@@ -50,7 +50,8 @@ its current local status, and a legacy-repair prerequisite check: fsync, loaded
 secondary indexes, no pending transactions/row-lock owners, and healthy recovery.
 SQL separately publishes a versioned completion certificate. Actual old-binary
 refusal and unchanged bytes have been observed for the explicit upgrade API;
-default startup and ordinary SQL admission still require integration.
+default startup and ordinary SQL admission were still unimplemented at that
+stage. Their later implementation is recorded below.
 
 ## Implemented components and observed checks
 
@@ -132,14 +133,48 @@ Native checks at unchanged `fcf2617b` Core/Page/workspace source. The initial ne
 COPY test's postcondition SELECT had no policy under FORCE RLS; the fixture now
 adds a verification-only read policy after the COPY checks finish. Its INSERT
 policy, absent child grants, refusal assertion and ACK requirements remain.
-The failed fixture run is retained. Broad Core/SQL/pgwire validation is running
-at `c3588bf8`; it is not yet a passing result or application/HA qualification.
+The failed fixture run is retained. Broad validation at `c3588bf8` finished with
+failures: Core 1378 passed/1 failed/12 ignored, SQL 2531 passed/6 failed/4 ignored,
+wire 490 passed/1 failed/2 ignored. Three Core crash families used stale external
+example helpers. Rebuilding all three helpers from exact `c3588bf8` and rerunning
+those unchanged families gives 40 passed/0 failed/3 ignored. The original failing
+run is preserved and is not relabeled as passing.
+
+The private branch now includes merged main `1.0.488-beta`, `d1d816af`, through
+`f7fb9888`, retaining the SQL partition, Decimal and application unique-scope
+reader fences. New PK backing and batch tests have a fixture-only baseline at
+`a4ce8ac3` over unchanged `f7fb9888`: one pass/six product failures. A partial PK
+made read-only SQL omit two acknowledged rows. The complete constraint-index
+matcher now includes predicate, exclusion and NULL policy. Parsed `PARTITION OF`
+uses the existing physical creation path. All seven regressions pass at
+`57dcb89c`, including modes, repaired exact backing, batch rollback and reopens.
+Earlier harness compile/setup failures remain separate evidence.
+
+Actual PostgreSQL 16.13 rejects four old SQL fixture setup shapes: missing
+partition keys in PKs (0A000), or parent INSERTs without a leaf (23514). Corrected
+setup retains every original assertion; all four tests pass at `57dcb89c`.
+The wire fixture has the same invalid PK shape and was corrected at `cc84f24f`.
+This does not independently qualify its legacy metadata-only ALTER INDEX ATTACH
+behavior. Original upstream application tests and timeouts remain unchanged.
+
+Two original ALTER tests expose real intermediate parent/child publication
+failures. Fixture-only `8dcad32b` over unchanged `57dcb89c` has one pass/five
+failures in six new transition checks, plus both original ALTER failures.
+Source `cc84f24f` publishes all converted/default/generated rows, schemas and
+certificate in one Native decision and restores the complete tree together on
+undo. A proposed certificate validates the complete proposed forest. All six
+new transition checks and both original ALTERs pass at `cc84f24f`; the seven
+PK/batch tests pass there too. The remaining focused SQL/protocol batch is live.
+Serial/identity ADD and independent process/I/O/VM qualification remain open.
+Raw logs, exact sources, fixture corrections and reference controls are under
+`docs/evidence/partition-execution-2026-11-12/catalog-transitions`.
 
 Whole-child column/default/generated/independent-key lifecycle, non-PK UNIQUE
-identities, FKs, namespaces/rename, raw multi-statement DDL, remaining hash types,
+identities, FKs, namespaces/rename, other raw DDL batch forms, remaining hash types,
 ONLY/snapshots/concurrency, protected Native authority, process/fault/VM and HA
-propagation remain required. PK index definition shape checks also require an
-explicit predicate/exclusion/null-policy audit. No delivery version is reserved.
+propagation remain required. The fixes above still require qualification on the
+final delivery source. No delivery version is reserved, and no new standard
+CLI/server binary, release or deployment was produced.
 
 ## Implementation and qualification checklist
 

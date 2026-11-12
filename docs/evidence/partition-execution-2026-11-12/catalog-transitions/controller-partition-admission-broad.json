@@ -1,0 +1,74 @@
+{
+  "label": "partition-admission-broad",
+  "source": "c3588bf8b029ac8579f1336bf9d170d231648f29",
+  "base": "f43583da4c34209e810c5e6a8f5925831b2949a1",
+  "repo": "/root/bicdb-partition-runtime",
+  "continue_on_failure": true,
+  "scope": "First broad current private partition/admission correctness batch (allCore, allSQL, allPGwire unit+integration tests), exactsource and inherited487version only, unmerged. Original application1464/unchanged10swaits, UI400backup/restore, independentprocess/VM/crash/Nativeauthority/HA/storage qualifications separate and still required. All actual failures retained; --no-fail-fast collects targets. OneCargoJob, incrementaloff, monitored16GiB cgroup/14GiBhigh with10GiBhost/1GiBcgroupheadroom; preserveotherowners. No standardbinary/release/deployment built by this testbatch.",
+  "commands": [
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--no-fail-fast",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-core",
+      "--lib",
+      "--tests",
+      "--",
+      "--nocapture",
+      "--test-threads=1"
+    ],
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--no-fail-fast",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-sql",
+      "--lib",
+      "--tests",
+      "--",
+      "--nocapture",
+      "--test-threads=1"
+    ],
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--no-fail-fast",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-pgwire",
+      "--lib",
+      "--tests",
+      "--",
+      "--nocapture",
+      "--test-threads=1"
+    ]
+  ],
+  "wait_units": [
+    "bicdb-partition-copy-rls-verifier-focused"
+  ],
+  "allow_isolated_builds": [],
+  "required_receipts": [
+    {
+      "path": "report-partition-copy-rls-verifier-focused.json",
+      "equals": {
+        "source": "c3588bf8b029ac8579f1336bf9d170d231648f29",
+        "status": "focused_passed"
+      }
+    }
+  ],
+  "remote_repo_name": "repo-tc",
+  "remote_target_name": "target-tc",
+  "remote_lock_name": "source-build.lock"
+}

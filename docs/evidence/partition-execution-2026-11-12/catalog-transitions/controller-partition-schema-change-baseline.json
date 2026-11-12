@@ -1,0 +1,69 @@
+{
+  "label": "partition-schema-change-baseline",
+  "source": "8dcad32b2da608dd106002e13c584176b098d342",
+  "base": "57dcb89c2c1fdc6a423c58460d8e484e8a3c990e",
+  "repo": "/root/bicdb-partition-runtime",
+  "scope": "Unchanged pre-ALTER-fix runtime57d main488 with only six new partition schema/ACK regressions; exacttestfixture reused atcc84. Original two SQL ALTER regressions retained. One Native commit for allschema/rows, exactfailure/refusal preservation, default/generated/modes/reopens, savepoint/fullundo. Negative baseline only, no qualification claim from expectedfails.",
+  "continue_on_failure": true,
+  "commands": [
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--no-fail-fast",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-sql",
+      "--test",
+      "partition_schema_changes",
+      "--",
+      "--nocapture",
+      "--test-threads=1"
+    ],
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--no-fail-fast",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-sql",
+      "--test",
+      "sql",
+      "group5::alter_column_type_propagates_partition_rows_and_rejects_dependencies",
+      "--",
+      "--nocapture",
+      "--test-threads=1"
+    ],
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--no-fail-fast",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-sql",
+      "--test",
+      "sql",
+      "group6::alter_table_parent_column_is_visible_on_existing_partitions_and_indexes",
+      "--",
+      "--nocapture",
+      "--test-threads=1"
+    ]
+  ],
+  "wait_units": [
+    "bicdb-partition-pk-batch-and-fixtures-focused"
+  ],
+  "required_receipts": [],
+  "allow_isolated_builds": [],
+  "remote_repo_name": "repo-metadata-describe",
+  "remote_target_name": "target-metadata-describe",
+  "remote_lock_name": "metadata-describe-source-build.lock",
+  "source_ref": "refs/bicdb-proof/partition-schema-baseline"
+}

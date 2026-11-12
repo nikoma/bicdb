@@ -374,6 +374,29 @@ fn native_metadata_registry_addition_actual_cli_requires_healthy_existing_read_a
         }
         std::thread::sleep(Duration::from_millis(50));
     }
+    // Query these SAME five owned Child handles after the health probes,
+    // before any final verdict. No restart or inferred reachability from an
+    // EventClient error; a running PID is diagnostic, not data readiness.
+    let child_statuses = processes
+        .children
+        .iter_mut()
+        .enumerate()
+        .map(|(i, child)| {
+            let pid = child.id();
+            match child.try_wait() {
+                Ok(None) => serde_json::json!({"node":node(i),"pid":pid,"running":true}),
+                Ok(Some(status)) => serde_json::json!({"node":node(i),"pid":pid,"running":false,
+                "exit_status":status.to_string(),"exit_code":status.code()}),
+                Err(error) => serde_json::json!({"node":node(i),"pid":pid,"running":null,
+                "wait_error":error.to_string()}),
+            }
+        })
+        .collect::<Vec<_>>();
+    journal(
+        &mut ledger,
+        serde_json::json!({"stage":"same_five_owned_children_after_health_gate",
+        "children":child_statuses,"restarted":false,"running_is_not_readiness":true}),
+    );
     let after_bindings = bindings(&root, &mut sequences, &mut ledger, "after_health_gate");
     // On this baseline there is no authorized writer-transition producer.
     // Diagnose any rotation rather than treating new DTO identities as proof.

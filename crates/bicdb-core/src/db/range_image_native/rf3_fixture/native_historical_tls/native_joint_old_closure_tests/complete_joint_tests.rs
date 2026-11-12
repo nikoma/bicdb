@@ -343,6 +343,12 @@ fn native_joint_fresh_phase_refuses_expired_original_caller_with_later_long_budg
     run_complete_joint(2);
 }
 
+#[test]
+fn native_joint_fresh_open_phase_reconciles_exact_target_epoch_and_lost_catalogue_reply_while_frozen(
+) {
+    run_complete_joint(3);
+}
+
 fn run_complete_joint(mode: u8) {
     let parent = CancellationToken::uncancelable();
     let mut fixture = EnforcedNetwork::new_with_metadata_members(4);
@@ -544,8 +550,12 @@ fn run_complete_joint(mode: u8) {
         }
         return;
     }
-    if mode == 1 {
-        exercise_fresh_native_publication(&fixture, &prepared, &parent, old.id);
+    if mode == 1 || mode == 3 {
+        let published =
+            exercise_fresh_native_publication(&fixture, &prepared, &parent, old.id, mode == 1);
+        if mode == 3 {
+            exercise_fresh_open_while_frozen(&fixture, &prepared, published, &parent, old.id);
+        }
         return;
     }
 
@@ -769,7 +779,8 @@ fn exercise_fresh_native_publication(
     prepared: &Arc<NativeJointPreparedServingQuorum>,
     parent: &CancellationToken,
     range: crate::RangeId,
-) {
+    test_cancellation: bool,
+) -> Arc<crate::distribution_range_handoff::NativeJointPublishedServingQuorum> {
     let remaining = prepared.test_original_budget_remaining_ms().0.unwrap();
     std::thread::sleep(Duration::from_millis(
         u64::try_from(remaining).unwrap() + 10,
@@ -903,18 +914,130 @@ fn exercise_fresh_native_publication(
         );
     }
     assert!(prepared.require_current().is_err());
-    prepared.test_cancel_original_quorum();
-    assert!(matches!(
-        prepared.begin_fresh_preparation_phase(Duration::from_secs(4)),
-        Err(crate::BicDbError::QueryCanceled)
-    ));
-    assert!(prepared.resume_native_publication().is_err());
-    parent.cancel();
-    assert!(
-        prepared
-            .begin_fresh_preparation_phase(Duration::from_secs(4))
-            .is_err(),
-        "ORIGINAL caller cancellation must stop new phases too"
-    );
+    if test_cancellation {
+        prepared.test_cancel_original_quorum();
+        assert!(matches!(
+            prepared.begin_fresh_preparation_phase(Duration::from_secs(4)),
+            Err(crate::BicDbError::QueryCanceled)
+        ));
+        assert!(prepared.resume_native_publication().is_err());
+        parent.cancel();
+        assert!(
+            prepared
+                .begin_fresh_preparation_phase(Duration::from_secs(4))
+                .is_err(),
+            "ORIGINAL caller cancellation must stop new phases too"
+        );
+    }
     eprintln!("ACTUAL_JOINT_FRESH_PUBLICATION_ONLY all-final-members=3 old-quorum-expired=true original-caller-cancellation-preserved=true no-catalogue-open-release-grant=true");
+    published
+}
+
+/// Every fresh round checks the SAME original cut. This stage deliberately
+/// keeps all real owners Frozen; release needs its own current lifecycle proof.
+fn exercise_fresh_open_while_frozen(
+    fixture: &EnforcedNetwork,
+    prepared: &Arc<NativeJointPreparedServingQuorum>,
+    published: Arc<crate::distribution_range_handoff::NativeJointPublishedServingQuorum>,
+    parent: &CancellationToken,
+    range: crate::RangeId,
+) {
+    let mut activations = BTreeMap::new();
+    let mut lost_target = None;
+    for local in [node("n3"), node("n1"), node("n2")] {
+        let mut complete = false;
+        for attempt in 0..3 {
+            let result = (|| -> crate::Result<()> {
+                let mut round = published.begin_fresh_open_phase(Duration::from_secs(4))?;
+                for id in [node("n1"), node("n2"), node("n3")] {
+                    round.acquire_actual_member(&fixture.clients[&id], &node("n1"))?;
+                }
+                let round = Arc::new(round.finish()?);
+                let open = round.acquire_local_open(&fixture.clients[&local], &node("n1"))?;
+                assert!(round
+                    .acquire_local_open(&fixture.clients[&local], &node("n1"))
+                    .is_err());
+                let receipt = Arc::new(open.persist_local_catalogue_activation(parent)?);
+                assert!(open.persist_local_catalogue_activation(parent).is_err());
+                if local == node("n3") && attempt == 0 {
+                    let sha = receipt.activation_sha256()?;
+                    let before = fixture.native.services[&local]
+                        .lock()
+                        .range_write_progress(range);
+                    assert_eq!(
+                        before.current_epoch,
+                        published.data().activation_range().epoch
+                    );
+                    lost_target = Some((sha, receipt));
+                    // The old response expires. A new controller/phase must
+                    // read the SAME protected activation, without rewriting it.
+                    drop(open);
+                    drop(round);
+                    std::thread::sleep(Duration::from_secs(4) + Duration::from_millis(10));
+                    assert!(lost_target.as_ref().unwrap().1.require_live().is_err());
+                    eprintln!("ACTUAL_JOINT_OPEN test-lost-reply-after-real-catalogue-fsync target={local}");
+                    return Err(crate::BicDbError::QueryTimedOut);
+                }
+                if local == node("n3") {
+                    assert_eq!(
+                        receipt.activation_sha256()?,
+                        lost_target
+                            .as_ref()
+                            .expect("actual target lost reply reached producer")
+                            .0
+                    );
+                    assert!(
+                        lost_target.as_ref().unwrap().1.require_live().is_err(),
+                        "new phase must not revive original activation receipt"
+                    );
+                }
+                activations.insert(local.clone(), receipt);
+                Ok(())
+            })();
+            match result {
+                Ok(()) => {
+                    complete = true;
+                    break;
+                }
+                Err(crate::BicDbError::QueryTimedOut) if attempt < 2 => eprintln!(
+                    "ACTUAL_JOINT_OPEN fresh-current-retry node={local} attempt={attempt}"
+                ),
+                Err(e) => panic!("genuine fresh open phase failed for {local}: {e}"),
+            }
+        }
+        assert!(complete);
+    }
+    assert_eq!(
+        activations.keys().cloned().collect::<Vec<_>>(),
+        vec![node("n1"), node("n2"), node("n3")]
+    );
+    assert!(prepared.require_current().is_err());
+    for local in [node("n1"), node("n2"), node("n3")] {
+        let db = fixture.native.databases[&local].read();
+        assert!(db.range_mutation_gate().try_enter(range).is_err());
+        assert_eq!(
+            db.current_native_range_source_lineage(range)
+                .unwrap()
+                .range_index(),
+            published.data().range_index()
+        );
+    }
+    // A real new serving-generation invalidation cannot be hidden by another
+    // fresh metadata request, even though all recorded hashes are unchanged.
+    fixture.native.databases[&node("n3")]
+        .read()
+        .range_mutation_gate()
+        .invalidate_serving_generation(range);
+    let mut stale = published
+        .begin_fresh_open_phase(Duration::from_secs(4))
+        .unwrap();
+    assert!(stale
+        .acquire_actual_member(&fixture.clients[&node("n3")], &node("n1"))
+        .is_err());
+    assert!(stale.finish().is_err());
+    parent.cancel();
+    assert!(published
+        .begin_fresh_open_phase(Duration::from_secs(4))
+        .is_err());
+    eprintln!("ACTUAL_JOINT_FRESH_OPEN_ONLY exact-target-epoch-transition=true all-catalogue-activations=3 lost-reply-original-expired=true native-open-generation-ABA-refused=true still-frozen=true no-release-or-newACK-claim=true");
 }

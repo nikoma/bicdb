@@ -1,6 +1,8 @@
 //! Actual native bridge publication on the NEW majority precedes raw/open
 //! activation. These opaque facts cannot be decoded from quorum audit data.
 use super::*;
+mod open_phase;
+pub(crate) use open_phase::{NativeJointOpenPhaseQuorum, NativeJointOpenPhaseRound};
 
 pub(crate) struct NativeJointServingPublicationRound {
     fresh_required: bool,
@@ -273,6 +275,8 @@ impl NativeJointPublishedServingQuorum {
         };
         let cancellation = cancellation.child_with_deadline(fresh.deadline());
         let result = NativeJointOpenAdmission {
+            open_phase: None,
+            attempted: std::sync::atomic::AtomicBool::new(false),
             quorum: self.clone(),
             local,
             receipt,
@@ -287,6 +291,8 @@ impl NativeJointPublishedServingQuorum {
 /// Actual fresh post-publication authority plus independently published NEW
 /// native quorum. No metadata/counter payload can construct this admission.
 pub(crate) struct NativeJointOpenAdmission {
+    open_phase: Option<Arc<NativeJointOpenPhaseQuorum>>,
+    attempted: std::sync::atomic::AtomicBool,
     quorum: Arc<NativeJointPublishedServingQuorum>,
     pub(super) local: Arc<NativeJointPreparedServingObservation>,
     receipt: Arc<crate::db::NativeJointServingBridgeReceipt>,
@@ -317,7 +323,19 @@ impl NativeJointOpenAdmission {
         parent: &crate::CancellationToken,
     ) -> Result<crate::distribution_range_consensus::NativeJointCatalogueActivationReceipt> {
         parent.check()?;
-        self.require_external_publications_current()?;
+        self.require_live()?;
+        if self.open_phase.is_some()
+            && self
+                .attempted
+                .swap(true, std::sync::atomic::Ordering::AcqRel)
+        {
+            return Err(invalid(
+                "fresh open admission already attempted activation/recovery",
+            ));
+        }
+        if self.open_phase.is_none() {
+            self.require_external_publications_current()?;
+        }
         let mut service = self
             .local
             .service
@@ -339,6 +357,10 @@ impl NativeJointOpenAdmission {
     }
     pub(crate) fn require_live(&self) -> Result<()> {
         self.cancellation.check()?;
+        self.fresh.require_metadata_current()?;
+        if let Some(phase) = &self.open_phase {
+            phase.require_post_quorum(&self.fresh)?;
+        }
         if self.fresh.data() != self.data()
             || self.fresh.native_receipt().local_node_id() != self.receipt.local_node_id()
         {
@@ -365,8 +387,22 @@ impl NativeJointOpenAdmission {
                     .service
                     .try_lock()
                     .ok_or_else(|| invalid("joint open native peer service busy"))?;
-                service.require_actual_native_joint_bridge(receipt)?;
+                if let Some(phase) = &self.open_phase {
+                    phase.require_member_with_service(node, &service)?;
+                } else {
+                    service.require_actual_native_joint_bridge(receipt)?;
+                }
             }
+        }
+        Ok(())
+    }
+    pub(crate) fn require_local_open_preparation(
+        &self,
+        service: &ClusterDataNodeService,
+    ) -> Result<()> {
+        self.require_live()?;
+        if let Some(phase) = &self.open_phase {
+            phase.require_member_with_service(self.receipt.local_node_id(), service)?;
         }
         Ok(())
     }

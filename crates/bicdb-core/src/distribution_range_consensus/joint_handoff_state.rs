@@ -8,7 +8,9 @@ mod bridge;
 pub(crate) use bridge::NativeJointBridgeCatalogue;
 mod activation;
 use activation::NativeJointCatalogueActivation;
-pub(crate) use activation::NativeJointCatalogueActivationReceipt;
+pub(crate) use activation::{
+    NativeJointCatalogueActivationFact, NativeJointCatalogueActivationReceipt,
+};
 
 pub(super) const NATIVE_JOINT_HANDOFF_CATALOG_FORMAT: u32 = 14;
 #[derive(Debug)]

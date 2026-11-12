@@ -20,11 +20,11 @@ pub(crate) use joint::{
     NativeJointHandoffRuntime, NativeJointMaterializedFacts, NativeJointMaterializedQuorums,
     NativeJointNewObservation, NativeJointNewRound, NativeJointOldClosedQuorum,
     NativeJointOldObservation, NativeJointOldRound, NativeJointOpenAdmission,
-    NativeJointPreparationPhaseQuorum, NativeJointPreparationPhaseRound,
-    NativeJointPreparedDecision, NativeJointPreparedServingObservation,
-    NativeJointPreparedServingQuorum, NativeJointPreparedServingRound,
-    NativeJointPreparedServingVoteData, NativeJointPublishedServingQuorum,
-    NativeJointServingPublicationRound,
+    NativeJointOpenPhaseQuorum, NativeJointOpenPhaseRound, NativeJointPreparationPhaseQuorum,
+    NativeJointPreparationPhaseRound, NativeJointPreparedDecision,
+    NativeJointPreparedServingObservation, NativeJointPreparedServingQuorum,
+    NativeJointPreparedServingRound, NativeJointPreparedServingVoteData,
+    NativeJointPublishedServingQuorum, NativeJointServingPublicationRound,
 };
 
 pub(crate) const HANDOFF_RANGE_LOG_FORMAT: u32 = 4;

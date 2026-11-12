@@ -15,8 +15,8 @@ mod joint_handoff;
 pub(crate) use activation_decision::NativeActivationDecisionReceipt;
 pub(in crate::db::range_image_native) use joint_handoff::NativeJointServingDomain;
 pub(crate) use joint_handoff::{
-    NativeJointDecisionReceipt, NativeJointOldCloseReceipt, NativeJointOldPhysicalProof,
-    NativeJointServingBridgeReceipt, NativeJointServingPreparation,
+    NativeJointBridgeReadScope, NativeJointDecisionReceipt, NativeJointOldCloseReceipt,
+    NativeJointOldPhysicalProof, NativeJointServingBridgeReceipt, NativeJointServingPreparation,
 };
 
 #[cfg(test)]

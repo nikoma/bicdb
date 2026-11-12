@@ -11,7 +11,8 @@ mod phase;
 mod publication;
 pub(crate) use phase::{NativeJointPreparationPhaseQuorum, NativeJointPreparationPhaseRound};
 pub(crate) use publication::{
-    NativeJointOpenAdmission, NativeJointPublishedServingQuorum, NativeJointServingPublicationRound,
+    NativeJointOpenAdmission, NativeJointOpenPhaseQuorum, NativeJointOpenPhaseRound,
+    NativeJointPublishedServingQuorum, NativeJointServingPublicationRound,
 };
 
 pub(crate) struct NativeJointPreparedServingObservation {

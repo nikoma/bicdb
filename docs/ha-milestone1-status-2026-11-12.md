@@ -37,6 +37,28 @@ The later status-document update changes no runtime code.
 | Operator-driven expansion, cold recovery and physical capacity | Open. Registered fifth-node replica receiver, authenticated native image/joint wire consumers and native placement-controller integration remain unfinished. Initial-only data-open does not supply general post-joint/cold recovery. No automatic four-to-five relocation/controller-restart result, new VM trial, physical RPO/RTO or stable-five throughput result exists. |
 
 
+## Additional candidate checkpoint: November 12, 17:14 UTC
+
+The earlier rows retain their exact source histories. The larger working
+candidate is still unmerged; its code anchor is
+`2a7a587fcfd392e851dc42eccc8762837b0c7fb6`, source `1.0.489-beta`.
+It includes the separate read489 candidate; it is not GitHub main489, a
+release binary or a deployed cluster. Main remains verified488 at this checkpoint.
+
+| Finding | Classification and exact evidence |
+| --- | --- |
+| Full read/Abort/joint composition | Passed focused checks only. At `f8a68673b`, run43264294037, native-writer controls pass10/0/907filtered in1.73s; all-target and isolated-consumer compilation pass. This does not validate later recovery code. |
+| Registered fifth-node receiver | Passed limited controls on `3ee40c19b`: Core3/0/913filtered in2.28s. The real CLI receiver case obtained an ACK/full Strong result before joining the fifth metadata voter and opening its replica-only receiver. APP/Get/Scan refused correctly. The same gateway then timed out: healthy post-join continuity, native image/joint transfer and automatic movement remain unproved. |
+| Expanded CLI cohort | **Failed4passed/1failed**, source3ee, run43262683104. The existing initial-DATA case obtained one object ACK/full Strong value, then its JSON-null append returned generic no-member-reachable. All four processes were alive, and retained metadata shows no leader change. Null durable outcome and post-failure ACK reconciliation are unknown because full DB/page/WAL/range-catalogue custody was not retained. [Original full logs, diagnostics, hashes, source excerpts, verifier and precise next-test limits](evidence/native-registered-receiver-cli-2026-11-12/README.md). No rerun or durable-loss conclusion follows. |
+| Ready-preparation timeout | **Failed positive acceptance** at `6ce80ad32`, run43263149425. Actual preparation fsync returned with662ms of the original budget left; full post-persistence validation left80ms, then repeated response validation expired. Service-lock waits were microseconds. This directly proves preparation persistence before the deadline in this cohort, not completion/activation/next ACK. |
+| Scoped produced-Ready correction | Source-reviewed; full positive result pending. Code2a7 consumes actual physical evidence, retains full validation before and after fsync, and immediately projects within the same exclusive Store/DB/freeze/pin ownership. Original deadline, caller, writer and session checks remain. RF1 controls pass2/0 in0.15s at run43265974939; CurrentJoint authority controls pass4/0 in47.80s at run43265975524. Full recovery acceptance43265975417 is still running. Predicted latency savings are not measured success. |
+
+The capability catalog now explicitly scopes automatic replica rebalancing to
+the legacy range/event controller. It does not assert that the unfinished native
+DATA image/joint/controller path is implemented. Manifest tested, qualified and
+deployed statuses remain not-established. No physical qualification, capacity
+increase, general distributed SQL or critical-workload admission is established.
+
 ## Deployment modes
 
 | Mode | Implemented and tested scope | Remaining qualification / deployment evidence |

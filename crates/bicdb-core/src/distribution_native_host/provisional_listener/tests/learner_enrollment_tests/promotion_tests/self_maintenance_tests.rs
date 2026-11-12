@@ -60,6 +60,27 @@ fn native_metadata_promoted_leader_maintenance_never_appends_to_itself() {
     host.enable_metadata_control(&own, business, member_config, &token)
         .unwrap();
     host.elect_metadata_control(&token).unwrap();
+    // The fixture's original learner transport predates birth binding. Learn
+    // CURRENT routing/birth DATA through the actual elected control listener;
+    // only the separately fresh OwnMQ below supplies authority. Never patch
+    // a native destination tuple or bypass its actual birth/incarnation guard.
+    let route = owned.lock().committed_topology().clone();
+    let bootstrap = crate::TcpClusterBootstrapClient::new(
+        route.cluster_id.clone(),
+        node(4),
+        f.networks[4].clone(),
+    )
+    .unwrap();
+    let current = bootstrap
+        .fetch_snapshot(&node(4), &route.nodes[&node(4)].address)
+        .unwrap();
+    assert_eq!(current.metadata_leader_id, Some(node(4)));
+    assert!(current.topology.nodes[&node(4)]
+        .native_store_birth_v1
+        .is_some());
+    f.learner_transport
+        .install_topology(current.topology)
+        .unwrap();
     let before = owned.lock().status();
     assert_eq!(before.role, crate::MetadataConsensusRole::Leader);
     assert_eq!(before.leader_id, Some(node(4)));

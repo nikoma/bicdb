@@ -52,11 +52,14 @@ impl ClusterRpcEvidenceObserver for Journal {
     }
 }
 struct Fixture {
-    root: tempfile::TempDir,
     config: crate::DistributionConfig,
     topology: Arc<RwLock<ClusterTopology>>,
-    db: Arc<RwLock<crate::BicDb>>,
     server: ClusterDataServerHandle,
+    db: Arc<RwLock<crate::BicDb>>,
+    // Root must outlive the ACTUAL listener/handlers and the last DB owner.
+    // Deleting a live directory can free its inode while DirectoryLock's
+    // same-process registry still correctly remembers that owner's identity.
+    root: tempfile::TempDir,
 }
 impl Fixture {
     fn new() -> Self {
@@ -126,7 +129,13 @@ impl Fixture {
                 root.path().join("data"),
                 crate::DbConfig::default().with_fsync(false),
             )
-            .unwrap(),
+            .unwrap_or_else(|error| {
+                panic!(
+                    "actual evidence fixture FIRST DB open failed: {error}; read-only lock probe={:?}; directory metadata={:?}",
+                    bicdb_page::probe_directory_lock(&root.path().join("data")),
+                    std::fs::metadata(root.path().join("data")),
+                )
+            }),
         ));
         let service = Arc::new(Mutex::new(
             ClusterDataNodeService::open(
@@ -176,7 +185,34 @@ impl Fixture {
 }
 impl Drop for Fixture {
     fn drop(&mut self) {
-        self.server.request_shutdown();
+        // Stop/join the actual acceptor and drain counted handlers before
+        // deleting any fixture paths. This is per-fixture ownership cleanup,
+        // not test serialization, an RPC retry, or a change to its deadline.
+        let until = CancellationToken::uncancelable()
+            .child_with_deadline(Instant::now() + Duration::from_secs(2));
+        let drained = self.server.stop_and_drain(&until).and_then(|_| {
+            // Active reaches zero just before a finishing handler's captures
+            // drop. Await actual service DB-owner release too, not a counter
+            // treated as authority to erase a still-open database directory.
+            while Arc::strong_count(&self.db) != 1 {
+                until.check()?;
+                thread::yield_now();
+            }
+            Ok(())
+        });
+        if let Err(error) = drained {
+            self.root.disable_cleanup(true);
+            eprintln!(
+                "ACTUAL_RPC_EVIDENCE_FIXTURE_NOT_DRAINED retained={} error={error}",
+                self.root.path().display()
+            );
+            if !thread::panicking() {
+                panic!("actual RPC evidence fixture did not drain: {error}");
+            }
+        }
+        // Rust drops fields in declaration order: after this Drop, db ends
+        // before root. On failure root is retained, never removed underneath
+        // a still-active actual owner.
     }
 }
 fn frame(record: &serde_json::Value) -> Vec<u8> {
@@ -317,14 +353,30 @@ fn actual_rpc_evidence_mtls_canceled_before_dispatch_records_original_cancellati
         Err(BicDbError::QueryCanceled)
     ));
     let records = fixture.records("cancel.jsonl");
-    assert_eq!(records.len(), 2);
+    assert_eq!(
+        records
+            .iter()
+            .map(|record| record["phase"].as_str().unwrap())
+            .collect::<Vec<_>>(),
+        vec![
+            "invoked",
+            "validated_transport_result_error",
+            "return_boundary_error_after_evidence"
+        ],
+        "both actual cancellation boundaries must remain in the complete journal",
+    );
+    assert!(records
+        .windows(2)
+        .all(|pair| pair[0]["attempt_id"] == pair[1]["attempt_id"]
+            && pair[0]["journal_sequence"].as_u64().unwrap() + 1
+                == pair[1]["journal_sequence"].as_u64().unwrap()));
     assert!(records
         .iter()
         .all(|r| r["raw_frame"].is_null() && r["may_have_dispatched"] == false));
-    assert!(records[1]["error_chain"][0]
+    assert!(records[1..].iter().all(|record| record["error_chain"][0]
         .as_str()
         .unwrap()
-        .contains("cancel"));
+        .contains("cancel")));
     assert_eq!(transport.next_request_id.load(Ordering::SeqCst), 1);
 }
 #[test]
@@ -372,6 +424,18 @@ fn actual_rpc_evidence_pre_dispatch_sync_failure_fences_without_application_muta
     ));
     assert_eq!(transport.next_request_id.load(Ordering::SeqCst), next);
     assert_eq!(fixture.records("before.jsonl").len(), 1);
+    let ended = Arc::downgrade(&fixture.db);
+    let path = fixture.root.path().to_owned();
+    drop(transport);
+    drop(fixture);
+    assert!(
+        ended.upgrade().is_none(),
+        "actual listener/service DB owner must end before fixture paths disappear"
+    );
+    assert!(
+        !path.exists(),
+        "successful ownership cleanup removes its own fixture only after actual close"
+    );
 }
 #[test]
 fn actual_rpc_evidence_post_response_sync_failure_returns_unknown_and_never_rearms() {

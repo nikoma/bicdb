@@ -348,6 +348,7 @@ impl BicDb {
                     readback_trace.complete();
                     drop(readback_trace);
                 }
+                quorum.require_recipient_role(fresh)?;
                 // CurrentJoint's full Prepared validator opens its own native
                 // read scope. Do not recursively try-lock this journal.
                 drop(journal);
@@ -481,6 +482,7 @@ impl BicDb {
             readback_trace.complete();
             drop(readback_trace);
         }
+        quorum.require_recipient_role(fresh)?;
         // Preserve actual WAL + current/archive readback under this guard,
         // then run the unchanged full physical/domain validator outside it.
         drop(journal);

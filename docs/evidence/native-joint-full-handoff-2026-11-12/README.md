@@ -6,8 +6,11 @@ Source `b1ba88c57d99d3601946bd02ef4aee1a4cf070b4` (inherited working version
 Core job 131204452860: one passed, zero failed, 888 filtered, 59.33 seconds.
 All-target and isolated-consumer compilation also passed.
 
-The genuine old/new membership fixture uses actual services, durable native
-stores and TLS metadata quorums on one CI host. It completes the image and
+The old/new membership fixture uses actual services, durable native stores
+and TLS metadata quorums on one CI host. Initial metadata leadership is a
+declared fixture precondition, so this test does not establish initial-election
+safety. The missing-catalog paired witness separately uses genuine initial
+TLS votes. It completes the image and
 all three native publications/openings, releases the three final replicas,
 recovers the target's leadership and commits the next application write.
 It checks exact original and new records, matching R2 history on all three,

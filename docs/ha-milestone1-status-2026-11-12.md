@@ -8,6 +8,22 @@ the same tree. A source version is not a published binary or verified deployment
 Evidence updates do not establish a new release binary or deployment. The
 larger read/recovery candidate remains unmerged; its source-scoped results follow.
 
+## Latest verified checkpoint
+
+Verified GitHub main remains **1.0.487-beta**, `6bed1b33508c52bc122e8173947f9ea7b1039c7a`.
+The HA metadata repair above entered main485; independent index work entered
+main487. Prospective main488 is another team's separately tested change, not
+an HA release or deployment. The larger native candidate remains unmerged.
+
+| Gate | Current classification and exact limit |
+| --- | --- |
+| Missing-catalog fail-closed read repair | Passed on read candidate `25710b785` (paired witness plus thirteen enrollment controls) and native regression `b08556c3f` (231 passed, zero failed, two ignored). Final versioned-main validation is still required. |
+| Complete same-open handoff and next ACK/Strong | Passed on exact `b1ba88c57`: terminal assertions establish three releases, target ACK2 and Strong R2. Later implementation changes are not covered by that result. Initial metadata election is a declared fixture precondition. |
+| Stale-seed discovery | Passed on exact `cf91eda30`: two actual-TLS/current-quorum tests. Enrollment remains metadata-only. |
+| Concurrent opening faults | `e8d263bac`, run 43227153532: two passed, one failed. Both post-fsync cancellation cuts were reached and checked; after actual foreign writer replacement the old phase refused, but fresh collection wrongly accepted the replacement against the original preparation. Binding that preparation to the original writer remains a required repair. No successful false activation or lost ACK was observed by this test. |
+| Full custody/handoff composition | `2c1b7d8be` failed test compilation in all three selected workflows because a genuine-election fixture constructor was omitted during import. Enrollment, paired ACK and full-handoff runtime checks did not execute. Test-only helper correction `969092ee6` is being batched with original-writer binding before rerunning. Read-only passing results do not qualify this full composition. |
+| Operator-driven data expansion, cold recovery and physical capacity | Open. The public native metadata lifecycle still refuses application data; component tests do not supply the missing data-open/remote relocation/controller-restart contract. No new VM trial, physical RPO/RTO or stable-five throughput result exists. |
+
 ## Deployment modes
 
 | Mode | Implemented and tested scope | Remaining qualification / deployment evidence |

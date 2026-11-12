@@ -155,6 +155,24 @@ pub(crate) struct NativeJointOpenAdmission {
     cancellation: crate::CancellationToken,
 }
 impl NativeJointOpenAdmission {
+    /// Retain only the actual image target lease for proof-authorized final
+    /// release after all preparation/publication owners have drained.
+    pub(crate) fn retain_image_release_owner(
+        &self,
+        activation: Arc<crate::distribution_range_consensus::NativeJointCatalogueActivationReceipt>,
+    ) -> Result<crate::distribution_data::NativeJointImageReleaseOwner> {
+        self.require_live()?;
+        if activation.native().data() != self.data()
+            || activation.native().checksum_sha256() != self.receipt.checksum_sha256()
+        {
+            return Err(invalid(
+                "joint image release changed the original local activation",
+            ));
+        }
+        self.local
+            .actual
+            .retain_image_release_owner(self.local.service.clone(), activation)
+    }
     pub(crate) fn persist_local_catalogue_activation(
         &self,
         parent: &crate::CancellationToken,

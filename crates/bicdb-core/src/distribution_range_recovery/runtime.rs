@@ -117,6 +117,73 @@ impl std::fmt::Debug for RecoveryImageInstallFreeze {
     }
 }
 impl RecoveryImageInstallFreeze {
+    /// Consume the exact leased image owner only after genuine joint native
+    /// and catalogue activation. The old recovery refusal stays durable; its
+    /// obsolete in-memory session is retired without minting normal Ready.
+    pub(crate) fn release_after_joint_activation(
+        &mut self,
+        image: &crate::distribution_range_image_install::NativeImageCatalogueFinalization,
+        activation: &crate::distribution_range_consensus::NativeJointCatalogueActivationReceipt,
+        parent: &CancellationToken,
+    ) -> Result<()> {
+        parent.check()?;
+        activation.require_live()?;
+        let frozen = self
+            .frozen
+            .as_ref()
+            .ok_or_else(|| invalid("joint image lease already consumed"))?;
+        let service = self
+            .runtime
+            .service
+            .try_lock()
+            .ok_or_else(|| invalid("joint recovery image release service busy"))?;
+        service.require_native_joint_image_release(image, frozen, activation)?;
+        let preflight = self
+            .preflight
+            .as_ref()
+            .ok_or_else(|| invalid("joint image lost original transfer preflight"))?;
+        let base = image.base();
+        if self.returned
+            || base.capture_range().id != self.scope.range_id
+            || base.attempt_id() != preflight.attempt_id()
+            || base.session_id() != self.scope.freeze_owner()?
+            || base.nonce() != self.scope.recovery_nonce
+            || base.attempt_id() != frozen.owner()
+        {
+            return Err(invalid(
+                "joint image release changed the exact retained recovery transfer",
+            ));
+        }
+        let mut sessions = self
+            .runtime
+            .sessions
+            .try_lock()
+            .ok_or_else(|| invalid("joint recovery image sessions busy"))?;
+        let session = sessions
+            .current
+            .get(&self.scope.range_id)
+            .ok_or_else(|| invalid("joint image lost retained recovery session"))?;
+        if !session.scope.same_session(&self.scope)
+            || session.frozen.is_some()
+            || session.native_prepared.is_some()
+            || sessions.active.contains(&self.scope.range_id)
+        {
+            return Err(invalid(
+                "joint image recovery session still has another operation/owner",
+            ));
+        }
+        parent.check()?;
+        activation.require_live()?;
+        // Every fallible check precedes owner consumption. Drop sees None and
+        // cannot reinstall an obsolete A-owned freeze into recovery N.
+        sessions.current.remove(&self.scope.range_id);
+        self.returned = true;
+        let released = self.frozen.take();
+        drop(sessions);
+        drop(service);
+        drop(released);
+        Ok(())
+    }
     pub(crate) fn as_frozen(&self) -> &FrozenRangeMutationPermit {
         self.frozen
             .as_ref()

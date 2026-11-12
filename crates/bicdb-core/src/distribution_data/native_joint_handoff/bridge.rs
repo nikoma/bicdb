@@ -7,6 +7,9 @@ use crate::distribution_range_image_install::{
     NativeImageCatalogueFinalization, NativeImageInstallFreeze,
 };
 
+mod image_release;
+pub(crate) use image_release::NativeJointImageReleaseOwner;
+
 /// Keep the actual owner alive, including an installer's nonextractable
 /// recovery lease. No raw Frozen is created from a metadata plan or number.
 #[derive(Clone)]

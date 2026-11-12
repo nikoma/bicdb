@@ -16,6 +16,57 @@ impl LocalNativeReadyEvidence {
     }
 }
 impl RangeWriteStore {
+    /// Produce and project in one exclusive store/same-DB borrow. The producer
+    /// owns the actual Frozen/read pin and performs its full physical checks
+    /// before and after durable preparation. No caller-supplied Prepared proof
+    /// or reusable "already checked" token can enter this path.
+    pub(crate) fn prepare_and_observe_native_recovery_ready(
+        &mut self,
+        db: &crate::BicDb,
+        physical: crate::db::LocalNativeRecoveryReady,
+        request: &NativeReadyRequest,
+        parent: &CancellationToken,
+    ) -> Result<(PreparedNativeRecoveryReady, LocalNativeReadyEvidence)> {
+        parent.check()?;
+        request.scope.require_role(physical.role())?;
+        let prepared = self.prepare_native_recovery_ready(db, physical)?;
+        // This is immediately after the producer's full post-fsync validation,
+        // within the SAME exclusive catalogue borrow and owned physical pin.
+        parent.check()?;
+        let role = prepared.role();
+        role.require_live_request()?;
+        #[cfg(test)]
+        let mut projection_trace = crate::distribution_range_handoff::NativeJointPhaseTrace::new(
+            "recovery-prepare-produced-response-projection",
+            role.local_node_id(),
+            parent,
+        );
+        let evidence = self.project_prepared_native(
+            &prepared,
+            request,
+            role.context_id(),
+            role.metadata_term(),
+            role.metadata_read_index(),
+        )?;
+        // Necessary refusal at the return boundary; this is not a renewed
+        // physical/current-role grant or a cache surviving the local call.
+        if matches!(
+            role.purpose(),
+            crate::distribution_consensus::MetadataRecoveryRolePurpose::CurrentJointRecovery { .. }
+        ) && self
+            .selected_current_joint_scope(request.scope.range_id)?
+            .is_none_or(|saved| !saved.same_session(&request.scope))
+        {
+            return Err(range_write_error(
+                "produced ready response changed its original current-joint writer/session",
+            ));
+        }
+        role.require_live_request()?;
+        parent.check()?;
+        #[cfg(test)]
+        projection_trace.complete();
+        Ok((prepared, evidence))
+    }
     /// Only preflight for retaining a restrictive freeze. This deliberately
     /// accepts an uncertain exact Prepared refusal so its actual fsync can be
     /// retried; it grants no observation, floor or mutation authority.

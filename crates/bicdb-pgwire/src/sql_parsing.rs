@@ -3616,6 +3616,9 @@ pub(crate) fn decode_binary_parameter_with_db(
 }
 
 pub(crate) fn decode_binary_parameter(bytes: &[u8], oid: i32) -> Result<String> {
+    if oid == 1033 {
+        return Err(aclitem_binary_error("input"));
+    }
     if matches!(oid, 22 | 30) {
         return decode_binary_catalog_vector_parameter(bytes, oid, None);
     }

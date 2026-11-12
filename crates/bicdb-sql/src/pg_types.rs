@@ -177,7 +177,8 @@ impl PgTypeSpec {
             PgInternalCodecDirection::Receive | PgInternalCodecDirection::Send
         ) && matches!(
             self.name,
-            "table_am_handler"
+            "aclitem"
+                | "table_am_handler"
                 | "index_am_handler"
                 | "any"
                 | "trigger"
@@ -663,6 +664,20 @@ pub static PG_TYPE_SPECS: &[PgTypeSpec] = &[
         false,
         'A',
         'i',
+        'p',
+        false,
+        false
+    ),
+    pg_type!(
+        "aclitem",
+        "aclitem",
+        [],
+        1033,
+        Some(1034),
+        16,
+        false,
+        'U',
+        'd',
         'p',
         false,
         false
@@ -1984,6 +1999,7 @@ pub fn pg_type_name_by_oid(oid: i32) -> Option<&'static str> {
         "cid" => "cid[]",
         "xid8" => "xid8[]",
         "oidvector" => "oidvector[]",
+        "aclitem" => "aclitem[]",
         "regproc" => "regproc[]",
         "json" => "json[]",
         "xml" => "xml[]",
@@ -2210,6 +2226,37 @@ mod tests {
             "../../../fixtures/postgresql-18/type-inventory.json"
         ))
         .expect("checked-in PostgreSQL 18 type inventory must be valid JSON")
+    }
+
+    #[test]
+    fn aclitem_catalog_identity_matches_pg18_without_inventing_binary_io() {
+        let spec = pg_type_spec("pg_catalog.aclitem").unwrap();
+        assert_eq!(
+            (spec.oid, spec.array_oid, spec.len, spec.align),
+            (1033, Some(1034), 16, 'd')
+        );
+        assert!(!spec.by_value && !spec.collatable && !spec.pseudo);
+        assert_eq!(pg_type_oid_by_name("aclitem[]"), Some(1034));
+        assert_eq!(pg_type_oid_by_name("_aclitem"), Some(1034));
+        assert_eq!(pg_type_name_by_oid(1034), Some("aclitem[]"));
+        assert_eq!(pg_array_element_oid(1034), Some(1033));
+        assert_eq!(
+            spec.catalog_codec_symbol(PgInternalCodecDirection::Input),
+            Some("aclitemin".into())
+        );
+        assert_eq!(
+            spec.catalog_codec_symbol(PgInternalCodecDirection::Output),
+            Some("aclitemout".into())
+        );
+        assert_eq!(
+            spec.catalog_codec_symbol(PgInternalCodecDirection::Receive),
+            None
+        );
+        assert_eq!(
+            spec.catalog_codec_symbol(PgInternalCodecDirection::Send),
+            None
+        );
+        assert_eq!(spec.binary_codec(), None);
     }
 
     #[test]

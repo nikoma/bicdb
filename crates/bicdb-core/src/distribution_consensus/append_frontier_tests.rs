@@ -75,7 +75,16 @@ fn report(root: &Path, name: &str, value: &impl Serialize) {
 fn metadata_append_actual_bounded_prefix_ack_cannot_commit_divergent_tail() {
     // Keep all original metadata files and reports on failure AND success.
     // No keys, log entries, terms, counters or response indices are fabricated.
-    let root = tempfile::tempdir().unwrap().keep();
+    let root = if let Some(evidence_root) = std::env::var_os("BICDB_TEST_EVIDENCE_ROOT") {
+        fs::create_dir_all(&evidence_root).unwrap();
+        tempfile::Builder::new()
+            .prefix("metadata-append-frontier-")
+            .tempdir_in(evidence_root)
+            .unwrap()
+    } else {
+        tempfile::tempdir().unwrap()
+    }
+    .keep();
     eprintln!("RETAINED_METADATA_APPEND_FRONTIER {}", root.display());
     let topology = initial_topology(&root.join("topology-seed"));
     let mut a = open(&root.join("a"), "n1", &topology);
@@ -220,6 +229,15 @@ fn metadata_append_actual_bounded_prefix_ack_cannot_commit_divergent_tail() {
             "C_proposal_only_existed_on_C":true, "C_proposal_discarded_after_actual_majority_recovery":true,
             "scope":"metadata acknowledgement only; no business-row/TLS/VM/Azure claim",
         }),
+    );
+    eprintln!(
+        "METADATA_APPEND_FRONTIER_SUMMARY {}",
+        serde_json::json!({
+            "matched_frontier":covered, "returned_ack":response.match_index,
+            "premature_topology_commit":advanced, "strict_reopened_stores":3,
+            "final_generation":topology.generation, "evidence_root":root,
+            "scope":"metadata only; no business-row/TLS/VM/Azure claim",
+        })
     );
     assert_eq!(
         response.match_index,

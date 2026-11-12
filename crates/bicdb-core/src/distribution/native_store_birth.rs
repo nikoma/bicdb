@@ -11,9 +11,14 @@ pub struct NativeStoreBirthV1 {
     birth_id: Uuid,
     birth_sha256: String,
     node_incarnation: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    writer_enforcement_version: Option<u32>,
 }
 
 impl NativeStoreBirthV1 {
+    pub fn writer_enforcement_version(&self) -> u32 {
+        self.writer_enforcement_version.unwrap_or(0)
+    }
     pub fn version(&self) -> u32 {
         self.version
     }
@@ -37,6 +42,15 @@ impl NativeStoreBirthV1 {
             birth_id: native.birth_id(),
             birth_sha256: native.birth_sha256().to_owned(),
             node_incarnation: native.local_member_incarnation(),
+            writer_enforcement_version: match native.writer_enforcement_version() {
+                0 => None,
+                1 => Some(1),
+                _ => {
+                    return Err(cluster_error(
+                        "unsupported native writer enforcement version",
+                    ))
+                }
+            },
         };
         value.validate_for(Some(value.bootstrap_id), value.node_incarnation)?;
         Ok(value)
@@ -44,6 +58,9 @@ impl NativeStoreBirthV1 {
 
     pub(crate) fn validate_for(&self, bootstrap: Option<Uuid>, incarnation: u64) -> Result<()> {
         if self.version != 1
+            || self
+                .writer_enforcement_version
+                .is_some_and(|version| version != 1)
             || self.bootstrap_id.is_nil()
             || self.birth_id.is_nil()
             || self.node_incarnation == 0

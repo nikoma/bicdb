@@ -9,6 +9,7 @@ pub(super) struct ServiceStoragePolicy {
     database_incarnation: String,
     directory: Option<std::sync::Weak<bicdb_page::DirectoryLock>>,
     native_format_at_open: bool,
+    writer_enforcement_version: u32,
 }
 impl ServiceStoragePolicy {
     pub(super) fn capture(database: &BicDb) -> Result<Self> {
@@ -16,9 +17,19 @@ impl ServiceStoragePolicy {
             database_root: database.data_path().canonicalize()?,
             database_incarnation: database.incarnation_id().into(),
             directory: database.native_service_directory_lifetime(),
+            writer_enforcement_version: database.actual_native_writer_enforcement_version()?,
             native_format_at_open: database.native_range_image_birth_present()
                 || crate::format::range_image_install_active(database.data_path())?,
         })
+    }
+    pub(super) fn native_writer_enforcement_version(&self) -> Result<u32> {
+        let flag = crate::format::native_writer_enrollment_active(&self.database_root)?;
+        if flag != (self.writer_enforcement_version == 1)
+            || (flag && self.directory.as_ref().and_then(|d| d.upgrade()).is_none())
+        {
+            return Err(data_error("native writer service birth/flag/open changed"));
+        }
+        Ok(self.writer_enforcement_version)
     }
     fn requires_native_catalog(&self, catalog_root: &Path) -> Result<bool> {
         Ok(self.native_format_at_open

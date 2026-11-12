@@ -69,6 +69,7 @@ pub(crate) use range_image_proposal::{
 };
 mod native_activation;
 pub(crate) use native_activation::NativeActivatedOpenGuard;
+mod commit_admission_hook;
 mod native_recovery_ready;
 mod range_image_native;
 pub(crate) use native_recovery_ready::{LocalNativeRecoveryReady, NativeLocalVisibilitySequence};
@@ -79,13 +80,13 @@ pub(crate) use range_image_native::rf3_fixture::{
 pub(crate) use range_image_native::NativeActivationDecisionReceipt;
 pub(crate) use range_image_native::NativeReplicaMaterialization;
 pub(crate) use range_image_native::{
-    FreshRangeGenesisAuthority, KnownNativeRecoveryPrefix, NativeHistoryPublicationBinding,
-    NativeHistoryStage, NativeHistoryStageProgress, NativeHistoryTargetContext,
-    NativeLogicalHistoryEntryV1, NativeLogicalHistoryOutcomeV1, NativeLogicalHistoryPoint,
-    NativeLogicalHistoryStepV1, NativeRangeInstallSafety, NativeRangePendingApply,
-    NativeRangePrefixObservation, NativeRecoveredServingReceipt, NativeRecoveryAdmission,
-    NativeRecoveryAppliedReceipt, RangeImageBirthMember, RangeImageBirthSpec,
-    SourceRangeImageLineage, StagedNativeHistoryProof,
+    FreshRangeGenesisAuthority, InstalledNativeWriterHostGuard, KnownNativeRecoveryPrefix,
+    NativeHistoryPublicationBinding, NativeHistoryStage, NativeHistoryStageProgress,
+    NativeHistoryTargetContext, NativeLogicalHistoryEntryV1, NativeLogicalHistoryOutcomeV1,
+    NativeLogicalHistoryPoint, NativeLogicalHistoryStepV1, NativeRangeInstallSafety,
+    NativeRangePendingApply, NativeRangePrefixObservation, NativeRecoveredServingReceipt,
+    NativeRecoveryAdmission, NativeRecoveryAppliedReceipt, NativeWriterHostState,
+    RangeImageBirthMember, RangeImageBirthSpec, SourceRangeImageLineage, StagedNativeHistoryProof,
 };
 pub(crate) use range_image_native::{NativeRangeReadPhysical, NativeReadLocalDbSequence};
 mod range_image_bindings;
@@ -3952,7 +3953,7 @@ pub struct BicDb {
     /// Host-installed distributed durability boundary. The database owns the
     /// call site so direct API, SQL, pgwire and extension writes cannot bypass
     /// range quorum once the database is opened in distributed mode.
-    commit_admission: RwLock<Option<Arc<dyn CommitAdmission>>>,
+    commit_admission: RwLock<commit_admission_hook::CommitAdmissionSlot>,
     range_mutations: crate::distribution_range_mutation::RangeMutationGate,
     range_image_initializing: AtomicBool,
     range_image_native_birth_active: AtomicBool,
@@ -9196,6 +9197,7 @@ pub struct Transaction {
     /// Used only by authenticated range-log replay. It is private to the core
     /// crate and therefore cannot be selected by SQL, pgwire, or extensions.
     bypass_commit_admission: bool,
+    native_image_row_grant: Option<range_image_native::NativeImageTransactionGrant>,
     range_mutation_claim: Option<crate::distribution_range_mutation::RangeMutationClaim>,
     database_mutation_permit: Option<crate::distribution_range_mutation::DatabaseMutationPermit>,
     native_wal_retention: Option<native_wal_apply::NativeWalRetentionPin>,
@@ -9880,7 +9882,7 @@ impl BicDb {
     /// Install or replace the trusted distributed commit authority. A
     /// distributed database remains read-only until this is called.
     pub fn install_commit_admission(&self, admission: Arc<dyn CommitAdmission>) {
-        *self.commit_admission.write() = Some(admission);
+        self.commit_admission.write().install(Some(admission));
     }
 
     /// Fence the installed writer while holding the same exclusive gate that
@@ -9915,7 +9917,7 @@ impl BicDb {
     }
 
     pub fn clear_commit_admission(&self) {
-        *self.commit_admission.write() = None;
+        self.commit_admission.write().install(None);
     }
 
     pub(crate) fn range_mutation_gate(
@@ -9944,6 +9946,7 @@ impl BicDb {
         mutations: &[CommitAdmissionMutation],
         authority: &crate::distribution_range_mutation::RangeMutationAuthority<'_>,
     ) -> Result<()> {
+        self.require_native_generic_import_allowed()?;
         self.range_mutations.validate(range_id, authority)?;
         if mutations.is_empty() {
             return Ok(());
@@ -9989,6 +9992,7 @@ impl BicDb {
         mutations: &[CommitAdmissionMutation],
         authority: &crate::distribution_range_mutation::RangeMutationAuthority<'_>,
     ) -> Result<usize> {
+        self.require_native_generic_import_allowed()?;
         self.range_mutations.validate(range.id, authority)?;
         for mutation in mutations {
             if !range.contains_token(distribution_key_token(
@@ -11004,7 +11008,7 @@ impl BicDb {
             ha_state,
             replication_state,
             consensus_state,
-            commit_admission: RwLock::new(None),
+            commit_admission: RwLock::new(commit_admission_hook::CommitAdmissionSlot::empty()),
             range_mutations: crate::distribution_range_mutation::RangeMutationGate::default(),
             range_image_initializing: AtomicBool::new(false),
             range_image_native_birth_active: AtomicBool::new(false),
@@ -12191,6 +12195,7 @@ impl BicDb {
         batch: &RangeSnapshotBatch,
         authority: &crate::distribution_range_mutation::RangeMutationAuthority<'_>,
     ) -> Result<usize> {
+        self.require_native_generic_import_allowed()?;
         self.range_mutations.validate(range.id, authority)?;
         Self::validate_range_snapshot_fields(range, collection_meta, batch)?;
         if !self.collections.contains_key(&batch.collection) {
@@ -12266,6 +12271,34 @@ impl BicDb {
         batch: &RangeSnapshotBatch,
         authority: &crate::distribution_range_mutation::RangeMutationAuthority<'_>,
     ) -> Result<usize> {
+        self.require_native_generic_import_allowed()?;
+        self.apply_range_snapshot_batch_preinstalled_with_mutation_native_scope(
+            range,
+            collection_meta,
+            batch,
+            authority,
+            None,
+        )
+    }
+
+    pub(crate) fn apply_range_snapshot_batch_preinstalled_with_mutation_native_scope(
+        &self,
+        range: &RangeDescriptor,
+        collection_meta: &CollectionMeta,
+        batch: &RangeSnapshotBatch,
+        authority: &crate::distribution_range_mutation::RangeMutationAuthority<'_>,
+        scope: Option<&range_image_native::NativeImageRowScope<'_>>,
+    ) -> Result<usize> {
+        if let Some(scope) = scope {
+            if scope.range() != range {
+                return Err(BicDbError::Cluster(
+                    "native image row scope range differs".into(),
+                ));
+            }
+        }
+        if scope.is_none() {
+            self.require_native_generic_import_allowed()?;
+        }
         self.range_mutations.validate(range.id, authority)?;
         Self::validate_range_snapshot_fields(range, collection_meta, batch)?;
         if self
@@ -12293,8 +12326,13 @@ impl BicDb {
         // ordinary client-write admission path would make the learner try to
         // lead a second quorum decision while it is still a non-leader.
         tx.bypass_commit_admission = true;
+        tx.imported_projection =
+            scope.is_some() && self.actual_native_writer_enforcement_version()? == 1;
         tx.range_mutation_claim = Some(authority.claim());
         tx.write_upserts_unchecked(&batch.collection, batch.records.clone())?;
+        if let Some(scope) = scope {
+            scope.authorize_transaction(self, &mut tx, authority)?;
+        }
         tx.commit()?;
         Ok(count)
     }
@@ -12323,6 +12361,7 @@ impl BicDb {
         frame: &CommitFrame,
         authority: &crate::distribution_range_mutation::RangeMutationAuthority<'_>,
     ) -> Result<usize> {
+        self.require_native_generic_import_allowed()?;
         self.range_mutations.validate(range.id, authority)?;
         let filtered = filter_commit_frame_for_range(frame, range)?;
         self.ensure_replication_frame_collections(&filtered)?;
@@ -12349,6 +12388,7 @@ impl BicDb {
         frame: &CommitFrame,
         authority: &crate::distribution_range_mutation::RangeMutationAuthority<'_>,
     ) -> Result<usize> {
+        self.require_native_generic_import_allowed()?;
         self.range_mutations.validate(range.id, authority)?;
         let filtered = filter_commit_frame_for_range(frame, range)?;
         for write in &filtered.writes {
@@ -12422,6 +12462,30 @@ impl BicDb {
         record_ids: &[String],
         authority: &crate::distribution_range_mutation::RangeMutationAuthority<'_>,
     ) -> Result<usize> {
+        self.require_native_generic_import_allowed()?;
+        self.delete_range_records_as_local_with_mutation_native_scope(
+            range, collection, record_ids, authority, None,
+        )
+    }
+
+    pub(crate) fn delete_range_records_as_local_with_mutation_native_scope(
+        &self,
+        range: &RangeDescriptor,
+        collection: &str,
+        record_ids: &[String],
+        authority: &crate::distribution_range_mutation::RangeMutationAuthority<'_>,
+        scope: Option<&range_image_native::NativeImageRowScope<'_>>,
+    ) -> Result<usize> {
+        if let Some(scope) = scope {
+            if scope.range() != range {
+                return Err(BicDbError::Cluster(
+                    "native image row scope range differs".into(),
+                ));
+            }
+        }
+        if scope.is_none() {
+            self.require_native_generic_import_allowed()?;
+        }
         self.range_mutations.validate(range.id, authority)?;
         for record_id in record_ids {
             if !range.contains_token(distribution_key_token(collection, record_id)) {
@@ -12444,8 +12508,13 @@ impl BicDb {
         // fenced relocation operation and must not attempt a fresh quorum write
         // as the old (now non-leader) source.
         tx.bypass_commit_admission = true;
+        tx.imported_projection =
+            scope.is_some() && self.actual_native_writer_enforcement_version()? == 1;
         tx.range_mutation_claim = Some(authority.claim());
         tx.delete_many(collection, record_ids)?;
+        if let Some(scope) = scope {
+            scope.authorize_transaction(self, &mut tx, authority)?;
+        }
         tx.commit()?;
         Ok(record_ids.len())
     }
@@ -12486,6 +12555,7 @@ impl BicDb {
         expected_cluster_id: &str,
         authority: Option<&crate::distribution_range_mutation::RangeMutationAuthority<'_>>,
     ) -> Result<ReplicationApplyReport> {
+        self.require_native_generic_import_allowed()?;
         let _database_mutation = if let Some(authority) = authority {
             self.range_mutations.validate_claim(&authority.claim())?;
             None

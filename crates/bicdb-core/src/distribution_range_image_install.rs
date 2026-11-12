@@ -744,15 +744,33 @@ impl NativeRangeImageInstaller {
                 Ok(false)
             },
         )?;
+        let context = NativeHistoryTargetContext::new(
+            &db,
+            store,
+            &self.fence,
+            &self.admission,
+            &self.safety,
+            &self.catalog,
+            role,
+            self.frozen.as_frozen(),
+        )?;
+        let row_scope = db.native_image_row_scope(
+            &context,
+            self.history_proof
+                .as_ref()
+                .ok_or_else(|| invalid("image row grant requires audited history"))?,
+            source,
+        )?;
         let controlled = db
             .range_mutation_gate()
             .try_controlled_mutation(self.frozen.as_frozen())?;
         self.destructive_started = true;
-        db.delete_range_records_as_local_with_mutation(
+        db.delete_range_records_as_local_with_mutation_native_scope(
             self.fence.range(),
             &meta.name,
             &ids,
             &RangeMutationAuthority::Controlled(&controlled),
+            Some(&row_scope),
         )?;
         drop(controlled);
         role.role().require_live_request()?;
@@ -821,15 +839,33 @@ impl NativeRangeImageInstaller {
                 .database
                 .try_read()
                 .ok_or_else(|| invalid("target DB busy before image batch"))?;
+            let context = NativeHistoryTargetContext::new(
+                &db,
+                store,
+                &self.fence,
+                &self.admission,
+                &self.safety,
+                &self.catalog,
+                role,
+                self.frozen.as_frozen(),
+            )?;
+            let row_scope = db.native_image_row_scope(
+                &context,
+                self.history_proof
+                    .as_ref()
+                    .ok_or_else(|| invalid("image row grant requires audited history"))?,
+                source,
+            )?;
             let controlled = db
                 .range_mutation_gate()
                 .try_controlled_mutation(self.frozen.as_frozen())?;
             self.destructive_started = true;
-            db.apply_range_snapshot_batch_preinstalled_with_mutation(
+            db.apply_range_snapshot_batch_preinstalled_with_mutation_native_scope(
                 self.fence.range(),
                 meta,
                 batch,
                 &RangeMutationAuthority::Controlled(&controlled),
+                Some(&row_scope),
             )?;
             drop(controlled);
         }

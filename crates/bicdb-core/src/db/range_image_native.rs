@@ -14,6 +14,8 @@ mod history;
 mod history_stage;
 mod installed_anchor;
 mod native_read;
+mod writer_enrollment;
+pub(crate) use writer_enrollment::{InstalledNativeWriterHostGuard, NativeWriterHostState};
 mod serving_configuration;
 pub(crate) use native_read::{NativeRangeReadPhysical, NativeReadLocalDbSequence};
 use serving_configuration::NativeRecoveredServingConfiguration;
@@ -29,7 +31,8 @@ pub(crate) use history::{
 };
 pub(crate) use history_stage::{
     NativeHistoryPublicationBinding, NativeHistoryStage, NativeHistoryStageProgress,
-    NativeHistoryTargetContext, StagedNativeHistoryProof,
+    NativeHistoryTargetContext, NativeImageRowScope, NativeImageTransactionGrant,
+    StagedNativeHistoryProof,
 };
 use installed_anchor::{NativeRangeBaseBinding, NativeRangeImageAnchor};
 
@@ -175,9 +178,12 @@ struct NativeDatabaseBirth {
 }
 impl NativeDatabaseBirth {
     fn new(spec: RangeImageBirthSpec) -> Result<Self> {
+        Self::new_with_writer_enforcement(spec, false)
+    }
+    fn new_with_writer_enforcement(spec: RangeImageBirthSpec, enforce: bool) -> Result<Self> {
         spec.validate()?;
         let mut birth = Self {
-            format_version: 1,
+            format_version: if enforce { 2 } else { 1 },
             birth_id: Uuid::now_v7(),
             spec,
             image_generation: Uuid::now_v7(),
@@ -199,7 +205,7 @@ impl NativeDatabaseBirth {
     }
     fn validate(&self) -> Result<()> {
         self.spec.validate()?;
-        if self.format_version != 1
+        if !matches!(self.format_version, 1 | 2)
             || self.birth_id.is_nil()
             || self.image_generation.is_nil()
             || self.checksum()? != self.checksum_sha256
@@ -246,6 +252,7 @@ pub(crate) struct FreshRangeGenesisAuthority {
 #[derive(Debug)]
 pub(crate) struct NativeRecoveryAdmission {
     database_incarnation: String,
+    writer_enforcement_version: u32,
     birth_id: Uuid,
     birth_sha256: String,
     cluster_id: ClusterId,
@@ -265,12 +272,16 @@ impl NativeRecoveryAdmission {
         if self.database_incarnation != current.database_incarnation
             || self.birth_id != current.birth_id
             || self.birth_sha256 != current.birth_sha256
+            || self.writer_enforcement_version != current.writer_enforcement_version
         {
             return Err(invalid(
                 "recovery admission belongs to another DB/open or native birth",
             ));
         }
         Ok(())
+    }
+    pub(crate) fn writer_enforcement_version(&self) -> u32 {
+        self.writer_enforcement_version
     }
     pub(crate) fn cluster_id(&self) -> &ClusterId {
         &self.cluster_id
@@ -659,6 +670,7 @@ impl BicDb {
         }
         Ok(NativeRecoveryAdmission {
             database_incarnation: self.incarnation.clone(),
+            writer_enforcement_version: u32::from(birth.format_version == 2),
             birth_id: birth.birth_id,
             birth_sha256: birth.checksum_sha256,
             cluster_id: cluster_id.clone(),
@@ -676,10 +688,27 @@ impl BicDb {
     ) -> Result<(Self, FreshRangeGenesisAuthority)> {
         Self::create_new_range_image_database_with(root, config, spec, |_| Ok(()))
     }
+    /// Fresh enforced-writer domain. Existing roots and birth-v1 upgrades are refused.
+    pub(crate) fn create_new_enrolled_range_image_database(
+        root: &Path,
+        config: DbConfig,
+        spec: RangeImageBirthSpec,
+    ) -> Result<(Self, FreshRangeGenesisAuthority)> {
+        Self::create_new_range_image_database_with_mode(root, config, spec, true, |_| Ok(()))
+    }
     fn create_new_range_image_database_with(
         root: &Path,
         config: DbConfig,
         spec: RangeImageBirthSpec,
+        after_flags: impl FnOnce(&mut Self) -> Result<()>,
+    ) -> Result<(Self, FreshRangeGenesisAuthority)> {
+        Self::create_new_range_image_database_with_mode(root, config, spec, false, after_flags)
+    }
+    fn create_new_range_image_database_with_mode(
+        root: &Path,
+        config: DbConfig,
+        spec: RangeImageBirthSpec,
+        enforce: bool,
         after_flags: impl FnOnce(&mut Self) -> Result<()>,
     ) -> Result<(Self, FreshRangeGenesisAuthority)> {
         spec.validate()?;
@@ -713,8 +742,12 @@ impl BicDb {
         let mut db = Self::open_with_config(root, config.with_required_commit_admission(true))?;
         db.activate_local_namespace_identity_v1()?;
         format::enable_range_image_install(root)?;
+        if enforce {
+            format::enable_current_image_proposal(root)?;
+            format::enable_native_writer_enrollment(root)?;
+        }
         after_flags(&mut db)?;
-        let birth = NativeDatabaseBirth::new(spec)?;
+        let birth = NativeDatabaseBirth::new_with_writer_enforcement(spec, enforce)?;
         db.write_native_range_image_record(BIRTH_KEY, &birth)?;
         crate::storage::write_atomic(
             &root.join(FACTORY_PREFLIGHT),
@@ -839,6 +872,14 @@ impl BicDb {
         let birth: Option<NativeDatabaseBirth> = self.read_native_range_image_record(BIRTH_KEY)?;
         if let Some(birth) = &birth {
             birth.validate()?;
+        }
+        let enforced = format::native_writer_enrollment_active(&self.path)?;
+        if birth
+            .as_ref()
+            .is_some_and(|birth| birth.format_version == 2)
+            != enforced
+        {
+            return Err(invalid("native writer enrollment must be fenced from birth; partial factory or legacy upgrade refused"));
         }
         Ok(birth)
     }

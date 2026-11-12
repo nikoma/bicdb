@@ -1323,7 +1323,7 @@ impl<'db> SqlSession<'db> {
         let defaults = self.bulk_missing_insert_defaults(schema, &[], 1)?;
         let mut fields = BTreeMap::new();
         self.apply_bulk_insert_defaults(schema, &defaults, 0, &mut fields)?;
-        Ok(vec![record_from_fields_with_db(
+        Ok(vec![record_from_insert_fields_with_db(
             self.db_ref(),
             table,
             schema,
@@ -1396,7 +1396,7 @@ impl<'db> SqlSession<'db> {
                 fields.insert(column.clone(), value);
             }
             self.apply_bulk_insert_defaults(schema, &defaults, idx, &mut fields)?;
-            records.push(record_from_fields_with_db(
+            records.push(record_from_insert_fields_with_db(
                 self.db_ref(),
                 table,
                 schema,
@@ -1431,7 +1431,7 @@ impl<'db> SqlSession<'db> {
                 fields.insert(column.clone(), value);
             }
             self.apply_bulk_insert_defaults(schema, &defaults, idx, &mut fields)?;
-            records.push(record_from_fields_with_db(
+            records.push(record_from_insert_fields_with_db(
                 self.db_ref(),
                 table,
                 schema,
@@ -1853,7 +1853,9 @@ impl<'db> SqlSession<'db> {
                                 None,
                             ));
                         }
-                        if partition_parent.is_none() || updated.id == existing.id {
+                        let move_schema = partition_parent
+                            .or_else(|| schema.has_generated_primary_key().then_some(schema));
+                        if move_schema.is_none() || updated.id == existing.id {
                             validate_records_for_write(
                                 self.db_ref(),
                                 self.read_tx(),
@@ -1864,8 +1866,7 @@ impl<'db> SqlSession<'db> {
                                 Some(&self.sql_engine()),
                             )?;
                         }
-                        if let Some(parent) = partition_parent.filter(|_| updated.id != existing.id)
-                        {
+                        if let Some(parent) = move_schema.filter(|_| updated.id != existing.id) {
                             self.update_partition_records(
                                 parent,
                                 &[(existing.clone(), updated.clone())],
@@ -3351,7 +3352,24 @@ impl<'db> SqlSession<'db> {
                         ))
                     })?;
                 let value = cast_value_to_column_type(value, column)?;
-                set_record_column(record, Some(schema), &column.name, value)?;
+                if matches!(value, SqlValue::Null)
+                    && primary_key_columns_for_schema(schema).contains(&column.name)
+                {
+                    return Err(constraint_violation(
+                        "23502",
+                        format!(
+                            "null value in column \"{}\" violates not-null constraint",
+                            column.name
+                        ),
+                        Some(schema.name.clone()),
+                        Some(column.name.clone()),
+                        Some(not_null_constraint_name(&schema.name, &column.name)),
+                    ));
+                }
+                set_generated_record_column(record, schema, &column.name, value)?;
+            }
+            if schema.has_generated_primary_key() {
+                self.refresh_partition_update_identity(schema, record)?;
             }
         }
         Ok(())

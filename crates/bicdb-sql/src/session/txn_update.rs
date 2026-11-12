@@ -816,7 +816,7 @@ impl<'db> SqlSession<'db> {
         self.validate_row_assignments(update, &table, schema.as_deref())?;
         if let Some(schema) = schema
             .as_deref()
-            .filter(|schema| schema.partitioning.is_none())
+            .filter(|schema| !schema.requires_row_move_plan())
         {
             if let Some(result) = self.try_move_primary_key(update, &table, schema, &ctes)? {
                 return Ok(result);
@@ -850,7 +850,7 @@ impl<'db> SqlSession<'db> {
         }
         let assignment_candidates = if let Some(parent) = schema
             .as_deref()
-            .filter(|schema| schema.partitioning.is_some())
+            .filter(|schema| schema.requires_row_move_plan())
         {
             self.partition_update_candidates(
                 update,
@@ -910,7 +910,7 @@ impl<'db> SqlSession<'db> {
         let mut partition_suppressed_deletes = Vec::new();
         let partition_assigned_columns = if schema
             .as_deref()
-            .is_some_and(|schema| schema.partitioning.is_some())
+            .is_some_and(|schema| schema.requires_row_move_plan())
         {
             update
                 .assignments
@@ -930,7 +930,7 @@ impl<'db> SqlSession<'db> {
         // (before, after) pair clone are both skipped.
         let needs_before_image = schema
             .as_ref()
-            .is_some_and(|schema| schema.partitioning.is_some())
+            .is_some_and(|schema| schema.requires_row_move_plan())
             || match_policy != UpdateMatchPolicy::First
             || match schema.as_deref() {
                 None => true,
@@ -1262,9 +1262,9 @@ impl<'db> SqlSession<'db> {
             }
             if let Some(parent) = schema
                 .as_deref()
-                .filter(|schema| schema.partitioning.is_some())
+                .filter(|schema| schema.requires_row_move_plan())
             {
-                self.refresh_partition_update_identity(parent, &mut record)?;
+                self.refresh_identity_before_generation(parent, &mut record)?;
             }
             // BEFORE UPDATE row triggers see the fully assigned row and may
             // veto it (skip this candidate) or modify it. They run before the
@@ -1288,7 +1288,7 @@ impl<'db> SqlSession<'db> {
                     record,
                     schema
                         .as_deref()
-                        .filter(|schema| schema.partitioning.is_some()),
+                        .filter(|schema| schema.requires_row_move_plan()),
                 )? {
                     Some(record) => record,
                     None => continue,
@@ -1296,16 +1296,16 @@ impl<'db> SqlSession<'db> {
                 None => record,
             };
             let mut record = record;
-            if let Some(schema) = schema.as_deref() {
+            if let Some(schema) = physical_trigger_schema.as_deref().or(schema.as_deref()) {
                 self.materialize_generated_columns(
-                    &table,
+                    trigger_table,
                     schema,
                     std::slice::from_mut(&mut record),
                 )?;
             }
             if let Some(parent) = schema
                 .as_deref()
-                .filter(|schema| schema.partitioning.is_some())
+                .filter(|schema| schema.requires_row_move_plan())
             {
                 self.refresh_partition_update_identity(parent, &mut record)?;
                 if let Some(before) = before.as_ref() {
@@ -1442,7 +1442,7 @@ impl<'db> SqlSession<'db> {
         // PostgreSQL's order, so a refused key is not revealed by 23505.
         let rls_violation = if schema
             .as_deref()
-            .is_some_and(|schema| schema.partitioning.is_some())
+            .is_some_and(|schema| schema.requires_row_move_plan())
         {
             None // Already checked each row before its physical write.
         } else {
@@ -1456,7 +1456,7 @@ impl<'db> SqlSession<'db> {
         };
         if let Some(schema) = schema
             .as_deref()
-            .filter(|schema| schema.partitioning.is_none())
+            .filter(|schema| !schema.requires_row_move_plan())
         {
             let assigned_columns = update
                 .assignments
@@ -1503,7 +1503,7 @@ impl<'db> SqlSession<'db> {
         };
         if schema
             .as_deref()
-            .is_none_or(|schema| schema.partitioning.is_none())
+            .is_none_or(|schema| !schema.requires_row_move_plan())
         {
             if updated_record_repairs.iter().any(Option::is_some) {
                 self.insert_session_records_with_repairs(
@@ -1547,7 +1547,7 @@ impl<'db> SqlSession<'db> {
         )?;
         if schema
             .as_deref()
-            .is_some_and(|schema| schema.partitioning.is_some())
+            .is_some_and(|schema| schema.requires_row_move_plan())
         {
             self.publish_extension_database_events(
                 &table,
@@ -1556,7 +1556,7 @@ impl<'db> SqlSession<'db> {
                     .iter()
                     .map(|record| (Some(record), None)),
             )?;
-            self.fire_partition_after_events(partition_after_events)?;
+            self.fire_partition_after_events(&table, partition_after_events)?;
         } else {
             self.fire_after_row_triggers(
                 &table,
@@ -6480,16 +6480,26 @@ impl<'db> SqlSession<'db> {
             return Ok(());
         };
         self.materialize_generated_columns(table, schema, std::slice::from_mut(&mut after))?;
-        validate_records_for_write(
-            self.db_ref(),
-            self.tx.as_ref(),
-            table,
-            schema,
-            std::slice::from_ref(&after),
-            true,
-            Some(&self.sql_engine()),
-        )?;
-        self.update_session_record(table, after.clone())?;
+        if before.id != after.id {
+            self.update_partition_records(
+                schema,
+                &[(before.clone(), after.clone())],
+                &[Some(table.clone())],
+                &[0],
+                &[],
+            )?;
+        } else {
+            validate_records_for_write(
+                self.db_ref(),
+                self.tx.as_ref(),
+                table,
+                schema,
+                std::slice::from_ref(&after),
+                true,
+                Some(&self.sql_engine()),
+            )?;
+            self.update_session_record(table, after.clone())?;
+        }
         self.apply_foreign_key_parent_update_inner(
             table,
             schema,

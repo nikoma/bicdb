@@ -5350,6 +5350,24 @@ fn sequence_data_type_name(data_type: &str) -> &'static str {
 }
 
 impl TableSchema {
+    fn has_generated_primary_key(&self) -> bool {
+        if self
+            .columns
+            .iter()
+            .all(|column| column.generated_expr.is_none())
+        {
+            return false;
+        }
+        primary_key_columns_for_schema(self).iter().any(|name| {
+            self.column(name)
+                .is_some_and(|column| column.generated_expr.is_some())
+        })
+    }
+
+    fn requires_row_move_plan(&self) -> bool {
+        self.partitioning.is_some() || self.has_generated_primary_key()
+    }
+
     fn row_type_oid(&self) -> i64 {
         self.row_type_oid.unwrap_or_else(|| {
             table_row_type_oid(legacy_namespace_oid(&self.schema_name), &self.name)

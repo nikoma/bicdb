@@ -86,7 +86,9 @@ impl SqlSession<'_> {
         let mut surviving = Vec::with_capacity(records.len());
         let mut triggered = false;
         for mut record in records {
-            partition::materialize_primary_key_fields(parent, &mut record)?;
+            if !parent.has_generated_primary_key() {
+                partition::materialize_primary_key_fields(parent, &mut record)?;
+            }
             let target = partition::route_record(self.db_ref(), parent, &record)?;
             let (rows, fired) = self.apply_before_insert_row_triggers_with_identity(
                 &target.name,
@@ -242,6 +244,7 @@ impl SqlSession<'_> {
 
     pub(super) fn fire_partition_after_events(
         &mut self,
+        accessed_table: &str,
         events: Vec<PartitionRowEvent>,
     ) -> Result<()> {
         for (schema, before, after) in events {
@@ -257,11 +260,13 @@ impl SqlSession<'_> {
                     } else {
                         ("delete", DatabaseOperation::Delete)
                     };
-                    self.publish_extension_database_events(
-                        &schema.name,
-                        operation,
-                        std::iter::once((Some(before), after)),
-                    )?;
+                    if schema.name != accessed_table {
+                        self.publish_extension_database_events(
+                            &schema.name,
+                            operation,
+                            std::iter::once((Some(before), after)),
+                        )?;
+                    }
                     self.fire_after_row_triggers(
                         &schema.name,
                         Some(&schema),
@@ -354,6 +359,17 @@ impl SqlSession<'_> {
             }
         }
         Ok(candidates)
+    }
+
+    pub(crate) fn refresh_identity_before_generation(
+        &self,
+        schema: &TableSchema,
+        record: &mut Record,
+    ) -> Result<()> {
+        if schema.has_generated_primary_key() {
+            return Ok(());
+        }
+        self.refresh_partition_update_identity(schema, record)
     }
 
     pub(crate) fn refresh_partition_update_identity(

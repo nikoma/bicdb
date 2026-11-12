@@ -4685,8 +4685,27 @@ pub(crate) fn record_from_fields(
     schema: Option<&TableSchema>,
     fields: BTreeMap<String, SqlValue>,
 ) -> Result<Record> {
+    record_from_fields_inner(table, schema, fields, false)
+}
+
+fn record_from_fields_inner(
+    table: &str,
+    schema: Option<&TableSchema>,
+    fields: BTreeMap<String, SqlValue>,
+    prepare_generated_key: bool,
+) -> Result<Record> {
     let fields = canonicalize_record_fields(schema, fields);
-    let id = record_id_from_fields(table, schema, &fields)?;
+    // INSERT/COPY have not run BEFORE triggers or generated expressions yet.
+    // This identity is transient; final generation derives the canonical key
+    // before arbitration, policy checks or any Native write. Preserve all
+    // supplied key values in metadata while the physical key is pending.
+    let pending_key =
+        prepare_generated_key && schema.is_some_and(TableSchema::has_generated_primary_key);
+    let id = if pending_key {
+        synthetic_record_id(table)
+    } else {
+        record_id_from_fields(table, schema, &fields)?
+    };
     if id.is_empty() {
         return Err(SqlError::InvalidSql(
             "record id must not be empty".to_string(),
@@ -4695,7 +4714,8 @@ pub(crate) fn record_from_fields(
     let primary_key_columns = schema
         .map(primary_key_columns_for_schema)
         .unwrap_or_else(|| vec!["id".to_string()]);
-    let omit_primary_key_metadata = primary_key_columns.len() == 1
+    let omit_primary_key_metadata = !pending_key
+        && primary_key_columns.len() == 1
         && schema
             .and_then(|schema| schema.column(&primary_key_columns[0]))
             .is_none_or(|column| !pg_type_requires_typed_identity(&column.pg_type));
@@ -4794,7 +4814,26 @@ pub(crate) fn record_from_fields_with_db(
     db: &BicDb,
     table: &str,
     schema: Option<&TableSchema>,
+    fields: BTreeMap<String, SqlValue>,
+) -> Result<Record> {
+    record_from_fields_with_db_inner(db, table, schema, fields, false)
+}
+
+pub(crate) fn record_from_insert_fields_with_db(
+    db: &BicDb,
+    table: &str,
+    schema: Option<&TableSchema>,
+    fields: BTreeMap<String, SqlValue>,
+) -> Result<Record> {
+    record_from_fields_with_db_inner(db, table, schema, fields, true)
+}
+
+fn record_from_fields_with_db_inner(
+    db: &BicDb,
+    table: &str,
+    schema: Option<&TableSchema>,
     mut fields: BTreeMap<String, SqlValue>,
+    prepare_generated_key: bool,
 ) -> Result<Record> {
     if let Some(schema) = schema {
         for (name, value) in &mut fields {
@@ -4812,7 +4851,7 @@ pub(crate) fn record_from_fields_with_db(
             }
         }
     }
-    record_from_fields(table, schema, fields)
+    record_from_fields_inner(table, schema, fields, prepare_generated_key)
 }
 
 pub(crate) fn resolve_oid_alias_column_value(

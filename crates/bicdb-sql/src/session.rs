@@ -3022,7 +3022,7 @@ impl<'db> SqlSession<'db> {
                 );
             }
             self.apply_bulk_insert_defaults(schema.as_ref(), &defaults, idx, &mut fields)?;
-            records.push(record_from_fields_with_db(
+            records.push(record_from_insert_fields_with_db(
                 self.db_ref(),
                 &table,
                 schema.as_ref(),

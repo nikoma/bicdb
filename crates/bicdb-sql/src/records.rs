@@ -277,6 +277,25 @@ pub(crate) fn set_record_column(
     set_record_column_inner(record, schema, column, value, false)
 }
 
+/// Only generated-expression evaluation may replace a computed key field.
+/// The caller reconstructs its canonical identity before the physical write.
+pub(crate) fn set_generated_record_column(
+    record: &mut Record,
+    schema: &TableSchema,
+    column: &str,
+    value: SqlValue,
+) -> Result<()> {
+    if !schema
+        .column(column)
+        .is_some_and(|column| column.generated_expr.is_some())
+    {
+        return Err(SqlError::InvalidSql(
+            "computed assignment requires a generated column".into(),
+        ));
+    }
+    set_record_column_inner(record, Some(schema), column, value, true)
+}
+
 /// Parent UPDATE owns a routed delete/insert plan and reconstructs the typed
 /// record identity after all assignments. Ordinary updates keep their existing
 /// primary-key move path and cannot opt into an uncoordinated identity change.
@@ -291,7 +310,7 @@ pub(crate) fn set_partition_update_column(
         schema,
         column,
         value,
-        schema.is_some_and(|schema| schema.partitioning.is_some()),
+        schema.is_some_and(TableSchema::requires_row_move_plan),
     )
 }
 

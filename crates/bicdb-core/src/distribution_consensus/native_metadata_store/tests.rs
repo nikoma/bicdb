@@ -7,7 +7,10 @@ fn node(name: &str) -> ClusterNodeId {
     ClusterNodeId::new(name).unwrap()
 }
 fn fixture() -> ActualNativeRf3Fixture {
-    ActualNativeRf3Fixture::new_with_enforced_network_and_ranges(&BTreeMap::new(), 1)
+    let mut f = ActualNativeRf3Fixture::new_with_enforced_network_and_ranges(&BTreeMap::new(), 1);
+    f.root.disable_cleanup(true);
+    eprintln!("NATIVE_METADATA_OWNER_ROOT {}", f.root.path().display());
+    f
 }
 fn initialize(f: &ActualNativeRf3Fixture) -> MetadataConsensusStore {
     MetadataConsensusStore::initialize_native_owned(

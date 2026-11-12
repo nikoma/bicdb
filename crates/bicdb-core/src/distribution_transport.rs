@@ -2698,7 +2698,10 @@ fn dispatch_cluster_data_request(
                 let commit_advanced = consensus.status().commit_index > commit_before;
                 (response, committed, commit_advanced)
             };
-            if response.success && commit_advanced {
+            // A durable restrictive snapshot must reach the shared view even
+            // when this OLD physical actor cannot produce a countable ACK.
+            // Persistence errors returned above never reach this branch.
+            if commit_advanced {
                 if let Some(store) = metadata_distribution_store {
                     store
                         .lock()
@@ -2731,7 +2734,9 @@ fn dispatch_cluster_data_request(
                 let commit_advanced = consensus.status().commit_index > commit_before;
                 (response, committed, commit_advanced)
             };
-            if response.append.success && commit_advanced {
+            // Success=false is not a voter proof; committed state is still
+            // durable and must publish retirement/replacement to the listener.
+            if commit_advanced {
                 if let Some(store) = metadata_distribution_store {
                     store
                         .lock()
@@ -2779,6 +2784,32 @@ fn dispatch_cluster_data_request(
         )),
         ClusterDataRequest::NativeInitialBirthOffer { .. } => Err(transport_error(
             "initial birth acquisition requires its actual factory provider",
+        )),
+    }
+}
+
+/// Test-only actual receiver dispatch. The trusted caller argument is the
+/// same lower boundary as embedded metadata tests, NOT TLS authentication.
+#[cfg(test)]
+pub(crate) fn test_dispatch_metadata_append_with_actual_store(
+    service: &Arc<Mutex<ClusterDataNodeService>>,
+    metadata: &Arc<Mutex<MetadataConsensusStore>>,
+    published: &Arc<RwLock<ClusterTopology>>,
+    caller: &ClusterNodeId,
+    request: MetadataAppendRequest,
+) -> Result<MetadataAppendResponse> {
+    match dispatch_cluster_data_request(
+        service.as_ref(),
+        None,
+        Some(metadata),
+        None,
+        published,
+        caller,
+        ClusterDataRequest::MetadataAppend { request },
+    )? {
+        ClusterDataResponse::MetadataAppend(reply) => Ok(reply),
+        _ => Err(transport_error(
+            "actual metadata dispatch returned wrong response",
         )),
     }
 }

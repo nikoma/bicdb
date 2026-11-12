@@ -1670,8 +1670,13 @@ impl MetadataConsensusStore {
                 "read authority probe identity/index/version is invalid",
             ));
         }
-        let append = self.handle_append_request(request.append)?;
-        self.require_native_metadata_actor_current(true)?;
+        let mut append = self.handle_append_request(request.append)?;
+        if self.require_native_metadata_actor_current(true).is_err() {
+            // A retired/nonvoting actor may persist restrictive state, but its
+            // probe can never count as a fresh voter acknowledgement.
+            append.success = false;
+            append.match_index = 0;
+        }
         Ok(MetadataReadProbeResponse {
             protocol_version: METADATA_READ_AUTHORITY_PROTOCOL_VERSION,
             context_id: request.context_id,
@@ -2188,7 +2193,9 @@ impl MetadataConsensusStore {
         self.persist()?;
         // Persist learned retirement/replacement FIRST, but never acknowledge
         // catch-up/voting as the replacement physical incarnation.
-        self.require_native_metadata_actor_current(false)?;
+        if self.require_native_metadata_actor_current(false).is_err() {
+            return Ok(self.append_response(false, match_index.saturating_add(1)));
+        }
         Ok(MetadataAppendResponse {
             cluster_id: self.state.cluster_id.clone(),
             term: self.state.current_term,

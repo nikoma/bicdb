@@ -186,3 +186,71 @@ fn computed_key_update_uses_update_authority_without_delete_or_insert_grants() {
         }
     }
 }
+
+#[test]
+fn late_sql_constraint_failure_rolls_back_authorized_key_replacement_and_audit() {
+    for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
+        let dir = tempfile::tempdir().unwrap();
+        let cfg = config(mode);
+        let mut db = BicDb::open_with_config(dir.path(), cfg.clone()).unwrap();
+        SqlSession::new(&mut db).execute("CREATE TABLE computed(k INT GENERATED ALWAYS AS(b*2) STORED PRIMARY KEY,b INT CHECK(b<10)); INSERT INTO computed(b) VALUES(1)").unwrap();
+        let original = db
+            .get("computed", "2")
+            .unwrap()
+            .unwrap()
+            .content_hash()
+            .unwrap();
+        db.set_mutation_policy("computed", MutationPolicy::grants_required().with_audit())
+            .unwrap();
+        let mut tx = db.begin_application_transaction(actor()).unwrap();
+        let authority = tx.issue_mutation_grant(grant("computed")).unwrap();
+        let mut sql = SqlSession::new_shared(&db)
+            .with_pending_transaction(tx)
+            .with_signed_mutation_grants(BTreeMap::from([("computed".into(), authority)]));
+        let error = sql
+            .execute("UPDATE computed SET b=11 WHERE k=2")
+            .unwrap_err();
+        assert_eq!(error.sqlstate(), "23514", "{error}");
+        let tx = sql.take_pending_transaction().unwrap();
+        assert_eq!(
+            tx.write_len(),
+            0,
+            "failed statement retained its physical move"
+        );
+        assert_eq!(
+            tx.broker_publish_len(),
+            0,
+            "failed SQL check retained an UPDATE audit"
+        );
+        drop(sql);
+        tx.commit().unwrap();
+        assert_eq!(
+            db.get("computed", "2")
+                .unwrap()
+                .unwrap()
+                .content_hash()
+                .unwrap(),
+            original
+        );
+        assert!(db.get("computed", "22").unwrap().is_none());
+        db.close().unwrap();
+        for _ in 0..2 {
+            let db = BicDb::open_with_config(dir.path(), cfg.clone()).unwrap();
+            assert_eq!(
+                db.get("computed", "2")
+                    .unwrap()
+                    .unwrap()
+                    .content_hash()
+                    .unwrap(),
+                original
+            );
+            assert!(db.get("computed", "22").unwrap().is_none());
+            assert!(db
+                .verify_indexes_consistently()
+                .unwrap()
+                .iter()
+                .all(|r| r.valid));
+            db.close().unwrap();
+        }
+    }
+}

@@ -45,11 +45,12 @@ fn parent_reads_include_acknowledged_child_rows_across_two_reopens() {
             if actual != vec![row(1, "child-ack")] {
                 failures.push(format!("{mode} reopen{reopen}: parent={actual:?}"));
             }
-            db.close().unwrap();
             if reopen < 2 {
+                db.close().unwrap();
                 db = BicDb::open_with_config(root.path(), cfg.clone()).unwrap();
             }
         }
+        db.close().unwrap();
     }
     assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
@@ -74,11 +75,12 @@ fn parent_inserts_route_to_the_actual_child_and_keep_both_acks() {
             if parent != vec![row(1, "child-ack"), row(2, "parent-ack")] {
                 failures.push(format!("{mode} reopen{reopen}: parent={parent:?}"));
             }
-            db.close().unwrap();
             if reopen < 2 {
+                db.close().unwrap();
                 db = BicDb::open_with_config(root.path(), cfg.clone()).unwrap();
             }
         }
+        db.close().unwrap();
     }
     assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
@@ -106,11 +108,12 @@ fn direct_child_insert_enforces_bounds_before_mutation_and_preserves_prior_ack()
         }
         for reopen in 0..3 {
             assert_eq!(rows(&mut db, "child"), vec![row(1, "child-ack")]);
-            db.close().unwrap();
             if reopen < 2 {
+                db.close().unwrap();
                 db = BicDb::open_with_config(root.path(), cfg.clone()).unwrap();
             }
         }
+        db.close().unwrap();
     }
     assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
@@ -143,11 +146,12 @@ fn attached_default_partition_routes_new_rows_and_keeps_existing_acknowledged_da
                 failures.push(format!("{mode} reopen{reopen}: fallback={actual:?}"));
             }
             assert_eq!(rows(&mut db, "child"), vec![row(1, "child-ack")]);
-            db.close().unwrap();
             if reopen < 2 {
+                db.close().unwrap();
                 db = BicDb::open_with_config(root.path(), cfg.clone()).unwrap();
             }
         }
+        db.close().unwrap();
     }
     assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
@@ -172,11 +176,12 @@ fn parent_update_moves_rows_between_partitions_without_losing_the_ack() {
             if !low.is_empty() || high != vec![row(11, "child-ack")] {
                 failures.push(format!("{mode} reopen{reopen}: old={low:?} new={high:?}"));
             }
-            db.close().unwrap();
             if reopen < 2 {
+                db.close().unwrap();
                 db = BicDb::open_with_config(root.path(), cfg.clone()).unwrap();
             }
         }
+        db.close().unwrap();
     }
     assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
@@ -204,11 +209,12 @@ fn parent_delete_visits_descendants_and_preserves_unselected_acknowledged_rows()
                 ));
             }
             assert_eq!(rows(&mut db, "upper_child"), vec![row(11, "other-ack")]);
-            db.close().unwrap();
             if reopen < 2 {
+                db.close().unwrap();
                 db = BicDb::open_with_config(root.path(), cfg.clone()).unwrap();
             }
         }
+        db.close().unwrap();
     }
     assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
@@ -273,11 +279,12 @@ fn partition_queries_use_the_privilege_and_rls_policy_of_the_accessed_relation()
                 rows(&mut db, "child"),
                 vec![row(1, "child-one-ack"), row(2, "child-two-ack")]
             );
-            db.close().unwrap();
             if reopen < 2 {
+                db.close().unwrap();
                 db = BicDb::open_with_config(root.path(), cfg.clone()).unwrap();
             }
         }
+        db.close().unwrap();
     }
     assert!(failures.is_empty(), "{}", failures.join("\n"));
 }

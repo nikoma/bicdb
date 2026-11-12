@@ -249,9 +249,11 @@ The public automatic-metadata owner supplies a distinct retained process
 cancellation token. A DATA controller starts only when that actual process owner
 and the published original DATA owner both exist. Finite DataOpen/client calls
 do not start background mutators. Outside finite attempts the worker holds a
-Weak owner; each attempt retains its exact objects and original token for at
-most the existing five-second admission budget. Stop/Drop cancel it, and the
-existing cleanup reaper retains its actual owner until the worker, listener,
+Weak owner; each attempt caps admissible results to the existing five-second
+original token budget. Uncancellable OS I/O may outlive that token; actual
+objects remain retained until it exits, with no late recovered grant.
+Stop/Drop cancel it, and the existing cleanup reaper retains its actual owner
+until the worker, listener,
 read workers and runtime contexts have really drained before exact-hook
 revocation. The controller has its own serialized state and does not run on or
 hold up the metadata heartbeat worker. Diagnostic/status acquisition does not

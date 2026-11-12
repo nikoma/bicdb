@@ -2,6 +2,7 @@ mod access_mutation;
 mod branching;
 mod collection_rename;
 mod commit_snapshot;
+mod decimal_predicate;
 mod deferred_materialize;
 mod local_namespace_identity;
 pub use deferred_materialize::DeferredMaterializeStats;
@@ -9126,6 +9127,8 @@ struct IndexCatalog {
     indexes: Vec<IndexDefinition>,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     btree_bindings: BTreeMap<String, String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    decimal_predicate_semantics_version: Option<u32>,
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -10040,6 +10043,7 @@ impl BicDb {
         storage::initialize_backup_write_gate(&path)?;
 
         let encryption = encryption::open_runtime(&path, encryption_config, config.fsync)?;
+        decimal_predicate::check_open_admission(&path, &encryption, &effective_mode)?;
         if effective_mode == StorageMode::ServerPaged
             && !path.join("paged/store.pages").try_exists()?
             && (path.join(COMMIT_SEQ_FLOOR_FILE).try_exists()?

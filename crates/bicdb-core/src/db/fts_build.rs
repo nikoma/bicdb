@@ -520,10 +520,30 @@ impl BicDb {
                         full_text_build_incomplete: false,
                     }),
                 );
+                // Commit the comparator version with its actual completed
+                // physical generation, not an independently loaded alias.
+                let old_binding = if decimal_predicate::affected(&state.definition) {
+                    self.btree_bindings
+                        .lock()
+                        .insert(state.definition.name.clone(), state.physical_name.clone())
+                } else {
+                    None
+                };
                 if let Err(error) = self.persist_index_catalog() {
                     self.index_generation
                         .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                     self.indexes.remove(&state.definition.name);
+                    if decimal_predicate::affected(&state.definition) {
+                        let mut bindings = self.btree_bindings.lock();
+                        match old_binding {
+                            Some(physical) => {
+                                bindings.insert(state.definition.name.clone(), physical);
+                            }
+                            None => {
+                                bindings.remove(&state.definition.name);
+                            }
+                        }
+                    }
                     return Err(error);
                 }
                 self.schema_compatibility.invalidate();

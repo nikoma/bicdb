@@ -1446,7 +1446,19 @@ impl RangeWriteStore {
             RangeWriteState::Prepared => entry.state = RangeWriteState::Committed,
             RangeWriteState::Committed
             | RangeWriteState::QuorumCommitted
-            | RangeWriteState::Applied => return Ok(entry.state),
+            | RangeWriteState::Applied => {
+                let state = entry.state;
+                // Materialization of an independently decided command need
+                // not itself have cast a local Commit vote. A later genuine
+                // idempotent Commit must mirror the newly protected ever-fact
+                // before returning its vote; do not leave read/Ready proofs
+                // seeing a stale JSON mirror of the actual native journal.
+                self.mark_native_ever_commit(command)?;
+                if previous.native_abort_protocol != self.catalog.native_abort_protocol {
+                    self.persist_recovery_catalog()?;
+                }
+                return Ok(state);
+            }
             RangeWriteState::Aborted => {
                 return Err(range_write_error(format!(
                     "cannot commit aborted range-write command {}",

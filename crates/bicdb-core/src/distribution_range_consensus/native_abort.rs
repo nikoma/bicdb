@@ -726,6 +726,39 @@ impl RangeWriteStore {
         }
         Ok(())
     }
+    pub(crate) fn preflight_actual_native_commit_entry(
+        &self,
+        command: &RangeWriteCommand,
+    ) -> Result<()> {
+        self.require_native_writer_command(command)?;
+        self.require_durable_recovery_catalog()?;
+        self.require_no_image_install(command.range_id)?;
+        self.require_no_active_recovery(command.range_id)?;
+        self.preflight_native_commit_slot(command)?;
+        self.require_no_native_abort_promise(command.range_id, command.index)?;
+        match self
+            .catalog
+            .ranges
+            .get(&command.range_id)
+            .and_then(|r| r.entries.get(&command.index))
+        {
+            Some(entry)
+                if entry.command == *command
+                    && matches!(
+                        entry.state,
+                        RangeWriteState::Prepared
+                            | RangeWriteState::Committed
+                            | RangeWriteState::QuorumCommitted
+                            | RangeWriteState::Applied
+                    ) =>
+            {
+                Ok(())
+            }
+            _ => Err(range_write_error(
+                "native Commit vote has no matching actual non-aborted retained entry",
+            )),
+        }
+    }
     pub(super) fn preflight_native_commit_slot(&self, command: &RangeWriteCommand) -> Result<()> {
         if let Some(protocol) = &self.catalog.native_abort_protocol {
             let slot = protocol

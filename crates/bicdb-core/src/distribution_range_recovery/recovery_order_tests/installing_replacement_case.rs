@@ -408,9 +408,37 @@ fn run_replacement(handover_cut: Option<bool>) {
     let d_source = selected_decision(
         &source, &p, &r, &actor, &range, &scope, &pointer, &command, &parent,
     );
+    // The ordinary source has never needed sparse history. Its first current
+    // certification must upgrade the reader fence before validating/publishing
+    // the newly present sparse body; the target was already sparse-capable.
+    let source_before_cert = catalogue(&f, &source);
+    assert!(source_before_cert["catalog"]["sparse_committed_decisions"].is_null());
     let cert_source = r[&source]
         .certify_installing_existing_committed(&d_source, &cert_parent)
         .unwrap();
+    let source_after_cert = catalogue(&f, &source);
+    assert!(
+        source_after_cert["catalog"]["format_version"]
+            .as_u64()
+            .unwrap()
+            > source_before_cert["catalog"]["format_version"]
+                .as_u64()
+                .unwrap()
+    );
+    assert_eq!(
+        source_after_cert["catalog"]["sparse_committed_decisions"][&k]["2"]["command"]
+            ["checksum_sha256"],
+        command.checksum_sha256
+    );
+    assert_eq!(
+        f.databases[&source]
+            .read()
+            .native_range_prefix_observation(range.id)
+            .unwrap()
+            .native_applied_index,
+        Some(1),
+        "durable certification must not apply the uncertain command"
+    );
     let mut current = InstallingCurrentCertificationRound::begin(d_source).unwrap();
     current.record(cert_target).unwrap();
     current.record(cert_source).unwrap();

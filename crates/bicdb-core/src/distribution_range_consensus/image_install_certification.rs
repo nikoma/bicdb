@@ -793,7 +793,10 @@ impl RangeWriteStore {
             }
             sparse.insert(command.index,super::sparse_certification::SparseHistoricalDecision::from_actual_installing_decision(decision,role,native)?);
         }
-        super::sparse_certification::validate_sparse_catalog(&candidate)?;
+        // Populate and reader-fence every new field before validating the
+        // candidate. An ordinary certifier may still have a pre-sparse
+        // catalogue, unlike the Installing target's already upgraded one.
+        // Validation must remain before any self.catalog mutation/publication.
         // Existing sparse mandatory field remains explicit for the newer format.
         candidate
             .sparse_committed_decisions
@@ -804,6 +807,7 @@ impl RangeWriteStore {
         candidate.format_version = candidate
             .format_version
             .max(INSTALLING_CERTIFICATION_FORMAT);
+        super::sparse_certification::validate_sparse_catalog(&candidate)?;
         validate_installing_certifications(&candidate)?;
         super::image_install_state::validate_catalog_install_intents(&candidate)?;
         crate::format::enable_current_image_proposal(&self.root)?;

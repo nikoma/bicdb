@@ -190,3 +190,46 @@ fn dropping_a_materialized_view_index_removes_its_stored_descriptor() {
         assert_eq!(sql.execute("SELECT count(*) FROM pg_indexes WHERE tablename='materialized_rows' AND indexname='view_idx'").unwrap().rows,vec![vec![SqlValue::Int(0)]]);
     }
 }
+
+#[test]
+fn oracle_constraint_owned_indexes_keep_the_native_02429_diagnostic() {
+    // Native diagnostic reference:
+    // https://docs.oracle.com/en/error-help/db/ora-02429/
+    for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = BicDb::open_with_config(
+            root.path(),
+            DbConfig::default().with_fsync(true).with_storage_mode(mode),
+        )
+        .unwrap();
+        bicdb_sql::oracle::ensure_database_profile(
+            &mut db,
+            bicdb_sql::oracle::ORACLE_PREVIEW_PROFILE,
+        )
+        .unwrap();
+        SqlSession::new(&mut db).execute("CREATE TABLE oracle_guard(item_key INT CONSTRAINT oracle_keep_pk PRIMARY KEY,code INT CONSTRAINT oracle_keep_uq UNIQUE); INSERT INTO oracle_guard VALUES(1,10)").unwrap();
+        let before = native_indexes(&db);
+        for command in ["DROP INDEX oracle_keep_pk", "DROP INDEX oracle_keep_uq"] {
+            let error = SqlSession::new(&mut db).execute(command).unwrap_err();
+            assert_eq!(error.sqlstate(), "2BP01");
+            assert_eq!(
+                error.to_string(),
+                "ORA-02429: cannot drop index used for enforcement of unique/primary key"
+            );
+            let detail = error
+                .fields()
+                .into_iter()
+                .find_map(|field| match field {
+                    bicdb_sql::SqlErrorField::Detail(value) => Some(value),
+                    _ => None,
+                })
+                .unwrap();
+            assert_eq!(
+                serde_json::from_str::<serde_json::Value>(&detail).unwrap()["oracle_error_stack"]
+                    [0]["code"],
+                -2429
+            );
+            assert_eq!(native_indexes(&db), before);
+        }
+    }
+}

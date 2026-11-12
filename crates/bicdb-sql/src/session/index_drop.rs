@@ -101,9 +101,20 @@ impl<'db> SqlSession<'db> {
             if let Some(schema) = load_schema(self.db_ref(), &table)? {
                 let primary = !primary_key_columns_for_schema(&schema).is_empty()
                     && schema.primary_key_constraint_name() == index;
-                let owned = schema.constraints.iter().any(|constraint| matches!(constraint,
-                    ConstraintSchema::Unique { name, .. } | ConstraintSchema::UniqueWithNullPolicy { name, .. } | ConstraintSchema::Exclusion { name, .. } if name == &index));
-                if primary || owned {
+                let key_owned = schema.constraints.iter().any(|constraint| matches!(constraint,
+                    ConstraintSchema::Unique { name, .. } | ConstraintSchema::UniqueWithNullPolicy { name, .. } if name == &index));
+                let exclusion_owned = schema.constraints.iter().any(|constraint| {
+                    matches!(constraint,
+                    ConstraintSchema::Exclusion { name, .. } if name == &index)
+                });
+                if (primary || key_owned) && oracle::is_oracle_database(self.db_ref())? {
+                    return Err(oracle::errors::database_error(
+                        -2429,
+                        "2BP01",
+                        "cannot drop index used for enforcement of unique/primary key",
+                    ));
+                }
+                if primary || key_owned || exclusion_owned {
                     return Err(SqlError::dependent_objects_still_exist(format!("cannot drop index {index} because constraint {index} on table {} requires it", catalog_display_name(&table))));
                 }
             }

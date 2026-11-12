@@ -42,6 +42,20 @@ impl NativeJointDecisionData {
         {
             return Err(invalid("malformed native joint decision provenance"));
         }
+        let target = self
+            .new_materialized
+            .get(&self.scope.target)
+            .ok_or_else(|| invalid("joint decision has no actual completed target image"))?;
+        if target.source_snapshot_db_sequence.is_none()
+            || target
+                .image_root_sha256
+                .as_deref()
+                .is_none_or(|root| !digest(root))
+        {
+            return Err(invalid(
+                "joint decision target lacks actual image capture B/content root",
+            ));
+        }
         let scope_sha = self.scope.checksum()?;
         for (facts, members, new) in [
             (&self.old_closed, &self.scope.old_members, false),
@@ -405,8 +419,13 @@ impl NativeJointDurableDecision {
 }
 
 impl NativeJointDecisionData {
-    pub(crate) fn source_snapshot_db_sequence(&self) -> u64 {
-        self.old_closed[&self.selected_source].actual_local_visibility_sequence
+    pub(crate) fn source_snapshot_db_sequence(&self) -> Result<u64> {
+        self.new_materialized
+            .get(&self.scope.target)
+            .and_then(|fact| fact.source_snapshot_db_sequence)
+            .ok_or_else(|| {
+                invalid("joint metadata source snapshot B requires the actual completed image seal")
+            })
     }
     pub(crate) fn target_local_snapshot_db_sequence(&self) -> Result<u64> {
         self.new_materialized

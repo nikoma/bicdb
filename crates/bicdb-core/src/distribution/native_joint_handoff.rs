@@ -153,7 +153,7 @@ impl NativeJointHandoffMetadataV1 {
             range_index: actual.range_index(),
             logical_genesis_sha256: actual.logical_genesis_sha256().into(),
             logical_history_sha256: actual.logical_history_sha256().into(),
-            source_snapshot_db_sequence: actual.source_snapshot_db_sequence(),
+            source_snapshot_db_sequence: actual.source_snapshot_db_sequence()?,
             target_local_snapshot_db_sequence: actual.target_local_snapshot_db_sequence()?,
             stage: NativeJointHandoffStageV1::Certified,
             activated_quorum_sha256: None,

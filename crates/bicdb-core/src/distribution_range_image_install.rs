@@ -282,6 +282,7 @@ pub(crate) struct AdoptedNativeRangeImageInstall {
 /// DB-open admission and exact intent fence retained. Only consuming an adopted
 /// image can construct it. It grants no serving configuration or user admission.
 pub(crate) struct NativeImageCatalogueFinalization {
+    source_seal: crate::distribution_range_image::LocalRangeImageSealV1,
     database: Arc<RwLock<BicDb>>,
     admission: NativeRecoveryAdmission,
     fence: TargetImageInstallFence,
@@ -289,6 +290,9 @@ pub(crate) struct NativeImageCatalogueFinalization {
     catalogue: NativeImageCatalogueAdoptionReceipt,
 }
 impl NativeImageCatalogueFinalization {
+    pub(crate) fn source_seal(&self) -> &crate::distribution_range_image::LocalRangeImageSealV1 {
+        &self.source_seal
+    }
     pub(crate) fn base(&self) -> &NativeInstalledRangeImageBase {
         &self.base
     }
@@ -389,6 +393,7 @@ impl AdoptedNativeRangeImageInstall {
             base,
         } = self.verified;
         let proof = NativeImageCatalogueFinalization {
+            source_seal: source.seal().clone(),
             database,
             admission,
             fence,

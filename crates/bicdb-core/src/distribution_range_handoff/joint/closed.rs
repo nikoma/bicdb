@@ -172,6 +172,8 @@ impl NativeJointOldObservation {
             logical_genesis_sha256: self.logical_genesis_sha256().into(),
             logical_history_sha256: self.logical_history_sha256().into(),
             actual_local_visibility_sequence: self.native.local_visibility_sequence(),
+            source_snapshot_db_sequence: None,
+            image_root_sha256: None,
             metadata_term: term,
             metadata_read_index: read_index,
             metadata_context_id: context,

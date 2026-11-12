@@ -301,3 +301,9 @@ impl NativeJointOldClosedQuorum {
         self.observations.get(node)
     }
 }
+
+impl NativeJointOldClosedQuorum {
+    pub(crate) fn selected_source_id(&self) -> &ClusterNodeId {
+        &self.selected_source
+    }
+}

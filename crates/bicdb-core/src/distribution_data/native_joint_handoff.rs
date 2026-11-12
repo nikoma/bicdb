@@ -453,6 +453,9 @@ impl ActualServiceNativeJointNewEvidence {
             || self.facts.actual_local_visibility_sequence != base.target_snapshot_bound().get()
             || self.facts.birth_id != base.birth_id()
             || self.facts.birth_sha256 != base.birth_sha256()
+            || self.facts.source_snapshot_db_sequence
+                != Some(self.image.source_seal().reserved_db_upper_bound)
+            || self.facts.image_root_sha256.as_deref() != Some(base.image_root_sha256())
         {
             return Err(data_error(
                 "actual NEW image evidence changed service/native materialization",
@@ -498,6 +501,22 @@ impl ClusterDataNodeService {
                 "actual target image is not this exact NEW joint configuration",
             ));
         }
+        let seal = image.source_seal();
+        if seal.source_id != *old.selected_source_id()
+            || seal.source_native_receipt_sha256 != base.source_native_receipt_sha256()
+            || seal.range_index != old.range_index()
+            || seal.logical_genesis_sha256 != old.logical_genesis_sha256()
+            || seal.logical_history_sha256 != old.logical_history_sha256()
+            || seal.image_root_sha256 != base.image_root_sha256()
+            || seal.old_config_sha256 != plan.promise().old_config_sha256
+            || seal.new_config_sha256 != plan.promise().new_config_sha256
+            || seal.session_id != plan.promise().session_id
+            || seal.nonce != plan.promise().nonce
+        {
+            return Err(data_error(
+                "actual NEW image lost its exact completed OLD source seal",
+            ));
+        }
         if base.range_index() != old.range_index()
             || base.logical_genesis_sha256() != old.logical_genesis_sha256()
             || base.logical_history_sha256() != old.logical_history_sha256()
@@ -519,6 +538,8 @@ impl ClusterDataNodeService {
             logical_genesis_sha256: base.logical_genesis_sha256().into(),
             logical_history_sha256: base.logical_history_sha256().into(),
             actual_local_visibility_sequence: base.target_snapshot_bound().get(),
+            source_snapshot_db_sequence: Some(seal.reserved_db_upper_bound),
+            image_root_sha256: Some(seal.image_root_sha256.clone()),
             metadata_term: role.role().metadata_term(),
             metadata_read_index: role.role().metadata_read_index(),
             metadata_context_id: role.role().context_id(),

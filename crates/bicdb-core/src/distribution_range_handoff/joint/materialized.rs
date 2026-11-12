@@ -20,6 +20,10 @@ pub(crate) struct NativeJointMaterializedFacts {
     pub(crate) logical_genesis_sha256: String,
     pub(crate) logical_history_sha256: String,
     pub(crate) actual_local_visibility_sequence: u64,
+    /// Actual completed capture reserved B; present only for the installed
+    /// learner image. Old/native visibility B is a different local domain.
+    pub(crate) source_snapshot_db_sequence: Option<u64>,
+    pub(crate) image_root_sha256: Option<String>,
     pub(crate) metadata_term: u64,
     pub(crate) metadata_read_index: u64,
     pub(crate) metadata_context_id: Uuid,
@@ -130,6 +134,7 @@ impl NativeJointNewRound {
             || !self
                 .observations
                 .contains_key(&plan.activation_range().leader)
+            || !self.observations.contains_key(&plan.data().target)
         {
             return Err(invalid(
                 "actual NEW data materialization needs a distinct majority and its intended leader",

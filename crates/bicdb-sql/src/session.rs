@@ -1046,6 +1046,9 @@ pub struct SqlSession<'db> {
     pub(crate) snapshot_floor: u64,
     pub(crate) _marker: PhantomData<&'db BicDb>,
     pub(crate) security_context: Option<SecurityContext>,
+    /// None is ordinary operator SQL; Some is an immutable signed application
+    /// decision supplied by the host, never a user-settable SQL setting.
+    pub(crate) app_exact_decimal_units: Option<bool>,
     pub(crate) runtime: Option<Arc<dyn SqlSessionRuntime>>,
     pub(crate) cancellation: CancellationToken,
     pub(crate) fts_limits: bicdb_core::FtsQueryLimits,
@@ -2415,6 +2418,7 @@ impl<'db> SqlSession<'db> {
             snapshot_floor: 0,
             _marker: PhantomData,
             security_context,
+            app_exact_decimal_units: None,
             runtime: None,
             cancellation: CancellationToken::uncancelable(),
             fts_limits: bicdb_core::FtsQueryLimits::UNLIMITED,
@@ -2532,6 +2536,13 @@ impl<'db> SqlSession<'db> {
     pub fn with_security_context(mut self, security_context: Option<SecurityContext>) -> Self {
         self.security_context = security_context;
         self.rebind_trusted_security_settings();
+        self
+    }
+
+    /// Bind the current signed application's declared feature. This Rust-only
+    /// allowance is independent of SQL roles, GUCs and transaction ownership.
+    pub fn with_application_exact_decimal_units(mut self, allowed: bool) -> Self {
+        self.app_exact_decimal_units = Some(allowed);
         self
     }
 

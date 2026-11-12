@@ -3197,12 +3197,13 @@ impl<'db> SqlSession<'db> {
         if let Some(value) = eval_fts_function_value(&name, &args, Some(&arg_types))? {
             return Ok(Some(value));
         }
-        if let Some(value) = eval_db_catalog_function_value(
+        if let Some(value) = eval_db_catalog_function_value_with_engine(
             self.db_ref(),
             &name,
             &args,
             self.tx.as_ref().map(Transaction::visibility_watermark),
             Some(&self.session_gucs),
+            Some(&self.sql_engine()),
         )? {
             return Ok(Some(value));
         }

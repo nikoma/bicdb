@@ -3276,6 +3276,7 @@ pub(crate) fn eval_fts_db_function_value(
     name: &str,
     args: &[SqlValue],
     session_gucs: Option<&std::collections::HashMap<String, String>>,
+    query_engine: Option<&SqlEngine<'_>>,
 ) -> Result<Option<SqlValue>> {
     let name = name.strip_prefix("pg_catalog.").unwrap_or(name);
     if name == "bicdb_fts_build_status" {
@@ -3363,11 +3364,19 @@ pub(crate) fn eval_fts_db_function_value(
     // relation", and whose ownership defaults also disable RLS on any
     // table with no recorded owner. `ts_rewrite` is not superuser-gated,
     // so any role could read any table by embedding a SELECT here.
-    let mut engine = SqlEngine::new(db);
-    if let Some(session_gucs) = session_gucs {
-        engine = engine.with_session_gucs(std::sync::Arc::new(session_gucs.clone()));
-    }
-    let rewrites = engine.execute(rewrite_sql)?;
+    // A signed application supplies its actual engine: retain its immutable
+    // feature allowance, security context, owning transaction and cancellation
+    // through this nested SQL boundary. GUCs cannot reconstruct that authority.
+    let rewrites = if let Some(engine) = query_engine {
+        engine.execute(rewrite_sql)?
+    } else {
+        // Standalone operator/metadata execution remains a separate context.
+        let mut engine = SqlEngine::new(db);
+        if let Some(session_gucs) = session_gucs {
+            engine = engine.with_session_gucs(std::sync::Arc::new(session_gucs.clone()));
+        }
+        engine.execute(rewrite_sql)?
+    };
     for row in rewrites.rows {
         if row.len() != 2 {
             return Err(SqlError::data_exception(

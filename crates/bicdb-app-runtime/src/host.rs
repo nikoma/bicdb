@@ -30,7 +30,7 @@ use bicdb_extension::abi_v2::{
 };
 use bicdb_extension::host::ApplicationHost;
 use bicdb_extension::{ExtensionCapability, ExtensionManifest};
-use bicdb_sql::{decode_typed_storage_json, SqlSession, SqlValue};
+use bicdb_sql::{decode_typed_storage_json, SqlError, SqlSession, SqlValue};
 use chacha20poly1305::aead::{Aead, KeyInit, Payload};
 use chacha20poly1305::{Key, XChaCha20Poly1305, XNonce};
 use ed25519_dalek::{Signature, Signer, SigningKey, Verifier, VerifyingKey};
@@ -2007,18 +2007,32 @@ impl CapabilityHost {
                     )
                     .with_deferred_commit()
                     .with_pending_transaction(transaction)
+                    .with_application_exact_decimal_units(
+                        self.application()
+                            .required_features
+                            .contains(&ApplicationFeature::ExactDecimalUnits),
+                    )
                     .with_signed_application_security_guc_compatibility();
-                    session.fire_deferred_row_triggers().map_err(|error| {
-                        AppRuntimeError::Invocation(format!(
-                            "deferred SQL validation failed (SQLSTATE {}): {error}",
-                            error.sqlstate()
-                        ))
-                    })?;
-                    session.take_pending_transaction().ok_or_else(|| {
+                    let execution = session.fire_deferred_row_triggers();
+                    let transaction = session.take_pending_transaction().ok_or_else(|| {
                         AppRuntimeError::Invocation(
                             "deferred SQL validation consumed its transaction".into(),
                         )
-                    })?
+                    })?;
+                    if let Err(error) = execution {
+                        // Recover ownership before mapping the error. Failed
+                        // deferred validation must not retain partial writes.
+                        transaction.rollback()?;
+                        return Err(exact_units_sql_application_error(&error).unwrap_or_else(
+                            || {
+                                AppRuntimeError::Invocation(format!(
+                                    "deferred SQL validation failed (SQLSTATE {}): {error}",
+                                    error.sqlstate()
+                                ))
+                            },
+                        ));
+                    }
+                    transaction
                 } else {
                     transaction
                 };
@@ -2430,6 +2444,11 @@ impl CapabilityHost {
         let mut session = SqlSession::new_shared_secure(database, security)
             .with_deferred_commit()
             .with_pending_transaction(active)
+            .with_application_exact_decimal_units(
+                self.application()
+                    .required_features
+                    .contains(&ApplicationFeature::ExactDecimalUnits),
+            )
             .with_positional_parameters(parameters)
             .with_signed_application_security_guc_compatibility()
             .with_signed_mutation_grants(signed_mutation_grants);
@@ -2443,11 +2462,13 @@ impl CapabilityHost {
         let placeholder = std::mem::replace(self.transaction_mut(transaction)?, restored);
         placeholder.rollback()?;
         let result = execution.map_err(|error| {
-            AppRuntimeError::Invocation(format!(
-                "raw SQL `{}` failed (SQLSTATE {}): {error}",
-                statement.id,
-                error.sqlstate()
-            ))
+            exact_units_sql_application_error(&error).unwrap_or_else(|| {
+                AppRuntimeError::Invocation(format!(
+                    "raw SQL `{}` failed (SQLSTATE {}): {error}",
+                    statement.id,
+                    error.sqlstate()
+                ))
+            })
         })?;
         raw_sql_result(statement, result)
     }
@@ -5846,6 +5867,19 @@ pub(crate) fn now_ms() -> i64 {
         .duration_since(UNIX_EPOCH)
         .map(|duration| duration.as_millis() as i64)
         .unwrap_or_default()
+}
+
+/// Translate only errors with an unforgeable native exact-unit origin. A
+/// routine raising SQLSTATE 22023/42501 or copying the message stays on its
+/// existing SQL error path.
+fn exact_units_sql_application_error(error: &SqlError) -> Option<AppRuntimeError> {
+    if error.is_exact_units_capability_denied() {
+        Some(AppRuntimeError::CapabilityDenied(error.to_string()))
+    } else {
+        error
+            .exact_units_parameter_message()
+            .map(|message| AppRuntimeError::InvalidRequest(message.to_string()))
+    }
 }
 
 fn raw_sql_security_context(actor: &ActorContext) -> SecurityContext {

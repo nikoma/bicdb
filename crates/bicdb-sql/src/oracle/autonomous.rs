@@ -321,6 +321,7 @@ impl SqlSession<'_> {
         child.runtime = self.runtime.clone();
         child.cancellation = self.cancellation.clone();
         child.fts_limits = self.fts_limits;
+        child.app_exact_decimal_units = self.app_exact_decimal_units;
         child.snapshot_floor = self
             .snapshot_floor
             .max(crate::statement_context::latest_independent_commit());

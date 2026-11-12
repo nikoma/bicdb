@@ -4127,6 +4127,7 @@ pub struct SqlEngine<'db> {
     pub(crate) settings: SqlSettings,
     pub(crate) ctes: BTreeMap<String, CteResult>,
     pub(crate) security_context: Option<SecurityContext>,
+    pub(crate) app_exact_decimal_units: Option<bool>,
     pub(crate) runtime: Option<Arc<dyn SqlSessionRuntime>>,
     pub(crate) session_gucs: Arc<HashMap<String, String>>,
     pub(crate) oracle_output: oracle::output::State,
@@ -4368,6 +4369,7 @@ impl<'db> SqlEngine<'db> {
             settings,
             ctes: BTreeMap::new(),
             security_context: None,
+            app_exact_decimal_units: None,
             runtime: None,
             session_gucs: Arc::new(HashMap::new()),
             oracle_output: oracle::output::State::default(),
@@ -4405,6 +4407,7 @@ impl<'db> SqlEngine<'db> {
             settings,
             ctes: BTreeMap::new(),
             security_context,
+            app_exact_decimal_units: None,
             runtime: None,
             session_gucs: Arc::new(session_gucs),
             oracle_output: oracle::output::State::default(),
@@ -4452,6 +4455,7 @@ impl<'db> SqlEngine<'db> {
         runtime: Option<Arc<dyn SqlSessionRuntime>>,
         cancellation: CancellationToken,
         fts_limits: bicdb_core::FtsQueryLimits,
+        app_exact_decimal_units: Option<bool>,
     ) -> Self {
         let session_gucs =
             bind_trusted_security_settings_shared(session_gucs, security_context.as_ref());
@@ -4463,6 +4467,7 @@ impl<'db> SqlEngine<'db> {
             ctes,
             security_context,
             runtime,
+            app_exact_decimal_units,
             session_gucs,
             oracle_output: oracle::output::State::default(),
             routine_vars,
@@ -4502,6 +4507,7 @@ impl<'db> SqlEngine<'db> {
             ctes,
             security_context,
             runtime: None,
+            app_exact_decimal_units: None,
             session_gucs,
             oracle_output: oracle::output::State::default(),
             routine_vars: Arc::new(BTreeMap::new()),
@@ -4622,6 +4628,33 @@ impl<'db> SqlEngine<'db> {
         self
     }
 
+    pub(crate) fn require_exact_decimal_units(&self) -> Result<()> {
+        if self.app_exact_decimal_units == Some(false) {
+            return Err(SqlError::ExactUnitsCapabilityDenied);
+        }
+        Ok(())
+    }
+
+    pub(crate) fn require_query_exact_decimal_units(&self, query: &Query) -> Result<()> {
+        if self.app_exact_decimal_units != Some(false) {
+            return Ok(());
+        }
+        let found = sqlparser::ast::visit_expressions(query, |expression| {
+            if let Expr::Function(function) = expression {
+                if object_name(&function.name)
+                    .is_ok_and(|name| name.eq_ignore_ascii_case("bicdb_exact_sum_units"))
+                {
+                    return ControlFlow::Break(());
+                }
+            }
+            ControlFlow::Continue(())
+        });
+        if found.is_break() {
+            self.require_exact_decimal_units()?;
+        }
+        Ok(())
+    }
+
     pub(crate) fn inherit_transaction(&self, engine: SqlEngine<'db>) -> SqlEngine<'db> {
         let mut engine = engine
             .with_index_lookup_cache(self.index_lookup_cache.clone())
@@ -4631,6 +4664,7 @@ impl<'db> SqlEngine<'db> {
             .with_routine_host(self.routine_host)
             .with_oracle_output(self.oracle_output.clone());
         engine.heap_lock_identity = self.heap_lock_identity;
+        engine.app_exact_decimal_units = self.app_exact_decimal_units;
         if engine.outer_row.is_none() {
             engine.outer_row.clone_from(&self.outer_row);
         }
@@ -5102,6 +5136,7 @@ impl<'db> SqlEngine<'db> {
     }
 
     pub(crate) fn execute_query(&self, query: &Query) -> Result<SqlResult> {
+        self.require_query_exact_decimal_units(query)?;
         let join_budget = crate::join_budget::QueryScope::enter();
         self.db_ref().check_recovery_state()?;
         self.require_from_relations_readable(query)?;

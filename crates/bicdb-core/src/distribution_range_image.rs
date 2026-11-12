@@ -177,6 +177,41 @@ impl TentativeNativeRangeImageSourceAuthorization<'_> {
         let database = read_database(&self.capture.db)?;
         self.capture.validate(&database)
     }
+    /// Checks binding-only points selected from ACTUAL target records against
+    /// the immutable source generation under this capture's existing pin.
+    /// The capability comes from the consumed full current-quorum verifier.
+    pub(crate) fn require_current_quorum_history_points(
+        &self,
+        points: &std::collections::BTreeMap<u64, String>,
+    ) -> Result<()> {
+        let cancellation = self.cut().current_quorum_history_cancellation()?;
+        let database = read_database(&self.capture.db)?;
+        self.capture.validate(&database)?;
+        if points.len() > 3 {
+            return Err(invalid("replacement history point bound exceeded"));
+        }
+        for (index, expected) in points {
+            if *index > self.lineage().range_index() {
+                return Err(invalid("replacement source omits protected prior prefix"));
+            }
+            let step = database.export_native_logical_history_step_with_source_pin(
+                self.lineage(),
+                &self.capture.frozen,
+                &self.capture.source_read_pin,
+                *index,
+                1,
+                &cancellation,
+            )?;
+            if step.entries.len() != 1
+                || step.entries[0].index != *index
+                || &step.entries[0].commitment_sha256 != expected
+            {
+                return Err(invalid("replacement source forks protected/staged prefix"));
+            }
+        }
+        self.capture.validate(&database)?;
+        self.cut().require_current_quorum_history_coverage()
+    }
     pub(crate) fn cut(&self) -> &NativeRangeImageSourceCut {
         &self.capture.cut
     }
@@ -472,6 +507,7 @@ impl RangeImageCapture {
     }
 
     fn validate(&self, database: &BicDb) -> Result<()> {
+        self.cut.require_retained_history_quorum()?;
         if self.invalid {
             return Err(invalid(
                 "capture was invalidated; begin a new authorized session",

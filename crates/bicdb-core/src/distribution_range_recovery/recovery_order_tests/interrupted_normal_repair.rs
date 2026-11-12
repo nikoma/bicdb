@@ -29,6 +29,8 @@ fn sha(bytes: &[u8]) -> String {
 pub(super) enum ImageStop {
     CatalogueBeforeMarker,
     BeginBeforeStage,
+    HistoryStagedPartialAudit,
+    HistoryPrefixBeforeAudit,
     AfterClear,
 }
 #[test]
@@ -372,8 +374,91 @@ pub(super) fn exercise_interrupted_normal_image(
             install.as_mut().unwrap(),
         );
     }
-    // Stop at the EXACT requested boundary: stage0..2 audited, clear complete,
-    // NO row copy, no completed source, no installed base or catalogue adoption.
+    if matches!(
+        stop,
+        ImageStop::HistoryStagedPartialAudit | ImageStop::HistoryPrefixBeforeAudit
+    ) {
+        let step = {
+            let source = capture.as_mut().unwrap();
+            let cursor = source.history_cursor().clone();
+            let max_entries = if matches!(stop, ImageStop::HistoryPrefixBeforeAudit) {
+                1
+            } else {
+                256
+            };
+            source
+                .export_history_step(&cursor, max_entries, &parent)
+                .unwrap()
+        };
+        let role = recipient_role(&providers, &initiator, &range, nonce);
+        let source = capture
+            .as_ref()
+            .unwrap()
+            .authorize_target_install()
+            .unwrap();
+        let installer = install.as_mut().unwrap();
+        let history_stage_id = installer.history_stage_id();
+        let progress = target_service
+            .lock()
+            .stage_native_range_image_history(
+                installer,
+                &NativeImageInstallRole::CurrentVoterRepair(&role),
+                &source,
+                history_stage_id,
+                &step,
+                &parent,
+            )
+            .unwrap();
+        if matches!(stop, ImageStop::HistoryPrefixBeforeAudit) {
+            assert_eq!(progress.verified_entries, 1);
+            assert!(!progress.cursor.complete());
+            assert!(
+                target_service
+                    .lock()
+                    .audit_native_range_image_history(
+                        installer,
+                        &NativeImageInstallRole::CurrentVoterRepair(&role),
+                        &source,
+                        1,
+                        &parent,
+                    )
+                    .is_err(),
+                "incomplete received history must not be audited as complete"
+            );
+        } else {
+            assert_eq!(progress.verified_entries, 3);
+            assert!(progress.cursor.complete());
+            assert!(!progress.audit_complete);
+            let progress = target_service
+                .lock()
+                .audit_native_range_image_history(
+                    installer,
+                    &NativeImageInstallRole::CurrentVoterRepair(&role),
+                    &source,
+                    1,
+                    &parent,
+                )
+                .unwrap();
+            assert!(
+                !progress.audit_complete,
+                "only actual H0 was audited before source death"
+            );
+        }
+        assert!(
+            target_service
+                .lock()
+                .clear_native_range_image_step(
+                    installer,
+                    &NativeImageInstallRole::CurrentVoterRepair(&role),
+                    &source,
+                    &parent,
+                )
+                .is_err(),
+            "partial audit must never authorize a row clear"
+        );
+    }
+    // Stop at the requested boundary (including partial audit), with NO row
+    // copy, completed source, installed base or catalogue adoption.
     let partial = target_db
         .read()
         .native_range_prefix_observation(range.id)

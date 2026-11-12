@@ -235,11 +235,37 @@ fn actual_installing_replacement_native_proposal_orphan_cold_resume() {
 fn actual_installing_replacement_catalogue_handover_cold_resume() {
     run_replacement(Some(false));
 }
-fn run_replacement(handover_cut: Option<bool>) {
-    let stopped = super::interrupted_normal_repair::exercise_interrupted_normal_image(
-        super::interrupted_normal_repair::ImageStop::AfterClear,
-        false,
+#[test]
+fn actual_installing_replacement_rejects_wrong_substitution_proof_prefix_target_and_role() {
+    // The kernel's cfg(test) controls use this GENUINE full-source verifier,
+    // current protected proposals and independently fresh target/source roles.
+    run_replacement(None);
+}
+#[test]
+fn actual_installing_replacement_preserves_partial_audit_across_cold_p2_resume() {
+    run_replacement_at(
+        Some(false),
+        super::interrupted_normal_repair::ImageStop::HistoryStagedPartialAudit,
     );
+}
+#[test]
+fn actual_installing_replacement_preserves_received_prefix_across_cold_p2_resume() {
+    run_replacement_at(
+        Some(false),
+        super::interrupted_normal_repair::ImageStop::HistoryPrefixBeforeAudit,
+    );
+}
+fn run_replacement(handover_cut: Option<bool>) {
+    run_replacement_at(
+        handover_cut,
+        super::interrupted_normal_repair::ImageStop::AfterClear,
+    );
+}
+fn run_replacement_at(
+    handover_cut: Option<bool>,
+    stop: super::interrupted_normal_repair::ImageStop,
+) {
+    let stopped = super::interrupted_normal_repair::exercise_interrupted_normal_image(stop, false);
     // The first routine returned and dropped ALL owners; retain the seed unchanged.
     let original_before = std::fs::read(stopped.join("n1/cluster-range-write-log.json")).unwrap();
     let copy = ActualNativeRf3Fixture::copy_stopped_recovery_tree(&stopped).unwrap();

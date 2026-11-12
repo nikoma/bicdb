@@ -444,6 +444,9 @@ impl TargetImageInstallFence {
     pub(crate) fn source_incarnation(&self) -> u64 {
         self.intent.source_incarnation
     }
+    pub(crate) fn protected_proposal(&self) -> Option<&super::NativeCurrentImageProposalPointer> {
+        self.intent.protected_proposal.as_ref()
+    }
     pub(crate) fn intent_sha256(&self) -> &str {
         &self.intent_sha256
     }

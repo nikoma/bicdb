@@ -190,6 +190,10 @@ pub(super) fn finish_actual_current_image_resume_at_source(
         )
         .unwrap();
     let target_service = &fixture.services[&target_id];
+    let previous_stage_sha = fixture.databases[&target_id]
+        .read()
+        .native_history_stage_state_commitment(range.id)
+        .unwrap();
     let install = target_service
         .lock()
         .begin_native_range_image_install(
@@ -201,6 +205,25 @@ pub(super) fn finish_actual_current_image_resume_at_source(
             parent,
         )
         .unwrap();
+    if source_id == node("n2") {
+        if let Some(previous_sha) = previous_stage_sha {
+            let archive = fixture.databases[&target_id]
+                .read()
+                .test_native_history_substitution_archive(range.id)
+                .unwrap();
+            assert_eq!(
+                archive["previous_header_sha256"], previous_sha,
+                "substitution must retain EXACT previous received/audited stage"
+            );
+            assert_eq!(archive["previous_history_sha256"], expected_h);
+            assert_eq!(archive["current_history_sha256"], expected_h);
+            assert!(
+                archive["previous_source_range_index"].as_u64().unwrap()
+                    <= archive["current_source_range_index"].as_u64().unwrap()
+            );
+            eprintln!("ACTUAL_CURRENT_QUORUM_HISTORY_SUBSTITUTION {archive}");
+        }
+    }
     drop(source);
     drop(role);
     let verified = materialize_actual_current_repair_image(

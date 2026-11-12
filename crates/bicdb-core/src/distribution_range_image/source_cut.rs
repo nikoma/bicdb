@@ -9,6 +9,28 @@ use crate::distribution_consensus::MetadataRestoreActivation;
 
 pub(crate) use crate::distribution_range_image_scope::RangeImageSourcePurposeV1;
 
+/// Retains the actual full-history verifier and its original quorum deadline.
+/// Historical proposal JSON alone can never recreate this capability.
+#[derive(Debug)]
+enum CurrentImageHistoryCoverage {
+    Replacement(crate::distribution_range_recovery::VerifiedCurrentImageReplacementHistory),
+    Resume(crate::distribution_range_recovery::VerifiedCurrentImageResumeHistory),
+}
+impl CurrentImageHistoryCoverage {
+    fn cancellation(&self) -> CancellationToken {
+        match self {
+            Self::Replacement(h) => h.authority().history_coverage_cancellation(),
+            Self::Resume(h) => h.authority().history_coverage_cancellation(),
+        }
+    }
+    fn require_live(&self) -> Result<()> {
+        match self {
+            Self::Replacement(history) => history.authority().require_live(),
+            Self::Resume(history) => history.authority().require_live(),
+        }
+    }
+}
+
 /// No Serialize/Deserialize, public fields, number constructor or fake plan.
 /// Its factory consumes actual fresh fenced-current-quorum history agreement
 /// AND independently materialized local native lineage. Physical repair does
@@ -37,6 +59,7 @@ pub(crate) struct CertifiedRecoveryImageCut {
         crate::distribution_range_recovery::HistoricalCurrentImageSourceAcceptance,
     resume_proposal: Option<crate::distribution_range_consensus::NativeCurrentImageProposalPointer>,
     replacement_source: bool,
+    history_coverage: Option<CurrentImageHistoryCoverage>,
 }
 
 impl CertifiedRecoveryImageCut {
@@ -100,6 +123,7 @@ impl CertifiedRecoveryImageCut {
                 .historical_current_image_acceptance(source, database, store)?,
             resume_proposal: None,
             replacement_source: false,
+            history_coverage: None,
         };
         history.require_current(source, database, store)?;
         Ok(cut)
@@ -121,7 +145,7 @@ impl CertifiedRecoveryImageCut {
         let schema_sha256 = role
             .expected_schema_sha256()
             .ok_or_else(|| invalid("image repair has no committed schema contract"))?;
-        let cut = Self {
+        let mut cut = Self {
             cluster_id: role.cluster_id().clone(),
             bootstrap_id: role.bootstrap_id(),
             range: role.current_range().clone(),
@@ -159,8 +183,10 @@ impl CertifiedRecoveryImageCut {
                 .historical_current_image_acceptance(source, database, store)?,
             resume_proposal: Some(authority.proposal().clone()),
             replacement_source: false,
+            history_coverage: None,
         };
         history.require_current(source, database, store)?;
+        cut.history_coverage = Some(CurrentImageHistoryCoverage::Resume(history));
         Ok(cut)
     }
     pub(crate) fn from_verified_replacement_source_history(
@@ -181,7 +207,7 @@ impl CertifiedRecoveryImageCut {
         let schema_sha256 = role
             .expected_schema_sha256()
             .ok_or_else(|| invalid("image repair has no committed schema contract"))?;
-        let cut = Self {
+        let mut cut = Self {
             cluster_id: role.cluster_id().clone(),
             bootstrap_id: role.bootstrap_id(),
             range: role.current_range().clone(),
@@ -219,8 +245,10 @@ impl CertifiedRecoveryImageCut {
                 .historical_current_image_acceptance(source, database, store)?,
             resume_proposal: Some(authority.pointer().clone()),
             replacement_source: true,
+            history_coverage: None,
         };
         history.require_current(source, database, store)?;
+        cut.history_coverage = Some(CurrentImageHistoryCoverage::Replacement(history));
         Ok(cut)
     }
 }
@@ -253,6 +281,49 @@ fn semantic_range(a: &RangeDescriptor, b: &RangeDescriptor) -> bool {
     a == b
 }
 impl NativeRangeImageSourceCut {
+    /// A request-bound actual current quorum/full-spine verifier, never an
+    /// audit hash or a caller-selected point. Normal/handoff cuts lack it.
+    #[cfg(test)]
+    pub(crate) fn test_history_coverage_source_role(
+        &self,
+    ) -> &crate::distribution_range_recovery::RecoveryRoleAdmission {
+        match self {
+            Self::CurrentVoterRepair(cut) => match cut.history_coverage.as_ref().unwrap() {
+                CurrentImageHistoryCoverage::Replacement(h) => h.authority().role(),
+                CurrentImageHistoryCoverage::Resume(h) => h.authority().role(),
+            },
+            _ => unreachable!(),
+        }
+    }
+    pub(super) fn require_retained_history_quorum(&self) -> Result<()> {
+        if let Self::CurrentVoterRepair(cut) = self {
+            if let Some(coverage) = &cut.history_coverage {
+                coverage.require_live()?;
+            }
+        }
+        Ok(())
+    }
+    pub(crate) fn current_quorum_history_cancellation(&self) -> Result<CancellationToken> {
+        self.require_current_quorum_history_coverage()?;
+        match self {
+            Self::CurrentVoterRepair(cut) => {
+                Ok(cut.history_coverage.as_ref().unwrap().cancellation())
+            }
+            Self::CommittedHandoff(_) => unreachable!(),
+        }
+    }
+    pub(crate) fn require_current_quorum_history_coverage(&self) -> Result<()> {
+        match self {
+            Self::CurrentVoterRepair(cut) => cut
+                .history_coverage
+                .as_ref()
+                .ok_or_else(|| invalid("source lacks live current-quorum history coverage"))?
+                .require_live(),
+            Self::CommittedHandoff(_) => {
+                Err(invalid("handoff cut is not a replacement-history quorum"))
+            }
+        }
+    }
     pub(crate) fn is_actual_replacement_source(&self) -> bool {
         matches!(self,Self::CurrentVoterRepair(cut)if cut.replacement_source)
     }

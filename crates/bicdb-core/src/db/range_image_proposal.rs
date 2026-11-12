@@ -173,6 +173,9 @@ impl NativeCurrentImageProposalReceipt {
     pub(crate) fn intent_core_sha256(&self) -> &str {
         &self.record.intent_core_sha256
     }
+    pub(crate) fn parent(&self) -> Option<&NativeCurrentImageProposalPointer> {
+        self.record.parent.as_ref()
+    }
     pub(crate) fn preimage(&self) -> &ProtectedCurrentImagePreimageV1 {
         &self.record.preimage
     }

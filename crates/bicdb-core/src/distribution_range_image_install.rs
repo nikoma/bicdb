@@ -592,7 +592,8 @@ impl NativeRangeImageInstaller {
             &catalog_obligations,
             role,
             frozen.as_frozen(),
-        )?;
+        )?
+        .with_source_substitution(&db, source)?;
         let history_stage = db.begin_native_history_stage(&context, source)?;
         let catalog = canonical_range_image_catalog(
             source.cut().cluster_id(),

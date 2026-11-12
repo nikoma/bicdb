@@ -162,7 +162,11 @@ fn native_unassigned_learner_birth_tls_live_scope_cancel_and_permanent_provision
     assert_eq!(observed.node().unwrap(), &node(4));
     assert_eq!(observed.schema_sha256().unwrap(), bundle.fingerprint.sha256);
     assert_eq!(birth.node_incarnation(), 1);
-    assert!(birth.writer_enforcement_version() == 1 && factory.spec.initial_ranges.is_empty());
+    assert!(
+        birth.writer_enforcement_version() == 1
+            && birth.abort_protocol_version() == 1
+            && factory.spec.initial_ranges.is_empty()
+    );
     assert!(
         launches[0].metadata.lock().committed_topology().nodes[&node(4)]
             .native_store_birth_v1

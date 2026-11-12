@@ -258,6 +258,11 @@ impl NativeUnassignedLearnerHost {
             .native_store_birth_v1
             .clone()
             .ok_or_else(|| invalid("actual learner proposal lacks birth"))?;
+        if birth.writer_enforcement_version() != 1 || birth.abort_protocol_version() != 1 {
+            return Err(invalid(
+                "learner observer requires the complete from-birth native writer/abort contract",
+            ));
+        }
         let mut service = crate::ClusterDataNodeService::open(
             factory.spec.cluster_id.clone(),
             factory.spec.node_id.clone(),
@@ -422,6 +427,7 @@ impl NativeLearnerBirthObservation {
             })
             || response.incarnation != target.incarnation
             || response.birth.writer_enforcement_version() != 1
+            || response.birth.abort_protocol_version() != 1
             || target
                 .native_store_birth_v1
                 .as_ref()

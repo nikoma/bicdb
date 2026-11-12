@@ -1,0 +1,73 @@
+{
+  "runs": [
+    {
+      "source": "e2a49d96dba1e07a5985e60fcf996890647b0fbc",
+      "targets": [
+        {
+          "target": "partition_replication_reader",
+          "exit": 101,
+          "status": "FAILED",
+          "passed": 0,
+          "failed": 1,
+          "ignored": 0
+        },
+        {
+          "target": "session::rename_table::tests::promoted_primary_recovers_an_undecided_replicated_rename_before_sql_writes",
+          "exit": 101,
+          "status": "FAILED",
+          "passed": 0,
+          "failed": 1,
+          "ignored": 0
+        }
+      ]
+    },
+    {
+      "source": "d7b6bfd3b899077322b9ebcc98a16f5f568dfdb3",
+      "targets": [
+        {
+          "target": "partition_replication_reader",
+          "exit": 0,
+          "status": "ok",
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "target": "partition_execution",
+          "exit": 0,
+          "status": "ok",
+          "passed": 9,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "target": "partition_child_schema",
+          "exit": 0,
+          "status": "ok",
+          "passed": 12,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "target": "rollback_index_admission",
+          "exit": 0,
+          "status": "ok",
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "target": "session::rename_table::tests::promoted_primary_recovers_an_undecided_replicated_rename_before_sql_writes",
+          "exit": 101,
+          "status": "FAILED",
+          "passed": 0,
+          "failed": 1,
+          "ignored": 0
+        }
+      ]
+    }
+  ],
+  "fixed_SQL_passed": 23,
+  "required_original_rename": "still failed; Nativeportablebirth/acceptedprovenance/resolver unimplemented; noassertionchanged or fallback",
+  "scope": "Focused only. Exact d7b actual standaloneNative logical replication+liveSQLpartition reads+two reopens+localpromotion+new write passes bothmodes; not network/physicalHA/portableorigin/app/release/mainmerge."
+}

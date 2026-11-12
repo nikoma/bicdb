@@ -1,0 +1,51 @@
+{
+  "source": "e2a49d96dba1e07a5985e60fcf996890647b0fbc",
+  "scope": "Stable1348production plus new positive SQLpartition Native logical replication, live standby parent/leaf reads, exact Native ACKhashes, two reopens and actual local promotion/new write in both modes. Original promoted undecided replicated SQLrename positive retained separately; expected portableorigin dependency remains unimplemented and any actual failure is a gate, never hidden. Not network election, VM/physicalHA/distributedcapacity/application or release/mainmerge qualification. Original assertions/waits unchanged; P2off/no new spend; goalactive.",
+  "started_unix": 1794521466.5106936,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--no-fail-fast",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "partition_replication_reader",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794521466.5113213,
+      "exit": 101,
+      "finished_unix": 1794521639.0044851
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--no-fail-fast",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--lib",
+        "session::rename_table::tests::promoted_primary_recovers_an_undecided_replicated_rename_before_sql_writes",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794521639.0046892,
+      "exit": 101,
+      "finished_unix": 1794521761.2794683
+    }
+  ],
+  "status": "failed",
+  "finished_unix": 1794521761.2796936
+}

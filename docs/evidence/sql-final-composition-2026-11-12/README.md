@@ -35,7 +35,9 @@ decoders are unit controls, not a claim that an old external binary ran here.
 
 Source `e2a49d96dba1e07a5985e60fcf996890647b0fbc` adds a SQL partition
 replication/read/local-promotion positive and reruns the unchanged original
-promoted undecided-rename positive. Both are pending at this checkpoint. Native
+promoted undecided-rename positive. The initial batch failed both tests. The session schema/certificate fix at
+`d7b6bfd3` now passes the partition positive and three related complete targets;
+the original rename positive still fails. See [exact results](partition-certificate/). Native
 portable collection birth, accepted provenance and its read-only resolver
 remain unimplemented. Names, aliases, SQL OIDs and donor UUIDs cannot substitute.
 

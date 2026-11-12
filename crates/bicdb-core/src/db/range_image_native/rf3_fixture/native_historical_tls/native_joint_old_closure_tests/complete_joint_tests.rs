@@ -332,11 +332,24 @@ fn install_actual_target(
         .unwrap()
 }
 
+#[derive(Debug, PartialEq, Eq)]
+enum JointTestOutcome {
+    FullHandoffAckAndStrong,
+    PublicationOnly,
+    OriginalCallerRejected,
+    FrozenOpenOnly,
+    AdversarialOnly,
+}
+
 #[test]
 fn native_joint_actual_complete_image_target_becomes_leader_ack_and_strong_read() {
     // Full contract uses DISTINCT bounded phases after original MQ expiry;
     // every original row/history/UID/final replica assertion remains below.
-    run_complete_joint(4);
+    assert_eq!(
+        run_complete_joint(0),
+        JointTestOutcome::FullHandoffAckAndStrong,
+        "a prerequisite/adversarial early return must not qualify the full handoff"
+    );
 }
 #[test]
 fn native_joint_fresh_preparation_phase_publishes_all_final_members_after_original_expiry() {
@@ -353,7 +366,7 @@ fn native_joint_fresh_open_phase_reconciles_exact_target_epoch_and_lost_catalogu
     run_complete_joint(3);
 }
 
-fn run_complete_joint(mode: u8) {
+fn run_complete_joint(mode: u8) -> JointTestOutcome {
     let parent = CancellationToken::uncancelable();
     let mut fixture = EnforcedNetwork::new_with_metadata_members(4);
     fixture.native.root.disable_cleanup(true);
@@ -554,20 +567,22 @@ fn run_complete_joint(mode: u8) {
             let db = fixture.native.databases[&id].read();
             assert!(db.range_mutation_gate().try_enter(old.id).is_err());
         }
-        return;
+        return JointTestOutcome::OriginalCallerRejected;
     }
     if mode == 1 || mode >= 3 {
         let published =
             exercise_fresh_native_publication(&fixture, &prepared, &parent, old.id, mode == 1);
         if mode == 3 {
             exercise_fresh_open_while_frozen(&fixture, &prepared, published, &parent, old.id);
+            return JointTestOutcome::FrozenOpenOnly;
         } else if mode >= 4 {
             open_adversarial_tests::exercise(&fixture, &prepared, published, &parent, old.id, mode);
+            return JointTestOutcome::AdversarialOnly;
         }
-        return;
+        return JointTestOutcome::PublicationOnly;
     }
 
-    let release_continuation = if mode == 4 {
+    let release_continuation = if mode == 0 {
         let published =
             exercise_fresh_native_publication(&fixture, &prepared, &parent, old.id, false);
         let (activations, image_owner) = exercise_fresh_open_boundary(
@@ -856,6 +871,12 @@ fn run_complete_joint(mode: u8) {
         assert_eq!(db.get("items", &key).unwrap(), Some(acknowledged.clone()));
         assert_eq!(db.get("items", &next_key).unwrap().as_deref(), Some(&next));
     }
+    assert!(
+        release_continuation.is_some(),
+        "full acceptance must exercise fresh all-member release continuation"
+    );
+    eprintln!("ACTUAL_JOINT_FULL_ACCEPTANCE all-three-release-checked=true target-ACK2-checked=true strong-R2-checked=true idempotent-R2-checked=true ABA-and-original-caller-refusal-checked=true");
+    JointTestOutcome::FullHandoffAckAndStrong
 }
 
 /// Complete ONLY the bounded Prepared→protected-native-publication phase.

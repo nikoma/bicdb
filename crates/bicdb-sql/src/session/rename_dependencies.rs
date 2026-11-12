@@ -63,6 +63,32 @@ impl RenameDependencies {
                     .insert((PRIVILEGE_COLLECTION.into(), privilege_key(&grant)));
             }
         }
+        // A later CREATE may reuse the source spelling while this rename's
+        // reservation is retained. Its existing default ACL templates can
+        // publish keys absent from the original table's grants. Reserve and
+        // capture those absent keys before the first rename mutation, so an
+        // internal writer cannot escape the original undo inventory.
+        let owner = previous.owner.as_deref().unwrap_or(BOOTSTRAP_ROLE_NAME);
+        for default in list_default_privileges(db)?.into_iter().filter(|default| {
+            default.object_type == PrivilegeObjectType::Table
+                && default.grantor.eq_ignore_ascii_case(owner)
+                && (default.schema_name == "*"
+                    || default
+                        .schema_name
+                        .eq_ignore_ascii_case(&previous.schema_name))
+        }) {
+            for name in [old, new] {
+                let grant = PrivilegeGrant {
+                    column: None,
+                    object_type: PrivilegeObjectType::Table,
+                    object_name: name.clone(),
+                    grantee: default.grantee.clone(),
+                    privilege: default.privilege.clone(),
+                };
+                plan.metadata
+                    .insert((PRIVILEGE_COLLECTION.into(), privilege_key(&grant)));
+            }
+        }
         for trigger in list_triggers(db)? {
             if trigger.table_name == *old {
                 plan.metadata

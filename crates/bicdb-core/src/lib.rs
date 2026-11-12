@@ -481,9 +481,9 @@ pub use memory_index::{
 };
 pub use mutation::{
     MutationActor, MutationGrantId, MutationGrantSpec, MutationOperation, MutationPolicy,
-    NativeCommitValidator, NativeInvariantAggregateFunction, NativeInvariantBinaryOperator,
-    NativeInvariantDefinition, NativeInvariantExpression, NativeInvariantKind,
-    NativeInvariantUnaryOperator, NativeInvariantValueType,
+    NativeCommitValidator, NativeFactPublicationPolicy, NativeInvariantAggregateFunction,
+    NativeInvariantBinaryOperator, NativeInvariantDefinition, NativeInvariantExpression,
+    NativeInvariantKind, NativeInvariantUnaryOperator, NativeInvariantValueType,
 };
 pub use numeric_key::{canonical_numeric_parts, numeric_index_key_from_canonical_text};
 pub use observability::{

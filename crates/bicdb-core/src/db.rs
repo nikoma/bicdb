@@ -8724,6 +8724,70 @@ fn evaluate_native_invariant_expression(
                         .is_some_and(Ordering::is_lt),
             )
         }
+        NativeInvariantExpression::PublishedExists {
+            binding,
+            relation,
+            owner_application,
+            publication_name,
+            publication_fingerprint,
+            consumer_application,
+            condition,
+        } => {
+            let publication = db
+                .mutation_policy(relation)?
+                .and_then(|policy| policy.native_fact_publication)
+                .ok_or_else(|| {
+                    BicDbError::CommitValidation("native fact integrity failed".into())
+                })?;
+            let actor = tx.mutation_actor.as_ref().ok_or_else(|| {
+                BicDbError::CommitValidation("native fact integrity failed".into())
+            })?;
+            if publication.owner_application != *owner_application
+                || publication.publication_name != *publication_name
+                || publication.fingerprint != *publication_fingerprint
+                || !publication.accept_new_references
+                || !publication.consumers.contains(consumer_application)
+                || actor.roles.is_disjoint(&publication.read_roles)
+            {
+                return Err(BicDbError::CommitValidation(
+                    "native fact integrity failed".into(),
+                ));
+            }
+            let tenant = actor
+                .tenant_id
+                .as_deref()
+                .and_then(|tenant| Uuid::parse_str(tenant).ok())
+                .ok_or_else(|| {
+                    BicDbError::CommitValidation("native fact integrity failed".into())
+                })?;
+            let mut found = false;
+            for record in resulting_records_for_relation(db, tx, relation)? {
+                let eligible = record_invariant_field(&record, &publication.tenant_field)
+                    .as_str()
+                    .and_then(|tenant| Uuid::parse_str(tenant).ok())
+                    == Some(tenant);
+                if !eligible {
+                    continue;
+                }
+                let mut nested = bindings.clone();
+                nested.insert(binding.clone(), record);
+                if evaluate_native_invariant_expression(
+                    db,
+                    tx,
+                    subject_relation,
+                    subject,
+                    &nested,
+                    condition,
+                )?
+                .as_bool()
+                    == Some(true)
+                {
+                    found = true;
+                    break;
+                }
+            }
+            Value::Bool(found)
+        }
         NativeInvariantExpression::Exists {
             binding,
             relation,
@@ -8836,8 +8900,38 @@ fn validate_carrier_invariant(
     {
         return Ok(());
     }
+    fn has_published(value: &NativeInvariantExpression) -> bool {
+        match value {
+            NativeInvariantExpression::PublishedExists { .. } => true,
+            NativeInvariantExpression::Unary { value, .. } => has_published(value),
+            NativeInvariantExpression::Binary { left, right, .. } => {
+                has_published(left) || has_published(right)
+            }
+            NativeInvariantExpression::Exists { condition, .. }
+            | NativeInvariantExpression::Aggregate { condition, .. } => has_published(condition),
+            NativeInvariantExpression::Overlaps { values, .. } => values.iter().any(has_published),
+            _ => false,
+        }
+    }
+    let published = has_published(&definition.expression);
+    if published
+        && !tx
+            .writes
+            .iter()
+            .any(|write| write.collection == definition.subject_relation)
+    {
+        return Ok(());
+    }
     let subjects = resulting_records_for_relation(db, tx, &definition.subject_relation)?;
     for subject in subjects {
+        if published
+            && !tx.writes.iter().any(|write| {
+                write.collection == definition.subject_relation && write.record_id == subject.id
+            })
+        {
+            continue;
+        }
+
         let value = evaluate_native_invariant_expression(
             db,
             tx,
@@ -9021,6 +9115,13 @@ impl TransactionRollbackMark {
     }
 }
 
+struct AuthorizedMutation {
+    audit: Option<crate::broker::PendingBrokerPublish>,
+    issuer_application: Option<String>,
+    relation: String,
+    record_ids: Vec<String>,
+}
+
 #[derive(Debug)]
 pub struct Transaction {
     db: NonNull<BicDb>,
@@ -9131,6 +9232,7 @@ pub struct Transaction {
     // so rollback marks restore the timing as well as the queued checks.
     constraint_modes: Mutex<Vec<(String, bool)>>,
     mutation_grants: BTreeMap<MutationGrantId, MutationGrant>,
+    native_write_issuers: Mutex<BTreeMap<usize, Option<String>>>,
     next_mutation_grant: u64,
     commit_validators: Vec<NativeCommitValidator>,
     isolation: TransactionIsolation,
@@ -10030,7 +10132,9 @@ impl BicDb {
                         value.get("phase").and_then(serde_json::Value::as_str),
                         Some("admitted" | "reverted")
                     ) {
-                        return Err(replication_error("offline application unique-scope transition requires signed recovery or admission"));
+                        return Err(replication_error(
+                            "offline application unique-scope transition requires signed recovery or admission",
+                        ));
                     }
                 }
                 Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
@@ -10089,7 +10193,9 @@ impl BicDb {
                         value.get("phase").and_then(serde_json::Value::as_str),
                         Some("admitted" | "reverted")
                     ) {
-                        return Err(replication_error("offline application unique-scope transition requires signed recovery or admission"));
+                        return Err(replication_error(
+                            "offline application unique-scope transition requires signed recovery or admission",
+                        ));
                     }
                 }
                 Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
@@ -12307,7 +12413,9 @@ impl BicDb {
         expected_cluster_id: &str,
     ) -> Result<ReplicationApplyReport> {
         if !self.replication_verification_healthy() {
-            return Err(replication_error("replica verification failed; snapshot bootstrap required before importing more commits"));
+            return Err(replication_error(
+                "replica verification failed; snapshot bootstrap required before importing more commits",
+            ));
         }
         if require_standby && !self.is_replication_standby() {
             return Err(replication_error(
@@ -12690,6 +12798,10 @@ impl BicDb {
                     "collection `{collection}` mutation field names must contain 1..=256 bytes"
                 )));
             }
+        }
+        if policy.native_fact_publication.is_some() || policy.native_fact_reference_owner.is_some()
+        {
+            format::enable_native_immutable_facts(&self.path)?;
         }
         self.collection_state_mut(collection)?.meta.mutation_policy = Some(policy);
         self.persist_catalog()?;
@@ -15292,6 +15404,28 @@ impl Transaction {
     /// [`BicDb::begin_application_transaction`]; ordinary transactions fail
     /// closed.
     pub fn issue_mutation_grant(&mut self, spec: MutationGrantSpec) -> Result<MutationGrantId> {
+        self.issue_mutation_grant_inner(spec, None)
+    }
+
+    /// Trusted native host only: the issuer is the validated executing package,
+    /// never an actor attribute, SQL parameter or application ABI request field.
+    pub fn issue_application_mutation_grant(
+        &mut self,
+        spec: MutationGrantSpec,
+        issuer_application: String,
+    ) -> Result<MutationGrantId> {
+        if issuer_application.is_empty() {
+            return Err(BicDbError::MutationDenied(
+                "empty application issuer".into(),
+            ));
+        }
+        self.issue_mutation_grant_inner(spec, Some(issuer_application))
+    }
+    fn issue_mutation_grant_inner(
+        &mut self,
+        spec: MutationGrantSpec,
+        issuer_application: Option<String>,
+    ) -> Result<MutationGrantId> {
         if self.state != TxState::Pending {
             return Err(BicDbError::TransactionNotPending);
         }
@@ -15343,6 +15477,7 @@ impl Transaction {
         self.mutation_grants.insert(
             id,
             MutationGrant {
+                issuer_application,
                 id,
                 actor,
                 remaining_rows: spec.maximum_affected_rows,
@@ -15559,7 +15694,7 @@ impl Transaction {
         collection: &str,
         operation: MutationOperation,
         records: &[Record],
-    ) -> Result<Option<crate::broker::PendingBrokerPublish>> {
+    ) -> Result<AuthorizedMutation> {
         self.authorize_mutation_with_preimage(grant_id, collection, operation, records, None)
     }
 
@@ -15570,7 +15705,7 @@ impl Transaction {
         operation: MutationOperation,
         records: &[Record],
         checked_preimage: Option<(&str, Option<Arc<Record>>)>,
-    ) -> Result<Option<crate::broker::PendingBrokerPublish>> {
+    ) -> Result<AuthorizedMutation> {
         if self.state != TxState::Pending {
             return Err(BicDbError::TransactionNotPending);
         }
@@ -15632,6 +15767,20 @@ impl Transaction {
                 .clone()
                 .unwrap_or_default()
         };
+        let native_owner = mutation_policy
+            .native_fact_publication
+            .as_ref()
+            .map(|publication| &publication.owner_application)
+            .or(mutation_policy.native_fact_reference_owner.as_ref());
+        if let Some(owner) = native_owner {
+            if grant.issuer_application.as_deref() != Some(owner.as_str())
+                || operation != MutationOperation::Insert
+            {
+                return Err(BicDbError::MutationDenied(
+                    "immutable native fact owner mutation denied".into(),
+                ));
+            }
+        }
         if mutation_policy.audit_required && grant.spec.audit_metadata.is_empty() {
             return Err(BicDbError::MutationDenied(format!(
                 "collection `{collection}` requires non-empty MutationGrant audit metadata"
@@ -15664,7 +15813,7 @@ impl Transaction {
                 Some(_) => {
                     return Err(BicDbError::TransactionConflict(
                         "checked mutation preimage does not match its row".into(),
-                    ))
+                    ));
                 }
                 None => self.get_visible_unchecked(collection, &record.id)?,
             };
@@ -15794,6 +15943,7 @@ impl Transaction {
                 message_id: Uuid::new_v4(),
             }
         });
+        let authorized_issuer = grant.issuer_application.clone();
         let grant = self
             .mutation_grants
             .get_mut(&grant_id)
@@ -15803,11 +15953,32 @@ impl Transaction {
         if grant.remaining_rows == 0 || grant.remaining_statements == 0 {
             self.mutation_grants.remove(&grant_id);
         }
-        Ok(audit)
+        Ok(AuthorizedMutation {
+            audit,
+            issuer_application: authorized_issuer,
+            relation: collection.into(),
+            record_ids: records.iter().map(|record| record.id.clone()).collect(),
+        })
     }
 
-    fn enqueue_mutation_audit(&self, audit: Option<crate::broker::PendingBrokerPublish>) {
-        if let Some(audit) = audit {
+    fn enqueue_mutation_audit(&self, authorization: AuthorizedMutation) {
+        let mut issuers = self.native_write_issuers.lock();
+        for id in &authorization.record_ids {
+            if let Some(index) = self
+                .writes
+                .iter()
+                .enumerate()
+                .rev()
+                .find_map(|(index, write)| {
+                    (write.collection == authorization.relation && write.record_id == *id)
+                        .then_some(index)
+                })
+            {
+                issuers.insert(index, authorization.issuer_application.clone());
+            }
+        }
+        drop(issuers);
+        if let Some(audit) = authorization.audit {
             self.pending_broker_publishes.lock().push(audit);
         }
     }
@@ -18266,6 +18437,7 @@ impl Transaction {
         }
         if len < self.writes.len() {
             self.writes.truncate(len);
+            self.native_write_issuers.lock().split_off(&len);
             self.rebuild_write_index();
         }
         self.rollback_write_receipts(self.writes.len());
@@ -18292,6 +18464,7 @@ impl Transaction {
         }
         if write_len < self.writes.len() {
             self.writes.truncate(write_len);
+            self.native_write_issuers.lock().split_off(&write_len);
             self.rebuild_write_index();
         }
         self.rollback_write_receipts(self.writes.len());
@@ -28029,12 +28202,10 @@ fn validate_record_parts(
         return Err(BicDbError::EmptyRecordId);
     }
     if id.len() > MAX_RECORD_ID_BYTES {
-        return Err(BicDbError::InvalidRecordId(
-            format!(
-                "record id for collection `{collection}` is {} UTF-8 bytes; ids must be at most {MAX_RECORD_ID_BYTES} bytes",
-                id.len()
-            ),
-        ));
+        return Err(BicDbError::InvalidRecordId(format!(
+            "record id for collection `{collection}` is {} UTF-8 bytes; ids must be at most {MAX_RECORD_ID_BYTES} bytes",
+            id.len()
+        )));
     }
 
     if let Some(vector) = vector {
@@ -33563,8 +33734,11 @@ mod index_maintenance_tests {
                             .get("ledger", "changed")
                             .unwrap()
                             .and_then(|record| record.metadata.get("v").and_then(|v| v.as_i64()));
-                        assert_eq!(value, reinsert.then_some(30),
-                            "before={delete_before_begin} reinsert={reinsert} abort={abort_first} truncate={truncate}");
+                        assert_eq!(
+                            value,
+                            reinsert.then_some(30),
+                            "before={delete_before_begin} reinsert={reinsert} abort={abort_first} truncate={truncate}"
+                        );
                         assert!(recovered.get("ledger", "untouched").unwrap().is_some());
                     }
                 }

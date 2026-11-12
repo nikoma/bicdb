@@ -1313,7 +1313,7 @@ impl ApplicationSecurityContractV1 {
                 _ => {
                     return invalid(
                         "BicDB application package names an unknown host security route",
-                    )
+                    );
                 }
             };
         let expected_scheme = (!public).then(|| self.auth_scheme.clone()).flatten();
@@ -2637,6 +2637,10 @@ pub struct ApplicationManifestV2 {
     pub resources: Vec<ResourceContractV1>,
     #[serde(default)]
     pub invariants: Vec<ApplicationInvariantV1>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub native_fact_publications: Vec<NativeFactPublicationV1>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub native_fact_imports: Vec<NativeFactImportV1>,
     #[serde(default)]
     pub migrations: Vec<MigrationPlanV1>,
     #[serde(default)]
@@ -2697,6 +2701,7 @@ impl ApplicationManifestV2 {
         }
         self.package.validate(&extension.identity.name)?;
         reject_unsupported_features(&self.required_features)?;
+        self.validate_native_facts(extension)?;
         unique_by(
             "relation permission",
             self.relation_permissions.iter().map(|item| &item.relation),
@@ -5295,7 +5300,9 @@ fn validate_resource_policy_expression(
         ApplicationExpressionV1::Variable { name } => invalid(format!(
             "resource policy references undeclared field or variable `{name}`"
         )),
-        ApplicationExpressionV1::Literal { value } if valid_resource_policy_literal(value) => Ok(()),
+        ApplicationExpressionV1::Literal { value } if valid_resource_policy_literal(value) => {
+            Ok(())
+        }
         ApplicationExpressionV1::Literal { .. } => {
             invalid("resource policy literals must be scalar or arrays of scalars")
         }
@@ -5310,9 +5317,7 @@ fn validate_resource_policy_expression(
         }
         ApplicationExpressionV1::Field { target, field } => {
             let ApplicationExpressionV1::Variable { name } = target.as_ref() else {
-                return invalid(
-                    "resource policy field access requires auth or a relation binding",
-                );
+                return invalid("resource policy field access requires auth or a relation binding");
             };
             let resource_name = bindings.get(name).ok_or_else(|| {
                 ExtensionError::InvalidManifest(format!(
@@ -5324,7 +5329,11 @@ fn validate_resource_policy_expression(
                 .iter()
                 .find(|resource| resource.name == *resource_name)
                 .expect("resource policy binding resources are validated");
-            if resource.fields.iter().any(|candidate| candidate.name == *field) {
+            if resource
+                .fields
+                .iter()
+                .any(|candidate| candidate.name == *field)
+            {
                 Ok(())
             } else {
                 invalid(format!(
@@ -5332,11 +5341,9 @@ fn validate_resource_policy_expression(
                 ))
             }
         }
-        ApplicationExpressionV1::Unary { operator, value, .. }
-            if matches!(operator.as_str(), "not" | "negate") =>
-        {
-            recurse(value, bindings)
-        }
+        ApplicationExpressionV1::Unary {
+            operator, value, ..
+        } if matches!(operator.as_str(), "not" | "negate") => recurse(value, bindings),
         ApplicationExpressionV1::Binary {
             operator,
             left,
@@ -5354,7 +5361,8 @@ fn validate_resource_policy_expression(
                 | "greater_equal"
                 | "less"
                 | "less_equal"
-        ) => {
+        ) =>
+        {
             recurse(left, bindings)?;
             recurse(right, bindings)
         }
@@ -5384,12 +5392,7 @@ fn validate_resource_policy_expression(
             condition,
         } => {
             validate_identifier("resource policy binding", binding)?;
-            if binding == "auth"
-                || subject
-                    .fields
-                    .iter()
-                    .any(|field| field.name == *binding)
-            {
+            if binding == "auth" || subject.fields.iter().any(|field| field.name == *binding) {
                 return invalid(format!(
                     "resource policy binding `{binding}` shadows a trusted or subject value"
                 ));
@@ -5459,7 +5462,8 @@ fn validate_resource_index_predicate(
                 | "greater_equal"
                 | "less"
                 | "less_equal"
-        ) => {
+        ) =>
+        {
             validate_resource_index_predicate(left, fields)?;
             validate_resource_index_predicate(right, fields)
         }
@@ -5643,22 +5647,23 @@ fn collect_carrier_blob_signed_methods_expression(
                 let method = arguments
                     .iter()
                     .find(|argument| argument.name.as_deref() == Some("method"));
-                let method =
-                    match method {
-                        None => "GET".to_string(),
-                        Some(ApplicationArgumentV1 {
-                            value:
-                                ApplicationExpressionV1::Literal {
-                                    value: JsonValue::String(value),
-                                },
-                            ..
-                        }) if matches!(value.to_ascii_uppercase().as_str(), "GET" | "PUT") => {
-                            value.to_ascii_uppercase()
-                        }
-                        _ => return invalid(
+                let method = match method {
+                    None => "GET".to_string(),
+                    Some(ApplicationArgumentV1 {
+                        value:
+                            ApplicationExpressionV1::Literal {
+                                value: JsonValue::String(value),
+                            },
+                        ..
+                    }) if matches!(value.to_ascii_uppercase().as_str(), "GET" | "PUT") => {
+                        value.to_ascii_uppercase()
+                    }
+                    _ => {
+                        return invalid(
                             "BicDB application blob signed URL method must be a literal GET or PUT",
-                        ),
-                    };
+                        );
+                    }
+                };
                 methods.insert(method);
             }
             for argument in arguments {
@@ -6068,6 +6073,7 @@ impl EgressDeclaration {
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 #[serde(rename_all = "snake_case")]
 pub enum ApplicationFeature {
+    NativeImmutableFacts,
     TrustedConnectionIdentity,
     ExactColumnAuthority,
     OidcRs256,
@@ -6427,6 +6433,99 @@ pub struct ApplicationInvariantTransitionV1 {
     pub value: ApplicationExpressionV1,
 }
 
+/// Signed immutable fact projection. This is predicate authority, never a local resource.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct NativeFactFieldV1 {
+    pub name: String,
+    pub field_type: FieldType,
+    pub nullable: bool,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct NativeFactPublicationV1 {
+    pub version: u32,
+    pub name: String,
+    pub owner_application: String,
+    pub resource: String,
+    pub relation: String,
+    pub stable_key: String,
+    pub tenant_field: String,
+    pub fields: Vec<NativeFactFieldV1>,
+    pub consumers: BTreeSet<String>,
+    pub read_roles: BTreeSet<String>,
+    pub fingerprint: String,
+    pub accept_new_references: bool,
+}
+
+impl NativeFactPublicationV1 {
+    /// Admission is monotonic durable policy, separate from structural identity.
+    pub fn structural_json(&self) -> Result<JsonValue> {
+        let mut value = serde_json::to_value(self)
+            .map_err(|error| ExtensionError::InvalidManifest(error.to_string()))?;
+        let object = value
+            .as_object_mut()
+            .expect("publication serializes as object");
+        object.remove("fingerprint");
+        object.remove("accept_new_references");
+        Ok(value)
+    }
+
+    fn validate(&self) -> Result<()> {
+        if self.version != 1 {
+            return invalid("native fact publication requires version 1");
+        }
+        validate_identifier("native fact publication", &self.name)?;
+        validate_nonempty("native fact owner", &self.owner_application, 256)?;
+        validate_identifier("native fact resource", &self.resource)?;
+        validate_nonempty("native fact relation", &self.relation, 256)?;
+        validate_nonempty("native fact stable key", &self.stable_key, 256)?;
+        validate_identifier("native fact tenant field", &self.tenant_field)?;
+        validate_sha256("native fact publication fingerprint", &self.fingerprint)?;
+        if self.fields.is_empty() || self.consumers.is_empty() || self.read_roles.is_empty() {
+            return invalid(
+                "native fact projection, consumers and roles must be explicit nonempty sets",
+            );
+        }
+        let mut names = BTreeSet::new();
+        for field in &self.fields {
+            validate_identifier("native fact field", &field.name)?;
+            if !names.insert(&field.name)
+                || !matches!(
+                    field.field_type,
+                    FieldType::String
+                        | FieldType::Bool
+                        | FieldType::Int64
+                        | FieldType::Float64
+                        | FieldType::Decimal
+                        | FieldType::Uuid
+                        | FieldType::Date
+                )
+            {
+                return invalid("native fact fields must be unique supported scalar fields");
+            }
+        }
+        if !self.fields.iter().any(|field| {
+            field.name == self.tenant_field
+                && field.field_type == FieldType::Uuid
+                && !field.nullable
+        }) {
+            return invalid("native fact tenant must be a published nonnullable UUID");
+        }
+        validate_string_set("native fact consumers", &self.consumers)?;
+        validate_string_set("native fact roles", &self.read_roles)
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct NativeFactImportV1 {
+    pub resource: String,
+    pub subject_resources: BTreeSet<String>,
+    pub publication: NativeFactPublicationV1,
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct ApplicationInvariantV1 {
@@ -6459,6 +6558,18 @@ impl ApplicationInvariantV1 {
                     self.name, self.subject_resource
                 ))
             })?;
+        if invariant_has_foreign_fact(application, &self.expression) {
+            if self.kind != ApplicationInvariantKindV1::MustAlways || self.transition.is_some() {
+                return invalid(
+                    "foreign native fact references require immutable positive must_always",
+                );
+            }
+            validate_positive_native_fact_expression(
+                application,
+                &self.subject_resource,
+                &self.expression,
+            )?;
+        }
         let mut dependencies = BTreeSet::from([self.subject_resource.clone()]);
         let bindings = BTreeMap::new();
         validate_invariant_expression(
@@ -6632,29 +6743,41 @@ fn validate_invariant_expression(
             let ApplicationExpressionV1::Variable { name } = target.as_ref() else {
                 return invalid("invariant field access requires a subject or binding variable");
             };
-            let resource = if name == "subject" {
-                subject
+            let resource_name = if name == "subject" {
+                &subject.name
             } else {
-                let resource_name = bindings.get(name).ok_or_else(|| {
-                    ExtensionError::InvalidManifest(format!(
-                        "invariant field access uses unknown binding `{name}`"
-                    ))
-                })?;
-                application
-                    .resources
-                    .iter()
-                    .find(|resource| resource.name == *resource_name)
-                    .expect("binding resources are validated")
+                bindings.get(name).ok_or_else(|| {
+                    ExtensionError::InvalidManifest(format!("unknown invariant binding `{name}`"))
+                })?
             };
-            if resource
-                .fields
+            let exists = application
+                .resources
                 .iter()
-                .any(|candidate| candidate.name == *field)
-            {
+                .find(|resource| resource.name == *resource_name)
+                .map(|resource| {
+                    resource
+                        .fields
+                        .iter()
+                        .any(|candidate| candidate.name == *field)
+                })
+                .or_else(|| {
+                    application
+                        .native_fact_imports
+                        .iter()
+                        .find(|import| import.resource == *resource_name)
+                        .map(|import| {
+                            import
+                                .publication
+                                .fields
+                                .iter()
+                                .any(|candidate| candidate.name == *field)
+                        })
+                });
+            if exists == Some(true) {
                 Ok(())
             } else {
                 invalid(format!(
-                    "invariant binding `{name}` references undeclared field `{field}`"
+                    "invariant binding `{name}` references undeclared or private field `{field}`"
                 ))
             }
         }
@@ -6782,14 +6905,22 @@ fn validate_invariant_expression(
             if binding == "subject" || bindings.contains_key(binding) {
                 return invalid(format!("duplicate invariant binding `{binding}`"));
             }
-            if !application
+            let local = application
                 .resources
                 .iter()
-                .any(|candidate| candidate.name == *resource)
-            {
+                .any(|candidate| candidate.name == *resource);
+            let imported = application
+                .native_fact_imports
+                .iter()
+                .find(|import| import.resource == *resource);
+            if !local && imported.is_none() {
                 return invalid(format!(
-                    "invariant binding `{binding}` references unknown resource `{resource}`"
+                    "invariant references unknown resource `{resource}`"
                 ));
+            }
+            if imported.is_some() && matches!(expression, ApplicationExpressionV1::Aggregate { .. })
+            {
+                return invalid("foreign native fact aggregates are unsupported");
             }
             dependencies.insert(resource.clone());
             let mut nested = bindings.clone();
@@ -6824,6 +6955,206 @@ fn validate_invariant_expression(
             Ok(())
         }
         _ => invalid("invariant contains an expression outside the enforced runtime corpus"),
+    }
+}
+
+impl ApplicationManifestV2 {
+    fn validate_native_facts(&self, extension: &ExtensionManifest) -> Result<()> {
+        if self.native_fact_publications.is_empty() && self.native_fact_imports.is_empty() {
+            return Ok(());
+        }
+        if !self
+            .required_features
+            .contains(&ApplicationFeature::NativeImmutableFacts)
+        {
+            return invalid("native facts require explicit supported feature");
+        }
+        let mut publications = BTreeSet::new();
+        let mut relations = BTreeSet::new();
+        for publication in &self.native_fact_publications {
+            publication.validate()?;
+            if publication.owner_application != extension.identity.name
+                || !publications.insert(&publication.name)
+                || !relations.insert(&publication.relation)
+            {
+                return invalid("native fact publication owner, name or relation is invalid");
+            }
+            let resource = self
+                .resources
+                .iter()
+                .find(|resource| resource.name == publication.resource)
+                .ok_or_else(|| {
+                    ExtensionError::InvalidManifest("native fact owner resource is absent".into())
+                })?;
+            if self
+                .resources
+                .iter()
+                .filter(|candidate| candidate.relation == publication.relation)
+                .count()
+                != 1
+            {
+                return invalid("native fact relation may not be shadowed");
+            }
+            if resource.schema_only
+                || resource.relation != publication.relation
+                || resource.tenant_field.as_deref() != Some(&publication.tenant_field)
+                || !resource
+                    .immutable_fields
+                    .contains(&publication.tenant_field)
+                || !resource
+                    .server_managed_fields
+                    .contains(&publication.tenant_field)
+            {
+                return invalid(
+                    "native fact owner requires actual immutable server-owned tenant policy",
+                );
+            }
+            for field in &publication.fields {
+                if !resource.fields.iter().any(|actual| {
+                    actual.name == field.name
+                        && actual.field_type == field.field_type
+                        && actual.nullable == field.nullable
+                }) || resource.redacted_fields.contains(&field.name)
+                    || resource
+                        .privacy
+                        .as_ref()
+                        .is_some_and(|privacy| privacy.fields.contains_key(&field.name))
+                {
+                    return invalid(
+                        "native fact projection references absent, mismatched or private owner field",
+                    );
+                }
+            }
+        }
+        let mut imports = BTreeSet::new();
+        for import in &self.native_fact_imports {
+            import.publication.validate()?;
+            if !imports.insert(&import.resource)
+                || !import.resource.contains('.')
+                || self.resources.iter().any(|resource| {
+                    resource.name == import.resource
+                        || resource.relation == import.publication.relation
+                })
+                || !import
+                    .publication
+                    .consumers
+                    .contains(&extension.identity.name)
+                || import.subject_resources.is_empty()
+            {
+                return invalid("native fact import is not an admitted dependency projection");
+            }
+            for subject in &import.subject_resources {
+                if let Some(resource) = self
+                    .resources
+                    .iter()
+                    .find(|resource| resource.name == *subject)
+                {
+                    if self
+                        .resources
+                        .iter()
+                        .filter(|candidate| candidate.relation == resource.relation)
+                        .count()
+                        != 1
+                    {
+                        return invalid("native reference relation may not be shadowed");
+                    }
+                }
+
+                if !self
+                    .resources
+                    .iter()
+                    .any(|resource| resource.name == *subject && !resource.schema_only)
+                {
+                    return invalid("native fact reference subject is absent");
+                }
+            }
+        }
+        Ok(())
+    }
+}
+
+fn invariant_has_foreign_fact(
+    application: &ApplicationManifestV2,
+    expression: &ApplicationExpressionV1,
+) -> bool {
+    match expression {
+        ApplicationExpressionV1::Exists {
+            resource,
+            condition,
+            ..
+        } => {
+            application
+                .native_fact_imports
+                .iter()
+                .any(|import| import.resource == *resource)
+                || invariant_has_foreign_fact(application, condition)
+        }
+        ApplicationExpressionV1::Aggregate { condition, .. }
+        | ApplicationExpressionV1::Unary {
+            value: condition, ..
+        } => invariant_has_foreign_fact(application, condition),
+        ApplicationExpressionV1::Binary { left, right, .. } => {
+            invariant_has_foreign_fact(application, left)
+                || invariant_has_foreign_fact(application, right)
+        }
+        ApplicationExpressionV1::Call { arguments, .. } => arguments
+            .iter()
+            .any(|argument| invariant_has_foreign_fact(application, &argument.value)),
+        _ => false,
+    }
+}
+
+fn native_fact_expression_has_scan(value: &ApplicationExpressionV1) -> bool {
+    match value {
+        ApplicationExpressionV1::Exists { .. } | ApplicationExpressionV1::Aggregate { .. } => true,
+        ApplicationExpressionV1::Unary { value, .. } => native_fact_expression_has_scan(value),
+        ApplicationExpressionV1::Binary { left, right, .. } => {
+            native_fact_expression_has_scan(left) || native_fact_expression_has_scan(right)
+        }
+        ApplicationExpressionV1::Call { arguments, .. } => arguments
+            .iter()
+            .any(|argument| native_fact_expression_has_scan(&argument.value)),
+        _ => false,
+    }
+}
+
+fn validate_positive_native_fact_expression(
+    application: &ApplicationManifestV2,
+    subject: &str,
+    expression: &ApplicationExpressionV1,
+) -> Result<()> {
+    match expression {
+        ApplicationExpressionV1::Exists {
+            resource,
+            condition,
+            ..
+        } if application.native_fact_imports.iter().any(|import| {
+            import.resource == *resource && import.subject_resources.contains(subject)
+        }) =>
+        {
+            if native_fact_expression_has_scan(condition) {
+                invalid("foreign native fact predicate cannot nest scans")
+            } else {
+                Ok(())
+            }
+        }
+        ApplicationExpressionV1::Binary {
+            operator,
+            left,
+            right,
+            ..
+        } if operator == "and" => {
+            validate_positive_native_fact_expression(application, subject, left)?;
+            validate_positive_native_fact_expression(application, subject, right)
+        }
+        value if !invariant_has_foreign_fact(application, value) => {
+            if native_fact_expression_has_scan(value) {
+                invalid("foreign fact invariant cannot mix mutable local scan dependencies")
+            } else {
+                Ok(())
+            }
+        }
+        _ => invalid("foreign fact reference must be a positive immutable EXISTS conjunct"),
     }
 }
 

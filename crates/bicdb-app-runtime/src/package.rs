@@ -198,6 +198,10 @@ pub(crate) struct ApplicationModuleContractV1 {
     pub traits: Vec<serde_json::Value>,
     #[serde(default)]
     pub extensions: Vec<serde_json::Value>,
+    #[serde(default)]
+    pub native_fact_publications: Vec<bicdb_extension::abi_v2::NativeFactPublicationV1>,
+    #[serde(default)]
+    pub native_fact_imports: Vec<bicdb_extension::abi_v2::NativeFactImportV1>,
 }
 
 #[derive(Clone, Debug, Default)]

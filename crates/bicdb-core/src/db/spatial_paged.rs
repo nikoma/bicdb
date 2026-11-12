@@ -2303,6 +2303,40 @@ impl BicDb {
     /// seq)` (after releasing the database write lock, so concurrent commits
     /// pipeline and coalesce) before acknowledging the commit.
     pub(crate) fn validate_native_commit_validators(&self, tx: &Transaction) -> Result<()> {
+        // Current durable policy wins over a captured pre-publication invocation.
+        let issuers = tx.native_write_issuers.lock();
+        let mut published_ids = BTreeSet::new();
+        for (index, write) in tx.writes.iter().enumerate() {
+            let policy = self.mutation_policy(&write.collection)?.unwrap_or_default();
+            if policy.native_fact_publication.is_some()
+                || policy.native_fact_reference_owner.is_some()
+            {
+                if write.op != TxWriteOp::Upsert
+                    || self
+                        .get_unchecked(&write.collection, &write.record_id)?
+                        .is_some()
+                    || !published_ids.insert((&write.collection, &write.record_id))
+                {
+                    return Err(BicDbError::CommitValidation(
+                        "immutable native fact mutation denied".into(),
+                    ));
+                }
+            }
+            let owner = policy
+                .native_fact_publication
+                .as_ref()
+                .map(|publication| &publication.owner_application)
+                .or(policy.native_fact_reference_owner.as_ref());
+            if let Some(owner) = owner {
+                if issuers.get(&index).and_then(|issuer| issuer.as_deref()) != Some(owner.as_str())
+                {
+                    return Err(BicDbError::CommitValidation(
+                        "immutable native fact owner mutation denied".into(),
+                    ));
+                }
+            }
+        }
+        drop(issuers);
         for validator in &tx.commit_validators {
             match validator {
                 NativeCommitValidator::AppendOnly { relation } => {

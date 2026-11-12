@@ -186,7 +186,8 @@ impl MetadataConsensusStore {
         } else {
             !current_pins.is_disjoint(&provenance.actual_pins)
         };
-        if binding.version != 1
+        if member.lifecycle != ClusterNodeLifecycle::Active
+            || binding.version != 1
             || binding.metadata_store_id.is_nil()
             || &binding.native_birth != birth
             || binding.native_birth.node_incarnation() != member.incarnation

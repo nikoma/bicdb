@@ -260,6 +260,22 @@ fn native_metadata_tls_reused_pin_old_destination_refuses_before_held_latches() 
     replicate(leader, &client, &[2, 3]);
     assert_eq!(leader.lock().committed_topology(), &retired);
     assert_eq!(metadata[&node(0)].lock().committed_topology(), &initial);
+    let retired_progress = leader.lock().match_index.clone();
+    let error = leader
+        .lock()
+        .record_append_response(&node(0), &owned_reply)
+        .unwrap_err();
+    assert!(
+        error
+            .to_string()
+            .contains("current birth/owned store/body/pin mismatch"),
+        "{error}"
+    );
+    assert_eq!(
+        leader.lock().match_index,
+        retired_progress,
+        "an actual pre-retirement ACK cannot repopulate committed retired identity progress"
+    );
     let replacement_socket = TcpListener::bind("127.0.0.1:0").unwrap();
     let mut replacement = retired.clone();
     replacement.generation += 1;

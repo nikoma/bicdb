@@ -17,14 +17,14 @@ Durations are milliseconds from actual phase clocks. Their intervals overlap; do
 |---|---|---:|---:|---|
 | Positive | n1 | 2894.045 | 1104ms | Reply returned |
 | Positive | n2 | 3949.512 | 48ms | Reply returned |
-| Positive | n3 | 2941.396 | 1056ms | Closed Ready quorum failed; no reply |
+| Positive | n3 | 2941.396 | 1056ms | Error reply; no completed observation |
 | Controls heavy case | n1 | 2819.406 | 1179ms | Reply returned |
 | Controls heavy case | n2 | 3589.635 | 408ms | Reply returned |
-| Controls heavy case | n3 | 2930.528 | 1067ms | Closed Ready quorum failed; no reply |
+| Controls heavy case | n3 | 2930.528 | 1067ms | Error reply; no completed observation |
 
 The positive's n3 closed-Ready phase began with2859ms left and failed after1803.024ms. The controls heavy case began with2861ms left and failed after1793.808ms. These are **aggregate collector durations**, not measured fixed peer TTLs. There are no exact peer queue/send/receipt, local-observation, receiver-role, receiver-latch or receiver-validation clocks in this source's logs. The final error names only the last retained peer error. Earlier and swallowed local failures cannot be reconstructed from these logs. Remaining parent time does not prove adequate time for the still-required persistence work.
 
-By observed-stable/live-owner custody capture, both fixtures have n1/n2 NativeCompleted and n3 NativePrepared. Both reached the real previous joint release, ACK2/Strong R2, CurrentJoint fences/promises, canonical Abort3/native R3 and three Prepare replies; only the first two Complete replies returned. The 883 cohort remains distinct: it actually returned all three Complete replies, then failed at activation reentry. Neither source's passing gates can be relabelled as an end-to-end result for the other.
+By observed-stable/live-owner custody capture, both fixtures have n1/n2 NativeCompleted and n3 NativePrepared. Both reached the real previous joint release, ACK2/Strong R2, CurrentJoint fences/promises, canonical Abort3/native R3 and three Prepare replies; only the first two successful Complete observations returned. The 883 cohort remains distinct: it actually returned all three Complete replies, then failed at activation reentry. Neither source's passing gates can be relabelled as an end-to-end result for the other.
 
 ## What the source proves, and what remains unknown
 

@@ -28,8 +28,8 @@ timeout was changed.
 | `8bcd3c1fa502a674a8ea284a3ef2032bb3f61d5a` | 6 bounds pass; execution 1 pass, 6 fail | Typed RANGE/LIST/DEFAULT bounds, attachment preflight, existing default rows, direct writes, child policy independence. |
 | `8a4bcfa818d4cf69df6007091c874fb4a91e088b` | 6 bounds pass; execution 3 pass, 5 fail | Parent scans now retain actual physical sources and apply the accessed parent's SQL policy. New query-shape test reaches a pre-existing bare `tableoid` projection failure. |
 | `1d126acb226cce0c89ead6b0cbeb4d229d07ccd2` | 8 bounds/routing pass; execution 5 pass, 3 fail | Plain INSERT routes before staging writes, including INSERT SELECT, multirow refusal/rollback and an attached partitioned subtree. Remaining execution failures: UPDATE, DELETE and bare physical system columns. |
-
 | `3267c029cbe7244a7fa6ca06deb1dc6bd9c9c8b6` | 8 bounds/routing pass; execution 6 pass, 2 fail | Bare system columns fixed; actual parent/child tableoid/xmin/ctid equality, aggregates and join shapes pass. UPDATE/DELETE remain failing. |
+| `f19ddd769b708ae01503308fa00f68974dc89cf5` | 9 bounds/routing/delete pass; execution 7 pass, 1 fail | Physical DELETE, USING, RETURNING and rollback pass. UPDATE row movement remains a mandatory failure. |
 
 The early `f9d2000d` submission lacked a remote Git prerequisite and ran no
 tests. Its rebundled attempt and `6992ffcb` did not compile because the new test

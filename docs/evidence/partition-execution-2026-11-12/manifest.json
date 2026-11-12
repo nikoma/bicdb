@@ -1,10 +1,31 @@
 {
   "status": "evolving_batch_not_qualified",
+  "latest_tested_source": "f19ddd769b708ae01503308fa00f68974dc89cf5",
+  "latest_tests": {
+    "passed": 16,
+    "failed": 1,
+    "required_remaining_failure": "parent UPDATE partition row movement"
+  },
   "files": [
     {
       "path": "README.md",
-      "bytes": 4883,
-      "sha256": "ab6686920c1e62631806dde2721361d5bc76267e9a77524e931a9bb6df549647"
+      "bytes": 5090,
+      "sha256": "472902dc24179bc9606484303681cca2b7f0f8d79ff033a22679609570da5004"
+    },
+    {
+      "path": "initial-harness-failures/tc-step-partition-execution-expanded-negative-6992ffcb.log",
+      "bytes": 95468,
+      "sha256": "2b6d5d39a46aa26520e98220cd762a4be4badb1ba5fa8ed79e1ecb2871a597f4"
+    },
+    {
+      "path": "initial-harness-failures/tc-step-partition-execution-negative-f9d2000d-v2.log",
+      "bytes": 92138,
+      "sha256": "8ab6d8df11d3899b49454d88f2a13741f59a3b33aba298d187f6c94d8e4eea8a"
+    },
+    {
+      "path": "initial-harness-failures/tc-step-partition-execution-negative-f9d2000d.log",
+      "bytes": 976,
+      "sha256": "f81f03eaa2427a960df2bc3fa63919290cc71934358201bf180074adba0613eb"
     },
     {
       "path": "native-pg16-reference/control.sql",
@@ -35,6 +56,16 @@
       "path": "partition-bounds-8bcd3c1f/tc-step-partition-bounds-8bcd3c1f.log",
       "bytes": 170233,
       "sha256": "1fef6b869ff61b2325e1e3cab83a51f732d229f801540f754eb2039bb2296342"
+    },
+    {
+      "path": "partition-delete-f19ddd76/report-partition-delete-f19ddd76.json",
+      "bytes": 1396,
+      "sha256": "3c5d21fc953d53b4ed6ac0272471ffda95a33aef6feeebb30ff7739b07af09bf"
+    },
+    {
+      "path": "partition-delete-f19ddd76/tc-step-partition-delete-f19ddd76.log",
+      "bytes": 167507,
+      "sha256": "e6d5f3a0165ca215d1f1bf8ab05dbc2051025f547e2566e9b571af7adf4b968a"
     },
     {
       "path": "partition-execution-negative-e86d6fc1/report-partition-execution-negative-e86d6fc1.json",

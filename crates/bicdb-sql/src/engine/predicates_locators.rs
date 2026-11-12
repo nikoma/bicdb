@@ -1344,7 +1344,7 @@ impl<'db> SqlEngine<'db> {
             for record in self.scan_raw_records(&physical.name)? {
                 let record = if different_keys {
                     let mut record = (*record).clone();
-                    partition::materialize_primary_key_fields(&physical, &mut record);
+                    partition::materialize_primary_key_fields(&physical, &mut record)?;
                     Arc::new(record)
                 } else {
                     record

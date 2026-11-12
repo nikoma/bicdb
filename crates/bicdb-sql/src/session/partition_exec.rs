@@ -86,7 +86,7 @@ impl SqlSession<'_> {
         let mut surviving = Vec::with_capacity(records.len());
         let mut triggered = false;
         for mut record in records {
-            partition::materialize_primary_key_fields(parent, &mut record);
+            partition::materialize_primary_key_fields(parent, &mut record)?;
             let target = partition::route_record(self.db_ref(), parent, &record)?;
             let (rows, fired) = self.apply_before_insert_row_triggers_with_identity(
                 &target.name,
@@ -301,7 +301,7 @@ impl SqlSession<'_> {
             for record in engine.scan_raw_records(&physical.name)? {
                 let record = if different_keys {
                     let mut record = (*record).clone();
-                    partition::materialize_primary_key_fields(&physical, &mut record);
+                    partition::materialize_primary_key_fields(&physical, &mut record)?;
                     Arc::new(record)
                 } else {
                     record
@@ -488,7 +488,7 @@ impl SqlSession<'_> {
             for record in engine.scan_raw_records(&physical.name)? {
                 let record = if different_keys {
                     let mut record = (*record).clone();
-                    partition::materialize_primary_key_fields(&physical, &mut record);
+                    partition::materialize_primary_key_fields(&physical, &mut record)?;
                     Arc::new(record)
                 } else {
                     record

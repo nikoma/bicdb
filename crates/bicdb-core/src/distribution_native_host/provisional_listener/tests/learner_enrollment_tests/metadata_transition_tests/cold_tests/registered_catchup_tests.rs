@@ -197,7 +197,6 @@ fn native_registered_metadata_cancel_promotion_catchup_and_all_owner_cold_voter_
     host.stop_owned_metadata(&token).unwrap();
     host.shutdown().unwrap();
     drop(held);
-    drop(host);
     drop(factory);
     // ALL target DB/MStore/provider/service/listener owners have ended. Copy
     // only stopped native bytes; no factory/schema/genesis initializer runs.

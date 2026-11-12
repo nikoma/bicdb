@@ -27,6 +27,7 @@ pub struct NativeMetadataLearnerHost {
     host: NativeUnassignedLearnerHost,
     transport: Arc<TcpClusterRelocationTransport>,
     leader: ClusterNodeId,
+    address: String,
     network: ClusterNetworkTransportConfig,
     metadata_started: bool,
     transitioning: bool,
@@ -84,7 +85,7 @@ impl NativeMetadataLearnerHost {
             .ok_or_else(|| invalid("fresh learner metadata leader unknown"))?;
         let transport = Arc::new(TcpClusterRelocationTransport::new(
             cluster,
-            local,
+            local.clone(),
             Arc::new(RwLock::new(snapshot.topology)),
             network.clone(),
         )?);
@@ -95,6 +96,16 @@ impl NativeMetadataLearnerHost {
             Duration::from_secs(5),
             &token,
         )?;
+        let first_member = first
+            .committed_topology(business)?
+            .nodes
+            .get(&local)
+            .ok_or_else(|| invalid("own learner absent from fresh metadata"))?;
+        if first_member.address != address || first_member.incarnation != incarnation {
+            return Err(invalid(
+                "fresh learner explicit endpoint/incarnation changed before schema transfer",
+            ));
+        }
         let range = first
             .committed_topology(business)?
             .ranges
@@ -114,6 +125,16 @@ impl NativeMetadataLearnerHost {
             &token,
         )?;
         transport.install_topology(current.committed_topology(factory_business)?.clone())?;
+        let current_member = current
+            .committed_topology(factory_business)?
+            .nodes
+            .get(&local)
+            .ok_or_else(|| invalid("own learner absent before factory"))?;
+        if current_member.address != address || current_member.incarnation != incarnation {
+            return Err(invalid(
+                "fresh learner explicit endpoint/incarnation changed before factory",
+            ));
+        }
         let db = DbConfig::default()
             .with_fsync(true)
             .with_storage_mode(StorageMode::ServerPaged)
@@ -139,6 +160,7 @@ impl NativeMetadataLearnerHost {
             host,
             transport,
             leader,
+            address: address.to_owned(),
             network,
             metadata_started: false,
             transitioning: false,
@@ -159,6 +181,18 @@ impl NativeMetadataLearnerHost {
             Duration::from_secs(5),
             parent,
         )?;
+        let member = observed
+            .committed_topology(business)?
+            .nodes
+            .get(&self.factory.spec.node_id)
+            .ok_or_else(|| invalid("actual learner member absent"))?;
+        if member.address != self.address
+            || member.incarnation != self.factory.spec.member_incarnation
+        {
+            return Err(invalid(
+                "learner endpoint/incarnation changed; old owner cannot rebind itself",
+            ));
+        }
         self.transport
             .install_topology(observed.committed_topology(business)?.clone())?;
         Ok((observed, business))

@@ -165,3 +165,13 @@ Registered reopen after persisted snapshot; missing/wrong original C must still
 refuse Prepared continuation. Keep this as a new unimplemented producer/test gate
 until separately executed; neither the prior 2c transition passes nor the full-C
 sidecar design qualifies it.
+
+Exactness failure must be reported as retryable missing exact snapshot, then
+reacquired only within the ORIGINAL bounded parent. Continuous metadata churn
+can starve this equality-based producer; that is an OPEN availability gate, not
+fault-safe completion. Tests must include genuine changed membership/new leader
+and sustained commit advancement with honest bounded refusal. A future stronger
+specific result could retain actual BEGIN C/restore whose hash is the anchor
+through MQ completion, while preserving normal HostMQ's existing advanced-view
+semantics. That is a separate producer/design; do not redefine normal HostMQ or
+label later C2 at an older k to avoid a retry.

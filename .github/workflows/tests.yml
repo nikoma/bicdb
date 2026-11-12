@@ -214,6 +214,7 @@ jobs:
         run: |
           set -euo pipefail
           export BICDB_TEST_EVIDENCE_ROOT="$RUNNER_TEMP/native-core-evidence/fault-state"
+          export BICDB_TEST_SOURCE_SHA="$GITHUB_SHA"
           mkdir -p "$BICDB_TEST_EVIDENCE_ROOT"
           cargo test -p bicdb-core --lib --locked "$BICDB_CORE_TEST_FILTER" -- --test-threads=4 \
             2>&1 | tee "$RUNNER_TEMP/native-core-evidence/tests.log"

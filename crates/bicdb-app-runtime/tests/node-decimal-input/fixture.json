@@ -1,0 +1,25 @@
+{
+  "application": "qualification.decimal_input",
+  "package": "fixtures/5b3436838c2c73b1af96bd4e9028680ea2c557c06546381059ae0b0bc97e2078.bicdb.json",
+  "package_sha256": "5b3436838c2c73b1af96bd4e9028680ea2c557c06546381059ae0b0bc97e2078",
+  "public_key": "fixtures/signing-key.pub",
+  "public_key_sha256": "059aa6c5096b73944c09d562f03786bf5e660f469e7da19495616f838e0355a6",
+  "key_id": "qa-decimal-input",
+  "public_test_seed_hex": "1919191919191919191919191919191919191919191919191919191919191919",
+  "official_compiler": {
+    "version": "2.3.92",
+    "source": "fe75da9386906da78ddadf7033cc572d9b5311db",
+    "sha256": "9d1d40e2e869df4569029398fec7d8e0fc1d471a20ebf1bb8383e215aa71b128"
+  },
+  "source_files": [
+    {
+      "path": "source/carrier.toml",
+      "sha256": "8ac7107583fb9201ee30c8b6a1005459c209cd2f77eb7303b0b9444cc624e634"
+    },
+    {
+      "path": "source/src/main.carrier",
+      "sha256": "6ac04ec65f74bab55dd3f81fa500e6893dcb92cecf55fd577dbf5b2ec6086eaa"
+    }
+  ],
+  "generated_output_edited": false
+}

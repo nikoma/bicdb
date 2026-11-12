@@ -5790,11 +5790,14 @@ fn raw_sql_parameter(value: Value, field_type: &FieldType) -> Result<SqlValue> {
             .map(SqlValue::Int)
             .ok_or_else(invalid),
         FieldType::Float64 => value.as_f64().map(SqlValue::Float).ok_or_else(invalid),
-        FieldType::Decimal => match value {
-            Value::Number(value) => Ok(SqlValue::String(value.to_string())),
-            Value::String(value) => Ok(SqlValue::String(value)),
-            _ => Err(invalid()),
-        },
+        FieldType::Decimal => {
+            crate::decimal_input::json_decimal_exact(&value).ok_or_else(invalid)?;
+            match value {
+                Value::Number(value) => Ok(SqlValue::String(value.to_string())),
+                Value::String(value) => Ok(SqlValue::String(value)),
+                _ => Err(invalid()),
+            }
+        }
         FieldType::String | FieldType::Timestamp | FieldType::Date => value
             .as_str()
             .map(|value| SqlValue::String(value.to_string()))
@@ -5915,12 +5918,7 @@ fn raw_sql_json_matches(value: &Value, field_type: &FieldType, parameter: bool) 
         FieldType::Bool => value.is_boolean(),
         FieldType::Int64 => value.as_i64().is_some() || value.as_u64().is_some(),
         FieldType::Float64 => value.as_f64().is_some(),
-        FieldType::Decimal => {
-            value.is_number()
-                || value
-                    .as_str()
-                    .is_some_and(|value| value.parse::<rust_decimal::Decimal>().is_ok())
-        }
+        FieldType::Decimal => crate::decimal_input::json_decimal_exact(value).is_some(),
         FieldType::String | FieldType::Timestamp | FieldType::Date | FieldType::Bytes => {
             value.is_string() || matches!(field_type, FieldType::Bytes) && value.is_array()
         }
@@ -8771,11 +8769,7 @@ fn typed_json_compare(
 }
 
 fn json_decimal(value: &Value) -> Option<rust_decimal::Decimal> {
-    match value {
-        Value::String(value) => value.parse().ok(),
-        Value::Number(value) => value.to_string().parse().ok(),
-        _ => None,
-    }
+    crate::decimal_input::json_decimal_exact(value)
 }
 
 fn spatial_rows(rows: Vec<Value>, operation: SpatialOperation) -> Result<Vec<Value>> {

@@ -1,0 +1,79 @@
+service DecimalInputQualification {}
+auth jwt InputAuth {issuer:"https://issuer.invalid" audience:"native-rollback-probe" algorithm:"RS256" roles_claim:"roles"}
+role probe_operator {}
+
+model DecimalInputRow {
+  id:UUID @primary
+  organization_id:UUID
+  amount:Decimal
+}
+policy DecimalInputRow {tenant_field:organization_id read:roles [probe_operator] write:roles [probe_operator]}
+
+type DecimalInput {id:UUID amount:Decimal}
+type RawDecimalInput {id:UUID amount:Json}
+type ParsedDecimalInput {id:UUID amount:String}
+type DecimalEcho {amount:Decimal}
+type OptionalDecimalEcho {amount:Decimal?}
+type DecimalBatch {rows:DecimalInput[]}
+type RawDecimalBatch {rows:RawDecimalInput[]}
+type BatchResult {count:Int}
+type FloatEcho {amount:Float}
+
+action typed_decimal(input:DecimalInput)->DecimalInputRow {
+  transaction(isolation:serializable) {
+    let actor=auth.current_user()
+    let rows=DecimalInputRow.bulk_insert([{id:input.id organization_id:actor.tenant_id amount:input.amount}])
+    return DecimalInputRow.get(id:input.id,scope:"all")
+  }
+}
+action raw_decimal(input:RawDecimalInput)->DecimalInputRow {
+  transaction(isolation:serializable) {
+    let actor=auth.current_user()
+    let rows:Json[]=[]
+    array.push(rows,{id:input.id organization_id:actor.tenant_id amount:input.amount})
+    let saved=DecimalInputRow.bulk_insert(rows)
+    return DecimalInputRow.get(id:input.id,scope:"all")
+  }
+}
+action parse_decimal(input:ParsedDecimalInput)->DecimalInputRow {
+  transaction(isolation:serializable) {
+    let actor=auth.current_user()
+    let amount=finance.decimal(input.amount)
+    let rows=DecimalInputRow.bulk_insert([{id:input.id organization_id:actor.tenant_id amount:amount}])
+    return DecimalInputRow.get(id:input.id,scope:"all")
+  }
+}
+action typed_decimal_batch(input:DecimalBatch)->BatchResult {
+  transaction(isolation:serializable) {
+    let actor=auth.current_user()
+    for row in input.rows {
+      let saved=DecimalInputRow.bulk_insert([{id:row.id organization_id:actor.tenant_id amount:row.amount}])
+    }
+    return BatchResult {count:array.length(input.rows)}
+  }
+}
+action raw_decimal_batch(input:RawDecimalBatch)->BatchResult {
+  transaction(isolation:serializable) {
+    let actor=auth.current_user()
+    for row in input.rows {
+      let rows:Json[]=[]
+      array.push(rows,{id:row.id organization_id:actor.tenant_id amount:row.amount})
+      let saved=DecimalInputRow.bulk_insert(rows)
+    }
+    return BatchResult {count:array.length(input.rows)}
+  }
+}
+crud DecimalInputRow at "/decimal-input/rows" {
+  list:protect InputAuth roles [probe_operator]
+  get:protect InputAuth roles [probe_operator]
+  create:protect InputAuth roles [probe_operator]
+}
+route POST "/decimal-input/typed" protect InputAuth roles [probe_operator] idempotent -> DecimalInputRow {input:DecimalInput handler{return typed_decimal(input)}}
+route POST "/decimal-input/raw-model" protect InputAuth roles [probe_operator] idempotent -> DecimalInputRow {input:RawDecimalInput handler{return raw_decimal(input)}}
+route POST "/decimal-input/parse" protect InputAuth roles [probe_operator] idempotent -> DecimalInputRow {input:ParsedDecimalInput handler{return parse_decimal(input)}}
+route POST "/decimal-input/typed-batch" protect InputAuth roles [probe_operator] idempotent -> BatchResult {input:DecimalBatch handler{return typed_decimal_batch(input)}}
+route POST "/decimal-input/raw-batch" protect InputAuth roles [probe_operator] idempotent -> BatchResult {input:RawDecimalBatch handler{return raw_decimal_batch(input)}}
+route POST "/decimal-input/optional" protect InputAuth roles [probe_operator] -> OptionalDecimalEcho {input:OptionalDecimalEcho handler{return input}}
+route POST "/decimal-input/float" protect InputAuth roles [probe_operator] -> FloatEcho {input:FloatEcho handler{return input}}
+route GET "/decimal-input/query" protect InputAuth roles [probe_operator] -> DecimalEcho {query{amount:Decimal} handler{return DecimalEcho {amount:query.amount}}}
+route GET "/decimal-input/path/{amount}" protect InputAuth roles [probe_operator] -> DecimalEcho {params{amount:Decimal} handler{return DecimalEcho {amount:params.amount}}}

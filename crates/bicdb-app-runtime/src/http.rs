@@ -25,7 +25,6 @@ use bicdb_extension::{HttpMethod, InvocationKind};
 use bytes::Bytes;
 use http_body::Frame;
 use http_body_util::StreamBody;
-use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
@@ -1437,7 +1436,7 @@ pub(crate) fn coerce_carrier_parameter_value(
                 Value::Number(value) => value.to_string(),
                 _ => return Err(invalid()),
             };
-            let value = value.parse::<Decimal>().map_err(|_| invalid())?;
+            let value = crate::decimal_input::parse_decimal_exact(&value).map_err(|_| invalid())?;
             if value.scale() > 28 {
                 return Err(invalid());
             }
@@ -1621,7 +1620,7 @@ pub(crate) fn normalize_carrier_json_value(
                 Value::Number(value) => value.to_string(),
                 _ => return Err(invalid()),
             };
-            let value = value.parse::<Decimal>().map_err(|_| invalid())?;
+            let value = crate::decimal_input::parse_decimal_exact(&value).map_err(|_| invalid())?;
             Ok(Value::String(value.to_string()))
         }
         ApplicationRouteParameterTypeV1::Bool => {

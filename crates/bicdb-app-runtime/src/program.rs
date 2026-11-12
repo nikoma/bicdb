@@ -2462,7 +2462,7 @@ fn decimal(value: Value, label: &str) -> Result<Decimal> {
             "BicDB application {label} must be an exact decimal string; got {value}"
         ))
     })?;
-    value.parse::<Decimal>().map_err(|error| {
+    crate::decimal_input::parse_decimal_exact(value).map_err(|error| {
         AppRuntimeError::InvalidRequest(format!(
             "BicDB application {label} is not a valid Decimal: {error}"
         ))
@@ -3443,7 +3443,7 @@ fn compare(
         // numbers, so `quantity > 0`-shaped comparisons mix the two. Compare
         // through Decimal — never through f64, which would round money.
         (Value::String(text), Value::Number(_)) => {
-            let left = text.parse::<Decimal>().map_err(|_| {
+            let left = crate::decimal_input::parse_decimal_exact(text).map_err(|_| {
                 AppRuntimeError::InvalidRequest(format!(
                     "BicDB application ordered comparison requires matching numbers or strings; got {left} and {right}"
                 ))
@@ -3451,7 +3451,7 @@ fn compare(
             left.cmp(&decimal(right.clone(), "comparison operand")?)
         }
         (Value::Number(_), Value::String(text)) => {
-            let right = text.parse::<Decimal>().map_err(|_| {
+            let right = crate::decimal_input::parse_decimal_exact(text).map_err(|_| {
                 AppRuntimeError::InvalidRequest(format!(
                     "BicDB application ordered comparison requires matching numbers or strings; got {left} and {right}"
                 ))

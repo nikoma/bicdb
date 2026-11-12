@@ -1,0 +1,380 @@
+{
+  "passed": true,
+  "expectExact": false,
+  "actualExactAdmission": false,
+  "critical_rounding_reproduced": true,
+  "unsupported_accepted": [
+    {
+      "text": "7922816251426433759354395033.55",
+      "mode": "typed",
+      "encoding": "string",
+      "returned": "7922816251426433759354395034"
+    },
+    {
+      "text": "7922816251426433759354395033.55",
+      "mode": "model",
+      "encoding": "string",
+      "returned": "7922816251426433759354395034"
+    },
+    {
+      "text": "7922816251426433759354395033.55",
+      "mode": "crud",
+      "encoding": "string",
+      "returned": "7922816251426433759354395034"
+    },
+    {
+      "text": "7922816251426433759354395033.55",
+      "mode": "builtin",
+      "encoding": "string",
+      "returned": "7922816251426433759354395034"
+    },
+    {
+      "text": "7922816251426433759354395033.55",
+      "mode": "typed",
+      "encoding": "numeric",
+      "returned": "7922816251426433759354395034"
+    },
+    {
+      "text": "7922816251426433759354395033.55",
+      "mode": "model",
+      "encoding": "numeric",
+      "returned": "7922816251426433759354395034"
+    },
+    {
+      "text": "7922816251426433759354395033.55",
+      "mode": "crud",
+      "encoding": "numeric",
+      "returned": "7922816251426433759354395034"
+    },
+    {
+      "text": "79228162514264337593543950335.1",
+      "mode": "typed",
+      "encoding": "string",
+      "returned": "79228162514264337593543950335"
+    },
+    {
+      "text": "79228162514264337593543950335.1",
+      "mode": "model",
+      "encoding": "string",
+      "returned": "79228162514264337593543950335"
+    },
+    {
+      "text": "79228162514264337593543950335.1",
+      "mode": "crud",
+      "encoding": "string",
+      "returned": "79228162514264337593543950335"
+    },
+    {
+      "text": "79228162514264337593543950335.1",
+      "mode": "builtin",
+      "encoding": "string",
+      "returned": "79228162514264337593543950335"
+    },
+    {
+      "text": "79228162514264337593543950335.1",
+      "mode": "typed",
+      "encoding": "numeric",
+      "returned": "79228162514264337593543950335"
+    },
+    {
+      "text": "79228162514264337593543950335.1",
+      "mode": "model",
+      "encoding": "numeric",
+      "returned": "79228162514264337593543950335"
+    },
+    {
+      "text": "79228162514264337593543950335.1",
+      "mode": "crud",
+      "encoding": "numeric",
+      "returned": "79228162514264337593543950335"
+    },
+    {
+      "text": "1.00000000000000000000000000001",
+      "mode": "typed",
+      "encoding": "string",
+      "returned": "1.0000000000000000000000000000"
+    },
+    {
+      "text": "1.00000000000000000000000000001",
+      "mode": "model",
+      "encoding": "string",
+      "returned": "1.0000000000000000000000000000"
+    },
+    {
+      "text": "1.00000000000000000000000000001",
+      "mode": "crud",
+      "encoding": "string",
+      "returned": "1.0000000000000000000000000000"
+    },
+    {
+      "text": "1.00000000000000000000000000001",
+      "mode": "builtin",
+      "encoding": "string",
+      "returned": "1.0000000000000000000000000000"
+    },
+    {
+      "text": "1.00000000000000000000000000001",
+      "mode": "typed",
+      "encoding": "numeric",
+      "returned": "1.0000000000000000000000000000"
+    },
+    {
+      "text": "1.00000000000000000000000000001",
+      "mode": "model",
+      "encoding": "numeric",
+      "returned": "1.0000000000000000000000000000"
+    },
+    {
+      "text": "1.00000000000000000000000000001",
+      "mode": "crud",
+      "encoding": "numeric",
+      "returned": "1.0000000000000000000000000000"
+    },
+    {
+      "text": "1.01e-28",
+      "mode": "typed",
+      "encoding": "string",
+      "returned": "0.0000000000000000000000000001"
+    },
+    {
+      "text": "1.01e-28",
+      "mode": "model",
+      "encoding": "string",
+      "returned": "0.0000000000000000000000000001"
+    },
+    {
+      "text": "1.01e-28",
+      "mode": "crud",
+      "encoding": "string",
+      "returned": "0.0000000000000000000000000001"
+    },
+    {
+      "text": "1.01e-28",
+      "mode": "builtin",
+      "encoding": "string",
+      "returned": "0.0000000000000000000000000001"
+    },
+    {
+      "text": "1.01e-28",
+      "mode": "typed",
+      "encoding": "numeric",
+      "returned": "0.0000000000000000000000000001"
+    },
+    {
+      "text": "1.01e-28",
+      "mode": "model",
+      "encoding": "numeric",
+      "returned": "0.0000000000000000000000000001"
+    },
+    {
+      "text": "1.01e-28",
+      "mode": "crud",
+      "encoding": "numeric",
+      "returned": "0.0000000000000000000000000001"
+    },
+    {
+      "text": "7922816251426433759354395033.55",
+      "mode": "query",
+      "returned": "7922816251426433759354395034"
+    },
+    {
+      "text": "7922816251426433759354395033.55",
+      "mode": "path",
+      "returned": "7922816251426433759354395034"
+    },
+    {
+      "text": "79228162514264337593543950335.1",
+      "mode": "query",
+      "returned": "79228162514264337593543950335"
+    },
+    {
+      "text": "79228162514264337593543950335.1",
+      "mode": "path",
+      "returned": "79228162514264337593543950335"
+    },
+    {
+      "text": "1.00000000000000000000000000001",
+      "mode": "query",
+      "returned": "1.0000000000000000000000000000"
+    },
+    {
+      "text": "1.00000000000000000000000000001",
+      "mode": "path",
+      "returned": "1.0000000000000000000000000000"
+    },
+    {
+      "text": "1.01e-28",
+      "mode": "query",
+      "returned": "0.0000000000000000000000000001"
+    },
+    {
+      "text": "1.01e-28",
+      "mode": "path",
+      "returned": "0.0000000000000000000000000001"
+    },
+    {
+      "mode": "typed-batch",
+      "text": "7922816251426433759354395033.55"
+    },
+    {
+      "mode": "raw-batch",
+      "text": "7922816251426433759354395033.55"
+    }
+  ],
+  "legacy_syntax_limits": [
+    {
+      "mode": "typed",
+      "text": "792281625142643375935439503350e-1",
+      "legacy_syntax_limit": true
+    },
+    {
+      "mode": "model",
+      "text": "792281625142643375935439503350e-1",
+      "legacy_syntax_limit": true
+    },
+    {
+      "mode": "crud",
+      "text": "792281625142643375935439503350e-1",
+      "legacy_syntax_limit": true
+    },
+    {
+      "mode": "builtin",
+      "text": "792281625142643375935439503350e-1",
+      "legacy_syntax_limit": true
+    },
+    {
+      "mode": "typed",
+      "text": "792281625142643375935439503350e-1",
+      "legacy_syntax_limit": true
+    },
+    {
+      "mode": "model",
+      "text": "792281625142643375935439503350e-1",
+      "legacy_syntax_limit": true
+    },
+    {
+      "mode": "crud",
+      "text": "792281625142643375935439503350e-1",
+      "legacy_syntax_limit": true
+    },
+    {
+      "mode": "typed",
+      "text": "-792281625142643375935439503350e-1",
+      "legacy_syntax_limit": true
+    },
+    {
+      "mode": "model",
+      "text": "-792281625142643375935439503350e-1",
+      "legacy_syntax_limit": true
+    },
+    {
+      "mode": "crud",
+      "text": "-792281625142643375935439503350e-1",
+      "legacy_syntax_limit": true
+    },
+    {
+      "mode": "builtin",
+      "text": "-792281625142643375935439503350e-1",
+      "legacy_syntax_limit": true
+    },
+    {
+      "mode": "typed",
+      "text": "-792281625142643375935439503350e-1",
+      "legacy_syntax_limit": true
+    },
+    {
+      "mode": "model",
+      "text": "-792281625142643375935439503350e-1",
+      "legacy_syntax_limit": true
+    },
+    {
+      "mode": "crud",
+      "text": "-792281625142643375935439503350e-1",
+      "legacy_syntax_limit": true
+    },
+    {
+      "mode": "typed",
+      "text": "0e-1000",
+      "legacy_syntax_limit": true
+    },
+    {
+      "mode": "model",
+      "text": "0e-1000",
+      "legacy_syntax_limit": true
+    },
+    {
+      "mode": "crud",
+      "text": "0e-1000",
+      "legacy_syntax_limit": true
+    },
+    {
+      "mode": "builtin",
+      "text": "0e-1000",
+      "legacy_syntax_limit": true
+    },
+    {
+      "mode": "typed",
+      "text": "0e-1000",
+      "legacy_syntax_limit": true
+    },
+    {
+      "mode": "model",
+      "text": "0e-1000",
+      "legacy_syntax_limit": true
+    },
+    {
+      "mode": "crud",
+      "text": "0e-1000",
+      "legacy_syntax_limit": true
+    },
+    {
+      "mode": "typed",
+      "text": "0e1000",
+      "legacy_syntax_limit": true
+    },
+    {
+      "mode": "model",
+      "text": "0e1000",
+      "legacy_syntax_limit": true
+    },
+    {
+      "mode": "crud",
+      "text": "0e1000",
+      "legacy_syntax_limit": true
+    },
+    {
+      "mode": "builtin",
+      "text": "0e1000",
+      "legacy_syntax_limit": true
+    },
+    {
+      "mode": "typed",
+      "text": "0e1000",
+      "legacy_syntax_limit": true
+    },
+    {
+      "mode": "model",
+      "text": "0e1000",
+      "legacy_syntax_limit": true
+    },
+    {
+      "mode": "crud",
+      "text": "0e1000",
+      "legacy_syntax_limit": true
+    }
+  ],
+  "record_count": 311,
+  "binary_sha256": "b5d38ad35532bd4d998747b4c18e2fb4e2bb7e13bb5c74ab82f977044f5a0fa0",
+  "source": "d8fc122db55300fd019fffe95321403c30ef45be",
+  "fixture_sha256": "5b3436838c2c73b1af96bd4e9028680ea2c557c06546381059ae0b0bc97e2078",
+  "node_only": true,
+  "rust_tests": false,
+  "ordinary_native": true,
+  "synthetic_verifier": true,
+  "real_issuer": false,
+  "Hub": false,
+  "main_account_untouched": true,
+  "late_batch_atomicity": true,
+  "valid_rows_and_replays_survive_SIGKILL_and_cold_restore": true,
+  "raw_JSON_numeric_tokens": true
+}

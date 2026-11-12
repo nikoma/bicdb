@@ -461,7 +461,14 @@ impl BicDb {
             logical_history_sha256: entry.commitment_sha256.clone(),
             checksum_sha256: String::new(),
         };
+        // Full local revalidation may consume time. The NEW decision cannot
+        // publish on an expired/canceled original request merely because its
+        // permanent promises remain historical facts.
+        parent.check()?;
+        quorum.require_recipient_role(fresh)?;
         self.in_paged_transaction(|paged, xid| {
+            parent.check()?;
+            quorum.require_recipient_role(fresh)?;
             record.native_page_xid = xid;
             record.checksum_sha256 = record.checksum()?;
             record.validate(&birth)?;

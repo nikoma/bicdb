@@ -488,7 +488,9 @@ impl RangeWriteStore {
                 "joint recovery refusal archive exceeds explicit 8MiB bound",
             ));
         }
+        role.require_live_request()?;
         crate::format::enable_native_current_joint_recovery(&self.root)?;
+        role.require_live_request()?;
         // From this point every ambiguity remains restrictive. The one atomic
         // catalogue transaction retains raw log/CQ/sparse/abort/promise state.
         self.recovery_persistence_uncertain = true;

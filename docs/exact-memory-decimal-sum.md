@@ -45,7 +45,8 @@ The separate signed application feature `exact_decimal_units` admits
 The same feature also admits `finance.prorate_native_units` and
 `finance.display_native_ratio_units` with the corresponding signatures and full
 0-through-28 quantity/amount scales, plus
-`finance.units_from_limbs(Int, Int, Int, Int, Int, Int) -> String`.
+`finance.units_from_limbs(Int, Int, Int, Int, Int, Int) -> String` and
+`finance.native_ratio_representable_units(String, String, Int, Int) -> Bool`.
 Activation records sticky storage feature `exact_decimal_units_v1` before
 exposing the application so older readers refuse the database. The strict SDK
 call signatures are validated even in unreachable program expressions.
@@ -112,11 +113,22 @@ ownership, posting authority, quotas and financial locks are unchanged.
 The six-limb formatter uses most-significant-first base-100000000000000 limbs.
 Every argument must be an actual nonnegative Int less than that base. The final
 unsigned value must be less than `2^254`; output is canonical ASCII with no
-leading zeros except `"0"`. This formatter alone is also admitted in native
-invariants so canonical text can be bound to actual numeric fields. It does not
-itself establish a financial source/carry proof. Other unit operations in native
-invariants and Cell execution are not admitted. Source implementation and
-preflight are not runtime qualification.
+leading zeros except `"0"`. The formatter is admitted in native invariants so
+canonical text can be bound to actual numeric fields. It does not itself
+establish a financial source/carry proof.
+
+The representability predicate validates the same unsigned cost/quantity units
+and full native scales before returning Bool. For a valid nonnegative rational
+`N/D`, the exact test is `2*N < (2*MAX96 + 1)*D`: the overflow midpoint is excluded
+because MAX96 is odd. Invalid inputs still produce errors; they never become
+`false`. This predicate is also admitted in native invariants, allowing a
+versioned nullable display rate to have an independently checked status. A
+half-unit receipt at commercial price MAX96 illustrates the distinction: its
+rounded carrying amount can imply a derived rate MAX96+1, while the original
+commercial price remains valid. Neither a fake zero nor a clipped derived rate
+is financial evidence. Other unit operations in native invariants and Cell
+execution are not admitted. Source implementation and preflight are not runtime
+qualification.
 
 ## Active owner invariant authority
 

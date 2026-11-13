@@ -4434,12 +4434,18 @@ impl<'db> SqlSession<'db> {
         self.oracle_autonomous_epoch += 1;
         // A rolled-back transaction's deferred constraint triggers
         // drop with the transaction itself.
+        // Journal undo below reads as this owner whatever frame the running
+        // statement entered: after a failed statement that frame has none.
+        let owner_reads = self
+            .tx
+            .as_ref()
+            .and_then(|tx| tx.enter_catalog_read_access().ok());
         let tx_rollback = self
             .tx
             .take()
             .map(|tx| tx.rollback().map_err(SqlError::from))
             .unwrap_or(Ok(()));
-        let ddl_rollback = self.rollback_ddl_after_transaction_end();
+        let ddl_rollback = self.rollback_ddl_after_transaction_end(owner_reads);
         self.savepoints.clear();
         self.rollback_guc_transaction();
         tx_rollback?;
@@ -4466,10 +4472,14 @@ impl<'db> SqlSession<'db> {
         {
             if let Err(error) = self.fire_deferred_row_triggers() {
                 self.pg_large_objects.clear();
+                let owner_reads = self
+                    .tx
+                    .as_ref()
+                    .and_then(|tx| tx.enter_catalog_read_access().ok());
                 if let Some(tx) = self.tx.take() {
                     let _ = tx.rollback();
                 }
-                let _ddl_rollback = self.rollback_ddl_after_transaction_end();
+                let _ddl_rollback = self.rollback_ddl_after_transaction_end(owner_reads);
                 self.savepoints.clear();
                 self.rollback_guc_transaction();
                 return Err(error);
@@ -4478,10 +4488,11 @@ impl<'db> SqlSession<'db> {
         self.pg_large_objects.clear();
         let mut committed_sequence = 0;
         if let Some(tx) = self.tx.take() {
+            let owner_reads = tx.enter_catalog_read_access().ok();
             match tx.commit_with_sequence() {
                 Ok(sequence) => committed_sequence = sequence,
                 Err(error) => {
-                    let _ddl_rollback = self.rollback_ddl_after_transaction_end();
+                    let _ddl_rollback = self.rollback_ddl_after_transaction_end(owner_reads);
                     self.savepoints.clear();
                     self.rollback_guc_transaction();
                     return Err(error.into());
@@ -5320,7 +5331,10 @@ impl<'db> SqlSession<'db> {
     /// owner, which its reservations require. Once no journal remains the
     /// owner is no longer registered, and the rest reads as the session's
     /// next statement would, with no owner.
-    fn rollback_ddl_after_transaction_end(&mut self) -> Result<()> {
+    fn rollback_ddl_after_transaction_end(
+        &mut self,
+        owner_reads: Option<bicdb_core::CatalogReadAccess>,
+    ) -> Result<()> {
         while self
             .ddl_undo
             .iter()
@@ -5329,6 +5343,7 @@ impl<'db> SqlSession<'db> {
             let len = self.ddl_undo.len() - 1;
             self.rollback_ddl_to_len(len)?;
         }
+        drop(owner_reads);
         let _reads = self.db_ref().enter_catalog_read_access(None)?;
         self.rollback_ddl_to_len(0)
     }

@@ -556,7 +556,7 @@ pub(super) fn exercise(
         .unwrap()
         .unwrap();
     assert_eq!(
-        serde_json::to_value(record).unwrap(),
+        serde_json::to_value(&record).unwrap(),
         acknowledged["actual_full_record"]
     );
     let after = state(&factory.database, pending, &node(4), ranges).unwrap();

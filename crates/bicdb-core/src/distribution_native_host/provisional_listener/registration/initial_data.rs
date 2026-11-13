@@ -12,6 +12,9 @@ mod old_step;
 use cleanup::{NativeInitialDataCleanup, NativeInitialDataCleanupSender};
 use hot_recovery::NativeHotRecoveryMaintenance;
 pub(crate) use old_step::NativeInitialOldStep;
+use old_step::RetainedInitialOld;
+#[cfg(test)]
+pub(crate) use old_step::{before_native_old_wal, CancelOldOwnBeforeNativeWal};
 
 #[derive(Clone, Debug, serde::Serialize)]
 pub struct NativeInitialDataRangeStatus {
@@ -144,6 +147,7 @@ pub(super) struct NativeInitialDataHost {
     hot_recovery: Option<Arc<NativeHotRecoveryMaintenance>>,
     registry_refresh_last_attempt: Option<serde_json::Value>,
     image_sources: Option<Arc<crate::distribution_range_image::NativeRemoteImageSourceRegistry>>,
+    old_closures: Mutex<BTreeMap<crate::RangeId, Arc<Mutex<RetainedInitialOld>>>>,
 }
 impl Drop for NativeInitialDataHost {
     fn drop(&mut self) {
@@ -177,6 +181,9 @@ impl Drop for NativeInitialDataHost {
 impl NativeInitialDataHost {
     pub(super) fn start_hot_process(&self, process: &CancellationToken) -> Result<()> {
         process.check()?;
+        if let Some(sources) = &self.image_sources {
+            sources.bind_original_process(process)?;
+        }
         if !self.published.load(Ordering::Acquire) {
             return Ok(());
         }
@@ -201,6 +208,7 @@ impl NativeInitialDataHost {
             initial,
             enrollment: None,
             image_sources: None,
+            old_closures: Mutex::new(BTreeMap::new()),
             registry_refresh_last_attempt: None,
             genesis: BTreeMap::new(),
             runtime: None,
@@ -384,6 +392,14 @@ impl NativeInitialDataHost {
         self.published.store(true, Ordering::Release);
         Ok(())
     }
+    pub(super) fn bind_image_source_process(&self, process: &CancellationToken) -> Result<()> {
+        process.check()?;
+        self.admission_for_old_step()?.require_live()?;
+        self.image_sources
+            .as_ref()
+            .ok_or_else(|| invalid("source registry absent"))?
+            .bind_original_process(process)
+    }
     pub(super) fn admission_for_old_step(&self) -> Result<&Arc<NativeInitialDataAdmission>> {
         if !self.is_running() {
             return Err(invalid("original initial DATA source is stopping"));
@@ -401,9 +417,9 @@ impl NativeInitialDataHost {
         &self,
         old: &mut Option<crate::distribution_range_handoff::NativeJointOldClosedQuorum>,
         target_attempt: Uuid,
-        original_session: &CancellationToken,
+        original_request: &CancellationToken,
     ) -> Result<crate::distribution_range_image::NativeRetainedRemoteImageSource> {
-        original_session.check()?;
+        original_request.check()?;
         if !self.is_running() {
             return Err(invalid("source initial DATA owner is not running"));
         }
@@ -424,19 +440,22 @@ impl NativeInitialDataHost {
             .as_ref()
             .ok_or_else(|| invalid("source image registry absent"))?;
         admission.require_listener(&self.initial.service, runtime)?;
+        registry.require_original_process()?;
         let actual = old
             .take()
             .ok_or_else(|| invalid("source OLD quorum already transferred"))?;
-        let session = crate::distribution_range_image::NativeRemoteImageSourceSession::retain_actual_old_quorum(
-            admission.clone(), runtime.clone(), self.initial.service.clone(), self.initial.metadata.clone(),
-            enrollment.guard.clone(), enrollment.coordinator.clone(), actual, target_attempt, original_session);
-        Ok(
-            crate::distribution_range_image::NativeRetainedRemoteImageSource::retain(
-                session,
-                registry.clone(),
-            ),
-        )
+        Ok(registry.retain_initial_source(
+            admission.clone(),
+            runtime.clone(),
+            self.initial.service.clone(),
+            self.initial.metadata.clone(),
+            enrollment.guard.clone(),
+            enrollment.coordinator.clone(),
+            actual,
+            target_attempt,
+        ))
     }
+
     fn status(&self, parent: &CancellationToken) -> Result<NativeInitialDataStatus> {
         parent.check()?;
         let writer_policy_current = match &self.admission {

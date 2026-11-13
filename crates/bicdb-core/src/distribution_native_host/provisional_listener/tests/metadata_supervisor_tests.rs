@@ -59,14 +59,22 @@ impl Network {
     }
     fn start(&mut self, i: usize) {
         let launch = self.launch(i);
-        self.workers[i] = Some(
-            launch
-                .start_automatic_metadata(
-                    self.fixture.networks[i].clone(),
-                    &CancellationToken::uncancelable(),
-                )
-                .unwrap(),
-        );
+        // Start never waits on the service/metadata latches: an actual peer
+        // RPC persisting under them yields a retryable busy refusal. Like the
+        // operator loop, retry only that refusal, bounded by the usual budget.
+        let retry = budget();
+        self.workers[i] = Some(loop {
+            match launch.start_automatic_metadata(
+                self.fixture.networks[i].clone(),
+                &CancellationToken::uncancelable(),
+            ) {
+                Ok(worker) => break worker,
+                Err(error) if error.to_string().contains("busy") && retry.check().is_ok() => {
+                    std::thread::sleep(Duration::from_millis(5));
+                }
+                Err(error) => panic!("actual metadata supervisor did not start: {error}"),
+            }
+        });
     }
     fn stop(&mut self, i: usize) {
         if let Some(worker) = self.workers[i].as_mut() {
@@ -110,6 +118,29 @@ impl Network {
                     .iter()
                     .map(|i| self.launch(*i).metadata.lock().status())
                     .collect::<Vec<_>>()
+            );
+            std::thread::sleep(Duration::from_millis(10));
+        }
+    }
+    /// Bounded by several ordinary heartbeat/round periods of the unchanged
+    /// supervisor timing; it only reads actual persisted consensus status.
+    fn wait_replicated(&self, follower: usize, leader: usize) {
+        let until = Instant::now() + Duration::from_secs(5);
+        loop {
+            let source = self.launch(leader).metadata.lock().status();
+            let target = self.launch(follower).metadata.lock().status();
+            if source.role == MetadataConsensusRole::Leader
+                && target.role == MetadataConsensusRole::Follower
+                && target.current_term == source.current_term
+                && target.last_log_term == source.last_log_term
+                && target.last_log_index >= source.last_log_index
+                && target.commit_index >= source.commit_index
+            {
+                return;
+            }
+            assert!(
+                Instant::now() < until,
+                "rebound follower never replicated the actual leader log: leader {source:?} follower {target:?}"
             );
             std::thread::sleep(Duration::from_millis(10));
         }
@@ -193,6 +224,11 @@ fn native_owned_metadata_supervisor_closed_ingress_cannot_hold_leadership_same_w
     );
     original_process.check().unwrap();
     f.fresh_mq(2, healthy);
+    // The successor's current-term barrier was committed by n0/n1 while n2
+    // had no ingress. A vote for n2 requires that actual log suffix, and only
+    // the successor's worker can deliver it through the rebound listener.
+    // Observe the real persisted follower state; nothing is installed here.
+    f.wait_replicated(2, healthy);
 
     // Make ONLY that original worker responsible for the next election.
     // The remaining follower's actual endpoint still supplies its real vote.

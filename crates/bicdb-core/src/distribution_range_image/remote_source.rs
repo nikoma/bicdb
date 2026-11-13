@@ -215,7 +215,7 @@ impl NativeRemoteImageSourceSession {
     /// Construction grants no frame or target permission. Once capture starts,
     /// any failure remains quarantined in this owner; begin never recreates it.
     #[allow(clippy::too_many_arguments)]
-    pub(crate) fn retain_actual_old_quorum(
+    fn retain_actual_old_quorum(
         admission: Arc<NativeInitialDataAdmission>,
         runtime: Arc<RangeRecoveryRuntime>,
         service: Arc<Mutex<ClusterDataNodeService>>,
@@ -286,10 +286,16 @@ impl NativeRemoteImageSourceSession {
             )
         };
         let proof = {
-            let m = self
-                .metadata
-                .try_lock()
-                .ok_or_else(|| invalid("source metadata busy at publication"))?;
+            // Momentary heartbeat/ingress holders are contention, not a
+            // refusal; the wait is bounded by the original publish request
+            // and the actual OWN observation. No service/DB guard is held.
+            let m = loop {
+                original_publish_request.check()?;
+                own.require_live_request(business)?;
+                if let Some(m) = self.metadata.try_lock_for(Duration::from_millis(5)) {
+                    break m;
+                }
+            };
             m.require_listener_database(&actual_open)?;
             m.observe_owned_native_metadata_member(own, business, original_publish_request)?
         };
@@ -431,10 +437,13 @@ impl NativeRemoteImageSourceSession {
             .plan()
             .require_source_host_metadata(own, business, &manifest.source_id)?;
         let proof = {
-            let metadata = self
-                .metadata
-                .try_lock()
-                .ok_or_else(|| invalid("source metadata busy during frame"))?;
+            let metadata = loop {
+                parent.check()?;
+                own.require_live_request(business)?;
+                if let Some(metadata) = self.metadata.try_lock_for(Duration::from_millis(5)) {
+                    break metadata;
+                }
+            };
             metadata.require_listener_database(actual_open)?;
             metadata.observe_owned_native_metadata_member(own, business, parent)?
         };
@@ -563,6 +572,7 @@ pub(crate) struct NativeRemoteImageSourceRegistry {
     sessions: Mutex<BTreeMap<Uuid, Arc<Mutex<NativeRemoteImageSourceSession>>>>,
     transport: Arc<TcpClusterRelocationTransport>,
     provider: Arc<crate::distribution_metadata_read_provider::MetadataReadProvider>,
+    original_process: std::sync::OnceLock<CancellationToken>,
 }
 impl NativeRemoteImageSourceRegistry {
     pub(crate) fn new(
@@ -573,7 +583,61 @@ impl NativeRemoteImageSourceRegistry {
             sessions: Mutex::new(BTreeMap::new()),
             transport,
             provider,
+            original_process: std::sync::OnceLock::new(),
         }
+    }
+    /// One original process parent, never an action/RPC publication token.
+    /// Repeated setup cannot rebind or renew a canceled original owner.
+    pub(crate) fn bind_original_process(&self, parent: &CancellationToken) -> Result<()> {
+        parent.check()?;
+        if let Some(original) = self.original_process.get() {
+            return original.check();
+        }
+        let child = parent.child();
+        self.original_process
+            .set(child)
+            .map_err(|_| invalid("source process binding raced"))?;
+        self.require_original_process()
+    }
+    pub(crate) fn require_original_process(&self) -> Result<()> {
+        self.original_process
+            .get()
+            .ok_or_else(|| invalid("source hosting requires original process parent"))?
+            .check()
+    }
+    /// All fallible binding checks must precede the caller's OLD take. This
+    /// creates only retained custody; actual publication remains fallible.
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn retain_initial_source(
+        self: &Arc<Self>,
+        admission: Arc<NativeInitialDataAdmission>,
+        runtime: Arc<RangeRecoveryRuntime>,
+        service: Arc<Mutex<ClusterDataNodeService>>,
+        metadata: Arc<Mutex<MetadataConsensusStore>>,
+        writer: Arc<crate::db::InstalledNativeWriterHostGuard>,
+        coordinator: Arc<RangeWriteCoordinator<TcpClusterRelocationTransport>>,
+        old: NativeJointOldClosedQuorum,
+        target_attempt: Uuid,
+    ) -> NativeRetainedRemoteImageSource {
+        // The actual Host checks require_original_process BEFORE transferring
+        // OLD custody. There is no externally supplied session/capture parent.
+        let session_parent = self
+            .original_process
+            .get()
+            .expect("actual source process bound before OLD transfer")
+            .child();
+        let source = NativeRemoteImageSourceSession::retain_actual_old_quorum(
+            admission,
+            runtime,
+            service,
+            metadata,
+            writer,
+            coordinator,
+            old,
+            target_attempt,
+            &session_parent,
+        );
+        NativeRetainedRemoteImageSource::retain(source, self.clone(), session_parent)
     }
     /// The caller still owns `session` if admission fails, including a full
     /// table. Register BEFORE begin, so every attempted capture stays retained.
@@ -612,6 +676,7 @@ impl NativeRemoteImageSourceRegistry {
         request: &NativeRemoteImageSourceRequestV1,
         parent: &CancellationToken,
     ) -> Result<ActualNativeRemoteImageSourceFrame> {
+        self.require_original_process()?;
         let token = request.cancellation(parent)?;
         let session = self
             .sessions
@@ -665,16 +730,24 @@ impl NativeRemoteImageSourceRegistry {
 pub(crate) struct NativeRetainedRemoteImageSource {
     session: Arc<Mutex<NativeRemoteImageSourceSession>>,
     registry: Arc<NativeRemoteImageSourceRegistry>,
+    cancellation: CancellationToken,
 }
 impl NativeRetainedRemoteImageSource {
-    pub(crate) fn retain(
+    fn retain(
         session: NativeRemoteImageSourceSession,
         registry: Arc<NativeRemoteImageSourceRegistry>,
+        cancellation: CancellationToken,
     ) -> Self {
         Self {
             session: Arc::new(Mutex::new(session)),
             registry,
+            cancellation,
         }
+    }
+    /// Revokes only this actual source session's child, never its process or
+    /// siblings. This is refusal-only; it creates no replacement identity.
+    pub(crate) fn request_cancel(&self) {
+        self.cancellation.cancel();
     }
     pub(crate) fn publish(
         &self,

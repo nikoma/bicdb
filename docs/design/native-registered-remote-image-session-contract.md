@@ -280,3 +280,53 @@ owner grant. Actual sink-time cancellation/revocation and remote OLD request/
 readonly-fact observation/transport certificate still require the next focused
 controls and implementation. No dynamic or fault-safe claim follows from this
 source-only step.
+
+## Hosted parent, persistence custody and real source-lifetime controls
+
+The source registry now binds exactly ONE original hosted-process parent, via
+actual `start_hot_process(process)` or the explicit manual host binding seam.
+It stores a child observing that original parent; no later call can renew or
+replace a canceled parent. Session construction is private and derives its
+capture/session cancellation child ONLY from that bound process. A per-session
+`request_cancel` revokes that child without canceling siblings/process. The
+retainer's finite caller is an entry check only, never the capture parent. No
+new uncancelable token is created in production. Source ingress checks the
+original hosted parent before its own metadata acquisition.
+
+The actual DATA host retains each OLD Runtime/attempt BEFORE mutation and the
+returned native/promise/pin observation BEFORE final MStore/reply checks. It
+keeps an uncertain attempt without inventing a completed observation or erasing
+its refusal. The first local source fixture shares ONLY these actual local
+observations into the original native OLD round; this does not deserialize or
+implement a remote certificate. The generic HRTB callback remains test-only;
+future RPC code must use the retained actual-result owner.
+
+Source-frame controls actually cancel their original collector/publish callers
+and wait past every original finite OLD issuance deadline, without clock
+simulation or role renewal. With the ORIGINAL hosted process still live, fresh
+bounded TLS history/rows/seals (positive case) or manifest observations (session
+cancel case) proceed from the permanent actual facts. The positive case then
+observes a healthy frame immediately before canceling the actual hosted parent;
+a distinct fresh target caller/OWN remains live while a fresh source request
+refuses. This proves neither continuous remote process detection nor readiness.
+
+A keyed, RAII-cleared thread-bound fault fires AFTER the actual raw OLD promise
+has returned durably and BEFORE native OLD WAL. Canceling only the independently
+acquired OWN parent, while original role/caller/deadline remain live, refuses
+native publication, preserves acknowledged rows/native R/H/B/UID/slots, and
+retains the exact actual permanent raw promise. A subsequent DISTINCT healthy
+collector, after the recorded failed operation counted no quorum, uses the same
+retained Runtime/refusal and produces real closure. A separate selector revokes
+the actual public writer hook at the SAME sink: the old original writer objects
+remain held but cannot authorize native publication. Actual protected native
+OLD current-record absence is checked under the real journal; no WAL replay or
+rollback claim is made. Raw refusal and intentional hook effects are explicitly
+separated from invariant native/user state, rather than normalized into success.
+
+Selectors: `native_registered_fifth_remote_source_` selects TWO source-frame
+cases; `native_registered_fifth_remote_old_source_actual_hook_revoked_after_promise_before_native_wal`
+selects the independent sink revocation case. All are source-only/unexecuted at
+this freeze. The original required fifth/control runner remains unchanged when
+its optional source branch is absent, and all original clocks/assertions/custody
+remain. Remote OLD transport/canonical certificate, cold source reissue and the
+full target/NEW-quorum/open/ACK/Strong transition remain mandatory next gates.

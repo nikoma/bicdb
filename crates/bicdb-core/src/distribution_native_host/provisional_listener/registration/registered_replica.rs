@@ -10,6 +10,8 @@ use std::sync::Weak;
 
 mod closed_fence;
 pub(crate) use closed_fence::NativeAssignedRegisteredClosedFence;
+mod assigned_policy;
+pub(crate) use assigned_policy::NativeAssignedDataPolicyOrigin;
 
 #[derive(Clone, Debug, serde::Serialize)]
 pub struct NativeRegisteredReplicaReceiverStatus {
@@ -88,6 +90,15 @@ pub(super) struct NativeRegisteredReplicaReceiver {
     listener: Option<ClusterDataServerHandle>,
     stopping: bool,
 }
+#[derive(Clone)]
+pub(super) struct RegisteredAssignedParts {
+    pub(super) backend: Arc<NativeMetadataControlBackend>,
+    pub(super) factory: Arc<NativeUnassignedLearnerFactory>,
+    pub(super) runtime: Arc<RangeRecoveryRuntime>,
+    pub(super) admission: Arc<NativeRegisteredReplicaAdmission>,
+    pub(super) database: ClusterServiceOpenGuard,
+    pub(super) store: RangeWriteServiceSlotGuard,
+}
 impl Drop for NativeRegisteredReplicaReceiver {
     fn drop(&mut self) {
         self.closed_fence_ready.store(false, Ordering::Release);
@@ -101,6 +112,32 @@ impl Drop for NativeRegisteredReplicaReceiver {
     }
 }
 impl NativeRegisteredReplicaReceiver {
+    pub(super) fn assigned_parts(&self) -> Result<RegisteredAssignedParts> {
+        self.admission
+            .require_listener(&self.backend.service, &self.runtime)?;
+        Ok(RegisteredAssignedParts {
+            backend: self.backend.clone(),
+            factory: self._factory.clone(),
+            runtime: self.runtime.clone(),
+            admission: self.admission.clone(),
+            database: self.admission.database.clone(),
+            store: self.admission.store.clone(),
+        })
+    }
+    /// Close the old immutable socket without dropping the same actual runtime
+    /// or metadata owner. This does not create a writer or release a freeze.
+    pub(super) fn drain_for_assigned(&mut self, parent: &CancellationToken) -> Result<()> {
+        self.closed_fence_ready.store(false, Ordering::Release);
+        if let Some(listener) = self.listener.as_mut() {
+            listener.stop_and_drain(parent)?;
+        }
+        if let Some(listener) = self.old_listener.as_mut() {
+            listener.stop_and_drain(parent)?;
+        }
+        self.listener.take();
+        self.old_listener.take();
+        parent.check()
+    }
     fn prepare(
         backend: Arc<NativeMetadataControlBackend>,
         factory: &Arc<NativeUnassignedLearnerFactory>,
@@ -344,6 +381,11 @@ impl NativeMetadataControlHost {
         parent: &CancellationToken,
     ) -> Result<()> {
         parent.check()?;
+        if self.assigned.is_some() {
+            return Err(invalid(
+                "Assigned DATA owner cannot return to blank Registered mode",
+            ));
+        }
         if self.data.is_some() {
             return Err(invalid(
                 "INITIAL DATA owner cannot become a blank registered receiver",

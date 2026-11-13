@@ -9,15 +9,23 @@ use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Instant;
 
+mod assigned_data;
 mod initial_data;
+pub(crate) use assigned_data::NativeAssignedDataAdmission;
+use assigned_data::NativeAssignedDataHost;
+mod data_owner;
+pub(crate) use data_owner::NativeDataOwnerAdmission;
 mod registered_replica;
 use registered_replica::NativeRegisteredReplicaReceiver;
 pub use registered_replica::NativeRegisteredReplicaReceiverStatus;
 pub(crate) use registered_replica::{
-    NativeAssignedRegisteredClosedFence, NativeRegisteredReplicaAdmission,
+    NativeAssignedDataPolicyOrigin, NativeAssignedRegisteredClosedFence,
+    NativeRegisteredReplicaAdmission,
 };
 mod maintenance;
 use initial_data::NativeInitialDataHost;
+#[cfg(test)]
+pub(crate) use initial_data::{before_native_old_wal, CancelOldOwnBeforeNativeWal};
 pub(crate) use initial_data::{NativeInitialDataAdmission, NativeInitialOldStep};
 pub use initial_data::{NativeInitialDataRangeStatus, NativeInitialDataStatus};
 mod schema_export;
@@ -135,7 +143,19 @@ impl NativeMetadataRegistrationController {
     /// quorum/readiness/write grant or cached schema authority is returned.
     pub(crate) fn bootstrap_initial_data(
         &self,
-        admission: &NativeInitialDataAdmission,
+        admission: &Arc<NativeInitialDataAdmission>,
+        parent: &CancellationToken,
+    ) -> Result<ClusterBootstrapSnapshot> {
+        self.bootstrap_data_owner(
+            &NativeDataOwnerAdmission::Initial(admission.clone()),
+            parent,
+        )
+    }
+    /// Routing DATA only for either actual retained owner. No role or current
+    /// read/write permission is derived from this common necessary fence.
+    pub(crate) fn bootstrap_data_owner(
+        &self,
+        admission: &NativeDataOwnerAdmission,
         parent: &CancellationToken,
     ) -> Result<ClusterBootstrapSnapshot> {
         parent.check()?;
@@ -376,6 +396,7 @@ pub(crate) struct NativeMetadataControlHost {
     data: Option<NativeInitialDataHost>,
     data_process: std::sync::OnceLock<CancellationToken>,
     replica: Option<NativeRegisteredReplicaReceiver>,
+    assigned: Option<NativeAssignedDataHost>,
     old_listener: Option<ClusterDataServerHandle>,
     drained: Option<DrainedClusterDataListener>,
     controller: Option<Arc<NativeMetadataRegistrationController>>,
@@ -397,6 +418,7 @@ impl NativeMetadataControlHost {
             data: None,
             data_process: std::sync::OnceLock::new(),
             replica: None,
+            assigned: None,
             old_listener: Some(listener),
             drained: None,
             controller: None,
@@ -416,6 +438,7 @@ impl NativeMetadataControlHost {
             data: None,
             data_process: std::sync::OnceLock::new(),
             replica: None,
+            assigned: None,
             old_listener: Some(listener),
             drained: None,
             controller: None,
@@ -426,6 +449,10 @@ impl NativeMetadataControlHost {
     }
     pub(in crate::distribution_native_host) fn is_running(&self) -> bool {
         self.listener.is_some()
+            || self
+                .assigned
+                .as_ref()
+                .is_some_and(|owner| owner.is_running())
             || self.data.as_ref().is_some_and(|data| data.is_running())
             || self
                 .replica
@@ -503,9 +530,23 @@ impl NativeMetadataControlHost {
         self.listener = Some(self.backend.start_listener(self.network.clone(), &token)?);
         token.check()
     }
+    pub(crate) fn close_initial_old_step(
+        &self,
+        runtime: Arc<crate::distribution_range_handoff::NativeJointHandoffRuntime>,
+        role: Arc<crate::distribution_range_recovery::RecoveryRoleAdmission>,
+        own: HostMetadataReadObservation,
+        business: Uuid,
+        parent: &CancellationToken,
+    ) -> Result<Arc<crate::distribution_range_handoff::NativeJointOldObservation>> {
+        self.data
+            .as_ref()
+            .ok_or_else(|| invalid("original initial DATA owner absent"))?
+            .close_initial_old(runtime, role, own, business, parent)
+    }
     /// Actual receiver step; neither its borrow nor a cached validation result
     /// can escape. Network acquisitions must precede this call. The closure
     /// must retain actual mutation outcomes before fallible postchecks.
+    #[cfg(test)]
     pub(crate) fn with_initial_old_step<T>(
         &self,
         role: Arc<crate::distribution_range_recovery::RecoveryRoleAdmission>,
@@ -531,16 +572,25 @@ impl NativeMetadataControlHost {
         step.require_live()?;
         Ok(result)
     }
+    pub(crate) fn bind_initial_image_source_process(
+        &self,
+        process: &CancellationToken,
+    ) -> Result<()> {
+        self.data
+            .as_ref()
+            .ok_or_else(|| invalid("actual initial DATA owner absent"))?
+            .bind_image_source_process(process)
+    }
     pub(crate) fn retain_initial_remote_image_source(
         &self,
         old: &mut Option<crate::distribution_range_handoff::NativeJointOldClosedQuorum>,
         target_attempt: Uuid,
-        original_session: &CancellationToken,
+        original_request: &CancellationToken,
     ) -> Result<crate::distribution_range_image::NativeRetainedRemoteImageSource> {
         self.data
             .as_ref()
             .ok_or_else(|| invalid("actual initial DATA owner is absent"))?
-            .retain_remote_image_source(old, target_attempt, original_session)
+            .retain_remote_image_source(old, target_attempt, original_request)
     }
     pub(crate) fn ensure_enrolled_target(
         &self,
@@ -744,6 +794,9 @@ impl NativeMetadataControlHost {
         self.backend.heartbeat(parent)
     }
     pub(crate) fn stop(&mut self, parent: &CancellationToken) -> Result<()> {
+        if let Some(assigned) = self.assigned.as_mut() {
+            assigned.stop(parent)?;
+        }
         if let Some(replica) = self.replica.as_mut() {
             replica.stop(parent)?;
         }

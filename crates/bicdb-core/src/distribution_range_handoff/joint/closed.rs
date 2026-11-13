@@ -69,6 +69,9 @@ impl NativeJointOldObservation {
             pin.as_ref().map(|pin| &**pin),
         )
     }
+    pub(super) fn original_issuance_deadline(&self) -> std::time::Instant {
+        self.role.deadline().max(self.plan.original_deadline())
+    }
     pub(crate) fn node_id(&self) -> &ClusterNodeId {
         self.native.native_admission().local_node_id()
     }

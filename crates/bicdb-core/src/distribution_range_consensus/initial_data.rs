@@ -6,6 +6,28 @@ use crate::distribution_range_recovery::RangeRecoveryRuntime;
 use crate::TcpClusterRelocationTransport;
 
 impl RangeWriteCoordinator<TcpClusterRelocationTransport> {
+    #[cfg(feature = "tls-replication")]
+    pub(crate) fn new_assigned_schema_fenced(
+        cluster: ClusterId,
+        local: ClusterNodeId,
+        topology: Arc<RwLock<ClusterTopology>>,
+        service: Arc<Mutex<ClusterDataNodeService>>,
+        transport: Arc<TcpClusterRelocationTransport>,
+        origin: &crate::distribution_native_host::NativeAssignedDataPolicyOrigin,
+    ) -> Result<Self> {
+        origin.require_live()?;
+        let mut coordinator = Self::with_repair_limits_scheduling(
+            cluster,
+            local,
+            topology,
+            service,
+            transport,
+            RangeWriteRepairLimits::default(),
+            true,
+        )?;
+        coordinator.require_schema_compatibility = true;
+        Ok(coordinator)
+    }
     pub(crate) fn new_initial_schema_fenced(
         cluster: ClusterId,
         local: ClusterNodeId,

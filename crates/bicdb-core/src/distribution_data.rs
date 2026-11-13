@@ -52,10 +52,14 @@ mod native_completion_materialize;
 mod native_recertify;
 pub(crate) use native_recertify::LocalNativeRecertifyEvidence;
 mod metadata_ingress;
+#[cfg(feature = "tls-replication")]
+mod native_assigned_policy;
 mod native_durability;
 pub(crate) use metadata_ingress::NativeMetadataIngressRegistration;
 mod native_joint_handoff;
 mod native_writer;
+#[cfg(feature = "tls-replication")]
+pub(crate) use native_assigned_policy::NativeAssignedImagePolicyEvidence;
 #[cfg(feature = "tls-replication")]
 mod registered_closed_fence;
 pub(crate) use native_durability::ClusterServiceOpenGuard;

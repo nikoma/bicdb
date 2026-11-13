@@ -15,3 +15,15 @@ impl BicDb {
         })
     }
 }
+
+impl BicDb {
+    /// Actual protected record presence, no permission/decoded receipt output.
+    pub(crate) fn test_native_old_close_present(&self, range: crate::RangeId) -> Result<bool> {
+        let _journal = self.try_native_image_journal()?;
+        Ok(self
+            .read_native_range_image_record::<serde_json::Value>(&format!(
+                "joint-handoff/old-close/current/{range}"
+            ))?
+            .is_some())
+    }
+}

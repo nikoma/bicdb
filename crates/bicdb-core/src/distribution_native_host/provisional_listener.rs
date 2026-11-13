@@ -15,8 +15,12 @@ pub(crate) use learner_enrollment::NativeLearnerMetadataEnrollment;
 pub(crate) use metadata_startup::NativeInitialWriterEnrollment;
 pub(in crate::distribution_native_host) use registration::NativeMetadataMaintenanceReport;
 pub use registration::NativeRegisteredReplicaReceiverStatus;
+#[cfg(test)]
+pub(crate) use registration::{before_native_old_wal, CancelOldOwnBeforeNativeWal};
 pub(crate) use registration::{
-    NativeAssignedRegisteredClosedFence, NativeRegisteredReplicaAdmission,
+    NativeAssignedDataAdmission, NativeAssignedDataPolicyOrigin,
+    NativeAssignedRegisteredClosedFence, NativeDataOwnerAdmission,
+    NativeRegisteredReplicaAdmission,
 };
 pub(crate) use registration::{
     NativeInitialDataAdmission, NativeInitialOldStep, NativeMetadataControlHost,

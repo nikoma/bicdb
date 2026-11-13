@@ -6,7 +6,11 @@ use crate::distribution_range_consensus::{RangeWriteCoordinator, RangeWriteTrans
 use std::sync::Weak;
 
 const POLICY_POINTER: &str = "writer-enrollment/current";
+#[cfg(feature = "tls-replication")]
+mod assigned_install;
 mod registry_refresh;
+#[cfg(feature = "tls-replication")]
+pub(crate) use assigned_install::NativeAssignedWriterInstallAttempt;
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]

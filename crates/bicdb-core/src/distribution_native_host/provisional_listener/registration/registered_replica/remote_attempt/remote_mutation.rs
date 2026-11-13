@@ -76,6 +76,19 @@ impl NativeRegisteredRemoteProposalPoint<'_> {
     }
 }
 impl NativeMetadataControlHost {
+    /// Borrow the original host's ACTUAL retained physical receipt. This is
+    /// immutable evidence only; a later adoption must independently acquire
+    /// its actual A/role/OWN/journal scope and call receipt.require_current.
+    pub(crate) fn registered_remote_final_image_receipt(
+        &self,
+        range: crate::RangeId,
+    ) -> Result<&Arc<crate::db::NativeRegisteredRemoteFinalImageReceipt>> {
+        self.replica
+            .as_ref()
+            .and_then(|r| r.remote_images.get(&range))
+            .and_then(|owner| owner.final_image_receipt())
+            .ok_or_else(|| invalid("original Registered protected final image receipt absent"))
+    }
     #[cfg(test)]
     pub(crate) fn test_registered_remote_image_state(
         &self,

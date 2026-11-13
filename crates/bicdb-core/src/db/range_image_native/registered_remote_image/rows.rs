@@ -120,6 +120,86 @@ pub(super) struct RetainedRemoteRows {
     content: sha2::Sha256,
     pending: Option<RowPending>,
 }
+/// Actual complete protected row progress, never a final-image/read grant.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(super) struct RegisteredCompletedRows {
+    pub(super) native_xid: u64,
+    pub(super) header_sha256: String,
+    pub(super) records: u64,
+    pub(super) bytes: u64,
+    pub(super) content_sha256: String,
+    pub(super) last_actual_target_b: Option<u64>,
+}
+impl NativeRegisteredRemoteImageInstallation {
+    pub(super) fn completed_rows(
+        &mut self,
+        db: &BicDb,
+        context: &NativeRegisteredRemoteImageContext<'_>,
+        seal: &crate::distribution_range_image::LocalRangeImageSealV1,
+    ) -> Result<RegisteredCompletedRows> {
+        let history = self.finish_history(db, context)?;
+        history.require_current(db, context)?;
+        let rows = self
+            .rows
+            .as_ref()
+            .ok_or_else(|| invalid("Registered final image needs actual complete rows"))?;
+        rows.header.validate()?;
+        let manifest = context.point.preflight().source().manifest();
+        let content_sha256 = hex::encode(rows.content.clone().finalize());
+        let actual: RowHeader = db
+            .read_native_range_image_record(&row_key(rows.header.attempt))?
+            .ok_or_else(|| invalid("Registered completed row header absent"))?;
+        let committed = db
+            .paged_records
+            .as_ref()
+            .ok_or_else(|| invalid("Registered completed rows page store absent"))?
+            .store()
+            .transactions()
+            .status(rows.header.native_xid)
+            == bicdb_page::TxStatus::Committed;
+        if rows.pending.is_some()
+            || !rows.header.complete
+            || actual != rows.header
+            || !committed
+            || rows.header.history_generation != history.header.generation
+            || history.header.wire_chain != seal.history_wire_chain_sha256
+            || history.header.cursor.step() != seal.history_steps
+            || rows.header.manifest_sha256 != manifest.checksum_sha256
+            || rows.header.intent_sha256 != context.fence.intent_sha256()?
+            || rows.header.cursor.collection_index() != manifest.collections.len()
+            || rows.header.cursor.after_key().is_some()
+            || rows.header.records != seal.record_count
+            || rows.header.bytes != seal.serialized_record_bytes
+            || content_sha256 != seal.image_root_sha256
+            || rows.header.chain != seal.wire_chain_sha256
+            || rows.header.cursor.step() != seal.steps
+            || rows
+                .header
+                .source_min_b
+                .unwrap_or(manifest.source_reserved_b)
+                != seal.min_snapshot_db_sequence
+            || rows
+                .header
+                .source_max_b
+                .unwrap_or(manifest.source_reserved_b)
+                != seal.max_snapshot_db_sequence
+            || (rows.header.records > 0 && rows.header.last_actual_target_b.is_none())
+        {
+            return Err(invalid(
+                "Registered final image needs exact complete committed rows and source seal",
+            ));
+        }
+        context.require_current(db)?;
+        Ok(RegisteredCompletedRows {
+            native_xid: rows.header.native_xid,
+            header_sha256: rows.header.checksum_sha256.clone(),
+            records: rows.header.records,
+            bytes: rows.header.bytes,
+            content_sha256,
+            last_actual_target_b: rows.header.last_actual_target_b,
+        })
+    }
+}
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub(crate) struct NativeRegisteredRemoteRowProgress {
     pub cursor: RangeImageCursorV1,
@@ -583,6 +663,35 @@ mod cuts {
 #[cfg(test)]
 pub(crate) use cuts::install as test_registered_remote_row_wal_cut;
 impl BicDb {
+    pub(super) fn require_registered_completed_rows_point(
+        &self,
+        attempt: Uuid,
+        xid: u64,
+        hash: &str,
+    ) -> Result<()> {
+        let header: RowHeader = self
+            .read_native_range_image_record(&row_key(attempt))?
+            .ok_or_else(|| invalid("Registered final row progress absent"))?;
+        header.validate()?;
+        if !header.complete
+            || header.attempt != attempt
+            || header.native_xid != xid
+            || header.checksum_sha256 != hash
+            || self
+                .paged_records
+                .as_ref()
+                .ok_or_else(|| invalid("Registered final rows page store absent"))?
+                .store()
+                .transactions()
+                .status(xid)
+                != bicdb_page::TxStatus::Committed
+        {
+            return Err(invalid(
+                "Registered final row progress changed or uncommitted",
+            ));
+        }
+        Ok(())
+    }
     fn read_registered_remote_row_intent(&self, expected: &RowIntent) -> Result<RowIntent> {
         let actual: RowIntent = self
             .read_native_range_image_record(&intent_key(expected.attempt, expected.step))?

@@ -62,7 +62,9 @@ mod index_build;
 use index_binding::load_btree_bindings;
 mod integrity_reservations;
 mod pitr_maintenance;
+mod range_image_final_pointer;
 mod range_image_install;
+pub(crate) use range_image_final_pointer::NativeRegisteredRemoteFinalImagePointer;
 mod range_image_proposal;
 pub(crate) use range_image_install::{
     NativeInstalledRangeImageBase, NativeInstalledRangeImageIntegrity,
@@ -99,6 +101,8 @@ pub(crate) use range_image_native::rf3_fixture::{
 };
 #[cfg(all(test, feature = "tls-replication"))]
 pub(crate) use range_image_native::test_fire_before_registered_remote_proposal_scope;
+#[cfg(all(test, feature = "tls-replication"))]
+pub(crate) use range_image_native::test_registered_remote_final_image_after_wal;
 #[cfg(all(test, feature = "tls-replication"))]
 pub(crate) use range_image_native::test_registered_remote_proposal_cut;
 #[cfg(all(test, feature = "tls-replication"))]
@@ -147,10 +151,11 @@ pub(crate) use range_image_native::{
 };
 #[cfg(feature = "tls-replication")]
 pub(crate) use range_image_native::{
-    NativeRegisteredRemoteHistoryProgress, NativeRegisteredRemoteHistoryProof,
-    NativeRegisteredRemoteImageContext, NativeRegisteredRemoteImageInstallation,
-    NativeRegisteredRemoteImageOperation, NativeRegisteredRemoteImageProgress,
-    NativeRegisteredRemoteRowProgress,
+    NativeRegisteredRemoteFinalImageReceipt, NativeRegisteredRemoteHistoryProgress,
+    NativeRegisteredRemoteHistoryProof, NativeRegisteredRemoteImageContext,
+    NativeRegisteredRemoteImageInstallation, NativeRegisteredRemoteImageOperation,
+    NativeRegisteredRemoteImageProgress, NativeRegisteredRemoteRowProgress,
+    NativeRegisteredRemoteVerificationProgress,
 };
 #[cfg(feature = "tls-replication")]
 pub(crate) use range_image_native::{

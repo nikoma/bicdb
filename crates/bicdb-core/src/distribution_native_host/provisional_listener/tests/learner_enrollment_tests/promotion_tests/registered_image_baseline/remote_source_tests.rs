@@ -39,6 +39,10 @@ pub(super) enum SourceCase {
     TargetImageRowsPreWalCanceled,
     TargetImageRowsPostWalCanceled,
     TargetImageRowsApplyFailed,
+    TargetFinalImage,
+    TargetFinalImageCanceled,
+    TargetFinalImageCorrupt,
+    TargetFinalImageWithoutScan,
     RemoteConstraintCapture,
     RemoteOldCollectorExpiredObservation,
     RemoteOldCollectorUnrelatedAdvance,
@@ -1261,6 +1265,30 @@ pub(super) fn exercise(
             );
             if matches!(
                 case,
+                SourceCase::TargetFinalImage
+                    | SourceCase::TargetFinalImageCanceled
+                    | SourceCase::TargetFinalImageCorrupt
+                    | SourceCase::TargetFinalImageWithoutScan
+            ) {
+                target_final_image_tests::exercise(
+                    case,
+                    target_control,
+                    target,
+                    remote_fact.clone(),
+                    &plan,
+                    &MetadataReadProvider::new(target_metadata.clone(), target.clone()).unwrap(),
+                    &actor,
+                    factory,
+                    pending,
+                    ranges,
+                    acknowledged,
+                    output,
+                    &mut journal,
+                );
+                return;
+            }
+            if matches!(
+                case,
                 SourceCase::TargetImageRows
                     | SourceCase::TargetImageRowsWithoutAudit
                     | SourceCase::TargetImageRowsPreWalCanceled
@@ -1578,6 +1606,7 @@ pub(super) fn exercise(
         "real_target_namespaces":factory.database.read().capture_range_image_bindings().unwrap().namespace_ids(),
     })).unwrap();
 }
+mod target_final_image_tests;
 mod target_image_tests;
 mod target_installing_tests;
 mod target_no_domain_tests;

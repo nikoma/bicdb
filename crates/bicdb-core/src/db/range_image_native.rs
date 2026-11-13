@@ -44,13 +44,17 @@ pub(crate) use registered_remote_proposal::{
 mod registered_remote_image;
 mod writer_enrollment;
 #[cfg(all(test, feature = "tls-replication"))]
+pub(crate) use registered_remote_image::test_registered_remote_final_image_after_wal;
+#[cfg(all(test, feature = "tls-replication"))]
 pub(crate) use registered_remote_image::test_registered_remote_row_wal_cut;
 #[cfg(feature = "tls-replication")]
 pub(crate) use registered_remote_image::{
+    NativeRegisteredRemoteFinalImagePointer, NativeRegisteredRemoteFinalImageReceipt,
     NativeRegisteredRemoteHistoryProgress, NativeRegisteredRemoteHistoryProof,
     NativeRegisteredRemoteImageContext, NativeRegisteredRemoteImageInstallation,
     NativeRegisteredRemoteImageOperation, NativeRegisteredRemoteImageProgress,
     NativeRegisteredRemoteRowProgress, NativeRegisteredRemoteRowTransactionGrant,
+    NativeRegisteredRemoteVerificationProgress,
 };
 #[cfg(feature = "tls-replication")]
 pub(crate) use writer_enrollment::NativeAssignedWriterInstallAttempt;

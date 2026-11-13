@@ -8,12 +8,20 @@ use crate::distribution_range_image::{
     NativeRemoteImageSourcePayloadV1, RangeImageHistoryCursorV1, RangeImageHistoryStepV1,
 };
 
+mod final_publication;
 mod rows;
+mod verification;
+#[cfg(test)]
+pub(crate) use final_publication::test_registered_remote_final_image_after_wal;
+pub(crate) use final_publication::{
+    NativeRegisteredRemoteFinalImagePointer, NativeRegisteredRemoteFinalImageReceipt,
+};
 #[cfg(test)]
 pub(crate) use rows::test_registered_remote_row_wal_cut;
 pub(crate) use rows::{
     NativeRegisteredRemoteRowProgress, NativeRegisteredRemoteRowTransactionGrant,
 };
+pub(crate) use verification::NativeRegisteredRemoteVerificationProgress;
 
 fn header_key(attempt: Uuid) -> String {
     format!("registered-remote-image/{attempt}/history")
@@ -184,6 +192,8 @@ pub(crate) struct NativeRegisteredRemoteImageInstallation {
     pending: Option<HistoryPending>,
     native_history_commit_returned: Option<u64>,
     rows: Option<rows::RetainedRemoteRows>,
+    verification: Option<verification::RegisteredTargetVerifier>,
+    final_publication: Option<final_publication::RegisteredFinalPublication>,
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub(crate) struct NativeRegisteredRemoteHistoryProgress {
@@ -196,11 +206,16 @@ pub(crate) enum NativeRegisteredRemoteImageOperation {
     AppendHistory,
     AuditHistory { max_entries: usize },
     ApplyRows,
+    BeginVerification,
+    VerifyTarget { max_scanned_records: usize },
+    PublishFinalImage,
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub(crate) enum NativeRegisteredRemoteImageProgress {
     History(NativeRegisteredRemoteHistoryProgress),
     Rows(NativeRegisteredRemoteRowProgress),
+    Verification(NativeRegisteredRemoteVerificationProgress),
+    FinalImage(NativeRegisteredRemoteFinalImagePointer),
 }
 /// Actual fully stored and separately audited source spine, not a range floor,
 /// row success, local SourceLineage, activated configuration or read grant.
@@ -258,12 +273,26 @@ impl NativeRegisteredRemoteImageInstallation {
             NativeRegisteredRemoteImageOperation::ApplyRows => self
                 .apply_rows(db, context)
                 .map(NativeRegisteredRemoteImageProgress::Rows),
+            NativeRegisteredRemoteImageOperation::BeginVerification => self
+                .begin_verification(db, context)
+                .map(NativeRegisteredRemoteImageProgress::Verification),
+            NativeRegisteredRemoteImageOperation::VerifyTarget {
+                max_scanned_records,
+            } => self
+                .verify_target(db, context, max_scanned_records)
+                .map(NativeRegisteredRemoteImageProgress::Verification),
+            NativeRegisteredRemoteImageOperation::PublishFinalImage => self
+                .publish_final_image(db, context)
+                .map(NativeRegisteredRemoteImageProgress::FinalImage),
         }
     }
     #[cfg(test)]
     pub(crate) fn test_state(&self) -> serde_json::Value {
         serde_json::json!({"history":self.header,"history_pending":self.pending.as_ref().map(|p|serde_json::json!({"header":p.header,"native_commit_returned":p.commit_returned})),
-            "rows":self.rows.as_ref().map(|rows|rows.test_state()),"actual_original_host_retained":true,"no_image_or_serving":true})
+            "rows":self.rows.as_ref().map(|rows|rows.test_state()),
+            "verification":self.verification.as_ref().map(|v|v.test_state()),
+            "final_image":self.final_publication.as_ref().map(|p|p.test_state()),
+            "actual_original_host_retained":true,"no_floor_or_serving":true})
     }
     pub(crate) fn retain(context: &NativeRegisteredRemoteImageContext<'_>) -> Result<Self> {
         context.point.require_live()?;
@@ -300,6 +329,8 @@ impl NativeRegisteredRemoteImageInstallation {
             pending: None,
             native_history_commit_returned: None,
             rows: None,
+            verification: None,
+            final_publication: None,
         })
     }
     fn require_owner(

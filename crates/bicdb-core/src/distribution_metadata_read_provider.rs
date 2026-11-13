@@ -835,7 +835,11 @@ mod tests {
                 let started = Instant::now();
                 let response = fixture
                     .provider
-                    .acquire_recovery_role(&initiator, request.clone(), &parent)
+                    .acquire_recovery_role(
+                        &participant(&fixture.topology, "n1"),
+                        request.clone(),
+                        &parent,
+                    )
                     .unwrap();
                 // This test transport wraps only evidence returned by the
                 // actual stores' begin/probe/record/finish. No DTO mints QQ.

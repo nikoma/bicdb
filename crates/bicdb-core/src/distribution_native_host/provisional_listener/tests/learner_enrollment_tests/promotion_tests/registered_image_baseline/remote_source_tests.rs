@@ -1,5 +1,5 @@
-//! Source-wire prerequisite only. Genuine LOCAL native OLD QQ seeds the real
-//! source owner; target is the real fifth, but NO image row/Tx/install grant.
+//! Source-wire prerequisites with separate actual local-OLD and remote-OLD
+//! source cases. Target is the real fifth; none grants image rows or Serving.
 use super::*;
 use crate::distribution_range_handoff::{
     NativeJointHandoffPlan, NativeJointHandoffRuntime, NativeJointOldRound,

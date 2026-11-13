@@ -13,8 +13,8 @@ use super::*;
 use crate::distribution_range_consensus::{ImageInstallPurpose, NativeImageInstallRole};
 use crate::distribution_range_handoff::{
     NativeJointDurableDecision, NativeJointHandoffPlan, NativeJointHandoffRuntime,
-    NativeJointNewObservation, NativeJointNewRound, NativeJointOldRound,
-    NativeJointPreparedServingObservation, NativeJointPreparedServingRound,
+    NativeJointNewObservation, NativeJointNewRound, NativeJointOldClosedQuorum,
+    NativeJointOldRound, NativeJointPreparedServingObservation, NativeJointPreparedServingRound,
 };
 use crate::distribution_range_image::RangeImageCapture;
 use crate::distribution_range_image_install::{
@@ -643,6 +643,88 @@ enum Fault {
     /// The image transfer fails after the source cut and the first copied
     /// step, while the range is frozen on its owners.
     TransferAfterSourceCut,
+    AbortBeforeCut,
+    AbortThenRetry,
+}
+
+#[test]
+fn native_fifth_exp_abort_before_cut() {
+    run_fifth_data_path(Fault::AbortBeforeCut);
+}
+
+#[test]
+fn native_fifth_exp_abort_then_retry() {
+    run_fifth_data_path(Fault::AbortThenRetry);
+}
+
+fn source_cut(
+    five: &Five,
+    members: &Members,
+    runtimes: &BTreeMap<usize, Arc<NativeJointHandoffRuntime>>,
+    range: &crate::RangeDescriptor,
+    relocation: RelocationId,
+    leader_index: usize,
+) -> (
+    Arc<NativeJointHandoffPlan>,
+    NativeJointOldClosedQuorum,
+    RangeImageCapture,
+) {
+    let parent = CancellationToken::uncancelable();
+    let round_parent = budget(5000);
+    let business = Uuid::now_v7();
+    let observation = members.clients[leader_index]
+        .acquire_metadata_read_observation(
+            &node(0),
+            business,
+            range.id,
+            range.epoch,
+            Duration::from_secs(5),
+            &round_parent,
+        )
+        .unwrap();
+    let mut round = NativeJointOldRound::begin(observation, business, relocation).unwrap();
+    let plan = round.plan();
+    let old_indices = plan.old_members().keys().map(index_of).collect::<Vec<_>>();
+    for &i in &old_indices {
+        let operation = budget(5000);
+        let constraints = runtimes[&i]
+            .observe_constraints(plan.clone(), members.role(&plan, i), &operation)
+            .unwrap();
+        round
+            .record_constraints(constraints, &members.services[i])
+            .unwrap();
+    }
+    eprintln!("FIFTH_EXP source constraints observed");
+    for &i in &old_indices {
+        let operation = budget(5000);
+        let role = members.role(&plan, i);
+        let own_business = Uuid::now_v7();
+        let own = members.clients[i]
+            .acquire_host_metadata_observation(
+                &node(0),
+                own_business,
+                Duration::from_secs(5),
+                &operation,
+            )
+            .unwrap();
+        let closed = five.controls[i]
+            .close_initial_old_step(
+                runtimes[&i].clone(),
+                Arc::new(role),
+                own,
+                own_business,
+                &operation,
+            )
+            .unwrap();
+        round.record_retained_closed_actual(closed).unwrap();
+    }
+    eprintln!("FIFTH_EXP source owners closed");
+    let mut closed = round.finish().unwrap();
+    assert!(closed.range_index() >= 1);
+    let capture = closed
+        .begin_capture(Duration::from_secs(2), &parent)
+        .unwrap();
+    (plan, closed, capture)
 }
 
 #[test]
@@ -775,32 +857,53 @@ fn exercise(five: &mut Five, fault: Fault) {
     };
 
     mark("learner allocation committed");
-    // Step 3: freeze the range on its current owners (source cut).
-    let round_parent = budget(5000);
-    let business = Uuid::now_v7();
-    let observation = members.clients[leader_index]
-        .acquire_metadata_read_observation(
-            &node(0),
-            business,
-            range.id,
-            range.epoch,
-            Duration::from_secs(5),
-            &round_parent,
-        )
-        .unwrap();
-    mark("source round metadata observed");
-    let mut round = NativeJointOldRound::begin(observation, business, relocation.id).unwrap();
-    let plan = round.plan();
-    assert_eq!(plan.activation_range().leader, node(4));
-    let old_indices = plan.old_members().keys().map(index_of).collect::<Vec<_>>();
-    let new_indices = plan.new_members().keys().map(index_of).collect::<Vec<_>>();
-    assert!(new_indices.contains(&4) && !new_indices.contains(&leader_index));
-    let survivors = new_indices
+    let old_indices = range
+        .replicas
         .iter()
-        .copied()
-        .filter(|i| *i != 4)
+        .filter(|r| r.role == RangeReplicaRole::Voter)
+        .map(|r| index_of(&r.node_id))
         .collect::<Vec<_>>();
-    assert_eq!(survivors.len(), 2);
+    if matches!(fault, Fault::AbortBeforeCut | Fault::AbortThenRetry) {
+        if fault == Fault::AbortBeforeCut {
+            five.host.stop_owned_metadata(&budget(10_000)).unwrap();
+        }
+        for (i, control) in five.controls.iter_mut().enumerate() {
+            let outcome = control.refresh_initial_data_policy(&budget(10_000));
+            eprintln!(
+                "FIFTH_EXP abort refresh member={i}: {:?}",
+                outcome.as_ref().map_err(|error| error.to_string())
+            );
+        }
+        for (i, control) in five.controls.iter().enumerate() {
+            let outcome = control.recover_initial_data_leadership(&budget(20_000));
+            eprintln!(
+                "FIFTH_EXP abort recover member={i}: {:?}",
+                outcome.as_ref().map_err(|error| error.to_string())
+            );
+        }
+        let gateway = crate::ClusterEventClient::new(&five.configs[0], pending.clone())
+            .unwrap()
+            .with_request_timeout(Duration::from_secs(5))
+            .unwrap();
+        let key = key_for(&pending, range.id, "after-abort");
+        let value = serde_json::json!({"fifth_data_path":"acknowledged after abort"});
+        append_until_acknowledged(&gateway, &key, &value);
+        assert_eq!(strong_until_served(&gateway, &key).as_ref(), Some(&value));
+        let holders = old_indices
+            .iter()
+            .filter(|i| stored(five, **i, &key).as_ref() == Some(&value))
+            .count();
+        assert!(holders >= 2, "abort write is not on an old majority");
+        for (key, value) in &acknowledged {
+            assert_eq!(strong_until_served(&gateway, key).as_ref(), Some(value));
+        }
+        acknowledged.push((key, value));
+        mark("abort write acknowledged");
+        if fault == Fault::AbortBeforeCut {
+            return;
+        }
+    }
+    // Step 3: freeze the range on its current owners (source cut).
     let runtimes = old_indices
         .iter()
         .map(|i| {
@@ -810,50 +913,27 @@ fn exercise(five: &mut Five, fault: Fault) {
             )
         })
         .collect::<BTreeMap<_, _>>();
-    for &i in &old_indices {
-        let operation = budget(5000);
-        let constraints = runtimes[&i]
-            .observe_constraints(plan.clone(), members.role(&plan, i), &operation)
-            .unwrap();
-        round
-            .record_constraints(constraints, &members.services[i])
-            .unwrap();
-    }
-    mark("source constraints observed");
-    for &i in &old_indices {
-        let operation = budget(5000);
-        let role = members.role(&plan, i);
-        let own_business = Uuid::now_v7();
-        let own = members.clients[i]
-            .acquire_host_metadata_observation(
-                &node(0),
-                own_business,
-                Duration::from_secs(5),
-                &operation,
-            )
-            .unwrap();
-        let closed = five.controls[i]
-            .close_initial_old_step(
-                runtimes[&i].clone(),
-                Arc::new(role),
-                own,
-                own_business,
-                &operation,
-            )
-            .unwrap();
-        round.record_retained_closed_actual(closed).unwrap();
-    }
-    mark("source owners closed");
-    let mut closed = round.finish().unwrap();
-    assert!(closed.range_index() >= 1);
-    let capture = closed
-        .begin_capture(Duration::from_secs(2), &parent)
-        .unwrap();
-    let closed = Arc::new(closed);
+    let (mut plan, mut closed, capture) = source_cut(
+        five,
+        &members,
+        &runtimes,
+        &range,
+        relocation.id,
+        leader_index,
+    );
+    assert_eq!(plan.activation_range().leader, node(4));
+    let new_indices = plan.new_members().keys().map(index_of).collect::<Vec<_>>();
+    assert!(new_indices.contains(&4) && !new_indices.contains(&leader_index));
+    let survivors = new_indices
+        .iter()
+        .copied()
+        .filter(|i| *i != 4)
+        .collect::<Vec<_>>();
+    assert_eq!(survivors.len(), 2);
 
     mark("source cut and capture started");
     // Step 4: ship image + history into the fifth member and verify there.
-    let installed = install_on_fifth(
+    let mut installed = install_on_fifth(
         &members,
         &fifth_runtime,
         &plan,
@@ -861,15 +941,12 @@ fn exercise(five: &mut Five, fault: Fault) {
         fault == Fault::TransferAfterSourceCut,
     );
     if fault == Fault::TransferAfterSourceCut {
-        let error = installed.err().expect("injected transfer failure");
+        let error = match &installed {
+            Err(error) => error.clone(),
+            Ok(_) => panic!("injected transfer failure"),
+        };
         eprintln!("FIFTH_DATA_PATH transfer failed after source cut: {error}");
-        // Characterization, not a success claim. The source cut records a
-        // permanent promise on the old owners; there is no abort that returns
-        // the range to its old configuration. Dropping every owner releases
-        // the in-memory freezes; what the old configuration then accepts is
-        // observed and printed, and acknowledged rows must be intact.
         drop(closed);
-        drop(runtimes);
         for &i in &old_indices {
             five.controls[i]
                 .forget_initial_old_closure(range.id)
@@ -895,9 +972,6 @@ fn exercise(five: &mut Five, fault: Fault) {
             "FIFTH_DATA_PATH_CHARACTERIZATION write on the old configuration after a post-cut transfer failure: {:?}",
             outcome.as_ref().map_err(|error| error.to_string())
         );
-        // Safety only: an acknowledgement, if one is ever returned here, must
-        // be a real durable row on a majority of the old owners. Whether the
-        // write is accepted is reported, not asserted, by this test.
         if matches!(outcome, Ok(true)) {
             let holders = old_indices
                 .iter()
@@ -905,8 +979,21 @@ fn exercise(five: &mut Five, fault: Fault) {
                 .count();
             assert!(holders >= 2, "acknowledged write is not on an old majority");
         }
-        return;
+        mark("resume: re-closing the source");
+        let (plan2, closed2, capture2) = source_cut(
+            five,
+            &members,
+            &runtimes,
+            &range,
+            relocation.id,
+            leader_index,
+        );
+        plan = plan2;
+        closed = closed2;
+        mark("resume: re-shipping the image");
+        installed = install_on_fifth(&members, &fifth_runtime, &plan, capture2, false);
     }
+    let closed = Arc::new(closed);
     mark("image transfer finished");
     let (frozen, image) = installed.unwrap();
     assert_eq!(image.base().range_index(), closed.range_index());

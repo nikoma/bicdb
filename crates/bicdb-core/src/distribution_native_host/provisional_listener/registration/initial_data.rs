@@ -744,6 +744,35 @@ impl NativeInitialDataHost {
         }
         Ok(())
     }
+    /// Recover leadership of the ranges this owner leads at the currently
+    /// installed committed configuration, through the ordinary coordinator
+    /// recovery. This is the continuation of `refresh_data_policy` for a
+    /// range whose epoch changed without a membership change (a committed
+    /// learner allocation whose handoff was abandoned before any source
+    /// cut). It is not a grant: recovery reads every voter's durable progress
+    /// and refuses when a voter is already fenced beyond this epoch, so a
+    /// range with a permanent handoff promise stays unwritable here.
+    fn recover_data_leadership(&self, parent: &CancellationToken) -> Result<usize> {
+        parent.check()?;
+        if self.stopping {
+            return Err(invalid(
+                "stopping INITIAL data owner cannot recover leadership",
+            ));
+        }
+        let admission = self
+            .admission
+            .as_ref()
+            .ok_or_else(|| invalid("leadership recovery requires the retained admission"))?;
+        admission.require_live()?;
+        let owner = self
+            .enrollment
+            .as_ref()
+            .ok_or_else(|| invalid("leadership recovery requires the retained writer"))?;
+        let recovered = owner.coordinator.recover_local_leadership(64)?;
+        parent.check()?;
+        admission.require_live()?;
+        Ok(recovered)
+    }
     /// Drop this host's retained OLD closure owner for one range once the
     /// collector that consumed it has finished. Only custody is released; the
     /// durable promise, native close record and joint state are untouched.
@@ -833,6 +862,16 @@ impl NativeMetadataControlHost {
             .as_mut()
             .ok_or_else(|| invalid("actual initial DATA owner absent"))?
             .refresh_data_policy(parent)
+    }
+    /// See `NativeInitialDataHost::recover_data_leadership`.
+    pub(crate) fn recover_initial_data_leadership(
+        &self,
+        parent: &CancellationToken,
+    ) -> Result<usize> {
+        self.data
+            .as_ref()
+            .ok_or_else(|| invalid("actual initial DATA owner absent"))?
+            .recover_data_leadership(parent)
     }
     pub(crate) fn forget_initial_old_closure(&self, range: crate::RangeId) -> Result<bool> {
         self.data

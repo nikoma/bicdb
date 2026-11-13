@@ -266,6 +266,7 @@ mod tests {
                 commit_seq: 1,
                 native_backings: BTreeMap::new(),
                 native_catalog_allocations: BTreeMap::new(),
+                native_imported_allocations: BTreeMap::new(),
             })
             .unwrap(),
         );

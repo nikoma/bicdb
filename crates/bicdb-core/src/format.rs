@@ -39,6 +39,7 @@ pub const NATIVE_WAL_BACKING_CAPTURE_FEATURE_FLAG: &str = "native_wal_backing_ca
 /// Physical Native factory root and allocation scope; local, not peer auth.
 pub const NATIVE_ORIGIN_ROOT_FEATURE_FLAG: &str = "native_origin_root_v1";
 pub const NATIVE_CATALOG_ALLOCATION_FACTS_FEATURE_FLAG: &str = "native_catalog_allocation_facts_v1";
+pub const NATIVE_IMPORTED_BACKING_ORIGINS_FEATURE_FLAG: &str = "native_imported_backing_origins_v1";
 /// Local native image receipts require writers that honor image invalidation.
 /// This capability is separate from namespace IDs and is never portable schema.
 pub const RANGE_IMAGE_INSTALL_FEATURE_FLAG: &str = "range_image_install_v1";
@@ -79,6 +80,7 @@ const KNOWN_FEATURE_FLAGS: &[&str] = &[
     NATIVE_WAL_BACKING_CAPTURE_FEATURE_FLAG,
     NATIVE_ORIGIN_ROOT_FEATURE_FLAG,
     NATIVE_CATALOG_ALLOCATION_FACTS_FEATURE_FLAG,
+    NATIVE_IMPORTED_BACKING_ORIGINS_FEATURE_FLAG,
     RANGE_IMAGE_INSTALL_FEATURE_FLAG,
     CURRENT_IMAGE_PROPOSAL_FEATURE_FLAG,
     NATIVE_RECOVERY_SERVING_FEATURE_FLAG,
@@ -867,6 +869,30 @@ pub(crate) fn enable_native_origin_root(root: &Path) -> Result<()> {
     metadata
         .feature_flags
         .insert(NATIVE_ORIGIN_ROOT_FEATURE_FLAG.into());
+    persist_metadata(root, &metadata, true)
+}
+
+pub(crate) fn enable_native_imported_backing_origins(root: &Path) -> Result<()> {
+    let lock = feature_flags_lock(root);
+    let _guard = lock.lock();
+    let mut metadata = read_or_legacy_metadata(root)?;
+    validate_supported(&metadata)?;
+    for required in [
+        NATIVE_ORIGIN_ROOT_FEATURE_FLAG,
+        NATIVE_COLLECTION_BIRTH_FEATURE_FLAG,
+        NATIVE_WAL_BACKING_CAPTURE_FEATURE_FLAG,
+        LOCAL_NAMESPACE_IDENTITY_FEATURE_FLAG,
+    ] {
+        if !metadata.feature_flags.contains(required) {
+            return Err(BicDbError::InvalidConfig(
+                "Native imported origins require actual root, birth, namespace and WAL capture"
+                    .into(),
+            ));
+        }
+    }
+    metadata
+        .feature_flags
+        .insert(NATIVE_IMPORTED_BACKING_ORIGINS_FEATURE_FLAG.into());
     persist_metadata(root, &metadata, true)
 }
 

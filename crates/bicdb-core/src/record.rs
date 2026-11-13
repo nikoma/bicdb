@@ -1295,6 +1295,28 @@ fn is_false_bool(value: &bool) -> bool {
     !value
 }
 
+/// Durable Native control data, installed only when an accepted import
+/// actually allocates its target. Decoding this data grants no capability.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct NativeImportedBackingOrigin {
+    pub(crate) version: u32,
+    pub(crate) source_root: uuid::Uuid,
+    pub(crate) source_root_sha256: String,
+    pub(crate) source_birth: uuid::Uuid,
+    pub(crate) source_namespace: uuid::Uuid,
+    pub(crate) source_storage: String,
+    pub(crate) source_contract_sha256: String,
+    pub(crate) source_sequence: u64,
+    pub(crate) source_frame_checksum: [u8; 32],
+    pub(crate) target_root: uuid::Uuid,
+    pub(crate) target_birth: uuid::Uuid,
+    pub(crate) target_namespace: uuid::Uuid,
+    pub(crate) target_storage: String,
+    pub(crate) generation: uuid::Uuid,
+    pub(crate) pending: bool,
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct CollectionMeta {
     pub name: String,
@@ -1342,6 +1364,8 @@ pub struct CollectionMeta {
     /// decision. Import metadata must never adopt this local pending state.
     #[serde(default, skip_serializing_if = "is_false_bool")]
     pub native_catalog_allocation_pending: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub native_imported_backing_origin: Option<NativeImportedBackingOrigin>,
 }
 
 impl CollectionMeta {
@@ -1358,6 +1382,7 @@ impl CollectionMeta {
         portable.native_backing_birth_id = None;
         portable.native_backing_origin_root = None;
         portable.native_catalog_allocation_pending = false;
+        portable.native_imported_backing_origin = None;
         portable
     }
 
@@ -1376,6 +1401,7 @@ impl CollectionMeta {
             native_backing_birth_id: None,
             native_backing_origin_root: None,
             native_catalog_allocation_pending: false,
+            native_imported_backing_origin: None,
         }
     }
 
@@ -1394,6 +1420,7 @@ impl CollectionMeta {
             native_backing_birth_id: None,
             native_backing_origin_root: None,
             native_catalog_allocation_pending: false,
+            native_imported_backing_origin: None,
         }
     }
 }

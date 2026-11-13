@@ -247,6 +247,7 @@ impl BicDb {
                     commit_seq,
                     native_backings,
                     native_catalog_allocations,
+                    ..
                 } => {
                     if commit_seq <= target {
                         new_anchor = Some((*start, *end));

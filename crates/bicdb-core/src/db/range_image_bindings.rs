@@ -90,7 +90,9 @@ impl BicDb {
                 ))
             })?;
             let state = self.collection_state(&name)?;
-            if state.meta.native_catalog_allocation_pending {
+            if state.meta.native_catalog_allocation_pending
+                || native_import_origins::pending(&state.meta)
+            {
                 return Err(BicDbError::Cluster(
                     "Native creation publication is pending; no protected capture is available"
                         .into(),

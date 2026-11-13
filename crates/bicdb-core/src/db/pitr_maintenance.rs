@@ -1641,6 +1641,8 @@ impl BicDb {
                         state.get_mut().meta.native_backing_origin_root;
                     local_meta.native_catalog_allocation_pending =
                         state.get_mut().meta.native_catalog_allocation_pending;
+                    local_meta.native_imported_backing_origin =
+                        state.get_mut().meta.native_imported_backing_origin.clone();
                     state.get_mut().meta = local_meta;
                     catalog_changed = true;
                 }

@@ -54,6 +54,13 @@ impl NativeOriginObservation {
     pub(crate) fn root_id(&self) -> Uuid {
         self.root_id
     }
+    pub(super) fn record_sha256(&self) -> &str {
+        &self.native_record_sha256
+    }
+}
+
+pub(super) fn has_prepared_factory(path: &Path) -> Result<bool> {
+    Ok(read_record(path)?.is_some())
 }
 
 pub(super) fn create_directory(path: &Path) -> Result<bool> {
@@ -163,6 +170,13 @@ impl BicDb {
     /// Existing backing birth metadata is never upgraded or rebound.
     pub fn activate_native_origin_root_v1(&mut self) -> Result<()> {
         self.ensure_writable("activate Native origin root")?;
+        self.install_actual_native_origin_root_v1()
+    }
+
+    // Also used by the private accepted-import factory. This never accepts a
+    // caller's root UUID and never changes this node's role to enable writes.
+    pub(super) fn install_actual_native_origin_root_v1(&mut self) -> Result<()> {
+        self.check_recovery_state()?;
         self.check_catalog_recovery_quiescent()?;
         if !self.config.fsync {
             return Err(invalid("origin factory requires fsync-enabled storage"));

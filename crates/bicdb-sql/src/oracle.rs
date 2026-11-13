@@ -493,6 +493,7 @@ pub fn initialize_existing_database_profile(db: &mut BicDb) -> Result<()> {
     if let Some(profile) = &profile {
         validate_database_profile_selection(db, profile)?;
     }
+    db.initialize_fresh_primary_replication_origins()?;
     recover_interrupted_recycle_bin_renames(db)?;
     if let Some(profile) = profile {
         ensure_database_profile_inner(db, &profile)?;
@@ -509,6 +510,7 @@ pub fn ensure_database_profile(db: &mut BicDb, profile: &str) -> Result<()> {
     // A wrong serve flag must not repair or convert a differently profiled
     // store before reporting the mismatch.
     validate_database_profile_selection(db, profile)?;
+    db.initialize_fresh_primary_replication_origins()?;
     recover_interrupted_recycle_bin_renames(db)?;
     let result = ensure_database_profile_inner(db, profile);
     db.check_recovery_state()?;

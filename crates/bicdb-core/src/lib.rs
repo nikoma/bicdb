@@ -546,8 +546,8 @@ pub use paged_maintenance::{
 pub use query_exec::{NumericSummary, TimeSeriesFilter};
 pub use record::{
     patch_json_object_text, splice_json_object_text, BlindIndexPolicy, CellRef, CellRow,
-    CollectionMeta, CollectionMode, CollectionPolicy, ColumnSecurity, OwnedCell, OwnedCellRow,
-    Record, RedactionPolicy, StoredRecord, TypedCell, TypedRow,
+    CollectionMeta, CollectionMode, CollectionPolicy, ColumnSecurity, NativeImportedBackingOrigin,
+    OwnedCell, OwnedCellRow, Record, RedactionPolicy, StoredRecord, TypedCell, TypedRow,
 };
 pub use replication::{
     CommitFrame, ReplicationApplyReport, ReplicationApplyState, ReplicationConfig,

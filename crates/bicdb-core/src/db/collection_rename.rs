@@ -390,6 +390,11 @@ impl BicDb {
     }
 
     fn ensure_renamable(&self, collection: &str) -> Result<()> {
+        if native_import_origins::pending(&self.collection_state(collection)?.meta) {
+            return Err(replication_error(
+                "Native imported backing publication is pending",
+            ));
+        }
         if self
             .collection_state(collection)?
             .meta
@@ -656,6 +661,7 @@ impl BicDb {
         copied.native_backing_birth_id = target.meta.native_backing_birth_id;
         copied.native_backing_origin_root = target.meta.native_backing_origin_root;
         copied.native_catalog_allocation_pending = target.meta.native_catalog_allocation_pending;
+        copied.native_imported_backing_origin = target.meta.native_imported_backing_origin.clone();
         copied.renamed_from = None;
         target.meta = copied;
         self.persist_catalog()?;

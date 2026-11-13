@@ -291,12 +291,10 @@ impl NativeHotRecoveryMaintenance {
             } else if !matches!(
                 error,
                 crate::BicDbError::QueryCanceled | crate::BicDbError::QueryTimedOut
-            ) && !debt.next.get(&node).is_some_and(|p| {
-                matches!(
-                    p,
-                    Phase::Fence | Phase::Certify | Phase::Apply | Phase::Prepare
-                )
-            }) {
+            ) {
+                // Early phases now run real completed materialization. Retain
+                // their semantic refusal too; subsequent socket loss cannot
+                // erase it or turn this known peer into a backoff-only hint.
                 debt.semantic_veto
                     .entry(node.clone())
                     .or_insert(debt.next.get(&node).copied().unwrap_or(Phase::Replica));

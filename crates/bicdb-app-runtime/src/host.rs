@@ -236,6 +236,25 @@ impl std::fmt::Debug for InvocationServices {
 }
 
 impl InvocationServices {
+    pub(crate) fn acquire_runtime_invariant_context(
+        &self,
+        application: &str,
+    ) -> Result<Option<Arc<crate::runtime::RuntimeInvariantContext>>> {
+        match &self.invariant_registry {
+            Some(provider) => {
+                let package_hash = self.invariant_package_sha256.as_deref().ok_or_else(|| {
+                    AppRuntimeError::NotReady(
+                        "runtime invocation lacks its verified package identity".into(),
+                    )
+                })?;
+                Ok(Some(Arc::new(provider.acquire(application, package_hash)?)))
+            }
+            // Standalone trusted Rust hosts retain their explicit manifest
+            // contract. ApplicationRuntime always configures the provider.
+            None => Ok(None),
+        }
+    }
+
     pub fn new(
         secrets: Arc<dyn SecretProvider>,
         egress: Arc<dyn EgressProvider>,
@@ -571,25 +590,8 @@ impl CapabilityHost {
                 "capability host requires an ABI v2 application manifest".to_string(),
             ));
         }
-        let invariant_context = match &services.invariant_registry {
-            Some(provider) => {
-                let package_hash =
-                    services
-                        .invariant_package_sha256
-                        .as_deref()
-                        .ok_or_else(|| {
-                            AppRuntimeError::NotReady(
-                                "runtime invocation lacks its verified package identity".into(),
-                            )
-                        })?;
-                Some(Arc::new(
-                    provider.acquire(&extension.identity.name, package_hash)?,
-                ))
-            }
-            // Standalone trusted Rust hosts retain their explicit manifest
-            // contract. ApplicationRuntime always configures the provider.
-            None => None,
-        };
+        let invariant_context =
+            services.acquire_runtime_invariant_context(&extension.identity.name)?;
         let mut host = Self {
             db: NonNull::from(db),
             service_trace,

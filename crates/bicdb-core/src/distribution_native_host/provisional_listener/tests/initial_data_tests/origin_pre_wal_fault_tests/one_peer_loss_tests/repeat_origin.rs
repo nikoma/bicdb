@@ -132,7 +132,23 @@ pub(super) fn run(
         base >= 4,
         "first recovery did not retain at least the four acknowledged native commands",
     )?;
-    let original_all4 = actual_all(f, originals, range, base, &first_keys)?;
+    // The diagnostic snapshot uses non-blocking latches on live owners whose
+    // process worker keeps tracking followers. A momentarily busy latch is
+    // not an observation: retry only that, for a bounded time. Every actual
+    // native/history/payload requirement of the snapshot is unchanged.
+    let original_all4 = {
+        let busy_until = Instant::now() + Duration::from_secs(2);
+        loop {
+            match actual_all(f, originals, range, base, &first_keys) {
+                Err(BicDbError::Cluster(message))
+                    if message.ends_with(" busy") && Instant::now() < busy_until =>
+                {
+                    std::thread::sleep(Duration::from_millis(10));
+                }
+                other => break other?,
+            }
+        }
+    };
     journal.append(
         serde_json::json!({"kind":"second_fault_requires_first_complete_all_native4",
         "actual_all":original_all4,"first_convergence_receipt":first_convergence,

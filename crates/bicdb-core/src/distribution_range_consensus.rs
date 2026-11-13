@@ -2453,7 +2453,7 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
         plan: &ClusterBackupPlan,
         now_ms: u64,
     ) -> Result<RangeBackupFenceSession> {
-        let topology = self.topology.read();
+        let topology = self.topology.read_recursive();
         let captured = ClusterBackupMetadata::capture(&topology)?;
         if plan.format_version != CLUSTER_BACKUP_CERTIFICATE_FORMAT_VERSION
             || plan.plan_id.is_nil()
@@ -2496,7 +2496,7 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
             return Err(range_write_error("backup fence plan id must not be nil"));
         }
         let (topology_generation, range) = {
-            let topology = self.topology.read();
+            let topology = self.topology.read_recursive();
             if session.cluster_id != self.cluster_id
                 || session.topology_generation != topology.generation
                 || installed_at_ms < session.created_at_ms
@@ -2606,7 +2606,7 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
             )));
         }
         let still_current = {
-            let topology = self.topology.read();
+            let topology = self.topology.read_recursive();
             topology.generation == topology_generation
                 && topology.range_by_id(range.id).is_some_and(|current| {
                     current.epoch == range.epoch && current.leader == self.local_node_id
@@ -2785,7 +2785,7 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
             ));
         }
         let mut ranges = {
-            let topology = self.topology.read();
+            let topology = self.topology.read_recursive();
             let recovered = self.recovered_epochs.lock();
             topology
                 .ranges
@@ -2820,7 +2820,7 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
                 completed = completed.saturating_add(1);
             }
         }
-        let topology = self.topology.read();
+        let topology = self.topology.read_recursive();
         self.recovered_epochs.lock().retain(|range_id, epoch| {
             topology
                 .range_by_id(*range_id)
@@ -2880,7 +2880,7 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
             return Ok(());
         }
         let (required, pending_target, advertised, advertised_pending) = {
-            let topology = self.topology.read();
+            let topology = self.topology.read_recursive();
             let current = topology
                 .range_by_id(range.id)
                 .filter(|current| {
@@ -3017,7 +3017,7 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
         if intent.mutations.is_empty() {
             return Err(range_write_error("distributed commit intent is empty"));
         }
-        let topology = self.topology.read();
+        let topology = self.topology.read_recursive();
         let mut resolved = None;
         for mutation in &intent.mutations {
             let range = topology.range_for_key(&mutation.collection, &mutation.record_id)?;
@@ -3449,7 +3449,7 @@ impl<Transport: RangeWriteTransport> RangeAntiEntropyFenceAuthority
         now_ms: u64,
     ) -> Result<RangeBackupFenceQuorum> {
         let topology_generation = {
-            let topology = self.topology.read();
+            let topology = self.topology.read_recursive();
             plan.validate(&topology, &self.local_node_id, now_ms)?;
             topology.generation
         };
@@ -3568,7 +3568,7 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
             )?
         };
         let native_plan = if let Some(database) = native_database {
-            let topology = self.topology.read();
+            let topology = self.topology.read_recursive();
             let bootstrap = topology.range_image_bootstrap_id.ok_or_else(|| {
                 range_write_error("native admission has no committed bootstrap domain")
             })?;
@@ -3993,8 +3993,12 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
         let mut actual_native_apply_verified = !self.native_image_mode;
         if let Some(native) = &evidence.native {
             if let Some((receipt, database)) = native_context {
-                let current_range =
-                    { self.topology.read().range_by_id(evidence.range_id).cloned() };
+                let current_range = {
+                    self.topology
+                        .read_recursive()
+                        .range_by_id(evidence.range_id)
+                        .cloned()
+                };
                 let validation = current_range
                     .ok_or_else(|| range_write_error("native callback range disappeared"))
                     .and_then(|range| self.require_native_writer_host_context(database,&range))
@@ -4045,7 +4049,12 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
             ));
         }
         if let Some((_, database)) = native_context {
-            let current_range = { self.topology.read().range_by_id(evidence.range_id).cloned() };
+            let current_range = {
+                self.topology
+                    .read_recursive()
+                    .range_by_id(evidence.range_id)
+                    .cloned()
+            };
             let validation = current_range
                 .ok_or_else(|| range_write_error("native callback range disappeared"))
                 .and_then(|range| self.require_native_writer_host_context(database, &range));

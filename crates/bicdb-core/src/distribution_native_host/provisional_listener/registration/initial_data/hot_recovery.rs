@@ -292,14 +292,18 @@ impl NativeHotRecoveryMaintenance {
         if ranges.is_empty() {
             return Ok(());
         }
-        // One bounded unit of actual work per attempt. Idle led ranges are
-        // passed over (memory/local reads only) so a retained job on another
-        // range is not delayed by a whole pacing interval per idle range.
+        // Retained jobs and new actual origin Pendings come first: idle led
+        // ranges are passed over (memory/local reads only) so such a range
+        // is not delayed by one pacing interval per idle range. Retained
+        // replica obligations keep their previous one-range-per-attempt
+        // cadence below.
+        let first = state.cursor % ranges.len();
         let mut selected = None;
-        for _ in 0..ranges.len().min(MAX_IDLE_RANGE_SCAN) {
-            let range = (*ranges[state.cursor % ranges.len()]).clone();
-            state.cursor = (state.cursor + 1) % ranges.len();
+        for offset in 0..ranges.len().min(MAX_IDLE_RANGE_SCAN) {
+            let at = (first + offset) % ranges.len();
+            let range = (*ranges[at]).clone();
             if state.jobs.contains_key(&range.id) {
+                state.cursor = (at + 1) % ranges.len();
                 selected = Some(range);
                 break;
             }
@@ -310,9 +314,6 @@ impl NativeHotRecoveryMaintenance {
                 .coordinator
                 .initial_data_leader_admission_observed(&range)
             {
-                if let Some(debt) = state.replica_debts.get_mut(&range.id) {
-                    return self.run_replica_debt(debt, parent);
-                }
                 continue;
             }
             // Do not discard an older session's frozen/uncaught-up physical
@@ -326,11 +327,18 @@ impl NativeHotRecoveryMaintenance {
                 .get(&range.id)
                 .is_some_and(|debt| !debt.converged())
             {
+                state.cursor = (at + 1) % ranges.len();
                 return Err(invalid("new origin recovery with retained replica session debt needs explicit continuation; old debt is preserved"));
             }
-            let Some(command) = self.candidate(&range, parent)? else {
-                continue;
+            let command = match self.candidate(&range, parent) {
+                Ok(Some(command)) => command,
+                Ok(None) => continue,
+                Err(error) => {
+                    state.cursor = (at + 1) % ranges.len();
+                    return Err(error);
+                }
             };
+            state.cursor = (at + 1) % ranges.len();
             if let Some(retired) = state.replica_debts.remove(&range.id) {
                 self.record(
                     retired.diagnostic("converged_session_retired_for_new_actual_origin_pending"),
@@ -370,6 +378,16 @@ impl NativeHotRecoveryMaintenance {
             break;
         }
         let Some(range) = selected else {
+            let range = ranges[first];
+            state.cursor = (first + 1) % ranges.len();
+            if self
+                .coordinator
+                .initial_data_leader_admission_observed(range)
+            {
+                if let Some(debt) = state.replica_debts.get_mut(&range.id) {
+                    return self.run_replica_debt(debt, parent);
+                }
+            }
             return Ok(());
         };
         let job = state.jobs.get_mut(&range.id).unwrap();
@@ -494,17 +512,7 @@ impl NativeHotRecoveryMaintenance {
                         "hot recovery retains an unresolved actual peer semantic veto",
                     ));
                 }
-                #[cfg(test)]
-                eprintln!(
-                    "NATIVE_HOT_DATA_STAGE node={} stage=publish-begin phase={:?}",
-                    self.initial.seed.spec.node_id, job.phase
-                );
                 let fresh = self.fresh_role(&job.range, job.scope.recovery_nonce, &phase_parent)?;
-                #[cfg(test)]
-                eprintln!(
-                    "NATIVE_HOT_DATA_STAGE node={} stage=publish-role phase={:?}",
-                    self.initial.seed.spec.node_id, job.phase
-                );
                 if job.replica_binding.is_none() {
                     job.replica_binding = Some(self.coordinator.capture_hot_replica_binding(
                         &self.runtime,
@@ -521,11 +529,6 @@ impl NativeHotRecoveryMaintenance {
                     &fresh,
                     &phase_parent,
                 )?;
-                #[cfg(test)]
-                eprintln!(
-                    "NATIVE_HOT_DATA_STAGE node={} stage=publish-binding phase={:?}",
-                    self.initial.seed.spec.node_id, job.phase
-                );
                 self.coordinator.publish_hot_native_recovery(
                     &self.runtime,
                     &self.host,
@@ -535,28 +538,13 @@ impl NativeHotRecoveryMaintenance {
                     &job.command,
                     &phase_parent,
                 )?;
-                #[cfg(test)]
-                eprintln!(
-                    "NATIVE_HOT_DATA_STAGE node={} stage=publish-done phase={:?}",
-                    self.initial.seed.spec.node_id, job.phase
-                );
                 return Ok(());
             }
             if job.position == job.members.len() {
                 // This threshold schedules the NEXT real producer. It is NOT
                 // a QQ, role, recovered epoch or admission grant. Original
                 // origin success and all known semantic vetoes are mandatory.
-                #[cfg(test)]
-                eprintln!(
-                    "NATIVE_HOT_DATA_STAGE node={} stage=round-end phase={:?}",
-                    self.initial.seed.spec.node_id, job.phase
-                );
                 let fresh = self.fresh_role(&job.range, job.scope.recovery_nonce, &phase_parent)?;
-                #[cfg(test)]
-                eprintln!(
-                    "NATIVE_HOT_DATA_STAGE node={} stage=round-role phase={:?}",
-                    self.initial.seed.spec.node_id, job.phase
-                );
                 job.scope.require_role(&fresh)?;
                 held.require_actual_store_slot()?;
                 if job.phase_observed.len() < job.members.len() / 2 + 1
@@ -747,14 +735,6 @@ impl NativeHotRecoveryMaintenance {
                 }
                 (io_ms, result)
             };
-            #[cfg(test)]
-            eprintln!(
-                "NATIVE_HOT_DATA_STAGE node={} stage=phase-returned target={} phase={:?} ok={}",
-                self.initial.seed.spec.node_id,
-                node,
-                job.phase,
-                result.is_ok()
-            );
             // Expired caller/role or changed original service slot aborts the
             // whole attempt regardless of any shorter peer socket timeout.
             self.live(&phase_parent)?;

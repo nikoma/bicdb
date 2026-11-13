@@ -204,7 +204,7 @@ impl<T: RangeWriteTransport> RangeWriteCoordinator<T> {
         state.require_database(database, range)?;
         match held_topology {
             Some(topology) => state.require_topology(topology),
-            None => state.require_topology(&self.topology.read()),
+            None => state.require_topology(&self.topology.read_recursive()),
         }
     }
     pub(crate) fn validate_native_writer_enrollment(
@@ -225,7 +225,7 @@ impl<T: RangeWriteTransport> RangeWriteCoordinator<T> {
             ));
         }
         {
-            let topology = self.topology.read();
+            let topology = self.topology.read_recursive();
             policy.facts().require_topology(&topology)?;
             for range in topology.ranges.values() {
                 policy.facts().require_range(range)?;

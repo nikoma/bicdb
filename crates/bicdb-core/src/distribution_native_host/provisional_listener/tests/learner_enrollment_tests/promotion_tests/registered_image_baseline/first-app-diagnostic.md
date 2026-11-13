@@ -36,3 +36,29 @@ through the existing observer contract. It therefore changes diagnostic timing.
 The original logical acknowledgment ledger and actual API error are retained;
 API errors establish uncertainty, not rollback. No benchmark, hardware recovery,
 serving fifth node or scale-out qualification follows from either test.
+
+The separate `first_app_observed_cohort` module contains four passive-observer
+counterparts of the original transfer, retained-callback, cancellation and hook
+revocation cases. Select that module with the original `--test-threads=4`; this
+selects four real independent fixtures in the same test process. There is no
+synthetic start barrier. `first-app-mode.json` records actual process/test identity
+and fixture-start time; raw intent/reply timestamps permit overlap inspection.
+Configured concurrency does not establish that all four APP calls overlapped.
+
+The opt-in observer flag defaults to false on every existing entry point. The
+cohort retains the original INITIAL-open twenty-second assertion and two-second
+APP calls, without the separate serial diagnostic's remaining-setup APP check.
+It adds no Strong probe, deadline, warmup or helper retry. The original API
+assertions and the `two_real_source_acks` failure stage remain unchanged. A first
+APP error is retained before the original assertion fails, with effect unknown.
+Later cancellation or hook tests are untested if that prerequisite fails.
+
+Source review found independent fixture roots, bootstrap UUIDs, CA/key material,
+metadata/services and ephemeral listener addresses. The rotation cut is
+thread-local and installed after the source APP prerequisite. No shared fixture
+owner or cross-case hook interference was established. Shared CPU, disk/fsync,
+TLS and background-worker scheduling are hypotheses requiring actual traces.
+Observation adds IO and may change timing. This cohort supplies a reproducible
+concurrent diagnostic configuration; it does not guarantee reproducing the
+historical failure or establish its cause. The serial `d09d1ca494cf` positive and
+`031681576891` compilation failure remain separate retained evidence.

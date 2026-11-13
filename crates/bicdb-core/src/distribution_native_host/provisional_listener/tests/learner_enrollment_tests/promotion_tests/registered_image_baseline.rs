@@ -199,6 +199,20 @@ fn run_registered_image_baseline_with_placement_and_source(
     assignment: AssignmentMode,
     source_case: Option<remote_source_tests::SourceCase>,
 ) {
+    run_registered_image_baseline_with_observer(case, assignment, source_case, false);
+}
+fn run_registered_image_baseline_with_observer(
+    case: Case,
+    assignment: AssignmentMode,
+    source_case: Option<remote_source_tests::SourceCase>,
+    observer_only_cohort: bool,
+) {
+    let observer_fixture_started_unix_ns = observer_only_cohort.then(|| {
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    });
     let mut f = EnrollmentFixture::new();
     let (factory, mut host) = f.factory("actual-registered-fifth-image-target");
     assert!(factory.spec.initial_ranges.is_empty());
@@ -374,8 +388,8 @@ fn run_registered_image_baseline_with_placement_and_source(
                 "test_only_consensus_proposal_adapter_not_automatic_controller":true
             })).unwrap();
         }
-        let diagnostic =
-            matches!(
+        let diagnostic = observer_only_cohort
+            || matches!(
             source_case,
             Some(remote_source_tests::SourceCase::TargetTransferReadinessDiagnostic
                 | remote_source_tests::SourceCase::TargetTransferObservedTrafficFirstDiagnostic)
@@ -386,6 +400,17 @@ fn run_registered_image_baseline_with_placement_and_source(
             .with_request_timeout(Duration::from_secs(2))
             .unwrap();
         if let Some(journal) = &rpc_journal {
+            evidence(&output.join("first-app-mode.json"), &serde_json::json!({
+                "observer_only_cohort":observer_only_cohort,
+                "ordinary_strong_precondition":matches!(source_case, Some(remote_source_tests::SourceCase::TargetTransferReadinessDiagnostic)),
+                "fixture_initialization_started_unix_ns":observer_fixture_started_unix_ns,
+                "actual_process_id":std::process::id(),
+                "configured_rust_test_threads":std::env::var("RUST_TEST_THREADS").ok(),
+                "actual_rust_test_thread":std::thread::current().name(),
+                "initial_open_absolute_budget_ms":20000,"app_per_call_timeout_ms":2000,
+                "cohort_adds_no_deadline_or_warmup":observer_only_cohort,
+                "observation_changes_timing_not_qualification":true,
+            })).unwrap();
             gateway = gateway
                 .with_rpc_evidence_observer(
                     journal.clone(),
@@ -446,10 +471,12 @@ fn run_registered_image_baseline_with_placement_and_source(
                 "outcome":"not_started","effect_unknown_on_error":false}));
             evidence(&output.join("ack-ledger.json"), &ledger).unwrap();
             if let Some(journal) = &rpc_journal {
-                assert!(
-                    until.saturating_duration_since(Instant::now()) >= Duration::from_secs(2),
-                    "diagnostic APP must fit remaining original INITIAL open20s"
-                );
+                if !observer_only_cohort {
+                    assert!(
+                        until.saturating_duration_since(Instant::now()) >= Duration::from_secs(2),
+                        "diagnostic APP must fit remaining original INITIAL open20s"
+                    );
+                }
                 journal.start(ledger.last().unwrap().clone());
             }
             let append = gateway.append("items", &key, value.clone());

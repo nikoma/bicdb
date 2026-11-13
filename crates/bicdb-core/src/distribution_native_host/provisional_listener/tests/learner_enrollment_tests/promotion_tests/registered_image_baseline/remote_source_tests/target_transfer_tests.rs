@@ -1,5 +1,6 @@
 //! Actual original fifth ownership transfer only; no native Installing/WAL.
 use super::*;
+mod first_app_observed_cohort;
 
 #[test]
 fn native_registered_fifth_remote_transfer_unique_runtime_owner_preserves_data() {

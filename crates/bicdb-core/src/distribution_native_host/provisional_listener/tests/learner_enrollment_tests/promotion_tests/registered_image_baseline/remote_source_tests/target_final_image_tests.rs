@@ -40,7 +40,7 @@ fn native_registered_fifth_remote_final_image_actual_historical_integrity_uses_i
     );
 }
 #[allow(clippy::too_many_arguments)]
-fn advance(
+pub(super) fn advance(
     control: &mut NativeMetadataControlHost,
     client: &TcpClusterRelocationTransport,
     source: &Arc<NativeRemoteImageFact>,
@@ -68,13 +68,19 @@ fn advance(
         output,
         journal,
     )?)?;
-    let guard = cancel.then(|| {
+    let native_base = matches!(operation, Operation::PublishNativeBase);
+    let base_guard = (cancel && native_base).then(|| {
+        let token = parent.clone();
+        crate::db::test_registered_remote_base_after_wal(Box::new(move || token.cancel()))
+    });
+    let guard = (cancel && !native_base).then(|| {
         let token = parent.clone();
         crate::db::test_registered_remote_final_image_after_wal(Box::new(move || token.cancel()))
     });
     let result = control
         .advance_registered_remote_image(source, &frame, role, own, business, &parent, operation);
     drop(guard);
+    drop(base_guard);
     parent.cancel();
     result
 }
@@ -115,7 +121,11 @@ pub(super) fn exercise(
     let before = state(&factory.database, pending, &node(4), ranges).unwrap();
     let owner_before = control.test_registered_remote_image_state(range).unwrap();
     let original_b = factory.database.read().current_commit_seq();
-    if matches!(case, SourceCase::TargetFinalImageWithoutScan) {
+    if matches!(
+        case,
+        SourceCase::TargetFinalImageWithoutScan | SourceCase::TargetNativeBaseWithoutFinal
+    ) {
+        let missing_final = matches!(case, SourceCase::TargetNativeBaseWithoutFinal);
         let error = advance(
             control,
             client,
@@ -125,16 +135,22 @@ pub(super) fn exercise(
             actor,
             output,
             journal,
-            Operation::PublishFinalImage,
+            if missing_final {
+                Operation::PublishNativeBase
+            } else {
+                Operation::PublishFinalImage
+            },
             false,
         )
         .unwrap_err();
-        evidence(&output.join("registered-final-image-missing-scan.json"),&serde_json::json!({"exact_error":error.to_string(),"before":before,
+        evidence(&output.join(if missing_final { "registered-native-base-missing-final.json" } else { "registered-final-image-missing-scan.json" }),&serde_json::json!({"exact_error":error.to_string(),"before":before,
             "owner_before":owner_before,"owner_after":control.test_registered_remote_image_state(range).unwrap(),"no_native_floor_or_serving":true})).unwrap();
         assert!(
-            error
-                .to_string()
-                .contains("requires independent target scan"),
+            error.to_string().contains(if missing_final {
+                "requires actual final image receipt"
+            } else {
+                "requires independent target scan"
+            }),
             "{error}"
         );
         assert_eq!(
@@ -400,4 +416,17 @@ pub(super) fn exercise(
             "{error}"
         );
     }
+    if matches!(
+        case,
+        SourceCase::TargetNativeBase
+            | SourceCase::TargetNativeBaseCanceled
+            | SourceCase::TargetNativeBaseInvalidated
+    ) {
+        native_base_tests::exercise(
+            case, control, client, &source, plan, provider, actor, factory, pending, ranges,
+            output, journal,
+        );
+    }
 }
+
+mod native_base_tests;

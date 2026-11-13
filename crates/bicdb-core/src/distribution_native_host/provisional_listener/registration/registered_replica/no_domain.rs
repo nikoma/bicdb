@@ -37,6 +37,17 @@ impl RegisteredRemoteNativePreflight {
         scope: &crate::db::NativeRegisteredRemoteMutationScope<'_>,
         member: &NativeOwnedMetadataMemberObservation,
     ) -> Result<()> {
+        self.require_mutation_identity(db, scope, member)?;
+        scope.require_irreversible_install_safety(&self.safety)
+    }
+    /// Original identities remain mandatory after the separate actual base
+    /// publisher introduces its own exact irreversible record.
+    pub(super) fn require_mutation_identity(
+        &self,
+        db: &BicDb,
+        scope: &crate::db::NativeRegisteredRemoteMutationScope<'_>,
+        member: &NativeOwnedMetadataMemberObservation,
+    ) -> Result<()> {
         if member.store_id() != self.metadata_store
             || self.native.birth_id() != scope.native().birth_id()
         {
@@ -45,8 +56,7 @@ impl RegisteredRemoteNativePreflight {
             ));
         }
         member.require_database_point(db)?;
-        db.validate_range_image_bindings(&self.bindings)?;
-        scope.require_irreversible_install_safety(&self.safety)
+        db.validate_range_image_bindings(&self.bindings)
     }
     pub(super) fn require_original_boundary(
         &self,

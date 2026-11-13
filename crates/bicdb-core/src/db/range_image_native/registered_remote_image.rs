@@ -39,6 +39,7 @@ pub(crate) struct NativeRegisteredRemoteImageContext<'a> {
     scope: &'a NativeRegisteredRemoteMutationScope<'a>,
     fence: &'a Arc<NativeRegisteredRemoteInstallingFence>,
     proposal: Arc<NativeRegisteredRemoteProposalReceipt>,
+    base: Option<Arc<crate::db::RegisteredRemoteBaseBoundary>>,
 }
 impl<'a> NativeRegisteredRemoteImageContext<'a> {
     pub(crate) fn new(
@@ -47,8 +48,14 @@ impl<'a> NativeRegisteredRemoteImageContext<'a> {
         point: &'a NativeRegisteredRemoteProposalPoint<'a>,
         scope: &'a NativeRegisteredRemoteMutationScope<'a>,
         fence: &'a Arc<NativeRegisteredRemoteInstallingFence>,
+        base: Option<Arc<crate::db::RegisteredRemoteBaseBoundary>>,
     ) -> Result<Self> {
-        point.require_mutation_boundary(db, store, scope)?;
+        if let Some(boundary) = &base {
+            point.require_original_mutation_identity(db, store, scope)?;
+            boundary.require_boundary(db, scope, point.preflight().safety())?;
+        } else {
+            point.require_mutation_boundary(db, store, scope)?;
+        }
         let proposal = Arc::new(db.read_native_registered_remote_proposal_for_mutation(
             store,
             scope,
@@ -60,13 +67,20 @@ impl<'a> NativeRegisteredRemoteImageContext<'a> {
             scope,
             fence,
             proposal,
+            base,
         };
         result.require_current(db)?;
         Ok(result)
     }
     pub(crate) fn require_current(&self, db: &BicDb) -> Result<()> {
-        self.point
-            .require_mutation_boundary(db, self.store, self.scope)?;
+        if let Some(boundary) = &self.base {
+            self.point
+                .require_original_mutation_identity(db, self.store, self.scope)?;
+            boundary.require_boundary(db, self.scope, self.point.preflight().safety())?;
+        } else {
+            self.point
+                .require_mutation_boundary(db, self.store, self.scope)?;
+        }
         self.proposal
             .require_mutation_current(db, self.store, self.scope)?;
         self.fence.require_catalogue_binding(
@@ -85,6 +99,27 @@ impl<'a> NativeRegisteredRemoteImageContext<'a> {
             ));
         }
         self.point.require_live()
+    }
+    pub(in crate::db) fn native_scope(&self) -> &NativeRegisteredRemoteMutationScope<'_> {
+        self.scope
+    }
+    pub(in crate::db) fn actual_preflight(
+        &self,
+    ) -> &crate::distribution_native_host::NativeRegisteredRemoteInstallPreflight {
+        self.point.preflight()
+    }
+    pub(in crate::db) fn with_owned_base(
+        &self,
+        base: Arc<crate::db::RegisteredRemoteBaseBoundary>,
+    ) -> Self {
+        Self {
+            store: self.store,
+            point: self.point,
+            scope: self.scope,
+            fence: self.fence,
+            proposal: self.proposal.clone(),
+            base: Some(base),
+        }
     }
 }
 
@@ -195,6 +230,7 @@ pub(crate) struct NativeRegisteredRemoteImageInstallation {
     rows: Option<rows::RetainedRemoteRows>,
     verification: Option<verification::RegisteredTargetVerifier>,
     final_publication: Option<final_publication::RegisteredFinalPublication>,
+    base_publication: Option<crate::db::RegisteredRemoteBasePublication>,
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub(crate) struct NativeRegisteredRemoteHistoryProgress {
@@ -210,6 +246,7 @@ pub(crate) enum NativeRegisteredRemoteImageOperation {
     BeginVerification,
     VerifyTarget { max_scanned_records: usize },
     PublishFinalImage,
+    PublishNativeBase,
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub(crate) enum NativeRegisteredRemoteImageProgress {
@@ -217,6 +254,11 @@ pub(crate) enum NativeRegisteredRemoteImageProgress {
     Rows(NativeRegisteredRemoteRowProgress),
     Verification(NativeRegisteredRemoteVerificationProgress),
     FinalImage(NativeRegisteredRemoteFinalImagePointer),
+    NativeBase {
+        range_index: u64,
+        native_page_xid: u64,
+        checksum_sha256: String,
+    },
 }
 /// Actual fully stored and separately audited source spine, not a range floor,
 /// row success, local SourceLineage, activated configuration or read grant.
@@ -261,6 +303,16 @@ impl NativeRegisteredRemoteImageInstallation {
         context: &NativeRegisteredRemoteImageContext<'_>,
         operation: NativeRegisteredRemoteImageOperation,
     ) -> Result<NativeRegisteredRemoteImageProgress> {
+        if self.base_publication.is_some()
+            && !matches!(
+                operation,
+                NativeRegisteredRemoteImageOperation::PublishNativeBase
+            )
+        {
+            return Err(invalid(
+                "Registered native base publication forbids further image mutation",
+            ));
+        }
         match operation {
             NativeRegisteredRemoteImageOperation::BeginHistory => self
                 .begin_history(db, context)
@@ -285,6 +337,20 @@ impl NativeRegisteredRemoteImageInstallation {
             NativeRegisteredRemoteImageOperation::PublishFinalImage => self
                 .publish_final_image(db, context)
                 .map(NativeRegisteredRemoteImageProgress::FinalImage),
+            NativeRegisteredRemoteImageOperation::PublishNativeBase => {
+                if self.base_publication.is_none() {
+                    let final_image = self.final_image_receipt().cloned().ok_or_else(|| {
+                        invalid("Registered native base requires actual final image receipt")
+                    })?;
+                    self.base_publication =
+                        Some(crate::db::RegisteredRemoteBasePublication::retain(
+                            db,
+                            context,
+                            final_image,
+                        )?);
+                }
+                self.base_publication.as_mut().unwrap().publish(db, context)
+            }
         }
     }
     #[cfg(test)]
@@ -293,7 +359,8 @@ impl NativeRegisteredRemoteImageInstallation {
             "rows":self.rows.as_ref().map(|rows|rows.test_state()),
             "verification":self.verification.as_ref().map(|v|v.test_state()),
             "final_image":self.final_publication.as_ref().map(|p|p.test_state()),
-            "actual_original_host_retained":true,"no_floor_or_serving":true})
+            "native_base":self.base_publication.as_ref().map(|p|p.test_state()),
+            "actual_original_host_retained":true,"no_floor_or_serving":self.base_publication.is_none(),"serving":false})
     }
     pub(crate) fn retain(context: &NativeRegisteredRemoteImageContext<'_>) -> Result<Self> {
         context.point.require_live()?;
@@ -332,7 +399,11 @@ impl NativeRegisteredRemoteImageInstallation {
             rows: None,
             verification: None,
             final_publication: None,
+            base_publication: None,
         })
+    }
+    pub(crate) fn base_boundary(&self) -> Option<Arc<crate::db::RegisteredRemoteBaseBoundary>> {
+        self.base_publication.as_ref().and_then(|p| p.boundary())
     }
     fn require_owner(
         &self,

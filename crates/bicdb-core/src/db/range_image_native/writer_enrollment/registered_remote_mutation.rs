@@ -51,7 +51,7 @@ impl NativeRegisteredRemoteMutationScope<'_> {
     pub(crate) fn native(&self) -> &NativeRecoveryAdmission {
         self.native
     }
-    pub(in crate::db::range_image_native) fn frozen(&self) -> &FrozenRangeMutationPermit {
+    pub(in crate::db) fn frozen(&self) -> &FrozenRangeMutationPermit {
         self.frozen
     }
     pub(in crate::db::range_image_native) fn retained_scope_liveness(

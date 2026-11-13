@@ -66,10 +66,16 @@ mod range_image_final_pointer;
 mod range_image_install;
 pub(crate) use range_image_final_pointer::NativeRegisteredRemoteFinalImagePointer;
 mod range_image_proposal;
+#[cfg(all(test, feature = "tls-replication"))]
+pub(crate) use range_image_install::test_registered_remote_base_after_wal;
 pub(crate) use range_image_install::{
     NativeInstalledRangeImageBase, NativeInstalledRangeImageIntegrity,
     NativeTargetImageVerificationProgress, NativeTargetImageVerifier,
     TargetNativeImageSnapshotBound,
+};
+#[cfg(feature = "tls-replication")]
+pub(crate) use range_image_install::{
+    RegisteredRemoteBaseBoundary, RegisteredRemoteBasePublication,
 };
 pub(crate) use range_image_proposal::{
     NativeCurrentImageProposalReceipt, ProtectedCurrentImagePreimageV1,

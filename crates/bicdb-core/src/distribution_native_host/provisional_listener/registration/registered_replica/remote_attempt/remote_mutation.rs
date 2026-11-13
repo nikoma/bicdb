@@ -43,6 +43,20 @@ impl NativeRegisteredRemoteProposalPoint<'_> {
         store: &RangeWriteStore,
         scope: &NativeRegisteredRemoteMutationScope<'_>,
     ) -> Result<()> {
+        self.require_original_mutation_identity(db, store, scope)?;
+        self.preflight
+            .actual
+            .require_mutation_boundary(db, scope, &self.request.member)?;
+        self.require_live()
+    }
+    /// Necessary identity checks only. The actual base publisher separately
+    /// proves either the unchanged preimage or its exact owned publication.
+    pub(crate) fn require_original_mutation_identity(
+        &self,
+        db: &BicDb,
+        store: &RangeWriteStore,
+        scope: &NativeRegisteredRemoteMutationScope<'_>,
+    ) -> Result<()> {
         self.require_live()?;
         scope.require_database(db)?;
         self.preflight.original.database.require_database(db)?;
@@ -56,7 +70,7 @@ impl NativeRegisteredRemoteProposalPoint<'_> {
         }
         self.preflight
             .actual
-            .require_mutation_boundary(db, scope, &self.request.member)?;
+            .require_mutation_identity(db, scope, &self.request.member)?;
         db.require_native_writer_catalogue_custody(store)?;
         self.require_live()
     }
@@ -179,7 +193,15 @@ impl NativeMetadataControlHost {
                 |scope| {
                     actual.with_writer_data_domain_store(&db, |store| {
                         let context = crate::db::NativeRegisteredRemoteImageContext::new(
-                            &db, store, &point, scope, &fence,
+                            &db,
+                            store,
+                            &point,
+                            scope,
+                            &fence,
+                            receiver
+                                .remote_images
+                                .get(&range)
+                                .and_then(|owner| owner.base_boundary()),
                         )?;
                         if !receiver.remote_images.contains_key(&range) {
                             // Original receiver retains exact history generation and

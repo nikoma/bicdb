@@ -1,0 +1,29 @@
+{
+  "run_id": 43341692634,
+  "job_id": 131611315866,
+  "source_revision": "ca8383ef36190c6c69cc8853cd51dd7803c7cc52",
+  "job_name": "Focused Core library (native_serving_observation_scope_actual_)",
+  "job_conclusion": "success",
+  "raw_bytes": 2784172,
+  "raw_sha256": "4ef51170c636c5c5011a01ea82389ccb464a4bcf65d07ab8b9e419312f36b78c",
+  "gzip_bytes": 263427,
+  "gzip_sha256": "43d47b3455487f77b70e71e8a407b93e058fd9128be27d664c8f90225f09cdbd",
+  "result_lines": [
+    "2026-11-13T01:07:14.3403723Z test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 971 filtered out; finished in 10.43s"
+  ],
+  "panics": [],
+  "test_results": [
+    "2026-11-13T01:07:06.3254153Z test db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::serving_observation_scope_tests::native_serving_observation_scope_actual_foreign_database_refused ... ok",
+    "2026-11-13T01:07:06.3538302Z test db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::serving_observation_scope_tests::native_serving_observation_scope_actual_foreign_store_refused ... ok",
+    "2026-11-13T01:07:06.4442632Z test db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::serving_observation_scope_tests::native_serving_observation_scope_actual_hook_replacement_refused ... ok",
+    "2026-11-13T01:07:06.4538885Z test db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::serving_observation_scope_tests::native_serving_observation_scope_actual_missing_middle_history_refused ... ok",
+    "2026-11-13T01:07:09.7501198Z test db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::serving_observation_scope_tests::native_serving_observation_scope_actual_original_caller_cancel_refused ... ok",
+    "2026-11-13T01:07:09.7548118Z test db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::serving_observation_scope_tests::native_serving_observation_scope_actual_schema_generation_refused ... ok",
+    "2026-11-13T01:07:09.8781341Z test db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::serving_observation_scope_tests::native_serving_observation_scope_actual_tls_reply_and_fresh_finish ... ok",
+    "2026-11-13T01:07:11.7919573Z test db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::serving_observation_scope_tests::normal_serving_record_tests::native_serving_observation_scope_actual_normal_serving_archive_damage_refused_at_exit ... ok",
+    "2026-11-13T01:07:13.9675824Z test db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::serving_observation_scope_tests::normal_serving_record_tests::native_serving_observation_scope_actual_normal_serving_current_damage_refused_at_exit ... ok"
+  ],
+  "strong_trace_lines": 30,
+  "recovery_probe_trace_lines": 1890,
+  "native_engine_opened_or_replayed_by_capture": false
+}

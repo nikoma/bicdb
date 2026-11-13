@@ -1,0 +1,16 @@
+{
+  "source": "a98c6a6b1390b0a3853e4ae658e8e103a7749b19",
+  "run": 43343369839,
+  "artifact_id": 14000702427,
+  "zip_bytes": 233323,
+  "zip_sha256": "b2faf53366223b5bbb5487b30d2c945d358c1582c298ab1c9009b0f8482c1c6e",
+  "custody_manifest_sha256": "482e8aeb41317301d7d3f0d213ac388f39dbf05f49d121bcb3721ebfec896953",
+  "custody_payload_files_verified": 96,
+  "custody_payload_bytes_verified": 2909809,
+  "artifact_files": 106,
+  "private_payloads_in_public_packet": false,
+  "engine_opened_or_replayed": false,
+  "actual_terminal_sha256": "9769c1bd5227de1a6ec7b353127a4ddd5eec151b850d700d706bb73b26e0d38d",
+  "actual_ack_ledger_sha256": "9845fb763b03726360a731fc87273f9c5202f34ede10aebc8b1be0cd828f2316",
+  "actual_fence_ledger_sha256": "3e3af0f8fbefc80e18f6673e15b55b7e16d9ad3fa47a52032b2f17e8cbcafddc"
+}

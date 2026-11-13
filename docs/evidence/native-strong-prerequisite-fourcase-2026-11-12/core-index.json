@@ -1,0 +1,29 @@
+{
+  "run_id": 43330054124,
+  "job_id": 131572255168,
+  "source_revision": "7b55059fd610b40189afd239cf8e9ea7b2986ad4",
+  "job_name": "Focused Core library (native_current_joint_activation_scope_actual_postcat_)",
+  "job_conclusion": "failure",
+  "raw_bytes": 2231439,
+  "raw_sha256": "fcd10953ffa9e5459fc5825e657e6d96dc03a7f6c18acbb1c2626d1abae18c0c",
+  "gzip_bytes": 235495,
+  "gzip_sha256": "7c8e9acf0f6a7edd689a3ac14a6488610e745f54a5f0080be414f2b639f76845",
+  "result_lines": [
+    "2026-11-12T23:42:41.4579111Z test result: FAILED. 0 passed; 4 failed; 0 ignored; 0 measured; 955 filtered out; finished in 78.27s"
+  ],
+  "panics": [
+    "2026-11-12T23:42:41.3347854Z thread 'db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::activation_scope_cut_tests::native_current_joint_activation_scope_actual_postcat_writer_replacement_refused' (7810) panicked at crates/bicdb-core/src/db/range_image_native/rf3_fixture/native_historical_tls/native_strong_point_tests.rs:475:61:",
+    "2026-11-12T23:42:41.3888446Z thread 'db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::activation_scope_cut_tests::native_current_joint_activation_scope_actual_postcat_caller_cancel_and_exact_fresh_recovery' (7807) panicked at crates/bicdb-core/src/db/range_image_native/rf3_fixture/native_historical_tls/native_strong_point_tests.rs:475:61:",
+    "2026-11-12T23:42:41.4331175Z thread 'db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::activation_scope_cut_tests::native_current_joint_activation_scope_actual_postcat_foreign_db_and_store_refused' (7808) panicked at crates/bicdb-core/src/db/range_image_native/rf3_fixture/native_historical_tls/native_strong_point_tests.rs:475:61:",
+    "2026-11-12T23:42:41.4573927Z thread 'db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::activation_scope_cut_tests::native_current_joint_activation_scope_actual_postcat_missing_decision_archive_refused' (7809) panicked at crates/bicdb-core/src/db/range_image_native/rf3_fixture/native_historical_tls/native_strong_point_tests.rs:475:61:"
+  ],
+  "test_results": [
+    "2026-11-12T23:42:40.7776844Z test db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::activation_scope_cut_tests::native_current_joint_activation_scope_actual_postcat_writer_replacement_refused ... FAILED",
+    "2026-11-12T23:42:40.8185621Z test db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::activation_scope_cut_tests::native_current_joint_activation_scope_actual_postcat_caller_cancel_and_exact_fresh_recovery ... FAILED",
+    "2026-11-12T23:42:41.2082411Z test db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::activation_scope_cut_tests::native_current_joint_activation_scope_actual_postcat_foreign_db_and_store_refused ... FAILED",
+    "2026-11-12T23:42:41.2708356Z test db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::activation_scope_cut_tests::native_current_joint_activation_scope_actual_postcat_missing_decision_archive_refused ... FAILED"
+  ],
+  "strong_trace_lines": 802,
+  "recovery_probe_trace_lines": 0,
+  "native_engine_opened_or_replayed_by_capture": false
+}

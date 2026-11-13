@@ -1,0 +1,17 @@
+{
+  "run_id": 43343984328,
+  "job_id": 131618780186,
+  "source_revision": "5812d5750409e8b4f21d959fbaf367c8d4362f39",
+  "job_name": "Formatting",
+  "job_conclusion": "failure",
+  "raw_bytes": 30528,
+  "raw_sha256": "057cdbe6d7c240262ecf2ef75d9ddd415fc2d66ca5abc2586f9af841d136c067",
+  "gzip_bytes": 7124,
+  "gzip_sha256": "1e178be907ea6e55fedfd74d604159e843db0f571b520e106b47ddb6f1b12c3d",
+  "result_lines": [],
+  "panics": [],
+  "test_results": [],
+  "strong_trace_lines": 0,
+  "recovery_probe_trace_lines": 0,
+  "native_engine_opened_or_replayed_by_capture": false
+}

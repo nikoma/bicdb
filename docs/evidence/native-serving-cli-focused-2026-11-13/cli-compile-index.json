@@ -1,0 +1,17 @@
+{
+  "run_id": 43340175836,
+  "job_id": 131606260036,
+  "source_revision": "5cec7687196fe6b113805485672e8730c8295a56",
+  "job_name": "Community-only workspace compiles, tests included",
+  "job_conclusion": "success",
+  "raw_bytes": 2355664,
+  "raw_sha256": "e146a8f14b6f80db9c4241bcc9f9e109673943cf8bc72ab91805bc30b7b2f08e",
+  "gzip_bytes": 274939,
+  "gzip_sha256": "6adc0fc8350035692f6b2abcda0657e967d1f580cd8fefa0ac561f737cdf9d5c",
+  "result_lines": [],
+  "panics": [],
+  "test_results": [],
+  "strong_trace_lines": 0,
+  "recovery_probe_trace_lines": 0,
+  "native_engine_opened_or_replayed_by_capture": false
+}

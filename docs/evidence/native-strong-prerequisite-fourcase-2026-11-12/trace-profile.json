@@ -1,0 +1,257 @@
+{
+  "source_revision": "7b55059fd610b40189afd239cf8e9ea7b2986ad4",
+  "run_id": 43330054124,
+  "core_job_id": 131572255168,
+  "trace_events": 802,
+  "businesses": 4,
+  "stages": {
+    "read-abort-controls": {
+      "ends": 19,
+      "min_us": 227484,
+      "median_us": 474029,
+      "max_us": 684862
+    },
+    "read-attempt": {
+      "ends": 19,
+      "min_us": 68051,
+      "median_us": 1288059,
+      "max_us": 1402485
+    },
+    "read-catalog-observation": {
+      "ends": 19,
+      "min_us": 1806,
+      "median_us": 3494,
+      "max_us": 7821
+    },
+    "read-catalog-postcurrent": {
+      "ends": 5,
+      "min_us": 1917,
+      "median_us": 1991,
+      "max_us": 5731
+    },
+    "read-catalog-writer-admission": {
+      "ends": 19,
+      "min_us": 11117,
+      "median_us": 21285,
+      "max_us": 38136
+    },
+    "read-collector": {
+      "ends": 4,
+      "min_us": 2565155,
+      "median_us": 2756210.5,
+      "max_us": 3106713
+    },
+    "read-current-lineage": {
+      "ends": 19,
+      "min_us": 226450,
+      "median_us": 460906,
+      "max_us": 706420
+    },
+    "read-db-acquire": {
+      "ends": 19,
+      "min_us": 13,
+      "median_us": 14,
+      "max_us": 21
+    },
+    "read-finish-service-wait": {
+      "ends": 4,
+      "min_us": 0,
+      "median_us": 1.0,
+      "max_us": 1
+    },
+    "read-finish-validation": {
+      "ends": 4,
+      "min_us": 372998,
+      "median_us": 558857.5,
+      "max_us": 1737100
+    },
+    "read-finish-worker": {
+      "ends": 4,
+      "min_us": 373150,
+      "median_us": 559190.5,
+      "max_us": 1737235
+    },
+    "read-local-revalidate": {
+      "ends": 8,
+      "min_us": 172040,
+      "median_us": 374583.0,
+      "max_us": 1073084
+    },
+    "read-native-admission": {
+      "ends": 19,
+      "min_us": 487,
+      "median_us": 1881,
+      "max_us": 4819
+    },
+    "read-physical": {
+      "ends": 19,
+      "min_us": 2,
+      "median_us": 218473,
+      "max_us": 668970
+    },
+    "read-probe-service": {
+      "ends": 19,
+      "min_us": 489007,
+      "median_us": 1287415,
+      "max_us": 1690062
+    },
+    "read-probe-worker-owned-context": {
+      "ends": 12,
+      "min_us": 1367865,
+      "median_us": 2191571.0,
+      "max_us": 2200018
+    },
+    "read-receiver-dispatch": {
+      "ends": 15,
+      "min_us": 866040,
+      "median_us": 882617,
+      "max_us": 1321848
+    },
+    "read-receiver-worker": {
+      "ends": 15,
+      "min_us": 866542,
+      "median_us": 1283424,
+      "max_us": 1694327
+    },
+    "read-record-attempt": {
+      "ends": 5,
+      "min_us": 355,
+      "median_us": 376,
+      "max_us": 409
+    },
+    "read-round-finish": {
+      "ends": 4,
+      "min_us": 372886,
+      "median_us": 558752.0,
+      "max_us": 1737047
+    },
+    "read-schema": {
+      "ends": 19,
+      "min_us": 60,
+      "median_us": 74,
+      "max_us": 122
+    },
+    "read-service-validation": {
+      "ends": 19,
+      "min_us": 489190,
+      "median_us": 1287587,
+      "max_us": 1691401
+    },
+    "read-service-wait": {
+      "ends": 19,
+      "min_us": 1,
+      "median_us": 3,
+      "max_us": 382228
+    },
+    "strong-birth-enrollment": {
+      "ends": 1,
+      "min_us": 31,
+      "median_us": 31,
+      "max_us": 31
+    },
+    "strong-caller": {
+      "ends": 4,
+      "min_us": 2574153,
+      "median_us": 2767467.5,
+      "max_us": 3971056
+    },
+    "strong-capture-actual-point": {
+      "ends": 1,
+      "min_us": 702412,
+      "median_us": 702412,
+      "max_us": 702412
+    },
+    "strong-data-quorum": {
+      "ends": 4,
+      "min_us": 2569630,
+      "median_us": 2756596.0,
+      "max_us": 3107072
+    },
+    "strong-final-currentness": {
+      "ends": 1,
+      "min_us": 173543,
+      "median_us": 173543,
+      "max_us": 173543
+    },
+    "strong-final-metadata": {
+      "ends": 1,
+      "min_us": 30570,
+      "median_us": 30570,
+      "max_us": 30570
+    },
+    "strong-final-service-wait": {
+      "ends": 1,
+      "min_us": 2,
+      "median_us": 2,
+      "max_us": 2
+    },
+    "strong-finalize": {
+      "ends": 1,
+      "min_us": 172995,
+      "median_us": 172995,
+      "max_us": 172995
+    },
+    "strong-reservation": {
+      "ends": 4,
+      "min_us": 11,
+      "median_us": 12.0,
+      "max_us": 15
+    },
+    "strong-snapshot": {
+      "ends": 1,
+      "min_us": 702462,
+      "median_us": 702462,
+      "max_us": 702462
+    },
+    "strong-worker": {
+      "ends": 4,
+      "min_us": 2573799,
+      "median_us": 2766550.5,
+      "max_us": 4021090
+    },
+    "strong-writer-service-wait": {
+      "ends": 4,
+      "min_us": 1,
+      "median_us": 1.5,
+      "max_us": 2
+    }
+  },
+  "strong_outcomes": [
+    "2026-11-12T23:42:36.8120197Z NATIVE_STRONG_TRACE pid=7806 t_us=38 node=n3 business=01a1d224-4cf0-7d32-a8c1-66c693e7fc40 challenge=01a1d224-4cf0-7d32-a8c1-66d1b65be325 range=r1 epoch=4 deadline_us=None remaining_us=None stage=strong-original-allowances event=detail request_budget_ms=5000 first_metadata_deadline_us=Some(3970874)",
+    "2026-11-12T23:42:36.8964444Z NATIVE_STRONG_TRACE pid=7806 t_us=54902 node=n3 business=01a1d224-4d1d-7171-8baf-d79d7d60aa56 challenge=01a1d224-4d1d-7171-8baf-d7a7ad1b0e9d range=r1 epoch=4 deadline_us=None remaining_us=None stage=strong-original-allowances event=detail request_budget_ms=5000 first_metadata_deadline_us=Some(4015117)",
+    "2026-11-12T23:42:37.3082658Z NATIVE_STRONG_TRACE pid=7806 t_us=493129 node=n3 business=01a1d224-4ecf-73f2-a1d4-e3270484a7e4 challenge=01a1d224-4ecf-73f2-a1d4-e33485a94e07 range=r1 epoch=4 deadline_us=None remaining_us=None stage=strong-original-allowances event=detail request_budget_ms=5000 first_metadata_deadline_us=Some(4449077)",
+    "2026-11-12T23:42:38.1913143Z NATIVE_STRONG_TRACE pid=7806 t_us=1339447 node=n3 business=01a1d224-5215-73f0-bd8e-7cbbe524bf2e challenge=01a1d224-5215-73f0-bd8e-7cc91c1fd847 range=r1 epoch=4 deadline_us=None remaining_us=None stage=strong-original-allowances event=detail request_budget_ms=5000 first_metadata_deadline_us=Some(5282240)",
+    "2026-11-12T23:42:39.8331738Z NATIVE_STRONG_TRACE pid=7806 t_us=3004065 node=n3 business=01a1d224-4d1d-7171-8baf-d79d7d60aa56 challenge=01a1d224-4d1d-7171-8baf-d7a7ad1b0e9d range=r1 epoch=4 deadline_us=Some(4015117) remaining_us=Some(1011051) stage=strong-outcome event=detail ok=false unavailable=Some(NativeStrongPointReadUnavailable { stage: DataQuorum, detail: \"cluster error: range recovery: cluster error: native range read observation: distinct matching current-voter read majority unavailable; failed probes: {ClusterNodeId(\\\"n1\\\"): \\\"canceling statement due to query timeout\\\", ClusterNodeId(\\\"n2\\\"): \\\"canceling statement due to query timeout\\\"}\" })",
+    "2026-11-12T23:42:39.8962484Z NATIVE_STRONG_TRACE pid=7806 t_us=3078594 node=n3 business=01a1d224-4ecf-73f2-a1d4-e3270484a7e4 challenge=01a1d224-4ecf-73f2-a1d4-e33485a94e07 range=r1 epoch=4 deadline_us=Some(4449077) remaining_us=Some(1370482) stage=strong-outcome event=detail ok=false unavailable=Some(NativeStrongPointReadUnavailable { stage: DataQuorum, detail: \"cluster error: range recovery: cluster error: native range read observation: distinct matching current-voter read majority unavailable; failed probes: {ClusterNodeId(\\\"n1\\\"): \\\"canceling statement due to query timeout\\\", ClusterNodeId(\\\"n2\\\"): \\\"canceling statement due to query timeout\\\"}\" })",
+    "2026-11-12T23:42:40.7328375Z NATIVE_STRONG_TRACE pid=7806 t_us=3913366 node=n3 business=01a1d224-5215-73f0-bd8e-7cbbe524bf2e challenge=01a1d224-5215-73f0-bd8e-7cc91c1fd847 range=r1 epoch=4 deadline_us=Some(5282240) remaining_us=Some(1368873) stage=strong-outcome event=detail ok=false unavailable=Some(NativeStrongPointReadUnavailable { stage: DataQuorum, detail: \"cluster error: range recovery: cluster error: native range read observation: distinct matching current-voter read majority unavailable; failed probes: {ClusterNodeId(\\\"n1\\\"): \\\"canceling statement due to query timeout\\\", ClusterNodeId(\\\"n2\\\"): \\\"canceling statement due to query timeout\\\"}\" })",
+    "2026-11-12T23:42:40.7825684Z NATIVE_STRONG_TRACE pid=7806 t_us=3971056 node=n3 business=01a1d224-4cf0-7d32-a8c1-66c693e7fc40 challenge=01a1d224-4cf0-7d32-a8c1-66d1b65be325 range=r1 epoch=4 deadline_us=None remaining_us=None stage=strong-caller-token-refusal event=detail error=canceling statement due to query timeout",
+    "2026-11-12T23:42:40.8339761Z NATIVE_STRONG_TRACE pid=7806 t_us=4022080 node=n3 business=01a1d224-4cf0-7d32-a8c1-66c693e7fc40 challenge=01a1d224-4cf0-7d32-a8c1-66d1b65be325 range=r1 epoch=4 deadline_us=Some(3970874) remaining_us=Some(0) stage=strong-outcome event=detail ok=false unavailable=Some(NativeStrongPointReadUnavailable { stage: FinalCurrentness, detail: \"canceling statement due to query timeout\" })"
+  ],
+  "record_expired_attempts": [],
+  "attempt_errors": [
+    "2026-11-12T23:42:38.1441985Z NATIVE_STRONG_TRACE pid=7806 t_us=1330013 node=n3 business=01a1d224-4cf0-7d32-a8c1-66c693e7fc40 challenge=01a1d224-4cf0-7d32-a8c1-66d1b65be325 range=r1 epoch=4 deadline_us=Some(1328070) remaining_us=Some(0) stage=read-attempt-result event=detail peer=n1 attempt=1 ok=false error=Some(QueryTimedOut)",
+    "2026-11-12T23:42:38.7134309Z NATIVE_STRONG_TRACE pid=7806 t_us=1382024 node=n3 business=01a1d224-4d1d-7171-8baf-d79d7d60aa56 challenge=01a1d224-4d1d-7171-8baf-d7a7ad1b0e9d range=r1 epoch=4 deadline_us=Some(1380953) remaining_us=Some(0) stage=read-attempt-result event=detail peer=n2 attempt=1 ok=false error=Some(QueryTimedOut)",
+    "2026-11-12T23:42:38.7379660Z NATIVE_STRONG_TRACE pid=7806 t_us=1382024 node=n3 business=01a1d224-4d1d-7171-8baf-d79d7d60aa56 challenge=01a1d224-4d1d-7171-8baf-d7a7ad1b0e9d range=r1 epoch=4 deadline_us=Some(1380930) remaining_us=Some(0) stage=read-attempt-result event=detail peer=n1 attempt=1 ok=false error=Some(QueryTimedOut)",
+    "2026-11-12T23:42:38.7850868Z NATIVE_STRONG_TRACE pid=7806 t_us=1400016 node=n3 business=01a1d224-4cf0-7d32-a8c1-66c693e7fc40 challenge=01a1d224-4cf0-7d32-a8c1-66d1b65be325 range=r1 epoch=4 deadline_us=Some(2210865) remaining_us=Some(810848) stage=read-attempt-result event=detail peer=n1 attempt=2 ok=false error=Some(QueryCanceled)",
+    "2026-11-12T23:42:38.9748593Z NATIVE_STRONG_TRACE pid=7806 t_us=1823056 node=n3 business=01a1d224-4ecf-73f2-a1d4-e3270484a7e4 challenge=01a1d224-4ecf-73f2-a1d4-e33485a94e07 range=r1 epoch=4 deadline_us=Some(1821074) remaining_us=Some(0) stage=read-attempt-result event=detail peer=n2 attempt=1 ok=false error=Some(QueryTimedOut)",
+    "2026-11-12T23:42:39.0029520Z NATIVE_STRONG_TRACE pid=7806 t_us=1824010 node=n3 business=01a1d224-4ecf-73f2-a1d4-e3270484a7e4 challenge=01a1d224-4ecf-73f2-a1d4-e33485a94e07 range=r1 epoch=4 deadline_us=Some(1821055) remaining_us=Some(0) stage=read-attempt-result event=detail peer=n1 attempt=1 ok=false error=Some(QueryTimedOut)",
+    "2026-11-12T23:42:39.0829854Z NATIVE_STRONG_TRACE pid=7806 t_us=2261047 node=n3 business=01a1d224-4d1d-7171-8baf-d79d7d60aa56 challenge=01a1d224-4d1d-7171-8baf-d7a7ad1b0e9d range=r1 epoch=4 deadline_us=Some(2259683) remaining_us=Some(0) stage=read-attempt-result event=detail peer=n2 attempt=2 ok=false error=Some(QueryTimedOut)",
+    "2026-11-12T23:42:39.0969662Z NATIVE_STRONG_TRACE pid=7806 t_us=2261048 node=n3 business=01a1d224-4d1d-7171-8baf-d79d7d60aa56 challenge=01a1d224-4d1d-7171-8baf-d7a7ad1b0e9d range=r1 epoch=4 deadline_us=Some(2259816) remaining_us=Some(0) stage=read-attempt-result event=detail peer=n1 attempt=2 ok=false error=Some(QueryTimedOut)",
+    "2026-11-12T23:42:39.4794463Z NATIVE_STRONG_TRACE pid=7806 t_us=2661085 node=n3 business=01a1d224-5215-73f0-bd8e-7cbbe524bf2e challenge=01a1d224-5215-73f0-bd8e-7cc91c1fd847 range=r1 epoch=4 deadline_us=Some(2659607) remaining_us=Some(0) stage=read-attempt-result event=detail peer=n1 attempt=1 ok=false error=Some(QueryTimedOut)",
+    "2026-11-12T23:42:39.4969781Z NATIVE_STRONG_TRACE pid=7806 t_us=2661264 node=n3 business=01a1d224-5215-73f0-bd8e-7cbbe524bf2e challenge=01a1d224-5215-73f0-bd8e-7cc91c1fd847 range=r1 epoch=4 deadline_us=Some(2659627) remaining_us=Some(0) stage=read-attempt-result event=detail peer=n2 attempt=1 ok=false error=Some(QueryTimedOut)",
+    "2026-11-12T23:42:39.6079636Z NATIVE_STRONG_TRACE pid=7806 t_us=2700040 node=n3 business=01a1d224-4ecf-73f2-a1d4-e3270484a7e4 challenge=01a1d224-4ecf-73f2-a1d4-e33485a94e07 range=r1 epoch=4 deadline_us=Some(2698846) remaining_us=Some(0) stage=read-attempt-result event=detail peer=n1 attempt=2 ok=false error=Some(QueryTimedOut)",
+    "2026-11-12T23:42:39.6170959Z NATIVE_STRONG_TRACE pid=7806 t_us=2700162 node=n3 business=01a1d224-4ecf-73f2-a1d4-e3270484a7e4 challenge=01a1d224-4ecf-73f2-a1d4-e33485a94e07 range=r1 epoch=4 deadline_us=Some(2698209) remaining_us=Some(0) stage=read-attempt-result event=detail peer=n2 attempt=2 ok=false error=Some(QueryTimedOut)",
+    "2026-11-12T23:42:40.3494947Z NATIVE_STRONG_TRACE pid=7806 t_us=3536044 node=n3 business=01a1d224-5215-73f0-bd8e-7cbbe524bf2e challenge=01a1d224-5215-73f0-bd8e-7cc91c1fd847 range=r1 epoch=4 deadline_us=Some(3534890) remaining_us=Some(0) stage=read-attempt-result event=detail peer=n1 attempt=2 ok=false error=Some(QueryTimedOut)",
+    "2026-11-12T23:42:40.3569519Z NATIVE_STRONG_TRACE pid=7806 t_us=3538003 node=n3 business=01a1d224-5215-73f0-bd8e-7cbbe524bf2e challenge=01a1d224-5215-73f0-bd8e-7cc91c1fd847 range=r1 epoch=4 deadline_us=Some(3535134) remaining_us=Some(0) stage=read-attempt-result event=detail peer=n2 attempt=2 ok=false error=Some(QueryTimedOut)"
+  ],
+  "panics": [
+    "2026-11-12T23:42:41.3347854Z thread 'db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::activation_scope_cut_tests::native_current_joint_activation_scope_actual_postcat_writer_replacement_refused' (7810) panicked at crates/bicdb-core/src/db/range_image_native/rf3_fixture/native_historical_tls/native_strong_point_tests.rs:475:61:",
+    "2026-11-12T23:42:41.3888446Z thread 'db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::activation_scope_cut_tests::native_current_joint_activation_scope_actual_postcat_caller_cancel_and_exact_fresh_recovery' (7807) panicked at crates/bicdb-core/src/db/range_image_native/rf3_fixture/native_historical_tls/native_strong_point_tests.rs:475:61:",
+    "2026-11-12T23:42:41.4331175Z thread 'db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::activation_scope_cut_tests::native_current_joint_activation_scope_actual_postcat_foreign_db_and_store_refused' (7808) panicked at crates/bicdb-core/src/db/range_image_native/rf3_fixture/native_historical_tls/native_strong_point_tests.rs:475:61:",
+    "2026-11-12T23:42:41.4573927Z thread 'db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::activation_scope_cut_tests::native_current_joint_activation_scope_actual_postcat_missing_decision_archive_refused' (7809) panicked at crates/bicdb-core/src/db/range_image_native/rf3_fixture/native_historical_tls/native_strong_point_tests.rs:475:61:"
+  ],
+  "result_lines": [
+    "2026-11-12T23:42:41.4579111Z test result: FAILED. 0 passed; 4 failed; 0 ignored; 0 measured; 955 filtered out; finished in 78.27s"
+  ],
+  "recovery_probe_events": 0
+}

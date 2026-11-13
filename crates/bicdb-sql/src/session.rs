@@ -5315,10 +5315,20 @@ impl<'db> SqlSession<'db> {
     }
 
     /// Undo every DDL effect once the owning transaction is gone. The running
-    /// statement bound its metadata reads to that transaction; undo reads as
-    /// the session's next statement would, with no owner. Scoped rename undo
-    /// keeps entering its own retained scope.
+    /// statement bound its metadata reads to that transaction. While a rename
+    /// journal retains that owner's catalog scope, undo keeps reading as the
+    /// owner, which its reservations require. Once no journal remains the
+    /// owner is no longer registered, and the rest reads as the session's
+    /// next statement would, with no owner.
     fn rollback_ddl_after_transaction_end(&mut self) -> Result<()> {
+        while self
+            .ddl_undo
+            .iter()
+            .any(|undo| matches!(undo, DdlUndo::RestoreRenameJournal { .. }))
+        {
+            let len = self.ddl_undo.len() - 1;
+            self.rollback_ddl_to_len(len)?;
+        }
         let _reads = self.db_ref().enter_catalog_read_access(None)?;
         self.rollback_ddl_to_len(0)
     }

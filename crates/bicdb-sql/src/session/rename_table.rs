@@ -88,7 +88,17 @@ pub(super) fn apply(
     };
     let owner = session.tx.as_ref().or(implicit_owner.as_ref()).unwrap();
     let scope = dependencies.reserve(session.db_ref(), owner)?;
-    let access = match session.db_ref().enter_catalog_scope(&scope) {
+    // Renaming a partition parent republishes the forest certificate with
+    // its descriptors; undo already enters the scope with that resource.
+    let publication_names = if session.db_ref().sql_partition_execution_feature_active() {
+        vec![partition_admission::CERTIFICATE_COLLECTION.to_string()]
+    } else {
+        Vec::new()
+    };
+    let access = match session
+        .db_ref()
+        .enter_catalog_scope_with_publication_resources(&scope, &publication_names)
+    {
         Ok(access) => access,
         Err(error) => {
             let _ = owner.release_catalog_scope(&scope);

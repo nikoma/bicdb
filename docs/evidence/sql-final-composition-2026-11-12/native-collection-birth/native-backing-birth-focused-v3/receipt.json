@@ -1,0 +1,119 @@
+{
+  "source": "a7571bd95db36b46924f242e3772cc7d9e10e71d",
+  "scope": "Private combined source Native future-only backing allocation identity prerequisite. New lifecycle/import/restart/capture controls plus existing local identity controls, Core/SQL/wire alltargets compile, and unchanged original promoted undecided rename positive retained as OPEN acceptance gate. No portable authenticated origin producer/resolver yet; no main/release/deployment or application qualification. Goal active, experimental production OFF, no new spend. v1 stopped at a test-setup E0382 compile error; preserved. This source fixes only the borrowed storage-mode setup. No semantic failures hidden. v2 Core/SQL/wire alltargets compile and Native4 PASS; capture fixture failed because fresh live collection was not reopened into protected purely-paged representation. v3 fixes only that fixture lifecycle and adds actual Native row ACK hash custody. Original gate still unmodified.",
+  "started_unix": 1794531580.057612,
+  "steps": [
+    {
+      "command": [
+        "python3",
+        "scripts/bump-version.py",
+        "--check"
+      ],
+      "started_unix": 1794531580.0577853,
+      "exit": 0,
+      "finished_unix": 1794531580.1062653
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "check",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "-p",
+        "bicdb-sql",
+        "-p",
+        "bicdb-pgwire",
+        "--all-targets"
+      ],
+      "started_unix": 1794531580.1063578,
+      "exit": 0,
+      "finished_unix": 1794531678.803593
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--lib",
+        "native_collection_birth::",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794531678.8037765,
+      "exit": 0,
+      "finished_unix": 1794531719.974758
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--lib",
+        "range_image_bindings::",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794531719.9750407,
+      "exit": 0,
+      "finished_unix": 1794531720.632374
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--lib",
+        "local_namespace_identity::",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794531720.632592,
+      "exit": 0,
+      "finished_unix": 1794531721.0342982
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--lib",
+        "promoted_primary_recovers_an_undecided_replicated_rename_before_sql_writes",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794531721.0345492,
+      "exit": 101,
+      "finished_unix": 1794531838.5100062
+    }
+  ],
+  "status": "failed",
+  "finished_unix": 1794531838.5103002
+}

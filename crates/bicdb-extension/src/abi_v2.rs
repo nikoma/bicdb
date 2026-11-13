@@ -3272,6 +3272,15 @@ impl ApplicationManifestV2 {
                     "exact unit arithmetic requires signed exact_decimal_units feature",
                 );
             }
+            if application_program_uses_builtin(program, &["finance.units_limb"])
+                && !self
+                    .required_features
+                    .contains(&ApplicationFeature::ExactUnitLimbAccess)
+            {
+                return invalid(
+                    "finance.units_limb requires signed exact_unit_limb_access feature",
+                );
+            }
             if application_program_uses_builtin(program, &["query.decimal_sum"])
                 && !self
                     .required_features
@@ -5234,6 +5243,7 @@ fn validate_carrier_expression(expression: &ApplicationExpressionV1) -> Result<(
                         | "finance.display_ratio_units"
                         | "finance.prorate_native_units"
                         | "finance.display_native_ratio_units"
+                        | "finance.units_limb"
                         | "finance.units_from_limbs"
                         | "finance.native_ratio_representable_units"
                 )
@@ -6129,6 +6139,7 @@ impl EgressDeclaration {
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 #[serde(rename_all = "snake_case")]
 pub enum ApplicationFeature {
+    ExactUnitLimbAccess,
     ExactDecimalUnits,
     ExactDecimalListSum,
     ExactProportionalIntervals,
@@ -6768,6 +6779,7 @@ fn validate_exact_decimal_units_call(expression: &ApplicationExpressionV1) -> Re
             &[None, None, None, None],
             ApplicationExpressionTypeV1::Bool,
         ),
+        "finance.units_limb" => (&[Text, Int], &[None, None], Int),
         "finance.units_from_limbs" => (
             &[Int, Int, Int, Int, Int, Int],
             &[None, None, None, None, None, None],

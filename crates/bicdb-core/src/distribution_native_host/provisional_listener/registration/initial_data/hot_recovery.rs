@@ -391,6 +391,7 @@ impl NativeHotRecoveryMaintenance {
                             job.phase == Phase::Apply,
                             parent,
                         )?
+                        .fence()
                         .require_live()?;
                 }
                 Phase::Prepare => {

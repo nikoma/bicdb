@@ -30,7 +30,18 @@
       "sha256": "d6744bec2c5c240d35c15f79d3bb30015a7b890fc178ab2e8904a8bd6e449904",
       "files": 4,
       "database_custody_retained": false
-    }
+    },
+    "executed_tests": [
+      "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::serving_observation_scope_tests::native_serving_observation_scope_actual_foreign_database_refused",
+      "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::serving_observation_scope_tests::native_serving_observation_scope_actual_foreign_store_refused",
+      "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::serving_observation_scope_tests::native_serving_observation_scope_actual_hook_replacement_refused",
+      "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::serving_observation_scope_tests::native_serving_observation_scope_actual_missing_middle_history_refused",
+      "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::serving_observation_scope_tests::native_serving_observation_scope_actual_original_caller_cancel_refused",
+      "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::serving_observation_scope_tests::native_serving_observation_scope_actual_schema_generation_refused",
+      "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::serving_observation_scope_tests::native_serving_observation_scope_actual_tls_reply_and_fresh_finish",
+      "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::serving_observation_scope_tests::normal_serving_record_tests::native_serving_observation_scope_actual_normal_serving_archive_damage_refused_at_exit",
+      "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::serving_observation_scope_tests::normal_serving_record_tests::native_serving_observation_scope_actual_normal_serving_current_damage_refused_at_exit"
+    ]
   },
   "cli": {
     "source": "5cec7687196fe6b113805485672e8730c8295a56",
@@ -80,7 +91,15 @@
       "sha256": "f146eb641f4c74fab31b37c3673a0af1a6baec9a2d91f035c1e73b4b1c7ebb2e",
       "files": 10,
       "database_custody_retained": false
-    }
+    },
+    "executed_tests": [
+      "initial_data_tests::native_initial_data_actual_cli_four_process_first_ack_and_strong_full_value",
+      "native_metadata_operator_actual_cli_four_process_startup_registration_and_data_refusal",
+      "native_metadata_operator_actual_cli_single_join_fresh_becomes_local_metadata_voter",
+      "promoted_cold_tests::native_metadata_operator_actual_cli_automatic_promoted_voter_kill_reopen_same_root",
+      "replica_receiver_tests::native_registered_replica_receiver_actual_cli_four_data_then_fifth_same_owner_no_data_grant",
+      "writer_registry_refresh_baseline::native_metadata_registry_addition_actual_cli_requires_healthy_existing_read_and_fresh_ack"
+    ]
   },
   "prior_failed_history": {
     "scope_source": "5cec7687196fe6b113805485672e8730c8295a56",

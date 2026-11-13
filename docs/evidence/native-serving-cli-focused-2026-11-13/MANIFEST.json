@@ -2,8 +2,8 @@
   "files": [
     {
       "path": "README.md",
-      "bytes": 5250,
-      "sha256": "82eeb5c4a41829fed7ffcf0b61c3e372134473332472b53c612c7fa3934a9dff"
+      "bytes": 7267,
+      "sha256": "1ce48aa1c8be01a2f0d69297736b3f8ff19558b48fdc264e2a046335b04fb77a"
     },
     {
       "path": "cli-compile-index.json",
@@ -32,8 +32,8 @@
     },
     {
       "path": "cli-journal-summary.json",
-      "bytes": 21085,
-      "sha256": "b4e328f98ea07de5d57103988655dc72c62534ab278880ce18bae002bd88a568"
+      "bytes": 199098,
+      "sha256": "46f366f21b1ea42cff6b657af15664030281e46245958ffce4af9605287accdd"
     },
     {
       "path": "cli-selected-tests.txt",
@@ -57,8 +57,13 @@
     },
     {
       "path": "results.json",
-      "bytes": 6056,
-      "sha256": "d79b99c3ce174965fc74f65d6ae0cd0e73476928b29be605bc53c7b90565e879"
+      "bytes": 8638,
+      "sha256": "cdd7e0000ae21293cff118285b778e30bae4bf1b72431e83f7d563c5cd20b1c1"
+    },
+    {
+      "path": "semantic_tamper.py",
+      "bytes": 7753,
+      "sha256": "ef63d784b4271a9321506088d8dd6b71936290b1d688132e77712fda09d2f413"
     },
     {
       "path": "serving-compile-index.json",
@@ -82,8 +87,8 @@
     },
     {
       "path": "verify.py",
-      "bytes": 3239,
-      "sha256": "c375c9034d28552ed30552665f6726f2edb6d3056c06ba0f2610729bd5df6c58"
+      "bytes": 25038,
+      "sha256": "5d2193447a84f5fde1a89fe23560256a922caf579f3e85565b813081991a3eac"
     }
   ]
 }

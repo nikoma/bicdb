@@ -24,6 +24,24 @@ fn native_registered_fifth_remote_transfer_actual_hook_aba_before_rotation_prese
     );
 }
 
+// Diagnostic setup qualification only; original traffic-first cases above
+// retain their exact request budgets and startup-availability assertions.
+#[test]
+fn native_registered_fifth_remote_transfer_after_ordinary_strong_absent_diagnostic() {
+    run_registered_image_baseline_with_source(
+        Case::Required,
+        Some(SourceCase::TargetTransferReadinessDiagnostic),
+    );
+}
+
+#[test]
+fn native_registered_fifth_remote_transfer_observed_traffic_first_diagnostic() {
+    run_registered_image_baseline_with_source(
+        Case::Required,
+        Some(SourceCase::TargetTransferObservedTrafficFirstDiagnostic),
+    );
+}
+
 #[allow(clippy::too_many_arguments)]
 pub(super) fn exercise(
     case: SourceCase,

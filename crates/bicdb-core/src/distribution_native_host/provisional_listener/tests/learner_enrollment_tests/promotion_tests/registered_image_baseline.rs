@@ -14,6 +14,7 @@ use std::collections::BTreeMap;
 
 mod closed_fence_controls;
 mod custody;
+mod first_app_diagnostic;
 mod placement_cases;
 mod remote_source_tests;
 use closed_fence_controls::Case;
@@ -373,10 +374,60 @@ fn run_registered_image_baseline_with_placement_and_source(
                 "test_only_consensus_proposal_adapter_not_automatic_controller":true
             })).unwrap();
         }
-        let gateway = crate::ClusterEventClient::new(&configs[0], current.clone())
+        let diagnostic =
+            matches!(
+            source_case,
+            Some(remote_source_tests::SourceCase::TargetTransferReadinessDiagnostic
+                | remote_source_tests::SourceCase::TargetTransferObservedTrafficFirstDiagnostic)
+        );
+        let rpc_journal = diagnostic.then(|| first_app_diagnostic::Journal::new(&output));
+        let mut gateway = crate::ClusterEventClient::new(&configs[0], current.clone())
             .unwrap()
             .with_request_timeout(Duration::from_secs(2))
             .unwrap();
+        if let Some(journal) = &rpc_journal {
+            gateway = gateway
+                .with_rpc_evidence_observer(
+                    journal.clone(),
+                    crate::ClusterRpcEvidenceLimits::default(),
+                )
+                .unwrap();
+            evidence(
+                &output.join("first-app-pre-probe.json"),
+                &first_app_diagnostic::snapshot(
+                    "before_any_diagnostic_client_request",
+                    &controls,
+                    &metadata,
+                    &services,
+                    &original_writers,
+                    &ranges,
+                    until,
+                ),
+            )
+            .unwrap();
+            if matches!(
+                source_case,
+                Some(remote_source_tests::SourceCase::TargetTransferReadinessDiagnostic)
+            ) {
+                phase = "diagnostic_ordinary_strong_absent_both_ranges";
+                first_app_diagnostic::require_strong_absent(
+                    &gateway, journal, &current, &ranges, until,
+                );
+            }
+            evidence(
+                &output.join("first-app-pre-append.json"),
+                &first_app_diagnostic::snapshot(
+                    "before_first_app",
+                    &controls,
+                    &metadata,
+                    &services,
+                    &original_writers,
+                    &ranges,
+                    until,
+                ),
+            )
+            .unwrap();
+        }
         phase = "two_real_source_acks";
         for range in &ranges {
             let key = key_in(&current, range.id);
@@ -394,7 +445,15 @@ fn run_registered_image_baseline_with_placement_and_source(
                 "configuration":current,"logical_ledger_not_raw_wire":true,
                 "outcome":"not_started","effect_unknown_on_error":false}));
             evidence(&output.join("ack-ledger.json"), &ledger).unwrap();
+            if let Some(journal) = &rpc_journal {
+                assert!(
+                    until.saturating_duration_since(Instant::now()) >= Duration::from_secs(2),
+                    "diagnostic APP must fit remaining original INITIAL open20s"
+                );
+                journal.start(ledger.last().unwrap().clone());
+            }
             let append = gateway.append("items", &key, value.clone());
+            let rpc_capture = rpc_journal.as_ref().map(|journal| journal.finish(&append));
             // Preserve the actual API error first; failed evidence IO cannot
             // replace it. Err means unknown effect, never a no-Commit claim.
             let outcome = ledger.last_mut().unwrap();
@@ -414,6 +473,24 @@ fn run_registered_image_baseline_with_placement_and_source(
                 &ledger,
                 &mut evidence_errors,
             );
+            if let Some(captured) = rpc_capture {
+                if let Err(error) = captured {
+                    evidence_errors.push(format!("first-app raw journal: {error}"));
+                }
+                evidence_after(
+                    &output.join(format!("first-app-after-append-{}.json", range.id.get())),
+                    &first_app_diagnostic::snapshot(
+                        "after_actual_app_reply",
+                        &controls,
+                        &metadata,
+                        &services,
+                        &original_writers,
+                        &ranges,
+                        until,
+                    ),
+                    &mut evidence_errors,
+                );
+            }
             assert!(append.unwrap());
             let leader = (0..4).find(|i| node(*i) == range.leader).unwrap();
             let record = databases[leader]
@@ -738,7 +815,15 @@ fn run_registered_image_baseline_with_placement_and_source(
             phase = "actual_local_old_quorum_seeded_remote_source_frames";
             let target_runtime = host.test_registered_receiver_parts().unwrap().1;
             remote_source_tests::exercise(
-                source_case,
+                if matches!(
+                    source_case,
+                    remote_source_tests::SourceCase::TargetTransferReadinessDiagnostic
+                        | remote_source_tests::SourceCase::TargetTransferObservedTrafficFirstDiagnostic
+                ) {
+                    remote_source_tests::SourceCase::TargetTransfer
+                } else {
+                    source_case
+                },
                 &controls,
                 &clients,
                 &services,

@@ -23,6 +23,8 @@ pub(super) enum SourceCase {
     TargetNoDomainMemberChanged,
     TargetNoDomainSchemaRevoked,
     TargetTransfer,
+    TargetTransferReadinessDiagnostic,
+    TargetTransferObservedTrafficFirstDiagnostic,
     TargetTransferBusy,
     TargetTransferCanceled,
     TargetTransferHookRevoked,

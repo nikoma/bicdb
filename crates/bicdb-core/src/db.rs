@@ -10681,8 +10681,9 @@ impl BicDb {
                 "Native imported allocation has no actual origin/WAL fence".into(),
             ));
         }
+        let mut completed_import_catalog = metas.clone();
         let native_import_catalog_repaired = native_import_origins::repair_pending(
-            &mut metas,
+            &mut completed_import_catalog,
             &tx_recovery.native_imported_allocations,
         )?;
         native_import_origins::validate_catalog(&metas, native_imported_backing_origins_active)?;
@@ -10728,6 +10729,26 @@ impl BicDb {
             &tx_recovery.native_origin_roots,
             native_origin.as_ref(),
         )?;
+        if native_import_catalog_repaired {
+            // Recovery may have read a commit left only in the page cache by
+            // a failed fsync. Make those exact bytes durable before publishing
+            // completed allocation provenance, or before any open-time WAL
+            // cut can discard the only copy of that allocation decision.
+            copy_transaction_log_tail(&path.join(DEFAULT_TRANSACTION_LOG), 0, true)?;
+            metas = completed_import_catalog;
+            metas.sort_by(|left, right| left.name.cmp(&right.name));
+            write_sidecar(
+                &path.join(DEFAULT_COLLECTION_CATALOG),
+                FrameKind::Index,
+                &serde_json::to_vec_pretty(&CollectionCatalog {
+                    collections: metas.clone(),
+                })?,
+                true,
+                &encryption,
+                "catalog",
+                storage::FailClosed::Always(&durability),
+            )?;
+        }
         // Physical storage names must be known before any row is read, and an
         // interrupted rename (renamed_from still set) maps index definitions
         // still recorded under the old name.
@@ -11606,9 +11627,6 @@ impl BicDb {
             for (tx_id, events) in &recovered_audit_outboxes {
                 db.persist_record_audit_publication(*tx_id, events)?;
             }
-        }
-        if native_import_catalog_repaired {
-            db.persist_catalog()?;
         }
         db.load_native_range_image_admission()?;
         db.recover_pending_replication_catalog()?;

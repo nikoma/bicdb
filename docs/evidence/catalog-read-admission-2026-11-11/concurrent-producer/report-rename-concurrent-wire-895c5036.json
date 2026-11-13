@@ -1,0 +1,47 @@
+{
+  "source": "895c503641b98c2dd87aa990d9b3224b369a5f97",
+  "scope": "Same production runtime as6ab; add one complete-inventory scoped undo negative control (valid later row must remain unchanged when earlier persisted image escapes scope; foreign owner also refuses) and4 actual concurrent SQL wire scenarios exercising native outer COMMIT/rollback/savepoint/autocommit finalization. Also run unchanged original private rename_unrelated_transactions and Core scope admission. Initial no-binary trusted namespace activation retains its existing quiescence requirement; do not hide failures or claim replicated mapping/application acceptance. Not main delivery/source475 public acceptance.",
+  "started_unix": 1794432381.6676366,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--lib",
+        "session::rename_journal::tests::",
+        "--",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794432381.6720414,
+      "exit": 0,
+      "finished_unix": 1794432518.7161
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-pgwire",
+        "--test",
+        "catalog_read_admission",
+        "--",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794432518.7203283,
+      "exit": 101,
+      "finished_unix": 1794432639.6557317
+    }
+  ],
+  "status": "failed",
+  "finished_unix": 1794432639.6559997
+}

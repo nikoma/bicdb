@@ -1,0 +1,29 @@
+{
+  "source": "5594663d3757ce2fad1340028e5b430088b29a24",
+  "scope": "Exact559 private492integration final version identity selector corrected to bicdb-sql. Priorintegration compile, Core20 and SQLauthority1 PASS; final invocation failed because --test version_identity was incorrectly selected from Core and no assertion ran. Reuse preceding checks. This actual SQL target verifies both version identities; no broad/application/producer qualification.",
+  "started_unix": 1794540162.2133949,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "version_identity",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794540162.2137735,
+      "exit": 0,
+      "finished_unix": 1794540166.5358703
+    }
+  ],
+  "status": "focused_passed",
+  "finished_unix": 1794540166.5386667
+}

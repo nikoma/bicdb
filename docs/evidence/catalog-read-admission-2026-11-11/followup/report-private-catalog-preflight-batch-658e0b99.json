@@ -1,0 +1,130 @@
+{
+  "source": "658e0b990fcc63f0ac34f3346b5f1e72f7bd76a6",
+  "scope": "Coherentprivatecatalogreader/resource/SQLowner/preflight batch567b: focusedgates first, broadNativeSQLlibraries+generalSQL onlyifallfocuspassed. NativeBindings preserve explicit SQLcatalogidentity observesno MVCCsnapshot; existingNative dataread stillrejectsdeferral, observationretention unchanged. Nativeinternalrecordbindings remainexact sochildpendingdoesnot blockothermetadatarecords. AutocommitCALLpreflight ownertransfers SAMEidentity tobufferedTx and configuresactualsnapshot/isolation/floor later; unused/failedcallownerRAIIcleanup; routineexpressionsselectactualownerafterCOMMIT. OriginaltwoSQLdeferredcontrols retained; cc587intermediate mayexpose old Native blanketdeferralguard (keepactualreceipt). NegativeNative controls da4a unchangedc5core. No globalowner/recoverygate relaxed; nofullproducer/wire/portableidentity/app/HA/VMqualification, public471 excludesallprivatecode. Newbroadresultsbelong567bsourceonly. Correctedfinal658e onlyStorageMode.clone innewNativecontroltest;567b testcompilefailurepreservedseparately, broadnotexecuted. Properbaselinebe5 control precedes focusedgates. PrivateNative/SQL runtimeunchangedfrom567b;473e includesindependentHAverifier evidence only. Do notclaim currentPublic471 includesprivatefixes.",
+  "started_unix": 1794415257.8542957,
+  "steps": [
+    {
+      "command": [
+        "python3",
+        "scripts/bump-version.py",
+        "--check"
+      ],
+      "started_unix": 1794415257.8543906,
+      "exit": 0,
+      "finished_unix": 1794415257.9174297
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--test",
+        "catalog_record_scope",
+        "--test",
+        "catalog_read_scope",
+        "--test",
+        "catalog_host_scope",
+        "--test",
+        "catalog_scope_admission",
+        "--",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794415257.917573,
+      "exit": 0,
+      "finished_unix": 1794415291.4454916
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "catalog_read_owner",
+        "--test",
+        "catalog_read_admission",
+        "--test",
+        "session_statement_snapshots",
+        "--test",
+        "read_only_transactions",
+        "--test",
+        "routine_header_metadata",
+        "--test",
+        "rename_routine_header_dependencies",
+        "--test",
+        "table_row_routines",
+        "--",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794415291.4457173,
+      "exit": 0,
+      "finished_unix": 1794415431.448816
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--lib",
+        "--",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794415431.449048,
+      "exit": 0,
+      "finished_unix": 1794415508.2630258
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--lib",
+        "--",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794415508.263334,
+      "exit": 0,
+      "finished_unix": 1794415901.854743
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "sql",
+        "--",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794415901.8550713,
+      "exit": 0,
+      "finished_unix": 1794415944.4628305
+    }
+  ],
+  "status": "focused_passed",
+  "finished_unix": 1794415944.4630837
+}

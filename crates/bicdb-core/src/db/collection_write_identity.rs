@@ -9,22 +9,43 @@ impl Transaction {
         let db = self.db_ref();
         db.check_recovery_state()?;
         let result = (|| {
-            db.ensure_collection(collection)?;
-            let incarnation = Arc::clone(&db.collection_state(collection)?.incarnation);
-            let mut bindings = self.collection_incarnations.lock();
-            match bindings.get(collection) {
-                Some(expected) if !Arc::ptr_eq(expected, &incarnation) => {
-                    Err(BicDbError::TransactionConflict(format!(
-                        "collection `{collection}` was replaced after this transaction observed it"
-                    )))
-                }
-                Some(_) => Ok(()),
-                None => {
-                    bindings.insert(collection.to_string(), incarnation);
-                    Ok(())
-                }
-            }
+            self.catalog_admission.bind(
+                self.id,
+                self.catalog_actor_scope,
+                &self.collection_incarnations,
+                collection,
+                None,
+                || {
+                    db.ensure_collection(collection)?;
+                    Ok(Arc::clone(&db.collection_state(collection)?.incarnation))
+                },
+            )
         })();
+        db.check_recovery_state()?;
+        result
+    }
+
+    pub(super) fn bind_collection_incarnation_for_record(
+        &self,
+        collection: &str,
+        id: &str,
+    ) -> Result<()> {
+        if self.catalog_actor_scope.is_none() {
+            return self.bind_collection_incarnation(collection);
+        }
+        let db = self.db_ref();
+        db.check_recovery_state()?;
+        let result = self.catalog_admission.bind(
+            self.id,
+            self.catalog_actor_scope,
+            &self.collection_incarnations,
+            collection,
+            Some(id),
+            || {
+                db.ensure_collection(collection)?;
+                Ok(Arc::clone(&db.collection_state(collection)?.incarnation))
+            },
+        );
         db.check_recovery_state()?;
         result
     }
@@ -46,7 +67,7 @@ impl BicDb {
                 let same = bindings.get(collection).is_some_and(|expected| {
                     current
                         .as_ref()
-                        .is_some_and(|state| Arc::ptr_eq(expected, &state.incarnation))
+                        .is_some_and(|state| Arc::ptr_eq(&expected.incarnation, &state.incarnation))
                 });
                 if !same {
                     return Err(BicDbError::TransactionConflict(format!(

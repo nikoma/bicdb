@@ -1,0 +1,57 @@
+{
+  "source": "3867be587b35c207762dd03344108e1609ddde71",
+  "scope": "Currentprivateintegration actualmain489 b939441 plusnewatomicrecursiveSERIAL/IDENTITY andallpreviouspartitionwork. Both Native modules/runtime state andallold/newdurablerequiredflags retained atmerge3c20. Source489inherited; no newdeliveryversion. NewACLtest nowexercisesreal SET ROLE seq_reader/nextval110/RESETROLE ratherthanunimplemented has_sequence_privilege probe; firstfailure preserved and independentbuiltin gap remainsOPEN. Expectedvalue derives twoexistingACKs100/105; savepointundo/data/schema/sequence/grants/tworeopens assertions unchanged. Exhaustionfixture explicitMIN0 as actualPG18v2PASS. NewCorefoundation meansoldCore1391PASS not proof ofcurrentCore. Focused25+2parser+Nativeflags targeted only; all broader/native/app/HA gatesremainACTIVE.",
+  "started_unix": 1794507234.8761044,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--no-fail-fast",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--lib",
+        "identity_sequence_options::tests",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794507234.8764882,
+      "exit": 0,
+      "finished_unix": 1794507423.2827134
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--no-fail-fast",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "partition_child_schema",
+        "--test",
+        "partition_schema_changes",
+        "--test",
+        "primary_key_index_compatibility",
+        "--test",
+        "partition_statement_batches",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794507423.2830827,
+      "exit": 0,
+      "finished_unix": 1794507582.35233
+    }
+  ],
+  "status": "focused_passed",
+  "finished_unix": 1794507582.3525333
+}

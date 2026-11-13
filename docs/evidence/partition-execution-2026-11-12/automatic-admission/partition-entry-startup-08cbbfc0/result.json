@@ -1,0 +1,155 @@
+{
+  "status": "entry_startup_failed",
+  "source": "08cbbfc06b7e0a829ae9f39ecefac483b19daa7f",
+  "sql_binary": "/root/bicdb-durability-s3/qualification-artifacts-debug/08cbbfc06b7e0a829ae9f39ecefac483b19daa7f/partition_upgrade_probe",
+  "sql_binary_sha256": "9a05942e76830ef8ab39ecea1309c45f33695d0e3d42441975770e8732942ce7",
+  "startup_binary": "/root/bicdb-durability-s3/qualification-artifacts-debug/08cbbfc06b7e0a829ae9f39ecefac483b19daa7f/partition_startup_probe",
+  "startup_binary_sha256": "8d7e1367292fbc4ccc4cff158172f0e7670f64a14852f0cc39f831d39077b61b",
+  "old_source": "f43583da4c34209e810c5e6a8f5925831b2949a1",
+  "old_binary_sha256": "31f3f86f3d43c04e7dcfa060fde43f71d8271727219a561fa1b3b14f2d61b556",
+  "started_unix": 1794496376.4924116,
+  "cases": [
+    {
+      "mode": "embedded_memory",
+      "case": "entry_text",
+      "database_copy": "/root/bicdb-durability-s3/partition-entry-startup-08cbbfc0/embedded_memory-entry_text-db",
+      "exit": 0,
+      "stdout": "embedded_memory-entry_text.stdout",
+      "stderr": "embedded_memory-entry_text.stderr",
+      "old_reader_exit": 1,
+      "old_reader_refused": true,
+      "byte_identity_preserved": true,
+      "changed_files": []
+    },
+    {
+      "mode": "embedded_memory",
+      "case": "entry_ast",
+      "database_copy": "/root/bicdb-durability-s3/partition-entry-startup-08cbbfc0/embedded_memory-entry_ast-db",
+      "exit": 0,
+      "stdout": "embedded_memory-entry_ast.stdout",
+      "stderr": "embedded_memory-entry_ast.stderr",
+      "old_reader_exit": 1,
+      "old_reader_refused": true,
+      "byte_identity_preserved": true,
+      "changed_files": []
+    },
+    {
+      "mode": "embedded_memory",
+      "case": "entry_copy",
+      "database_copy": "/root/bicdb-durability-s3/partition-entry-startup-08cbbfc0/embedded_memory-entry_copy-db",
+      "exit": 101,
+      "stdout": "embedded_memory-entry_copy.stdout",
+      "stderr": "embedded_memory-entry_copy.stderr"
+    },
+    {
+      "mode": "embedded_memory",
+      "case": "entry_procedure",
+      "database_copy": "/root/bicdb-durability-s3/partition-entry-startup-08cbbfc0/embedded_memory-entry_procedure-db",
+      "old_procedure_setup_exit": 0,
+      "exit": 0,
+      "stdout": "embedded_memory-entry_procedure.stdout",
+      "stderr": "embedded_memory-entry_procedure.stderr",
+      "old_reader_exit": 1,
+      "old_reader_refused": true,
+      "byte_identity_preserved": true,
+      "changed_files": []
+    },
+    {
+      "mode": "embedded_memory",
+      "case": "startup_parent_heap",
+      "database_copy": "/root/bicdb-durability-s3/partition-entry-startup-08cbbfc0/embedded_memory-startup_parent_heap-db",
+      "exit": 1,
+      "stdout": "embedded_memory-startup_parent_heap.stdout",
+      "stderr": "embedded_memory-startup_parent_heap.stderr"
+    },
+    {
+      "mode": "embedded_memory",
+      "case": "startup_bad_child_bound",
+      "database_copy": "/root/bicdb-durability-s3/partition-entry-startup-08cbbfc0/embedded_memory-startup_bad_child_bound-db",
+      "exit": 0,
+      "stdout": "embedded_memory-startup_bad_child_bound.stdout",
+      "stderr": "embedded_memory-startup_bad_child_bound.stderr"
+    },
+    {
+      "mode": "embedded_memory",
+      "case": "startup_independent_child_policy",
+      "database_copy": "/root/bicdb-durability-s3/partition-entry-startup-08cbbfc0/embedded_memory-startup_independent_child_policy-db",
+      "exit": 0,
+      "stdout": "embedded_memory-startup_independent_child_policy.stdout",
+      "stderr": "embedded_memory-startup_independent_child_policy.stderr"
+    },
+    {
+      "mode": "server_paged",
+      "case": "entry_text",
+      "database_copy": "/root/bicdb-durability-s3/partition-entry-startup-08cbbfc0/server_paged-entry_text-db",
+      "exit": 0,
+      "stdout": "server_paged-entry_text.stdout",
+      "stderr": "server_paged-entry_text.stderr",
+      "old_reader_exit": 1,
+      "old_reader_refused": true,
+      "byte_identity_preserved": true,
+      "changed_files": []
+    },
+    {
+      "mode": "server_paged",
+      "case": "entry_ast",
+      "database_copy": "/root/bicdb-durability-s3/partition-entry-startup-08cbbfc0/server_paged-entry_ast-db",
+      "exit": 0,
+      "stdout": "server_paged-entry_ast.stdout",
+      "stderr": "server_paged-entry_ast.stderr",
+      "old_reader_exit": 1,
+      "old_reader_refused": true,
+      "byte_identity_preserved": true,
+      "changed_files": []
+    },
+    {
+      "mode": "server_paged",
+      "case": "entry_copy",
+      "database_copy": "/root/bicdb-durability-s3/partition-entry-startup-08cbbfc0/server_paged-entry_copy-db",
+      "exit": 101,
+      "stdout": "server_paged-entry_copy.stdout",
+      "stderr": "server_paged-entry_copy.stderr"
+    },
+    {
+      "mode": "server_paged",
+      "case": "entry_procedure",
+      "database_copy": "/root/bicdb-durability-s3/partition-entry-startup-08cbbfc0/server_paged-entry_procedure-db",
+      "old_procedure_setup_exit": 0,
+      "exit": 0,
+      "stdout": "server_paged-entry_procedure.stdout",
+      "stderr": "server_paged-entry_procedure.stderr",
+      "old_reader_exit": 1,
+      "old_reader_refused": true,
+      "byte_identity_preserved": true,
+      "changed_files": []
+    },
+    {
+      "mode": "server_paged",
+      "case": "startup_parent_heap",
+      "database_copy": "/root/bicdb-durability-s3/partition-entry-startup-08cbbfc0/server_paged-startup_parent_heap-db",
+      "exit": 1,
+      "stdout": "server_paged-startup_parent_heap.stdout",
+      "stderr": "server_paged-startup_parent_heap.stderr"
+    },
+    {
+      "mode": "server_paged",
+      "case": "startup_bad_child_bound",
+      "database_copy": "/root/bicdb-durability-s3/partition-entry-startup-08cbbfc0/server_paged-startup_bad_child_bound-db",
+      "exit": 0,
+      "stdout": "server_paged-startup_bad_child_bound.stdout",
+      "stderr": "server_paged-startup_bad_child_bound.stderr"
+    },
+    {
+      "mode": "server_paged",
+      "case": "startup_independent_child_policy",
+      "database_copy": "/root/bicdb-durability-s3/partition-entry-startup-08cbbfc0/server_paged-startup_independent_child_policy-db",
+      "exit": 0,
+      "stdout": "server_paged-startup_independent_child_policy.stdout",
+      "stderr": "server_paged-startup_independent_child_policy.stderr"
+    }
+  ],
+  "finished_unix": 1794496377.987357,
+  "originals_unchanged": true,
+  "independent_old_fixture_acks": 14,
+  "scope": "Eight genuineold482parentfixture entry cases: SQLtext/AST/COPY/procedure, each firstproves readonlyengine55000+sharedsessionexclusivefallback with zero Nativecommits before repair; exactfullrecordhashes foralloldACKspreserved plus2reopens, physicalparentempty, Nativeindexes. Proceduremetadata producedbyactualold482CLI oncopy. Sixstartup-only serverconstructorcases: parentauto-upgrade, invalidbounds/ambiguouspolicies55000beforelistenerreturned, ACK/policyretained,2reopens. All10successfulupgradedcases actualold482readerrefusal+unchangedbytes. Not fullwireprotocol/listener, broad/app/fault/HAqualification."
+}

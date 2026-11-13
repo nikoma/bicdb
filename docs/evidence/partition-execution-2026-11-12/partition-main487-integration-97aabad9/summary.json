@@ -1,0 +1,16 @@
+{
+  "label": "partition-main487-integration-97aabad9",
+  "source": "97aabad9413a44f6caf99591224e3012d6feae6c",
+  "reported_batch_status": "focused_passed",
+  "passed": 58,
+  "failed_tests": 0,
+  "ignored": 0,
+  "compile_errors": false,
+  "scope": "Actualmain4876bedintegratedintoprivatepartitionbatch97aabad9 (NOT main delivery). ConflictresolvedretainingbothretryableRestoreIndexandRestorePartitionCatalog undo. Packageversion487inheriteddevelopmentonly,nodeliveryreservation. Focusedindex/rollbackandtriggercatalog/execution/visibility/lifecycle+auth/baseType/independentOraclecontrols; otherunchanged314DMLand74routinechecksretainedsource-scoped. No broad/fault/app/HA/oldreader/featurecompletion.",
+  "raw_log": {
+    "archive": "tc-step-partition-main487-integration-97aabad9.log.gz",
+    "uncompressed_bytes": 977817,
+    "sha256": "448b6222ccca9a57e95c202bb39f50f92fb3b2e4bc1a8318d3055662bed12168",
+    "gzip_sha256": "98cfe2028097d0280cd8e3d9a8b86144ec0e78d675616538f0edfd5af835f314"
+  }
+}

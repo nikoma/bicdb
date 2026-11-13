@@ -1,0 +1,307 @@
+{
+  "native-birth-retained-wal-baseline": {
+    "source": "4f81319c0f3588e808e87a0d26cf17c73698ed9c",
+    "status": "failed",
+    "step_exits": [
+      101
+    ],
+    "parent_results": [
+      {
+        "outcome": "FAILED",
+        "passed": 0,
+        "failed": 2,
+        "ignored": 0
+      }
+    ],
+    "unit_terminal": {
+      "MainPID": "0",
+      "ActiveState": "failed"
+    }
+  },
+  "native-birth-retained-wal-baseline-v2": {
+    "source": "3d294731f1b00638677bb81ddee2b67029cbf61a",
+    "status": "failed",
+    "step_exits": [
+      101
+    ],
+    "parent_results": [
+      {
+        "outcome": "FAILED",
+        "passed": 0,
+        "failed": 2,
+        "ignored": 0
+      }
+    ],
+    "unit_terminal": {
+      "MainPID": "0",
+      "ActiveState": "failed"
+    }
+  },
+  "native-birth-retained-wal-baseline-v3": {
+    "source": "d51e987d2534812491074b4600118e91465d3144",
+    "status": "failed",
+    "step_exits": [
+      101
+    ],
+    "parent_results": [
+      {
+        "outcome": "FAILED",
+        "passed": 0,
+        "failed": 2,
+        "ignored": 0
+      }
+    ],
+    "unit_terminal": {
+      "MainPID": "0",
+      "ActiveState": "failed"
+    }
+  },
+  "native-birth-wal-capture-focused-v1": {
+    "source": "31be8e3d0fb566fefa8c6189923b60f48abbd1c8",
+    "status": "failed",
+    "step_exits": [
+      0,
+      0,
+      101
+    ],
+    "parent_results": [
+      {
+        "outcome": "FAILED",
+        "passed": 8,
+        "failed": 2,
+        "ignored": 0
+      }
+    ],
+    "unit_terminal": {
+      "MainPID": "0",
+      "ActiveState": "failed"
+    }
+  },
+  "native-birth-wal-capture-focused-v2": {
+    "source": "87581e659b7d3bef38a341a7a6cd50be1e885a4a",
+    "status": "failed",
+    "step_exits": [
+      0,
+      0,
+      101
+    ],
+    "parent_results": [
+      {
+        "outcome": "FAILED",
+        "passed": 10,
+        "failed": 2,
+        "ignored": 0
+      }
+    ],
+    "unit_terminal": {
+      "MainPID": "0",
+      "ActiveState": "failed"
+    }
+  },
+  "native-birth-wal-capture-focused-v3": {
+    "source": "aaa754c7b2388e8e8c31816c689a76bbf4791fa1",
+    "status": "focused_passed",
+    "step_exits": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "parent_results": [
+      {
+        "outcome": "ok",
+        "passed": 12,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "outcome": "ok",
+        "passed": 6,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "outcome": "ok",
+        "passed": 8,
+        "failed": 0,
+        "ignored": 1
+      },
+      {
+        "outcome": "ok",
+        "passed": 1,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "outcome": "ok",
+        "passed": 4,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "outcome": "ok",
+        "passed": 3,
+        "failed": 0,
+        "ignored": 0
+      }
+    ],
+    "unit_terminal": {
+      "MainPID": "0",
+      "ActiveState": "inactive"
+    }
+  },
+  "native-birth-wal-capture-focused-v4": {
+    "source": "d3e840d967ecb8d61c27d0f298ff9fbdf092eb4c",
+    "status": "focused_passed",
+    "step_exits": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "parent_results": [
+      {
+        "outcome": "ok",
+        "passed": 13,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "outcome": "ok",
+        "passed": 6,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "outcome": "ok",
+        "passed": 8,
+        "failed": 0,
+        "ignored": 1
+      },
+      {
+        "outcome": "ok",
+        "passed": 1,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "outcome": "ok",
+        "passed": 4,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "outcome": "ok",
+        "passed": 3,
+        "failed": 0,
+        "ignored": 0
+      }
+    ],
+    "unit_terminal": {
+      "MainPID": "0",
+      "ActiveState": "inactive"
+    }
+  },
+  "native-birth-wal-capture-focused-v5": {
+    "source": "21e22627b93c7f16e515820d7e0c395cdf828cc3",
+    "status": "failed",
+    "step_exits": [
+      0,
+      101
+    ],
+    "parent_results": [
+      {
+        "outcome": "FAILED",
+        "passed": 13,
+        "failed": 1,
+        "ignored": 0
+      }
+    ],
+    "unit_terminal": {
+      "MainPID": "0",
+      "ActiveState": "failed"
+    }
+  },
+  "native-birth-wal-capture-focused-v6": {
+    "source": "ccde585361dcdbf65bd9da698a21ccba94941b09",
+    "status": "focused_passed",
+    "step_exits": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "parent_results": [
+      {
+        "outcome": "ok",
+        "passed": 14,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "outcome": "ok",
+        "passed": 6,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "outcome": "ok",
+        "passed": 8,
+        "failed": 0,
+        "ignored": 1
+      },
+      {
+        "outcome": "ok",
+        "passed": 1,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "outcome": "ok",
+        "passed": 4,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "outcome": "ok",
+        "passed": 3,
+        "failed": 0,
+        "ignored": 0
+      }
+    ],
+    "unit_terminal": {
+      "MainPID": "0",
+      "ActiveState": "inactive"
+    }
+  },
+  "qualification": {
+    "source": "ccde585361dcdbf65bd9da698a21ccba94941b09",
+    "Core_focused_passed": 36,
+    "Core_failed": 0,
+    "historical_ignored": 1,
+    "parent_targets": 6,
+    "actual_in_process_EIO_cases": 4,
+    "actual_corrupted_cold_open_refusals": 4,
+    "Core_SQL_wire_alltargets_compile_passed": true,
+    "independent_crash_EIO_KVM_qualified": false,
+    "source_root_authentication_implemented": false,
+    "portable_import_producers_implemented": false,
+    "SQL_promoted_original_positive_qualified": false,
+    "main_delivered": false,
+    "production_binary_built": false,
+    "release_published": false,
+    "deployed": false
+  }
+}

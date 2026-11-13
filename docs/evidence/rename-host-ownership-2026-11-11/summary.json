@@ -1,0 +1,18 @@
+{
+  "qualification_source": "dd9d199ecfb57582673d7930c0dab0870a4da31c",
+  "qualification_source_version": "1.0.460-beta (private branch at that revision)",
+  "host_row_effect_runtime_source": "2e5566b288310f59d32dac47cda493f2d7c6b051",
+  "focused_commands_passed": 7,
+  "focused_tests_passed": 112,
+  "host_lifecycle_tests_passed": 10,
+  "prior_ownership_acl_source": "5188e977d01b307492673ec33287586d77aee863",
+  "prior_ownership_acl_tests_passed": 111,
+  "native_postgresql_acl_cases_passed": 2,
+  "sql_scope_producer_integrated": false,
+  "metadata_row_resources_implemented": false,
+  "sql_catalog_describe_visibility_qualified": false,
+  "broad_workspace_ci_qualified": false,
+  "application_acceptance_qualified": false,
+  "production_qualified": false,
+  "binary_or_deployment_produced": false
+}

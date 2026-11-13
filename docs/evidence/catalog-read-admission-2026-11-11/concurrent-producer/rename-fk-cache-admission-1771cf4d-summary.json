@@ -1,0 +1,35 @@
+{
+  "source": "1771cf4d535145ef543f506be98424a3dac85454",
+  "status": "focused_passed",
+  "counts": [
+    {
+      "status": "ok",
+      "passed": 4,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "status": "ok",
+      "passed": 6,
+      "failed": 0,
+      "ignored": 0
+    }
+  ],
+  "passed": 10,
+  "failed": 0,
+  "ignored": 0,
+  "files": {
+    "report-rename-fk-cache-admission-1771cf4d.json": {
+      "bytes": 959,
+      "sha256": "90b4f8c3e27cd69a5764b6bfa43068252794d89ea10dea9651b5f7103df1fa43"
+    },
+    "tc-step-rename-fk-cache-admission-1771cf4d.log": {
+      "bytes": 101705,
+      "sha256": "0c2c60dbda82ea30353649fd473665663c6db47661634f44cf5ff3e13e089a42"
+    }
+  },
+  "scope": "Production source byte-identical4885. Four new semantic SQL controls use actual UPDATE/DELETE with cold and warm FK memos, require related child metadata reservations to refuse before changing rows, preserve ordinary23503 FK denial after release, and keep detached-table writes admitted/committed. No broader test/application/main claim.",
+  "main_delivered": false,
+  "application_qualified": false,
+  "observed_unix": 1794434030.8625293
+}

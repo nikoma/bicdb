@@ -1,0 +1,113 @@
+{
+  "status": "native16_native18_count_difference_verified",
+  "started_unix": 1794529380.0968478,
+  "scope": "Tinycached-image catalog controls. ExplicitPGDATA in ownedtmpfs avoidsPG16anonymousVOLUME diskbootstrapfailure; noimagepull/cloudspend/protectedDBconnections ororiginaltest/providerchanges.",
+  "results": [
+    {
+      "major": 16,
+      "result": {
+        "version": "16.13 (Debian 16.13-1.pgdg13+1)",
+        "names": [],
+        "types": [],
+        "provider_count": 0,
+        "excluding_not_null_count": 0
+      }
+    },
+    {
+      "major": 18,
+      "result": {
+        "version": "18.4 (Debian 18.4-1.pgdg13+1)",
+        "names": [
+          "parent_k_not_null",
+          "parent_v_not_null"
+        ],
+        "types": [
+          "n",
+          "n"
+        ],
+        "provider_count": 2,
+        "excluding_not_null_count": 0
+      }
+    }
+  ],
+  "containers": [
+    {
+      "major": 16,
+      "id": "179a89b3e27d099747029830661c9c79c9f15f89455f9d3d6224cbd1ad36f91b",
+      "image_id": "sha256:71e27bf60b70bded003791b5573f8b808365613f341df20ffcf0c1ed7bc13ddf",
+      "arguments": [
+        "docker",
+        "create",
+        "--pull=never",
+        "--name",
+        "bicdb-root-partition-count-1794529380123225386",
+        "--label",
+        "bicdb.owner=codex-root-partition-count-v2",
+        "--network",
+        "none",
+        "--read-only",
+        "--memory=768m",
+        "--memory-swap=768m",
+        "--cpus=1",
+        "--pids-limit=128",
+        "--tmpfs",
+        "/var/lib/postgresql:rw,size=512m",
+        "--tmpfs",
+        "/var/run/postgresql:rw,size=16m",
+        "--tmpfs",
+        "/tmp:rw,size=16m",
+        "--env",
+        "PGDATA=/var/lib/postgresql/owneddata",
+        "--env",
+        "POSTGRES_HOST_AUTH_METHOD=trust",
+        "postgres:16",
+        "postgres",
+        "-c",
+        "max_wal_size=128MB",
+        "-c",
+        "min_wal_size=32MB"
+      ],
+      "removed": true
+    },
+    {
+      "major": 18,
+      "id": "32c677ad9baf68357900fa28c8015f4cc4b8b2797daa6008b09e54ef172ebbb4",
+      "image_id": "sha256:a02db8cac496f15b094798a38254f14d6e00741f709360e5e00bb6668ea31636",
+      "arguments": [
+        "docker",
+        "create",
+        "--pull=never",
+        "--name",
+        "bicdb-root-partition-count-1794529382060903695",
+        "--label",
+        "bicdb.owner=codex-root-partition-count-v2",
+        "--network",
+        "none",
+        "--read-only",
+        "--memory=768m",
+        "--memory-swap=768m",
+        "--cpus=1",
+        "--pids-limit=128",
+        "--tmpfs",
+        "/var/lib/postgresql:rw,size=512m",
+        "--tmpfs",
+        "/var/run/postgresql:rw,size=16m",
+        "--tmpfs",
+        "/tmp:rw,size=16m",
+        "--env",
+        "PGDATA=/var/lib/postgresql/owneddata",
+        "--env",
+        "POSTGRES_HOST_AUTH_METHOD=trust",
+        "public.ecr.aws/docker/library/postgres:18.4",
+        "postgres",
+        "-c",
+        "max_wal_size=128MB",
+        "-c",
+        "min_wal_size=32MB"
+      ],
+      "removed": true
+    }
+  ],
+  "sql": "CREATE SCHEMA adempiere;\nSET search_path TO adempiere,public;\nCREATE TABLE parent(k INT NOT NULL,v TEXT NOT NULL) PARTITION BY LIST(k);\nSELECT json_build_object('version',current_setting('server_version'),'names',ARRAY(SELECT conname FROM pg_constraint WHERE conrelid='parent'::regclass ORDER BY conname),'types',ARRAY(SELECT contype::text FROM pg_constraint WHERE conrelid='parent'::regclass ORDER BY conname),'provider_count',(SELECT COUNT(*) FROM pg_constraint WHERE conrelid=LOWER('parent')::regclass),'excluding_not_null_count',(SELECT COUNT(*) FROM pg_constraint WHERE conrelid=LOWER('parent')::regclass AND contype<>'n'));\n",
+  "finished_unix": 1794529383.8622882
+}

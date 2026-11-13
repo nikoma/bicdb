@@ -1,0 +1,10 @@
+{
+  "status": "running",
+  "container": "bicdb-partition-identity-fd597803f4",
+  "image": "sha256:71e27bf60b70bded003791b5573f8b808365613f341df20ffcf0c1ed7bc13ddf",
+  "sql": "control.sql",
+  "started_unix": 1794496973.2847795,
+  "container_removed": true,
+  "cleanup_stdout": "bicdb-partition-identity-fd597803f4\n",
+  "cleanup_stderr": ""
+}

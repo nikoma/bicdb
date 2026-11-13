@@ -1,0 +1,74 @@
+{
+  "source": "8dcad32b2da608dd106002e13c584176b098d342",
+  "scope": "Unchanged pre-ALTER-fix runtime57d main488 with only six new partition schema/ACK regressions; exacttestfixture reused atcc84. Original two SQL ALTER regressions retained. One Native commit for allschema/rows, exactfailure/refusal preservation, default/generated/modes/reopens, savepoint/fullundo. Negative baseline only, no qualification claim from expectedfails.",
+  "started_unix": 1794502460.7787728,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--no-fail-fast",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "partition_schema_changes",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794502460.778923,
+      "exit": 101,
+      "finished_unix": 1794502469.5001767
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--no-fail-fast",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "sql",
+        "group5::alter_column_type_propagates_partition_rows_and_rejects_dependencies",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794502469.5003438,
+      "exit": 101,
+      "finished_unix": 1794502470.0937161
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--no-fail-fast",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "sql",
+        "group6::alter_table_parent_column_is_visible_on_existing_partitions_and_indexes",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794502470.0939298,
+      "exit": 101,
+      "finished_unix": 1794502470.655224
+    }
+  ],
+  "status": "failed",
+  "finished_unix": 1794502470.6554441
+}

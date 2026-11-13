@@ -1,0 +1,68 @@
+[
+  {
+    "path": "sql-final-composition-compile-original.log.gz",
+    "bytes": 46947,
+    "sha256": "386dfb74fe67b2ef0f4e8563757c30fc9155380d171d85afd9774d90db2b0708",
+    "raw_bytes": 359557,
+    "raw_sha256": "61679498d6d02010dd8786b9daed1d07b1e849401033235dece5f1e930fac7b2"
+  },
+  {
+    "path": "sql-final-composition-compile-receipt.json",
+    "bytes": 1274,
+    "sha256": "19fb5e545b0c71d5f455e2a8b0211314a505ed002acf6aafb369fce68c04a075"
+  },
+  {
+    "path": "sql-final-composition-compile-runner.py",
+    "bytes": 5033,
+    "sha256": "679260d14e9f4351cf0ee9d15024270f66e9daf47959e0e7b6981b582bf6314b"
+  },
+  {
+    "path": "sql-final-composition-compile.json",
+    "bytes": 1727,
+    "sha256": "e9d05365338990a51af08cb15fec855d72f7c7993b401e38578e5712379b1726"
+  },
+  {
+    "path": "sql-final-reader-state-baseline-original.log.gz",
+    "bytes": 16801,
+    "sha256": "535c51f439a46a57ed587360c6a73dac1a218ccb612c9ffe736adfa20daffc42",
+    "raw_bytes": 151176,
+    "raw_sha256": "9dca648691d96991690b860d6ced6aaac311027678e5ffe3e464e550cafda477"
+  },
+  {
+    "path": "sql-final-reader-state-baseline-receipt.json",
+    "bytes": 1076,
+    "sha256": "a7d996fede587e59cf238c2fa50b3968c14586eced6844e259ce41322cdab179"
+  },
+  {
+    "path": "sql-final-reader-state-baseline-runner.py",
+    "bytes": 5033,
+    "sha256": "679260d14e9f4351cf0ee9d15024270f66e9daf47959e0e7b6981b582bf6314b"
+  },
+  {
+    "path": "sql-final-reader-state-baseline.json",
+    "bytes": 1527,
+    "sha256": "7f860e9122f6cb6f396f4aff1373b7542a2b40e411b8a26fe502d5175c2a2bc0"
+  },
+  {
+    "path": "sql-final-reader-state-focused-original.log.gz",
+    "bytes": 139815,
+    "sha256": "8f9bbfc8209331e7d291e9d117192d2c4cca4b95b273debcf8a336a1f9d54ee7",
+    "raw_bytes": 1265611,
+    "raw_sha256": "d3be3e74f667b3722148824c788dfaf0b75e656552696802cf21ca67db7b39ef"
+  },
+  {
+    "path": "sql-final-reader-state-focused-receipt.json",
+    "bytes": 3271,
+    "sha256": "4c87b6e715582e16e6113c00fe98f418c6042babc72881b3a0ef8afe9c14cedf"
+  },
+  {
+    "path": "sql-final-reader-state-focused-runner.py",
+    "bytes": 5033,
+    "sha256": "679260d14e9f4351cf0ee9d15024270f66e9daf47959e0e7b6981b582bf6314b"
+  },
+  {
+    "path": "sql-final-reader-state-focused.json",
+    "bytes": 2930,
+    "sha256": "c661eb74f01a58ee897c9f0822b760a5404739f7c4199f35d5de2c692cf56fa7"
+  }
+]

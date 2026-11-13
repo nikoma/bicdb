@@ -1,0 +1,49 @@
+{
+  "source": "3267c029cbe7244a7fa6ca06deb1dc6bd9c9c8b6",
+  "scope": "Evolving partition batch:8bounds controls and8executionpositives unchanged. Actual1d8boundsPASS+5executionPASS3FAIL (UPDATE/DELETE notyetimplemented, directchildbaretableoid pre-existing projection failure). This source routes bare systemcolumns through actualheap row evaluation, assertions unchanged. No fullbatch/broad/app/HA completionclaim.",
+  "started_unix": 1794481834.591959,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "partition_bounds",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794481834.592131,
+      "exit": 0,
+      "finished_unix": 1794481914.1462343
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "partition_execution",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794481914.1464486,
+      "exit": 101,
+      "finished_unix": 1794481919.6513927
+    }
+  ],
+  "status": "failed",
+  "finished_unix": 1794481919.6515703
+}

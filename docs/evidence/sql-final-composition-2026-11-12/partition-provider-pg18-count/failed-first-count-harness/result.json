@@ -1,0 +1,21 @@
+{
+  "source": "82a8311156e2293a92e7cf9c1ffd70d1df92d57a",
+  "binary_sha256": "9d66171db1afa6a5d3bf5257c7918bf3c59b44395812d56c74a33c6ddc762f7c",
+  "scope": "Tinyfreshownedstore, exactproviderparentconstraintCOUNT; nooriginalbaseline/testbyteschanged, noapplicationacceptanceclaim.",
+  "pid": 4092034,
+  "queries": [
+    {
+      "sql": "CREATE SCHEMA adempiere",
+      "rows": []
+    },
+    {
+      "sql": "SET search_path TO adempiere, public",
+      "rows": []
+    },
+    {
+      "sql": "CREATE TABLE parent(k INT NOT NULL,v TEXT NOT NULL) PARTITION BY LIST(k)",
+      "rows": []
+    }
+  ],
+  "owned_server_stopped": true
+}

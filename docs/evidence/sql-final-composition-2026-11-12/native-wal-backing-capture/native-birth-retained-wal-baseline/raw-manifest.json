@@ -1,0 +1,22 @@
+{
+  "receipt.json": {
+    "stored_as": "receipt.json",
+    "raw_bytes": 958,
+    "raw_sha256": "7e76336c2eaf0ecbe340ac5d265a5dc70c800ebe298f35c769e295fede087bda"
+  },
+  "spec.json": {
+    "stored_as": "spec.json",
+    "raw_bytes": 890,
+    "raw_sha256": "711572c49cea4d70c31d04bc2c19c1b9de101d3dbeec512c58156ae8965d098b"
+  },
+  "runner.py": {
+    "stored_as": "runner.py",
+    "raw_bytes": 5033,
+    "raw_sha256": "679260d14e9f4351cf0ee9d15024270f66e9daf47959e0e7b6981b582bf6314b"
+  },
+  "validation.log": {
+    "stored_as": "validation.log.gz",
+    "raw_bytes": 151841,
+    "raw_sha256": "72645b10d6b81c58670b72de6caf848f2b90040df697b5c6206c39abf98108b6"
+  }
+}

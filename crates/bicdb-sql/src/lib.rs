@@ -91,6 +91,7 @@ mod builtin_signatures;
 mod identity;
 pub mod oracle;
 pub mod sql_text;
+mod table_queries;
 pub use identity::{
     bicdb_version_banner, postgres_version_banner, BICDB_VERSION, POSTGRES_COMPATIBILITY_VERSION,
     POSTGRES_COMPATIBILITY_VERSION_NUM,
@@ -245,6 +246,7 @@ mod const_fold;
 mod mvt;
 mod order_by_ordinal;
 mod partial_index;
+mod partition;
 pub(crate) use const_fold::fold_statement_constants;
 mod pg_scalar_extra;
 mod records;
@@ -257,7 +259,9 @@ pub(crate) use row_types::{
     eval_populate_record_call, populate_record_call, populate_record_value,
     rewrite_row_type_constructs, RECORD_STAR_MARKER,
 };
+mod catalog_reads;
 mod engine;
+pub(crate) use catalog_reads::{check_sql_catalog_read, validate_catalog_reads};
 mod external_sort;
 pub mod plan_diagnostics;
 mod predicate_contradiction;
@@ -3143,6 +3147,9 @@ struct TableSchema {
     columns: Vec<ColumnSchema>,
     #[serde(default)]
     primary_key_name: Option<String>,
+    /// Name allocated for an inferred `id` key if its default was already in use.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    implicit_primary_key_name: Option<String>,
     #[serde(default)]
     indexes: Vec<IndexSchema>,
     #[serde(default)]
@@ -3227,6 +3234,8 @@ struct TableCatalogSummary {
 struct PartitioningSchema {
     strategy: String,
     key_columns: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    execution_version: Option<u32>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -3234,6 +3243,8 @@ struct PartitionOfSchema {
     parent_table: String,
     parent_schema: String,
     bound: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    execution_version: Option<u32>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -5301,10 +5312,18 @@ impl TriggerEnabledMode {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
+struct PartitionTriggerParent {
+    table_name: String,
+    trigger_name: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
 struct TriggerSchema {
     name: String,
     table_name: String,
     function_name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    partition_parent: Option<PartitionTriggerParent>,
     /// Text arguments supplied to `EXECUTE FUNCTION`. PostgreSQL exposes
     /// these through zero-based `TG_ARGV` and `TG_NARGS`.
     #[serde(default)]
@@ -5420,6 +5439,24 @@ fn sequence_data_type_name(data_type: &str) -> &'static str {
 }
 
 impl TableSchema {
+    fn has_generated_primary_key(&self) -> bool {
+        if self
+            .columns
+            .iter()
+            .all(|column| column.generated_expr.is_none())
+        {
+            return false;
+        }
+        primary_key_columns_for_schema(self).iter().any(|name| {
+            self.column(name)
+                .is_some_and(|column| column.generated_expr.is_some())
+        })
+    }
+
+    fn requires_row_move_plan(&self) -> bool {
+        self.partitioning.is_some() || self.has_generated_primary_key()
+    }
+
     fn row_type_oid(&self) -> i64 {
         self.row_type_oid.unwrap_or_else(|| {
             table_row_type_oid(legacy_namespace_oid(&self.schema_name), &self.name)
@@ -5438,7 +5475,9 @@ impl TableSchema {
 
     fn primary_key_constraint_name(&self) -> String {
         self.primary_key_name
-            .clone()
+            .as_ref()
+            .or(self.implicit_primary_key_name.as_ref())
+            .cloned()
             .unwrap_or_else(|| default_primary_key_name(&self.name))
     }
 
@@ -5556,6 +5595,7 @@ pub fn ensure_embedded_table_schema(
         )),
         columns: Vec::new(),
         primary_key_name: None,
+        implicit_primary_key_name: None,
         indexes: Vec::new(),
         constraints: Vec::new(),
         rls_enabled: false,
@@ -5627,7 +5667,8 @@ pub fn ensure_embedded_table_schema(
         .find(|column| column.primary_key)
         .expect("validated primary key");
     if schema.primary_key_name.is_none() {
-        schema.primary_key_name = Some(default_primary_key_name(table));
+        schema.primary_key_name = Some(schema.primary_key_constraint_name());
+        schema.implicit_primary_key_name = None;
         changed = true;
     }
     if schema.primary_key() != requested_primary_key.name {

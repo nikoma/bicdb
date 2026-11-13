@@ -1,0 +1,39 @@
+{
+  "source": "c727a6fade74c070384a9191fbf9ac0a455111c2",
+  "scope": "Compile only of full partition+Nativeauthorizedidentity+semanticreaderfix composed with hardened SQLrename/catalogadmission branch e897. Source inherited489; no finalsource versionreservation, mainmerge, test pass, originalpromotion/portableorigin, application, HA/capacity, CLI/release/deployment claim. Preserve original tests/assertions/waits and full goal/P2off/no new spend. Exact concurrent metadata Cargo birth allowed, separate locked sources/targets and monitored bounded compilers.",
+  "started_unix": 1794520700.6816423,
+  "steps": [
+    {
+      "command": [
+        "python3",
+        "scripts/bump-version.py",
+        "--check"
+      ],
+      "started_unix": 1794520700.6817641,
+      "exit": 0,
+      "finished_unix": 1794520700.7757218
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "check",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "-p",
+        "bicdb-sql",
+        "-p",
+        "bicdb-pgwire",
+        "--all-targets"
+      ],
+      "started_unix": 1794520700.781103,
+      "exit": 0,
+      "finished_unix": 1794520971.190905
+    }
+  ],
+  "status": "focused_passed",
+  "finished_unix": 1794520971.19111
+}

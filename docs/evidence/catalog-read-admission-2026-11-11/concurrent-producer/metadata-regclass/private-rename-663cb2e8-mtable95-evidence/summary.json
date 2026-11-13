@@ -1,0 +1,63 @@
+{
+  "source": "663cb2e80cb1823f047f513f997a7e290ae2ff62",
+  "tests": 95,
+  "passed": 94,
+  "failed": 1,
+  "errors": 0,
+  "baseline_unchanged": true,
+  "processes_stopped": true,
+  "original_assertions_and_timeouts_unchanged": true,
+  "failure": "42P01 at unqualified LOWER(?)::regclass after new parent creation",
+  "application_qualified": false,
+  "inputs": {
+    "TEST-org.idempiere.test.base.MRelationTypeTest.xml": {
+      "sha256": "c641d63856f241cd80bda4096ce35c6c5c161ed23b058a0ebdddad5b0e73febd",
+      "bytes": 19462
+    },
+    "database.log.gz": {
+      "sha256": "087e90b31300ce44dec161176e65baafdfd55778b2e88289864d246de0b0160b",
+      "bytes": 1534
+    },
+    "jvm.log.gz": {
+      "sha256": "76d4278f9d1127b6129d869e59280863f8774aecbb18774c068a1684fd4c5c3e",
+      "bytes": 12567
+    },
+    "TEST-org.idempiere.test.base.MQueryTest.xml": {
+      "sha256": "5f2f4c935095efdff5cb126367ca80032e439a4da1a2381629cb46f289e4dd81",
+      "bytes": 22816
+    },
+    "TEST-org.idempiere.test.base.MProcessTest.xml": {
+      "sha256": "4b2c6bcc535b86f2b29d7972206b9d241b02f3ef5ccc60ac5b6286bea14a13b7",
+      "bytes": 23923
+    },
+    "TEST-org.idempiere.test.base.MStorageTest.xml": {
+      "sha256": "74f70aa7de9848deff7ccc9f50c22dd600b9adf09efb25deb9b9afcf6a0ec640",
+      "bytes": 19172
+    },
+    "TEST-org.idempiere.test.base.MTabTest.xml": {
+      "sha256": "b1b92ff9aaaa68eede523c0dc8d3fea0dd97de3357e12ff2d14c504995136688",
+      "bytes": 22020
+    },
+    "producer.json": {
+      "sha256": "680a62ff1f71b0aeecb4627e9742fae063a1ebf9e9b518164a90c765a4f51513",
+      "bytes": 4228
+    },
+    "class-load.log.gz": {
+      "sha256": "52d2bc34bec9c49a8eac95a07694068d00f8aa9e9008f2db01cd46f094e6cefd",
+      "bytes": 153085
+    },
+    "query-trace.log.gz": {
+      "sha256": "8536013cde851ee3e86d65cdaa3b74e635209cf3e4dc7a0af8b598b411bf1197",
+      "bytes": 124117
+    },
+    "TEST-org.idempiere.test.base.MTableTest.xml": {
+      "sha256": "e1d9965f57943952dc1d37485b4e83571986bec67994ef030230c0f569161b33",
+      "bytes": 37307
+    },
+    "original-run.json": {
+      "sha256": "b01565dd68e4a87f1873bf25007f6587f5e723ed5b87860c3123f6c9dbfe4413",
+      "bytes": 6325
+    }
+  },
+  "collected_unix": 1794461520.863288
+}

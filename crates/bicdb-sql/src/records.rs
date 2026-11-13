@@ -272,11 +272,59 @@ pub(crate) fn set_record_column(
     record: &mut Record,
     schema: Option<&TableSchema>,
     column: &str,
+    value: SqlValue,
+) -> Result<()> {
+    set_record_column_inner(record, schema, column, value, false)
+}
+
+/// Only generated-expression evaluation may replace a computed key field.
+/// The caller reconstructs its canonical identity before the physical write.
+pub(crate) fn set_generated_record_column(
+    record: &mut Record,
+    schema: &TableSchema,
+    column: &str,
+    value: SqlValue,
+) -> Result<()> {
+    if !schema
+        .column(column)
+        .is_some_and(|column| column.generated_expr.is_some())
+    {
+        return Err(SqlError::InvalidSql(
+            "computed assignment requires a generated column".into(),
+        ));
+    }
+    set_record_column_inner(record, Some(schema), column, value, true)
+}
+
+/// Parent UPDATE owns a routed delete/insert plan and reconstructs the typed
+/// record identity after all assignments. Ordinary updates keep their existing
+/// primary-key move path and cannot opt into an uncoordinated identity change.
+pub(crate) fn set_partition_update_column(
+    record: &mut Record,
+    schema: Option<&TableSchema>,
+    column: &str,
+    value: SqlValue,
+) -> Result<()> {
+    set_record_column_inner(
+        record,
+        schema,
+        column,
+        value,
+        schema.is_some_and(TableSchema::requires_row_move_plan),
+    )
+}
+
+fn set_record_column_inner(
+    record: &mut Record,
+    schema: Option<&TableSchema>,
+    column: &str,
     mut value: SqlValue,
+    routed_key_move: bool,
 ) -> Result<()> {
     let schema_column = schema.and_then(|schema| schema.column(column));
-    if schema_column.is_some_and(|column| column.primary_key)
-        || (schema.is_none() && column.eq_ignore_ascii_case("id"))
+    if !routed_key_move
+        && (schema_column.is_some_and(|column| column.primary_key)
+            || (schema.is_none() && column.eq_ignore_ascii_case("id")))
     {
         return Err(SqlError::Unsupported(
             "UPDATE of primary key is not supported".to_string(),
@@ -346,6 +394,7 @@ pub(crate) fn validate_records_for_write(
     for record in records {
         validate_record_columns(table, schema, record)?;
         validate_prepared_checks(table, schema, record, &checks, check_engine)?;
+        partition::validate_record(db, schema, record)?;
         validate_foreign_keys(db, tx, table, schema, record)?;
     }
     validate_unique_constraints(db, tx, table, schema, records, allow_existing_same_id)?;
@@ -367,6 +416,7 @@ pub(crate) fn validate_records_for_write_prechecked(
         return Ok(());
     }
     for record in records {
+        partition::validate_record(db, schema, record)?;
         validate_foreign_keys(db, tx, table, schema, record)?;
     }
     validate_unique_constraints(db, tx, table, schema, records, allow_existing_same_id)?;
@@ -397,6 +447,7 @@ pub(crate) fn validate_updated_records(
         .collect::<BTreeMap<_, _>>();
     for record in after_records {
         validate_record_local_constraints(table, schema, record, check_engine)?;
+        partition::validate_record(db, schema, record)?;
         let before = before_by_id.get(record.id.as_str()).copied();
         for constraint in &schema.constraints {
             if let (Some(before), ConstraintSchema::ForeignKey { columns, .. }) =

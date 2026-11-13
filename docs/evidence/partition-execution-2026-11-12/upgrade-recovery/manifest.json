@@ -1,0 +1,106 @@
+{
+  "README.md": {
+    "bytes": 4253,
+    "sha256": "33f83ab396d8e1232c2f50d5fd26e190da11f72a54f0e04559c307cd48141015"
+  },
+  "archived-files.json": {
+    "bytes": 401141,
+    "sha256": "a59d90062f01b5e0cdee1356cf26fd88d55290b137bacc61c276321471fcb5fb"
+  },
+  "native-pg18-partition-ack-constraints-reference/container.stderr": {
+    "bytes": 1608,
+    "sha256": "a864d3d76ad4988a5329eccb7f48a6abd74c0034990dc8e494fae38981d8c1fa"
+  },
+  "native-pg18-partition-ack-constraints-reference/container.stdout": {
+    "bytes": 2369,
+    "sha256": "259db0953243d4e9d78feefcfece00fd88064c8c6bbcbc87f4b15a3bdbdb1535"
+  },
+  "native-pg18-partition-ack-constraints-reference/control.sql": {
+    "bytes": 2341,
+    "sha256": "cf55d46adea8d73ffb962143c1f93f7b0488042261145d37ee50fb53a8a2156f"
+  },
+  "native-pg18-partition-ack-constraints-reference/result.json": {
+    "bytes": 902,
+    "sha256": "ec819f257e0999189c183000a9d43e360dd7ba5c91ca39b479ce10efeed64f46"
+  },
+  "native-pg18-partition-ack-constraints-reference/stderr": {
+    "bytes": 63,
+    "sha256": "44180ed0f4132747a78b1f5d88a9adeb7a7514d59cfc1275de6c251fef861e16"
+  },
+  "native-pg18-partition-ack-constraints-reference/stdout": {
+    "bytes": 371,
+    "sha256": "433e074f90c5cb0ce8e588bf56644dbd3e4994f3a7d1a4272c8d9468b4bf90de"
+  },
+  "original-source-scoped-results.tar.gz": {
+    "bytes": 112894,
+    "sha256": "4148a6a451eb997b4b7355df6bbea2f8569c2cfe88b8bca5c58dd97925b7213d"
+  },
+  "partition-ack-main489-broad.json": {
+    "bytes": 3673,
+    "sha256": "42ca55218a6d74b7dd3edaaa8fd3ae85fb7de0bf80fe78b05addc74d68c6179e"
+  },
+  "partition-old-crash-span-probe-build.json": {
+    "bytes": 2229,
+    "sha256": "9c6bb658c687c105107a2e3a8f0698b49fbed0982728d6059eb045ce125b8a35"
+  },
+  "partition-old-io-failure-probe-build.json": {
+    "bytes": 2676,
+    "sha256": "abafbdbe78f8bee8e11e986e9dfd14900e6d4a39e39051771447d53e3864076f"
+  },
+  "partition-superseded-test-elf-cleanup-receipt.json": {
+    "bytes": 103337,
+    "sha256": "bf1a80d71f0a74dcc1a63f1e354d539cd34ff944a3509175ce6fb5dd4fdd1fe7"
+  },
+  "partition-unused-preview-probe-cleanup.json": {
+    "bytes": 1123,
+    "sha256": "3e13dec6b04db9a55b834631ad8f9e14376360cf88450ac15a724106b8e834d5"
+  },
+  "partition-upgrade-all-acks-forest-focused.json": {
+    "bytes": 2409,
+    "sha256": "a4faba927ebd4eebdefced1373fd83a045b1fe9de237ef0a445d7f1e3ec9b915"
+  },
+  "partition-upgrade-all-acks-probes.json": {
+    "bytes": 1650,
+    "sha256": "dc74f500d2e003da955197648875fe8ae0e5b8aae2e0ac1f566b4f39a8f0a09b"
+  },
+  "production-equivalence.json": {
+    "bytes": 1715,
+    "sha256": "4aa61cebc5e2af3141e87b545acaf63c918bc7364f803b9faa2d71a51da79a39"
+  },
+  "run-partition-crash-matrix-fa7a2c59.py": {
+    "bytes": 7418,
+    "sha256": "0c66f91070f07d9e3a1ffdf25994a4ac08b5ac97bb5e58212479036066dfc517"
+  },
+  "run-partition-crash-smoke-fa7a2c59.py": {
+    "bytes": 6732,
+    "sha256": "ba3d280a6cd47803d8acf6a0b5d8ee139cebaebb9b15603dc881dee7fd055a33"
+  },
+  "run-partition-default-6c16e66e.py": {
+    "bytes": 3738,
+    "sha256": "f13cf7bfcb4665c20aac77c5b99cf05f6b8c0ab0a542df91ee54c0495ec5ef38"
+  },
+  "run-partition-entry-6c16e66e.py": {
+    "bytes": 4866,
+    "sha256": "151b6d296cfc7e0051a676e6a3c9436f519df7df418a2291c6bef04fd2ee1f7c"
+  },
+  "run-partition-explicit-6c16e66e.py": {
+    "bytes": 3297,
+    "sha256": "a4190a1ec3df6d3df9b3979ccb851746d9b3684a6d7c8e5d7e632338cb5f34fb"
+  },
+  "run-partition-io-failure-matrix-430067f7.py": {
+    "bytes": 7515,
+    "sha256": "03fa6cb163cd089eba1b45a252d0dac2927e50291e9278dcba02bc00d89da599"
+  },
+  "run-partition-legacy-qualification-6c16e66e.py": {
+    "bytes": 1139,
+    "sha256": "bf90b304aae643d5aba65be65e8e8044e29bb7a4c0f98311448448923e973322"
+  },
+  "summary.json": {
+    "bytes": 6642,
+    "sha256": "66d89ea1c2d4866bf763a2987fa9b2648ef0fb0def83d289cba540ab1f33b4e6"
+  },
+  "verify-partition-legacy-qualification-6c16e66e.py": {
+    "bytes": 3035,
+    "sha256": "ebca87be4bbf07c2632d09205ea70889db4a3672a8f09a1a53daf5c4c06ea907"
+  }
+}

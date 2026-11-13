@@ -1,0 +1,65 @@
+{
+  "label": "partition-current-helper-requalification",
+  "source": "c3588bf8b029ac8579f1336bf9d170d231648f29",
+  "base": "8ed4a67b81c6e2287e95cf594597df7d9099e399",
+  "repo": "/root/bicdb-partition-runtime",
+  "continue_on_failure": false,
+  "scope": "Correct qualification provenance after sourcec358standardbroad incorrectly used stale oldexamplehelpers (--lib --tests doesnotrebuildthem). CurrentpinnedCorebuild ofdurability_child/chaos_child/ha_state_child, custodySHAmanifest+requiredSQLfeaturemarker, thenrerunall3affectedCoreintegrationfamilies unchangedfaultsites/counts/assertions. OtherCorelibrary/testtargets unaffectedbyhelperaudit; SQL/PGwire currentbroadrun hasnoexternalexamples and continues. Distinctmetadatarepo/target/lock, onlyexactknownparallelstandardCargo PIDbirth/source/target allowed with28GiBhostavailable beforeoverlap; active12GiBmonitor10GiBhostfloor. Do notclaimcurrentdurabilityfromoldstalechildcase. OriginalfailurecaseDB/ledgers+oldELFhash preserved.",
+  "commands": [
+    [
+      "cargo",
+      "+1.96.0",
+      "build",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-core",
+      "--example",
+      "durability_child",
+      "--example",
+      "chaos_child",
+      "--example",
+      "ha_state_child"
+    ],
+    [
+      "python3",
+      "-c",
+      "import pathlib,json,hashlib,os,subprocess,time\nroot=pathlib.Path('/root/bicdb-durability-s3');repo=root/'repo-metadata-describe';source=subprocess.check_output(['git','rev-parse','HEAD'],cwd=repo,text=True).strip();assert source=='c3588bf8b029ac8579f1336bf9d170d231648f29'\nfiles={}\nfor name in ['durability_child','chaos_child','ha_state_child']:\n p=pathlib.Path(os.environ['CARGO_TARGET_DIR'])/'debug/examples'/name;data=p.read_bytes();files[name]={'path':str(p),'sha256':hashlib.sha256(data).hexdigest(),'bytes':len(data),'mtime':p.stat().st_mtime,'has_sql_partition_required_feature':b'sql_partition_execution_v1' in data}\nassert files['durability_child']['has_sql_partition_required_feature']\nproof={'source':source,'files':files,'recorded_unix':time.time(),'scope':'Exactsourcecheckout+successfulprecedingbuild3exampletargets; currentdurabilityELFincludesrequiredSQLformatflagmissingfromoldstandardhelper. Process-localruntime/custodyonly, noartifactpromotion.'};(root/'partition-current-helper-c358-custody.json').write_text(json.dumps(proof,indent=2)+'\\n');print(json.dumps(proof))\n"
+    ],
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--no-fail-fast",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-core",
+      "--test",
+      "commit_durability_crash",
+      "--test",
+      "projection_chaos",
+      "--test",
+      "ha_state_crash",
+      "--",
+      "--nocapture",
+      "--test-threads=1"
+    ]
+  ],
+  "wait_units": [],
+  "allow_isolated_builds": [
+    {
+      "pid": 3951950,
+      "start_ticks": 163102221,
+      "repo": "/root/bicdb-durability-s3/repo-tc",
+      "target": "/root/bicdb-durability-s3/target-tc"
+    }
+  ],
+  "required_receipts": [],
+  "remote_repo_name": "repo-metadata-describe",
+  "remote_target_name": "target-metadata-describe",
+  "remote_lock_name": "metadata-describe-source-build.lock",
+  "source_ref": "refs/bicdb-proof/partition-current-helper-c358"
+}

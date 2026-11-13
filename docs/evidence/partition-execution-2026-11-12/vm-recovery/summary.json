@@ -1,0 +1,17 @@
+{
+  "source": "0adf78abbc53f697e76f889ef52f036e7a1153d6",
+  "production_equivalent": "5aa92dcecb29b639251acc81a5d60428dfae96f7",
+  "status": "verified_passed",
+  "recorded_unix": 1794512817.7822328,
+  "scope": "Independent56-case coverage/no duplicates/exactguestbinary identity/preservedrawcutSHA/fullold482manifest+14ACKs/serialreadyandexternalACKwitness/3stableguestopens/fullrecord-schema-indexchecks. ExistingpreIOhooks explicitlynotpostfsync claims. ActualguestRAMloss; notphysicalhostpowercut/HA/scaleout/fullapplication.",
+  "cases": 56,
+  "acknowledged_cases": 8,
+  "stable_states": {
+    "complete_old": 40,
+    "complete_new": 16
+  },
+  "unique_original_ACKs": 14,
+  "originals_unchanged": true,
+  "result_sha256": "33f72475a11c5bb6e63cc70c7edc4f9106d17246ea04ae60b5198bd20bfbda7b",
+  "binary_sha256": "47159ec9ea97e9f9b3d6180a2ef78244b0e1fc8a908ac4b234d7fc9d8350d539"
+}

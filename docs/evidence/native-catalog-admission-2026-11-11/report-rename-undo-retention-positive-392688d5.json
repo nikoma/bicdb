@@ -1,0 +1,53 @@
+{
+  "source": "392688d5e38efe5b3584dee854fb43a2b0596896",
+  "scope": "Durable rename-journal undo retains its session identity until restore succeeds; bounded2string clone only, no fullrowpayloadclone. Tests-only433source negative executes separately first, retainfailure. Newtest checks originalnativeowner+entry retained on foreignpending refusal, exactlater retry restoresbacking/header; allrename units and composite/snapshot regressions. NativeScopefoundationf4 unchanged. SQLscopeproducer/metadata/Describe integration stillOPEN; notdeliveryready.",
+  "started_unix": 1794390461.325539,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--lib",
+        "session::rename_",
+        "--",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794390461.3256207,
+      "exit": 0,
+      "finished_unix": 1794390608.5687082
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "rename_pending_composites",
+        "--test",
+        "table_rename_views",
+        "--test",
+        "schema_table_rename",
+        "--test",
+        "session_statement_snapshots",
+        "--test",
+        "read_only_transactions"
+      ],
+      "started_unix": 1794390608.568871,
+      "exit": 0,
+      "finished_unix": 1794390720.150267
+    }
+  ],
+  "status": "focused_passed",
+  "finished_unix": 1794390720.150577
+}

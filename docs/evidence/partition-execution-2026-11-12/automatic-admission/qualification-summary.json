@@ -1,0 +1,67 @@
+{
+  "current_source": "c3588bf8b029ac8579f1336bf9d170d231648f29",
+  "production_examples_exact_source": "8ed4a67b81c6e2287e95cf594597df7d9099e399",
+  "native_core_page_cargo_exact_source": "fcf2617ba3ea5e26d6ea720672504fd68dbadfa0",
+  "private_unmerged": true,
+  "source_version": "1.0.487-beta inherited development",
+  "sql_focused_passed": 97,
+  "sql_reuse": "8ed96PASS1failedverificationreadfixture; unchanged94tests reused, COPY3 rerunPASS atc358 with verifierSELECTpolicy onlyafterCOPY/RLSchecks; production unchanged. Do not add duplicate COPY2passes again.",
+  "native_focused_passed": 6,
+  "native_scope": "fcf5Coreunit+1boundedbatchintegration; Core/Page/Cargo unchanged",
+  "actual_old_store_scenarios": {
+    "default": 8,
+    "explicit": 8,
+    "entry_startup": 14,
+    "source": "8ed4a67b81c6e2287e95cf594597df7d9099e399",
+    "original_fixture_acks": 14,
+    "original_fixture_hashes_unchanged": true,
+    "scope": "30scenarios across3controllers, notfullfeature/application/HAqualification; repeated prior-source scenarios not additive"
+  },
+  "binary": "/root/bicdb-durability-s3/qualification-artifacts-debug/8ed4a67b81c6e2287e95cf594597df7d9099e399/partition_upgrade_probe",
+  "binary_sha256": "a1320a1db86ac10ad5ace291c8019238d1a7b3c888689ed071ab7747a8c92df3",
+  "startup_binary": {
+    "binary": "/root/bicdb-durability-s3/qualification-artifacts-debug/8ed4a67b81c6e2287e95cf594597df7d9099e399/partition_startup_probe",
+    "binary_sha256": "ee65a6b5286ba1e74c783f8c49599a4b5ea6636ff8618ee90af3038689675e84"
+  },
+  "broad": {
+    "source": "c3588bf8b029ac8579f1336bf9d170d231648f29",
+    "unit": "bicdb-partition-admission-broad",
+    "status": "live_at_checkpoint_not_a_pass",
+    "scope": "allCore/SQL/PGwire unit+integration tests",
+    "core_first_command_exit": 101,
+    "qualification_correction": {
+      "stale_standard_child_sha256": "277e08f671f7cf5f3e4ac7dcbc83e6f8b595f445a268eb820515fb64560d73fa",
+      "old_child_mtime": 1794263428.4864097,
+      "broad_started": 1794498585.674856,
+      "old_child_missing_current_sql_feature": true,
+      "affected_current_source_qualification_not_proven": [
+        "commit_durability_crash",
+        "projection_chaos",
+        "ha_state_crash"
+      ],
+      "current_helpers_built_source": "c3588bf8b029ac8579f1336bf9d170d231648f29",
+      "current_custody": "validation-provenance/current-helper-custody.json",
+      "private_failure_custody": "validation-provenance/first-case-private-custody.json",
+      "rerun_unit": "bicdb-partition-current-helper-requalification",
+      "rerun_result": "live_pending",
+      "assertions_sites_counts_fsync_unchanged": true,
+      "SQL_pgwire_external_example_selector_audit": "none; existing broad continues; no passyet"
+    }
+  },
+  "prior_failures_preserved": [
+    "fcf63PASS1localtriggercertificateFAIL",
+    "08cb92PASS1implicitidFAIL plusentry_startup10PASS4COPY/startupPKFAIL",
+    "8ed96PASS1forcedRLSverificationreadfixtureFAIL",
+    "initialNativePGreferenceharnessreadinessfailure(noSQLran)"
+  ],
+  "scope_corrections": [
+    "Rawfcfexplicitcontrollerinheritedtheoldunimplemented-admission scope phrase; actualseparatefcfdefault8resultprovesimplementedSQLadmission. Originalreceipt unchanged.",
+    "Currentcertificate catalog_digest addedonprivatebranch; olderprivateinterimcertificates are not a supported publicreleaseformat.",
+    "PKlogicalnormalization/freshchildnames coveractualoldfixture startup; fullchildcolumn/default/generated/independentkey/nonPKUnique/FKlifecycle remainsrequired."
+  ],
+  "raw_archives_verified": 262,
+  "standard_binary_built": false,
+  "release_published": false,
+  "deployed": false,
+  "verified_unix": 1794498817.7944036
+}

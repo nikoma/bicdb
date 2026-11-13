@@ -1,0 +1,30 @@
+{
+  "source": "b3e4b2110b04819f6b56f2fc2f9bdf7dd02af451",
+  "scope": "Focused reproduction of unchanged original5421 application failure at TablePartitionService.migrateDBIndexes line228: prepared pg_indexes metadata under own rename. Original95 completed94PASS1FAIL40001; no original tests changed.",
+  "started_unix": 1794461357.5267513,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-pgwire",
+        "--test",
+        "catalog_read_admission",
+        "prepared_partition_index_metadata_keeps_the_owner_after_rename_and_parent_creation",
+        "--",
+        "--exact",
+        "--nocapture"
+      ],
+      "started_unix": 1794461357.5270352,
+      "exit": 101,
+      "finished_unix": 1794461369.5360897
+    }
+  ],
+  "status": "failed",
+  "finished_unix": 1794461369.542594
+}

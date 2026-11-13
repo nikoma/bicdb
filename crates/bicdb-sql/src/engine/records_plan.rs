@@ -587,7 +587,7 @@ impl<'db> SqlEngine<'db> {
         }
     }
 
-    pub(crate) fn scan_records(&self, collection: &str) -> Result<Vec<Arc<Record>>> {
+    pub(crate) fn scan_raw_records(&self, collection: &str) -> Result<Vec<Arc<Record>>> {
         let records = match self.security_context.as_ref() {
             Some(ctx) => match self.tx {
                 Some(tx) => tx
@@ -606,7 +606,11 @@ impl<'db> SqlEngine<'db> {
                     .map_err(SqlError::from),
             },
         }?;
-        let records: Vec<Arc<Record>> = records.into_iter().map(Arc::new).collect();
+        Ok(records.into_iter().map(Arc::new).collect())
+    }
+
+    pub(crate) fn scan_records(&self, collection: &str) -> Result<Vec<Arc<Record>>> {
+        let records = self.scan_raw_records(collection)?;
         if self
             .security_context
             .as_ref()

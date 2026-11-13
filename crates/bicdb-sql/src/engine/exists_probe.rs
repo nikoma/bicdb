@@ -674,7 +674,7 @@ impl SqlEngine<'_> {
         let Some(schema) = load_schema(self.db_ref(), &resolved)? else {
             return Ok(None);
         };
-        if schema.rls_enabled || !schema.policies.is_empty() {
+        if schema.partitioning.is_some() || schema.rls_enabled || !schema.policies.is_empty() {
             return Ok(None);
         }
         let primary_names = primary_key_columns_for_schema(&schema);

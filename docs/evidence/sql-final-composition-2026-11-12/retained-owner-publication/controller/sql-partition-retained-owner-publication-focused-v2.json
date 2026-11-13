@@ -1,0 +1,63 @@
+{
+  "label": "sql-partition-retained-owner-publication-focused-v2",
+  "source": "4c9c90476e14dc4a589b05f7d7259d167965399d",
+  "base": "5392fb876ab96a4607728e424f141d77a9749d83",
+  "source_ref": "refs/bicdb-proof/partition-retained-owner-publication-v2-4c9c9047",
+  "repo": "/root/bicdb-sql-final-composition",
+  "scope": "Actualoriginal95 4e94P1F certificate resource failure, identicalfocused094actual0P1F retained. NewNative temporaryderivedpublication borrowsactualparent and admits extras withforeignscope/observationfences; no permanent globalcertificate reservation or beforeimageauth. Native3controls thenoriginalpositiveSQLcommitrollback/NativeACK/fullhash/foreignread/tworeopens. No fullapplication/main/portableorigin/HAqualification claim. Fullgoalactive,P2productionoff,no spend. PriorCore2P1F was newtest checking an exactSQLcatalogrecord reservation via genericNativeget instead ofthe actualcatalogreadAPI. Correctedtest nowexplicitlychecks protectedbase metadata denied andtemporaryderivedmetadata readable afterrelease; productioncode unchanged. Original094SQLpositive unchanged andstillrequired.",
+  "continue_on_failure": false,
+  "wait_units": [
+    "bicdb-sql-partition-retained-owner-publication-focused"
+  ],
+  "required_receipts": [
+    {
+      "path": "report-sql-partition-retained-owner-publication-focused.json",
+      "equals": {
+        "source": "5392fb876ab96a4607728e424f141d77a9749d83",
+        "status": "failed"
+      }
+    }
+  ],
+  "commands": [
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--no-fail-fast",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-core",
+      "--lib",
+      "catalog_publication_",
+      "--",
+      "--nocapture",
+      "--test-threads=1"
+    ],
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--no-fail-fast",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-sql",
+      "--lib",
+      "retained_rename_owner_creates_partition_tree",
+      "--",
+      "--nocapture",
+      "--test-threads=1"
+    ]
+  ],
+  "allow_isolated_builds": [
+    {
+      "pid": 2039683,
+      "start_ticks": 165686736,
+      "repo": "/root/bicdb-durability-s3/repo-metadata-describe",
+      "target": "/root/bicdb-durability-s3/target-metadata-describe"
+    }
+  ]
+}

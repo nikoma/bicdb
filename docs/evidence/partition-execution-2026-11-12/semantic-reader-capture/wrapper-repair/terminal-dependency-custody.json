@@ -1,0 +1,21 @@
+{
+  "status": "all_terminal_no_restart_due_to_observation",
+  "units": {
+    "semantic-reader-current-core-broad": {
+      "MainPID": "0",
+      "ExecMainStatus": "1",
+      "ActiveState": "failed"
+    },
+    "partition-original-mtable95-probe-build": {
+      "MainPID": "0",
+      "ExecMainStatus": "1",
+      "ActiveState": "failed"
+    },
+    "private-partition-e8c426a7-mtable95": {
+      "MainPID": "0",
+      "ExecMainStatus": "1",
+      "ActiveState": "failed"
+    }
+  },
+  "scope": "Core helpers build0; Python custody wrapper syntax failed before any tests. Probe precondition failed before commands/receipt; original95 controller failed before application launch. No Core test failure or application outcome. Preserve old receipts/logs; use new corrected source-identical wrappers."
+}

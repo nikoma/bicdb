@@ -9,6 +9,8 @@ const MAX_IMAGE_CATALOG_BYTES: usize = 8 * 1024 * 1024;
 struct NamespacePin {
     name: String,
     local_id: Uuid,
+    backing_birth_id: Option<Uuid>,
+    origin_root: Option<Uuid>,
     incarnation: Arc<()>,
 }
 
@@ -22,6 +24,7 @@ pub(crate) struct RangeImageDbBindings {
     reader_features: Vec<String>,
     namespaces: Vec<NamespacePin>,
     portable_collections: Vec<CollectionMeta>,
+    native_origin: Option<NativeOriginObservation>,
 }
 
 impl RangeImageDbBindings {
@@ -36,6 +39,9 @@ impl RangeImageDbBindings {
     }
     pub(crate) fn collections(&self) -> &[CollectionMeta] {
         &self.portable_collections
+    }
+    pub(crate) fn native_origin(&self) -> Option<&NativeOriginObservation> {
+        self.native_origin.as_ref()
     }
     pub(crate) fn namespace_ids(&self) -> Vec<(String, Uuid)> {
         self.namespaces
@@ -66,6 +72,7 @@ impl BicDb {
             BicDbError::Cluster("range image schema has no current verified digest".into())
         })?;
         let reader_features = format::required_reader_features(&self.path)?;
+        let native_origin = self.observe_native_origin_root()?;
         if self.collections.len() > MAX_IMAGE_NAMESPACES {
             return Err(BicDbError::Cluster(
                 "range image namespace bound exceeded".into(),
@@ -83,6 +90,14 @@ impl BicDb {
                 ))
             })?;
             let state = self.collection_state(&name)?;
+            if state.meta.native_catalog_allocation_pending
+                || native_import_origins::pending(&state.meta)
+            {
+                return Err(BicDbError::Cluster(
+                    "Native creation publication is pending; no protected capture is available"
+                        .into(),
+                ));
+            }
             if !state.paged_lazy {
                 return Err(BicDbError::Cluster(format!(
                     "range image namespace `{name}` is not server_paged"
@@ -100,6 +115,8 @@ impl BicDb {
             namespaces.push(NamespacePin {
                 name,
                 local_id,
+                backing_birth_id: state.meta.native_backing_birth_id,
+                origin_root: state.meta.native_backing_origin_root,
                 incarnation: Arc::clone(&state.incarnation),
             });
             portable_collections.push(state.meta.portable_contract());
@@ -111,6 +128,7 @@ impl BicDb {
             reader_features,
             namespaces,
             portable_collections,
+            native_origin,
         };
         self.validate_range_image_bindings(&bindings)?;
         Ok(bindings)
@@ -133,6 +151,7 @@ impl BicDb {
                 != Some(expected.schema_sha256.as_str())
             || format::required_reader_features(&self.path)? != expected.reader_features
             || self.collections.len() != expected.namespaces.len()
+            || self.observe_native_origin_root()? != expected.native_origin
         {
             return Err(BicDbError::Cluster(
                 "range image database/schema/reader identity changed; discard this capture".into(),
@@ -142,6 +161,8 @@ impl BicDb {
             let state = self.collection_state(&pin.name)?;
             if !Arc::ptr_eq(&state.incarnation, &pin.incarnation)
                 || self.local_namespace_identity(&pin.name)? != Some(pin.local_id)
+                || state.meta.native_backing_birth_id != pin.backing_birth_id
+                || state.meta.native_backing_origin_root != pin.origin_root
             {
                 return Err(BicDbError::Cluster(format!(
                     "range image namespace `{}` changed physical lineage; discard this capture",
@@ -155,6 +176,47 @@ impl BicDb {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn current_semantic_reader_requirements_invalidate_captured_bindings() {
+        for (flag, activate) in format::semantic_reader_test_activations() {
+            let root = tempfile::tempdir().unwrap();
+            let db = populated(root.path());
+            let before = db.capture_range_image_bindings().unwrap();
+            let hash = db
+                .get("items", "row-0000")
+                .unwrap()
+                .unwrap()
+                .content_hash()
+                .unwrap();
+            let sequence = db.last_commit_seq();
+            let namespace = db.local_namespace_identity("items").unwrap();
+            activate(root.path()).unwrap();
+            assert!(
+                db.validate_range_image_bindings(&before).is_err(),
+                "{flag}: old capture remained usable after a semantic requirement changed"
+            );
+            let after = db.capture_range_image_bindings().unwrap();
+            assert!(after.reader_features().iter().any(|f| f == flag));
+            for local in [
+                format::LOCAL_NAMESPACE_IDENTITY_FEATURE_FLAG,
+                format::RANGE_IMAGE_INSTALL_FEATURE_FLAG,
+                format::SERVER_PAGED_FEATURE_FLAG,
+            ] {
+                assert!(!after.reader_features().iter().any(|f| f == local));
+            }
+            assert_eq!(db.last_commit_seq(), sequence);
+            assert_eq!(db.local_namespace_identity("items").unwrap(), namespace);
+            assert_eq!(
+                db.get("items", "row-0000")
+                    .unwrap()
+                    .unwrap()
+                    .content_hash()
+                    .unwrap(),
+                hash
+            );
+        }
+    }
+
     use super::*;
     use crate::distribution_range_mutation::RangeMutationAuthority;
     use crate::{DistributionConfig, DistributionStore};
@@ -276,32 +338,87 @@ mod tests {
     }
 
     #[test]
-    fn current_semantic_reader_requirements_invalidate_captured_bindings() {
-        for (flag, activate) in format::semantic_reader_test_activations() {
+    fn range_image_scan_budget_preserves_semantic_readers_on_every_batch() {
+        let root = tempfile::tempdir().unwrap();
+        let db = populated(root.path());
+        format::enable_decimal_predicate_comparison_v1(root.path()).unwrap();
+        db.schema_compatibility_fingerprint().unwrap();
+        let topology_root = tempfile::tempdir().unwrap();
+        let range = range(topology_root.path());
+        let options = RangeSnapshotOptions {
+            max_records_per_batch: 3,
+            max_bytes_per_batch: 4096,
+            max_record_bytes: 1024,
+        };
+        for scan_budget in [1, 2, 5, 23] {
+            let mut cursor = None;
+            let mut ids = BTreeSet::new();
+            loop {
+                let result = db
+                    .for_each_range_snapshot_batch_with_cancellation(
+                        "items",
+                        &range,
+                        cursor.as_deref(),
+                        &options,
+                        scan_budget,
+                        &CancellationToken::uncancelable(),
+                        |batch| {
+                            assert!(batch.required_reader_features.iter().any(|feature| {
+                                feature == format::DECIMAL_PREDICATE_COMPARISON_V1_FEATURE_FLAG
+                            }), "scan budget {scan_budget} lost the Native semantic reader contract");
+                            for row in batch.records {
+                                assert!(ids.insert(row.id));
+                            }
+                            Ok(true)
+                        },
+                    )
+                    .unwrap();
+                if result.completed {
+                    break;
+                }
+                assert!(result.resume_after_key > cursor);
+                cursor = result.resume_after_key;
+            }
+            assert_eq!(ids.len(), 23);
+        }
+        assert_eq!(db.get("items", "row-0000").unwrap().unwrap().id, "row-0000");
+    }
+
+    #[test]
+    fn native_semantic_reader_requirements_invalidate_prior_image_bindings() {
+        for flag in [
+            format::SQL_PARTITION_EXECUTION_V1_FEATURE_FLAG,
+            format::DECIMAL_PREDICATE_COMPARISON_V1_FEATURE_FLAG,
+            format::APPLICATION_UNIQUE_SCOPE_FEATURE_FLAG,
+        ] {
             let root = tempfile::tempdir().unwrap();
-            let db = populated(root.path());
-            let before = db.capture_range_image_bindings().unwrap();
-            let hash = db
-                .get("items", "row-0000")
-                .unwrap()
-                .unwrap()
-                .content_hash()
-                .unwrap();
+            let mut db = populated(root.path());
+            let old = db.capture_range_image_bindings().unwrap();
+            let acknowledgement = db.get("items", "row-0000").unwrap().unwrap();
             let sequence = db.last_commit_seq();
             let namespace = db.local_namespace_identity("items").unwrap();
-            activate(root.path()).unwrap();
-            assert!(
-                db.validate_range_image_bindings(&before).is_err(),
-                "{flag}: old capture remained usable after a semantic requirement changed"
-            );
-            let after = db.capture_range_image_bindings().unwrap();
-            assert!(after.reader_features().iter().any(|f| f == flag));
+            match flag {
+                format::SQL_PARTITION_EXECUTION_V1_FEATURE_FLAG => {
+                    db.enable_sql_partition_execution_v1().unwrap();
+                }
+                format::DECIMAL_PREDICATE_COMPARISON_V1_FEATURE_FLAG => {
+                    format::enable_decimal_predicate_comparison_v1(root.path()).unwrap();
+                }
+                format::APPLICATION_UNIQUE_SCOPE_FEATURE_FLAG => {
+                    db.enable_application_unique_scope().unwrap();
+                }
+                _ => unreachable!(),
+            }
+            assert!(db.validate_range_image_bindings(&old).is_err(), "{flag}");
+            db.schema_compatibility_fingerprint().unwrap();
+            let current = db.capture_range_image_bindings().unwrap();
+            assert!(current.reader_features().iter().any(|f| f == flag));
             for local in [
                 format::LOCAL_NAMESPACE_IDENTITY_FEATURE_FLAG,
                 format::RANGE_IMAGE_INSTALL_FEATURE_FLAG,
                 format::SERVER_PAGED_FEATURE_FLAG,
             ] {
-                assert!(!after.reader_features().iter().any(|f| f == local));
+                assert!(!current.reader_features().iter().any(|f| f == local));
             }
             assert_eq!(db.last_commit_seq(), sequence);
             assert_eq!(db.local_namespace_identity("items").unwrap(), namespace);
@@ -311,9 +428,83 @@ mod tests {
                     .unwrap()
                     .content_hash()
                     .unwrap(),
-                hash
+                acknowledgement.content_hash().unwrap()
             );
+            db.close().unwrap();
+            for _ in 0..2 {
+                let db = BicDb::open_with_config(root.path(), config()).unwrap();
+                db.schema_compatibility_fingerprint().unwrap();
+                let reopened = db.capture_range_image_bindings().unwrap();
+                assert!(reopened.reader_features().iter().any(|f| f == flag));
+                assert_eq!(db.local_namespace_identity("items").unwrap(), namespace);
+                assert_eq!(
+                    db.get("items", "row-0000")
+                        .unwrap()
+                        .unwrap()
+                        .content_hash()
+                        .unwrap(),
+                    acknowledgement.content_hash().unwrap()
+                );
+                db.close().unwrap();
+            }
         }
+    }
+
+    #[test]
+    fn range_image_bindings_pin_allocation_birth_separately_from_local_namespace() {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = populated(root.path());
+        db.activate_native_collection_birth_v1().unwrap();
+        assert_eq!(db.native_collection_birth_id("items").unwrap(), None);
+        db.create_collection("born").unwrap();
+        db.insert(
+            "born",
+            Record::new("birth_ACK").with_metadata(serde_json::json!({"value": 41})),
+        )
+        .unwrap();
+        let ack = db
+            .get("born", "birth_ACK")
+            .unwrap()
+            .unwrap()
+            .content_hash()
+            .unwrap();
+        // Protected image capture currently requires the reopened, purely
+        // paged representation, rather than a newly created live collection.
+        db.close().unwrap();
+        let mut db = BicDb::open_with_config(root.path(), config()).unwrap();
+        db.schema_compatibility_fingerprint().unwrap();
+        let bindings = db.capture_range_image_bindings().unwrap();
+        let namespace = db.local_namespace_identity("born").unwrap();
+        let birth = db.native_collection_birth_id("born").unwrap();
+        assert!(birth.is_some());
+        assert!(bindings.collections().iter().all(
+            |meta| meta.native_backing_birth_id.is_none() && meta.local_namespace_id.is_none()
+        ));
+        assert!(!bindings
+            .reader_features()
+            .iter()
+            .any(|f| f == format::NATIVE_COLLECTION_BIRTH_FEATURE_FLAG));
+        // White-box corruption control: a digest and local namespace alone
+        // must not validate a capture after its allocation identity changes.
+        db.collection_state_mut("born")
+            .unwrap()
+            .meta
+            .native_backing_birth_id = Some(Uuid::new_v4());
+        assert_eq!(db.local_namespace_identity("born").unwrap(), namespace);
+        assert!(db.validate_range_image_bindings(&bindings).is_err());
+        db.collection_state_mut("born")
+            .unwrap()
+            .meta
+            .native_backing_birth_id = birth;
+        db.validate_range_image_bindings(&bindings).unwrap();
+        assert_eq!(
+            db.get("born", "birth_ACK")
+                .unwrap()
+                .unwrap()
+                .content_hash()
+                .unwrap(),
+            ack
+        );
     }
 
     #[test]
@@ -351,6 +542,7 @@ mod tests {
             .unwrap();
         let record = Record::new("trusted-copy");
         let batch = RangeSnapshotBatch {
+            required_reader_features: Vec::new(),
             collection: "items".into(),
             range_id: range.id,
             range_epoch: range.epoch,

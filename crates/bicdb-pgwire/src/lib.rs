@@ -2752,7 +2752,7 @@ fn handle_frontend_message(
                 }
             }
         },
-        b'B' => match bind_message(&payload, &state.prepared, server).and_then(
+        b'B' => match bind_message_for_connection(&payload, server, state).and_then(
             |(portal_name, portal, has_parameters)| {
                 acquire_postgres_statement_snapshot(server, state, None, || {
                     has_parameters

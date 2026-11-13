@@ -1,0 +1,29 @@
+{
+  "scope": "Exact Git tree/blob equivalence of these runtime directories andworkspace manifests. Later sources add/change onlyqualificationexample, notthe productioncode covered by6c focused/livebroad. Versionis489inherited, notdelivery.",
+  "trees": {
+    "6c16e66e742bb575041aebce4086ebf434b9fe64": {
+      "crates/bicdb-core/src": "7e0483426863dd4a9495dbeaeefd1966b24f5192",
+      "crates/bicdb-page/src": "71791b6c5427a6a5bc92c94f3b95b27816b861d2",
+      "crates/bicdb-sql/src": "08fa5b56e03e97163b1371f4d04ad63c4b3cb1d9",
+      "crates/bicdb-pgwire/src": "5bd8d6706732313de96ed68025ecdf64daeefa70",
+      "Cargo.toml": "9417817c48ec70a66ea2f60b7e547d13dc67b9d1",
+      "Cargo.lock": "e0c4ea98b6d7f66b51283c5c3d2eccd929f5b165"
+    },
+    "fa7a2c593f2fc0aee77781c56a277a0f3a96ad11": {
+      "crates/bicdb-core/src": "7e0483426863dd4a9495dbeaeefd1966b24f5192",
+      "crates/bicdb-page/src": "71791b6c5427a6a5bc92c94f3b95b27816b861d2",
+      "crates/bicdb-sql/src": "08fa5b56e03e97163b1371f4d04ad63c4b3cb1d9",
+      "crates/bicdb-pgwire/src": "5bd8d6706732313de96ed68025ecdf64daeefa70",
+      "Cargo.toml": "9417817c48ec70a66ea2f60b7e547d13dc67b9d1",
+      "Cargo.lock": "e0c4ea98b6d7f66b51283c5c3d2eccd929f5b165"
+    },
+    "430067f7fed0b0fefacc6e2fef71e8aa27097c2c": {
+      "crates/bicdb-core/src": "7e0483426863dd4a9495dbeaeefd1966b24f5192",
+      "crates/bicdb-page/src": "71791b6c5427a6a5bc92c94f3b95b27816b861d2",
+      "crates/bicdb-sql/src": "08fa5b56e03e97163b1371f4d04ad63c4b3cb1d9",
+      "crates/bicdb-pgwire/src": "5bd8d6706732313de96ed68025ecdf64daeefa70",
+      "Cargo.toml": "9417817c48ec70a66ea2f60b7e547d13dc67b9d1",
+      "Cargo.lock": "e0c4ea98b6d7f66b51283c5c3d2eccd929f5b165"
+    }
+  }
+}

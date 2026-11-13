@@ -1,0 +1,85 @@
+{
+  "status": "all_requirements_passed",
+  "source": "8ed4a67b81c6e2287e95cf594597df7d9099e399",
+  "binary": "/root/bicdb-durability-s3/qualification-artifacts-debug/8ed4a67b81c6e2287e95cf594597df7d9099e399/partition_upgrade_probe",
+  "binary_sha256": "a1320a1db86ac10ad5ace291c8019238d1a7b3c888689ed071ab7747a8c92df3",
+  "old_source": "f43583da4c34209e810c5e6a8f5925831b2949a1",
+  "old_binary_sha256": "31f3f86f3d43c04e7dcfa060fde43f71d8271727219a561fa1b3b14f2d61b556",
+  "started_unix": 1794497852.8349733,
+  "cases": [
+    {
+      "mode": "embedded_memory",
+      "case": "parent_heap",
+      "database_copy": "/root/bicdb-durability-s3/partition-default-copy-pk-8ed4a67b/embedded_memory-parent_heap",
+      "exit": 0,
+      "stdout": "embedded_memory-parent_heap.stdout",
+      "stderr": "embedded_memory-parent_heap.stderr"
+    },
+    {
+      "mode": "embedded_memory",
+      "case": "bad_child_bound",
+      "database_copy": "/root/bicdb-durability-s3/partition-default-copy-pk-8ed4a67b/embedded_memory-bad_child_bound",
+      "exit": 0,
+      "stdout": "embedded_memory-bad_child_bound.stdout",
+      "stderr": "embedded_memory-bad_child_bound.stderr"
+    },
+    {
+      "mode": "embedded_memory",
+      "case": "independent_child_policy",
+      "database_copy": "/root/bicdb-durability-s3/partition-default-copy-pk-8ed4a67b/embedded_memory-independent_child_policy",
+      "exit": 0,
+      "stdout": "embedded_memory-independent_child_policy.stdout",
+      "stderr": "embedded_memory-independent_child_policy.stderr"
+    },
+    {
+      "mode": "server_paged",
+      "case": "parent_heap",
+      "database_copy": "/root/bicdb-durability-s3/partition-default-copy-pk-8ed4a67b/server_paged-parent_heap",
+      "exit": 0,
+      "stdout": "server_paged-parent_heap.stdout",
+      "stderr": "server_paged-parent_heap.stderr"
+    },
+    {
+      "mode": "server_paged",
+      "case": "bad_child_bound",
+      "database_copy": "/root/bicdb-durability-s3/partition-default-copy-pk-8ed4a67b/server_paged-bad_child_bound",
+      "exit": 0,
+      "stdout": "server_paged-bad_child_bound.stdout",
+      "stderr": "server_paged-bad_child_bound.stderr"
+    },
+    {
+      "mode": "server_paged",
+      "case": "independent_child_policy",
+      "database_copy": "/root/bicdb-durability-s3/partition-default-copy-pk-8ed4a67b/server_paged-independent_child_policy",
+      "exit": 0,
+      "stdout": "server_paged-independent_child_policy.stdout",
+      "stderr": "server_paged-independent_child_policy.stderr"
+    },
+    {
+      "mode": "embedded_memory",
+      "case": "old_reader_fence",
+      "candidate_exit": 0,
+      "old_reader_exit": 1,
+      "old_reader_accepted": false,
+      "byte_identity_preserved": true,
+      "changed_files": [],
+      "stdout": "embedded_memory-old-reader.stdout",
+      "stderr": "embedded_memory-old-reader.stderr"
+    },
+    {
+      "mode": "server_paged",
+      "case": "old_reader_fence",
+      "candidate_exit": 0,
+      "old_reader_exit": 1,
+      "old_reader_accepted": false,
+      "byte_identity_preserved": true,
+      "changed_files": [],
+      "stdout": "server_paged-old-reader.stdout",
+      "stderr": "server_paged-old-reader.stderr"
+    }
+  ],
+  "finished_unix": 1794497853.515883,
+  "originals_unchanged": true,
+  "old_acknowledged_rows": 14,
+  "scope": "Automatic SQL default admission: unchanged original6old482row/policy/boundrequirements plus2realoldreaderrefusal/byteidentitycases, bothstores,14ACKoriginalshashesuntouched. IndependentofexplicitAPI/focused/native/serverstartup/broad/application/HAqualification."
+}

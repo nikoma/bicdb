@@ -1,0 +1,25 @@
+{
+  "label": "native-birth-retained-wal-baseline",
+  "source": "4f81319c0f3588e808e87a0d26cf17c73698ed9c",
+  "base": "68de99c6450518e8d67d83b1118d2e7afa4e7374",
+  "repo": "/root/bicdb-sql-final-composition",
+  "scope": "Actual retained Native WAL batch and live exports after rename and same-name replacement. Original durable record must retain its write-time backing contract, not whichever same-name collection happens to exist now. Independent Native ACK/data custody and two reopens in both modes. Expected pre-fix failures; no portable authority/main/application qualification.",
+  "continue_on_failure": false,
+  "commands": [
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-core",
+      "--lib",
+      "native_collection_birth::wal_tests::",
+      "--",
+      "--nocapture",
+      "--test-threads=1"
+    ]
+  ]
+}

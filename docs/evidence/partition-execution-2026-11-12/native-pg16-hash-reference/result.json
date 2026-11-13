@@ -1,0 +1,11 @@
+{
+  "status": "actual_native_pg16_physical_hash_routes_collected",
+  "source": "Live PostgreSQL16.13 actual INSERT and tableoid, not locally computed hashes",
+  "counts": {
+    "integer": 12,
+    "text": 33,
+    "mixed": 50
+  },
+  "scope": "Only new scratchschema inside rolledback transaction. No original businessschema changes and no physical byteidentityclaim.",
+  "recorded_unix": 1794482798.0818264
+}

@@ -187,6 +187,14 @@ fn actual_native_floor_vetoes_lower_and_same_epoch_drift_after_copied_logical_ro
     );
     let diagnostic = root.path().join("deliberate-partial-restore-copy");
     copy_tree(&path, &diagnostic);
+    // Restore the stopped store through the authorized producer, so the
+    // copy opens and the serving floor, not directory custody, must veto.
+    assert_eq!(
+        crate::authorize_native_cold_restore(&path, &diagnostic).unwrap(),
+        crate::NativeColdRestoreOutcome::Rebound {
+            custody_generation: 1
+        }
+    );
     // Restore authentic EARLIER logical bytes in a COPY only. Native rows,
     // birth, native WAL, history and the genuine higher serving floor remain.
     std::fs::write(

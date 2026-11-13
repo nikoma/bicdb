@@ -1,0 +1,57 @@
+{
+  "label": "partition-identity-options-focused",
+  "source": "9caac16dc86c390e5c115c8c38fa6adde8fea5ef",
+  "base": "71d3be9206bc9670576ff741bad9c8d0d9d54854",
+  "repo": "/root/bicdb-partition-runtime",
+  "scope": "DeclaredtargetPG18.4 correction: actualNative18 imagea02db confirmsrecursiveidentityADDaccepted/sharedchildidentity. Reverted bothPG16-only productionchanges (be8 runtimeexacte036), retained oldreferences/failedtests, corrected two newidentityexpectations to18.4. ValidSQLSTART WITH100 INCREMENT BY5 unchanged: sqlparser0.62 expects fixedorder, nowtoken-source-preservingcanonicaloptionorderadapter; no literal/comment edits. Unit2 +all9childrequirements; recursiveidentity/serialdata+catalog/sequenceatomicpublicationstillopen and mayfailafterparsergate. Originalfullgoal ACTIVE; no release/deployment.",
+  "continue_on_failure": true,
+  "commands": [
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--no-fail-fast",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-sql",
+      "--lib",
+      "identity_sequence_options::tests",
+      "--",
+      "--nocapture",
+      "--test-threads=1"
+    ],
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--no-fail-fast",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-sql",
+      "--test",
+      "partition_child_schema",
+      "--",
+      "--nocapture",
+      "--test-threads=1"
+    ]
+  ],
+  "wait_units": [
+    "bicdb-partition-child-identity-focused"
+  ],
+  "required_receipts": [],
+  "allow_isolated_builds": [
+    {
+      "pid": 2111915,
+      "start_ticks": 163592680,
+      "repo": "/root/bicdb-durability-s3/repo-tc",
+      "target": "/root/bicdb-durability-s3/target-tc"
+    }
+  ],
+  "remote_repo_name": "repo-metadata-describe",
+  "remote_target_name": "target-metadata-describe",
+  "remote_lock_name": "metadata-describe-source-build.lock"
+}

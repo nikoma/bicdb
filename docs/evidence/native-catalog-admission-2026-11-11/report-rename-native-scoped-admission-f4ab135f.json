@@ -1,0 +1,106 @@
+{
+  "source": "f4ab135fef987fddd9fbc4c53c8c3d914a90005d",
+  "scope": "Native runtime collection-reservation foundation for scoped SQL admission. Active transaction incarnation bindings weak-registered; first bind and scope creation atomically ordered; both names+immutablebackings protected; only explicitlyscoped owner skips prior globalrename pending/lock gate. Default unscoped gate/grants retained. Leases release via exact token/commit/rollback/drop, snapshotrefresh retains. New4tests cover unrelatedACK bothstores, priorread/readlockdenial, latealreadybegun/newaccessdenial, foreigntokens,64races. SQLscoped visibility/Describe/metadata rowguard and producer integration NOT implemented; ce3SQLnegative remains failing and this is NOT delivery-ready. First2d source3/4 tests pass; late access oldname returnedCollectionNotFound beforebind due legacy policylookup; nativelegacy wrappers nowcheck missingname reservation onlyonNotFound, preserving existing policy/grant order. Same denial assertion retained, stronger futurewrite/readlock checks added. Localfmt caught missingbrace inunsubmitted aa7d helper; corrected before anynewremotebuild. No tests ran onaa7d. de640 all4commands PASS. This refinement separates registrymutex from scopeRWgate so ordinarybegin/drop neednoexclusive scopegate withzeroscope; resolves backingIDs beforegate toavoid collectionlock->registration inversion. Newowned-handle afterDBdrop unitcontrol. Needsrevalidation; noSQLintegrationclaim.",
+  "started_unix": 1794389254.8440065,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--test",
+        "catalog_scope_admission",
+        "--",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794389254.8442104,
+      "exit": 0,
+      "finished_unix": 1794389280.7007728
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--lib",
+        "catalog_admission::tests",
+        "--",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794389280.700975,
+      "exit": 0,
+      "finished_unix": 1794389307.3035975
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--test",
+        "collection_rename_admission",
+        "--test",
+        "collection_rename",
+        "--test",
+        "collection_rename_paged_stubs"
+      ],
+      "started_unix": 1794389307.303847,
+      "exit": 0,
+      "finished_unix": 1794389309.6348732
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--test",
+        "transaction_isolation",
+        "--test",
+        "mutation_grants"
+      ],
+      "started_unix": 1794389309.635335,
+      "exit": 0,
+      "finished_unix": 1794389310.6868732
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--lib",
+        "snapshot_reader_tests",
+        "--",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794389310.6870475,
+      "exit": 0,
+      "finished_unix": 1794389311.2773478
+    }
+  ],
+  "status": "focused_passed",
+  "finished_unix": 1794389311.2775564
+}

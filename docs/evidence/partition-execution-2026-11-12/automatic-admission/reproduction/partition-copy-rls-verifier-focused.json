@@ -1,0 +1,31 @@
+{
+  "label": "partition-copy-rls-verifier-focused",
+  "source": "c3588bf8b029ac8579f1336bf9d170d231648f29",
+  "base": "8ed4a67b81c6e2287e95cf594597df7d9099e399",
+  "repo": "/root/bicdb-partition-runtime",
+  "continue_on_failure": true,
+  "scope": "Test-only verifierpolicy correction: COPY INSERT/RLS/grant checks execute with no SELECT policy; after allowed/refused writes finish, owner explicitly grants verifier SELECT visibility, then unchangedACKpostconditionandrawleafcounts. Production/examples/Cargo exact8ed; previous8ed30oldstorecasesPASS, focused96PASS1verificationfixtureFAIL retained. Nativefcf6 andremaining94SQLfocusedtests reusedsource-exact; rerunCOPY3.",
+  "commands": [
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-sql",
+      "--test",
+      "partition_copy",
+      "--",
+      "--nocapture",
+      "--test-threads=1"
+    ]
+  ],
+  "wait_units": [],
+  "allow_isolated_builds": [],
+  "required_receipts": [],
+  "remote_repo_name": "repo-metadata-describe",
+  "remote_target_name": "target-metadata-describe",
+  "remote_lock_name": "metadata-describe-source-build.lock"
+}

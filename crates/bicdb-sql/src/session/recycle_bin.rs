@@ -52,6 +52,12 @@ pub(crate) fn is_recycle_bin_name(name: &str) -> bool {
 /// their durable bin entry; ambiguous states are preserved for diagnosis.
 pub fn recover_interrupted_recycle_bin_renames(db: &mut BicDb) -> Result<usize> {
     db.check_recovery_state()?;
+    // The source's durable stream owns these decisions. A hot standby must
+    // retain live intents across restart; it cannot repair them independently.
+    // Promotion restarts the host as a primary before accepting writes.
+    if db.is_standby_role() {
+        return Ok(0);
+    }
     let result = recover_interrupted_recycle_bin_renames_inner(db);
     // A concurrent/late fence wins even over an empty result or a structural
     // ambiguity diagnostic: startup must not continue with an unsafe store.
@@ -59,17 +65,71 @@ pub fn recover_interrupted_recycle_bin_renames(db: &mut BicDb) -> Result<usize> 
     result
 }
 
+/// Preserve an undecided source prefix without exposing its intermediate SQL
+/// catalog. This conservative standby fence is separate from the prototype's
+/// still-open scoped admission work; native replication must keep running.
+pub(crate) fn ensure_replica_catalog_ready(db: &BicDb) -> Result<()> {
+    if db.is_standby_role() && super::recycle_bin_journal::has_pending_recovery(db)? {
+        return Err(SqlError::data_exception(
+            "55000",
+            "replica SQL catalog is awaiting the primary's DDL decision",
+            None,
+        ));
+    }
+    Ok(())
+}
+
+pub(crate) fn ensure_replica_catalog_statement_ready(
+    db: &BicDb,
+    statement: &Statement,
+) -> Result<()> {
+    if matches!(
+        statement,
+        Statement::StartTransaction { .. }
+            | Statement::Commit { .. }
+            | Statement::Rollback { .. }
+            | Statement::Savepoint { .. }
+            | Statement::ReleaseSavepoint { .. }
+            | Statement::Set(_)
+            | Statement::Reset(_)
+            | Statement::ShowVariable { .. }
+    ) {
+        return Ok(());
+    }
+    ensure_replica_catalog_ready(db)
+}
+
 /// Finish only durably decided purges while the host owns exclusive catalog
 /// access. Unlike startup recovery, this never reverses a live move intent.
 /// Native committers call it after their transaction is durable and released.
+/// Also reclaims one bounded batch of decided rename images; live intents are
+/// retained. The return value remains the number of completed recycle purges.
 pub fn finish_committed_recycle_bin_purges(db: &mut BicDb) -> Result<usize> {
     db.check_recovery_state()?;
     let result = super::recycle_bin_journal::recover_purges(db);
     db.check_recovery_state()?;
+    if result.is_ok() {
+        super::rename_journal::collect_committed_images_batch(db, 128)?;
+    }
     result
 }
 
 fn recover_interrupted_recycle_bin_renames_inner(db: &mut BicDb) -> Result<usize> {
+    let completed = list_recycle_bin(db)?
+        .into_iter()
+        .map(|entry| entry.bin_name)
+        .collect::<BTreeSet<_>>();
+    let legacy_move = db.collections().iter().any(|meta| {
+        is_recycle_bin_name(&meta.name)
+            && uuid::Uuid::parse_str(&meta.name[BIN_NAME_PREFIX.len()..]).is_ok()
+            && !completed.contains(&meta.name)
+    });
+    if !legacy_move && !super::recycle_bin_journal::has_pending_recovery(db)? {
+        // Pure image reclamation never reverses live catalog state. Keep
+        // clean gateway/profile checks compatible with unrelated native work.
+        super::rename_journal::collect_orphans(db)?;
+        return Ok(0);
+    }
     db.check_catalog_recovery_quiescent()?;
     let journal_repairs = super::recycle_bin_journal::recover(db)?;
     let completed = list_recycle_bin(db)?

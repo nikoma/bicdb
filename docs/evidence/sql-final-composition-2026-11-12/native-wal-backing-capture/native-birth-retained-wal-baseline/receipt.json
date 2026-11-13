@@ -1,0 +1,29 @@
+{
+  "source": "4f81319c0f3588e808e87a0d26cf17c73698ed9c",
+  "scope": "Actual retained Native WAL batch and live exports after rename and same-name replacement. Original durable record must retain its write-time backing contract, not whichever same-name collection happens to exist now. Independent Native ACK/data custody and two reopens in both modes. Expected pre-fix failures; no portable authority/main/application qualification.",
+  "started_unix": 1794532459.753947,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--lib",
+        "native_collection_birth::wal_tests::",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794532459.754186,
+      "exit": 101,
+      "finished_unix": 1794532520.177511
+    }
+  ],
+  "status": "failed",
+  "finished_unix": 1794532520.1777384
+}

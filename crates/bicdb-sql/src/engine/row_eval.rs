@@ -2129,13 +2129,9 @@ impl<'db> SqlEngine<'db> {
         expr: &Expr,
     ) -> Option<String> {
         if let Expr::CompoundIdentifier(parts) = unwrap_nested_expr(expr) {
-            if let [.., qualifier, _] = parts.as_slice() {
-                let inner = qualifier.value.eq_ignore_ascii_case(alias)
-                    || qualifier.value.eq_ignore_ascii_case(table)
-                    || table
-                        .rsplit('.')
-                        .next()
-                        .is_some_and(|short| qualifier.value.eq_ignore_ascii_case(short));
+            if parts.len() >= 2 {
+                let names = parts.iter().map(ident_value).collect::<Vec<_>>();
+                let inner = target_record_field_from_parts(table, alias, schema, &names).is_some();
                 if !inner {
                     return row_columns_expr_pg_type(
                         self.db_ref(),

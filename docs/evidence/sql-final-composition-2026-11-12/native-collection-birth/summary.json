@@ -1,0 +1,142 @@
+{
+  "native-backing-birth-focused-v1": {
+    "source": "09b42f4d063f52d176a1675cd5086e71526e1538",
+    "step_exits": [
+      0,
+      101
+    ],
+    "parent_harness_results": []
+  },
+  "native-backing-birth-focused-v2": {
+    "source": "5bf80715ed86e7ff55852b86932d747ee8eb3b39",
+    "step_exits": [
+      0,
+      0,
+      0,
+      101
+    ],
+    "parent_harness_results": [
+      {
+        "outcome": "ok",
+        "passed": 4,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "outcome": "FAILED",
+        "passed": 5,
+        "failed": 1,
+        "ignored": 0
+      }
+    ]
+  },
+  "native-backing-birth-focused-v3": {
+    "source": "a7571bd95db36b46924f242e3772cc7d9e10e71d",
+    "step_exits": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      101
+    ],
+    "parent_harness_results": [
+      {
+        "outcome": "ok",
+        "passed": 4,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "outcome": "ok",
+        "passed": 6,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "outcome": "ok",
+        "passed": 8,
+        "failed": 0,
+        "ignored": 1
+      },
+      {
+        "outcome": "FAILED",
+        "passed": 0,
+        "failed": 1,
+        "ignored": 0
+      }
+    ]
+  },
+  "native-backing-birth-schema-refresh-baseline": {
+    "source": "d2c85d9879b2bb895bf87aecb68ba749613b19d3",
+    "step_exits": [
+      101
+    ],
+    "parent_harness_results": [
+      {
+        "outcome": "FAILED",
+        "passed": 0,
+        "failed": 1,
+        "ignored": 0
+      }
+    ]
+  },
+  "native-backing-birth-focused-v4": {
+    "source": "68de99c6450518e8d67d83b1118d2e7afa4e7374",
+    "step_exits": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      101
+    ],
+    "parent_harness_results": [
+      {
+        "outcome": "ok",
+        "passed": 5,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "outcome": "ok",
+        "passed": 6,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "outcome": "ok",
+        "passed": 8,
+        "failed": 0,
+        "ignored": 1
+      },
+      {
+        "outcome": "ok",
+        "passed": 3,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "outcome": "FAILED",
+        "passed": 0,
+        "failed": 1,
+        "ignored": 0
+      }
+    ]
+  },
+  "qualification": {
+    "source": "68de99c6450518e8d67d83b1118d2e7afa4e7374",
+    "core_focused_passed": 22,
+    "core_focused_failed": 0,
+    "core_historical_ignored": 1,
+    "unchanged_SQL_promotion_positive_passed": 0,
+    "unchanged_SQL_promotion_positive_failed": 1,
+    "alltargets_Core_SQL_wire_compile_passed": true,
+    "portable_origin_producer_implemented": false,
+    "application_qualified": false,
+    "main_delivered": false,
+    "release_published": false,
+    "deployed": false
+  }
+}

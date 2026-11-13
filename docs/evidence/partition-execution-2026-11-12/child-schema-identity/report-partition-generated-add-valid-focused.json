@@ -1,0 +1,36 @@
+{
+  "source": "372cbf03d17a88d6a37169796ebc7f5f2b369d69",
+  "scope": "ActualtargetPG18.4 recursive SERIAL/IDENTITY: pure newownedsequence allocation during complete row/schema validation, one Native data/schema/sequence/defaultACL/certificate decision, complete retryableforest+auxiliary undo. Newpopulatedserial+singleNativecommit, exhaustednewidentity no changes/tworeopens, duplicate global/schema defaultACL+savepointundo controls; all prior9child and2parser tests unchanged. No broad/fullapplication/HA deliveryclaim. Core remains exactcc84 unchanged. ActualNativePG18v1 referencefixtureinvalidMIN1==MAX1, retainedfailed. V2explicitMIN0passestarget2200H/exactACKpreservation+rollback+defaultACL+sharedserial controls. OnlynewexhaustionfixtureaddsMIN0; productionexact8739, allrequiredassertionspreserved. Docsrecordtargetcorrectionandmain489independentmerge; no489integrationqualificationyet.",
+  "started_unix": 1794507132.6986494,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--no-fail-fast",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "partition_child_schema",
+        "--test",
+        "partition_schema_changes",
+        "--test",
+        "primary_key_index_compatibility",
+        "--test",
+        "partition_statement_batches",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794507132.699075,
+      "exit": 101,
+      "finished_unix": 1794507158.619687
+    }
+  ],
+  "status": "failed",
+  "finished_unix": 1794507158.620973
+}

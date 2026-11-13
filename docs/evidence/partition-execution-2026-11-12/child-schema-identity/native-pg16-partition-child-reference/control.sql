@@ -1,0 +1,42 @@
+\set ON_ERROR_STOP on
+BEGIN;
+CREATE SCHEMA partition_child_reference;
+SET LOCAL search_path=partition_child_reference,pg_catalog;
+CREATE TABLE p(k INT PRIMARY KEY,payload TEXT DEFAULT 'parent',qty INT DEFAULT 10) PARTITION BY RANGE(k);
+CREATE TABLE low PARTITION OF p FOR VALUES FROM(0) TO(10);
+CREATE TABLE high(k INT PRIMARY KEY,payload TEXT DEFAULT 'high',qty INT DEFAULT 20);
+ALTER TABLE p ATTACH PARTITION high FOR VALUES FROM(10) TO(20);
+ALTER TABLE low ALTER COLUMN payload SET DEFAULT 'low';
+INSERT INTO low(k) VALUES(1);
+INSERT INTO p(k) VALUES(2);
+INSERT INTO high(k) VALUES(11);
+SELECT 'initial',k,payload,qty FROM p ORDER BY k;
+ALTER TABLE p ADD COLUMN note TEXT DEFAULT 'new';
+INSERT INTO low(k) VALUES(3);
+INSERT INTO high(k) VALUES(12);
+SELECT 'after_add',k,payload,qty,note FROM p ORDER BY k;
+ALTER TABLE p ALTER COLUMN payload TYPE VARCHAR(40) USING payload||'!';
+INSERT INTO low(k) VALUES(4);
+INSERT INTO high(k) VALUES(13);
+SELECT 'after_type',k,payload,qty,note FROM p ORDER BY k;
+ALTER TABLE p ALTER COLUMN qty SET DEFAULT 30;
+INSERT INTO low(k) VALUES(5);
+INSERT INTO high(k) VALUES(14);
+SELECT 'after_parent_default',k,payload,qty,note FROM p ORDER BY k;
+ALTER TABLE p ALTER COLUMN qty DROP DEFAULT;
+INSERT INTO low(k) VALUES(6);
+INSERT INTO high(k) VALUES(15);
+SELECT 'after_parent_drop_default',k,payload,qty,note FROM p ORDER BY k;
+CREATE TABLE keyless(k INT,payload INT) PARTITION BY RANGE(k);
+CREATE TABLE ownkey(k INT,payload INT PRIMARY KEY);
+ALTER TABLE keyless ATTACH PARTITION ownkey FOR VALUES FROM(0) TO(10);
+INSERT INTO ownkey VALUES(1,10);
+DO $$BEGIN
+ BEGIN
+  INSERT INTO ownkey VALUES(2,10);
+  RAISE EXCEPTION 'independent child PK was ignored';
+ EXCEPTION WHEN unique_violation THEN RAISE NOTICE 'independent child PK refused %',SQLSTATE;
+ END;
+END$$;
+SELECT 'ownkey',contype,conname FROM pg_constraint WHERE conrelid='ownkey'::regclass ORDER BY conname;
+ROLLBACK;

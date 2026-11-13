@@ -1,0 +1,38 @@
+{
+  "source": "82a8311156e2293a92e7cf9c1ffd70d1df92d57a",
+  "scope": "Explicit frozen debugserver fornewrealretainedrename/certificatepublication fixes. Requires currentpositiveandrelatedchecksPASS; unchangedoriginal95diagnostic separate anddoesnotreplacefull1464 orportableorigin/HAqualification. Inherited490developmentversion,no CLI/release/deploy/P2promotion/spend.",
+  "started_unix": 1794527490.4983208,
+  "steps": [
+    {
+      "command": [
+        "python3",
+        "scripts/bump-version.py",
+        "--check"
+      ],
+      "started_unix": 1794527490.4985309,
+      "exit": 0,
+      "finished_unix": 1794527490.5725813
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "build",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-pgwire",
+        "--example",
+        "oracle_server"
+      ],
+      "started_unix": 1794527490.5727508,
+      "exit": 0,
+      "finished_unix": 1794527494.9517777
+    }
+  ],
+  "status": "focused_passed",
+  "binary": "/root/bicdb-durability-s3/qualification-artifacts-debug/82a8311156e2293a92e7cf9c1ffd70d1df92d57a/oracle_server",
+  "binary_sha256": "9d66171db1afa6a5d3bf5257c7918bf3c59b44395812d56c74a33c6ddc762f7c",
+  "finished_unix": 1794527495.3542662
+}

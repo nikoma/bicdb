@@ -10605,8 +10605,9 @@ fn pgwire_buffered_transaction_replays_split_schema_chunks() {
         &mut client,
         r#"
         CREATE TABLE analytics_cycle_analytics_issue_stage_events (
-            id bigint PRIMARY KEY,
-            partition_id bigint NOT NULL
+            id bigint,
+            partition_id bigint NOT NULL,
+            PRIMARY KEY(id, partition_id)
         ) PARTITION BY HASH (partition_id);
 
         ALTER INDEX analytics_cycle_analytics_issue_stage_events_pkey

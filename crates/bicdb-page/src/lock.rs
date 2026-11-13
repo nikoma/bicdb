@@ -71,6 +71,41 @@ struct DirectoryIdentity {
     inode: u64,
 }
 
+/// OS-observed physical directory birth data, not database or peer authority.
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
+pub struct DirectoryPhysicalBirth {
+    device: u64,
+    inode: u64,
+    created_seconds: u64,
+    created_nanos: u32,
+}
+
+/// Read-only refusal preflight. A positive observation acquires no claim.
+pub fn physical_directory_birth(dir: &Path) -> Result<Option<DirectoryPhysicalBirth>> {
+    #[cfg(unix)]
+    {
+        let metadata = std::fs::metadata(dir).map_err(|e| PageError::io(dir, e))?;
+        let created = metadata
+            .created()
+            .map_err(|e| PageError::io(dir, e))?
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_err(|e| {
+                PageError::io(dir, std::io::Error::new(std::io::ErrorKind::InvalidData, e))
+            })?;
+        Ok(Some(DirectoryPhysicalBirth {
+            device: metadata.dev(),
+            inode: metadata.ino(),
+            created_seconds: created.as_secs(),
+            created_nanos: created.subsec_nanos(),
+        }))
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = dir;
+        Ok(None)
+    }
+}
+
 #[cfg(unix)]
 fn process_locks() -> &'static Mutex<HashSet<DirectoryIdentity>> {
     static LOCKS: OnceLock<Mutex<HashSet<DirectoryIdentity>>> = OnceLock::new();
@@ -135,6 +170,29 @@ impl DirectoryLock {
     /// Path of the lock file, for diagnostics.
     pub fn path(&self) -> &Path {
         &self.path
+    }
+
+    /// Identity of this actual claimed directory. Refuse path replacement
+    /// while the old directory's lock remains held.
+    pub fn physical_birth(&self) -> Result<Option<DirectoryPhysicalBirth>> {
+        let dir = self
+            .path
+            .parent()
+            .expect("store lock has a parent directory");
+        #[cfg(unix)]
+        {
+            let metadata = std::fs::metadata(dir).map_err(|e| PageError::io(dir, e))?;
+            if metadata.dev() != self.identity.device || metadata.ino() != self.identity.inode {
+                return Err(PageError::io(
+                    dir,
+                    std::io::Error::new(
+                        std::io::ErrorKind::InvalidData,
+                        "claimed directory was replaced",
+                    ),
+                ));
+            }
+        }
+        physical_directory_birth(dir)
     }
 }
 

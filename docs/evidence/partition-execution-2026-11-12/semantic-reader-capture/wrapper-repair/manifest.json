@@ -1,0 +1,59 @@
+[
+  {
+    "path": "failed-core-wrapper-receipt.json",
+    "bytes": 2434,
+    "sha256": "0c1514560bb4701a8ae9983d4f4404ac1ad58153657dc9529b5e3f84ef0aad71",
+    "raw_sha256": "0c1514560bb4701a8ae9983d4f4404ac1ad58153657dc9529b5e3f84ef0aad71",
+    "raw_bytes": 2434,
+    "remote_path": "report-semantic-reader-current-core-broad.json"
+  },
+  {
+    "path": "failed-core-wrapper-original.log.gz",
+    "bytes": 35035,
+    "sha256": "8d3e1e9eee595e086754caaa79f7ad6d3cc6cc9d2be4433ee2553fc4aa26d4f7",
+    "raw_sha256": "4a00af4b12f115cd8c670501e035a1d341e89d2029adae538ca447b4bdfd19ba",
+    "raw_bytes": 297660,
+    "remote_path": "tc-step-semantic-reader-current-core-broad.log"
+  },
+  {
+    "path": "terminal-dependency-custody.json",
+    "bytes": 794,
+    "sha256": "5d2e1a00ebfeb1fe91ea95fd3fc043c06aa170e4cc089f81e61166add2f7a557",
+    "raw_sha256": "5d2e1a00ebfeb1fe91ea95fd3fc043c06aa170e4cc089f81e61166add2f7a557",
+    "raw_bytes": 794,
+    "remote_path": "host-control/semantic-reader-wrapper-failure-custody.json"
+  },
+  {
+    "path": "never-launched-application-controller-receipt.json",
+    "bytes": 424,
+    "sha256": "b04da01c09db782021759d15926ea97db807bd2cb3cc4895a5dc145305991213",
+    "raw_sha256": "b04da01c09db782021759d15926ea97db807bd2cb3cc4895a5dc145305991213",
+    "raw_bytes": 424,
+    "remote_path": "report-private-partition-e8c426a7-mtable95.json"
+  },
+  {
+    "path": "semantic-reader-current-core-broad.json",
+    "bytes": 3446,
+    "sha256": "7f6985499b53c271f9ec34cb0409d1b55c55f60f7dc19c69c01a16e2486013b4"
+  },
+  {
+    "path": "semantic-reader-current-core-broad-v2.json",
+    "bytes": 3848,
+    "sha256": "04a080403b7bafef36cd8a0b9b69cdfb1d54e6b624e6b5eefa73e755015dabd3"
+  },
+  {
+    "path": "partition-original-mtable95-probe-build-v2.json",
+    "bytes": 1667,
+    "sha256": "362dfb9976e355702f89dd43b04f9673c1d0fb06993f1f316c3eb0cd4ff651b4"
+  },
+  {
+    "path": "run_private_partition_mtable_probe_v6.py",
+    "bytes": 7336,
+    "sha256": "442c1a6ed8e470fc7e47f7107681d842c41e5ff754887787033dfc4938629693"
+  },
+  {
+    "path": "private-partition-e8c426a7-mtable95-v2-launch.json",
+    "bytes": 727,
+    "sha256": "55793f33b74124fd2a884b17c4f3085004a2859fc9128a99160b1051b42da1cd"
+  }
+]

@@ -1,0 +1,201 @@
+{
+  "source": "7138ffa974f89ba31606d385af5a36ba44c529bb",
+  "scope": "Private merge of verified remote main 1.0.465-beta ac5e64ee into retained rename/host work, merge 8ebc05d3. Only conflict schema_meta parse: preserve main Boolean balancing, private TABLE lowering, parser safety checks. Add joint TABLE-CTE plus 21/100/1000 appended terms test, original generated-filter assertions unchanged. Native PostgreSQL16.13 three reference cases pass. Validate final merged source version, main read-committed exact-row and SQL snapshot schedules, bounded host actors, permissions, both parser features, rename/journal/replication integrations. Full SQL scoped producer, metadata row resources, logical type/routine/Describe and durable pending-journal inventory remain OPEN. Not broad workspace, application or VM qualification. Private source version now465; no final merge version reserved.",
+  "started_unix": 1794395588.5699525,
+  "steps": [
+    {
+      "command": [
+        "python3",
+        "scripts/bump-version.py",
+        "--check"
+      ],
+      "started_unix": 1794395588.5700552,
+      "exit": 0,
+      "finished_unix": 1794395588.6171086
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "generated_boolean_filters",
+        "--test",
+        "read_committed_lock_refresh",
+        "--test",
+        "version_identity"
+      ],
+      "started_unix": 1794395588.6172185,
+      "exit": 0,
+      "finished_unix": 1794395696.5610235
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--test",
+        "paged_row_reservations",
+        "--test",
+        "collection_rename_admission"
+      ],
+      "started_unix": 1794395696.5612583,
+      "exit": 0,
+      "finished_unix": 1794395722.390752
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--test",
+        "catalog_host_scope",
+        "--test",
+        "catalog_scope_admission",
+        "--",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794395722.390983,
+      "exit": 0,
+      "finished_unix": 1794395724.703226
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "rename_default_privileges"
+      ],
+      "started_unix": 1794395724.7034605,
+      "exit": 0,
+      "finished_unix": 1794395728.5065475
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--lib",
+        "session::rename_",
+        "--",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794395728.5067945,
+      "exit": 0,
+      "finished_unix": 1794395888.407804
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "rename_pending_composites",
+        "--test",
+        "table_rename_views",
+        "--test",
+        "schema_table_rename",
+        "--test",
+        "session_statement_snapshots",
+        "--test",
+        "read_only_transactions"
+      ],
+      "started_unix": 1794395888.408034,
+      "exit": 0,
+      "finished_unix": 1794395909.45395
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "sql",
+        "alter_default_privileges",
+        "--",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794395909.454237,
+      "exit": 0,
+      "finished_unix": 1794395914.5809584
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--test",
+        "mutation_grants",
+        "--test",
+        "transaction_isolation"
+      ],
+      "started_unix": 1794395914.5811684,
+      "exit": 0,
+      "finished_unix": 1794395915.7009802
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--test",
+        "live_replication",
+        "--test",
+        "replication_durable_frames",
+        "--test",
+        "replication_journal"
+      ],
+      "started_unix": 1794395915.7012775,
+      "exit": 0,
+      "finished_unix": 1794395944.5002737
+    }
+  ],
+  "status": "focused_passed",
+  "finished_unix": 1794395944.5006433
+}

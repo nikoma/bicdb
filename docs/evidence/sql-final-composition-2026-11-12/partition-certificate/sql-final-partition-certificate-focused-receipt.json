@@ -1,0 +1,114 @@
+{
+  "source": "d7b6bfd3b899077322b9ebcc98a16f5f568dfdb3",
+  "scope": "Fix actualcombinedSQLpartitionpositive0P1F: session-owned schema write must route schema+certificate through atomic Native publication while retaining catalogrecordmutation access and existingundo/defaultACL behavior. Unchanged positive replica/read/promotion and relatedpartitionDDL regressions; original undecidedrenamepromotionremainsrequired andunimplementedportablebirth/resolver failure isnot hidden. Focused only, no fullcurrentbroad/application/physicalHA/capacity/release/mergeclaim. Originaltests/assertions/waits preserved;goalactive/P2off/no new spend.",
+  "started_unix": 1794521870.487253,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--no-fail-fast",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "partition_replication_reader",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794521870.487396,
+      "exit": 0,
+      "finished_unix": 1794521993.7713552
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--no-fail-fast",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "partition_execution",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794521993.7715921,
+      "exit": 0,
+      "finished_unix": 1794522001.9070961
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--no-fail-fast",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "partition_child_schema",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794522001.9073546,
+      "exit": 0,
+      "finished_unix": 1794522023.4050837
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--no-fail-fast",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "rollback_index_admission",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794522023.4052615,
+      "exit": 0,
+      "finished_unix": 1794522028.7329297
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--no-fail-fast",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--lib",
+        "session::rename_table::tests::promoted_primary_recovers_an_undecided_replicated_rename_before_sql_writes",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794522028.7331412,
+      "exit": 101,
+      "finished_unix": 1794522152.5388093
+    }
+  ],
+  "status": "failed",
+  "finished_unix": 1794522152.5432293
+}

@@ -1,0 +1,29 @@
+{
+  "source": "606692adc80390fda471398e8050d85bb505c825",
+  "scope": "Regression baseline only: same f2bff runtime plus one new ordering test. Actual catalog.write EIO preserves pending target on disk after committed creation; actual WAL rewrite cut_copy EIO during reopen must not let metadata publish completed provenance before WAL is verified. Expect original pending-marker invariant to expose ordering defect, keep evidence; no pass qualification.",
+  "started_unix": 1794542686.3964422,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--lib",
+        "db::native_import_origins::tests::recovery_never_publishes_pending_origin_before_its_wal_rewrite_sync",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794542686.3966963,
+      "exit": 101,
+      "finished_unix": 1794542751.3176236
+    }
+  ],
+  "status": "failed",
+  "finished_unix": 1794542751.3644564
+}

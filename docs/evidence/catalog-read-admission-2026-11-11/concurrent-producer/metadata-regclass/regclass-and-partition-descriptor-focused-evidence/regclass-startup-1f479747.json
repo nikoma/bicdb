@@ -1,0 +1,28 @@
+{
+  "source": "1f47974702aed116e82a0c15df5cad6c72e49646",
+  "scope": "Sameproductionanddependencies ase637 (proofretained), onlynewembeddingtestfixture addsdocumentedstartupinitializerbeforeBEGIN; originalSQL/assertionsbyteidentical frome637. Reuse46existingSQLpasses ase637; focused3regclass tests plusfullcatalogwire/readOnly/ACL/protocol anddebugserverbuild. Prior e63748PASS1FAIL (teststartupcompaction) preserved, notproductpass. NativePG16PKcontrol15+1,0,1,0PASS. Noapp/provider/JAR/timeouts/productionflagschanges. OwnS3metadatasource/target/lock;standard481builduntouched.",
+  "started_unix": 1794459005.5878918,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "regclass_search_path",
+        "--",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794459005.5880733,
+      "exit": 101,
+      "finished_unix": 1794459012.1180816
+    }
+  ],
+  "status": "failed",
+  "finished_unix": 1794459012.1183538
+}

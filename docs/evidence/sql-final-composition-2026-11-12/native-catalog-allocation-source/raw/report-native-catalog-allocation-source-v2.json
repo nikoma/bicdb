@@ -1,0 +1,29 @@
+{
+  "source": "fe0ebfae874aa04a04f0152626822d9e0b5e0609",
+  "scope": "Actual Native source allocation producer first batch. Six new regressions cover both storage modes, creation before data, two exports/two opens, no late or forged-row adoption, same-name reuse, actual WAL write/sync EIO, marker-clear EIO and retained-WAL feature fencing. Not target identity mapping, imported authority, independent process/KVM or SQL promotion acceptance. Previous v1 failed to compile two test-only moved StorageMode values; no assertions ran. Preserve that evidence. Retry also holds actual database mutation admission.",
+  "started_unix": 1794540961.0005474,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--lib",
+        "db::native_catalog_allocations::tests",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794540961.000792,
+      "exit": 101,
+      "finished_unix": 1794541020.6561785
+    }
+  ],
+  "status": "failed",
+  "finished_unix": 1794541020.6563845
+}

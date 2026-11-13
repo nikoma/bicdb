@@ -1,0 +1,4 @@
+CREATE SCHEMA
+SET
+CREATE TABLE
+{"version" : "18.4 (Debian 18.4-1.pgdg13+1)", "names" : ["parent_k_not_null","parent_v_not_null"], "types" : ["n","n"], "provider_count" : 2, "excluding_not_null_count" : 0}

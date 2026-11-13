@@ -1,0 +1,72 @@
+{
+  "source": "0d020d5c8c11e8456dd0b23841ae64d97b0c4434",
+  "scope": "Private final local-consumer/profile integration focus after actual72da negative0pass2fail and aee80da2 fivecommands6testsPASS. All rename journal controls and trusted profile initialization before BEGIN, repeated profile validation with live unrelated Native owner, SSI CatalogBinding incarnation integration and existing catalog reader closure. Existing original assertions retained; direct Native owner fixtures now initialize physical identities at trusted pre-transaction boundary. No global producer/recovery admission relaxed. Streamed localUUID translation remains missing, so no replication/promotion/application qualification claimed. Actual6fa all13journal tests PASS; new profile control1PASS1FAIL because it assumed full Oracle startup profile initializer admits live Native owners. Existing simple_case_migration::ensure requires quiescence before ready-marker validation. Keep production boundary unchanged; assert namespace helper is idempotent with live owners, PostgreSQL profile succeeds, Oracle full startup migration explicitly refuses then succeeds after owner ends. This is correction of new fixture assumption, not a change to original application assertions or relaxation of runtime admission. 65 final runtime journal13 + profile2 PASS; Core test compile then stopped because newly integrated UID RangeSnapshotBatch fixture lacked private required_reader_features field. Add empty capability set to that fixture only; production runtime unchanged from65. Reuse65SQLresults; run remaining Core SSI/catalog + SQLcatalog closure.",
+  "started_unix": 1794426848.8933706,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--lib",
+        "sql_serializable",
+        "--",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794426848.893592,
+      "exit": 0,
+      "finished_unix": 1794426887.3657138
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--lib",
+        "catalog_admission",
+        "--",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794426887.3659668,
+      "exit": 0,
+      "finished_unix": 1794426887.5960507
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "catalog_read_admission",
+        "--test",
+        "catalog_read_owner",
+        "--test",
+        "catalog_read_routine_transitions",
+        "--test",
+        "catalog_default_dependencies",
+        "--test",
+        "catalog_default_and_index_columns"
+      ],
+      "started_unix": 1794426887.5963354,
+      "exit": 0,
+      "finished_unix": 1794427050.4904158
+    }
+  ],
+  "status": "focused_passed",
+  "finished_unix": 1794427050.4907386
+}

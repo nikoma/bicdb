@@ -185,6 +185,14 @@ pub(crate) fn rewrite_column(
     old_ids: Vec<Uuid>,
 ) -> Result<()> {
     let schema_record = prepare_schema_record(db, schema)?;
+    let certificate = crate::session::partition_admission::certificate_for_catalog_changes(
+        db,
+        &[(
+            SCHEMA_COLLECTION,
+            schema.name.clone(),
+            Some(schema_record.clone()),
+        )],
+    )?;
     let tx = db.begin_transaction()?;
     let mut session = SqlSession::new(db).with_pending_transaction(tx);
     if is_column(old_column) {
@@ -205,6 +213,12 @@ pub(crate) fn rewrite_column(
         .expect("owned transaction");
     tx.batch_insert(table, records)?;
     tx.insert(SCHEMA_COLLECTION, schema_record)?;
+    if let Some(certificate) = certificate {
+        tx.insert(
+            crate::session::partition_admission::CERTIFICATE_COLLECTION,
+            certificate,
+        )?;
+    }
     drop(session);
     tx.commit()?;
     cache_saved_schema(db, schema);

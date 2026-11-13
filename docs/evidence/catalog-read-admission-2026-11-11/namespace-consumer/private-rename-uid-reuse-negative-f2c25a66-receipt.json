@@ -1,0 +1,28 @@
+{
+  "source": "f2c25a66db145b7d5cb16b9ae00af78cb6429a67",
+  "scope": "Private test-only negative for stale rename/row images after drop/recreate with the same physical storage alias. Integrates a700 namespace foundation and root transaction delivery parents; no producer gate relaxed and no recovery behavior changed. Both original fail-closed assertions expected to fail against storage-string consumer. Full fsync, both storage modes when assertions reached. Not main474 or application qualification. First35e attempt stopped at integration compile E0308 (SSI Arc vs CatalogBinding), no tests executed; adapt SSI identity to existing binding.incarnation only, rerun unchanged negative assertions.",
+  "started_unix": 1794425659.7829125,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--lib",
+        "session::rename_journal::tests::reused_",
+        "--",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794425659.783197,
+      "exit": 101,
+      "finished_unix": 1794425728.3629913
+    }
+  ],
+  "status": "failed",
+  "finished_unix": 1794425728.3632681
+}

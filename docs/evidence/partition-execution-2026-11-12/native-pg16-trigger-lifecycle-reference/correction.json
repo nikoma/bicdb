@@ -1,0 +1,5 @@
+{
+  "actual": "PG16.13 accepts partition-parent constraint trigger and clones it; state00000.",
+  "correction": "Initial receipt scope text predicted refusal. Actual output disproved that prediction. No BicDB refusal was added. Raw original output retained.",
+  "evidence": "initial-control/catalog.json and catalog.json"
+}

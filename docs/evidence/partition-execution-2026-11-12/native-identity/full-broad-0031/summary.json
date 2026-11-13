@@ -1,0 +1,33 @@
+{
+  "source": "0031d1976ece1be2d6139ea9972fbf49069b1590",
+  "status": "completed_passed",
+  "counts": {
+    "bicdb_core": {
+      "Cargo_targets": 127,
+      "passed": 1702,
+      "failed": 0,
+      "ignored": 17,
+      "child_summaries_excluded": 1
+    },
+    "bicdb_sql": {
+      "Cargo_targets": 265,
+      "passed": 2590,
+      "failed": 0,
+      "ignored": 4,
+      "child_summaries_excluded": 0
+    },
+    "bicdb_pgwire": {
+      "Cargo_targets": 26,
+      "passed": 491,
+      "failed": 0,
+      "ignored": 2,
+      "child_summaries_excluded": 0
+    }
+  },
+  "scope": "Exact0031 Native identity and SQL partition composition before e8c426a7 semantic reader change and before c727a6fa rename/catalog composition. Not new-source qualification, application, portable origin, physical HA, release or deployment. Original assertions/waits unchanged.",
+  "cleanup_reclaimed_allocated_bytes": 116695814144,
+  "remaining_target_bytes_after_cleanup": {
+    "target-tc": 484881956559,
+    "target-metadata-describe": 77494622209
+  }
+}

@@ -516,6 +516,7 @@ impl<'db> SqlSession<'db> {
             row_array_type_oid: Some(row_array_type_oid),
             columns,
             primary_key_name,
+            implicit_primary_key_name: None,
             indexes,
             constraints,
             rls_enabled: source.rls_enabled,
@@ -577,7 +578,6 @@ impl<'db> SqlSession<'db> {
             )));
         }
 
-        self.create_session_collection(&partition.partition_table)?;
         let row_type_oid = table_row_type_oid(
             namespace_oid(&partition.partition_schema),
             &partition.partition_table,
@@ -586,19 +586,22 @@ impl<'db> SqlSession<'db> {
             namespace_oid(&partition.partition_schema),
             &partition.partition_table,
         );
-        self.save_session_schema(&TableSchema {
+        let primary_key_name = (!parent.has_hidden_primary_key())
+            .then(|| default_primary_key_name(&partition.partition_table));
+        let child = TableSchema {
             name: partition.partition_table,
             schema_name: partition.partition_schema,
             row_type_oid: Some(row_type_oid),
             row_array_type_oid: Some(row_array_type_oid),
-            columns: parent.columns,
-            primary_key_name: parent.primary_key_name,
+            columns: parent.columns.clone(),
+            primary_key_name,
+            implicit_primary_key_name: None,
             indexes: Vec::new(),
-            constraints: parent.constraints,
-            rls_enabled: parent.rls_enabled,
-            rls_forced: parent.rls_forced,
+            constraints: parent.constraints.clone(),
+            rls_enabled: false,
+            rls_forced: false,
             referential_checks_disabled: false,
-            policies: parent.policies,
+            policies: Vec::new(),
             owner: Some(current_user_from_gucs(&self.session_gucs)),
             partitioning: None,
             partition_of: Some(PartitionOfSchema {
@@ -606,12 +609,17 @@ impl<'db> SqlSession<'db> {
                 parent_schema: if parent.schema_name.is_empty() {
                     partition.parent_schema
                 } else {
-                    parent.schema_name
+                    parent.schema_name.clone()
                 },
                 bound: partition.bound,
+                execution_version: None,
             }),
             oracle_partitioning: None,
-        })?;
+        };
+        partition::validate_attachment(self.db_ref(), self.read_tx(), &parent, &child, true)?;
+        self.validate_partition_trigger_attachment(&child, &parent)?;
+        self.create_session_collection(&child.name)?;
+        self.save_partition_schema_and_triggers(&child, Some(&parent))?;
         Ok(())
     }
 
@@ -666,24 +674,53 @@ impl<'db> SqlSession<'db> {
                 }
                 let mut partition = load_schema(self.db_ref(), &partition_table)?
                     .ok_or_else(|| SqlError::InvalidCollection(partition_table.clone()))?;
-                partition.schema_name = partition_schema;
+                if partition.partition_of.is_some() {
+                    return Err(SqlError::InvalidSql(
+                        "relation is already a partition".into(),
+                    ));
+                }
+                if partition.schema_name != partition_schema {
+                    return Err(SqlError::InvalidSql(
+                        "partition namespace does not match relation".into(),
+                    ));
+                }
                 partition.partition_of = Some(PartitionOfSchema {
                     parent_table,
                     parent_schema: if parent.schema_name.is_empty() {
                         parent_schema
                     } else {
-                        parent.schema_name
+                        parent.schema_name.clone()
                     },
                     bound,
+                    execution_version: None,
                 });
-                self.save_session_schema(&partition)?;
+                partition::validate_attachment(
+                    self.db_ref(),
+                    self.read_tx(),
+                    &parent,
+                    &partition,
+                    false,
+                )?;
+                self.save_partition_schema_and_triggers(&partition, Some(&parent))?;
             }
-            RawAlterTablePartition::Detach { partition_table } => {
+            RawAlterTablePartition::Detach {
+                parent_table,
+                parent_schema,
+                partition_table,
+            } => {
+                self.require_table_ownership(&parent_table, "detach a partition from it")?;
                 self.require_table_ownership(&partition_table, "detach it")?;
                 let mut partition = load_schema(self.db_ref(), &partition_table)?
                     .ok_or_else(|| SqlError::InvalidCollection(partition_table.clone()))?;
+                if !partition.partition_of.as_ref().is_some_and(|link| {
+                    link.parent_table == parent_table && link.parent_schema == parent_schema
+                }) {
+                    return Err(SqlError::InvalidSql(
+                        "relation is not a partition of this parent".into(),
+                    ));
+                }
                 partition.partition_of = None;
-                self.save_session_schema(&partition)?;
+                self.save_partition_schema_and_triggers(&partition, None)?;
             }
         }
         Ok(())
@@ -1049,6 +1086,7 @@ impl<'db> SqlSession<'db> {
 
     pub(crate) fn execute_statement(&mut self, statement: &Statement) -> Result<SqlResult> {
         self.ensure_read_only_statement(statement)?;
+        recycle_bin::ensure_replica_catalog_statement_ready(self.db_ref(), statement)?;
         // User-defined operators bind to their functions before execution.
         let bound = match crate::pg_operators::operators_to_bind(self.db_ref(), statement)? {
             Some(operators) => crate::pg_operators::bind_statement_operators(

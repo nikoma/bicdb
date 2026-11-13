@@ -1,0 +1,29 @@
+{
+  "source": "05ca6e31d02c0065d3e92a0e4d72d9812ece71e5",
+  "scope": "Test-harness-only storageModeclone fixes E0382 in newnestedlatefailurecases; exact314productruntime unchanged. All9mandatoryvisibility/suppression/lateactualwrite-and-rollback/savepointpositives,bothstores+2reopens. Precedingfirsttargetdidnotcompile; its17independentexistingtargetresultsrecorded separately. No broad/app/HA/featurecompletion.",
+  "started_unix": 1794486827.8447485,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "partition_trigger_visibility",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794486827.8448448,
+      "exit": 0,
+      "finished_unix": 1794486834.945631
+    }
+  ],
+  "status": "focused_passed",
+  "finished_unix": 1794486834.9458416
+}

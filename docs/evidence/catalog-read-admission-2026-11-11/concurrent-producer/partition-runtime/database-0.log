@@ -1,0 +1,7 @@
+BicDB compatibility server: 127.0.0.1:51423
+{"timestamp":1794467642,"event":"server.listening","severity":"info","fields":{"address":"127.0.0.1:51423"}}
+bicdb pgwire listening on 127.0.0.1:51423 — effective limits: --max-connections=32 --max-pending-accepts=100 --max-active-queries=4 (reads 4 / writes 4) --max-queued-queries=16 (reads 16 / writes 16). Defaults are host-sized; set these explicitly for production.
+{"timestamp":1794467642,"event":"server.limits","severity":"info","fields":{"address":"127.0.0.1:51423","max_active_queries":4,"max_active_reads":4,"max_active_writes":4,"max_connections":32,"max_pending_accepts":100,"max_queued_queries":16,"max_queued_reads":16,"max_queued_writes":16}}
+{"timestamp":1794467642,"event":"connection.opened","severity":"info","fields":{"connection_id":1,"database":"bicdb","peer_addr":"127.0.0.1:58876","tls":false,"user":"bicdb"}}
+{"timestamp":1794467643,"event":"query.failed","severity":"warn","fields":{"connection_id":1,"error":"sql error: invalid SQL: ALTER TABLE ATTACH PARTITION expects FOR VALUES","query":"ALTER TABLE parent ATTACH PARTITION fallback DEFAULT","sqlstate":"42601"}}
+{"timestamp":1794467643,"event":"connection.closed","severity":"info","fields":{"connection_id":1}}

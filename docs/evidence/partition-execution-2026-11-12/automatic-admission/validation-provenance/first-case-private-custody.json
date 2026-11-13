@@ -1,0 +1,101 @@
+{
+  "source": "c3588bf8b029ac8579f1336bf9d170d231648f29",
+  "original": "/tmp/durability-failure-transaction_log_fail_io_page_log_sync_60-1794499166154968",
+  "preserved": "/root/bicdb-durability-s3/partition-admission-core-fault-not-reached-c358/case",
+  "files": {
+    "db/format.json": {
+      "bytes": 192,
+      "sha256": "54f5d977028abbac7ea27f18181076c5ca63c6f052bbea62c647aec3a9302123"
+    },
+    "db/fts-index-generations.json": {
+      "bytes": 185,
+      "sha256": "2c286e718d956b48b0e5f94e3fec2014350f3f6370bdb680b4ddfde2305e7770"
+    },
+    "db/collections.json": {
+      "bytes": 511,
+      "sha256": "3b6b154783751e0affc2ad46407eefb322e9b0270fc3011620c8e253dec130cb"
+    },
+    "db/transactions.log": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "db/mesh_signing_key.json": {
+      "bytes": 127,
+      "sha256": "b42267a6e8602a8918eccfddf208e2fb962159b7a4dc89b9679e3698b3cf1ae2"
+    },
+    "db/commit-seq.floor": {
+      "bytes": 12,
+      "sha256": "d6b417a256c14b9938cdf61be161f3539e91cdc8cccad70dc81ac030ca426432"
+    },
+    "db/store.lock": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "db/.backup-write.lock": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "db/incarnations.log": {
+      "bytes": 119,
+      "sha256": "dd3b1441c20b7d5c7d55903baac640cb495ad4e64c90d33ea52066454552d5ea"
+    },
+    "db/indexes.json": {
+      "bytes": 466,
+      "sha256": "869acf31d4f8edc3dcb0cc1818d285c5c8e45053b5e75c143e81a5b1eeed9769"
+    },
+    "db/sync_state.json": {
+      "bytes": 340,
+      "sha256": "872d8d13fa41a32494d64fe8c7bff544ab2deb5fe393410054b909e94facc6ff"
+    },
+    "ledger/ddl": {
+      "bytes": 292,
+      "sha256": "210183ee3d49d23443fd7fa837102f6985c6098e1df72267030b616223773afc"
+    },
+    "ledger/state": {
+      "bytes": 8,
+      "sha256": "63745aef95742025c6d7a1b4fc0e7107e6f3c3eb2e0cb290f33c46f176e6740d"
+    },
+    "ledger/writer-1": {
+      "bytes": 372,
+      "sha256": "11ebba9a3453b6af0b448a00ad5c27aa9f5508a1cfdfacfe130c6752545dcf76"
+    },
+    "ledger/writer-3": {
+      "bytes": 372,
+      "sha256": "11ebba9a3453b6af0b448a00ad5c27aa9f5508a1cfdfacfe130c6752545dcf76"
+    },
+    "ledger/writer-2": {
+      "bytes": 372,
+      "sha256": "11ebba9a3453b6af0b448a00ad5c27aa9f5508a1cfdfacfe130c6752545dcf76"
+    },
+    "ledger/writer-0": {
+      "bytes": 372,
+      "sha256": "11ebba9a3453b6af0b448a00ad5c27aa9f5508a1cfdfacfe130c6752545dcf76"
+    },
+    "db/btree-index-builds/4f96c867d9483d0b0a7704f7f68d0941d95cb7b362f484989032797dffc98fd7.json": {
+      "bytes": 698,
+      "sha256": "7fe5d87671d49e8084027c84fad55eef458ed77532afe978ecf7b219b71bc494"
+    },
+    "db/btree-index-builds/03a823c2a1af3b235a9495de9a0750277ac669c2a7786d83769a970568d8b803.json": {
+      "bytes": 704,
+      "sha256": "03a57d60c0b030f46fad880169f82b1936e1bddcf4854ba456128f4478e68b60"
+    },
+    "db/paged/store.wal": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "db/paged/store.lock": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "db/paged/store.pages": {
+      "bytes": 368640,
+      "sha256": "f7b169c6a2d4c7dffd0df588681000c9e52e283a6bec1c3577fb180a1452c115"
+    },
+    "db/events/events.seg": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  },
+  "recorded_unix": 1794500031.7438343,
+  "failure": "commit_durability_crash::transaction_log_only_path_fails_closed_at_every_io_failure_site: page_log.sync:60 not reached or not fenced; observed healthy; original assertion/site/count unchanged; cause under investigation"
+}

@@ -1,0 +1,70 @@
+{
+  "source": "731eae2bad65514d2fa59202d87fba6814ebce63",
+  "scope": "Minimal retention fix after real fbe negative loses source_payload_idx despite successful second full rollback; Native pending-owner full-build fence unchanged. New two-store full-rollback retry+independent ACK+2reopens, related constraint/index SQL regressions, existing rename unrelated-owner regression and rename-journal retry unit tests. No DEFAULT or automatic success while foreign owners remain claimed.",
+  "started_unix": 1794467231.250735,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "rollback_index_admission",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794467231.2509367,
+      "exit": 0,
+      "finished_unix": 1794467316.6009147
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "--no-fail-fast",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "drop_constraint_indexes",
+        "--test",
+        "rename_unrelated_transactions",
+        "--",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794467316.6011238,
+      "exit": 0,
+      "finished_unix": 1794467334.058511
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--lib",
+        "session::rename_journal::tests::refused_ddl_undo_keeps_the_journal_entry_for_a_later_retry",
+        "--",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794467334.058703,
+      "exit": 0,
+      "finished_unix": 1794467442.4051068
+    }
+  ],
+  "status": "focused_passed",
+  "finished_unix": 1794467442.405373
+}

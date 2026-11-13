@@ -1,0 +1,16 @@
+{
+  "label": "partition-trigger-function-cascade-final-batch",
+  "source": "21d821009a8a9e86597d6f1b3c477be2929271c2",
+  "reported_batch_status": "focused_passed",
+  "passed": 56,
+  "failed_tests": 0,
+  "ignored": 0,
+  "compile_errors": false,
+  "scope": "Currentcoherenttriggerfunctionlifecyclebatch: resolvesallfunctiontargetsandpreflightsdeps; restrictrefusesactualresolvedtriggerfunction; Nativeatomicfunction+completeownedtriggerrecordsandpromotioncatalog; exactrawbatchundo. ActualPG16parentconstraintacceptance/noinventedrefusal; 5mandatorylifecyclepositivesafter2PASS3FAIL. Relevanttrigger,owner,privilege,baseTypeandindependentOracleinvalidroutine regressions. Broad/multiobjectoperator-type/processfault/namespace/oldreader/app/HAgatesunqualified.",
+  "raw_log": {
+    "archive": "tc-step-partition-trigger-function-cascade-final-batch.log.gz",
+    "uncompressed_bytes": 974895,
+    "sha256": "0e5884482c941e80fc704b8ef8f8e6f4e7e27fe55ff06642d63b4ab7a5943496",
+    "gzip_sha256": "46dca58e37dc390fdf986df9740976867a7a0d0043fffa8e4cd94756ac1de07c"
+  }
+}

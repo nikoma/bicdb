@@ -1,0 +1,29 @@
+{
+  "source": "97bdaf8b300eeeecf62b97ddb5b17a91d9169665",
+  "scope": "Tests-only effect-bound control for trusted internal host actors. Actor may read an unrelated dependency but writes must belong to the reserved undo/effect closure. Test both stores, reject unrelated update/insert/delete and preserve business rows, allow covered catalog update and normal cleanup. Runtime unchanged from 5188; this source intentionally exposes current unbounded host-effect writes. Not SQL producer/metadata/Describe or application qualification.",
+  "started_unix": 1794395058.389173,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--test",
+        "catalog_host_scope",
+        "internal_catalog_writes_stay_inside_the_declared_effect_scope",
+        "--",
+        "--exact"
+      ],
+      "started_unix": 1794395058.3893607,
+      "exit": 101,
+      "finished_unix": 1794395059.2637918
+    }
+  ],
+  "status": "failed",
+  "finished_unix": 1794395059.2640045
+}

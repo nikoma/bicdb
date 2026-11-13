@@ -1,0 +1,110 @@
+{
+  "catalog-host-demotion-negative-2cbcf517": {
+    "test_results": [
+      "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 8 filtered out; finished in 0.03s"
+    ],
+    "failure_excerpt": "failures:\n\n---- demotion_during_an_outer_decision_keeps_readonly_host_cleanup_access stdout ----\n\nthread 'demotion_during_an_outer_decision_keeps_readonly_host_cleanup_access' (3715165) panicked at crates/bicdb-core/tests/catalog_host_scope.rs:258:56:\na refused predecision role-fenced commit must not leave its host scope permanently closing: TransactionConflict(\"internal catalog scope is closed or no longer active\")\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n\n\nfailures:\n    demotion_during_an_outer_decision_keeps_readonly_host_cleanup_access\n\ntest result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 8 filtered out; finished in 0.03s\n\nerror: test failed, to rerun pass `-p bicdb-core --test catalog_host_scope`\n{\"source\": \"2cbcf517cd4d12b1fbf766dba3fc81007ce7ec3c\", \"scope\": \"Tests-only role-fence error-path control. A primary buffers a business write and retains host catalog scope, then is demoted before commit. Commit must fail with no business row; host may still inspect its own prefix through a read-only child while mutations/recovery remain refused. Exercises the early standby-commit branch reopening behavior. Intended both storage modes; first negative failure stops. Local role API control, not wire election or VM qualification.\", \"started_unix\": 1794394282.5020456, \"steps\": [{\"command\": [\"cargo\", \"+1.96.0\", \"test\", \"--locked\", \"-j\", \"1\", \"-p\", \"bicdb-core\", \"--test\", \"catalog_host_scope\", \"demotion_during_an_outer_decision_keeps_readonly_host_cleanup_access\", \"--\", \"--exact\"], \"started_unix\": 1794394282.502567, \"exit\": 101, \"finished_unix\": 1794394283.7417643}], \"status\": \"failed\", \"finished_unix\": 1794394283.7420297}\n",
+    "tests_passed": 0
+  },
+  "catalog-host-effect-bound-negative-97bdaf8b": {
+    "test_results": [
+      "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 9 filtered out; finished in 0.02s"
+    ],
+    "failure_excerpt": "failures:\n\n---- internal_catalog_writes_stay_inside_the_declared_effect_scope stdout ----\n\nthread 'internal_catalog_writes_stay_inside_the_declared_effect_scope' (3861924) panicked at crates/bicdb-core/tests/catalog_host_scope.rs:367:13:\nassertion failed: matches!(internal.update(\"business\", seed(9)),\n    Err(BicDbError::TransactionConflict(_)))\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n\n\nfailures:\n    internal_catalog_writes_stay_inside_the_declared_effect_scope\n\ntest result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 9 filtered out; finished in 0.02s\n\nerror: test failed, to rerun pass `-p bicdb-core --test catalog_host_scope`\n{\"source\": \"97bdaf8b300eeeecf62b97ddb5b17a91d9169665\", \"scope\": \"Tests-only effect-bound control for trusted internal host actors. Actor may read an unrelated dependency but writes must belong to the reserved undo/effect closure. Test both stores, reject unrelated update/insert/delete and preserve business rows, allow covered catalog update and normal cleanup. Runtime unchanged from 5188; this source intentionally exposes current unbounded host-effect writes. Not SQL producer/metadata/Describe or application qualification.\", \"started_unix\": 1794395058.389173, \"steps\": [{\"command\": [\"cargo\", \"+1.96.0\", \"test\", \"--locked\", \"-j\", \"1\", \"-p\", \"bicdb-core\", \"--test\", \"catalog_host_scope\", \"internal_catalog_writes_stay_inside_the_declared_effect_scope\", \"--\", \"--exact\"], \"started_unix\": 1794395058.3893607, \"exit\": 101, \"finished_unix\": 1794395059.2637918}], \"status\": \"failed\", \"finished_unix\": 1794395059.2640045}\n",
+    "tests_passed": 0
+  },
+  "catalog-host-effect-bound-positive-2e5566b2": {
+    "test_results": [
+      "test result: FAILED. 9 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.67s"
+    ],
+    "failure_excerpt": "failures:\n\n---- internal_catalog_writes_stay_inside_the_declared_effect_scope stdout ----\n\nthread 'internal_catalog_writes_stay_inside_the_declared_effect_scope' (3870269) panicked at crates/bicdb-core/tests/catalog_host_scope.rs:385:51:\ncalled `Result::unwrap()` on an `Err` value: TransactionConflict(\"internal catalog mutation of `business` exceeds its reserved resources\")\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n\n\nfailures:\n    internal_catalog_writes_stay_inside_the_declared_effect_scope\n\ntest result: FAILED. 9 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.67s\n\nerror: test failed, to rerun pass `-p bicdb-core --test catalog_host_scope`\n{\"source\": \"2e5566b288310f59d32dac47cda493f2d7c6b051\", \"scope\": \"5188 ownership/ACL batch all seven commands passed. Tests-only 97bdaf8b actually permits unreserved internal.update and fails its original denial assertion. Bound host actor row effects to reserved collection names/backing IDs, preserve ordinary read/policy/grant checks and primary role gate, and cover common/stored/repair update paths before row reservations plus central append backstop. Control strengthens coverage with repairing writes and immediate unrelated transaction progress after denial. All ten host lifecycle tests and prior native/SQL focused integrations rerun on this exact head. Full SQL metadata row resources, relation/type/routine/Describe and durable pending-header inventory remain OPEN; SQL producer remains conservative. No broad workspace, application, VM or delivery claim.\", \"started_unix\": 1794395121.4832213, \"steps\": [{\"command\": [\"cargo\", \"+1.96.0\", \"test\", \"--locked\", \"-j\", \"1\", \"-p\", \"bicdb-core\", \"--test\", \"catalog_host_scope\", \"--test\", \"catalog_scope_admission\", \"--\", \"--test-threads=1\"], \"started_unix\": 1794395121.4833095, \"exit\": 101, \"finished_unix\": 1794395146.756099}], \"status\": \"failed\", \"finished_unix\": 1794395146.7562625}\n",
+    "tests_passed": 9
+  },
+  "rename-default-privileges-negative-36a136d6": {
+    "test_results": [
+      "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s"
+    ],
+    "failure_excerpt": "failures:\n\n---- rename_preserves_existing_acl_without_reapplying_changed_creation_defaults stdout ----\n\nthread 'rename_preserves_existing_acl_without_reapplying_changed_creation_defaults' (3541210) panicked at crates/bicdb-sql/tests/rename_default_privileges.rs:8:24:\ncalled `Result::unwrap_err()` on an `Ok` value: SqlResult { columns: [\"payload\"], rows: [[String(\"kept\")]], command_tag: None, column_types: [Some(\"text\")], column_metadata: [SqlColumnMetadata { table_oid: 82237065, attribute_number: 2, type_modifier: -1 }], notices: [] }\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n\n\nfailures:\n    rename_preserves_existing_acl_without_reapplying_changed_creation_defaults\n\ntest result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s\n\nerror: test failed, to rerun pass `-p bicdb-sql --test rename_default_privileges`\n{\"source\": \"36a136d699da17e49857504e3a1238643050bfab\", \"scope\": \"Tests-only PostgreSQL ACL identity/default creation grant gate. Existingtable granted priorreader then defaults switchto laterreader; rename mustnotgrantlaterreader access, rollbackmustnotleaveorphan access ondestname reuse; genuinelynewtable doesgetnewdefaults. Intended2storesxcommit/rollback+reopen, stopsfirstnegativefailure. Actual SETROLE SELECT permission checked, notintrospectiononly. NativeOracleimplicitDDL excluded.\", \"started_unix\": 1794393025.6867309, \"steps\": [{\"command\": [\"cargo\", \"+1.96.0\", \"test\", \"--locked\", \"-j\", \"1\", \"-p\", \"bicdb-sql\", \"--test\", \"rename_default_privileges\", \"--\", \"--test-threads=1\"], \"started_unix\": 1794393025.6869197, \"exit\": 101, \"finished_unix\": 1794393139.3748465}], \"status\": \"failed\", \"finished_unix\": 1794393139.3750858}\n",
+    "tests_passed": 0
+  },
+  "rename-default-privileges-negative-v2-ece30483": {
+    "test_results": [
+      "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.11s"
+    ],
+    "failure_excerpt": "failures:\n\n---- rename_preserves_existing_acl_without_reapplying_changed_creation_defaults stdout ----\n\nthread 'rename_preserves_existing_acl_without_reapplying_changed_creation_defaults' (3571085) panicked at crates/bicdb-sql/tests/rename_default_privileges.rs:8:24:\nrole later_reader must not read renamed: SqlResult { columns: [\"payload\"], rows: [[String(\"kept\")]], command_tag: None, column_types: [Some(\"text\")], column_metadata: [SqlColumnMetadata { table_oid: 82237065, attribute_number: 2, type_modifier: -1 }], notices: [] }\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n\n\nfailures:\n    rename_preserves_existing_acl_without_reapplying_changed_creation_defaults\n\ntest result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.11s\n\nerror: test failed, to rerun pass `-p bicdb-sql --test rename_default_privileges`\n{\"source\": \"ece30483348520de9ef34ed0140720bc9f392175\", \"scope\": \"Tests-only PostgreSQL ACL identity/default creation grant gate. Existingtable granted priorreader then defaults switchto laterreader; rename mustnotgrantlaterreader access, rollbackmustnotleaveorphan access ondestname reuse; genuinelynewtable doesgetnewdefaults. Intended2storesxcommit/rollback+reopen, stopsfirstnegativefailure. Actual SETROLE SELECT permission checked, notintrospectiononly. NativeOracleimplicitDDL excluded. First36negative returnskept atdenialhelper butcallsite stageunspecified; diagnostics nowinclude role/table withoutchangingassertion orruntime. NeeddistinguishbeforeRename vsafterRename beforeattributingcause.\", \"started_unix\": 1794393320.5584383, \"steps\": [{\"command\": [\"cargo\", \"+1.96.0\", \"test\", \"--locked\", \"-j\", \"1\", \"-p\", \"bicdb-sql\", \"--test\", \"rename_default_privileges\", \"--\", \"--test-threads=1\"], \"started_unix\": 1794393320.5586145, \"exit\": 101, \"finished_unix\": 1794393323.6446755}], \"status\": \"failed\", \"finished_unix\": 1794393323.6448915}\n",
+    "tests_passed": 0
+  },
+  "rename-host-ownership-and-acl-0ca35a4d": {
+    "test_results": [
+      "test result: FAILED. 8 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.45s"
+    ],
+    "failure_excerpt": "failures:\n\n---- demotion_during_an_outer_decision_keeps_readonly_host_cleanup_access stdout ----\n\nthread 'demotion_during_an_outer_decision_keeps_readonly_host_cleanup_access' (3750877) panicked at crates/bicdb-core/tests/catalog_host_scope.rs:264:13:\nassertion failed: internal.update(\"catalog\", seed(9)).is_err()\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n\n\nfailures:\n    demotion_during_an_outer_decision_keeps_readonly_host_cleanup_access\n\ntest result: FAILED. 8 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.45s\n\nerror: test failed, to rerun pass `-p bicdb-core --test catalog_host_scope`\n{\"source\": \"0ca35a4df121a4acb8c63aa9715e368192ab4033\", \"scope\": \"Private focused ownership and permission batch. Actual negative controls retained: ece30483 leaks changed creation defaults onto renamed table; 21e26367 fixes that but fails valid leading ALTER DEFAULT PRIVILEGES migration batch; 2cbcf517 leaves retained host scope closing after demoted commit refusal. This head leaves multi-statement default privileges to existing SQL-safe split dispatcher and routes standby commit errors through shared scope reopening. Original assertions unchanged. Checks all 9 host lifecycle tests, native reservation races, rename and default ACL regressions, read-only and snapshot behavior, native grants/isolation, and replication/fault regressions. Runtime host admission foundation only; full SQL scoped producer/metadata/type/routine/Describe bridge remains OPEN. Not full workspace, VM, application acceptance, deployed binary, or production qualification.\", \"started_unix\": 1794394558.3630667, \"steps\": [{\"command\": [\"cargo\", \"+1.96.0\", \"test\", \"--locked\", \"-j\", \"1\", \"-p\", \"bicdb-core\", \"--test\", \"catalog_host_scope\", \"--test\", \"catalog_scope_admission\", \"--\", \"--test-threads=1\"], \"started_unix\": 1794394558.3632555, \"exit\": 101, \"finished_unix\": 1794394583.4745421}], \"status\": \"failed\", \"finished_unix\": 1794394583.4747498}\n",
+    "tests_passed": 8
+  },
+  "rename-host-ownership-and-acl-21e26367": {
+    "test_results": [
+      "test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.68s",
+      "test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.02s",
+      "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.24s"
+    ],
+    "failure_excerpt": "failures:\n\n---- rename_preserves_existing_acl_without_reapplying_changed_creation_defaults stdout ----\n\nthread 'rename_preserves_existing_acl_without_reapplying_changed_creation_defaults' (3637181) panicked at crates/bicdb-sql/tests/rename_default_privileges.rs:51:228:\ncalled `Result::unwrap()` on an `Err` value: InvalidSql(\"ALTER DEFAULT PRIVILEGES requires role names\")\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n\n\nfailures:\n    rename_preserves_existing_acl_without_reapplying_changed_creation_defaults\n\ntest result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.24s\n\nerror: test failed, to rerun pass `-p bicdb-sql --test rename_default_privileges`\n{\"source\": \"21e26367ce25a6020a5e3b3b2f69ea90ceaaa6b5\", \"scope\": \"Coherent private ownership+ACL batch. c562 lifecycle all4groups passed; overlap refinement now refusesfinalizing siblingtokenswhileoverlappingchildworkpending. ActualSQLnegative36/ece: laterrole SELECTsource deniedbeforeRename but canreadkeptafterRename; NativePG16.13 commit/rollbackcontrols pass. Rename rawsave ofjournal-capturedschema preservesoldACL anddoesnotapplynewcreationdefaults; genuinelynewobjects stillreceivecurrentdefaults. Nativehostscope lifecycle isruntimeonly; SQL scopedproducer/metadata/type/routine/Describe bridge anddurableheaderinventory stillOPEN, ce3SQLnativeunrelatedwriterregression notpassing. Not broadworkspace/VM/application/OracleimplicitDDL/production qualification.\", \"started_unix\": 1794393842.1914759, \"steps\": [{\"command\": [\"cargo\", \"+1.96.0\", \"test\", \"--locked\", \"-j\", \"1\", \"-p\", \"bicdb-core\", \"--test\", \"catalog_host_scope\", \"--test\", \"catalog_scope_admission\", \"--\", \"--test-threads=1\"], \"started_unix\": 1794393842.1916645, \"exit\": 0, \"finished_unix\": 1794393873.1441495}, {\"command\": [\"cargo\", \"+1.96.0\", \"test\", \"--locked\", \"-j\", \"1\", \"-p\", \"bicdb-sql\", \"--test\", \"rename_default_privileges\"], \"started_unix\": 1794393873.1443737, \"exit\": 101, \"finished_unix\": 1794393985.419633}], \"status\": \"failed\", \"finished_unix\": 1794393985.4198816}\n",
+    "tests_passed": 12
+  },
+  "rename-host-ownership-and-acl-5188e977": {
+    "test_results": [
+      "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.69s",
+      "test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.46s",
+      "test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.35s",
+      "test result: ok. 20 passed; 0 failed; 0 ignored; 0 measured; 874 filtered out; finished in 37.20s",
+      "test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s",
+      "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.65s",
+      "test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.04s",
+      "test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.29s",
+      "test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 15.88s",
+      "test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 415 filtered out; finished in 1.92s",
+      "test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.48s",
+      "test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.26s",
+      "test result: ok. 32 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.89s",
+      "test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 40.41s",
+      "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.71s"
+    ],
+    "failure_excerpt": null,
+    "tests_passed": 111
+  },
+  "rename-host-scope-lifecycle-c5625c39": {
+    "test_results": [
+      "test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.85s",
+      "test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.66s",
+      "test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.45s",
+      "test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.12s",
+      "test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s",
+      "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 498 filtered out; finished in 0.01s",
+      "test result: ok. 32 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.79s",
+      "test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 85.07s",
+      "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.69s"
+    ],
+    "failure_excerpt": null,
+    "tests_passed": 68
+  },
+  "catalog-host-effect-bound-positive-dd9d199e": {
+    "test_results": [
+      "test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.75s",
+      "test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.55s",
+      "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.69s",
+      "test result: ok. 20 passed; 0 failed; 0 ignored; 0 measured; 874 filtered out; finished in 64.65s",
+      "test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s",
+      "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.65s",
+      "test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.96s",
+      "test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.28s",
+      "test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.66s",
+      "test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 415 filtered out; finished in 0.22s",
+      "test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s",
+      "test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s",
+      "test result: ok. 32 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.33s",
+      "test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 23.16s",
+      "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.54s"
+    ],
+    "tests_passed": 112,
+    "failure_excerpt": null
+  }
+}

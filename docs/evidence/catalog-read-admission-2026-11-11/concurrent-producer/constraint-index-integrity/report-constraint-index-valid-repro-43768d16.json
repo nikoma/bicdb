@@ -1,0 +1,30 @@
+{
+  "source": "43768d161a5d0ab5655911d7dbbb389d7aebb9e8",
+  "scope": "Prior852 agent fixture failed to compile after consuming BicDb.close in a conditional loop; no tests ran. Correct explicit final break, retain original constraints/reopen assertions, add exact quoted-case Native/SQL identity and materialized-view descriptor checks. Sourcea68 production unchanged; this is expected negative evidence.",
+  "started_unix": 1794465784.531278,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "--no-fail-fast",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "drop_constraint_indexes",
+        "--",
+        "--test-threads=1",
+        "--nocapture"
+      ],
+      "started_unix": 1794465784.5316849,
+      "exit": 101,
+      "finished_unix": 1794465794.2970135
+    }
+  ],
+  "status": "failed",
+  "finished_unix": 1794465794.2996414
+}

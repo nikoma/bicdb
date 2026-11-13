@@ -1,0 +1,103 @@
+{
+  "source": "0031d1976ece1be2d6139ea9972fbf49069b1590",
+  "scope": "FullCore+SQL+wire for stable Native-authorized identity replacement + MutationDenied42501 + Nativeobservedsource ceiling batch, over currentmain489 and fullpartitionruntime. Build/pin exactcurrentCorehelpers first; no missing durableflags. Starts onlyafter exact0031focusedactuallyPASS and previous5aaSQL/wire broadcollectsall evidence. OriginalCore/SQL/wire assertions/timeouts unchanged. PreviousCore1699/SQL2573/wire491 at6c andVM56 at0ad exact5aa arehistoricalscoped; Corechangedmustrequalify. No fulliDempiere/UI/portableorigin/HA/distributedcapacity/P1P2 qualification or sourceversionmergeclaim; goalACTIVE/P2off/no newspend.",
+  "started_unix": 1794515712.3181145,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "build",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--example",
+        "durability_child",
+        "--example",
+        "chaos_child",
+        "--example",
+        "ha_state_child"
+      ],
+      "started_unix": 1794515712.4611962,
+      "exit": 0,
+      "finished_unix": 1794515720.9087658
+    },
+    {
+      "command": [
+        "python3",
+        "-c",
+        "import pathlib,json,hashlib,os,subprocess,time\nroot=pathlib.Path('/root/bicdb-durability-s3');repo=root/'repo-tc';source=subprocess.check_output(['git','rev-parse','HEAD'],cwd=repo,text=True).strip();assert source=='0031d1976ece1be2d6139ea9972fbf49069b1590'\nfiles={}\nfor name in ['durability_child','chaos_child','ha_state_child']:\n p=pathlib.Path(os.environ['CARGO_TARGET_DIR'])/'debug/examples'/name;data=p.read_bytes();flags={flag:flag.encode() in data for flag in ['sql_partition_execution_v1','decimal_predicate_comparison_v1','application_unique_scope_transition_v1']};assert all(flags.values()),(name,flags);files[name]={'path':str(p),'sha256':hashlib.sha256(data).hexdigest(),'bytes':len(data),'mtime':p.stat().st_mtime,'required_features':flags}\nproof={'source':source,'files':files,'recorded_unix':time.time(),'scope':'Exactsource+successful preceding explicitbuild3Corehelpers; Native runtimeELF custody, not CLI/release/deployment.'};json.dump(proof,(root/'partition-native-identity-current-helpers.json').open('w'),indent=2);print(json.dumps(proof))\n"
+      ],
+      "started_unix": 1794515720.912174,
+      "exit": 0,
+      "finished_unix": 1794515721.0317812
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--no-fail-fast",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--lib",
+        "--tests",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794515721.0319517,
+      "exit": 0,
+      "finished_unix": 1794517396.9750001
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--no-fail-fast",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--lib",
+        "--tests",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794517396.9751956,
+      "exit": 0,
+      "finished_unix": 1794519615.655971
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--no-fail-fast",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-pgwire",
+        "--lib",
+        "--tests",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794519615.656296,
+      "exit": 0,
+      "finished_unix": 1794520232.7375736
+    }
+  ],
+  "status": "focused_passed",
+  "finished_unix": 1794520232.7378266
+}

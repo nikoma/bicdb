@@ -1,0 +1,74 @@
+{
+  "source": "c5edfd4954277efbbefd64b6806470503722c5d3",
+  "scope": "Actual73control fiveFAILunderoldcollectionadapter: unrelatedrecordreadblocked, priorotherrecordobservationblocksreservation, disjointownersblocked, undeclaredscalarupdateallowed andmixedbatchallowed. NewexactNativecatalogresourceAPI protectsfullrelationsandmetadatarecordswithphysicalincarnations; boundedpercollectionSQLcatalogpointobservations128escalatetoallrecords ratherthanunboundedmemory. ExistingNativecoarsecollectionobservationsremainconservative. Hostmutatorsvalidateallrecordeffects beforelocks/append; centralappendbackstopretained; pointinternalreads/bindsallowdisjointowners. UpdatedonlyadaptertonewAPI,same5assertionbodies. WholecollectionNativeadmission/hostlifecycle/readcapability/SQLreaderfences retained. Scopeproducer/SQLread-owner-context/wireDescribe/fullmetadataclosure/lifecycleNamespaceUID integrationstillOPEN; no globalDDLowner gate relaxed. Private471notpublic147257,nopublicationversionreserved.",
+  "started_unix": 1794408222.749666,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--test",
+        "catalog_record_scope",
+        "--test",
+        "catalog_read_scope",
+        "--test",
+        "catalog_host_scope",
+        "--test",
+        "catalog_scope_admission",
+        "--",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794408222.749852,
+      "exit": 0,
+      "finished_unix": 1794408250.314375
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "catalog_read_admission",
+        "--",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794408250.3146203,
+      "exit": 0,
+      "finished_unix": 1794408352.737959
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--test",
+        "transaction_isolation",
+        "--test",
+        "mutation_grants",
+        "--",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794408352.7381475,
+      "exit": 0,
+      "finished_unix": 1794408353.8985045
+    }
+  ],
+  "status": "focused_passed",
+  "finished_unix": 1794408353.8987143
+}

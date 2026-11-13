@@ -1126,10 +1126,15 @@ fn gitlab_postgres_partitions_view_query_materializes_catalog_join() {
             ],
             Vec::new()
         )
-        // The wildcard over the view now reports each column's declared type
-        // (all text in this catalog view's schema) instead of leaving them
-        // untyped for the wire layer to guess from values.
-        .with_column_types(vec![Some("text".to_string()); 6])
+        // The wildcard over the view reports each column's declared type.
+        // With the partition catalog relations typed, those are the types
+        // PostgreSQL reports for this view rather than text throughout.
+        .with_column_types(
+            ["text", "oid", "name", "name", "text", "name[]"]
+                .into_iter()
+                .map(|name| Some(name.to_string()))
+                .collect()
+        )
     );
 }
 

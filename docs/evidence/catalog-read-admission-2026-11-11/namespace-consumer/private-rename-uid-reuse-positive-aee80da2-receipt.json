@@ -1,0 +1,104 @@
+{
+  "source": "aee80da206bf59e7a7e00b8be6d7f38364ac974c",
+  "scope": "Private local rename image namespace consumer only. Require actual persistent local UUID plus storage alias; validate entire remaining inventory before undo. Refuse missing/nil/replaced identities and unresolved SQL journals during activation. Trusted initialization before Native transactions required. Replicated donor->target UUID mapping not implemented: no HA promotion/scoped producer/global gate relaxation or final qualification claim. Original negatives retained; four identity regressions and existing committed/uncommitted replay checks.",
+  "started_unix": 1794426010.19865,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--lib",
+        "session::rename_journal::tests::reused_",
+        "--",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794426010.1988044,
+      "exit": 0,
+      "finished_unix": 1794426137.5654044
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--lib",
+        "session::rename_journal::tests::namespace_activation_",
+        "--",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794426137.5656648,
+      "exit": 0,
+      "finished_unix": 1794426138.0689492
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--lib",
+        "session::rename_journal::tests::legacy_missing_",
+        "--",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794426138.0691268,
+      "exit": 0,
+      "finished_unix": 1794426138.8574543
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--lib",
+        "session::rename_journal::tests::uncommitted_journal_",
+        "--",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794426138.8577373,
+      "exit": 0,
+      "finished_unix": 1794426139.6116817
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--lib",
+        "session::rename_journal::tests::decision_and_business_",
+        "--",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794426139.6120021,
+      "exit": 0,
+      "finished_unix": 1794426140.1802158
+    }
+  ],
+  "status": "focused_passed",
+  "finished_unix": 1794426140.1805508
+}

@@ -266,7 +266,7 @@ pub(crate) fn regclass_text_value(db: &BicDb, value: SqlValue) -> Result<SqlValu
             .unwrap_or_else(|| SqlValue::String(oid.to_string())));
     }
     if let SqlValue::String(name) = value {
-        if let Some(oid) = resolve_regclass_oid(db, &name) {
+        if let Some(oid) = resolve_regclass_oid(db, &name)? {
             return Ok(resolve_regclass_name(db, oid)?
                 .map(SqlValue::String)
                 .unwrap_or_else(|| SqlValue::String(regclass_relation_name(&name))));
@@ -279,29 +279,74 @@ pub(crate) fn regclass_text_value(db: &BicDb, value: SqlValue) -> Result<SqlValu
     )))
 }
 
-pub(crate) fn resolve_regclass_oid(db: &BicDb, name: &str) -> Option<i64> {
-    let parts = sql_identifier_parts(name).ok()?;
-    let physical = relation_name_from_parts(&parts).ok()?;
+pub(crate) fn resolve_regclass_oid(db: &BicDb, name: &str) -> Result<Option<i64>> {
+    let Ok(parts) = sql_identifier_parts(name) else {
+        return Ok(None);
+    };
     if parts.len() == 1 || parts.first().is_some_and(|schema| schema == "pg_catalog") {
-        if let Some(oid) = virtual_catalog_table_oid(parts.last()?) {
-            return Some(oid);
+        if let Some(oid) = parts
+            .last()
+            .and_then(|name| virtual_catalog_table_oid(name))
+        {
+            return Ok(Some(oid));
         }
     }
-    if let Some(sequence) = load_sequence(db, &physical).ok().flatten() {
-        return Some(sequence_oid(&sequence.name));
+    if parts.len() == 1 {
+        if let Some(path) = crate::search_path::active_path() {
+            for schema in path.iter() {
+                let physical = relation_name_from_parts(&[schema.clone(), parts[0].clone()])?;
+                if let Some(oid) = resolve_regclass_physical_oid(db, &physical, schema, &parts[0])?
+                {
+                    return Ok(Some(oid));
+                }
+            }
+            // An explicit path must not silently fall back to public.
+            return Ok(None);
+        }
     }
-    if let Some(oid) = table_oids(db).get(&physical).copied() {
-        return Some(oid);
+    let Ok(physical) = relation_name_from_parts(&parts) else {
+        return Ok(None);
+    };
+    let (namespace, logical_name): (&str, &str) = match parts.as_slice() {
+        [name] => ("public", name),
+        [schema, name] => (schema, name),
+        _ => relation_schema_and_name(&physical),
+    };
+    resolve_regclass_physical_oid(db, &physical, namespace, logical_name)
+}
+
+fn resolve_regclass_physical_oid(
+    db: &BicDb,
+    physical: &str,
+    namespace: &str,
+    logical_name: &str,
+) -> Result<Option<i64>> {
+    // Resolve exact metadata before any directory cache. Known relations must
+    // neither observe unrelated schema rows nor reuse an OID through another
+    // owner's pending rename. Reservation failures remain retryable errors.
+    if let Some(sequence) = load_sequence(db, physical)? {
+        return Ok(Some(sequence_oid(&sequence.name)));
     }
-    let (namespace, name) = relation_schema_and_name(&physical);
-    pg_class_rows(db).ok()?.into_iter().find_map(|row| {
+    if let Some(schema) = load_schema_shared(db, physical)? {
+        return Ok(Some(table_relation_oid(&schema)));
+    }
+    if let Some(view) = load_view(db, physical)? {
+        return Ok(Some(named_relation_oid(&view.name)));
+    }
+    if (db.has_collection(physical) && !is_internal_sql_collection(physical))
+        || graph_virtual_table_names().contains(&physical)
+    {
+        return Ok(Some(named_relation_oid(physical)));
+    }
+    // Index catalogs carry the logical name and owning namespace separately.
+    // Splitting a schema-encoded storage name would incorrectly select public.
+    Ok(pg_class_rows(db)?.into_iter().find_map(|row| {
         (matches!(virtual_cell(&row, "relkind").to_cell().as_str(), "i" | "I")
-            && virtual_cell(&row, "relname").to_cell() == name
-            && sql_value_i64(&virtual_cell(&row, "relnamespace"))
-                == Some(namespace_oid(&namespace)))
+            && virtual_cell(&row, "relname").to_cell() == logical_name
+            && sql_value_i64(&virtual_cell(&row, "relnamespace")) == Some(namespace_oid(namespace)))
         .then(|| sql_value_i64(&virtual_cell(&row, "oid")))
         .flatten()
-    })
+    }))
 }
 
 pub(crate) fn resolve_regclass_name(db: &BicDb, oid: i64) -> Result<Option<String>> {

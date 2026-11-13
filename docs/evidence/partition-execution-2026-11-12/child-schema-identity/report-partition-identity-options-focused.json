@@ -1,0 +1,51 @@
+{
+  "source": "9caac16dc86c390e5c115c8c38fa6adde8fea5ef",
+  "scope": "DeclaredtargetPG18.4 correction: actualNative18 imagea02db confirmsrecursiveidentityADDaccepted/sharedchildidentity. Reverted bothPG16-only productionchanges (be8 runtimeexacte036), retained oldreferences/failedtests, corrected two newidentityexpectations to18.4. ValidSQLSTART WITH100 INCREMENT BY5 unchanged: sqlparser0.62 expects fixedorder, nowtoken-source-preservingcanonicaloptionorderadapter; no literal/comment edits. Unit2 +all9childrequirements; recursiveidentity/serialdata+catalog/sequenceatomicpublicationstillopen and mayfailafterparsergate. Originalfullgoal ACTIVE; no release/deployment.",
+  "started_unix": 1794505651.7384162,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--no-fail-fast",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--lib",
+        "identity_sequence_options::tests",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794505651.7387662,
+      "exit": 101,
+      "finished_unix": 1794505780.3766544
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--no-fail-fast",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "partition_child_schema",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794505780.3769157,
+      "exit": 101,
+      "finished_unix": 1794505909.4984431
+    }
+  ],
+  "status": "failed",
+  "finished_unix": 1794505909.4986491
+}

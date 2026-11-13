@@ -1,0 +1,9 @@
+{
+  "label": "partition-trigger-events-negative-005bc04f",
+  "source": "005bc04f48bcff4abe41b882db34a1ce0a0594cc",
+  "status": "failed",
+  "passed": 0,
+  "failed": 3,
+  "ignored": 0,
+  "scope": "Mandatory positive event order and physical partition trigger context; product runtime exactly747a76ed, test-only005bc04f; actual PostgreSQL16.13 ephemeral isolated control14events+4multirowevents. Expected negative baseline, no application/HA/completefeature claim."
+}

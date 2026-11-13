@@ -1,0 +1,18 @@
+{
+  "private_main465_integration_source": "7138ffa974f89ba31606d385af5a36ba44c529bb",
+  "private_main465_integration_commands_passed": 10,
+  "private_main465_integration_tests_passed": 132,
+  "routine_control_source": "f229a4baf867ba2f3a0c81d710367b19ccfa470d",
+  "routine_control_result": "Actual unsupported array element type source during routine creation; rename not reached.",
+  "routine_positive_source": "5e74ff58a6befce1f6e5e83ac6eb43dfa83969ba",
+  "routine_positive_commands_passed": 5,
+  "routine_positive_tests_passed": 52,
+  "source_version": "1.0.465-beta private integration",
+  "expanded_process_cuts_qualified_here": false,
+  "broad_sql_qualified_here": false,
+  "bicdb_routine_execution_qualified_here": false,
+  "complete_sql_scoped_admission_qualified": false,
+  "application_acceptance_qualified": false,
+  "vm_or_production_qualified": false,
+  "binary_or_deployment_produced": false
+}

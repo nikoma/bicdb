@@ -1,0 +1,13 @@
+{
+  "scope": "unmerged prototype; focused evidence only",
+  "runtime_source": "c3ce4ebf092595573302d054ed3dd95fabf9dac3",
+  "runtime_focused_commands_passed": 6,
+  "fixture_source": "2262454a38e25c14e0bcecc95b86c8afccff4383",
+  "production_code_unchanged_after_runtime_source": true,
+  "actual_old_reader_cases": 16,
+  "protected_refusals_without_file_mutation": 12,
+  "unflagged_ack_controls": 4,
+  "mixed_version_live_wire_qualified": false,
+  "vm_fault_qualified": false,
+  "production_qualified": false
+}

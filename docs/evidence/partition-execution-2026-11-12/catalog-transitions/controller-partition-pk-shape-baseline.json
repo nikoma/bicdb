@@ -1,0 +1,39 @@
+{
+  "label": "partition-pk-shape-baseline",
+  "source": "90cb54b2d69a5e88a04a2166a1dcd8eac4f66bb4",
+  "base": "c3588bf8b029ac8579f1336bf9d170d231648f29",
+  "repo": "/root/bicdb-partition-runtime",
+  "scope": "New actual primary-key Native backing compatibility regressions on main488-integrated private partition source, before matcher fix. Partial/null-policy replacements must refuse startup with ACKs/index definitions/commit count unchanged; repaired exact backing admits and preserves duplicate refusal. Ordinary+physical partition child, both modes/two reopens; read-only partial PK must not omit ACKs. Exclusion control uses actual Native nonunique exclusion restriction. Expected product counterexample retained. Not broad/application/HA qualification.",
+  "continue_on_failure": false,
+  "commands": [
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--no-fail-fast",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-sql",
+      "--test",
+      "primary_key_index_compatibility",
+      "--",
+      "--nocapture",
+      "--test-threads=1"
+    ]
+  ],
+  "wait_units": [],
+  "required_receipts": [],
+  "allow_isolated_builds": [
+    {
+      "pid": 3951950,
+      "start_ticks": 163102221,
+      "repo": "/root/bicdb-durability-s3/repo-tc",
+      "target": "/root/bicdb-durability-s3/target-tc"
+    }
+  ],
+  "remote_repo_name": "repo-metadata-describe",
+  "remote_target_name": "target-metadata-describe",
+  "remote_lock_name": "metadata-describe-source-build.lock"
+}

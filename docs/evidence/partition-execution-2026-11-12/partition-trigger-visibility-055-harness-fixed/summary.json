@@ -1,0 +1,16 @@
+{
+  "label": "partition-trigger-visibility-055-harness-fixed",
+  "source": "05ca6e31d02c0065d3e92a0e4d72d9812ece71e5",
+  "reported_batch_status": "focused_passed",
+  "passed": 9,
+  "failed_tests": 0,
+  "ignored": 0,
+  "compile_errors": false,
+  "scope": "Test-harness-only storageModeclone fixes E0382 in newnestedlatefailurecases; exact314productruntime unchanged. All9mandatoryvisibility/suppression/lateactualwrite-and-rollback/savepointpositives,bothstores+2reopens. Precedingfirsttargetdidnotcompile; its17independentexistingtargetresultsrecorded separately. No broad/app/HA/featurecompletion.",
+  "raw_log": {
+    "archive": "tc-step-partition-trigger-visibility-055-harness-fixed.log.gz",
+    "uncompressed_bytes": 84840,
+    "sha256": "46fdccaf368efb5701ce68bbf80212ac9dc61acb027b32911902d0b2eb632f65",
+    "gzip_sha256": "1e9bcc1ae1fb8b1b37797166016cc86e3d0b9c9f370c8005171c3a82901f6372"
+  }
+}

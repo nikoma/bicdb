@@ -1,0 +1,159 @@
+{
+  "source": "aaa754c7b2388e8e8c31816c689a76bbf4791fa1",
+  "scope": "Write-time Native backing contracts are part of the same WAL commit as their writes, including prepared-WAL fast path. Actual bounded durable batch/live exporters retain historical backing identity across rename/name reuse/drop and restart. Private checksum-bound in-process capture is not decoded from JSON, not source root authentication/import/recovery authority. New lifecycle/unborn/async/forgery/dropped-fence controls plus prior Native birth5/image6/local8/snapshot3 and legacy WAL serialization tests. Original SQL promotion acceptance remains OPEN; no source/main/application/release/deployment or full broad/fault qualification. Currentv2 adds separate native_wal_backing_capture_v1 local compatibility fence and explicit future-only activation (birth-aware older writers must reject the additional WAL semantics); first-vector Native commit captures the planned dimension and exact full payload. No old WAL retrofits, source-root authentication or import authority. Tests7 WAL+5 priorbirth, both modes, plus focused regressions. New original SQL promotion test unchanged/not claimed PASS. v1 exporter fix advanced both originals then discovered real local-recovery corruption after restart: old retained WAL was replayed into the new same-name backing. v3 rebinds captured local WAL by actual immutable birth/namespace pair before row replay; rejects changed pairs and skips genuinely dropped pairs. No logical/storage-name fallback, donor import mapping or source authentication. Legacy/unborn WAL gets no invented provenance and retains existing semantics.",
+  "started_unix": 1794533827.1988184,
+  "steps": [
+    {
+      "command": [
+        "python3",
+        "scripts/bump-version.py",
+        "--check"
+      ],
+      "started_unix": 1794533827.1991217,
+      "exit": 0,
+      "finished_unix": 1794533827.2635355
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "check",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "-p",
+        "bicdb-sql",
+        "-p",
+        "bicdb-pgwire",
+        "--all-targets"
+      ],
+      "started_unix": 1794533827.267827,
+      "exit": 0,
+      "finished_unix": 1794533973.2178352
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--lib",
+        "native_collection_birth::",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794533973.2181287,
+      "exit": 0,
+      "finished_unix": 1794534040.881216
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--lib",
+        "range_image_bindings::",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794534040.8820312,
+      "exit": 0,
+      "finished_unix": 1794534046.1400862
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--lib",
+        "local_namespace_identity::",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794534046.1404192,
+      "exit": 0,
+      "finished_unix": 1794534049.4523318
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--lib",
+        "tx_frame_ref_matches_owned_serialization",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794534049.4525971,
+      "exit": 0,
+      "finished_unix": 1794534049.772207
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--lib",
+        "compact_wal::",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794534049.7725763,
+      "exit": 0,
+      "finished_unix": 1794534050.1925633
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--test",
+        "sql_rename_snapshot_fence",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794534050.1928937,
+      "exit": 0,
+      "finished_unix": 1794534098.705558
+    }
+  ],
+  "status": "focused_passed",
+  "finished_unix": 1794534098.7058141
+}

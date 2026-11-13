@@ -1,0 +1,26 @@
+{
+  "label": "native-origin-root-main492-version-final",
+  "source": "5594663d3757ce2fad1340028e5b430088b29a24",
+  "base": "1f14ae1d7ed9ebdbde8a9cd2ae4af9f4bedb7c1f",
+  "repo": "/root/bicdb-sql-final-composition",
+  "scope": "Exact559 private492integration final version identity selector corrected to bicdb-sql. Priorintegration compile, Core20 and SQLauthority1 PASS; final invocation failed because --test version_identity was incorrectly selected from Core and no assertion ran. Reuse preceding checks. This actual SQL target verifies both version identities; no broad/application/producer qualification.",
+  "continue_on_failure": false,
+  "commands": [
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-sql",
+      "--test",
+      "version_identity",
+      "--",
+      "--nocapture",
+      "--test-threads=1"
+    ]
+  ],
+  "wait_units": []
+}

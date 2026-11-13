@@ -1,0 +1,44 @@
+[
+  {
+    "path": "original-receipt.json",
+    "bytes": 3709,
+    "sha256": "25254e728cc1211fb06d89216c7666c7643191f64e2d84f22cdee2cceed25a2d",
+    "raw_sha256": "25254e728cc1211fb06d89216c7666c7643191f64e2d84f22cdee2cceed25a2d",
+    "raw_bytes": 3709,
+    "remote_path": "report-partition-native-identity-main489-broad.json"
+  },
+  {
+    "path": "canonical-parent-results.json",
+    "bytes": 229617,
+    "sha256": "2a5508bbf92b6a2d7abd0f4293ddd47140627bd265cee265430f942842ad0cda",
+    "raw_sha256": "2a5508bbf92b6a2d7abd0f4293ddd47140627bd265cee265430f942842ad0cda",
+    "raw_bytes": 229617,
+    "remote_path": "report-partition-native-identity-main489-canonical-parent-results.json"
+  },
+  {
+    "path": "original.log.gz",
+    "bytes": 368066,
+    "sha256": "5b8c7bb74ba6035da400429d04d57a2779a91dec9b8dd4bafcddeda1a0f6e661",
+    "raw_sha256": "df47fcecd1166d73fdec0da59317ff1033bc2af220781d00c5c0a7dea9fcb555",
+    "raw_bytes": 3221647,
+    "remote_path": "tc-step-partition-native-identity-main489-broad.log"
+  },
+  {
+    "path": "owned-cleanup-receipt.json",
+    "bytes": 74780,
+    "sha256": "ac1bf39844a6f94bf78123f1db6b59735d1df20e19782dbafe5a5f1355d8528d",
+    "raw_sha256": "ac1bf39844a6f94bf78123f1db6b59735d1df20e19782dbafe5a5f1355d8528d",
+    "raw_bytes": 74780,
+    "remote_path": "host-control/native490-superseded-metadata-ELF-cleanup.json"
+  },
+  {
+    "path": "collect-canonical-native-identity-partition-results.py",
+    "bytes": 2931,
+    "sha256": "e6d2bb9ea945a0963f1ec5cbb99d72072ed9032321f3b279c91fc42c62bca816"
+  },
+  {
+    "path": "partition-native-identity-main489-broad.json",
+    "bytes": 3533,
+    "sha256": "8e49478d3461f8a9ff247db9ef58b477d12b343209d13123ef5086cfbf13fb8a"
+  }
+]

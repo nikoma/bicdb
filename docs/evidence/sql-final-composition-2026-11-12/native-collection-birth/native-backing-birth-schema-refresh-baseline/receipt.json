@@ -1,0 +1,29 @@
+{
+  "source": "d2c85d9879b2bb895bf87aecb68ba749613b19d3",
+  "scope": "New Native backing-birth regression: actual cluster schema refresh must retain actual pre-existing target allocation birth and independently acknowledged Native data. Expected baseline failure because metadata refresh preserves namespace UUID but currently drops the new backing birth. No original assertions modified. Not portable origin/recovery/main/application qualification.",
+  "started_unix": 1794531843.559159,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--lib",
+        "native_birth_schema_refresh_keeps_existing_allocation_and_native_ack",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794531843.5592556,
+      "exit": 101,
+      "finished_unix": 1794531883.9160008
+    }
+  ],
+  "status": "failed",
+  "finished_unix": 1794531883.916236
+}

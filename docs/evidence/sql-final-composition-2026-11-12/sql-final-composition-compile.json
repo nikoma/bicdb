@@ -1,0 +1,54 @@
+{
+  "label": "sql-final-composition-compile",
+  "source": "c727a6fade74c070384a9191fbf9ac0a455111c2",
+  "base": "0031d1976ece1be2d6139ea9972fbf49069b1590",
+  "repo": "/root/bicdb-sql-final-composition",
+  "scope": "Compile only of full partition+Nativeauthorizedidentity+semanticreaderfix composed with hardened SQLrename/catalogadmission branch e897. Source inherited489; no finalsource versionreservation, mainmerge, test pass, originalpromotion/portableorigin, application, HA/capacity, CLI/release/deployment claim. Preserve original tests/assertions/waits and full goal/P2off/no new spend. Exact concurrent metadata Cargo birth allowed, separate locked sources/targets and monitored bounded compilers.",
+  "continue_on_failure": false,
+  "commands": [
+    [
+      "python3",
+      "scripts/bump-version.py",
+      "--check"
+    ],
+    [
+      "cargo",
+      "+1.96.0",
+      "check",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-core",
+      "-p",
+      "bicdb-sql",
+      "-p",
+      "bicdb-pgwire",
+      "--all-targets"
+    ]
+  ],
+  "required_receipts": [
+    {
+      "path": "report-partition-native-identity-main489-broad.json",
+      "equals": {
+        "source": "0031d1976ece1be2d6139ea9972fbf49069b1590",
+        "status": "focused_passed"
+      }
+    },
+    {
+      "path": "report-semantic-reader-capture-focused.json",
+      "equals": {
+        "source": "e8c426a73a14c1d97851082b90b815da60d4ef82",
+        "status": "focused_passed"
+      }
+    }
+  ],
+  "allow_isolated_builds": [
+    {
+      "pid": 3447154,
+      "start_ticks": 165215890,
+      "repo": "/root/bicdb-durability-s3/repo-metadata-describe",
+      "target": "/root/bicdb-durability-s3/target-metadata-describe"
+    }
+  ]
+}

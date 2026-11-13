@@ -25,9 +25,21 @@ pub const ONLINE_BACKUP_EXTENT_FEATURE_FLAG: &str = "online_backup_extent_tracki
 pub const UNIQUE_NULLS_NOT_DISTINCT_FEATURE_FLAG: &str = "unique_nulls_not_distinct_v1";
 pub const ORACLE_INVALID_ROUTINES_FEATURE_FLAG: &str = "oracle_invalid_routines_v1";
 pub const SQL_CATALOG_INTENTS_FEATURE_FLAG: &str = "sql_catalog_intents_v1";
+pub const SQL_PARTITION_EXECUTION_V1_FEATURE_FLAG: &str = "sql_partition_execution_v1";
+/// Generic rename before-images require recovery beyond the recycle journal.
+pub const SQL_RENAME_INTENTS_FEATURE_FLAG: &str = "sql_rename_intents_v1";
 /// Node-local namespace lineage. Never replicate this as a portable schema
 /// reader capability: each destination activates and owns its own identities.
 pub const LOCAL_NAMESPACE_IDENTITY_FEATURE_FLAG: &str = "local_namespace_identity_v1";
+/// Future-only local allocation identities, never portable reader authority.
+pub const NATIVE_COLLECTION_BIRTH_FEATURE_FLAG: &str = "native_collection_birth_v1";
+/// Local historical WAL allocation contracts; birth-aware older writers must
+/// refuse rather than silently discard these additional commit facts.
+pub const NATIVE_WAL_BACKING_CAPTURE_FEATURE_FLAG: &str = "native_wal_backing_capture_v1";
+/// Physical Native factory root and allocation scope; local, not peer auth.
+pub const NATIVE_ORIGIN_ROOT_FEATURE_FLAG: &str = "native_origin_root_v1";
+pub const NATIVE_CATALOG_ALLOCATION_FACTS_FEATURE_FLAG: &str = "native_catalog_allocation_facts_v1";
+pub const NATIVE_IMPORTED_BACKING_ORIGINS_FEATURE_FLAG: &str = "native_imported_backing_origins_v1";
 /// Local native image receipts require writers that honor image invalidation.
 /// This capability is separate from namespace IDs and is never portable schema.
 pub const RANGE_IMAGE_INSTALL_FEATURE_FLAG: &str = "range_image_install_v1";
@@ -59,6 +71,7 @@ pub const NATIVE_FACT_PROJECTION_CONTRACTS_FEATURE_FLAG: &str =
 pub const NATIVE_COMPLETED_DECISION_MATERIALIZATION_FEATURE_FLAG: &str =
     "native_completed_decision_materialization_v1";
 const KNOWN_FEATURE_FLAGS: &[&str] = &[
+    SQL_PARTITION_EXECUTION_V1_FEATURE_FLAG,
     EXACT_DECIMAL_UNITS_FEATURE_FLAG,
     NATIVE_COMPLETED_DECISION_MATERIALIZATION_FEATURE_FLAG,
     EXACT_DECIMAL_LIST_SUM_FEATURE_FLAG,
@@ -71,7 +84,13 @@ const KNOWN_FEATURE_FLAGS: &[&str] = &[
     ORACLE_SIMPLE_CASE_V1_FEATURE_FLAG,
     UNIQUE_NULLS_NOT_DISTINCT_FEATURE_FLAG,
     SQL_CATALOG_INTENTS_FEATURE_FLAG,
+    SQL_RENAME_INTENTS_FEATURE_FLAG,
     LOCAL_NAMESPACE_IDENTITY_FEATURE_FLAG,
+    NATIVE_COLLECTION_BIRTH_FEATURE_FLAG,
+    NATIVE_WAL_BACKING_CAPTURE_FEATURE_FLAG,
+    NATIVE_ORIGIN_ROOT_FEATURE_FLAG,
+    NATIVE_CATALOG_ALLOCATION_FACTS_FEATURE_FLAG,
+    NATIVE_IMPORTED_BACKING_ORIGINS_FEATURE_FLAG,
     RANGE_IMAGE_INSTALL_FEATURE_FLAG,
     CURRENT_IMAGE_PROPOSAL_FEATURE_FLAG,
     NATIVE_RECOVERY_SERVING_FEATURE_FLAG,
@@ -87,21 +106,23 @@ const KNOWN_FEATURE_FLAGS: &[&str] = &[
     ONLINE_BACKUP_EXTENT_FEATURE_FLAG,
 ];
 
-// Capture-only subset of the c3 portable-reader contract. Rename journals
-// are deliberately absent until their actual recovery implementation lands;
-// knowing a future flag before implementing its reader would be unsafe.
+// Required semantic readers travel with a captured image; node-local storage,
+// identity and authority flags do not. This list only includes implemented
+// readers. The contract itself grants no recovery or portable origin authority.
 const REPLICATED_READER_FEATURES: &[&str] = &[
     EXACT_DECIMAL_UNITS_FEATURE_FLAG,
     EXACT_DECIMAL_LIST_SUM_FEATURE_FLAG,
     EXACT_PROPORTIONAL_INTERVALS_FEATURE_FLAG,
     NATIVE_FACT_PROJECTION_CONTRACTS_FEATURE_FLAG,
     NATIVE_IMMUTABLE_FACTS_FEATURE_FLAG,
+    SQL_PARTITION_EXECUTION_V1_FEATURE_FLAG,
     DECIMAL_PREDICATE_COMPARISON_V1_FEATURE_FLAG,
     APPLICATION_UNIQUE_SCOPE_FEATURE_FLAG,
     ORACLE_INVALID_ROUTINES_FEATURE_FLAG,
     ORACLE_SIMPLE_CASE_V1_FEATURE_FLAG,
     UNIQUE_NULLS_NOT_DISTINCT_FEATURE_FLAG,
     SQL_CATALOG_INTENTS_FEATURE_FLAG,
+    SQL_RENAME_INTENTS_FEATURE_FLAG,
 ];
 
 pub(crate) fn required_reader_features(root: &Path) -> Result<Vec<String>> {
@@ -131,15 +152,72 @@ fn feature_flags_lock(root: &Path) -> std::sync::Arc<parking_lot::Mutex<()>> {
     lock
 }
 
-pub(crate) fn enable_decimal_predicate_comparison_v1(root: &Path) -> Result<()> {
+pub(crate) fn validate_replicated_reader_features(features: &[String]) -> Result<()> {
+    if features.windows(2).any(|pair| pair[0] >= pair[1]) {
+        return Err(BicDbError::FormatCompatibility(
+            "replicated reader capabilities must be sorted and unique".into(),
+        ));
+    }
+    for feature in features {
+        if !REPLICATED_READER_FEATURES.contains(&feature.as_str()) {
+            return Err(BicDbError::FormatCompatibility(format!(
+                "unsupported replicated reader capability `{feature}`"
+            )));
+        }
+    }
+    Ok(())
+}
+
+pub(crate) fn validate_collection_reader_features(name: &str, features: &[String]) -> Result<()> {
+    let required = match name {
+        "__bicdb_rename_intents" | "__bicdb_rename_images" | "__bicdb_rename_gc" => {
+            Some(SQL_RENAME_INTENTS_FEATURE_FLAG)
+        }
+        "__bicdb_recycle_intents" | "__bicdb_recycle_purges" | "__bicdb_recycle_creations" => {
+            Some(SQL_CATALOG_INTENTS_FEATURE_FLAG)
+        }
+        _ => None,
+    };
+    if let Some(required) = required {
+        if !features.iter().any(|feature| feature == required) {
+            return Err(BicDbError::FormatCompatibility(format!(
+                "replicated collection `{name}` requires reader capability `{required}`"
+            )));
+        }
+    }
+    Ok(())
+}
+
+pub(crate) fn install_replicated_reader_features(root: &Path, features: &[String]) -> Result<bool> {
+    validate_replicated_reader_features(features)?;
+    if features.is_empty() {
+        return Ok(false);
+    }
+    enable_feature_flags_changed(
+        root,
+        &features.iter().map(String::as_str).collect::<Vec<_>>(),
+    )
+}
+
+fn enable_feature_flags(root: &Path, features: &[&str]) -> Result<()> {
+    enable_feature_flags_changed(root, features).map(|_| ())
+}
+
+fn enable_feature_flags_changed(root: &Path, features: &[&str]) -> Result<bool> {
+    // Shared range-apply workers can install different capabilities at once.
+    // Serialize the read/merge/fsync with local feature enables so neither
+    // writer can replace a flag that the other has just made durable.
     let lock = feature_flags_lock(root);
     let _guard = lock.lock();
     let mut metadata = read_or_legacy_metadata(root)?;
     validate_supported(&metadata)?;
-    metadata
-        .feature_flags
-        .insert(DECIMAL_PREDICATE_COMPARISON_V1_FEATURE_FLAG.into());
-    persist_metadata(root, &metadata, true)
+    let changed = features.iter().fold(false, |changed, feature| {
+        metadata.feature_flags.insert((*feature).into()) || changed
+    });
+    if changed {
+        persist_metadata(root, &metadata, true)?;
+    }
+    Ok(changed)
 }
 
 /// Which storage engine owns a database's durable state. See
@@ -629,6 +707,15 @@ fn persist_metadata_with(
             .contains(LOCAL_NAMESPACE_IDENTITY_FEATURE_FLAG)
         || metadata
             .feature_flags
+            .contains(NATIVE_WAL_BACKING_CAPTURE_FEATURE_FLAG)
+        || metadata
+            .feature_flags
+            .contains(NATIVE_ORIGIN_ROOT_FEATURE_FLAG)
+        || metadata
+            .feature_flags
+            .contains(SQL_PARTITION_EXECUTION_V1_FEATURE_FLAG)
+        || metadata
+            .feature_flags
             .contains(RANGE_IMAGE_INSTALL_FEATURE_FLAG)
         || metadata
             .feature_flags
@@ -690,33 +777,44 @@ pub(crate) fn enable_online_backup_extent_tracking(root: &Path) -> Result<()> {
 
 /// Older binaries must refuse a database whose unique keys compare NULLs as equal.
 pub(crate) fn enable_unique_nulls_not_distinct(root: &Path) -> Result<()> {
-    let lock = feature_flags_lock(root);
-    let _guard = lock.lock();
-    let mut metadata = read_or_legacy_metadata(root)?;
-    validate_supported(&metadata)?;
-    if metadata
-        .feature_flags
-        .insert(UNIQUE_NULLS_NOT_DISTINCT_FEATURE_FLAG.into())
-    {
-        persist_metadata(root, &metadata, true)?;
-    }
-    Ok(())
+    enable_feature_flags(root, &[UNIQUE_NULLS_NOT_DISTINCT_FEATURE_FLAG])
 }
 
 /// Fence older SQL runtimes before publishing a transactional catalog intent.
 /// Even an empty journal remains sticky: unknown readers must not skip recovery.
 pub(crate) fn enable_sql_catalog_intents(root: &Path) -> Result<()> {
+    enable_feature_flags(root, &[SQL_CATALOG_INTENTS_FEATURE_FLAG])
+}
+
+/// Install before publishing any generic rename undo images. Readers that
+/// only understand recycle moves must refuse this store, even after the last
+/// rename intent has been resolved. Never remove this sticky capability.
+pub(crate) fn enable_sql_rename_intents(root: &Path) -> Result<()> {
+    enable_feature_flags(root, &[SQL_RENAME_INTENTS_FEATURE_FLAG])
+}
+
+/// Always sync an activation retry too: a flag visible after a failed
+/// directory sync does not yet establish the required-reader fence.
+pub(crate) fn enable_sql_partition_execution_v1(
+    root: &Path,
+    health: &bicdb_page::DurabilityHealth,
+) -> Result<()> {
     let lock = feature_flags_lock(root);
     let _guard = lock.lock();
     let mut metadata = read_or_legacy_metadata(root)?;
     validate_supported(&metadata)?;
-    if metadata
+    metadata
         .feature_flags
-        .insert(SQL_CATALOG_INTENTS_FEATURE_FLAG.into())
-    {
-        persist_metadata(root, &metadata, true)?;
-    }
-    Ok(())
+        .insert(SQL_PARTITION_EXECUTION_V1_FEATURE_FLAG.into());
+    persist_metadata_with(root, &metadata, true, |path, bytes, fsync| {
+        storage::replace_durably(
+            path,
+            storage::ReplaceContents::Plain(bytes),
+            fsync,
+            "sql_partition.format_fence",
+            storage::FailClosed::Always(health),
+        )
+    })
 }
 
 /// Always fsync the sticky fence, including an interrupted activation retry,
@@ -729,6 +827,107 @@ pub(crate) fn enable_local_namespace_identity(root: &Path) -> Result<()> {
     metadata
         .feature_flags
         .insert(LOCAL_NAMESPACE_IDENTITY_FEATURE_FLAG.into());
+    persist_metadata(root, &metadata, true)
+}
+
+/// Fence older readers/writers before a new backing can acquire a birth ID.
+/// Retrying this fence must not manufacture identities for older backings.
+pub(crate) fn enable_native_collection_birth(root: &Path) -> Result<()> {
+    let lock = feature_flags_lock(root);
+    let _guard = lock.lock();
+    let mut metadata = read_or_legacy_metadata(root)?;
+    validate_supported(&metadata)?;
+    if !metadata
+        .feature_flags
+        .contains(LOCAL_NAMESPACE_IDENTITY_FEATURE_FLAG)
+    {
+        return Err(BicDbError::InvalidConfig(
+            "Native collection birth requires local namespace identities".into(),
+        ));
+    }
+    metadata
+        .feature_flags
+        .insert(NATIVE_COLLECTION_BIRTH_FEATURE_FLAG.into());
+    persist_metadata(root, &metadata, true)
+}
+
+pub(crate) fn enable_native_wal_backing_capture(root: &Path) -> Result<()> {
+    let lock = feature_flags_lock(root);
+    let _guard = lock.lock();
+    let mut metadata = read_or_legacy_metadata(root)?;
+    validate_supported(&metadata)?;
+    if !metadata
+        .feature_flags
+        .contains(NATIVE_COLLECTION_BIRTH_FEATURE_FLAG)
+        || !metadata
+            .feature_flags
+            .contains(LOCAL_NAMESPACE_IDENTITY_FEATURE_FLAG)
+    {
+        return Err(BicDbError::InvalidConfig(
+            "Native WAL backing capture requires collection births and local namespace identities"
+                .into(),
+        ));
+    }
+    metadata
+        .feature_flags
+        .insert(NATIVE_WAL_BACKING_CAPTURE_FEATURE_FLAG.into());
+    persist_metadata(root, &metadata, true)
+}
+
+/// Fence image-unaware readers/writers before trusting native image receipts.
+pub(crate) fn enable_native_origin_root(root: &Path) -> Result<()> {
+    let lock = feature_flags_lock(root);
+    let _guard = lock.lock();
+    let mut metadata = read_or_legacy_metadata(root)?;
+    validate_supported(&metadata)?;
+    metadata
+        .feature_flags
+        .insert(NATIVE_ORIGIN_ROOT_FEATURE_FLAG.into());
+    persist_metadata(root, &metadata, true)
+}
+
+pub(crate) fn enable_native_imported_backing_origins(root: &Path) -> Result<()> {
+    let lock = feature_flags_lock(root);
+    let _guard = lock.lock();
+    let mut metadata = read_or_legacy_metadata(root)?;
+    validate_supported(&metadata)?;
+    for required in [
+        NATIVE_ORIGIN_ROOT_FEATURE_FLAG,
+        NATIVE_COLLECTION_BIRTH_FEATURE_FLAG,
+        NATIVE_WAL_BACKING_CAPTURE_FEATURE_FLAG,
+        LOCAL_NAMESPACE_IDENTITY_FEATURE_FLAG,
+    ] {
+        if !metadata.feature_flags.contains(required) {
+            return Err(BicDbError::InvalidConfig(
+                "Native imported origins require actual root, birth, namespace and WAL capture"
+                    .into(),
+            ));
+        }
+    }
+    metadata
+        .feature_flags
+        .insert(NATIVE_IMPORTED_BACKING_ORIGINS_FEATURE_FLAG.into());
+    persist_metadata(root, &metadata, true)
+}
+
+pub(crate) fn enable_native_catalog_allocation_facts(root: &Path) -> Result<()> {
+    let lock = feature_flags_lock(root);
+    let _guard = lock.lock();
+    let mut metadata = read_or_legacy_metadata(root)?;
+    validate_supported(&metadata)?;
+    for required in [
+        NATIVE_ORIGIN_ROOT_FEATURE_FLAG,
+        NATIVE_WAL_BACKING_CAPTURE_FEATURE_FLAG,
+    ] {
+        if !metadata.feature_flags.contains(required) {
+            return Err(BicDbError::InvalidConfig(
+                "Native catalog allocation facts require actual origin and WAL capture".into(),
+            ));
+        }
+    }
+    metadata
+        .feature_flags
+        .insert(NATIVE_CATALOG_ALLOCATION_FACTS_FEATURE_FLAG.into());
     persist_metadata(root, &metadata, true)
 }
 
@@ -1031,32 +1230,103 @@ pub(crate) fn range_image_install_active(root: &Path) -> Result<bool> {
 /// Persist the reader/writer fence before any Oracle-v1 key definition or build
 /// checkpoint becomes durable. The capability is sticky even after index DROP.
 pub(crate) fn enable_oracle_simple_case_v1(root: &Path) -> Result<()> {
-    let lock = feature_flags_lock(root);
-    let _guard = lock.lock();
-    let mut metadata = read_or_legacy_metadata(root)?;
-    validate_supported(&metadata)?;
-    if metadata
-        .feature_flags
-        .insert(ORACLE_SIMPLE_CASE_V1_FEATURE_FLAG.into())
-    {
-        persist_metadata(root, &metadata, true)?;
-    }
-    Ok(())
+    enable_feature_flags(root, &[ORACLE_SIMPLE_CASE_V1_FEATURE_FLAG])
 }
 
 /// Persist a sticky reader fence before publishing an invalid Oracle routine.
 pub(crate) fn enable_oracle_invalid_routines(root: &Path) -> Result<()> {
-    let lock = feature_flags_lock(root);
-    let _guard = lock.lock();
-    let mut metadata = read_or_legacy_metadata(root)?;
-    validate_supported(&metadata)?;
-    if metadata
-        .feature_flags
-        .insert(ORACLE_INVALID_ROUTINES_FEATURE_FLAG.into())
-    {
-        persist_metadata(root, &metadata, true)?;
+    enable_feature_flags(root, &[ORACLE_INVALID_ROUTINES_FEATURE_FLAG])
+}
+
+#[cfg(test)]
+mod replicated_reader_tests {
+    use super::*;
+
+    #[test]
+    fn portable_capabilities_preserve_local_layout_and_backup_fences() {
+        let root = tempfile::tempdir().unwrap();
+        persist_current_with_mode(root.path(), StorageMode::ServerPaged, true).unwrap();
+        enable_online_backup_extent_tracking(root.path()).unwrap();
+        install_replicated_reader_features(root.path(), &[SQL_RENAME_INTENTS_FEATURE_FLAG.into()])
+            .unwrap();
+        install_replicated_reader_features(
+            root.path(),
+            &[ORACLE_SIMPLE_CASE_V1_FEATURE_FLAG.into()],
+        )
+        .unwrap();
+        persist_current(root.path(), true).unwrap();
+        let metadata = read_or_legacy_metadata(root.path()).unwrap();
+        assert_eq!(metadata.storage_mode, StorageMode::ServerPaged);
+        assert!(metadata
+            .feature_flags
+            .contains(ONLINE_BACKUP_EXTENT_FEATURE_FLAG));
+        assert_eq!(
+            required_reader_features(root.path()).unwrap(),
+            vec![
+                ORACLE_SIMPLE_CASE_V1_FEATURE_FLAG.to_string(),
+                SQL_RENAME_INTENTS_FEATURE_FLAG.to_string()
+            ]
+        );
     }
-    Ok(())
+
+    #[test]
+    fn unknown_nonportable_and_noncanonical_requirements_leave_metadata_untouched() {
+        let root = tempfile::tempdir().unwrap();
+        persist_current(root.path(), true).unwrap();
+        let before = std::fs::read(metadata_path(root.path())).unwrap();
+        for features in [
+            vec!["unknown_reader_v999".into()],
+            vec![SERVER_PAGED_FEATURE_FLAG.into()],
+            vec![
+                SQL_RENAME_INTENTS_FEATURE_FLAG.into(),
+                SQL_CATALOG_INTENTS_FEATURE_FLAG.into(),
+            ],
+            vec![
+                SQL_RENAME_INTENTS_FEATURE_FLAG.into(),
+                SQL_RENAME_INTENTS_FEATURE_FLAG.into(),
+            ],
+        ] {
+            assert!(install_replicated_reader_features(root.path(), &features).is_err());
+            assert_eq!(std::fs::read(metadata_path(root.path())).unwrap(), before);
+        }
+    }
+
+    #[test]
+    fn simultaneous_feature_installs_and_metadata_refresh_keep_the_union() {
+        let root = tempfile::tempdir().unwrap();
+        persist_current(root.path(), true).unwrap();
+        let barrier = std::sync::Barrier::new(3);
+        std::thread::scope(|scope| {
+            for feature in [
+                SQL_CATALOG_INTENTS_FEATURE_FLAG,
+                SQL_RENAME_INTENTS_FEATURE_FLAG,
+            ] {
+                let root = root.path();
+                let barrier = &barrier;
+                scope.spawn(move || {
+                    barrier.wait();
+                    for _ in 0..16 {
+                        install_replicated_reader_features(root, &[feature.into()]).unwrap();
+                    }
+                });
+            }
+            let root = root.path();
+            let barrier = &barrier;
+            scope.spawn(move || {
+                barrier.wait();
+                for _ in 0..16 {
+                    persist_current(root, true).unwrap();
+                }
+            });
+        });
+        assert_eq!(
+            required_reader_features(root.path()).unwrap(),
+            vec![
+                SQL_CATALOG_INTENTS_FEATURE_FLAG.to_string(),
+                SQL_RENAME_INTENTS_FEATURE_FLAG.to_string()
+            ]
+        );
+    }
 }
 
 #[cfg(test)]
@@ -1297,6 +1567,124 @@ pub(crate) fn enable_exact_decimal_units(root: &Path) -> Result<()> {
     metadata
         .feature_flags
         .insert(EXACT_DECIMAL_UNITS_FEATURE_FLAG.into());
+    persist_metadata(root, &metadata, true)
+}
+
+#[cfg(test)]
+mod semantic_reader_capture_tests {
+    use super::*;
+    use crate::{BicDb, DbConfig, Record};
+
+    fn preserves_semantic_requirement(flag: &str, activate: impl Fn(&mut BicDb)) {
+        for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
+            let root = tempfile::tempdir().unwrap();
+            let config = DbConfig::default()
+                .with_storage_mode(mode)
+                .with_fsync(true)
+                .with_paged_buffer_pool_bytes(8 * 1024 * 1024);
+            let mut db = BicDb::open_with_config(root.path(), config.clone()).unwrap();
+            db.create_collection("reader_capture_ACK").unwrap();
+            db.insert(
+                "reader_capture_ACK",
+                Record::new("one")
+                    .with_metadata(serde_json::json!({"payload":"independent-native-ACK"})),
+            )
+            .unwrap();
+            let hash = db
+                .get("reader_capture_ACK", "one")
+                .unwrap()
+                .unwrap()
+                .content_hash()
+                .unwrap();
+            activate(&mut db);
+            assert!(read_or_legacy_metadata(root.path())
+                .unwrap()
+                .feature_flags
+                .contains(flag));
+            let sequence = db.last_commit_seq();
+            let captured = required_reader_features(root.path()).unwrap();
+            assert!(captured.iter().any(|f| f == flag), "Native reader contract silently dropped active semantic requirement {flag}: {captured:?}");
+            assert_eq!(db.last_commit_seq(), sequence, "capture must be read-only");
+            assert_eq!(
+                db.get("reader_capture_ACK", "one")
+                    .unwrap()
+                    .unwrap()
+                    .content_hash()
+                    .unwrap(),
+                hash
+            );
+            db.close().unwrap();
+            for _ in 0..2 {
+                let db = BicDb::open_with_config(root.path(), config.clone()).unwrap();
+                assert!(required_reader_features(root.path())
+                    .unwrap()
+                    .iter()
+                    .any(|f| f == flag));
+                assert_eq!(
+                    db.get("reader_capture_ACK", "one")
+                        .unwrap()
+                        .unwrap()
+                        .content_hash()
+                        .unwrap(),
+                    hash
+                );
+                db.close().unwrap();
+            }
+        }
+    }
+
+    #[test]
+    fn partition_execution_requirement_survives_native_reader_capture() {
+        preserves_semantic_requirement(SQL_PARTITION_EXECUTION_V1_FEATURE_FLAG, |db| {
+            db.enable_sql_partition_execution_v1().unwrap()
+        });
+    }
+    #[test]
+    fn decimal_comparison_requirement_survives_native_reader_capture() {
+        preserves_semantic_requirement(DECIMAL_PREDICATE_COMPARISON_V1_FEATURE_FLAG, |db| {
+            enable_decimal_predicate_comparison_v1(db.data_path()).unwrap()
+        });
+    }
+    #[test]
+    fn application_unique_scope_requirement_survives_native_reader_capture() {
+        preserves_semantic_requirement(APPLICATION_UNIQUE_SCOPE_FEATURE_FLAG, |db| {
+            db.enable_application_unique_scope().unwrap()
+        });
+    }
+
+    #[test]
+    fn finance_requirements_survive_native_reader_capture_and_reopens() {
+        for (flag, activate) in [
+            (
+                NATIVE_IMMUTABLE_FACTS_FEATURE_FLAG,
+                enable_native_immutable_facts as fn(&Path) -> Result<()>,
+            ),
+            (
+                NATIVE_FACT_PROJECTION_CONTRACTS_FEATURE_FLAG,
+                enable_native_fact_projection_contracts,
+            ),
+            (
+                EXACT_PROPORTIONAL_INTERVALS_FEATURE_FLAG,
+                enable_exact_proportional_intervals,
+            ),
+            (
+                EXACT_DECIMAL_LIST_SUM_FEATURE_FLAG,
+                enable_exact_decimal_list_sum,
+            ),
+        ] {
+            preserves_semantic_requirement(flag, |db| activate(db.data_path()).unwrap());
+        }
+    }
+}
+
+pub(crate) fn enable_decimal_predicate_comparison_v1(root: &Path) -> Result<()> {
+    let lock = feature_flags_lock(root);
+    let _guard = lock.lock();
+    let mut metadata = read_or_legacy_metadata(root)?;
+    validate_supported(&metadata)?;
+    metadata
+        .feature_flags
+        .insert(DECIMAL_PREDICATE_COMPARISON_V1_FEATURE_FLAG.into());
     persist_metadata(root, &metadata, true)
 }
 

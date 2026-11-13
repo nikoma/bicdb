@@ -1,0 +1,29 @@
+{
+  "source": "3d294731f1b00638677bb81ddee2b67029cbf61a",
+  "scope": "Actual retained Native WAL batch and live exports after rename and same-name replacement. Original durable record must retain its write-time backing contract, not whichever same-name collection happens to exist now. Independent Native ACK/data custody and two reopens in both modes. Expected pre-fix failures; no portable authority/main/application qualification. First fixture correctly refused mesh-synchronized rename before reaching the intended assertion. This baseline fixes only the fixture: renameable Standard A, replacement TimeSeries B. Runtime implementation changes remain outside this pinned commit and are not part of baseline.",
+  "started_unix": 1794532716.1592896,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--lib",
+        "native_collection_birth::wal_tests::",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794532716.1595345,
+      "exit": 101,
+      "finished_unix": 1794532776.4363804
+    }
+  ],
+  "status": "failed",
+  "finished_unix": 1794532776.4366233
+}

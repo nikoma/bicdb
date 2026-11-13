@@ -143,41 +143,66 @@ pub(crate) fn alter_table_alter_column(
             schema.columns[idx].nullable = true;
             save_schema(db, schema)
         }
-        AlterColumnOperation::SetDefault { value } => {
-            if schema.columns[idx].identity.is_some() {
-                return Err(SqlError::InvalidSql(format!(
-                    "column \"{column}\" of relation \"{table}\" is an identity column"
-                )));
-            }
-            if let Some(sequence) = default_sequence_from_expr(value)? {
-                load_sequence_required(db, &sequence)?;
-                schema.columns[idx].default_sequence = Some(sequence);
-                schema.columns[idx].default_value = None;
-                schema.columns[idx].default_expr = None;
-            } else {
-                schema.columns[idx].default_sequence = None;
-                let pg_type = schema.columns[idx].pg_type.clone();
-                schema.columns[idx].default_value =
-                    literal_default_value_from_expr_with_db(db, value, &pg_type)?;
-                schema.columns[idx].default_expr = Some(crate::sql_text::sql_text(value));
-            }
-            save_schema(db, schema)
-        }
-        AlterColumnOperation::DropDefault => {
-            if schema.columns[idx].identity.is_some() {
-                return Err(SqlError::InvalidSql(format!(
-                    "column \"{column}\" of relation \"{table}\" is an identity column"
-                )));
-            }
-            schema.columns[idx].default_sequence = None;
-            schema.columns[idx].default_value = None;
-            schema.columns[idx].default_expr = None;
+        AlterColumnOperation::SetDefault { .. } | AlterColumnOperation::DropDefault => {
+            let actual = schema.columns[idx].name.clone();
+            alter_column_default(db, schema, &actual, op)?;
             save_schema(db, schema)
         }
         AlterColumnOperation::AddGenerated { .. } => Err(SqlError::Unsupported(format!(
             "ALTER COLUMN {op} is not supported"
         ))),
     }
+}
+
+pub(crate) fn alter_column_default(
+    db: &BicDb,
+    schema: &mut TableSchema,
+    column: &str,
+    op: &AlterColumnOperation,
+) -> Result<()> {
+    let index = schema
+        .columns
+        .iter()
+        .position(|candidate| candidate.name == column)
+        .ok_or_else(|| SqlError::UndefinedColumn {
+            table: schema.name.clone(),
+            column: column.into(),
+        })?;
+    if schema.columns[index].identity.is_some() {
+        return Err(SqlError::InvalidSql(format!(
+            "column \"{column}\" of relation \"{}\" is an identity column",
+            schema.name
+        )));
+    }
+    match op {
+        AlterColumnOperation::SetDefault { value } => {
+            if let Some(sequence) = default_sequence_from_expr(value)? {
+                load_sequence_required(db, &sequence)?;
+                schema.columns[index].default_sequence = Some(sequence);
+                schema.columns[index].default_value = None;
+                schema.columns[index].default_expr = None;
+            } else {
+                schema.columns[index].default_sequence = None;
+                schema.columns[index].default_value = literal_default_value_from_expr_with_db(
+                    db,
+                    value,
+                    &schema.columns[index].pg_type,
+                )?;
+                schema.columns[index].default_expr = Some(crate::sql_text::sql_text(value));
+            }
+        }
+        AlterColumnOperation::DropDefault => {
+            schema.columns[index].default_sequence = None;
+            schema.columns[index].default_value = None;
+            schema.columns[index].default_expr = None;
+        }
+        _ => {
+            return Err(SqlError::Unsupported(format!(
+                "not a column default operation: {op}"
+            )))
+        }
+    }
+    Ok(())
 }
 
 pub(crate) fn alter_column_using_is_self_cast(expr: &Expr, column: &str) -> bool {
@@ -207,8 +232,10 @@ pub(crate) fn sync_partition_children_from_parent(
         if !partition_of.parent_table.eq_ignore_ascii_case(&parent.name) {
             continue;
         }
-        let synced = schema_with_parent_inheritance(child, parent);
-        save_schema(db, &synced)?;
+        let synced = schema_with_parent_inheritance(child.clone(), parent);
+        if serde_json::to_value(&synced)? != serde_json::to_value(&child)? {
+            save_schema(db, &synced)?;
+        }
     }
     Ok(())
 }
@@ -226,13 +253,18 @@ pub(crate) fn alter_table_add_constraint(
         let existing_columns = primary_key_columns_for_schema(schema);
         if !existing_columns.is_empty() {
             if schema.primary_key_name.is_none() && existing_columns == columns {
+                let existing_name = schema.primary_key_constraint_name();
                 let name = primary_key
                     .name
                     .as_ref()
                     .map(ident_value)
-                    .unwrap_or_else(|| default_primary_key_name(table));
+                    .unwrap_or_else(|| existing_name.clone());
+                let rename = (name != existing_name
+                    && executable_primary_key_index_for_schema(db, schema).is_some())
+                .then(|| (existing_name, name.clone()));
                 schema.primary_key_name = Some(name);
-                return Ok(None);
+                schema.implicit_primary_key_name = None;
+                return Ok(rename);
             }
             return Err(SqlError::InvalidSql(format!(
                 "multiple primary keys for table \"{table}\" are not allowed"
@@ -243,7 +275,9 @@ pub(crate) fn alter_table_add_constraint(
             .name
             .as_ref()
             .map(ident_value)
-            .unwrap_or_else(|| default_primary_key_name(table));
+            .unwrap_or_else(|| {
+                allocate_primary_key_name(db, &schema.schema_name, table, &schema.constraints)
+            });
         apply_primary_key_constraint(db, table, schema, name, columns, not_valid)?;
         // Rows stored before the table had this key (pg_dump's CREATE TABLE,
         // COPY, then ADD CONSTRAINT ... PRIMARY KEY) are re-keyed, or key
@@ -521,6 +555,7 @@ pub(crate) fn apply_primary_key_constraint(
         column.nullable = false;
     }
     schema.primary_key_name = Some(name);
+    schema.implicit_primary_key_name = None;
     Ok(())
 }
 
@@ -611,6 +646,7 @@ pub(crate) fn alter_table_drop_constraint(
             column.primary_key = false;
         }
         schema.primary_key_name = None;
+        schema.implicit_primary_key_name = None;
         return Ok(Some(dropped_constraint.to_string()));
     }
     if !dropped_metadata_constraint && !if_exists {
@@ -637,6 +673,7 @@ pub(crate) fn alter_table_rename_constraint(
         && schema.primary_key_constraint_name() == old_name
     {
         schema.primary_key_name = Some(new_name.to_string());
+        schema.implicit_primary_key_name = None;
         return Ok(Some((old_name.to_string(), new_name.to_string())));
     }
     let renames_unique_index = schema.constraints.iter().any(|constraint| {
@@ -1684,10 +1721,7 @@ pub(crate) fn user_type_column_from_data_type(
         }
         return Ok(Some(user_type.column_type(array)));
     }
-    if let Some(schema) = list_schemas(db)?.into_iter().find(|schema| {
-        schema.schema_name.eq_ignore_ascii_case(&schema_name)
-            && schema.name.eq_ignore_ascii_case(&name)
-    }) {
+    if let Some(schema) = table_row_schema_by_type_name(db, &schema_name, &name)? {
         return Ok(Some(table_row_type_column(&schema, array)));
     }
     Err(SqlError::undefined_type(if schema_name == "public" {
@@ -1766,6 +1800,9 @@ pub(crate) fn inherit_view_source_column_types(
     columns: &mut [ColumnSchema],
 ) -> Result<()> {
     let SetExpr::Select(select) = query.body.as_ref() else {
+        for column in columns {
+            hydrate_view_column_type(db, column)?;
+        }
         return Ok(());
     };
     // Infer expressions and every joined relation without executing the view.
@@ -1831,11 +1868,16 @@ pub(crate) fn inherit_view_source_column_types(
             continue;
         }
         target.pg_type = source.pg_type.clone();
+        target.user_type = source.user_type.clone();
+        target.collation = source.collation.clone();
         target.type_modifier = source.type_modifier.clone();
         target.vector_dim = source.vector_dim;
         target.array_ndims = source.array_ndims;
         // An outer join can make a NOT NULL source column nullable. View
         // columns remain conservatively nullable as PostgreSQL reports them.
+    }
+    for column in columns {
+        hydrate_view_column_type(db, column)?;
     }
     Ok(())
 }
@@ -2198,8 +2240,8 @@ pub(crate) fn sequence_from_options(
             SequenceOptions::Cache(expr) => {
                 sequence.cache_size = sequence_option_i64(expr, "CACHE")?;
             }
-            SequenceOptions::Cycle(cycle) => {
-                sequence.cycle = *cycle;
+            SequenceOptions::Cycle(no_cycle) => {
+                sequence.cycle = !*no_cycle;
             }
         }
     }
@@ -2921,6 +2963,8 @@ pub(crate) enum RawAlterTablePartition {
         bound: String,
     },
     Detach {
+        parent_table: String,
+        parent_schema: String,
         partition_table: String,
     },
 }
@@ -3123,6 +3167,7 @@ pub(crate) fn raw_partition_by_clause(sql: &str) -> Result<Option<PartitioningSc
     Ok(Some(PartitioningSchema {
         strategy,
         key_columns,
+        execution_version: None,
     }))
 }
 
@@ -3174,12 +3219,13 @@ pub(crate) fn raw_create_partition_table(sql: &str) -> Result<Option<RawCreatePa
     };
     let (parent, after_parent) = parse_leading_qualified_sql_identifier(rest)?;
     let bound = after_parent.trim();
-    if !bound
-        .get(.."FOR VALUES".len())
-        .is_some_and(|head| head.eq_ignore_ascii_case("FOR VALUES"))
+    if !bound.eq_ignore_ascii_case("DEFAULT")
+        && !bound
+            .get(.."FOR VALUES".len())
+            .is_some_and(|head| head.eq_ignore_ascii_case("FOR VALUES"))
     {
         return Err(SqlError::InvalidSql(
-            "CREATE TABLE PARTITION OF expects FOR VALUES".to_string(),
+            "CREATE TABLE PARTITION OF expects FOR VALUES or DEFAULT".to_string(),
         ));
     }
 
@@ -3228,12 +3274,13 @@ pub(crate) fn raw_alter_table_partition_action(
             normalize_object_name(&partition_table),
         ])?;
         let bound = after_partition.trim();
-        if !bound
-            .get(.."FOR VALUES".len())
-            .is_some_and(|head| head.eq_ignore_ascii_case("FOR VALUES"))
+        if !bound.eq_ignore_ascii_case("DEFAULT")
+            && !bound
+                .get(.."FOR VALUES".len())
+                .is_some_and(|head| head.eq_ignore_ascii_case("FOR VALUES"))
         {
             return Err(SqlError::InvalidSql(
-                "ALTER TABLE ATTACH PARTITION expects FOR VALUES".to_string(),
+                "ALTER TABLE ATTACH PARTITION expects FOR VALUES or DEFAULT".to_string(),
             ));
         }
         return Ok(Some(RawAlterTablePartition::Attach {
@@ -3257,7 +3304,11 @@ pub(crate) fn raw_alter_table_partition_action(
             normalize_object_name(&partition_schema),
             normalize_object_name(&partition_table),
         ])?;
-        return Ok(Some(RawAlterTablePartition::Detach { partition_table }));
+        return Ok(Some(RawAlterTablePartition::Detach {
+            parent_table,
+            parent_schema,
+            partition_table,
+        }));
     }
     Ok(None)
 }
@@ -4649,8 +4700,27 @@ pub(crate) fn record_from_fields(
     schema: Option<&TableSchema>,
     fields: BTreeMap<String, SqlValue>,
 ) -> Result<Record> {
+    record_from_fields_inner(table, schema, fields, false)
+}
+
+fn record_from_fields_inner(
+    table: &str,
+    schema: Option<&TableSchema>,
+    fields: BTreeMap<String, SqlValue>,
+    prepare_generated_key: bool,
+) -> Result<Record> {
     let fields = canonicalize_record_fields(schema, fields);
-    let id = record_id_from_fields(table, schema, &fields)?;
+    // INSERT/COPY have not run BEFORE triggers or generated expressions yet.
+    // This identity is transient; final generation derives the canonical key
+    // before arbitration, policy checks or any Native write. Preserve all
+    // supplied key values in metadata while the physical key is pending.
+    let pending_key =
+        prepare_generated_key && schema.is_some_and(TableSchema::has_generated_primary_key);
+    let id = if pending_key {
+        synthetic_record_id(table)
+    } else {
+        record_id_from_fields(table, schema, &fields)?
+    };
     if id.is_empty() {
         return Err(SqlError::InvalidSql(
             "record id must not be empty".to_string(),
@@ -4659,7 +4729,8 @@ pub(crate) fn record_from_fields(
     let primary_key_columns = schema
         .map(primary_key_columns_for_schema)
         .unwrap_or_else(|| vec!["id".to_string()]);
-    let omit_primary_key_metadata = primary_key_columns.len() == 1
+    let omit_primary_key_metadata = !pending_key
+        && primary_key_columns.len() == 1
         && schema
             .and_then(|schema| schema.column(&primary_key_columns[0]))
             .is_none_or(|column| !pg_type_requires_typed_identity(&column.pg_type));
@@ -4758,7 +4829,26 @@ pub(crate) fn record_from_fields_with_db(
     db: &BicDb,
     table: &str,
     schema: Option<&TableSchema>,
+    fields: BTreeMap<String, SqlValue>,
+) -> Result<Record> {
+    record_from_fields_with_db_inner(db, table, schema, fields, false)
+}
+
+pub(crate) fn record_from_insert_fields_with_db(
+    db: &BicDb,
+    table: &str,
+    schema: Option<&TableSchema>,
+    fields: BTreeMap<String, SqlValue>,
+) -> Result<Record> {
+    record_from_fields_with_db_inner(db, table, schema, fields, true)
+}
+
+fn record_from_fields_with_db_inner(
+    db: &BicDb,
+    table: &str,
+    schema: Option<&TableSchema>,
     mut fields: BTreeMap<String, SqlValue>,
+    prepare_generated_key: bool,
 ) -> Result<Record> {
     if let Some(schema) = schema {
         for (name, value) in &mut fields {
@@ -4776,7 +4866,7 @@ pub(crate) fn record_from_fields_with_db(
             }
         }
     }
-    record_from_fields(table, schema, fields)
+    record_from_fields_inner(table, schema, fields, prepare_generated_key)
 }
 
 pub(crate) fn resolve_oid_alias_column_value(

@@ -1,0 +1,47 @@
+{
+  "report-partition-native-authority-baseline.json": {
+    "stored_as": "report-partition-native-authority-baseline.json",
+    "raw_bytes": 1085,
+    "raw_sha256": "0b5aa2ffdd15646ad441a6117b250dd2769b19a8674ddd4dd0baa61872ed2859"
+  },
+  "tc-step-partition-native-authority-baseline.log": {
+    "stored_as": "tc-step-partition-native-authority-baseline.log.gz",
+    "raw_bytes": 299025,
+    "raw_sha256": "7dfbad7087e2154a6ef9a62ff177afd9fe888a74a75c07a1a5ad87a39624023f"
+  },
+  "report-partition-native-identity-update-focused.json": {
+    "stored_as": "report-partition-native-identity-update-focused.json",
+    "raw_bytes": 2138,
+    "raw_sha256": "f9467f79932218a6a4146de3356a6dace08720625af05e5be9298f22c8cc6eef"
+  },
+  "tc-step-partition-native-identity-update-focused.log": {
+    "stored_as": "tc-step-partition-native-identity-update-focused.log.gz",
+    "raw_bytes": 584996,
+    "raw_sha256": "02ab320ec55e9cd600b9aac618f5691c51d726c44cb03c7c3f8b25d36e50ac12"
+  },
+  "report-partition-native-identity-observed-focused.json": {
+    "stored_as": "report-partition-native-identity-observed-focused.json",
+    "raw_bytes": 2631,
+    "raw_sha256": "11d083c20a75612ff8ff4412fdde1d8b79cdda9987237c2b2d33426ee5f3704b"
+  },
+  "tc-step-partition-native-identity-observed-focused.log": {
+    "stored_as": "tc-step-partition-native-identity-observed-focused.log.gz",
+    "raw_bytes": 588183,
+    "raw_sha256": "a0c0e9dd33c06927d6bd367402772452d0ae412d634c279e0b85374b7f560659"
+  },
+  "controller/partition-native-authority-baseline.json": {
+    "stored_as": "controller/partition-native-authority-baseline.json",
+    "raw_bytes": 1568,
+    "raw_sha256": "61119580dbf4fcdf8ec0a00b5dde1bba93fb140c96524d39c1fb00db28815ac0"
+  },
+  "controller/partition-native-identity-update-focused.json": {
+    "stored_as": "controller/partition-native-identity-update-focused.json",
+    "raw_bytes": 2399,
+    "raw_sha256": "aec33eb4250b88055bb45d7cd9c67670b6bec3d3f0a6009d46b23aca061d5da5"
+  },
+  "controller/partition-native-identity-observed-focused.json": {
+    "stored_as": "controller/partition-native-identity-observed-focused.json",
+    "raw_bytes": 2706,
+    "raw_sha256": "34e3acd62bacb051d95ff0be8de14dc59bd215c0a43b9c9c07054e8dabbc9e4e"
+  }
+}

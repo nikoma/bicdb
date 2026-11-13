@@ -62,3 +62,22 @@ Observation adds IO and may change timing. This cohort supplies a reproducible
 concurrent diagnostic configuration; it does not guarantee reproducing the
 historical failure or establish its cause. The serial `d09d1ca494cf` positive and
 `031681576891` compilation failure remain separate retained evidence.
+
+`native_registered_fifth_old_round_expiry_then_fresh_mq_counts_same_live_closes`
+is a separate expiry component control. Its original genuine MQ uses one second;
+each genuine Role/OWN and the distinct fresh MQ retain the existing five-second
+budgets. It covers every old voter with actual native close observations under
+the same original services, runtime, scope, epoch and history. The original round
+must refuse after its observed real deadline. The fresh round may count the exact
+same retained Arcs only while their own original issuance remains live. It does
+not issue a replacement close or renew an expired observation. If those facts
+expire, the control records that limitation and fails; a real native reread
+producer would be required. It explicitly covers no unclosable or partial-debt
+peer, and proves no target installation, serving or workload availability.
+
+The control records original/fresh MQ and per-close Role/OWN business/context
+IDs, terms, indexes, deadlines and timestamps, plus native close hashes and full
+native/catalogue state before/after fresh counting. Caller cancellation is not
+used as an expiry substitute: the current transport MetadataReadObservation
+retains a deadline rather than the original caller token. The retained failed
+four-case cohort and its original assertions remain unchanged.

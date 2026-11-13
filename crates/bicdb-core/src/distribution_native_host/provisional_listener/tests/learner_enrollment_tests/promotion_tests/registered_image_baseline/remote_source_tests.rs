@@ -10,6 +10,7 @@ use crate::distribution_range_image::{
     RangeImageCursorV1, RangeImageHistoryCursorV1,
 };
 use crate::distribution_transport::AuthenticatedNativeRemoteImageSourceFrame;
+mod old_round_expiry_tests;
 
 #[derive(Clone, Copy, Debug)]
 pub(super) enum SourceCase {
@@ -34,6 +35,7 @@ pub(super) enum SourceCase {
     TargetProposalBeforeHookRevoked,
     TargetProposalReaderFenceRetry,
     RemoteConstraintCapture,
+    LocalOldExpiredRoundContinuation,
 }
 #[test]
 fn native_registered_fifth_remote_source_actual_tls_history_rows_seal_local_old_seed() {
@@ -703,10 +705,17 @@ pub(super) fn exercise(
                 business,
                 range.id,
                 range.epoch,
-                Duration::from_secs(5),
+                if matches!(case, SourceCase::LocalOldExpiredRoundContinuation) {
+                    Duration::from_secs(1)
+                } else {
+                    Duration::from_secs(5)
+                },
                 &parent,
             )
             .unwrap();
+        let original_mq = matches!(case, SourceCase::LocalOldExpiredRoundContinuation)
+            .then(|| old_round_expiry_tests::observation_data(&observation, business));
+        let original_mq_deadline = observation.deadline();
         let mut round = NativeJointOldRound::begin(observation, business, relocation.id).unwrap();
         let plan = round.plan();
         if matches!(case, SourceCase::RemoteConstraintCapture) {
@@ -737,6 +746,24 @@ pub(super) fn exercise(
                 target_before
             );
             continue;
+        }
+        if let Some(original_mq) = original_mq {
+            old_round_expiry_tests::exercise(
+                round,
+                plan,
+                original_mq,
+                original_mq_deadline,
+                controls,
+                clients,
+                services,
+                metadata,
+                pending,
+                ranges,
+                &actor,
+                leader_index,
+                output,
+            );
+            return;
         }
         let mut runtimes = Vec::new();
         let (source, retained, original_old_expiry) = if matches!(

@@ -323,3 +323,7 @@ cleanup preserves current objects, full old ACK row and actual native point.
 An already-ready cached coordinator epoch is used only to skip idle candidate
 scans when no job exists. It cannot grant any permission; an actual uncertain
 origin release removes that readiness, and retained jobs ignore the skip hint.
+
+The [source-pinned one-peer-loss/lost-reply audit](native-hot-origin-one-peer-loss-audit.md)
+separates the current all-recipient outer controller from majority-capable inner
+collectors and specifies an unexecuted required-success fault contract.

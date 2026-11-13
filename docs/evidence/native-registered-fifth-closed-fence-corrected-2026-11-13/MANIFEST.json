@@ -1,0 +1,85 @@
+{
+  "version": 1,
+  "files": [
+    {
+      "path": "README.md",
+      "bytes": 5415,
+      "sha256": "7c98e4187dba2959b52f2ee357d046b8e7acd0e5609661c16037eddc95afd092"
+    },
+    {
+      "path": "compile-index.json",
+      "bytes": 612,
+      "sha256": "c8e4c866f036487a7e5b2a245ecee9509a3a5725569fd4a548acdf60675b1542"
+    },
+    {
+      "path": "compile.log.gz",
+      "bytes": 279016,
+      "sha256": "d068d4a01daa0f3db228bc64c9166959a3a977d4bf6b1a13f83ebc5a496a374f"
+    },
+    {
+      "path": "controls.json.gz",
+      "bytes": 72016,
+      "sha256": "c3b408088c85821db7e0435c5609f60446311c680eafb2404aa5289b3a6de27a"
+    },
+    {
+      "path": "core-index.json",
+      "bytes": 749,
+      "sha256": "418b61586f306aa4519cfcced4ada7df080d0165af24c9ece425727518a01807"
+    },
+    {
+      "path": "core.log.gz",
+      "bytes": 426290,
+      "sha256": "bd6e498060da53279ae6cd18201faf50c3cd1575c518c1498e01bfbe17f74fe4"
+    },
+    {
+      "path": "custody-receipt.json",
+      "bytes": 5298,
+      "sha256": "4c36b61fe3616b8dd92640615f7a23e886bc00ecfba9ed80ebfc5c745888b618"
+    },
+    {
+      "path": "derived.json.gz",
+      "bytes": 139201,
+      "sha256": "2c10a2cfc2fa33470fd2cd921c619be3de07c8c2cdf07b4dbb37aec3f1fe2360"
+    },
+    {
+      "path": "formatting-index.json",
+      "bytes": 569,
+      "sha256": "f6418b30c99930b63ac74c3331b6cee02295c41e500d2f477885ba2f91eb8093"
+    },
+    {
+      "path": "formatting.log.gz",
+      "bytes": 6926,
+      "sha256": "4eccb646f0c205f2c0fc820bd072ea1d294900f01ded50085e3fcdc5e76a58fe"
+    },
+    {
+      "path": "results.json",
+      "bytes": 3505,
+      "sha256": "3dbe2004314ed035d93c8a19440dd9e5e80e2758bca539c654306fdf70b42aa7"
+    },
+    {
+      "path": "semantic_tamper.py",
+      "bytes": 4573,
+      "sha256": "ee7989437312f035e4da5fd56ea4015cfd39c3c50d9bfb00d30b03039117de42"
+    },
+    {
+      "path": "source-comparison.json",
+      "bytes": 816,
+      "sha256": "a68115d4185a404f6b2064d5035571944bdbedc7a4cc7b5cfb1fdaa63482f376"
+    },
+    {
+      "path": "source-correction.patch",
+      "bytes": 6922,
+      "sha256": "cfa386cb6df381c5a1d9fd23f04d4cd3b2f8c4e47c4997a477bfe100ae51c011"
+    },
+    {
+      "path": "verify.py",
+      "bytes": 11021,
+      "sha256": "468f24019d12993eb827c7c7cbbaa504e96171d176b3f3ac05f509d088972655"
+    },
+    {
+      "path": "workflow-status.json",
+      "bytes": 405,
+      "sha256": "70141ce7636448578cc099dec86c386afe765a25f6b5553c55750fb5b925c8af"
+    }
+  ]
+}

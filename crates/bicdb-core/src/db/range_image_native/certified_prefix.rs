@@ -6,9 +6,18 @@ use crate::distribution_range_consensus::{
     NativeRangeCertificateEvidence, NativeRangeCommandIntent, NativeRangeCommitCertificate,
 };
 use crate::distribution_range_mutation::RangeMutationAuthority;
+mod no_data;
+use no_data::NativeNoDataPrefixEvidence;
+pub(crate) use no_data::NativeRecoveryAbortedReceipt;
 mod ordinary_apply;
+#[cfg(test)]
+mod origin_fault;
 mod recovery_apply;
 pub(crate) use ordinary_apply::NativeReplicaMaterialization;
+#[cfg(test)]
+pub(in crate::db) use origin_fault::test_record_origin_release;
+#[cfg(test)]
+pub(crate) use origin_fault::{NativeOriginAppSpan, NativeOriginFaultArm, NativeOriginFaultProbe};
 pub(crate) use recovery_apply::{KnownNativeRecoveryPrefix, NativeRecoveryAppliedReceipt};
 
 fn pending_key(range: RangeId) -> String {
@@ -29,6 +38,8 @@ struct NativeCommandScope {
 #[derive(Debug, Default)]
 pub(in crate::db) struct NativeRangeScopeRegistry {
     entries: BTreeMap<u64, NativeCommandScope>,
+    #[cfg(test)]
+    origin_fault: Option<Arc<NativeOriginFaultProbe>>,
 }
 #[derive(Debug)]
 struct NativeCommandScopeLease {
@@ -248,9 +259,9 @@ impl NativeRangeInstallSafety {
     }
 }
 
-/// Constant-size durable prefix extension; its native transaction follows the
-/// actual data/WAL apply. Previous native receipts form an ordered local
-/// history, not portable voter signatures or metadata authority.
+/// Constant-size durable prefix extension backed by actual data/WAL
+/// materialization or a separately proven native no-data decision. Previous
+/// receipts form local history, not portable signatures or metadata authority.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub(super) struct NativeCertifiedRangePrefix {
     format_version: u32,
@@ -264,7 +275,10 @@ pub(super) struct NativeCertifiedRangePrefix {
     command_checksum_sha256: String,
     mutations_sha256: String,
     scope_sha256: String,
-    materialized: MaterializedNativeCommand,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    materialized: Option<MaterializedNativeCommand>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    no_data: Option<NativeNoDataPrefixEvidence>,
     certified_voters: BTreeSet<ClusterNodeId>,
     required_quorum: usize,
     #[serde(
@@ -274,6 +288,8 @@ pub(super) struct NativeCertifiedRangePrefix {
     certificate_evidence: NativeRangeCertificateEvidence,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     recovery_attempt: Option<recovery_apply::RecoveryNativeAttemptBinding>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    joint_decision_sha256: Option<String>,
     global_image_generation: Uuid,
     range_image_generation: Uuid,
     history_generation: Uuid,
@@ -283,7 +299,16 @@ pub(super) struct NativeCertifiedRangePrefix {
 }
 impl NativeCertifiedRangePrefix {
     pub(super) fn actual_local_visibility_sequence(&self) -> u64 {
-        self.materialized.local_wal_sequence
+        self.materialized.as_ref().map_or_else(
+            || {
+                self.no_data
+                    .as_ref()
+                    .expect("validated no-data prefix")
+                    .local_data_visibility
+                    .get()
+            },
+            |materialized| materialized.local_wal_sequence,
+        )
     }
     fn checksum(&self) -> Result<String> {
         let mut unsigned = self.clone();
@@ -307,10 +332,25 @@ impl NativeCertifiedRangePrefix {
         birth: &NativeDatabaseBirth,
         base: &NativeRangeBaseBinding,
     ) -> Result<()> {
+        self.validate_with_native_joint_domain(birth, base, None)
+    }
+    fn validate_with_native_joint_domain(
+        &self,
+        birth: &NativeDatabaseBirth,
+        base: &NativeRangeBaseBinding,
+        joint: Option<&NativeJointServingDomain>,
+    ) -> Result<()> {
+        let joint = joint.filter(|domain| self.range_index > domain.range_index());
+        if self.joint_decision_sha256.as_deref() != joint.map(|domain| domain.decision_sha256()) {
+            return Err(invalid(
+                "native Applied prefix lacks its actual protected joint domain",
+            ));
+        }
         self.certificate_evidence.validate()?;
         if matches!(
             self.certificate_evidence,
             NativeRangeCertificateEvidence::HistoricalCurrentCertificateQuorum { .. }
+                | NativeRangeCertificateEvidence::CompletedDecisionMaterializationQuorum { .. }
         ) != self.recovery_attempt.is_some()
         {
             return Err(invalid(
@@ -320,7 +360,9 @@ impl NativeCertifiedRangePrefix {
         if let Some(attempt) = &self.recovery_attempt {
             attempt.validate_prefix(
                 &self.command_checksum_sha256,
-                &self.materialized,
+                self.materialized.as_ref().ok_or_else(|| {
+                    invalid("applied recovery attempt lacks actual WAL materialization")
+                })?,
                 &self.certificate_evidence,
             )?;
         }
@@ -336,7 +378,8 @@ impl NativeCertifiedRangePrefix {
                 scope_sha256,
                 ..
             } => {
-                let member = base.base_members.get(leader_node_id).ok_or_else(|| {
+                let members = joint.map_or(&base.base_members, |domain| domain.members());
+                let member = members.get(leader_node_id).ok_or_else(|| {
                     invalid("native materialization leader is not in actual base")
                 })?;
                 let pin = match (
@@ -356,6 +399,10 @@ impl NativeCertifiedRangePrefix {
                     || !pin
                     || restore_activation.as_ref() != base.restore_activation.as_ref()
                     || scope_sha256 != &self.scope_sha256
+                    || joint.is_some_and(|domain| {
+                        *range_epoch != domain.range().epoch
+                            || leader_node_id != &domain.range().leader
+                    })
                 {
                     return Err(invalid("native authenticated materialization cannot claim a local certificate quorum"));
                 }
@@ -367,9 +414,40 @@ impl NativeCertifiedRangePrefix {
                 {
                     return Err(invalid("native prefix lacks its actual quorum evidence"));
                 }
+                if joint.is_some_and(|domain| {
+                    self.required_quorum != domain.members().len() / 2 + 1
+                        || !self
+                            .certified_voters
+                            .iter()
+                            .all(|node| domain.members().contains_key(node))
+                }) {
+                    return Err(invalid(
+                        "native Applied quorum differs from actual joint NEW voters",
+                    ));
+                }
             }
         }
-        if self.format_version != 2
+        let materialization_shape = match (&self.materialized, &self.no_data) {
+            (Some(actual), None) => {
+                self.format_version == 2
+                    && actual.actual_mutations_sha256 == self.mutations_sha256
+                    && !matches!(
+                        self.certificate_evidence,
+                        NativeRangeCertificateEvidence::AbortPromiseQuorum { .. }
+                    )
+            }
+            (None, Some(no_data)) => {
+                self.format_version == 3
+                    && no_data.validate(self).is_ok()
+                    && birth.abort_protocol_version == Some(1)
+                    && matches!(
+                        self.certificate_evidence,
+                        NativeRangeCertificateEvidence::AbortPromiseQuorum { .. }
+                    )
+            }
+            _ => false,
+        };
+        if !materialization_shape
             || self.birth_id != birth.birth_id
             || self.base_receipt_sha256 != base.checksum_sha256
             || self.range_id != base.range.id
@@ -380,7 +458,6 @@ impl NativeCertifiedRangePrefix {
             || self.history_generation != base.history_generation
             || self.logical_genesis_sha256 != base.logical_genesis_sha256
             || self.logical_history_sha256.len() != 64
-            || self.materialized.actual_mutations_sha256 != self.mutations_sha256
             || self.checksum()? != self.checksum_sha256
         {
             return Err(invalid("damaged/mismatched native certified prefix"));
@@ -609,7 +686,9 @@ impl BicDb {
         let lineage = self.current_native_range_source_lineage(intent.range().id)?;
         if lineage.range_index() == intent.range_index() {
             if lineage.prefix.as_ref().is_some_and(|prefix| {
-                prefix.command_id == intent.command_id()
+                prefix.materialized.is_some()
+                    && prefix.no_data.is_none()
+                    && prefix.command_id == intent.command_id()
                     && prefix.command_checksum_sha256 == intent.command_checksum_sha256()
                     && prefix.scope_sha256 == intent.scope_sha256()
                     && prefix.mutations_sha256 == intent.mutations_sha256()
@@ -674,15 +753,30 @@ impl BicDb {
         let prefix: Option<NativeCertifiedRangePrefix> =
             self.read_native_range_image_record(&prefix_key(base.range.id))?;
         self.validate_native_range_base_history(birth, base)?;
+        let joint = self.read_native_joint_serving_domain(birth, base)?;
         if let Some(prefix) = &prefix {
-            prefix.validate(birth, base)?;
+            if matches!(
+                prefix.certificate_evidence,
+                NativeRangeCertificateEvidence::CompletedDecisionMaterializationQuorum { .. }
+            ) && !crate::format::native_completed_decision_materialization_active(&self.path)?
+            {
+                return Err(invalid(
+                    "actual completed-decision prefix requires its sticky reader fence",
+                ));
+            }
+            prefix.validate_with_native_joint_domain(birth, base, joint.as_ref())?;
             let entry = self.read_native_history_entry(
                 prefix.range_id,
                 prefix.history_generation,
                 prefix.range_index,
             )?;
-            let expected = history::NativeLogicalHistoryOutcomeV1::Applied {
-                command_checksum_sha256: prefix.command_checksum_sha256.clone(),
+            let expected = if prefix.no_data.is_some() {
+                self.validate_native_abort_prefix_record(birth, base, prefix)?;
+                history::NativeLogicalHistoryOutcomeV1::Aborted
+            } else {
+                history::NativeLogicalHistoryOutcomeV1::Applied {
+                    command_checksum_sha256: prefix.command_checksum_sha256.clone(),
+                }
             };
             if entry.commitment_sha256 != prefix.logical_history_sha256 || entry.outcome != expected
             {
@@ -691,7 +785,34 @@ impl BicDb {
                 ));
             }
         }
+        if let Some(joint) = &joint {
+            joint.require_materialized(base, prefix.as_ref())?;
+        }
         Ok(prefix)
+    }
+    /// Read-only protected pending identity, never a materialized floor.
+    /// Caller owns the actual native journal across this contract observation.
+    pub(super) fn joint_pending_obligation_under_journal(
+        &self,
+        lineage: &SourceRangeImageLineage,
+    ) -> Result<Option<(u64, String)>> {
+        let Some(pending) = self.read_native_range_image_record::<PendingNativeRangeCommand>(
+            &pending_key(lineage.base.range.id),
+        )?
+        else {
+            return Ok(None);
+        };
+        pending.validate()?;
+        if pending.birth_id != lineage.birth.birth_id
+            || pending.range_id != lineage.base.range.id
+            || pending.previous_index != lineage.range_index()
+            || pending.previous_receipt_sha256 != lineage.native_receipt_sha256()
+        {
+            return Err(invalid(
+                "joint continuity pending obligation differs from actual native predecessor",
+            ));
+        }
+        Ok(Some((pending.range_index, pending.command_checksum_sha256)))
     }
     pub(super) fn native_range_pending_exists(&self, range: RangeId) -> Result<bool> {
         Ok(self
@@ -719,6 +840,11 @@ impl BicDb {
         &self,
         range_id: RangeId,
     ) -> Result<SourceRangeImageLineage> {
+        #[cfg(test)]
+        let construct_trace =
+            crate::distribution_range_handoff::NativeJointPhaseTrace::refresh_detail(
+                "refresh-source-lineage-construct-native-point",
+            );
         let birth = self
             .read_native_birth()?
             .ok_or_else(|| invalid("no native birth"))?;
@@ -728,20 +854,50 @@ impl BicDb {
         let prefix = self.read_native_certified_range_prefix(&birth, &base)?;
         let serving =
             self.read_native_recovered_serving_configuration(&birth, &base, prefix.as_ref())?;
+        let joint = self.read_native_joint_serving_domain(&birth, &base)?;
+        if let Some(joint) = &joint {
+            joint.require_materialized(&base, prefix.as_ref())?;
+        }
         let lineage = SourceRangeImageLineage {
             birth,
             _anchor: anchor,
             base,
             prefix,
             serving,
+            joint,
             current_database_incarnation: self.incarnation.clone(),
             current_schema_generation: self.schema_compatibility.generation(),
         };
+        #[cfg(test)]
+        crate::distribution_range_handoff::NativeJointPhaseTrace::finish_detail(construct_trace);
+        #[cfg(test)]
+        let validate_trace =
+            crate::distribution_range_handoff::NativeJointPhaseTrace::refresh_detail(
+                "refresh-source-lineage-first-full-contract",
+            );
         self.validate_source_range_image_lineage_contract(
             &lineage,
             range_id,
             lineage.range_index(),
         )?;
+        #[cfg(test)]
+        crate::distribution_range_handoff::NativeJointPhaseTrace::finish_detail(validate_trace);
+        Ok(lineage)
+    }
+    pub(in crate::db::range_image_native) fn current_native_range_source_lineage_under_journal(
+        &self,
+        range_id: RangeId,
+        journal: &NativeImageJournalGuard<'_>,
+    ) -> Result<SourceRangeImageLineage> {
+        journal.require_database(self)?;
+        let lineage = self.native_range_source_lineage_contract(range_id)?;
+        if self.native_range_pending_exists(range_id)? {
+            return Err(invalid(
+                "unfinished native command; source range image unavailable",
+            ));
+        }
+        self.check_recovery_state()?;
+        journal.require_database(self)?;
         Ok(lineage)
     }
     pub(crate) fn current_native_range_source_lineage(
@@ -749,7 +905,17 @@ impl BicDb {
         range_id: RangeId,
     ) -> Result<SourceRangeImageLineage> {
         let lineage = self.native_range_source_lineage_contract(range_id)?;
+        #[cfg(test)]
+        let second_trace = crate::distribution_range_handoff::NativeJointPhaseTrace::refresh_detail(
+            "refresh-source-lineage-second-contract-and-pending",
+        );
+        #[cfg(test)]
+        if second_trace.is_some() {
+            eprintln!("ACTUAL_REFRESH_LINEAGE_RANGE range={range_id}");
+        }
         self.validate_source_range_image_lineage(&lineage, range_id, lineage.range_index())?;
+        #[cfg(test)]
+        crate::distribution_range_handoff::NativeJointPhaseTrace::finish_detail(second_trace);
         Ok(lineage)
     }
     /// The coordinator must persist this before the actual native row apply.
@@ -971,6 +1137,7 @@ impl BicDb {
             .actual_native_range_integrity_binding(&birth, record.range_id)?
             .ok_or_else(|| invalid("native completion base disappeared"))?;
         let old = self.read_native_certified_range_prefix(&birth, &base)?;
+        let joint = self.read_native_joint_serving_domain(&birth, &base)?;
         let previous_index = old
             .as_ref()
             .map_or(base.range_index, |previous| previous.range_index);
@@ -1008,11 +1175,16 @@ impl BicDb {
             command_checksum_sha256: record.command_checksum_sha256,
             mutations_sha256: record.mutations_sha256,
             scope_sha256: record.scope_sha256,
-            materialized,
+            materialized: Some(materialized),
+            no_data: None,
             certified_voters: proof.certified_voters(),
             required_quorum: proof.required_quorum(),
             certificate_evidence: proof.evidence(),
             recovery_attempt: record.recovery_attempt,
+            joint_decision_sha256: joint
+                .as_ref()
+                .filter(|domain| record.range_index > domain.range_index())
+                .map(|domain| domain.decision_sha256().to_owned()),
             global_image_generation: record.global_image_generation,
             range_image_generation: record.range_image_generation,
             history_generation: base.history_generation,
@@ -1021,7 +1193,7 @@ impl BicDb {
             checksum_sha256: String::new(),
         };
         prefix.checksum_sha256 = prefix.checksum()?;
-        prefix.validate(&birth, &base)?;
+        prefix.validate_with_native_joint_domain(&birth, &base, joint.as_ref())?;
         let encoded = bounded_json(&prefix, MAX_NATIVE_RECEIPT_BYTES)?;
         self.in_paged_transaction(|paged, xid| {
             history::put_immutable_history_entry(

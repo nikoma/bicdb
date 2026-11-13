@@ -11,22 +11,47 @@ use crate::distribution_range_image::{
 };
 use crate::distribution_range_mutation::FrozenRangeMutationPermit;
 
+mod abort_catalogue;
+pub(crate) use abort_catalogue::NativeAbortCatalogueBootstrap;
+pub(crate) mod abort_history;
 mod certified_prefix;
+#[cfg(test)]
+pub(super) use certified_prefix::test_record_origin_release;
+#[cfg(test)]
+pub(crate) use certified_prefix::{
+    NativeOriginAppSpan, NativeOriginFaultArm, NativeOriginFaultProbe,
+};
 mod history;
+mod initial_data;
+pub(crate) use initial_data::NativeInitialDataGenesis;
 mod history_stage;
+pub(crate) use history_stage::ClosedImageOriginalWriter;
 mod installed_anchor;
 mod native_read;
+mod registered_receiver_domain;
 mod writer_enrollment;
-pub(crate) use writer_enrollment::{InstalledNativeWriterHostGuard, NativeWriterHostState};
-mod serving_configuration;
-pub(crate) use native_read::{NativeRangeReadPhysical, NativeReadLocalDbSequence};
-use serving_configuration::NativeRecoveredServingConfiguration;
-pub(crate) use serving_configuration::{
-    NativeActivationDecisionReceipt, NativeRecoveredServingReceipt,
+#[cfg(feature = "tls-replication")]
+pub(crate) use writer_enrollment::NativeRegisteredClosedPersistScope;
+pub(crate) use writer_enrollment::{
+    InstalledNativeWriterHostGuard, NativeRegisteredReceiverHook, NativeWriterHostState,
 };
+mod serving_configuration;
+pub(crate) use native_read::{
+    NativeRangeReadPhysical, NativeReadLocalDbSequence, NativeServingObservationScope,
+};
+pub(crate) use serving_configuration::{
+    NativeActivationDecisionReceipt, NativeActivationReadScope, NativeCompletionReadScope,
+    NativeCurrentJointBinding, NativeCurrentJointRecoveryDomain, NativeJointBridgeReadScope,
+    NativeJointDecisionReceipt, NativeJointHistoricalCutScope, NativeJointOldCloseReceipt,
+    NativeJointOldPhysicalProof, NativeJointPreparedPublicationScope,
+    NativeJointServingBridgeReceipt, NativeJointServingPreparation, NativeReadyObserverReadScope,
+    NativeRecoveredServingReceipt,
+};
+use serving_configuration::{NativeJointServingDomain, NativeRecoveredServingConfiguration};
 #[cfg(test)]
 pub(crate) mod rf3_fixture;
 use certified_prefix::NativeCertifiedRangePrefix;
+pub(crate) use certified_prefix::NativeRecoveryAbortedReceipt;
 pub(crate) use history::{
     NativeLogicalHistoryEntryV1, NativeLogicalHistoryOutcomeV1, NativeLogicalHistoryPoint,
     NativeLogicalHistoryStepV1,
@@ -175,6 +200,8 @@ struct NativeDatabaseBirth {
     format_version: u32,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     metadata_initialization_version: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    abort_protocol_version: Option<u32>,
     birth_id: Uuid,
     spec: RangeImageBirthSpec,
     image_generation: Uuid,
@@ -193,6 +220,7 @@ impl NativeDatabaseBirth {
         let mut birth = Self {
             format_version: if enforce { 2 } else { 1 },
             metadata_initialization_version: metadata_initialization.then_some(1),
+            abort_protocol_version: None,
             birth_id: Uuid::now_v7(),
             spec,
             image_generation: Uuid::now_v7(),
@@ -202,6 +230,20 @@ impl NativeDatabaseBirth {
         Ok(birth)
     }
     fn checksum(&self) -> Result<String> {
+        if let Some(version) = self.abort_protocol_version {
+            return Ok(hex::encode(sha2::Sha256::digest(bounded_json(
+                &(
+                    "NativeAbortProtocolFromBirth-v1",
+                    self.format_version,
+                    self.birth_id,
+                    &self.spec,
+                    self.image_generation,
+                    self.metadata_initialization_version,
+                    version,
+                ),
+                MAX_NATIVE_RECEIPT_BYTES,
+            )?)));
+        }
         if let Some(version) = self.metadata_initialization_version {
             return Ok(hex::encode(sha2::Sha256::digest(bounded_json(
                 &(
@@ -229,6 +271,11 @@ impl NativeDatabaseBirth {
     fn validate(&self) -> Result<()> {
         self.spec.validate()?;
         if !matches!(self.format_version, 1 | 2)
+            || self.abort_protocol_version.is_some_and(|v| {
+                v != 1
+                    || self.format_version != 2
+                    || self.metadata_initialization_version != Some(1)
+            })
             || self
                 .metadata_initialization_version
                 .is_some_and(|v| v != 1 || self.format_version != 2)
@@ -280,6 +327,7 @@ pub(crate) struct NativeRecoveryAdmission {
     database_incarnation: String,
     writer_enforcement_version: u32,
     metadata_initialization_version: u32,
+    abort_protocol_version: u32,
     birth_id: Uuid,
     birth_sha256: String,
     cluster_id: ClusterId,
@@ -301,12 +349,16 @@ impl NativeRecoveryAdmission {
             || self.birth_sha256 != current.birth_sha256
             || self.writer_enforcement_version != current.writer_enforcement_version
             || self.metadata_initialization_version != current.metadata_initialization_version
+            || self.abort_protocol_version != current.abort_protocol_version
         {
             return Err(invalid(
                 "recovery admission belongs to another DB/open or native birth",
             ));
         }
         Ok(())
+    }
+    pub(crate) fn abort_protocol_version(&self) -> u32 {
+        self.abort_protocol_version
     }
     pub(crate) fn metadata_initialization_version(&self) -> u32 {
         self.metadata_initialization_version
@@ -441,6 +493,7 @@ pub(crate) struct SourceRangeImageLineage {
     base: NativeRangeBaseBinding,
     prefix: Option<NativeCertifiedRangePrefix>,
     serving: Option<NativeRecoveredServingConfiguration>,
+    joint: Option<NativeJointServingDomain>,
     current_database_incarnation: String,
     current_schema_generation: u64,
 }
@@ -452,6 +505,14 @@ pub(crate) struct FreshNativeCatalogueBootstrap<'a> {
     birth: &'a NativeDatabaseBirth,
 }
 impl FreshNativeCatalogueBootstrap<'_> {
+    pub(crate) fn require_non_abort_profile(&self) -> Result<()> {
+        if self.birth.abort_protocol_version.is_some() {
+            return Err(invalid(
+                "abort-aware fresh factory must use protected catalogue StoreUUID",
+            ));
+        }
+        Ok(())
+    }
     pub(crate) fn require_current(&self) -> Result<(PathBuf, ClusterId, ClusterNodeId)> {
         self.database.check_recovery_state()?;
         let actual = self
@@ -571,12 +632,19 @@ impl SourceRangeImageLineage {
                 prefix.actual_local_visibility_sequence()
             })
     }
+    /// Identity from the actual protected native bridge, never metadata intent.
+    pub(crate) fn current_joint_decision_sha256(&self) -> Option<&str> {
+        self.joint.as_ref().map(|joint| joint.decision_sha256())
+    }
     pub(crate) fn base_range(&self) -> &RangeDescriptor {
         &self.base.range
     }
     /// The physical capture anchor stays immutable. New ordinary writes use
     /// the independently native-WAL-persisted recovered serving configuration.
     pub(crate) fn native_write_range(&self) -> Result<&RangeDescriptor> {
+        if let Some(joint) = &self.joint {
+            return Ok(joint.range());
+        }
         match &self.serving {
             Some(serving) if serving.binds_current_base(&self.base) => Ok(serving.range()),
             Some(_) => Err(invalid(
@@ -624,6 +692,9 @@ impl SourceRangeImageLineage {
     pub(crate) fn native_write_members(
         &self,
     ) -> Result<BTreeMap<ClusterNodeId, RangeImageBirthMember>> {
+        if let Some(joint) = &self.joint {
+            return Ok(joint.members().clone());
+        }
         self.members_for_native_range(self.native_write_range()?)
     }
     pub(crate) fn base_range_index(&self) -> u64 {
@@ -684,6 +755,24 @@ fn genesis_key(range_id: RangeId) -> String {
 }
 
 impl BicDb {
+    /// Until a qualified NEW-voter AbortQQ is composed, refuse NoData BEFORE
+    /// its native WAL write whenever an actual protected joint domain exists.
+    /// A matching configuration/SHA must not bypass this support boundary.
+    pub(crate) fn require_native_no_data_without_joint_domain(&self, range: RangeId) -> Result<()> {
+        let birth = self
+            .read_native_birth()?
+            .ok_or_else(|| invalid("NoData support check has no actual native birth"))?;
+        let anchor = self.actual_native_range_anchor(&birth, range)?;
+        if self
+            .read_native_joint_serving_domain(&birth, &anchor.binding())?
+            .is_some()
+        {
+            return Err(invalid(
+                "NoData after native joint activation requires a qualified NEW-voter abort domain",
+            ));
+        }
+        Ok(())
+    }
     pub(super) fn try_native_image_journal(&self) -> Result<NativeImageJournalGuard<'_>> {
         Ok(NativeImageJournalGuard {
             database_incarnation: &self.incarnation,
@@ -706,8 +795,9 @@ impl BicDb {
         TEST_REJECT_NATIVE_AFTER_LOCAL_WAL.with(|reject| reject.replace(false))
     }
     #[cfg(test)]
-    pub(super) fn test_native_admission_rejected(&self) -> bool {
+    pub(super) fn test_native_admission_rejected(&self, transaction: &Transaction) -> bool {
         TEST_REJECT_NATIVE_AFTER_ADMISSION.with(|reject| reject.replace(false))
+            || self.test_consume_receiver_origin_fault(transaction)
     }
     pub(super) fn finish_failed_native_local_attempt(&self, transaction: &mut Transaction) {
         if transaction.state == TxState::Pending {
@@ -733,6 +823,14 @@ impl BicDb {
         local_node_id: &ClusterNodeId,
         local_member_incarnation: u64,
     ) -> Result<NativeRecoveryAdmission> {
+        #[cfg(test)]
+        let total_trace = crate::distribution_range_handoff::NativeJointPhaseTrace::refresh_detail(
+            "refresh-admission-total",
+        );
+        #[cfg(test)]
+        let flags_trace = crate::distribution_range_handoff::NativeJointPhaseTrace::refresh_detail(
+            "refresh-admission-health-storage-reader-flags",
+        );
         self.check_recovery_state()?;
         if !self.config.fsync
             || self.config.storage_mode != StorageMode::ServerPaged
@@ -743,6 +841,12 @@ impl BicDb {
                 "native recovery requires completed fsync image-aware factory",
             ));
         }
+        #[cfg(test)]
+        crate::distribution_range_handoff::NativeJointPhaseTrace::finish_detail(flags_trace);
+        #[cfg(test)]
+        let birth_trace = crate::distribution_range_handoff::NativeJointPhaseTrace::refresh_detail(
+            "refresh-admission-actual-birth",
+        );
         let birth = self
             .read_native_birth()?
             .ok_or_else(|| invalid("native recovery has no actual database birth"))?;
@@ -756,8 +860,14 @@ impl BicDb {
                 "native recovery birth/bootstrap/local member binding mismatch",
             ));
         }
+        #[cfg(test)]
+        crate::distribution_range_handoff::NativeJointPhaseTrace::finish_detail(birth_trace);
         // An in-memory boolean is insufficient. Revalidate the actual ordered
         // completion marker and its immutable genesis inventory on every mint.
+        #[cfg(test)]
+        let ready_trace = crate::distribution_range_handoff::NativeJointPhaseTrace::refresh_detail(
+            "refresh-admission-ready-marker-and-all-initial-ranges",
+        );
         let ready: NativeInitializationComplete =
             self.read_native_range_image_record(READY_KEY)?
                 .ok_or_else(|| invalid("native recovery factory completion is missing"))?;
@@ -769,10 +879,15 @@ impl BicDb {
                 "native recovery factory completion does not match birth",
             ));
         }
+        #[cfg(test)]
+        crate::distribution_range_handoff::NativeJointPhaseTrace::finish_detail(ready_trace);
+        #[cfg(test)]
+        crate::distribution_range_handoff::NativeJointPhaseTrace::finish_detail(total_trace);
         Ok(NativeRecoveryAdmission {
             database_incarnation: self.incarnation.clone(),
             writer_enforcement_version: u32::from(birth.format_version == 2),
             metadata_initialization_version: birth.metadata_initialization_version.unwrap_or(0),
+            abort_protocol_version: birth.abort_protocol_version.unwrap_or(0),
             birth_id: birth.birth_id,
             birth_sha256: birth.checksum_sha256,
             cluster_id: cluster_id.clone(),
@@ -796,7 +911,15 @@ impl BicDb {
         config: DbConfig,
         spec: RangeImageBirthSpec,
     ) -> Result<(Self, FreshRangeGenesisAuthority)> {
-        Self::create_new_range_image_database_with_mode(root, config, spec, true, true, |_| Ok(()))
+        Self::create_new_range_image_database_with_mode(
+            root,
+            config,
+            spec,
+            true,
+            true,
+            true,
+            |_| Ok(()),
+        )
     }
     /// Reproduces the ACTUAL pre-capability enforced factory ordering for
     /// compatibility negatives. It never creates fresh metadata authority.
@@ -806,7 +929,15 @@ impl BicDb {
         config: DbConfig,
         spec: RangeImageBirthSpec,
     ) -> Result<(Self, FreshRangeGenesisAuthority)> {
-        Self::create_new_range_image_database_with_mode(root, config, spec, true, false, |_| Ok(()))
+        Self::create_new_range_image_database_with_mode(
+            root,
+            config,
+            spec,
+            true,
+            false,
+            false,
+            |_| Ok(()),
+        )
     }
     fn create_new_range_image_database_with(
         root: &Path,
@@ -820,6 +951,7 @@ impl BicDb {
             spec,
             false,
             false,
+            false,
             after_flags,
         )
     }
@@ -829,6 +961,7 @@ impl BicDb {
         spec: RangeImageBirthSpec,
         enforce: bool,
         metadata_initialization: bool,
+        abort_protocol: bool,
         after_flags: impl FnOnce(&mut Self) -> Result<()>,
     ) -> Result<(Self, FreshRangeGenesisAuthority)> {
         spec.validate()?;
@@ -870,12 +1003,17 @@ impl BicDb {
                 format::enable_native_metadata_store(root)?;
             }
         }
+        if abort_protocol {
+            format::enable_native_abort_history(root)?;
+        }
         after_flags(&mut db)?;
-        let birth = NativeDatabaseBirth::new_with_writer_enforcement(
+        let mut birth = NativeDatabaseBirth::new_with_writer_enforcement(
             spec,
             enforce,
             metadata_initialization,
         )?;
+        birth.abort_protocol_version = abort_protocol.then_some(1);
+        birth.checksum_sha256 = birth.checksum()?;
         db.write_native_range_image_record(BIRTH_KEY, &birth)?;
         crate::storage::write_atomic(
             &root.join(FACTORY_PREFLIGHT),
@@ -890,9 +1028,18 @@ impl BicDb {
             true,
         )?;
         if enforce {
-            crate::distribution_range_consensus::RangeWriteStore::initialize_fresh_native_catalogue(
-                &FreshNativeCatalogueBootstrap { database: &db, birth: &birth },
-            )?;
+            let fresh = FreshNativeCatalogueBootstrap {
+                database: &db,
+                birth: &birth,
+            };
+            fresh.require_current()?;
+            if birth.abort_protocol_version == Some(1) {
+                // One actual catalogue owner: protected Pending→exact15→
+                // Registered BEFORE factory exposure, never an empty12 retrofit.
+                db.initialize_native_abort_catalogue(&birth)?;
+            } else {
+                crate::distribution_range_consensus::RangeWriteStore::initialize_fresh_native_catalogue(&fresh)?;
+            }
         }
         db.finish_native_genesis_initialization(&birth)?;
         let authority = FreshRangeGenesisAuthority {
@@ -1014,6 +1161,16 @@ impl BicDb {
         {
             return Err(invalid("native writer enrollment must be fenced from birth; partial factory or legacy upgrade refused"));
         }
+        let abort_fenced = format::native_abort_history_active(&self.path)?;
+        if birth
+            .as_ref()
+            .is_some_and(|b| b.abort_protocol_version == Some(1))
+            != abort_fenced
+        {
+            return Err(invalid(
+                "abort protocol capability must be fenced from birth; retrofit refused",
+            ));
+        }
         let metadata_fenced = format::native_metadata_store_active(&self.path)?;
         if birth
             .as_ref()
@@ -1116,8 +1273,26 @@ impl BicDb {
         &self,
         birth: &NativeDatabaseBirth,
     ) -> Result<BTreeMap<RangeId, String>> {
+        #[cfg(test)]
+        let inventory_trace =
+            crate::distribution_range_handoff::NativeJointPhaseTrace::refresh_detail(
+                "refresh-admission-all-genesis-inventory",
+            );
         let mut receipts = BTreeMap::new();
         for range in &birth.spec.initial_ranges {
+            #[cfg(test)]
+            let range_trace =
+                crate::distribution_range_handoff::NativeJointPhaseTrace::refresh_detail(
+                    "refresh-admission-one-genesis-validation",
+                );
+            #[cfg(test)]
+            if range_trace.is_some() {
+                eprintln!(
+                    "ACTUAL_REFRESH_GENESIS_RANGE range={} initial_ranges={}",
+                    range.id,
+                    birth.spec.initial_ranges.len()
+                );
+            }
             let receipt: Option<NativeGenesisReceipt> =
                 self.read_native_range_image_record(&genesis_key(range.id))?;
             if let Some(receipt) = receipt {
@@ -1136,7 +1311,11 @@ impl BicDb {
                 }
                 receipts.insert(range.id, receipt.checksum_sha256);
             }
+            #[cfg(test)]
+            crate::distribution_range_handoff::NativeJointPhaseTrace::finish_detail(range_trace);
         }
+        #[cfg(test)]
+        crate::distribution_range_handoff::NativeJointPhaseTrace::finish_detail(inventory_trace);
         Ok(receipts)
     }
     pub(super) fn load_native_range_image_admission(&self) -> Result<()> {
@@ -1149,6 +1328,9 @@ impl BicDb {
             .store(true, AtomicOrdering::Release);
         let ready: Option<NativeInitializationComplete> =
             self.read_native_range_image_record(READY_KEY)?;
+        if ready.is_some() && birth.abort_protocol_version == Some(1) {
+            self.native_abort_catalogue_store_id()?;
+        }
         if let Some(ready) = ready {
             if ready.birth_id != birth.birth_id
                 || ready.birth_sha256 != birth.checksum_sha256
@@ -1172,6 +1354,7 @@ impl BicDb {
     fn finish_native_genesis_initialization(&self, birth: &NativeDatabaseBirth) -> Result<()> {
         let receipts = self.native_genesis_receipts(birth)?;
         if receipts.len() == birth.spec.initial_ranges.len() {
+            self.initialize_native_abort_catalogue(birth)?;
             self.write_native_range_image_record(
                 READY_KEY,
                 &NativeInitializationComplete {
@@ -1247,6 +1430,10 @@ impl BicDb {
         range_id: RangeId,
         range_index: u64,
     ) -> Result<()> {
+        #[cfg(test)]
+        let native_trace = crate::distribution_range_handoff::NativeJointPhaseTrace::refresh_detail(
+            "refresh-lineage-native-birth-anchor-prefix-joint",
+        );
         self.check_recovery_state()?;
         if self.native_range_image_installing(range_id)? {
             return Err(invalid(
@@ -1260,6 +1447,17 @@ impl BicDb {
         let receipt = actual_anchor.binding();
         self.validate_native_range_base_history(&birth, &receipt)?;
         let prefix = self.read_native_certified_range_prefix(&birth, &receipt)?;
+        let joint = self.read_native_joint_serving_domain(&birth, &receipt)?;
+        if let Some(joint) = &joint {
+            joint.require_materialized(&receipt, prefix.as_ref())?;
+        }
+        #[cfg(test)]
+        crate::distribution_range_handoff::NativeJointPhaseTrace::finish_detail(native_trace);
+        #[cfg(test)]
+        let catalog_trace =
+            crate::distribution_range_handoff::NativeJointPhaseTrace::refresh_detail(
+                "refresh-lineage-all-namespace-catalog-and-generations",
+            );
         let bindings = self.capture_range_image_bindings()?;
         let catalog = canonical_range_image_catalog(
             &birth.spec.cluster_id,
@@ -1280,6 +1478,7 @@ impl BicDb {
             || birth != lineage.birth
             || receipt != lineage.base
             || prefix != lineage.prefix
+            || joint != lineage.joint
             || lineage.range_index() != range_index
             || receipt.range.id != range_id
             || !self.config.fsync
@@ -1288,6 +1487,13 @@ impl BicDb {
                 "source lineage/base/floor changed; re-establish actual native proof",
             ));
         }
+        #[cfg(test)]
+        crate::distribution_range_handoff::NativeJointPhaseTrace::finish_detail(catalog_trace);
+        #[cfg(test)]
+        let namespace_trace =
+            crate::distribution_range_handoff::NativeJointPhaseTrace::refresh_detail(
+                "refresh-lineage-namespace-UID-schema-readers",
+            );
         for (name, id) in &receipt.local_namespace_ids {
             if self.local_namespace_identity(name)? != Some(*id) {
                 return Err(invalid("source native base namespace lineage changed"));
@@ -1302,6 +1508,8 @@ impl BicDb {
                 "source native base schema/reader contract changed; re-attestation required",
             ));
         }
+        #[cfg(test)]
+        crate::distribution_range_handoff::NativeJointPhaseTrace::finish_detail(namespace_trace);
         Ok(())
     }
 
@@ -1351,10 +1559,12 @@ impl BicDb {
                     let base = NativeRangeBaseBinding::genesis(&receipt);
                     let serving = database
                         .read_native_recovered_serving_configuration(&birth, &base, None)?;
+                    let joint = database.read_native_joint_serving_domain(&birth, &base)?;
                     let lineage = SourceRangeImageLineage {
                         birth,
                         base,
                         serving,
+                        joint,
                         _anchor: NativeRangeImageAnchor::Genesis(receipt),
                         prefix: None,
                         current_database_incarnation: database.incarnation.clone(),
@@ -1512,10 +1722,12 @@ impl BicDb {
         let base = NativeRangeBaseBinding::genesis(&receipt);
         let serving =
             database.read_native_recovered_serving_configuration(&authority.birth, &base, None)?;
+        let joint = database.read_native_joint_serving_domain(&authority.birth, &base)?;
         let lineage = SourceRangeImageLineage {
             birth: authority.birth.clone(),
             base,
             serving,
+            joint,
             _anchor: NativeRangeImageAnchor::Genesis(receipt),
             prefix: None,
             current_database_incarnation: database.incarnation.clone(),

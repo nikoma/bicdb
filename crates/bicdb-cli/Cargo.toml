@@ -59,6 +59,7 @@ rustls-native-certs = "0.8"
 tokio-postgres-rustls = "0.14"
 
 [dev-dependencies]
+rcgen = "0.13"
 osmpbfreader.workspace = true
 protobuf.workspace = true
 tempfile.workspace = true

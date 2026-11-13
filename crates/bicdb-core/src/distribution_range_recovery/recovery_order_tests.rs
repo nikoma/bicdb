@@ -46,6 +46,42 @@ impl<T: RangeWriteTransport> RangeWriteTransport for ObservedRecoveryBus<T> {
             .ok_or_else(|| invalid("test receiver is absent"))?;
         receiver.observe_history(&self.caller, request, parent)
     }
+    fn observe_native_ready_observation(
+        &self,
+        destination: &ClusterNodeId,
+        request: &NativeReadyRequest,
+        parent: &CancellationToken,
+    ) -> Result<NativeReadyObservation> {
+        parent.check()?;
+        if self.unavailable.lock().contains(destination) {
+            return Err(invalid("test data delivery is unavailable"));
+        }
+        let receiver = self
+            .receivers
+            .lock()
+            .get(destination)
+            .and_then(Weak::upgrade)
+            .ok_or_else(|| invalid("test receiver is absent"))?;
+        receiver.observe_native_ready(&self.caller, request, parent)
+    }
+    fn observe_native_completion_observation(
+        &self,
+        destination: &ClusterNodeId,
+        request: &NativeCompletionRequest,
+        parent: &CancellationToken,
+    ) -> Result<NativeCompletionObservation> {
+        parent.check()?;
+        if self.unavailable.lock().contains(destination) {
+            return Err(invalid("test data delivery is unavailable"));
+        }
+        let receiver = self
+            .receivers
+            .lock()
+            .get(destination)
+            .and_then(Weak::upgrade)
+            .ok_or_else(|| invalid("test receiver is absent"))?;
+        receiver.observe_native_completion(&self.caller, request, parent)
+    }
     fn range_write_progress(
         &self,
         n: &ClusterNodeId,
@@ -478,3 +514,8 @@ mod copied_full_image_case;
 mod interrupted_normal_repair;
 
 mod protected_resume_positive;
+
+mod installing_replacement_case;
+mod replacement_source_positive;
+
+mod higher_accepted_source;

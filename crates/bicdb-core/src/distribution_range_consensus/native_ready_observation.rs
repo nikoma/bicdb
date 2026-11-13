@@ -16,6 +16,145 @@ impl LocalNativeReadyEvidence {
     }
 }
 impl RangeWriteStore {
+    // Module-private producer continuation. It accepts only real opaque quorum
+    // decisions, performs their actual persistence/refresh, then immediately
+    // projects under the SAME exclusive Store/actual DB/Frozen/read-pin borrow.
+    // No callback or "already checked" capability is exposed outside consensus.
+    pub(super) fn produce_completion_and_project_ready<T>(
+        &mut self,
+        db: &crate::BicDb,
+        prepared: &PreparedNativeRecoveryReady,
+        decision: super::native_ready_completion::NativeCompletionDecision,
+        fresh: &RecoveryRoleAdmission,
+        request: &NativeReadyRequest,
+        parent: &CancellationToken,
+        project: impl FnOnce(
+            &Self,
+            LocalNativeReadyEvidence,
+            &super::native_ready_completion::NativeRecoveryCompletedFrozenReceipt,
+        ) -> Result<T>,
+    ) -> Result<T> {
+        parent.check()?;
+        request.scope.require_role(fresh)?;
+        let receipt = self.persist_native_completion_decision(db, prepared, decision, fresh)?;
+        self.project_just_produced_completion(
+            db, prepared, fresh, request, parent, receipt, project,
+        )
+    }
+    #[cfg(test)]
+    pub(super) fn test_produce_completion_and_project_ready_with<T>(
+        &mut self,
+        db: &crate::BicDb,
+        prepared: &PreparedNativeRecoveryReady,
+        decision: super::native_ready_completion::NativeCompletionDecision,
+        fresh: &RecoveryRoleAdmission,
+        request: &NativeReadyRequest,
+        parent: &CancellationToken,
+        write: impl FnOnce(&Path, &[u8], bool) -> Result<()>,
+        project: impl FnOnce(
+            &Self,
+            LocalNativeReadyEvidence,
+            &super::native_ready_completion::NativeRecoveryCompletedFrozenReceipt,
+        ) -> Result<T>,
+    ) -> Result<T> {
+        parent.check()?;
+        request.scope.require_role(fresh)?;
+        let receipt = self
+            .test_persist_native_completion_decision_with(db, prepared, decision, fresh, write)?;
+        self.project_just_produced_completion(
+            db, prepared, fresh, request, parent, receipt, project,
+        )
+    }
+    // Strictly private: both call sites above have just run the actual durable
+    // producer under this uninterrupted exclusive borrow. No stored receipt
+    // can select this path from another module or request.
+    fn project_just_produced_completion<T>(
+        &self,
+        db: &crate::BicDb,
+        prepared: &PreparedNativeRecoveryReady,
+        fresh: &RecoveryRoleAdmission,
+        request: &NativeReadyRequest,
+        parent: &CancellationToken,
+        receipt: super::native_ready_completion::NativeRecoveryCompletedFrozenReceipt,
+        project: impl FnOnce(
+            &Self,
+            LocalNativeReadyEvidence,
+            &super::native_ready_completion::NativeRecoveryCompletedFrozenReceipt,
+        ) -> Result<T>,
+    ) -> Result<T> {
+        parent.check()?;
+        #[cfg(test)]
+        let mut projection_trace = crate::distribution_range_handoff::NativeJointPhaseTrace::new(
+            "recovery-complete-produced-response-projection",
+            fresh.local_node_id(),
+            parent,
+        );
+        let ready = self.project_prepared_native(
+            prepared,
+            request,
+            fresh.context_id(),
+            fresh.metadata_term(),
+            fresh.metadata_read_index(),
+        )?;
+        let result = project(self, ready, &receipt)?;
+        prepared.require_produced_completion_boundary(db, self, fresh)?;
+        fresh.require_live_request()?;
+        parent.check()?;
+        #[cfg(test)]
+        projection_trace.complete();
+        Ok(result)
+    }
+    /// Produce and project in one exclusive store/same-DB borrow. The producer
+    /// owns the actual Frozen/read pin and performs its full physical checks
+    /// before and after durable preparation. No caller-supplied Prepared proof
+    /// or reusable "already checked" token can enter this path.
+    pub(crate) fn prepare_and_observe_native_recovery_ready(
+        &mut self,
+        db: &crate::BicDb,
+        physical: crate::db::LocalNativeRecoveryReady,
+        request: &NativeReadyRequest,
+        parent: &CancellationToken,
+    ) -> Result<(PreparedNativeRecoveryReady, LocalNativeReadyEvidence)> {
+        parent.check()?;
+        request.scope.require_role(physical.role())?;
+        let prepared = self.prepare_native_recovery_ready(db, physical)?;
+        // This is immediately after the producer's full post-fsync validation,
+        // within the SAME exclusive catalogue borrow and owned physical pin.
+        parent.check()?;
+        let role = prepared.role();
+        role.require_live_request()?;
+        #[cfg(test)]
+        let mut projection_trace = crate::distribution_range_handoff::NativeJointPhaseTrace::new(
+            "recovery-prepare-produced-response-projection",
+            role.local_node_id(),
+            parent,
+        );
+        let evidence = self.project_prepared_native(
+            &prepared,
+            request,
+            role.context_id(),
+            role.metadata_term(),
+            role.metadata_read_index(),
+        )?;
+        // Necessary refusal at the return boundary; this is not a renewed
+        // physical/current-role grant or a cache surviving the local call.
+        if matches!(
+            role.purpose(),
+            crate::distribution_consensus::MetadataRecoveryRolePurpose::CurrentJointRecovery { .. }
+        ) && self
+            .selected_current_joint_scope(request.scope.range_id)?
+            .is_none_or(|saved| !saved.same_session(&request.scope))
+        {
+            return Err(range_write_error(
+                "produced ready response changed its original current-joint writer/session",
+            ));
+        }
+        role.require_live_request()?;
+        parent.check()?;
+        #[cfg(test)]
+        projection_trace.complete();
+        Ok((prepared, evidence))
+    }
     /// Only preflight for retaining a restrictive freeze. This deliberately
     /// accepts an uncertain exact Prepared refusal so its actual fsync can be
     /// retried; it grants no observation, floor or mutation authority.
@@ -69,6 +208,34 @@ impl RangeWriteStore {
             role.metadata_read_index(),
         )
     }
+    pub(crate) fn observe_prepared_native_for_observer_scoped(
+        &self,
+        db: &crate::BicDb,
+        prepared: &PreparedNativeRecoveryReady,
+        observer: &RecoveryObservationRoleAdmission,
+        request: &NativeReadyRequest,
+        slot: &crate::distribution_data::RangeWriteServiceSlotGuard,
+        parent: &CancellationToken,
+    ) -> Result<LocalNativeReadyEvidence> {
+        db.with_native_ready_observer_scope(
+            prepared,
+            self,
+            observer,
+            request,
+            slot,
+            parent,
+            |scope| {
+                scope.require_identity(db, prepared, self, observer, request)?;
+                self.project_prepared_native(
+                    prepared,
+                    request,
+                    observer.metadata_context_id(),
+                    observer.metadata_term(),
+                    observer.metadata_read_index(),
+                )
+            },
+        )
+    }
     pub(crate) fn observe_prepared_native_for_observer(
         &self,
         db: &crate::BicDb,
@@ -76,7 +243,15 @@ impl RangeWriteStore {
         observer: &RecoveryObservationRoleAdmission,
         request: &NativeReadyRequest,
     ) -> Result<LocalNativeReadyEvidence> {
+        // Preserve the actual Data entry's Ready/completion-status trace phase:
+        // this physical validator is shared by both observation paths.
+        #[cfg(test)]
+        let validation_trace = crate::distribution_range_recovery::NativeProbeTraceSpan::current(
+            "observer-prepared-current-total",
+        );
         prepared.require_current_for_observer(db, self, observer, &request.scope)?;
+        #[cfg(test)]
+        crate::distribution_range_recovery::NativeProbeTraceSpan::finish(validation_trace);
         self.project_prepared_native(
             prepared,
             request,
@@ -101,6 +276,7 @@ impl RangeWriteStore {
             || !matches!(
                 request.scope.purpose,
                 crate::distribution_consensus::MetadataRecoveryRolePurpose::NormalRecovery
+                    | crate::distribution_consensus::MetadataRecoveryRolePurpose::CurrentJointRecovery { .. }
             )
         {
             return Err(range_write_error(
@@ -173,7 +349,7 @@ impl RangeWriteStore {
             reply: NativeReadyReply {
                 stage: prepared.frozen_stage()?,
                 evidence_version: 1,
-                physical_domain: NativeReadyPhysicalDomain::SameVoterNativeAnchorV1,
+                physical_domain: NativeReadyPhysicalDomain::for_scope(&request.scope)?,
                 scope: request.scope.clone(),
                 challenge: request.challenge,
                 observed_metadata_context_id,

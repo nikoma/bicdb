@@ -23,8 +23,21 @@ use crate::distribution_range_mutation::{
 use crate::{BicDb, BicDbError, CancellationToken, CollectionMeta, Result};
 
 mod history_export;
+#[cfg(test)]
+pub(crate) mod initial_wait_tests;
 pub(crate) use history_export::{RangeImageHistoryCursorV1, RangeImageHistoryStepV1};
+mod closed_image_source;
+#[cfg(feature = "tls-replication")]
+mod remote_source;
+#[cfg(feature = "tls-replication")]
+pub(crate) use remote_source::{
+    ActualNativeRemoteImageSourceFrame, NativeRemoteImageManifestV1,
+    NativeRemoteImageSourceOperationV1, NativeRemoteImageSourcePayloadV1,
+    NativeRemoteImageSourceReplyV1, NativeRemoteImageSourceRequestV1,
+    NativeRemoteImageSourceSession,
+};
 mod source_cut;
+pub(crate) use closed_image_source::ClosedNativeImageSource;
 pub(crate) use source_cut::{
     CertifiedRecoveryImageCut, NativeRangeImageSourceCut, RangeImageSourcePurposeV1,
 };
@@ -138,9 +151,11 @@ pub(crate) struct LocalRangeImageSealV1 {
 /// owned until this session is dropped; durable remote promises survive that
 /// drop and must be resolved by the handoff coordinator, never by a timer.
 pub(crate) struct RangeImageCapture {
+    closed_image_lifetime: Arc<()>,
+    original_cancellation: CancellationToken,
     db: Arc<RwLock<BicDb>>,
     gate: RangeMutationGate,
-    source_read_pin: SourceCaptureReadPin,
+    source_read_pin: Arc<SourceCaptureReadPin>,
     frozen: Arc<FrozenRangeMutationPermit>,
     cut: NativeRangeImageSourceCut,
     range_index: RangeIndexCut,
@@ -176,6 +191,41 @@ impl TentativeNativeRangeImageSourceAuthorization<'_> {
     pub(crate) fn require_current(&self) -> Result<()> {
         let database = read_database(&self.capture.db)?;
         self.capture.validate(&database)
+    }
+    /// Checks binding-only points selected from ACTUAL target records against
+    /// the immutable source generation under this capture's existing pin.
+    /// The capability comes from the consumed full current-quorum verifier.
+    pub(crate) fn require_current_quorum_history_points(
+        &self,
+        points: &std::collections::BTreeMap<u64, String>,
+    ) -> Result<()> {
+        let cancellation = self.cut().current_quorum_history_cancellation()?;
+        let database = read_database(&self.capture.db)?;
+        self.capture.validate(&database)?;
+        if points.len() > 4 {
+            return Err(invalid("replacement history point bound exceeded"));
+        }
+        for (index, expected) in points {
+            if *index > self.lineage().range_index() {
+                return Err(invalid("replacement source omits protected prior prefix"));
+            }
+            let step = database.export_native_logical_history_step_with_source_pin(
+                self.lineage(),
+                &self.capture.frozen,
+                &self.capture.source_read_pin,
+                *index,
+                1,
+                &cancellation,
+            )?;
+            if step.entries.len() != 1
+                || step.entries[0].index != *index
+                || &step.entries[0].commitment_sha256 != expected
+            {
+                return Err(invalid("replacement source forks protected/staged prefix"));
+            }
+        }
+        self.capture.validate(&database)?;
+        self.cut().require_current_quorum_history_coverage()
     }
     pub(crate) fn cut(&self) -> &NativeRangeImageSourceCut {
         &self.capture.cut
@@ -307,8 +357,75 @@ impl RangeImageCapture {
         wait_budget: Duration,
         cancellation: &CancellationToken,
     ) -> Result<Self> {
-        let cut = cut.into();
-        let frozen = frozen.into();
+        Self::begin_internal(
+            db,
+            cut.into(),
+            frozen.into(),
+            lineage,
+            wait_budget,
+            cancellation,
+            None,
+            None,
+        )
+    }
+    /// Share an ACTUAL existing source read lease; never acquire a second pin
+    /// or permit controlled writes while any observer/capture retains it.
+    pub(crate) fn begin_with_source_pin(
+        db: Arc<RwLock<BicDb>>,
+        cut: impl Into<NativeRangeImageSourceCut>,
+        frozen: Arc<FrozenRangeMutationPermit>,
+        lineage: SourceRangeImageLineage,
+        wait_budget: Duration,
+        cancellation: &CancellationToken,
+        pin: Arc<SourceCaptureReadPin>,
+    ) -> Result<Self> {
+        Self::begin_internal(
+            db,
+            cut.into(),
+            frozen,
+            lineage,
+            wait_budget,
+            cancellation,
+            Some(pin),
+            None,
+        )
+    }
+    /// The actual remote publication wait observes BOTH original tokens, but
+    /// the resulting capture retains only the long-session cancellation. A
+    /// finished 5s publication request is never a relocated 8GiB image lease.
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn begin_with_source_pin_and_initial_wait(
+        db: Arc<RwLock<BicDb>>,
+        cut: impl Into<NativeRangeImageSourceCut>,
+        frozen: Arc<FrozenRangeMutationPermit>,
+        lineage: SourceRangeImageLineage,
+        wait_budget: Duration,
+        session: &CancellationToken,
+        initial_request: &CancellationToken,
+        pin: Arc<SourceCaptureReadPin>,
+    ) -> Result<Self> {
+        initial_request.check()?;
+        Self::begin_internal(
+            db,
+            cut.into(),
+            frozen,
+            lineage,
+            wait_budget.min(Duration::from_secs(5)),
+            session,
+            Some(pin),
+            Some(initial_request),
+        )
+    }
+    fn begin_internal(
+        db: Arc<RwLock<BicDb>>,
+        cut: NativeRangeImageSourceCut,
+        frozen: Arc<FrozenRangeMutationPermit>,
+        lineage: SourceRangeImageLineage,
+        wait_budget: Duration,
+        cancellation: &CancellationToken,
+        existing_pin: Option<Arc<SourceCaptureReadPin>>,
+        initial_request: Option<&CancellationToken>,
+    ) -> Result<Self> {
         if wait_budget.is_zero()
             || wait_budget > MAX_CAPTURE_WAIT
             || frozen.owner() != cut.session_id()
@@ -317,14 +434,26 @@ impl RangeImageCapture {
         }
         let wait = cancellation.child_with_deadline(Instant::now() + wait_budget);
         wait.check()?;
+        if let Some(request) = initial_request {
+            request.check()?;
+        }
         // The old-data-quorum cut does not itself qualify a native image.
         // Require the actual persisted base's exact metadata transition too.
         cut.validate_source_lineage_configuration(&lineage)?;
         let (gate, reserved, bindings, source_read_pin) = {
             let database = read_database(&db)?;
             let gate = database.range_mutation_gate();
-            gate.validate_quiescent_frozen(cut.range().id, &frozen)?;
-            let source_read_pin = gate.try_source_capture_read_pin(cut.range().id, &frozen)?;
+            let source_read_pin = match existing_pin {
+                Some(pin) => {
+                    gate.validate_frozen(cut.range().id, &frozen)?;
+                    gate.validate_source_capture_read_pin(cut.range().id, &pin)?;
+                    pin
+                }
+                None => {
+                    gate.validate_quiescent_frozen(cut.range().id, &frozen)?;
+                    Arc::new(gate.try_source_capture_read_pin(cut.range().id, &frozen)?)
+                }
+            };
             database.validate_source_range_image_lineage(
                 &lineage,
                 cut.range().id,
@@ -340,8 +469,15 @@ impl RangeImageCapture {
                 source_read_pin,
             )
         };
+        #[cfg(test)]
+        if initial_request.is_some() {
+            initial_wait_tests::cancel_at_actual_wait(&db, cut.range().id, cut.nonce());
+        }
         loop {
             wait.check()?;
+            if let Some(request) = initial_request {
+                request.check()?;
+            }
             let reached = {
                 let database = read_database(&db)?;
                 gate.validate_quiescent_frozen(cut.range().id, &frozen)?;
@@ -355,6 +491,10 @@ impl RangeImageCapture {
             // No database/service latch is held across this bounded wait.
             std::thread::sleep(WAIT_POLL);
         }
+        if let Some(request) = initial_request {
+            wait.check()?;
+            request.check()?;
+        }
         let catalog_bytes = canonical_range_image_catalog(
             cut.cluster_id(),
             cut.range(),
@@ -366,7 +506,13 @@ impl RangeImageCapture {
         let wire_chain_sha256 = hex::encode(Sha256::digest(b"bicdb.range-image.wire.v1\0"));
         let range_index = RangeIndexCut::certified(&cut);
         let complete = bindings.collections().is_empty();
+        if let Some(request) = initial_request {
+            wait.check()?;
+            request.check()?;
+        }
         Ok(Self {
+            closed_image_lifetime: Arc::new(()),
+            original_cancellation: cancellation.clone(),
             db,
             gate,
             source_read_pin,
@@ -425,6 +571,7 @@ impl RangeImageCapture {
     }
 
     fn validate(&self, database: &BicDb) -> Result<()> {
+        self.cut.require_retained_history_quorum()?;
         if self.invalid {
             return Err(invalid(
                 "capture was invalidated; begin a new authorized session",

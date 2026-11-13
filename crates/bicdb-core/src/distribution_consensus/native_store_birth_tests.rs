@@ -109,10 +109,18 @@ fn native_birth_shape_keeps_legacy_and_rejects_invalid_data_or_format() {
     let mut v = value;
     v["authority"] = serde_json::json!(true);
     assert!(serde_json::from_value::<NativeStoreBirthV1>(v).is_err());
-    for format in [1, 3] {
+    // Joint handoff adds format 3 while retaining format-2 birth bindings.
+    // Unknown formats remain invalid; format 1 cannot carry those bindings.
+    let mut joint_format = t.clone();
+    joint_format.format_version = crate::distribution::NATIVE_JOINT_HANDOFF_TOPOLOGY_FORMAT_VERSION;
+    joint_format.validate().unwrap();
+    for format in [1, u32::MAX] {
         let mut wrong = t.clone();
         wrong.format_version = format;
-        assert!(wrong.validate().is_err());
+        assert!(
+            wrong.validate().is_err(),
+            "unsupported birth format {format}"
+        );
     }
     let mut wrong = t;
     wrong.range_image_bootstrap_id = Some(Uuid::new_v4());
@@ -725,4 +733,33 @@ fn native_birth_unbound_native_replacement_requires_new_incarnation_but_generic_
                 .nodes
                 .values()
                 .all(|node| node.native_store_birth_v1.is_none())));
+}
+
+#[test]
+fn native_abort_birth_capability_preserves_old_bytes_and_requires_writer_domain() {
+    // Data-shape checks only. These DTOs do not stand in for actual factory evidence.
+    let bootstrap = Uuid::new_v4();
+    let old = binding(bootstrap, 1);
+    let bytes = serde_json::to_vec(&old).unwrap();
+    assert!(!String::from_utf8(bytes.clone())
+        .unwrap()
+        .contains("abort_protocol_version"));
+    assert_eq!(old.abort_protocol_version(), 0);
+    assert_eq!(
+        serde_json::to_vec(&serde_json::from_slice::<NativeStoreBirthV1>(&bytes).unwrap()).unwrap(),
+        bytes
+    );
+    let mut value = serde_json::to_value(&old).unwrap();
+    value["abort_protocol_version"] = serde_json::json!(1);
+    let no_writer: NativeStoreBirthV1 = serde_json::from_value(value.clone()).unwrap();
+    assert!(no_writer.validate_for(Some(bootstrap), 1).is_err());
+    value["writer_enforcement_version"] = serde_json::json!(1);
+    let shape: NativeStoreBirthV1 = serde_json::from_value(value.clone()).unwrap();
+    shape.validate_for(Some(bootstrap), 1).unwrap();
+    assert_eq!(shape.abort_protocol_version(), 1);
+    value["abort_protocol_version"] = serde_json::json!(2);
+    assert!(serde_json::from_value::<NativeStoreBirthV1>(value)
+        .unwrap()
+        .validate_for(Some(bootstrap), 1)
+        .is_err());
 }

@@ -5,6 +5,9 @@ use crate::db::NativeRecoveryAdmission;
 use crate::distribution_consensus::MetadataRecoveryRolePurpose;
 use crate::distribution_range_recovery::RecoveryRoleAdmission;
 
+#[cfg(feature = "tls-replication")]
+mod registered_closed;
+
 pub(super) const MAX_RECOVERY_FENCES: usize = 65_536;
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -30,7 +33,8 @@ impl RecoveryFenceScope {
     pub(crate) fn freeze_owner(&self) -> Result<Uuid> {
         self.validate()?;
         match self.purpose {
-            MetadataRecoveryRolePurpose::NormalRecovery => Ok(self.recovery_nonce),
+            MetadataRecoveryRolePurpose::NormalRecovery
+            | MetadataRecoveryRolePurpose::CurrentJointRecovery { .. } => Ok(self.recovery_nonce),
             MetadataRecoveryRolePurpose::CommittedHandoff { session_id, .. }
                 if !session_id.is_nil() =>
             {
@@ -63,6 +67,13 @@ impl RecoveryFenceScope {
     }
     /// Structural DTO validation only; never role, quorum or serving authority.
     pub(crate) fn validate(&self) -> Result<()> {
+        if matches!(&self.purpose,MetadataRecoveryRolePurpose::CurrentJointRecovery {joint_decision_sha256}
+            if joint_decision_sha256.len()!=64 || !joint_decision_sha256.bytes().all(|b|b.is_ascii_hexdigit()))
+        {
+            return Err(range_write_error(
+                "invalid current-joint scope intent digest",
+            ));
+        }
         if self.protocol_version != 1
             || self.bootstrap_id.is_nil()
             || self.range_epoch == 0
@@ -403,6 +414,30 @@ impl RecoveryResolvedCatalogObservation {
 }
 
 impl RangeWriteStore {
+    pub(crate) fn require_completed_retained_command(
+        &self,
+        native: &NativeRecoveryAdmission,
+        completed: &crate::distribution_range_recovery::CompletedNativeCommandAdmission,
+    ) -> Result<()> {
+        completed.require_live()?;
+        self.require_native_recovery_identity(completed.role(), native)?;
+        self.require_durable_recovery_catalog()?;
+        let command = completed.command();
+        let log = self
+            .catalog
+            .ranges
+            .get(&command.range_id)
+            .ok_or_else(|| range_write_error("completed command actual local log is absent"))?;
+        if log.current_epoch != command.range_epoch {
+            return Err(range_write_error(
+                "completed command actual local raw epoch differs",
+            ));
+        }
+        match log.entries.get(&command.index) {
+            Some(entry) if entry.command == *command && matches!(entry.state, RangeWriteState::QuorumCommitted | RangeWriteState::Applied) => Ok(()),
+            _ => Err(range_write_error("completed materialization needs exact retained actual local CQ command; compaction/image or new-vote adoption is separate")),
+        }
+    }
     pub(crate) fn mark_historical_applied(
         &mut self,
         db: &crate::BicDb,
@@ -502,6 +537,14 @@ impl RangeWriteStore {
                     "physical historical Apply contradicts actual retained command state",
                 ))
             }
+        }
+        // Completed authority is disjoint from active current-certification.
+        // It may materialize ONLY an identical already durable local CQ/body;
+        // it cannot insert a missing command or cast a new Commit vote. Full
+        // actual native predecessor/H linkage is required separately by DB.
+        if let Some(completed) = admission.completed_decision() {
+            completed.require_recipient_role(role)?;
+            return self.require_completed_retained_command(native, completed);
         }
         let marker=self.catalog.recovery_fences[&scope.range_id].historical_certifications.get(&command.index)
             .ok_or_else(||range_write_error("physical historical Apply lacks an actual local current-session certify marker"))?;
@@ -721,6 +764,43 @@ impl RangeWriteStore {
         {
             serde_json::to_writer(&mut hash, &("sparse-committed-history-v1", sparse))?;
         }
+        if let Some(current) = self
+            .catalog
+            .installing_committed_certifications
+            .as_ref()
+            .and_then(|m| m.get(&range_id))
+            .filter(|m| !m.is_empty())
+        {
+            serde_json::to_writer(
+                &mut hash,
+                &("Installing-existing-committed-provenance-v1", current),
+            )?;
+        }
+        if let Some(h) = self
+            .catalog
+            .installing_recovery_handovers
+            .as_ref()
+            .and_then(|m| m.get(&range_id))
+            .filter(|m| !m.is_empty())
+        {
+            serde_json::to_writer(&mut hash, &("Installing-refusal-handover-history-v1", h))?;
+        }
+        if let Some(protocol) = self
+            .catalog
+            .native_abort_protocol
+            .as_ref()
+            .and_then(|p| p.range(range_id))
+        {
+            serde_json::to_writer(&mut hash, &("native-abort-control-v1", protocol))?;
+        }
+        if let Some(joint) = self
+            .catalog
+            .current_joint_recoveries
+            .as_ref()
+            .and_then(|m| m.get(&range_id))
+        {
+            serde_json::to_writer(&mut hash, &("current-joint-refusal-archive-v1", joint))?;
+        }
         Ok(hex::encode(hash.0.finalize()))
     }
     /// No row/WAL Apply occurs here. Only an independently observed committed
@@ -735,6 +815,7 @@ impl RangeWriteStore {
         let scope = decision.scope();
         self.require_recovery_scope(role, native, scope)?;
         let command = decision.command();
+        self.require_no_native_abort_promise(command.range_id, command.index)?;
         role.require_historical_command_scope(command)?;
         if self
             .catalog
@@ -857,6 +938,9 @@ impl RangeWriteStore {
     }
     pub(crate) fn preflight_recovery_nonce(&self, scope: &RecoveryFenceScope) -> Result<()> {
         self.require_no_image_install(scope.range_id)?;
+        self.preflight_recovery_nonce_fields(scope)
+    }
+    fn preflight_recovery_nonce_fields(&self, scope: &RecoveryFenceScope) -> Result<()> {
         scope.validate()?;
         if let Some(old) = self.catalog.recovery_fences.get(&scope.range_id) {
             if scope.range_epoch < old.scope.range_epoch
@@ -917,6 +1001,9 @@ impl RangeWriteStore {
     ) -> Result<()> {
         self.require_durable_recovery_catalog()?;
         self.require_no_image_install(scope.range_id)?;
+        self.require_active_recovery_scope_record(scope)
+    }
+    fn require_active_recovery_scope_record(&self, scope: &RecoveryFenceScope) -> Result<()> {
         let saved = self
             .catalog
             .recovery_fences
@@ -969,7 +1056,19 @@ impl RangeWriteStore {
         write: impl FnOnce(&Path, &[u8], bool) -> Result<()>,
     ) -> Result<()> {
         self.recovery_persistence_uncertain = true;
+
+        // FENCE_TRACE_BEGIN
+        #[cfg(test)]
+        crate::distribution_range_recovery::fence_trace::mark(
+            "fence-catalogue-durable-write-begin",
+        );
+        // FENCE_TRACE_END
         self.persist_with(write)?;
+        // FENCE_TRACE_BEGIN
+        #[cfg(test)]
+        crate::distribution_range_recovery::fence_trace::mark("fence-catalogue-durable-write-ok");
+        // FENCE_TRACE_END
+
         self.recovery_persistence_uncertain = false;
         Ok(())
     }
@@ -1026,6 +1125,9 @@ impl RangeWriteStore {
     pub(crate) fn require_no_active_recovery(&self, range_id: RangeId) -> Result<()> {
         self.require_durable_recovery_catalog()?;
         self.require_no_uncovered_sparse(range_id, self.progress(range_id).resolved_through)?;
+        if self.native_joint_covers_prior_recovery_context(range_id)? {
+            return Ok(());
+        }
         if self
             .catalog
             .recovery_fences
@@ -1053,6 +1155,7 @@ impl RangeWriteStore {
             .catalog
             .handoff_promises
             .contains_key(&command.range_id)
+            && !self.native_joint_command_allowed(command)?
         {
             return Err(range_write_error(
                 "ordinary native write conflicts with permanent handoff promise",
@@ -1087,6 +1190,7 @@ impl RangeWriteStore {
     ) -> Result<()> {
         role.require_live_request()?;
         self.require_sparse_native_binding(role.current_range().id, native)?;
+        self.require_installing_certification_native_binding(role.current_range().id, native)?;
         if !self.fsync
             || !crate::format::range_image_install_active(&self.root)?
             || &self.catalog.cluster_id != role.cluster_id()
@@ -1111,8 +1215,29 @@ impl RangeWriteStore {
         native: &NativeRecoveryAdmission,
         scope: &RecoveryFenceScope,
     ) -> Result<()> {
+        if matches!(
+            scope.purpose,
+            MetadataRecoveryRolePurpose::CurrentJointRecovery { .. }
+        ) || self
+            .catalog
+            .current_joint_recoveries
+            .as_ref()
+            .is_some_and(|m| m.contains_key(&scope.range_id))
+        {
+            return Err(range_write_error(
+                "current joint recovery requires its dedicated actual protected-domain producer",
+            ));
+        }
         self.require_no_image_install(scope.range_id)?;
         self.preflight_recovery_nonce(scope)?;
+        self.preflight_recovery_fence_constraints(role, native, scope)
+    }
+    fn preflight_recovery_fence_constraints(
+        &self,
+        role: &RecoveryRoleAdmission,
+        native: &NativeRecoveryAdmission,
+        scope: &RecoveryFenceScope,
+    ) -> Result<()> {
         self.require_native_recovery_identity(role, native)?;
         scope.require_role(role)?;
         if self.catalog.backup_fences.contains_key(&scope.range_id) {
@@ -1215,6 +1340,24 @@ impl RangeWriteStore {
         write: impl FnOnce(&Path, &[u8], bool) -> Result<()>,
     ) -> Result<()> {
         self.preflight_recovery_fence(role, native, scope)?;
+        self.persist_recovery_fence_record(role, native, scope, write)
+    }
+    fn persist_recovery_fence_record(
+        &mut self,
+        role: &RecoveryRoleAdmission,
+        native: &NativeRecoveryAdmission,
+        scope: &RecoveryFenceScope,
+        write: impl FnOnce(&Path, &[u8], bool) -> Result<()>,
+    ) -> Result<()> {
+        self.install_recovery_fence_record(role, native, scope);
+        self.persist_recovery_catalog_with(write)
+    }
+    fn install_recovery_fence_record(
+        &mut self,
+        role: &RecoveryRoleAdmission,
+        native: &NativeRecoveryAdmission,
+        scope: &RecoveryFenceScope,
+    ) {
         self.native_activated_opens.remove(&scope.range_id);
         let log = self
             .catalog
@@ -1266,9 +1409,8 @@ impl RangeWriteStore {
                 retired_nonces,
             },
         );
-        // Retain this refusal on any rename/directory-sync ambiguity. Retrying
-        // always re-fsyncs before any fresh quorum acknowledgment is issued.
-        self.persist_recovery_catalog_with(write)
+        // Caller retains this refusal through any rename/directory-sync or
+        // post-write guard ambiguity; no rollback over uncertainty is allowed.
     }
     pub(crate) fn require_recovery_scope(
         &self,
@@ -1280,6 +1422,7 @@ impl RangeWriteStore {
         self.require_no_image_install(scope.range_id)?;
         self.require_native_recovery_identity(role, native)?;
         scope.require_role(role)?;
+        self.current_joint_scope_constraint(scope)?;
         let saved = self
             .catalog
             .recovery_fences

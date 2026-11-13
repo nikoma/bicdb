@@ -1,0 +1,12 @@
+{
+  "source": "21259881268b1ae84b0c87b2211d519eaaf06703",
+  "run": 43357200474,
+  "artifact_id": 14006816760,
+  "zip_sha256": "7db80961e77a4300e5a63ca1557790e9c9b3fd78c5b812302a8d176cfa3bca52",
+  "zip_bytes": 42178,
+  "zip_entries": 4,
+  "manifests": [],
+  "verified_files": 0,
+  "verified_bytes": 0,
+  "engine_opened_or_replayed": false
+}

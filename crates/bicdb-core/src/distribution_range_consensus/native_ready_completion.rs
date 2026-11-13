@@ -66,8 +66,30 @@ impl NativeRecoveryCompletedFrozenReceipt {
         }
         Ok(())
     }
+    // Private to the actual producer: refreshed is the post-catalogue native
+    // readback from the SAME uninterrupted Store/DB/Prepared borrow. External
+    // receipt consumers must continue using full require_current above.
+    fn require_refreshed_binding(
+        &self,
+        store: &RangeWriteStore,
+        prepared: &PreparedNativeRecoveryReady,
+        fresh: &RecoveryRoleAdmission,
+        refreshed: &NativeRecoveredServingReceipt,
+    ) -> Result<()> {
+        self.scope.require_role(fresh)?;
+        if self.store_open_id != store.open_id
+            || !prepared.scope().same_session(&self.scope)
+            || self.native.checksum_sha256() != refreshed.checksum_sha256()
+            || refreshed.checksum_sha256() != self.completed.native_serving_sha256
+            || !matches!(&store.catalog.recovery_fences[&self.scope.range_id].phase,
+                RecoveryFencePhase::NativeCompleted(saved) if saved == &self.completed)
+        {
+            return Err(range_write_error("produced completion receipt differs from actual refreshed native/catalogue binding"));
+        }
+        Ok(())
+    }
 }
-enum NativeCompletionDecision {
+pub(super) enum NativeCompletionDecision {
     Closed(ClosedNativeReadyQuorum),
     Completed(crate::distribution_range_recovery::NativeCompletionQuorum),
     Activated(crate::distribution_range_recovery::ActivatedNativeCompletionDecision),
@@ -180,6 +202,32 @@ impl RangeWriteStore {
             crate::storage::write_atomic,
         )
     }
+    pub(super) fn persist_native_completion_decision(
+        &mut self,
+        db: &crate::BicDb,
+        prepared: &PreparedNativeRecoveryReady,
+        quorum: NativeCompletionDecision,
+        fresh: &RecoveryRoleAdmission,
+    ) -> Result<NativeRecoveryCompletedFrozenReceipt> {
+        self.persist_native_completion_decision_with(
+            db,
+            prepared,
+            quorum,
+            fresh,
+            crate::storage::write_atomic,
+        )
+    }
+    #[cfg(test)]
+    pub(super) fn test_persist_native_completion_decision_with(
+        &mut self,
+        db: &crate::BicDb,
+        prepared: &PreparedNativeRecoveryReady,
+        quorum: NativeCompletionDecision,
+        fresh: &RecoveryRoleAdmission,
+        write: impl FnOnce(&Path, &[u8], bool) -> Result<()>,
+    ) -> Result<NativeRecoveryCompletedFrozenReceipt> {
+        self.persist_native_completion_decision_with(db, prepared, quorum, fresh, write)
+    }
     fn persist_native_completion_decision_with(
         &mut self,
         db: &crate::BicDb,
@@ -188,16 +236,64 @@ impl RangeWriteStore {
         fresh: &RecoveryRoleAdmission,
         write: impl FnOnce(&Path, &[u8], bool) -> Result<()>,
     ) -> Result<NativeRecoveryCompletedFrozenReceipt> {
-        quorum.require_local_prepared(prepared, db, self, fresh)?;
+        #[cfg(test)]
+        let mut quorum_trace =
+            crate::distribution_range_handoff::NativeJointPhaseTrace::from_deadline(
+                "recovery-complete-final-local-quorum-check",
+                fresh.local_node_id(),
+                fresh.deadline(),
+            );
+        // Lifetime/session/writer refusal only here. The SAME sealed decision's
+        // actual native mutator immediately performs the full local physical +
+        // exact quorum-point check before WAL; no proof is inferred from this
+        // boundary. The full pre-catalogue check below remains separate.
+        quorum.require_recipient_role(fresh)?;
+        prepared.require_produced_completion_boundary(db, self, fresh)?;
+        #[cfg(test)]
+        {
+            quorum_trace.complete();
+            drop(quorum_trace);
+        }
         // FIRST: actual native-WAL configuration, while Prepared blocks writes.
+        #[cfg(test)]
+        let mut native_trace =
+            crate::distribution_range_handoff::NativeJointPhaseTrace::from_deadline(
+                "recovery-complete-native-serving-producer",
+                fresh.local_node_id(),
+                fresh.deadline(),
+            );
         let native = quorum.persist_native(prepared, db, self, fresh)?;
+        #[cfg(test)]
+        {
+            native_trace.complete();
+            drop(native_trace);
+            eprintln!(
+                "ACTUAL_RECOVERY_COMPLETE_NATIVE_PERSISTED node={} nonce={} R={} serving_sha={}",
+                fresh.local_node_id(),
+                prepared.scope().recovery_nonce,
+                prepared.range_index(),
+                native.checksum_sha256()
+            );
+        }
         let scope = prepared.scope().clone();
         let completed = NativeCompletedPoint {
             point: prepared.actual_prepared_point(),
             native_serving_sha256: native.checksum_sha256().to_owned(),
         };
         completed.validate()?;
+        #[cfg(test)]
+        let mut pre_catalog_trace =
+            crate::distribution_range_handoff::NativeJointPhaseTrace::from_deadline(
+                "recovery-complete-before-catalogue-local-quorum-check",
+                fresh.local_node_id(),
+                fresh.deadline(),
+            );
         quorum.require_local_prepared(prepared, db, self, fresh)?;
+        #[cfg(test)]
+        {
+            pre_catalog_trace.complete();
+            drop(pre_catalog_trace);
+        }
         self.recovery_persistence_uncertain = true;
         self.catalog
             .recovery_fences
@@ -212,16 +308,54 @@ impl RangeWriteStore {
         // SECOND: completion is durable, still an ordinary-write refusal.
         // On any error retain this phase + uncertain flag; never roll it back
         // to Active or infer durability from the visible JSON rename.
+        #[cfg(test)]
+        let mut persist_trace =
+            crate::distribution_range_handoff::NativeJointPhaseTrace::from_deadline(
+                "recovery-complete-catalogue-fsync",
+                fresh.local_node_id(),
+                fresh.deadline(),
+            );
         self.persist_recovery_catalog_with(write)?;
-        prepared.refresh_after_durable_native_completion(db, self, fresh)?;
+        #[cfg(test)]
+        {
+            persist_trace.complete();
+            drop(persist_trace);
+            eprintln!("ACTUAL_RECOVERY_COMPLETE_CATALOGUE_PERSISTED node={} nonce={} point={:?} serving_sha={} uncertain={}", fresh.local_node_id(), scope.recovery_nonce, completed.point, completed.native_serving_sha256, self.recovery_persistence_uncertain);
+        }
+        #[cfg(test)]
+        let mut refresh_trace =
+            crate::distribution_range_handoff::NativeJointPhaseTrace::from_deadline(
+                "recovery-complete-refresh-prepared-binding",
+                fresh.local_node_id(),
+                fresh.deadline(),
+            );
+        let refreshed = prepared.refresh_completed_native_binding(db, self, fresh)?;
+        #[cfg(test)]
+        {
+            refresh_trace.complete();
+            drop(refresh_trace);
+        }
         let receipt = NativeRecoveryCompletedFrozenReceipt {
             store_open_id: self.open_id,
             scope,
             completed,
             native,
         };
-        receipt.require_current(db, self, prepared, fresh)?;
+        #[cfg(test)]
+        let mut receipt_trace =
+            crate::distribution_range_handoff::NativeJointPhaseTrace::from_deadline(
+                "recovery-complete-receipt-current",
+                fresh.local_node_id(),
+                fresh.deadline(),
+            );
+        receipt.require_refreshed_binding(self, prepared, fresh, &refreshed)?;
+        prepared.require_produced_completion_boundary(db, self, fresh)?;
         quorum.require_recipient_role(fresh)?;
+        #[cfg(test)]
+        {
+            receipt_trace.complete();
+            drop(receipt_trace);
+        }
         Ok(receipt)
     }
 }

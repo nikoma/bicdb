@@ -1,0 +1,29 @@
+[
+  {
+    "label": "core",
+    "job": 131658467851,
+    "name": "Focused Core library (native_registered_fifth_placement_)",
+    "status": "completed",
+    "conclusion": "failure",
+    "raw_bytes": 2042972,
+    "raw_sha256": "005ba370da2bc55f6a1ae3b91910a782dc480f36fa076d17f14f12cecdf6f57e"
+  },
+  {
+    "label": "format",
+    "job": 131658432548,
+    "name": "Formatting",
+    "status": "completed",
+    "conclusion": "success",
+    "raw_bytes": 30089,
+    "raw_sha256": "9f6378c6a83a814d92865f4b01dca4ab8fe4bad4193873c5592ccad390430a45"
+  },
+  {
+    "label": "compile",
+    "job": 131658432592,
+    "name": "Community-only workspace compiles, tests included",
+    "status": "completed",
+    "conclusion": "success",
+    "raw_bytes": 2360485,
+    "raw_sha256": "43ef6645b91026a426132aebcd8ee3665c368b09894d8d4f79e51811e2ae21fa"
+  }
+]

@@ -6,6 +6,7 @@ use crate::distribution_range_consensus::{RangeWriteCoordinator, RangeWriteTrans
 use std::sync::Weak;
 
 const POLICY_POINTER: &str = "writer-enrollment/current";
+mod registry_refresh;
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
@@ -61,8 +62,14 @@ pub(crate) struct NativeWriterHostState {
     schema_generation: u64,
     registration: Weak<CommitAdmissionRegistration>,
     coordinator: Weak<dyn CommitAdmission>,
+    registry_extension:
+        parking_lot::RwLock<Option<Arc<registry_refresh::VerifiedRegistryExtension>>>,
+    registry_publication_pending: std::sync::atomic::AtomicBool,
 }
 impl NativeWriterHostState {
+    pub(crate) fn registration_generation(&self) -> Uuid {
+        self.record.generation
+    }
     fn require_lifetime(&self) -> Result<Arc<CommitAdmissionRegistration>> {
         let registration = self
             .registration
@@ -98,6 +105,11 @@ impl NativeWriterHostState {
             .check()
             .map_err(|error| BicDbError::PagedStorage(error.to_string()))?;
         Ok(registration)
+    }
+    /// Necessary original writer/registration lifetime refusal for an owned
+    /// read observation. Full actual DB/hook/registry checks remain scoped.
+    pub(in crate::db::range_image_native) fn require_read_lifetime(&self) -> Result<()> {
+        self.require_lifetime().map(|_| ())
     }
     pub(crate) fn require_store(&self, root: &Path, open_id: Uuid) -> Result<()> {
         self.require_lifetime()?;
@@ -139,9 +151,51 @@ impl NativeWriterHostState {
         Ok(())
     }
     pub(crate) fn require_topology(&self, topology: &crate::ClusterTopology) -> Result<()> {
-        self.record.facts.require_topology(topology)
+        self.require_registry_topology(topology)
+    }
+    /// Necessary mutable-boundary refusal inside an actual activation journal
+    /// scope. Full policy/birth/registry validation remains at scope entry/exit.
+    pub(in crate::db::range_image_native) fn require_activation_lifetime(
+        &self,
+        database: &BicDb,
+        range: &RangeDescriptor,
+    ) -> Result<()> {
+        let registration = self.require_lifetime()?;
+        database.check_recovery_state()?;
+        if database.incarnation_id() != self.record.database_incarnation
+            || database.data_path().canonicalize()? != self.root
+        {
+            return Err(invalid("native writer database/open changed"));
+        }
+        let hook = database.commit_admission.read();
+        if !Arc::ptr_eq(hook.registration(), &registration)
+            || hook
+                .native_writer()
+                .is_none_or(|state| !std::ptr::eq(state.as_ref(), self))
+        {
+            return Err(invalid(
+                "native writer policy is not the actual installed hook",
+            ));
+        }
+        self.require_range(range)
+    }
+    /// Necessary read boundary only: same existing original registration,
+    /// DB/open, hook, schema/health and immutable DATA policy checks. This
+    /// unit preflight grants neither activation nor a serving observation.
+    pub(in crate::db::range_image_native) fn require_read_database_lifetime(
+        &self,
+        database: &BicDb,
+        range: &RangeDescriptor,
+    ) -> Result<()> {
+        self.require_activation_lifetime(database, range)
     }
     pub(crate) fn require_database(&self, database: &BicDb, range: &RangeDescriptor) -> Result<()> {
+        self.require_original_database(database, range)?;
+        self.require_verified_registry_database(database)
+    }
+    // Only registry publication may reconcile a durable-but-unpublished audit.
+    // This still proves the actual original DB/hook/policy/open, not a role.
+    fn require_original_database(&self, database: &BicDb, range: &RangeDescriptor) -> Result<()> {
         self.require_lifetime()?;
         database.check_recovery_state()?;
         if database.incarnation_id() != self.record.database_incarnation
@@ -187,6 +241,126 @@ impl NativeWriterHostState {
     }
 }
 
+/// Necessary original registration continuity, captured only from the actual
+/// Registered receiver's original empty hook. Never a writer or fence grant.
+pub(crate) struct NativeRegisteredReceiverHook {
+    registration: Weak<CommitAdmissionRegistration>,
+    actual_open: Weak<()>,
+}
+impl NativeRegisteredReceiverHook {
+    #[cfg(test)]
+    pub(crate) fn test_keep_original_registration(
+        &self,
+    ) -> Result<impl std::any::Any + Send + Sync> {
+        self.registration
+            .upgrade()
+            .ok_or_else(|| invalid("actual original registration ended before test"))
+    }
+
+    fn require_borrowed(
+        &self,
+        database: &BicDb,
+        hook: &crate::db::commit_admission_hook::CommitAdmissionSlot,
+    ) -> Result<()> {
+        let original = self
+            .registration
+            .upgrade()
+            .ok_or_else(|| invalid("original registered receiver hook ended"))?;
+        if self.actual_open.upgrade().is_none()
+            || !Weak::ptr_eq(
+                &self.actual_open,
+                &database.native_metadata_owner_open_lifetime(),
+            )
+            || !Arc::ptr_eq(&original, hook.registration())
+            || hook.is_some()
+            || hook.native_writer().is_some()
+            || original.is_active()
+        {
+            return Err(invalid(
+                "original registered receiver hook changed; restored None cannot rebase it",
+            ));
+        }
+        Ok(())
+    }
+    pub(crate) fn require_current(&self, database: &BicDb) -> Result<()> {
+        let hook = database
+            .commit_admission
+            .try_read()
+            .ok_or_else(|| invalid("registered receiver hook busy"))?;
+        self.require_borrowed(database, &hook)
+    }
+    #[cfg(feature = "tls-replication")]
+    pub(crate) fn with_persist<'op, R>(
+        &self,
+        database: &BicDb,
+        capability: &crate::distribution_native_host::NativeAssignedRegisteredClosedFence<'op>,
+        operation: impl for<'scope> FnOnce(
+            &NativeRegisteredClosedPersistScope<'scope, 'op>,
+        ) -> Result<R>,
+    ) -> Result<R> {
+        let admission = database
+            .serializable_commit_admission
+            .try_read()
+            .ok_or_else(|| invalid("registered CLOSED admission busy at actual sink"))?;
+        let hook = database
+            .commit_admission
+            .try_read()
+            .ok_or_else(|| invalid("registered CLOSED hook busy at actual sink"))?;
+        let scope = NativeRegisteredClosedPersistScope {
+            database,
+            capability,
+            original: self,
+            hook,
+            _admission: admission,
+            _local: std::marker::PhantomData,
+        };
+        scope.require_capability(capability, database)?;
+        let result = operation(&scope)?;
+        scope.require_capability(capability, database)?;
+        Ok(result)
+    }
+}
+
+/// Actual borrowed original-hook exclusion. Constructor and guards are private;
+/// HRTB callback cannot return this !Send scope or a reusable checked permit.
+#[cfg(feature = "tls-replication")]
+pub(crate) struct NativeRegisteredClosedPersistScope<'scope, 'op> {
+    database: &'scope BicDb,
+    capability: &'scope crate::distribution_native_host::NativeAssignedRegisteredClosedFence<'op>,
+    original: &'scope NativeRegisteredReceiverHook,
+    hook:
+        parking_lot::RwLockReadGuard<'scope, crate::db::commit_admission_hook::CommitAdmissionSlot>,
+    _admission: parking_lot::RwLockReadGuard<'scope, ()>,
+    _local: std::marker::PhantomData<std::rc::Rc<()>>,
+}
+#[cfg(feature = "tls-replication")]
+impl NativeRegisteredClosedPersistScope<'_, '_> {
+    pub(crate) fn require_capability(
+        &self,
+        capability: &crate::distribution_native_host::NativeAssignedRegisteredClosedFence<'_>,
+        database: &BicDb,
+    ) -> Result<()> {
+        if !std::ptr::eq(database, self.database) || !std::ptr::eq(capability, self.capability) {
+            return Err(invalid(
+                "registered CLOSED persistence scope changed actual DB/capability",
+            ));
+        }
+        self.original.require_borrowed(database, &self.hook)?;
+        database.require_never_installed_receiver_writer_records()?;
+        capability.require_live()
+    }
+    pub(crate) fn require_current(
+        &self,
+        database: &BicDb,
+        store: &crate::distribution_range_consensus::RangeWriteStore,
+    ) -> Result<()> {
+        self.require_capability(self.capability, database)?;
+        self.capability
+            .require_database_store_under_persist(database, store, self)?;
+        self.require_capability(self.capability, database)
+    }
+}
+
 /// Necessary installed-host continuity proof. It grants no current role,
 /// snapshot, data quorum or row/absence permission.
 #[derive(Debug)]
@@ -194,8 +368,100 @@ pub(crate) struct InstalledNativeWriterHostGuard {
     state: Arc<NativeWriterHostState>,
 }
 impl InstalledNativeWriterHostGuard {
+    /// Read-only diagnostic DATA from the retained actual installation. No
+    /// DB/service/native-journal reacquisition or role/readiness authority.
+    /// The bound registration may have been revoked; its ID is not a grant.
+    pub(crate) fn binding_diagnostic(&self) -> serde_json::Value {
+        let observed = self.state.registration.upgrade();
+        let actual = observed
+            .as_ref()
+            .and_then(|registration| registration.authority());
+        let expected = self.state.coordinator.upgrade();
+        let matches = actual
+            .as_ref()
+            .zip(expected.as_ref())
+            .map(|(actual, expected)| Arc::ptr_eq(actual, expected));
+        let lifetime = self.state.require_lifetime();
+        serde_json::json!({
+            "scope":"diagnostic retained binding only; not linearizable Ready/role or a permission",
+            "persisted_policy_coordinator_id":self.state.record.coordinator_id,
+            "persisted_policy_registration_generation":self.state.record.generation,
+            "persisted_policy_database_open_incarnation":self.state.record.database_incarnation,
+            "persisted_policy_range_store_open_id":self.state.record.store_open_id,
+            "persisted_policy_checksum_sha256":self.state.record.checksum_sha256,
+            "observed_bound_registration_generation":observed.as_ref().map(|registration| registration.generation()),
+            "observed_bound_registration_active":observed.as_ref().map(|registration| registration.is_active()),
+            "observed_bound_authority_matches_retained_coordinator":matches,
+            "observed_weak_directory_alive":self.state.directory.upgrade().is_some(),
+            "observed_binding_lifetime_live":lifetime.is_ok(),
+            "observed_binding_liveness_error":lifetime.err().map(|error|error.to_string()),
+            "actual_verified_registry_extension":self.state.registry_diagnostic(),
+            "current_database_hook_slot_not_relocked":true,
+            "identity_from_status_dto_is_not_authority":true,
+        })
+    }
     pub(crate) fn writer_enforcement_version(&self) -> u32 {
         1
+    }
+    /// Retire only THIS actual installation after its host has drained. The
+    /// commit gate and hook lock serialize comparison and clearing with new
+    /// installs, including the SAME coordinator Arc reinstalled under a new
+    /// registration. No native journal, range permit or network is acquired.
+    pub(crate) fn retire_if_current<T: RangeWriteTransport>(
+        &self,
+        database: &BicDb,
+        coordinator: &Arc<RangeWriteCoordinator<T>>,
+    ) -> Result<bool> {
+        // Revocation must work even after a durability/recovery failure. No
+        // native reads, health/ready check or filesystem lookup belongs here:
+        // the immutable actual-open ID plus exact private slot identities
+        // below suffice to revoke THIS hook, and cannot grant any authority.
+        if database.incarnation_id() != self.state.record.database_incarnation
+            || coordinator.native_writer_coordinator_id() != self.state.record.coordinator_id
+        {
+            return Err(invalid(
+                "cannot retire a writer from another actual database/coordinator",
+            ));
+        }
+        let expected: Arc<dyn CommitAdmission> = coordinator.clone();
+        if self
+            .state
+            .coordinator
+            .upgrade()
+            .is_none_or(|actual| !Arc::ptr_eq(&actual, &expected))
+        {
+            return Err(invalid("cannot retire another actual writer Arc"));
+        }
+        let Some(registration) = self.state.registration.upgrade() else {
+            return Ok(false);
+        };
+        let _quiesced = database
+            .serializable_commit_admission
+            .try_write()
+            .ok_or_else(|| {
+                invalid("actual transactions still draining before writer retirement")
+            })?;
+        let mut hook = database
+            .commit_admission
+            .try_write()
+            .ok_or_else(|| invalid("actual writer installation busy during retirement"))?;
+        if !Arc::ptr_eq(hook.registration(), &registration)
+            || hook
+                .native_writer()
+                .is_none_or(|actual| !Arc::ptr_eq(actual, &self.state))
+            || hook
+                .as_ref()
+                .is_none_or(|actual| !Arc::ptr_eq(actual, &expected))
+        {
+            return Ok(false);
+        }
+        hook.install(None);
+        Ok(true)
+    }
+    /// Cleanup-only liveness: no registration means no slot can still own
+    /// this installation. This cannot become a writer/read permission.
+    pub(crate) fn registration_ended(&self) -> bool {
+        self.state.registration.upgrade().is_none()
     }
     pub(crate) fn require_current(&self, database: &BicDb, range: &RangeDescriptor) -> Result<()> {
         self.state.require_database(database, range)
@@ -252,6 +518,63 @@ impl BicDb {
             }
         }
         store.require_verified_native_catalogue_custody(self.data_path())
+    }
+    pub(crate) fn capture_registered_receiver_hook(&self) -> Result<NativeRegisteredReceiverHook> {
+        let _admission = self
+            .serializable_commit_admission
+            .try_read()
+            .ok_or_else(|| invalid("receiver admission busy at original capture"))?;
+        let hook = self
+            .commit_admission
+            .try_read()
+            .ok_or_else(|| invalid("receiver hook busy at original capture"))?;
+        self.require_never_installed_receiver_writer_records()?;
+        let result = NativeRegisteredReceiverHook {
+            registration: Arc::downgrade(hook.registration()),
+            actual_open: self.native_metadata_owner_open_lifetime(),
+        };
+        result.require_borrowed(self, &hook)?;
+        Ok(result)
+    }
+    #[cfg(feature = "tls-replication")]
+    pub(crate) fn with_assigned_closed_writer_exclusion<R>(
+        &self,
+        capability: &crate::distribution_native_host::NativeAssignedRegisteredClosedFence<'_>,
+        operation: impl FnOnce() -> Result<R>,
+    ) -> Result<R> {
+        let _admission = self
+            .serializable_commit_admission
+            .try_read()
+            .ok_or_else(|| invalid("assigned CLOSED receiver writer admission busy"))?;
+        capability.require_database(self)?;
+        self.require_never_installed_receiver_writer()?;
+        let result = operation()?;
+        self.require_never_installed_receiver_writer()?;
+        capability.require_database(self)?;
+        Ok(result)
+    }
+    fn require_never_installed_receiver_writer(&self) -> Result<()> {
+        if self.commit_admission_ready() {
+            return Err(invalid("assigned CLOSED receiver refuses installed writer"));
+        }
+        self.require_never_installed_receiver_writer_records()
+    }
+    fn require_never_installed_receiver_writer_records(&self) -> Result<()> {
+        let _journal = self.try_native_image_journal()?;
+        if self
+            .read_native_range_image_record::<NativeWriterPolicyRecord>(POLICY_POINTER)?
+            .is_some()
+            || self
+                .read_native_range_image_record::<NativeWriterPolicyRecord>(
+                    "writer-enrollment/previous",
+                )?
+                .is_some()
+        {
+            return Err(invalid(
+                "assigned CLOSED receiver refuses installed or historical writer policy",
+            ));
+        }
+        Ok(())
     }
     pub(crate) fn actual_native_writer_enforcement_version(&self) -> Result<u32> {
         self.check_recovery_state()?;
@@ -421,6 +744,8 @@ impl BicDb {
             schema_generation: self.schema_compatibility.generation(),
             registration: Arc::downgrade(&registration),
             coordinator: Arc::downgrade(&authority),
+            registry_extension: parking_lot::RwLock::new(None),
+            registry_publication_pending: std::sync::atomic::AtomicBool::new(false),
         });
         #[cfg(test)]
         if TEST_FAIL_HOST_POLICY_PUBLICATION.with(|flag| flag.replace(false)) {

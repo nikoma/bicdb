@@ -1,8 +1,12 @@
 //! Factual, explicitly UNADMITTED candidate. Missing durable host/birth
 //! enrollment is an open gate: this type cannot authorize reads or absence.
 use super::*;
+#[cfg(feature = "tls-replication")]
+mod recovered_open;
 use crate::distribution::{ClusterNodeLifecycle, SCHEMA_COMPATIBILITY_NODE_LABEL};
 use crate::distribution_consensus::MetadataReadObservation;
+#[cfg(feature = "tls-replication")]
+pub(crate) use recovered_open::NativeHotRecoveredReadQuorum;
 use std::collections::{BTreeMap, BTreeSet};
 
 pub(crate) fn scope_from_metadata(
@@ -163,7 +167,23 @@ impl NativeReadQuorumRound {
         &mut self,
         observation: NativeRangeReadObservation,
     ) -> Result<bool> {
+        // STRONG_TRACE_BEGIN
+        #[cfg(test)]
+        let _record = crate::distribution_native_read::trace::Span::current("read-record-attempt");
+        // STRONG_TRACE_END
+
         if observation.require_live().is_err() {
+            // STRONG_TRACE_BEGIN
+            #[cfg(test)]
+            crate::distribution_native_read::trace::Span::detail(
+                "read-record-expired-attempt",
+                format_args!(
+                    "peer={} action=retain-constraint-without-vote",
+                    observation.facts().node_id
+                ),
+            );
+            // STRONG_TRACE_END
+
             self.constrain_expired_attempt(&observation)?;
             return Ok(false);
         }
@@ -171,6 +191,14 @@ impl NativeReadQuorumRound {
         if result.is_err() {
             self.poisoned = true;
         }
+
+        // STRONG_TRACE_BEGIN
+        #[cfg(test)]
+        crate::distribution_native_read::trace::Span::detail(
+            "read-record-live-attempt",
+            format_args!("ok={} error={:?}", result.is_ok(), result.as_ref().err()),
+        );
+        // STRONG_TRACE_END
         result.map(|_| true)
     }
     pub(crate) fn constrain_expired_attempt(
@@ -244,6 +272,20 @@ impl NativeReadQuorumRound {
         self,
         service: &crate::ClusterDataNodeService,
     ) -> Result<NativeReadQuorumCandidate> {
+        // STRONG_TRACE_BEGIN
+        #[cfg(test)]
+        let _round_finish =
+            crate::distribution_native_read::trace::Span::current("read-round-finish");
+        #[cfg(test)]
+        crate::distribution_native_read::trace::Span::detail(
+            "read-round-finish",
+            format_args!(
+                "observations={} expired_constraints={}",
+                self.observations.len(),
+                self.expired_constraints.len()
+            ),
+        );
+        // STRONG_TRACE_END
         self.require_live()?;
         self.require_no_known_conflict()?;
         let local = self
@@ -251,20 +293,78 @@ impl NativeReadQuorumRound {
             .get(&self.local_node)
             .and_then(|o| o.local())
             .ok_or_else(|| invalid("actual same-service local read observation unavailable"))?;
-        local.require_current(service)?;
+        if local
+            .physical()
+            .native_admission()
+            .writer_enforcement_version()
+            != 1
+        {
+            local.require_current(service)?;
+        }
+        let matching = if local
+            .physical()
+            .native_admission()
+            .writer_enforcement_version()
+            == 1
+        {
+            service.with_native_serving_read_observation(local, &self.cancellation, |actual| {
+                self.require_live()?;
+                let matching =
+                    self.matching_at_local_point(local, |facts| actual.require_ancestor(facts))?;
+                self.require_live()?;
+                Ok(matching)
+            })?
+        } else {
+            self.matching_at_local_point(local, |facts| {
+                service.require_native_read_ancestor(local, facts)
+            })?
+        };
+        if local
+            .physical()
+            .native_admission()
+            .writer_enforcement_version()
+            != 1
+        {
+            local.require_current(service)?;
+        }
+        self.require_live()?;
+        Ok(NativeReadQuorumCandidate {
+            round: self,
+            matching,
+        })
+    }
+    fn matching_at_local_point(
+        &self,
+        local: &LocalNativeRangeReadObservation,
+        mut ancestor: impl FnMut(&NativeRangeReadFacts) -> Result<()>,
+    ) -> Result<BTreeSet<ClusterNodeId>> {
         let point = local.facts();
+
+        // STRONG_TRACE_BEGIN
+        #[cfg(test)]
+        crate::distribution_native_read::trace::Span::detail(
+            "read-round-local-point",
+            format_args!(
+                "node={} R={} H={} local_B={}",
+                self.local_node,
+                point.range_index,
+                point.logical_history_sha256,
+                point.local_visibility_db_sequence
+            ),
+        );
+        // STRONG_TRACE_END
         let mut matching = BTreeSet::new();
         for (node, observation) in &self.observations {
             let facts = observation.facts();
             if facts.range_index == point.range_index {
                 matching.insert(node.clone());
             } else {
-                service.require_native_read_ancestor(local, facts)?;
+                ancestor(facts)?;
             }
         }
         for facts in &self.expired_constraints {
             if facts.range_index < point.range_index {
-                service.require_native_read_ancestor(local, facts)?;
+                ancestor(facts)?;
             }
         }
         if matching.len() < self.request.scope.members.len() / 2 + 1 {
@@ -272,12 +372,7 @@ impl NativeReadQuorumRound {
                 "distinct matching current-voter read majority unavailable",
             ));
         }
-        local.require_current(service)?;
-        self.require_live()?;
-        Ok(NativeReadQuorumCandidate {
-            round: self,
-            matching,
-        })
+        Ok(matching)
     }
 }
 /// No admission bit/constructor, no numeric snapshot-floor accessor and no
@@ -297,7 +392,10 @@ impl NativeReadQuorumCandidate {
             .round
             .metadata
             .committed_topology(self.round.business)?;
-        if topology.format_version != 2 {
+        if !matches!(
+            topology.format_version,
+            2 | crate::distribution::NATIVE_JOINT_HANDOFF_TOPOLOGY_FORMAT_VERSION
+        ) {
             return Err(invalid("read voters have no fenced native birth registry"));
         }
         for (id, member) in &self.scope().members {
@@ -376,5 +474,84 @@ impl EnrolledNativeReadQuorum {
     #[cfg(test)]
     pub(crate) fn point_for_test(&self) -> (u64, &str, &str) {
         self.candidate.point()
+    }
+}
+
+/// INITIAL-host bootstrap only. A candidate alone cannot produce this: the
+/// retained actual factory/selected-range protected genesis is mandatory, and
+/// this object never authorizes a row/absence or exposes a numeric B floor.
+pub(crate) struct NativeInitialDataReadQuorum {
+    enrolled: EnrolledNativeReadQuorum,
+}
+impl NativeReadQuorumCandidate {
+    pub(crate) fn into_initial_data_genesis(
+        self,
+        genesis: &crate::db::NativeInitialDataGenesis,
+    ) -> Result<NativeInitialDataReadQuorum> {
+        let (index, h0, h) = self.point();
+        if canonical_range(genesis.range()) != self.scope().range
+            || index != 0
+            || h0 != h
+            || h0 != genesis.logical_genesis_sha256()
+        {
+            return Err(invalid(
+                "initial DATA recovery requires matching actual original genesis quorum",
+            ));
+        }
+        let enrolled = self.check_enrolled_voter_births()?;
+        let topology = enrolled
+            .candidate
+            .round
+            .metadata
+            .committed_topology(enrolled.candidate.round.business)?;
+        for node in enrolled.candidate.scope().members.keys() {
+            if topology.nodes[node]
+                .native_store_birth_v1
+                .as_ref()
+                .is_none_or(|birth| birth.abort_protocol_version() != 1)
+            {
+                return Err(invalid("initial DATA requires from-birth protected writer-start/catalogue custody on every voter"));
+            }
+        }
+        for node in enrolled.candidate.matching_member_ids() {
+            if enrolled.candidate.round.observations[node]
+                .facts()
+                .native_writer_enforcement_version
+                != 1
+            {
+                return Err(invalid(
+                    "initial DATA voter is outside enforced writer domain",
+                ));
+            }
+        }
+        Ok(NativeInitialDataReadQuorum { enrolled })
+    }
+}
+impl NativeInitialDataReadQuorum {
+    pub(crate) fn require_current(
+        &self,
+        service: &crate::ClusterDataNodeService,
+        final_metadata: &crate::distribution_consensus::MetadataReadObservation,
+        business: Uuid,
+    ) -> Result<()> {
+        let candidate = &self.enrolled.candidate;
+        candidate.require_lifetime()?;
+        let first = &candidate.round.metadata;
+        let scope = scope_from_metadata(final_metadata, business, &candidate.round.local_node)?;
+        if final_metadata.context_id() == first.context_id()
+            || final_metadata.term() < first.term()
+            || final_metadata.read_index() < first.read_index()
+            || scope != *candidate.scope()
+        {
+            return Err(invalid(
+                "initial DATA metadata changed across actual genesis collection",
+            ));
+        }
+        let local = candidate.round.observations[&candidate.round.local_node]
+            .local()
+            .ok_or_else(|| invalid("initial DATA has no SAME-service local observation"))?;
+        local.require_current(service)?;
+        final_metadata.require_live_request(business)?;
+        candidate.require_lifetime()
     }
 }

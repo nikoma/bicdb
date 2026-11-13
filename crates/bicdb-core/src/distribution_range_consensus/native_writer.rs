@@ -68,6 +68,7 @@ impl RangeWriteStore {
     }
     pub(super) fn require_native_writer_command(&self, command: &RangeWriteCommand) -> Result<()> {
         self.require_native_writer_host_base()?;
+        self.native_joint_command_allowed(command)?;
         if crate::format::native_writer_enrollment_active(&self.root)? {
             self.native_writer_host
                 .as_ref()
@@ -142,6 +143,17 @@ impl<T: RangeWriteTransport> RangeWriteCoordinator<T> {
                     "registered enforced native coordinator cannot recover a legacy store",
                 ));
             }
+        }
+        Ok(())
+    }
+    pub(crate) fn require_registry_refresh_service(
+        &self,
+        service: &Arc<Mutex<ClusterDataNodeService>>,
+    ) -> Result<()> {
+        if !Arc::ptr_eq(&self.local_service, service) {
+            return Err(range_write_error(
+                "registry refresh changed actual coordinator service",
+            ));
         }
         Ok(())
     }

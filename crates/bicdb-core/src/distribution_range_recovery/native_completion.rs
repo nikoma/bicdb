@@ -94,6 +94,7 @@ impl NativeCompletionReply {
             || !matches!(
                 self.scope.purpose,
                 MetadataRecoveryRolePurpose::NormalRecovery
+                    | MetadataRecoveryRolePurpose::CurrentJointRecovery { .. }
             )
             || self.challenge != request.challenge
             || self.challenge.is_nil()

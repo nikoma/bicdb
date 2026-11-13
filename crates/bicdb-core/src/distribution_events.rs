@@ -189,6 +189,20 @@ mod client {
             Ok(self)
         }
 
+        /// Journal exact actual Event/discovery RPC evidence through the
+        /// existing transport. This opt-in may refuse on evidence failure; it
+        /// cannot change replies, routing, retries or admission authority.
+        pub fn with_rpc_evidence_observer(
+            mut self,
+            observer: Arc<dyn crate::ClusterRpcEvidenceObserver>,
+            limits: crate::ClusterRpcEvidenceLimits,
+        ) -> Result<Self> {
+            self.transport = self
+                .transport
+                .with_rpc_evidence_observer(observer, limits)?;
+            Ok(self)
+        }
+
         /// Discover a newer committed topology from known members. Equal
         /// generations with conflicting contents are rejected by the transport.
         pub fn refresh(&self) -> Result<()> {
@@ -204,6 +218,7 @@ mod client {
         }
 
         fn refresh_members_until(&self, deadline: std::time::Instant) -> Result<bool> {
+            self.transport.require_rpc_evidence_current()?;
             let cancellation =
                 crate::CancellationToken::uncancelable().child_with_deadline(deadline);
             let members: Vec<ClusterNodeId> = self.topology.read().nodes.keys().cloned().collect();
@@ -241,6 +256,7 @@ mod client {
                     observed = true;
                 }
             }
+            self.transport.require_rpc_evidence_current()?;
             Ok(observed)
         }
 
@@ -262,6 +278,7 @@ mod client {
                 crate::CancellationToken::uncancelable().child_with_deadline(deadline);
             let mut last_error = invalid("event cluster request failed");
             for attempt in 0..5 {
+                self.transport.require_rpc_evidence_current()?;
                 if std::time::Instant::now() >= deadline {
                     break;
                 }
@@ -317,6 +334,7 @@ mod client {
                     Err(error) => last_error = error,
                 }
             }
+            self.transport.require_rpc_evidence_current()?;
             Err(last_error)
         }
 
@@ -339,6 +357,7 @@ mod client {
             // A finite bound plus the SAME absolute request deadline. Typed
             // route/unavailable results never become a successful empty row.
             for attempt in 0..128 {
+                self.transport.require_rpc_evidence_current()?;
                 parent.check()?;
                 if attempt > 0 {
                     let until = (std::time::Instant::now() + retry_after).min(deadline);

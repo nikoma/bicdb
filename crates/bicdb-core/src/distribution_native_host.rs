@@ -33,13 +33,44 @@ mod learner_factory;
 #[cfg(feature = "tls-replication")]
 pub(crate) use learner_factory::NativeUnassignedLearnerFactory;
 #[cfg(feature = "tls-replication")]
+mod learner_cold;
+#[cfg(feature = "tls-replication")]
+pub(crate) use learner_cold::NativeColdLearnerMetadataHost;
+#[cfg(feature = "tls-replication")]
+mod learner_birth;
+#[cfg(feature = "tls-replication")]
+pub(crate) use learner_birth::{
+    NativeLearnerBirthObservation, NativeLearnerBirthProvider, NativeLearnerBirthRequest,
+    NativeLearnerBirthResponse, NativeUnassignedLearnerHost,
+};
+#[cfg(feature = "tls-replication")]
 mod provisional_listener;
 pub(crate) use initial_offer::{
     NativeInitialBirthOfferObservation, NativeInitialBirthOfferRequest,
     NativeInitialBirthOfferResponse,
 };
 #[cfg(feature = "tls-replication")]
-pub(crate) use provisional_listener::{NativeInitialConsensusLaunch, NativeProvisionalHost};
+pub(crate) use provisional_listener::{
+    NativeInitialConsensusLaunch, NativeLearnerMetadataEnrollment, NativeMetadataControlHost,
+    NativeMetadataRegistrationController, NativeProvisionalHost,
+};
+#[cfg(feature = "tls-replication")]
+mod metadata_supervisor;
+#[cfg(feature = "tls-replication")]
+use provisional_listener::{NativeMetadataControlBackend, NativeMetadataMaintenanceReport};
+#[cfg(feature = "tls-replication")]
+mod operator;
+#[cfg(feature = "tls-replication")]
+pub(crate) use metadata_supervisor::{NativeMetadataSupervisor, NativeMetadataSupervisorConfig};
+#[cfg(feature = "tls-replication")]
+pub use operator::{
+    NativeMetadataBootstrapPlan, NativeMetadataCollection, NativeMetadataHost,
+    NativeMetadataHostAction, NativeMetadataHostPhase, NativeMetadataHostStatus,
+};
+#[cfg(feature = "tls-replication")]
+mod operator_learner;
+#[cfg(feature = "tls-replication")]
+pub use operator_learner::{NativeMetadataLearnerHost, NativeMetadataLearnerStatus};
 fn invalid(detail: &str) -> BicDbError {
     BicDbError::Cluster(format!("native host bootstrap: {detail}"))
 }
@@ -301,6 +332,7 @@ impl NativeProvisionalNode {
             spec.member_incarnation,
         )?;
         if native.writer_enforcement_version() != 1
+            || native.abort_protocol_version() != 1
             || native.birth_id() != original.birth_id
             || native.birth_sha256() != original.birth_sha256
             || database.schema_compatibility_fingerprint()?.sha256 != original.schema_sha256
@@ -446,6 +478,7 @@ impl NativeInitialMetadataConfiguration {
                 .require_unwritten_enrollment_database(&database, &plan.topology)?;
             let schema = database.schema_compatibility_fingerprint()?.sha256;
             if actual.writer_enforcement_version() != 1
+                || actual.abort_protocol_version() != 1
                 || actual.birth_id() != seed.manifest.birth_id
                 || actual.birth_sha256() != seed.manifest.birth_sha256
                 || schema != seed.manifest.schema_sha256
@@ -466,9 +499,9 @@ impl NativeInitialMetadataConfiguration {
             .bind_initial_or_unassigned_learner(&mut topology)?;
         }
         if topology.nodes.values().any(|node| {
-            node.native_store_birth_v1
-                .as_ref()
-                .is_none_or(|birth| birth.writer_enforcement_version() != 1)
+            node.native_store_birth_v1.as_ref().is_none_or(|birth| {
+                birth.writer_enforcement_version() != 1 || birth.abort_protocol_version() != 1
+            })
         }) {
             return Err(invalid("initial metadata has an unenrolled planned voter"));
         }
@@ -554,3 +587,15 @@ impl NativeProvisionalNode {
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(feature = "tls-replication")]
+pub(crate) use provisional_listener::NativeInitialDataAdmission;
+#[cfg(feature = "tls-replication")]
+pub use provisional_listener::{NativeInitialDataRangeStatus, NativeInitialDataStatus};
+
+#[cfg(feature = "tls-replication")]
+pub use provisional_listener::NativeRegisteredReplicaReceiverStatus;
+#[cfg(feature = "tls-replication")]
+pub(crate) use provisional_listener::{
+    NativeAssignedRegisteredClosedFence, NativeRegisteredReplicaAdmission,
+};

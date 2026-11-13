@@ -1,0 +1,452 @@
+commit 21259881268b1ae84b0c87b2211d519eaaf06703
+Author:     nikoma <niko.manek@gmail.com>
+AuthorDate: Thu Nov 12 19:07:06 2026 -0800
+Commit:     nikoma <niko.manek@gmail.com>
+CommitDate: Thu Nov 12 19:08:59 2026 -0800
+
+    Keep original publication cancellation separate from retained image session
+
+diff --git a/crates/bicdb-core/src/db/range_image_native/rf3_fixture/native_historical_tls/native_joint_old_closure_tests.rs b/crates/bicdb-core/src/db/range_image_native/rf3_fixture/native_historical_tls/native_joint_old_closure_tests.rs
+index 73c0265cb..90643a027 100644
+--- a/crates/bicdb-core/src/db/range_image_native/rf3_fixture/native_historical_tls/native_joint_old_closure_tests.rs
++++ b/crates/bicdb-core/src/db/range_image_native/rf3_fixture/native_historical_tls/native_joint_old_closure_tests.rs
+@@ -185,6 +185,22 @@ fn role(
+ 
+ #[test]
+ fn native_joint_actual_old_closure_four_metadata_rf3_nonempty_complete_prefix_and_shared_pin() {
++    run_actual_old_capture(None)
++}
++#[test]
++fn native_joint_actual_old_capture_initial_request_cancel_at_wait_refused() {
++    run_actual_old_capture(Some(InitialCaptureControl::CancelWhileWaiting))
++}
++#[test]
++fn native_joint_actual_old_capture_finished_publish_cancel_does_not_renew_or_end_session() {
++    run_actual_old_capture(Some(InitialCaptureControl::FinishThenCancelPublish))
++}
++#[derive(Clone, Copy)]
++enum InitialCaptureControl {
++    CancelWhileWaiting,
++    FinishThenCancelPublish,
++}
++fn run_actual_old_capture(initial_wait_cancel: Option<InitialCaptureControl>) {
+     let mut fixture = EnforcedNetwork::new_with_metadata_members(4);
+     let (key, old) = fixture.seed();
+     let original = fixture.native.databases[&node("n0")]
+@@ -249,9 +265,59 @@ fn native_joint_actual_old_closure_four_metadata_rf3_nonempty_complete_prefix_an
+     assert_eq!(closed.range_index(), 1);
+     assert_eq!(closed.selected_source_id(), &node("n0"));
+     closed.require_current().unwrap();
+-    let mut capture = closed
+-        .begin_capture(Duration::from_secs(2), &CancellationToken::uncancelable())
+-        .unwrap();
++    let original_session = CancellationToken::uncancelable();
++    let original_publish = CancellationToken::uncancelable()
++        .child_with_deadline(std::time::Instant::now() + Duration::from_secs(5));
++    let mut capture = if let Some(control) = initial_wait_cancel {
++        let cancel_during_wait = matches!(control, InitialCaptureControl::CancelWhileWaiting);
++        let database = &fixture.native.databases[&node("n0")];
++        let before = {
++            let db = database.read();
++            (
++                db.native_range_prefix_observation(old.id).unwrap(),
++                db.current_commit_seq(),
++                db.local_namespace_identity("items").unwrap(),
++            )
++        };
++        let hook = cancel_during_wait.then(||
++            crate::distribution_range_image::initial_wait_tests::CancelOriginalAtActualWait::install(
++                database, old.id, plan.promise().nonce, &original_publish));
++        let result = closed.begin_capture_with_initial_wait(
++            Duration::from_secs(2),
++            &original_session,
++            &original_publish,
++        );
++        original_session.check().unwrap();
++        if cancel_during_wait {
++            assert!(
++                hook.as_ref().unwrap().fired(),
++                "actual capture initial wait reached"
++            );
++            assert!(matches!(result, Err(BicDbError::QueryCanceled)));
++            closed.require_current().unwrap();
++            let db = database.read();
++            assert_eq!(
++                serde_json::to_vec(&db.native_range_prefix_observation(old.id).unwrap()).unwrap(),
++                serde_json::to_vec(&before.0).unwrap()
++            );
++            assert_eq!(db.current_commit_seq(), before.1);
++            assert_eq!(db.local_namespace_identity("items").unwrap(), before.2);
++            assert_eq!(db.get("items", &key).unwrap().unwrap(), original);
++            return;
++        }
++        let capture = result.unwrap();
++        original_publish.cancel();
++        assert!(matches!(
++            original_publish.check(),
++            Err(BicDbError::QueryCanceled)
++        ));
++        original_session.check().unwrap();
++        capture
++    } else {
++        closed
++            .begin_capture(Duration::from_secs(2), &original_session)
++            .unwrap()
++    };
+     assert!(capture.reserved_upper_bound().get() >= 3);
+     assert_ne!(capture.reserved_upper_bound().get(), closed.range_index());
+     let cursor = capture.history_cursor().clone();
+diff --git a/crates/bicdb-core/src/distribution_data/native_joint_handoff.rs b/crates/bicdb-core/src/distribution_data/native_joint_handoff.rs
+index acd7ca903..f01b1c3fb 100644
+--- a/crates/bicdb-core/src/distribution_data/native_joint_handoff.rs
++++ b/crates/bicdb-core/src/distribution_data/native_joint_handoff.rs
+@@ -292,6 +292,24 @@ pub(crate) struct ActualServiceNativeJointCaptureInputs {
+     pin: Arc<SourceCaptureReadPin>,
+ }
+ impl ActualServiceNativeJointCaptureInputs {
++    pub(crate) fn begin_with_initial_wait(
++        self,
++        budget: std::time::Duration,
++        session: &CancellationToken,
++        initial_request: &CancellationToken,
++    ) -> Result<crate::distribution_range_image::RangeImageCapture> {
++        crate::distribution_range_image::RangeImageCapture::begin_with_source_pin_and_initial_wait(
++            self.database,
++            self.cut,
++            self.frozen,
++            self.lineage,
++            budget,
++            session,
++            initial_request,
++            self.pin,
++        )
++    }
++
+     pub(crate) fn begin(
+         self,
+         budget: std::time::Duration,
+diff --git a/crates/bicdb-core/src/distribution_range_handoff/joint/old_quorum.rs b/crates/bicdb-core/src/distribution_range_handoff/joint/old_quorum.rs
+index 84cfb62bd..3f78390c1 100644
+--- a/crates/bicdb-core/src/distribution_range_handoff/joint/old_quorum.rs
++++ b/crates/bicdb-core/src/distribution_range_handoff/joint/old_quorum.rs
+@@ -269,6 +269,24 @@ impl NativeJointOldClosedQuorum {
+         budget: std::time::Duration,
+         parent: &crate::CancellationToken,
+     ) -> Result<crate::distribution_range_image::RangeImageCapture> {
++        self.capture_inputs()?.begin(budget, parent)
++    }
++    /// Separate ephemeral original publication request from retained capture
++    /// lifetime. This never refreshes an attempted/consumed cut.
++    pub(crate) fn begin_capture_with_initial_wait(
++        &mut self,
++        budget: std::time::Duration,
++        session: &crate::CancellationToken,
++        initial_request: &crate::CancellationToken,
++    ) -> Result<crate::distribution_range_image::RangeImageCapture> {
++        initial_request.check()?;
++        session.check()?;
++        self.capture_inputs()?
++            .begin_with_initial_wait(budget, session, initial_request)
++    }
++    fn capture_inputs(
++        &mut self,
++    ) -> Result<crate::distribution_data::ActualServiceNativeJointCaptureInputs> {
+         for observation in self.observations.values() {
+             observation.require_current()?;
+         }
+@@ -279,7 +297,7 @@ impl NativeJointOldClosedQuorum {
+         let input = self.observations[&self.selected_source].prepare_capture(cut)?;
+         // The actual DB/service guards used to assemble inputs are gone here.
+         // Its absolute shippable wait is allowed only outside those locks.
+-        input.begin(budget, parent)
++        Ok(input)
+     }
+ }
+ 
+diff --git a/crates/bicdb-core/src/distribution_range_image.rs b/crates/bicdb-core/src/distribution_range_image.rs
+index aea130c29..f1770ed04 100644
+--- a/crates/bicdb-core/src/distribution_range_image.rs
++++ b/crates/bicdb-core/src/distribution_range_image.rs
+@@ -23,6 +23,8 @@ use crate::distribution_range_mutation::{
+ use crate::{BicDb, BicDbError, CancellationToken, CollectionMeta, Result};
+ 
+ mod history_export;
++#[cfg(test)]
++pub(crate) mod initial_wait_tests;
+ pub(crate) use history_export::{RangeImageHistoryCursorV1, RangeImageHistoryStepV1};
+ mod closed_image_source;
+ #[cfg(feature = "tls-replication")]
+@@ -363,6 +365,7 @@ impl RangeImageCapture {
+             wait_budget,
+             cancellation,
+             None,
++            None,
+         )
+     }
+     /// Share an ACTUAL existing source read lease; never acquire a second pin
+@@ -384,6 +387,33 @@ impl RangeImageCapture {
+             wait_budget,
+             cancellation,
+             Some(pin),
++            None,
++        )
++    }
++    /// The actual remote publication wait observes BOTH original tokens, but
++    /// the resulting capture retains only the long-session cancellation. A
++    /// finished 5s publication request is never a relocated 8GiB image lease.
++    #[allow(clippy::too_many_arguments)]
++    pub(crate) fn begin_with_source_pin_and_initial_wait(
++        db: Arc<RwLock<BicDb>>,
++        cut: impl Into<NativeRangeImageSourceCut>,
++        frozen: Arc<FrozenRangeMutationPermit>,
++        lineage: SourceRangeImageLineage,
++        wait_budget: Duration,
++        session: &CancellationToken,
++        initial_request: &CancellationToken,
++        pin: Arc<SourceCaptureReadPin>,
++    ) -> Result<Self> {
++        initial_request.check()?;
++        Self::begin_internal(
++            db,
++            cut.into(),
++            frozen,
++            lineage,
++            wait_budget.min(Duration::from_secs(5)),
++            session,
++            Some(pin),
++            Some(initial_request),
+         )
+     }
+     fn begin_internal(
+@@ -394,6 +424,7 @@ impl RangeImageCapture {
+         wait_budget: Duration,
+         cancellation: &CancellationToken,
+         existing_pin: Option<Arc<SourceCaptureReadPin>>,
++        initial_request: Option<&CancellationToken>,
+     ) -> Result<Self> {
+         if wait_budget.is_zero()
+             || wait_budget > MAX_CAPTURE_WAIT
+@@ -403,6 +434,9 @@ impl RangeImageCapture {
+         }
+         let wait = cancellation.child_with_deadline(Instant::now() + wait_budget);
+         wait.check()?;
++        if let Some(request) = initial_request {
++            request.check()?;
++        }
+         // The old-data-quorum cut does not itself qualify a native image.
+         // Require the actual persisted base's exact metadata transition too.
+         cut.validate_source_lineage_configuration(&lineage)?;
+@@ -435,8 +469,15 @@ impl RangeImageCapture {
+                 source_read_pin,
+             )
+         };
++        #[cfg(test)]
++        if initial_request.is_some() {
++            initial_wait_tests::cancel_at_actual_wait(&db, cut.range().id, cut.nonce());
++        }
+         loop {
+             wait.check()?;
++            if let Some(request) = initial_request {
++                request.check()?;
++            }
+             let reached = {
+                 let database = read_database(&db)?;
+                 gate.validate_quiescent_frozen(cut.range().id, &frozen)?;
+@@ -450,6 +491,10 @@ impl RangeImageCapture {
+             // No database/service latch is held across this bounded wait.
+             std::thread::sleep(WAIT_POLL);
+         }
++        if let Some(request) = initial_request {
++            wait.check()?;
++            request.check()?;
++        }
+         let catalog_bytes = canonical_range_image_catalog(
+             cut.cluster_id(),
+             cut.range(),
+@@ -461,6 +506,10 @@ impl RangeImageCapture {
+         let wire_chain_sha256 = hex::encode(Sha256::digest(b"bicdb.range-image.wire.v1\0"));
+         let range_index = RangeIndexCut::certified(&cut);
+         let complete = bindings.collections().is_empty();
++        if let Some(request) = initial_request {
++            wait.check()?;
++            request.check()?;
++        }
+         Ok(Self {
+             closed_image_lifetime: Arc::new(()),
+             original_cancellation: cancellation.clone(),
+diff --git a/crates/bicdb-core/src/distribution_range_image/initial_wait_tests.rs b/crates/bicdb-core/src/distribution_range_image/initial_wait_tests.rs
+new file mode 100644
+index 000000000..cf02905cb
+--- /dev/null
++++ b/crates/bicdb-core/src/distribution_range_image/initial_wait_tests.rs
+@@ -0,0 +1,84 @@
++//! Keyed fault only: cancel the ACTUAL publication request after real source
++//! bindings/pin/reservation capture, before the wait loop. Never a grant.
++use super::*;
++use std::cell::RefCell;
++use std::marker::PhantomData;
++use std::rc::Rc;
++use std::sync::{
++    atomic::{AtomicBool, Ordering},
++    Weak,
++};
++
++struct Pending {
++    database: Weak<RwLock<BicDb>>,
++    range: RangeId,
++    nonce: Uuid,
++    original_request: CancellationToken,
++    fired: Arc<AtomicBool>,
++}
++thread_local! { static PENDING: RefCell<Option<Pending>> = const { RefCell::new(None) }; }
++pub(crate) struct CancelOriginalAtActualWait {
++    fired: Arc<AtomicBool>,
++    _thread: PhantomData<Rc<()>>,
++}
++impl CancelOriginalAtActualWait {
++    pub(crate) fn install(
++        database: &Arc<RwLock<BicDb>>,
++        range: RangeId,
++        nonce: Uuid,
++        original_request: &CancellationToken,
++    ) -> Self {
++        let fired = Arc::new(AtomicBool::new(false));
++        PENDING.with(|pending| {
++            assert!(
++                pending.borrow().is_none(),
++                "nested actual capture cancellation hook"
++            );
++            *pending.borrow_mut() = Some(Pending {
++                database: Arc::downgrade(database),
++                range,
++                nonce,
++                original_request: original_request.clone(),
++                fired: fired.clone(),
++            });
++        });
++        Self {
++            fired,
++            _thread: PhantomData,
++        }
++    }
++    pub(crate) fn fired(&self) -> bool {
++        self.fired.load(Ordering::Acquire)
++    }
++}
++impl Drop for CancelOriginalAtActualWait {
++    fn drop(&mut self) {
++        PENDING.with(|pending| {
++            if pending
++                .borrow()
++                .as_ref()
++                .is_some_and(|p| Arc::ptr_eq(&p.fired, &self.fired))
++            {
++                pending.borrow_mut().take();
++            }
++        });
++    }
++}
++pub(super) fn cancel_at_actual_wait(database: &Arc<RwLock<BicDb>>, range: RangeId, nonce: Uuid) {
++    let action = PENDING.with(|pending| {
++        let matches = pending.borrow().as_ref().is_some_and(|p| {
++            p.range == range
++                && p.nonce == nonce
++                && Weak::ptr_eq(&p.database, &Arc::downgrade(database))
++        });
++        if matches {
++            pending.borrow_mut().take()
++        } else {
++            None
++        }
++    });
++    if let Some(actual) = action {
++        actual.original_request.cancel();
++        actual.fired.store(true, Ordering::Release);
++    }
++}
+diff --git a/crates/bicdb-core/src/distribution_range_image/remote_source.rs b/crates/bicdb-core/src/distribution_range_image/remote_source.rs
+index f9c3ecd7e..e9b36092f 100644
+--- a/crates/bicdb-core/src/distribution_range_image/remote_source.rs
++++ b/crates/bicdb-core/src/distribution_range_image/remote_source.rs
+@@ -205,6 +205,7 @@ pub(crate) struct NativeRemoteImageSourceSession {
+     capture: Option<RangeImageCapture>,
+     manifest: Option<NativeRemoteImageManifestV1>,
+     target_attempt: Uuid,
++    source_session: Uuid,
+     capture_attempted: bool,
+     published: bool,
+     original_session: CancellationToken,
+@@ -234,6 +235,7 @@ impl NativeRemoteImageSourceSession {
+             coordinator,
+             old,
+             target_attempt,
++            source_session: Uuid::now_v7(),
+             original_session: original_session.clone(),
+             actual_open: None,
+             slot: None,
+@@ -299,7 +301,7 @@ impl NativeRemoteImageSourceSession {
+         self.slot = Some(slot);
+         self.metadata_store_id = Some(proof.store_id());
+         let now = Instant::now();
+-        let wait_budget = wait_budget.min(
++        let wait_budget = wait_budget.min(Duration::from_secs(5)).min(
+             original_publish_request
+                 .deadline()
+                 .map_or(wait_budget, |end| end.saturating_duration_since(now)),
+@@ -309,10 +311,11 @@ impl NativeRemoteImageSourceSession {
+             return Err(BicDbError::QueryTimedOut);
+         }
+         self.capture_attempted = true;
+-        self.capture = Some(
+-            self.old
+-                .begin_capture(wait_budget, &self.original_session)?,
+-        );
++        self.capture = Some(self.old.begin_capture_with_initial_wait(
++            wait_budget,
++            &self.original_session,
++            original_publish_request,
++        )?);
+         // Retain the capture BEFORE any post-capture failure. No failed publish
+         // can drop these pins and then silently mint a replacement session.
+         let capture = self.capture.as_ref().unwrap();
+@@ -338,7 +341,7 @@ impl NativeRemoteImageSourceSession {
+         let plan = self.old.plan();
+         let mut manifest = NativeRemoteImageManifestV1 {
+             version: 1,
+-            source_session: Uuid::now_v7(),
++            source_session: self.source_session,
+             target_attempt: self.target_attempt,
+             handoff_session: capture.cut.session_id(),
+             nonce: capture.cut.nonce(),
+diff --git a/docs/design/native-registered-remote-image-session-contract.md b/docs/design/native-registered-remote-image-session-contract.md
+index 7d19b16d9..dba7b94c5 100644
+--- a/docs/design/native-registered-remote-image-session-contract.md
++++ b/docs/design/native-registered-remote-image-session-contract.md
+@@ -130,3 +130,27 @@ that wrapper, a source lineage, or target mutation permission. Source-owner loss
+ closes future source operations; issued same-cut facts retain their historical
+ meaning. Session publication, remote OLD collector, target controlled Tx and
+ actual finalization/readiness consumers are still absent in this first leaf.
++
++## Original initial-wait cancellation correction
++
++Source review of `ef5d030a4` found that clipping a wait duration to the publish
++request deadline did not observe that request's explicit cancellation, and an
++unbounded caller could still choose a wait greater than 5s. The dedicated actual
++capture entry now accepts TWO original tokens: the long-session token remains
++the capture's retained cancellation; the ephemeral initial-request token is
++checked at entry, each shippable-prefix wait iteration, after that wait and at
++return. The dedicated wait is capped at 5s even when the caller has no deadline.
++No uncancelable substitute, token renewal or generic cancellation API is added.
++Existing capture entry points pass no extra initial request and preserve their
++validation/retained-token semantics. The poll is 10ms outside engine latches;
++this does not claim a hard bound on an already-running filesystem operation.
++
++Two source-only regressions reuse the actual four-member native OLD-closure
++fixture. A keyed, RAII-removed fault cancels the real publish token AFTER actual
++DB/pin/reservation acquisition at the wait boundary; the still-live long session
++cannot make capture succeed, and native point/B/namespace/acknowledged row stay
++unchanged. A separate actual capture finishes, then its original publish token
++is canceled while the long session stays live; complete actual native history
++export still succeeds with all original OLD-closure assertions. These are lower
++capture-producer controls, not a remote source-session/TLS/image acceptance run.
++A consumed failed cut stays quarantined; exact restart/resume remains OPEN.

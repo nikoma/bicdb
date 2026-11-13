@@ -62,6 +62,7 @@ fn native_catalogue_custody_missing_original_read_repeats_without_creating_blank
         db.read().require_native_writer_catalogue_custody(&store),
         Err(BicDbError::NativeRangeCatalogueCustodyMissing)
     ));
+    drop(store); // actual raw catalogue owner ends before repeated cold opens
     for _ in 0..3 {
         assert!(matches!(
             RangeWriteStore::open(&path, spec.cluster_id.clone(), spec.node_id.clone(), true),
@@ -160,3 +161,6 @@ fn native_catalogue_custody_actual_reader_fence_is_local_and_old_known_flags_ref
         .iter()
         .any(|f| f == format::NATIVE_CATALOGUE_CUSTODY_FEATURE_FLAG));
 }
+
+#[path = "custody_tests/full_abort_tests.rs"]
+mod full_abort_tests;

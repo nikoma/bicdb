@@ -35,7 +35,7 @@ fn planned_network(count: usize) -> PlannedNetwork {
 }
 fn planned_network_with_spare(count: usize, spare: usize) -> PlannedNetwork {
     assert!(matches!(count, 3 | 4));
-    assert!(spare <= 1);
+    assert!(spare <= 2);
     let root = tempfile::tempdir().unwrap();
     let ca_key = KeyPair::generate().unwrap();
     let mut params = CertificateParams::default();
@@ -207,6 +207,7 @@ fn native_initial_birth_tls_all_actual_factories_bind_initial_config_without_adm
         assert_eq!(birth.birth_id(), host.seed.manifest.birth_id);
         assert_eq!(birth.birth_sha256(), host.seed.manifest.birth_sha256);
         assert_eq!(birth.writer_enforcement_version(), 1);
+        assert_eq!(birth.abort_protocol_version(), 1);
         assert!(births.insert(birth.birth_id()));
         assert_eq!(
             member.labels[crate::distribution::SCHEMA_COMPATIBILITY_NODE_LABEL],
@@ -407,4 +408,12 @@ mod process_tests;
 mod initial_preparation_tests;
 mod learner_factory_tests;
 
+mod learner_birth_tests;
+
+mod learner_enrollment_tests;
+
 mod heartbeat_backlog_tests;
+
+mod metadata_supervisor_tests;
+
+mod initial_data_tests;

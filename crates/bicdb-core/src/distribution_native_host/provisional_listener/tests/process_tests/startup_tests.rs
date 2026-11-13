@@ -13,6 +13,8 @@ struct Stage {
     metadata_term: u64,
     metadata_read_index: u64,
     metadata_context_id: Option<Uuid>,
+    last_log_index: u64,
+    topology_generation: u64,
 }
 pub(super) fn drive_startup(mut host: NativeProvisionalHost, config: &ChildConfig) {
     let command_path = config.ready.with_extension("command");
@@ -22,6 +24,7 @@ pub(super) fn drive_startup(mut host: NativeProvisionalHost, config: &ChildConfi
     let mut launch = None;
     let mut listener = None;
     let mut writer = None;
+    let mut control: Option<crate::distribution_native_host::NativeMetadataControlHost> = None;
     let mut completed = 0;
     while !config.stop.exists() && Instant::now() < until {
         if let Ok(bytes) = std::fs::read(&command_path) {
@@ -66,10 +69,56 @@ pub(super) fn drive_startup(mut host: NativeProvisionalHost, config: &ChildConfi
                                 .unwrap(),
                         );
                     }
+                    "control" => {
+                        if control.is_none() {
+                            let member = &host.seed.plan.topology.nodes[&node(config.index)];
+                            let template = crate::DistributionConfig {
+                                enabled: true,
+                                cluster_id: host.seed.plan.topology.cluster_id.clone(),
+                                range_image_bootstrap_id: host
+                                    .seed
+                                    .plan
+                                    .topology
+                                    .range_image_bootstrap_id,
+                                node_id: member.id.clone(),
+                                node_address: member.address.clone(),
+                                node_incarnation: member.incarnation,
+                                node_capacity_bytes: member.capacity_bytes,
+                                node_tls_certificate_sha256: member.tls_certificate_sha256.clone(),
+                                replication_factor: host.seed.plan.topology.replication_factor,
+                                initial_ranges: host
+                                    .seed
+                                    .plan
+                                    .topology
+                                    .ranges
+                                    .len()
+                                    .try_into()
+                                    .unwrap(),
+                                transport: config.network.clone(),
+                                ..Default::default()
+                            };
+                            control = Some(
+                                crate::distribution_native_host::NativeMetadataControlHost::new(
+                                    launch.take().unwrap(),
+                                    listener.take().unwrap(),
+                                    config.network.clone(),
+                                    template,
+                                ),
+                            );
+                        }
+                        control.as_mut().unwrap().advance(&token).unwrap();
+                    }
+                    "interrupt-control" => control.as_ref().unwrap().fail_after_next_proposal(),
+                    "status-control" => {}
+                    "pause-control" => control.as_mut().unwrap().stop(&token).unwrap(),
+                    "heartbeat-control" => control.as_ref().unwrap().heartbeat(&token).unwrap(),
                     _ => panic!("unknown parent-owned startup step"),
                 }
                 token.check().unwrap();
-                let metadata = launch.as_ref().map(|l| l.metadata.lock().status());
+                let metadata = control
+                    .as_ref()
+                    .map(|c| c.metadata_status(&token).unwrap())
+                    .or_else(|| launch.as_ref().map(|l| l.metadata.lock().status()));
                 let stage = Stage {
                     sequence,
                     name,
@@ -84,6 +133,8 @@ pub(super) fn drive_startup(mut host: NativeProvisionalHost, config: &ChildConfi
                         |w| w.metadata_read_index,
                     ),
                     metadata_context_id: writer.as_ref().map(|w| w.metadata_context_id),
+                    last_log_index: metadata.as_ref().map_or(0, |m| m.last_log_index),
+                    topology_generation: metadata.as_ref().map_or(0, |m| m.topology_generation),
                 };
                 crate::storage::write_atomic(
                     &stage_path,
@@ -95,6 +146,14 @@ pub(super) fn drive_startup(mut host: NativeProvisionalHost, config: &ChildConfi
             }
         }
         std::thread::sleep(Duration::from_millis(10));
+    }
+    if let Some(mut actual) = control {
+        actual
+            .stop(
+                &CancellationToken::uncancelable()
+                    .child_with_deadline(Instant::now() + Duration::from_secs(5)),
+            )
+            .unwrap();
     }
     if let Some(mut actual) = listener {
         actual
@@ -276,3 +335,5 @@ fn native_initial_startup_four_processes_actual_election_host_mq_and_writer_poli
     let root = processes.root.take().unwrap().keep();
     eprintln!("NATIVE_INITIAL_STARTUP_PROCESSES_ROOT {}", root.display());
 }
+
+mod registration_tests;

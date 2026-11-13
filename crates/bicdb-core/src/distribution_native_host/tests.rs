@@ -262,6 +262,7 @@ fn native_host_initial_metadata_binds_every_actual_factory_and_rejects_recreated
             assert_eq!(binding.birth_id(), expected.manifest.birth_id);
             assert_eq!(binding.birth_sha256(), expected.manifest.birth_sha256);
             assert_eq!(binding.writer_enforcement_version(), 1);
+            assert_eq!(binding.abort_protocol_version(), 1);
         }
         seed.require_unregistered().unwrap();
     }

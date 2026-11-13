@@ -22,6 +22,27 @@ fn invalid(message: &str) -> BicDbError {
     BicDbError::Cluster(format!("range recovery: {message}"))
 }
 
+// FENCE_TRACE_BEGIN
+#[cfg(test)]
+pub(crate) mod fence_trace;
+// FENCE_TRACE_END
+#[cfg(test)]
+mod native_probe_trace;
+#[cfg(test)]
+pub(crate) use native_probe_trace::{NativeProbeTraceContext, NativeProbeTraceSpan};
+mod image_replacement_history;
+pub(crate) use image_replacement_history::{
+    CurrentImageReplacementHistoryRound, VerifiedCurrentImageReplacementHistory,
+};
+mod image_replacement;
+pub(crate) use image_replacement::{
+    FreshInstallingCommittedAuthority, InstallingCommittedApplyAdmission,
+    InstallingCommittedCertificationEvidence, InstallingCommittedCertificationObservation,
+    InstallingCommittedDecision, InstallingCommittedDecisionRound,
+    InstallingCommittedFenceEvidence, InstallingCommittedFenceObservation,
+    InstallingCommittedQuorumRound, InstallingCommittedRequest, InstallingCommittedVote,
+    InstallingCurrentCertificationRound, InstallingDecisionVoteAudit,
+};
 mod image_compatibility;
 mod image_history;
 mod image_proposal;
@@ -73,6 +94,15 @@ mod runtime;
 pub(crate) use runtime::{RangeRecoveryRuntime, RecoveryImageInstallFreeze};
 mod quorum;
 pub(crate) use quorum::{FreshRangeRecoveryAuthority, RecoveryFenceQuorumRound};
+pub(crate) mod native_abort;
+pub(crate) use native_abort::{
+    NativeAbortCandidateObservation, NativeAbortPromiseObservation, NativeAbortPromiseRound,
+    NativeAbortQuorum, NativeAbortRequest,
+};
+mod completed_apply;
+pub(crate) use completed_apply::{
+    CompletedNativeCommandAdmission, NativeCompletedMaterializeRequest,
+};
 mod historical;
 pub(crate) use historical::{
     CurrentHistoricalCertificationRound, HistoricalCommandDecision, HistoricalCommandDecisionRound,
@@ -333,6 +363,10 @@ pub(crate) struct RecoveryFenceObservation {
     deadline: Instant,
 }
 impl RecoveryFenceObservation {
+    #[cfg(test)]
+    pub(crate) fn test_actual_reply_for_loss(&self) -> &RecoveryEpochFenceReply {
+        &self.reply
+    }
     pub(crate) fn is_active_recovery(&self) -> bool {
         self.reply.phase == RecoveryFenceObservationPhase::ActiveRecovery
     }
@@ -543,7 +577,8 @@ impl RecoveryRoleAdmission {
             .and_then(|node| node.labels.get(SCHEMA_COMPATIBILITY_NODE_LABEL))
             .cloned();
         let relocation = match purpose {
-            MetadataRecoveryRolePurpose::NormalRecovery => None,
+            MetadataRecoveryRolePurpose::NormalRecovery
+            | MetadataRecoveryRolePurpose::CurrentJointRecovery { .. } => None,
             MetadataRecoveryRolePurpose::CommittedHandoff { relocation_id, .. } => Some(
                 topology
                     .relocations
@@ -591,6 +626,43 @@ impl RecoveryRoleAdmission {
             relocation,
             handoff_target_identity,
         })
+    }
+    /// Compare two independently sealed observations; projection never mints a
+    /// role or upgrades a topology DTO into authority.
+    pub(crate) fn require_own_host_metadata(
+        &self,
+        observed: &crate::distribution_consensus::HostMetadataReadObservation,
+        business: Uuid,
+    ) -> Result<()> {
+        self.require_live_request()?;
+        observed.require_live_request(business)?;
+        if observed.requester_node_id() != self.local_node_id()
+            || observed.requester_incarnation() != self.local_member_incarnation()
+            || observed.term() != self.metadata_term()
+            || observed.read_index() != self.metadata_read_index()
+            || observed.committed_topology(business)?
+                != self
+                    .witness
+                    .committed_topology(self.business_request_id(), self.recipient_challenge())?
+            || observed.restore_activation(business)? != self.restore_activation()
+        {
+            return Err(invalid(
+                "assigned receiver OWN metadata differs from original recovery role",
+            ));
+        }
+        self.require_live_request()
+    }
+    pub(crate) fn native_store_birth(
+        &self,
+        node: &ClusterNodeId,
+    ) -> Result<&crate::distribution::NativeStoreBirthV1> {
+        self.require_live_request()?;
+        self.witness
+            .committed_topology(self.business_request_id(), self.recipient_challenge())?
+            .nodes
+            .get(node)
+            .and_then(|n| n.native_store_birth_v1.as_ref())
+            .ok_or_else(|| invalid("fresh metadata does not bind the actual native voter birth"))
     }
     pub(crate) fn configuration_sha256(&self) -> Result<String> {
         use sha2::{Digest, Sha256};
@@ -762,7 +834,7 @@ impl RecoveryRoleAdmission {
                 "normal recovery cannot authorize native handoff installation",
             ));
         }
-        Ok(HandoffRoleAdmission(self))
+        Ok(HandoffRoleAdmission(std::sync::Arc::new(self)))
     }
     pub(crate) fn require_historical_command_scope(
         &self,
@@ -802,7 +874,8 @@ impl RecoveryObservationRoleAdmission {
     pub(crate) fn purpose(scope: &RecoveryFenceScope) -> Result<MetadataRecoveryRolePurpose> {
         use crate::distribution_consensus::MetadataRecoveryHandoffBinding;
         let committed_handoff = match &scope.purpose {
-            MetadataRecoveryRolePurpose::NormalRecovery => None,
+            MetadataRecoveryRolePurpose::NormalRecovery
+            | MetadataRecoveryRolePurpose::CurrentJointRecovery { .. } => None,
             MetadataRecoveryRolePurpose::CommittedHandoff {
                 relocation_id,
                 plan_id,
@@ -822,6 +895,12 @@ impl RecoveryObservationRoleAdmission {
             coordinator_node_id: scope.initiator_node_id.clone(),
             coordinator_incarnation: scope.initiator_incarnation,
             committed_handoff,
+            current_joint_decision_sha256: match &scope.purpose {
+                MetadataRecoveryRolePurpose::CurrentJointRecovery {
+                    joint_decision_sha256,
+                } => Some(joint_decision_sha256.clone()),
+                _ => None,
+            },
         })
     }
     #[allow(clippy::too_many_arguments)]
@@ -930,8 +1009,13 @@ impl RecoveryObservationRoleAdmission {
 /// Exact committed-plan permission. It cannot be constructed from a normal
 /// recovery witness and is not a capture/install/native receipt by itself.
 #[derive(Debug)]
-pub(crate) struct HandoffRoleAdmission(RecoveryRoleAdmission);
+pub(crate) struct HandoffRoleAdmission(std::sync::Arc<RecoveryRoleAdmission>);
 impl HandoffRoleAdmission {
+    /// Retain this SAME sealed request, including its original cancellation
+    /// and deadline. This never reacquires or renews metadata authority.
+    pub(crate) fn retain_original(&self) -> std::sync::Arc<RecoveryRoleAdmission> {
+        self.0.clone()
+    }
     pub(crate) fn role(&self) -> &RecoveryRoleAdmission {
         &self.0
     }
@@ -1168,6 +1252,7 @@ pub(crate) fn test_role_admission(
         response,
         parent.deadline().unwrap(),
         started,
+        &parent,
     )?;
     while provider.inflight_contexts() != 0 {
         parent.check()?;
@@ -1290,6 +1375,7 @@ pub(crate) fn test_recovery_metadata_cluster(
                 response,
                 deadline,
                 started,
+                parent,
             )
         }
     }
@@ -1311,8 +1397,27 @@ pub(crate) fn test_recovery_metadata_cluster(
         .collect::<Result<BTreeMap<_, _>>>()?;
     {
         let mut leader = stores[metadata_leader].lock();
-        leader.start_election()?;
-        leader.become_leader(&topology.metadata_voters())?;
+        let request = leader.start_election()?;
+        let mut granted = std::collections::BTreeSet::from([metadata_leader.clone()]);
+        for node in topology
+            .metadata_voters()
+            .iter()
+            .filter(|node| *node != metadata_leader)
+        {
+            let response = stores[node].lock().handle_vote_request(request.clone())?;
+            if response.cluster_id != topology.cluster_id
+                || &response.voter_id != node
+                || response.term != request.term
+            {
+                return Err(invalid(
+                    "test metadata election returned another identity/term",
+                ));
+            }
+            if response.vote_granted {
+                granted.insert(node.clone());
+            }
+        }
+        leader.become_leader(&granted)?;
         for node in topology
             .metadata_voters()
             .iter()

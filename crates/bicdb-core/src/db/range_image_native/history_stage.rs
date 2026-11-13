@@ -12,6 +12,12 @@ use crate::distribution_range_image::{
 };
 use crate::distribution_range_mutation::RangeMutationAuthority;
 
+mod closed_writer;
+mod substitution;
+#[cfg(test)]
+pub(super) use closed_writer::test_before_closed_image_transaction;
+pub(crate) use closed_writer::ClosedImageOriginalWriter;
+
 const STAGE_FORMAT: u32 = 1;
 const MAX_WIRE: usize = 272 * 1024;
 fn stage_key(range: RangeId) -> String {
@@ -34,6 +40,7 @@ pub(crate) struct NativeHistoryTargetContext<'a> {
     catalog: &'a TargetImageCatalogHistoryObligations,
     role: &'a NativeImageInstallRole<'a>,
     frozen: &'a FrozenRangeMutationPermit,
+    substitution: Option<substitution::CurrentQuorumSubstitutionCoverage>,
 }
 impl<'a> NativeHistoryTargetContext<'a> {
     #[allow(clippy::too_many_arguments)]
@@ -55,9 +62,40 @@ impl<'a> NativeHistoryTargetContext<'a> {
             catalog,
             role,
             frozen,
+            substitution: None,
         };
         context.require_current(database)?;
         Ok(context)
+    }
+    /// Only an actual replacement/resume full-spine verifier may add this
+    /// purpose-bound grant. The ordinary constructor retains its old guard.
+    pub(crate) fn with_source_substitution(
+        mut self,
+        database: &BicDb,
+        source: &TentativeNativeRangeImageSourceAuthorization<'_>,
+    ) -> Result<Self> {
+        let journal = database.try_native_image_journal()?;
+        self.require_current_under_journal(database, &journal)?;
+        if source.cut().resume_proposal().is_some() {
+            if let Some(previous) = database
+                .read_native_range_image_record::<StageHeader>(&stage_key(self.fence.range().id))?
+            {
+                previous.validate()?;
+                if previous.source != HistorySourceScope::actual(source)?
+                    || previous.substitution.is_some()
+                {
+                    let coverage = substitution::CurrentQuorumSubstitutionCoverage::prove(
+                        database, &self, source, &previous,
+                    )?;
+                    #[cfg(test)]
+                    substitution::assert_actual_negative_controls(
+                        database, &self, source, &previous, &coverage,
+                    );
+                    self.substitution = Some(coverage);
+                }
+            }
+        }
+        Ok(self)
     }
     fn require_current(&self, database: &BicDb) -> Result<()> {
         let journal = database.try_native_image_journal()?;
@@ -172,6 +210,8 @@ struct StageHeader {
     native_irreversible_sha256: String,
     catalog_sha256: String,
     source: HistorySourceScope,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    substitution: Option<substitution::SubstitutionRecord>,
     target_point: Option<(u64, String)>,
     target_point_matched: bool,
     remaining_commands: BTreeMap<u64, String>,
@@ -219,6 +259,9 @@ impl StageHeader {
                 .is_some_and(|xid| xid == 0 || !self.audit_complete)
         {
             return Err(invalid("damaged/inconsistent native history stage header"));
+        }
+        if let Some(binding) = &self.substitution {
+            binding.validate(self)?;
         }
         Ok(())
     }
@@ -681,6 +724,35 @@ impl BicDb {
         Ok(())
     }
 
+    #[cfg(test)]
+    pub(crate) fn test_native_history_substitution_archive(
+        &self,
+        range: RangeId,
+    ) -> Result<serde_json::Value> {
+        let header = self.read_history_stage(range)?;
+        let binding = header
+            .substitution
+            .as_ref()
+            .ok_or_else(|| invalid("actual stage has no substitution binding"))?;
+        binding.require_archive(self, &header)?;
+        let archived: StageHeader = self
+            .read_native_range_image_record(&binding.archive_key(range))?
+            .ok_or_else(|| invalid("actual prior stage archive missing"))?;
+        Ok(serde_json::json!({
+            "previous_stage_id":archived.stage_id,"previous_generation":archived.generation,
+            "previous_header_sha256":archived.checksum_sha256,
+            "previous_verified_entries":archived.verified_entries,
+            "previous_audit_next_index":archived.audit_next_index,
+            "previous_audit_complete":archived.audit_complete,
+            "previous_target_point":archived.target_point,
+            "previous_target_point_matched":archived.target_point_matched,
+            "previous_source_range_index":archived.source.range_index,
+            "previous_history_sha256":archived.source.logical_history_sha256,
+            "current_source_range_index":header.source.range_index,
+            "current_history_sha256":header.source.logical_history_sha256,
+        }))
+    }
+
     /// Read-only custody commitment; no mutation, floor or serving authority.
     pub(crate) fn native_history_stage_state_commitment(
         &self,
@@ -737,6 +809,9 @@ impl BicDb {
     ) -> Result<StageHeader> {
         context.require_current_under_journal(self, journal)?;
         let header = self.read_history_stage(stage.range_id)?;
+        if let Some(binding) = &header.substitution {
+            binding.require_archive(self, &header)?;
+        }
         if stage.database_incarnation != self.incarnation
             || stage.range_id != context.fence.range().id
             || stage.stage_id != header.stage_id
@@ -864,6 +939,7 @@ impl BicDb {
             native_irreversible_sha256: context.safety.irreversible_records_sha256().to_string(),
             catalog_sha256: context.catalog.range_log_sha256().to_string(),
             source: scope,
+            substitution: None,
             target_point_matched: target_point.is_none(),
             target_point,
             remaining_commands: commands,
@@ -881,9 +957,9 @@ impl BicDb {
         };
         header.checksum_sha256 = header.checksum()?;
         header.validate()?;
-        if let Some(previous) =
-            self.read_native_range_image_record::<StageHeader>(&stage_key(header.source.range_id))?
-        {
+        let previous =
+            self.read_native_range_image_record::<StageHeader>(&stage_key(header.source.range_id))?;
+        if let Some(previous) = &previous {
             previous.validate()?;
             if previous.target_birth_id != header.target_birth_id
                 || previous.target_birth_sha256 != header.target_birth_sha256
@@ -914,28 +990,108 @@ impl BicDb {
                     range_id: previous.source.range_id,
                 });
             }
-            if previous.source != header.source {
-                let point=context.safety.history_point().filter(|point|point.range_index()>=previous.source.range_index)
-                    .ok_or_else(||invalid("alternate source requires an explicit current-quorum substitution proof"))?;
-                let retained = self.read_native_history_entry(
-                    point.range_id(),
-                    point.history_generation(),
-                    previous.source.range_index,
-                )?;
-                if !previous.audit_complete
-                    || retained.commitment_sha256 != previous.source.logical_history_sha256
+            if let Some(previous_point) = &previous.target_point {
+                if previous_point.0 > header.source.range_index
+                    || header.target_point.as_ref().is_some_and(|current| {
+                        current.0 == previous_point.0 && current.1 != previous_point.1
+                    })
                 {
                     return Err(invalid(
-                        "prior observed source history is not covered by actual native history",
+                        "prior target-native commitment contradicts new source/target",
                     ));
+                }
+                if header.target_point.is_none() {
+                    header.target_point = Some(previous_point.clone());
+                    header.target_point_matched = false;
+                }
+            }
+            // Preserve every not-yet-verified old command obligation too.
+            // The new FULL stream must discharge this union before clearing;
+            // neither a point commitment nor a new catalogue may drop it.
+            for (index, expected) in &previous.remaining_commands {
+                if *index > header.source.range_index
+                    || header
+                        .remaining_commands
+                        .insert(*index, expected.clone())
+                        .is_some_and(|known| known != *expected)
+                {
+                    return Err(invalid("prior staged irreversible command contradicts new target/source obligations"));
+                }
+            }
+            if previous.source != header.source || previous.substitution.is_some() {
+                if let Some(coverage) = &context.substitution {
+                    coverage.require_current(self, context, source, previous)?;
+                    header.substitution = Some(coverage.record().clone());
+                } else {
+                    // The existing materialized-native proof remains necessary
+                    // whenever there is no sealed current-quorum substitution.
+                    let point = context.safety.history_point()
+                        .filter(|point| point.range_index() >= previous.source.range_index)
+                        .ok_or_else(|| invalid("alternate source requires an explicit current-quorum substitution proof"))?;
+                    let retained = self.read_native_history_entry(
+                        point.range_id(),
+                        point.history_generation(),
+                        previous.source.range_index,
+                    )?;
+                    if !previous.audit_complete
+                        || retained.commitment_sha256 != previous.source.logical_history_sha256
+                    {
+                        return Err(invalid(
+                            "prior observed source history is not covered by actual native history",
+                        ));
+                    }
                 }
             }
         }
+        header.checksum_sha256 = header.checksum()?;
+        header.validate()?;
+        source.require_current()?;
+        context.require_current_under_journal(self, &journal)?;
+        if !self.config.fsync || !format::range_image_install_active(&self.path)? {
+            return Err(invalid(
+                "native history stage requires sticky fsync reader fence",
+            ));
+        }
+        // Quiescent preflight must precede OUR own counted lease. Keep that
+        // lease through the actual synchronous page-WAL durable completion.
         let controlled = self
             .range_mutations
             .try_controlled_mutation(context.frozen)?;
-        self.write_native_range_image_record(&stage_key(header.source.range_id), &header)?;
+        // Preserve the exact old cursor/audit and generation atomically with
+        // publishing the new attempt. This is neither a reset nor a new floor.
+        self.in_paged_transaction(|paged, xid| {
+            if let Some(previous) = &previous {
+                let key = native_key(&substitution::archive_key(previous));
+                let bytes = bounded_json(previous, MAX_NATIVE_RECEIPT_BYTES)?;
+                let existing = paged
+                    .store()
+                    .get_as_of(&paged.latest_snapshot(), &key)
+                    .map_err(|error| BicDbError::PagedStorage(error.to_string()))?;
+                if existing.as_ref().is_some_and(|existing| existing != &bytes) {
+                    return Err(invalid("immutable prior history stage archive changed"));
+                }
+                paged
+                    .store()
+                    .put(xid, &key, &bytes)
+                    .map_err(|error| BicDbError::PagedStorage(error.to_string()))?;
+            }
+            paged
+                .store()
+                .put(
+                    xid,
+                    &native_key(&stage_key(header.source.range_id)),
+                    &bounded_json(&header, MAX_NATIVE_RECEIPT_BYTES)?,
+                )
+                .map_err(|error| BicDbError::PagedStorage(error.to_string()))?;
+            Ok(())
+        })?
+        .ok_or_else(|| invalid("native history stage has no page store"))?;
         drop(controlled);
+        source.require_current()?;
+        #[cfg(test)]
+        if let Some(binding) = &header.substitution {
+            binding.assert_actual_missing_archive_refused(self, &header);
+        }
         Ok(NativeHistoryStage {
             database_incarnation: self.incarnation.clone(),
             stage_id: header.stage_id,
@@ -1017,6 +1173,15 @@ impl BicDb {
                 }
             } else if header.current_head.as_deref() != Some(entry.previous_sha256.as_str()) {
                 return Err(invalid("native history stage link differs"));
+            }
+            if let Some(binding) = &header.substitution {
+                if binding
+                    .points
+                    .get(&entry.index)
+                    .is_some_and(|expected| expected != &entry.commitment_sha256)
+                {
+                    return Err(invalid("source stream forks protected substituted prefix"));
+                }
             }
             if let Some((index, expected)) = &header.target_point {
                 if *index == entry.index {
@@ -1572,6 +1737,17 @@ pub(crate) struct NativeImageRowScope<'a> {
     proof: &'a StagedNativeHistoryProof,
     source: &'a TentativeNativeRangeImageSourceAuthorization<'a>,
     marker_sha256: String,
+    closed_writer: Option<Arc<ClosedImageOriginalWriter>>,
+    caller: &'a CancellationToken,
+}
+#[derive(Debug)]
+struct ClosedImageTransactionBinding {
+    writer: Arc<ClosedImageOriginalWriter>,
+    // Preserve this authorization's sealed role as well as the original BEGIN
+    // role retained by writer. Its independent parent can cancel before WAL.
+    step_role: Arc<crate::distribution_range_recovery::RecoveryRoleAdmission>,
+    header: StageHeader,
+    caller: CancellationToken,
 }
 #[derive(Debug)]
 pub(crate) struct NativeImageTransactionGrant {
@@ -1583,6 +1759,7 @@ pub(crate) struct NativeImageTransactionGrant {
     marker_sha256: String,
     deadline: std::time::Instant,
     claim: crate::distribution_range_mutation::RangeMutationClaim,
+    closed: Option<ClosedImageTransactionBinding>,
 }
 impl NativeImageTransactionGrant {
     pub(in crate::db) fn require_current(
@@ -1615,7 +1792,26 @@ impl NativeImageTransactionGrant {
                 return Err(invalid("native image mutation left its authorized range"));
             }
         }
-        database.require_installed_native_writer_database_for_range(&self.range)
+        if let Some(closed) = &self.closed {
+            closed.caller.check()?;
+            closed.step_role.require_live_request()?;
+            closed.writer.require_current(database)?;
+            // Same private synchronous import call still owns the exclusive
+            // Store borrow and Controlled claim. Recheck the actual protected
+            // audited header without asking for quiescence during our write.
+            if database.read_history_stage(self.range.id)? != closed.header
+                || !closed.header.audit_complete
+                || closed.header.attempt_id != self.attempt
+            {
+                return Err(invalid(
+                    "closed image actual staged history changed before transaction",
+                ));
+            }
+            closed.step_role.require_live_request()?;
+            closed.caller.check()
+        } else {
+            database.require_installed_native_writer_database_for_range(&self.range)
+        }
     }
 }
 impl NativeImageRowScope<'_> {
@@ -1630,6 +1826,10 @@ impl NativeImageRowScope<'_> {
     ) -> Result<()> {
         self.source.require_current()?;
         self.context.role.role().require_live_request()?;
+        if let Some(closed) = &self.closed_writer {
+            self.caller.check()?;
+            closed.require_context(database, self.context)?;
+        }
         database
             .range_mutations
             .validate(self.range().id, authority)?;
@@ -1640,6 +1840,21 @@ impl NativeImageRowScope<'_> {
         {
             return Err(invalid("native image scope marker/attempt changed"));
         }
+        let closed = if let Some(writer) = &self.closed_writer {
+            let NativeImageInstallRole::CommittedHandoff(step) = self.context.role else {
+                return Err(invalid(
+                    "closed image transaction lost actual committed step role",
+                ));
+            };
+            Some(ClosedImageTransactionBinding {
+                writer: writer.clone(),
+                step_role: step.retain_original(),
+                header: self.proof.header.clone(),
+                caller: self.caller.clone(),
+            })
+        } else {
+            None
+        };
         transaction.native_image_row_grant = Some(NativeImageTransactionGrant {
             database_incarnation: database.incarnation_id().into(),
             transaction_id: transaction.id().0,
@@ -1651,7 +1866,12 @@ impl NativeImageRowScope<'_> {
             marker_sha256: self.marker_sha256.clone(),
             deadline: self.context.role.role().deadline(),
             claim: authority.claim(),
+            closed,
         });
+        #[cfg(test)]
+        if self.closed_writer.is_some() {
+            closed_writer::before_transaction();
+        }
         Ok(())
     }
 }
@@ -1661,9 +1881,16 @@ impl BicDb {
         context: &'a NativeHistoryTargetContext<'a>,
         proof: &'a StagedNativeHistoryProof,
         source: &'a TentativeNativeRangeImageSourceAuthorization<'a>,
+        caller: &'a CancellationToken,
     ) -> Result<NativeImageRowScope<'a>> {
         proof.require_current(self, context, source)?;
-        self.require_installed_native_writer_database_for_range(context.fence.range())?;
+        let closed_writer = context.fence.closed_original_writer().cloned();
+        if let Some(closed) = &closed_writer {
+            caller.check()?;
+            closed.require_context(self, context)?;
+        } else {
+            self.require_installed_native_writer_database_for_range(context.fence.range())?;
+        }
         let marker_sha256 = self.native_image_row_marker_commitment(
             context.fence.range().id,
             context.fence.attempt_id(),
@@ -1673,6 +1900,8 @@ impl BicDb {
             proof,
             source,
             marker_sha256,
+            closed_writer,
+            caller,
         })
     }
 }

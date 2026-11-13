@@ -39,17 +39,41 @@ use crate::{
     SchemaCompatibilityAuthority, SchemaCompatibilityFingerprint, SignedClusterSchemaBundle,
 };
 
+mod range_write_slot;
+use range_write_slot::RangeWriteServiceSlot;
+pub(crate) use range_write_slot::RangeWriteServiceSlotGuard;
+
+#[cfg(feature = "tls-replication")]
+mod hot_recovery;
+mod native_abort;
 mod native_activation;
 mod native_apply;
+mod native_completion_materialize;
+mod native_recertify;
+pub(crate) use native_recertify::LocalNativeRecertifyEvidence;
 mod native_durability;
+mod native_joint_handoff;
 mod native_writer;
+#[cfg(feature = "tls-replication")]
+mod registered_closed_fence;
 pub(crate) use native_durability::ClusterServiceOpenGuard;
 use native_durability::{checked_database_read, checked_database_write, ServiceStoragePolicy};
+pub(crate) use native_joint_handoff::{
+    ActualServiceNativeJointCaptureInputs, ActualServiceNativeJointCommittedEvidence,
+    ActualServiceNativeJointConstraints, ActualServiceNativeJointNewEvidence,
+    ActualServiceNativeJointOldEvidence, ActualServiceNativeJointPreparedEvidence,
+    ActualServiceNativeJointReleaseEvidence, NativeJointImageReleaseOwner,
+    NativeJointIrrevocableFacts, NativeJointReleaseOwnerView, NativeJointServingLease,
+};
+pub(crate) use native_writer::NativeWriterRegistryRefresh;
+mod current_image_replacement;
 mod current_image_resume;
 mod native_completion;
 mod native_image_install;
 mod native_range_read;
 mod native_ready;
+#[cfg(feature = "tls-replication")]
+mod registered_metadata_catchup;
 pub(crate) use native_range_read::{
     ActualServiceNativeReadEvidence, ActualServiceNativeReadProbeEvidence,
 };
@@ -730,6 +754,10 @@ impl ClusterSchemaFinalizationReceipt {
 /// deployment modes.
 #[derive(Debug)]
 pub struct ClusterDataNodeService {
+    #[cfg(test)]
+    test_refuse_native_prepare_after_start: bool,
+    #[cfg(test)]
+    test_fail_abort_after_native_publication: bool,
     cluster_id: ClusterId,
     node_id: ClusterNodeId,
     db: Arc<RwLock<BicDb>>,
@@ -737,7 +765,7 @@ pub struct ClusterDataNodeService {
     schema_compatibility: SchemaCompatibilityAuthority,
     schema_compatibility_window: Option<ClusterSchemaCompatibilityWindow>,
     learner: RangeLearnerStore,
-    range_writes: RangeWriteStore,
+    range_writes: RangeWriteServiceSlot,
     range_mutations: RangeMutationGate,
     range_digest_root: PathBuf,
     range_digest_repair_root: PathBuf,
@@ -750,6 +778,13 @@ pub struct ClusterDataNodeService {
     initial_preparation_provider:
         Option<std::sync::Weak<crate::distribution_native_host::NativeProvisionalNode>>,
     initial_consensus_only: bool,
+    #[cfg(feature = "tls-replication")]
+    native_metadata_control: Option<
+        std::sync::Weak<crate::distribution_native_host::NativeMetadataRegistrationController>,
+    >,
+    #[cfg(feature = "tls-replication")]
+    learner_birth_provider:
+        Option<std::sync::Weak<crate::distribution_native_host::NativeLearnerBirthProvider>>,
 }
 
 impl ClusterDataNodeService {
@@ -861,6 +896,10 @@ impl ClusterDataNodeService {
                 .ok()
         };
         let mut service = Self {
+            #[cfg(test)]
+            test_refuse_native_prepare_after_start: false,
+            #[cfg(test)]
+            test_fail_abort_after_native_publication: false,
             cluster_id,
             node_id,
             db,
@@ -868,7 +907,7 @@ impl ClusterDataNodeService {
             schema_compatibility,
             schema_compatibility_window,
             learner,
-            range_writes,
+            range_writes: RangeWriteServiceSlot::new(range_writes),
             range_mutations,
             range_digest_root,
             range_digest_repair_root,
@@ -879,7 +918,18 @@ impl ClusterDataNodeService {
             initial_birth_provider: None,
             initial_preparation_provider: None,
             initial_consensus_only: false,
+            #[cfg(feature = "tls-replication")]
+            native_metadata_control: None,
+            #[cfg(feature = "tls-replication")]
+            learner_birth_provider: None,
         };
+        {
+            let database = checked_database_read(&service.db, &service.storage_policy)?;
+            service
+                .range_writes
+                .current_mut()
+                .reconcile_actual_abort_control(&database)?;
+        }
         service.recover_committed_range_writes()?;
         Ok(service)
     }
@@ -925,9 +975,147 @@ impl ClusterDataNodeService {
     pub(crate) fn native_initial_listener_store_open_id(&self) -> Uuid {
         self.range_writes.recovery_store_open_id()
     }
+    pub(crate) fn native_replica_listener_store_open_guard(&self) -> RangeWriteServiceSlotGuard {
+        self.range_writes.guard()
+    }
+    #[cfg(test)]
+    pub(crate) fn test_replace_native_range_write_store(
+        &mut self,
+        replacement: RangeWriteStore,
+    ) -> RangeWriteStore {
+        self.range_writes.replace(replacement)
+    }
     pub(crate) fn initial_consensus_only(&self) -> bool {
         self.initial_consensus_only
     }
+    #[cfg(feature = "tls-replication")]
+    pub(crate) fn native_metadata_control(
+        &self,
+    ) -> Option<
+        std::sync::Weak<crate::distribution_native_host::NativeMetadataRegistrationController>,
+    > {
+        self.native_metadata_control.clone()
+    }
+    #[cfg(feature = "tls-replication")]
+    pub(crate) fn attach_native_metadata_control(
+        &mut self,
+        actual: &Arc<Mutex<Self>>,
+        drained: &crate::distribution_transport::DrainedClusterDataListener,
+        metadata: &crate::MetadataConsensusStore,
+        controller: &Arc<crate::distribution_native_host::NativeMetadataRegistrationController>,
+    ) -> Result<()> {
+        drained.require_service(actual)?;
+        drained.require_store(self.native_initial_listener_store_open_id())?;
+        if !self.initial_consensus_only
+            || self.initial_birth_provider.is_some()
+            || self.learner_birth_provider.is_some()
+            || self.native_writer_enforcement_version()? != 1
+        {
+            return Err(data_error(
+                "native metadata control needs the actual drained metadata-only service",
+            ));
+        }
+        metadata.require_listener_database(&self.listener_open_guard())?;
+        controller.require_service(actual, self.native_initial_listener_store_open_id())?;
+        if let Some(old) = self.native_metadata_control.as_ref() {
+            if !std::sync::Weak::ptr_eq(old, &Arc::downgrade(controller)) {
+                return Err(data_error(
+                    "another native metadata controller is already attached",
+                ));
+            }
+        }
+        self.native_metadata_control = Some(Arc::downgrade(controller));
+        Ok(())
+    }
+    #[cfg(feature = "tls-replication")]
+    pub(crate) fn attach_learner_birth_provider(
+        &mut self,
+        provider: &Arc<crate::distribution_native_host::NativeLearnerBirthProvider>,
+    ) -> Result<()> {
+        if self.learner_birth_provider.is_some()
+            || self.initial_birth_provider.is_some()
+            || self.initial_preparation_provider.is_some()
+            || self.initial_consensus_only
+            || self.native_writer_enforcement_version()? != 1
+        {
+            return Err(data_error(
+                "learner factory provider must attach once to an actual provisional service",
+            ));
+        }
+        provider.require_same_database(&self.db, &self.cluster_id, &self.node_id)?;
+        self.learner_birth_provider = Some(Arc::downgrade(provider));
+        Ok(())
+    }
+    #[cfg(feature = "tls-replication")]
+    pub(crate) fn learner_birth_provider(
+        &self,
+    ) -> Option<std::sync::Weak<crate::distribution_native_host::NativeLearnerBirthProvider>> {
+        self.learner_birth_provider.clone()
+    }
+    /// Existing-cluster learner purpose, never an initial all-C permit.
+    /// NEW cold service, not a mutation of any captured listener. Actual root
+    /// ownership replaces the need for a prior live endpoint/drain fact.
+    #[cfg(feature = "tls-replication")]
+    pub(crate) fn open_cold_native_learner_metadata(
+        cluster: ClusterId,
+        node: ClusterNodeId,
+        root: &std::path::Path,
+        database: Arc<RwLock<BicDb>>,
+        metadata: &crate::MetadataConsensusStore,
+    ) -> Result<Self> {
+        metadata.registered_native_learner_store_id()?;
+        if metadata
+            .committed_topology()
+            .ranges
+            .values()
+            .any(|range| range.replicas.iter().any(|replica| replica.node_id == node))
+        {
+            return Err(data_error(
+                "cold learner metadata service cannot own data replicas",
+            ));
+        }
+        let mut service = Self::open(cluster, node, root, database, true)?;
+        metadata.require_listener_database(&service.listener_open_guard())?;
+        if service.native_writer_enforcement_version()? != 1 {
+            return Err(data_error(
+                "cold learner metadata requires actual enforced database",
+            ));
+        }
+        service.initial_consensus_only = true;
+        Ok(service)
+    }
+
+    /// Existing-cluster learner purpose, never an initial all-C permit.
+    /// Caller holds only nonwaiting metadata/service guards after true drain;
+    /// this method acquires NO DB latch and opens NO data surface.
+    #[cfg(feature = "tls-replication")]
+    pub(crate) fn transition_enrolled_learner_metadata_listener(
+        &mut self,
+        actual: &Arc<Mutex<Self>>,
+        drained: &crate::distribution_transport::DrainedClusterDataListener,
+        database: &Arc<RwLock<BicDb>>,
+        metadata: &crate::MetadataConsensusStore,
+    ) -> Result<()> {
+        drained.require_service(actual)?;
+        drained.require_store(self.native_initial_listener_store_open_id())?;
+        if !Arc::ptr_eq(&self.db, database)
+            || self.initial_birth_provider.is_some()
+            || self.initial_preparation_provider.is_some()
+            || (self.learner_birth_provider.is_none() && !self.initial_consensus_only)
+        {
+            return Err(data_error(
+                "drained learner service/actual DB attachment changed",
+            ));
+        }
+        metadata.require_listener_database(&self.listener_open_guard())?;
+        metadata.registered_native_learner_store_id()?;
+        // Only a NEW listener sees this mutation. Captured old Some remains
+        // immutable even when its Weak provider ends.
+        self.learner_birth_provider = None;
+        self.initial_consensus_only = true;
+        Ok(())
+    }
+
     #[cfg(feature = "tls-replication")]
     pub(crate) fn transition_initial_preparation_listener(
         &mut self,
@@ -980,6 +1168,47 @@ impl ClusterDataNodeService {
     ) -> Result<()> {
         self.range_writes.preflight_recovery_nonce(scope)
     }
+    /// Intent discovery only. A protected historical domain cannot mint a
+    /// metadata role or data quorum; each receiver independently checks both.
+    pub(crate) fn observe_current_joint_recovery_purpose(
+        &self,
+        range: crate::distribution::RangeId,
+        parent: &crate::CancellationToken,
+    ) -> Result<crate::distribution_consensus::MetadataRecoveryRolePurpose> {
+        parent.check()?;
+        let db = checked_database_read(&self.db, &self.storage_policy)?;
+        let fact = db.observe_current_joint_recovery_domain(&self.range_writes, range, parent)?;
+        parent.check()?;
+        Ok(fact.purpose())
+    }
+
+    /// Test-only necessary-constraint probe. Altered claim DATA cannot mint a
+    /// role, fence, native fact, catalogue mutation or serving permission.
+    #[cfg(test)]
+    pub(crate) fn test_current_joint_local_promise_claim(
+        &self,
+        range: crate::distribution::RangeId,
+        parent: &crate::CancellationToken,
+        alter: impl FnOnce(
+            Option<crate::distribution_range_handoff::RangeHandoffPromise>,
+        ) -> Option<crate::distribution_range_handoff::RangeHandoffPromise>,
+    ) -> Result<()> {
+        let db = checked_database_read(&self.db, &self.storage_policy)?;
+        let fact = db.observe_current_joint_recovery_domain(&self.range_writes, range, parent)?;
+        let claim = alter(fact.binding().local_handoff_promise.clone());
+        fact.test_local_promise_claim(&db, claim.as_ref())?;
+        parent.check()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn test_missing_current_joint_generic_custody(
+        &self,
+        range: crate::distribution::RangeId,
+    ) -> Result<()> {
+        self.range_writes
+            .test_missing_current_joint_generic_custody(range)
+    }
+
     pub(crate) fn preflight_native_recovery(
         &self,
         role: &crate::distribution_range_recovery::RecoveryRoleAdmission,
@@ -987,16 +1216,73 @@ impl ClusterDataNodeService {
         cancellation: &crate::CancellationToken,
     ) -> Result<()> {
         cancellation.check()?;
+
+        // FENCE_TRACE_BEGIN
+        #[cfg(test)]
+        crate::distribution_range_recovery::fence_trace::mark("preflight-db-acquire-begin");
+        // FENCE_TRACE_END
         let db = checked_database_read(&self.db, &self.storage_policy)?;
+
+        // FENCE_TRACE_BEGIN
+        #[cfg(test)]
+        crate::distribution_range_recovery::fence_trace::mark("preflight-db-acquire-ok");
+        // FENCE_TRACE_END
+
+        // FENCE_TRACE_BEGIN
+        #[cfg(test)]
+        crate::distribution_range_recovery::fence_trace::mark("preflight-native-admission-begin");
+        // FENCE_TRACE_END
         let native = db.native_recovery_admission(
             role.cluster_id(),
             role.bootstrap_id(),
             role.local_node_id(),
             role.local_member_incarnation(),
         )?;
+
+        // FENCE_TRACE_BEGIN
+        #[cfg(test)]
+        crate::distribution_range_recovery::fence_trace::mark("preflight-native-admission-ok");
+        // FENCE_TRACE_END
+
+        // FENCE_TRACE_BEGIN
+        #[cfg(test)]
+        crate::distribution_range_recovery::fence_trace::mark("preflight-native-current-begin");
+        // FENCE_TRACE_END
         native.require_current(&db)?;
-        self.range_writes
-            .preflight_recovery_fence(role, &native, scope)
+        // FENCE_TRACE_BEGIN
+        #[cfg(test)]
+        crate::distribution_range_recovery::fence_trace::mark("preflight-native-current-ok");
+        // FENCE_TRACE_END
+
+        if matches!(
+            role.purpose(),
+            crate::distribution_consensus::MetadataRecoveryRolePurpose::CurrentJointRecovery { .. }
+        ) {
+            // FENCE_TRACE_BEGIN
+            #[cfg(test)]
+            crate::distribution_range_recovery::fence_trace::mark("preflight-joint-domain-begin");
+            // FENCE_TRACE_END
+            let fact = db.observe_current_joint_recovery_domain(
+                &self.range_writes,
+                scope.range_id,
+                cancellation,
+            )?;
+
+            // FENCE_TRACE_BEGIN
+            #[cfg(test)]
+            crate::distribution_range_recovery::fence_trace::mark("preflight-joint-domain-ok");
+            // FENCE_TRACE_END
+
+            // FENCE_TRACE_BEGIN
+            #[cfg(test)]
+            crate::distribution_range_recovery::fence_trace::mark("preflight-joint-store-begin");
+            // FENCE_TRACE_END
+            self.range_writes
+                .preflight_current_joint_recovery(&db, role, &native, scope, &fact)
+        } else {
+            self.range_writes
+                .preflight_recovery_fence(role, &native, scope)
+        }
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -1022,16 +1308,18 @@ impl ClusterDataNodeService {
             actual.local_node_id(),
             actual.local_member_incarnation(),
         )?;
-        self.range_writes.preflight_recovery_image_install(
-            &db,
-            &native,
-            source,
-            role,
-            frozen,
-            purpose,
-            attempt_id,
-            cancellation,
-        )
+        self.range_writes
+            .current_mut()
+            .preflight_recovery_image_install(
+                &db,
+                &native,
+                source,
+                role,
+                frozen,
+                purpose,
+                attempt_id,
+                cancellation,
+            )
     }
 
     /// Final transfer validation and owner rotation are one local critical
@@ -1095,6 +1383,7 @@ impl ClusterDataNodeService {
             .require_image_install_recovery_scope(actual, &native)?;
         let proof = self
             .range_writes
+            .current_mut()
             .prove_untouched_image_transfer_return(original, &db, &native, role, frozen, parent)?;
         if proof.range_id() != original.range_id()
             || proof.attempt_id() != original.attempt_id()
@@ -1159,22 +1448,99 @@ impl ClusterDataNodeService {
         self.range_mutations
             .validate_quiescent_frozen(scope.range_id, frozen)?;
         cancellation.check()?;
+
+        // FENCE_TRACE_BEGIN
+        #[cfg(test)]
+        crate::distribution_range_recovery::fence_trace::mark("fence-db-acquire-begin");
+        // FENCE_TRACE_END
         let db = checked_database_read(&self.db, &self.storage_policy)?;
+
+        // FENCE_TRACE_BEGIN
+        #[cfg(test)]
+        crate::distribution_range_recovery::fence_trace::mark("fence-db-acquire-ok");
+        // FENCE_TRACE_END
+
+        // FENCE_TRACE_BEGIN
+        #[cfg(test)]
+        crate::distribution_range_recovery::fence_trace::mark("fence-native-admission-begin");
+        // FENCE_TRACE_END
         let native = db.native_recovery_admission(
             role.cluster_id(),
             role.bootstrap_id(),
             role.local_node_id(),
             role.local_member_incarnation(),
         )?;
+
+        // FENCE_TRACE_BEGIN
+        #[cfg(test)]
+        crate::distribution_range_recovery::fence_trace::mark("fence-native-admission-ok");
+        // FENCE_TRACE_END
+
+        // FENCE_TRACE_BEGIN
+        #[cfg(test)]
+        crate::distribution_range_recovery::fence_trace::mark("fence-native-current-begin");
+        // FENCE_TRACE_END
         native.require_current(&db)?;
+        // FENCE_TRACE_BEGIN
+        #[cfg(test)]
+        crate::distribution_range_recovery::fence_trace::mark("fence-native-current-ok");
+        // FENCE_TRACE_END
+
         role.require_live_request()?;
         self.range_mutations
             .validate_quiescent_frozen(scope.range_id, frozen)?;
-        self.range_writes
-            .fence_recovery_epoch(role, &native, scope)?;
+        if matches!(
+            role.purpose(),
+            crate::distribution_consensus::MetadataRecoveryRolePurpose::CurrentJointRecovery { .. }
+        ) {
+            // FENCE_TRACE_BEGIN
+            #[cfg(test)]
+            crate::distribution_range_recovery::fence_trace::mark("fence-joint-domain-begin");
+            // FENCE_TRACE_END
+            let fact = db.observe_current_joint_recovery_domain(
+                &self.range_writes,
+                scope.range_id,
+                cancellation,
+            )?;
+
+            // FENCE_TRACE_BEGIN
+            #[cfg(test)]
+            crate::distribution_range_recovery::fence_trace::mark("fence-joint-domain-ok");
+            // FENCE_TRACE_END
+
+            // FENCE_TRACE_BEGIN
+            #[cfg(test)]
+            crate::distribution_range_recovery::fence_trace::mark("fence-joint-store-begin");
+            // FENCE_TRACE_END
+            self.range_writes
+                .current_mut()
+                .fence_current_joint_recovery(&db, role, &native, scope, &fact, frozen)?;
+        } else {
+            self.range_writes
+                .current_mut()
+                .fence_recovery_epoch(role, &native, scope)?;
+        }
+
+        // FENCE_TRACE_BEGIN
+        #[cfg(test)]
+        crate::distribution_range_recovery::fence_trace::mark("fence-persist-returned");
+        // FENCE_TRACE_END
         cancellation.check()?;
+        // FENCE_TRACE_BEGIN
+        #[cfg(test)]
+        crate::distribution_range_recovery::fence_trace::mark("fence-post-native-current-begin");
+        // FENCE_TRACE_END
         native.require_current(&db)?;
+
+        // FENCE_TRACE_BEGIN
+        #[cfg(test)]
+        crate::distribution_range_recovery::fence_trace::mark("fence-post-native-current-ok");
+        // FENCE_TRACE_END
         role.require_live_request()?;
+        // FENCE_TRACE_BEGIN
+        #[cfg(test)]
+        crate::distribution_range_recovery::fence_trace::mark("fence-response-inventory-begin");
+        // FENCE_TRACE_END
         Ok(
             crate::distribution_range_recovery::RecoveryEpochFenceReply {
                 phase: self.range_writes.recovery_observation_phase(scope)?,
@@ -1357,7 +1723,7 @@ impl ClusterDataNodeService {
         native.require_current(&db)?;
         self.range_mutations
             .validate_controlled(role.current_range().id, &controlled)?;
-        let marker = certify(&mut self.range_writes, &native)?;
+        let marker = certify(self.range_writes.current_mut(), &native)?;
         native.require_current(&db)?;
         role.require_live_request()?;
         cancellation.check()?;
@@ -1390,6 +1756,9 @@ impl ClusterDataNodeService {
         native.require_current(&db)?;
         self.range_mutations
             .validate_controlled(admission.command().range_id, &controlled)?;
+        if admission.completed_decision().is_some() {
+            self.require_native_writer_host_for_range(&db, role.current_range())?;
+        }
         let receipt = db.apply_historical_native_command(
             &self.range_writes,
             &native,
@@ -1399,7 +1768,11 @@ impl ClusterDataNodeService {
             &controlled,
             cancellation,
         )?;
+        if admission.completed_decision().is_some() {
+            self.require_native_writer_host_for_range(&db, role.current_range())?;
+        }
         self.range_writes
+            .current_mut()
             .mark_historical_applied(&db, &native, role, admission, &receipt)?;
         receipt.require_current(&db, &native, role, admission)?;
         cancellation.check()?;
@@ -1668,7 +2041,7 @@ impl ClusterDataNodeService {
     ) -> Result<RangeWriteProgress> {
         self.range_mutations.validate(range.id, authority)?;
         self.validate_range_write_peer(range, caller)?;
-        self.range_writes.install_backup_fence(
+        self.range_writes.current_mut().install_backup_fence(
             plan_id,
             range.id,
             range.epoch,
@@ -1703,6 +2076,7 @@ impl ClusterDataNodeService {
         self.range_mutations.validate(range.id, authority)?;
         self.validate_range_write_peer(range, caller)?;
         self.range_writes
+            .current_mut()
             .release_backup_fence(plan_id, range.id, range.epoch)
     }
 
@@ -1880,11 +2254,11 @@ impl ClusterDataNodeService {
             )));
         }
         self.validate_range_write_repair_entry(range, command)?;
-        self.range_writes.prepare(command.clone())?;
+        self.range_writes.current_mut().prepare(command.clone())?;
         match outcome {
             RangeWriteState::Applied => {
-                self.range_writes.commit(command)?;
-                let state = self.range_writes.certify(command)?;
+                self.range_writes.current_mut().commit(command)?;
+                let state = self.range_writes.current_mut().certify(command)?;
                 if state != RangeWriteState::Applied {
                     checked_database_read(&self.db, &self.storage_policy)?
                         .apply_admitted_mutations_with_mutation(
@@ -1892,11 +2266,11 @@ impl ClusterDataNodeService {
                             &command.mutations,
                             authority,
                         )?;
-                    self.range_writes.mark_applied(command)?;
+                    self.range_writes.current_mut().mark_applied(command)?;
                 }
             }
             RangeWriteState::Aborted => {
-                self.range_writes.abort(command)?;
+                self.range_writes.current_mut().abort(command)?;
             }
             RangeWriteState::Prepared
             | RangeWriteState::Committed
@@ -1940,11 +2314,13 @@ impl ClusterDataNodeService {
                 )));
             }
             self.validate_range_write_repair_entry(range, &entry.command)?;
-            self.range_writes.prepare(entry.command.clone())?;
+            self.range_writes
+                .current_mut()
+                .prepare(entry.command.clone())?;
             match entry.state {
                 RangeWriteState::Applied => {
-                    self.range_writes.commit(&entry.command)?;
-                    let state = self.range_writes.certify(&entry.command)?;
+                    self.range_writes.current_mut().commit(&entry.command)?;
+                    let state = self.range_writes.current_mut().certify(&entry.command)?;
                     if state != RangeWriteState::Applied {
                         checked_database_read(&self.db, &self.storage_policy)?
                             .apply_admitted_mutations_with_mutation(
@@ -1952,11 +2328,13 @@ impl ClusterDataNodeService {
                                 &entry.command.mutations,
                                 authority,
                             )?;
-                        self.range_writes.mark_applied(&entry.command)?;
+                        self.range_writes
+                            .current_mut()
+                            .mark_applied(&entry.command)?;
                     }
                 }
                 RangeWriteState::Aborted => {
-                    self.range_writes.abort(&entry.command)?;
+                    self.range_writes.current_mut().abort(&entry.command)?;
                 }
                 RangeWriteState::Prepared
                 | RangeWriteState::Committed
@@ -2000,7 +2378,16 @@ impl ClusterDataNodeService {
     ) -> Result<RangeWriteAck> {
         self.range_mutations.validate(range.id, authority)?;
         self.validate_range_write(range, caller, &command)?;
-        let state = self.range_writes.prepare(command.clone())?;
+        self.ensure_native_abort_prepare_start(range, &command, authority)?;
+        #[cfg(test)]
+        if self.test_refuse_native_prepare_after_start
+            && self.range_writes.requires_native_abort_tracking()?
+        {
+            return Err(data_error(
+                "injected actual Prepare refusal after durable native writer-start",
+            ));
+        }
+        let state = self.range_writes.current_mut().prepare(command.clone())?;
         self.range_write_ack(&command, state)
     }
 
@@ -2032,13 +2419,21 @@ impl ClusterDataNodeService {
     ) -> Result<RangeWriteAck> {
         self.range_mutations.validate(range.id, authority)?;
         self.validate_range_write(range, caller, command)?;
-        let state = self.range_writes.commit(command)?;
+        if self.range_writes.requires_native_abort_tracking()? {
+            let db = Arc::clone(&self.db);
+            let database = try_database_read(&db)?;
+            return self.commit_native_range_write_with_context(
+                &database, range, caller, command, authority,
+            );
+        }
+        let state = self.range_writes.current_mut().commit(command)?;
         self.range_write_ack(command, state)
     }
 
     #[cfg(test)]
     pub(crate) fn test_fail_native_commit_after_publication(&mut self) {
         self.range_writes
+            .current_mut()
             .test_fail_native_commit_after_publication();
     }
 
@@ -2067,7 +2462,7 @@ impl ClusterDataNodeService {
     ) -> Result<RangeWriteAck> {
         self.range_mutations.validate(range.id, authority)?;
         self.validate_range_write(range, caller, command)?;
-        let state = self.range_writes.certify(command)?;
+        let state = self.range_writes.current_mut().certify(command)?;
         self.range_write_ack(command, state)
     }
 
@@ -2096,10 +2491,9 @@ impl ClusterDataNodeService {
         command: &RangeWriteCommand,
         authority: &RangeMutationAuthority<'_>,
     ) -> Result<RangeWriteAck> {
-        self.range_mutations.validate(range.id, authority)?;
-        self.validate_range_write(range, caller, command)?;
-        let state = self.range_writes.commit(command)?;
-        self.range_write_ack(command, state)
+        // Peer Commit is the SAME vote boundary as the originating decision:
+        // protected everCommit must precede the raw decision and its reply.
+        self.commit_range_write_decision_with_mutation(range, caller, command, authority)
     }
 
     /// Apply only a quorum-certified decision. The applied checkpoint remains
@@ -2134,7 +2528,7 @@ impl ClusterDataNodeService {
         {
             return Err(data_error("native Apply requires an authenticated current-leader instruction; raw caller/CQ replay is insufficient"));
         }
-        let state = self.range_writes.state(command)?;
+        let state = self.range_writes.current_mut().state(command)?;
         if !matches!(
             state,
             RangeWriteState::QuorumCommitted | RangeWriteState::Applied
@@ -2151,7 +2545,7 @@ impl ClusterDataNodeService {
                     &command.mutations,
                     authority,
                 )?;
-            self.range_writes.mark_applied(command)?;
+            self.range_writes.current_mut().mark_applied(command)?;
         }
         self.range_write_ack(command, RangeWriteState::Applied)
     }
@@ -2181,7 +2575,7 @@ impl ClusterDataNodeService {
     ) -> Result<RangeWriteAck> {
         self.range_mutations.validate(range.id, authority)?;
         self.validate_range_write(range, caller, command)?;
-        let state = self.range_writes.abort(command)?;
+        let state = self.range_writes.current_mut().abort(command)?;
         self.range_write_ack(command, state)
     }
 
@@ -2210,7 +2604,7 @@ impl ClusterDataNodeService {
             .ok_or_else(|| data_error(format!("unknown range-write command {command_id}")))?;
         self.range_mutations.validate(command.range_id, authority)?;
         self.require_catalog_storage_policy()?;
-        self.range_writes.mark_applied(&command)
+        self.range_writes.current_mut().mark_applied(&command)
     }
 
     fn recover_committed_range_writes(&mut self) -> Result<()> {
@@ -2231,7 +2625,7 @@ impl ClusterDataNodeService {
                     &command.mutations,
                     authority,
                 )?;
-            self.range_writes.mark_applied(&command)?;
+            self.range_writes.current_mut().mark_applied(&command)?;
         }
         Ok(())
     }

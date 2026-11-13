@@ -19,14 +19,28 @@ impl ClusterDataNodeService {
     ) -> Result<LocalNativeCompletionEvidence> {
         parent.check()?;
         request.scope.require_role(fresh)?;
+        #[cfg(test)]
+        let mut db_trace = crate::distribution_range_handoff::NativeJointPhaseTrace::new(
+            "recovery-complete-database-read-acquisition",
+            fresh.local_node_id(),
+            parent,
+        );
         let db = checked_database_read(&self.db, &self.storage_policy)?;
-        self.range_writes
-            .complete_native_recovery_frozen(&db, prepared, quorum, fresh)?;
+        #[cfg(test)]
+        {
+            db_trace.complete();
+            drop(db_trace);
+        }
+        let evidence = self
+            .range_writes
+            .current_mut()
+            .complete_and_observe_native_recovery_frozen(
+                &db, prepared, quorum, fresh, request, parent,
+            )?;
         // A canceled/lost response after durability never erases the completed
         // refusal. A fresh readonly request can attest the retained proof.
         parent.check()?;
-        self.range_writes
-            .observe_native_completion_for_role(&db, prepared, fresh, request)
+        Ok(evidence)
     }
     pub(crate) fn adopt_local_native_completion(
         &mut self,
@@ -39,11 +53,14 @@ impl ClusterDataNodeService {
         parent.check()?;
         request.scope.require_role(fresh)?;
         let db = checked_database_read(&self.db, &self.storage_policy)?;
-        self.range_writes
-            .adopt_native_completion_decision(&db, prepared, quorum, fresh)?;
+        let evidence = self
+            .range_writes
+            .current_mut()
+            .adopt_and_observe_native_completion_decision(
+                &db, prepared, quorum, fresh, request, parent,
+            )?;
         parent.check()?;
-        self.range_writes
-            .observe_native_completion_for_role(&db, prepared, fresh, request)
+        Ok(evidence)
     }
     pub(crate) fn adopt_local_native_activated_decision(
         &mut self,
@@ -57,6 +74,7 @@ impl ClusterDataNodeService {
         request.scope.require_role(fresh)?;
         let db = checked_database_read(&self.db, &self.storage_policy)?;
         self.range_writes
+            .current_mut()
             .adopt_native_activated_decision(&db, prepared, decision, fresh)?;
         parent.check()?;
         self.range_writes
@@ -76,11 +94,31 @@ impl ClusterDataNodeService {
         parent: &CancellationToken,
     ) -> Result<LocalNativeCompletionEvidence> {
         parent.check()?;
+        #[cfg(test)]
+        let _probe_context = crate::distribution_range_recovery::NativeProbeTraceContext::enter(
+            "completion-status",
+            observer.local_node_id(),
+            &request.scope,
+            request.challenge,
+            Some(observer.deadline()),
+        );
+        #[cfg(test)]
+        let db_trace = crate::distribution_range_recovery::NativeProbeTraceSpan::current(
+            "receiver-db-acquisition",
+        );
         let db = checked_database_read(&self.db, &self.storage_policy)?;
+        #[cfg(test)]
+        crate::distribution_range_recovery::NativeProbeTraceSpan::finish(db_trace);
         let evidence = if self.range_writes.recovery_observation_phase(&request.scope)?==crate::distribution_range_recovery::RecoveryFenceObservationPhase::NativeActivatedAnchor {
             self.range_writes.observe_activated_completion_for_observer(&db,observer,request)?
         } else {
-            self.range_writes.observe_native_completion_for_observer(&db,prepared.ok_or_else(||data_error("completion has no actual retained frozen pin"))?,observer,request)?
+            let prepared = prepared.ok_or_else(||data_error("completion has no actual retained frozen pin"))?;
+            if matches!(request.scope.purpose, crate::distribution_consensus::MetadataRecoveryRolePurpose::CurrentJointRecovery { .. }) {
+                let slot = self.native_replica_listener_store_open_guard();
+                self.range_writes.observe_native_completion_for_observer_scoped(&db, prepared, observer, request, &slot, parent)?
+            } else {
+                self.range_writes.observe_native_completion_for_observer(&db, prepared, observer, request)?
+            }
         };
         parent.check()?;
         Ok(evidence)

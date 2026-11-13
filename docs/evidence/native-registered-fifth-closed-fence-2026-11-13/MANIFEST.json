@@ -1,0 +1,70 @@
+{
+  "version": 1,
+  "files": [
+    {
+      "path": "README.md",
+      "bytes": 5310,
+      "sha256": "2624d2f79fa1aaea54806b5d9832efd6d5890ce00046facfd741f4fa150d42cf"
+    },
+    {
+      "path": "compile-index.json",
+      "bytes": 612,
+      "sha256": "6a6abaddc81b7510c7123385f5181ea0e384ac387d7075e527a7c6d517e3d3ce"
+    },
+    {
+      "path": "compile.log.gz",
+      "bytes": 277527,
+      "sha256": "a1ff88e2e9be4af839564ceb7fb103259d3f8edfa79c15bedd651a328bfbc12f"
+    },
+    {
+      "path": "controls.json.gz",
+      "bytes": 62488,
+      "sha256": "8dd4e7d4b6219f1f1baaf02722a3ca9d35a5e9e1f821d04b2cc68179ca87efdf"
+    },
+    {
+      "path": "core-index.json",
+      "bytes": 8298,
+      "sha256": "f84ebf1f10004f83ed256e865fd2dee48ab7f5858a601f6eb6719b005442a1a7"
+    },
+    {
+      "path": "core.log.gz",
+      "bytes": 442358,
+      "sha256": "0df932480977f9c058b58baeeb3a1e5a16cc64a9a7b818622ebec3f2755d97c4"
+    },
+    {
+      "path": "custody-receipt.json",
+      "bytes": 5298,
+      "sha256": "393144847e72a840846478a61938fa0b408a62fee4e3d21e758c30697b265d5f"
+    },
+    {
+      "path": "derived.json.gz",
+      "bytes": 133762,
+      "sha256": "819e83f3d0a94f3af043193b6bb6862ffce30dc4f0d69d0e314b8383564ae5cc"
+    },
+    {
+      "path": "formatting-index.json",
+      "bytes": 569,
+      "sha256": "ea76dbdfdd116286f5fe5856310c965e7749c40271d121b4d1e3ea234fcef0be"
+    },
+    {
+      "path": "formatting.log.gz",
+      "bytes": 6890,
+      "sha256": "ecb270e282765e205cec9283e5ef3f80f3be909bd9de75752b388ebac1a28b70"
+    },
+    {
+      "path": "results.json",
+      "bytes": 3509,
+      "sha256": "f6626bb7a6ef1892ee933459b6c3f052f8d55f565119be2fd7b0b5f4c67ddff1"
+    },
+    {
+      "path": "semantic_tamper.py",
+      "bytes": 3980,
+      "sha256": "08b1d8eda84b57fe63b94a6f76370568d6a6784a5ef368b07a1cdee09ca20796"
+    },
+    {
+      "path": "verify.py",
+      "bytes": 9495,
+      "sha256": "b8ca37dfa58078907257eb3e1104b72950bdfd73c6fc09d2c2ec926345d19d7d"
+    }
+  ]
+}

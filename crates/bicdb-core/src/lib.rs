@@ -45,6 +45,13 @@ mod distribution_metadata_read_provider;
 mod distribution_native_admission;
 mod distribution_native_apply;
 mod distribution_native_host;
+#[cfg(feature = "tls-replication")]
+pub use distribution_native_host::{
+    NativeInitialDataRangeStatus, NativeInitialDataStatus, NativeMetadataBootstrapPlan,
+    NativeMetadataCollection, NativeMetadataHost, NativeMetadataHostAction,
+    NativeMetadataHostPhase, NativeMetadataHostStatus, NativeMetadataLearnerHost,
+    NativeMetadataLearnerStatus, NativeRegisteredReplicaReceiverStatus,
+};
 mod distribution_native_read;
 mod distribution_native_writer;
 mod distribution_query;
@@ -268,7 +275,7 @@ pub use db::{
 pub use db::{timestamp_day_index_inputs_supported, timestamp_day_index_value};
 pub use db::{
     CommitAdmission, CommitAdmissionIntent, CommitAdmissionMutation, CommitAdmissionTicket,
-    NativeWalApplyReceipt,
+    NativeCommitAdmissionResult, NativeTransactionNoEffect, NativeWalApplyReceipt,
 };
 pub use db::{CommitResolution, INCARNATION_JOURNAL};
 pub use db::{WalArchiveReport, WalArchiveStatus};
@@ -402,11 +409,12 @@ pub use distribution_query::{
     DISTRIBUTED_QUERY_PROTOCOL_VERSION,
 };
 pub use distribution_range_consensus::{
-    RangeBackupFenceQuorum, RangeBackupFenceSession, RangeBackupWriteFence, RangeWriteAck,
-    RangeWriteCatalogInspection, RangeWriteCommand, RangeWriteCoordinator, RangeWriteLogEntry,
-    RangeWriteProbe, RangeWriteProgress, RangeWriteRepairBatch, RangeWriteRepairLimits,
-    RangeWriteState, RangeWriteStore, RangeWriteTransport, DEFAULT_RANGE_WRITE_LOG,
-    RANGE_WRITE_LOG_FORMAT_VERSION, RANGE_WRITE_PROTOCOL_VERSION,
+    NativePrepareOnlyRejection, NativeUncertainAdmissionRejection, RangeBackupFenceQuorum,
+    RangeBackupFenceSession, RangeBackupWriteFence, RangeWriteAck, RangeWriteCatalogInspection,
+    RangeWriteCommand, RangeWriteCoordinator, RangeWriteLogEntry, RangeWriteProbe,
+    RangeWriteProgress, RangeWriteRepairBatch, RangeWriteRepairLimits, RangeWriteState,
+    RangeWriteStore, RangeWriteTransport, DEFAULT_RANGE_WRITE_LOG, RANGE_WRITE_LOG_FORMAT_VERSION,
+    RANGE_WRITE_PROTOCOL_VERSION,
 };
 pub use distribution_restore::{
     load_cluster_restore_admission, load_cluster_restore_admission_run_state,
@@ -451,6 +459,7 @@ pub use distribution_supervisor::{
 pub use distribution_transport::{
     start_cluster_data_server, start_cluster_data_server_on_listener_with_metadata_read_provider,
     start_cluster_data_server_with_metadata_read_provider, ClusterDataServerHandle,
+    ClusterRpcEvidence, ClusterRpcEvidenceLimits, ClusterRpcEvidenceObserver,
     TcpClusterBootstrapClient, TcpClusterRelocationTransport,
 };
 pub use encryption::{

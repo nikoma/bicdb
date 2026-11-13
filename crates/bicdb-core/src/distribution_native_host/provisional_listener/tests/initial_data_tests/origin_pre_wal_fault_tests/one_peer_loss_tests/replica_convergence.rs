@@ -4,7 +4,7 @@
 use super::*;
 use std::collections::BTreeMap;
 
-fn snapshot(
+pub(super) fn snapshot(
     f: &Fixture,
     target: usize,
     range: &crate::RangeDescriptor,
@@ -64,6 +64,7 @@ pub(super) fn run<
     expected_blocked_native: u64,
     expected_blocked_phase: &str,
     resume_actual_target: ResumeActualTarget,
+    partial_repeat: Option<&[repeat_origin::OriginalWriter]>,
 ) -> Result<serde_json::Value> {
     check(
         first_public_receipt_ns <= 20_000_000_000,
@@ -190,6 +191,32 @@ pub(super) fn run<
         serde_json::json!({"kind":"actual_origin_r4_full_commands_before_debt_release",
         "elapsed_ns":start.elapsed().as_nanos(),"source":source,"actual_commands":commands}),
     )?;
+    if let Some(originals) = partial_repeat {
+        // This distinct REQUIRED scenario intentionally injects the next
+        // genuine origin fault BEFORE the old completed follower converges.
+        // The retained actual debt guard remains held throughout that APP.
+        parent.check()?;
+        let partial = serde_json::json!({"actual_source":source,
+            "actual_partial_target":still_frozen,"original_first_public_receipt_ns":first_public_receipt_ns,
+            "first_replica_convergence_not_claimed":true});
+        journal.append(
+            serde_json::json!({"kind":"actual_partial_debt_before_second_unknown",
+            "actual":partial,"all_original_owners_retained":true}),
+        )?;
+        return repeat_origin::run_partial(
+            f,
+            origin_control,
+            journal,
+            client,
+            topology,
+            range,
+            values[0].0,
+            values[0].1,
+            originals,
+            &partial,
+            actual_debt_schedule,
+        );
+    }
     journal.append(serde_json::json!({"kind":"same_actual_target_network_resume_intent",
         "elapsed_ns":start.elapsed().as_nanos(),"actual_blocked_native":expected_blocked_native,
         "actual_blocked_phase":expected_blocked_phase,"no_protocol_or_permission_from_resume":true}))?;

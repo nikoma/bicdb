@@ -1,7 +1,7 @@
 //! REQUIRED repeat-fault success, never pass on safe refusal/queued debt.
 //! No new factory, manual maintenance, epoch/role setter or data authority.
 use super::*;
-type OriginalWriter = (
+pub(super) type OriginalWriter = (
     Arc<
         crate::distribution_range_consensus::RangeWriteCoordinator<
             crate::TcpClusterRelocationTransport,
@@ -16,12 +16,23 @@ fn actual_all(
     expected: u64,
     keys: &[&str],
 ) -> Result<serde_json::Value> {
+    actual_members(f, originals, range, expected, keys, &[0, 1, 2])
+}
+fn actual_members(
+    f: &Fixture,
+    originals: &[OriginalWriter],
+    range: &crate::RangeDescriptor,
+    expected: u64,
+    keys: &[&str],
+    members: &[usize],
+) -> Result<serde_json::Value> {
     check(
         originals.len() == 3,
         "all three original writer/guard pairs required",
     )?;
     let mut rows = Vec::new();
-    for (i, (coordinator, guard)) in originals.iter().enumerate() {
+    for &i in members {
+        let (coordinator, guard) = &originals[i];
         let open = {
             let service = f.hosts[i]
                 ._service
@@ -106,6 +117,66 @@ pub(super) fn run(
     first_convergence: &serde_json::Value,
     cancel_successor: bool,
 ) -> Result<serde_json::Value> {
+    run_impl::<()>(
+        f,
+        control,
+        journal,
+        client,
+        topology,
+        range,
+        old,
+        old_value,
+        originals,
+        first_convergence,
+        cancel_successor,
+        None,
+    )
+}
+#[allow(clippy::too_many_arguments)]
+pub(super) fn run_partial<ActualHeldDebtSchedule>(
+    f: &Fixture,
+    control: &NativeMetadataControlHost,
+    journal: &Arc<Journal>,
+    client: &crate::ClusterEventClient,
+    topology: &ClusterTopology,
+    range: &crate::RangeDescriptor,
+    old: &str,
+    old_value: &serde_json::Value,
+    originals: &[OriginalWriter],
+    first_partial: &serde_json::Value,
+    debt_hold: ActualHeldDebtSchedule,
+) -> Result<serde_json::Value> {
+    run_impl(
+        f,
+        control,
+        journal,
+        client,
+        topology,
+        range,
+        old,
+        old_value,
+        originals,
+        first_partial,
+        false,
+        Some(debt_hold),
+    )
+}
+#[allow(clippy::too_many_arguments)]
+fn run_impl<ActualHeldDebtSchedule>(
+    f: &Fixture,
+    control: &NativeMetadataControlHost,
+    journal: &Arc<Journal>,
+    client: &crate::ClusterEventClient,
+    topology: &ClusterTopology,
+    range: &crate::RangeDescriptor,
+    old: &str,
+    old_value: &serde_json::Value,
+    originals: &[OriginalWriter],
+    first_convergence: &serde_json::Value,
+    cancel_successor: bool,
+    prior_debt_hold: Option<ActualHeldDebtSchedule>,
+) -> Result<serde_json::Value> {
+    let partial = prior_debt_hold.is_some();
     let fifth = key_in(topology, range.id, "same-origin-second-unknown5");
     let sixth = key_in(topology, range.id, "same-origin-second-next-ack6");
     let fifth_value =
@@ -140,7 +211,11 @@ pub(super) fn run(
     let original_all4 = {
         let busy_until = Instant::now() + Duration::from_secs(2);
         loop {
-            match actual_all(f, originals, range, base, &first_keys) {
+            match if partial {
+                actual_members(f, originals, range, base, &first_keys, &[0, 1])
+            } else {
+                actual_all(f, originals, range, base, &first_keys)
+            } {
                 Err(BicDbError::Cluster(message))
                     if message.ends_with(" busy") && Instant::now() < busy_until =>
                 {
@@ -150,13 +225,35 @@ pub(super) fn run(
             }
         }
     };
+    if partial {
+        originals[2].1.require_for_coordinator(
+            &f.hosts[2].seed.database.read(),
+            range,
+            &originals[2].0,
+        )?;
+        let actual = replica_convergence::snapshot(f, 2, range, &first_keys)?;
+        check(
+            actual["native_R"] == 2
+                && actual["actual_open"]["phase"] == "NativeCompletedFrozen"
+                && actual["actual_open"]["actual_current_open_valid"] == false
+                && actual["records"][prior_next.as_str()].is_null()
+                && actual["records"][fourth.as_str()].is_null(),
+            "second partial-debt fault requires actual original completed2 follower without ACK3/4",
+        )?;
+        journal.append(
+            serde_json::json!({"kind":"second_fault_requires_actual_prior_debt_partial",
+            "actual_current_majority":original_all4,"actual_original_target":actual,
+            "source_head":base,"first_complete_all_replica_convergence":false}),
+        )?;
+    }
     journal.append(
-        serde_json::json!({"kind":"second_fault_requires_first_complete_all_native4",
+        serde_json::json!({"kind":if partial {"second_fault_after_actual_partial_debt"} else {"second_fault_requires_first_complete_all_native4"},
         "actual_all":original_all4,"first_convergence_receipt":first_convergence,
         "same_actual_original_guards_checked":true,"no_new_owner_or_genesis":true}),
     )?;
-    // Scheduling only, acquired after actual first physical convergence. The
-    // first callback/APP handler EXIT must be real, not a sender timeout.
+    // Scheduling only, after the actual declared first cut. In the partial
+    // case the source/current peer cover the ACKs while the other original
+    // peer remains genuinely completed2. APP EXIT must be real in both cases.
     let held = control.test_hold_hot_controller_for_fault(&budget(1000))?;
     let db = f.hosts[0].seed.database.clone();
     let arm = db
@@ -221,6 +318,26 @@ pub(super) fn run(
     )?;
     let mut actual_peers = Vec::new();
     for i in [1, 2] {
+        if partial && i == 2 {
+            originals[2].1.require_for_coordinator(
+                &f.hosts[2].seed.database.read(),
+                range,
+                &originals[2].0,
+            )?;
+            let actual = replica_convergence::snapshot(f, 2, range, &[old, fifth.as_str()])?;
+            check(
+                actual["native_R"] == 2
+                    && actual["actual_open"]["phase"] == "NativeCompletedFrozen"
+                    && actual["actual_open"]["actual_current_open_valid"] == false
+                    && actual["records"][fifth.as_str()].is_null(),
+                "actual old completed2 target must remain2 without the second Unknown value",
+            )?;
+            actual_peers.push(
+                serde_json::json!({"node":node(2),"actual_original_partial_target":actual,
+                "not_expected_at_new_command":true}),
+            );
+            continue;
+        }
         let db = f.hosts[i].seed.database.read();
         originals[i]
             .1
@@ -236,17 +353,21 @@ pub(super) fn run(
                 BicDbError::Cluster("actual peer second committed full record missing".into())
             })?;
         check(
-            source.range_index() == base + 1 && full.metadata == fifth_value,
+            source.range_index() == base + 1
+                && source.logical_genesis_sha256() == original_all4[0]["H0"].as_str().unwrap()
+                && full.metadata == fifth_value,
             "actual peer native5/full fifth mismatch",
         )?;
         actual_peers.push(serde_json::json!({"node":node(i),"native_R":source.range_index(),"H0":source.logical_genesis_sha256(),"H":source.logical_history_sha256(),"full_record":full}));
     }
-    check(
-        actual_peers[0]["H"] == actual_peers[1]["H"],
-        "actual peer second histories conflict",
-    )?;
+    if !partial {
+        check(
+            actual_peers[0]["H"] == actual_peers[1]["H"],
+            "actual peer second histories conflict",
+        )?;
+    }
     journal.append(
-        serde_json::json!({"kind":"second_actual_origin4_pending5_peers_native5_before_release",
+        serde_json::json!({"kind":if partial {"second_actual_unknown_with_prior_completed2_debt"} else {"second_actual_origin4_pending5_peers_native5_before_release"},
         "actual_origin":prefix,"actual_command":command,"actual_peers":actual_peers,
         "all_unknown_outcomes_remain_immutable":true}),
     )?;
@@ -261,6 +382,7 @@ pub(super) fn run(
         "no_manual_tick_or_recovery":true,"original_client_setting_ms":2000,"phase_limit_ms":5000}),
     )?;
     drop(held);
+    drop(prior_debt_hold);
     let mut ever_ack = false;
     let mut round = 0;
     while Instant::now() < end {
@@ -315,12 +437,25 @@ pub(super) fn run(
                             originals,
                             range,
                             head,
-                            &[old, fifth.as_str(), sixth.as_str()],
+                            &[
+                                old,
+                                prior_unknown.as_str(),
+                                prior_next.as_str(),
+                                fourth.as_str(),
+                                fifth.as_str(),
+                                sixth.as_str(),
+                            ],
                         )
                     });
                 journal.append(serde_json::json!({"kind":"second_actual_all_replica6_sample",
                     "elapsed_ns":start.elapsed().as_nanos(),"actual_all":final_all.as_ref().ok(),"error":final_all.as_ref().err().map(ToString::to_string)}))?;
                 if let Ok(all) = final_all {
+                    for key in &first_keys {
+                        check(
+                            all[0]["records"][*key] == original_all4[0]["records"][*key],
+                            "previous full acknowledged record changed during second recovery",
+                        )?;
+                    }
                     let cancellation = successor_cancel.as_ref().map(|arm| arm.snapshot());
                     if let Some(actual) = &cancellation {
                         journal.append(serde_json::json!({"kind":"actual_successor_cancellation_custody_gate","actual":actual}))?;
@@ -345,7 +480,7 @@ pub(super) fn run(
                     )?;
                     let receipt = serde_json::json!({"required_second_unknown5_then_ACK6_all_native6":true,
                         "actual_second_Unknown":fault,"second_health_receipt_ns":elapsed,"all_replicas_receipt_ns":final_receipt_ns,
-                        "actual_all":all,"original_all4":original_all4,"actual_successor_cancellation":cancellation,"no_manual_recovery":true,
+                        "actual_all":all,"original_all4":original_all4,"prior_debt_was_partial":partial,"actual_successor_cancellation":cancellation,"no_manual_recovery":true,
                         "first_Unknown_and_noACK_not_reclassified":true});
                     journal.append(serde_json::json!({"kind":"required_repeat_origin_success","receipt":receipt}))?;
                     return Ok(receipt);

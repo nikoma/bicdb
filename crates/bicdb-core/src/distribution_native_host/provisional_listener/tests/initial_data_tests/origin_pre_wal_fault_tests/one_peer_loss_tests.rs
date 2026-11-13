@@ -12,6 +12,7 @@ enum Scenario {
     LostFollowerReply,
     RepeatOriginalOrigin,
     RepeatOriginCancelSuccessor,
+    RepeatOriginWhilePriorDebtPartial,
     LostFollowerFenceReply,
     LostFollowerPrepareReply,
     LostOriginReply,
@@ -47,7 +48,9 @@ fn run_one_peer_loss(
     )?;
     let original_writers = if matches!(
         scenario,
-        Scenario::RepeatOriginalOrigin | Scenario::RepeatOriginCancelSuccessor
+        Scenario::RepeatOriginalOrigin
+            | Scenario::RepeatOriginCancelSuccessor
+            | Scenario::RepeatOriginWhilePriorDebtPartial
     ) {
         controls
             .iter()
@@ -68,6 +71,7 @@ fn run_one_peer_loss(
         Scenario::LostFollowerReply
             | Scenario::RepeatOriginalOrigin
             | Scenario::RepeatOriginCancelSuccessor
+            | Scenario::RepeatOriginWhilePriorDebtPartial
             | Scenario::LostFollowerFenceReply
             | Scenario::LostFollowerPrepareReply
             | Scenario::NativeGapBeforeFence
@@ -399,6 +403,7 @@ fn run_one_peer_loss(
         Scenario::LostFollowerReply
         | Scenario::RepeatOriginalOrigin
         | Scenario::RepeatOriginCancelSuccessor
+        | Scenario::RepeatOriginWhilePriorDebtPartial
         | Scenario::LostFollowerFenceReply
         | Scenario::LostFollowerPrepareReply => Some(peers[1].test_hot_recovery_bindings()?.2),
         Scenario::LostOriginReply => Some(origin_control.test_hot_recovery_bindings()?.2),
@@ -639,6 +644,7 @@ fn run_one_peer_loss(
         Scenario::LostFollowerReply
             | Scenario::RepeatOriginalOrigin
             | Scenario::RepeatOriginCancelSuccessor
+            | Scenario::RepeatOriginWhilePriorDebtPartial
             | Scenario::LostFollowerFenceReply
             | Scenario::LostFollowerPrepareReply
             | Scenario::NativeGapBeforeFence
@@ -691,6 +697,11 @@ fn run_one_peer_loss(
                 } else {
                     Ok(())
                 }
+            },
+            if matches!(scenario, Scenario::RepeatOriginWhilePriorDebtPartial) {
+                Some(original_writers.as_slice())
+            } else {
+                None
             },
         )?)
     } else {
@@ -973,4 +984,9 @@ fn native_hot_peer_second_actual_origin_unknown5_same_owners_requires_ack6_and_f
 #[test]
 fn native_hot_peer_repeat_unknown_canceled_successor_acquisition_preserves_prior_custody() {
     run_case(Scenario::RepeatOriginCancelSuccessor);
+}
+
+#[test]
+fn native_hot_peer_second_unknown_while_prior_completed_replica_debt_requires_full_recovery() {
+    run_case(Scenario::RepeatOriginWhilePriorDebtPartial);
 }

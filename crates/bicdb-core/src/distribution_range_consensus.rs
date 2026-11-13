@@ -2117,6 +2117,46 @@ pub trait RangeWriteTransport: std::fmt::Debug + Send + Sync + 'static {
     ) -> Result<RangeWriteAck>;
 }
 
+/// One independent exchange per voter. With `concurrent`, every exchange runs
+/// on its own scoped thread and all of them have returned before this
+/// function does; results keep `targets` order. `None` only when a worker
+/// panicked, which the caller treats like any other missing reply.
+fn voter_fan_out<R: Send>(
+    targets: &[ClusterNodeId],
+    concurrent: bool,
+    exchange: impl Fn(&ClusterNodeId) -> R + Sync,
+) -> Vec<(ClusterNodeId, Option<R>)> {
+    if !concurrent || targets.len() < 2 {
+        return targets
+            .iter()
+            .map(|target| (target.clone(), Some(exchange(target))))
+            .collect();
+    }
+    std::thread::scope(|scope| {
+        let exchange = &exchange;
+        let started = targets
+            .iter()
+            .map(|target| {
+                let worker = std::thread::Builder::new()
+                    .name("range-voter-exchange".into())
+                    .spawn_scoped(scope, move || exchange(target));
+                (target, worker)
+            })
+            .collect::<Vec<_>>();
+        started
+            .into_iter()
+            .map(|(target, worker)| {
+                let returned = match worker {
+                    Ok(worker) => worker.join().ok(),
+                    // No thread: perform the same exchange on this one.
+                    Err(_) => Some(exchange(target)),
+                };
+                (target.clone(), returned)
+            })
+            .collect()
+    })
+}
+
 /// Production commit authority installed into `BicDb` by the cluster host.
 #[derive(Debug)]
 pub struct RangeWriteCoordinator<Transport: RangeWriteTransport> {
@@ -3744,9 +3784,16 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
         }
         let mut committed = 1usize;
         let mut committed_nodes = Vec::new();
-        for voter in &prepared_nodes {
-            if let Ok(ack) = self.transport.commit_range_write(voter, &command) {
-                if self.validate_ack(voter, &command, &ack).is_ok()
+        // Native voters are independent recipients of the same decision; one
+        // exchange per voter runs concurrently and only actual validated
+        // replies are counted, in voter order, exactly as before.
+        let concurrent_voters = native_database.is_some();
+        let transport = &self.transport;
+        for (voter, ack) in voter_fan_out(&prepared_nodes, concurrent_voters, |voter| {
+            transport.commit_range_write(voter, &command)
+        }) {
+            if let Some(Ok(ack)) = ack {
+                if self.validate_ack(&voter, &command, &ack).is_ok()
                     && matches!(
                         ack.state,
                         RangeWriteState::Committed
@@ -3755,7 +3802,7 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
                     )
                 {
                     committed += 1;
-                    committed_nodes.push(voter.clone());
+                    committed_nodes.push(voter);
                 }
             }
         }
@@ -3803,24 +3850,22 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
         reservation.preserve_for_recovery(&command.command_id);
         let mut certified_voters = 1usize;
         let mut certified_nodes = BTreeSet::from([self.local_node_id.clone()]);
-        for voter in &committed_nodes {
-            let certified = self
-                .transport
-                .certify_range_write(voter, &command)
-                .ok()
-                .filter(|ack| {
-                    self.validate_ack(voter, &command, ack).is_ok()
-                        && matches!(
-                            ack.state,
-                            RangeWriteState::QuorumCommitted | RangeWriteState::Applied
-                        )
-                });
+        for (voter, ack) in voter_fan_out(&committed_nodes, concurrent_voters, |voter| {
+            transport.certify_range_write(voter, &command)
+        }) {
+            let certified = ack.and_then(|ack| ack.ok()).filter(|ack| {
+                self.validate_ack(&voter, &command, ack).is_ok()
+                    && matches!(
+                        ack.state,
+                        RangeWriteState::QuorumCommitted | RangeWriteState::Applied
+                    )
+            });
             if certified.is_some() {
                 certified_voters += 1;
-                certified_nodes.insert(voter.clone());
                 if native_database.is_none() {
-                    let _ = self.transport.apply_range_write(voter, &command);
+                    let _ = self.transport.apply_range_write(&voter, &command);
                 }
+                certified_nodes.insert(voter);
             }
         }
         let native = if let (Some(database), Some(plan)) = (native_database, native_plan) {
@@ -3853,16 +3898,18 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
                             crate::distribution_native_apply::NATIVE_ORDINARY_BUDGET_MS,
                         ),
                 );
-                for voter in certified_nodes
+                let apply_targets = certified_nodes
                     .iter()
                     .filter(|node| **node != self.local_node_id)
-                {
-                    // The actual QQ exists before any authenticated native
-                    // instruction. A lost materialization reply is not rollback.
+                    .cloned()
+                    .collect::<Vec<_>>();
+                let apply_budget = &budget;
+                // The actual QQ exists before any authenticated native
+                // instruction. A lost materialization reply is not rollback.
+                let _ = voter_fan_out(&apply_targets, true, |voter| {
                     let _ =
-                        self.transport
-                            .apply_native_origin(voter, &command, certificate, &budget);
-                }
+                        transport.apply_native_origin(voter, &command, certificate, apply_budget);
+                });
             }
             Some(NativeRangeAcknowledgementEvidence {
                 pending,

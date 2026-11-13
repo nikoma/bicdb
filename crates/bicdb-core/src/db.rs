@@ -21168,6 +21168,10 @@ fn ship_to_standby(source_path: &Path, standby_path: &Path) -> Result<HaApplyRep
     match apply {
         Ok(()) => {
             state.applied_checkpoint_bytes = source_checkpoint_bytes;
+            // Shipped by this crate from a primary that just opened in
+            // custody of its Native root: the standby directory may take
+            // custody of the shipped root at its next open.
+            native_origin::authorize_materialized_copy(&standby_path)?;
             persist_ha_state(&standby_path, &state, true)?;
             // An apply interrupted mid-copy leaves `.ha-tmp` files behind.
             // `collect_ha_files` SKIPS them, so they were invisible to every

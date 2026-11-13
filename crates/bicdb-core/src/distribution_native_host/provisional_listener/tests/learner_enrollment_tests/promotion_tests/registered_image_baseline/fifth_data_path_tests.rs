@@ -340,35 +340,51 @@ fn install_on_fifth(
     plan: &NativeJointHandoffPlan,
     mut capture: RangeImageCapture,
     fail_after_first_copy_step: bool,
+    restart: bool,
 ) -> std::result::Result<(NativeImageInstallFreeze, NativeImageCatalogueFinalization), String> {
     let target = 4usize;
     let parent = CancellationToken::uncancelable();
     let initial = members.role(plan, target);
     let scope = RecoveryFenceScope::from_role(&initial).unwrap();
-    runtime
-        .fence_epoch(
-            &members.actor,
-            &RecoveryEpochFenceRequest {
-                scope: scope.clone(),
-                budget_ms: 5000,
-            },
-            &parent,
-        )
-        .unwrap();
+    if !restart {
+        runtime
+            .fence_epoch(
+                &members.actor,
+                &RecoveryEpochFenceRequest {
+                    scope: scope.clone(),
+                    budget_ms: 5000,
+                },
+                &parent,
+            )
+            .unwrap();
+    }
     let handoff = members.role(plan, target).into_handoff().unwrap();
     let image_role = NativeImageInstallRole::CommittedHandoff(&handoff);
     let attempt = Uuid::now_v7();
     let source = capture.authorize_target_install().unwrap();
-    let lease = runtime
-        .transfer_image_install(
-            &scope,
-            &source,
-            &image_role,
-            ImageInstallPurpose::RelocationLearner,
-            attempt,
-            &parent,
-        )
-        .unwrap();
+    let lease = if restart {
+        runtime
+            .restart_dropped_image_transfer(
+                &scope,
+                &source,
+                &image_role,
+                ImageInstallPurpose::RelocationLearner,
+                attempt,
+                &parent,
+            )
+            .unwrap()
+    } else {
+        runtime
+            .transfer_image_install(
+                &scope,
+                &source,
+                &image_role,
+                ImageInstallPurpose::RelocationLearner,
+                attempt,
+                &parent,
+            )
+            .unwrap()
+    };
     let mut install: NativeRangeImageInstaller = members.services[target]
         .lock()
         .begin_native_range_image_install(
@@ -887,6 +903,32 @@ fn exercise(five: &mut Five, fault: Fault) {
             .unwrap();
         let key = key_for(&pending, range.id, "after-abort");
         let value = serde_json::json!({"fifth_data_path":"acknowledged after abort"});
+        for round in 0..3 {
+            let raw = five.clients[0].application_event_cancellable(
+                &budget(5000),
+                &range.leader,
+                crate::ClusterEventRequest {
+                    range_id: range.id,
+                    range_epoch: range.epoch,
+                    operation: crate::ClusterEventOperation::Append {
+                        namespace: "items".into(),
+                        key: format!("{key}-raw-{round}"),
+                        value: value.clone(),
+                    },
+                },
+            );
+            match raw {
+                Ok(_) => eprintln!("FIFTH_EXP raw append round={round}: acknowledged"),
+                Err(error) => eprintln!("FIFTH_EXP raw append round={round}: {error}"),
+            }
+            for (i, control) in five.controls.iter().enumerate() {
+                let outcome = control.recover_initial_data_leadership(&budget(20_000));
+                eprintln!(
+                    "FIFTH_EXP abort recover again round={round} member={i}: {:?}",
+                    outcome.as_ref().map_err(|error| error.to_string())
+                );
+            }
+        }
         append_until_acknowledged(&gateway, &key, &value);
         assert_eq!(strong_until_served(&gateway, &key).as_ref(), Some(&value));
         let holders = old_indices
@@ -939,6 +981,7 @@ fn exercise(five: &mut Five, fault: Fault) {
         &plan,
         capture,
         fault == Fault::TransferAfterSourceCut,
+        false,
     );
     if fault == Fault::TransferAfterSourceCut {
         let error = match &installed {
@@ -991,7 +1034,7 @@ fn exercise(five: &mut Five, fault: Fault) {
         plan = plan2;
         closed = closed2;
         mark("resume: re-shipping the image");
-        installed = install_on_fifth(&members, &fifth_runtime, &plan, capture2, false);
+        installed = install_on_fifth(&members, &fifth_runtime, &plan, capture2, false, true);
     }
     let closed = Arc::new(closed);
     mark("image transfer finished");

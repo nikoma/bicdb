@@ -2,6 +2,7 @@
 use super::*;
 use std::io::Write;
 use std::os::unix::process::ExitStatusExt;
+mod stopped_custody;
 struct ChildCustody(std::process::Child);
 impl Drop for ChildCustody {
     fn drop(&mut self) {
@@ -94,6 +95,10 @@ fn native_registered_fifth_row_cold_sigkill_preserves_pending_before_generic_ope
     let pre: serde_json::Value =
         serde_json::from_slice(&std::fs::read(marker.with_extension("pre.json")).unwrap()).unwrap();
     let root = PathBuf::from(pre["target_database_path"].as_str().unwrap());
+    let fixture_root = PathBuf::from(pre["owned_fixture_root"].as_str().unwrap());
+    // All five node services lived in this one child process. They are now
+    // stopped, but custody here copies ONLY the target, before its first open.
+    let stopped_target_custody = stopped_custody::capture(&root, &fixture_root, &output);
     let before = business_bytes(&root);
     let wal = before[crate::DEFAULT_TRANSACTION_LOG].as_ref().unwrap();
     assert!(!wal.is_empty(), "real original row logical WAL required");
@@ -131,6 +136,10 @@ fn native_registered_fifth_row_cold_sigkill_preserves_pending_before_generic_ope
     let after = business_bytes(&root);
     evidence(&output.join("registered-row-cold-preservation.json"),&serde_json::json!({
         "actual_marker":actual_marker,"signal":terminal.signal(),"pre":pre,"actual_pending":pending,
+        "stopped_target_custody":stopped_target_custody,
+        "all_five_fixture_nodes_died_in_same_process":true,
+        "custody_scope":"stopped target only, copied before first native recovery open",
+        "independent_host_or_other_four_node_custody_claim":false,
         "exact_open_error":error.to_string(),"logical_wal_bytes":wal.len(),
         "logical_wal_sha256":hex::encode(Sha256::digest(wal)),
         "business_file_comparison":before.iter().map(|(name,bytes)|serde_json::json!({

@@ -385,10 +385,13 @@ pub(super) fn exercise(
         if cut == Some(true) {
             if let Some(marker) = std::env::var_os(COLD_CHILD_MARKER) {
                 let marker = std::path::PathBuf::from(marker);
+                let target_root = factory.database.read().data_path().canonicalize().unwrap();
+                let owned_fixture_root = target_root.parent().unwrap().to_path_buf();
                 evidence(
                     &marker.with_extension("pre.json"),
                     &serde_json::json!({
-                        "target_database_path":factory.database.read().data_path(),
+                        "target_database_path":target_root,"owned_fixture_root":owned_fixture_root,
+                        "expected_target_directory":"actual-registered-fifth-image-target",
                         "source_acknowledged":acknowledged,
                         "original_step":step,"exact_source_frame":actual.payload().unwrap(),
                         "test_observation_not_authority":true

@@ -43,8 +43,19 @@ unindexed attempts is implemented, and no portable SQL schema flag is added.
 The proposed Unix process-loss control uses the existing actual
 `retain_applied_known` callback, writes and fsyncs an external phase marker,
 then parks. Its parent sends real SIGKILL and waits for process termination;
-there is no child Drop/close. The parent retains exact logical-WAL bytes and
-reads the actual recovered native index/intent. Fresh normal paged open must
+there is no child Drop/close. All five fixture node services run in that one
+child, so all five die; this is not independent-host failure evidence. After
+SIGKILL/wait and before the FIRST PagedRecords open, the parent copies ONLY the
+actual stopped target database root into private `custody/stopped-target-before-first-open`.
+It rejects symlinks/non-regular files, requires the exact canonical task-owned
+target path, bounds files/directories/depth/bytes, and compares complete relative
+file/directory inventories with per-file SHA-256 and size before/after copying
+and against the copy. Copied files are mode 0600 and custody directories 0700.
+The original stays intact for the existing open/refusal checks; the retained
+copy is never opened or replayed by an engine. This stopped-target custody is
+distinct from any other fixture's live-copy diagnostics and covers no files
+outside this target database root. The parent also retains exact logical-WAL
+bytes and reads the actual recovered native index/intent. Fresh normal paged open must
 refuse with the original attempt/Tx diagnosis while logical WAL, sync log,
 event segment and incarnation journal remain exactly unchanged. The marker is
 a phase observation, not a client acknowledgment. Existing cancellation

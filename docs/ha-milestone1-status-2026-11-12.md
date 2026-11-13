@@ -1,5 +1,47 @@
 # HA Milestone 1: revision-scoped status, November 12, 2026
 
+## Update, November 13, 2026: native candidate composed onto main as 1.0.496-beta
+
+The previously unmerged native HA candidate branches are composed onto main in
+[PR 169](https://github.com/nikoma/bicdb/pull/169) and delivered as source
+**1.0.496-beta**. Sections below describe earlier, revision-scoped checkpoints
+in which that candidate was still unmerged; they are history, not current state.
+
+What changed in this delivery, beyond composition:
+
+- **Hot one-peer-loss and repeat recovery.** Seven defects fixed, including a
+  routing-lock self-deadlock during publication, an out-of-order phase sent to
+  a lagging follower becoming a permanent veto, a cooldown that starved the
+  majority, a retained debt record refusing a second origin fault, and a silent
+  voter adding its socket timeout to every commit. Quorum rules, voter sets and
+  deadlines are unchanged.
+- **Closed-ingress metadata leadership.** The scheduler pause is delivered; its
+  regression now waits for the resumed node's log to catch up before stopping
+  the successor.
+- **Registered fifth receiver.** The diverged image-session lines are
+  reconciled; contended metadata Store acquisitions wait briefly instead of
+  refusing with a busy error.
+- **Validation.** The complete broad suites ran on the composed source for the
+  first time. Multi-node native fixtures run one at a time in their own Core
+  job, because four concurrent three-to-five-node fixtures measured runner
+  contention rather than the protocol; every Core test still runs.
+
+Still open and **not** qualified by this merge:
+
+- A registered fifth node still receives no rows: target-side image staging,
+  the remote OLD collector, the joint Open including the fifth, the Serving
+  publisher and any production driver are not implemented. The interrupted
+  writer-domain edit is preserved, uncompiled, on
+  `wip/native-assigned-data-owner-interrupted`.
+- A second origin fault while replica debt is unconverged is still refused, and
+  a lagging follower that the majority needs still stalls recovery.
+- Real-time budgets are thin under CPU contention (first commit on a fresh
+  cluster, five-second authority windows spanning multi-node fsync rounds).
+- Cold and higher-domain recovery, multi-process acceptance of injected-tail
+  repair, physical four-to-five expansion, RPO/RTO and sustained capacity gain.
+  The original Azure qualification remains **FAILED**.
+- No release binary or deployment is produced by this source version.
+
 **Production qualification remains incomplete.** The metadata repair merged into main as **1.0.485-beta**,
 `e3fa39974d23c13d6212d5b94ab84437271c50bf`, merged the metadata Append
 frontier repair in [PR 162](https://github.com/nikoma/bicdb/pull/162). The exact

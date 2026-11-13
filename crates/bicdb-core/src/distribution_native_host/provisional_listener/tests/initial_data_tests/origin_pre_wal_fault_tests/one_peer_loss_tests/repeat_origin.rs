@@ -119,7 +119,20 @@ pub(super) fn run(
         prior_next.as_str(),
         fourth.as_str(),
     ];
-    let original_all4 = actual_all(f, originals, range, 4, &first_keys)?;
+    // Every real ACK consumes a native command slot, including a same-value
+    // retry acknowledged in a later health round (API inserted=false). The
+    // actual origin head after the first complete convergence is therefore
+    // >= 4 and is read, never assumed; every later index is relative to it.
+    let base = {
+        let db = f.hosts[0].seed.database.read();
+        db.current_native_range_source_lineage(range.id)?
+            .range_index()
+    };
+    check(
+        base >= 4,
+        "first recovery did not retain at least the four acknowledged native commands",
+    )?;
+    let original_all4 = actual_all(f, originals, range, base, &first_keys)?;
     journal.append(
         serde_json::json!({"kind":"second_fault_requires_first_complete_all_native4",
         "actual_all":original_all4,"first_convergence_receipt":first_convergence,
@@ -135,7 +148,7 @@ pub(super) fn run(
     let probe = arm.observation();
     journal.append(
         serde_json::json!({"kind":"second_actual_origin_fault_armed",
-        "expected_previous_native_R":4,"full_fifth":fifth_value,"probe":probe.snapshot()}),
+        "expected_previous_native_R":base,"full_fifth":fifth_value,"probe":probe.snapshot()}),
     )?;
     let api = append(journal, client, &fifth, &fifth_value);
     let wait_end = Instant::now() + Duration::from_secs(6);
@@ -169,7 +182,7 @@ pub(super) fn run(
     let command = f.hosts[0]
         ._service
         .lock()
-        .probe_range_write_for_peer(range, &node(0), 5)?
+        .probe_range_write_for_peer(range, &node(0), base + 1)?
         .entry
         .ok_or_else(|| BicDbError::Cluster("actual second CQ5 command missing".into()))?;
     check(
@@ -182,8 +195,8 @@ pub(super) fn run(
     )?;
     let prefix = db.read().native_range_prefix_observation(range.id)?;
     check(
-        prefix.native_applied_index == Some(4)
-            && prefix.pending_command_index == Some(5)
+        prefix.native_applied_index == Some(base)
+            && prefix.pending_command_index == Some(base + 1)
             && prefix.pending_command_id.as_deref() == Some(command.command.command_id.as_str())
             && prefix.materialized_pending_index.is_none()
             && !prefix.invalidated,
@@ -206,7 +219,7 @@ pub(super) fn run(
                 BicDbError::Cluster("actual peer second committed full record missing".into())
             })?;
         check(
-            source.range_index() == 5 && full.metadata == fifth_value,
+            source.range_index() == base + 1 && full.metadata == fifth_value,
             "actual peer native5/full fifth mismatch",
         )?;
         actual_peers.push(serde_json::json!({"node":node(i),"native_R":source.range_index(),"H0":source.logical_genesis_sha256(),"H":source.logical_history_sha256(),"full_record":full}));
@@ -259,13 +272,32 @@ pub(super) fn run(
                 .is_ok_and(|v| v.as_ref() == Some(&sixth_value));
         if healthy {
             while Instant::now() < end {
-                let final_all = actual_all(
-                    f,
-                    originals,
-                    range,
-                    6,
-                    &[old, fifth.as_str(), sixth.as_str()],
-                );
+                // A same-value sixth ACK repeated by a later health round
+                // also consumes a slot: require the actual origin head, which
+                // must cover at least the second Unknown and its next ACK.
+                let final_all = f.hosts[0]
+                    .seed
+                    .database
+                    .try_read()
+                    .ok_or_else(|| BicDbError::Cluster("actual repeat origin DB busy".into()))
+                    .and_then(|db| {
+                        Ok(db
+                            .current_native_range_source_lineage(range.id)?
+                            .range_index())
+                    })
+                    .and_then(|head| {
+                        check(
+                            head >= base + 2,
+                            "actual origin head does not cover second Unknown and next ACK",
+                        )?;
+                        actual_all(
+                            f,
+                            originals,
+                            range,
+                            head,
+                            &[old, fifth.as_str(), sixth.as_str()],
+                        )
+                    });
                 journal.append(serde_json::json!({"kind":"second_actual_all_replica6_sample",
                     "elapsed_ns":start.elapsed().as_nanos(),"actual_all":final_all.as_ref().ok(),"error":final_all.as_ref().err().map(ToString::to_string)}))?;
                 if let Ok(all) = final_all {

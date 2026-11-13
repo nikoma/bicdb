@@ -91,6 +91,8 @@ pub(crate) mod metadata_append;
 mod native_abort;
 mod native_activation;
 mod native_image_source;
+mod native_source_discovery;
+pub(crate) use native_source_discovery::AuthenticatedNativeSourceDiscovery;
 mod native_old;
 use crate::distribution_native_host::{
     NativeInitialBirthOfferRequest, NativeInitialBirthOfferResponse,
@@ -278,6 +280,9 @@ enum ClusterDataRequest {
     Ping,
     NativeRemoteImageSourceFrame {
         request: crate::distribution_range_image::NativeRemoteImageSourceRequestV1,
+    },
+    NativeSourceDiscovery {
+        request: crate::distribution_range_image::NativeSourceDiscoveryRequestV1,
     },
     NativeRemoteOld {
         request: crate::distribution_range_handoff::NativeRemoteOldRequestV1,
@@ -531,7 +536,8 @@ impl ClusterDataRequest {
             Self::ApplicationEvent(request) => Some(request.range_id),
             Self::NativeEventGet(_)
             | Self::NativeRemoteImageSourceFrame { .. }
-            | Self::NativeRemoteOld { .. } => None,
+            | Self::NativeRemoteOld { .. }
+            | Self::NativeSourceDiscovery { .. } => None,
             Self::ExportSchemaBundle { range_id, .. } => Some(*range_id),
             Self::InstallSchemaBundle { .. }
             | Self::StageSignedSchemaBundle { .. }
@@ -625,6 +631,7 @@ impl ClusterDataRequest {
                 | Self::MaterializeNativeCompleted { .. }
                 | Self::NativeRemoteImageSourceFrame { .. }
                 | Self::NativeRemoteOld { .. }
+                | Self::NativeSourceDiscovery { .. }
         )
     }
 }
@@ -634,6 +641,7 @@ enum ClusterDataResponse {
     Pong,
     NativeRemoteImageSourceFrame(crate::distribution_range_image::NativeRemoteImageSourceReplyV1),
     NativeRemoteOld(crate::distribution_range_handoff::NativeRemoteOldReplyV1),
+    NativeSourceDiscovery(crate::distribution_range_image::NativeSourceDiscoveryReplyV1),
     ApplicationEvent(crate::ClusterEventResponse),
     NativeEventGet(crate::distribution_native_read::NativeEventGetReply),
     Ack,
@@ -1622,6 +1630,24 @@ fn handle_cluster_data_connection(
                     ClusterDataResponse::NativeRemoteImageSourceFrame(actual.into_reply())
                 });
         }
+        if let ClusterDataRequest::NativeSourceDiscovery { request } = request.request {
+            let donor = initial_data.ok_or_else(|| {
+                transport_error("source discovery requires actual INITIAL donor owner")
+            })?;
+            let peer = authenticated_caller
+                .as_ref()
+                .ok_or_else(|| transport_error("source discovery requires authenticated target"))?;
+            let parent =
+                CancellationToken::new(Arc::new(AtomicBool::new(false)), Some(request_deadline));
+            let actual = donor.discover_remote_image_source(peer, &request, &parent)?;
+            #[cfg(test)]
+            if donor.test_take_source_discovery_reply_loss() {
+                suppress_actual_completion_reply.set(true);
+            }
+            return Ok(ClusterDataResponse::NativeSourceDiscovery(
+                actual.into_reply(),
+            ));
+        }
         if let ClusterDataRequest::NativeRemoteOld { request } = request.request {
             let source = initial_data
                 .ok_or_else(|| transport_error("remote OLD requires actual INITIAL DATA owner"))?;
@@ -2453,6 +2479,9 @@ fn dispatch_cluster_data_request(
         ClusterDataRequest::Ping => Ok(ClusterDataResponse::Pong),
         ClusterDataRequest::NativeRemoteImageSourceFrame { .. } => Err(transport_error(
             "source image frames require their actual before-latch owner",
+        )),
+        ClusterDataRequest::NativeSourceDiscovery { .. } => Err(transport_error(
+            "source discovery requires actual before-latch donor owner",
         )),
         ClusterDataRequest::NativeRemoteOld { .. } => Err(transport_error(
             "native OLD requires its actual before-latch owner",
@@ -5351,6 +5380,7 @@ impl TcpClusterRelocationTransport {
                 &request,
                 ClusterDataRequest::NativeRemoteImageSourceFrame { .. }
                     | ClusterDataRequest::NativeRemoteOld { .. }
+                    | ClusterDataRequest::NativeSourceDiscovery { .. }
                     | ClusterDataRequest::MetadataReadProbe { .. }
                     | ClusterDataRequest::MetadataReadAcquire { .. }
                     | ClusterDataRequest::HostMetadataReadAcquire { .. }

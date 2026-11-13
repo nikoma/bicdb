@@ -13,6 +13,7 @@ mod writer_data_domain;
 use cleanup::{NativeInitialDataCleanup, NativeInitialDataCleanupSender};
 use hot_recovery::NativeHotRecoveryMaintenance;
 use old_step::RetainedInitialOldTable;
+mod source_discovery;
 #[cfg(test)]
 pub(crate) use old_step::{
     after_remote_native_old_wal, before_native_old_wal, CancelOldOwnBeforeNativeWal,
@@ -50,6 +51,9 @@ pub(crate) struct NativeInitialDataAdmission {
     // Mutable only after this actual owner's durable policy refresh. OLD
     // operations separately retain their exact original writer snapshot.
     writer: parking_lot::RwLock<Arc<NativeWriterHostState>>,
+    source_writer: parking_lot::RwLock<Weak<crate::db::InstalledNativeWriterHostGuard>>,
+    source_coordinator:
+        parking_lot::RwLock<Weak<RangeWriteCoordinator<TcpClusterRelocationTransport>>>,
     // Original service/open identity is never replaced by policy refresh.
     database: crate::distribution_data::ClusterServiceOpenGuard,
     root: PathBuf,
@@ -75,6 +79,26 @@ impl NativeInitialDataAdmission {
     pub(super) fn replace_writer(&self, writer: Arc<NativeWriterHostState>) {
         *self.writer.write() = writer;
     }
+    /// Follow only the existing INITIAL owner's completed actual policy
+    /// replacement. This installs no policy or grant; Joined has no source
+    /// registry and cannot populate these bindings through writer refresh.
+    fn replace_initial_writer(
+        &self,
+        writer: Arc<NativeWriterHostState>,
+        guard: &Arc<crate::db::InstalledNativeWriterHostGuard>,
+        coordinator: &Arc<RangeWriteCoordinator<TcpClusterRelocationTransport>>,
+    ) -> Result<()> {
+        if self.image_sources.upgrade().is_none() {
+            return Err(invalid(
+                "Joined/non-INITIAL owner cannot acquire donor bindings",
+            ));
+        }
+        let mut current = self.writer.write();
+        *self.source_writer.write() = Arc::downgrade(guard);
+        *self.source_coordinator.write() = Arc::downgrade(coordinator);
+        *current = writer;
+        Ok(())
+    }
     /// A Registered member that joined DATA through the joint handoff binds
     /// the same necessary lifetime/slot/writer refusals as an INITIAL owner.
     /// It has no image-source registry and no INITIAL genesis.
@@ -93,6 +117,8 @@ impl NativeInitialDataAdmission {
             service: Arc::downgrade(service),
             runtime: Arc::downgrade(runtime),
             writer: parking_lot::RwLock::new(writer),
+            source_writer: parking_lot::RwLock::new(Weak::new()),
+            source_coordinator: parking_lot::RwLock::new(Weak::new()),
             database,
             root,
             store_open: store_slot.id(),
@@ -162,6 +188,16 @@ impl NativeInitialDataAdmission {
             ));
         }
         Ok(())
+    }
+    /// Necessary source-only ingress refusal. Joined owners deliberately have
+    /// no actual INITIAL source registry/process, even though they share the
+    /// immutable Append/Get listener. No role or capture grant is made here.
+    pub(crate) fn require_initial_source_hosting(&self) -> Result<()> {
+        self.require_live()?;
+        self.image_sources
+            .upgrade()
+            .ok_or_else(|| invalid("Joined/non-INITIAL owner has no source hosting authority"))?
+            .require_original_process()
     }
     pub(crate) fn observe_remote_image_source_frame(
         &self,
@@ -369,6 +405,10 @@ impl NativeInitialDataHost {
                 service: Arc::downgrade(&self.initial.service),
                 runtime: Arc::downgrade(runtime),
                 writer: parking_lot::RwLock::new(writer),
+                source_writer: parking_lot::RwLock::new(Arc::downgrade(&enrollment.guard)),
+                source_coordinator: parking_lot::RwLock::new(Arc::downgrade(
+                    &enrollment.coordinator,
+                )),
                 database: service.listener_open_guard(),
                 root,
                 store_open: service.native_initial_listener_store_open_id(),
@@ -536,124 +576,8 @@ impl NativeInitialDataHost {
             &[crate::distribution_transport::AuthenticatedNativeRemoteOldFrame],
         ) -> Result<()>,
     ) -> Result<crate::distribution_range_handoff::NativeRemoteOldCutCertificate> {
-        use crate::distribution_range_handoff::{
-            NativeRemoteOldOperationV1, NativeRemoteOldRequestV1, NativeRemoteOldRound,
-        };
-        let token = parent.child_with_deadline(Instant::now() + Duration::from_secs(5));
-        self.admission_for_old_step()?.require_live()?;
-        self.image_sources
-            .as_ref()
-            .ok_or_else(|| invalid("actual donor source process absent"))?
-            .require_original_process()?;
-        let actual = self.retained_actual_old_source(range)?;
-        let plan = actual.plan().clone();
-        let leader = self
-            .initial
-            .provider
-            .current_metadata_leader_hint(&token)?
-            .ok_or_else(|| invalid("actual donor metadata leader unavailable"))?;
-        let business = Uuid::now_v7();
-        let own = self.initial.transport.acquire_host_metadata_observation(
-            &leader,
-            business,
-            Duration::from_secs(5),
-            &token,
-        )?;
-        // This first fresh OWN binds the observation phase, not the final
-        // collector lifetime. Retain only necessary monotonic/phase DATA;
-        // unrelated range metadata changes need not invalidate this cut.
-        plan.require_source_host_metadata(&own, business, actual.node_id())?;
-        let started_term = own.term();
-        let started_index = own.read_index();
-        let started_phase = own
-            .committed_topology(business)?
-            .relocations
-            .get(&plan.promise().relocation_id)
-            .ok_or_else(|| invalid("remote OLD observation phase disappeared"))?
-            .phase;
-        let mut frames = Vec::with_capacity(plan.old_members().len());
-        for node in plan.old_members().keys() {
-            token.check()?;
-            let business = Uuid::now_v7();
-            let remaining = token
-                .deadline()
-                .unwrap()
-                .saturating_duration_since(Instant::now());
-            if remaining.is_zero() {
-                return Err(BicDbError::QueryTimedOut);
-            }
-            let own = self
-                .initial
-                .transport
-                .acquire_host_metadata_observation(&leader, business, remaining, &token)?;
-            let request = NativeRemoteOldRequestV1::from_plan(
-                &plan,
-                NativeRemoteOldOperationV1::Observe,
-                business,
-                remaining.as_millis().min(4000).max(1) as u64,
-            )?;
-            let frame = self
-                .initial
-                .transport
-                .request_remote_native_old(node, &plan, &request, &own, &token)?;
-            frame.require_request_live()?;
-            frames.push(frame);
-        }
-        after_fetch(&own, business, &frames)?;
-        token.check()?;
-        self.admission_for_old_step()?.require_live()?;
-        self.image_sources
-            .as_ref()
-            .ok_or_else(|| invalid("actual donor source process absent after OLD fetch"))?
-            .require_original_process()?;
-        actual.require_current()?;
-        for frame in &frames {
-            frame.require_request_live()?;
-        }
-        let remaining = token
-            .deadline()
-            .unwrap()
-            .checked_duration_since(Instant::now())
-            .ok_or(BicDbError::QueryTimedOut)?;
-        // Fresh final authority is acquired AFTER the bounded remote reads.
-        // None of their original request tokens or authenticated owners is
-        // reissued or relabeled. A canceled/expired frame still refuses below.
-        let final_business = Uuid::now_v7();
-        let final_own = self.initial.transport.acquire_host_metadata_observation(
-            &leader,
-            final_business,
-            remaining,
-            &token,
-        )?;
-        plan.require_source_host_metadata(&final_own, final_business, actual.node_id())?;
-        let final_phase = final_own
-            .committed_topology(final_business)?
-            .relocations
-            .get(&plan.promise().relocation_id)
-            .ok_or_else(|| invalid("remote OLD final Pending phase disappeared"))?
-            .phase;
-        if final_own.term() < started_term
-            || final_own.read_index() < started_index
-            || final_phase != started_phase
-        {
-            return Err(invalid(
-                "remote OLD final metadata regressed or selected phase changed",
-            ));
-        }
-        let mut round =
-            NativeRemoteOldRound::begin(actual.clone(), final_own, final_business, &token)?;
-        for frame in frames {
-            round.record(frame)?;
-        }
-        let result = round.finish()?;
-        actual.require_current()?;
-        self.admission_for_old_step()?.require_live()?;
-        self.image_sources
-            .as_ref()
-            .ok_or_else(|| invalid("actual donor source process absent after OLD cut"))?
-            .require_original_process()?;
-        token.check()?;
-        Ok(result)
+        self.admission_for_old_step()?
+            .collect_remote_old_for_source(range, parent, after_fetch)
     }
     #[cfg(test)]
     pub(super) fn test_collect_remote_old_at_actual_donor(
@@ -956,7 +880,7 @@ impl NativeInitialDataHost {
                 .ok_or_else(|| invalid("DATA policy change service busy after policy"))?;
             service.retain_initial_data_writer(&coordinator, &guard, &range)?
         };
-        admission.replace_writer(writer);
+        admission.replace_initial_writer(writer, &guard, &coordinator)?;
         admission.require_live()?;
         self.hot_recovery = Some(NativeHotRecoveryMaintenance::new(self)?);
         dispatcher.publish(&coordinator, &guard)?;

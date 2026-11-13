@@ -1,0 +1,62 @@
+{
+  "captured_at_utc": "2026-11-12T23:48:13.776507+00:00",
+  "run_id": 43330054124,
+  "head_sha": "7b55059fd610b40189afd239cf8e9ea7b2986ad4",
+  "status": "completed",
+  "conclusion": "failure",
+  "formatting_job": {
+    "id": 131572220036,
+    "status": "completed",
+    "conclusion": "success",
+    "steps": [
+      {
+        "name": "Set up job",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 1,
+        "started_at": "2026-11-12T23:34:59Z",
+        "completed_at": "2026-11-12T23:34:59Z"
+      },
+      {
+        "name": "Run actions/checkout@v4",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 2,
+        "started_at": "2026-11-12T23:34:59Z",
+        "completed_at": "2026-11-12T23:46:05Z"
+      },
+      {
+        "name": "Run dtolnay/rust-toolchain@1.96.0",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 3,
+        "started_at": "2026-11-12T23:46:05Z",
+        "completed_at": "2026-11-12T23:46:12Z"
+      },
+      {
+        "name": "Run cargo fmt --all -- --check",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 4,
+        "started_at": "2026-11-12T23:46:12Z",
+        "completed_at": "2026-11-12T23:46:19Z"
+      },
+      {
+        "name": "Post Run actions/checkout@v4",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 8,
+        "started_at": "2026-11-12T23:46:19Z",
+        "completed_at": "2026-11-12T23:46:19Z"
+      },
+      {
+        "name": "Complete job",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 9,
+        "started_at": "2026-11-12T23:46:19Z",
+        "completed_at": "2026-11-12T23:46:19Z"
+      }
+    ]
+  }
+}

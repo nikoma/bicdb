@@ -1,0 +1,30 @@
+{
+  "baseline_source": "8334a99e666970263c2d5a4192b5c9ce61d26677",
+  "corrected_controls_source": "60c47ae29d84371f6815cdedf1fb0b8ffa866d75",
+  "prior_fault_baseline_source": "721c329de4196aeef96604642c439fe7d8ddb0bf",
+  "production_bytes_equal": true,
+  "sole_changed_tracked_path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/initial_data_tests/hot_recovery_tests.rs",
+  "source_files": {
+    "hot-controls-8334.rs": {
+      "commit": "8334a99e666970263c2d5a4192b5c9ce61d26677",
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/initial_data_tests/hot_recovery_tests.rs",
+      "sha256": "425dfce21e4fa20bade2efcff0bfa7b7d5371fa51ae3743b14671ca482429c32",
+      "git_blob": "d48fd6c469f178b6484f79586ea7927ac8ae8d06"
+    },
+    "hot-controls-60c.rs": {
+      "commit": "60c47ae29d84371f6815cdedf1fb0b8ffa866d75",
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/initial_data_tests/hot_recovery_tests.rs",
+      "sha256": "e6a13458627463c35f5b2bd636ff363d01ac7fac9054798d760c96bc9d313a3d",
+      "git_blob": "517a5607cabf5cf879939a8789697af614d84216"
+    },
+    "origin-fault-unchanged.rs": {
+      "commit": "8334a99e666970263c2d5a4192b5c9ce61d26677",
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/initial_data_tests/origin_pre_wal_fault_tests.rs",
+      "sha256": "75d177ff4061f5b5f02c7bf261827be4802edf395738f30fec3df6e57dc68aca",
+      "git_blob": "da0614e7a52c7e2eec381fd787fd3d47bb443d80"
+    }
+  },
+  "patch_sha256": "61ac24cefd026328e7ff80030ee7ae4e76838a22e51c6f1d7059837988a88710",
+  "repository_verification": "git diff --name-only8334..60c and exact baseline721/8334/60c blob equality; optional --repo reruns without engine/build",
+  "execution_authenticity_claimed": false
+}

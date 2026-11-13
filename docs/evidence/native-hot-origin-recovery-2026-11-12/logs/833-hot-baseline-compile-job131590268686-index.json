@@ -1,0 +1,93 @@
+{
+  "source_revision": "8334a99e666970263c2d5a4192b5c9ce61d26677",
+  "requested_source": "8334a99e666970263c2d5a4192b5c9ce61d26677",
+  "authoritative_source_verified": true,
+  "run_id": 43335421681,
+  "job_id": 131590268686,
+  "job_name": "Community-only workspace compiles, tests included",
+  "job_status": "completed",
+  "job_conclusion": "success",
+  "captured_at_utc": "2026-11-13T00:22:01.838463+00:00",
+  "raw_bytes": 2341062,
+  "raw_sha256": "eae6ed8f43cdb8734878929b1e48ef8445f84a3aecd5341768e28bcfcf52692e",
+  "compressed_file": "833-hot-baseline-compile-job131590268686.log.gz",
+  "compressed_sha256": "aa1d9f8120ffcf60064cc930711b50bae2cd9c0c8eebcbc4719d883e4fc4b609",
+  "capture_exit_code": 0,
+  "test_summaries": [],
+  "failure_context": [],
+  "test_observations": [],
+  "steps": [
+    {
+      "name": "Set up job",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 1,
+      "started_at": "2026-11-13T00:14:14Z",
+      "completed_at": "2026-11-13T00:14:15Z"
+    },
+    {
+      "name": "Run actions/checkout@v4",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 2,
+      "started_at": "2026-11-13T00:14:15Z",
+      "completed_at": "2026-11-13T00:14:18Z"
+    },
+    {
+      "name": "Run dtolnay/rust-toolchain@stable",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 3,
+      "started_at": "2026-11-13T00:14:18Z",
+      "completed_at": "2026-11-13T00:14:28Z"
+    },
+    {
+      "name": "Run Swatinem/rust-cache@v2",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 4,
+      "started_at": "2026-11-13T00:14:28Z",
+      "completed_at": "2026-11-13T00:14:45Z"
+    },
+    {
+      "name": "cargo check --workspace --all-targets",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 5,
+      "started_at": "2026-11-13T00:14:45Z",
+      "completed_at": "2026-11-13T00:19:09Z"
+    },
+    {
+      "name": "Workflow consumer compiles without Core defaults",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 6,
+      "started_at": "2026-11-13T00:19:09Z",
+      "completed_at": "2026-11-13T00:19:44Z"
+    },
+    {
+      "name": "Post Run Swatinem/rust-cache@v2",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 11,
+      "started_at": "2026-11-13T00:19:44Z",
+      "completed_at": "2026-11-13T00:19:55Z"
+    },
+    {
+      "name": "Post Run actions/checkout@v4",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 12,
+      "started_at": "2026-11-13T00:19:55Z",
+      "completed_at": "2026-11-13T00:19:55Z"
+    },
+    {
+      "name": "Complete job",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 13,
+      "started_at": "2026-11-13T00:19:55Z",
+      "completed_at": "2026-11-13T00:19:55Z"
+    }
+  ]
+}

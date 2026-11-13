@@ -149,7 +149,12 @@ pub(crate) fn admission_mutations_sha256(mutations: &[CommitAdmissionMutation]) 
     mutation_hash(&mutations)
 }
 pub(super) fn actual_transaction_mutations_sha256(transaction: &Transaction) -> Result<String> {
-    mutation_hash(&ActualMutations(&transaction.writes))
+    actual_writes_mutations_sha256(&transaction.writes)
+}
+/// The same canonical ordered mutation hash for bounded decoded WAL writes.
+/// This is integrity DATA, never an applied receipt or transaction grant.
+pub(super) fn actual_writes_mutations_sha256(writes: &[TxWrite]) -> Result<String> {
+    mutation_hash(&ActualMutations(writes))
 }
 struct ActualMutations<'a>(&'a [TxWrite]);
 impl Serialize for ActualMutations<'_> {

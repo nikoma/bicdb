@@ -286,10 +286,16 @@ impl NativeRemoteImageSourceSession {
             )
         };
         let proof = {
-            let m = self
-                .metadata
-                .try_lock()
-                .ok_or_else(|| invalid("source metadata busy at publication"))?;
+            // Momentary heartbeat/ingress holders are contention, not a
+            // refusal; the wait is bounded by the original publish request
+            // and the actual OWN observation. No service/DB guard is held.
+            let m = loop {
+                original_publish_request.check()?;
+                own.require_live_request(business)?;
+                if let Some(m) = self.metadata.try_lock_for(Duration::from_millis(5)) {
+                    break m;
+                }
+            };
             m.require_listener_database(&actual_open)?;
             m.observe_owned_native_metadata_member(own, business, original_publish_request)?
         };
@@ -431,10 +437,13 @@ impl NativeRemoteImageSourceSession {
             .plan()
             .require_source_host_metadata(own, business, &manifest.source_id)?;
         let proof = {
-            let metadata = self
-                .metadata
-                .try_lock()
-                .ok_or_else(|| invalid("source metadata busy during frame"))?;
+            let metadata = loop {
+                parent.check()?;
+                own.require_live_request(business)?;
+                if let Some(metadata) = self.metadata.try_lock_for(Duration::from_millis(5)) {
+                    break metadata;
+                }
+            };
             metadata.require_listener_database(actual_open)?;
             metadata.observe_owned_native_metadata_member(own, business, parent)?
         };

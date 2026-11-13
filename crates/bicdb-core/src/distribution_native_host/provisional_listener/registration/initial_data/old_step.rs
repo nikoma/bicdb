@@ -12,6 +12,8 @@ use crate::distribution_range_recovery::RecoveryRoleAdmission;
 #[cfg(test)]
 pub(crate) use sink_test::{before_native_old_wal, CancelOldOwnBeforeNativeWal};
 
+const METADATA_LOCK_POLL: std::time::Duration = std::time::Duration::from_millis(5);
+
 pub(crate) struct NativeInitialOldStep<'request> {
     admission: &'request NativeInitialDataAdmission,
     service: Arc<Mutex<ClusterDataNodeService>>,
@@ -63,9 +65,18 @@ impl NativeInitialDataAdmission {
             )
         };
         let member = {
-            let store = metadata
-                .try_lock()
-                .ok_or_else(|| invalid("original OLD source metadata busy"))?;
+            // The metadata Store is shared with heartbeat/ingress work, so a
+            // momentary holder is contention, not a refusal. The wait stays
+            // bounded by the original caller and the actual OWN observation;
+            // no service, DB or native-journal guard is held here.
+            let store = loop {
+                parent.check()?;
+                own.require_live_request(business)?;
+                if let Some(store) = metadata.try_lock_for(METADATA_LOCK_POLL) {
+                    break store;
+                }
+            };
+            parent.check()?;
             store.require_listener_database(&database)?;
             store.observe_owned_native_metadata_member(&own, business, parent)?
         };
@@ -129,10 +140,13 @@ impl NativeInitialOldStep<'_> {
     /// ONLY outside service/DB/native-journal guards.
     pub(crate) fn require_metadata_current(&self) -> Result<()> {
         self.require_live()?;
-        let store = self
-            .metadata
-            .try_lock()
-            .ok_or_else(|| invalid("OLD source metadata changed during operation"))?;
+        let store = loop {
+            self.require_live()?;
+            self.own.require_live_request(self.business)?;
+            if let Some(store) = self.metadata.try_lock_for(METADATA_LOCK_POLL) {
+                break store;
+            }
+        };
         store.require_listener_database(&self.database)?;
         self.member.require_current(&store)?;
         self.require_live()

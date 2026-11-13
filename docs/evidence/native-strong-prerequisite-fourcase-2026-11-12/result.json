@@ -1,0 +1,191 @@
+{
+  "source_revision": "7b55059fd610b40189afd239cf8e9ea7b2986ad4",
+  "package_version": "1.0.490-beta",
+  "data_wire_protocol": 28,
+  "run_id": 43330054124,
+  "event": "workflow_dispatch",
+  "core_job_id": 131572255168,
+  "compile_job_id": 131572220029,
+  "filter": "native_current_joint_activation_scope_actual_postcat_",
+  "test_threads": 4,
+  "core": {
+    "passed": 0,
+    "failed": 4,
+    "ignored": 0,
+    "filtered": 955,
+    "seconds": 78.27
+  },
+  "all_targets": "PASS",
+  "isolated_no_default_consumer": "PASS",
+  "workflow_terminal_status_at_receipt": "IN_PROGRESS",
+  "formatting_job_id": 131572220036,
+  "formatting_stage_at_receipt": "actions/checkout@v4; formatter has not run",
+  "cases": [
+    {
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::activation_scope_cut_tests::native_current_joint_activation_scope_actual_postcat_writer_replacement_refused",
+      "outcome": "FAILED",
+      "actual_refusal": "actual read unavailable at DataQuorum: cluster error: range recovery: cluster error: native range read observation: distinct matching current-voter read majority unavailable; failed probes: {ClusterNodeId(\"n1\"): \"canceling statement due to query timeout\", ClusterNodeId(\"n2\"): \"canceling statement due to query timeout\"}",
+      "postcat_cut_reached": false,
+      "CurrentJointRecovery_continuation_reached": false
+    },
+    {
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::activation_scope_cut_tests::native_current_joint_activation_scope_actual_postcat_caller_cancel_and_exact_fresh_recovery",
+      "outcome": "FAILED",
+      "actual_refusal": "actual read unavailable at DataQuorum: cluster error: range recovery: cluster error: native range read observation: distinct matching current-voter read majority unavailable; failed probes: {ClusterNodeId(\"n1\"): \"canceling statement due to query timeout\", ClusterNodeId(\"n2\"): \"canceling statement due to query timeout\"}",
+      "postcat_cut_reached": false,
+      "CurrentJointRecovery_continuation_reached": false
+    },
+    {
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::activation_scope_cut_tests::native_current_joint_activation_scope_actual_postcat_foreign_db_and_store_refused",
+      "outcome": "FAILED",
+      "actual_refusal": "actual read unavailable at DataQuorum: cluster error: range recovery: cluster error: native range read observation: distinct matching current-voter read majority unavailable; failed probes: {ClusterNodeId(\"n1\"): \"canceling statement due to query timeout\", ClusterNodeId(\"n2\"): \"canceling statement due to query timeout\"}",
+      "postcat_cut_reached": false,
+      "CurrentJointRecovery_continuation_reached": false
+    },
+    {
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::activation_scope_cut_tests::native_current_joint_activation_scope_actual_postcat_missing_decision_archive_refused",
+      "outcome": "FAILED",
+      "actual_refusal": "actual read unavailable at Canceled: canceling statement due to query timeout",
+      "postcat_cut_reached": false,
+      "CurrentJointRecovery_continuation_reached": false
+    }
+  ],
+  "trace_events": 802,
+  "recovery_probe_trace_events": 0,
+  "businesses": [
+    {
+      "business": "01a1d224-4cf0-7d32-a8c1-66c693e7fc40",
+      "challenge": "01a1d224-4cf0-7d32-a8c1-66d1b65be325",
+      "original_caller_deadline": null,
+      "observed_points": [
+        {
+          "peer": "n2",
+          "attempt": 1,
+          "R": 2,
+          "H": "bc95e8ac2a556f05781acea225278ab9fe8f7e1e52f7f4fffca428ca061b54db",
+          "local_B": 4
+        },
+        {
+          "peer": "n3",
+          "attempt": 1,
+          "R": 2,
+          "H": "bc95e8ac2a556f05781acea225278ab9fe8f7e1e52f7f4fffca428ca061b54db",
+          "local_B": 2
+        }
+      ],
+      "durations_us": {
+        "strong-reservation": 11,
+        "strong-writer-service-wait": 1,
+        "read-round-finish": 1737047,
+        "read-finish-validation": 1737100,
+        "strong-data-quorum": 3107072,
+        "strong-birth-enrollment": 31,
+        "strong-capture-actual-point": 702412,
+        "strong-snapshot": 702462,
+        "strong-final-metadata": 30570,
+        "strong-final-service-wait": 2,
+        "strong-caller": 3971056,
+        "strong-finalize": 172995,
+        "strong-final-currentness": 173543,
+        "strong-worker": 4021090
+      },
+      "actual_outcome_lines": [
+        "2026-11-12T23:42:40.7825684Z NATIVE_STRONG_TRACE pid=7806 t_us=3971056 node=n3 business=01a1d224-4cf0-7d32-a8c1-66c693e7fc40 challenge=01a1d224-4cf0-7d32-a8c1-66d1b65be325 range=r1 epoch=4 deadline_us=None remaining_us=None stage=strong-caller-token-refusal event=detail error=canceling statement due to query timeout",
+        "2026-11-12T23:42:40.8339761Z NATIVE_STRONG_TRACE pid=7806 t_us=4022080 node=n3 business=01a1d224-4cf0-7d32-a8c1-66c693e7fc40 challenge=01a1d224-4cf0-7d32-a8c1-66d1b65be325 range=r1 epoch=4 deadline_us=Some(3970874) remaining_us=Some(0) stage=strong-outcome event=detail ok=false unavailable=Some(NativeStrongPointReadUnavailable { stage: FinalCurrentness, detail: \"canceling statement due to query timeout\" })"
+      ]
+    },
+    {
+      "business": "01a1d224-4d1d-7171-8baf-d79d7d60aa56",
+      "challenge": "01a1d224-4d1d-7171-8baf-d7a7ad1b0e9d",
+      "original_caller_deadline": null,
+      "observed_points": [
+        {
+          "peer": "n3",
+          "attempt": 1,
+          "R": 2,
+          "H": "92ecfd472516cd6d448a3d2212d79b3dbdc6d938379cb19e066ccc8f758f7361",
+          "local_B": 2
+        }
+      ],
+      "durations_us": {
+        "strong-reservation": 13,
+        "strong-writer-service-wait": 2,
+        "read-round-finish": 740943,
+        "read-finish-validation": 741059,
+        "strong-data-quorum": 2941563,
+        "strong-worker": 2948080,
+        "strong-caller": 2949272
+      },
+      "actual_outcome_lines": [
+        "2026-11-12T23:42:39.8331738Z NATIVE_STRONG_TRACE pid=7806 t_us=3004065 node=n3 business=01a1d224-4d1d-7171-8baf-d79d7d60aa56 challenge=01a1d224-4d1d-7171-8baf-d7a7ad1b0e9d range=r1 epoch=4 deadline_us=Some(4015117) remaining_us=Some(1011051) stage=strong-outcome event=detail ok=false unavailable=Some(NativeStrongPointReadUnavailable { stage: DataQuorum, detail: \"cluster error: range recovery: cluster error: native range read observation: distinct matching current-voter read majority unavailable; failed probes: {ClusterNodeId(\\\"n1\\\"): \\\"canceling statement due to query timeout\\\", ClusterNodeId(\\\"n2\\\"): \\\"canceling statement due to query timeout\\\"}\" })"
+      ]
+    },
+    {
+      "business": "01a1d224-4ecf-73f2-a1d4-e3270484a7e4",
+      "challenge": "01a1d224-4ecf-73f2-a1d4-e33485a94e07",
+      "original_caller_deadline": null,
+      "observed_points": [
+        {
+          "peer": "n3",
+          "attempt": 1,
+          "R": 2,
+          "H": "5721dc2a3efd6dbf4282682a13c8b026632322724bd3184d55bc87954d398ac6",
+          "local_B": 2
+        }
+      ],
+      "durations_us": {
+        "strong-reservation": 15,
+        "strong-writer-service-wait": 2,
+        "read-round-finish": 376561,
+        "read-finish-validation": 376656,
+        "strong-data-quorum": 2571629,
+        "strong-worker": 2585021,
+        "strong-caller": 2585663
+      },
+      "actual_outcome_lines": [
+        "2026-11-12T23:42:39.8962484Z NATIVE_STRONG_TRACE pid=7806 t_us=3078594 node=n3 business=01a1d224-4ecf-73f2-a1d4-e3270484a7e4 challenge=01a1d224-4ecf-73f2-a1d4-e33485a94e07 range=r1 epoch=4 deadline_us=Some(4449077) remaining_us=Some(1370482) stage=strong-outcome event=detail ok=false unavailable=Some(NativeStrongPointReadUnavailable { stage: DataQuorum, detail: \"cluster error: range recovery: cluster error: native range read observation: distinct matching current-voter read majority unavailable; failed probes: {ClusterNodeId(\\\"n1\\\"): \\\"canceling statement due to query timeout\\\", ClusterNodeId(\\\"n2\\\"): \\\"canceling statement due to query timeout\\\"}\" })"
+      ]
+    },
+    {
+      "business": "01a1d224-5215-73f0-bd8e-7cbbe524bf2e",
+      "challenge": "01a1d224-5215-73f0-bd8e-7cc91c1fd847",
+      "original_caller_deadline": null,
+      "observed_points": [
+        {
+          "peer": "n3",
+          "attempt": 1,
+          "R": 2,
+          "H": "ac249f0a59c81be170f91c67f2eadf60674b965676153eb859555c778fb04cbd",
+          "local_B": 2
+        }
+      ],
+      "durations_us": {
+        "strong-reservation": 11,
+        "strong-writer-service-wait": 1,
+        "read-round-finish": 372886,
+        "read-finish-validation": 372998,
+        "strong-data-quorum": 2569630,
+        "strong-worker": 2573799,
+        "strong-caller": 2574153
+      },
+      "actual_outcome_lines": [
+        "2026-11-12T23:42:40.7328375Z NATIVE_STRONG_TRACE pid=7806 t_us=3913366 node=n3 business=01a1d224-5215-73f0-bd8e-7cbbe524bf2e challenge=01a1d224-5215-73f0-bd8e-7cc91c1fd847 range=r1 epoch=4 deadline_us=Some(5282240) remaining_us=Some(1368873) stage=strong-outcome event=detail ok=false unavailable=Some(NativeStrongPointReadUnavailable { stage: DataQuorum, detail: \"cluster error: range recovery: cluster error: native range read observation: distinct matching current-voter read majority unavailable; failed probes: {ClusterNodeId(\\\"n1\\\"): \\\"canceling statement due to query timeout\\\", ClusterNodeId(\\\"n2\\\"): \\\"canceling statement due to query timeout\\\"}\" })"
+      ]
+    }
+  ],
+  "actual_same_open_local_fixture": true,
+  "physical_qualification": false,
+  "operator_or_autonomous_recovery_qualification": false,
+  "historical_eedf_fourcase_failure_replaced_or_waived": false,
+  "native_engine_opened_or_replayed_by_receipt": false,
+  "private_artifact_id": 13995525792,
+  "private_artifact_sha256": "87ac6582d5e2483fc6aca73fe712d5d1ed0c20ee28035693c6c595d227c4e912",
+  "portable_packet_contains_databases_or_private_keys": false,
+  "diagnostic_limits": [
+    "inclusive nested spans must not be summed",
+    "span end does not imply success or actual Operation drain",
+    "three DataQuorum businesses are not individually mapped to test names by assumption",
+    "per-peer attempts require node and deadline correlation",
+    "no concurrency causation or production/8GiB performance inference"
+  ]
+}

@@ -1,0 +1,100 @@
+{
+  "id": 131572220029,
+  "run_id": 43330054124,
+  "workflow_name": "tests",
+  "head_branch": "integrate/native-milestone1-current-main",
+  "run_url": "https://api.github.com/repos/nikoma/bicdb/actions/runs/43330054124",
+  "run_attempt": 1,
+  "node_id": "CR_kwDOUimcAs8AAAAeolDAfQ",
+  "head_sha": "7b55059fd610b40189afd239cf8e9ea7b2986ad4",
+  "url": "https://api.github.com/repos/nikoma/bicdb/actions/jobs/131572220029",
+  "html_url": "https://github.com/nikoma/bicdb/actions/runs/43330054124/job/131572220029",
+  "status": "completed",
+  "conclusion": "success",
+  "created_at": "2026-11-12T23:34:56Z",
+  "started_at": "2026-11-12T23:34:58Z",
+  "completed_at": "2026-11-12T23:40:59Z",
+  "name": "Community-only workspace compiles, tests included",
+  "steps": [
+    {
+      "name": "Set up job",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 1,
+      "started_at": "2026-11-12T23:34:59Z",
+      "completed_at": "2026-11-12T23:35:00Z"
+    },
+    {
+      "name": "Run actions/checkout@v4",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 2,
+      "started_at": "2026-11-12T23:35:00Z",
+      "completed_at": "2026-11-12T23:35:05Z"
+    },
+    {
+      "name": "Run dtolnay/rust-toolchain@stable",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 3,
+      "started_at": "2026-11-12T23:35:05Z",
+      "completed_at": "2026-11-12T23:35:14Z"
+    },
+    {
+      "name": "Run Swatinem/rust-cache@v2",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 4,
+      "started_at": "2026-11-12T23:35:14Z",
+      "completed_at": "2026-11-12T23:35:30Z"
+    },
+    {
+      "name": "cargo check --workspace --all-targets",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 5,
+      "started_at": "2026-11-12T23:35:30Z",
+      "completed_at": "2026-11-12T23:40:10Z"
+    },
+    {
+      "name": "Workflow consumer compiles without Core defaults",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 6,
+      "started_at": "2026-11-12T23:40:10Z",
+      "completed_at": "2026-11-12T23:40:45Z"
+    },
+    {
+      "name": "Post Run Swatinem/rust-cache@v2",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 11,
+      "started_at": "2026-11-12T23:40:45Z",
+      "completed_at": "2026-11-12T23:40:57Z"
+    },
+    {
+      "name": "Post Run actions/checkout@v4",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 12,
+      "started_at": "2026-11-12T23:40:57Z",
+      "completed_at": "2026-11-12T23:40:57Z"
+    },
+    {
+      "name": "Complete job",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 13,
+      "started_at": "2026-11-12T23:40:57Z",
+      "completed_at": "2026-11-12T23:40:57Z"
+    }
+  ],
+  "check_run_url": "https://api.github.com/repos/nikoma/bicdb/check-runs/131572220029",
+  "labels": [
+    "ubuntu-latest"
+  ],
+  "runner_id": 1000022968,
+  "runner_name": "GitHub Actions 1000022968",
+  "runner_group_id": 0,
+  "runner_group_name": "GitHub Actions"
+}

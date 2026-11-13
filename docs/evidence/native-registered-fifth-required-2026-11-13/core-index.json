@@ -1,0 +1,140 @@
+{
+  "source_revision": "a98c6a6b1390b0a3853e4ae658e8e103a7749b19",
+  "requested_source": "a98c6a6b1390b0a3853e4ae658e8e103a7749b19",
+  "authoritative_source_verified": true,
+  "run_id": 43343369839,
+  "job_id": 131616827260,
+  "job_name": "Focused Core library (native_registered_fifth_actual_closed_handoff_fence_without_initial_writer_baseline)",
+  "job_status": "completed",
+  "job_conclusion": "failure",
+  "captured_at_utc": "2026-11-13T01:21:02.109149+00:00",
+  "raw_bytes": 1811706,
+  "raw_sha256": "ffb0e6d3c0a2b9584b209d0a22ecbac163ddea4b3558a4d851771286f5881c01",
+  "compressed_file": "a98-a98-registered-fifth-first-required-job131616827260.log.gz",
+  "compressed_sha256": "bc92e31800d068e4c76975921a8103df76c00ffb97fe6107ebc5d924a7175c04",
+  "capture_exit_code": 0,
+  "test_summaries": [
+    "2026-11-13T01:19:38.3209187Z test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 980 filtered out; finished in 4.31s"
+  ],
+  "failure_context": [
+    {
+      "line": 16848,
+      "remaining": 0,
+      "lines": [
+        "2026-11-13T01:19:38.3204462Z NATIVE_LEARNER_ENROLLMENT_ROOT /tmp/.tmpaAEmiR",
+        "2026-11-13T01:19:38.3204629Z",
+        "2026-11-13T01:19:38.3205503Z thread 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::native_registered_fifth_actual_closed_handoff_fence_without_initial_writer_baseline' (7438) panicked at crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline.rs:677:9:",
+        "2026-11-13T01:19:38.3206742Z assertion `left == right` failed: REQUIRED genuine registered fifth CommittedHandoff fences unavailable; no INITIAL writer substitute",
+        "2026-11-13T01:19:38.3207151Z   left: 0",
+        "2026-11-13T01:19:38.3207296Z  right: 2",
+        "2026-11-13T01:19:38.3207535Z note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace",
+        "2026-11-13T01:19:38.3207758Z",
+        "2026-11-13T01:19:38.3207761Z",
+        "2026-11-13T01:19:38.3207818Z failures:",
+        "2026-11-13T01:19:38.3208354Z     distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::native_registered_fifth_actual_closed_handoff_fence_without_initial_writer_baseline",
+        "2026-11-13T01:19:38.3208988Z",
+        "2026-11-13T01:19:38.3209187Z test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 980 filtered out; finished in 4.31s",
+        "2026-11-13T01:19:38.3252511Z",
+        "2026-11-13T01:19:38.3253000Z error: test failed, to rerun pass `-p bicdb-core --lib`",
+        "2026-11-13T01:19:38.3337462Z ##[error]Process completed with exit code 101."
+      ]
+    }
+  ],
+  "test_observations": [
+    {
+      "line": 16837,
+      "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::native_registered_fifth_actual_closed_handoff_fence_without_initial_writer_baseline",
+      "result": "FAILED"
+    }
+  ],
+  "steps": [
+    {
+      "name": "Set up job",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 1,
+      "started_at": "2026-11-13T01:14:27Z",
+      "completed_at": "2026-11-13T01:14:28Z"
+    },
+    {
+      "name": "Run actions/checkout@v4",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 2,
+      "started_at": "2026-11-13T01:14:28Z",
+      "completed_at": "2026-11-13T01:14:33Z"
+    },
+    {
+      "name": "Run dtolnay/rust-toolchain@stable",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 3,
+      "started_at": "2026-11-13T01:14:33Z",
+      "completed_at": "2026-11-13T01:14:42Z"
+    },
+    {
+      "name": "Run Swatinem/rust-cache@v2",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 4,
+      "started_at": "2026-11-13T01:14:42Z",
+      "completed_at": "2026-11-13T01:14:49Z"
+    },
+    {
+      "name": "Build projection chaos helper",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 5,
+      "started_at": "2026-11-13T01:14:49Z",
+      "completed_at": "2026-11-13T01:18:13Z"
+    },
+    {
+      "name": "Record source and list selected Core library tests",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 6,
+      "started_at": "2026-11-13T01:18:13Z",
+      "completed_at": "2026-11-13T01:19:33Z"
+    },
+    {
+      "name": "Execute selected Core library tests",
+      "status": "completed",
+      "conclusion": "failure",
+      "number": 7,
+      "started_at": "2026-11-13T01:19:33Z",
+      "completed_at": "2026-11-13T01:19:38Z"
+    },
+    {
+      "name": "Retain focused source, log and opted-in fault-state evidence",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 8,
+      "started_at": "2026-11-13T01:19:38Z",
+      "completed_at": "2026-11-13T01:19:39Z"
+    },
+    {
+      "name": "Post Run Swatinem/rust-cache@v2",
+      "status": "completed",
+      "conclusion": "skipped",
+      "number": 15,
+      "started_at": "2026-11-13T01:19:39Z",
+      "completed_at": "2026-11-13T01:19:39Z"
+    },
+    {
+      "name": "Post Run actions/checkout@v4",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 16,
+      "started_at": "2026-11-13T01:19:39Z",
+      "completed_at": "2026-11-13T01:19:39Z"
+    },
+    {
+      "name": "Complete job",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 17,
+      "started_at": "2026-11-13T01:19:39Z",
+      "completed_at": "2026-11-13T01:19:39Z"
+    }
+  ]
+}

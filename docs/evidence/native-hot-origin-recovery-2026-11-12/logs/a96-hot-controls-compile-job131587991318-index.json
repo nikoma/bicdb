@@ -1,0 +1,116 @@
+{
+  "source_revision": "a96bbf958b8f366d41bbe31b2bc776f1fb6bcbe4",
+  "requested_source": "a96bbf958b8f366d41bbe31b2bc776f1fb6bcbe4",
+  "authoritative_source_verified": true,
+  "run_id": 43334746500,
+  "job_id": 131587991318,
+  "job_name": "Community-only workspace compiles, tests included",
+  "job_status": "completed",
+  "job_conclusion": "failure",
+  "captured_at_utc": "2026-11-13T00:11:20.378195+00:00",
+  "raw_bytes": 73557,
+  "raw_sha256": "fe8670b415f0967bd0e480757b0430822ab5802d6e8a1201428d8a73f2e58fd5",
+  "compressed_file": "a96-hot-controls-compile-job131587991318.log.gz",
+  "compressed_sha256": "363d9781d145e7a23adffb5f8c5e0211cd1f432171a4deeca33d7238012ca04a",
+  "capture_exit_code": 0,
+  "test_summaries": [],
+  "failure_context": [
+    {
+      "line": 712,
+      "remaining": 0,
+      "lines": [
+        "2026-11-13T00:10:06.1251314Z    |                       ^^^^^^^",
+        "2026-11-13T00:10:06.1251665Z",
+        "2026-11-13T00:10:15.5740786Z error[E0599]: no method named `require_live` found for struct `distribution_range_recovery::RecoveryHistoryObservation` in the current scope",
+        "2026-11-13T00:10:15.5742504Z    --> crates/bicdb-core/src/distribution_native_host/provisional_listener/registration/initial_data/hot_recovery.rs:394:26",
+        "2026-11-13T00:10:15.5743481Z     |",
+        "2026-11-13T00:10:15.5744050Z 382 | /                     self.initial",
+        "2026-11-13T00:10:15.5744795Z 383 | |                         .transport",
+        "2026-11-13T00:10:15.5745643Z 384 | |                         .recovery_historical_command_observation(",
+        "2026-11-13T00:10:15.5746719Z 385 | |                             node,",
+        "2026-11-13T00:10:15.5747308Z ...   |",
+        "2026-11-13T00:10:15.5747896Z 393 | |                         )?",
+        "2026-11-13T00:10:15.5748611Z 394 | |                         .require_live()?;",
+        "2026-11-13T00:10:15.5749991Z     | |                         -^^^^^^^^^^^^ method not found in `distribution_range_recovery::RecoveryHistoryObservation`",
+        "2026-11-13T00:10:15.5751360Z     | |_________________________|",
+        "2026-11-13T00:10:15.5751814Z     |",
+        "2026-11-13T00:10:15.5752136Z     |"
+      ]
+    }
+  ],
+  "test_observations": [],
+  "steps": [
+    {
+      "name": "Set up job",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 1,
+      "started_at": "2026-11-13T00:09:18Z",
+      "completed_at": "2026-11-13T00:09:19Z"
+    },
+    {
+      "name": "Run actions/checkout@v4",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 2,
+      "started_at": "2026-11-13T00:09:19Z",
+      "completed_at": "2026-11-13T00:09:24Z"
+    },
+    {
+      "name": "Run dtolnay/rust-toolchain@stable",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 3,
+      "started_at": "2026-11-13T00:09:24Z",
+      "completed_at": "2026-11-13T00:09:34Z"
+    },
+    {
+      "name": "Run Swatinem/rust-cache@v2",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 4,
+      "started_at": "2026-11-13T00:09:34Z",
+      "completed_at": "2026-11-13T00:09:53Z"
+    },
+    {
+      "name": "cargo check --workspace --all-targets",
+      "status": "completed",
+      "conclusion": "failure",
+      "number": 5,
+      "started_at": "2026-11-13T00:09:53Z",
+      "completed_at": "2026-11-13T00:10:34Z"
+    },
+    {
+      "name": "Workflow consumer compiles without Core defaults",
+      "status": "completed",
+      "conclusion": "skipped",
+      "number": 6,
+      "started_at": "2026-11-13T00:10:34Z",
+      "completed_at": "2026-11-13T00:10:34Z"
+    },
+    {
+      "name": "Post Run Swatinem/rust-cache@v2",
+      "status": "completed",
+      "conclusion": "skipped",
+      "number": 11,
+      "started_at": "2026-11-13T00:10:34Z",
+      "completed_at": "2026-11-13T00:10:34Z"
+    },
+    {
+      "name": "Post Run actions/checkout@v4",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 12,
+      "started_at": "2026-11-13T00:10:34Z",
+      "completed_at": "2026-11-13T00:10:34Z"
+    },
+    {
+      "name": "Complete job",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 13,
+      "started_at": "2026-11-13T00:10:35Z",
+      "completed_at": "2026-11-13T00:10:35Z"
+    }
+  ]
+}

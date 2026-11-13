@@ -1,0 +1,3783 @@
+[
+  {
+    "stage": "four_initial_owners",
+    "source": "5cec7687196fe6b113805485672e8730c8295a56",
+    "execution_identity": {
+      "source": "5cec7687196fe6b113805485672e8730c8295a56",
+      "source_available": true,
+      "source_authority": "BICDB_TEST_SOURCE_SHA runtime environment; not option_env or runtime git lookup",
+      "test_package_version": "1.0.490-beta",
+      "binary_sha256": "81c2c35ef7c023691aeed714e18970726274093a3936092b8fee92e483461452",
+      "binary_bytes": 754227664,
+      "binary_scope": "actual CARGO_BIN_EXE_bicdb bytes read before process/startup/ACK phase; not a published release"
+    },
+    "process_ids": [
+      16224,
+      16225,
+      16226,
+      16227
+    ],
+    "data_stage": "four_initial_only",
+    "fifth_data_stage": "not_entered"
+  },
+  {
+    "stage": "first_receiver_pending",
+    "reply": {
+      "version": 1,
+      "sequence": 5,
+      "process_id": 16224,
+      "host": {
+        "version": 1,
+        "node_id": "n0",
+        "phase": "initial_data_opening",
+        "metadata": {
+          "cluster_id": "native-operator-cli",
+          "node_id": "n0",
+          "role": "leader",
+          "current_term": 1,
+          "voted_for": "n0",
+          "leader_id": "n0",
+          "commit_index": 1,
+          "last_log_index": 1,
+          "last_log_term": 1,
+          "topology_generation": 1,
+          "voters": [
+            "n0",
+            "n1",
+            "n2",
+            "n3"
+          ],
+          "learners": []
+        },
+        "last_enrolled_learner": null,
+        "last_caught_up_learner_store_id": null,
+        "last_metadata_maintenance": {
+          "node": null,
+          "stage": "idle_or_backoff",
+          "receiver_store_id": null,
+          "installed_through_index": null,
+          "error": null
+        },
+        "last_metadata_promotion": null,
+        "initial_data": {
+          "receiver_listening": true,
+          "writer_policy_current": true,
+          "dispatcher_published": false,
+          "strong_readiness": "request-scoped fresh MQ/data QQ/MVCC/final MQ; publication is not readiness",
+          "replica_readiness": "actual policy/native/refusal checks at every replica RPC",
+          "ranges": [
+            {
+              "range_id": 2,
+              "epoch": 1,
+              "local_leader": false,
+              "leader_admission_observed": false
+            },
+            {
+              "range_id": 3,
+              "epoch": 1,
+              "local_leader": false,
+              "leader_admission_observed": false
+            },
+            {
+              "range_id": 4,
+              "epoch": 1,
+              "local_leader": true,
+              "leader_admission_observed": false
+            }
+          ],
+          "cleanup_quarantined_owners": 0,
+          "writer_binding_diagnostic": {
+            "scope": "diagnostic retained binding only; not linearizable Ready/role or a permission",
+            "persisted_policy_coordinator_id": "01a1d26d-8b75-7ab3-a2ec-74987223a271",
+            "persisted_policy_registration_generation": "01a1d26d-8b77-7652-b8ea-2d290d09745d",
+            "persisted_policy_database_open_incarnation": "46ab4f14-38d6-4a35-8c33-cacfa3cb8a97",
+            "persisted_policy_range_store_open_id": "01a1d26d-850d-7f41-bf34-5585f6c058a6",
+            "persisted_policy_checksum_sha256": "65135c7697d6617010e7d3ca3cb0aec3d670867d9ad5d55682a40483851516d0",
+            "observed_bound_registration_generation": "01a1d26d-8b77-7652-b8ea-2d290d09745d",
+            "observed_bound_registration_active": true,
+            "observed_bound_authority_matches_retained_coordinator": true,
+            "observed_weak_directory_alive": true,
+            "observed_binding_lifetime_live": true,
+            "observed_binding_liveness_error": null,
+            "actual_verified_registry_extension": {
+              "publication_pending": false,
+              "verified_extension": null,
+              "scope": "retained same-open verified audit DATA; not role or Ready"
+            },
+            "current_database_hook_slot_not_relocked": true,
+            "identity_from_status_dto_is_not_authority": true,
+            "retained_owner_coordinator_id": "01a1d26d-8b75-7ab3-a2ec-74987223a271"
+          },
+          "registry_refresh_last_attempt": null,
+          "hot_recovery_last_attempt": null
+        },
+        "data_serving": false,
+        "data_refusal": "metadata-only or pending DATA host: no successful application admission is installed"
+      },
+      "error": "cluster error: range recovery: cluster error: native range read observation: distinct matching current-voter read majority unavailable; failed probes: {ClusterNodeId(\"n1\"): \"cluster error: cluster node n1 rejected RPC cluster_data_operation_failed: cluster error: native metadata control listener grants CONFIG/metadata endpoints only\", ClusterNodeId(\"n2\"): \"cluster error: cluster node n2 rejected RPC cluster_data_operation_failed: cluster error: native metadata control listener grants CONFIG/metadata endpoints only\"}",
+      "data_serving": false
+    }
+  },
+  {
+    "logical_operation_id": "01a1d26d-8bc9-7771-aa44-305172bc010a",
+    "stage": "attempt",
+    "namespace": "items",
+    "key": "before-initial-data-quorum",
+    "value": {
+      "phase": "must_not_ack_before_quorum"
+    },
+    "payload_sha256": "e06f3e79692b8ca894c809983ce5deaf0a37a49cfd9405898f15fd8d02c9d525"
+  },
+  {
+    "logical_operation_id": "01a1d26d-8bc9-7771-aa44-305172bc010a",
+    "stage": "reply",
+    "key": "before-initial-data-quorum",
+    "acknowledged": false,
+    "error": "cluster error: cluster node n0 rejected RPC cluster_data_operation_failed: cluster error: initial DATA receiver is pending local leader readiness; retry within the original request budget"
+  },
+  {
+    "stage": "data_open_action",
+    "node": "n0",
+    "reply": {
+      "version": 1,
+      "sequence": 6,
+      "process_id": 16224,
+      "host": {
+        "version": 1,
+        "node_id": "n0",
+        "phase": "initial_data_opening",
+        "metadata": {
+          "cluster_id": "native-operator-cli",
+          "node_id": "n0",
+          "role": "leader",
+          "current_term": 1,
+          "voted_for": "n0",
+          "leader_id": "n0",
+          "commit_index": 1,
+          "last_log_index": 1,
+          "last_log_term": 1,
+          "topology_generation": 1,
+          "voters": [
+            "n0",
+            "n1",
+            "n2",
+            "n3"
+          ],
+          "learners": []
+        },
+        "last_enrolled_learner": null,
+        "last_caught_up_learner_store_id": null,
+        "last_metadata_maintenance": {
+          "node": null,
+          "stage": "idle_or_backoff",
+          "receiver_store_id": null,
+          "installed_through_index": null,
+          "error": null
+        },
+        "last_metadata_promotion": null,
+        "initial_data": {
+          "receiver_listening": true,
+          "writer_policy_current": true,
+          "dispatcher_published": false,
+          "strong_readiness": "request-scoped fresh MQ/data QQ/MVCC/final MQ; publication is not readiness",
+          "replica_readiness": "actual policy/native/refusal checks at every replica RPC",
+          "ranges": [
+            {
+              "range_id": 2,
+              "epoch": 1,
+              "local_leader": false,
+              "leader_admission_observed": false
+            },
+            {
+              "range_id": 3,
+              "epoch": 1,
+              "local_leader": false,
+              "leader_admission_observed": false
+            },
+            {
+              "range_id": 4,
+              "epoch": 1,
+              "local_leader": true,
+              "leader_admission_observed": false
+            }
+          ],
+          "cleanup_quarantined_owners": 0,
+          "writer_binding_diagnostic": {
+            "scope": "diagnostic retained binding only; not linearizable Ready/role or a permission",
+            "persisted_policy_coordinator_id": "01a1d26d-8b75-7ab3-a2ec-74987223a271",
+            "persisted_policy_registration_generation": "01a1d26d-8b77-7652-b8ea-2d290d09745d",
+            "persisted_policy_database_open_incarnation": "46ab4f14-38d6-4a35-8c33-cacfa3cb8a97",
+            "persisted_policy_range_store_open_id": "01a1d26d-850d-7f41-bf34-5585f6c058a6",
+            "persisted_policy_checksum_sha256": "65135c7697d6617010e7d3ca3cb0aec3d670867d9ad5d55682a40483851516d0",
+            "observed_bound_registration_generation": "01a1d26d-8b77-7652-b8ea-2d290d09745d",
+            "observed_bound_registration_active": true,
+            "observed_bound_authority_matches_retained_coordinator": true,
+            "observed_weak_directory_alive": true,
+            "observed_binding_lifetime_live": true,
+            "observed_binding_liveness_error": null,
+            "actual_verified_registry_extension": {
+              "publication_pending": false,
+              "verified_extension": null,
+              "scope": "retained same-open verified audit DATA; not role or Ready"
+            },
+            "current_database_hook_slot_not_relocked": true,
+            "identity_from_status_dto_is_not_authority": true,
+            "retained_owner_coordinator_id": "01a1d26d-8b75-7ab3-a2ec-74987223a271"
+          },
+          "registry_refresh_last_attempt": null,
+          "hot_recovery_last_attempt": null
+        },
+        "data_serving": false,
+        "data_refusal": "metadata-only or pending DATA host: no successful application admission is installed"
+      },
+      "error": "cluster error: range recovery: cluster error: native range read observation: distinct matching current-voter read majority unavailable; failed probes: {ClusterNodeId(\"n1\"): \"cluster error: cluster node n1 rejected RPC cluster_data_operation_failed: cluster error: native metadata control listener grants CONFIG/metadata endpoints only\", ClusterNodeId(\"n2\"): \"cluster error: cluster node n2 rejected RPC cluster_data_operation_failed: cluster error: native metadata control listener grants CONFIG/metadata endpoints only\"}",
+      "data_serving": false
+    }
+  },
+  {
+    "stage": "data_open_action",
+    "node": "n1",
+    "reply": {
+      "version": 1,
+      "sequence": 4,
+      "process_id": 16225,
+      "host": {
+        "version": 1,
+        "node_id": "n1",
+        "phase": "initial_data_opening",
+        "metadata": {
+          "cluster_id": "native-operator-cli",
+          "node_id": "n1",
+          "role": "follower",
+          "current_term": 1,
+          "voted_for": "n0",
+          "leader_id": "n0",
+          "commit_index": 1,
+          "last_log_index": 1,
+          "last_log_term": 1,
+          "topology_generation": 1,
+          "voters": [
+            "n0",
+            "n1",
+            "n2",
+            "n3"
+          ],
+          "learners": []
+        },
+        "last_enrolled_learner": null,
+        "last_caught_up_learner_store_id": null,
+        "last_metadata_maintenance": null,
+        "last_metadata_promotion": null,
+        "initial_data": {
+          "receiver_listening": true,
+          "writer_policy_current": true,
+          "dispatcher_published": false,
+          "strong_readiness": "request-scoped fresh MQ/data QQ/MVCC/final MQ; publication is not readiness",
+          "replica_readiness": "actual policy/native/refusal checks at every replica RPC",
+          "ranges": [
+            {
+              "range_id": 1,
+              "epoch": 1,
+              "local_leader": true,
+              "leader_admission_observed": false
+            },
+            {
+              "range_id": 3,
+              "epoch": 1,
+              "local_leader": false,
+              "leader_admission_observed": false
+            },
+            {
+              "range_id": 4,
+              "epoch": 1,
+              "local_leader": false,
+              "leader_admission_observed": false
+            }
+          ],
+          "cleanup_quarantined_owners": 0,
+          "writer_binding_diagnostic": {
+            "scope": "diagnostic retained binding only; not linearizable Ready/role or a permission",
+            "persisted_policy_coordinator_id": "01a1d26d-9b1a-7fb0-a8f5-2f7ed41f2cf3",
+            "persisted_policy_registration_generation": "01a1d26d-9b1b-7522-8d3f-6297fd5c0172",
+            "persisted_policy_database_open_incarnation": "ff8b78de-e9fc-48ac-984c-e2c92d55d028",
+            "persisted_policy_range_store_open_id": "01a1d26d-8502-79c1-91d2-1dd9d753a112",
+            "persisted_policy_checksum_sha256": "84885d45f2646ae9d64bbadc880cc6c38751f6a8a8f2755f47ec90c10c90fc16",
+            "observed_bound_registration_generation": "01a1d26d-9b1b-7522-8d3f-6297fd5c0172",
+            "observed_bound_registration_active": true,
+            "observed_bound_authority_matches_retained_coordinator": true,
+            "observed_weak_directory_alive": true,
+            "observed_binding_lifetime_live": true,
+            "observed_binding_liveness_error": null,
+            "actual_verified_registry_extension": {
+              "publication_pending": false,
+              "verified_extension": null,
+              "scope": "retained same-open verified audit DATA; not role or Ready"
+            },
+            "current_database_hook_slot_not_relocked": true,
+            "identity_from_status_dto_is_not_authority": true,
+            "retained_owner_coordinator_id": "01a1d26d-9b1a-7fb0-a8f5-2f7ed41f2cf3"
+          },
+          "registry_refresh_last_attempt": null,
+          "hot_recovery_last_attempt": null
+        },
+        "data_serving": false,
+        "data_refusal": "metadata-only or pending DATA host: no successful application admission is installed"
+      },
+      "error": "cluster error: range recovery: cluster error: native range read observation: distinct matching current-voter read majority unavailable; failed probes: {ClusterNodeId(\"n2\"): \"cluster error: cluster node n2 rejected RPC cluster_data_operation_failed: cluster error: native metadata control listener grants CONFIG/metadata endpoints only\", ClusterNodeId(\"n3\"): \"cluster error: cluster node n3 rejected RPC cluster_data_operation_failed: cluster error: native metadata control listener grants CONFIG/metadata endpoints only\"}",
+      "data_serving": false
+    }
+  },
+  {
+    "stage": "data_open_action",
+    "node": "n2",
+    "reply": {
+      "version": 1,
+      "sequence": 4,
+      "process_id": 16226,
+      "host": {
+        "version": 1,
+        "node_id": "n2",
+        "phase": "initial_data",
+        "metadata": {
+          "cluster_id": "native-operator-cli",
+          "node_id": "n2",
+          "role": "follower",
+          "current_term": 1,
+          "voted_for": "n0",
+          "leader_id": "n0",
+          "commit_index": 1,
+          "last_log_index": 1,
+          "last_log_term": 1,
+          "topology_generation": 1,
+          "voters": [
+            "n0",
+            "n1",
+            "n2",
+            "n3"
+          ],
+          "learners": []
+        },
+        "last_enrolled_learner": null,
+        "last_caught_up_learner_store_id": null,
+        "last_metadata_maintenance": null,
+        "last_metadata_promotion": null,
+        "initial_data": {
+          "receiver_listening": true,
+          "writer_policy_current": true,
+          "dispatcher_published": true,
+          "strong_readiness": "request-scoped fresh MQ/data QQ/MVCC/final MQ; publication is not readiness",
+          "replica_readiness": "actual policy/native/refusal checks at every replica RPC",
+          "ranges": [
+            {
+              "range_id": 1,
+              "epoch": 1,
+              "local_leader": false,
+              "leader_admission_observed": false
+            },
+            {
+              "range_id": 2,
+              "epoch": 1,
+              "local_leader": true,
+              "leader_admission_observed": true
+            },
+            {
+              "range_id": 4,
+              "epoch": 1,
+              "local_leader": false,
+              "leader_admission_observed": false
+            }
+          ],
+          "cleanup_quarantined_owners": 0,
+          "writer_binding_diagnostic": {
+            "scope": "diagnostic retained binding only; not linearizable Ready/role or a permission",
+            "persisted_policy_coordinator_id": "01a1d26d-9bb1-7f91-a790-17d41f0ae7fe",
+            "persisted_policy_registration_generation": "01a1d26d-9bb3-7542-871e-9668455eb225",
+            "persisted_policy_database_open_incarnation": "c32d684c-430b-4ba4-bddd-d7393186f5a0",
+            "persisted_policy_range_store_open_id": "01a1d26d-850f-7050-bd63-af7e0914b142",
+            "persisted_policy_checksum_sha256": "6ee02f7356791c468d28ac78fbff77bd06048e4ed2fb4ee9a86b911dce5d59ea",
+            "observed_bound_registration_generation": "01a1d26d-9bb3-7542-871e-9668455eb225",
+            "observed_bound_registration_active": true,
+            "observed_bound_authority_matches_retained_coordinator": true,
+            "observed_weak_directory_alive": true,
+            "observed_binding_lifetime_live": true,
+            "observed_binding_liveness_error": null,
+            "actual_verified_registry_extension": {
+              "publication_pending": false,
+              "verified_extension": null,
+              "scope": "retained same-open verified audit DATA; not role or Ready"
+            },
+            "current_database_hook_slot_not_relocked": true,
+            "identity_from_status_dto_is_not_authority": true,
+            "retained_owner_coordinator_id": "01a1d26d-9bb1-7f91-a790-17d41f0ae7fe"
+          },
+          "registry_refresh_last_attempt": null,
+          "hot_recovery_last_attempt": null
+        },
+        "data_serving": true,
+        "data_refusal": "initial native point DATA only; Strong readiness is request-scoped; SQL/scan/placement/joint operations unsupported"
+      },
+      "error": null,
+      "data_serving": true
+    }
+  },
+  {
+    "stage": "data_open_action",
+    "node": "n3",
+    "reply": {
+      "version": 1,
+      "sequence": 4,
+      "process_id": 16227,
+      "host": {
+        "version": 1,
+        "node_id": "n3",
+        "phase": "initial_data",
+        "metadata": {
+          "cluster_id": "native-operator-cli",
+          "node_id": "n3",
+          "role": "follower",
+          "current_term": 1,
+          "voted_for": "n0",
+          "leader_id": "n0",
+          "commit_index": 1,
+          "last_log_index": 1,
+          "last_log_term": 1,
+          "topology_generation": 1,
+          "voters": [
+            "n0",
+            "n1",
+            "n2",
+            "n3"
+          ],
+          "learners": []
+        },
+        "last_enrolled_learner": null,
+        "last_caught_up_learner_store_id": null,
+        "last_metadata_maintenance": null,
+        "last_metadata_promotion": null,
+        "initial_data": {
+          "receiver_listening": true,
+          "writer_policy_current": true,
+          "dispatcher_published": true,
+          "strong_readiness": "request-scoped fresh MQ/data QQ/MVCC/final MQ; publication is not readiness",
+          "replica_readiness": "actual policy/native/refusal checks at every replica RPC",
+          "ranges": [
+            {
+              "range_id": 1,
+              "epoch": 1,
+              "local_leader": false,
+              "leader_admission_observed": false
+            },
+            {
+              "range_id": 2,
+              "epoch": 1,
+              "local_leader": false,
+              "leader_admission_observed": false
+            },
+            {
+              "range_id": 3,
+              "epoch": 1,
+              "local_leader": true,
+              "leader_admission_observed": true
+            }
+          ],
+          "cleanup_quarantined_owners": 0,
+          "writer_binding_diagnostic": {
+            "scope": "diagnostic retained binding only; not linearizable Ready/role or a permission",
+            "persisted_policy_coordinator_id": "01a1d26d-9c8f-72c1-aebc-ede19a1c652a",
+            "persisted_policy_registration_generation": "01a1d26d-9c91-7171-aff1-99c142030906",
+            "persisted_policy_database_open_incarnation": "67c89181-1573-4447-a5c6-a2840c4bafb2",
+            "persisted_policy_range_store_open_id": "01a1d26d-8512-7143-a7f1-837351553bf3",
+            "persisted_policy_checksum_sha256": "e8dc91d58fe91298a708e8a87009229bb51d171948c84cb78ab401332bbd82f9",
+            "observed_bound_registration_generation": "01a1d26d-9c91-7171-aff1-99c142030906",
+            "observed_bound_registration_active": true,
+            "observed_bound_authority_matches_retained_coordinator": true,
+            "observed_weak_directory_alive": true,
+            "observed_binding_lifetime_live": true,
+            "observed_binding_liveness_error": null,
+            "actual_verified_registry_extension": {
+              "publication_pending": false,
+              "verified_extension": null,
+              "scope": "retained same-open verified audit DATA; not role or Ready"
+            },
+            "current_database_hook_slot_not_relocked": true,
+            "identity_from_status_dto_is_not_authority": true,
+            "retained_owner_coordinator_id": "01a1d26d-9c8f-72c1-aebc-ede19a1c652a"
+          },
+          "registry_refresh_last_attempt": null,
+          "hot_recovery_last_attempt": null
+        },
+        "data_serving": true,
+        "data_refusal": "initial native point DATA only; Strong readiness is request-scoped; SQL/scan/placement/joint operations unsupported"
+      },
+      "error": null,
+      "data_serving": true
+    }
+  },
+  {
+    "stage": "data_open_action",
+    "node": "n0",
+    "reply": {
+      "version": 1,
+      "sequence": 7,
+      "process_id": 16224,
+      "host": {
+        "version": 1,
+        "node_id": "n0",
+        "phase": "initial_data",
+        "metadata": {
+          "cluster_id": "native-operator-cli",
+          "node_id": "n0",
+          "role": "leader",
+          "current_term": 1,
+          "voted_for": "n0",
+          "leader_id": "n0",
+          "commit_index": 1,
+          "last_log_index": 1,
+          "last_log_term": 1,
+          "topology_generation": 1,
+          "voters": [
+            "n0",
+            "n1",
+            "n2",
+            "n3"
+          ],
+          "learners": []
+        },
+        "last_enrolled_learner": null,
+        "last_caught_up_learner_store_id": null,
+        "last_metadata_maintenance": {
+          "node": null,
+          "stage": "idle_or_backoff",
+          "receiver_store_id": null,
+          "installed_through_index": null,
+          "error": null
+        },
+        "last_metadata_promotion": null,
+        "initial_data": {
+          "receiver_listening": true,
+          "writer_policy_current": true,
+          "dispatcher_published": true,
+          "strong_readiness": "request-scoped fresh MQ/data QQ/MVCC/final MQ; publication is not readiness",
+          "replica_readiness": "actual policy/native/refusal checks at every replica RPC",
+          "ranges": [
+            {
+              "range_id": 2,
+              "epoch": 1,
+              "local_leader": false,
+              "leader_admission_observed": false
+            },
+            {
+              "range_id": 3,
+              "epoch": 1,
+              "local_leader": false,
+              "leader_admission_observed": false
+            },
+            {
+              "range_id": 4,
+              "epoch": 1,
+              "local_leader": true,
+              "leader_admission_observed": true
+            }
+          ],
+          "cleanup_quarantined_owners": 0,
+          "writer_binding_diagnostic": {
+            "scope": "diagnostic retained binding only; not linearizable Ready/role or a permission",
+            "persisted_policy_coordinator_id": "01a1d26d-8b75-7ab3-a2ec-74987223a271",
+            "persisted_policy_registration_generation": "01a1d26d-8b77-7652-b8ea-2d290d09745d",
+            "persisted_policy_database_open_incarnation": "46ab4f14-38d6-4a35-8c33-cacfa3cb8a97",
+            "persisted_policy_range_store_open_id": "01a1d26d-850d-7f41-bf34-5585f6c058a6",
+            "persisted_policy_checksum_sha256": "65135c7697d6617010e7d3ca3cb0aec3d670867d9ad5d55682a40483851516d0",
+            "observed_bound_registration_generation": "01a1d26d-8b77-7652-b8ea-2d290d09745d",
+            "observed_bound_registration_active": true,
+            "observed_bound_authority_matches_retained_coordinator": true,
+            "observed_weak_directory_alive": true,
+            "observed_binding_lifetime_live": true,
+            "observed_binding_liveness_error": null,
+            "actual_verified_registry_extension": {
+              "publication_pending": false,
+              "verified_extension": null,
+              "scope": "retained same-open verified audit DATA; not role or Ready"
+            },
+            "current_database_hook_slot_not_relocked": true,
+            "identity_from_status_dto_is_not_authority": true,
+            "retained_owner_coordinator_id": "01a1d26d-8b75-7ab3-a2ec-74987223a271"
+          },
+          "registry_refresh_last_attempt": null,
+          "hot_recovery_last_attempt": null
+        },
+        "data_serving": true,
+        "data_refusal": "initial native point DATA only; Strong readiness is request-scoped; SQL/scan/placement/joint operations unsupported"
+      },
+      "error": null,
+      "data_serving": true
+    }
+  },
+  {
+    "stage": "data_open_action",
+    "node": "n1",
+    "reply": {
+      "version": 1,
+      "sequence": 5,
+      "process_id": 16225,
+      "host": {
+        "version": 1,
+        "node_id": "n1",
+        "phase": "initial_data",
+        "metadata": {
+          "cluster_id": "native-operator-cli",
+          "node_id": "n1",
+          "role": "follower",
+          "current_term": 1,
+          "voted_for": "n0",
+          "leader_id": "n0",
+          "commit_index": 1,
+          "last_log_index": 1,
+          "last_log_term": 1,
+          "topology_generation": 1,
+          "voters": [
+            "n0",
+            "n1",
+            "n2",
+            "n3"
+          ],
+          "learners": []
+        },
+        "last_enrolled_learner": null,
+        "last_caught_up_learner_store_id": null,
+        "last_metadata_maintenance": null,
+        "last_metadata_promotion": null,
+        "initial_data": {
+          "receiver_listening": true,
+          "writer_policy_current": true,
+          "dispatcher_published": true,
+          "strong_readiness": "request-scoped fresh MQ/data QQ/MVCC/final MQ; publication is not readiness",
+          "replica_readiness": "actual policy/native/refusal checks at every replica RPC",
+          "ranges": [
+            {
+              "range_id": 1,
+              "epoch": 1,
+              "local_leader": true,
+              "leader_admission_observed": true
+            },
+            {
+              "range_id": 3,
+              "epoch": 1,
+              "local_leader": false,
+              "leader_admission_observed": false
+            },
+            {
+              "range_id": 4,
+              "epoch": 1,
+              "local_leader": false,
+              "leader_admission_observed": false
+            }
+          ],
+          "cleanup_quarantined_owners": 0,
+          "writer_binding_diagnostic": {
+            "scope": "diagnostic retained binding only; not linearizable Ready/role or a permission",
+            "persisted_policy_coordinator_id": "01a1d26d-9b1a-7fb0-a8f5-2f7ed41f2cf3",
+            "persisted_policy_registration_generation": "01a1d26d-9b1b-7522-8d3f-6297fd5c0172",
+            "persisted_policy_database_open_incarnation": "ff8b78de-e9fc-48ac-984c-e2c92d55d028",
+            "persisted_policy_range_store_open_id": "01a1d26d-8502-79c1-91d2-1dd9d753a112",
+            "persisted_policy_checksum_sha256": "84885d45f2646ae9d64bbadc880cc6c38751f6a8a8f2755f47ec90c10c90fc16",
+            "observed_bound_registration_generation": "01a1d26d-9b1b-7522-8d3f-6297fd5c0172",
+            "observed_bound_registration_active": true,
+            "observed_bound_authority_matches_retained_coordinator": true,
+            "observed_weak_directory_alive": true,
+            "observed_binding_lifetime_live": true,
+            "observed_binding_liveness_error": null,
+            "actual_verified_registry_extension": {
+              "publication_pending": false,
+              "verified_extension": null,
+              "scope": "retained same-open verified audit DATA; not role or Ready"
+            },
+            "current_database_hook_slot_not_relocked": true,
+            "identity_from_status_dto_is_not_authority": true,
+            "retained_owner_coordinator_id": "01a1d26d-9b1a-7fb0-a8f5-2f7ed41f2cf3"
+          },
+          "registry_refresh_last_attempt": null,
+          "hot_recovery_last_attempt": null
+        },
+        "data_serving": true,
+        "data_refusal": "initial native point DATA only; Strong readiness is request-scoped; SQL/scan/placement/joint operations unsupported"
+      },
+      "error": null,
+      "data_serving": true
+    }
+  },
+  {
+    "logical_operation_id": "01a1d26d-9e5d-7a32-8933-df19fa4bca74",
+    "stage": "attempt",
+    "namespace": "items",
+    "key": "external-first-ack",
+    "value": {
+      "full": {
+        "array": [
+          1,
+          true,
+          null,
+          {
+            "nested": "retained"
+          }
+        ]
+      },
+      "count": 17,
+      "text": "entire acknowledged payload"
+    },
+    "payload_sha256": "1dc23dddaa3457b67163545bc41e9b29188ebdd7f8b803aada54be7707bc6c0b"
+  },
+  {
+    "logical_operation_id": "01a1d26d-9e5d-7a32-8933-df19fa4bca74",
+    "stage": "reply",
+    "key": "external-first-ack",
+    "value": {
+      "full": {
+        "array": [
+          1,
+          true,
+          null,
+          {
+            "nested": "retained"
+          }
+        ]
+      },
+      "count": 17,
+      "text": "entire acknowledged payload"
+    },
+    "payload_sha256": "1dc23dddaa3457b67163545bc41e9b29188ebdd7f8b803aada54be7707bc6c0b",
+    "acknowledged": true,
+    "inserted": true,
+    "error": null
+  },
+  {
+    "logical_operation_id": "01a1d26d-9fc4-7a11-a9a1-f86ec35f8f5f",
+    "stage": "strong_reply",
+    "key": "external-first-ack",
+    "present": true,
+    "value": {
+      "full": {
+        "array": [
+          1,
+          true,
+          null,
+          {
+            "nested": "retained"
+          }
+        ]
+      },
+      "count": 17,
+      "text": "entire acknowledged payload"
+    }
+  },
+  {
+    "logical_operation_id": "01a1d26d-a096-7e03-93e5-825a5f2beef5",
+    "stage": "attempt",
+    "namespace": "items",
+    "key": "external-json-null",
+    "value": null,
+    "payload_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"
+  },
+  {
+    "logical_operation_id": "01a1d26d-a096-7e03-93e5-825a5f2beef5",
+    "stage": "reply",
+    "key": "external-json-null",
+    "value": null,
+    "payload_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+    "acknowledged": true,
+    "inserted": true,
+    "error": null
+  },
+  {
+    "logical_operation_id": "01a1d26d-a222-7fc2-a108-92987da57e35",
+    "stage": "strong_reply",
+    "key": "external-json-null",
+    "present": true,
+    "value": null
+  },
+  {
+    "logical_operation_id": "01a1d26d-a30d-7871-bd82-4d0b319c5f8a",
+    "stage": "attempt",
+    "namespace": "items",
+    "key": "external-empty-object",
+    "value": {},
+    "payload_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+  },
+  {
+    "logical_operation_id": "01a1d26d-a30d-7871-bd82-4d0b319c5f8a",
+    "stage": "reply",
+    "key": "external-empty-object",
+    "value": {},
+    "payload_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+    "acknowledged": true,
+    "inserted": true,
+    "error": null
+  },
+  {
+    "logical_operation_id": "01a1d26d-a4e9-7c73-9d18-9923652418d9",
+    "stage": "strong_reply",
+    "key": "external-empty-object",
+    "present": true,
+    "value": {}
+  },
+  {
+    "logical_operation_id": "01a1d26d-a5cd-70b3-9df2-c41398635b49",
+    "stage": "strong_reply",
+    "key": "genuine-unwritten-key",
+    "present": false,
+    "value": null
+  },
+  {
+    "stage": "four_initial_data_complete",
+    "externally_acknowledged": 3,
+    "fifth_data_stage": "not_entered",
+    "automatic_range_move": "not_implemented"
+  },
+  {
+    "stage": "initial_four",
+    "execution_identity": {
+      "source": "5cec7687196fe6b113805485672e8730c8295a56",
+      "source_available": true,
+      "source_authority": "BICDB_TEST_SOURCE_SHA runtime environment; not option_env or runtime git lookup",
+      "test_package_version": "1.0.490-beta",
+      "binary_sha256": "81c2c35ef7c023691aeed714e18970726274093a3936092b8fee92e483461452",
+      "binary_bytes": 754227664,
+      "binary_scope": "actual CARGO_BIN_EXE_bicdb bytes read before process/startup/ACK phase; not a published release"
+    },
+    "pids": [
+      18537,
+      18538,
+      18539,
+      18540
+    ]
+  },
+  {
+    "stage": "initial_data_action",
+    "node": "n0",
+    "reply": {
+      "version": 1,
+      "sequence": 5,
+      "process_id": 18537,
+      "host": {
+        "version": 1,
+        "node_id": "n0",
+        "phase": "initial_data_opening",
+        "metadata": {
+          "cluster_id": "native-operator-cli",
+          "node_id": "n0",
+          "role": "leader",
+          "current_term": 1,
+          "voted_for": "n0",
+          "leader_id": "n0",
+          "commit_index": 1,
+          "last_log_index": 1,
+          "last_log_term": 1,
+          "topology_generation": 1,
+          "voters": [
+            "n0",
+            "n1",
+            "n2",
+            "n3"
+          ],
+          "learners": []
+        },
+        "last_enrolled_learner": null,
+        "last_caught_up_learner_store_id": null,
+        "last_metadata_maintenance": {
+          "node": null,
+          "stage": "idle_or_backoff",
+          "receiver_store_id": null,
+          "installed_through_index": null,
+          "error": null
+        },
+        "last_metadata_promotion": null,
+        "initial_data": {
+          "receiver_listening": true,
+          "writer_policy_current": true,
+          "dispatcher_published": false,
+          "strong_readiness": "request-scoped fresh MQ/data QQ/MVCC/final MQ; publication is not readiness",
+          "replica_readiness": "actual policy/native/refusal checks at every replica RPC",
+          "ranges": [
+            {
+              "range_id": 2,
+              "epoch": 1,
+              "local_leader": false,
+              "leader_admission_observed": false
+            },
+            {
+              "range_id": 3,
+              "epoch": 1,
+              "local_leader": false,
+              "leader_admission_observed": false
+            },
+            {
+              "range_id": 4,
+              "epoch": 1,
+              "local_leader": true,
+              "leader_admission_observed": false
+            }
+          ],
+          "cleanup_quarantined_owners": 0,
+          "writer_binding_diagnostic": {
+            "scope": "diagnostic retained binding only; not linearizable Ready/role or a permission",
+            "persisted_policy_coordinator_id": "01a1d26e-1b72-73d0-850b-ae999da3e27d",
+            "persisted_policy_registration_generation": "01a1d26e-1b73-73e1-b950-fd5b888226df",
+            "persisted_policy_database_open_incarnation": "fecdf4a4-7159-4023-a00b-35613fd0d143",
+            "persisted_policy_range_store_open_id": "01a1d26e-1525-7af0-966c-9dc98f9319f5",
+            "persisted_policy_checksum_sha256": "836df39735ff7e6759566922c86387e9afdffa915a9f07672c74a3f83fc20d37",
+            "observed_bound_registration_generation": "01a1d26e-1b73-73e1-b950-fd5b888226df",
+            "observed_bound_registration_active": true,
+            "observed_bound_authority_matches_retained_coordinator": true,
+            "observed_weak_directory_alive": true,
+            "observed_binding_lifetime_live": true,
+            "observed_binding_liveness_error": null,
+            "actual_verified_registry_extension": {
+              "publication_pending": false,
+              "verified_extension": null,
+              "scope": "retained same-open verified audit DATA; not role or Ready"
+            },
+            "current_database_hook_slot_not_relocked": true,
+            "identity_from_status_dto_is_not_authority": true,
+            "retained_owner_coordinator_id": "01a1d26e-1b72-73d0-850b-ae999da3e27d"
+          },
+          "registry_refresh_last_attempt": null,
+          "hot_recovery_last_attempt": null
+        },
+        "data_serving": false,
+        "data_refusal": "metadata-only or pending DATA host: no successful application admission is installed"
+      },
+      "error": "cluster error: range recovery: cluster error: native range read observation: distinct matching current-voter read majority unavailable; failed probes: {ClusterNodeId(\"n1\"): \"cluster error: cluster node n1 rejected RPC cluster_data_operation_failed: cluster error: native metadata control listener grants CONFIG/metadata endpoints only\", ClusterNodeId(\"n2\"): \"cluster error: cluster node n2 rejected RPC cluster_data_operation_failed: cluster error: native metadata control listener grants CONFIG/metadata endpoints only\"}",
+      "data_serving": false
+    }
+  },
+  {
+    "stage": "initial_data_action",
+    "node": "n1",
+    "reply": {
+      "version": 1,
+      "sequence": 4,
+      "process_id": 18538,
+      "host": {
+        "version": 1,
+        "node_id": "n1",
+        "phase": "initial_data_opening",
+        "metadata": {
+          "cluster_id": "native-operator-cli",
+          "node_id": "n1",
+          "role": "follower",
+          "current_term": 1,
+          "voted_for": "n0",
+          "leader_id": "n0",
+          "commit_index": 1,
+          "last_log_index": 1,
+          "last_log_term": 1,
+          "topology_generation": 1,
+          "voters": [
+            "n0",
+            "n1",
+            "n2",
+            "n3"
+          ],
+          "learners": []
+        },
+        "last_enrolled_learner": null,
+        "last_caught_up_learner_store_id": null,
+        "last_metadata_maintenance": null,
+        "last_metadata_promotion": null,
+        "initial_data": {
+          "receiver_listening": true,
+          "writer_policy_current": true,
+          "dispatcher_published": false,
+          "strong_readiness": "request-scoped fresh MQ/data QQ/MVCC/final MQ; publication is not readiness",
+          "replica_readiness": "actual policy/native/refusal checks at every replica RPC",
+          "ranges": [
+            {
+              "range_id": 1,
+              "epoch": 1,
+              "local_leader": true,
+              "leader_admission_observed": false
+            },
+            {
+              "range_id": 3,
+              "epoch": 1,
+              "local_leader": false,
+              "leader_admission_observed": false
+            },
+            {
+              "range_id": 4,
+              "epoch": 1,
+              "local_leader": false,
+              "leader_admission_observed": false
+            }
+          ],
+          "cleanup_quarantined_owners": 0,
+          "writer_binding_diagnostic": {
+            "scope": "diagnostic retained binding only; not linearizable Ready/role or a permission",
+            "persisted_policy_coordinator_id": "01a1d26e-1c13-7a11-853b-758a94ea99da",
+            "persisted_policy_registration_generation": "01a1d26e-1c14-7c60-aca5-e69408be4c94",
+            "persisted_policy_database_open_incarnation": "e397db50-e0a9-4830-aeb0-218259cc8036",
+            "persisted_policy_range_store_open_id": "01a1d26e-1525-7622-b5b0-8fb9ae00fa0e",
+            "persisted_policy_checksum_sha256": "198f8c026d2690261fb35f1f58d44396f8356534b18b1e0c53a35e4d824f750c",
+            "observed_bound_registration_generation": "01a1d26e-1c14-7c60-aca5-e69408be4c94",
+            "observed_bound_registration_active": true,
+            "observed_bound_authority_matches_retained_coordinator": true,
+            "observed_weak_directory_alive": true,
+            "observed_binding_lifetime_live": true,
+            "observed_binding_liveness_error": null,
+            "actual_verified_registry_extension": {
+              "publication_pending": false,
+              "verified_extension": null,
+              "scope": "retained same-open verified audit DATA; not role or Ready"
+            },
+            "current_database_hook_slot_not_relocked": true,
+            "identity_from_status_dto_is_not_authority": true,
+            "retained_owner_coordinator_id": "01a1d26e-1c13-7a11-853b-758a94ea99da"
+          },
+          "registry_refresh_last_attempt": null,
+          "hot_recovery_last_attempt": null
+        },
+        "data_serving": false,
+        "data_refusal": "metadata-only or pending DATA host: no successful application admission is installed"
+      },
+      "error": "cluster error: range recovery: cluster error: native range read observation: distinct matching current-voter read majority unavailable; failed probes: {ClusterNodeId(\"n2\"): \"cluster error: cluster node n2 rejected RPC cluster_data_operation_failed: cluster error: native metadata control listener grants CONFIG/metadata endpoints only\", ClusterNodeId(\"n3\"): \"cluster error: cluster node n3 rejected RPC cluster_data_operation_failed: cluster error: native metadata control listener grants CONFIG/metadata endpoints only\"}",
+      "data_serving": false
+    }
+  },
+  {
+    "stage": "initial_data_action",
+    "node": "n2",
+    "reply": {
+      "version": 1,
+      "sequence": 4,
+      "process_id": 18539,
+      "host": {
+        "version": 1,
+        "node_id": "n2",
+        "phase": "initial_data",
+        "metadata": {
+          "cluster_id": "native-operator-cli",
+          "node_id": "n2",
+          "role": "follower",
+          "current_term": 1,
+          "voted_for": "n0",
+          "leader_id": "n0",
+          "commit_index": 1,
+          "last_log_index": 1,
+          "last_log_term": 1,
+          "topology_generation": 1,
+          "voters": [
+            "n0",
+            "n1",
+            "n2",
+            "n3"
+          ],
+          "learners": []
+        },
+        "last_enrolled_learner": null,
+        "last_caught_up_learner_store_id": null,
+        "last_metadata_maintenance": null,
+        "last_metadata_promotion": null,
+        "initial_data": {
+          "receiver_listening": true,
+          "writer_policy_current": true,
+          "dispatcher_published": true,
+          "strong_readiness": "request-scoped fresh MQ/data QQ/MVCC/final MQ; publication is not readiness",
+          "replica_readiness": "actual policy/native/refusal checks at every replica RPC",
+          "ranges": [
+            {
+              "range_id": 1,
+              "epoch": 1,
+              "local_leader": false,
+              "leader_admission_observed": false
+            },
+            {
+              "range_id": 2,
+              "epoch": 1,
+              "local_leader": true,
+              "leader_admission_observed": true
+            },
+            {
+              "range_id": 4,
+              "epoch": 1,
+              "local_leader": false,
+              "leader_admission_observed": false
+            }
+          ],
+          "cleanup_quarantined_owners": 0,
+          "writer_binding_diagnostic": {
+            "scope": "diagnostic retained binding only; not linearizable Ready/role or a permission",
+            "persisted_policy_coordinator_id": "01a1d26e-1cb5-7720-b392-41ea97694649",
+            "persisted_policy_registration_generation": "01a1d26e-1cb7-7390-870c-ad19c886a026",
+            "persisted_policy_database_open_incarnation": "a1fd9f41-a038-400a-995d-3449e3edf1e1",
+            "persisted_policy_range_store_open_id": "01a1d26e-1525-7653-be66-3c3c07c3e7ed",
+            "persisted_policy_checksum_sha256": "bda791693270f34f51316e0110afde28877d8c830c822b3b53a1b578098c9f4e",
+            "observed_bound_registration_generation": "01a1d26e-1cb7-7390-870c-ad19c886a026",
+            "observed_bound_registration_active": true,
+            "observed_bound_authority_matches_retained_coordinator": true,
+            "observed_weak_directory_alive": true,
+            "observed_binding_lifetime_live": true,
+            "observed_binding_liveness_error": null,
+            "actual_verified_registry_extension": {
+              "publication_pending": false,
+              "verified_extension": null,
+              "scope": "retained same-open verified audit DATA; not role or Ready"
+            },
+            "current_database_hook_slot_not_relocked": true,
+            "identity_from_status_dto_is_not_authority": true,
+            "retained_owner_coordinator_id": "01a1d26e-1cb5-7720-b392-41ea97694649"
+          },
+          "registry_refresh_last_attempt": null,
+          "hot_recovery_last_attempt": null
+        },
+        "data_serving": true,
+        "data_refusal": "initial native point DATA only; Strong readiness is request-scoped; SQL/scan/placement/joint operations unsupported"
+      },
+      "error": null,
+      "data_serving": true
+    }
+  },
+  {
+    "stage": "initial_data_action",
+    "node": "n3",
+    "reply": {
+      "version": 1,
+      "sequence": 4,
+      "process_id": 18540,
+      "host": {
+        "version": 1,
+        "node_id": "n3",
+        "phase": "initial_data",
+        "metadata": {
+          "cluster_id": "native-operator-cli",
+          "node_id": "n3",
+          "role": "follower",
+          "current_term": 1,
+          "voted_for": "n0",
+          "leader_id": "n0",
+          "commit_index": 1,
+          "last_log_index": 1,
+          "last_log_term": 1,
+          "topology_generation": 1,
+          "voters": [
+            "n0",
+            "n1",
+            "n2",
+            "n3"
+          ],
+          "learners": []
+        },
+        "last_enrolled_learner": null,
+        "last_caught_up_learner_store_id": null,
+        "last_metadata_maintenance": null,
+        "last_metadata_promotion": null,
+        "initial_data": {
+          "receiver_listening": true,
+          "writer_policy_current": true,
+          "dispatcher_published": true,
+          "strong_readiness": "request-scoped fresh MQ/data QQ/MVCC/final MQ; publication is not readiness",
+          "replica_readiness": "actual policy/native/refusal checks at every replica RPC",
+          "ranges": [
+            {
+              "range_id": 1,
+              "epoch": 1,
+              "local_leader": false,
+              "leader_admission_observed": false
+            },
+            {
+              "range_id": 2,
+              "epoch": 1,
+              "local_leader": false,
+              "leader_admission_observed": false
+            },
+            {
+              "range_id": 3,
+              "epoch": 1,
+              "local_leader": true,
+              "leader_admission_observed": true
+            }
+          ],
+          "cleanup_quarantined_owners": 0,
+          "writer_binding_diagnostic": {
+            "scope": "diagnostic retained binding only; not linearizable Ready/role or a permission",
+            "persisted_policy_coordinator_id": "01a1d26e-1da6-7362-9e66-893b4143721d",
+            "persisted_policy_registration_generation": "01a1d26e-1da8-7403-a8e7-465faefc3c74",
+            "persisted_policy_database_open_incarnation": "a33a0054-fc1c-4956-abdc-2e98a7ede11d",
+            "persisted_policy_range_store_open_id": "01a1d26e-1527-7f23-8759-ee1d7e0d02fa",
+            "persisted_policy_checksum_sha256": "f8cdc16839af89b225786e4ec5b5e8ff489aee8f3c2586fca5b180da66cc90de",
+            "observed_bound_registration_generation": "01a1d26e-1da8-7403-a8e7-465faefc3c74",
+            "observed_bound_registration_active": true,
+            "observed_bound_authority_matches_retained_coordinator": true,
+            "observed_weak_directory_alive": true,
+            "observed_binding_lifetime_live": true,
+            "observed_binding_liveness_error": null,
+            "actual_verified_registry_extension": {
+              "publication_pending": false,
+              "verified_extension": null,
+              "scope": "retained same-open verified audit DATA; not role or Ready"
+            },
+            "current_database_hook_slot_not_relocked": true,
+            "identity_from_status_dto_is_not_authority": true,
+            "retained_owner_coordinator_id": "01a1d26e-1da6-7362-9e66-893b4143721d"
+          },
+          "registry_refresh_last_attempt": null,
+          "hot_recovery_last_attempt": null
+        },
+        "data_serving": true,
+        "data_refusal": "initial native point DATA only; Strong readiness is request-scoped; SQL/scan/placement/joint operations unsupported"
+      },
+      "error": null,
+      "data_serving": true
+    }
+  },
+  {
+    "stage": "initial_data_action",
+    "node": "n0",
+    "reply": {
+      "version": 1,
+      "sequence": 6,
+      "process_id": 18537,
+      "host": {
+        "version": 1,
+        "node_id": "n0",
+        "phase": "initial_data",
+        "metadata": {
+          "cluster_id": "native-operator-cli",
+          "node_id": "n0",
+          "role": "leader",
+          "current_term": 1,
+          "voted_for": "n0",
+          "leader_id": "n0",
+          "commit_index": 1,
+          "last_log_index": 1,
+          "last_log_term": 1,
+          "topology_generation": 1,
+          "voters": [
+            "n0",
+            "n1",
+            "n2",
+            "n3"
+          ],
+          "learners": []
+        },
+        "last_enrolled_learner": null,
+        "last_caught_up_learner_store_id": null,
+        "last_metadata_maintenance": {
+          "node": null,
+          "stage": "idle_or_backoff",
+          "receiver_store_id": null,
+          "installed_through_index": null,
+          "error": null
+        },
+        "last_metadata_promotion": null,
+        "initial_data": {
+          "receiver_listening": true,
+          "writer_policy_current": true,
+          "dispatcher_published": true,
+          "strong_readiness": "request-scoped fresh MQ/data QQ/MVCC/final MQ; publication is not readiness",
+          "replica_readiness": "actual policy/native/refusal checks at every replica RPC",
+          "ranges": [
+            {
+              "range_id": 2,
+              "epoch": 1,
+              "local_leader": false,
+              "leader_admission_observed": false
+            },
+            {
+              "range_id": 3,
+              "epoch": 1,
+              "local_leader": false,
+              "leader_admission_observed": false
+            },
+            {
+              "range_id": 4,
+              "epoch": 1,
+              "local_leader": true,
+              "leader_admission_observed": true
+            }
+          ],
+          "cleanup_quarantined_owners": 0,
+          "writer_binding_diagnostic": {
+            "scope": "diagnostic retained binding only; not linearizable Ready/role or a permission",
+            "persisted_policy_coordinator_id": "01a1d26e-1b72-73d0-850b-ae999da3e27d",
+            "persisted_policy_registration_generation": "01a1d26e-1b73-73e1-b950-fd5b888226df",
+            "persisted_policy_database_open_incarnation": "fecdf4a4-7159-4023-a00b-35613fd0d143",
+            "persisted_policy_range_store_open_id": "01a1d26e-1525-7af0-966c-9dc98f9319f5",
+            "persisted_policy_checksum_sha256": "836df39735ff7e6759566922c86387e9afdffa915a9f07672c74a3f83fc20d37",
+            "observed_bound_registration_generation": "01a1d26e-1b73-73e1-b950-fd5b888226df",
+            "observed_bound_registration_active": true,
+            "observed_bound_authority_matches_retained_coordinator": true,
+            "observed_weak_directory_alive": true,
+            "observed_binding_lifetime_live": true,
+            "observed_binding_liveness_error": null,
+            "actual_verified_registry_extension": {
+              "publication_pending": false,
+              "verified_extension": null,
+              "scope": "retained same-open verified audit DATA; not role or Ready"
+            },
+            "current_database_hook_slot_not_relocked": true,
+            "identity_from_status_dto_is_not_authority": true,
+            "retained_owner_coordinator_id": "01a1d26e-1b72-73d0-850b-ae999da3e27d"
+          },
+          "registry_refresh_last_attempt": null,
+          "hot_recovery_last_attempt": null
+        },
+        "data_serving": true,
+        "data_refusal": "initial native point DATA only; Strong readiness is request-scoped; SQL/scan/placement/joint operations unsupported"
+      },
+      "error": null,
+      "data_serving": true
+    }
+  },
+  {
+    "stage": "initial_data_action",
+    "node": "n1",
+    "reply": {
+      "version": 1,
+      "sequence": 5,
+      "process_id": 18538,
+      "host": {
+        "version": 1,
+        "node_id": "n1",
+        "phase": "initial_data",
+        "metadata": {
+          "cluster_id": "native-operator-cli",
+          "node_id": "n1",
+          "role": "follower",
+          "current_term": 1,
+          "voted_for": "n0",
+          "leader_id": "n0",
+          "commit_index": 1,
+          "last_log_index": 1,
+          "last_log_term": 1,
+          "topology_generation": 1,
+          "voters": [
+            "n0",
+            "n1",
+            "n2",
+            "n3"
+          ],
+          "learners": []
+        },
+        "last_enrolled_learner": null,
+        "last_caught_up_learner_store_id": null,
+        "last_metadata_maintenance": null,
+        "last_metadata_promotion": null,
+        "initial_data": {
+          "receiver_listening": true,
+          "writer_policy_current": true,
+          "dispatcher_published": true,
+          "strong_readiness": "request-scoped fresh MQ/data QQ/MVCC/final MQ; publication is not readiness",
+          "replica_readiness": "actual policy/native/refusal checks at every replica RPC",
+          "ranges": [
+            {
+              "range_id": 1,
+              "epoch": 1,
+              "local_leader": true,
+              "leader_admission_observed": true
+            },
+            {
+              "range_id": 3,
+              "epoch": 1,
+              "local_leader": false,
+              "leader_admission_observed": false
+            },
+            {
+              "range_id": 4,
+              "epoch": 1,
+              "local_leader": false,
+              "leader_admission_observed": false
+            }
+          ],
+          "cleanup_quarantined_owners": 0,
+          "writer_binding_diagnostic": {
+            "scope": "diagnostic retained binding only; not linearizable Ready/role or a permission",
+            "persisted_policy_coordinator_id": "01a1d26e-1c13-7a11-853b-758a94ea99da",
+            "persisted_policy_registration_generation": "01a1d26e-1c14-7c60-aca5-e69408be4c94",
+            "persisted_policy_database_open_incarnation": "e397db50-e0a9-4830-aeb0-218259cc8036",
+            "persisted_policy_range_store_open_id": "01a1d26e-1525-7622-b5b0-8fb9ae00fa0e",
+            "persisted_policy_checksum_sha256": "198f8c026d2690261fb35f1f58d44396f8356534b18b1e0c53a35e4d824f750c",
+            "observed_bound_registration_generation": "01a1d26e-1c14-7c60-aca5-e69408be4c94",
+            "observed_bound_registration_active": true,
+            "observed_bound_authority_matches_retained_coordinator": true,
+            "observed_weak_directory_alive": true,
+            "observed_binding_lifetime_live": true,
+            "observed_binding_liveness_error": null,
+            "actual_verified_registry_extension": {
+              "publication_pending": false,
+              "verified_extension": null,
+              "scope": "retained same-open verified audit DATA; not role or Ready"
+            },
+            "current_database_hook_slot_not_relocked": true,
+            "identity_from_status_dto_is_not_authority": true,
+            "retained_owner_coordinator_id": "01a1d26e-1c13-7a11-853b-758a94ea99da"
+          },
+          "registry_refresh_last_attempt": null,
+          "hot_recovery_last_attempt": null
+        },
+        "data_serving": true,
+        "data_refusal": "initial native point DATA only; Strong readiness is request-scoped; SQL/scan/placement/joint operations unsupported"
+      },
+      "error": null,
+      "data_serving": true
+    }
+  },
+  {
+    "logical_operation_id": "01a1d26e-1faa-7392-8295-c4e97ba53ab8",
+    "stage": "attempt_before_fifth",
+    "namespace": "items",
+    "key": "ack-before-fifth-replica-receiver",
+    "value": {
+      "entire": "external ACK precedes fifth stage",
+      "nested": [
+        17,
+        null,
+        {
+          "retained": true
+        }
+      ]
+    }
+  },
+  {
+    "logical_operation_id": "01a1d26e-1faa-7392-8295-c4e97ba53ab8",
+    "stage": "reply_before_fifth",
+    "key": "ack-before-fifth-replica-receiver",
+    "value": {
+      "entire": "external ACK precedes fifth stage",
+      "nested": [
+        17,
+        null,
+        {
+          "retained": true
+        }
+      ]
+    },
+    "acknowledged": true,
+    "error": null
+  },
+  {
+    "logical_operation_id": "01a1d26e-2113-7270-831f-066d3a7457ec",
+    "stage": "strong_before_fifth",
+    "key": "ack-before-fifth-replica-receiver",
+    "present": true,
+    "value": {
+      "entire": "external ACK precedes fifth stage",
+      "nested": [
+        17,
+        null,
+        {
+          "retained": true
+        }
+      ]
+    }
+  },
+  {
+    "stage": "same_owned_fifth_receiver",
+    "status": {
+      "version": 1,
+      "sequence": 0,
+      "process_id": 18892,
+      "host": {
+        "version": 1,
+        "node_id": "n4",
+        "birth_id": "01a1d26e-2315-70d2-95bf-4a4ea14ec955",
+        "birth_sha256": "dee22e43a19523ac7bbc607ea18aec7b4d87bb8d0938001fd7863eca90a34f35",
+        "birth_bound": true,
+        "schema_sha256": "dbf787e4836cc8c39299bce6b74940e28a847b560c54f9038385090cfd65756b",
+        "namespace_ids": [
+          [
+            "__bic_cluster_events",
+            "8eaa0265-5701-4519-81e5-69f34edf885b"
+          ],
+          [
+            "items",
+            "6be182f4-d6ed-4562-bd2c-8e33abc6a630"
+          ]
+        ],
+        "metadata_store_id": "01a1d26e-257a-7a82-8d2c-8b953bb25652",
+        "metadata_role": "voter",
+        "metadata": {
+          "cluster_id": "native-operator-cli",
+          "node_id": "n4",
+          "role": "follower",
+          "current_term": 1,
+          "voted_for": null,
+          "leader_id": "n0",
+          "commit_index": 4,
+          "last_log_index": 4,
+          "last_log_term": 1,
+          "topology_generation": 4,
+          "voters": [
+            "n0",
+            "n1",
+            "n2",
+            "n3",
+            "n4"
+          ],
+          "learners": []
+        },
+        "metadata_listener_owned": true,
+        "metadata_control_owned": true,
+        "replica_receiver": {
+          "receiver_ready": true,
+          "stopping": false,
+          "range_store_open_id": "01a1d26e-2324-7bc2-b451-141346ed169e",
+          "metadata_store_id": "01a1d26e-257a-7a82-8d2c-8b953bb25652",
+          "database_incarnation": "b0ed31a2-434a-4f8a-9888-840c6a7a35b3",
+          "birth_id": "01a1d26e-2315-70d2-95bf-4a4ea14ec955",
+          "birth_sha256": "dee22e43a19523ac7bbc607ea18aec7b4d87bb8d0938001fd7863eca90a34f35",
+          "writer_admission": "not installed by replica-only owner",
+          "range_readiness": "UNKNOWN: no assigned image/native materialization or serving proof",
+          "next_required_gates": [
+            "native_placement_controller",
+            "authenticated_native_image_joint_wire",
+            "actual_image_joint_open_and_writer_admission"
+          ],
+          "data_serving": false
+        },
+        "last_metadata_maintenance": null,
+        "last_metadata_promotion": null,
+        "phase": "owned_metadata_voter",
+        "data_serving": false
+      },
+      "error": null,
+      "data_serving": false
+    }
+  },
+  {
+    "stage": "strong_after_fifth",
+    "present": true,
+    "value": {
+      "entire": "external ACK precedes fifth stage",
+      "nested": [
+        17,
+        null,
+        {
+          "retained": true
+        }
+      ]
+    }
+  },
+  {
+    "stage": "replica_receiver_prerequisite_complete",
+    "fifth_data_serving": false,
+    "next_missing_gates": [
+      "native_placement_controller",
+      "authenticated_native_image_joint_wire",
+      "actual_image_joint_open_and_writer_admission"
+    ],
+    "relocation": "not_attempted_or_claimed"
+  },
+  {
+    "stage": "initial_four",
+    "execution_identity": {
+      "source": "5cec7687196fe6b113805485672e8730c8295a56",
+      "source_available": true,
+      "source_authority": "BICDB_TEST_SOURCE_SHA runtime environment; not option_env or runtime git lookup",
+      "test_package_version": "1.0.490-beta",
+      "binary_sha256": "81c2c35ef7c023691aeed714e18970726274093a3936092b8fee92e483461452",
+      "binary_bytes": 754227664,
+      "binary_scope": "actual CARGO_BIN_EXE_bicdb bytes read before process/startup/ACK phase; not a published release"
+    },
+    "pids": [
+      19226,
+      19227,
+      19228,
+      19229
+    ]
+  },
+  {
+    "stage": "initial_data_action",
+    "node": "n0",
+    "reply": {
+      "version": 1,
+      "sequence": 5,
+      "process_id": 19226,
+      "host": {
+        "version": 1,
+        "node_id": "n0",
+        "phase": "initial_data_opening",
+        "metadata": {
+          "cluster_id": "native-operator-cli",
+          "node_id": "n0",
+          "role": "leader",
+          "current_term": 1,
+          "voted_for": "n0",
+          "leader_id": "n0",
+          "commit_index": 1,
+          "last_log_index": 1,
+          "last_log_term": 1,
+          "topology_generation": 1,
+          "voters": [
+            "n0",
+            "n1",
+            "n2",
+            "n3"
+          ],
+          "learners": []
+        },
+        "last_enrolled_learner": null,
+        "last_caught_up_learner_store_id": null,
+        "last_metadata_maintenance": null,
+        "last_metadata_promotion": null,
+        "initial_data": {
+          "receiver_listening": true,
+          "writer_policy_current": true,
+          "dispatcher_published": false,
+          "strong_readiness": "request-scoped fresh MQ/data QQ/MVCC/final MQ; publication is not readiness",
+          "replica_readiness": "actual policy/native/refusal checks at every replica RPC",
+          "ranges": [
+            {
+              "range_id": 2,
+              "epoch": 1,
+              "local_leader": false,
+              "leader_admission_observed": false
+            },
+            {
+              "range_id": 3,
+              "epoch": 1,
+              "local_leader": false,
+              "leader_admission_observed": false
+            },
+            {
+              "range_id": 4,
+              "epoch": 1,
+              "local_leader": true,
+              "leader_admission_observed": false
+            }
+          ],
+          "cleanup_quarantined_owners": 0,
+          "writer_binding_diagnostic": {
+            "scope": "diagnostic retained binding only; not linearizable Ready/role or a permission",
+            "persisted_policy_coordinator_id": "01a1d26e-5dcf-79a2-9b05-616bbba3dd2f",
+            "persisted_policy_registration_generation": "01a1d26e-5dd1-7e90-aa3a-d213c362b4bb",
+            "persisted_policy_database_open_incarnation": "635b790b-c7e4-4361-9441-b6ea63ceac86",
+            "persisted_policy_range_store_open_id": "01a1d26e-577e-7872-9513-b644a1ead97d",
+            "persisted_policy_checksum_sha256": "d4a95cba1ec89a5dd530d0daeae0080be089c4d1b9ac3f065812774414a780aa",
+            "observed_bound_registration_generation": "01a1d26e-5dd1-7e90-aa3a-d213c362b4bb",
+            "observed_bound_registration_active": true,
+            "observed_bound_authority_matches_retained_coordinator": true,
+            "observed_weak_directory_alive": true,
+            "observed_binding_lifetime_live": true,
+            "observed_binding_liveness_error": null,
+            "actual_verified_registry_extension": {
+              "publication_pending": false,
+              "verified_extension": null,
+              "scope": "retained same-open verified audit DATA; not role or Ready"
+            },
+            "current_database_hook_slot_not_relocked": true,
+            "identity_from_status_dto_is_not_authority": true,
+            "retained_owner_coordinator_id": "01a1d26e-5dcf-79a2-9b05-616bbba3dd2f"
+          },
+          "registry_refresh_last_attempt": null,
+          "hot_recovery_last_attempt": null
+        },
+        "data_serving": false,
+        "data_refusal": "metadata-only or pending DATA host: no successful application admission is installed"
+      },
+      "error": "cluster error: range recovery: cluster error: native range read observation: distinct matching current-voter read majority unavailable; failed probes: {ClusterNodeId(\"n1\"): \"cluster error: cluster node n1 rejected RPC cluster_data_operation_failed: cluster error: native metadata control listener grants CONFIG/metadata endpoints only\", ClusterNodeId(\"n2\"): \"cluster error: cluster node n2 rejected RPC cluster_data_operation_failed: cluster error: native metadata control listener grants CONFIG/metadata endpoints only\"}",
+      "data_serving": false
+    }
+  },
+  {
+    "stage": "initial_data_action",
+    "node": "n1",
+    "reply": {
+      "version": 1,
+      "sequence": 4,
+      "process_id": 19227,
+      "host": {
+        "version": 1,
+        "node_id": "n1",
+        "phase": "initial_data_opening",
+        "metadata": {
+          "cluster_id": "native-operator-cli",
+          "node_id": "n1",
+          "role": "follower",
+          "current_term": 1,
+          "voted_for": "n0",
+          "leader_id": "n0",
+          "commit_index": 1,
+          "last_log_index": 1,
+          "last_log_term": 1,
+          "topology_generation": 1,
+          "voters": [
+            "n0",
+            "n1",
+            "n2",
+            "n3"
+          ],
+          "learners": []
+        },
+        "last_enrolled_learner": null,
+        "last_caught_up_learner_store_id": null,
+        "last_metadata_maintenance": null,
+        "last_metadata_promotion": null,
+        "initial_data": {
+          "receiver_listening": true,
+          "writer_policy_current": true,
+          "dispatcher_published": false,
+          "strong_readiness": "request-scoped fresh MQ/data QQ/MVCC/final MQ; publication is not readiness",
+          "replica_readiness": "actual policy/native/refusal checks at every replica RPC",
+          "ranges": [
+            {
+              "range_id": 1,
+              "epoch": 1,
+              "local_leader": true,
+              "leader_admission_observed": false
+            },
+            {
+              "range_id": 3,
+              "epoch": 1,
+              "local_leader": false,
+              "leader_admission_observed": false
+            },
+            {
+              "range_id": 4,
+              "epoch": 1,
+              "local_leader": false,
+              "leader_admission_observed": false
+            }
+          ],
+          "cleanup_quarantined_owners": 0,
+          "writer_binding_diagnostic": {
+            "scope": "diagnostic retained binding only; not linearizable Ready/role or a permission",
+            "persisted_policy_coordinator_id": "01a1d26e-5e70-7fe0-8019-51bf4e689fa7",
+            "persisted_policy_registration_generation": "01a1d26e-5e72-7b52-92fe-6fec2d8661f9",
+            "persisted_policy_database_open_incarnation": "8d5c0905-2cde-4955-8a16-c48e2c41c843",
+            "persisted_policy_range_store_open_id": "01a1d26e-5776-7092-8041-cc7b38834f9b",
+            "persisted_policy_checksum_sha256": "01f90ea29feeff21fc847e9c2cefd57763a7b0a7eda34b2dc524f6d89e61f0b0",
+            "observed_bound_registration_generation": "01a1d26e-5e72-7b52-92fe-6fec2d8661f9",
+            "observed_bound_registration_active": true,
+            "observed_bound_authority_matches_retained_coordinator": true,
+            "observed_weak_directory_alive": true,
+            "observed_binding_lifetime_live": true,
+            "observed_binding_liveness_error": null,
+            "actual_verified_registry_extension": {
+              "publication_pending": false,
+              "verified_extension": null,
+              "scope": "retained same-open verified audit DATA; not role or Ready"
+            },
+            "current_database_hook_slot_not_relocked": true,
+            "identity_from_status_dto_is_not_authority": true,
+            "retained_owner_coordinator_id": "01a1d26e-5e70-7fe0-8019-51bf4e689fa7"
+          },
+          "registry_refresh_last_attempt": null,
+          "hot_recovery_last_attempt": null
+        },
+        "data_serving": false,
+        "data_refusal": "metadata-only or pending DATA host: no successful application admission is installed"
+      },
+      "error": "cluster error: range recovery: cluster error: native range read observation: distinct matching current-voter read majority unavailable; failed probes: {ClusterNodeId(\"n2\"): \"cluster error: cluster node n2 rejected RPC cluster_data_operation_failed: cluster error: native metadata control listener grants CONFIG/metadata endpoints only\", ClusterNodeId(\"n3\"): \"cluster error: cluster node n3 rejected RPC cluster_data_operation_failed: cluster error: native metadata control listener grants CONFIG/metadata endpoints only\"}",
+      "data_serving": false
+    }
+  },
+  {
+    "stage": "initial_data_action",
+    "node": "n2",
+    "reply": {
+      "version": 1,
+      "sequence": 4,
+      "process_id": 19228,
+      "host": {
+        "version": 1,
+        "node_id": "n2",
+        "phase": "initial_data",
+        "metadata": {
+          "cluster_id": "native-operator-cli",
+          "node_id": "n2",
+          "role": "follower",
+          "current_term": 1,
+          "voted_for": "n0",
+          "leader_id": "n0",
+          "commit_index": 1,
+          "last_log_index": 1,
+          "last_log_term": 1,
+          "topology_generation": 1,
+          "voters": [
+            "n0",
+            "n1",
+            "n2",
+            "n3"
+          ],
+          "learners": []
+        },
+        "last_enrolled_learner": null,
+        "last_caught_up_learner_store_id": null,
+        "last_metadata_maintenance": null,
+        "last_metadata_promotion": null,
+        "initial_data": {
+          "receiver_listening": true,
+          "writer_policy_current": true,
+          "dispatcher_published": true,
+          "strong_readiness": "request-scoped fresh MQ/data QQ/MVCC/final MQ; publication is not readiness",
+          "replica_readiness": "actual policy/native/refusal checks at every replica RPC",
+          "ranges": [
+            {
+              "range_id": 1,
+              "epoch": 1,
+              "local_leader": false,
+              "leader_admission_observed": false
+            },
+            {
+              "range_id": 2,
+              "epoch": 1,
+              "local_leader": true,
+              "leader_admission_observed": true
+            },
+            {
+              "range_id": 4,
+              "epoch": 1,
+              "local_leader": false,
+              "leader_admission_observed": false
+            }
+          ],
+          "cleanup_quarantined_owners": 0,
+          "writer_binding_diagnostic": {
+            "scope": "diagnostic retained binding only; not linearizable Ready/role or a permission",
+            "persisted_policy_coordinator_id": "01a1d26e-5f09-7891-a238-2a5d5c32fe35",
+            "persisted_policy_registration_generation": "01a1d26e-5f0b-75e2-990e-e2dced388532",
+            "persisted_policy_database_open_incarnation": "13f69227-5ff7-4369-9558-26b547c8cee4",
+            "persisted_policy_range_store_open_id": "01a1d26e-5782-7b51-9f27-a3b73cc85d1a",
+            "persisted_policy_checksum_sha256": "09249f7c8c87fac201b926a3c68b61153ed105acbedf138bddd2ea972ea96e20",
+            "observed_bound_registration_generation": "01a1d26e-5f0b-75e2-990e-e2dced388532",
+            "observed_bound_registration_active": true,
+            "observed_bound_authority_matches_retained_coordinator": true,
+            "observed_weak_directory_alive": true,
+            "observed_binding_lifetime_live": true,
+            "observed_binding_liveness_error": null,
+            "actual_verified_registry_extension": {
+              "publication_pending": false,
+              "verified_extension": null,
+              "scope": "retained same-open verified audit DATA; not role or Ready"
+            },
+            "current_database_hook_slot_not_relocked": true,
+            "identity_from_status_dto_is_not_authority": true,
+            "retained_owner_coordinator_id": "01a1d26e-5f09-7891-a238-2a5d5c32fe35"
+          },
+          "registry_refresh_last_attempt": null,
+          "hot_recovery_last_attempt": null
+        },
+        "data_serving": true,
+        "data_refusal": "initial native point DATA only; Strong readiness is request-scoped; SQL/scan/placement/joint operations unsupported"
+      },
+      "error": null,
+      "data_serving": true
+    }
+  },
+  {
+    "stage": "initial_data_action",
+    "node": "n3",
+    "reply": {
+      "version": 1,
+      "sequence": 4,
+      "process_id": 19229,
+      "host": {
+        "version": 1,
+        "node_id": "n3",
+        "phase": "initial_data",
+        "metadata": {
+          "cluster_id": "native-operator-cli",
+          "node_id": "n3",
+          "role": "follower",
+          "current_term": 1,
+          "voted_for": "n0",
+          "leader_id": "n0",
+          "commit_index": 1,
+          "last_log_index": 1,
+          "last_log_term": 1,
+          "topology_generation": 1,
+          "voters": [
+            "n0",
+            "n1",
+            "n2",
+            "n3"
+          ],
+          "learners": []
+        },
+        "last_enrolled_learner": null,
+        "last_caught_up_learner_store_id": null,
+        "last_metadata_maintenance": null,
+        "last_metadata_promotion": null,
+        "initial_data": {
+          "receiver_listening": true,
+          "writer_policy_current": true,
+          "dispatcher_published": true,
+          "strong_readiness": "request-scoped fresh MQ/data QQ/MVCC/final MQ; publication is not readiness",
+          "replica_readiness": "actual policy/native/refusal checks at every replica RPC",
+          "ranges": [
+            {
+              "range_id": 1,
+              "epoch": 1,
+              "local_leader": false,
+              "leader_admission_observed": false
+            },
+            {
+              "range_id": 2,
+              "epoch": 1,
+              "local_leader": false,
+              "leader_admission_observed": false
+            },
+            {
+              "range_id": 3,
+              "epoch": 1,
+              "local_leader": true,
+              "leader_admission_observed": true
+            }
+          ],
+          "cleanup_quarantined_owners": 0,
+          "writer_binding_diagnostic": {
+            "scope": "diagnostic retained binding only; not linearizable Ready/role or a permission",
+            "persisted_policy_coordinator_id": "01a1d26e-5fdc-73f0-8309-f74686a4b64e",
+            "persisted_policy_registration_generation": "01a1d26e-5fde-7040-b207-9cb7c6961391",
+            "persisted_policy_database_open_incarnation": "08b44fa6-1730-4071-a67f-a6bff8c62ab4",
+            "persisted_policy_range_store_open_id": "01a1d26e-5785-7290-b25c-dfaa5296bf6b",
+            "persisted_policy_checksum_sha256": "4b6d7a426e7d2f7d82dc57c989f951c945fbdb77622f01dc220c098b0d8fd965",
+            "observed_bound_registration_generation": "01a1d26e-5fde-7040-b207-9cb7c6961391",
+            "observed_bound_registration_active": true,
+            "observed_bound_authority_matches_retained_coordinator": true,
+            "observed_weak_directory_alive": true,
+            "observed_binding_lifetime_live": true,
+            "observed_binding_liveness_error": null,
+            "actual_verified_registry_extension": {
+              "publication_pending": false,
+              "verified_extension": null,
+              "scope": "retained same-open verified audit DATA; not role or Ready"
+            },
+            "current_database_hook_slot_not_relocked": true,
+            "identity_from_status_dto_is_not_authority": true,
+            "retained_owner_coordinator_id": "01a1d26e-5fdc-73f0-8309-f74686a4b64e"
+          },
+          "registry_refresh_last_attempt": null,
+          "hot_recovery_last_attempt": null
+        },
+        "data_serving": true,
+        "data_refusal": "initial native point DATA only; Strong readiness is request-scoped; SQL/scan/placement/joint operations unsupported"
+      },
+      "error": null,
+      "data_serving": true
+    }
+  },
+  {
+    "stage": "initial_data_action",
+    "node": "n0",
+    "reply": {
+      "version": 1,
+      "sequence": 6,
+      "process_id": 19226,
+      "host": {
+        "version": 1,
+        "node_id": "n0",
+        "phase": "initial_data",
+        "metadata": {
+          "cluster_id": "native-operator-cli",
+          "node_id": "n0",
+          "role": "leader",
+          "current_term": 1,
+          "voted_for": "n0",
+          "leader_id": "n0",
+          "commit_index": 1,
+          "last_log_index": 1,
+          "last_log_term": 1,
+          "topology_generation": 1,
+          "voters": [
+            "n0",
+            "n1",
+            "n2",
+            "n3"
+          ],
+          "learners": []
+        },
+        "last_enrolled_learner": null,
+        "last_caught_up_learner_store_id": null,
+        "last_metadata_maintenance": {
+          "node": null,
+          "stage": "idle_or_backoff",
+          "receiver_store_id": null,
+          "installed_through_index": null,
+          "error": null
+        },
+        "last_metadata_promotion": null,
+        "initial_data": {
+          "receiver_listening": true,
+          "writer_policy_current": true,
+          "dispatcher_published": true,
+          "strong_readiness": "request-scoped fresh MQ/data QQ/MVCC/final MQ; publication is not readiness",
+          "replica_readiness": "actual policy/native/refusal checks at every replica RPC",
+          "ranges": [
+            {
+              "range_id": 2,
+              "epoch": 1,
+              "local_leader": false,
+              "leader_admission_observed": false
+            },
+            {
+              "range_id": 3,
+              "epoch": 1,
+              "local_leader": false,
+              "leader_admission_observed": false
+            },
+            {
+              "range_id": 4,
+              "epoch": 1,
+              "local_leader": true,
+              "leader_admission_observed": true
+            }
+          ],
+          "cleanup_quarantined_owners": 0,
+          "writer_binding_diagnostic": {
+            "scope": "diagnostic retained binding only; not linearizable Ready/role or a permission",
+            "persisted_policy_coordinator_id": "01a1d26e-5dcf-79a2-9b05-616bbba3dd2f",
+            "persisted_policy_registration_generation": "01a1d26e-5dd1-7e90-aa3a-d213c362b4bb",
+            "persisted_policy_database_open_incarnation": "635b790b-c7e4-4361-9441-b6ea63ceac86",
+            "persisted_policy_range_store_open_id": "01a1d26e-577e-7872-9513-b644a1ead97d",
+            "persisted_policy_checksum_sha256": "d4a95cba1ec89a5dd530d0daeae0080be089c4d1b9ac3f065812774414a780aa",
+            "observed_bound_registration_generation": "01a1d26e-5dd1-7e90-aa3a-d213c362b4bb",
+            "observed_bound_registration_active": true,
+            "observed_bound_authority_matches_retained_coordinator": true,
+            "observed_weak_directory_alive": true,
+            "observed_binding_lifetime_live": true,
+            "observed_binding_liveness_error": null,
+            "actual_verified_registry_extension": {
+              "publication_pending": false,
+              "verified_extension": null,
+              "scope": "retained same-open verified audit DATA; not role or Ready"
+            },
+            "current_database_hook_slot_not_relocked": true,
+            "identity_from_status_dto_is_not_authority": true,
+            "retained_owner_coordinator_id": "01a1d26e-5dcf-79a2-9b05-616bbba3dd2f"
+          },
+          "registry_refresh_last_attempt": null,
+          "hot_recovery_last_attempt": null
+        },
+        "data_serving": true,
+        "data_refusal": "initial native point DATA only; Strong readiness is request-scoped; SQL/scan/placement/joint operations unsupported"
+      },
+      "error": null,
+      "data_serving": true
+    }
+  },
+  {
+    "stage": "initial_data_action",
+    "node": "n1",
+    "reply": {
+      "version": 1,
+      "sequence": 5,
+      "process_id": 19227,
+      "host": {
+        "version": 1,
+        "node_id": "n1",
+        "phase": "initial_data",
+        "metadata": {
+          "cluster_id": "native-operator-cli",
+          "node_id": "n1",
+          "role": "follower",
+          "current_term": 1,
+          "voted_for": "n0",
+          "leader_id": "n0",
+          "commit_index": 1,
+          "last_log_index": 1,
+          "last_log_term": 1,
+          "topology_generation": 1,
+          "voters": [
+            "n0",
+            "n1",
+            "n2",
+            "n3"
+          ],
+          "learners": []
+        },
+        "last_enrolled_learner": null,
+        "last_caught_up_learner_store_id": null,
+        "last_metadata_maintenance": null,
+        "last_metadata_promotion": null,
+        "initial_data": {
+          "receiver_listening": true,
+          "writer_policy_current": true,
+          "dispatcher_published": true,
+          "strong_readiness": "request-scoped fresh MQ/data QQ/MVCC/final MQ; publication is not readiness",
+          "replica_readiness": "actual policy/native/refusal checks at every replica RPC",
+          "ranges": [
+            {
+              "range_id": 1,
+              "epoch": 1,
+              "local_leader": true,
+              "leader_admission_observed": true
+            },
+            {
+              "range_id": 3,
+              "epoch": 1,
+              "local_leader": false,
+              "leader_admission_observed": false
+            },
+            {
+              "range_id": 4,
+              "epoch": 1,
+              "local_leader": false,
+              "leader_admission_observed": false
+            }
+          ],
+          "cleanup_quarantined_owners": 0,
+          "writer_binding_diagnostic": {
+            "scope": "diagnostic retained binding only; not linearizable Ready/role or a permission",
+            "persisted_policy_coordinator_id": "01a1d26e-5e70-7fe0-8019-51bf4e689fa7",
+            "persisted_policy_registration_generation": "01a1d26e-5e72-7b52-92fe-6fec2d8661f9",
+            "persisted_policy_database_open_incarnation": "8d5c0905-2cde-4955-8a16-c48e2c41c843",
+            "persisted_policy_range_store_open_id": "01a1d26e-5776-7092-8041-cc7b38834f9b",
+            "persisted_policy_checksum_sha256": "01f90ea29feeff21fc847e9c2cefd57763a7b0a7eda34b2dc524f6d89e61f0b0",
+            "observed_bound_registration_generation": "01a1d26e-5e72-7b52-92fe-6fec2d8661f9",
+            "observed_bound_registration_active": true,
+            "observed_bound_authority_matches_retained_coordinator": true,
+            "observed_weak_directory_alive": true,
+            "observed_binding_lifetime_live": true,
+            "observed_binding_liveness_error": null,
+            "actual_verified_registry_extension": {
+              "publication_pending": false,
+              "verified_extension": null,
+              "scope": "retained same-open verified audit DATA; not role or Ready"
+            },
+            "current_database_hook_slot_not_relocked": true,
+            "identity_from_status_dto_is_not_authority": true,
+            "retained_owner_coordinator_id": "01a1d26e-5e70-7fe0-8019-51bf4e689fa7"
+          },
+          "registry_refresh_last_attempt": null,
+          "hot_recovery_last_attempt": null
+        },
+        "data_serving": true,
+        "data_refusal": "initial native point DATA only; Strong readiness is request-scoped; SQL/scan/placement/joint operations unsupported"
+      },
+      "error": null,
+      "data_serving": true
+    }
+  },
+  {
+    "stage": "readonly_retained_writer_binding",
+    "phase": "before_fifth",
+    "node": "n0",
+    "command_success": true,
+    "reply": {
+      "version": 1,
+      "sequence": 7,
+      "process_id": 19226,
+      "host": {
+        "version": 1,
+        "node_id": "n0",
+        "phase": "initial_data",
+        "metadata": {
+          "cluster_id": "native-operator-cli",
+          "node_id": "n0",
+          "role": "leader",
+          "current_term": 1,
+          "voted_for": "n0",
+          "leader_id": "n0",
+          "commit_index": 1,
+          "last_log_index": 1,
+          "last_log_term": 1,
+          "topology_generation": 1,
+          "voters": [
+            "n0",
+            "n1",
+            "n2",
+            "n3"
+          ],
+          "learners": []
+        },
+        "last_enrolled_learner": null,
+        "last_caught_up_learner_store_id": null,
+        "last_metadata_maintenance": {
+          "node": null,
+          "stage": "idle_or_backoff",
+          "receiver_store_id": null,
+          "installed_through_index": null,
+          "error": null
+        },
+        "last_metadata_promotion": null,
+        "initial_data": {
+          "receiver_listening": true,
+          "writer_policy_current": true,
+          "dispatcher_published": true,
+          "strong_readiness": "request-scoped fresh MQ/data QQ/MVCC/final MQ; publication is not readiness",
+          "replica_readiness": "actual policy/native/refusal checks at every replica RPC",
+          "ranges": [
+            {
+              "range_id": 2,
+              "epoch": 1,
+              "local_leader": false,
+              "leader_admission_observed": false
+            },
+            {
+              "range_id": 3,
+              "epoch": 1,
+              "local_leader": false,
+              "leader_admission_observed": false
+            },
+            {
+              "range_id": 4,
+              "epoch": 1,
+              "local_leader": true,
+              "leader_admission_observed": true
+            }
+          ],
+          "cleanup_quarantined_owners": 0,
+          "writer_binding_diagnostic": {
+            "scope": "diagnostic retained binding only; not linearizable Ready/role or a permission",
+            "persisted_policy_coordinator_id": "01a1d26e-5dcf-79a2-9b05-616bbba3dd2f",
+            "persisted_policy_registration_generation": "01a1d26e-5dd1-7e90-aa3a-d213c362b4bb",
+            "persisted_policy_database_open_incarnation": "635b790b-c7e4-4361-9441-b6ea63ceac86",
+            "persisted_policy_range_store_open_id": "01a1d26e-577e-7872-9513-b644a1ead97d",
+            "persisted_policy_checksum_sha256": "d4a95cba1ec89a5dd530d0daeae0080be089c4d1b9ac3f065812774414a780aa",
+            "observed_bound_registration_generation": "01a1d26e-5dd1-7e90-aa3a-d213c362b4bb",
+            "observed_bound_registration_active": true,
+            "observed_bound_authority_matches_retained_coordinator": true,
+            "observed_weak_directory_alive": true,
+            "observed_binding_lifetime_live": true,
+            "observed_binding_liveness_error": null,
+            "actual_verified_registry_extension": {
+              "publication_pending": false,
+              "verified_extension": null,
+              "scope": "retained same-open verified audit DATA; not role or Ready"
+            },
+            "current_database_hook_slot_not_relocked": true,
+            "identity_from_status_dto_is_not_authority": true,
+            "retained_owner_coordinator_id": "01a1d26e-5dcf-79a2-9b05-616bbba3dd2f"
+          },
+          "registry_refresh_last_attempt": null,
+          "hot_recovery_last_attempt": null
+        },
+        "data_serving": true,
+        "data_refusal": "initial native point DATA only; Strong readiness is request-scoped; SQL/scan/placement/joint operations unsupported"
+      },
+      "error": null,
+      "data_serving": true
+    },
+    "stderr": ""
+  },
+  {
+    "stage": "readonly_retained_writer_binding",
+    "phase": "before_fifth",
+    "node": "n1",
+    "command_success": true,
+    "reply": {
+      "version": 1,
+      "sequence": 6,
+      "process_id": 19227,
+      "host": {
+        "version": 1,
+        "node_id": "n1",
+        "phase": "initial_data",
+        "metadata": {
+          "cluster_id": "native-operator-cli",
+          "node_id": "n1",
+          "role": "follower",
+          "current_term": 1,
+          "voted_for": "n0",
+          "leader_id": "n0",
+          "commit_index": 1,
+          "last_log_index": 1,
+          "last_log_term": 1,
+          "topology_generation": 1,
+          "voters": [
+            "n0",
+            "n1",
+            "n2",
+            "n3"
+          ],
+          "learners": []
+        },
+        "last_enrolled_learner": null,
+        "last_caught_up_learner_store_id": null,
+        "last_metadata_maintenance": null,
+        "last_metadata_promotion": null,
+        "initial_data": {
+          "receiver_listening": true,
+          "writer_policy_current": true,
+          "dispatcher_published": true,
+          "strong_readiness": "request-scoped fresh MQ/data QQ/MVCC/final MQ; publication is not readiness",
+          "replica_readiness": "actual policy/native/refusal checks at every replica RPC",
+          "ranges": [
+            {
+              "range_id": 1,
+              "epoch": 1,
+              "local_leader": true,
+              "leader_admission_observed": true
+            },
+            {
+              "range_id": 3,
+              "epoch": 1,
+              "local_leader": false,
+              "leader_admission_observed": false
+            },
+            {
+              "range_id": 4,
+              "epoch": 1,
+              "local_leader": false,
+              "leader_admission_observed": false
+            }
+          ],
+          "cleanup_quarantined_owners": 0,
+          "writer_binding_diagnostic": {
+            "scope": "diagnostic retained binding only; not linearizable Ready/role or a permission",
+            "persisted_policy_coordinator_id": "01a1d26e-5e70-7fe0-8019-51bf4e689fa7",
+            "persisted_policy_registration_generation": "01a1d26e-5e72-7b52-92fe-6fec2d8661f9",
+            "persisted_policy_database_open_incarnation": "8d5c0905-2cde-4955-8a16-c48e2c41c843",
+            "persisted_policy_range_store_open_id": "01a1d26e-5776-7092-8041-cc7b38834f9b",
+            "persisted_policy_checksum_sha256": "01f90ea29feeff21fc847e9c2cefd57763a7b0a7eda34b2dc524f6d89e61f0b0",
+            "observed_bound_registration_generation": "01a1d26e-5e72-7b52-92fe-6fec2d8661f9",
+            "observed_bound_registration_active": true,
+            "observed_bound_authority_matches_retained_coordinator": true,
+            "observed_weak_directory_alive": true,
+            "observed_binding_lifetime_live": true,
+            "observed_binding_liveness_error": null,
+            "actual_verified_registry_extension": {
+              "publication_pending": false,
+              "verified_extension": null,
+              "scope": "retained same-open verified audit DATA; not role or Ready"
+            },
+            "current_database_hook_slot_not_relocked": true,
+            "identity_from_status_dto_is_not_authority": true,
+            "retained_owner_coordinator_id": "01a1d26e-5e70-7fe0-8019-51bf4e689fa7"
+          },
+          "registry_refresh_last_attempt": null,
+          "hot_recovery_last_attempt": null
+        },
+        "data_serving": true,
+        "data_refusal": "initial native point DATA only; Strong readiness is request-scoped; SQL/scan/placement/joint operations unsupported"
+      },
+      "error": null,
+      "data_serving": true
+    },
+    "stderr": ""
+  },
+  {
+    "stage": "readonly_retained_writer_binding",
+    "phase": "before_fifth",
+    "node": "n2",
+    "command_success": true,
+    "reply": {
+      "version": 1,
+      "sequence": 5,
+      "process_id": 19228,
+      "host": {
+        "version": 1,
+        "node_id": "n2",
+        "phase": "initial_data",
+        "metadata": {
+          "cluster_id": "native-operator-cli",
+          "node_id": "n2",
+          "role": "follower",
+          "current_term": 1,
+          "voted_for": "n0",
+          "leader_id": "n0",
+          "commit_index": 1,
+          "last_log_index": 1,
+          "last_log_term": 1,
+          "topology_generation": 1,
+          "voters": [
+            "n0",
+            "n1",
+            "n2",
+            "n3"
+          ],
+          "learners": []
+        },
+        "last_enrolled_learner": null,
+        "last_caught_up_learner_store_id": null,
+        "last_metadata_maintenance": null,
+        "last_metadata_promotion": null,
+        "initial_data": {
+          "receiver_listening": true,
+          "writer_policy_current": true,
+          "dispatcher_published": true,
+          "strong_readiness": "request-scoped fresh MQ/data QQ/MVCC/final MQ; publication is not readiness",
+          "replica_readiness": "actual policy/native/refusal checks at every replica RPC",
+          "ranges": [
+            {
+              "range_id": 1,
+              "epoch": 1,
+              "local_leader": false,
+              "leader_admission_observed": false
+            },
+            {
+              "range_id": 2,
+              "epoch": 1,
+              "local_leader": true,
+              "leader_admission_observed": true
+            },
+            {
+              "range_id": 4,
+              "epoch": 1,
+              "local_leader": false,
+              "leader_admission_observed": false
+            }
+          ],
+          "cleanup_quarantined_owners": 0,
+          "writer_binding_diagnostic": {
+            "scope": "diagnostic retained binding only; not linearizable Ready/role or a permission",
+            "persisted_policy_coordinator_id": "01a1d26e-5f09-7891-a238-2a5d5c32fe35",
+            "persisted_policy_registration_generation": "01a1d26e-5f0b-75e2-990e-e2dced388532",
+            "persisted_policy_database_open_incarnation": "13f69227-5ff7-4369-9558-26b547c8cee4",
+            "persisted_policy_range_store_open_id": "01a1d26e-5782-7b51-9f27-a3b73cc85d1a",
+            "persisted_policy_checksum_sha256": "09249f7c8c87fac201b926a3c68b61153ed105acbedf138bddd2ea972ea96e20",
+            "observed_bound_registration_generation": "01a1d26e-5f0b-75e2-990e-e2dced388532",
+            "observed_bound_registration_active": true,
+            "observed_bound_authority_matches_retained_coordinator": true,
+            "observed_weak_directory_alive": true,
+            "observed_binding_lifetime_live": true,
+            "observed_binding_liveness_error": null,
+            "actual_verified_registry_extension": {
+              "publication_pending": false,
+              "verified_extension": null,
+              "scope": "retained same-open verified audit DATA; not role or Ready"
+            },
+            "current_database_hook_slot_not_relocked": true,
+            "identity_from_status_dto_is_not_authority": true,
+            "retained_owner_coordinator_id": "01a1d26e-5f09-7891-a238-2a5d5c32fe35"
+          },
+          "registry_refresh_last_attempt": null,
+          "hot_recovery_last_attempt": null
+        },
+        "data_serving": true,
+        "data_refusal": "initial native point DATA only; Strong readiness is request-scoped; SQL/scan/placement/joint operations unsupported"
+      },
+      "error": null,
+      "data_serving": true
+    },
+    "stderr": ""
+  },
+  {
+    "stage": "readonly_retained_writer_binding",
+    "phase": "before_fifth",
+    "node": "n3",
+    "command_success": true,
+    "reply": {
+      "version": 1,
+      "sequence": 5,
+      "process_id": 19229,
+      "host": {
+        "version": 1,
+        "node_id": "n3",
+        "phase": "initial_data",
+        "metadata": {
+          "cluster_id": "native-operator-cli",
+          "node_id": "n3",
+          "role": "follower",
+          "current_term": 1,
+          "voted_for": "n0",
+          "leader_id": "n0",
+          "commit_index": 1,
+          "last_log_index": 1,
+          "last_log_term": 1,
+          "topology_generation": 1,
+          "voters": [
+            "n0",
+            "n1",
+            "n2",
+            "n3"
+          ],
+          "learners": []
+        },
+        "last_enrolled_learner": null,
+        "last_caught_up_learner_store_id": null,
+        "last_metadata_maintenance": null,
+        "last_metadata_promotion": null,
+        "initial_data": {
+          "receiver_listening": true,
+          "writer_policy_current": true,
+          "dispatcher_published": true,
+          "strong_readiness": "request-scoped fresh MQ/data QQ/MVCC/final MQ; publication is not readiness",
+          "replica_readiness": "actual policy/native/refusal checks at every replica RPC",
+          "ranges": [
+            {
+              "range_id": 1,
+              "epoch": 1,
+              "local_leader": false,
+              "leader_admission_observed": false
+            },
+            {
+              "range_id": 2,
+              "epoch": 1,
+              "local_leader": false,
+              "leader_admission_observed": false
+            },
+            {
+              "range_id": 3,
+              "epoch": 1,
+              "local_leader": true,
+              "leader_admission_observed": true
+            }
+          ],
+          "cleanup_quarantined_owners": 0,
+          "writer_binding_diagnostic": {
+            "scope": "diagnostic retained binding only; not linearizable Ready/role or a permission",
+            "persisted_policy_coordinator_id": "01a1d26e-5fdc-73f0-8309-f74686a4b64e",
+            "persisted_policy_registration_generation": "01a1d26e-5fde-7040-b207-9cb7c6961391",
+            "persisted_policy_database_open_incarnation": "08b44fa6-1730-4071-a67f-a6bff8c62ab4",
+            "persisted_policy_range_store_open_id": "01a1d26e-5785-7290-b25c-dfaa5296bf6b",
+            "persisted_policy_checksum_sha256": "4b6d7a426e7d2f7d82dc57c989f951c945fbdb77622f01dc220c098b0d8fd965",
+            "observed_bound_registration_generation": "01a1d26e-5fde-7040-b207-9cb7c6961391",
+            "observed_bound_registration_active": true,
+            "observed_bound_authority_matches_retained_coordinator": true,
+            "observed_weak_directory_alive": true,
+            "observed_binding_lifetime_live": true,
+            "observed_binding_liveness_error": null,
+            "actual_verified_registry_extension": {
+              "publication_pending": false,
+              "verified_extension": null,
+              "scope": "retained same-open verified audit DATA; not role or Ready"
+            },
+            "current_database_hook_slot_not_relocked": true,
+            "identity_from_status_dto_is_not_authority": true,
+            "retained_owner_coordinator_id": "01a1d26e-5fdc-73f0-8309-f74686a4b64e"
+          },
+          "registry_refresh_last_attempt": null,
+          "hot_recovery_last_attempt": null
+        },
+        "data_serving": true,
+        "data_refusal": "initial native point DATA only; Strong readiness is request-scoped; SQL/scan/placement/joint operations unsupported"
+      },
+      "error": null,
+      "data_serving": true
+    },
+    "stderr": ""
+  },
+  {
+    "logical_operation_id": "01a1d26e-6260-7523-8fc5-380e4212648e",
+    "stage": "attempt_before_fifth",
+    "namespace": "items",
+    "key": "ack-before-fifth-registry-refresh",
+    "value": {
+      "entire": "external ACK precedes fifth stage",
+      "nested": [
+        17,
+        null,
+        {
+          "retained": true
+        }
+      ]
+    }
+  },
+  {
+    "logical_operation_id": "01a1d26e-6260-7523-8fc5-380e4212648e",
+    "stage": "reply_before_fifth",
+    "key": "ack-before-fifth-registry-refresh",
+    "value": {
+      "entire": "external ACK precedes fifth stage",
+      "nested": [
+        17,
+        null,
+        {
+          "retained": true
+        }
+      ]
+    },
+    "acknowledged": true,
+    "error": null
+  },
+  {
+    "logical_operation_id": "01a1d26e-63d7-7f93-9425-40e723727830",
+    "stage": "strong_before_fifth",
+    "key": "ack-before-fifth-registry-refresh",
+    "present": true,
+    "value": {
+      "entire": "external ACK precedes fifth stage",
+      "nested": [
+        17,
+        null,
+        {
+          "retained": true
+        }
+      ]
+    }
+  },
+  {
+    "stage": "same_owned_fifth_receiver",
+    "status": {
+      "version": 1,
+      "sequence": 0,
+      "process_id": 19595,
+      "host": {
+        "version": 1,
+        "node_id": "n4",
+        "birth_id": "01a1d26e-65c8-7640-beb1-481a9df0ab0f",
+        "birth_sha256": "34dba3329df69c8735c3613a81f2784178ba4c7064838f5f7f3e11ab453947a7",
+        "birth_bound": true,
+        "schema_sha256": "dbf787e4836cc8c39299bce6b74940e28a847b560c54f9038385090cfd65756b",
+        "namespace_ids": [
+          [
+            "__bic_cluster_events",
+            "6c01d3f3-ace8-4b11-8818-4058903d6a47"
+          ],
+          [
+            "items",
+            "2da9fa17-6acc-41f7-8e91-d25429672c9c"
+          ]
+        ],
+        "metadata_store_id": "01a1d26e-6823-7d62-b62d-f37ff9769ccd",
+        "metadata_role": "voter",
+        "metadata": {
+          "cluster_id": "native-operator-cli",
+          "node_id": "n4",
+          "role": "follower",
+          "current_term": 1,
+          "voted_for": null,
+          "leader_id": "n0",
+          "commit_index": 4,
+          "last_log_index": 4,
+          "last_log_term": 1,
+          "topology_generation": 4,
+          "voters": [
+            "n0",
+            "n1",
+            "n2",
+            "n3",
+            "n4"
+          ],
+          "learners": []
+        },
+        "metadata_listener_owned": true,
+        "metadata_control_owned": true,
+        "replica_receiver": {
+          "receiver_ready": true,
+          "stopping": false,
+          "range_store_open_id": "01a1d26e-65d7-7a83-b05d-e0984df644a8",
+          "metadata_store_id": "01a1d26e-6823-7d62-b62d-f37ff9769ccd",
+          "database_incarnation": "a7508727-1269-4f46-8c7b-835f5b093534",
+          "birth_id": "01a1d26e-65c8-7640-beb1-481a9df0ab0f",
+          "birth_sha256": "34dba3329df69c8735c3613a81f2784178ba4c7064838f5f7f3e11ab453947a7",
+          "writer_admission": "not installed by replica-only owner",
+          "range_readiness": "UNKNOWN: no assigned image/native materialization or serving proof",
+          "next_required_gates": [
+            "native_placement_controller",
+            "authenticated_native_image_joint_wire",
+            "actual_image_joint_open_and_writer_admission"
+          ],
+          "data_serving": false
+        },
+        "last_metadata_maintenance": null,
+        "last_metadata_promotion": null,
+        "phase": "owned_metadata_voter",
+        "data_serving": false
+      },
+      "error": null,
+      "data_serving": false
+    }
+  },
+  {
+    "stage": "actual_before_after_configuration",
+    "before": {
+      "format_version": 2,
+      "hash_version": 1,
+      "cluster_id": "native-operator-cli",
+      "range_image_bootstrap_id": "01a1d26e-56f7-7a71-bf89-48b3e80183e1",
+      "generation": 1,
+      "replication_factor": 3,
+      "nodes": {
+        "n0": {
+          "id": "n0",
+          "address": "127.0.0.1:43511",
+          "tls_certificate_sha256": "d6db0b55f4f034086c2b6db87a5b0fc80db3d01641927f95699bab9f2e02ad9c",
+          "incarnation": 1,
+          "native_store_birth_v1": {
+            "version": 1,
+            "bootstrap_id": "01a1d26e-56f7-7a71-bf89-48b3e80183e1",
+            "birth_id": "01a1d26e-573b-7403-8928-95bcb2b3aeda",
+            "birth_sha256": "3a59fc0b908e4e36876420dbc73d6ccfd95c53f150973d818ccfc8d6fd147d72",
+            "node_incarnation": 1,
+            "writer_enforcement_version": 1,
+            "abort_protocol_version": 1
+          },
+          "lifecycle": "active",
+          "labels": {
+            "bicdb.schema.sha256": "dbf787e4836cc8c39299bce6b74940e28a847b560c54f9038385090cfd65756b"
+          },
+          "capacity_bytes": 1073741824,
+          "used_bytes": 0,
+          "joined_at_ms": 10,
+          "last_heartbeat_ms": 10
+        },
+        "n1": {
+          "id": "n1",
+          "address": "127.0.0.1:34741",
+          "tls_certificate_sha256": "a10570bab062baeafe9020160d1952c335858368f10213c5f2b258d007b0929e",
+          "incarnation": 1,
+          "native_store_birth_v1": {
+            "version": 1,
+            "bootstrap_id": "01a1d26e-56f7-7a71-bf89-48b3e80183e1",
+            "birth_id": "01a1d26e-573a-7311-aa49-c3877a2fedcb",
+            "birth_sha256": "043901bd8299841a0c79e2265e2f9a7b3302e1430cc5bb04d77ebee236586b60",
+            "node_incarnation": 1,
+            "writer_enforcement_version": 1,
+            "abort_protocol_version": 1
+          },
+          "lifecycle": "active",
+          "labels": {
+            "bicdb.schema.sha256": "dbf787e4836cc8c39299bce6b74940e28a847b560c54f9038385090cfd65756b"
+          },
+          "capacity_bytes": 1073741824,
+          "used_bytes": 0,
+          "joined_at_ms": 10,
+          "last_heartbeat_ms": 10
+        },
+        "n2": {
+          "id": "n2",
+          "address": "127.0.0.1:33829",
+          "tls_certificate_sha256": "371d69807c08f06f899288867b11b4bf3b7f867f8f8030048c13462effe31c79",
+          "incarnation": 1,
+          "native_store_birth_v1": {
+            "version": 1,
+            "bootstrap_id": "01a1d26e-56f7-7a71-bf89-48b3e80183e1",
+            "birth_id": "01a1d26e-5740-7153-8930-903d230e21d6",
+            "birth_sha256": "e265ac1a024aaff56a9dece531f2a0e622c684239a25574c96619e3923250d3b",
+            "node_incarnation": 1,
+            "writer_enforcement_version": 1,
+            "abort_protocol_version": 1
+          },
+          "lifecycle": "active",
+          "labels": {
+            "bicdb.schema.sha256": "dbf787e4836cc8c39299bce6b74940e28a847b560c54f9038385090cfd65756b"
+          },
+          "capacity_bytes": 1073741824,
+          "used_bytes": 0,
+          "joined_at_ms": 10,
+          "last_heartbeat_ms": 10
+        },
+        "n3": {
+          "id": "n3",
+          "address": "127.0.0.1:43097",
+          "tls_certificate_sha256": "b86c0c806cadc327f9fb0cbcd84f65531bb7b81aee01cf39150ad6df434d0d23",
+          "incarnation": 1,
+          "native_store_birth_v1": {
+            "version": 1,
+            "bootstrap_id": "01a1d26e-56f7-7a71-bf89-48b3e80183e1",
+            "birth_id": "01a1d26e-5744-7370-b840-39701fad7a10",
+            "birth_sha256": "e5c1b3a7682b0f34ec9148ccc89b4be8bff8364e843ec48a0ce2714eafe15f3a",
+            "node_incarnation": 1,
+            "writer_enforcement_version": 1,
+            "abort_protocol_version": 1
+          },
+          "lifecycle": "active",
+          "labels": {
+            "bicdb.schema.sha256": "dbf787e4836cc8c39299bce6b74940e28a847b560c54f9038385090cfd65756b"
+          },
+          "capacity_bytes": 1073741824,
+          "used_bytes": 0,
+          "joined_at_ms": 10,
+          "last_heartbeat_ms": 10
+        }
+      },
+      "ranges": {
+        "0": {
+          "id": 1,
+          "start_token": 0,
+          "end_token": 4611686018427387904,
+          "epoch": 1,
+          "replicas": [
+            {
+              "id": 5,
+              "node_id": "n1",
+              "role": "voter"
+            },
+            {
+              "id": 9,
+              "node_id": "n2",
+              "role": "voter"
+            },
+            {
+              "id": 13,
+              "node_id": "n3",
+              "role": "voter"
+            }
+          ],
+          "leader": "n1",
+          "approximate_bytes": 0,
+          "approximate_qps": 0,
+          "placement": {
+            "required_node_labels": {},
+            "distinct_failure_domains": []
+          }
+        },
+        "4611686018427387904": {
+          "id": 2,
+          "start_token": 4611686018427387904,
+          "end_token": 9223372036854775808,
+          "epoch": 1,
+          "replicas": [
+            {
+              "id": 2,
+              "node_id": "n0",
+              "role": "voter"
+            },
+            {
+              "id": 6,
+              "node_id": "n2",
+              "role": "voter"
+            },
+            {
+              "id": 10,
+              "node_id": "n3",
+              "role": "voter"
+            }
+          ],
+          "leader": "n2",
+          "approximate_bytes": 0,
+          "approximate_qps": 0,
+          "placement": {
+            "required_node_labels": {},
+            "distinct_failure_domains": []
+          }
+        },
+        "9223372036854775808": {
+          "id": 3,
+          "start_token": 9223372036854775808,
+          "end_token": 13835058055282163712,
+          "epoch": 1,
+          "replicas": [
+            {
+              "id": 3,
+              "node_id": "n0",
+              "role": "voter"
+            },
+            {
+              "id": 7,
+              "node_id": "n3",
+              "role": "voter"
+            },
+            {
+              "id": 11,
+              "node_id": "n1",
+              "role": "voter"
+            }
+          ],
+          "leader": "n3",
+          "approximate_bytes": 0,
+          "approximate_qps": 0,
+          "placement": {
+            "required_node_labels": {},
+            "distinct_failure_domains": []
+          }
+        },
+        "13835058055282163712": {
+          "id": 4,
+          "start_token": 13835058055282163712,
+          "end_token": null,
+          "epoch": 1,
+          "replicas": [
+            {
+              "id": 4,
+              "node_id": "n0",
+              "role": "voter"
+            },
+            {
+              "id": 8,
+              "node_id": "n1",
+              "role": "voter"
+            },
+            {
+              "id": 12,
+              "node_id": "n2",
+              "role": "voter"
+            }
+          ],
+          "leader": "n0",
+          "approximate_bytes": 0,
+          "approximate_qps": 0,
+          "placement": {
+            "required_node_labels": {},
+            "distinct_failure_domains": []
+          }
+        }
+      },
+      "next_range_id": 5,
+      "next_replica_id": 14,
+      "next_relocation_id": 1,
+      "relocations": {},
+      "applied_rebalance_plans": [],
+      "history": [
+        {
+          "generation": 1,
+          "at_ms": 10,
+          "actor": "n0",
+          "summary": "cluster initialized"
+        }
+      ]
+    },
+    "after": {
+      "format_version": 2,
+      "hash_version": 1,
+      "cluster_id": "native-operator-cli",
+      "range_image_bootstrap_id": "01a1d26e-56f7-7a71-bf89-48b3e80183e1",
+      "generation": 4,
+      "replication_factor": 3,
+      "nodes": {
+        "n0": {
+          "id": "n0",
+          "address": "127.0.0.1:43511",
+          "tls_certificate_sha256": "d6db0b55f4f034086c2b6db87a5b0fc80db3d01641927f95699bab9f2e02ad9c",
+          "incarnation": 1,
+          "native_store_birth_v1": {
+            "version": 1,
+            "bootstrap_id": "01a1d26e-56f7-7a71-bf89-48b3e80183e1",
+            "birth_id": "01a1d26e-573b-7403-8928-95bcb2b3aeda",
+            "birth_sha256": "3a59fc0b908e4e36876420dbc73d6ccfd95c53f150973d818ccfc8d6fd147d72",
+            "node_incarnation": 1,
+            "writer_enforcement_version": 1,
+            "abort_protocol_version": 1
+          },
+          "lifecycle": "active",
+          "labels": {
+            "bicdb.schema.sha256": "dbf787e4836cc8c39299bce6b74940e28a847b560c54f9038385090cfd65756b"
+          },
+          "capacity_bytes": 1073741824,
+          "used_bytes": 0,
+          "joined_at_ms": 10,
+          "last_heartbeat_ms": 10
+        },
+        "n1": {
+          "id": "n1",
+          "address": "127.0.0.1:34741",
+          "tls_certificate_sha256": "a10570bab062baeafe9020160d1952c335858368f10213c5f2b258d007b0929e",
+          "incarnation": 1,
+          "native_store_birth_v1": {
+            "version": 1,
+            "bootstrap_id": "01a1d26e-56f7-7a71-bf89-48b3e80183e1",
+            "birth_id": "01a1d26e-573a-7311-aa49-c3877a2fedcb",
+            "birth_sha256": "043901bd8299841a0c79e2265e2f9a7b3302e1430cc5bb04d77ebee236586b60",
+            "node_incarnation": 1,
+            "writer_enforcement_version": 1,
+            "abort_protocol_version": 1
+          },
+          "lifecycle": "active",
+          "labels": {
+            "bicdb.schema.sha256": "dbf787e4836cc8c39299bce6b74940e28a847b560c54f9038385090cfd65756b"
+          },
+          "capacity_bytes": 1073741824,
+          "used_bytes": 0,
+          "joined_at_ms": 10,
+          "last_heartbeat_ms": 10
+        },
+        "n2": {
+          "id": "n2",
+          "address": "127.0.0.1:33829",
+          "tls_certificate_sha256": "371d69807c08f06f899288867b11b4bf3b7f867f8f8030048c13462effe31c79",
+          "incarnation": 1,
+          "native_store_birth_v1": {
+            "version": 1,
+            "bootstrap_id": "01a1d26e-56f7-7a71-bf89-48b3e80183e1",
+            "birth_id": "01a1d26e-5740-7153-8930-903d230e21d6",
+            "birth_sha256": "e265ac1a024aaff56a9dece531f2a0e622c684239a25574c96619e3923250d3b",
+            "node_incarnation": 1,
+            "writer_enforcement_version": 1,
+            "abort_protocol_version": 1
+          },
+          "lifecycle": "active",
+          "labels": {
+            "bicdb.schema.sha256": "dbf787e4836cc8c39299bce6b74940e28a847b560c54f9038385090cfd65756b"
+          },
+          "capacity_bytes": 1073741824,
+          "used_bytes": 0,
+          "joined_at_ms": 10,
+          "last_heartbeat_ms": 10
+        },
+        "n3": {
+          "id": "n3",
+          "address": "127.0.0.1:43097",
+          "tls_certificate_sha256": "b86c0c806cadc327f9fb0cbcd84f65531bb7b81aee01cf39150ad6df434d0d23",
+          "incarnation": 1,
+          "native_store_birth_v1": {
+            "version": 1,
+            "bootstrap_id": "01a1d26e-56f7-7a71-bf89-48b3e80183e1",
+            "birth_id": "01a1d26e-5744-7370-b840-39701fad7a10",
+            "birth_sha256": "e5c1b3a7682b0f34ec9148ccc89b4be8bff8364e843ec48a0ce2714eafe15f3a",
+            "node_incarnation": 1,
+            "writer_enforcement_version": 1,
+            "abort_protocol_version": 1
+          },
+          "lifecycle": "active",
+          "labels": {
+            "bicdb.schema.sha256": "dbf787e4836cc8c39299bce6b74940e28a847b560c54f9038385090cfd65756b"
+          },
+          "capacity_bytes": 1073741824,
+          "used_bytes": 0,
+          "joined_at_ms": 10,
+          "last_heartbeat_ms": 10
+        },
+        "n4": {
+          "id": "n4",
+          "address": "127.0.0.1:33767",
+          "tls_certificate_sha256": "872739f477d668c49605f1cbdb44d79d751a020a332a1b84a4a4b3ad5409b71d",
+          "incarnation": 1,
+          "native_store_birth_v1": {
+            "version": 1,
+            "bootstrap_id": "01a1d26e-56f7-7a71-bf89-48b3e80183e1",
+            "birth_id": "01a1d26e-65c8-7640-beb1-481a9df0ab0f",
+            "birth_sha256": "34dba3329df69c8735c3613a81f2784178ba4c7064838f5f7f3e11ab453947a7",
+            "node_incarnation": 1,
+            "writer_enforcement_version": 1,
+            "abort_protocol_version": 1
+          },
+          "lifecycle": "active",
+          "labels": {
+            "bicdb.schema.sha256": "dbf787e4836cc8c39299bce6b74940e28a847b560c54f9038385090cfd65756b"
+          },
+          "capacity_bytes": 1099511627776,
+          "used_bytes": 0,
+          "joined_at_ms": 1794531812552,
+          "last_heartbeat_ms": 1794531812552
+        }
+      },
+      "ranges": {
+        "0": {
+          "id": 1,
+          "start_token": 0,
+          "end_token": 4611686018427387904,
+          "epoch": 1,
+          "replicas": [
+            {
+              "id": 5,
+              "node_id": "n1",
+              "role": "voter"
+            },
+            {
+              "id": 9,
+              "node_id": "n2",
+              "role": "voter"
+            },
+            {
+              "id": 13,
+              "node_id": "n3",
+              "role": "voter"
+            }
+          ],
+          "leader": "n1",
+          "approximate_bytes": 0,
+          "approximate_qps": 0,
+          "placement": {
+            "required_node_labels": {},
+            "distinct_failure_domains": []
+          }
+        },
+        "4611686018427387904": {
+          "id": 2,
+          "start_token": 4611686018427387904,
+          "end_token": 9223372036854775808,
+          "epoch": 1,
+          "replicas": [
+            {
+              "id": 2,
+              "node_id": "n0",
+              "role": "voter"
+            },
+            {
+              "id": 6,
+              "node_id": "n2",
+              "role": "voter"
+            },
+            {
+              "id": 10,
+              "node_id": "n3",
+              "role": "voter"
+            }
+          ],
+          "leader": "n2",
+          "approximate_bytes": 0,
+          "approximate_qps": 0,
+          "placement": {
+            "required_node_labels": {},
+            "distinct_failure_domains": []
+          }
+        },
+        "9223372036854775808": {
+          "id": 3,
+          "start_token": 9223372036854775808,
+          "end_token": 13835058055282163712,
+          "epoch": 1,
+          "replicas": [
+            {
+              "id": 3,
+              "node_id": "n0",
+              "role": "voter"
+            },
+            {
+              "id": 7,
+              "node_id": "n3",
+              "role": "voter"
+            },
+            {
+              "id": 11,
+              "node_id": "n1",
+              "role": "voter"
+            }
+          ],
+          "leader": "n3",
+          "approximate_bytes": 0,
+          "approximate_qps": 0,
+          "placement": {
+            "required_node_labels": {},
+            "distinct_failure_domains": []
+          }
+        },
+        "13835058055282163712": {
+          "id": 4,
+          "start_token": 13835058055282163712,
+          "end_token": null,
+          "epoch": 1,
+          "replicas": [
+            {
+              "id": 4,
+              "node_id": "n0",
+              "role": "voter"
+            },
+            {
+              "id": 8,
+              "node_id": "n1",
+              "role": "voter"
+            },
+            {
+              "id": 12,
+              "node_id": "n2",
+              "role": "voter"
+            }
+          ],
+          "leader": "n0",
+          "approximate_bytes": 0,
+          "approximate_qps": 0,
+          "placement": {
+            "required_node_labels": {},
+            "distinct_failure_domains": []
+          }
+        }
+      },
+      "next_range_id": 5,
+      "next_replica_id": 14,
+      "next_relocation_id": 1,
+      "relocations": {},
+      "applied_rebalance_plans": [],
+      "history": [
+        {
+          "generation": 1,
+          "at_ms": 10,
+          "actor": "n0",
+          "summary": "cluster initialized"
+        },
+        {
+          "generation": 2,
+          "at_ms": 1794531812552,
+          "actor": "n0",
+          "summary": "node n4 joined as metadata Learner"
+        },
+        {
+          "generation": 4,
+          "at_ms": 1794531813563,
+          "actor": "n0",
+          "summary": "node n4 promoted to metadata voter"
+        }
+      ]
+    }
+  },
+  {
+    "logical_operation_id": "01a1d26e-6b04-7e43-92d6-fdc07534eb9c",
+    "stage": "strict_old_ack_read",
+    "round": 1,
+    "expected": {
+      "entire": "external ACK precedes fifth stage",
+      "nested": [
+        17,
+        null,
+        {
+          "retained": true
+        }
+      ]
+    },
+    "health_receipt_elapsed_ns": 271392943,
+    "within_health_receipt_budget": true,
+    "success": true,
+    "present": true,
+    "value": {
+      "entire": "external ACK precedes fifth stage",
+      "nested": [
+        17,
+        null,
+        {
+          "retained": true
+        }
+      ]
+    },
+    "error": null
+  },
+  {
+    "logical_operation_id": "01a1d26e-6c14-7810-8faf-7b21cc7e6c4a",
+    "stage": "strict_fresh_append_intent",
+    "round": 1,
+    "key": "fresh-ack-after-fifth-registry-addition",
+    "value": {
+      "whole": "new external ACK after registry addition",
+      "nested": [
+        null,
+        {
+          "unchanged_data_assignment": true
+        }
+      ],
+      "empty": {}
+    }
+  },
+  {
+    "logical_operation_id": "01a1d26e-6c14-7810-8faf-7b21cc7e6c4a",
+    "stage": "strict_fresh_append_reply",
+    "round": 1,
+    "key": "fresh-ack-after-fifth-registry-addition",
+    "value": {
+      "whole": "new external ACK after registry addition",
+      "nested": [
+        null,
+        {
+          "unchanged_data_assignment": true
+        }
+      ],
+      "empty": {}
+    },
+    "health_receipt_elapsed_ns": 677782869,
+    "within_health_receipt_budget": true,
+    "acknowledged": true,
+    "inserted": true,
+    "classification": "EXTERNAL_ACK",
+    "error": null
+  },
+  {
+    "logical_operation_id": "01a1d26e-6daa-7dd2-8823-c5b1eda6d029",
+    "stage": "strict_fresh_ack_read_reply",
+    "round": 1,
+    "expected": {
+      "whole": "new external ACK after registry addition",
+      "nested": [
+        null,
+        {
+          "unchanged_data_assignment": true
+        }
+      ],
+      "empty": {}
+    },
+    "health_receipt_elapsed_ns": 932375073,
+    "within_health_receipt_budget": true,
+    "success": true,
+    "value": {
+      "whole": "new external ACK after registry addition",
+      "nested": [
+        null,
+        {
+          "unchanged_data_assignment": true
+        }
+      ],
+      "empty": {}
+    },
+    "error": null
+  },
+  {
+    "stage": "same_five_owned_children_after_health_gate",
+    "children": [
+      {
+        "node": "n0",
+        "pid": 19226,
+        "running": true
+      },
+      {
+        "node": "n1",
+        "pid": 19227,
+        "running": true
+      },
+      {
+        "node": "n2",
+        "pid": 19228,
+        "running": true
+      },
+      {
+        "node": "n3",
+        "pid": 19229,
+        "running": true
+      },
+      {
+        "node": "n4",
+        "pid": 19595,
+        "running": true
+      }
+    ],
+    "restarted": false,
+    "running_is_not_readiness": true
+  },
+  {
+    "stage": "readonly_retained_writer_binding",
+    "phase": "after_health_gate",
+    "node": "n0",
+    "command_success": true,
+    "reply": {
+      "version": 1,
+      "sequence": 8,
+      "process_id": 19226,
+      "host": {
+        "version": 1,
+        "node_id": "n0",
+        "phase": "initial_data",
+        "metadata": {
+          "cluster_id": "native-operator-cli",
+          "node_id": "n0",
+          "role": "leader",
+          "current_term": 1,
+          "voted_for": "n0",
+          "leader_id": "n0",
+          "commit_index": 4,
+          "last_log_index": 4,
+          "last_log_term": 1,
+          "topology_generation": 4,
+          "voters": [
+            "n0",
+            "n1",
+            "n2",
+            "n3",
+            "n4"
+          ],
+          "learners": []
+        },
+        "last_enrolled_learner": null,
+        "last_caught_up_learner_store_id": null,
+        "last_metadata_maintenance": {
+          "node": null,
+          "stage": "idle_or_backoff",
+          "receiver_store_id": null,
+          "installed_through_index": null,
+          "error": null
+        },
+        "last_metadata_promotion": {
+          "node": "n4",
+          "stage": "promoted_and_installed",
+          "receiver_store_id": "01a1d26e-6823-7d62-b62d-f37ff9769ccd",
+          "installed_through_index": 4,
+          "error": null
+        },
+        "initial_data": {
+          "receiver_listening": true,
+          "writer_policy_current": true,
+          "dispatcher_published": true,
+          "strong_readiness": "request-scoped fresh MQ/data QQ/MVCC/final MQ; publication is not readiness",
+          "replica_readiness": "actual policy/native/refusal checks at every replica RPC",
+          "ranges": [
+            {
+              "range_id": 2,
+              "epoch": 1,
+              "local_leader": false,
+              "leader_admission_observed": false
+            },
+            {
+              "range_id": 3,
+              "epoch": 1,
+              "local_leader": false,
+              "leader_admission_observed": false
+            },
+            {
+              "range_id": 4,
+              "epoch": 1,
+              "local_leader": true,
+              "leader_admission_observed": true
+            }
+          ],
+          "cleanup_quarantined_owners": 0,
+          "writer_binding_diagnostic": {
+            "scope": "diagnostic retained binding only; not linearizable Ready/role or a permission",
+            "persisted_policy_coordinator_id": "01a1d26e-5dcf-79a2-9b05-616bbba3dd2f",
+            "persisted_policy_registration_generation": "01a1d26e-5dd1-7e90-aa3a-d213c362b4bb",
+            "persisted_policy_database_open_incarnation": "635b790b-c7e4-4361-9441-b6ea63ceac86",
+            "persisted_policy_range_store_open_id": "01a1d26e-577e-7872-9513-b644a1ead97d",
+            "persisted_policy_checksum_sha256": "d4a95cba1ec89a5dd530d0daeae0080be089c4d1b9ac3f065812774414a780aa",
+            "observed_bound_registration_generation": "01a1d26e-5dd1-7e90-aa3a-d213c362b4bb",
+            "observed_bound_registration_active": true,
+            "observed_bound_authority_matches_retained_coordinator": true,
+            "observed_weak_directory_alive": true,
+            "observed_binding_lifetime_live": true,
+            "observed_binding_liveness_error": null,
+            "actual_verified_registry_extension": {
+              "publication_pending": false,
+              "verified_extension": {
+                "sequence": 1,
+                "native_audit_sha256": "0406b4ce13f2291cff6a3a3540596974afef4128a47b389e3e8209f2d2420d85",
+                "metadata_context_id": "01a1d26e-6954-7853-868a-352558cd4921",
+                "metadata_term": 1,
+                "metadata_read_index": 4,
+                "metadata_voters": [
+                  "n0",
+                  "n1",
+                  "n2",
+                  "n3",
+                  "n4"
+                ]
+              },
+              "scope": "retained same-open verified audit DATA; not role or Ready"
+            },
+            "current_database_hook_slot_not_relocked": true,
+            "identity_from_status_dto_is_not_authority": true,
+            "retained_owner_coordinator_id": "01a1d26e-5dcf-79a2-9b05-616bbba3dd2f"
+          },
+          "registry_refresh_last_attempt": {
+            "result": "verified_same_writer_registry_audit_published",
+            "scope": "metadata-only policy facts; not Ready or a new role"
+          },
+          "hot_recovery_last_attempt": null
+        },
+        "data_serving": true,
+        "data_refusal": "initial native point DATA only; Strong readiness is request-scoped; SQL/scan/placement/joint operations unsupported"
+      },
+      "error": null,
+      "data_serving": true
+    },
+    "stderr": ""
+  },
+  {
+    "stage": "readonly_retained_writer_binding",
+    "phase": "after_health_gate",
+    "node": "n1",
+    "command_success": true,
+    "reply": {
+      "version": 1,
+      "sequence": 7,
+      "process_id": 19227,
+      "host": {
+        "version": 1,
+        "node_id": "n1",
+        "phase": "initial_data",
+        "metadata": {
+          "cluster_id": "native-operator-cli",
+          "node_id": "n1",
+          "role": "follower",
+          "current_term": 1,
+          "voted_for": "n0",
+          "leader_id": "n0",
+          "commit_index": 4,
+          "last_log_index": 4,
+          "last_log_term": 1,
+          "topology_generation": 4,
+          "voters": [
+            "n0",
+            "n1",
+            "n2",
+            "n3",
+            "n4"
+          ],
+          "learners": []
+        },
+        "last_enrolled_learner": null,
+        "last_caught_up_learner_store_id": null,
+        "last_metadata_maintenance": null,
+        "last_metadata_promotion": null,
+        "initial_data": {
+          "receiver_listening": true,
+          "writer_policy_current": true,
+          "dispatcher_published": true,
+          "strong_readiness": "request-scoped fresh MQ/data QQ/MVCC/final MQ; publication is not readiness",
+          "replica_readiness": "actual policy/native/refusal checks at every replica RPC",
+          "ranges": [
+            {
+              "range_id": 1,
+              "epoch": 1,
+              "local_leader": true,
+              "leader_admission_observed": true
+            },
+            {
+              "range_id": 3,
+              "epoch": 1,
+              "local_leader": false,
+              "leader_admission_observed": false
+            },
+            {
+              "range_id": 4,
+              "epoch": 1,
+              "local_leader": false,
+              "leader_admission_observed": false
+            }
+          ],
+          "cleanup_quarantined_owners": 0,
+          "writer_binding_diagnostic": {
+            "scope": "diagnostic retained binding only; not linearizable Ready/role or a permission",
+            "persisted_policy_coordinator_id": "01a1d26e-5e70-7fe0-8019-51bf4e689fa7",
+            "persisted_policy_registration_generation": "01a1d26e-5e72-7b52-92fe-6fec2d8661f9",
+            "persisted_policy_database_open_incarnation": "8d5c0905-2cde-4955-8a16-c48e2c41c843",
+            "persisted_policy_range_store_open_id": "01a1d26e-5776-7092-8041-cc7b38834f9b",
+            "persisted_policy_checksum_sha256": "01f90ea29feeff21fc847e9c2cefd57763a7b0a7eda34b2dc524f6d89e61f0b0",
+            "observed_bound_registration_generation": "01a1d26e-5e72-7b52-92fe-6fec2d8661f9",
+            "observed_bound_registration_active": true,
+            "observed_bound_authority_matches_retained_coordinator": true,
+            "observed_weak_directory_alive": true,
+            "observed_binding_lifetime_live": true,
+            "observed_binding_liveness_error": null,
+            "actual_verified_registry_extension": {
+              "publication_pending": false,
+              "verified_extension": {
+                "sequence": 1,
+                "native_audit_sha256": "d44f6f5d2b5b3c9363ed76fc596bc8d437d0b436c98c175062b9e675876a45d3",
+                "metadata_context_id": "01a1d26e-6991-76d2-93ce-90043e6790ca",
+                "metadata_term": 1,
+                "metadata_read_index": 4,
+                "metadata_voters": [
+                  "n0",
+                  "n1",
+                  "n2",
+                  "n3",
+                  "n4"
+                ]
+              },
+              "scope": "retained same-open verified audit DATA; not role or Ready"
+            },
+            "current_database_hook_slot_not_relocked": true,
+            "identity_from_status_dto_is_not_authority": true,
+            "retained_owner_coordinator_id": "01a1d26e-5e70-7fe0-8019-51bf4e689fa7"
+          },
+          "registry_refresh_last_attempt": {
+            "result": "verified_same_writer_registry_audit_published",
+            "scope": "metadata-only policy facts; not Ready or a new role"
+          },
+          "hot_recovery_last_attempt": null
+        },
+        "data_serving": true,
+        "data_refusal": "initial native point DATA only; Strong readiness is request-scoped; SQL/scan/placement/joint operations unsupported"
+      },
+      "error": null,
+      "data_serving": true
+    },
+    "stderr": ""
+  },
+  {
+    "stage": "readonly_retained_writer_binding",
+    "phase": "after_health_gate",
+    "node": "n2",
+    "command_success": true,
+    "reply": {
+      "version": 1,
+      "sequence": 6,
+      "process_id": 19228,
+      "host": {
+        "version": 1,
+        "node_id": "n2",
+        "phase": "initial_data",
+        "metadata": {
+          "cluster_id": "native-operator-cli",
+          "node_id": "n2",
+          "role": "follower",
+          "current_term": 1,
+          "voted_for": "n0",
+          "leader_id": "n0",
+          "commit_index": 4,
+          "last_log_index": 4,
+          "last_log_term": 1,
+          "topology_generation": 4,
+          "voters": [
+            "n0",
+            "n1",
+            "n2",
+            "n3",
+            "n4"
+          ],
+          "learners": []
+        },
+        "last_enrolled_learner": null,
+        "last_caught_up_learner_store_id": null,
+        "last_metadata_maintenance": null,
+        "last_metadata_promotion": null,
+        "initial_data": {
+          "receiver_listening": true,
+          "writer_policy_current": true,
+          "dispatcher_published": true,
+          "strong_readiness": "request-scoped fresh MQ/data QQ/MVCC/final MQ; publication is not readiness",
+          "replica_readiness": "actual policy/native/refusal checks at every replica RPC",
+          "ranges": [
+            {
+              "range_id": 1,
+              "epoch": 1,
+              "local_leader": false,
+              "leader_admission_observed": false
+            },
+            {
+              "range_id": 2,
+              "epoch": 1,
+              "local_leader": true,
+              "leader_admission_observed": true
+            },
+            {
+              "range_id": 4,
+              "epoch": 1,
+              "local_leader": false,
+              "leader_admission_observed": false
+            }
+          ],
+          "cleanup_quarantined_owners": 0,
+          "writer_binding_diagnostic": {
+            "scope": "diagnostic retained binding only; not linearizable Ready/role or a permission",
+            "persisted_policy_coordinator_id": "01a1d26e-5f09-7891-a238-2a5d5c32fe35",
+            "persisted_policy_registration_generation": "01a1d26e-5f0b-75e2-990e-e2dced388532",
+            "persisted_policy_database_open_incarnation": "13f69227-5ff7-4369-9558-26b547c8cee4",
+            "persisted_policy_range_store_open_id": "01a1d26e-5782-7b51-9f27-a3b73cc85d1a",
+            "persisted_policy_checksum_sha256": "09249f7c8c87fac201b926a3c68b61153ed105acbedf138bddd2ea972ea96e20",
+            "observed_bound_registration_generation": "01a1d26e-5f0b-75e2-990e-e2dced388532",
+            "observed_bound_registration_active": true,
+            "observed_bound_authority_matches_retained_coordinator": true,
+            "observed_weak_directory_alive": true,
+            "observed_binding_lifetime_live": true,
+            "observed_binding_liveness_error": null,
+            "actual_verified_registry_extension": {
+              "publication_pending": false,
+              "verified_extension": {
+                "sequence": 1,
+                "native_audit_sha256": "dd47e8572365bfd2149cc2d297956b93a20be4608dbea85ff7dcd3f696721045",
+                "metadata_context_id": "01a1d26e-6968-7353-a382-a007c1af7cfd",
+                "metadata_term": 1,
+                "metadata_read_index": 4,
+                "metadata_voters": [
+                  "n0",
+                  "n1",
+                  "n2",
+                  "n3",
+                  "n4"
+                ]
+              },
+              "scope": "retained same-open verified audit DATA; not role or Ready"
+            },
+            "current_database_hook_slot_not_relocked": true,
+            "identity_from_status_dto_is_not_authority": true,
+            "retained_owner_coordinator_id": "01a1d26e-5f09-7891-a238-2a5d5c32fe35"
+          },
+          "registry_refresh_last_attempt": {
+            "result": "verified_same_writer_registry_audit_published",
+            "scope": "metadata-only policy facts; not Ready or a new role"
+          },
+          "hot_recovery_last_attempt": null
+        },
+        "data_serving": true,
+        "data_refusal": "initial native point DATA only; Strong readiness is request-scoped; SQL/scan/placement/joint operations unsupported"
+      },
+      "error": null,
+      "data_serving": true
+    },
+    "stderr": ""
+  },
+  {
+    "stage": "readonly_retained_writer_binding",
+    "phase": "after_health_gate",
+    "node": "n3",
+    "command_success": true,
+    "reply": {
+      "version": 1,
+      "sequence": 6,
+      "process_id": 19229,
+      "host": {
+        "version": 1,
+        "node_id": "n3",
+        "phase": "initial_data",
+        "metadata": {
+          "cluster_id": "native-operator-cli",
+          "node_id": "n3",
+          "role": "follower",
+          "current_term": 1,
+          "voted_for": "n0",
+          "leader_id": "n0",
+          "commit_index": 4,
+          "last_log_index": 4,
+          "last_log_term": 1,
+          "topology_generation": 4,
+          "voters": [
+            "n0",
+            "n1",
+            "n2",
+            "n3",
+            "n4"
+          ],
+          "learners": []
+        },
+        "last_enrolled_learner": null,
+        "last_caught_up_learner_store_id": null,
+        "last_metadata_maintenance": null,
+        "last_metadata_promotion": null,
+        "initial_data": {
+          "receiver_listening": true,
+          "writer_policy_current": true,
+          "dispatcher_published": true,
+          "strong_readiness": "request-scoped fresh MQ/data QQ/MVCC/final MQ; publication is not readiness",
+          "replica_readiness": "actual policy/native/refusal checks at every replica RPC",
+          "ranges": [
+            {
+              "range_id": 1,
+              "epoch": 1,
+              "local_leader": false,
+              "leader_admission_observed": false
+            },
+            {
+              "range_id": 2,
+              "epoch": 1,
+              "local_leader": false,
+              "leader_admission_observed": false
+            },
+            {
+              "range_id": 3,
+              "epoch": 1,
+              "local_leader": true,
+              "leader_admission_observed": true
+            }
+          ],
+          "cleanup_quarantined_owners": 0,
+          "writer_binding_diagnostic": {
+            "scope": "diagnostic retained binding only; not linearizable Ready/role or a permission",
+            "persisted_policy_coordinator_id": "01a1d26e-5fdc-73f0-8309-f74686a4b64e",
+            "persisted_policy_registration_generation": "01a1d26e-5fde-7040-b207-9cb7c6961391",
+            "persisted_policy_database_open_incarnation": "08b44fa6-1730-4071-a67f-a6bff8c62ab4",
+            "persisted_policy_range_store_open_id": "01a1d26e-5785-7290-b25c-dfaa5296bf6b",
+            "persisted_policy_checksum_sha256": "4b6d7a426e7d2f7d82dc57c989f951c945fbdb77622f01dc220c098b0d8fd965",
+            "observed_bound_registration_generation": "01a1d26e-5fde-7040-b207-9cb7c6961391",
+            "observed_bound_registration_active": true,
+            "observed_bound_authority_matches_retained_coordinator": true,
+            "observed_weak_directory_alive": true,
+            "observed_binding_lifetime_live": true,
+            "observed_binding_liveness_error": null,
+            "actual_verified_registry_extension": {
+              "publication_pending": false,
+              "verified_extension": {
+                "sequence": 1,
+                "native_audit_sha256": "eede7b7ca2c3af4d7eb73d1665057d8dcffa61fef0b981c2f0dc5e4cade8de00",
+                "metadata_context_id": "01a1d26e-695e-7d70-b9df-073a57ee2b28",
+                "metadata_term": 1,
+                "metadata_read_index": 4,
+                "metadata_voters": [
+                  "n0",
+                  "n1",
+                  "n2",
+                  "n3",
+                  "n4"
+                ]
+              },
+              "scope": "retained same-open verified audit DATA; not role or Ready"
+            },
+            "current_database_hook_slot_not_relocked": true,
+            "identity_from_status_dto_is_not_authority": true,
+            "retained_owner_coordinator_id": "01a1d26e-5fdc-73f0-8309-f74686a4b64e"
+          },
+          "registry_refresh_last_attempt": {
+            "result": "verified_same_writer_registry_audit_published",
+            "scope": "metadata-only policy facts; not Ready or a new role"
+          },
+          "hot_recovery_last_attempt": null
+        },
+        "data_serving": true,
+        "data_refusal": "initial native point DATA only; Strong readiness is request-scoped; SQL/scan/placement/joint operations unsupported"
+      },
+      "error": null,
+      "data_serving": true
+    },
+    "stderr": ""
+  },
+  {
+    "stage": "strict_registry_addition_terminal",
+    "rounds": 1,
+    "old_ack_read": true,
+    "fresh_ack": true,
+    "healthy_triple_receipt_ns": 932375073,
+    "health_limit_ns": 10000000000,
+    "health_gate_scope": "original API receipt monotonic budget; no hard OS or diagnostic-fsync wall bound",
+    "fresh_ack_read": true,
+    "observed_false_absence": false,
+    "observed_wrong_value": false,
+    "fifth_data_serving": false,
+    "data_move": "not_attempted",
+    "scope": "unchanged assignments require actual bounded healthy existing read AND fresh ACK"
+  }
+]

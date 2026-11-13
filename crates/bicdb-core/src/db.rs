@@ -121,6 +121,8 @@ pub(crate) use range_image_native::NativeInitialDataGenesis;
 #[cfg(feature = "tls-replication")]
 pub(crate) use range_image_native::NativeRegisteredClosedPersistScope;
 #[cfg(feature = "tls-replication")]
+pub(crate) use range_image_native::NativeRegisteredJointScope;
+#[cfg(feature = "tls-replication")]
 pub(crate) use range_image_native::NativeRegisteredNoDomainScope;
 #[cfg(feature = "tls-replication")]
 pub(crate) use range_image_native::NativeRegisteredRemoteAttemptScope;

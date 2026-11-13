@@ -53,7 +53,8 @@ pub(crate) use native_image_base::NativeImageCatalogueAdoptionReceipt;
 use native_image_base::{NativeImageCatalogueBase, NATIVE_IMAGE_CATALOG_FORMAT};
 #[cfg(feature = "tls-replication")]
 pub(crate) use native_image_base::{
-    NativeRegisteredRemoteCataloguePoint, NativeRegisteredRemoteCataloguePublication,
+    NativeRegisteredRemoteCatalogueMaterialization, NativeRegisteredRemoteCataloguePoint,
+    NativeRegisteredRemoteCataloguePublication,
 };
 pub(crate) use native_image_ready::FinalizedNativeImageCatalogueObservation;
 #[cfg(feature = "tls-replication")]

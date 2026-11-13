@@ -12,6 +12,8 @@ use crate::distribution_range_recovery::{
 mod remote_mutation;
 pub(crate) use remote_mutation::NativeRegisteredRemoteTransactionRequest;
 mod remote_catalogue;
+mod remote_joint;
+pub(crate) use remote_joint::NativeRegisteredRemoteJointTarget;
 mod remote_installing;
 
 pub(crate) struct NativeRegisteredRemoteInstallPreflight {

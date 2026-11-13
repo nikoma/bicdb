@@ -17,9 +17,13 @@ pub(crate) use data_domains::{
 };
 mod joint_domain;
 #[cfg(feature = "tls-replication")]
+mod registered_joint;
+#[cfg(feature = "tls-replication")]
 mod registered_no_domain;
 #[cfg(feature = "tls-replication")]
 mod registered_remote_attempt;
+#[cfg(feature = "tls-replication")]
+pub(crate) use registered_joint::NativeRegisteredJointScope;
 #[cfg(feature = "tls-replication")]
 mod registered_remote_mutation;
 #[cfg(feature = "tls-replication")]

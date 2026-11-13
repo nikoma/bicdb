@@ -61,6 +61,8 @@ pub(crate) use writer_enrollment::NativeAssignedWriterInstallAttempt;
 #[cfg(feature = "tls-replication")]
 pub(crate) use writer_enrollment::NativeRegisteredClosedPersistScope;
 #[cfg(feature = "tls-replication")]
+pub(crate) use writer_enrollment::NativeRegisteredJointScope;
+#[cfg(feature = "tls-replication")]
 pub(crate) use writer_enrollment::NativeRegisteredNoDomainScope;
 #[cfg(feature = "tls-replication")]
 pub(crate) use writer_enrollment::NativeRegisteredRemoteAttemptScope;

@@ -1244,6 +1244,42 @@ pub fn ensure_primary_key_indexes(db: &mut BicDb) -> Result<()> {
     Ok(())
 }
 
+/// Plan missing executable constraint indexes for an installed embedded table.
+///
+/// This does not mutate storage: application activation must create the returned
+/// indexes through its schema receipt so a later failure can compensate them.
+/// Validate every existing name before returning any work; a conflicting index
+/// must never be silently replaced or treated as enforcing the SQL constraint.
+pub fn missing_embedded_table_constraint_indexes(
+    db: &BicDb,
+    table: &str,
+) -> Result<Vec<IndexDefinition>> {
+    let schema = load_schema(db, table)?.ok_or_else(|| {
+        SqlError::InvalidSql(format!("embedded table `{table}` has no SQL schema"))
+    })?;
+    let definitions = primary_key_index_definition_for_schema(&schema)
+        .into_iter()
+        .chain(unique_constraint_index_definitions_for_schema(&schema));
+    let existing = db.index_definitions();
+    let mut missing = Vec::new();
+    for definition in definitions {
+        match existing
+            .iter()
+            .find(|index| index.name.eq_ignore_ascii_case(&definition.name))
+        {
+            Some(index) if unique_constraint_index_definition_matches(index, &definition) => {}
+            Some(_) => {
+                return Err(SqlError::InvalidSql(format!(
+                    "index \"{}\" conflicts with an embedded table constraint",
+                    definition.name
+                )));
+            }
+            None => missing.push(definition),
+        }
+    }
+    Ok(missing)
+}
+
 /// Backfill executable B-tree indexes for SQL UNIQUE constraints created by
 /// older BicDB builds. PostgreSQL UNIQUE constraints are index-backed; keeping
 /// them as catalog-only metadata forces every validation and ON CONFLICT probe

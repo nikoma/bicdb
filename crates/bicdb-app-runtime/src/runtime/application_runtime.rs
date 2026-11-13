@@ -3228,6 +3228,19 @@ impl ApplicationRuntime {
                 })? {
                     receipt.embedded_sql_schemas.push(schema);
                 }
+                // Materialize the SQL constraints during lifecycle work, not
+                // first PGwire startup. Use the same compensating receipt as
+                // the resource schema so failed activation leaves no indexes.
+                for definition in missing_embedded_table_constraint_indexes(&db, &contract.relation)
+                    .map_err(|error| {
+                        AppRuntimeError::InvalidPackage(format!(
+                            "resource `{}` cannot install its SQL constraint indexes: {error}",
+                            contract.name
+                        ))
+                    })?
+                {
+                    create_schema_index(&mut db, definition, &mut receipt)?;
+                }
                 let row_policy = embedded_resource_row_policy(contract);
                 let policy_receipt = reconcile_embedded_table_row_policy(
                     &mut db,

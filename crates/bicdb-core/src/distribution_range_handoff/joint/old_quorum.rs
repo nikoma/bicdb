@@ -269,6 +269,24 @@ impl NativeJointOldClosedQuorum {
         budget: std::time::Duration,
         parent: &crate::CancellationToken,
     ) -> Result<crate::distribution_range_image::RangeImageCapture> {
+        self.capture_inputs()?.begin(budget, parent)
+    }
+    /// Separate ephemeral original publication request from retained capture
+    /// lifetime. This never refreshes an attempted/consumed cut.
+    pub(crate) fn begin_capture_with_initial_wait(
+        &mut self,
+        budget: std::time::Duration,
+        session: &crate::CancellationToken,
+        initial_request: &crate::CancellationToken,
+    ) -> Result<crate::distribution_range_image::RangeImageCapture> {
+        initial_request.check()?;
+        session.check()?;
+        self.capture_inputs()?
+            .begin_with_initial_wait(budget, session, initial_request)
+    }
+    fn capture_inputs(
+        &mut self,
+    ) -> Result<crate::distribution_data::ActualServiceNativeJointCaptureInputs> {
         for observation in self.observations.values() {
             observation.require_current()?;
         }
@@ -279,7 +297,7 @@ impl NativeJointOldClosedQuorum {
         let input = self.observations[&self.selected_source].prepare_capture(cut)?;
         // The actual DB/service guards used to assemble inputs are gone here.
         // Its absolute shippable wait is allowed only outside those locks.
-        input.begin(budget, parent)
+        Ok(input)
     }
 }
 
@@ -304,6 +322,14 @@ impl NativeJointOldClosedQuorum {
             .iter()
             .map(|(node, obs)| (node.clone(), obs.receipt_sha256().into()))
             .collect()
+    }
+    /// Historical projection from the actual retained OLD quorum only. A
+    /// decoded map cannot reconstruct that quorum or any source permission.
+    pub(crate) fn source_image_materialized_facts(
+        &self,
+    ) -> Result<BTreeMap<ClusterNodeId, super::materialized::NativeJointMaterializedFacts>> {
+        self.require_current()?;
+        Ok(self.materialized_facts())
     }
     pub(crate) fn checksum_sha256(&self) -> Result<String> {
         self.require_current()?;

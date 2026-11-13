@@ -185,6 +185,22 @@ fn role(
 
 #[test]
 fn native_joint_actual_old_closure_four_metadata_rf3_nonempty_complete_prefix_and_shared_pin() {
+    run_actual_old_capture(None)
+}
+#[test]
+fn native_joint_actual_old_capture_initial_request_cancel_at_wait_refused() {
+    run_actual_old_capture(Some(InitialCaptureControl::CancelWhileWaiting))
+}
+#[test]
+fn native_joint_actual_old_capture_finished_publish_cancel_does_not_renew_or_end_session() {
+    run_actual_old_capture(Some(InitialCaptureControl::FinishThenCancelPublish))
+}
+#[derive(Clone, Copy)]
+enum InitialCaptureControl {
+    CancelWhileWaiting,
+    FinishThenCancelPublish,
+}
+fn run_actual_old_capture(initial_wait_cancel: Option<InitialCaptureControl>) {
     let mut fixture = EnforcedNetwork::new_with_metadata_members(4);
     let (key, old) = fixture.seed();
     let original = fixture.native.databases[&node("n0")]
@@ -249,9 +265,59 @@ fn native_joint_actual_old_closure_four_metadata_rf3_nonempty_complete_prefix_an
     assert_eq!(closed.range_index(), 1);
     assert_eq!(closed.selected_source_id(), &node("n0"));
     closed.require_current().unwrap();
-    let mut capture = closed
-        .begin_capture(Duration::from_secs(2), &CancellationToken::uncancelable())
-        .unwrap();
+    let original_session = CancellationToken::uncancelable();
+    let original_publish = CancellationToken::uncancelable()
+        .child_with_deadline(std::time::Instant::now() + Duration::from_secs(5));
+    let mut capture = if let Some(control) = initial_wait_cancel {
+        let cancel_during_wait = matches!(control, InitialCaptureControl::CancelWhileWaiting);
+        let database = &fixture.native.databases[&node("n0")];
+        let before = {
+            let db = database.read();
+            (
+                db.native_range_prefix_observation(old.id).unwrap(),
+                db.current_commit_seq(),
+                db.local_namespace_identity("items").unwrap(),
+            )
+        };
+        let hook = cancel_during_wait.then(||
+            crate::distribution_range_image::initial_wait_tests::CancelOriginalAtActualWait::install(
+                database, old.id, plan.promise().nonce, &original_publish));
+        let result = closed.begin_capture_with_initial_wait(
+            Duration::from_secs(2),
+            &original_session,
+            &original_publish,
+        );
+        original_session.check().unwrap();
+        if cancel_during_wait {
+            assert!(
+                hook.as_ref().unwrap().fired(),
+                "actual capture initial wait reached"
+            );
+            assert!(matches!(result, Err(BicDbError::QueryCanceled)));
+            closed.require_current().unwrap();
+            let db = database.read();
+            assert_eq!(
+                serde_json::to_vec(&db.native_range_prefix_observation(old.id).unwrap()).unwrap(),
+                serde_json::to_vec(&before.0).unwrap()
+            );
+            assert_eq!(db.current_commit_seq(), before.1);
+            assert_eq!(db.local_namespace_identity("items").unwrap(), before.2);
+            assert_eq!(db.get("items", &key).unwrap().unwrap(), original);
+            return;
+        }
+        let capture = result.unwrap();
+        original_publish.cancel();
+        assert!(matches!(
+            original_publish.check(),
+            Err(BicDbError::QueryCanceled)
+        ));
+        original_session.check().unwrap();
+        capture
+    } else {
+        closed
+            .begin_capture(Duration::from_secs(2), &original_session)
+            .unwrap()
+    };
     assert!(capture.reserved_upper_bound().get() >= 3);
     assert_ne!(capture.reserved_upper_bound().get(), closed.range_index());
     let cursor = capture.history_cursor().clone();

@@ -86,6 +86,92 @@ impl NativeJointHandoffPlan {
         }
         Ok(())
     }
+    /// Necessary READONLY current-plan comparison. A HostMQ never becomes a
+    /// recovery mutation role or an OLD-data quorum through this method.
+    pub(crate) fn require_source_host_metadata(
+        &self,
+        observed: &crate::distribution_consensus::HostMetadataReadObservation,
+        business: Uuid,
+        source: &ClusterNodeId,
+    ) -> Result<()> {
+        self.data.validate()?;
+        observed.require_live_request(business)?;
+        let current = observed.committed_topology(business)?;
+        let range = current
+            .range_by_id(self.data.old_range.id)
+            .ok_or_else(|| invalid("remote image source range absent"))?;
+        let plan = current
+            .relocations
+            .get(&self.data.promise.relocation_id)
+            .ok_or_else(|| invalid("remote image Pending plan absent"))?;
+        let session = plan
+            .handoff_session
+            .as_ref()
+            .ok_or_else(|| invalid("remote image Pending session absent"))?;
+        if observed.requester_node_id() != source
+            || !self.data.old_members.contains_key(source)
+            || observed.term() < self.metadata_term
+            || observed.read_index() < self.metadata_read_index
+            || current.cluster_id != self.data.cluster_id
+            || current.range_image_bootstrap_id != Some(self.data.bootstrap_id)
+            || observed.restore_activation(business)? != self.data.restore_activation.as_ref()
+            || canonical_range(range) != self.data.old_range
+            || plan.plan_id != self.data.promise.plan_id
+            || plan.source.as_ref() != Some(&self.data.old_source)
+            || plan.target != self.data.target
+            || plan.range_id != range.id
+            || plan.learner_epoch != range.epoch
+            || session.session_id != self.data.promise.session_id
+            || session.nonce != self.data.promise.nonce
+            || !matches!(
+                plan.phase,
+                crate::distribution::RelocationPhase::LearnerAllocated
+                    | crate::distribution::RelocationPhase::SnapshotCopying
+                    | crate::distribution::RelocationPhase::CatchingUp
+                    | crate::distribution::RelocationPhase::ReadyToPromote
+            )
+        {
+            return Err(invalid(
+                "source OWN metadata changed actual immutable Pending image plan",
+            ));
+        }
+        for (id, identity) in self
+            .data
+            .old_members
+            .iter()
+            .chain(self.data.new_members.iter())
+        {
+            let node = current
+                .nodes
+                .get(id)
+                .ok_or_else(|| invalid("source image participant absent"))?;
+            if node.lifecycle != crate::distribution::ClusterNodeLifecycle::Active
+                || node.incarnation != identity.incarnation
+                || node.tls_certificate_sha256 != identity.tls_certificate_sha256
+                || node.pending_tls_certificate_sha256 != identity.pending_tls_certificate_sha256
+                || node.native_store_birth_v1.as_ref() != self.data.enrolled_births.get(id)
+                || node
+                    .labels
+                    .get(crate::distribution::SCHEMA_COMPATIBILITY_NODE_LABEL)
+                    != Some(&self.data.schema_sha256)
+            {
+                return Err(invalid(
+                    "source image current participant/birth/pin/schema differs",
+                ));
+            }
+        }
+        observed.require_live_request(business)
+    }
+    /// Immutable enrolled identity DATA; it cannot mint admission or a role.
+    pub(crate) fn enrolled_birth(
+        &self,
+        node: &ClusterNodeId,
+    ) -> Result<&crate::distribution::NativeStoreBirthV1> {
+        self.data
+            .enrolled_births
+            .get(node)
+            .ok_or_else(|| invalid("source image participant birth absent from actual OLD scope"))
+    }
     pub(crate) fn require_old_native_configuration(
         &self,
         lineage: &crate::db::SourceRangeImageLineage,

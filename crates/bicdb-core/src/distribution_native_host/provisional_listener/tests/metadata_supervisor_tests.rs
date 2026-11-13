@@ -114,6 +114,29 @@ impl Network {
             std::thread::sleep(Duration::from_millis(10));
         }
     }
+    /// Bounded by several ordinary heartbeat/round periods of the unchanged
+    /// supervisor timing; it only reads actual persisted consensus status.
+    fn wait_replicated(&self, follower: usize, leader: usize) {
+        let until = Instant::now() + Duration::from_secs(5);
+        loop {
+            let source = self.launch(leader).metadata.lock().status();
+            let target = self.launch(follower).metadata.lock().status();
+            if source.role == MetadataConsensusRole::Leader
+                && target.role == MetadataConsensusRole::Follower
+                && target.current_term == source.current_term
+                && target.last_log_term == source.last_log_term
+                && target.last_log_index >= source.last_log_index
+                && target.commit_index >= source.commit_index
+            {
+                return;
+            }
+            assert!(
+                Instant::now() < until,
+                "rebound follower never replicated the actual leader log: leader {source:?} follower {target:?}"
+            );
+            std::thread::sleep(Duration::from_millis(10));
+        }
+    }
     fn fresh_mq(&self, caller: usize, leader: usize) {
         let business = Uuid::now_v7();
         let observed = self
@@ -193,6 +216,11 @@ fn native_owned_metadata_supervisor_closed_ingress_cannot_hold_leadership_same_w
     );
     original_process.check().unwrap();
     f.fresh_mq(2, healthy);
+    // The successor's current-term barrier was committed by n0/n1 while n2
+    // had no ingress. A vote for n2 requires that actual log suffix, and only
+    // the successor's worker can deliver it through the rebound listener.
+    // Observe the real persisted follower state; nothing is installed here.
+    f.wait_replicated(2, healthy);
 
     // Make ONLY that original worker responsible for the next election.
     // The remaining follower's actual endpoint still supplies its real vote.

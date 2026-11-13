@@ -7,6 +7,13 @@ This source change follows required-test leaf
 passing test or qualification result. No local engine build, CI dispatch, VM,
 benchmark, or production deployment was performed for this source leaf.
 
+The coherent candidate also composes exact sequential recovery-follower leaf
+`6c9a8b65131d122970de2e496b5539396b517e65` (local composition commit
+`73232d004`). Recovery followers can call back through one another's fresh
+metadata quorum; they are not assumed independent. This does not change any
+required assertion, phase budget or acceptance clock. The original `2dfbbd704`,
+`de143dab` and `0175a151` leaves remain separately retained.
+
 ## Actual failure shape and retained obligations
 
 The required test retains original three-node TLS owners. One actual target is

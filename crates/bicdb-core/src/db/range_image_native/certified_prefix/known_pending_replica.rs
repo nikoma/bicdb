@@ -55,6 +55,31 @@ impl KnownPendingNativeReplicaPrefix {
         }
         Ok(())
     }
+    pub(crate) fn require_slot_predecessor(
+        &self,
+        db: &BicDb,
+        slot: &crate::db::range_image_native::abort_history::NativeAbortSlotRecord,
+    ) -> Result<()> {
+        if slot.command.range_id != self.lineage.base_range().id
+            || slot.predecessor_index.checked_add(1) != Some(slot.command.index)
+            || slot.predecessor_index > self.range_index()
+        {
+            return Err(invalid(
+                "KnownPending protected slot has another predecessor position",
+            ));
+        }
+        let predecessor = db.read_native_history_entry(
+            slot.command.range_id,
+            self.lineage.history_generation(),
+            slot.predecessor_index,
+        )?;
+        if predecessor.commitment_sha256 != slot.predecessor_history_sha256 {
+            return Err(invalid(
+                "KnownPending protected slot predecessor is not actual immutable ancestry",
+            ));
+        }
+        Ok(())
+    }
     pub(crate) fn require_remote(
         &self,
         db: &BicDb,
@@ -202,6 +227,7 @@ impl BicDb {
             .entry
             .ok_or_else(|| invalid("KnownPending has no retained actual command"))?;
         let command = entry.command;
+        crate::distribution_range_consensus::validate_native_recovery_command_size(&command)?;
         command.validate()?;
         if crate::distribution_native_read::canonical_range(lineage.native_write_range()?)
             != crate::distribution_native_read::canonical_range(range)

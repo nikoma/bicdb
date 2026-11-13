@@ -25,6 +25,7 @@ impl RangeWriteStore {
             return Err(range_write_error("KnownPending requires complete actual protected slot inventory and exact pending slot"));
         }
         for record in actual {
+            known.require_slot_predecessor(db, record)?;
             let slot = mirror
                 .and_then(|r| r.slots.get(&record.command.index))
                 .ok_or_else(|| {
